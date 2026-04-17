@@ -1037,11 +1037,23 @@ class ChatPage(BasePage):
             return []
         data_source = dict(result.data_source or {})
         value = self._normalize_selected_file_ids(data_source.get("graph_source_ids", []))
-        if value:
-            return value
-
         fallback_ids = self._extract_selected_ids_from_data_source(data_source)
-        if fallback_ids:
+        merged_ids = self._merge_unique_file_ids(value, fallback_ids)
+        if merged_ids and merged_ids != value:
+            data_source["graph_source_ids"] = merged_ids
+            try:
+                with Session(engine) as session:
+                    statement = select(Conversation).where(Conversation.id == conversation_id)
+                    row = session.exec(statement).one_or_none()
+                    if row:
+                        row.data_source = data_source
+                        session.add(row)
+                        session.commit()
+            except Exception:
+                pass
+            return merged_ids
+
+        if fallback_ids and not value:
             data_source["graph_source_ids"] = fallback_ids
             try:
                 with Session(engine) as session:
@@ -1053,17 +1065,22 @@ class ChatPage(BasePage):
                         session.commit()
             except Exception:
                 pass
-        return fallback_ids
+        return value if value else fallback_ids
 
     def refresh_knowledge_graph(
         self,
         conversation_id,
         graph_source_ids,
         focus_file_id,
+        selected_file_ids=None,
     ):
         if not self.knowledge_graph:
             return gr.update(value=""), None, "Status: knowledge graph unavailable.", []
-        source_scope = self._normalize_selected_file_ids(graph_source_ids)
+        source_scope = self._merge_unique_file_ids(
+            self._normalize_selected_file_ids(graph_source_ids),
+            self._normalize_selected_file_ids(selected_file_ids),
+            [focus_file_id] if focus_file_id else [],
+        )
         try:
             graph_view = self.knowledge_graph.get_graph_view(
                 conversation_id=conversation_id,
@@ -1071,6 +1088,17 @@ class ChatPage(BasePage):
                 focus_file_id=focus_file_id,
                 force_rebuild=False,
             )
+
+            # Auto-heal stale cache during normal refresh so file add/delete events
+            # immediately reflect in the graph without requiring manual button click.
+            if graph_view.get("status") == "stale":
+                graph_view = self.knowledge_graph.get_graph_view(
+                    conversation_id=conversation_id,
+                    graph_source_ids=source_scope,
+                    focus_file_id=focus_file_id,
+                    force_rebuild=True,
+                )
+
             return (
                 self._json_to_plot(graph_view),
                 graph_view,
@@ -1091,12 +1119,14 @@ class ChatPage(BasePage):
         conversation_id,
         graph_source_ids,
         focus_file_id,
+        selected_file_ids=None,
     ):
         # Keep backward compatibility with existing event wiring but do not force rebuild.
         return self.refresh_knowledge_graph(
             conversation_id=conversation_id,
             graph_source_ids=graph_source_ids,
             focus_file_id=focus_file_id,
+            selected_file_ids=selected_file_ids,
         )
 
     def generate_knowledge_graph(
@@ -1104,10 +1134,15 @@ class ChatPage(BasePage):
         conversation_id,
         graph_source_ids,
         focus_file_id,
+        selected_file_ids=None,
     ):
         if not self.knowledge_graph:
             return gr.update(value=""), None, "Status: knowledge graph unavailable.", []
-        source_scope = self._normalize_selected_file_ids(graph_source_ids)
+        source_scope = self._merge_unique_file_ids(
+            self._normalize_selected_file_ids(graph_source_ids),
+            self._normalize_selected_file_ids(selected_file_ids),
+            [focus_file_id] if focus_file_id else [],
+        )
         try:
             graph_view = self.knowledge_graph.get_graph_view(
                 conversation_id=conversation_id,
@@ -2019,6 +2054,7 @@ class ChatPage(BasePage):
                     self.chat_control.conversation_id,
                     self._graph_source_ids,
                     self._active_file_id,
+                    self._indices_input[1],
                 ],
                 outputs=[
                     self.plot_panel,
@@ -2080,6 +2116,7 @@ class ChatPage(BasePage):
                     self.chat_control.conversation_id,
                     self._graph_source_ids,
                     self._active_file_id,
+                    self._indices_input[1],
                 ],
                 outputs=[
                     self.plot_panel,
@@ -2135,6 +2172,7 @@ class ChatPage(BasePage):
                     self.chat_control.conversation_id,
                     self._graph_source_ids,
                     self._active_file_id,
+                    self._indices_input[1],
                 ],
                 outputs=[
                     self.plot_panel,
@@ -2186,6 +2224,7 @@ class ChatPage(BasePage):
                         self.chat_control.conversation_id,
                         self._graph_source_ids,
                         self._active_file_id,
+                        self._indices_input[1],
                     ],
                     outputs=[
                         self.plot_panel,
@@ -2206,6 +2245,7 @@ class ChatPage(BasePage):
                     self.chat_control.conversation_id,
                     self._graph_source_ids,
                     self._active_file_id,
+                    self._indices_input[1],
                 ],
                 outputs=[
                     self.plot_panel,
@@ -2459,6 +2499,7 @@ class ChatPage(BasePage):
                         self.chat_control.conversation_id,
                         self._graph_source_ids,
                         self._active_file_id,
+                        self._indices_input[1],
                     ],
                     "outputs": [
                         self.plot_panel,

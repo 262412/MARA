@@ -60,6 +60,7 @@ class ConversationControl(BasePage):
                 size="sm",
                 elem_classes=["no-background", "body-text-color"],
                 elem_id="toggle-dark-button",
+                visible=False,
             )
             self.btn_chat_expand = gr.Button(
                 value="",
@@ -68,6 +69,7 @@ class ConversationControl(BasePage):
                 size="sm",
                 elem_classes=["no-background", "body-text-color"],
                 elem_id="chat-expand-button",
+                visible=False,
             )
             self.btn_info_expand = gr.Button(
                 value="",
@@ -79,14 +81,7 @@ class ConversationControl(BasePage):
                 elem_id="info-expand-button",
             )
 
-            self.btn_toggle_dark_mode.click(
-                None,
-                js="""
-                () => {
-                    document.body.classList.toggle('dark');
-                }
-                """,
-            )
+            # Dark/light toggle is intentionally disabled for the current visual theme.
 
         self.conversation_id = gr.State(value="")
         self.conversation = gr.Dropdown(

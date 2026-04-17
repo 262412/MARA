@@ -1085,7 +1085,7 @@ function run() {
     if (mainParent.childNodes?.[0]?.classList) {
       mainParent.childNodes[0].classList.add("header-bar");
     }
-    mainParent.style = "padding: 0; margin: 0";
+    mainParent.style = "padding: 0; margin: 0; position: relative";
     if (mainParent.parentNode) {
       mainParent.parentNode.style = "gap: 0";
       if (mainParent.parentNode.parentNode) {
@@ -1093,10 +1093,18 @@ function run() {
       }
     }
 
-    const versionNode = document.createElement("p");
-    versionNode.innerHTML = "version: KH_APP_VERSION";
-    versionNode.style = "position: fixed; top: 10px; right: 10px;";
-    mainParent.appendChild(versionNode);
+    let versionNode = document.getElementById("app-version-badge");
+    if (!versionNode) {
+      versionNode = document.createElement("p");
+      versionNode.id = "app-version-badge";
+      mainParent.appendChild(versionNode);
+    }
+    versionNode.textContent = "version: KH_APP_VERSION";
+
+    const darkToggle = document.getElementById("toggle-dark-button");
+    if (darkToggle) {
+      darkToggle.style.display = "none";
+    }
 
     const favicon = document.createElement("link");
     favicon.rel = "icon";

@@ -186,9 +186,8 @@ class FileIndexPage(BasePage):
                 "loader",
                 "date_created",
             ],
-            column_widths=[0, 50, 8, 7, 15, 20],
             interactive=False,
-            wrap=False,
+            wrap=True,
             elem_id="file_list_view",
         )
 
@@ -336,6 +335,8 @@ class FileIndexPage(BasePage):
                         variant="secondary",
                         elem_classes=["right-button"],
                     )
+                    self.upload_before_source_ids = gr.State(value=[])
+                    self.upload_new_source_ids = gr.State(value=[])
 
                 with gr.Tab("Files"):
                     self.render_file_list()
@@ -395,6 +396,37 @@ class FileIndexPage(BasePage):
                     "show_progress": "hidden",
                 },
             )
+
+    def _list_source_ids_for_user(self, user_id) -> list[str]:
+        Source = self._index._resources.get("Source")
+        if Source is None:
+            return []
+
+        with Session(engine) as session:
+            statement = select(Source.id)
+            if self._index.config.get("private", False):
+                statement = statement.where(Source.user == user_id)
+            rows = session.execute(statement).all()
+
+        source_ids: list[str] = []
+        for row in rows:
+            file_id = str(row[0] or "").strip() if row else ""
+            if not file_id:
+                continue
+            source_ids.append(file_id)
+        return source_ids
+
+    def snapshot_source_ids(self, user_id) -> list[str]:
+        return self._list_source_ids_for_user(user_id)
+
+    def collect_new_source_ids(self, before_source_ids, user_id) -> list[str]:
+        before_set = {
+            str(item or "").strip()
+            for item in (before_source_ids or [])
+            if str(item or "").strip()
+        }
+        current_ids = self._list_source_ids_for_user(user_id)
+        return [file_id for file_id in current_ids if file_id not in before_set]
 
     def file_selected(self, file_id):
         chunks = []
@@ -916,6 +948,12 @@ class FileIndexPage(BasePage):
                 outputs=[self.upload_progress_panel],
             )
             .then(
+                fn=self.snapshot_source_ids,
+                inputs=[self._app.user_id],
+                outputs=[self.upload_before_source_ids],
+                show_progress="hidden",
+            )
+            .then(
                 fn=self.index_fn,
                 inputs=[
                     self.files,
@@ -933,14 +971,83 @@ class FileIndexPage(BasePage):
             )
         )
 
-        uploadedEvent = onUploaded.then(
-            fn=self.list_file,
-            inputs=[self._app.user_id, self.filter],
-            outputs=[self.file_list_state, self.file_list],
-            concurrency_limit=20,
+        uploadedEvent = (
+            onUploaded.then(
+                fn=self.collect_new_source_ids,
+                inputs=[self.upload_before_source_ids, self._app.user_id],
+                outputs=[self.upload_new_source_ids],
+                show_progress="hidden",
+            )
+            .then(
+                fn=self.list_file,
+                inputs=[self._app.user_id, self.filter],
+                outputs=[self.file_list_state, self.file_list],
+                concurrency_limit=20,
+            )
         )
         for event in self._app.get_event(f"onFileIndex{self._index.id}Changed"):
             uploadedEvent = uploadedEvent.then(**event)
+
+        if (
+            self._index.id == 1
+            and getattr(self._app, "chat_page", None) is not None
+            and getattr(self._app.chat_page, "knowledge_graph", None) is not None
+            and len(getattr(self._app.chat_page, "_indices_input", [])) > 1
+        ):
+            uploadedEvent = (
+                uploadedEvent.then(
+                    fn=self._app.chat_page.merge_graph_source_ids,
+                    inputs=[
+                        self._app.chat_page._graph_source_ids,
+                        self.upload_new_source_ids,
+                    ],
+                    outputs=[self._app.chat_page._graph_source_ids],
+                    show_progress="hidden",
+                )
+                .then(
+                    fn=self._app.chat_page.persist_conversation_source_scope,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._app.chat_page._graph_source_ids,
+                    ],
+                    outputs=[self._app.chat_page._graph_source_ids],
+                    show_progress="hidden",
+                )
+                .then(
+                    fn=self._app.chat_page.refresh_chat_file_list,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._app.chat_page.first_selector_choices,
+                        self._app.chat_page._indices_input[1],
+                        self._app.chat_page._graph_source_ids,
+                        self._app.chat_page.chat_file_filter,
+                    ],
+                    outputs=[
+                        self._app.chat_page.chat_file_rows,
+                        self._app.chat_page.chat_file_list,
+                        self._app.chat_page.chat_selected_file,
+                    ],
+                    show_progress="hidden",
+                )
+                .then(
+                    fn=self._app.chat_page.refresh_knowledge_graph,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.chat_page._graph_source_ids,
+                        self._app.chat_page._active_file_id,
+                        self._app.chat_page._indices_input[1],
+                    ],
+                    outputs=[
+                        self._app.chat_page.plot_panel,
+                        self._app.chat_page.state_plot_panel,
+                        self._app.chat_page.knowledge_graph_status,
+                        self._app.chat_page._graph_source_ids,
+                    ],
+                    show_progress="hidden",
+                )
+            )
 
         _ = onUploaded.success(
             fn=lambda: None,
