@@ -82,11 +82,13 @@ RUN --mount=type=ssh  \
     uv pip install --python .venv "libs/kotaemon[adv]" \
     && uv pip install --python .venv unstructured[all-docs]
 
-# Install lightRAG
-ENV USE_LIGHTRAG=true
+# Install legacy GraphRAG dependencies only when explicitly requested
+ARG INSTALL_LEGACY_GRAPHRAG=false
 RUN --mount=type=ssh  \
     --mount=type=cache,target=/root/.cache/uv  \
-    uv pip install --python .venv aioboto3 nano-vectordb ollama xxhash "lightrag-hku<=1.3.0"
+    if [ "$INSTALL_LEGACY_GRAPHRAG" = "true" ]; then \
+        uv pip install --python .venv aioboto3 nano-vectordb ollama xxhash "lightrag-hku<=1.3.0"; \
+    fi
 
 RUN --mount=type=ssh  \
     --mount=type=cache,target=/root/.cache/uv  \

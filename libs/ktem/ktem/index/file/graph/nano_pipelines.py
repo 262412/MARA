@@ -37,13 +37,14 @@ try:
     from nano_graphrag._utils import EmbeddingFunc, compute_args_hash
 
 except ImportError:
-    print(
-        (
-            "Nano-GraphRAG dependencies not installed. "
-            "Try `pip install nano-graphrag` to install. "
-            "Nano-GraphRAG retriever pipeline will not work properly."
+    if os.getenv("KH_SHOW_LEGACY_RAG_WARNINGS", "false").lower() == "true":
+        print(
+            (
+                "Nano-GraphRAG dependencies not installed. "
+                "Try `pip install nano-graphrag` to install. "
+                "Nano-GraphRAG retriever pipeline will not work properly."
+            )
         )
-    )
 
 
 logging.getLogger("nano-graphrag").setLevel(logging.INFO)
@@ -305,8 +306,9 @@ class NanoGraphRAGIndexingPipeline(GraphRAGIndexingPipeline):
                 }
             )
             return settings_dict
-        except ImportError as e:
-            print(e)
+        except ImportError:
+            if os.getenv("KH_SHOW_LEGACY_RAG_WARNINGS", "false").lower() == "true":
+                print("nano_graphrag prompt module is unavailable")
             return {}
 
     def call_graphrag_index(self, graph_id: str, docs: list[Document]):

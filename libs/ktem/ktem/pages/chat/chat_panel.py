@@ -13,7 +13,7 @@ if not KH_DEMO_MODE:
     PLACEHOLDER_TEXT = (
         "This is the beginning of a new conversation.\n"
         "Start by uploading a file or a web URL. "
-        "Visit Files tab for more options (e.g: GraphRAG)."
+        "Visit Files tab for more document-management options."
     )
 else:
     PLACEHOLDER_TEXT = (

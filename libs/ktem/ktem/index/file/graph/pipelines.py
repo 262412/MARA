@@ -35,13 +35,14 @@ try:
     )
     from graphrag.vector_stores.lancedb import LanceDBVectorStore
 except ImportError:
-    print(
-        (
-            "GraphRAG dependencies not installed. "
-            "Try `pip install graphrag future` to install. "
-            "GraphRAG retriever pipeline will not work properly."
+    if config("KH_SHOW_LEGACY_RAG_WARNINGS", default=False, cast=bool):
+        print(
+            (
+                "GraphRAG dependencies not installed. "
+                "Try `pip install graphrag future` to install. "
+                "GraphRAG retriever pipeline will not work properly."
+            )
         )
-    )
 
 
 filestorage_path = Path(settings.KH_FILESTORAGE_PATH) / "graphrag"

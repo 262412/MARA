@@ -647,6 +647,15 @@ class FileIndexPage(BasePage):
 
                     quickUploadedEvent = (
                         quickUploadedEvent.success(
+                            fn=self._app.chat_page.merge_graph_source_ids,
+                            inputs=[
+                                self._app.chat_page._graph_source_ids,
+                                self.quick_upload_state,
+                            ],
+                            outputs=[self._app.chat_page._graph_source_ids],
+                            show_progress="hidden",
+                        )
+                        .success(
                             fn=lambda x: x,
                             inputs=self.quick_upload_state,
                             outputs=self._app.chat_page._indices_input[1],
@@ -703,6 +712,14 @@ class FileIndexPage(BasePage):
                     quickURLUploadedEvent = quickURLUploadedEvent.then(**event)
 
                 quickURLUploadedEvent = quickURLUploadedEvent.success(
+                    fn=self._app.chat_page.merge_graph_source_ids,
+                    inputs=[
+                        self._app.chat_page._graph_source_ids,
+                        self.quick_upload_state,
+                    ],
+                    outputs=[self._app.chat_page._graph_source_ids],
+                    show_progress="hidden",
+                ).success(
                     fn=lambda x: x,
                     inputs=self.quick_upload_state,
                     outputs=self._app.chat_page._indices_input[1],

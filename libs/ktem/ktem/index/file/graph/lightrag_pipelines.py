@@ -39,13 +39,14 @@ try:
     from lightrag.utils import EmbeddingFunc, compute_args_hash
 
 except ImportError:
-    print(
-        (
-            "LightRAG dependencies not installed. "
-            "Try `pip install git+https://github.com/HKUDS/LightRAG.git` to install. "
-            "LighthRAG retriever pipeline will not work properly."
+    if os.getenv("KH_SHOW_LEGACY_RAG_WARNINGS", "false").lower() == "true":
+        print(
+            (
+                "LightRAG dependencies not installed. "
+                "Try `pip install git+https://github.com/HKUDS/LightRAG.git` to install. "
+                "LighthRAG retriever pipeline will not work properly."
+            )
         )
-    )
 
 
 logging.getLogger("lightrag").setLevel(logging.INFO)
@@ -317,8 +318,9 @@ class LightRAGIndexingPipeline(GraphRAGIndexingPipeline):
                 }
             )
             return settings_dict
-        except ImportError as e:
-            print(e)
+        except ImportError:
+            if os.getenv("KH_SHOW_LEGACY_RAG_WARNINGS", "false").lower() == "true":
+                print("lightrag prompt module is unavailable")
             return {}
 
     def call_graphrag_index(self, graph_id: str, docs: list[Document]):

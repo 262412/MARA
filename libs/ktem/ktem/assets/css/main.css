@@ -285,6 +285,13 @@ button.selected {
   overflow: hidden !important;
 }
 
+#info-expand > div:last-child {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
 #html-info-panel,
 #answer-panel {
   height: 100% !important;
@@ -977,4 +984,456 @@ div.markmap {
 #login-row {
   display: grid;
   place-items: center;
+}
+
+#chat-file-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: 4px 0 12px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color-primary, #d4d4d8) 92%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--background-fill-secondary, #f8fafc) 72%, transparent);
+}
+
+#advanced-source-selectors {
+  margin-top: 10px;
+}
+
+#chat-file-filter {
+  margin-bottom: 0;
+}
+
+#chat-selected-file {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+#chat-file-list {
+  min-height: 220px;
+}
+
+#chat-file-list .chat-file-list-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#chat-file-list .chat-file-empty {
+  padding: 16px 14px;
+  border: 1px dashed var(--border-color-primary, #d4d4d8);
+  border-radius: 14px;
+  color: var(--body-text-color-subdued, #6b7280);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+#chat-file-list .chat-file-entry {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border-color-primary, #d4d4d8);
+  background: var(--background-fill-primary, #fff);
+  border-radius: 14px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+#chat-file-list .chat-file-entry:hover {
+  background: color-mix(
+    in srgb,
+    var(--color-accent-soft, #dbeafe) 55%,
+    transparent
+  );
+  border-color: color-mix(in srgb, var(--color-accent, #2563eb) 45%, #d4d4d8);
+  transform: translateY(-1px);
+}
+
+#chat-file-list .chat-file-entry.is-selected {
+  border-color: var(--color-accent, #2563eb);
+  background: color-mix(
+    in srgb,
+    var(--color-accent-soft, #dbeafe) 72%,
+    var(--background-fill-primary, #fff)
+  );
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, #2563eb) 22%, transparent);
+}
+
+#chat-file-list .chat-file-entry__name {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.38;
+  font-size: clamp(0.84rem, 1.1vw, 0.96rem);
+  word-break: break-word;
+  white-space: normal;
+}
+
+#chat-upload-hint {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+  color: var(--body-text-color-subdued, #6b7280);
+}
+
+#knowledge-graph-status {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+#knowledge-graph-refresh {
+  margin-bottom: 10px;
+}
+
+#knowledge-graph-plot {
+  min-height: 320px;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden !important;
+  min-width: 0;
+}
+
+#knowledge-graph-plot > div,
+#knowledge-graph-plot .prose {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+#knowledge-graph-plot .knowledge-graph-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  flex: 1 1 auto;
+  max-height: 100%;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+  padding: 8px 6px 16px;
+  cursor: grab;
+  touch-action: none;
+  scrollbar-gutter: stable both-edges;
+}
+
+#knowledge-graph-plot .knowledge-graph-shell.is-stale {
+  opacity: 0.96;
+}
+
+#knowledge-graph-plot .knowledge-graph-shell.is-dragging {
+  user-select: none;
+}
+
+#knowledge-graph-plot .kg-empty {
+  border: 1px dashed var(--border-color-primary, #d4d4d8);
+  border-radius: 18px;
+  padding: 18px 16px;
+  background: color-mix(in srgb, var(--background-fill-secondary, #f8fafc) 88%, transparent);
+}
+
+#knowledge-graph-plot .kg-empty h4 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+#knowledge-graph-plot .kg-empty__hint {
+  margin: 0;
+  color: var(--body-text-color-subdued, #6b7280);
+  line-height: 1.5;
+}
+
+#knowledge-graph-plot .kg-tree-root {
+  padding: 0 0 2px;
+}
+
+#knowledge-graph-plot .kg-tree-root__meta {
+  margin: 8px 0 0 2px;
+  color: var(--body-text-color-subdued, #6b7280);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+#knowledge-graph-plot .kg-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 28px;
+  position: relative;
+}
+
+#knowledge-graph-plot .kg-tree-list::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 4px;
+  bottom: 8px;
+  border-left: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 32%, #64748b);
+}
+
+#knowledge-graph-plot .kg-tree-list--systems {
+  padding-left: 0;
+}
+
+#knowledge-graph-plot .kg-tree-list--systems::before {
+  display: none;
+}
+
+#knowledge-graph-plot .kg-tree-item {
+  position: relative;
+  margin: 8px 0;
+}
+
+#knowledge-graph-plot .kg-tree-item::before {
+  content: "";
+  position: absolute;
+  left: -17px;
+  top: 19px;
+  width: 17px;
+  border-top: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 38%, #64748b);
+}
+
+#knowledge-graph-plot .kg-tree-list--systems > .kg-tree-item::before {
+  left: -6px;
+  width: 6px;
+}
+
+#knowledge-graph-plot .kg-tree-node {
+  width: fit-content;
+  max-width: min(92%, 760px);
+  border: 1px solid color-mix(in srgb, var(--border-color-primary, #d4d4d8) 92%, transparent);
+  border-radius: 12px;
+  background: var(--background-fill-primary, #fff);
+  color: var(--body-text-color, #111827);
+  padding: 8px 12px;
+  font: inherit;
+  text-align: left;
+  line-height: 1.45;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+}
+
+#knowledge-graph-plot .kg-tree-node:hover {
+  border-color: color-mix(in srgb, var(--color-accent, #2563eb) 58%, #d4d4d8);
+  transform: translateY(-1px);
+}
+
+#knowledge-graph-plot .kg-tree-node.is-selected {
+  border-color: color-mix(in srgb, var(--color-accent, #2563eb) 75%, #d4d4d8);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent, #2563eb) 24%, transparent);
+}
+
+#knowledge-graph-plot .kg-tree-node--root {
+  background:
+    linear-gradient(145deg, rgba(14, 116, 144, 0.2), rgba(2, 132, 199, 0.08)),
+    var(--background-fill-primary, #fff);
+  border-radius: 14px;
+  font-weight: 650;
+}
+
+#knowledge-graph-plot .kg-tree-node--system {
+  background:
+    linear-gradient(150deg, rgba(30, 64, 175, 0.18), rgba(37, 99, 235, 0.04)),
+    var(--background-fill-primary, #fff);
+  font-weight: 620;
+}
+
+#knowledge-graph-plot .kg-tree-node--file {
+  background:
+    linear-gradient(145deg, rgba(15, 118, 110, 0.15), rgba(16, 185, 129, 0.03)),
+    var(--background-fill-primary, #fff);
+  font-weight: 600;
+}
+
+#knowledge-graph-plot .kg-tree-node--point {
+  background:
+    linear-gradient(145deg, rgba(148, 163, 184, 0.15), rgba(100, 116, 139, 0.02)),
+    var(--background-fill-primary, #fff);
+  font-size: 0.9rem;
+}
+
+#knowledge-graph-plot .kg-tree-node--theme {
+  background:
+    linear-gradient(145deg, rgba(245, 158, 11, 0.18), rgba(245, 158, 11, 0.03)),
+    var(--background-fill-primary, #fff);
+  border-radius: 999px;
+  font-size: 0.84rem;
+  padding: 6px 10px;
+}
+
+#knowledge-graph-plot .kg-tree-item--file.is-focused > .kg-tree-node--file {
+  border-color: color-mix(in srgb, var(--color-accent, #2563eb) 74%, #d4d4d8);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent, #2563eb) 20%, transparent);
+}
+
+#knowledge-graph-plot .kg-tree-item__meta {
+  margin: 6px 0 0 3px;
+  font-size: 0.91rem;
+  line-height: 1.5;
+  color: var(--body-text-color-subdued, #4b5563);
+  max-width: min(88%, 740px);
+}
+
+#knowledge-graph-plot .kg-tree-item__keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0 2px;
+}
+
+#knowledge-graph-plot .kg-keyword {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #e2e8f0 72%, #fff);
+  font-size: 0.78rem;
+  color: var(--body-text-color-subdued, #4b5563);
+}
+
+#knowledge-graph-plot .kg-point-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+#knowledge-graph-plot .kg-point-more {
+  font-size: 0.84rem;
+  color: var(--body-text-color-subdued, #6b7280);
+  padding-left: 2px;
+}
+
+#kg-answer-hint {
+  margin: 0 0 10px;
+}
+
+#kg-answer-hint .kg-answer-hint {
+  border: 1px solid color-mix(in srgb, var(--border-color-primary, #d4d4d8) 92%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--background-fill-secondary, #f8fafc) 80%, transparent);
+  padding: 10px 12px 12px;
+}
+
+#kg-answer-hint .kg-answer-hint--empty {
+  color: var(--body-text-color-subdued, #6b7280);
+  font-size: 0.88rem;
+}
+
+#kg-answer-hint .kg-answer-hint__title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--body-text-color-subdued, #6b7280);
+  margin-bottom: 6px;
+}
+
+#kg-answer-hint .kg-answer-hint__node {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb, var(--border-color-primary, #d4d4d8) 92%, transparent);
+  border-radius: 12px;
+  background: var(--background-fill-primary, #fff);
+  color: var(--body-text-color, #111827);
+  padding: 8px 12px;
+  line-height: 1.45;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+}
+
+#kg-answer-hint .kg-answer-hint__label {
+  font-weight: 620;
+}
+
+#kg-answer-hint .kg-answer-hint__type {
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--color-accent, #2563eb) 75%, #0f172a);
+  background: color-mix(in srgb, var(--color-accent-soft, #dbeafe) 75%, #fff);
+  border: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 42%, #d4d4d8);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+#kg-answer-hint .kg-answer-hint__summary {
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  color: var(--body-text-color, #111827);
+}
+
+#kg-answer-hint .kg-answer-hint__actions {
+  margin-top: 10px;
+}
+
+#kg-answer-hint .kg-answer-hint__ask {
+  border: 1px solid color-mix(in srgb, var(--border-color-primary, #d4d4d8) 92%, transparent);
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, rgba(15, 118, 110, 0.15), rgba(16, 185, 129, 0.03)),
+    var(--background-fill-primary, #fff);
+  color: var(--body-text-color, #111827);
+  font-size: 0.86rem;
+  font-weight: 600;
+  padding: 7px 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+#kg-answer-hint .kg-answer-hint__ask:hover {
+  border-color: color-mix(in srgb, var(--color-accent, #2563eb) 58%, #d4d4d8);
+  transform: translateY(-1px);
+}
+
+#kg-answer-hint .kg-answer-hint__node.kg-tree-node--root {
+  background:
+    linear-gradient(145deg, rgba(14, 116, 144, 0.2), rgba(2, 132, 199, 0.08)),
+    var(--background-fill-primary, #fff);
+}
+
+#kg-answer-hint .kg-answer-hint__node.kg-tree-node--system {
+  background:
+    linear-gradient(150deg, rgba(30, 64, 175, 0.18), rgba(37, 99, 235, 0.04)),
+    var(--background-fill-primary, #fff);
+}
+
+#kg-answer-hint .kg-answer-hint__node.kg-tree-node--file {
+  background:
+    linear-gradient(145deg, rgba(15, 118, 110, 0.15), rgba(16, 185, 129, 0.03)),
+    var(--background-fill-primary, #fff);
+}
+
+#kg-answer-hint .kg-answer-hint__node.kg-tree-node--point {
+  background:
+    linear-gradient(145deg, rgba(148, 163, 184, 0.15), rgba(100, 116, 139, 0.02)),
+    var(--background-fill-primary, #fff);
+}
+
+#kg-answer-hint .kg-answer-hint__node.kg-tree-node--theme {
+  background:
+    linear-gradient(145deg, rgba(245, 158, 11, 0.18), rgba(245, 158, 11, 0.03)),
+    var(--background-fill-primary, #fff);
+}
+
+@media (max-width: 900px) {
+  #chat-file-list .chat-file-entry__name {
+    -webkit-line-clamp: 4;
+  }
+
+  #knowledge-graph-plot .kg-tree-list {
+    padding-left: 20px;
+  }
+
+  #knowledge-graph-plot .kg-tree-item::before {
+    left: -13px;
+    width: 13px;
+  }
+
+  #knowledge-graph-plot .kg-tree-node {
+    max-width: calc(100vw - 90px);
+  }
 }

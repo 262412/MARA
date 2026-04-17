@@ -7,12 +7,19 @@ from sqlmodel import Session
 
 
 class ReportIssue(BasePage):
-    def __init__(self, app):
+    def __init__(self, app, show_panel: Optional[bool] = None):
         self._app = app
+        self._show_panel = show_panel
         self.on_building_ui()
 
     def on_building_ui(self):
-        with gr.Accordion(label="Feedback", open=False, elem_id="report-accordion"):
+        panel_visible = True if self._show_panel is None else bool(self._show_panel)
+        with gr.Accordion(
+            label="Feedback",
+            open=False,
+            elem_id="report-accordion",
+            visible=panel_visible,
+        ):
             self.correctness = gr.Radio(
                 choices=[
                     ("The answer is correct", "correct"),
