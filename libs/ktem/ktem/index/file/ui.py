@@ -13,6 +13,7 @@ import pandas as pd
 from gradio.data_classes import FileData
 from gradio.utils import NamedString
 from ktem.app import BasePage
+from ktem.db.models import Conversation
 from ktem.db.engine import engine
 from ktem.utils.render import Render
 from sqlalchemy import select
@@ -660,6 +661,16 @@ class FileIndexPage(BasePage):
                             inputs=self.quick_upload_state,
                             outputs=self._app.chat_page._indices_input[1],
                         )
+                        .success(
+                            fn=self._app.chat_page.persist_conversation_source_scope,
+                            inputs=[
+                                self._app.chat_page.chat_control.conversation_id,
+                                self._app.user_id,
+                                self._app.chat_page._graph_source_ids,
+                            ],
+                            outputs=[self._app.chat_page._graph_source_ids],
+                            show_progress="hidden",
+                        )
                         .then(
                             fn=lambda: gr.update(value="Indexing completed."),
                             outputs=self._app.chat_page.quick_file_upload_status,
@@ -723,6 +734,15 @@ class FileIndexPage(BasePage):
                     fn=lambda x: x,
                     inputs=self.quick_upload_state,
                     outputs=self._app.chat_page._indices_input[1],
+                ).success(
+                    fn=self._app.chat_page.persist_conversation_source_scope,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._app.chat_page._graph_source_ids,
+                    ],
+                    outputs=[self._app.chat_page._graph_source_ids],
+                    show_progress="hidden",
                 ).then(
                     fn=lambda: gr.update(value="Indexing completed."),
                     outputs=self._app.chat_page.quick_file_upload_status,
@@ -845,16 +865,23 @@ class FileIndexPage(BasePage):
             ],
         )
 
-        self.delete_all_button_confirm.click(
-            fn=self.delete_all_files,
-            inputs=[self.file_list],
-            outputs=[],
-            show_progress="hidden",
-        ).then(
-            fn=self.list_file,
-            inputs=[self._app.user_id, self.filter],
-            outputs=[self.file_list_state, self.file_list],
-        ).then(
+        onDeletedAll = (
+            self.delete_all_button_confirm.click(
+                fn=self.delete_all_files,
+                inputs=[self.file_list],
+                outputs=[],
+                show_progress="hidden",
+            )
+            .then(
+                fn=self.list_file,
+                inputs=[self._app.user_id, self.filter],
+                outputs=[self.file_list_state, self.file_list],
+            )
+        )
+        for event in self._app.get_event(f"onFileIndex{self._index.id}Changed"):
+            onDeletedAll = onDeletedAll.then(**event)
+
+        onDeletedAll.then(
             lambda: [
                 gr.update(visible=True),
                 gr.update(visible=False),
@@ -1372,6 +1399,64 @@ class FileIndexPage(BasePage):
             num /= 1024.0
         return f"{num:.0f}Yi{suffix}"
 
+    @staticmethod
+    def _normalize_selected_ids_from_payload(selected_payload) -> list[str]:
+        if not isinstance(selected_payload, dict):
+            return []
+
+        selected_ids: list[str] = []
+        for value in selected_payload.values():
+            values = value if isinstance(value, list) else [value]
+            for candidate in values:
+                if isinstance(candidate, list):
+                    nested_values = candidate
+                else:
+                    nested_values = [candidate]
+
+                for nested in nested_values:
+                    if isinstance(nested, (dict, tuple, list)):
+                        continue
+                    item = str(nested or "").strip()
+                    if not item or item.lower() in {"select", "upload", "all"}:
+                        continue
+                    selected_ids.append(item)
+
+        merged: list[str] = []
+        seen = set()
+        for item in selected_ids:
+            if item in seen:
+                continue
+            seen.add(item)
+            merged.append(item)
+        return merged
+
+    def _extract_conversation_file_ids(self, data_source: dict | None) -> list[str]:
+        if not isinstance(data_source, dict):
+            return []
+
+        graph_ids = data_source.get("graph_source_ids", [])
+        if isinstance(graph_ids, list):
+            cleaned = []
+            seen = set()
+            for value in graph_ids:
+                file_id = str(value or "").strip()
+                if not file_id or file_id in seen:
+                    continue
+                seen.add(file_id)
+                cleaned.append(file_id)
+            if cleaned:
+                return cleaned
+
+        return self._normalize_selected_ids_from_payload(data_source.get("selected", {}))
+
+    @staticmethod
+    def _format_conversation_scope(conversation_names: list[str]) -> str:
+        if not conversation_names:
+            return "-"
+        if len(conversation_names) <= 2:
+            return ", ".join(conversation_names)
+        return f"{conversation_names[0]}, {conversation_names[1]} (+{len(conversation_names) - 2})"
+
     def list_file(self, user_id, name_pattern=""):
         if user_id is None:
             # not signed in
@@ -1383,6 +1468,7 @@ class FileIndexPage(BasePage):
                         "size": "-",
                         "tokens": "-",
                         "loader": "-",
+                        "conversations": "-",
                         "date_created": "-",
                     }
                 ]
@@ -1395,6 +1481,23 @@ class FileIndexPage(BasePage):
                 statement = statement.where(Source.user == user_id)
             if name_pattern:
                 statement = statement.where(Source.name.ilike(f"%{name_pattern}%"))
+
+            conversation_statement = select(Conversation)
+            if self._index.config.get("private", False):
+                conversation_statement = conversation_statement.where(
+                    Conversation.user == user_id
+                )
+
+            file_to_conversations: dict[str, list[str]] = {}
+            for (conversation_row,) in session.execute(conversation_statement).all():
+                conversation_name = str(conversation_row.name or conversation_row.id)
+                for file_id in self._extract_conversation_file_ids(
+                    conversation_row.data_source or {}
+                ):
+                    names = file_to_conversations.setdefault(file_id, [])
+                    if conversation_name not in names:
+                        names.append(conversation_name)
+
             results = [
                 {
                     "id": each[0].id,
@@ -1404,6 +1507,9 @@ class FileIndexPage(BasePage):
                         each[0].note.get("tokens", "-"), suffix=""
                     ),
                     "loader": each[0].note.get("loader", "-"),
+                    "conversations": self._format_conversation_scope(
+                        file_to_conversations.get(each[0].id, [])
+                    ),
                     "date_created": each[0].date_created.strftime("%Y-%m-%d %H:%M:%S"),
                 }
                 for each in session.execute(statement).all()
@@ -1420,6 +1526,7 @@ class FileIndexPage(BasePage):
                         "size": "-",
                         "tokens": "-",
                         "loader": "-",
+                        "conversations": "-",
                         "date_created": "-",
                     }
                 ]

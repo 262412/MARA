@@ -835,6 +835,118 @@ class ChatPage(BasePage):
             self._normalize_selected_file_ids(new_file_ids),
         )
 
+    @staticmethod
+    def _is_group_selector_value(selector_value: str) -> bool:
+        value = str(selector_value or "").strip()
+        return value.startswith("[") and value.endswith("]")
+
+    def _build_selector_source_map(self, first_selector_choices) -> dict[str, str]:
+        source_map: dict[str, str] = {}
+        for item in list(first_selector_choices or []):
+            if not isinstance(item, (list, tuple)) or len(item) < 2:
+                continue
+            name = str(item[0] or "")
+            file_id = str(item[1] or "")
+            if not file_id or self._is_group_selector_value(file_id):
+                continue
+            source_map[file_id] = name or file_id
+        return source_map
+
+    def _load_available_source_map(self, user_id) -> dict[str, str]:
+        source_map: dict[str, str] = {}
+        if not self.file_index:
+            return source_map
+
+        Source = self.file_index._resources.get("Source")
+        if Source is None:
+            return source_map
+
+        try:
+            with Session(engine) as session:
+                statement = select(Source)
+                if self.file_index.config.get("private", False):
+                    statement = statement.where(Source.user == user_id)
+
+                rows = session.execute(statement).all()
+                for row in rows:
+                    item = None
+                    if isinstance(row, (list, tuple)):
+                        item = row[0] if row else None
+                    elif hasattr(row, "_mapping"):
+                        mapping = getattr(row, "_mapping")
+                        if Source in mapping:
+                            item = mapping[Source]
+                        elif mapping:
+                            item = next(iter(mapping.values()))
+                    if item is None:
+                        item = row
+
+                    file_id = str(getattr(item, "id", "") or "")
+                    if not file_id:
+                        continue
+                    file_name = str(getattr(item, "name", "") or file_id)
+                    source_map[file_id] = file_name
+        except Exception as exc:
+            logger.warning("Failed to load source map for chat sidebar: %s", exc)
+
+        return source_map
+
+    def sync_graph_source_ids_with_selector_choices(
+        self,
+        graph_source_ids,
+        first_selector_choices,
+        user_id,
+    ):
+        current_ids = self._normalize_selected_file_ids(graph_source_ids)
+        if not current_ids:
+            return []
+
+        source_map = self._load_available_source_map(user_id)
+        if not source_map:
+            source_map = self._build_selector_source_map(first_selector_choices)
+        if not source_map:
+            # Selector choices might not be loaded yet during startup.
+            return current_ids
+
+        available_ids = set(source_map.keys())
+        return [file_id for file_id in current_ids if file_id in available_ids]
+
+    def persist_conversation_source_scope(
+        self,
+        conversation_id,
+        user_id,
+        graph_source_ids,
+    ):
+        normalized_ids = self._normalize_selected_file_ids(graph_source_ids)
+        if not conversation_id:
+            return normalized_ids
+
+        try:
+            with Session(engine) as session:
+                statement = select(Conversation).where(Conversation.id == conversation_id)
+                row = session.exec(statement).one_or_none()
+                if not row:
+                    return normalized_ids
+
+                if row.user not in (None, user_id):
+                    return normalized_ids
+
+                data_source = dict(row.data_source or {})
+                existing_ids = self._normalize_selected_file_ids(
+                    data_source.get("graph_source_ids", [])
+                )
+                if existing_ids == normalized_ids:
+                    return normalized_ids
+
+                data_source["graph_source_ids"] = normalized_ids
+                row.data_source = data_source
+                session.add(row)
+                session.commit()
+        except Exception as exc:
+            logger.warning("Failed to persist conversation source scope: %s", exc)
+
+        return normalized_ids
+
     def _render_chat_file_list_html(self, rows: list[dict], selected_ids: set[str]) -> str:
         if not rows:
             return "<div class='chat-file-empty'>No files uploaded</div>"
@@ -855,30 +967,53 @@ class ChatPage(BasePage):
 
         return "<div class='chat-file-list-shell'>" + "".join(items) + "</div>"
 
-    def refresh_chat_file_list(self, first_selector_choices, selected_file_ids, filter_text):
+    def refresh_chat_file_list(
+        self,
+        conversation_id,
+        user_id,
+        first_selector_choices,
+        selected_file_ids,
+        graph_source_ids,
+        filter_text,
+    ):
         selected_ids = self._normalize_selected_file_ids(selected_file_ids)
         selected_set = set(selected_ids)
         keyword = str(filter_text or "").strip().lower()
+        source_map = self._load_available_source_map(user_id)
+        if not source_map and not str(conversation_id or "").strip():
+            source_map = self._build_selector_source_map(first_selector_choices)
+
+        scoped_ids = self._normalize_selected_file_ids(graph_source_ids)
+        if not scoped_ids:
+            # Backward-compatible fallback for older conversations.
+            scoped_ids = selected_ids
+
+        if source_map and scoped_ids:
+            available_ids = set(source_map.keys())
+            scoped_ids = [file_id for file_id in scoped_ids if file_id in available_ids]
+
+        if not scoped_ids and not str(conversation_id or "").strip():
+            # No active conversation yet: show all available files in collection.
+            scoped_ids = list(source_map.keys())
 
         rows: list[dict] = []
-        for item in list(first_selector_choices or []):
-            if not isinstance(item, (list, tuple)) or len(item) < 2:
-                continue
-            name = str(item[0] or "")
-            file_id = str(item[1] or "")
-            if not file_id:
-                continue
+        for file_id in scoped_ids:
+            name = source_map.get(file_id, file_id)
             if keyword and keyword not in name.lower():
                 continue
             rows.append({"id": file_id, "name": name})
 
-        selected_name = "all files"
+        selected_name = "all files in conversation"
         if selected_ids:
             first_selected = selected_ids[0]
             for row in rows:
                 if row["id"] == first_selected:
                     selected_name = row["name"]
                     break
+            if selected_name == "all files in conversation":
+                selected_name = source_map.get(first_selected, first_selected)
+        elif not str(conversation_id or "").strip():
+            selected_name = "all files in collection"
 
         list_html = self._render_chat_file_list_html(rows, selected_set)
         return rows, list_html, f"Focus: {selected_name}"
@@ -1847,8 +1982,11 @@ class ChatPage(BasePage):
             self.chat_file_filter.change(
                 fn=self.refresh_chat_file_list,
                 inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
                     self.first_selector_choices,
                     self._indices_input[1],
+                    self._graph_source_ids,
                     self.chat_file_filter,
                 ],
                 outputs=[
@@ -1862,8 +2000,11 @@ class ChatPage(BasePage):
             self._indices_input[1].change(
                 fn=self.refresh_chat_file_list,
                 inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
                     self.first_selector_choices,
                     self._indices_input[1],
+                    self._graph_source_ids,
                     self.chat_file_filter,
                 ],
                 outputs=[
@@ -1899,16 +2040,32 @@ class ChatPage(BasePage):
                 show_progress="hidden",
             )
 
-            self.chat_control.conversation_id.change(
-                fn=self.load_conversation_graph_state,
-                inputs=[self.chat_control.conversation_id],
+            self.first_selector_choices.change(
+                fn=self.sync_graph_source_ids_with_selector_choices,
+                inputs=[
+                    self._graph_source_ids,
+                    self.first_selector_choices,
+                    self._app.user_id,
+                ],
+                outputs=[self._graph_source_ids],
+                show_progress="hidden",
+            ).then(
+                fn=self.persist_conversation_source_scope,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
+                    self._graph_source_ids,
+                ],
                 outputs=[self._graph_source_ids],
                 show_progress="hidden",
             ).then(
                 fn=self.refresh_chat_file_list,
                 inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
                     self.first_selector_choices,
                     self._indices_input[1],
+                    self._graph_source_ids,
                     self.chat_file_filter,
                 ],
                 outputs=[
@@ -1932,6 +2089,112 @@ class ChatPage(BasePage):
                 ],
                 show_progress="hidden",
             )
+
+            self.chat_control.conversation_id.change(
+                fn=self.load_conversation_graph_state,
+                inputs=[self.chat_control.conversation_id],
+                outputs=[self._graph_source_ids],
+                show_progress="hidden",
+            ).then(
+                fn=self.sync_graph_source_ids_with_selector_choices,
+                inputs=[
+                    self._graph_source_ids,
+                    self.first_selector_choices,
+                    self._app.user_id,
+                ],
+                outputs=[self._graph_source_ids],
+                show_progress="hidden",
+            ).then(
+                fn=self.persist_conversation_source_scope,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
+                    self._graph_source_ids,
+                ],
+                outputs=[self._graph_source_ids],
+                show_progress="hidden",
+            ).then(
+                fn=self.refresh_chat_file_list,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
+                    self.first_selector_choices,
+                    self._indices_input[1],
+                    self._graph_source_ids,
+                    self.chat_file_filter,
+                ],
+                outputs=[
+                    self.chat_file_rows,
+                    self.chat_file_list,
+                    self.chat_selected_file,
+                ],
+                show_progress="hidden",
+            ).then(
+                fn=self.refresh_knowledge_graph,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._graph_source_ids,
+                    self._active_file_id,
+                ],
+                outputs=[
+                    self.plot_panel,
+                    self.state_plot_panel,
+                    self.knowledge_graph_status,
+                    self._graph_source_ids,
+                ],
+                show_progress="hidden",
+            )
+
+            if hasattr(self._app, "_tabs") and "chat-tab" in self._app._tabs:
+                self._app._tabs["chat-tab"].select(
+                    fn=self.sync_graph_source_ids_with_selector_choices,
+                    inputs=[
+                        self._graph_source_ids,
+                        self.first_selector_choices,
+                        self._app.user_id,
+                    ],
+                    outputs=[self._graph_source_ids],
+                    show_progress="hidden",
+                ).then(
+                    fn=self.persist_conversation_source_scope,
+                    inputs=[
+                        self.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._graph_source_ids,
+                    ],
+                    outputs=[self._graph_source_ids],
+                    show_progress="hidden",
+                ).then(
+                    fn=self.refresh_chat_file_list,
+                    inputs=[
+                        self.chat_control.conversation_id,
+                        self._app.user_id,
+                        self.first_selector_choices,
+                        self._indices_input[1],
+                        self._graph_source_ids,
+                        self.chat_file_filter,
+                    ],
+                    outputs=[
+                        self.chat_file_rows,
+                        self.chat_file_list,
+                        self.chat_selected_file,
+                    ],
+                    show_progress="hidden",
+                ).then(
+                    fn=self.refresh_knowledge_graph,
+                    inputs=[
+                        self.chat_control.conversation_id,
+                        self._graph_source_ids,
+                        self._active_file_id,
+                    ],
+                    outputs=[
+                        self.plot_panel,
+                        self.state_plot_panel,
+                        self.knowledge_graph_status,
+                        self._graph_source_ids,
+                    ],
+                    show_progress="hidden",
+                )
 
             self.knowledge_graph_refresh.click(
                 fn=lambda: "Status: generating knowledge graph...",
@@ -2140,6 +2403,73 @@ class ChatPage(BasePage):
                 )
 
     def on_subscribe_public_events(self):
+        if self.knowledge_graph and len(self._indices_input) > 1 and self.file_index:
+            event_name = f"onFileIndex{self.file_index.id}Changed"
+            self._app.subscribe_event(
+                name=event_name,
+                definition={
+                    "fn": self.sync_graph_source_ids_with_selector_choices,
+                    "inputs": [
+                        self._graph_source_ids,
+                        self.first_selector_choices,
+                        self._app.user_id,
+                    ],
+                    "outputs": [self._graph_source_ids],
+                    "show_progress": "hidden",
+                },
+            )
+            self._app.subscribe_event(
+                name=event_name,
+                definition={
+                    "fn": self.persist_conversation_source_scope,
+                    "inputs": [
+                        self.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._graph_source_ids,
+                    ],
+                    "outputs": [self._graph_source_ids],
+                    "show_progress": "hidden",
+                },
+            )
+            self._app.subscribe_event(
+                name=event_name,
+                definition={
+                    "fn": self.refresh_chat_file_list,
+                    "inputs": [
+                        self.chat_control.conversation_id,
+                        self._app.user_id,
+                        self.first_selector_choices,
+                        self._indices_input[1],
+                        self._graph_source_ids,
+                        self.chat_file_filter,
+                    ],
+                    "outputs": [
+                        self.chat_file_rows,
+                        self.chat_file_list,
+                        self.chat_selected_file,
+                    ],
+                    "show_progress": "hidden",
+                },
+            )
+            self._app.subscribe_event(
+                name=event_name,
+                definition={
+                    "fn": self.refresh_knowledge_graph,
+                    "inputs": [
+                        self.chat_control.conversation_id,
+                        self._graph_source_ids,
+                        self._active_file_id,
+                    ],
+                    "outputs": [
+                        self.plot_panel,
+                        self.state_plot_panel,
+                        self.knowledge_graph_status,
+                        self._graph_source_ids,
+                    ],
+                    "show_progress": "hidden",
+                },
+            )
+
         if self._app.f_user_management:
             self._app.subscribe_event(
                 name="onSignIn",
