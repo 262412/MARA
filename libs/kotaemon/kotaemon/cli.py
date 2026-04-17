@@ -29,6 +29,157 @@ def promptui():
 main.add_command(promptui)
 
 
+@click.group()
+def modelcli():
+    """Cross-model CLI commands (experimental)."""
+
+
+main.add_command(modelcli)
+
+
+@modelcli.command("init-config")
+@click.option(
+    "--output",
+    default="modelcli.yml",
+    show_default=True,
+    help="Output config file path.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Overwrite the config file if it already exists.",
+)
+def modelcli_init_config(output, force):
+    """Generate default multi-provider config file."""
+    from kotaemon.modelcli import write_default_config
+
+    try:
+        path = write_default_config(output_path=output, force=force)
+    except FileExistsError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"Config written to {path}")
+
+
+@modelcli.command("providers")
+@click.option(
+    "--config",
+    "config_path",
+    default="modelcli.yml",
+    show_default=True,
+    help="Runtime config path.",
+)
+def modelcli_providers(config_path):
+    """List provider availability from current environment."""
+    from pathlib import Path
+
+    from kotaemon.modelcli import build_registry, load_runtime_config
+
+    try:
+        cfg = load_runtime_config(config_path if Path(config_path).exists() else None)
+        registry = build_registry()
+        report = registry.availability(cfg)
+    except Exception as exc:  # pragma: no cover - defensive CLI wrapper
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo("Provider\tAvailable\tReason")
+    for name in registry.names():
+        available, reason = report[name]
+        status = "yes" if available else "no"
+        click.echo(f"{name}\t{status}\t{reason}")
+
+
+@modelcli.command("run")
+@click.option("--prompt", required=True, help="Prompt to send to the selected model.")
+@click.option("--model", required=True, help="Model name or alias.")
+@click.option("--provider", required=False, help="Provider name override.")
+@click.option(
+    "--system-prompt",
+    required=False,
+    default=None,
+    help="Optional system prompt.",
+)
+@click.option(
+    "--temperature",
+    required=False,
+    default=0.2,
+    type=float,
+    show_default=True,
+)
+@click.option("--max-tokens", required=False, type=int, default=None)
+@click.option(
+    "--config",
+    "config_path",
+    default="modelcli.yml",
+    show_default=True,
+    help="Runtime config path.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Resolve provider/model and print execution plan without calling APIs.",
+)
+def modelcli_run(
+    prompt,
+    model,
+    provider,
+    system_prompt,
+    temperature,
+    max_tokens,
+    config_path,
+    dry_run,
+):
+    """Run a single completion through provider router."""
+    from pathlib import Path
+
+    from kotaemon.modelcli import (
+        ModelRequest,
+        build_registry,
+        load_runtime_config,
+        resolve_provider_name,
+        run_completion,
+    )
+
+    try:
+        cfg = load_runtime_config(config_path if Path(config_path).exists() else None)
+        registry = build_registry()
+        request = ModelRequest(
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        if dry_run:
+            resolved_model = cfg.resolve_model_alias(request.model)
+            provider_name = resolve_provider_name(
+                registry=registry,
+                cfg=cfg,
+                model=resolved_model,
+                provider=provider,
+            )
+            click.echo("mode: dry-run")
+            click.echo(f"provider: {provider_name}")
+            click.echo(f"model: {resolved_model}")
+            return
+
+        response = run_completion(
+            registry=registry,
+            cfg=cfg,
+            request=request,
+            provider=provider,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(response.text)
+
+
 @promptui.command()
 @click.argument("export_path", nargs=1)
 @click.option("--output", default="promptui.yml", show_default=True, required=False)
