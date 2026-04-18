@@ -542,6 +542,7 @@ class ChatPage(BasePage):
                         label="Files in this conversation",
                         placeholder="Filter file name",
                         elem_id="chat-file-filter",
+                        visible=False,
                     )
                     self.chat_file_rows = gr.State([])
                     self.chat_selected_file = gr.Markdown(
@@ -1066,6 +1067,31 @@ class ChatPage(BasePage):
             except Exception:
                 pass
         return value if value else fallback_ids
+
+    def show_knowledge_graph_loading(self, _trigger=None, mode: str = "update"):
+        normalized_mode = str(mode or "update").strip().lower()
+        is_generating = normalized_mode.startswith("gen")
+        title = (
+            "Generating knowledge graph..."
+            if is_generating
+            else "Updating knowledge graph..."
+        )
+        hint = (
+            "Analyzing current conversation files and rebuilding links."
+            if is_generating
+            else "Detected file changes. Recomputing graph nodes and relationships."
+        )
+        loading_html = (
+            "<div class='knowledge-graph-shell is-loading' id='knowledge-graph-panel' "
+            "data-kg-status='loading'>"
+            "<div class='kg-loading'>"
+            "<div class='kg-loading__spinner' aria-hidden='true'></div>"
+            f"<h4 class='kg-loading__title'>{title}</h4>"
+            f"<p class='kg-loading__hint'>{hint}</p>"
+            "</div>"
+            "</div>"
+        )
+        return gr.update(visible=True, value=loading_html), f"Status: {title}"
 
     def refresh_knowledge_graph(
         self,
@@ -2049,6 +2075,14 @@ class ChatPage(BasePage):
                 ],
                 show_progress="hidden",
             ).then(
+                fn=self.show_knowledge_graph_loading,
+                inputs=[self.chat_control.conversation_id],
+                outputs=[
+                    self.plot_panel,
+                    self.knowledge_graph_status,
+                ],
+                show_progress="hidden",
+            ).then(
                 fn=self.refresh_knowledge_graph,
                 inputs=[
                     self.chat_control.conversation_id,
@@ -2111,6 +2145,14 @@ class ChatPage(BasePage):
                 ],
                 show_progress="hidden",
             ).then(
+                fn=self.show_knowledge_graph_loading,
+                inputs=[self.chat_control.conversation_id],
+                outputs=[
+                    self.plot_panel,
+                    self.knowledge_graph_status,
+                ],
+                show_progress="hidden",
+            ).then(
                 fn=self.refresh_knowledge_graph,
                 inputs=[
                     self.chat_control.conversation_id,
@@ -2167,6 +2209,14 @@ class ChatPage(BasePage):
                 ],
                 show_progress="hidden",
             ).then(
+                fn=self.show_knowledge_graph_loading,
+                inputs=[self.chat_control.conversation_id],
+                outputs=[
+                    self.plot_panel,
+                    self.knowledge_graph_status,
+                ],
+                show_progress="hidden",
+            ).then(
                 fn=self.refresh_knowledge_graph,
                 inputs=[
                     self.chat_control.conversation_id,
@@ -2219,6 +2269,14 @@ class ChatPage(BasePage):
                     ],
                     show_progress="hidden",
                 ).then(
+                    fn=self.show_knowledge_graph_loading,
+                    inputs=[self.chat_control.conversation_id],
+                    outputs=[
+                        self.plot_panel,
+                        self.knowledge_graph_status,
+                    ],
+                    show_progress="hidden",
+                ).then(
                     fn=self.refresh_knowledge_graph,
                     inputs=[
                         self.chat_control.conversation_id,
@@ -2236,8 +2294,14 @@ class ChatPage(BasePage):
                 )
 
             self.knowledge_graph_refresh.click(
-                fn=lambda: "Status: generating knowledge graph...",
-                outputs=[self.knowledge_graph_status],
+                fn=lambda conversation_id: self.show_knowledge_graph_loading(
+                    conversation_id, mode="generate"
+                ),
+                inputs=[self.chat_control.conversation_id],
+                outputs=[
+                    self.plot_panel,
+                    self.knowledge_graph_status,
+                ],
                 show_progress="hidden",
             ).then(
                 fn=self.generate_knowledge_graph,
@@ -2487,6 +2551,18 @@ class ChatPage(BasePage):
                         self.chat_file_rows,
                         self.chat_file_list,
                         self.chat_selected_file,
+                    ],
+                    "show_progress": "hidden",
+                },
+            )
+            self._app.subscribe_event(
+                name=event_name,
+                definition={
+                    "fn": self.show_knowledge_graph_loading,
+                    "inputs": [self.chat_control.conversation_id],
+                    "outputs": [
+                        self.plot_panel,
+                        self.knowledge_graph_status,
                     ],
                     "show_progress": "hidden",
                 },

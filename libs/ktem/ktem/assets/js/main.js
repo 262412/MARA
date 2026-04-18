@@ -864,6 +864,25 @@ function run() {
     if (graphPanel && graphPanel.dataset.kgBound !== "true") {
       graphPanel.dataset.kgBound = "true";
       graphPanel.addEventListener("click", (event) => {
+        const toggleTrigger = event.target.closest("[data-kg-toggle-points]");
+        if (toggleTrigger) {
+          const fileCard = toggleTrigger.closest("[data-kg-file-card]");
+          if (!fileCard) {
+            return;
+          }
+          const isExpanded = fileCard.classList.toggle("is-points-expanded");
+          const moreLabel =
+            toggleTrigger.getAttribute("data-kg-more-label") ||
+            toggleTrigger.textContent ||
+            "";
+          const lessLabel =
+            toggleTrigger.getAttribute("data-kg-less-label") || "Show less";
+
+          toggleTrigger.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+          toggleTrigger.textContent = isExpanded ? lessLabel : moreLabel;
+          return;
+        }
+
         const trigger = event.target.closest("[data-kg-payload]");
         if (!trigger) {
           return;
@@ -928,7 +947,7 @@ function run() {
       });
     }
 
-    bindKnowledgeGraphPan();
+    // Drag-pan frequently suppresses click events on dense/long trees; rely on native scroll.
     syncKnowledgeGraphFocus();
   }
 
@@ -1121,8 +1140,11 @@ function run() {
   function initChatPanelControls() {
     const infoExpandButton = document.getElementById("info-expand-button");
     const chatInfoPanel = document.getElementById("info-expand");
-    if (infoExpandButton && chatInfoPanel && chatInfoPanel.childNodes.length >= 2) {
-      chatInfoPanel.insertBefore(infoExpandButton, chatInfoPanel.childNodes[2]);
+    if (infoExpandButton && chatInfoPanel) {
+      const infoExpandHeader = chatInfoPanel.querySelector(":scope > div:first-child");
+      if (infoExpandHeader) {
+        infoExpandHeader.appendChild(infoExpandButton);
+      }
     }
 
     const chatExpandButton = document.getElementById("chat-expand-button");
@@ -1154,7 +1176,7 @@ function run() {
       }
     };
 
-    if (chatColumn && chatExpandButton) {
+    if (chatColumn && chatExpandButton && chatExpandButton.offsetParent !== null) {
       chatExpandButton.style.flexGrow = "0";
       chatExpandButton.style.width = "36px";
       chatExpandButton.style.minWidth = "36px";

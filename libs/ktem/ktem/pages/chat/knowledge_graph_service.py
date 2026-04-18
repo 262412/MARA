@@ -902,13 +902,14 @@ class GlobalKnowledgeGraphService:
             system_html_parts.append("<ul class='kg-tree-list kg-tree-list--files kg-system__files'>")
             for file_card in file_group:
                 file_id = str(file_card.get("file_id", "") or "")
+                safe_file_id = html.escape(file_id, quote=True)
                 is_focused_file = bool(focus_file_id and file_id == focus_file_id)
                 file_classes = (
                     "kg-tree-item kg-tree-item--file kg-file-card is-focused"
                     if is_focused_file
                     else "kg-tree-item kg-tree-item--file kg-file-card"
                 )
-                system_html_parts.append(f"<li class='{file_classes}' data-kg-file-card='{html.escape(file_id, quote=True)}'>")
+                system_html_parts.append(f"<li class='{file_classes}' data-kg-file-card='{safe_file_id}'>")
                 system_html_parts.append(
                     "<button type='button' class='kg-tree-node kg-tree-node--file kg-file-card__title' "
                     f"data-kg-payload=\"{self._payload_attr(file_card, focus_file_id)}\">"
@@ -920,8 +921,13 @@ class GlobalKnowledgeGraphService:
                 )
 
                 file_points = list(points_by_file.get(file_id, []))
-                visible_points = file_points if is_focused_file or len(file_group) == 1 else file_points[:2]
-                if visible_points:
+                collapsed_points: list[dict[str, Any]] = []
+                visible_points = file_points
+                if not is_focused_file and len(file_group) > 1:
+                    visible_points = file_points[:2]
+                    collapsed_points = file_points[2:]
+
+                if visible_points or collapsed_points:
                     system_html_parts.append("<ul class='kg-tree-list kg-tree-list--points kg-point-list'>")
                     for point in visible_points:
                         system_html_parts.append(
@@ -932,10 +938,29 @@ class GlobalKnowledgeGraphService:
                             "</button>"
                             "</li>"
                         )
-                    if len(file_points) > len(visible_points):
+
+                    for point in collapsed_points:
+                        system_html_parts.append(
+                            "<li class='kg-tree-item kg-tree-item--point kg-point-item is-collapsed-point'>"
+                            "<button type='button' class='kg-tree-node kg-tree-node--point kg-point-card' "
+                            f"data-kg-payload=\"{self._payload_attr(point, focus_file_id)}\">"
+                            f"{html.escape(str(point.get('label', '') or 'Knowledge point'))}"
+                            "</button>"
+                            "</li>"
+                        )
+
+                    if collapsed_points:
+                        more_label = f"+{len(collapsed_points)} more point(s)"
+                        less_label = "Show less"
                         system_html_parts.append(
                             "<li class='kg-tree-item kg-tree-item--more'>"
-                            f"<div class='kg-point-more'>+{len(file_points) - len(visible_points)} more point(s)</div>"
+                            "<button type='button' class='kg-point-more kg-point-more--toggle' "
+                            f"data-kg-toggle-points='{safe_file_id}' "
+                            f"data-kg-more-label='{html.escape(more_label, quote=True)}' "
+                            f"data-kg-less-label='{html.escape(less_label, quote=True)}' "
+                            "aria-expanded='false'>"
+                            f"{html.escape(more_label)}"
+                            "</button>"
                             "</li>"
                         )
                     system_html_parts.append("</ul>")

@@ -688,6 +688,48 @@ class FileIndexPage(BasePage):
                             outputs=[self._app.chat_page._graph_source_ids],
                             show_progress="hidden",
                         )
+                        .then(
+                            fn=self._app.chat_page.refresh_chat_file_list,
+                            inputs=[
+                                self._app.chat_page.chat_control.conversation_id,
+                                self._app.user_id,
+                                self._app.chat_page.first_selector_choices,
+                                self._app.chat_page._indices_input[1],
+                                self._app.chat_page._graph_source_ids,
+                                self._app.chat_page.chat_file_filter,
+                            ],
+                            outputs=[
+                                self._app.chat_page.chat_file_rows,
+                                self._app.chat_page.chat_file_list,
+                                self._app.chat_page.chat_selected_file,
+                            ],
+                            show_progress="hidden",
+                        )
+                        .then(
+                            fn=self._app.chat_page.show_knowledge_graph_loading,
+                            inputs=[self._app.chat_page.chat_control.conversation_id],
+                            outputs=[
+                                self._app.chat_page.plot_panel,
+                                self._app.chat_page.knowledge_graph_status,
+                            ],
+                            show_progress="hidden",
+                        )
+                        .then(
+                            fn=self._app.chat_page.refresh_knowledge_graph,
+                            inputs=[
+                                self._app.chat_page.chat_control.conversation_id,
+                                self._app.chat_page._graph_source_ids,
+                                self._app.chat_page._active_file_id,
+                                self._app.chat_page._indices_input[1],
+                            ],
+                            outputs=[
+                                self._app.chat_page.plot_panel,
+                                self._app.chat_page.state_plot_panel,
+                                self._app.chat_page.knowledge_graph_status,
+                                self._app.chat_page._graph_source_ids,
+                            ],
+                            show_progress="hidden",
+                        )
                         .success(
                             fn=lambda x: x,
                             inputs=self.quick_upload_state,
@@ -761,6 +803,45 @@ class FileIndexPage(BasePage):
                         self.quick_upload_state,
                     ],
                     outputs=[self._app.chat_page._graph_source_ids],
+                    show_progress="hidden",
+                ).then(
+                    fn=self._app.chat_page.refresh_chat_file_list,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._app.chat_page.first_selector_choices,
+                        self._app.chat_page._indices_input[1],
+                        self._app.chat_page._graph_source_ids,
+                        self._app.chat_page.chat_file_filter,
+                    ],
+                    outputs=[
+                        self._app.chat_page.chat_file_rows,
+                        self._app.chat_page.chat_file_list,
+                        self._app.chat_page.chat_selected_file,
+                    ],
+                    show_progress="hidden",
+                ).then(
+                    fn=self._app.chat_page.show_knowledge_graph_loading,
+                    inputs=[self._app.chat_page.chat_control.conversation_id],
+                    outputs=[
+                        self._app.chat_page.plot_panel,
+                        self._app.chat_page.knowledge_graph_status,
+                    ],
+                    show_progress="hidden",
+                ).then(
+                    fn=self._app.chat_page.refresh_knowledge_graph,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.chat_page._graph_source_ids,
+                        self._app.chat_page._active_file_id,
+                        self._app.chat_page._indices_input[1],
+                    ],
+                    outputs=[
+                        self._app.chat_page.plot_panel,
+                        self._app.chat_page.state_plot_panel,
+                        self._app.chat_page.knowledge_graph_status,
+                        self._app.chat_page._graph_source_ids,
+                    ],
                     show_progress="hidden",
                 ).success(
                     fn=lambda x: x,
