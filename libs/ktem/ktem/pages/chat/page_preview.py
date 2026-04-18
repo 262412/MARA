@@ -42,12 +42,8 @@ from .page_preview_runtime import (
 )
 from .page_preview_types import detect_office_extension, is_office_source, is_pdf_source
 
-# HTML placeholder shown when no mindmap is generated
-MINDMAP_PLACEHOLDER_HTML = (
-    "<div class='page-result-placeholder'>"
-    "Enter a question to generate a page-specific mindmap."
-    "</div>"
-)
+# Keep mindmap placeholder empty so the Knowledge Graph area is not occupied.
+MINDMAP_PLACEHOLDER_HTML = ""
 # Message shown when no answer is available yet
 ANSWER_PLACEHOLDER_TEXT = "Ask a question about the current page to generate an answer."
 logger = logging.getLogger(__name__)
@@ -354,8 +350,8 @@ class ChatPagePreviewController:
         return (
             "",
             MINDMAP_PLACEHOLDER_HTML,
-            gr.update(visible=False),
-            None,
+            gr.skip(),
+            gr.skip(),
             ANSWER_PLACEHOLDER_TEXT,
             [],  # Empty chat history
         )
@@ -386,8 +382,8 @@ class ChatPagePreviewController:
                 return (
                     last_question,
                     mindmap_html,
-                    gr.update(visible=False),
-                    None,
+                    gr.skip(),
+                    gr.skip(),
                     answer_html,
                     chat_history,
                 )
@@ -415,8 +411,8 @@ class ChatPagePreviewController:
         return (
             last_question,
             mindmap_html,
-            gr.update(visible=False),
-            None,
+            gr.skip(),
+            gr.skip(),
             answer_text,
             chat_history,  # Return chat history for the chatbot component
         )

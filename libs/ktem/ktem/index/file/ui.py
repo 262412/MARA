@@ -13,6 +13,7 @@ import pandas as pd
 from gradio.data_classes import FileData
 from gradio.utils import NamedString
 from ktem.app import BasePage
+from ktem.db.models import Conversation
 from ktem.db.engine import engine
 from ktem.utils.render import Render
 from sqlalchemy import select
@@ -185,9 +186,8 @@ class FileIndexPage(BasePage):
                 "loader",
                 "date_created",
             ],
-            column_widths=[0, 50, 8, 7, 15, 20],
             interactive=False,
-            wrap=False,
+            wrap=True,
             elem_id="file_list_view",
         )
 
@@ -335,6 +335,8 @@ class FileIndexPage(BasePage):
                         variant="secondary",
                         elem_classes=["right-button"],
                     )
+                    self.upload_before_source_ids = gr.State(value=[])
+                    self.upload_new_source_ids = gr.State(value=[])
 
                 with gr.Tab("Files"):
                     self.render_file_list()
@@ -394,6 +396,37 @@ class FileIndexPage(BasePage):
                     "show_progress": "hidden",
                 },
             )
+
+    def _list_source_ids_for_user(self, user_id) -> list[str]:
+        Source = self._index._resources.get("Source")
+        if Source is None:
+            return []
+
+        with Session(engine) as session:
+            statement = select(Source.id)
+            if self._index.config.get("private", False):
+                statement = statement.where(Source.user == user_id)
+            rows = session.execute(statement).all()
+
+        source_ids: list[str] = []
+        for row in rows:
+            file_id = str(row[0] or "").strip() if row else ""
+            if not file_id:
+                continue
+            source_ids.append(file_id)
+        return source_ids
+
+    def snapshot_source_ids(self, user_id) -> list[str]:
+        return self._list_source_ids_for_user(user_id)
+
+    def collect_new_source_ids(self, before_source_ids, user_id) -> list[str]:
+        before_set = {
+            str(item or "").strip()
+            for item in (before_source_ids or [])
+            if str(item or "").strip()
+        }
+        current_ids = self._list_source_ids_for_user(user_id)
+        return [file_id for file_id in current_ids if file_id not in before_set]
 
     def file_selected(self, file_id):
         chunks = []
@@ -647,9 +680,28 @@ class FileIndexPage(BasePage):
 
                     quickUploadedEvent = (
                         quickUploadedEvent.success(
+                            fn=self._app.chat_page.merge_graph_source_ids,
+                            inputs=[
+                                self._app.chat_page._graph_source_ids,
+                                self.quick_upload_state,
+                            ],
+                            outputs=[self._app.chat_page._graph_source_ids],
+                            show_progress="hidden",
+                        )
+                        .success(
                             fn=lambda x: x,
                             inputs=self.quick_upload_state,
                             outputs=self._app.chat_page._indices_input[1],
+                        )
+                        .success(
+                            fn=self._app.chat_page.persist_conversation_source_scope,
+                            inputs=[
+                                self._app.chat_page.chat_control.conversation_id,
+                                self._app.user_id,
+                                self._app.chat_page._graph_source_ids,
+                            ],
+                            outputs=[self._app.chat_page._graph_source_ids],
+                            show_progress="hidden",
                         )
                         .then(
                             fn=lambda: gr.update(value="Indexing completed."),
@@ -703,9 +755,26 @@ class FileIndexPage(BasePage):
                     quickURLUploadedEvent = quickURLUploadedEvent.then(**event)
 
                 quickURLUploadedEvent = quickURLUploadedEvent.success(
+                    fn=self._app.chat_page.merge_graph_source_ids,
+                    inputs=[
+                        self._app.chat_page._graph_source_ids,
+                        self.quick_upload_state,
+                    ],
+                    outputs=[self._app.chat_page._graph_source_ids],
+                    show_progress="hidden",
+                ).success(
                     fn=lambda x: x,
                     inputs=self.quick_upload_state,
                     outputs=self._app.chat_page._indices_input[1],
+                ).success(
+                    fn=self._app.chat_page.persist_conversation_source_scope,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._app.chat_page._graph_source_ids,
+                    ],
+                    outputs=[self._app.chat_page._graph_source_ids],
+                    show_progress="hidden",
                 ).then(
                     fn=lambda: gr.update(value="Indexing completed."),
                     outputs=self._app.chat_page.quick_file_upload_status,
@@ -828,16 +897,23 @@ class FileIndexPage(BasePage):
             ],
         )
 
-        self.delete_all_button_confirm.click(
-            fn=self.delete_all_files,
-            inputs=[self.file_list],
-            outputs=[],
-            show_progress="hidden",
-        ).then(
-            fn=self.list_file,
-            inputs=[self._app.user_id, self.filter],
-            outputs=[self.file_list_state, self.file_list],
-        ).then(
+        onDeletedAll = (
+            self.delete_all_button_confirm.click(
+                fn=self.delete_all_files,
+                inputs=[self.file_list],
+                outputs=[],
+                show_progress="hidden",
+            )
+            .then(
+                fn=self.list_file,
+                inputs=[self._app.user_id, self.filter],
+                outputs=[self.file_list_state, self.file_list],
+            )
+        )
+        for event in self._app.get_event(f"onFileIndex{self._index.id}Changed"):
+            onDeletedAll = onDeletedAll.then(**event)
+
+        onDeletedAll.then(
             lambda: [
                 gr.update(visible=True),
                 gr.update(visible=False),
@@ -872,6 +948,12 @@ class FileIndexPage(BasePage):
                 outputs=[self.upload_progress_panel],
             )
             .then(
+                fn=self.snapshot_source_ids,
+                inputs=[self._app.user_id],
+                outputs=[self.upload_before_source_ids],
+                show_progress="hidden",
+            )
+            .then(
                 fn=self.index_fn,
                 inputs=[
                     self.files,
@@ -889,14 +971,83 @@ class FileIndexPage(BasePage):
             )
         )
 
-        uploadedEvent = onUploaded.then(
-            fn=self.list_file,
-            inputs=[self._app.user_id, self.filter],
-            outputs=[self.file_list_state, self.file_list],
-            concurrency_limit=20,
+        uploadedEvent = (
+            onUploaded.then(
+                fn=self.collect_new_source_ids,
+                inputs=[self.upload_before_source_ids, self._app.user_id],
+                outputs=[self.upload_new_source_ids],
+                show_progress="hidden",
+            )
+            .then(
+                fn=self.list_file,
+                inputs=[self._app.user_id, self.filter],
+                outputs=[self.file_list_state, self.file_list],
+                concurrency_limit=20,
+            )
         )
         for event in self._app.get_event(f"onFileIndex{self._index.id}Changed"):
             uploadedEvent = uploadedEvent.then(**event)
+
+        if (
+            self._index.id == 1
+            and getattr(self._app, "chat_page", None) is not None
+            and getattr(self._app.chat_page, "knowledge_graph", None) is not None
+            and len(getattr(self._app.chat_page, "_indices_input", [])) > 1
+        ):
+            uploadedEvent = (
+                uploadedEvent.then(
+                    fn=self._app.chat_page.merge_graph_source_ids,
+                    inputs=[
+                        self._app.chat_page._graph_source_ids,
+                        self.upload_new_source_ids,
+                    ],
+                    outputs=[self._app.chat_page._graph_source_ids],
+                    show_progress="hidden",
+                )
+                .then(
+                    fn=self._app.chat_page.persist_conversation_source_scope,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._app.chat_page._graph_source_ids,
+                    ],
+                    outputs=[self._app.chat_page._graph_source_ids],
+                    show_progress="hidden",
+                )
+                .then(
+                    fn=self._app.chat_page.refresh_chat_file_list,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._app.chat_page.first_selector_choices,
+                        self._app.chat_page._indices_input[1],
+                        self._app.chat_page._graph_source_ids,
+                        self._app.chat_page.chat_file_filter,
+                    ],
+                    outputs=[
+                        self._app.chat_page.chat_file_rows,
+                        self._app.chat_page.chat_file_list,
+                        self._app.chat_page.chat_selected_file,
+                    ],
+                    show_progress="hidden",
+                )
+                .then(
+                    fn=self._app.chat_page.refresh_knowledge_graph,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.chat_page._graph_source_ids,
+                        self._app.chat_page._active_file_id,
+                        self._app.chat_page._indices_input[1],
+                    ],
+                    outputs=[
+                        self._app.chat_page.plot_panel,
+                        self._app.chat_page.state_plot_panel,
+                        self._app.chat_page.knowledge_graph_status,
+                        self._app.chat_page._graph_source_ids,
+                    ],
+                    show_progress="hidden",
+                )
+            )
 
         _ = onUploaded.success(
             fn=lambda: None,
@@ -1355,6 +1506,64 @@ class FileIndexPage(BasePage):
             num /= 1024.0
         return f"{num:.0f}Yi{suffix}"
 
+    @staticmethod
+    def _normalize_selected_ids_from_payload(selected_payload) -> list[str]:
+        if not isinstance(selected_payload, dict):
+            return []
+
+        selected_ids: list[str] = []
+        for value in selected_payload.values():
+            values = value if isinstance(value, list) else [value]
+            for candidate in values:
+                if isinstance(candidate, list):
+                    nested_values = candidate
+                else:
+                    nested_values = [candidate]
+
+                for nested in nested_values:
+                    if isinstance(nested, (dict, tuple, list)):
+                        continue
+                    item = str(nested or "").strip()
+                    if not item or item.lower() in {"select", "upload", "all"}:
+                        continue
+                    selected_ids.append(item)
+
+        merged: list[str] = []
+        seen = set()
+        for item in selected_ids:
+            if item in seen:
+                continue
+            seen.add(item)
+            merged.append(item)
+        return merged
+
+    def _extract_conversation_file_ids(self, data_source: dict | None) -> list[str]:
+        if not isinstance(data_source, dict):
+            return []
+
+        graph_ids = data_source.get("graph_source_ids", [])
+        if isinstance(graph_ids, list):
+            cleaned = []
+            seen = set()
+            for value in graph_ids:
+                file_id = str(value or "").strip()
+                if not file_id or file_id in seen:
+                    continue
+                seen.add(file_id)
+                cleaned.append(file_id)
+            if cleaned:
+                return cleaned
+
+        return self._normalize_selected_ids_from_payload(data_source.get("selected", {}))
+
+    @staticmethod
+    def _format_conversation_scope(conversation_names: list[str]) -> str:
+        if not conversation_names:
+            return "-"
+        if len(conversation_names) <= 2:
+            return ", ".join(conversation_names)
+        return f"{conversation_names[0]}, {conversation_names[1]} (+{len(conversation_names) - 2})"
+
     def list_file(self, user_id, name_pattern=""):
         if user_id is None:
             # not signed in
@@ -1366,6 +1575,7 @@ class FileIndexPage(BasePage):
                         "size": "-",
                         "tokens": "-",
                         "loader": "-",
+                        "conversations": "-",
                         "date_created": "-",
                     }
                 ]
@@ -1378,6 +1588,23 @@ class FileIndexPage(BasePage):
                 statement = statement.where(Source.user == user_id)
             if name_pattern:
                 statement = statement.where(Source.name.ilike(f"%{name_pattern}%"))
+
+            conversation_statement = select(Conversation)
+            if self._index.config.get("private", False):
+                conversation_statement = conversation_statement.where(
+                    Conversation.user == user_id
+                )
+
+            file_to_conversations: dict[str, list[str]] = {}
+            for (conversation_row,) in session.execute(conversation_statement).all():
+                conversation_name = str(conversation_row.name or conversation_row.id)
+                for file_id in self._extract_conversation_file_ids(
+                    conversation_row.data_source or {}
+                ):
+                    names = file_to_conversations.setdefault(file_id, [])
+                    if conversation_name not in names:
+                        names.append(conversation_name)
+
             results = [
                 {
                     "id": each[0].id,
@@ -1387,6 +1614,9 @@ class FileIndexPage(BasePage):
                         each[0].note.get("tokens", "-"), suffix=""
                     ),
                     "loader": each[0].note.get("loader", "-"),
+                    "conversations": self._format_conversation_scope(
+                        file_to_conversations.get(each[0].id, [])
+                    ),
                     "date_created": each[0].date_created.strftime("%Y-%m-%d %H:%M:%S"),
                 }
                 for each in session.execute(statement).all()
@@ -1403,6 +1633,7 @@ class FileIndexPage(BasePage):
                         "size": "-",
                         "tokens": "-",
                         "loader": "-",
+                        "conversations": "-",
                         "date_created": "-",
                     }
                 ]

@@ -1,6 +1,7 @@
 function run() {
   let answerPanelObserver = globalThis._ktemAnswerPanelObserver || null;
   let previewSrcPoller = globalThis._ktemPreviewSrcPoller || null;
+  let knowledgeGraphObserver = globalThis._ktemKnowledgeGraphObserver || null;
   let lastPreviewSrc = globalThis._ktemLastPreviewSrc || null;
   let selectionPromptBox = null;
   let selectionPromptInput = null;
@@ -555,6 +556,108 @@ function run() {
     return stateValue || fieldValue;
   }
 
+  function setKnowledgeGraphContext(value) {
+    let graphContextField = document.querySelector(
+      "#selected-graph-context textarea, #selected-graph-context input"
+    );
+    if (!graphContextField) {
+      return;
+    }
+
+    graphContextField.value = value || "";
+    graphContextField.dispatchEvent(new Event("input", { bubbles: true }));
+    graphContextField.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function fillChatInputWithoutSubmit(question) {
+    const chatInput = getChatInputField();
+    if (!chatInput || !question) {
+      return;
+    }
+    chatInput.value = question;
+    chatInput.dispatchEvent(new Event("input", { bubbles: true }));
+    chatInput.dispatchEvent(new Event("change", { bubbles: true }));
+    chatInput.focus();
+  }
+
+  function renderKnowledgeGraphAnswerHint(payload) {
+    const hintContainer = document.querySelector("#kg-answer-hint");
+    if (!hintContainer) {
+      return;
+    }
+
+    if (!payload || typeof payload !== "object") {
+      hintContainer.innerHTML =
+        "<div class='kg-answer-hint kg-answer-hint--empty'>Select a node in the knowledge graph tree to pin context and get a suggested question.</div>";
+      return;
+    }
+
+    const graphContext = payload.graph_context || {};
+    const label = String(payload.node_label || graphContext.label || "Selected node").trim();
+    const summary = String(payload.summary || "").trim();
+    const suggestedQuestion = String(
+      payload.prompt || payload.suggested_question || ""
+    ).trim();
+    const rawNodeType = String(payload.node_type || graphContext.type || "").trim();
+    const nodeTypeMap = {
+      knowledge_root: "Root",
+      knowledge_system: "Knowledge System",
+      file_summary: "File",
+      knowledge_point: "Knowledge Point",
+      system_relation: "Theme",
+    };
+    const nodeStyleClassMap = {
+      knowledge_root: "kg-tree-node--root",
+      knowledge_system: "kg-tree-node--system",
+      file_summary: "kg-tree-node--file",
+      knowledge_point: "kg-tree-node--point",
+      system_relation: "kg-tree-node--theme",
+    };
+    const nodeType = nodeTypeMap[rawNodeType] || (rawNodeType || "Node");
+    const nodeStyleClass =
+      nodeStyleClassMap[rawNodeType] || "kg-tree-node--point";
+
+    hintContainer.innerHTML = `
+      <div class="kg-answer-hint">
+        <div class="kg-answer-hint__title">Knowledge Graph Context</div>
+        <div class="kg-answer-hint__node ${nodeStyleClass}">
+          <span class="kg-answer-hint__label">${escapeHtml(label)}</span>
+          <span class="kg-answer-hint__type">${escapeHtml(nodeType)}</span>
+        </div>
+        ${summary ? `<p class="kg-answer-hint__summary">${escapeHtml(summary)}</p>` : ""}
+        ${
+          suggestedQuestion
+            ? `<div class="kg-answer-hint__actions"><button type="button" class="kg-answer-hint__ask kg-tree-node--file" data-kg-fill-question="${escapeHtml(
+                suggestedQuestion
+              )}">Use this in answer box</button></div>`
+            : ""
+        }
+      </div>
+    `;
+  }
+
+  function setChatFileClick(value) {
+    let fileClickField = document.querySelector(
+      "#chat-file-click textarea, #chat-file-click input"
+    );
+    if (!fileClickField) {
+      return;
+    }
+
+    fileClickField.value = value || "";
+    fileClickField.dispatchEvent(new Event("input", { bubbles: true }));
+    fileClickField.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
   function getChatInputField() {
     return document.querySelector("#chat-input textarea");
   }
@@ -615,6 +718,218 @@ function run() {
         })
       );
     });
+  }
+
+  function syncKnowledgeGraphFocus() {
+    const graphPanel = document.querySelector("#knowledge-graph-plot");
+    if (!graphPanel) {
+      return;
+    }
+    const focusedCard = graphPanel.querySelector(
+      ".kg-file-card.is-focused, .kg-tree-item--file.is-focused"
+    );
+    if (!focusedCard || focusedCard.dataset.kgFocused === "true") {
+      return;
+    }
+    focusedCard.dataset.kgFocused = "true";
+    window.setTimeout(() => {
+      focusedCard.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+        behavior: "smooth",
+      });
+    }, 40);
+  }
+
+  function bindKnowledgeGraphPan() {
+    const graphPanel = document.querySelector("#knowledge-graph-plot");
+    if (!graphPanel) {
+      return;
+    }
+
+    const shell = graphPanel.querySelector(".knowledge-graph-shell");
+    if (!shell || shell.dataset.kgDragBound === "true") {
+      return;
+    }
+    shell.dataset.kgDragBound = "true";
+
+    let isPointerDown = false;
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let startScrollLeft = 0;
+    let startScrollTop = 0;
+    let suppressClick = false;
+    const DRAG_THRESHOLD = 8;
+
+    const clearDragState = () => {
+      isPointerDown = false;
+      isDragging = false;
+      shell.classList.remove("is-dragging");
+      shell.style.cursor = "";
+    };
+
+    const stopTracking = () => {
+      if (!isPointerDown && !isDragging) {
+        return;
+      }
+      if (isDragging) {
+        window.setTimeout(() => {
+          suppressClick = false;
+        }, 120);
+      } else {
+        suppressClick = false;
+      }
+      clearDragState();
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp, true);
+      window.removeEventListener("pointercancel", handlePointerCancel, true);
+    };
+
+    const handlePointerMove = (event) => {
+      if (!isPointerDown) {
+        return;
+      }
+
+      const deltaX = event.clientX - startX;
+      const deltaY = event.clientY - startY;
+      if (!isDragging) {
+        if (Math.abs(deltaX) < DRAG_THRESHOLD && Math.abs(deltaY) < DRAG_THRESHOLD) {
+          return;
+        }
+        isDragging = true;
+        suppressClick = true;
+        shell.classList.add("is-dragging");
+        shell.style.cursor = "grabbing";
+      }
+
+      shell.scrollLeft = startScrollLeft - deltaX;
+      shell.scrollTop = startScrollTop - deltaY;
+      event.preventDefault();
+    };
+
+    const handlePointerUp = () => {
+      stopTracking();
+    };
+
+    const handlePointerCancel = () => {
+      stopTracking();
+    };
+
+    shell.addEventListener(
+      "click",
+      (event) => {
+        if (!suppressClick) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") {
+          event.stopImmediatePropagation();
+        }
+      },
+      true
+    );
+
+    shell.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      if (event.target.closest("input, textarea, select")) {
+        return;
+      }
+
+      isPointerDown = true;
+      isDragging = false;
+      suppressClick = false;
+      startX = event.clientX;
+      startY = event.clientY;
+      startScrollLeft = shell.scrollLeft;
+      startScrollTop = shell.scrollTop;
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp, true);
+      window.addEventListener("pointercancel", handlePointerCancel, true);
+    });
+
+    shell.addEventListener("pointerleave", () => {
+      if (!isPointerDown) {
+        return;
+      }
+      stopTracking();
+    });
+  }
+
+  function bindKnowledgeGraphInteractions() {
+    const graphPanel = document.querySelector("#knowledge-graph-plot");
+    if (graphPanel && graphPanel.dataset.kgBound !== "true") {
+      graphPanel.dataset.kgBound = "true";
+      graphPanel.addEventListener("click", (event) => {
+        const trigger = event.target.closest("[data-kg-payload]");
+        if (!trigger) {
+          return;
+        }
+
+        let payload = trigger.getAttribute("data-kg-payload");
+        if (!payload) {
+          return;
+        }
+
+        try {
+          payload = JSON.parse(payload);
+        } catch (error) {
+          payload = null;
+        }
+
+        if (!payload || typeof payload !== "object") {
+          return;
+        }
+
+        const graphContext = payload.graph_context || {};
+        setKnowledgeGraphContext(JSON.stringify(graphContext));
+        graphPanel
+          .querySelectorAll(".kg-tree-node.is-selected")
+          .forEach((node) => node.classList.remove("is-selected"));
+        if (trigger.classList.contains("kg-tree-node")) {
+          trigger.classList.add("is-selected");
+        }
+        renderKnowledgeGraphAnswerHint(payload);
+      });
+    }
+
+    const answerHint = document.querySelector("#kg-answer-hint");
+    if (answerHint && answerHint.dataset.kgHintBound !== "true") {
+      answerHint.dataset.kgHintBound = "true";
+      answerHint.addEventListener("click", (event) => {
+        const trigger = event.target.closest("[data-kg-fill-question]");
+        if (!trigger) {
+          return;
+        }
+        const question = trigger.getAttribute("data-kg-fill-question") || "";
+        if (!question) {
+          return;
+        }
+        fillChatInputWithoutSubmit(question);
+      });
+    }
+
+    const fileList = document.querySelector("#chat-file-list");
+    if (fileList && fileList.dataset.chatFileBound !== "true") {
+      fileList.dataset.chatFileBound = "true";
+      fileList.addEventListener("click", (event) => {
+        const trigger = event.target.closest("[data-chat-file-id]");
+        if (!trigger) {
+          return;
+        }
+        const fileId = trigger.getAttribute("data-chat-file-id") || "";
+        if (!fileId) {
+          return;
+        }
+        setChatFileClick(fileId);
+      });
+    }
+
+    bindKnowledgeGraphPan();
+    syncKnowledgeGraphFocus();
   }
 
   function ensureSelectionPrompt() {
@@ -680,6 +995,7 @@ function run() {
 
       const baseQuestion = question || "Please explain this selected text.";
       const selectedBlock = getSelectedPageTextValue();
+      setKnowledgeGraphContext("");
       if (selectedBlock) {
         currentSelectedPageText = selectedBlock;
         setSelectedPageText(selectedBlock);
@@ -769,7 +1085,7 @@ function run() {
     if (mainParent.childNodes?.[0]?.classList) {
       mainParent.childNodes[0].classList.add("header-bar");
     }
-    mainParent.style = "padding: 0; margin: 0";
+    mainParent.style = "padding: 0; margin: 0; position: relative";
     if (mainParent.parentNode) {
       mainParent.parentNode.style = "gap: 0";
       if (mainParent.parentNode.parentNode) {
@@ -777,10 +1093,18 @@ function run() {
       }
     }
 
-    const versionNode = document.createElement("p");
-    versionNode.innerHTML = "version: KH_APP_VERSION";
-    versionNode.style = "position: fixed; top: 10px; right: 10px;";
-    mainParent.appendChild(versionNode);
+    let versionNode = document.getElementById("app-version-badge");
+    if (!versionNode) {
+      versionNode = document.createElement("p");
+      versionNode.id = "app-version-badge";
+      mainParent.appendChild(versionNode);
+    }
+    versionNode.textContent = "version: KH_APP_VERSION";
+
+    const darkToggle = document.getElementById("toggle-dark-button");
+    if (darkToggle) {
+      darkToggle.style.display = "none";
+    }
 
     const favicon = document.createElement("link");
     favicon.rel = "icon";
@@ -1080,11 +1404,13 @@ function run() {
       return;
     }
     // fill the chat input with the clicked div text
+    setKnowledgeGraphContext("");
     chatInput.value = "Explain " + event.target.textContent;
     chatInput.dispatchEvent(new Event("input", { bubbles: true }));
     chatInput.focus();
   };
 
+  bindKnowledgeGraphInteractions();
   enforceAnswerPanelScroll();
   if (!globalThis._ktemSelectionBridgeRegistered) {
     window.addEventListener("message", (event) => {
@@ -1156,6 +1482,7 @@ function run() {
   if (!answerPanelObserver) {
     answerPanelObserver = new MutationObserver(() => {
       enforceAnswerPanelScroll();
+      bindKnowledgeGraphInteractions();
     });
 
     answerPanelObserver.observe(document.body, {
@@ -1164,6 +1491,17 @@ function run() {
       characterData: true,
     });
     globalThis._ktemAnswerPanelObserver = answerPanelObserver;
+  }
+
+  if (!knowledgeGraphObserver) {
+    knowledgeGraphObserver = new MutationObserver(() => {
+      bindKnowledgeGraphInteractions();
+    });
+    knowledgeGraphObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+    globalThis._ktemKnowledgeGraphObserver = knowledgeGraphObserver;
   }
 
   if (!previewSrcPoller) {

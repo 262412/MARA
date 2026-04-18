@@ -1,0 +1,314 @@
+﻿import html
+import json
+
+from ktem.pages.chat.knowledge_graph_service import GlobalKnowledgeGraphService
+
+
+class _DummyApp:
+    pass
+
+
+class _DummyIndex:
+    pass
+
+
+def _make_service(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "ktem.pages.chat.knowledge_graph_service.flowsettings.KH_APP_DATA_DIR",
+        tmp_path,
+        raising=False,
+    )
+    return GlobalKnowledgeGraphService(_DummyApp(), _DummyIndex())
+
+
+def test_conversation_graph_groups_related_and_unrelated_files(monkeypatch, tmp_path):
+    service = _make_service(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        service,
+        "_build_file_graph",
+        lambda file_id, source: {
+            "file_id": file_id,
+            "file_name": source["name"],
+            "summary": f"Summary for {source['name']}",
+            "summary_support_pages": {file_id: ["1"]},
+            "summary_support_chunk_ids": {file_id: [f"{file_id}-chunk-summary"]},
+            "top_keywords": {
+                "file-a": ["rag", "retrieval", "chunking"],
+                "file-b": ["rag", "retrieval", "citation"],
+                "file-c": ["biology", "cells", "genetics"],
+            }[file_id],
+            "knowledge_points": [
+                {
+                    "id": f"point::{file_id}::1",
+                    "type": "knowledge_point",
+                    "file_id": file_id,
+                    "label": f"Point for {source['name']}",
+                    "keywords": {
+                        "file-a": ["rag", "retrieval"],
+                        "file-b": ["rag", "citation"],
+                        "file-c": ["biology", "cells"],
+                    }[file_id],
+                    "related_file_ids": [file_id],
+                    "support_pages": {file_id: ["1"]},
+                    "support_chunk_ids": {file_id: [f"{file_id}-chunk-1"]},
+                }
+            ],
+        },
+    )
+
+    graph = service._build_conversation_graph(
+        "conv-1",
+        {
+            "file-a": {"name": "Alpha.pdf"},
+            "file-b": {"name": "Beta.pdf"},
+            "file-c": {"name": "Cells.pdf"},
+        },
+    )
+
+    systems = graph["systems"]
+    assert len(systems) == 2
+    system_sizes = sorted(len(system["related_file_ids"]) for system in systems)
+    assert system_sizes == [1, 2]
+    assert graph["support_pages"]["file-a"] == ["1"]
+    assert graph["support_pages"]["file-b"] == ["1"]
+    assert graph["support_pages"]["file-c"] == ["1"]
+    assert "file-a-chunk-summary" in graph["support_chunk_ids"]["file-a"]
+    assert "file-a-chunk-1" in graph["support_chunk_ids"]["file-a"]
+
+
+def test_get_graph_view_does_not_auto_build_without_force_rebuild(monkeypatch, tmp_path):
+    service = _make_service(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        service,
+        "_load_sources",
+        lambda source_ids: {
+            "file-a": {
+                "id": "file-a",
+                "name": "Alpha.pdf",
+                "path": "",
+                "size": 1,
+                "date_created": "2026-01-01",
+            }
+        },
+    )
+
+    build_calls = []
+
+    def _build_graph(conversation_id, sources):
+        build_calls.append((conversation_id, sorted(sources.keys())))
+        return {
+            "conversation_id": conversation_id,
+            "source_ids": list(sources.keys()),
+            "systems": [],
+            "file_cards": [],
+            "knowledge_points": [],
+            "edges": [],
+            "support_pages": {},
+            "support_chunk_ids": {},
+        }
+
+    monkeypatch.setattr(service, "_build_conversation_graph", _build_graph)
+
+    first_view = service.get_graph_view(
+        "conv-2",
+        ["file-a"],
+        focus_file_id="file-a",
+        force_rebuild=False,
+    )
+    assert first_view["status"] == "stale"
+    assert first_view["graph"] is None
+    assert "not been generated" in first_view["status_message"]
+    assert first_view["support_pages"] == {}
+    assert first_view["support_chunk_ids"] == {}
+    assert build_calls == []
+
+    built_view = service.get_graph_view(
+        "conv-2",
+        ["file-a"],
+        focus_file_id="file-a",
+        force_rebuild=True,
+    )
+    assert built_view["status"] == "ready"
+    assert build_calls == [("conv-2", ["file-a"])]
+
+    refreshed_view = service.get_graph_view(
+        "conv-2",
+        ["file-a"],
+        focus_file_id="file-a",
+        force_rebuild=False,
+    )
+    assert refreshed_view["status"] == "ready"
+    assert build_calls == [("conv-2", ["file-a"])]
+
+
+def test_get_graph_view_returns_focus_html_and_prunes_missing_sources(monkeypatch, tmp_path):
+    service = _make_service(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        service,
+        "_load_sources",
+        lambda source_ids: {
+            "file-a": {
+                "id": "file-a",
+                "name": "Alpha.pdf",
+                "path": "",
+                "size": 1,
+                "date_created": "2026-01-01",
+            },
+            "file-b": {
+                "id": "file-b",
+                "name": "Beta.pdf",
+                "path": "",
+                "size": 1,
+                "date_created": "2026-01-02",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "_build_conversation_graph",
+        lambda conversation_id, sources: {
+            "conversation_id": conversation_id,
+            "source_ids": list(sources.keys()),
+            "systems": [
+                {
+                    "id": "system::1",
+                    "type": "knowledge_system",
+                    "label": "Shared knowledge system",
+                    "summary": "Connects uploaded sources through rag.",
+                    "related_file_ids": ["file-a", "file-b"],
+                    "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+                    "support_chunk_ids": {"file-a": ["a1"], "file-b": ["b1"]},
+                    "themes": [],
+                }
+            ],
+            "file_cards": [
+                {
+                    "id": "file::file-a",
+                    "type": "file_summary",
+                    "system_id": "system::1",
+                    "file_id": "file-a",
+                    "label": "Alpha.pdf",
+                    "summary": "Alpha summary",
+                    "related_file_ids": ["file-a", "file-b"],
+                    "support_pages": {"file-a": ["1"]},
+                    "support_chunk_ids": {"file-a": ["a1"]},
+                    "top_keywords": ["rag"],
+                }
+            ],
+            "knowledge_points": [
+                {
+                    "id": "point::file-a::1",
+                    "type": "knowledge_point",
+                    "system_id": "system::1",
+                    "file_id": "file-a",
+                    "label": "Alpha point",
+                    "related_file_ids": ["file-a", "file-b"],
+                    "support_pages": {"file-a": ["1"]},
+                    "support_chunk_ids": {"file-a": ["a1"]},
+                }
+            ],
+            "edges": [],
+            "support_pages": {"file-a": ["1"]},
+            "support_chunk_ids": {"file-a": ["a1"]},
+        },
+    )
+
+    graph_view = service.get_graph_view(
+        "conv-1",
+        ["file-a", "file-b", "missing"],
+        focus_file_id="file-a",
+        force_rebuild=True,
+    )
+
+    assert graph_view["status"] == "ready"
+    assert graph_view["graph_source_ids"] == ["file-a", "file-b"]
+    assert "kg-tree-node" in graph_view["html"]
+    assert "data-kg-payload" in graph_view["html"]
+    assert graph_view["support_pages"] == {"file-a": ["1"]}
+    assert graph_view["support_chunk_ids"] == {"file-a": ["a1"]}
+
+
+def test_build_file_graph_uses_llm_outline_and_maps_support(monkeypatch, tmp_path):
+    service = _make_service(monkeypatch, tmp_path)
+
+    class _FakeDoc:
+        def __init__(self, doc_id, text, page_label):
+            self.doc_id = doc_id
+            self.text = text
+            self.metadata = {"type": "text", "page_label": page_label}
+
+    fake_docs = [
+        _FakeDoc(
+            "chunk-1",
+            "Retrieval augmented generation combines search and synthesis. "
+            "Chunk ranking improves grounded answers for enterprise docs.",
+            "1",
+        ),
+        _FakeDoc(
+            "chunk-2",
+            "Citation mapping links generated statements to page evidence. "
+            "This improves traceability and review workflows.",
+            "2",
+        ),
+    ]
+
+    monkeypatch.setattr(service, "_load_file_docs", lambda file_id: fake_docs)
+    monkeypatch.setattr(
+        service,
+        "_generate_outline_with_llm",
+        lambda file_name, candidates: {
+            "summary": "The document explains a RAG pipeline with citation-backed evidence alignment.",
+            "knowledge_points": [
+                {
+                    "label": "RAG combines retrieval with generation for grounded responses.",
+                    "keywords": ["rag", "retrieval", "generation"],
+                },
+                {
+                    "label": "Citation mapping ties statements to evidence chunks and pages.",
+                    "keywords": ["citation", "evidence", "traceability"],
+                },
+            ],
+        },
+    )
+
+    file_graph = service._build_file_graph(
+        "file-rag",
+        {
+            "id": "file-rag",
+            "name": "RAG-Guide.pdf",
+            "path": "",
+            "size": 1,
+            "date_created": "2026-04-16",
+        },
+    )
+
+    assert file_graph["summary"]
+    assert len(file_graph["knowledge_points"]) >= 2
+    assert file_graph["summary_support_pages"]["file-rag"]
+    assert file_graph["summary_support_chunk_ids"]["file-rag"]
+    for point in file_graph["knowledge_points"]:
+        assert point["support_pages"]["file-rag"]
+        assert point["support_chunk_ids"]["file-rag"]
+
+
+def test_payload_attr_includes_prompt_and_graph_context(monkeypatch, tmp_path):
+    service = _make_service(monkeypatch, tmp_path)
+
+    payload = service._payload_attr(
+        {
+            "type": "knowledge_point",
+            "label": "Evidence alignment",
+            "related_file_ids": ["file-a"],
+            "support_pages": {"file-a": ["2"]},
+            "support_chunk_ids": {"file-a": ["chunk-2"]},
+        },
+        "file-a",
+    )
+    payload = json.loads(html.unescape(payload))
+
+    assert "graph_context" in payload
+    assert payload["graph_context"]["focus_file_id"] == "file-a"
+    assert payload["node_label"] == "Evidence alignment"
+    assert payload["prompt"]
+    assert payload["suggested_question"]
+    assert payload["prompt"] == payload["suggested_question"]

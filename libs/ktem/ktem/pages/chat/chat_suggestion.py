@@ -1,6 +1,7 @@
 import gradio as gr
 from ktem.app import BasePage
 from theflow.settings import settings as flowsettings
+from typing import Optional
 
 
 class ChatSuggestion(BasePage):
@@ -14,15 +15,21 @@ class ChatSuggestion(BasePage):
         ],
     )
 
-    def __init__(self, app):
+    def __init__(self, app, show_panel: Optional[bool] = None):
         self._app = app
+        self._show_panel = show_panel
         self.on_building_ui()
 
     def on_building_ui(self):
         self.chat_samples = [[each] for each in self.CHAT_SAMPLES]
+        panel_visible = (
+            getattr(flowsettings, "KH_FEATURE_CHAT_SUGGESTION", False)
+            if self._show_panel is None
+            else bool(self._show_panel)
+        )
         with gr.Accordion(
             label="Chat Suggestion",
-            visible=getattr(flowsettings, "KH_FEATURE_CHAT_SUGGESTION", False),
+            visible=panel_visible,
         ) as self.accordion:
             self.default_example = gr.State(
                 value=self.chat_samples,

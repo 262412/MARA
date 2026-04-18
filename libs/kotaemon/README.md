@@ -12,6 +12,25 @@ TBD
 pip install kotaemon@git+ssh://git@github.com/Cinnamon/kotaemon.git
 ```
 
+## Experimental cross-model CLI
+
+The package now exposes an experimental `modelcli` command group under the existing
+`kotaemon` CLI.
+
+```shell
+# Generate a default provider config
+kotaemon modelcli init-config --output modelcli.yml
+
+# Inspect provider availability from environment variables
+kotaemon modelcli providers --config modelcli.yml
+
+# Run routing/model resolution without calling provider APIs
+kotaemon modelcli run --prompt "hello" --model gpt-4o-mini --dry-run
+```
+
+The default config supports OpenAI, Anthropic, Gemini, and OpenRouter via provider
+API keys in environment variables.
+
 ## Contribute
 
 ### Setup

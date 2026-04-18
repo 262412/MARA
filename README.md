@@ -223,48 +223,22 @@ documents and developers who want to build their own RAG pipeline.
 
 5. Check the `Resources` tab and `LLMs and Embeddings` and ensure that your `api_key` value is set correctly from your `.env` file. If it is not set, you can set it there.
 
-### Setup GraphRAG
+### Knowledge Graph And Retrieval (Default)
 
-The application supports multiple GraphRAG implementations for knowledge graph-based retrieval:
+Kotaemon now uses a unified default retrieval path for single-page QA:
 
-<details>
+- `FileIndex` is the default and only built-in index in the standard runtime.
+- The conversation knowledge graph is generated from uploaded sources and supports interactive node-to-question workflows.
+- Selecting files or graph nodes scopes QA through graph context (related file IDs/pages/chunks).
 
-<summary>Setup Nano GraphRAG (Recommended)</summary>
+### Legacy GraphRAG Modules (Deprecated)
 
-- Install nano-GraphRAG: `pip install nano-graphrag`
-- `nano-graphrag` install might introduce version conflicts, see [this issue](https://github.com/Cinnamon/kotaemon/issues/440)
-  - To quickly fix: `pip uninstall hnswlib chroma-hnswlib && pip install chroma-hnswlib`
-- Launch Kotaemon with `USE_NANO_GRAPHRAG=true` environment variable.
-- Set your default LLM & Embedding models in Resources setting and it will be recognized automatically from NanoGraphRAG.
+Legacy GraphRAG families (Nano/Light/MS) are no longer part of the default runtime flow.
 
-</details>
-
-<details>
-
-<summary>Setup LightRAG</summary>
-
-- Install LightRAG: `pip install git+https://github.com/HKUDS/LightRAG.git`
-- `LightRAG` install might introduce version conflicts, see [this issue](https://github.com/Cinnamon/kotaemon/issues/440)
-  - To quickly fix: `pip uninstall hnswlib chroma-hnswlib && pip install chroma-hnswlib`
-- Launch Kotaemon with `USE_LIGHTRAG=true` environment variable.
-- Set your default LLM & Embedding models in Resources setting and it will be recognized automatically from LightRAG.
-
-</details>
-
-<details>
-
-<summary>Setup Microsoft GraphRAG</summary>
-
-- **Non-Docker Installation**: If you are not using Docker, install GraphRAG with the following command:
-
-  ```shell
-  pip install "graphrag<=0.3.6" future
-  ```
-
-- **Setting Up API KEY**: To use the GraphRAG retriever feature, ensure you set the `GRAPHRAG_API_KEY` environment variable. You can do this directly in your environment or by adding it to a `.env` file.
-- **Using Local Models and Custom Settings**: If you want to use GraphRAG with local models (like `Ollama`) or customize the default LLM and other configurations, set the `USE_CUSTOMIZED_GRAPHRAG_SETTING` environment variable to true. Then, adjust your settings in the `settings.yaml.example` file.
-
-</details>
+- Existing code paths are retained for backward compatibility and custom experimentation.
+- Legacy environment variables are deprecated in `.env.example`.
+- To re-enable missing-dependency startup warnings for legacy modules, set `KH_SHOW_LEGACY_RAG_WARNINGS=true`.
+- In Docker, legacy GraphRAG dependencies are installed only when `INSTALL_LEGACY_GRAPHRAG=true` is passed at build time.
 
 ### Setup Local Models (for local/private RAG)
 

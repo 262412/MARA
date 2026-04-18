@@ -1,4 +1,5 @@
 import asyncio
+import html
 import json
 import logging
 import os
@@ -47,6 +48,7 @@ from .generation_store import (
     update_plot,
     update_reasoning_state,
 )
+from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
 from .chat_suggestion import ChatSuggestion
 from .common import STATE
@@ -467,15 +469,24 @@ class ChatPage(BasePage):
         self._app = app
         self._indices_input = []
         self.page_preview = ChatPagePreviewController(app)
+        self.file_index = (
+            self._app.index_manager.indices[0]
+            if self._app.index_manager.indices
+            else None
+        )
+        self.knowledge_graph = (
+            GlobalKnowledgeGraphService(self._app, self.file_index)
+            if self.file_index is not None
+            else None
+        )
 
         self.on_building_ui()
 
         self._preview_links = gr.State(value=None)
         self._reasoning_type = gr.State(value=None)
         self._conversation_renamed = gr.State(value=False)
-        self._use_suggestion = gr.State(
-            value=getattr(flowsettings, "KH_FEATURE_CHAT_SUGGESTION", False)
-        )
+        # Keep suggestion feature disabled in this layout to simplify the left sidebar.
+        self._use_suggestion = gr.State(value=False)
         self._info_panel_expanded = gr.State(value=True)
         self._command_state = gr.State(value=None)
         self._user_api_key = gr.Text(value="", visible=False)
@@ -504,59 +515,94 @@ class ChatPage(BasePage):
             self.state_retrieval_history = gr.State([])
             self.state_plot_history = gr.State([])
             self.state_plot_panel = gr.State(None)
+            self._graph_source_ids = gr.State([])
             self.first_selector_choices = gr.State(None)
             # Selected text from the current page for targeted questions
             self._selected_page_text = gr.Textbox(
                 value="", visible=False, elem_id="selected-page-text"
             )
+            self._selected_graph_context = gr.Textbox(
+                value="", visible=False, elem_id="selected-graph-context"
+            )
+            self._chat_file_click = gr.Textbox(
+                value="", visible=False, elem_id="chat-file-click"
+            )
 
             with gr.Column(scale=1, elem_id="conv-settings-panel") as self.conv_column:
                 self.chat_control = ConversationControl(self._app)
 
-                for index_id, index in enumerate(self._app.index_manager.indices):
-                    index.selector = None
-                    index_ui = index.get_selector_component_ui()
-                    if not index_ui:
-                        # the index doesn't have a selector UI component
-                        continue
+                self.upload_scope_hint = gr.Markdown(
+                    "**Sources in this conversation are treated as related by default.** "
+                    "If files are weakly related, the knowledge graph will split them into separate systems.",
+                    elem_id="chat-upload-hint",
+                )
+                with gr.Column(elem_id="chat-file-browser"):
+                    self.chat_file_filter = gr.Textbox(
+                        value="",
+                        label="Files in this conversation",
+                        placeholder="Filter file name",
+                        elem_id="chat-file-filter",
+                    )
+                    self.chat_file_rows = gr.State([])
+                    self.chat_selected_file = gr.Markdown(
+                        "Focus: all files",
+                        elem_id="chat-selected-file",
+                    )
+                    self.chat_file_list = gr.HTML(
+                        "<div class='chat-file-empty'>No files uploaded</div>",
+                        elem_id="chat-file-list",
+                    )
 
-                    index_ui.unrender()  # need to rerender later within Accordion
-                    is_first_index = index_id == 0
-                    index_name = index.name
+                with gr.Accordion(
+                    label="Advanced Source Selectors",
+                    open=False,
+                    elem_id="advanced-source-selectors",
+                    visible=False,
+                ):
+                    for index_id, index in enumerate(self._app.index_manager.indices):
+                        index.selector = None
+                        index_ui = index.get_selector_component_ui()
+                        if not index_ui:
+                            # the index doesn't have a selector UI component
+                            continue
 
-                    if KH_DEMO_MODE and is_first_index:
-                        index_name = "Select from Paper Collection"
+                        index_ui.unrender()  # need to rerender later within Accordion
+                        is_first_index = index_id == 0
+                        index_name = index.name
 
-                    with gr.Accordion(
-                        label=index_name,
-                        open=is_first_index,
-                        elem_id=f"index-{index_id}",
-                    ):
-                        index_ui.render()
-                        gr_index = index_ui.as_gradio_component()
+                        if KH_DEMO_MODE and is_first_index:
+                            index_name = "Select from Paper Collection"
 
-                        # get the file selector choices for the first index
-                        if index_id == 0:
-                            self.first_selector_choices = index_ui.selector_choices
-                            self.first_indexing_url_fn = None
+                        with gr.Accordion(
+                            label=index_name,
+                            open=is_first_index,
+                            elem_id=f"index-{index_id}",
+                        ):
+                            index_ui.render()
+                            gr_index = index_ui.as_gradio_component()
 
-                        if gr_index:
-                            if isinstance(gr_index, list):
-                                index.selector = tuple(
-                                    range(
-                                        len(self._indices_input),
-                                        len(self._indices_input) + len(gr_index),
+                            # get the file selector choices for the first index
+                            if index_id == 0:
+                                self.first_selector_choices = index_ui.selector_choices
+                                self.first_indexing_url_fn = None
+
+                            if gr_index:
+                                if isinstance(gr_index, list):
+                                    index.selector = tuple(
+                                        range(
+                                            len(self._indices_input),
+                                            len(self._indices_input) + len(gr_index),
+                                        )
                                     )
-                                )
-                                index.default_selector = index_ui.default()
-                                self._indices_input.extend(gr_index)
-                            else:
-                                index.selector = len(self._indices_input)
-                                index.default_selector = index_ui.default()
-                                self._indices_input.append(gr_index)
-                        setattr(self, f"_index_{index.id}", index_ui)
+                                    index.default_selector = index_ui.default()
+                                    self._indices_input.extend(gr_index)
+                                else:
+                                    index.selector = len(self._indices_input)
+                                    index.default_selector = index_ui.default()
+                                    self._indices_input.append(gr_index)
+                            setattr(self, f"_index_{index.id}", index_ui)
 
-                self.chat_suggestion = ChatSuggestion(self._app)
+                self.chat_suggestion = ChatSuggestion(self._app, show_panel=False)
 
                 if len(self._app.index_manager.indices) > 0:
                     quick_upload_label = (
@@ -588,7 +634,7 @@ class ChatPage(BasePage):
                         )
 
                 if not KH_DEMO_MODE:
-                    self.report_issue = ReportIssue(self._app)
+                    self.report_issue = ReportIssue(self._app, show_panel=False)
                 else:
                     with gr.Accordion(label="Related papers", open=False):
                         self.related_papers = gr.Markdown(elem_id="related-papers")
@@ -683,24 +729,441 @@ class ChatPage(BasePage):
             with gr.Column(
                 scale=INFO_PANEL_SCALES[False], elem_id="chat-info-panel"
             ) as self.info_column:
-                with gr.Accordion(label="Mindmap", open=True, elem_id="info-expand"):
+                with gr.Accordion(label="Knowledge Graph", open=True, elem_id="info-expand"):
                     self.modal = gr.HTML("<div id='pdf-modal'></div>")
-                    self.plot_panel = gr.Plot(visible=False)
+                    self.knowledge_graph_status = gr.Markdown(
+                        "Status: no graph generated yet.",
+                        elem_id="knowledge-graph-status",
+                    )
+                    self.knowledge_graph_refresh = gr.Button(
+                        "Generate / Refresh Knowledge Graph",
+                        variant="secondary",
+                        elem_id="knowledge-graph-refresh",
+                    )
+                    self.plot_panel = gr.HTML("", visible=True, elem_id="knowledge-graph-plot")
                     self.info_panel = gr.HTML(elem_id="html-info-panel")
 
                 with gr.Accordion(label="Answer", open=True, elem_id="answer-expand"):
+                    self.kg_answer_hint = gr.HTML(
+                        value=(
+                            "<div class='kg-answer-hint kg-answer-hint--empty'>"
+                            "Select a node in the knowledge graph tree to pin context and get a suggested question."
+                            "</div>"
+                        ),
+                        elem_id="kg-answer-hint",
+                    )
                     self.answer_panel = gr.Markdown(value="", elem_id="answer-panel")
 
         self.followup_questions = self.chat_suggestion.examples
         self.followup_questions_ui = self.chat_suggestion.accordion
 
     def _json_to_plot(self, json_dict: dict | None):
-        if json_dict:
-            plot = from_json(json_dict)
-            plot = gr.update(visible=True, value=plot)
-        else:
-            plot = gr.update(visible=False)
-        return plot
+        html_payload = ""
+        if isinstance(json_dict, dict):
+            if "html" in json_dict:
+                html_payload = str(json_dict.get("html", "") or "")
+            else:
+                try:
+                    html_payload = html.escape(json.dumps(json_dict, ensure_ascii=False))
+                except Exception:
+                    html_payload = ""
+        elif isinstance(json_dict, str):
+            html_payload = json_dict
+        return gr.update(visible=True, value=html_payload)
+
+    @staticmethod
+    def _normalize_selected_file_ids(selected_file_ids) -> list[str]:
+        if selected_file_ids in (None, ""):
+            return []
+        if isinstance(selected_file_ids, list):
+            return [str(item) for item in selected_file_ids if item not in (None, "")]
+        return [str(selected_file_ids)]
+
+    @staticmethod
+    def _merge_unique_file_ids(*groups) -> list[str]:
+        merged: list[str] = []
+        seen = set()
+        for group in groups:
+            if group in (None, ""):
+                continue
+            values = group if isinstance(group, list) else [group]
+            for value in values:
+                item = str(value or "").strip()
+                if not item or item in seen:
+                    continue
+                seen.add(item)
+                merged.append(item)
+        return merged
+
+    @staticmethod
+    def _extract_selected_ids_from_data_source(data_source: dict | None) -> list[str]:
+        if not isinstance(data_source, dict):
+            return []
+
+        selected = data_source.get("selected", {})
+        if not isinstance(selected, dict):
+            return []
+
+        file_ids: list[str] = []
+        for value in selected.values():
+            candidates = value if isinstance(value, list) else [value]
+            for candidate in candidates:
+                if isinstance(candidate, list):
+                    for nested in candidate:
+                        if isinstance(nested, (dict, tuple, list)):
+                            continue
+                        item = str(nested or "").strip()
+                        if not item:
+                            continue
+                        if item.lower() in {"select", "upload", "all"}:
+                            continue
+                        file_ids.append(item)
+                else:
+                    if isinstance(candidate, (dict, tuple)):
+                        continue
+                    item = str(candidate or "").strip()
+                    if not item:
+                        continue
+                    if item.lower() in {"select", "upload", "all"}:
+                        continue
+                    file_ids.append(item)
+        return ChatPage._merge_unique_file_ids(file_ids)
+
+    def merge_graph_source_ids(self, graph_source_ids, new_file_ids):
+        return self._merge_unique_file_ids(
+            self._normalize_selected_file_ids(graph_source_ids),
+            self._normalize_selected_file_ids(new_file_ids),
+        )
+
+    @staticmethod
+    def _is_group_selector_value(selector_value: str) -> bool:
+        value = str(selector_value or "").strip()
+        return value.startswith("[") and value.endswith("]")
+
+    def _build_selector_source_map(self, first_selector_choices) -> dict[str, str]:
+        source_map: dict[str, str] = {}
+        for item in list(first_selector_choices or []):
+            if not isinstance(item, (list, tuple)) or len(item) < 2:
+                continue
+            name = str(item[0] or "")
+            file_id = str(item[1] or "")
+            if not file_id or self._is_group_selector_value(file_id):
+                continue
+            source_map[file_id] = name or file_id
+        return source_map
+
+    def _load_available_source_map(self, user_id) -> dict[str, str]:
+        source_map: dict[str, str] = {}
+        if not self.file_index:
+            return source_map
+
+        Source = self.file_index._resources.get("Source")
+        if Source is None:
+            return source_map
+
+        try:
+            with Session(engine) as session:
+                statement = select(Source)
+                if self.file_index.config.get("private", False):
+                    statement = statement.where(Source.user == user_id)
+
+                rows = session.execute(statement).all()
+                for row in rows:
+                    item = None
+                    if isinstance(row, (list, tuple)):
+                        item = row[0] if row else None
+                    elif hasattr(row, "_mapping"):
+                        mapping = getattr(row, "_mapping")
+                        if Source in mapping:
+                            item = mapping[Source]
+                        elif mapping:
+                            item = next(iter(mapping.values()))
+                    if item is None:
+                        item = row
+
+                    file_id = str(getattr(item, "id", "") or "")
+                    if not file_id:
+                        continue
+                    file_name = str(getattr(item, "name", "") or file_id)
+                    source_map[file_id] = file_name
+        except Exception as exc:
+            logger.warning("Failed to load source map for chat sidebar: %s", exc)
+
+        return source_map
+
+    def sync_graph_source_ids_with_selector_choices(
+        self,
+        graph_source_ids,
+        first_selector_choices,
+        user_id,
+    ):
+        current_ids = self._normalize_selected_file_ids(graph_source_ids)
+        if not current_ids:
+            return []
+
+        source_map = self._load_available_source_map(user_id)
+        if not source_map:
+            source_map = self._build_selector_source_map(first_selector_choices)
+        if not source_map:
+            # Selector choices might not be loaded yet during startup.
+            return current_ids
+
+        available_ids = set(source_map.keys())
+        return [file_id for file_id in current_ids if file_id in available_ids]
+
+    def persist_conversation_source_scope(
+        self,
+        conversation_id,
+        user_id,
+        graph_source_ids,
+    ):
+        normalized_ids = self._normalize_selected_file_ids(graph_source_ids)
+        if not conversation_id:
+            return normalized_ids
+
+        try:
+            with Session(engine) as session:
+                statement = select(Conversation).where(Conversation.id == conversation_id)
+                row = session.exec(statement).one_or_none()
+                if not row:
+                    return normalized_ids
+
+                if row.user not in (None, user_id):
+                    return normalized_ids
+
+                data_source = dict(row.data_source or {})
+                existing_ids = self._normalize_selected_file_ids(
+                    data_source.get("graph_source_ids", [])
+                )
+                if existing_ids == normalized_ids:
+                    return normalized_ids
+
+                data_source["graph_source_ids"] = normalized_ids
+                row.data_source = data_source
+                session.add(row)
+                session.commit()
+        except Exception as exc:
+            logger.warning("Failed to persist conversation source scope: %s", exc)
+
+        return normalized_ids
+
+    def _render_chat_file_list_html(self, rows: list[dict], selected_ids: set[str]) -> str:
+        if not rows:
+            return "<div class='chat-file-empty'>No files uploaded</div>"
+
+        items = []
+        for row in rows:
+            file_id = str(row.get("id", "") or "")
+            file_name = str(row.get("name", "") or file_id)
+            is_selected = file_id in selected_ids
+            item_class = "chat-file-entry is-selected" if is_selected else "chat-file-entry"
+            items.append(
+                f"<button type='button' class='{item_class}' data-chat-file-id='{html.escape(file_id, quote=True)}'>"
+                "<span class='chat-file-entry__name'>"
+                f"{html.escape(file_name)}"
+                "</span>"
+                "</button>"
+            )
+
+        return "<div class='chat-file-list-shell'>" + "".join(items) + "</div>"
+
+    def refresh_chat_file_list(
+        self,
+        conversation_id,
+        user_id,
+        first_selector_choices,
+        selected_file_ids,
+        graph_source_ids,
+        filter_text,
+    ):
+        selected_ids = self._normalize_selected_file_ids(selected_file_ids)
+        selected_set = set(selected_ids)
+        keyword = str(filter_text or "").strip().lower()
+        source_map = self._load_available_source_map(user_id)
+        if not source_map and not str(conversation_id or "").strip():
+            source_map = self._build_selector_source_map(first_selector_choices)
+
+        scoped_ids = self._normalize_selected_file_ids(graph_source_ids)
+        if not scoped_ids:
+            # Backward-compatible fallback for older conversations.
+            scoped_ids = selected_ids
+
+        if source_map and scoped_ids:
+            available_ids = set(source_map.keys())
+            scoped_ids = [file_id for file_id in scoped_ids if file_id in available_ids]
+
+        if not scoped_ids and not str(conversation_id or "").strip():
+            # No active conversation yet: show all available files in collection.
+            scoped_ids = list(source_map.keys())
+
+        rows: list[dict] = []
+        for file_id in scoped_ids:
+            name = source_map.get(file_id, file_id)
+            if keyword and keyword not in name.lower():
+                continue
+            rows.append({"id": file_id, "name": name})
+
+        selected_name = "all files in conversation"
+        if selected_ids:
+            first_selected = selected_ids[0]
+            for row in rows:
+                if row["id"] == first_selected:
+                    selected_name = row["name"]
+                    break
+            if selected_name == "all files in conversation":
+                selected_name = source_map.get(first_selected, first_selected)
+        elif not str(conversation_id or "").strip():
+            selected_name = "all files in collection"
+
+        list_html = self._render_chat_file_list_html(rows, selected_set)
+        return rows, list_html, f"Focus: {selected_name}"
+
+    def select_chat_file(self, file_id):
+        target_id = str(file_id or "").strip()
+        if not target_id:
+            return gr.update(), gr.update(), ""
+        return "select", gr.update(value=[target_id]), ""
+
+    def load_conversation_graph_state(self, conversation_id):
+        if not conversation_id:
+            return []
+        try:
+            with Session(engine) as session:
+                statement = select(Conversation).where(Conversation.id == conversation_id)
+                result = session.exec(statement).one_or_none()
+        except Exception:
+            return []
+        if not result:
+            return []
+        data_source = dict(result.data_source or {})
+        value = self._normalize_selected_file_ids(data_source.get("graph_source_ids", []))
+        fallback_ids = self._extract_selected_ids_from_data_source(data_source)
+        merged_ids = self._merge_unique_file_ids(value, fallback_ids)
+        if merged_ids and merged_ids != value:
+            data_source["graph_source_ids"] = merged_ids
+            try:
+                with Session(engine) as session:
+                    statement = select(Conversation).where(Conversation.id == conversation_id)
+                    row = session.exec(statement).one_or_none()
+                    if row:
+                        row.data_source = data_source
+                        session.add(row)
+                        session.commit()
+            except Exception:
+                pass
+            return merged_ids
+
+        if fallback_ids and not value:
+            data_source["graph_source_ids"] = fallback_ids
+            try:
+                with Session(engine) as session:
+                    statement = select(Conversation).where(Conversation.id == conversation_id)
+                    row = session.exec(statement).one_or_none()
+                    if row:
+                        row.data_source = data_source
+                        session.add(row)
+                        session.commit()
+            except Exception:
+                pass
+        return value if value else fallback_ids
+
+    def refresh_knowledge_graph(
+        self,
+        conversation_id,
+        graph_source_ids,
+        focus_file_id,
+        selected_file_ids=None,
+    ):
+        if not self.knowledge_graph:
+            return gr.update(value=""), None, "Status: knowledge graph unavailable.", []
+        source_scope = self._merge_unique_file_ids(
+            self._normalize_selected_file_ids(graph_source_ids),
+            self._normalize_selected_file_ids(selected_file_ids),
+            [focus_file_id] if focus_file_id else [],
+        )
+        try:
+            graph_view = self.knowledge_graph.get_graph_view(
+                conversation_id=conversation_id,
+                graph_source_ids=source_scope,
+                focus_file_id=focus_file_id,
+                force_rebuild=False,
+            )
+
+            # Auto-heal stale cache during normal refresh so file add/delete events
+            # immediately reflect in the graph without requiring manual button click.
+            if graph_view.get("status") == "stale":
+                graph_view = self.knowledge_graph.get_graph_view(
+                    conversation_id=conversation_id,
+                    graph_source_ids=source_scope,
+                    focus_file_id=focus_file_id,
+                    force_rebuild=True,
+                )
+
+            return (
+                self._json_to_plot(graph_view),
+                graph_view,
+                f"Status: {graph_view.get('status_message', 'ready')}",
+                graph_view.get("graph_source_ids", []),
+            )
+        except Exception as exc:
+            logger.warning("Failed to refresh knowledge graph: %s", exc)
+            return (
+                gr.update(value=""),
+                None,
+                "Status: failed to load knowledge graph.",
+                self._normalize_selected_file_ids(source_scope),
+            )
+
+    def auto_refresh_knowledge_graph(
+        self,
+        conversation_id,
+        graph_source_ids,
+        focus_file_id,
+        selected_file_ids=None,
+    ):
+        # Keep backward compatibility with existing event wiring but do not force rebuild.
+        return self.refresh_knowledge_graph(
+            conversation_id=conversation_id,
+            graph_source_ids=graph_source_ids,
+            focus_file_id=focus_file_id,
+            selected_file_ids=selected_file_ids,
+        )
+
+    def generate_knowledge_graph(
+        self,
+        conversation_id,
+        graph_source_ids,
+        focus_file_id,
+        selected_file_ids=None,
+    ):
+        if not self.knowledge_graph:
+            return gr.update(value=""), None, "Status: knowledge graph unavailable.", []
+        source_scope = self._merge_unique_file_ids(
+            self._normalize_selected_file_ids(graph_source_ids),
+            self._normalize_selected_file_ids(selected_file_ids),
+            [focus_file_id] if focus_file_id else [],
+        )
+        try:
+            graph_view = self.knowledge_graph.get_graph_view(
+                conversation_id=conversation_id,
+                graph_source_ids=source_scope,
+                focus_file_id=focus_file_id,
+                force_rebuild=True,
+            )
+            return (
+                self._json_to_plot(graph_view),
+                graph_view,
+                f"Status: {graph_view.get('status_message', 'ready')}",
+                graph_view.get("graph_source_ids", []),
+            )
+        except Exception as exc:
+            logger.warning("Failed to generate knowledge graph: %s", exc)
+            return (
+                gr.update(value=""),
+                None,
+                "Status: failed to generate knowledge graph.",
+                self._normalize_selected_file_ids(source_scope),
+            )
 
     def _format_chat_message(self, content: str, role: str) -> str:
         """Format a chat message as a bubble"""
@@ -1001,7 +1464,9 @@ class ChatPage(BasePage):
                     self.chat_control.conversation_id,
                     self.chat_control.conversation_rn,
                     self.first_selector_choices,
+                    self._graph_source_ids,
                     self._selected_page_text,
+                    self._selected_graph_context,
                 ],
                 outputs=[
                     self.chat_panel.text_input,
@@ -1015,6 +1480,8 @@ class ChatPage(BasePage):
                     self._last_question,
                     self._command_state,
                     self._selected_page_text,
+                    self._selected_graph_context,
+                    self._graph_source_ids,
                 ],
                 concurrency_limit=20,
                 show_progress="hidden",
@@ -1037,6 +1504,8 @@ class ChatPage(BasePage):
                     self._active_file_name,
                     self.chat_panel.page_number,
                     self._selected_page_text,
+                    self._selected_graph_context,
+                    self.state_plot_panel,
                 ]
                 + self._indices_input,
                 outputs=[
@@ -1141,6 +1610,7 @@ class ChatPage(BasePage):
                     self.state_plot_history,
                     self._request_chat_history,
                     self.state_chat,
+                    self._graph_source_ids,
                 ]
                 + self._indices_input,
                 outputs=[
@@ -1543,6 +2013,249 @@ class ChatPage(BasePage):
             js=chat_input_focus_js,
         )
 
+        if self.knowledge_graph and len(self._indices_input) > 1:
+            self.chat_file_filter.change(
+                fn=self.refresh_chat_file_list,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
+                    self.first_selector_choices,
+                    self._indices_input[1],
+                    self._graph_source_ids,
+                    self.chat_file_filter,
+                ],
+                outputs=[
+                    self.chat_file_rows,
+                    self.chat_file_list,
+                    self.chat_selected_file,
+                ],
+                show_progress="hidden",
+            )
+
+            self._indices_input[1].change(
+                fn=self.refresh_chat_file_list,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
+                    self.first_selector_choices,
+                    self._indices_input[1],
+                    self._graph_source_ids,
+                    self.chat_file_filter,
+                ],
+                outputs=[
+                    self.chat_file_rows,
+                    self.chat_file_list,
+                    self.chat_selected_file,
+                ],
+                show_progress="hidden",
+            ).then(
+                fn=self.refresh_knowledge_graph,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._graph_source_ids,
+                    self._active_file_id,
+                    self._indices_input[1],
+                ],
+                outputs=[
+                    self.plot_panel,
+                    self.state_plot_panel,
+                    self.knowledge_graph_status,
+                    self._graph_source_ids,
+                ],
+                show_progress="hidden",
+            )
+
+            self._chat_file_click.change(
+                fn=self.select_chat_file,
+                inputs=[self._chat_file_click],
+                outputs=[
+                    self._indices_input[0],
+                    self._indices_input[1],
+                    self._chat_file_click,
+                ],
+                show_progress="hidden",
+            )
+
+            self.first_selector_choices.change(
+                fn=self.sync_graph_source_ids_with_selector_choices,
+                inputs=[
+                    self._graph_source_ids,
+                    self.first_selector_choices,
+                    self._app.user_id,
+                ],
+                outputs=[self._graph_source_ids],
+                show_progress="hidden",
+            ).then(
+                fn=self.persist_conversation_source_scope,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
+                    self._graph_source_ids,
+                ],
+                outputs=[self._graph_source_ids],
+                show_progress="hidden",
+            ).then(
+                fn=self.refresh_chat_file_list,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
+                    self.first_selector_choices,
+                    self._indices_input[1],
+                    self._graph_source_ids,
+                    self.chat_file_filter,
+                ],
+                outputs=[
+                    self.chat_file_rows,
+                    self.chat_file_list,
+                    self.chat_selected_file,
+                ],
+                show_progress="hidden",
+            ).then(
+                fn=self.refresh_knowledge_graph,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._graph_source_ids,
+                    self._active_file_id,
+                    self._indices_input[1],
+                ],
+                outputs=[
+                    self.plot_panel,
+                    self.state_plot_panel,
+                    self.knowledge_graph_status,
+                    self._graph_source_ids,
+                ],
+                show_progress="hidden",
+            )
+
+            self.chat_control.conversation_id.change(
+                fn=self.load_conversation_graph_state,
+                inputs=[self.chat_control.conversation_id],
+                outputs=[self._graph_source_ids],
+                show_progress="hidden",
+            ).then(
+                fn=self.sync_graph_source_ids_with_selector_choices,
+                inputs=[
+                    self._graph_source_ids,
+                    self.first_selector_choices,
+                    self._app.user_id,
+                ],
+                outputs=[self._graph_source_ids],
+                show_progress="hidden",
+            ).then(
+                fn=self.persist_conversation_source_scope,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
+                    self._graph_source_ids,
+                ],
+                outputs=[self._graph_source_ids],
+                show_progress="hidden",
+            ).then(
+                fn=self.refresh_chat_file_list,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._app.user_id,
+                    self.first_selector_choices,
+                    self._indices_input[1],
+                    self._graph_source_ids,
+                    self.chat_file_filter,
+                ],
+                outputs=[
+                    self.chat_file_rows,
+                    self.chat_file_list,
+                    self.chat_selected_file,
+                ],
+                show_progress="hidden",
+            ).then(
+                fn=self.refresh_knowledge_graph,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._graph_source_ids,
+                    self._active_file_id,
+                    self._indices_input[1],
+                ],
+                outputs=[
+                    self.plot_panel,
+                    self.state_plot_panel,
+                    self.knowledge_graph_status,
+                    self._graph_source_ids,
+                ],
+                show_progress="hidden",
+            )
+
+            if hasattr(self._app, "_tabs") and "chat-tab" in self._app._tabs:
+                self._app._tabs["chat-tab"].select(
+                    fn=self.sync_graph_source_ids_with_selector_choices,
+                    inputs=[
+                        self._graph_source_ids,
+                        self.first_selector_choices,
+                        self._app.user_id,
+                    ],
+                    outputs=[self._graph_source_ids],
+                    show_progress="hidden",
+                ).then(
+                    fn=self.persist_conversation_source_scope,
+                    inputs=[
+                        self.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._graph_source_ids,
+                    ],
+                    outputs=[self._graph_source_ids],
+                    show_progress="hidden",
+                ).then(
+                    fn=self.refresh_chat_file_list,
+                    inputs=[
+                        self.chat_control.conversation_id,
+                        self._app.user_id,
+                        self.first_selector_choices,
+                        self._indices_input[1],
+                        self._graph_source_ids,
+                        self.chat_file_filter,
+                    ],
+                    outputs=[
+                        self.chat_file_rows,
+                        self.chat_file_list,
+                        self.chat_selected_file,
+                    ],
+                    show_progress="hidden",
+                ).then(
+                    fn=self.refresh_knowledge_graph,
+                    inputs=[
+                        self.chat_control.conversation_id,
+                        self._graph_source_ids,
+                        self._active_file_id,
+                        self._indices_input[1],
+                    ],
+                    outputs=[
+                        self.plot_panel,
+                        self.state_plot_panel,
+                        self.knowledge_graph_status,
+                        self._graph_source_ids,
+                    ],
+                    show_progress="hidden",
+                )
+
+            self.knowledge_graph_refresh.click(
+                fn=lambda: "Status: generating knowledge graph...",
+                outputs=[self.knowledge_graph_status],
+                show_progress="hidden",
+            ).then(
+                fn=self.generate_knowledge_graph,
+                inputs=[
+                    self.chat_control.conversation_id,
+                    self._graph_source_ids,
+                    self._active_file_id,
+                    self._indices_input[1],
+                ],
+                outputs=[
+                    self.plot_panel,
+                    self.state_plot_panel,
+                    self.knowledge_graph_status,
+                    self._graph_source_ids,
+                ],
+                show_progress="minimal",
+            )
+
         if KH_DEMO_MODE:
             self.paper_list.examples.select(
                 self.paper_list.select_example,
@@ -1568,7 +2281,9 @@ class ChatPage(BasePage):
         conv_id,
         conv_name,
         first_selector_choices,
+        graph_source_ids,
         selected_page_text,
+        selected_graph_context,
         request: gr.Request,
     ):
         """Submit a message to the chatbot"""
@@ -1614,6 +2329,7 @@ class ChatPage(BasePage):
 
         # add new file ids to the first selector choices
         first_selector_choices.extend(zip(urls, file_ids))
+        merged_graph_source_ids = self.merge_graph_source_ids(graph_source_ids, file_ids)
 
         # if file_ids is not empty and chat_input_text is empty
         # set the input to summary
@@ -1683,6 +2399,8 @@ class ChatPage(BasePage):
             + [chat_input_text]
             + [used_command]
             + [selected_page_text]
+            + [selected_graph_context]
+            + [merged_graph_source_ids]
         )
 
     def get_recommendations(self, first_selector_choices, file_ids):
@@ -1725,6 +2443,74 @@ class ChatPage(BasePage):
                 )
 
     def on_subscribe_public_events(self):
+        if self.knowledge_graph and len(self._indices_input) > 1 and self.file_index:
+            event_name = f"onFileIndex{self.file_index.id}Changed"
+            self._app.subscribe_event(
+                name=event_name,
+                definition={
+                    "fn": self.sync_graph_source_ids_with_selector_choices,
+                    "inputs": [
+                        self._graph_source_ids,
+                        self.first_selector_choices,
+                        self._app.user_id,
+                    ],
+                    "outputs": [self._graph_source_ids],
+                    "show_progress": "hidden",
+                },
+            )
+            self._app.subscribe_event(
+                name=event_name,
+                definition={
+                    "fn": self.persist_conversation_source_scope,
+                    "inputs": [
+                        self.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._graph_source_ids,
+                    ],
+                    "outputs": [self._graph_source_ids],
+                    "show_progress": "hidden",
+                },
+            )
+            self._app.subscribe_event(
+                name=event_name,
+                definition={
+                    "fn": self.refresh_chat_file_list,
+                    "inputs": [
+                        self.chat_control.conversation_id,
+                        self._app.user_id,
+                        self.first_selector_choices,
+                        self._indices_input[1],
+                        self._graph_source_ids,
+                        self.chat_file_filter,
+                    ],
+                    "outputs": [
+                        self.chat_file_rows,
+                        self.chat_file_list,
+                        self.chat_selected_file,
+                    ],
+                    "show_progress": "hidden",
+                },
+            )
+            self._app.subscribe_event(
+                name=event_name,
+                definition={
+                    "fn": self.refresh_knowledge_graph,
+                    "inputs": [
+                        self.chat_control.conversation_id,
+                        self._graph_source_ids,
+                        self._active_file_id,
+                        self._indices_input[1],
+                    ],
+                    "outputs": [
+                        self.plot_panel,
+                        self.state_plot_panel,
+                        self.knowledge_graph_status,
+                        self._graph_source_ids,
+                    ],
+                    "show_progress": "hidden",
+                },
+            )
+
         if self._app.f_user_management:
             self._app.subscribe_event(
                 name="onSignIn",
@@ -1802,6 +2588,7 @@ class ChatPage(BasePage):
         plot_history,
         messages,
         state,
+        graph_source_ids,
         *selecteds,
     ):
         """Update the data source"""
@@ -1845,6 +2632,7 @@ class ChatPage(BasePage):
                 "retrieval_messages": retrival_history,
                 "plot_history": plot_history,
                 "state": state,
+                "graph_source_ids": self._normalize_selected_file_ids(graph_source_ids),
                 "likes": deepcopy(data_source.get("likes", [])),
             }
             session.add(result)
@@ -1933,6 +2721,7 @@ class ChatPage(BasePage):
         active_file_name: str,
         page_number: int,
         selected_page_text: str,
+        selected_graph_context: str,
         *selecteds,
     ):
         """Create the pipeline from settings
@@ -2031,6 +2820,17 @@ class ChatPage(BasePage):
         pipeline.active_file_name = active_file_name
         pipeline.page_number = normalized_page_number if is_pdf_file else None
         pipeline.selected_text = selected_text
+        try:
+            graph_context = (
+                json.loads(selected_graph_context)
+                if selected_graph_context
+                else {}
+            )
+            if not isinstance(graph_context, dict):
+                graph_context = {}
+        except Exception:
+            graph_context = {}
+        pipeline.graph_context = graph_context
 
         return pipeline, reasoning_state
 
@@ -2051,6 +2851,8 @@ class ChatPage(BasePage):
         active_file_name,
         page_number,
         selected_page_text,
+        selected_graph_context,
+        state_plot_panel,
         *selecteds,
         request: gr.Request | None = None,
     ):
@@ -2106,11 +2908,13 @@ class ChatPage(BasePage):
             active_file_name,
             page_number,
             selected_page_text,
+            selected_graph_context,
             *selecteds,
         )
         pipeline.set_output_queue(queue)
 
-        text, refs, plot, plot_gr = "", "", None, gr.update(visible=False)
+        text, refs, plot = "", "", state_plot_panel
+        plot_gr = self._json_to_plot(state_plot_panel)
         mindmap_html = ""
         msg_placeholder = getattr(
             flowsettings, "KH_CHAT_MSG_PLACEHOLDER", "Thinking ..."
@@ -2177,8 +2981,9 @@ class ChatPage(BasePage):
                             mindmap_html += response.content
 
                 if response.channel == "plot":
-                    plot = response.content
-                    plot_gr = self._json_to_plot(plot)
+                    # Keep the knowledge graph panel stable during answer streaming.
+                    plot = state_plot_panel
+                    plot_gr = self._json_to_plot(state_plot_panel)
 
                 chat_state[pipeline.get_info()["id"]] = reasoning_state["pipeline"]
                 update_reasoning_state(request_key, reasoning_state["pipeline"])

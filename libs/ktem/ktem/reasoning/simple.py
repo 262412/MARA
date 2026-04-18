@@ -132,6 +132,18 @@ class FullQAPipeline(BaseReasoning):
         active_file_name = getattr(self, "active_file_name", "")
         page_number = getattr(self, "page_number", None)
         selected_text = getattr(self, "selected_text", "") or ""
+        graph_context = getattr(self, "graph_context", {}) or {}
+        if not isinstance(graph_context, dict):
+            graph_context = {}
+
+        graph_related_file_ids = [
+            str(item or "").strip()
+            for item in list(graph_context.get("related_file_ids", []) or [])
+            if str(item or "").strip()
+        ]
+        graph_support_pages = graph_context.get("support_pages", {}) or {}
+        graph_support_chunk_ids = graph_context.get("support_chunk_ids", {}) or {}
+
         selected_text_norm = " ".join(selected_text.lower().split())
         active_file_name_norm = os.path.basename(str(active_file_name or "")).lower()
 
@@ -177,15 +189,64 @@ class FullQAPipeline(BaseReasoning):
             except Exception:
                 return False
 
+        def _is_graph_related_doc(doc: RetrievedDocument) -> bool:
+            if not graph_related_file_ids:
+                return False
+
+            doc_file_id = str(doc.metadata.get("file_id", "") or "")
+            if doc_file_id and doc_file_id not in graph_related_file_ids:
+                return False
+
+            if doc_file_id:
+                allowed_pages = [
+                    str(item).strip()
+                    for item in list(graph_support_pages.get(doc_file_id, []) or [])
+                    if str(item).strip()
+                ]
+                allowed_chunks = [
+                    str(item).strip()
+                    for item in list(graph_support_chunk_ids.get(doc_file_id, []) or [])
+                    if str(item).strip()
+                ]
+
+                if allowed_pages:
+                    page_label = str(doc.metadata.get("page_label", "") or "").strip()
+                    if page_label and page_label not in allowed_pages:
+                        return False
+
+                if allowed_chunks:
+                    doc_id = str(getattr(doc, "doc_id", "") or "").strip()
+                    if doc_id and doc_id not in allowed_chunks:
+                        return False
+
+            return True
+
         for idx, retriever in enumerate(self.retrievers):
             retriever_node = self._prepare_child(retriever, f"retriever_{idx}")
-            retriever_docs = retriever_node(text=query)
+            all_retriever_docs = retriever_node(text=query)
 
-            retriever_docs = [doc for doc in retriever_docs if _is_active_file_doc(doc)]
+            # Retrieval order is explicit to preserve single-page QA behavior:
+            # current page -> active file -> graph-related files -> fallback.
+            page_docs = []
             if page_number:
-                page_docs = [doc for doc in retriever_docs if _is_current_page_doc(doc)]
-                if page_docs:
-                    retriever_docs = page_docs
+                page_docs = [
+                    doc
+                    for doc in all_retriever_docs
+                    if _is_active_file_doc(doc) and _is_current_page_doc(doc)
+                ]
+            active_file_docs = [doc for doc in all_retriever_docs if _is_active_file_doc(doc)]
+            graph_docs = []
+            if graph_related_file_ids:
+                graph_docs = [doc for doc in all_retriever_docs if _is_graph_related_doc(doc)]
+
+            if page_docs:
+                retriever_docs = page_docs
+            elif active_file_docs:
+                retriever_docs = active_file_docs
+            elif graph_docs:
+                retriever_docs = graph_docs
+            else:
+                retriever_docs = list(all_retriever_docs)
 
             if selected_text_norm:
                 selected_filtered_docs = []
