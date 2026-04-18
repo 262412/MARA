@@ -453,6 +453,30 @@ button.selected {
   height: 100% !important;
 }
 
+#html-info-panel.kg-info-empty {
+  display: none !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  border-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#html-info-panel.kg-info-empty > div,
+#html-info-panel.kg-info-empty .prose,
+#html-info-panel.kg-info-empty .wrap,
+#html-info-panel.kg-info-empty .component-wrap,
+#html-info-panel.kg-info-empty .message {
+  height: 0 !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
 body.dark #chat-info-panel figure>img{
   filter: invert(100%);
 }
@@ -614,6 +638,19 @@ mark {
 
 #chat-input textarea {
   resize: none !important;
+}
+
+#chat-input-row button[tabindex="-1"]:has(input[data-testid="file-upload"]),
+#chat-input-row button.boundedheight.disable_click[tabindex="-1"],
+#chat-input-row input[data-testid="file-upload"] {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
 }
 
 #pdf-preview-notice {
@@ -1146,8 +1183,7 @@ div.markmap {
   min-height: 320px;
   height: 100%;
   max-height: 100%;
-  overflow-y: auto !important;
-  overflow-x: auto !important;
+  overflow: visible !important;
   min-width: 0;
   flex: 1 1 auto !important;
 }
@@ -1156,11 +1192,27 @@ div.markmap {
 #knowledge-graph-plot .prose {
   display: flex !important;
   flex-direction: column !important;
-  min-height: 100% !important;
+  min-height: 0 !important;
   height: auto !important;
   max-height: none !important;
   min-width: 0 !important;
   overflow: visible !important;
+}
+
+#knowledge-graph-plot .prose:empty {
+  display: none !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+#knowledge-graph-plot .prose.kg-prose-empty {
+  display: none !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
 }
 
 #knowledge-graph-plot .knowledge-graph-shell {

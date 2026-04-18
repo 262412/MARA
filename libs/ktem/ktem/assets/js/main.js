@@ -859,7 +859,55 @@ function run() {
     });
   }
 
+  function cleanupKnowledgeGraphOverlayNodes() {
+    const graphPanel = document.querySelector("#knowledge-graph-plot");
+    if (!graphPanel) {
+      return;
+    }
+
+    const proseNodes = graphPanel.querySelectorAll(".prose");
+    proseNodes.forEach((node) => {
+      const hasGraphShell = !!node.querySelector(".knowledge-graph-shell");
+      const textContent = (node.textContent || "").trim();
+      const shouldMask = !hasGraphShell && !textContent;
+
+      // Do not remove Gradio-managed wrappers; only hide truly empty overlays.
+      node.classList.toggle("kg-prose-empty", shouldMask);
+    });
+  }
+
+  function cleanupHtmlInfoPanelOverlay() {
+    const infoPanel = document.querySelector("#html-info-panel");
+    if (!infoPanel) {
+      return;
+    }
+
+    const proseNodes = infoPanel.querySelectorAll(".prose");
+    const hasRenderableProseContent = Array.from(proseNodes).some((node) => {
+      const textContent = (node.textContent || "").trim();
+      if (textContent) {
+        return true;
+      }
+      return !!node.querySelector(
+        "details, p, li, table, img, svg, canvas, iframe, .evidence-content, .markmap"
+      );
+    });
+
+    const fallbackText = (infoPanel.textContent || "").trim();
+    const hasFallbackRenderableContent = !!infoPanel.querySelector(
+      "details, p, li, table, img, svg, canvas, iframe, .evidence-content, .markmap"
+    );
+    const shouldCollapse =
+      !hasRenderableProseContent && !fallbackText && !hasFallbackRenderableContent;
+
+    // Collapse only truly empty info panels to avoid blocking KG node clicks.
+    infoPanel.classList.toggle("kg-info-empty", shouldCollapse);
+  }
+
   function bindKnowledgeGraphInteractions() {
+    cleanupKnowledgeGraphOverlayNodes();
+    cleanupHtmlInfoPanelOverlay();
+
     const graphPanel = document.querySelector("#knowledge-graph-plot");
     if (graphPanel && graphPanel.dataset.kgBound !== "true") {
       graphPanel.dataset.kgBound = "true";
