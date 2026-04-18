@@ -8,7 +8,6 @@ from copy import deepcopy
 from typing import Optional
 
 import gradio as gr
-from decouple import config
 from ktem.app import BasePage
 from ktem.components import reasonings
 from ktem.db.models import Conversation, engine
@@ -660,37 +659,21 @@ class ChatPage(BasePage):
                     ) as self.chat_settings:
                         with gr.Row(elem_id="quick-setting-labels"):
                             gr.HTML("Reasoning method")
-                            gr.HTML(
-                                "Model", visible=not KH_DEMO_MODE and not KH_SSO_ENABLED
-                            )
-                            gr.HTML("Language")
+                            gr.HTML("Response language")
 
                         with gr.Row():
                             reasoning_setting = (
                                 self._app.default_settings.reasoning.settings["use"]
                             )
-                            model_setting = self._app.default_settings.reasoning.options[
-                                "simple"
-                            ].settings["llm"]
                             language_setting = (
                                 self._app.default_settings.reasoning.settings["lang"]
                             )
-                            citation_setting = self._app.default_settings.reasoning.options[
-                                "simple"
-                            ].settings["highlight_citation"]
 
                             self.reasoning_type = gr.Dropdown(
                                 choices=reasoning_setting.choices[:REASONING_LIMITS],
                                 value=reasoning_setting.value,
                                 container=False,
                                 show_label=False,
-                            )
-                            self.model_type = gr.Dropdown(
-                                choices=model_setting.choices,
-                                value=model_setting.value,
-                                container=False,
-                                show_label=False,
-                                visible=not KH_DEMO_MODE and not KH_SSO_ENABLED,
                             )
                             self.language = gr.Dropdown(
                                 choices=language_setting.choices,
@@ -699,31 +682,10 @@ class ChatPage(BasePage):
                                 show_label=False,
                             )
 
-                            self.citation = gr.Dropdown(
-                                choices=citation_setting.choices,
-                                value=citation_setting.value,
-                                container=False,
-                                show_label=False,
-                                interactive=True,
-                                elem_id="citation-dropdown",
-                            )
-
-                            if not config("USE_LOW_LLM_REQUESTS", default=False, cast=bool):
-                                self.use_mindmap = gr.State(value=True)
-                                self.use_mindmap_check = gr.Checkbox(
-                                    label="Mindmap (on)",
-                                    container=False,
-                                    elem_id="use-mindmap-checkbox",
-                                    value=True,
-                                )
-                            else:
-                                self.use_mindmap = gr.State(value=False)
-                                self.use_mindmap_check = gr.Checkbox(
-                                    label="Mindmap (off)",
-                                    container=False,
-                                    elem_id="use-mindmap-checkbox",
-                                    value=False,
-                                )
+                            # Keep advanced settings as internal defaults for pipeline compatibility.
+                            self.model_type = gr.State(value=DEFAULT_SETTING)
+                            self.citation = gr.State(value=DEFAULT_SETTING)
+                            self.use_mindmap = gr.State(value=DEFAULT_SETTING)
 
                     self.chat_panel.render_input()
 
@@ -1574,7 +1536,7 @@ class ChatPage(BasePage):
                 fn=lambda: True,
                 inputs=None,
                 outputs=[self._preview_links],
-                js=pdfview_js,  # 这里已经包含了自动滚动和拖动初始化
+                js=pdfview_js,  # Includes auto-scroll and drag initialization.
             )
             .then(
                 fn=None,
@@ -1996,12 +1958,6 @@ class ChatPage(BasePage):
             self.reasoning_changed,
             inputs=[self.reasoning_type],
             outputs=[self._reasoning_type],
-        )
-        self.use_mindmap_check.change(
-            lambda x: (x, gr.update(label="Mindmap " + ("(on)" if x else "(off)"))),
-            inputs=[self.use_mindmap_check],
-            outputs=[self.use_mindmap, self.use_mindmap_check],
-            show_progress="hidden",
         )
 
         def toggle_chat_suggestion(current_state):

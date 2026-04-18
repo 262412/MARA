@@ -9,20 +9,20 @@ from .page_preview_runtime import get_file_signature, get_pdf_preview_dir, is_va
 from .page_preview_types import detect_office_extension, is_office_source
 
 # ============================================================================
-# TODO: 性能优化留底 - Office 文件处理
+# TODO: Performance optimization notes - Office file processing
 # ============================================================================
-# 
-# 当前问题：
-#   1. DOC/DOCX、PPT、Excel 文件依赖 LibreOffice 后台转 PDF
-#   2. 转换延迟明显（2-10 秒），服务器资源占用高
-#   3. 并发能力差，多文件同时转换会卡死
 #
-# 潜在优化方向：
-#   1. 异步转换 + 进度提示（用户等待时显示转换进度）
-#   2. 增量转换（只转换变化的页面）
-#   3. 预转换（上传时立即转换，而非首次访问时）
-#   4. 分布式转换（专用转换服务队列）
-#   5. 缓存优化（长期缓存 + 失效策略）
+# Current issues:
+#   1. DOC/DOCX, PPT, and Excel files depend on LibreOffice for background PDF conversion.
+#   2. Conversion latency is noticeable (2-10 seconds) with high server resource usage.
+#   3. Concurrency is weak; multi-file conversion can stall.
+#
+# Potential optimization directions:
+#   1. Asynchronous conversion + progress indicators (show conversion progress while waiting).
+#   2. Incremental conversion (only convert changed pages).
+#   3. Pre-conversion (convert on upload instead of first access).
+#   4. Distributed conversion (dedicated conversion service queue).
+#   5. Cache optimization (long-lived cache + invalidation policy).
 #
 # ============================================================================
 

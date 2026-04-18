@@ -859,6 +859,90 @@ function run() {
     });
   }
 
+  function applyIconOnlyButtonTooltips() {
+    const iconButtonHints = {
+      "new-conv-button": "Start a new chat",
+      "rename-conv-button": "Rename this chat",
+      "delete-conv-button": "Delete this chat",
+      "info-expand-button": "Expand or collapse the right panel",
+      "chat-expand-button": "Expand or collapse the chat panel",
+      "toggle-dark-button": "Toggle theme",
+    };
+
+    Object.entries(iconButtonHints).forEach(([id, label]) => {
+      const button = document.getElementById(id);
+      if (!button) {
+        return;
+      }
+      button.setAttribute("title", label);
+      button.setAttribute("aria-label", label);
+    });
+
+    // Fallback for icon-only buttons that are injected by Gradio without a title.
+    document.querySelectorAll("button").forEach((button) => {
+      if (button.getAttribute("title")) {
+        return;
+      }
+      const hasVisibleText = (button.textContent || "").trim().length > 0;
+      const hasIconContent = !!button.querySelector("img, svg");
+      if (hasVisibleText || !hasIconContent) {
+        return;
+      }
+
+      const fallbackLabel = button.getAttribute("aria-label") || "Icon button";
+      button.setAttribute("title", fallbackLabel);
+      if (!button.getAttribute("aria-label")) {
+        button.setAttribute("aria-label", fallbackLabel);
+      }
+    });
+  }
+
+  function localizeUploadDropzoneText() {
+    const replacements = [
+      [new RegExp("\\u5c06\\u6587\\u4ef6\\u62d6\\u653e\\u5230\\u6b64\\u5904", "g"), "Drop files here"],
+      [new RegExp("[\\-\\u2013\\u2014\\uff0d]\\s*\\u6216\\s*[\\-\\u2013\\u2014\\uff0d]", "g"), "- or -"],
+      [new RegExp("\\u70b9\\u51fb\\u4e0a\\u4f20", "g"), "Click to upload"],
+    ];
+
+    const replaceTextNodes = (root) => {
+      if (!root) {
+        return;
+      }
+      const textWalker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let textNode = textWalker.nextNode();
+      while (textNode) {
+        const originalValue = textNode.nodeValue || "";
+        let updatedValue = originalValue;
+        replacements.forEach(([pattern, replacement]) => {
+          updatedValue = updatedValue.replace(pattern, replacement);
+        });
+        if (updatedValue !== originalValue) {
+          textNode.nodeValue = updatedValue;
+        }
+        textNode = textWalker.nextNode();
+      }
+    };
+
+    document.querySelectorAll("input[data-testid='file-upload']").forEach((input) => {
+      const uploadButton = input.closest("button");
+      if (!uploadButton) {
+        return;
+      }
+      replaceTextNodes(uploadButton);
+
+      // Ensure the separator in the upload prompt is normalized even when Gradio splits text nodes.
+      uploadButton.querySelectorAll("span.or").forEach((separator) => {
+        const value = (separator.textContent || "").trim();
+        if (value.includes("\u6216")) {
+          separator.textContent = "- or -";
+        }
+      });
+
+      uploadButton.setAttribute("title", "Upload files");
+      uploadButton.setAttribute("aria-label", "Upload files");
+    });
+  }
+
   function cleanupKnowledgeGraphOverlayNodes() {
     const graphPanel = document.querySelector("#knowledge-graph-plot");
     if (!graphPanel) {
@@ -905,6 +989,8 @@ function run() {
   }
 
   function bindKnowledgeGraphInteractions() {
+    applyIconOnlyButtonTooltips();
+    localizeUploadDropzoneText();
     cleanupKnowledgeGraphOverlayNodes();
     cleanupHtmlInfoPanelOverlay();
 

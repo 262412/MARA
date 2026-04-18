@@ -120,6 +120,7 @@ class ConversationControl(BasePage):
                     scale=1,
                     size="sm",
                     elem_classes=["no-background", "body-text-color"],
+                    elem_id="rename-conv-button",
                 )
                 self.btn_del = gr.Button(
                     value="",
@@ -128,6 +129,7 @@ class ConversationControl(BasePage):
                     scale=1,
                     size="sm",
                     elem_classes=["no-background", "body-text-color"],
+                    elem_id="delete-conv-button",
                 )
                 self.btn_new = gr.Button(
                     value="",

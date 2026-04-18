@@ -16,7 +16,7 @@ class HintPage(BasePage):
                     """
                 - You can select any text from the chat answer to **highlight relevant citation(s)** on the right panel.
                 - **Citations** can be viewed on both PDF viewer and raw text.
-                - You can tweak the citation format and use advance (CoT) reasoning in **Chat settings** menu.
+                - You can tweak response language and reasoning mode in the **Chat settings** menu.
                 - Want to **explore more**? Check out the **Help** section to create your private space.
             """  # noqa
                 )
