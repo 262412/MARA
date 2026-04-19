@@ -1,0 +1,27 @@
+{
+  "platform": "codex",
+  "mode": "full",
+  "components": [
+    "skills",
+    "agents",
+    "utils",
+    "scripts",
+    "AGENTS.md",
+    "config.toml.template"
+  ],
+  "changed_paths": [
+    "D:\\PythonProject\\kotaemon\\..codex\\skills",
+    "D:\\PythonProject\\kotaemon\\..codex\\agents",
+    "D:\\PythonProject\\kotaemon\\..codex\\utils",
+    "D:\\PythonProject\\kotaemon\\..codex\\scripts",
+    "D:\\PythonProject\\kotaemon\\..codex\\AGENTS.md",
+    "D:\\PythonProject\\kotaemon\\..codex\\config.kotaemon.template.toml"
+  ],
+  "merged_paths": [
+    "D:\\PythonProject\\kotaemon\\..codex\\config.toml"
+  ],
+  "sidecar_paths": [],
+  "backup_dir": null,
+  "dry_run": false,
+  "timestamp_utc": "2026-04-19T20:20:03.131758+00:00"
+}

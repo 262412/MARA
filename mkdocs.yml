@@ -12,6 +12,7 @@ nav:
   # - Functional description: pages/app/functional-description.md
   - Development:
       - development/index.md
+      - Platform CLI support: development/platform-cli-support.md
       # - Data & Data Structure Components: development/data-components.md
       # - Features: pages/app/features.md
       - Customize flow logic: pages/app/customize-flows.md

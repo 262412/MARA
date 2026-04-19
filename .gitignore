@@ -516,3 +516,6 @@ S.gpg-agent*
 # Conda and env
 *install_dir/
 doc_env/
+
+# Local modelcli runtime config may contain API keys
+/modelcli.yml

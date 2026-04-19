@@ -8,6 +8,9 @@ include-package-data = false
 packages.find.include = ["kotaemon*"]
 packages.find.exclude = ["tests*", "env*"]
 
+[tool.setuptools.package-data]
+kotaemon = ["platform_support/assets/**/*"]
+
 [tool.setuptools-git-versioning]
 enabled = true
 dev_template = "{tag}"

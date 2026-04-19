@@ -1,0 +1,18 @@
+{
+  "customInstructions": "Prefer kotaemon modelcli validation before real API calls.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git reset --hard:*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/security-guard.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+  "mcpServers": {}
+}

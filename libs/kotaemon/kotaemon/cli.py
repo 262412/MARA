@@ -5,6 +5,9 @@ import yaml
 from trogon import tui
 
 
+PLATFORM_CHOICES = ("claude-code", "codex")
+
+
 # check if the output is not a .yml file -> raise error
 def check_config_format(config):
     if os.path.exists(config):
@@ -35,6 +38,14 @@ def modelcli():
 
 
 main.add_command(modelcli)
+
+
+@click.group()
+def platform():
+    """Install and validate platform bundles for Claude Code and Codex."""
+
+
+main.add_command(platform)
 
 
 @modelcli.command("init-config")
@@ -178,6 +189,171 @@ def modelcli_run(
         raise click.ClickException(str(exc)) from exc
 
     click.echo(response.text)
+
+
+@platform.command("list")
+def platform_list():
+    """List supported external AI coding platforms."""
+    from kotaemon.platform_support import get_platform_spec, list_platform_names
+
+    click.echo("Platform\tDefault target")
+    for name in list_platform_names():
+        spec = get_platform_spec(name)
+        click.echo(f"{name}\t{spec.target_subdir}")
+
+
+@platform.command("status")
+@click.option(
+    "--platform",
+    "platform_name",
+    type=click.Choice(PLATFORM_CHOICES),
+    required=True,
+    help="Platform to inspect.",
+)
+@click.option(
+    "--target-dir",
+    default=None,
+    help="Override install target root (defaults to ~/.claude or ~/.codex).",
+)
+def platform_status_cmd(platform_name, target_dir):
+    """Show installed component status for one platform."""
+    from kotaemon.platform_support import platform_status
+
+    status = platform_status(platform_name, target_dir=target_dir)
+    click.echo(f"Platform: {status.platform}")
+    click.echo(f"Target: {status.target_dir}")
+    click.echo("Component\tPresent")
+    for component, present in status.component_state.items():
+        click.echo(f"{component}\t{'yes' if present else 'no'}")
+
+
+@platform.command("install")
+@click.option(
+    "--platform",
+    "platform_name",
+    type=click.Choice(PLATFORM_CHOICES),
+    required=True,
+    help="Platform to install.",
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["full", "minimal", "selective"]),
+    default="full",
+    show_default=True,
+    help="Install mode.",
+)
+@click.option(
+    "--item",
+    "items",
+    multiple=True,
+    help="Component names for selective mode (repeat option).",
+)
+@click.option(
+    "--target-dir",
+    default=None,
+    help="Override install target root (defaults to ~/.claude or ~/.codex).",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Preview changes without writing files.",
+)
+@click.option(
+    "--yes",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Skip confirmation prompt.",
+)
+def platform_install(platform_name, mode, items, target_dir, dry_run, yes):
+    """Install platform bundle assets into target directories."""
+    from kotaemon.platform_support import install_platform
+
+    if mode == "selective" and not items:
+        raise click.UsageError("Selective mode requires at least one --item option.")
+
+    if not yes:
+        if not click.confirm(
+            f"Install platform '{platform_name}' using mode '{mode}'?"
+        ):
+            raise click.Abort()
+
+    try:
+        result = install_platform(
+            platform_name=platform_name,
+            mode=mode,
+            target_dir=target_dir,
+            items=items,
+            dry_run=dry_run,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"Platform: {result.platform}")
+    click.echo(f"Target: {result.target_dir}")
+    click.echo(f"Mode: {result.mode}")
+    click.echo(f"Dry run: {'yes' if result.dry_run else 'no'}")
+    click.echo(f"Components: {', '.join(result.components)}")
+    click.echo(f"Changed paths: {len(result.changed_paths)}")
+    click.echo(f"Merged paths: {len(result.merged_paths)}")
+    click.echo(f"Sidecar paths: {len(result.sidecar_paths)}")
+    if result.backup_dir:
+        click.echo(f"Backup dir: {result.backup_dir}")
+
+    for path in result.changed_paths:
+        click.echo(f"- {path}")
+
+
+@platform.command("validate")
+@click.option(
+    "--platform",
+    "platform_name",
+    type=click.Choice(PLATFORM_CHOICES),
+    required=False,
+    help="Validate one platform only.",
+)
+@click.option(
+    "--installed",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Validate installed target instead of source bundle.",
+)
+@click.option(
+    "--target-dir",
+    default=None,
+    help="Override install target root for --installed validation.",
+)
+def platform_validate(platform_name, installed, target_dir):
+    """Validate platform bundles or installed targets."""
+    from kotaemon.platform_support import validate_bundle, validate_installed
+
+    if installed:
+        if not platform_name:
+            raise click.UsageError("--platform is required when using --installed.")
+        result = validate_installed(platform_name, target_dir=target_dir)
+        click.echo(
+            f"{result.platform}: {'PASS' if result.valid else 'FAIL'}"
+        )
+        for error in result.errors:
+            click.echo(f"  - {error}")
+        if not result.valid:
+            raise click.ClickException("Installed validation failed.")
+        return
+
+    results = validate_bundle(platform_name=platform_name)
+    all_valid = True
+    for result in results:
+        click.echo(f"{result.platform}: {'PASS' if result.valid else 'FAIL'}")
+        for error in result.errors:
+            click.echo(f"  - {error}")
+        if not result.valid:
+            all_valid = False
+
+    if not all_valid:
+        raise click.ClickException("Bundle validation failed.")
 
 
 @promptui.command()

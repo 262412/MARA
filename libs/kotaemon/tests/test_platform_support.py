@@ -1,0 +1,120 @@
+import json
+
+from click.testing import CliRunner
+
+from kotaemon.cli import main
+from kotaemon.platform_support import (
+    install_platform,
+    list_platform_names,
+    validate_bundle,
+    validate_installed,
+)
+
+
+def test_platform_registry_names():
+    assert set(list_platform_names()) == {"claude-code", "codex"}
+
+
+def test_install_claude_minimal_creates_expected_assets(tmp_path):
+    result = install_platform(
+        platform_name="claude-code",
+        mode="minimal",
+        target_dir=tmp_path,
+    )
+
+    assert result.platform == "claude-code"
+    assert (tmp_path / "skills").exists()
+    assert (tmp_path / "agents").exists()
+    assert (tmp_path / "CLAUDE.md").exists()
+
+
+def test_install_claude_settings_template_merges_existing_json(tmp_path):
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text('{"existing": 1, "hooks": {}}\n', encoding="utf-8")
+
+    result = install_platform(
+        platform_name="claude-code",
+        mode="selective",
+        items=["settings.json.template"],
+        target_dir=tmp_path,
+    )
+
+    merged = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert merged["existing"] == 1
+    assert "customInstructions" in merged
+    assert "hooks" in merged
+    assert (tmp_path / "settings.kotaemon.template.json").exists()
+    assert str(settings_path) in result.merged_paths
+
+
+def test_install_codex_agents_uses_sidecar_when_existing_file_present(tmp_path):
+    primary = tmp_path / "AGENTS.md"
+    primary.write_text("user owned content\n", encoding="utf-8")
+
+    result = install_platform(
+        platform_name="codex",
+        mode="selective",
+        items=["AGENTS.md"],
+        target_dir=tmp_path,
+    )
+
+    sidecar = tmp_path / "AGENTS.kotaemon.md"
+    assert primary.read_text(encoding="utf-8") == "user owned content\n"
+    assert sidecar.exists()
+    assert str(sidecar) in result.sidecar_paths
+
+
+def test_validate_bundle_passes_for_packaged_assets():
+    results = validate_bundle()
+    assert results
+    assert all(item.valid for item in results), [
+        (item.platform, item.errors) for item in results
+    ]
+
+
+def test_validate_installed_reports_missing_minimal_components(tmp_path):
+    result = validate_installed("codex", target_dir=tmp_path)
+    assert result.valid is False
+    assert any(
+        message.startswith("Missing minimal component") for message in result.errors
+    )
+
+
+def test_cli_platform_list_command():
+    runner = CliRunner()
+    result = runner.invoke(main, ["platform", "list"])
+
+    assert result.exit_code == 0, result.output
+    assert "claude-code" in result.output
+    assert "codex" in result.output
+
+
+def test_cli_platform_install_dry_run(tmp_path):
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "platform",
+            "install",
+            "--platform",
+            "codex",
+            "--mode",
+            "minimal",
+            "--target-dir",
+            str(tmp_path),
+            "--dry-run",
+            "--yes",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Dry run: yes" in result.output
+    assert (tmp_path / "skills").exists() is False
+
+
+def test_cli_platform_validate_bundle_command():
+    runner = CliRunner()
+    result = runner.invoke(main, ["platform", "validate", "--platform", "codex"])
+
+    assert result.exit_code == 0, result.output
+    assert "codex: PASS" in result.output

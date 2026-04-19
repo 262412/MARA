@@ -66,6 +66,7 @@ documents and developers who want to build their own RAG pipeline.
 
 - **Framework for RAG Pipelines**: Tools to build your own RAG-based document QA pipeline.
 - **Customizable UI**: See your RAG pipeline in action with the provided UI, built with <a href='https://github.com/gradio-app/gradio'>Gradio <img src='https://img.shields.io/github/stars/gradio-app/gradio'></a>.
+- **Cross-platform CLI profiles**: Install and validate single-repo support bundles for Claude Code and Codex with `kotaemon platform` commands.
 
 ## Key Features
 
