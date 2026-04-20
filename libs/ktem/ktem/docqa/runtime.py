@@ -48,7 +48,7 @@ class DocQARequest:
     selected_inputs: Optional[dict[int, Any]] = None
     active_file_id: str = ""
     active_file_name: str = ""
-    page_number: int = 1
+    page_number: Optional[int] = None
     selected_text: str = ""
     graph_context: dict[str, Any] = field(default_factory=dict)
     graph_source_ids: Optional[list[str]] = None
@@ -82,7 +82,7 @@ class DocQAResponse:
     graph_source_ids: list[str]
     active_file_id: str
     active_file_name: str
-    page_number: int
+    page_number: Optional[int]
     selected_text: str
     graph_context: dict[str, Any]
     reasoning_id: str
@@ -209,6 +209,7 @@ class _PreparedPipeline:
     selected_file_ids: list[str]
     active_file_id: str
     active_file_name: str
+    page_number: Optional[int]
     selected_text: str
     graph_context: dict[str, Any]
     settings: dict[str, Any]
@@ -472,6 +473,12 @@ class DocQARuntime:
         if isinstance(selected_file_ids, list):
             return [str(item) for item in selected_file_ids if item not in (None, "")]
         return [str(selected_file_ids)]
+
+    @staticmethod
+    def _normalize_page_number(page_number: Any) -> Optional[int]:
+        if page_number in (None, ""):
+            return None
+        return max(1, int(page_number))
 
     @staticmethod
     def _merge_unique_file_ids(*groups) -> list[str]:
@@ -902,9 +909,14 @@ class DocQARuntime:
                 active_file_id = active_file_id or inferred_id
                 active_file_name = active_file_name or inferred_name
 
-        normalized_page_number = max(1, int(request.page_number or 1))
+        normalized_page_number = self._normalize_page_number(request.page_number)
         selected_text = str(request.selected_text or "").strip()
-        if (not selected_text) and active_file_id and active_file_name:
+        if (
+            (not selected_text)
+            and normalized_page_number is not None
+            and active_file_id
+            and active_file_name
+        ):
             selected_text = self._preview.get_page_context_text(
                 active_file_id,
                 active_file_name,
@@ -915,7 +927,11 @@ class DocQARuntime:
         is_pdf_file = str(active_file_name or "").lower().endswith(".pdf")
         pipeline.active_file_id = active_file_id or ""
         pipeline.active_file_name = active_file_name
-        pipeline.page_number = normalized_page_number if is_pdf_file else None
+        pipeline.page_number = (
+            normalized_page_number
+            if is_pdf_file and normalized_page_number is not None
+            else None
+        )
         pipeline.selected_text = selected_text
         pipeline.graph_context = graph_context
 
@@ -925,6 +941,7 @@ class DocQARuntime:
             selected_file_ids=selected_file_ids,
             active_file_id=active_file_id or "",
             active_file_name=active_file_name,
+            page_number=normalized_page_number,
             selected_text=selected_text,
             graph_context=graph_context,
             settings=settings,
@@ -1081,7 +1098,7 @@ class DocQARuntime:
             graph_source_ids=graph_source_ids,
             active_file_id=prepared.active_file_id,
             active_file_name=prepared.active_file_name,
-            page_number=max(1, int(request.page_number or 1)),
+            page_number=prepared.page_number,
             selected_text=prepared.selected_text,
             graph_context=_serialize_value(prepared.graph_context),
             reasoning_id=prepared.reasoning_id,

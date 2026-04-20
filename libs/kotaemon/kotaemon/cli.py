@@ -239,15 +239,14 @@ def _docqa_shared_options(command):
         ),
         click.option(
             "--page",
-            default=1,
-            show_default=True,
-            type=int,
-            help="Active page number for page-level QA.",
+            default=None,
+            type=click.IntRange(min=1),
+            help="Focus QA on one page. Omit to use whole-document QA.",
         ),
         click.option(
             "--selected-text",
             default="",
-            help="Explicit selected text to bias page-level QA.",
+            help="Explicit selected text to focus retrieval without forcing page 1.",
         ),
         click.option(
             "--graph-context-file",
@@ -313,7 +312,7 @@ def _run_docqa_repl(
     conversation_id,
     file_refs=(),
     active_file_ref="",
-    page=1,
+    page=None,
     selected_text="",
     graph_context_file="",
     reasoning=None,
@@ -336,13 +335,13 @@ def _run_docqa_repl(
     active_record = _resolve_cli_active_file(runtime, active_file_ref)
     active_file_id = active_record.file_id if active_record else ""
     active_file_name = active_record.name if active_record else ""
-    current_page = max(1, int(page or 1))
-    current_selected_text = selected_text or ""
+    current_page = max(1, int(page)) if page not in (None, "") else None
+    current_selected_text = str(selected_text or "").strip()
     graph_context = _parse_graph_context_file(graph_context_file)
 
     _echo_text(f"Conversation: {conversation_id}")
     _echo_text(
-        "Commands: /files, /use <file>, /page <n>, /selected-text <text>, /history, /help, /exit"
+        "Commands: /files, /use <file>, /page <n|clear>, /selected-text [text], /history, /help, /exit"
     )
 
     while True:
@@ -360,7 +359,7 @@ def _run_docqa_repl(
             break
         if prompt == "/help":
             _echo_text(
-                "Commands: /files, /use <file>, /page <n>, /selected-text <text>, /history, /help, /exit"
+                "Commands: /files, /use <file>, /page <n|clear>, /selected-text [text], /history, /help, /exit"
             )
             continue
         if prompt == "/files":
@@ -380,15 +379,22 @@ def _run_docqa_repl(
             continue
         if prompt.startswith("/page"):
             value = prompt[len("/page") :].strip()
+            if value.lower() in {"", "clear", "off", "document", "doc"}:
+                current_page = None
+                _echo_text("Page focus cleared. Using whole-document QA.")
+                continue
             if not value.isdigit():
-                _echo_text("Usage: /page <number>")
+                _echo_text("Usage: /page <number> or /page clear")
                 continue
             current_page = max(1, int(value))
             _echo_text(f"Page set to {current_page}.")
             continue
         if prompt.startswith("/selected-text"):
             current_selected_text = prompt[len("/selected-text") :].strip()
-            _echo_text("Selected text updated.")
+            if current_selected_text:
+                _echo_text("Selected text updated.")
+            else:
+                _echo_text("Selected text cleared.")
             continue
         if prompt == "/history":
             latest = runtime.load_session(conversation_id)
@@ -639,7 +645,7 @@ def docqa_ask(
             else None,
             active_file_id=active_record.file_id if active_record else "",
             active_file_name=active_record.name if active_record else "",
-            page_number=max(1, int(page or 1)),
+            page_number=page,
             selected_text=selected_text or "",
             graph_context=_parse_graph_context_file(graph_context_file),
             reasoning_type=reasoning,

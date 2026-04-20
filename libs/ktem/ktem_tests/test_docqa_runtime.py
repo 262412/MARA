@@ -31,6 +31,13 @@ def test_merge_unique_file_ids_preserves_order():
     ) == ["file-1", "file-2", "file-3", "file-4"]
 
 
+def test_normalize_page_number_supports_document_scope():
+    assert DocQARuntime._normalize_page_number(None) is None
+    assert DocQARuntime._normalize_page_number("") is None
+    assert DocQARuntime._normalize_page_number(5) == 5
+    assert DocQARuntime._normalize_page_number(0) == 1
+
+
 def test_ensure_default_managed_user_reuses_existing_admin(monkeypatch):
     runtime = object.__new__(DocQARuntime)
     runtime._app = SimpleNamespace(f_user_management=True)

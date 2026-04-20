@@ -43,12 +43,17 @@ class _DummySessionSummary:
 
 
 class _DummyResponse:
-    def __init__(self, conversation_id: str, active_file_name: str = "alpha.pdf"):
+    def __init__(
+        self,
+        conversation_id: str,
+        active_file_name: str = "alpha.pdf",
+        page_number: int | None = 3,
+    ):
         self.conversation_id = conversation_id
         self.answer = "dummy answer"
         self.references_text = "dummy evidence"
         self.active_file_name = active_file_name
-        self.page_number = 3
+        self.page_number = page_number
 
     def as_dict(self):
         return {
@@ -124,7 +129,11 @@ class _DummyRuntime:
         conversation_id = request.conversation_id or "conv-1"
         self.sessions.setdefault(conversation_id, []).append((request.prompt, "dummy answer"))
         active_file_name = request.active_file_name or "alpha.pdf"
-        return _DummyResponse(conversation_id=conversation_id, active_file_name=active_file_name)
+        return _DummyResponse(
+            conversation_id=conversation_id,
+            active_file_name=active_file_name,
+            page_number=request.page_number,
+        )
 
     def load_session(self, conversation_id):
         messages = self.sessions.get(conversation_id)
@@ -190,6 +199,57 @@ def test_docqa_ask_json(monkeypatch, tmp_path):
     assert runtime.last_request.use_mindmap is True
 
 
+def test_docqa_ask_defaults_to_document_scope(monkeypatch):
+    runtime = _DummyRuntime()
+    monkeypatch.setattr("kotaemon.cli._create_docqa_runtime", lambda: runtime)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "docqa",
+            "ask",
+            "--prompt",
+            "Summarize alpha.",
+            "--file",
+            "alpha.pdf",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["conversation_id"] == "conv-1"
+    assert runtime.last_request.selected_file_ids == ["file-1"]
+    assert runtime.last_request.page_number is None
+    assert runtime.last_request.selected_text == ""
+
+
+def test_docqa_ask_selected_text_without_page_keeps_document_scope(monkeypatch):
+    runtime = _DummyRuntime()
+    monkeypatch.setattr("kotaemon.cli._create_docqa_runtime", lambda: runtime)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "docqa",
+            "ask",
+            "--prompt",
+            "Explain alpha.",
+            "--file",
+            "alpha.pdf",
+            "--selected-text",
+            "focused snippet",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert runtime.last_request.page_number is None
+    assert runtime.last_request.selected_text == "focused snippet"
+
+
 def test_docqa_chat_repl(monkeypatch):
     runtime = _DummyRuntime()
     monkeypatch.setattr("kotaemon.cli._create_docqa_runtime", lambda: runtime)
@@ -206,6 +266,26 @@ def test_docqa_chat_repl(monkeypatch):
     assert "dummy answer" in result.output
     assert runtime.last_request.prompt == "What is alpha?"
     assert runtime.last_request.selected_file_ids == ["file-1"]
+    assert runtime.last_request.page_number is None
+
+
+def test_docqa_chat_repl_page_clear(monkeypatch):
+    runtime = _DummyRuntime()
+    monkeypatch.setattr("kotaemon.cli._create_docqa_runtime", lambda: runtime)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["docqa", "chat", "--file", "alpha.pdf"],
+        input="/page 4\n/page clear\n/selected-text focus\n/selected-text\nWhat is alpha?\n/exit\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Page set to 4." in result.output
+    assert "Page focus cleared. Using whole-document QA." in result.output
+    assert "Selected text cleared." in result.output
+    assert runtime.last_request.page_number is None
+    assert runtime.last_request.selected_text == ""
 
 
 def test_docqa_files_and_sessions(monkeypatch):
