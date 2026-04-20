@@ -1,25 +1,19 @@
 from __future__ import annotations
 
-import json
+import hashlib
 import logging
 import os
 import re
 import tempfile
 import zipfile
-import hashlib
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from html import unescape
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import pluggy
-from pypdf import PdfReader
-from sqlmodel import Session, select
-from theflow.settings import settings as flowsettings
-from theflow.utils.modules import import_dotted_string
-
 from ktem import extension_protocol
 from ktem.components import reasonings
 from ktem.db.models import Conversation, Settings, User, engine
@@ -31,6 +25,10 @@ from ktem.rerankings.manager import reranking_models_manager
 from ktem.settings import BaseSettingGroup, SettingGroup, SettingReasoningGroup
 from ktem.utils.commands import WEB_SEARCH_COMMAND
 from ktem.utils.conversation import sync_retrieval_n_message
+from pypdf import PdfReader
+from sqlmodel import Session, select
+from theflow.settings import settings as flowsettings
+from theflow.utils.modules import import_dotted_string
 
 from kotaemon.base import Document
 
@@ -245,7 +243,9 @@ class _RuntimeAppContext:
         self.dev_mode = getattr(flowsettings, "KH_MODE", "") == "dev"
         self.app_name = getattr(flowsettings, "KH_APP_NAME", "Kotaemon")
         self.app_version = getattr(flowsettings, "KH_APP_VERSION", "")
-        self.f_user_management = getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT", False)
+        self.f_user_management = getattr(
+            flowsettings, "KH_FEATURE_USER_MANAGEMENT", False
+        )
         self.default_settings = SettingGroup(
             application=BaseSettingGroup(settings=flowsettings.SETTINGS_APP),
             reasoning=SettingReasoningGroup(settings=flowsettings.SETTINGS_REASONING),
@@ -312,8 +312,8 @@ class _DocQAPreviewService:
     def __init__(self, app):
         from ktem.docqa.preview_support import (
             OfficePreviewConversionService,
-            PreviewFileResolver,
             PresentationTextService,
+            PreviewFileResolver,
         )
 
         self._app = app
@@ -377,7 +377,9 @@ class _DocQAPreviewService:
         file_extension = (Path(file_name).suffix or Path(source_path).suffix).lower()
 
         if file_extension == ".pdf":
-            return self._extract_pdf_page_text(source_path, page_number, max_chars=max_chars)
+            return self._extract_pdf_page_text(
+                source_path, page_number, max_chars=max_chars
+            )
 
         if source_extension in {".pptx", ".ppt"}:
             return self._presentation_preview_service.extract_slide_text(
@@ -416,12 +418,13 @@ class DocQARuntime:
         self._preview = _DocQAPreviewService(self._app)
         self._web_search_cls = self._load_web_search_cls()
         self.file_index = self._get_default_file_index()
+        self.knowledge_graph: Any = None
         if self.file_index is not None:
             from ktem.docqa.knowledge_graph import GlobalKnowledgeGraphService
 
-            self.knowledge_graph = GlobalKnowledgeGraphService(self._app, self.file_index)
-        else:
-            self.knowledge_graph = None
+            self.knowledge_graph = GlobalKnowledgeGraphService(
+                self._app, self.file_index
+            )
 
     @property
     def user_id(self):
@@ -434,7 +437,8 @@ class DocQARuntime:
 
     def _ensure_default_managed_user(self) -> str:
         configured_username = str(
-            getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_ADMIN", "admin") or "admin"
+            getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_ADMIN", "admin")
+            or "admin"
         ).strip()
         configured_password = str(
             getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_PASSWORD", "admin")
@@ -450,11 +454,15 @@ class DocQARuntime:
                 if existing is not None:
                     return str(existing.id)
 
-                fallback_admin = session.exec(select(User).where(User.admin == True)).first()  # noqa: E712
+                fallback_admin = session.exec(
+                    select(User).where(User.admin.is_(True))
+                ).first()
                 if fallback_admin is not None:
                     return str(fallback_admin.id)
 
-                hashed_password = hashlib.sha256(configured_password.encode()).hexdigest()
+                hashed_password = hashlib.sha256(
+                    configured_password.encode()
+                ).hexdigest()
                 created = User(
                     username=configured_username,
                     username_lower=username_lookup,
@@ -572,9 +580,11 @@ class DocQARuntime:
                 select(Conversation)
                 .where(
                     (Conversation.user == resolved_user_id)
-                    | (Conversation.is_public == True)  # noqa: E712
+                    | Conversation.is_public.is_(True)
                 )
-                .order_by(Conversation.date_created.desc())  # type: ignore[attr-defined]
+                .order_by(
+                    Conversation.date_created.desc()
+                )  # type: ignore[attr-defined]
             )
             rows = session.exec(statement).all()
 
@@ -629,7 +639,9 @@ class DocQARuntime:
             is_public=bool(row.is_public),
             data_source=data_source,
             messages=messages,
-            retrieval_messages=sync_retrieval_n_message(messages, retrieval_messages),
+            retrieval_messages=sync_retrieval_n_message(
+                [list(item) for item in messages], retrieval_messages
+            ),
             plot_history=plot_history,
             state=state,
             selected_mapping=selected_mapping,
@@ -639,7 +651,9 @@ class DocQARuntime:
             date_updated=row.date_updated,
         )
 
-    def create_session(self, name: str | None = None, user_id: Any = None) -> DocQASession:
+    def create_session(
+        self, name: str | None = None, user_id: Any = None
+    ) -> DocQASession:
         resolved_user_id = self._resolve_user_id(user_id)
         with Session(engine) as session:
             row = Conversation(user=resolved_user_id)
@@ -703,7 +717,8 @@ class DocQARuntime:
                 contains = [
                     record
                     for record in records
-                    if key.lower() in record.name.lower() or key.lower() in record.file_id.lower()
+                    if key.lower() in record.name.lower()
+                    or key.lower() in record.file_id.lower()
                 ]
                 if len(contains) == 1:
                     match = contains[0]
@@ -743,7 +758,9 @@ class DocQARuntime:
                 ):
                     selected_input = list(selected_input[:3])
                 else:
-                    normalized_ids = self.file_index.resolve_selected_ids(user_id, selected_input)
+                    normalized_ids = self.file_index.resolve_selected_ids(
+                        user_id, selected_input
+                    )
                     mode = "select" if normalized_ids else "all"
                     selected_input = [mode, normalized_ids, user_id]
                 mapping[str(index.id)] = selected_input
@@ -777,7 +794,9 @@ class DocQARuntime:
         plot_history_to_store = list(plot_history or [])
 
         if not state_to_store.get("app", {}).get("regen", False):
-            retrieval_history_to_store = retrieval_history_to_store + [retrieval_message]
+            retrieval_history_to_store = retrieval_history_to_store + [
+                retrieval_message
+            ]
             plot_history_to_store = plot_history_to_store + [plot_data]
         else:
             if retrieval_history_to_store:
@@ -800,7 +819,9 @@ class DocQARuntime:
             )
 
             updated_data_source = {
-                "selected": selected_mapping if is_owner else data_source.get("selected", {}),
+                "selected": selected_mapping
+                if is_owner
+                else data_source.get("selected", {}),
                 "messages": messages,
                 "retrieval_messages": retrieval_history_to_store,
                 "plot_history": plot_history_to_store,
@@ -837,13 +858,17 @@ class DocQARuntime:
             return selected_inputs
 
         if session_info:
-            selected_mapping = session_info.selected_mapping.get(str(self.file_index.id))
+            selected_mapping = session_info.selected_mapping.get(
+                str(self.file_index.id)
+            )
             if selected_mapping is not None:
                 selected_inputs[self.file_index.id] = selected_mapping
                 return selected_inputs
 
             if session_info.graph_source_ids:
-                selected_inputs[self.file_index.id] = list(session_info.graph_source_ids)
+                selected_inputs[self.file_index.id] = list(
+                    session_info.graph_source_ids
+                )
                 return selected_inputs
 
         return selected_inputs
@@ -865,12 +890,18 @@ class DocQARuntime:
         reasoning_id = reasoning_cls.get_info()["id"]
 
         llm_setting_key = f"reasoning.options.{reasoning_id}.llm"
-        if llm_setting_key in settings and request.llm not in (DEFAULT_SETTING, None, ""):
+        if llm_setting_key in settings and request.llm not in (
+            DEFAULT_SETTING,
+            None,
+            "",
+        ):
             settings[llm_setting_key] = request.llm
         if request.use_mindmap not in (DEFAULT_SETTING, None):
             settings["reasoning.options.simple.create_mindmap"] = request.use_mindmap
         if request.use_citation not in (DEFAULT_SETTING, None):
-            settings["reasoning.options.simple.highlight_citation"] = request.use_citation
+            settings[
+                "reasoning.options.simple.highlight_citation"
+            ] = request.use_citation
         if request.language not in (DEFAULT_SETTING, None, ""):
             settings["reasoning.lang"] = request.language
 
@@ -883,7 +914,9 @@ class DocQARuntime:
             for index in getattr(self._app.index_manager, "indices", []):
                 selected_input = selected_inputs.get(index.id)
                 retrievers.extend(
-                    index.get_retriever_pipelines(settings, resolved_user_id, selected_input)
+                    index.get_retriever_pipelines(
+                        settings, resolved_user_id, selected_input
+                    )
                 )
 
         reasoning_state = {
@@ -926,7 +959,9 @@ class DocQARuntime:
                 normalized_page_number,
             )
 
-        graph_context = request.graph_context if isinstance(request.graph_context, dict) else {}
+        graph_context = (
+            request.graph_context if isinstance(request.graph_context, dict) else {}
+        )
         is_pdf_file = str(active_file_name or "").lower().endswith(".pdf")
         pipeline.active_file_id = active_file_id or ""
         pipeline.active_file_name = active_file_name
@@ -967,7 +1002,11 @@ class DocQARuntime:
 
     def run_turn(self, request: DocQARequest) -> DocQAResponse:
         resolved_user_id = self._resolve_user_id(request.user_id)
-        session_info = self.load_session(request.conversation_id) if request.conversation_id else None
+        session_info = (
+            self.load_session(request.conversation_id)
+            if request.conversation_id
+            else None
+        )
         if session_info is None:
             session_info = self.create_session(user_id=resolved_user_id)
 
@@ -1003,6 +1042,8 @@ class DocQARuntime:
             origin=request.origin,
         )
         prepared = self._prepare_pipeline(request_to_run)
+        request_state = request_to_run.state or deepcopy(STATE)
+        request_to_run.state = request_state
 
         history = list(request_to_run.history or [])
         text = ""
@@ -1041,10 +1082,9 @@ class DocQARuntime:
             elif response.channel == "plot":
                 plot = response.content
 
-            request_to_run.state.setdefault(prepared.pipeline.get_info()["id"], {})
-            request_to_run.state[prepared.pipeline.get_info()["id"]] = prepared.reasoning_state[
-                "pipeline"
-            ]
+            pipeline_id = str(prepared.pipeline.get_info()["id"])
+            request_state.setdefault(pipeline_id, {})
+            request_state[pipeline_id] = prepared.reasoning_state["pipeline"]
 
         if not text:
             text = getattr(
@@ -1071,7 +1111,7 @@ class DocQARuntime:
             retrieval_history=session_info.retrieval_messages,
             plot_history=session_info.plot_history,
             messages=messages,
-            state=request_to_run.state or STATE,
+            state=request_state,
             graph_source_ids=graph_source_ids,
             selected_inputs=selected_inputs,
             selected_file_ids=prepared.selected_file_ids,
@@ -1095,7 +1135,7 @@ class DocQARuntime:
             messages=messages,
             retrieval_messages=retrieval_history,
             plot_history=_serialize_value(plot_history),
-            state=_serialize_value(request_to_run.state or STATE),
+            state=_serialize_value(request_state),
             selected_file_ids=prepared.selected_file_ids,
             selected_mapping=_serialize_value(selected_mapping),
             graph_source_ids=graph_source_ids,
@@ -1118,7 +1158,9 @@ class DocQARuntime:
 
         supported_types = {
             item.strip().lower()
-            for item in str(self.file_index.config.get("supported_file_types", "")).split(",")
+            for item in str(
+                self.file_index.config.get("supported_file_types", "")
+            ).split(",")
             if item.strip()
         }
         expanded: list[str] = []
@@ -1144,7 +1186,10 @@ class DocQARuntime:
             for child in sorted(out_dir.rglob("*")):
                 if not child.is_file():
                     continue
-                if child.suffix.lower() in supported_types and child.suffix.lower() != ".zip":
+                if (
+                    child.suffix.lower() in supported_types
+                    and child.suffix.lower() != ".zip"
+                ):
                     expanded.append(str(child.resolve()))
         return expanded
 
@@ -1154,7 +1199,9 @@ class DocQARuntime:
 
         supported_types = {
             item.strip().lower()
-            for item in str(self.file_index.config.get("supported_file_types", "")).split(",")
+            for item in str(
+                self.file_index.config.get("supported_file_types", "")
+            ).split(",")
             if item.strip()
         }
         collected: list[str] = []
@@ -1194,12 +1241,15 @@ class DocQARuntime:
         resolved_user_id = self._resolve_user_id(user_id)
         runtime_settings = deepcopy(settings or self.load_settings(resolved_user_id))
         expanded_paths = self._expand_index_inputs(paths)
-        pipeline = self.file_index.get_indexing_pipeline(runtime_settings, resolved_user_id)
+        pipeline = self.file_index.get_indexing_pipeline(
+            runtime_settings, resolved_user_id
+        )
 
         successes: list[dict[str, Any]] = []
         failures: list[dict[str, Any]] = []
         debug_messages: list[str] = []
-        for response in pipeline.stream(expanded_paths, reindex=reindex):
+        index_inputs = cast(list[str | Path], expanded_paths)
+        for response in pipeline.stream(index_inputs, reindex=reindex):
             if response.channel == "debug":
                 debug_messages.append(str(response.text))
             elif response.channel == "index":
@@ -1218,7 +1268,9 @@ class DocQARuntime:
             debug_messages=debug_messages,
         )
 
-    def delete_files(self, refs: list[str], user_id: Any = None) -> list[DocQAFileRecord]:
+    def delete_files(
+        self, refs: list[str], user_id: Any = None
+    ) -> list[DocQAFileRecord]:
         if not self.file_index:
             return []
 

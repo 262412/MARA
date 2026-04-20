@@ -33,30 +33,30 @@ if (-not $isAdmin) {
 # ----------------------------------------------------------------------------
 function Install-LibreOffice {
     Write-Host "📦 Downloading and installing LibreOffice..." -ForegroundColor Cyan
-    
+
     $downloadUrl = "https://download.documentfoundation.org/libreoffice/stable/24.2.7/win/x86_64/LibreOffice_24.2.7_Win_x86-64.msi"
     $installerPath = "$env:TEMP\LibreOffice_Installer.msi"
-    
+
     try {
         # Download installer
         Write-Host "Download URL: $downloadUrl" -ForegroundColor Gray
         Invoke-WebRequest -Uri $downloadUrl -OutFile $installerPath
-        
+
         # Silent installation
         Write-Host "Installing..." -ForegroundColor Cyan
         Start-Process -FilePath "msiexec.exe" `
             -ArgumentList "/i `"$installerPath`" /quiet /norestart" `
             -Wait
-        
+
         # Cleanup installer
         Remove-Item $installerPath -Force
-        
+
         # Verify installation
         $sofficePath = "C:\Program Files\LibreOffice\program\soffice.exe"
         if (Test-Path $sofficePath) {
             $version = & $sofficePath --version
             Write-Host "✅ LibreOffice installed successfully! Version: $version" -ForegroundColor Green
-            
+
             # Add to system PATH if not already present
             $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
             if ($currentPath -notlike "*C:\Program Files\LibreOffice\program*") {
@@ -86,7 +86,7 @@ function Install-LibreOffice {
 # ----------------------------------------------------------------------------
 function Install-Poppler {
     Write-Host "📦 Installing Poppler (optional PDF utilities)..." -ForegroundColor Cyan
-    
+
     if (Get-Command choco -ErrorAction SilentlyContinue) {
         choco install -y poppler
         Write-Host "✅ Poppler installed successfully" -ForegroundColor Green
@@ -104,7 +104,7 @@ function Install-Poppler {
 # ----------------------------------------------------------------------------
 function Install-Tesseract {
     Write-Host "📦 Installing Tesseract OCR (optional text recognition)..." -ForegroundColor Cyan
-    
+
     if (Get-Command choco -ErrorAction SilentlyContinue) {
         choco install -y tesseract
         Write-Host "✅ Tesseract installed successfully" -ForegroundColor Green
@@ -131,16 +131,16 @@ switch ($choice) {
     "1" { Install-LibreOffice }
     "2" { Install-Poppler }
     "3" { Install-Tesseract }
-    "4" { 
+    "4" {
         Install-LibreOffice
         Install-Poppler
         Install-Tesseract
     }
-    "5" { 
+    "5" {
         Write-Host "Installation skipped." -ForegroundColor Yellow
         exit 0
     }
-    default { 
+    default {
         Write-Host "Invalid option" -ForegroundColor Red
         exit 1
     }

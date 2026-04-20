@@ -8,14 +8,13 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from ktem.db.engine import engine
 from ktem.llms.manager import llms
-from kotaemon.base import HumanMessage, SystemMessage
 from sqlalchemy import select
 from sqlmodel import Session
 from theflow.settings import settings as flowsettings
 
-from ktem.db.engine import engine
-
+from kotaemon.base import HumanMessage, SystemMessage
 
 _EN_STOPWORDS = {
     "about",
@@ -110,9 +109,12 @@ class GlobalKnowledgeGraphService:
     def _normalize_source_ids(source_ids: list[str] | str | None) -> list[str]:
         if source_ids in (None, ""):
             return []
-        if not isinstance(source_ids, list):
-            source_ids = [source_ids]
-        return _limit_unique_strings([str(item or "").strip() for item in source_ids], 256)
+        if isinstance(source_ids, list):
+            values = source_ids
+        else:
+            value = str(source_ids).strip()
+            values = [value] if value else []
+        return _limit_unique_strings([str(item or "").strip() for item in values], 256)
 
     @staticmethod
     def _normalize_whitespace(value: str) -> str:
@@ -258,7 +260,9 @@ class GlobalKnowledgeGraphService:
         trimmed = normalized[: limit - 1].rstrip(" ,.;:")
         return f"{trimmed}..."
 
-    def _make_sentence_candidates(self, docs: list[Any]) -> tuple[list[dict[str, Any]], list[str]]:
+    def _make_sentence_candidates(
+        self, docs: list[Any]
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         candidates: list[dict[str, Any]] = []
         pages_seen: list[str] = []
         for doc in docs:
@@ -297,7 +301,9 @@ class GlobalKnowledgeGraphService:
             return 0.82
         return 0.55
 
-    def _score_candidates(self, candidates: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    def _score_candidates(
+        self, candidates: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         keyword_counter: Counter[str] = Counter()
         for candidate in candidates:
             keyword_counter.update(candidate.get("keywords", []))
@@ -305,7 +311,7 @@ class GlobalKnowledgeGraphService:
         for candidate in candidates:
             sentence = candidate.get("text", "")
             keywords = candidate.get("keywords", [])
-            score = sum(keyword_counter[keyword] for keyword in set(keywords))
+            score = float(sum(keyword_counter[keyword] for keyword in set(keywords)))
             score += len(set(keywords)) * 0.6
             score *= self._sentence_length_multiplier(len(sentence))
             candidate["score"] = score
@@ -326,7 +332,9 @@ class GlobalKnowledgeGraphService:
         return candidates, top_keywords
 
     @staticmethod
-    def _is_duplicate_point(existing_points: list[dict[str, Any]], sentence: str) -> bool:
+    def _is_duplicate_point(
+        existing_points: list[dict[str, Any]], sentence: str
+    ) -> bool:
         sentence_norm = sentence.lower()
         for point in existing_points:
             label = str(point.get("label", "") or "").lower()
@@ -373,7 +381,9 @@ class GlobalKnowledgeGraphService:
             return None
 
         candidates = [payload]
-        fenced = re.findall(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", payload, flags=re.IGNORECASE)
+        fenced = re.findall(
+            r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", payload, flags=re.IGNORECASE
+        )
         candidates.extend(fenced)
         first_object = self._extract_first_json_object(payload)
         if first_object:
@@ -408,11 +418,16 @@ class GlobalKnowledgeGraphService:
                 if isinstance(point, str):
                     label = self._normalize_whitespace(point)
                 elif isinstance(point, dict):
-                    label = self._normalize_whitespace(str(point.get("label") or point.get("point") or ""))
+                    label = self._normalize_whitespace(
+                        str(point.get("label") or point.get("point") or "")
+                    )
                     keywords_raw = point.get("keywords", [])
                     if isinstance(keywords_raw, list):
                         keywords = _limit_unique_strings(
-                            [self._normalize_term(str(item or "")) for item in keywords_raw],
+                            [
+                                self._normalize_term(str(item or ""))
+                                for item in keywords_raw
+                            ],
                             6,
                         )
                         keywords = [item for item in keywords if item]
@@ -427,7 +442,9 @@ class GlobalKnowledgeGraphService:
             "knowledge_points": normalized_points,
         }
 
-    def _generate_outline_with_llm(self, file_name: str, candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+    def _generate_outline_with_llm(
+        self, file_name: str, candidates: list[dict[str, Any]]
+    ) -> dict[str, Any] | None:
         if not candidates:
             return None
         try:
@@ -442,7 +459,10 @@ class GlobalKnowledgeGraphService:
                 continue
             page_label = str(candidate.get("page_label", "") or "")
             chunk_id = str(candidate.get("doc_id", "") or "")
-            evidence_lines.append(f"[{index}] page={page_label or 'N/A'} chunk={chunk_id or 'N/A'} text={sentence}")
+            evidence_lines.append(
+                f"[{index}] page={page_label or 'N/A'} "
+                f"chunk={chunk_id or 'N/A'} text={sentence}"
+            )
 
         if not evidence_lines:
             return None
@@ -455,14 +475,13 @@ class GlobalKnowledgeGraphService:
             f"Document: {file_name}\n"
             "Output JSON schema:\n"
             "{\n"
-            "  \"summary\": \"...\",\n"
-            "  \"knowledge_points\": [\n"
-            "    {\"label\": \"...\", \"keywords\": [\"...\"]}\n"
+            '  "summary": "...",\n'
+            '  "knowledge_points": [\n'
+            '    {"label": "...", "keywords": ["..."]}\n'
             "  ]\n"
             "}\n"
             "Please produce one summary and 3-6 knowledge points.\n"
-            "Evidence:\n"
-            + "\n".join(evidence_lines)
+            "Evidence:\n" + "\n".join(evidence_lines)
         )
         try:
             response = model(
@@ -478,7 +497,9 @@ class GlobalKnowledgeGraphService:
         if isinstance(response, str):
             response_text = response
         else:
-            response_text = str(getattr(response, "text", "") or getattr(response, "content", "") or "")
+            response_text = str(
+                getattr(response, "text", "") or getattr(response, "content", "") or ""
+            )
         return self._parse_outline_json(response_text)
 
     def _build_file_graph(self, file_id: str, source: dict[str, Any]) -> dict[str, Any]:
@@ -486,20 +507,28 @@ class GlobalKnowledgeGraphService:
         candidates, pages_seen = self._make_sentence_candidates(docs)
         candidates, top_keywords = self._score_candidates(candidates)
 
-        llm_outline = self._generate_outline_with_llm(source.get("name", file_id), candidates[:16])
+        llm_outline = self._generate_outline_with_llm(
+            source.get("name", file_id), candidates[:16]
+        )
 
         if llm_outline and llm_outline.get("knowledge_points"):
             summary_text = self._trim_sentence(llm_outline.get("summary", ""), 132)
             if not summary_text and candidates:
                 summary_text = self._trim_sentence(candidates[0].get("text", ""), 132)
-            summary_candidate = candidates[0] if candidates else {"page_label": "", "doc_id": ""}
+            summary_candidate = (
+                candidates[0] if candidates else {"page_label": "", "doc_id": ""}
+            )
 
             knowledge_points: list[dict[str, Any]] = []
             for point in llm_outline.get("knowledge_points", []):
                 label = self._trim_sentence(str(point.get("label", "") or ""), 110)
                 if not label or self._is_duplicate_point(knowledge_points, label):
                     continue
-                match = candidates[len(knowledge_points)] if len(candidates) > len(knowledge_points) else summary_candidate
+                match = (
+                    candidates[len(knowledge_points)]
+                    if len(candidates) > len(knowledge_points)
+                    else summary_candidate
+                )
                 support_pages = _limit_unique_strings([match.get("page_label", "")], 8)
                 support_chunk_ids = _limit_unique_strings([match.get("doc_id", "")], 8)
                 knowledge_points.append(
@@ -509,7 +538,8 @@ class GlobalKnowledgeGraphService:
                         "file_id": file_id,
                         "label": label,
                         "keywords": _limit_unique_strings(
-                            list(point.get("keywords", [])) + self._extract_keywords(label, limit=6),
+                            list(point.get("keywords", []))
+                            + self._extract_keywords(label, limit=6),
                             6,
                         ),
                         "related_file_ids": [file_id],
@@ -525,9 +555,14 @@ class GlobalKnowledgeGraphService:
         if not llm_outline:
             if candidates:
                 summary_candidate = candidates[0]
-                summary_text = self._trim_sentence(summary_candidate.get("text", ""), 132)
+                summary_text = self._trim_sentence(
+                    summary_candidate.get("text", ""), 132
+                )
             else:
-                summary_text = f"{source.get('name', file_id)} contains indexed content for this conversation."
+                summary_text = (
+                    f"{source.get('name', file_id)} contains indexed content "
+                    "for this conversation."
+                )
                 summary_candidate = {"page_label": "", "doc_id": ""}
 
             knowledge_points = []
@@ -535,15 +570,21 @@ class GlobalKnowledgeGraphService:
                 label = self._trim_sentence(candidate.get("text", ""), 110)
                 if not label or self._is_duplicate_point(knowledge_points, label):
                     continue
-                support_pages = _limit_unique_strings([candidate.get("page_label", "")], 8)
-                support_chunk_ids = _limit_unique_strings([candidate.get("doc_id", "")], 8)
+                support_pages = _limit_unique_strings(
+                    [candidate.get("page_label", "")], 8
+                )
+                support_chunk_ids = _limit_unique_strings(
+                    [candidate.get("doc_id", "")], 8
+                )
                 knowledge_points.append(
                     {
                         "id": f"point::{file_id}::{len(knowledge_points) + 1}",
                         "type": "knowledge_point",
                         "file_id": file_id,
                         "label": label,
-                        "keywords": _limit_unique_strings(candidate.get("keywords", []), 6),
+                        "keywords": _limit_unique_strings(
+                            candidate.get("keywords", []), 6
+                        ),
                         "related_file_ids": [file_id],
                         "support_pages": {file_id: support_pages},
                         "support_chunk_ids": {file_id: support_chunk_ids},
@@ -560,8 +601,16 @@ class GlobalKnowledgeGraphService:
                         "label": self._trim_sentence(summary_text, 110),
                         "keywords": top_keywords[:4],
                         "related_file_ids": [file_id],
-                        "support_pages": {file_id: _limit_unique_strings([summary_candidate.get("page_label", "")], 8)},
-                        "support_chunk_ids": {file_id: _limit_unique_strings([summary_candidate.get("doc_id", "")], 8)},
+                        "support_pages": {
+                            file_id: _limit_unique_strings(
+                                [summary_candidate.get("page_label", "")], 8
+                            )
+                        },
+                        "support_chunk_ids": {
+                            file_id: _limit_unique_strings(
+                                [summary_candidate.get("doc_id", "")], 8
+                            )
+                        },
                     }
                 )
 
@@ -569,7 +618,9 @@ class GlobalKnowledgeGraphService:
             [summary_candidate.get("page_label", "")] + pages_seen,
             12,
         )
-        summary_chunks = _limit_unique_strings([summary_candidate.get("doc_id", "")], 12)
+        summary_chunks = _limit_unique_strings(
+            [summary_candidate.get("doc_id", "")], 12
+        )
 
         return {
             "file_id": file_id,
@@ -583,12 +634,20 @@ class GlobalKnowledgeGraphService:
             "knowledge_points": knowledge_points,
         }
 
-    def _shared_keywords(self, left: dict[str, Any], right: dict[str, Any]) -> list[str]:
+    def _shared_keywords(
+        self, left: dict[str, Any], right: dict[str, Any]
+    ) -> list[str]:
         right_keywords = set(right.get("top_keywords", []))
-        shared = [keyword for keyword in left.get("top_keywords", []) if keyword in right_keywords]
+        shared = [
+            keyword
+            for keyword in left.get("top_keywords", [])
+            if keyword in right_keywords
+        ]
         return _limit_unique_strings(shared, 6)
 
-    def _group_files_into_systems(self, file_graphs: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    def _group_files_into_systems(
+        self, file_graphs: list[dict[str, Any]]
+    ) -> list[list[dict[str, Any]]]:
         file_ids = [graph["file_id"] for graph in file_graphs]
         union_find = _UnionFind(file_ids)
         graph_map = {graph["file_id"]: graph for graph in file_graphs}
@@ -606,7 +665,9 @@ class GlobalKnowledgeGraphService:
         ordered_systems: list[list[dict[str, Any]]] = []
         for cluster_ids in grouped_ids.values():
             cluster_graphs = [graph_map[file_id] for file_id in cluster_ids]
-            cluster_graphs.sort(key=lambda item: item.get("file_name", item["file_id"]).lower())
+            cluster_graphs.sort(
+                key=lambda item: item.get("file_name", item["file_id"]).lower()
+            )
             ordered_systems.append(cluster_graphs)
 
         ordered_systems.sort(
@@ -618,15 +679,21 @@ class GlobalKnowledgeGraphService:
         return ordered_systems
 
     @staticmethod
-    def _merge_support_dict(target: dict[str, list[str]], source: dict[str, list[str]] | None, limit: int) -> dict[str, list[str]]:
+    def _merge_support_dict(
+        target: dict[str, list[str]], source: dict[str, list[str]] | None, limit: int
+    ) -> dict[str, list[str]]:
         for file_id, values in (source or {}).items():
             key = str(file_id or "").strip()
             if not key:
                 continue
-            target[key] = _limit_unique_strings(target.get(key, []) + list(values or []), limit)
+            target[key] = _limit_unique_strings(
+                target.get(key, []) + list(values or []), limit
+            )
         return target
 
-    def _build_conversation_graph(self, conversation_id: str, sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    def _build_conversation_graph(
+        self, conversation_id: str, sources: dict[str, dict[str, Any]]
+    ) -> dict[str, Any]:
         file_graphs = [
             self._build_file_graph(file_id, source)
             for file_id, source in sources.items()
@@ -639,11 +706,17 @@ class GlobalKnowledgeGraphService:
         support_pages: dict[str, list[str]] = {}
         support_chunk_ids: dict[str, list[str]] = {}
 
-        for system_index, grouped_file_graphs in enumerate(self._group_files_into_systems(file_graphs), start=1):
+        for system_index, grouped_file_graphs in enumerate(
+            self._group_files_into_systems(file_graphs), start=1
+        ):
             system_id = f"system::{system_index}"
             related_file_ids = [graph["file_id"] for graph in grouped_file_graphs]
             shared_keywords = _limit_unique_strings(
-                [keyword for graph in grouped_file_graphs for keyword in graph.get("top_keywords", [])],
+                [
+                    keyword
+                    for graph in grouped_file_graphs
+                    for keyword in graph.get("top_keywords", [])
+                ],
                 6,
             )
             system_support_pages = {
@@ -664,9 +737,8 @@ class GlobalKnowledgeGraphService:
                         "id": f"theme::{system_index}::{idx}",
                         "type": "system_relation",
                         "label": keyword,
-                        "summary": (
-                            f"Shared theme '{keyword}' across {len(related_file_ids)} files."
-                        ),
+                        "summary": f"Shared theme '{keyword}' across "
+                        f"{len(related_file_ids)} files.",
                         "related_file_ids": related_file_ids,
                         "support_pages": system_support_pages,
                         "support_chunk_ids": system_support_chunk_ids,
@@ -682,13 +754,16 @@ class GlobalKnowledgeGraphService:
                     )
 
             if len(grouped_file_graphs) == 1:
-                file_name = grouped_file_graphs[0].get("file_name", grouped_file_graphs[0]["file_id"])
+                file_name = grouped_file_graphs[0].get(
+                    "file_name", grouped_file_graphs[0]["file_id"]
+                )
                 label = f"{file_name} system"
                 summary = f"Centered on {file_name} and its core ideas."
             else:
                 label = "Shared knowledge system"
                 summary = (
-                    f"Connects {len(grouped_file_graphs)} sources through {', '.join(shared_keywords[:3])}."
+                    f"Connects {len(grouped_file_graphs)} sources through "
+                    f"{', '.join(shared_keywords[:3])}."
                     if shared_keywords
                     else f"Connects {len(grouped_file_graphs)} uploaded sources."
                 )
@@ -745,11 +820,19 @@ class GlobalKnowledgeGraphService:
                         }
                     )
 
-                self._merge_support_dict(support_pages, graph.get("summary_support_pages", {}), 24)
-                self._merge_support_dict(support_chunk_ids, graph.get("summary_support_chunk_ids", {}), 36)
+                self._merge_support_dict(
+                    support_pages, graph.get("summary_support_pages", {}), 24
+                )
+                self._merge_support_dict(
+                    support_chunk_ids, graph.get("summary_support_chunk_ids", {}), 36
+                )
                 for point in graph.get("knowledge_points", []):
-                    self._merge_support_dict(support_pages, point.get("support_pages", {}), 24)
-                    self._merge_support_dict(support_chunk_ids, point.get("support_chunk_ids", {}), 36)
+                    self._merge_support_dict(
+                        support_pages, point.get("support_pages", {}), 24
+                    )
+                    self._merge_support_dict(
+                        support_chunk_ids, point.get("support_chunk_ids", {}), 36
+                    )
 
         return {
             "conversation_id": conversation_id,
@@ -762,7 +845,9 @@ class GlobalKnowledgeGraphService:
             "support_chunk_ids": support_chunk_ids,
         }
 
-    def _make_graph_context(self, item: dict[str, Any], focus_file_id: str) -> dict[str, Any]:
+    def _make_graph_context(
+        self, item: dict[str, Any], focus_file_id: str
+    ) -> dict[str, Any]:
         related_file_ids = _limit_unique_strings(
             [focus_file_id] + list(item.get("related_file_ids", []) or []),
             12,
@@ -780,13 +865,24 @@ class GlobalKnowledgeGraphService:
         label = str(item.get("label", "") or "this topic")
         item_type = str(item.get("type", "") or "")
         if item_type == "knowledge_root":
-            return "Can you summarize the major knowledge systems in this conversation and explain how they differ?"
+            return (
+                "Can you summarize the major knowledge systems in this "
+                "conversation and explain how they differ?"
+            )
         if item_type == "knowledge_system":
-            return f"Can you explain the knowledge system '{label}' and how it connects across uploaded files?"
+            return (
+                f"Can you explain the knowledge system '{label}' and how it "
+                "connects across uploaded files?"
+            )
         if item_type == "file_summary":
-            return f"Can you explain the role of '{label}' and its most important ideas in the selected file?"
+            return (
+                f"Can you explain the role of '{label}' and its most important "
+                "ideas in the selected file?"
+            )
         if item_type == "system_relation":
-            return f"Can you explain why '{label}' is a shared theme across these files?"
+            return (
+                f"Can you explain why '{label}' is a shared theme across these files?"
+            )
         return f"Can you explain this knowledge point: '{label}'?"
 
     def _build_prompt(self, item: dict[str, Any], focus_file_id: str) -> str:
@@ -796,10 +892,13 @@ class GlobalKnowledgeGraphService:
 
         if len(related_ids) > 1:
             relation_clause = (
-                " Then add how it connects with related files from the same conversation."
+                " Then add how it connects with related files from the same "
+                "conversation."
             )
         else:
-            relation_clause = " Then mention whether any cross-file relation is supported."
+            relation_clause = (
+                " Then mention whether any cross-file relation is supported."
+            )
 
         return (
             f"Please explain '{label}' using current-file/current-page evidence first."
@@ -832,7 +931,9 @@ class GlobalKnowledgeGraphService:
             "</div>"
         )
 
-    def _render_graph_html(self, graph: dict[str, Any], focus_file_id: str, status: str) -> str:
+    def _render_graph_html(
+        self, graph: dict[str, Any], focus_file_id: str, status: str
+    ) -> str:
         systems = list(graph.get("systems", []) or [])
         file_cards = list(graph.get("file_cards", []) or [])
         knowledge_points = list(graph.get("knowledge_points", []) or [])
@@ -840,7 +941,8 @@ class GlobalKnowledgeGraphService:
         if not systems:
             return self._render_empty_html(
                 "No knowledge graph available yet.",
-                "Generate a graph after uploading related sources to this conversation.",
+                "Generate a graph after uploading related sources to this "
+                "conversation.",
             )
 
         file_cards_by_system: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -851,14 +953,21 @@ class GlobalKnowledgeGraphService:
         for point in knowledge_points:
             points_by_file[str(point.get("file_id", ""))].append(point)
 
-        systems.sort(key=lambda item: (0 if focus_file_id in (item.get("related_file_ids", []) or []) else 1, str(item.get("label", ""))))
+        systems.sort(
+            key=lambda item: (
+                0 if focus_file_id in (item.get("related_file_ids", []) or []) else 1,
+                str(item.get("label", "")),
+            )
+        )
 
         root_item = {
             "id": "root::conversation",
             "type": "knowledge_root",
             "label": "Conversation Knowledge Tree",
             "summary": (
-                f"{len(file_cards)} file node(s), {len(knowledge_points)} knowledge point(s), {len(systems)} system(s)."
+                f"{len(file_cards)} file node(s), "
+                f"{len(knowledge_points)} knowledge point(s), "
+                f"{len(systems)} system(s)."
             ),
             "related_file_ids": list(graph.get("source_ids", []) or []),
             "support_pages": graph.get("support_pages", {}) or {},
@@ -869,8 +978,16 @@ class GlobalKnowledgeGraphService:
         for system in systems:
             system_id = str(system.get("id", "") or "")
             file_group = file_cards_by_system.get(system_id, [])
-            file_group.sort(key=lambda item: (0 if item.get("file_id") == focus_file_id else 1, str(item.get("label", "")).lower()))
-            is_focus_system = bool(focus_file_id and focus_file_id in (system.get("related_file_ids", []) or []))
+            file_group.sort(
+                key=lambda item: (
+                    0 if item.get("file_id") == focus_file_id else 1,
+                    str(item.get("label", "")).lower(),
+                )
+            )
+            is_focus_system = bool(
+                focus_file_id
+                and focus_file_id in (system.get("related_file_ids", []) or [])
+            )
             system_classes = (
                 "kg-tree-item kg-tree-item--system kg-system is-focused"
                 if is_focus_system
@@ -878,13 +995,17 @@ class GlobalKnowledgeGraphService:
             )
             system_html_parts.append(f"<li class='{system_classes}'>")
             system_html_parts.append(
-                "<button type='button' class='kg-tree-node kg-tree-node--system kg-pill kg-system__title' "
-                f"data-kg-payload=\"{self._payload_attr(system, focus_file_id)}\">"
+                "<button type='button' "
+                "class='kg-tree-node kg-tree-node--system kg-pill "
+                "kg-system__title' "
+                f'data-kg-payload="{self._payload_attr(system, focus_file_id)}">'
                 f"{html.escape(str(system.get('label', 'Knowledge system')))}"
                 "</button>"
             )
             system_html_parts.append(
-                f"<p class='kg-tree-item__meta kg-system__summary'>{html.escape(str(system.get('summary', '') or ''))}</p>"
+                "<p class='kg-tree-item__meta kg-system__summary'>"
+                f"{html.escape(str(system.get('summary', '') or ''))}"
+                "</p>"
             )
 
             themes = list(system.get("themes", []) or [])
@@ -892,14 +1013,18 @@ class GlobalKnowledgeGraphService:
                 system_html_parts.append("<div class='kg-tree-item__keywords'>")
                 for theme in themes:
                     system_html_parts.append(
-                        "<button type='button' class='kg-tree-node kg-tree-node--theme kg-theme-node' "
-                        f"data-kg-payload=\"{self._payload_attr(theme, focus_file_id)}\">"
+                        "<button type='button' "
+                        "class='kg-tree-node kg-tree-node--theme "
+                        "kg-theme-node' "
+                        f'data-kg-payload="{self._payload_attr(theme, focus_file_id)}">'
                         f"{html.escape(str(theme.get('label', '') or 'theme'))}"
                         "</button>"
                     )
                 system_html_parts.append("</div>")
 
-            system_html_parts.append("<ul class='kg-tree-list kg-tree-list--files kg-system__files'>")
+            system_html_parts.append(
+                "<ul class='kg-tree-list kg-tree-list--files kg-system__files'>"
+            )
             for file_card in file_group:
                 file_id = str(file_card.get("file_id", "") or "")
                 safe_file_id = html.escape(file_id, quote=True)
@@ -909,15 +1034,21 @@ class GlobalKnowledgeGraphService:
                     if is_focused_file
                     else "kg-tree-item kg-tree-item--file kg-file-card"
                 )
-                system_html_parts.append(f"<li class='{file_classes}' data-kg-file-card='{safe_file_id}'>")
                 system_html_parts.append(
-                    "<button type='button' class='kg-tree-node kg-tree-node--file kg-file-card__title' "
-                    f"data-kg-payload=\"{self._payload_attr(file_card, focus_file_id)}\">"
+                    f"<li class='{file_classes}' data-kg-file-card='{safe_file_id}'>"
+                )
+                system_html_parts.append(
+                    "<button type='button' "
+                    "class='kg-tree-node kg-tree-node--file "
+                    "kg-file-card__title' "
+                    f'data-kg-payload="{self._payload_attr(file_card, focus_file_id)}">'
                     f"{html.escape(str(file_card.get('label', file_id) or file_id))}"
                     "</button>"
                 )
                 system_html_parts.append(
-                    f"<p class='kg-tree-item__meta kg-file-card__summary'>{html.escape(str(file_card.get('summary', '') or ''))}</p>"
+                    "<p class='kg-tree-item__meta kg-file-card__summary'>"
+                    f"{html.escape(str(file_card.get('summary', '') or ''))}"
+                    "</p>"
                 )
 
                 file_points = list(points_by_file.get(file_id, []))
@@ -928,23 +1059,38 @@ class GlobalKnowledgeGraphService:
                     collapsed_points = file_points[2:]
 
                 if visible_points or collapsed_points:
-                    system_html_parts.append("<ul class='kg-tree-list kg-tree-list--points kg-point-list'>")
+                    system_html_parts.append(
+                        "<ul class='kg-tree-list kg-tree-list--points kg-point-list'>"
+                    )
                     for point in visible_points:
+                        point_payload = self._payload_attr(point, focus_file_id)
+                        point_label = html.escape(
+                            str(point.get("label", "") or "Knowledge point")
+                        )
                         system_html_parts.append(
                             "<li class='kg-tree-item kg-tree-item--point'>"
-                            "<button type='button' class='kg-tree-node kg-tree-node--point kg-point-card' "
-                            f"data-kg-payload=\"{self._payload_attr(point, focus_file_id)}\">"
-                            f"{html.escape(str(point.get('label', '') or 'Knowledge point'))}"
+                            "<button type='button' "
+                            "class='kg-tree-node kg-tree-node--point "
+                            "kg-point-card' "
+                            f'data-kg-payload="{point_payload}">'
+                            f"{point_label}"
                             "</button>"
                             "</li>"
                         )
 
                     for point in collapsed_points:
+                        point_payload = self._payload_attr(point, focus_file_id)
+                        point_label = html.escape(
+                            str(point.get("label", "") or "Knowledge point")
+                        )
                         system_html_parts.append(
-                            "<li class='kg-tree-item kg-tree-item--point kg-point-item is-collapsed-point'>"
-                            "<button type='button' class='kg-tree-node kg-tree-node--point kg-point-card' "
-                            f"data-kg-payload=\"{self._payload_attr(point, focus_file_id)}\">"
-                            f"{html.escape(str(point.get('label', '') or 'Knowledge point'))}"
+                            "<li class='kg-tree-item kg-tree-item--point "
+                            "kg-point-item is-collapsed-point'>"
+                            "<button type='button' "
+                            "class='kg-tree-node kg-tree-node--point "
+                            "kg-point-card' "
+                            f'data-kg-payload="{point_payload}">'
+                            f"{point_label}"
                             "</button>"
                             "</li>"
                         )
@@ -954,10 +1100,13 @@ class GlobalKnowledgeGraphService:
                         less_label = "Show less"
                         system_html_parts.append(
                             "<li class='kg-tree-item kg-tree-item--more'>"
-                            "<button type='button' class='kg-point-more kg-point-more--toggle' "
+                            "<button type='button' "
+                            "class='kg-point-more kg-point-more--toggle' "
                             f"data-kg-toggle-points='{safe_file_id}' "
-                            f"data-kg-more-label='{html.escape(more_label, quote=True)}' "
-                            f"data-kg-less-label='{html.escape(less_label, quote=True)}' "
+                            "data-kg-more-label='"
+                            f"{html.escape(more_label, quote=True)}' "
+                            "data-kg-less-label='"
+                            f"{html.escape(less_label, quote=True)}' "
                             "aria-expanded='false'>"
                             f"{html.escape(more_label)}"
                             "</button>"
@@ -973,13 +1122,16 @@ class GlobalKnowledgeGraphService:
             shell_classes += " is-stale"
 
         return (
-            f"<div class='{shell_classes}' id='knowledge-graph-panel' data-kg-status='{html.escape(status, quote=True)}'>"
+            f"<div class='{shell_classes}' id='knowledge-graph-panel' "
+            f"data-kg-status='{html.escape(status, quote=True)}'>"
             + "<div class='kg-tree-root'>"
             + "<button type='button' class='kg-tree-node kg-tree-node--root' "
-            + f"data-kg-payload=\"{self._payload_attr(root_item, focus_file_id)}\">"
+            + f'data-kg-payload="{self._payload_attr(root_item, focus_file_id)}">'
             + html.escape(str(root_item.get("label", "Conversation Knowledge Tree")))
             + "</button>"
-            + f"<p class='kg-tree-root__meta'>{html.escape(str(root_item.get('summary', '') or ''))}</p>"
+            + "<p class='kg-tree-root__meta'>"
+            + html.escape(str(root_item.get("summary", "") or ""))
+            + "</p>"
             + "</div>"
             + "<ul class='kg-tree-list kg-tree-list--systems'>"
             + "".join(system_html_parts)
@@ -1000,7 +1152,10 @@ class GlobalKnowledgeGraphService:
         with self._lock:
             sources = self._load_sources(source_ids)
             valid_source_ids = list(sources.keys())
-            manifest = {file_id: self._make_signature(source) for file_id, source in sources.items()}
+            manifest = {
+                file_id: self._make_signature(source)
+                for file_id, source in sources.items()
+            }
             cached_state = self._load_cached_state(conversation_id)
             cached_manifest = cached_state.get("manifest", {}) or {}
             cached_graph = cached_state.get("graph")
@@ -1009,7 +1164,8 @@ class GlobalKnowledgeGraphService:
             if not valid_source_ids:
                 html_content = self._render_empty_html(
                     "No graph sources in this conversation yet.",
-                    "Upload related sources in this conversation and then generate the knowledge graph.",
+                    "Upload related sources in this conversation and then "
+                    "generate the knowledge graph.",
                 )
                 return {
                     "html": html_content,
@@ -1024,6 +1180,7 @@ class GlobalKnowledgeGraphService:
                 }
 
             is_fresh = bool(cached_graph) and cached_manifest == manifest
+            graph: dict[str, Any] | None
             if force_rebuild:
                 graph = self._build_conversation_graph(conversation_id, sources)
                 cached_state = {
@@ -1034,10 +1191,10 @@ class GlobalKnowledgeGraphService:
                 self._save_cached_state(conversation_id, cached_state)
                 status = "ready"
             elif is_fresh:
-                graph = cached_graph
+                graph = cached_graph if isinstance(cached_graph, dict) else None
                 status = "ready"
             else:
-                graph = cached_graph if cached_graph else None
+                graph = cached_graph if isinstance(cached_graph, dict) else None
                 status = "stale"
 
             if not graph:
@@ -1051,7 +1208,8 @@ class GlobalKnowledgeGraphService:
             if status == "ready":
                 status_message = (
                     f"Ready: {len(valid_source_ids)} sources, "
-                    f"{len(graph.get('systems', []) if graph else [])} knowledge systems."
+                    f"{len(graph.get('systems', []) if graph else [])} "
+                    "knowledge systems."
                 )
             elif status == "stale" and graph:
                 status_message = (
@@ -1069,7 +1227,10 @@ class GlobalKnowledgeGraphService:
                 status_message = "Knowledge graph status unknown."
 
             if missing_count:
-                status_message += f" {missing_count} unavailable source(s) were removed from this graph scope."
+                status_message += (
+                    f" {missing_count} unavailable source(s) were removed "
+                    "from this graph scope."
+                )
 
             root_support_pages = graph.get("support_pages", {}) if graph else {}
             root_support_chunk_ids = graph.get("support_chunk_ids", {}) if graph else {}

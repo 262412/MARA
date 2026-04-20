@@ -36,17 +36,16 @@ def _tail_text(text: str, max_lines: int = 40) -> str:
 
 _configure_noise_controls()
 
-from docx import Document as DocxDocument
-from openpyxl import Workbook
-from pptx import Presentation
-from pptx.util import Inches
-from sqlmodel import Session, select
-
-from ktem.db.models import Conversation, engine
-from ktem.docqa import DocQARequest, DocQARuntime
-from ktem.index.file.index import FileIndex
-from ktem.main import App
-from ktem.utils.dependencies import DependencyChecker, find_soffice_binary
+from docx import Document as DocxDocument  # noqa: E402
+from ktem.db.models import Conversation, engine  # noqa: E402
+from ktem.docqa import DocQARequest, DocQARuntime  # noqa: E402
+from ktem.index.file.index import FileIndex  # noqa: E402
+from ktem.main import App  # noqa: E402
+from ktem.utils.dependencies import DependencyChecker, find_soffice_binary  # noqa: E402
+from openpyxl import Workbook  # noqa: E402
+from pptx import Presentation  # noqa: E402
+from pptx.util import Inches  # noqa: E402
+from sqlmodel import Session, select  # noqa: E402
 
 
 class AcceptanceFailure(RuntimeError):
@@ -68,7 +67,9 @@ class AcceptanceMatrix:
         self.completed_successfully = False
         self.runtime = DocQARuntime()
         self.user_id = str(self.runtime.user_id or "")
-        self.work_dir = Path(tempfile.gettempdir()) / f"kotaemon-acceptance-{uuid.uuid4().hex[:8]}"
+        self.work_dir = (
+            Path(tempfile.gettempdir()) / f"kotaemon-acceptance-{uuid.uuid4().hex[:8]}"
+        )
         self.samples_dir = self.work_dir / "samples"
         self.platform_dir = self.work_dir / "platform"
         self.graph_context_path = self.work_dir / "graph_context.json"
@@ -152,7 +153,9 @@ class AcceptanceMatrix:
         entry.update(details)
         self.results.append(entry)
 
-    def _assert_contains_marker(self, payload: dict[str, Any], marker: str, *, context: str) -> None:
+    def _assert_contains_marker(
+        self, payload: dict[str, Any], marker: str, *, context: str
+    ) -> None:
         joined = "\n".join(
             [
                 str(payload.get("answer", "")),
@@ -172,7 +175,13 @@ class AcceptanceMatrix:
 
         graph_context = {
             "acceptance_run_id": self.work_dir.name,
-            "related_markers": ["TXT-MARKER", "PDF-MARKER", "DOCX-MARKER", "XLSX-MARKER", "PPTX-MARKER"],
+            "related_markers": [
+                "TXT-MARKER",
+                "PDF-MARKER",
+                "DOCX-MARKER",
+                "XLSX-MARKER",
+                "PPTX-MARKER",
+            ],
         }
         self.graph_context_path.write_text(
             json.dumps(graph_context, ensure_ascii=False, indent=2),
@@ -239,7 +248,9 @@ class AcceptanceMatrix:
         slide = presentation.slides.add_slide(presentation.slide_layouts[1])
         slide.shapes.title.text = "Acceptance Deck"
         slide.placeholders[1].text = f"Slide marker: {pptx_marker}\nOwner: Jamie Frost"
-        note_box = slide.shapes.add_textbox(Inches(1), Inches(4), Inches(6), Inches(1.5))
+        note_box = slide.shapes.add_textbox(
+            Inches(1), Inches(4), Inches(6), Inches(1.5)
+        )
         note_box.text_frame.text = "Deck validation content for CLI/Web acceptance."
         presentation.save(pptx_path)
         self.sample_files.append(
@@ -278,11 +289,15 @@ class AcceptanceMatrix:
     def _convert_to_pdf(self, source_path: Path, output_pdf: Path) -> None:
         available, libreoffice_info = DependencyChecker.check_libreoffice()
         if not available:
-            raise AcceptanceFailure("LibreOffice is required to generate the PDF sample.")
+            raise AcceptanceFailure(
+                "LibreOffice is required to generate the PDF sample."
+            )
 
         soffice = find_soffice_binary()
         if not soffice:
-            raise AcceptanceFailure(f"Unable to locate LibreOffice executable: {libreoffice_info}")
+            raise AcceptanceFailure(
+                f"Unable to locate LibreOffice executable: {libreoffice_info}"
+            )
 
         output_pdf.parent.mkdir(parents=True, exist_ok=True)
         command = [
@@ -297,14 +312,21 @@ class AcceptanceMatrix:
         self._run_command(command, timeout=180)
         converted_pdf = output_pdf.parent / f"{source_path.stem}.pdf"
         if not converted_pdf.exists():
-            raise AcceptanceFailure(f"LibreOffice did not produce PDF for {source_path}")
+            raise AcceptanceFailure(
+                f"LibreOffice did not produce PDF for {source_path}"
+            )
         if converted_pdf != output_pdf:
             shutil.move(str(converted_pdf), str(output_pdf))
 
     def run_doctor(self) -> None:
-        result = self._run_cli("docqa", "doctor", "--json", expect_json=True, timeout=300)
+        result = self._run_cli(
+            "docqa", "doctor", "--json", expect_json=True, timeout=300
+        )
         if not result.get("ok"):
-            raise AcceptanceFailure(f"DocQA doctor failed: {json.dumps(result, ensure_ascii=False, indent=2)}")
+            raise AcceptanceFailure(
+                "DocQA doctor failed: "
+                f"{json.dumps(result, ensure_ascii=False, indent=2)}"
+            )
         self._record(
             "doctor",
             default_user_id=result.get("default_user_id"),
@@ -324,21 +346,34 @@ class AcceptanceMatrix:
             )
             if not result.get("successes"):
                 raise AcceptanceFailure(
-                    f"Indexing failed for {sample.path.name}: {json.dumps(result, ensure_ascii=False, indent=2)}"
+                    f"Indexing failed for {sample.path.name}: "
+                    f"{json.dumps(result, ensure_ascii=False, indent=2)}"
                 )
-            self._record("index", file=sample.path.name, successes=len(result.get("successes", [])))
+            self._record(
+                "index",
+                file=sample.path.name,
+                successes=len(result.get("successes", [])),
+            )
 
-        files_payload = self._run_cli("docqa", "files", "--json", expect_json=True, timeout=300)
+        files_payload = self._run_cli(
+            "docqa", "files", "--json", expect_json=True, timeout=300
+        )
         for sample in self.sample_files:
-            matching = [row for row in files_payload if row.get("name") == sample.path.name]
+            matching = [
+                row for row in files_payload if row.get("name") == sample.path.name
+            ]
             if not matching:
-                raise AcceptanceFailure(f"Indexed file not found in file list: {sample.path.name}")
+                raise AcceptanceFailure(
+                    f"Indexed file not found in file list: {sample.path.name}"
+                )
             record = matching[0]
             self.file_records[sample.kind] = record
             self.created_file_ids.add(str(record["file_id"]))
         self._record(
             "files",
-            indexed_files={kind: record["file_id"] for kind, record in self.file_records.items()},
+            indexed_files={
+                kind: record["file_id"] for kind, record in self.file_records.items()
+            },
         )
 
     def run_cli_ask_matrix(self) -> None:
@@ -369,12 +404,21 @@ class AcceptanceMatrix:
             )
             conversation_id = str(payload.get("conversation_id") or "")
             if not conversation_id:
-                raise AcceptanceFailure(f"Missing conversation id for {sample.kind} ask payload.")
+                raise AcceptanceFailure(
+                    f"Missing conversation id for {sample.kind} ask payload."
+                )
             self.created_conversation_ids.add(conversation_id)
             self.cli_conversations[sample.kind] = conversation_id
-            self._assert_contains_marker(payload, sample.marker, context=f"CLI ask for {sample.kind}")
-            if payload.get("graph_context", {}).get("acceptance_run_id") != self.work_dir.name:
-                raise AcceptanceFailure(f"Graph context was not preserved for {sample.kind}.")
+            self._assert_contains_marker(
+                payload, sample.marker, context=f"CLI ask for {sample.kind}"
+            )
+            if (
+                payload.get("graph_context", {}).get("acceptance_run_id")
+                != self.work_dir.name
+            ):
+                raise AcceptanceFailure(
+                    f"Graph context was not preserved for {sample.kind}."
+                )
             self._record(
                 "ask",
                 file_kind=sample.kind,
@@ -384,7 +428,9 @@ class AcceptanceMatrix:
 
     def run_cli_chat_and_resume(self) -> None:
         txt_record = self.file_records["txt"]
-        txt_sample = next(sample for sample in self.sample_files if sample.kind == "txt")
+        txt_sample = next(
+            sample for sample in self.sample_files if sample.kind == "txt"
+        )
         chat_output = self._run_cli(
             "docqa",
             "chat",
@@ -406,12 +452,16 @@ class AcceptanceMatrix:
                 match = line.split(":", 1)[1].strip()
                 break
         if not match:
-            raise AcceptanceFailure("docqa chat output did not include a conversation id.")
+            raise AcceptanceFailure(
+                "docqa chat output did not include a conversation id."
+            )
         self.chat_conversation_id = match
         self.created_conversation_ids.add(match)
         self._record("chat", conversation_id=match)
 
-        pdf_sample = next(sample for sample in self.sample_files if sample.kind == "pdf")
+        pdf_sample = next(
+            sample for sample in self.sample_files if sample.kind == "pdf"
+        )
         pdf_conversation_id = self.cli_conversations["pdf"]
         resume_output = self._run_cli(
             "docqa",
@@ -421,14 +471,18 @@ class AcceptanceMatrix:
             timeout=300,
         )
         if pdf_sample.marker not in resume_output:
-            raise AcceptanceFailure("docqa resume output did not include the PDF marker.")
+            raise AcceptanceFailure(
+                "docqa resume output did not include the PDF marker."
+            )
         self._record("resume", conversation_id=pdf_conversation_id)
 
     def run_cli_to_web_restore_matrix(self) -> None:
         app = App()
         app.make()
         chat_page = app.chat_page
-        file_index = next(index for index in app.index_manager.indices if isinstance(index, FileIndex))
+        file_index = next(
+            index for index in app.index_manager.indices if isinstance(index, FileIndex)
+        )
         selector_ui = file_index.get_selector_component_ui()
         _, selector_choices = selector_ui.load_files([], self.user_id)
 
@@ -440,7 +494,9 @@ class AcceptanceMatrix:
             conversation_id = self.cli_conversations[sample.kind]
             file_id = str(self.file_records[sample.kind]["file_id"])
             if conversation_id not in history_ids:
-                raise AcceptanceFailure(f"Web history does not include CLI conversation {conversation_id}.")
+                raise AcceptanceFailure(
+                    f"Web history does not include CLI conversation {conversation_id}."
+                )
 
             selected = chat_page.chat_control.select_conv(conversation_id, self.user_id)
             restored_conversation_id = selected[0]
@@ -453,14 +509,18 @@ class AcceptanceMatrix:
                     continue
                 if isinstance(index.selector, tuple):
                     width = len(index.default_selector)
-                    restored_selector_map[index.id] = list(selected[offset : offset + width])
+                    restored_selector_map[index.id] = list(
+                        selected[offset : offset + width]
+                    )
                     offset += width
                 else:
                     restored_selector_map[index.id] = selected[offset]
                     offset += 1
 
             file_selector_state = restored_selector_map[file_index.id]
-            restored_selected_ids = file_index.resolve_selected_ids(self.user_id, file_selector_state)
+            restored_selected_ids = file_index.resolve_selected_ids(
+                self.user_id, file_selector_state
+            )
             graph_source_ids = chat_page.load_conversation_graph_state(conversation_id)
             rows, list_html, focus_label = chat_page.refresh_chat_file_list(
                 conversation_id,
@@ -476,37 +536,76 @@ class AcceptanceMatrix:
                 1,
                 1,
             )
-            preview_file_id, preview_file_name, preview_file_path, preview_page, _preview_total_pages, preview_src, preview_notice = preview
-            page_context = preview_runtime.get_page_context_text(file_id, sample.path.name, 1)
+            (
+                preview_file_id,
+                preview_file_name,
+                preview_file_path,
+                preview_page,
+                _preview_total_pages,
+                preview_src,
+                preview_notice,
+            ) = preview
+            page_context = preview_runtime.get_page_context_text(
+                file_id, sample.path.name, 1
+            )
 
             if restored_conversation_id != conversation_id:
-                raise AcceptanceFailure(f"Web restored wrong conversation for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web restored wrong conversation for {sample.kind}."
+                )
             if not restored_messages:
-                raise AcceptanceFailure(f"Web restored empty message history for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web restored empty message history for {sample.kind}."
+                )
             if sample.marker not in restored_messages[-1][1]:
-                raise AcceptanceFailure(f"Web restored answer missing marker for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web restored answer missing marker for {sample.kind}."
+                )
             if file_id not in restored_selected_ids:
-                raise AcceptanceFailure(f"Web restored selected ids missing file for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web restored selected ids missing file for {sample.kind}."
+                )
             if file_id not in graph_source_ids:
-                raise AcceptanceFailure(f"Web restored graph ids missing file for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web restored graph ids missing file for {sample.kind}."
+                )
             if not any(row.get("id") == file_id for row in rows):
-                raise AcceptanceFailure(f"Web chat file list missing file for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web chat file list missing file for {sample.kind}."
+                )
             if sample.path.name not in focus_label:
-                raise AcceptanceFailure(f"Web focus label missing file name for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web focus label missing file name for {sample.kind}."
+                )
             if preview_file_id != file_id:
-                raise AcceptanceFailure(f"Web preview restored wrong file id for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web preview restored wrong file id for {sample.kind}."
+                )
             if preview_file_name != sample.path.name:
-                raise AcceptanceFailure(f"Web preview restored wrong file name for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web preview restored wrong file name for {sample.kind}."
+                )
             if not preview_file_path or not Path(preview_file_path).exists():
-                raise AcceptanceFailure(f"Web preview resolved invalid file path for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web preview resolved invalid file path for {sample.kind}."
+                )
             if int(preview_page or 0) != 1:
-                raise AcceptanceFailure(f"Web preview restored wrong page for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web preview restored wrong page for {sample.kind}."
+                )
             if not preview_src and not preview_notice:
-                raise AcceptanceFailure(f"Web preview returned neither content nor notice for {sample.kind}.")
+                raise AcceptanceFailure(
+                    "Web preview returned neither content nor notice "
+                    f"for {sample.kind}."
+                )
             if sample.marker not in (page_context or ""):
-                raise AcceptanceFailure(f"Preview page context missing marker for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Preview page context missing marker for {sample.kind}."
+                )
             if sample.path.name not in list_html:
-                raise AcceptanceFailure(f"Web list HTML missing file name for {sample.kind}.")
+                raise AcceptanceFailure(
+                    f"Web list HTML missing file name for {sample.kind}."
+                )
 
             self._record(
                 "cli_to_web",
@@ -523,7 +622,9 @@ class AcceptanceMatrix:
 
         sample = next(item for item in self.sample_files if item.kind == "docx")
         file_record = self.file_records["docx"]
-        conversation_id, _dropdown_update = chat_page.chat_control.new_conv(self.user_id)
+        conversation_id, _dropdown_update = chat_page.chat_control.new_conv(
+            self.user_id
+        )
         if not conversation_id:
             raise AcceptanceFailure("Web conversation creation failed.")
         self.web_conversation_id = str(conversation_id)
@@ -543,7 +644,9 @@ class AcceptanceMatrix:
                 origin="web",
             )
         )
-        self._assert_contains_marker(response.as_dict(), sample.marker, context="Web-origin conversation")
+        self._assert_contains_marker(
+            response.as_dict(), sample.marker, context="Web-origin conversation"
+        )
 
         resume_output = self._run_cli(
             "docqa",
@@ -553,7 +656,9 @@ class AcceptanceMatrix:
             timeout=300,
         )
         if sample.marker not in resume_output:
-            raise AcceptanceFailure("CLI resume could not reopen the Web-created conversation.")
+            raise AcceptanceFailure(
+                "CLI resume could not reopen the Web-created conversation."
+            )
 
         with Session(engine) as session:
             row = session.exec(
@@ -561,14 +666,16 @@ class AcceptanceMatrix:
             ).one()
             data_source = dict(row.data_source or {})
             if data_source.get("origin") != "web":
-                raise AcceptanceFailure("Web-created conversation lost its web origin marker.")
+                raise AcceptanceFailure(
+                    "Web-created conversation lost its web origin marker."
+                )
         self._record("web_to_cli", conversation_id=self.web_conversation_id)
 
     def run_platform_matrix(self) -> None:
         self._run_cli("platform", "validate", timeout=300)
         self._record("platform_bundle_validate", status="pass")
 
-        platform_cases = [
+        platform_cases: list[tuple[str, str, list[str]]] = [
             ("codex", "minimal", []),
             ("codex", "full", []),
             ("codex", "selective", ["skills", "agents", "AGENTS.md"]),
@@ -613,11 +720,13 @@ class AcceptanceMatrix:
                 expected_command = target_dir / "commands" / "kotaemon-docqa.md"
                 if mode in {"full", "selective"} and not expected_command.exists():
                     raise AcceptanceFailure(
-                        f"Installed Claude Code bundle missing docqa command wrapper: {expected_command}"
+                        "Installed Claude Code bundle missing docqa command "
+                        f"wrapper: {expected_command}"
                     )
             if f"{platform_name}: PASS" not in validate_output:
                 raise AcceptanceFailure(
-                    f"Installed platform validation did not pass for {platform_name} {mode}.\n{validate_output}"
+                    "Installed platform validation did not pass for "
+                    f"{platform_name} {mode}.\n{validate_output}"
                 )
             self._record(
                 "platform_install",
@@ -639,13 +748,19 @@ class AcceptanceMatrix:
         deleted_ids = {str(item.get("file_id") or "") for item in delete_payload}
         missing = sorted(self.created_file_ids - deleted_ids)
         if missing:
-            raise AcceptanceFailure(f"docqa delete did not remove expected file ids: {missing}")
+            raise AcceptanceFailure(
+                f"docqa delete did not remove expected file ids: {missing}"
+            )
 
-        remaining_files = self._run_cli("docqa", "files", "--json", expect_json=True, timeout=300)
+        remaining_files = self._run_cli(
+            "docqa", "files", "--json", expect_json=True, timeout=300
+        )
         remaining_ids = {str(item.get("file_id") or "") for item in remaining_files}
         still_present = sorted(self.created_file_ids & remaining_ids)
         if still_present:
-            raise AcceptanceFailure(f"Deleted file ids still present after delete: {still_present}")
+            raise AcceptanceFailure(
+                f"Deleted file ids still present after delete: {still_present}"
+            )
         self._record("delete", deleted_count=len(delete_payload))
 
     def cleanup(self) -> None:
@@ -688,7 +803,9 @@ class AcceptanceMatrix:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run the DocQA cross-entry acceptance matrix.")
+    parser = argparse.ArgumentParser(
+        description="Run the DocQA cross-entry acceptance matrix."
+    )
     parser.add_argument(
         "--keep-artifacts",
         action="store_true",

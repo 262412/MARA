@@ -6,12 +6,10 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from ktem.db.engine import engine
+from sqlalchemy import select
 from sqlmodel import Session
 from theflow.settings import settings as flowsettings
-from sqlalchemy import select
-
-from ktem.db.engine import engine
-
 
 _EN_STOPWORDS = {
     "about",
@@ -103,9 +101,12 @@ class GlobalKnowledgeGraphService:
     def _normalize_source_ids(source_ids: list[str] | str | None) -> list[str]:
         if source_ids in (None, ""):
             return []
-        if not isinstance(source_ids, list):
-            source_ids = [source_ids]
-        return _limit_unique_strings([str(item or "").strip() for item in source_ids], 256)
+        if isinstance(source_ids, list):
+            values = source_ids
+        else:
+            value = str(source_ids).strip()
+            values = [value] if value else []
+        return _limit_unique_strings([str(item or "").strip() for item in values], 256)
 
     @staticmethod
     def _normalize_whitespace(value: str) -> str:
@@ -173,12 +174,12 @@ class GlobalKnowledgeGraphService:
 
         source_table = self._index._resources["Source"]
         with Session(engine) as session:
-            rows = session.exec(
+            rows = session.execute(
                 select(source_table).where(source_table.id.in_(source_ids))
             ).all()
 
         sources_by_id: dict[str, dict[str, Any]] = {}
-        for row in rows:
+        for (row,) in rows:
             file_id = str(getattr(row, "id", "") or "")
             if not file_id:
                 continue
@@ -218,7 +219,7 @@ class GlobalKnowledgeGraphService:
                 index_table.source_id == file_id,
                 index_table.relation_type == "document",
             )
-            doc_ids = list(session.exec(stmt).all())
+            doc_ids = [row[0] for row in session.execute(stmt).all()]
         if not doc_ids:
             return []
         docs = docstore.get(doc_ids)
@@ -256,7 +257,7 @@ class GlobalKnowledgeGraphService:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         sources = self._load_sources(source_ids)
         if not sources:
-            return [], []
+            return {"nodes": [], "edges": [], "clusters": {}}, {}
 
         keyword_files: defaultdict[str, set[str]] = defaultdict(set)
         file_keywords: dict[str, list[str]] = {}
@@ -266,7 +267,9 @@ class GlobalKnowledgeGraphService:
             docs = self._load_file_docs(file_id)
             text_chunks: list[str] = []
             for doc in docs:
-                content = str(getattr(doc, "text", "") or getattr(doc, "content", "") or "")
+                content = str(
+                    getattr(doc, "text", "") or getattr(doc, "content", "") or ""
+                )
                 if content:
                     text_chunks.append(content)
             combined_text = "\n".join(text_chunks)
@@ -292,7 +295,7 @@ class GlobalKnowledgeGraphService:
                         if len(evidence_by_keyword[normalized]) >= 5:
                             break
 
-        file_nodes = [
+        file_nodes: list[dict[str, Any]] = [
             {
                 "id": file_id,
                 "type": "file",
@@ -302,7 +305,7 @@ class GlobalKnowledgeGraphService:
             for file_id, source in sources.items()
         ]
 
-        keyword_nodes = []
+        keyword_nodes: list[dict[str, Any]] = []
         for keyword, file_ids in keyword_files.items():
             keyword_nodes.append(
                 {
@@ -316,7 +319,7 @@ class GlobalKnowledgeGraphService:
                 }
             )
 
-        edges = []
+        edges: list[dict[str, Any]] = []
         for file_id, keywords in file_keywords.items():
             for keyword in keywords:
                 normalized = self._normalize_term(keyword)
@@ -350,12 +353,13 @@ class GlobalKnowledgeGraphService:
             "clusters": dict(clusters),
         }
         manifest = {
-            file_id: self._make_signature(source)
-            for file_id, source in sources.items()
+            file_id: self._make_signature(source) for file_id, source in sources.items()
         }
         return graph, manifest
 
-    def build_graph(self, conversation_id: str, source_ids: list[str] | str | None) -> dict[str, Any]:
+    def build_graph(
+        self, conversation_id: str, source_ids: list[str] | str | None
+    ) -> dict[str, Any]:
         source_ids = self._normalize_source_ids(source_ids)
         cached_state = self._load_cached_state(conversation_id)
         graph, manifest = self._build_nodes_and_edges(source_ids)

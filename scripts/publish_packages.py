@@ -8,7 +8,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DIST_ROOT = REPO_ROOT / "dist" / "publish"
 
@@ -83,7 +82,8 @@ def _resolve_packages(requested: list[str] | None) -> list[PackageSpec]:
     if unknown:
         choices = ", ".join(PACKAGE_BY_NAME)
         raise SystemExit(
-            f"Unknown package selection: {', '.join(unknown)}. Valid packages: {choices}"
+            "Unknown package selection: "
+            f"{', '.join(unknown)}. Valid packages: {choices}"
         )
     return [PACKAGE_BY_NAME[name] for name in requested]
 
@@ -138,9 +138,7 @@ def _twine_upload(
     token_env = repo["token_env"]
     token = os.environ.get(token_env, "").strip()
     if not token:
-        raise SystemExit(
-            f"Missing required token environment variable: {token_env}"
-        )
+        raise SystemExit(f"Missing required token environment variable: {token_env}")
 
     artifacts = _artifact_paths(package, dist_root)
     command = [
@@ -239,7 +237,10 @@ def build_parser() -> argparse.ArgumentParser:
             "--packages",
             nargs="*",
             choices=list(PACKAGE_BY_NAME),
-            help="Optional subset of packages to process. Defaults to all packages in dependency order.",
+            help=(
+                "Optional subset of packages to process. "
+                "Defaults to all packages in dependency order."
+            ),
         )
 
     build_parser_ = subparsers.add_parser("build", help="Build wheels and sdists.")

@@ -2,11 +2,11 @@ import hashlib
 import uuid
 from types import SimpleNamespace
 
-from sqlmodel import Session, select
-
 import ktem.docqa.runtime as runtime_module
 from ktem.db.models import User, engine
+from ktem.docqa.knowledge_graph import GlobalKnowledgeGraphService
 from ktem.docqa.runtime import DocQARuntime
+from sqlmodel import Session, select
 
 
 def test_extract_selected_ids_from_data_source_handles_cli_shape():
@@ -144,7 +144,9 @@ def test_doctor_reports_invalid_optional_models_as_warnings(monkeypatch):
     runtime = object.__new__(DocQARuntime)
     object.__setattr__(runtime, "_user_id", "user-1")
     object.__setattr__(runtime, "_app", SimpleNamespace(app_name="Kotaemon"))
-    object.__setattr__(runtime, "file_index", SimpleNamespace(name="File Collection", id=1))
+    object.__setattr__(
+        runtime, "file_index", SimpleNamespace(name="File Collection", id=1)
+    )
     object.__setattr__(runtime, "knowledge_graph", None)
     object.__setattr__(runtime, "_resolve_user_id", lambda user_id=None: "user-1")
     object.__setattr__(runtime, "list_files", lambda user_id=None: [])
@@ -181,3 +183,14 @@ def test_doctor_reports_invalid_optional_models_as_warnings(monkeypatch):
         "Invalid embedding configuration: cohere: missing credential",
         "Invalid reranking configuration: voyage: missing credential",
     ]
+
+
+def test_knowledge_graph_empty_sources_return_empty_graph_shape(tmp_path):
+    service = object.__new__(GlobalKnowledgeGraphService)
+    service._index = None
+    service._storage_dir = tmp_path
+
+    graph, manifest = service._build_nodes_and_edges([])
+
+    assert graph == {"nodes": [], "edges": [], "clusters": {}}
+    assert manifest == {}
