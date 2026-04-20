@@ -6,6 +6,13 @@ allowed-tools: Bash(kotaemon:*)
 
 Run a quick Kotaemon document QA workflow.
 
+If `kotaemon` is not available, install the packaged runtime first:
+
+- `pip install kotaemon-app`
+- or `uv tool install kotaemon-app`
+- then run `kotaemon app init`
+- then run `kotaemon app doctor`
+
 1. Validate the runtime first:
    !`kotaemon docqa doctor`
 

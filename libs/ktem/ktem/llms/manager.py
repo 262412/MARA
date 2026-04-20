@@ -18,6 +18,7 @@ class LLMManager:
         self._info: dict[str, dict] = {}
         self._default: str = ""
         self._vendors: list[Type] = []
+        self._load_errors: list[str] = []
 
         if hasattr(flowsettings, "KH_LLMS"):
             for name, model in flowsettings.KH_LLMS.items():
@@ -38,18 +39,27 @@ class LLMManager:
 
     def load(self):
         """Load the model pool from database"""
-        self._models, self._info, self._default = {}, {}, ""
+        self._models, self._info, self._default, self._load_errors = {}, {}, "", []
         with Session(engine) as session:
             stmt = select(LLMTable)
             items = session.execute(stmt)
 
             for (item,) in items:
-                self._models[item.name] = deserialize(item.spec, safe=False)
-                self._info[item.name] = {
+                info = {
                     "name": item.name,
                     "spec": item.spec,
                     "default": item.default,
                 }
+                try:
+                    model = deserialize(item.spec, safe=False)
+                except Exception as exc:
+                    info["load_error"] = str(exc)
+                    self._info[item.name] = info
+                    self._load_errors.append(f"{item.name}: {exc}")
+                    continue
+
+                self._models[item.name] = model
+                self._info[item.name] = info
                 if item.default:
                     self._default = item.name
 
@@ -157,6 +167,10 @@ class LLMManager:
     def info(self) -> dict:
         """List all models"""
         return self._info
+
+    def load_errors(self) -> list[str]:
+        """List model specs that failed to deserialize."""
+        return list(self._load_errors)
 
     def add(self, name: str, spec: dict, default: bool):
         """Add a new model to the pool"""

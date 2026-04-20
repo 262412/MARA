@@ -159,28 +159,48 @@ documents and developers who want to build their own RAG pipeline.
 
 ### Without Docker
 
-#### Option 1: Using uv (Recommended for faster installation)
+#### Option 1: Install the packaged app without cloning the repo
 
-1. Clone the repository and run the uv installation script:
+1. Install the runtime with `pip` or `uv`.
 
    ```shell
-   # clone this repo
-   git clone https://github.com/Cinnamon/kotaemon
-   cd kotaemon
-
-   # run the uv installation script (installs uv automatically if not present)
-   bash scripts/run_uv.sh
+   pip install kotaemon-app
+   # or
+   uv tool install kotaemon-app
    ```
 
-   This script will:
+2. Initialize your user config directory and inspect the runtime:
 
-   - Install uv package manager if not present
-   - Create a virtual environment with Python 3.10
-   - Install all dependencies using uv (significantly faster than conda/pip)
-   - Set up PDF.js viewer
-   - Launch the application
+   ```shell
+   kotaemon app init
+   kotaemon app doctor
+   ```
 
-#### Option 2: Using conda (Traditional method)
+3. Start the packaged Web UI from any directory:
+
+   ```shell
+   kotaemon app run
+   ```
+
+   - User config is stored in your platform config directory.
+   - User data, file storage, and caches are stored in platform-specific data/cache directories.
+   - If you need custom defaults, edit the generated `flowsettings.py` in your user config directory and keep secrets in the adjacent `.env`.
+
+#### Option 2: Use the release installer scripts
+
+If you downloaded a release archive instead of cloning the repository, run the bundled installer:
+
+```shell
+# macOS / Linux
+bash install.sh
+
+# Windows PowerShell
+./install.ps1
+```
+
+The installer creates a virtual environment, installs the Kotaemon runtime, runs `kotaemon app init`, and leaves you with a ready-to-use `kotaemon` CLI.
+
+#### Option 3: Source install for local development
 
 1. Clone and install required packages on a fresh python environment.
 
@@ -228,6 +248,13 @@ documents and developers who want to build their own RAG pipeline.
 
 Kotaemon also ships with a shared `docqa` CLI that uses the same runtime, settings, indexes,
 and saved conversations as the Web UI.
+
+If you installed the packaged app instead of cloning the repository, start with:
+
+```shell
+kotaemon app init
+kotaemon app doctor
+```
 
 Before using the CLI for the first time, make sure your chat model and embedding model are
 configured in the app, then validate the runtime:
@@ -351,7 +378,8 @@ See [Local model setup](docs/local_model.md).
 
 ### Customize your application
 
-- By default, all application data is stored in the `./ktem_app_data` folder. You can back up or copy this folder to transfer your installation to a new machine.
+- In packaged installs, application data lives in your platform-specific user data directory. You can inspect the active paths with `kotaemon app doctor`.
+- In source installs, application data is stored in the local `./ktem_app_data` folder. You can back up or copy this folder to transfer your installation to a new machine.
 
 - For advanced users or specific use cases, you can customize these files:
 

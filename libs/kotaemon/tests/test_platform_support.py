@@ -173,6 +173,10 @@ def test_docqa_skill_parity_between_platforms():
     ).read_text(encoding="utf-8")
 
     shared_tokens = [
+        "pip install kotaemon-app",
+        "uv tool install kotaemon-app",
+        "kotaemon app init",
+        "kotaemon app doctor",
         "kotaemon docqa doctor",
         "kotaemon docqa index <path...> [--reindex]",
         "kotaemon docqa files",
@@ -231,6 +235,10 @@ def test_cli_operations_skill_parity_between_platforms():
     ).read_text(encoding="utf-8")
 
     shared_tokens = [
+        "pip install kotaemon-app",
+        "uv tool install kotaemon-app",
+        "kotaemon app init",
+        "kotaemon app doctor",
         "kotaemon modelcli init-config --output modelcli.yml",
         "kotaemon modelcli providers --config modelcli.yml",
         "kotaemon modelcli run --prompt \"...\" --model ds-chat --provider openai --config modelcli.yml --dry-run",

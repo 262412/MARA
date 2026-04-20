@@ -10,6 +10,13 @@ version: 1.0.0
 
 Use this skill to guide users through predictable kotaemon CLI workflows.
 
+If `kotaemon` is not on `PATH`, install the packaged runtime first:
+
+- `pip install kotaemon-app`
+- or `uv tool install kotaemon-app`
+- then run `kotaemon app init`
+- then run `kotaemon app doctor`
+
 ## Core Workflow
 
 1. Confirm working directory and virtual environment.
