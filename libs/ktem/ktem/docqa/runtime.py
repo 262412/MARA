@@ -1276,11 +1276,11 @@ class DocQARuntime:
 
         resolved_user_id = self._resolve_user_id(user_id)
         matches = self.resolve_file_refs(refs, user_id=resolved_user_id)
-        source_table = self.file_index._resources["Source"]
-        index_table = self.file_index._resources["Index"]
-        vector_store = self.file_index._resources["VectorStore"]
-        doc_store = self.file_index._resources["DocStore"]
-        file_storage_path = self.file_index._resources.get("FileStoragePath")
+        source_table = cast(Any, self.file_index._resources["Source"])
+        index_table = cast(Any, self.file_index._resources["Index"])
+        vector_store = cast(Any, self.file_index._resources["VectorStore"])
+        doc_store = cast(Any, self.file_index._resources["DocStore"])
+        file_storage_path = cast(Any, self.file_index._resources.get("FileStoragePath"))
 
         for match in matches:
             stored_rel_path = ""

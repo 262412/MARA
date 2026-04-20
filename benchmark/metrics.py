@@ -79,7 +79,9 @@ def _levenshtein_distance(left: str, right: str) -> int:
     return previous[-1]
 
 
-def anls_score(prediction: str, gold_answers: list[str], threshold: float = 0.5) -> float:
+def anls_score(
+    prediction: str, gold_answers: list[str], threshold: float = 0.5
+) -> float:
     if not gold_answers:
         return 0.0
 

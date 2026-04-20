@@ -20,7 +20,9 @@ def test_check_libreoffice_uses_shared_locator(monkeypatch):
     )
     monkeypatch.setattr(
         "ktem.utils.dependencies.subprocess.run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="LibreOffice 24.2", stderr=""),
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0, stdout="LibreOffice 24.2", stderr=""
+        ),
     )
 
     ok, info = DependencyChecker.check_libreoffice()

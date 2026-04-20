@@ -3,10 +3,9 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from theflow.settings.default import *  # noqa
-
 from ktem.runtime_bootstrap import get_runtime_paths, load_packaged_runtime_env
 from ktem.runtime_defaults import build_kotaemon_settings
+from theflow.settings.default import *  # noqa
 
 
 def _load_user_overrides(path: Path) -> dict[str, object]:
@@ -19,11 +18,7 @@ def _load_user_overrides(path: Path) -> dict[str, object]:
 
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return {
-        name: getattr(module, name)
-        for name in dir(module)
-        if name.isupper()
-    }
+    return {name: getattr(module, name) for name in dir(module) if name.isupper()}
 
 
 runtime_paths = get_runtime_paths()

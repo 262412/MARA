@@ -76,7 +76,9 @@ def test_conversation_graph_groups_related_and_unrelated_files(monkeypatch, tmp_
     assert "file-a-chunk-1" in graph["support_chunk_ids"]["file-a"]
 
 
-def test_get_graph_view_does_not_auto_build_without_force_rebuild(monkeypatch, tmp_path):
+def test_get_graph_view_does_not_auto_build_without_force_rebuild(
+    monkeypatch, tmp_path
+):
     service = _make_service(monkeypatch, tmp_path)
     monkeypatch.setattr(
         service,
@@ -141,7 +143,9 @@ def test_get_graph_view_does_not_auto_build_without_force_rebuild(monkeypatch, t
     assert build_calls == [("conv-2", ["file-a"])]
 
 
-def test_get_graph_view_returns_focus_html_and_prunes_missing_sources(monkeypatch, tmp_path):
+def test_get_graph_view_returns_focus_html_and_prunes_missing_sources(
+    monkeypatch, tmp_path
+):
     service = _make_service(monkeypatch, tmp_path)
     monkeypatch.setattr(
         service,

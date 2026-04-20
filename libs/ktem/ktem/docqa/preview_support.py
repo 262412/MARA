@@ -5,15 +5,14 @@ import os
 import re
 import shutil
 import subprocess
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
-
-from pypdf import PdfReader
-from sqlmodel import Session, select
 
 from ktem.db.models import engine
 from ktem.utils.dependencies import find_soffice_binary
+from pypdf import PdfReader
+from sqlmodel import Session, select
 
 try:
     from pptx import Presentation
@@ -142,7 +141,9 @@ def extract_xlsx_text(file_path: str, max_chars: int = 9000) -> str:
 
 
 class PresentationTextService:
-    def extract_slide_text(self, file_path: str, page: int, max_chars: int = 7000) -> str:
+    def extract_slide_text(
+        self, file_path: str, page: int, max_chars: int = 7000
+    ) -> str:
         if not file_path or not os.path.isfile(file_path) or Presentation is None:
             return ""
 
@@ -305,7 +306,9 @@ class OfficePreviewConversionService:
                     repr(exc),
                 )
         else:
-            self._logger.info("LibreOffice soffice binary not found. Skipping soffice conversion.")
+            self._logger.info(
+                "LibreOffice soffice binary not found. Skipping soffice conversion."
+            )
 
         if ext in {".docx", ".doc"}:
             try:
@@ -345,7 +348,9 @@ class OfficePreviewConversionService:
                 for filename in os.listdir(preview_dir):
                     if filename.startswith(stem + "_") and filename.endswith(".pdf"):
                         candidate_path = os.path.join(preview_dir, filename)
-                        if os.path.isfile(candidate_path) and self._is_valid_pdf(candidate_path):
+                        if os.path.isfile(candidate_path) and self._is_valid_pdf(
+                            candidate_path
+                        ):
                             self._office_pdf_cache[cache_key] = candidate_path
                             return candidate_path
         except Exception:
@@ -406,7 +411,9 @@ class PreviewFileResolver:
                 continue
 
             if file_storage_path:
-                candidate_storage_path = os.path.join(str(file_storage_path), stored_path)
+                candidate_storage_path = os.path.join(
+                    str(file_storage_path), stored_path
+                )
                 if os.path.isfile(candidate_storage_path):
                     return candidate_storage_path
             if os.path.isfile(stored_path):
@@ -446,7 +453,9 @@ class PreviewFileResolver:
             stored_path = getattr(source_obj, "path", "") or ""
 
             if stored_path and file_storage_path:
-                candidate_storage_path = os.path.join(str(file_storage_path), stored_path)
+                candidate_storage_path = os.path.join(
+                    str(file_storage_path), stored_path
+                )
                 if os.path.isfile(candidate_storage_path):
                     resolved_path = candidate_storage_path
                     break
@@ -483,7 +492,9 @@ class PreviewSupportService:
         return self._resolver.resolve_file_name_by_id(file_id)
 
     @staticmethod
-    def extract_pdf_page_text(pdf_path: str, page_number: int, max_chars: int = 7000) -> str:
+    def extract_pdf_page_text(
+        pdf_path: str, page_number: int, max_chars: int = 7000
+    ) -> str:
         if not pdf_path or not os.path.isfile(pdf_path):
             return ""
         try:
@@ -515,7 +526,9 @@ class PreviewSupportService:
         file_extension = (Path(file_name).suffix or Path(source_path).suffix).lower()
 
         if file_extension == ".pdf":
-            return self.extract_pdf_page_text(source_path, page_number, max_chars=max_chars)
+            return self.extract_pdf_page_text(
+                source_path, page_number, max_chars=max_chars
+            )
 
         if source_extension in {".pptx", ".ppt"}:
             return self._presentation_service.extract_slide_text(
@@ -527,9 +540,13 @@ class PreviewSupportService:
         if source_extension in {".docx", ".doc", ".xlsx", ".xls"}:
             cached_pdf = self._office_conversion.get_cached_pdf_preview(source_path)
             if not cached_pdf:
-                cached_pdf = self._office_conversion.convert_to_pdf_preview(source_path, file_name)
+                cached_pdf = self._office_conversion.convert_to_pdf_preview(
+                    source_path, file_name
+                )
             if cached_pdf and os.path.isfile(cached_pdf):
-                return self.extract_pdf_page_text(cached_pdf, page_number, max_chars=max_chars)
+                return self.extract_pdf_page_text(
+                    cached_pdf, page_number, max_chars=max_chars
+                )
 
         if file_extension in {".docx", ".doc"}:
             return extract_docx_text(source_path, max_chars=max_chars)

@@ -4,6 +4,7 @@ The `kotaemon` CLI now includes a `platform` command group for installing and va
 single-repo support bundles for external AI coding tools.
 
 Supported platforms:
+
 - `claude-code`
 - `codex`
 

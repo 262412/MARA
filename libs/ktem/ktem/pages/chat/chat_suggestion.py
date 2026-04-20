@@ -1,7 +1,8 @@
+from typing import Optional
+
 import gradio as gr
 from ktem.app import BasePage
 from theflow.settings import settings as flowsettings
-from typing import Optional
 
 
 class ChatSuggestion(BasePage):

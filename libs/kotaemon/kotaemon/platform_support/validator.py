@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .installer import platform_status, resolve_target_dir
@@ -31,7 +31,9 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
 
         if not spec.bundle_root.exists():
             errors.append(f"Bundle root not found: {spec.bundle_root}")
-            output.append(ValidationResult(platform=current, valid=False, errors=errors))
+            output.append(
+                ValidationResult(platform=current, valid=False, errors=errors)
+            )
             continue
 
         for component in spec.selectable_components:
@@ -59,7 +61,9 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
                         "config.toml.template must include BEGIN KOTAEMON PLATFORM BLOCK"
                     )
 
-        output.append(ValidationResult(platform=current, valid=not errors, errors=errors))
+        output.append(
+            ValidationResult(platform=current, valid=not errors, errors=errors)
+        )
 
     return output
 

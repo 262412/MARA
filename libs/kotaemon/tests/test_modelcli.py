@@ -1,5 +1,5 @@
-from click.testing import CliRunner
 import yaml
+from click.testing import CliRunner
 
 from kotaemon.cli import main
 
@@ -8,7 +8,9 @@ def test_modelcli_init_config(tmp_path):
     runner = CliRunner()
     config_path = tmp_path / "modelcli.yml"
 
-    result = runner.invoke(main, ["modelcli", "init-config", "--output", str(config_path)])
+    result = runner.invoke(
+        main, ["modelcli", "init-config", "--output", str(config_path)]
+    )
 
     assert result.exit_code == 0, result.output
     assert config_path.exists()

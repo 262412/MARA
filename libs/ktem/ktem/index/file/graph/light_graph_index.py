@@ -59,7 +59,7 @@ class LightRAGIndex(GraphRAGIndex):
         return pipeline
 
     def get_retriever_pipelines(
-        self, settings: dict, user_id: int, selected: Any = None
+        self, settings: dict, user_id: int | str | None, selected: Any = None
     ) -> list["BaseFileIndexRetriever"]:
         file_ids = self.resolve_selected_ids(user_id, selected)
         # retrieval settings

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import json
+import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-import json
 from pathlib import Path
-import shutil
 from typing import Any, Sequence
 
 from .registry import PlatformSpec, get_platform_spec
@@ -30,7 +30,9 @@ class PlatformStatus:
     component_state: dict[str, bool]
 
 
-def resolve_target_dir(spec: PlatformSpec, target_dir: str | Path | None = None) -> Path:
+def resolve_target_dir(
+    spec: PlatformSpec, target_dir: str | Path | None = None
+) -> Path:
     if target_dir is not None:
         return Path(target_dir).expanduser().resolve()
     return (Path.home() / spec.target_subdir).resolve()
@@ -56,8 +58,7 @@ def select_components(
     if invalid:
         valid = ", ".join(spec.selectable_components)
         raise ValueError(
-            "Invalid selective items: "
-            f"{', '.join(invalid)}. Valid values: {valid}"
+            "Invalid selective items: " f"{', '.join(invalid)}. Valid values: {valid}"
         )
     return list(dict.fromkeys(selected))
 

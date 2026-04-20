@@ -7,7 +7,6 @@ from typing import Any
 
 import yaml
 
-
 DEFAULT_PROVIDER_ORDER = ["openai", "anthropic", "gemini", "openrouter"]
 
 
@@ -28,7 +27,9 @@ class ProviderConfig:
 @dataclass(slots=True)
 class RuntimeConfig:
     default_provider: str = "openai"
-    provider_order: list[str] = field(default_factory=lambda: list(DEFAULT_PROVIDER_ORDER))
+    provider_order: list[str] = field(
+        default_factory=lambda: list(DEFAULT_PROVIDER_ORDER)
+    )
     request_timeout: int = 60
     providers: dict[str, ProviderConfig] = field(default_factory=dict)
     model_aliases: dict[str, str] = field(default_factory=dict)

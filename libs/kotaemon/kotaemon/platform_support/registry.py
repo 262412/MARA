@@ -76,4 +76,6 @@ def get_platform_spec(platform_name: str) -> PlatformSpec:
         return _PLATFORM_SPECS[platform_name]
     except KeyError as exc:
         names = ", ".join(sorted(_PLATFORM_SPECS.keys()))
-        raise ValueError(f"Unknown platform '{platform_name}'. Supported: {names}") from exc
+        raise ValueError(
+            f"Unknown platform '{platform_name}'. Supported: {names}"
+        ) from exc

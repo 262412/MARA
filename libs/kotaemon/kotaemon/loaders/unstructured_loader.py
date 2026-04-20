@@ -10,10 +10,10 @@ pip install xlrd
 
 """
 import mimetypes
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 import re
 import zipfile
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from llama_index.core.readers.base import BaseReader
 
@@ -55,7 +55,7 @@ class UnstructuredReader(BaseReader):
         self,
         file: Path,
         extra_info: Optional[Dict] = None,
-        split_documents: Optional[bool] = False,
+        split_documents: bool = False,
         **kwargs,
     ) -> List[Document]:
         """If api is set, parse through api"""
@@ -73,18 +73,16 @@ class UnstructuredReader(BaseReader):
             from unstructured.partition.auto import partition
 
             partition_kwargs = dict(kwargs)
-            content_type = partition_kwargs.get("content_type") or self._infer_content_type(
-                file_path_str, extra_info
-            )
+            content_type = partition_kwargs.get(
+                "content_type"
+            ) or self._infer_content_type(file_path_str, extra_info)
             if content_type:
                 partition_kwargs["content_type"] = content_type
 
             metadata_filename = (
                 partition_kwargs.get("metadata_filename")
                 or partition_kwargs.get("file_filename")
-                or self._infer_file_name(
-                file_path_str, extra_info, content_type
-                )
+                or self._infer_file_name(file_path_str, extra_info, content_type)
             )
             partition_kwargs.pop("file_filename", None)
             if metadata_filename:
@@ -165,7 +163,9 @@ class UnstructuredReader(BaseReader):
         return [Document(text=text, metadata=metadata)]
 
     @staticmethod
-    def _extract_text_without_unstructured(file_path: str, content_type: Optional[str]) -> str:
+    def _extract_text_without_unstructured(
+        file_path: str, content_type: Optional[str]
+    ) -> str:
         content_type = (content_type or "").lower()
 
         if content_type.endswith("wordprocessingml.document"):
@@ -173,7 +173,9 @@ class UnstructuredReader(BaseReader):
                 from docx import Document as DocxDocument
 
                 doc = DocxDocument(file_path)
-                paragraphs = [p.text.strip() for p in doc.paragraphs if p.text and p.text.strip()]
+                paragraphs = [
+                    p.text.strip() for p in doc.paragraphs if p.text and p.text.strip()
+                ]
                 return "\n".join(paragraphs)
             except Exception:
                 pass
@@ -214,7 +216,12 @@ class UnstructuredReader(BaseReader):
     ) -> str:
         candidate = ""
         if extra_info:
-            for key in ("original_file_name", "source_file_name", "file_name", "filename"):
+            for key in (
+                "original_file_name",
+                "source_file_name",
+                "file_name",
+                "filename",
+            ):
                 value = extra_info.get(key)
                 if isinstance(value, str) and value.strip():
                     candidate = value.strip()
@@ -237,13 +244,20 @@ class UnstructuredReader(BaseReader):
         return f"{path_name}{inferred_ext}" if inferred_ext else path_name
 
     @staticmethod
-    def _infer_content_type(file_path: str, extra_info: Optional[Dict]) -> Optional[str]:
+    def _infer_content_type(
+        file_path: str, extra_info: Optional[Dict]
+    ) -> Optional[str]:
         guessed, _ = mimetypes.guess_type(file_path)
         if guessed:
             return guessed
 
         if extra_info:
-            for key in ("original_file_name", "source_file_name", "file_name", "filename"):
+            for key in (
+                "original_file_name",
+                "source_file_name",
+                "file_name",
+                "filename",
+            ):
                 value = extra_info.get(key)
                 if isinstance(value, str) and value.strip():
                     guessed, _ = mimetypes.guess_type(value.strip())

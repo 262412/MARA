@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from theflow.settings.default import *  # noqa
 from ktem.runtime_defaults import build_kotaemon_settings
+from theflow.settings.default import *  # noqa
 
 this_dir = Path(__file__).resolve().parent
 

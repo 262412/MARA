@@ -1,8 +1,8 @@
 import base64
 import os
 import re
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 from html import escape
 
 from .page_preview_text import build_html_pages
@@ -20,7 +20,11 @@ def extract_pptx_text(file_path: str, max_chars: int = 9000) -> str:
     try:
         with zipfile.ZipFile(file_path) as zf:
             slide_names = sorted(
-                [name for name in zf.namelist() if re.match(r"ppt/slides/slide\d+\.xml", name)]
+                [
+                    name
+                    for name in zf.namelist()
+                    if re.match(r"ppt/slides/slide\d+\.xml", name)
+                ]
             )
             for slide in slide_names:
                 with zf.open(slide) as file_obj:
@@ -102,7 +106,9 @@ class PresentationPreviewService:
             inline_script=self._build_preview_script(),
         )
 
-    def _render_slide(self, slide, slide_index: int, slide_width: int, slide_height: int) -> str:
+    def _render_slide(
+        self, slide, slide_index: int, slide_width: int, slide_height: int
+    ) -> str:
         slide_width_px = self._emu_to_px(slide_width)
         slide_height_px = self._emu_to_px(slide_height)
         background_style = self._get_slide_background_style(slide)
@@ -132,11 +138,15 @@ class PresentationPreviewService:
             "</section>"
         )
 
-    def _render_shape(self, shape, slide_width: int, slide_height: int, z_index: int) -> str:
+    def _render_shape(
+        self, shape, slide_width: int, slide_height: int, z_index: int
+    ) -> str:
         try:
             shape_type = getattr(shape, "shape_type", None)
             if MSO_SHAPE_TYPE is not None and shape_type == MSO_SHAPE_TYPE.GROUP:
-                return self._render_group_shape(shape, slide_width, slide_height, z_index)
+                return self._render_group_shape(
+                    shape, slide_width, slide_height, z_index
+                )
         except Exception:
             pass
 
@@ -149,16 +159,22 @@ class PresentationPreviewService:
         if getattr(shape, "has_text_frame", False):
             return self._render_text_shape(shape, slide_width, slide_height, z_index)
 
-        box_style = self._build_shape_box_style(shape, slide_width, slide_height, z_index)
+        box_style = self._build_shape_box_style(
+            shape, slide_width, slide_height, z_index
+        )
         if not box_style:
             return ""
-        fill_style = self._extract_fill_style(getattr(shape, "fill", None), "background")
+        fill_style = self._extract_fill_style(
+            getattr(shape, "fill", None), "background"
+        )
         line_style = self._extract_line_style(getattr(shape, "line", None))
         if not fill_style and not line_style:
             return ""
         return f"<div class='pptx-preview-shape' style='{box_style}{fill_style}{line_style}'></div>"
 
-    def _render_group_shape(self, shape, slide_width: int, slide_height: int, z_index: int) -> str:
+    def _render_group_shape(
+        self, shape, slide_width: int, slide_height: int, z_index: int
+    ) -> str:
         group_text: list[str] = []
         for item in getattr(shape, "shapes", []):
             if getattr(item, "has_text_frame", False):
@@ -169,8 +185,12 @@ class PresentationPreviewService:
         if not group_text:
             return ""
 
-        box_style = self._build_shape_box_style(shape, slide_width, slide_height, z_index)
-        fill_style = self._extract_fill_style(getattr(shape, "fill", None), "background")
+        box_style = self._build_shape_box_style(
+            shape, slide_width, slide_height, z_index
+        )
+        fill_style = self._extract_fill_style(
+            getattr(shape, "fill", None), "background"
+        )
         line_style = self._extract_line_style(getattr(shape, "line", None))
         return (
             f"<div class='pptx-preview-element pptx-preview-text' style='{box_style}{fill_style}{line_style}'>"
@@ -178,13 +198,19 @@ class PresentationPreviewService:
             "</div>"
         )
 
-    def _render_text_shape(self, shape, slide_width: int, slide_height: int, z_index: int) -> str:
+    def _render_text_shape(
+        self, shape, slide_width: int, slide_height: int, z_index: int
+    ) -> str:
         content = self._extract_text_frame_html(shape.text_frame)
         if not content:
             return ""
-        box_style = self._build_shape_box_style(shape, slide_width, slide_height, z_index)
+        box_style = self._build_shape_box_style(
+            shape, slide_width, slide_height, z_index
+        )
         text_frame_style = self._build_text_frame_style(shape.text_frame)
-        fill_style = self._extract_fill_style(getattr(shape, "fill", None), "background")
+        fill_style = self._extract_fill_style(
+            getattr(shape, "fill", None), "background"
+        )
         line_style = self._extract_line_style(getattr(shape, "line", None))
         return (
             f"<div class='pptx-preview-element pptx-preview-text' style='{box_style}{text_frame_style}{fill_style}{line_style}'>"
@@ -192,7 +218,9 @@ class PresentationPreviewService:
             "</div>"
         )
 
-    def _render_picture_shape(self, shape, slide_width: int, slide_height: int, z_index: int) -> str:
+    def _render_picture_shape(
+        self, shape, slide_width: int, slide_height: int, z_index: int
+    ) -> str:
         try:
             image = shape.image
             mime_type = getattr(image, "content_type", "") or "image/png"
@@ -200,14 +228,18 @@ class PresentationPreviewService:
         except Exception:
             return ""
 
-        box_style = self._build_shape_box_style(shape, slide_width, slide_height, z_index)
+        box_style = self._build_shape_box_style(
+            shape, slide_width, slide_height, z_index
+        )
         return (
             f"<div class='pptx-preview-element pptx-preview-picture' style='{box_style}'>"
             f"<img alt='' src='data:{mime_type};base64,{encoded}' />"
             "</div>"
         )
 
-    def _render_table_shape(self, shape, slide_width: int, slide_height: int, z_index: int) -> str:
+    def _render_table_shape(
+        self, shape, slide_width: int, slide_height: int, z_index: int
+    ) -> str:
         try:
             table = shape.table
         except Exception:
@@ -217,19 +249,23 @@ class PresentationPreviewService:
         for row in table.rows:
             cells_html: list[str] = []
             for cell in row.cells:
-                cell_fill = self._extract_fill_style(getattr(cell, "fill", None), "background")
-                cell_text = escape((getattr(cell, "text", "") or "").strip()).replace("\n", "<br/>")
+                cell_fill = self._extract_fill_style(
+                    getattr(cell, "fill", None), "background"
+                )
+                cell_text = escape((getattr(cell, "text", "") or "").strip()).replace(
+                    "\n", "<br/>"
+                )
                 if not cell_text:
                     cell_text = "&nbsp;"
-                cells_html.append(
-                    f"<td style='{cell_fill}'>{cell_text}</td>"
-                )
+                cells_html.append(f"<td style='{cell_fill}'>{cell_text}</td>")
             rows_html.append(f"<tr>{''.join(cells_html)}</tr>")
 
         if not rows_html:
             return ""
 
-        box_style = self._build_shape_box_style(shape, slide_width, slide_height, z_index)
+        box_style = self._build_shape_box_style(
+            shape, slide_width, slide_height, z_index
+        )
         line_style = self._extract_line_style(getattr(shape, "line", None))
         return (
             f"<div class='pptx-preview-element pptx-preview-table-wrap' style='{box_style}{line_style}'>"
@@ -244,9 +280,7 @@ class PresentationPreviewService:
         padding_right = self._emu_to_px(getattr(text_frame, "margin_right", 0) or 0)
         padding_bottom = self._emu_to_px(getattr(text_frame, "margin_bottom", 0) or 0)
         padding_left = self._emu_to_px(getattr(text_frame, "margin_left", 0) or 0)
-        return (
-            f"padding:{padding_top:.2f}px {padding_right:.2f}px {padding_bottom:.2f}px {padding_left:.2f}px;"
-        )
+        return f"padding:{padding_top:.2f}px {padding_right:.2f}px {padding_bottom:.2f}px {padding_left:.2f}px;"
 
     def _extract_text_frame_html(self, text_frame) -> str:
         paragraphs_html: list[str] = []
@@ -289,7 +323,9 @@ class PresentationPreviewService:
                 runs_html.append(rendered)
 
         if not runs_html:
-            plain_text = escape((getattr(paragraph, "text", "") or "").strip()).replace("\n", "<br/>")
+            plain_text = escape((getattr(paragraph, "text", "") or "").strip()).replace(
+                "\n", "<br/>"
+            )
             if plain_text:
                 runs_html.append(plain_text)
 
@@ -330,7 +366,9 @@ class PresentationPreviewService:
 
         hyperlink = ""
         try:
-            hyperlink = (getattr(getattr(run, "hyperlink", None), "address", "") or "").strip()
+            hyperlink = (
+                getattr(getattr(run, "hyperlink", None), "address", "") or ""
+            ).strip()
         except Exception:
             hyperlink = ""
 
@@ -364,9 +402,7 @@ class PresentationPreviewService:
         except Exception:
             return ""
 
-        style = (
-            f"left:{left:.2f}px;top:{top:.2f}px;width:{width:.2f}px;height:{height:.2f}px;z-index:{z_index};"
-        )
+        style = f"left:{left:.2f}px;top:{top:.2f}px;width:{width:.2f}px;height:{height:.2f}px;z-index:{z_index};"
         rotation = getattr(shape, "rotation", 0) or 0
         try:
             rotation_value = float(rotation)

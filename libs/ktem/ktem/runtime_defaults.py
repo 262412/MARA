@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from decouple import config
-
 from ktem.utils.lang import SUPPORTED_LANGUAGE_MAP
 
 
@@ -55,9 +54,7 @@ def build_kotaemon_settings(
             "KH_ENABLE_FIRST_SETUP", default=True, cast=bool
         ),
         "KH_DEMO_MODE": config("KH_DEMO_MODE", default=False, cast=bool),
-        "KH_OLLAMA_URL": config(
-            "KH_OLLAMA_URL", default="http://localhost:11434/v1/"
-        ),
+        "KH_OLLAMA_URL": config("KH_OLLAMA_URL", default="http://localhost:11434/v1/"),
         "KH_APP_DATA_DIR": app_data_dir,
         "KH_APP_DATA_EXISTS": app_data_exists,
         "KH_USER_DATA_DIR": user_data_dir,
@@ -138,9 +135,7 @@ def build_kotaemon_settings(
     openai_default = "<YOUR_OPENAI_KEY>"
     openai_api_key = config("OPENAI_API_KEY", default=openai_default)
     google_api_key = config("GOOGLE_API_KEY", default="your-key")
-    is_openai_default = (
-        len(openai_api_key) > 0 and openai_api_key != openai_default
-    )
+    is_openai_default = len(openai_api_key) > 0 and openai_api_key != openai_default
 
     if openai_api_key:
         settings["KH_LLMS"]["openai"] = {
@@ -213,9 +208,7 @@ def build_kotaemon_settings(
             "spec": {
                 "__type__": "kotaemon.embeddings.OpenAIEmbeddings",
                 "base_url": settings["KH_OLLAMA_URL"],
-                "model": config(
-                    "LOCAL_MODEL_EMBEDDINGS", default="nomic-embed-text"
-                ),
+                "model": config("LOCAL_MODEL_EMBEDDINGS", default="nomic-embed-text"),
                 "api_key": "ollama",
             },
             "default": False,
@@ -314,12 +307,12 @@ def build_kotaemon_settings(
     settings["KH_REASONINGS_USE_MULTIMODAL"] = config(
         "USE_MULTIMODAL", default=False, cast=bool
     )
-    settings["KH_VLM_ENDPOINT"] = (
-        "{0}/openai/deployments/{1}/chat/completions?api-version={2}".format(
-            config("AZURE_OPENAI_ENDPOINT", default=""),
-            config("OPENAI_VISION_DEPLOYMENT_NAME", default="gpt-4o"),
-            config("OPENAI_API_VERSION", default=""),
-        )
+    settings[
+        "KH_VLM_ENDPOINT"
+    ] = "{0}/openai/deployments/{1}/chat/completions?api-version={2}".format(
+        config("AZURE_OPENAI_ENDPOINT", default=""),
+        config("OPENAI_VISION_DEPLOYMENT_NAME", default="gpt-4o"),
+        config("OPENAI_API_VERSION", default=""),
     )
 
     settings["SETTINGS_APP"] = {}

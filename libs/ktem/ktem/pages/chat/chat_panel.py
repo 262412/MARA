@@ -25,7 +25,7 @@ else:
 
 class ChatPanel(BasePage):
     """Main chat panel with integrated document preview."""
-    
+
     def __init__(self, app):
         self._app = app
         self.text_input = None
@@ -63,7 +63,9 @@ class ChatPanel(BasePage):
             elem_id="main-pdf-preview",
         )
         # Hidden textbox storing the preview source URL
-        self.pdf_preview_src = gr.Textbox(value="", visible=False, elem_id="main-pdf-preview-src")
+        self.pdf_preview_src = gr.Textbox(
+            value="", visible=False, elem_id="main-pdf-preview-src"
+        )
         # Timer for polling preview status (optimized to 2s interval)
         self.preview_refresh_timer = gr.Timer(value=2.0, active=True)
 
@@ -108,11 +110,11 @@ class ChatPanel(BasePage):
 
     def submit_msg(self, chat_input, chat_history):
         """Submit a message to the chatbot.
-        
+
         Args:
             chat_input: User's input message
             chat_history: Current chat history
-            
+
         Returns:
             Tuple of (empty string for clearing input, updated chat history)
         """

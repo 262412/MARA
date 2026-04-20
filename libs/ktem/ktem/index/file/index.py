@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import datetime
-from typing import Any, Optional, Type
+from typing import Any, Optional, Type, cast
 
 from ktem.components import filestorage_path, get_docstore, get_vectorstore
 from ktem.db.engine import engine
@@ -531,7 +531,7 @@ class FileIndex(BaseIndex):
         return normalized
 
     def list_source_rows(self, user_id: int | str | None) -> list[dict[str, Any]]:
-        source_table = self._resources["Source"]
+        source_table = cast(Any, self._resources["Source"])
         statement = select(source_table)
         if self.config.get("private", False):
             statement = statement.where(source_table.user == user_id)

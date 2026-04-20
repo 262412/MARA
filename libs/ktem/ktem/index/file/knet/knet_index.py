@@ -34,7 +34,7 @@ class KnowledgeNetworkFileIndex(FileIndex):
         return obj
 
     def get_retriever_pipelines(
-        self, settings: dict, user_id: int, selected: Any = None
+        self, settings: dict, user_id: int | str | None, selected: Any = None
     ) -> list["BaseFileIndexRetriever"]:
         retrievers = super().get_retriever_pipelines(settings, user_id, selected)
 

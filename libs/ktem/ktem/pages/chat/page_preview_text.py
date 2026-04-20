@@ -2,7 +2,6 @@ import os
 from html import escape
 from urllib.parse import quote
 
-
 PREVIEW_HTML_STYLE = (
     "html,body{width:100%;height:100%;max-width:none;overflow:hidden;}"
     "body{margin:0;padding:12px;font-family:Arial,sans-serif;background:#fff;color:#111;box-sizing:border-box;}"

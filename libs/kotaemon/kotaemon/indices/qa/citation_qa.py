@@ -312,7 +312,9 @@ class AnswerWithContextPipeline(BaseComponent):
                 logprobs += out_msg.logprobs
                 yield Document(channel="chat", content=out_msg.text)
         except NotImplementedError:
-            logger.debug("Streaming is not supported, falling back to normal processing")
+            logger.debug(
+                "Streaming is not supported, falling back to normal processing"
+            )
             output = self.llm(messages).text
             yield Document(channel="chat", content=output)
 
