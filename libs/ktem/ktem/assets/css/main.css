@@ -453,6 +453,30 @@ button.selected {
   height: 100% !important;
 }
 
+#html-info-panel.kg-info-empty {
+  display: none !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  border-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#html-info-panel.kg-info-empty > div,
+#html-info-panel.kg-info-empty .prose,
+#html-info-panel.kg-info-empty .wrap,
+#html-info-panel.kg-info-empty .component-wrap,
+#html-info-panel.kg-info-empty .message {
+  height: 0 !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
 body.dark #chat-info-panel figure>img{
   filter: invert(100%);
 }
@@ -550,9 +574,15 @@ mark {
 }
 
 #info-expand-button {
-  position: absolute;
-  top: 6px;
-  right: 15px;
+  position: static;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  margin-left: auto;
+  margin-right: 6px;
 }
 
 /* prevent overflow of html info panel */
@@ -604,6 +634,23 @@ mark {
 #chat-input button {
   border-top-right-radius: var(--radius-lg) !important;
   border-bottom-right-radius: var(--radius-lg) !important;
+}
+
+#chat-input textarea {
+  resize: none !important;
+}
+
+#chat-input-row button[tabindex="-1"]:has(input[data-testid="file-upload"]),
+#chat-input-row button.boundedheight.disable_click[tabindex="-1"],
+#chat-input-row input[data-testid="file-upload"] {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
 }
 
 #pdf-preview-notice {
@@ -1146,25 +1193,105 @@ div.markmap {
   display: flex !important;
   flex-direction: column !important;
   min-height: 0 !important;
-  height: 100% !important;
-  max-height: 100% !important;
+  height: auto !important;
+  max-height: none !important;
   min-width: 0 !important;
   overflow: visible !important;
+}
+
+#knowledge-graph-plot .prose:empty {
+  display: none !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+#knowledge-graph-plot .prose.kg-prose-empty {
+  display: none !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
 }
 
 #knowledge-graph-plot .knowledge-graph-shell {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 0;
+  min-height: 100%;
   flex: 1 1 auto;
   max-height: none;
   overflow: visible !important;
   overscroll-behavior: contain;
   padding: 8px 6px 16px;
-  cursor: grab;
-  touch-action: none;
+  cursor: default;
+  touch-action: auto;
   scrollbar-gutter: auto;
+}
+
+#knowledge-graph-plot .knowledge-graph-shell.is-loading {
+  justify-content: center;
+  min-height: 320px;
+  cursor: progress;
+  pointer-events: none;
+}
+
+#knowledge-graph-plot .kg-loading {
+  margin: 24px auto;
+  max-width: 360px;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 44%, #64748b);
+  border-radius: 16px;
+  padding: 18px 16px;
+  background:
+    radial-gradient(110% 150% at 10% 0%, rgba(37, 99, 235, 0.15), transparent 58%),
+    color-mix(in srgb, var(--background-fill-secondary, #f8fafc) 92%, transparent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+#knowledge-graph-plot .kg-loading__spinner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--color-accent, #2563eb) 28%, #94a3b8);
+  border-top-color: var(--color-accent, #2563eb);
+  animation: kg-loading-spin 0.9s linear infinite;
+}
+
+#knowledge-graph-plot .kg-loading__title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--body-text-color, #0f172a);
+}
+
+#knowledge-graph-plot .kg-loading__hint {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--body-text-color-subdued, #64748b);
+  animation: kg-loading-pulse 1.35s ease-in-out infinite;
+}
+
+@keyframes kg-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes kg-loading-pulse {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 #knowledge-graph-plot .knowledge-graph-shell.is-stale {
@@ -1221,11 +1348,13 @@ div.markmap {
 }
 
 #knowledge-graph-plot .kg-tree-list--systems {
-  padding-left: 0;
+  padding-left: 18px;
 }
 
 #knowledge-graph-plot .kg-tree-list--systems::before {
-  display: none;
+  display: block;
+  left: 11px;
+  top: -8px;
 }
 
 #knowledge-graph-plot .kg-tree-item {
@@ -1243,8 +1372,8 @@ div.markmap {
 }
 
 #knowledge-graph-plot .kg-tree-list--systems > .kg-tree-item::before {
-  left: -6px;
-  width: 6px;
+  left: -11px;
+  width: 11px;
 }
 
 #knowledge-graph-plot .kg-tree-node {
@@ -1345,10 +1474,38 @@ div.markmap {
   margin-top: 8px;
 }
 
+#knowledge-graph-plot .kg-point-item.is-collapsed-point {
+  display: none;
+}
+
+#knowledge-graph-plot .kg-tree-item--file.is-points-expanded .kg-point-item.is-collapsed-point {
+  display: list-item;
+}
+
 #knowledge-graph-plot .kg-point-more {
   font-size: 0.84rem;
   color: var(--body-text-color-subdued, #6b7280);
   padding-left: 2px;
+}
+
+#knowledge-graph-plot .kg-point-more--toggle {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.35;
+  font: inherit;
+}
+
+#knowledge-graph-plot .kg-point-more--toggle:hover {
+  color: color-mix(in srgb, var(--color-accent, #2563eb) 76%, #94a3b8);
+  text-decoration: underline;
+}
+
+#knowledge-graph-plot .kg-point-more--toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent, #2563eb) 56%, #94a3b8);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 #kg-answer-hint {
@@ -1690,11 +1847,9 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(72% 54% at 14% 88%, rgba(42, 75, 214, 0.22), transparent 72%),
-    radial-gradient(74% 56% at 86% 88%, rgba(29, 145, 81, 0.2), transparent 73%),
     linear-gradient(142deg, rgba(8, 14, 30, 0.22), rgba(5, 9, 18, 0.34));
   pointer-events: none;
-  opacity: 1;
+  opacity: 0.86;
 }
 
 #app-version-badge {

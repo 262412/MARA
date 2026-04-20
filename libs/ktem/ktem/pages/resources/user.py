@@ -1,4 +1,5 @@
 import hashlib
+import logging
 
 import gradio as gr
 import pandas as pd
@@ -6,6 +7,8 @@ from ktem.app import BasePage
 from ktem.db.models import User, engine
 from sqlmodel import Session, select
 from theflow.settings import settings as flowsettings
+
+logger = logging.getLogger(__name__)
 
 USERNAME_RULE = """**Username rule:**
 
@@ -99,7 +102,7 @@ def create_user(usn, pwd, user_id=None, is_admin=True) -> bool:
         statement = select(User).where(User.username_lower == usn.lower())
         result = session.exec(statement).all()
         if result:
-            print(f'User "{usn}" already exists')
+            logger.debug('User "%s" already exists', usn)
             return False
 
         else:

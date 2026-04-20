@@ -1,3 +1,4 @@
+import logging
 import os
 
 import markdown
@@ -6,6 +7,7 @@ from fast_langdetect import detect
 from kotaemon.base import RetrievedDocument
 
 BASE_PATH = os.environ.get("GR_FILE_ROOT_PATH", "")
+logger = logging.getLogger(__name__)
 
 
 def is_close(val1, val2, tolerance=1e-9):
@@ -81,18 +83,18 @@ class Render:
         pdf_path = doc.metadata.get("file_path", "")
 
         if not os.path.isfile(pdf_path):
-            print(f"pdf-path: {pdf_path} does not exist")
+            logger.debug("pdf-path does not exist: %s", pdf_path)
             return html_content
 
         is_pdf = doc.metadata.get("file_type", "") == "application/pdf"
         page_idx = int(doc.metadata.get("page_label", 1))
 
         if not is_pdf:
-            print("Document is not pdf")
+            logger.debug("Document is not pdf")
             return html_content
 
         if page_idx < 0:
-            print("Fail to extract page number")
+            logger.debug("Fail to extract page number")
             return html_content
 
         if not highlight_text:
@@ -113,8 +115,8 @@ class Render:
                 highlight_text = (
                     text.replace("\n", "").replace('"', "").replace("'", "")
                 )
-            except Exception as e:
-                print(e)
+            except Exception as exc:
+                logger.debug("Language detection failed during preview: %s", exc)
                 highlight_text = text
                 phrase = "false"
         else:

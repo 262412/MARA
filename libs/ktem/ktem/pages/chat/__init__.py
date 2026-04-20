@@ -8,9 +8,9 @@ from copy import deepcopy
 from typing import Optional
 
 import gradio as gr
-from decouple import config
 from ktem.app import BasePage
 from ktem.components import reasonings
+from ktem.docqa import DocQARequest, DocQARuntime
 from ktem.db.models import Conversation, engine
 from ktem.index.file.ui import File
 from ktem.reasoning.prompt_optimization.mindmap import MINDMAP_HTML_EXPORT_TEMPLATE
@@ -479,6 +479,7 @@ class ChatPage(BasePage):
             if self.file_index is not None
             else None
         )
+        self.docqa = DocQARuntime(app=self._app)
 
         self.on_building_ui()
 
@@ -542,6 +543,7 @@ class ChatPage(BasePage):
                         label="Files in this conversation",
                         placeholder="Filter file name",
                         elem_id="chat-file-filter",
+                        visible=False,
                     )
                     self.chat_file_rows = gr.State([])
                     self.chat_selected_file = gr.Markdown(
@@ -659,37 +661,21 @@ class ChatPage(BasePage):
                     ) as self.chat_settings:
                         with gr.Row(elem_id="quick-setting-labels"):
                             gr.HTML("Reasoning method")
-                            gr.HTML(
-                                "Model", visible=not KH_DEMO_MODE and not KH_SSO_ENABLED
-                            )
-                            gr.HTML("Language")
+                            gr.HTML("Response language")
 
                         with gr.Row():
                             reasoning_setting = (
                                 self._app.default_settings.reasoning.settings["use"]
                             )
-                            model_setting = self._app.default_settings.reasoning.options[
-                                "simple"
-                            ].settings["llm"]
                             language_setting = (
                                 self._app.default_settings.reasoning.settings["lang"]
                             )
-                            citation_setting = self._app.default_settings.reasoning.options[
-                                "simple"
-                            ].settings["highlight_citation"]
 
                             self.reasoning_type = gr.Dropdown(
                                 choices=reasoning_setting.choices[:REASONING_LIMITS],
                                 value=reasoning_setting.value,
                                 container=False,
                                 show_label=False,
-                            )
-                            self.model_type = gr.Dropdown(
-                                choices=model_setting.choices,
-                                value=model_setting.value,
-                                container=False,
-                                show_label=False,
-                                visible=not KH_DEMO_MODE and not KH_SSO_ENABLED,
                             )
                             self.language = gr.Dropdown(
                                 choices=language_setting.choices,
@@ -698,31 +684,10 @@ class ChatPage(BasePage):
                                 show_label=False,
                             )
 
-                            self.citation = gr.Dropdown(
-                                choices=citation_setting.choices,
-                                value=citation_setting.value,
-                                container=False,
-                                show_label=False,
-                                interactive=True,
-                                elem_id="citation-dropdown",
-                            )
-
-                            if not config("USE_LOW_LLM_REQUESTS", default=False, cast=bool):
-                                self.use_mindmap = gr.State(value=True)
-                                self.use_mindmap_check = gr.Checkbox(
-                                    label="Mindmap (on)",
-                                    container=False,
-                                    elem_id="use-mindmap-checkbox",
-                                    value=True,
-                                )
-                            else:
-                                self.use_mindmap = gr.State(value=False)
-                                self.use_mindmap_check = gr.Checkbox(
-                                    label="Mindmap (off)",
-                                    container=False,
-                                    elem_id="use-mindmap-checkbox",
-                                    value=False,
-                                )
+                            # Keep advanced settings as internal defaults for pipeline compatibility.
+                            self.model_type = gr.State(value=DEFAULT_SETTING)
+                            self.citation = gr.State(value=DEFAULT_SETTING)
+                            self.use_mindmap = gr.State(value=DEFAULT_SETTING)
 
                     self.chat_panel.render_input()
 
@@ -806,7 +771,14 @@ class ChatPage(BasePage):
 
         file_ids: list[str] = []
         for value in selected.values():
-            candidates = value if isinstance(value, list) else [value]
+            if (
+                isinstance(value, list)
+                and len(value) >= 3
+                and str(value[0] or "").strip() in {"disabled", "select", "all"}
+            ):
+                candidates = [value[1]]
+            else:
+                candidates = value if isinstance(value, list) else [value]
             for candidate in candidates:
                 if isinstance(candidate, list):
                     for nested in candidate:
@@ -834,6 +806,19 @@ class ChatPage(BasePage):
             self._normalize_selected_file_ids(graph_source_ids),
             self._normalize_selected_file_ids(new_file_ids),
         )
+
+    def _build_selected_input_map(self, *selecteds) -> dict[int, object]:
+        selected_inputs: dict[int, object] = {}
+        for index in self._app.index_manager.indices:
+            if index.selector is None:
+                continue
+            if isinstance(index.selector, int) and index.selector < len(selecteds):
+                selected_inputs[index.id] = selecteds[index.selector]
+            elif isinstance(index.selector, tuple):
+                selected_inputs[index.id] = [
+                    selecteds[i] for i in index.selector if i < len(selecteds)
+                ]
+        return selected_inputs
 
     @staticmethod
     def _is_group_selector_value(selector_value: str) -> bool:
@@ -1066,6 +1051,31 @@ class ChatPage(BasePage):
             except Exception:
                 pass
         return value if value else fallback_ids
+
+    def show_knowledge_graph_loading(self, _trigger=None, mode: str = "update"):
+        normalized_mode = str(mode or "update").strip().lower()
+        is_generating = normalized_mode.startswith("gen")
+        title = (
+            "Generating knowledge graph..."
+            if is_generating
+            else "Updating knowledge graph..."
+        )
+        hint = (
+            "Analyzing current conversation files and rebuilding links."
+            if is_generating
+            else "Detected file changes. Recomputing graph nodes and relationships."
+        )
+        loading_html = (
+            "<div class='knowledge-graph-shell is-loading' id='knowledge-graph-panel' "
+            "data-kg-status='loading'>"
+            "<div class='kg-loading'>"
+            "<div class='kg-loading__spinner' aria-hidden='true'></div>"
+            f"<h4 class='kg-loading__title'>{title}</h4>"
+            f"<p class='kg-loading__hint'>{hint}</p>"
+            "</div>"
+            "</div>"
+        )
+        return gr.update(visible=True, value=loading_html), f"Status: {title}"
 
     def refresh_knowledge_graph(
         self,
@@ -1548,7 +1558,7 @@ class ChatPage(BasePage):
                 fn=lambda: True,
                 inputs=None,
                 outputs=[self._preview_links],
-                js=pdfview_js,  # 这里已经包含了自动滚动和拖动初始化
+                js=pdfview_js,  # Includes auto-scroll and drag initialization.
             )
             .then(
                 fn=None,
@@ -1971,12 +1981,6 @@ class ChatPage(BasePage):
             inputs=[self.reasoning_type],
             outputs=[self._reasoning_type],
         )
-        self.use_mindmap_check.change(
-            lambda x: (x, gr.update(label="Mindmap " + ("(on)" if x else "(off)"))),
-            inputs=[self.use_mindmap_check],
-            outputs=[self.use_mindmap, self.use_mindmap_check],
-            show_progress="hidden",
-        )
 
         def toggle_chat_suggestion(current_state):
             return current_state, gr.update(visible=current_state)
@@ -2049,6 +2053,14 @@ class ChatPage(BasePage):
                 ],
                 show_progress="hidden",
             ).then(
+                fn=self.show_knowledge_graph_loading,
+                inputs=[self.chat_control.conversation_id],
+                outputs=[
+                    self.plot_panel,
+                    self.knowledge_graph_status,
+                ],
+                show_progress="hidden",
+            ).then(
                 fn=self.refresh_knowledge_graph,
                 inputs=[
                     self.chat_control.conversation_id,
@@ -2111,6 +2123,14 @@ class ChatPage(BasePage):
                 ],
                 show_progress="hidden",
             ).then(
+                fn=self.show_knowledge_graph_loading,
+                inputs=[self.chat_control.conversation_id],
+                outputs=[
+                    self.plot_panel,
+                    self.knowledge_graph_status,
+                ],
+                show_progress="hidden",
+            ).then(
                 fn=self.refresh_knowledge_graph,
                 inputs=[
                     self.chat_control.conversation_id,
@@ -2167,6 +2187,14 @@ class ChatPage(BasePage):
                 ],
                 show_progress="hidden",
             ).then(
+                fn=self.show_knowledge_graph_loading,
+                inputs=[self.chat_control.conversation_id],
+                outputs=[
+                    self.plot_panel,
+                    self.knowledge_graph_status,
+                ],
+                show_progress="hidden",
+            ).then(
                 fn=self.refresh_knowledge_graph,
                 inputs=[
                     self.chat_control.conversation_id,
@@ -2219,6 +2247,14 @@ class ChatPage(BasePage):
                     ],
                     show_progress="hidden",
                 ).then(
+                    fn=self.show_knowledge_graph_loading,
+                    inputs=[self.chat_control.conversation_id],
+                    outputs=[
+                        self.plot_panel,
+                        self.knowledge_graph_status,
+                    ],
+                    show_progress="hidden",
+                ).then(
                     fn=self.refresh_knowledge_graph,
                     inputs=[
                         self.chat_control.conversation_id,
@@ -2236,8 +2272,14 @@ class ChatPage(BasePage):
                 )
 
             self.knowledge_graph_refresh.click(
-                fn=lambda: "Status: generating knowledge graph...",
-                outputs=[self.knowledge_graph_status],
+                fn=lambda conversation_id: self.show_knowledge_graph_loading(
+                    conversation_id, mode="generate"
+                ),
+                inputs=[self.chat_control.conversation_id],
+                outputs=[
+                    self.plot_panel,
+                    self.knowledge_graph_status,
+                ],
                 show_progress="hidden",
             ).then(
                 fn=self.generate_knowledge_graph,
@@ -2494,6 +2536,18 @@ class ChatPage(BasePage):
             self._app.subscribe_event(
                 name=event_name,
                 definition={
+                    "fn": self.show_knowledge_graph_loading,
+                    "inputs": [self.chat_control.conversation_id],
+                    "outputs": [
+                        self.plot_panel,
+                        self.knowledge_graph_status,
+                    ],
+                    "show_progress": "hidden",
+                },
+            )
+            self._app.subscribe_event(
+                name=event_name,
+                definition={
                     "fn": self.refresh_knowledge_graph,
                     "inputs": [
                         self.chat_control.conversation_id,
@@ -2595,50 +2649,27 @@ class ChatPage(BasePage):
         if not convo_id:
             gr.Warning("No conversation selected")
             return
+        selected_inputs = self._build_selected_input_map(*selecteds)
+        selected_file_ids = []
+        if self.file_index is not None:
+            selected_input = selected_inputs.get(self.file_index.id)
+            selected_file_ids = self.file_index.resolve_selected_ids(
+                user_id, selected_input
+            )
 
-        # if not regen, then append the new message
-        if not state["app"].get("regen", False):
-            retrival_history = retrival_history + [retrieval_msg]
-            plot_history = plot_history + [plot_data]
-        else:
-            if retrival_history:
-                retrival_history[-1] = retrieval_msg
-                plot_history[-1] = plot_data
-
-        # reset regen state
-        state["app"]["regen"] = False
-
-        selecteds_ = {}
-        for index in self._app.index_manager.indices:
-            if index.selector is None:
-                continue
-            if isinstance(index.selector, int):
-                selecteds_[str(index.id)] = selecteds[index.selector]
-            else:
-                selecteds_[str(index.id)] = [selecteds[i] for i in index.selector]
-
-        with Session(engine) as session:
-            statement = select(Conversation).where(Conversation.id == convo_id)
-            result = session.exec(statement).one()
-
-            data_source = result.data_source
-            old_selecteds = data_source.get("selected", {})
-            is_owner = result.user == user_id
-
-            # Write down to db
-            result.data_source = {
-                "selected": selecteds_ if is_owner else old_selecteds,
-                "messages": messages,
-                "retrieval_messages": retrival_history,
-                "plot_history": plot_history,
-                "state": state,
-                "graph_source_ids": self._normalize_selected_file_ids(graph_source_ids),
-                "likes": deepcopy(data_source.get("likes", [])),
-            }
-            session.add(result)
-            session.commit()
-
-        return retrival_history, plot_history
+        return self.docqa.persist_conversation_state(
+            conversation_id=convo_id,
+            user_id=user_id,
+            retrieval_message=retrieval_msg,
+            plot_data=plot_data,
+            retrieval_history=retrival_history,
+            plot_history=plot_history,
+            messages=messages,
+            state=state,
+            graph_source_ids=self._normalize_selected_file_ids(graph_source_ids),
+            selected_inputs=selected_inputs,
+            selected_file_ids=selected_file_ids,
+        )
 
     def reasoning_changed(self, reasoning_type):
         if reasoning_type != DEFAULT_SETTING:
@@ -2735,91 +2766,6 @@ class ChatPage(BasePage):
         Returns:
             - the pipeline objects
         """
-        # override reasoning_mode by temporary chat page state
-        reasoning_mode = (
-            settings["reasoning.use"]
-            if session_reasoning_type in (DEFAULT_SETTING, None)
-            else session_reasoning_type
-        )
-        reasoning_cls = reasonings[reasoning_mode]
-        reasoning_id = reasoning_cls.get_info()["id"]
-
-        settings = deepcopy(settings)
-        llm_setting_key = f"reasoning.options.{reasoning_id}.llm"
-        if llm_setting_key in settings and session_llm not in (
-            DEFAULT_SETTING,
-            None,
-            "",
-        ):
-            settings[llm_setting_key] = session_llm
-
-        if session_use_mindmap not in (DEFAULT_SETTING, None):
-            settings["reasoning.options.simple.create_mindmap"] = session_use_mindmap
-
-        if session_use_citation not in (DEFAULT_SETTING, None):
-            settings[
-                "reasoning.options.simple.highlight_citation"
-            ] = session_use_citation
-
-        if session_language not in (DEFAULT_SETTING, None):
-            settings["reasoning.lang"] = session_language
-
-        # get retrievers
-        retrievers = []
-
-        if not active_file_name and self._app.index_manager.indices:
-            first_index = self._app.index_manager.indices[0]
-            selected_file_ids = []
-            if isinstance(first_index.selector, tuple) and len(first_index.selector) > 1:
-                selected_file_ids = selecteds[first_index.selector[1]]
-            elif isinstance(first_index.selector, int):
-                selected_file_ids = selecteds[first_index.selector]
-
-            inferred_file_id, inferred_file_name, _ = self.page_preview.resolve_pdf_source(
-                None, selected_file_ids
-            )
-            active_file_id = active_file_id or inferred_file_id
-            active_file_name = inferred_file_name
-
-        if command_state == WEB_SEARCH_COMMAND:
-            # set retriever for web search
-            if not WebSearch:
-                raise ValueError("Web search back-end is not available.")
-
-            web_search = WebSearch()
-            retrievers.append(web_search)
-        else:
-            for index in self._app.index_manager.indices:
-                index_selected = []
-                if isinstance(index.selector, int):
-                    index_selected = selecteds[index.selector]
-                if isinstance(index.selector, tuple):
-                    for i in index.selector:
-                        index_selected.append(selecteds[i])
-                iretrievers = index.get_retriever_pipelines(
-                    settings, user_id, index_selected
-                )
-                retrievers += iretrievers
-
-        # prepare states
-        reasoning_state = {
-            "app": deepcopy(state["app"]),
-            "pipeline": deepcopy(state.get(reasoning_id, {})),
-        }
-
-        pipeline = reasoning_cls.get_pipeline(settings, reasoning_state, retrievers)
-        normalized_page_number = max(1, int(page_number or 1))
-        selected_text = (selected_page_text or "").strip()
-        if (not selected_text) and active_file_id and active_file_name:
-            selected_text = self._get_office_page_context_text(
-                active_file_id, active_file_name, normalized_page_number
-            )
-
-        is_pdf_file = (active_file_name or "").lower().endswith(".pdf")
-        pipeline.active_file_id = active_file_id or ""
-        pipeline.active_file_name = active_file_name
-        pipeline.page_number = normalized_page_number if is_pdf_file else None
-        pipeline.selected_text = selected_text
         try:
             graph_context = (
                 json.loads(selected_graph_context)
@@ -2830,9 +2776,26 @@ class ChatPage(BasePage):
                 graph_context = {}
         except Exception:
             graph_context = {}
-        pipeline.graph_context = graph_context
 
-        return pipeline, reasoning_state
+        request = DocQARequest(
+            prompt="",
+            selected_inputs=self._build_selected_input_map(*selecteds),
+            active_file_id=active_file_id or "",
+            active_file_name=active_file_name or "",
+            page_number=max(1, int(page_number or 1)),
+            selected_text=(selected_page_text or "").strip(),
+            graph_context=graph_context,
+            settings=deepcopy(settings),
+            state=deepcopy(state),
+            reasoning_type=session_reasoning_type,
+            llm=session_llm,
+            use_mindmap=session_use_mindmap,
+            use_citation=session_use_citation,
+            language=session_language,
+            command_state=command_state,
+            user_id=user_id,
+        )
+        return self.docqa.create_pipeline(request)
 
     def chat_fn(
         self,

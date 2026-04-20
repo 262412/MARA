@@ -1,10 +1,13 @@
 from typing import List
+import logging
 
 from pydantic import BaseModel, Field
 
 from kotaemon.base import BaseComponent
 from kotaemon.base.schema import HumanMessage, SystemMessage
 from kotaemon.llms import BaseLLM
+
+logger = logging.getLogger(__name__)
 
 
 class CiteEvidence(BaseModel):
@@ -67,9 +70,9 @@ class CitationPipeline(BaseComponent):
     def invoke(self, context: str, question: str):
         messages, llm_kwargs = self.prepare_llm(context, question)
         try:
-            print("CitationPipeline: invoking LLM")
+            logger.debug("CitationPipeline: invoking LLM")
             llm_output = self.get_from_path("llm").invoke(messages, **llm_kwargs)
-            print("CitationPipeline: finish invoking LLM")
+            logger.debug("CitationPipeline: finish invoking LLM")
             if not llm_output.additional_kwargs.get("tool_calls"):
                 return None
 
@@ -82,14 +85,14 @@ class CitationPipeline(BaseComponent):
                 # anthropic format
                 function_output = first_func["args"]
 
-            print("CitationPipeline:", function_output)
+            logger.debug("CitationPipeline result: %s", function_output)
 
             if isinstance(function_output, str):
                 output = CiteEvidence.parse_raw(function_output)
             else:
                 output = CiteEvidence.parse_obj(function_output)
-        except Exception as e:
-            print(e)
+        except Exception:
+            logger.exception("CitationPipeline failed")
             return None
 
         return output

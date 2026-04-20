@@ -312,3 +312,97 @@ def test_payload_attr_includes_prompt_and_graph_context(monkeypatch, tmp_path):
     assert payload["prompt"]
     assert payload["suggested_question"]
     assert payload["prompt"] == payload["suggested_question"]
+
+
+def test_render_graph_html_includes_toggle_for_collapsed_points(monkeypatch, tmp_path):
+    service = _make_service(monkeypatch, tmp_path)
+
+    graph = {
+        "source_ids": ["file-a", "file-b"],
+        "systems": [
+            {
+                "id": "system::1",
+                "type": "knowledge_system",
+                "label": "System 1",
+                "summary": "Shared concepts",
+                "related_file_ids": ["file-a", "file-b"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+                "themes": [],
+            }
+        ],
+        "file_cards": [
+            {
+                "id": "file::file-a",
+                "type": "file_summary",
+                "system_id": "system::1",
+                "file_id": "file-a",
+                "label": "Alpha.pdf",
+                "summary": "Alpha summary",
+                "related_file_ids": ["file-a"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            {
+                "id": "file::file-b",
+                "type": "file_summary",
+                "system_id": "system::1",
+                "file_id": "file-b",
+                "label": "Beta.pdf",
+                "summary": "Beta summary",
+                "related_file_ids": ["file-b"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+        ],
+        "knowledge_points": [
+            {
+                "id": "point::file-a::1",
+                "type": "knowledge_point",
+                "system_id": "system::1",
+                "file_id": "file-a",
+                "label": "Point A1",
+                "related_file_ids": ["file-a"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            {
+                "id": "point::file-a::2",
+                "type": "knowledge_point",
+                "system_id": "system::1",
+                "file_id": "file-a",
+                "label": "Point A2",
+                "related_file_ids": ["file-a"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            {
+                "id": "point::file-a::3",
+                "type": "knowledge_point",
+                "system_id": "system::1",
+                "file_id": "file-a",
+                "label": "Point A3",
+                "related_file_ids": ["file-a"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            {
+                "id": "point::file-a::4",
+                "type": "knowledge_point",
+                "system_id": "system::1",
+                "file_id": "file-a",
+                "label": "Point A4",
+                "related_file_ids": ["file-a"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+        ],
+        "support_pages": {},
+        "support_chunk_ids": {},
+    }
+
+    rendered = service._render_graph_html(graph, focus_file_id="", status="ready")
+
+    assert "data-kg-toggle-points='file-a'" in rendered
+    assert "+2 more point(s)" in rendered
+    assert "is-collapsed-point" in rendered

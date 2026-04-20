@@ -31,6 +31,25 @@ kotaemon modelcli run --prompt "hello" --model gpt-4o-mini --dry-run
 The default config supports OpenAI, Anthropic, Gemini, and OpenRouter via provider
 API keys in environment variables.
 
+## Platform CLI support
+
+The package also exposes a `platform` command group to install and validate AI coding
+assistant bundles in a single repository.
+
+```shell
+# List supported platforms
+kotaemon platform list
+
+# Install a minimal Codex profile to a custom target
+kotaemon platform install --platform codex --mode minimal --target-dir ./tmp/codex --yes
+
+# Validate source bundles and installed target
+kotaemon platform validate
+kotaemon platform validate --installed --platform codex --target-dir ./tmp/codex
+```
+
+Supported platforms: `claude-code`, `codex`.
+
 ## Contribute
 
 ### Setup

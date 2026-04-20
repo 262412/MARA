@@ -1,5 +1,6 @@
 import html
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -23,6 +24,8 @@ from theflow.settings import settings as flowsettings
 from ...utils.commands import WEB_SEARCH_COMMAND
 from ...utils.rate_limit import check_rate_limit
 from .utils import download_arxiv_pdf, is_arxiv_url
+
+logger = logging.getLogger(__name__)
 
 KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
@@ -635,7 +638,7 @@ class FileIndexPage(BasePage):
             # quick file upload event registration of first Index only
             if self._index.id == 1:
                 self.quick_upload_state = gr.State(value=[])
-                print("Setting up quick upload event")
+                logger.debug("Setting up quick upload event")
 
                 # override indexing function from chat page
                 self._app.chat_page.first_indexing_url_fn = (
@@ -686,6 +689,48 @@ class FileIndexPage(BasePage):
                                 self.quick_upload_state,
                             ],
                             outputs=[self._app.chat_page._graph_source_ids],
+                            show_progress="hidden",
+                        )
+                        .then(
+                            fn=self._app.chat_page.refresh_chat_file_list,
+                            inputs=[
+                                self._app.chat_page.chat_control.conversation_id,
+                                self._app.user_id,
+                                self._app.chat_page.first_selector_choices,
+                                self._app.chat_page._indices_input[1],
+                                self._app.chat_page._graph_source_ids,
+                                self._app.chat_page.chat_file_filter,
+                            ],
+                            outputs=[
+                                self._app.chat_page.chat_file_rows,
+                                self._app.chat_page.chat_file_list,
+                                self._app.chat_page.chat_selected_file,
+                            ],
+                            show_progress="hidden",
+                        )
+                        .then(
+                            fn=self._app.chat_page.show_knowledge_graph_loading,
+                            inputs=[self._app.chat_page.chat_control.conversation_id],
+                            outputs=[
+                                self._app.chat_page.plot_panel,
+                                self._app.chat_page.knowledge_graph_status,
+                            ],
+                            show_progress="hidden",
+                        )
+                        .then(
+                            fn=self._app.chat_page.refresh_knowledge_graph,
+                            inputs=[
+                                self._app.chat_page.chat_control.conversation_id,
+                                self._app.chat_page._graph_source_ids,
+                                self._app.chat_page._active_file_id,
+                                self._app.chat_page._indices_input[1],
+                            ],
+                            outputs=[
+                                self._app.chat_page.plot_panel,
+                                self._app.chat_page.state_plot_panel,
+                                self._app.chat_page.knowledge_graph_status,
+                                self._app.chat_page._graph_source_ids,
+                            ],
                             show_progress="hidden",
                         )
                         .success(
@@ -761,6 +806,45 @@ class FileIndexPage(BasePage):
                         self.quick_upload_state,
                     ],
                     outputs=[self._app.chat_page._graph_source_ids],
+                    show_progress="hidden",
+                ).then(
+                    fn=self._app.chat_page.refresh_chat_file_list,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.user_id,
+                        self._app.chat_page.first_selector_choices,
+                        self._app.chat_page._indices_input[1],
+                        self._app.chat_page._graph_source_ids,
+                        self._app.chat_page.chat_file_filter,
+                    ],
+                    outputs=[
+                        self._app.chat_page.chat_file_rows,
+                        self._app.chat_page.chat_file_list,
+                        self._app.chat_page.chat_selected_file,
+                    ],
+                    show_progress="hidden",
+                ).then(
+                    fn=self._app.chat_page.show_knowledge_graph_loading,
+                    inputs=[self._app.chat_page.chat_control.conversation_id],
+                    outputs=[
+                        self._app.chat_page.plot_panel,
+                        self._app.chat_page.knowledge_graph_status,
+                    ],
+                    show_progress="hidden",
+                ).then(
+                    fn=self._app.chat_page.refresh_knowledge_graph,
+                    inputs=[
+                        self._app.chat_page.chat_control.conversation_id,
+                        self._app.chat_page._graph_source_ids,
+                        self._app.chat_page._active_file_id,
+                        self._app.chat_page._indices_input[1],
+                    ],
+                    outputs=[
+                        self._app.chat_page.plot_panel,
+                        self._app.chat_page.state_plot_panel,
+                        self._app.chat_page.knowledge_graph_status,
+                        self._app.chat_page._graph_source_ids,
+                    ],
                     show_progress="hidden",
                 ).success(
                     fn=lambda x: x,

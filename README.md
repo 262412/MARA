@@ -66,6 +66,7 @@ documents and developers who want to build their own RAG pipeline.
 
 - **Framework for RAG Pipelines**: Tools to build your own RAG-based document QA pipeline.
 - **Customizable UI**: See your RAG pipeline in action with the provided UI, built with <a href='https://github.com/gradio-app/gradio'>Gradio <img src='https://img.shields.io/github/stars/gradio-app/gradio'></a>.
+- **Cross-platform CLI profiles**: Install and validate single-repo support bundles for Claude Code and Codex with `kotaemon platform` commands.
 
 ## Key Features
 
@@ -222,6 +223,110 @@ documents and developers who want to build their own RAG pipeline.
    ![Chat tab](https://raw.githubusercontent.com/Cinnamon/kotaemon/main/docs/images/chat-tab.png)
 
 5. Check the `Resources` tab and `LLMs and Embeddings` and ensure that your `api_key` value is set correctly from your `.env` file. If it is not set, you can set it there.
+
+### CLI Document QA
+
+Kotaemon also ships with a shared `docqa` CLI that uses the same runtime, settings, indexes,
+and saved conversations as the Web UI.
+
+Before using the CLI for the first time, make sure your chat model and embedding model are
+configured in the app, then validate the runtime:
+
+```shell
+kotaemon docqa doctor
+```
+
+Index one or more files into the default file collection:
+
+```shell
+kotaemon docqa index ./docs/report.pdf ./docs/appendix.docx
+```
+
+List indexed files:
+
+```shell
+kotaemon docqa files
+```
+
+Run one-shot QA:
+
+```shell
+# Whole-document QA (default when --page is omitted)
+kotaemon docqa ask --file report.pdf --prompt "Summarize this document"
+
+# Page-level QA (explicit page focus)
+kotaemon docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
+
+# Text-focused QA (bias retrieval to an explicit snippet)
+kotaemon docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
+```
+
+Important CLI scoping rules:
+
+- Omitting `--page` means whole-document QA.
+- Passing `--page <n>` enables page-level QA for that request.
+- Passing `--selected-text "..."` focuses retrieval on the provided text without forcing page 1.
+- `--file` restricts retrieval to one or more indexed files.
+- `--active-file` pins the active file for page-level context when multiple files are selected.
+
+Shared `ask` / `chat` options:
+
+- `--conversation <conversation-id>`: continue an existing saved conversation.
+- `--file <file-id-or-name>`: restrict retrieval to one or more indexed files. Repeat the flag to select multiple files.
+- `--active-file <file-id-or-name>`: set the active file for page-focused QA when multiple files are selected.
+- `--page <n>`: enable page-level QA for one page. If omitted, QA uses the whole document scope.
+- `--selected-text "..."`: bias retrieval to an explicit text span without forcing page 1.
+- `--graph-context-file <path.json>`: inject graph context from a JSON object on disk.
+- `--reasoning <reasoning-id>`: temporarily override the reasoning pipeline.
+- `--llm <llm-name>`: temporarily override the chat model.
+- `--citation highlight|inline|off`: override citation rendering.
+- `--language <language>`: force the answer language for this run.
+- `--mindmap`: request mindmap output when supported by the selected reasoning pipeline.
+- `--json`: return structured JSON instead of the text UI.
+
+For multi-turn sessions:
+
+```shell
+kotaemon docqa chat --file report.pdf
+kotaemon docqa sessions
+kotaemon docqa resume <conversation-id>
+```
+
+Inside `kotaemon docqa chat`, you can use:
+
+- `/files`
+- `/use <file>`
+- `/page <n>`
+- `/page clear`
+- `/selected-text <text>`
+- `/history`
+- `/exit`
+
+To run the full end-to-end acceptance matrix:
+
+```shell
+kotaemon docqa acceptance
+# or
+kotaemon docqa check
+```
+
+Other `docqa` command options:
+
+- `kotaemon docqa doctor --json`: inspect runtime health in structured form.
+- `kotaemon docqa index <path...> [--reindex] [--json]`: ingest local paths or URLs, optionally replacing existing indexed copies.
+- `kotaemon docqa files [--json]`: list indexed files with ids you can reuse in later commands.
+- `kotaemon docqa delete <file-id-or-name>... [--json]`: remove indexed files by id or file name.
+- `kotaemon docqa sessions [--json]`: list saved CLI/Web conversations.
+- `kotaemon docqa resume <conversation-id> [--json]`: reopen an existing interactive conversation.
+- `kotaemon docqa acceptance [--keep-artifacts] [--verbose] [--json]`: run the full acceptance matrix, optionally keeping temporary artifacts or surfacing low-level logs.
+
+If you want Codex or Claude Code to expose Kotaemon's bundled skills/commands, install the
+platform bundle after the Python packages are installed:
+
+```shell
+kotaemon platform install --platform codex --mode full --yes
+kotaemon platform install --platform claude-code --mode full --yes
+```
 
 ### Knowledge Graph And Retrieval (Default)
 

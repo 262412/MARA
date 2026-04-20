@@ -13,19 +13,19 @@ from typing import Optional, Tuple
 
 class DependencyChecker:
     """Check external dependencies availability."""
-    
+
     @staticmethod
     def check_libreoffice() -> Tuple[bool, Optional[str]]:
         """
         Check if LibreOffice is installed.
-        
+
         Returns:
             Tuple of (is_available, version_or_error_message)
         """
         try:
             # Try to find soffice executable
             soffice_path = shutil.which("soffice")
-            
+
             if not soffice_path:
                 # Try common paths on Windows
                 if shutil.which("soffice.exe"):
@@ -40,63 +40,62 @@ class DependencyChecker:
                         if Path(path).exists():
                             soffice_path = path
                             break
-            
+
             if not soffice_path:
                 return False, None
-            
+
             # Get version information
             result = subprocess.run(
                 [soffice_path, "--version"],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
             )
-            
+
             if result.returncode == 0:
                 return True, result.stdout.strip()
-            else:
-                return False, None
-                
+            return False, None
+
         except Exception:
             return False, None
-    
+
     @staticmethod
     def check_pdfjs() -> Tuple[bool, Optional[str]]:
         """
         Check if PDF.js is available.
-        
+
         Returns:
             Tuple of (is_available, path_or_error_message)
         """
         try:
             from ktem.assets import PDFJS_PREBUILT_DIR
-            
+
             if not PDFJS_PREBUILT_DIR.exists():
                 return False, f"Directory not found: {PDFJS_PREBUILT_DIR}"
-            
+
             viewer_html = PDFJS_PREBUILT_DIR / "web" / "viewer.html"
             if not viewer_html.exists():
                 return False, f"viewer.html not found: {viewer_html}"
-            
+
             return True, str(PDFJS_PREBUILT_DIR)
-            
+
         except Exception as e:
             return False, str(e)
-    
+
     @staticmethod
     def get_installation_guide() -> str:
         """
         Get installation guide for missing dependencies.
-        
+
         Returns:
             Formatted installation guide string
         """
         guide = []
         guide.append("\n" + "=" * 60)
-        guide.append("📋 Dependencies Installation Guide")
+        guide.append("Dependencies Installation Guide")
         guide.append("=" * 60)
-        
-        guide.append("\n🔹 LibreOffice (Required for Office document preview)")
+
+        guide.append("\nLibreOffice (Required for Office document preview)")
         guide.append("\n   Quick installation:")
         guide.append("   - Windows: Run scripts\\setup.ps1")
         guide.append("   - Linux:   Run bash scripts/setup.sh")
@@ -105,49 +104,49 @@ class DependencyChecker:
         guide.append("   - Windows: https://www.libreoffice.org/download/")
         guide.append("   - Linux:   sudo apt-get install libreoffice")
         guide.append("   - macOS:   brew install --cask libreoffice")
-        
-        guide.append("\n🔹 PDF.js (Built-in, no installation required)")
+
+        guide.append("\nPDF.js (Built-in, no installation required)")
         guide.append("   Location: libs/ktem/ktem/assets/prebuilt/pdfjs-4.0.379-dist/")
-        
+
         guide.append("\n" + "=" * 60)
-        
+
         return "\n".join(guide)
-    
+
     @classmethod
     def check_all(cls, verbose: bool = True) -> bool:
         """
         Check all dependencies and report status.
-        
+
         Args:
             verbose: If True, print detailed status messages
-            
+
         Returns:
             True if all critical dependencies are available
         """
         all_ok = True
-        
+
         # Check LibreOffice
         lo_available, lo_info = cls.check_libreoffice()
         if not lo_available:
             if verbose:
-                print("\n⚠️  WARNING: LibreOffice not detected!")
+                print("\n[WARN] LibreOffice not detected!")
                 print("   Office document preview will NOT work.")
             all_ok = False
         elif verbose:
-            print(f"\n✅ LibreOffice: {lo_info}")
-        
+            print(f"\n[OK] LibreOffice: {lo_info}")
+
         # Check PDF.js
         pdfjs_available, pdfjs_info = cls.check_pdfjs()
         if not pdfjs_available:
             if verbose:
-                print(f"\n⚠️  WARNING: PDF.js not detected!")
+                print("\n[WARN] PDF.js not detected!")
                 print(f"   {pdfjs_info}")
             all_ok = False
         elif verbose:
-            print(f"✅ PDF.js: {pdfjs_info}")
-        
+            print(f"[OK] PDF.js: {pdfjs_info}")
+
         # Print installation guide if needed
         if not all_ok and verbose:
             print(cls.get_installation_guide())
-        
+
         return all_ok

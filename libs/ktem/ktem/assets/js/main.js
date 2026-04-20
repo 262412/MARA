@@ -859,11 +859,164 @@ function run() {
     });
   }
 
+  function applyIconOnlyButtonTooltips() {
+    const iconButtonHints = {
+      "new-conv-button": "Start a new chat",
+      "rename-conv-button": "Rename this chat",
+      "delete-conv-button": "Delete this chat",
+      "info-expand-button": "Expand or collapse the right panel",
+      "chat-expand-button": "Expand or collapse the chat panel",
+      "toggle-dark-button": "Toggle theme",
+    };
+
+    Object.entries(iconButtonHints).forEach(([id, label]) => {
+      const button = document.getElementById(id);
+      if (!button) {
+        return;
+      }
+      button.setAttribute("title", label);
+      button.setAttribute("aria-label", label);
+    });
+
+    // Fallback for icon-only buttons that are injected by Gradio without a title.
+    document.querySelectorAll("button").forEach((button) => {
+      if (button.getAttribute("title")) {
+        return;
+      }
+      const hasVisibleText = (button.textContent || "").trim().length > 0;
+      const hasIconContent = !!button.querySelector("img, svg");
+      if (hasVisibleText || !hasIconContent) {
+        return;
+      }
+
+      const fallbackLabel = button.getAttribute("aria-label") || "Icon button";
+      button.setAttribute("title", fallbackLabel);
+      if (!button.getAttribute("aria-label")) {
+        button.setAttribute("aria-label", fallbackLabel);
+      }
+    });
+  }
+
+  function localizeUploadDropzoneText() {
+    const replacements = [
+      [new RegExp("\\u5c06\\u6587\\u4ef6\\u62d6\\u653e\\u5230\\u6b64\\u5904", "g"), "Drop files here"],
+      [new RegExp("[\\-\\u2013\\u2014\\uff0d]\\s*\\u6216\\s*[\\-\\u2013\\u2014\\uff0d]", "g"), "- or -"],
+      [new RegExp("\\u70b9\\u51fb\\u4e0a\\u4f20", "g"), "Click to upload"],
+    ];
+
+    const replaceTextNodes = (root) => {
+      if (!root) {
+        return;
+      }
+      const textWalker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let textNode = textWalker.nextNode();
+      while (textNode) {
+        const originalValue = textNode.nodeValue || "";
+        let updatedValue = originalValue;
+        replacements.forEach(([pattern, replacement]) => {
+          updatedValue = updatedValue.replace(pattern, replacement);
+        });
+        if (updatedValue !== originalValue) {
+          textNode.nodeValue = updatedValue;
+        }
+        textNode = textWalker.nextNode();
+      }
+    };
+
+    document.querySelectorAll("input[data-testid='file-upload']").forEach((input) => {
+      const uploadButton = input.closest("button");
+      if (!uploadButton) {
+        return;
+      }
+      replaceTextNodes(uploadButton);
+
+      // Ensure the separator in the upload prompt is normalized even when Gradio splits text nodes.
+      uploadButton.querySelectorAll("span.or").forEach((separator) => {
+        const value = (separator.textContent || "").trim();
+        if (value.includes("\u6216")) {
+          separator.textContent = "- or -";
+        }
+      });
+
+      uploadButton.setAttribute("title", "Upload files");
+      uploadButton.setAttribute("aria-label", "Upload files");
+    });
+  }
+
+  function cleanupKnowledgeGraphOverlayNodes() {
+    const graphPanel = document.querySelector("#knowledge-graph-plot");
+    if (!graphPanel) {
+      return;
+    }
+
+    const proseNodes = graphPanel.querySelectorAll(".prose");
+    proseNodes.forEach((node) => {
+      const hasGraphShell = !!node.querySelector(".knowledge-graph-shell");
+      const textContent = (node.textContent || "").trim();
+      const shouldMask = !hasGraphShell && !textContent;
+
+      // Do not remove Gradio-managed wrappers; only hide truly empty overlays.
+      node.classList.toggle("kg-prose-empty", shouldMask);
+    });
+  }
+
+  function cleanupHtmlInfoPanelOverlay() {
+    const infoPanel = document.querySelector("#html-info-panel");
+    if (!infoPanel) {
+      return;
+    }
+
+    const proseNodes = infoPanel.querySelectorAll(".prose");
+    const hasRenderableProseContent = Array.from(proseNodes).some((node) => {
+      const textContent = (node.textContent || "").trim();
+      if (textContent) {
+        return true;
+      }
+      return !!node.querySelector(
+        "details, p, li, table, img, svg, canvas, iframe, .evidence-content, .markmap"
+      );
+    });
+
+    const fallbackText = (infoPanel.textContent || "").trim();
+    const hasFallbackRenderableContent = !!infoPanel.querySelector(
+      "details, p, li, table, img, svg, canvas, iframe, .evidence-content, .markmap"
+    );
+    const shouldCollapse =
+      !hasRenderableProseContent && !fallbackText && !hasFallbackRenderableContent;
+
+    // Collapse only truly empty info panels to avoid blocking KG node clicks.
+    infoPanel.classList.toggle("kg-info-empty", shouldCollapse);
+  }
+
   function bindKnowledgeGraphInteractions() {
+    applyIconOnlyButtonTooltips();
+    localizeUploadDropzoneText();
+    cleanupKnowledgeGraphOverlayNodes();
+    cleanupHtmlInfoPanelOverlay();
+
     const graphPanel = document.querySelector("#knowledge-graph-plot");
     if (graphPanel && graphPanel.dataset.kgBound !== "true") {
       graphPanel.dataset.kgBound = "true";
       graphPanel.addEventListener("click", (event) => {
+        const toggleTrigger = event.target.closest("[data-kg-toggle-points]");
+        if (toggleTrigger) {
+          const fileCard = toggleTrigger.closest("[data-kg-file-card]");
+          if (!fileCard) {
+            return;
+          }
+          const isExpanded = fileCard.classList.toggle("is-points-expanded");
+          const moreLabel =
+            toggleTrigger.getAttribute("data-kg-more-label") ||
+            toggleTrigger.textContent ||
+            "";
+          const lessLabel =
+            toggleTrigger.getAttribute("data-kg-less-label") || "Show less";
+
+          toggleTrigger.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+          toggleTrigger.textContent = isExpanded ? lessLabel : moreLabel;
+          return;
+        }
+
         const trigger = event.target.closest("[data-kg-payload]");
         if (!trigger) {
           return;
@@ -928,7 +1081,7 @@ function run() {
       });
     }
 
-    bindKnowledgeGraphPan();
+    // Drag-pan frequently suppresses click events on dense/long trees; rely on native scroll.
     syncKnowledgeGraphFocus();
   }
 
@@ -1121,8 +1274,11 @@ function run() {
   function initChatPanelControls() {
     const infoExpandButton = document.getElementById("info-expand-button");
     const chatInfoPanel = document.getElementById("info-expand");
-    if (infoExpandButton && chatInfoPanel && chatInfoPanel.childNodes.length >= 2) {
-      chatInfoPanel.insertBefore(infoExpandButton, chatInfoPanel.childNodes[2]);
+    if (infoExpandButton && chatInfoPanel) {
+      const infoExpandHeader = chatInfoPanel.querySelector(":scope > div:first-child");
+      if (infoExpandHeader) {
+        infoExpandHeader.appendChild(infoExpandButton);
+      }
     }
 
     const chatExpandButton = document.getElementById("chat-expand-button");
@@ -1154,7 +1310,7 @@ function run() {
       }
     };
 
-    if (chatColumn && chatExpandButton) {
+    if (chatColumn && chatExpandButton && chatExpandButton.offsetParent !== null) {
       chatExpandButton.style.flexGrow = "0";
       chatExpandButton.style.width = "36px";
       chatExpandButton.style.minWidth = "36px";
