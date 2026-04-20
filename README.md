@@ -75,6 +75,7 @@ documents and developers who want to build their own RAG pipeline.
 - **🌟 Page-Driven QA System**: Unique page-level conversation isolation. Each page of each file maintains independent chat history. Ask questions like "What's on page 3?" with precise context awareness.
 
 - **📄 Advanced Document Preview**: Clean, minimalistic preview UI for different file types:
+
   - **PDF Files**: Native PDF.js viewer with smooth scrolling and zooming
   - **Office Documents** (DOC/DOCX, PPT/PPTX, XLS/XLSX): Auto-convert to PDF for faithful format preservation
   - **Text Files** (TXT, MD, HTML): Syntax-highlighted text preview
@@ -226,12 +227,13 @@ The installer creates a virtual environment, installs the Kotaemon runtime, runs
 <img src="https://raw.githubusercontent.com/Cinnamon/kotaemon/main/docs/images/pdf-viewer-setup.png" alt="pdf-setup" width="300">
 
 4. (Optional) **Office Document Preview Setup**: If you want to preview Office documents (`.doc`, `.docx`, `.ppt`, `.pptx`, `.xls`, `.xlsx`):
+
    - Install LibreOffice from [libreoffice.org](https://www.libreoffice.org/download/download/)
    - Verify installation: Run `soffice --version` in terminal
    - Configure path if needed: Set `SOFFICE_PATH` environment variable
    - The system will automatically convert Office files to PDF for faithful format preservation
 
-4. Start the web server:
+5. Start the web server:
 
    ```shell
    python app.py
@@ -242,7 +244,7 @@ The installer creates a virtual environment, installs the Kotaemon runtime, runs
 
    ![Chat tab](https://raw.githubusercontent.com/Cinnamon/kotaemon/main/docs/images/chat-tab.png)
 
-5. Check the `Resources` tab and `LLMs and Embeddings` and ensure that your `api_key` value is set correctly from your `.env` file. If it is not set, you can set it there.
+6. Check the `Resources` tab and `LLMs and Embeddings` and ensure that your `api_key` value is set correctly from your `.env` file. If it is not set, you can set it there.
 
 ### CLI Document QA
 
@@ -391,6 +393,7 @@ See [Local model setup](docs/local_model.md).
 The application provides advanced document preview capabilities:
 
 **Supported File Types:**
+
 - **PDF Files** (`.pdf`): Native PDF.js viewer with smooth scrolling and zooming
 - **Word Documents** (`.doc`, `.docx`): Auto-convert to PDF via LibreOffice
 - **PowerPoint Presentations** (`.ppt`, `.pptx`): Auto-convert to PDF via LibreOffice
@@ -398,6 +401,7 @@ The application provides advanced document preview capabilities:
 - **Text Files** (`.txt`, `.md`, `.html`, `.mhtml`): Syntax-highlighted text preview
 
 **Page-Driven QA Architecture:**
+
 ```
 Conversation
 ├── File A

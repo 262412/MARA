@@ -1,7 +1,7 @@
 import os
 import re
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 from html import escape
 
 from docx import Document as DocxDocument
@@ -260,7 +260,7 @@ def extract_docx_html(file_path: str, max_chars: int = 12000) -> str:
             return ""
         if href:
             return (
-                f"<a href=\"{escape(href)}\" target=\"_blank\" rel=\"noopener noreferrer\">"
+                f'<a href="{escape(href)}" target="_blank" rel="noopener noreferrer">'
                 f"{inner}</a>"
             )
         return inner
@@ -301,7 +301,7 @@ def extract_docx_html(file_path: str, max_chars: int = 12000) -> str:
         (
             "<div class='docx-preview' "
             f"style=\"font-family:'{escape(base_font_name)}',serif;"
-            f"font-size:{base_font_size_em:.2f}em;\">"
+            f'font-size:{base_font_size_em:.2f}em;">'
         )
     ]
     active_list_stack: list[str] = []

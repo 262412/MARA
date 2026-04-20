@@ -749,9 +749,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
                     "the suitable pipeline for this file type in the settings."
                 )
 
-        logger.debug(
-            "Chunk size=%s chunk overlap=%s", chunk_size, chunk_overlap
-        )
+        logger.debug("Chunk size=%s chunk overlap=%s", chunk_size, chunk_overlap)
         logger.debug("Using reader %s", reader)
         pipeline: IndexPipeline = IndexPipeline(
             loader=reader,

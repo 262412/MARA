@@ -9,7 +9,9 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     run_parser = subparsers.add_parser("run", help="Run a benchmark suite")
-    run_parser.add_argument("--manifest", required=True, help="Normalized manifest path")
+    run_parser.add_argument(
+        "--manifest", required=True, help="Normalized manifest path"
+    )
     run_parser.add_argument("--suite-name", default="kotaemon-benchmark")
     run_parser.add_argument(
         "--output-dir",

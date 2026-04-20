@@ -31,11 +31,11 @@ from .page_preview_types import detect_office_extension, is_office_source
 
 class OfficePreviewConversionService:
     """Service for converting Office documents to PDF for preview.
-    
+
     Uses LibreOffice in headless mode to convert DOC/DOCX, PPT/PPTX, XLS/XLSX
     files to PDF format. Maintains a cache to avoid re-conversion.
     """
-    
+
     def __init__(self, logger: logging.Logger | None = None):
         self._logger = logger or logging.getLogger(__name__)
         # Cache for converted PDF paths: {file_signature: pdf_path}
@@ -50,12 +50,12 @@ class OfficePreviewConversionService:
     @staticmethod
     def find_soffice_binary() -> str:
         """Find LibreOffice soffice binary path.
-        
+
         Searches in order:
         1. SOFFICE_PATH environment variable
         2. System PATH using shutil.which()
         3. Common installation paths on Linux, macOS, and Windows
-        
+
         Returns:
             Path to soffice binary or empty string if not found
         """
@@ -63,10 +63,10 @@ class OfficePreviewConversionService:
 
     def get_status(self, file_path: str) -> str:
         """Get the status of an Office to PDF conversion job.
-        
+
         Args:
             file_path: Path to the Office document
-            
+
         Returns:
             Status message or empty string if no job found
         """
@@ -78,14 +78,14 @@ class OfficePreviewConversionService:
 
     def convert_to_pdf_preview(self, file_path: str, file_name: str) -> str:
         """Convert Office document to PDF for preview.
-        
+
         Converts DOC/DOCX, PPT/PPTX, XLS/XLSX files to PDF using LibreOffice.
         Caches the result to avoid re-conversion.
-        
+
         Args:
             file_path: Path to the Office document
             file_name: Name of the file (used to detect extension)
-            
+
         Returns:
             Path to the converted PDF file, or empty string if conversion fails
         """
@@ -201,7 +201,7 @@ class OfficePreviewConversionService:
             with self._office_pdf_job_lock:
                 self._office_pdf_job_status[cache_key] = "done"
             return recovered_pdf
-        
+
         # Also check for PDFs that might exist from previous sessions
         # Try to find any PDF with matching stem in the preview directory
         try:
@@ -209,14 +209,16 @@ class OfficePreviewConversionService:
                 for filename in os.listdir(preview_dir):
                     if filename.startswith(stem + "_") and filename.endswith(".pdf"):
                         candidate_path = os.path.join(preview_dir, filename)
-                        if os.path.isfile(candidate_path) and is_valid_pdf(candidate_path):
+                        if os.path.isfile(candidate_path) and is_valid_pdf(
+                            candidate_path
+                        ):
                             self._office_pdf_cache[cache_key] = candidate_path
                             with self._office_pdf_job_lock:
                                 self._office_pdf_job_status[cache_key] = "done"
                             return candidate_path
         except Exception:
             pass  # Ignore errors when scanning preview directory
-        
+
         return ""
 
     def schedule_conversion(self, file_path: str, file_name: str):
@@ -250,11 +252,15 @@ class OfficePreviewConversionService:
                 output_pdf = self.convert_to_pdf_preview(file_path, file_name)
                 with self._office_pdf_job_lock:
                     self._office_pdf_job_status[job_key] = (
-                        "done" if output_pdf and os.path.isfile(output_pdf) else "failed"
+                        "done"
+                        if output_pdf and os.path.isfile(output_pdf)
+                        else "failed"
                     )
                     self._office_pdf_job_ts[job_key] = time.time()
             except Exception as exc:
-                self._logger.warning("Background office->pdf conversion failed: %s", exc)
+                self._logger.warning(
+                    "Background office->pdf conversion failed: %s", exc
+                )
                 with self._office_pdf_job_lock:
                     self._office_pdf_job_status[job_key] = "failed"
                     self._office_pdf_job_ts[job_key] = time.time()

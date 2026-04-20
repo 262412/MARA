@@ -1,5 +1,4 @@
 import logging
-import os
 from copy import deepcopy
 
 import gradio as gr

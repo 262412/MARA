@@ -1,7 +1,7 @@
 # Kotaemon Codex Agent Profile
 
-Session discipline:
-0. If `kotaemon` is missing, install the packaged runtime with `pip install kotaemon-app` or `uv tool install kotaemon-app`, then run `kotaemon app init` and `kotaemon app doctor`.
+Session discipline: 0. If `kotaemon` is missing, install the packaged runtime with `pip install kotaemon-app` or `uv tool install kotaemon-app`, then run `kotaemon app init` and `kotaemon app doctor`.
+
 1. Validate environment and config before running model calls.
 2. Prefer dry-run first for new model aliases or provider routes.
 3. Use `$kotaemon-cli-operations` or `kotaemon modelcli ...` for routing checks, promptui workflows, and benchmark verification.

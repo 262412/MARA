@@ -13,11 +13,11 @@ TEXT_LIKE_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".py", ".js", ".ts", ".h
 
 def is_pdf_source(file_name: str, file_path: str) -> bool:
     """Check if a file is a PDF document.
-    
+
     Args:
         file_name: Name of the file
         file_path: Path to the file
-        
+
     Returns:
         True if PDF, False otherwise
     """
@@ -28,14 +28,14 @@ def is_pdf_source(file_name: str, file_path: str) -> bool:
 
 def detect_office_extension(file_name: str, file_path: str) -> str:
     """Detect Office document extension from filename or file content.
-    
+
     Checks file extension first, then inspects ZIP structure for modern Office formats,
     and finally checks file header for legacy binary formats.
-    
+
     Args:
         file_name: Name of the file
         file_path: Path to the file
-        
+
     Returns:
         Detected extension (e.g., '.docx', '.pptx') or empty string
     """
@@ -71,13 +71,13 @@ def detect_office_extension(file_name: str, file_path: str) -> str:
 
 def detect_source_extension(file_name: str, file_path: str) -> str:
     """Detect the source extension for any file type.
-    
+
     Tries Office detection first, then returns whatever is found.
-    
+
     Args:
         file_name: Name of the file
         file_path: Path to the file
-        
+
     Returns:
         Detected extension or empty string
     """
@@ -92,11 +92,11 @@ def detect_source_extension(file_name: str, file_path: str) -> str:
 
 def is_office_source(file_name: str, file_path: str) -> bool:
     """Check if a file is an Office document.
-    
+
     Args:
         file_name: Name of the file
         file_path: Path to the file
-        
+
     Returns:
         True if Office document, False otherwise
     """
@@ -105,11 +105,11 @@ def is_office_source(file_name: str, file_path: str) -> bool:
 
 def is_text_like_source(file_name: str, file_path: str) -> bool:
     """Check if a file can be displayed as plain text.
-    
+
     Args:
         file_name: Name of the file
         file_path: Path to the file
-        
+
     Returns:
         True if text-like file, False otherwise
     """

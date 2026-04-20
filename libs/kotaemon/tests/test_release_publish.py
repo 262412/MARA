@@ -30,7 +30,7 @@ def test_publish_script_exists_and_releases_three_packages():
         "pypi",
         "twine",
         "build",
-        ]:
+    ]:
         assert token in content
 
 

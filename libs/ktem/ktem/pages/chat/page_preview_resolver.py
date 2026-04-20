@@ -50,7 +50,9 @@ class PreviewFileResolver:
                 continue
 
             if file_storage_path:
-                candidate_storage_path = os.path.join(str(file_storage_path), stored_path)
+                candidate_storage_path = os.path.join(
+                    str(file_storage_path), stored_path
+                )
                 if os.path.isfile(candidate_storage_path):
                     return candidate_storage_path
             if os.path.isfile(stored_path):
@@ -92,7 +94,9 @@ class PreviewFileResolver:
             stored_path = getattr(source_obj, "path", "") or ""
 
             if stored_path and file_storage_path:
-                candidate_storage_path = os.path.join(str(file_storage_path), stored_path)
+                candidate_storage_path = os.path.join(
+                    str(file_storage_path), stored_path
+                )
                 if os.path.isfile(candidate_storage_path):
                     resolved_path = candidate_storage_path
                     break

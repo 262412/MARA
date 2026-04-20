@@ -1,11 +1,14 @@
 import logging
+from typing import Callable
 
+bootstrap_runtime_settings: Callable[[], str] | None
 try:
     from ktem.runtime_bootstrap import bootstrap_runtime_settings
 except ImportError:  # pragma: no cover - standalone kotaemon installs
     bootstrap_runtime_settings = None
 else:
-    bootstrap_runtime_settings()
+    if bootstrap_runtime_settings is not None:
+        bootstrap_runtime_settings()
 
 logger = logging.getLogger(__name__)
 try:

@@ -3,10 +3,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from theflow.settings import settings as flowsettings
-
 from ktem.assets import ASSETS_DIR
 from ktem.main import App
+from theflow.settings import settings as flowsettings
 
 
 def ensure_gradio_temp_dir() -> str:

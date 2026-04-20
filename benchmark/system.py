@@ -10,6 +10,7 @@ from typing import Any
 from ktem.embeddings.manager import embedding_models_manager
 from ktem.llms.manager import llms
 from ktem.rerankings.manager import reranking_models_manager
+
 from kotaemon.base import Document, RetrievedDocument
 from kotaemon.embeddings import FastEmbedEmbeddings
 from kotaemon.indices import VectorIndexing, VectorRetrieval
@@ -130,7 +131,10 @@ class KotaemonTextRAGSystem:
         reader = self._get_reader(document.path)
         parsed_docs = reader.load_data(
             document.path,
-            extra_info={"file_id": document.document_id, "collection_name": "benchmark"},
+            extra_info={
+                "file_id": document.document_id,
+                "collection_name": "benchmark",
+            },
         )
         parse_seconds = time.perf_counter() - parse_start
 
@@ -286,7 +290,9 @@ class KotaemonTextRAGSystem:
             return answer, evidence, time.perf_counter() - start
 
         if self.llm is None:
-            raise ValueError("Generation is enabled but no benchmark LLM is configured.")
+            raise ValueError(
+                "Generation is enabled but no benchmark LLM is configured."
+            )
 
         prompt = self.prompt_template.populate(
             context=evidence,

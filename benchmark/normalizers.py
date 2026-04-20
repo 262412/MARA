@@ -152,7 +152,9 @@ def normalize_slidevqa_manifest(
     if isinstance(annotations, dict):
         annotations = annotations.get("data", [])
     if not isinstance(annotations, list):
-        raise ValueError("SlideVQA annotations must be a JSON list or {data: [...]} object.")
+        raise ValueError(
+            "SlideVQA annotations must be a JSON list or {data: [...]} object."
+        )
 
     path_index: dict[str, Path] = {}
     for candidate in documents_root.rglob("*"):

@@ -14,8 +14,8 @@ import pandas as pd
 from gradio.data_classes import FileData
 from gradio.utils import NamedString
 from ktem.app import BasePage
-from ktem.db.models import Conversation
 from ktem.db.engine import engine
+from ktem.db.models import Conversation
 from ktem.utils.render import Render
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -799,69 +799,77 @@ class FileIndexPage(BasePage):
                 for event in self._app.get_event(f"onFileIndex{self._index.id}Changed"):
                     quickURLUploadedEvent = quickURLUploadedEvent.then(**event)
 
-                quickURLUploadedEvent = quickURLUploadedEvent.success(
-                    fn=self._app.chat_page.merge_graph_source_ids,
-                    inputs=[
-                        self._app.chat_page._graph_source_ids,
-                        self.quick_upload_state,
-                    ],
-                    outputs=[self._app.chat_page._graph_source_ids],
-                    show_progress="hidden",
-                ).then(
-                    fn=self._app.chat_page.refresh_chat_file_list,
-                    inputs=[
-                        self._app.chat_page.chat_control.conversation_id,
-                        self._app.user_id,
-                        self._app.chat_page.first_selector_choices,
-                        self._app.chat_page._indices_input[1],
-                        self._app.chat_page._graph_source_ids,
-                        self._app.chat_page.chat_file_filter,
-                    ],
-                    outputs=[
-                        self._app.chat_page.chat_file_rows,
-                        self._app.chat_page.chat_file_list,
-                        self._app.chat_page.chat_selected_file,
-                    ],
-                    show_progress="hidden",
-                ).then(
-                    fn=self._app.chat_page.show_knowledge_graph_loading,
-                    inputs=[self._app.chat_page.chat_control.conversation_id],
-                    outputs=[
-                        self._app.chat_page.plot_panel,
-                        self._app.chat_page.knowledge_graph_status,
-                    ],
-                    show_progress="hidden",
-                ).then(
-                    fn=self._app.chat_page.refresh_knowledge_graph,
-                    inputs=[
-                        self._app.chat_page.chat_control.conversation_id,
-                        self._app.chat_page._graph_source_ids,
-                        self._app.chat_page._active_file_id,
-                        self._app.chat_page._indices_input[1],
-                    ],
-                    outputs=[
-                        self._app.chat_page.plot_panel,
-                        self._app.chat_page.state_plot_panel,
-                        self._app.chat_page.knowledge_graph_status,
-                        self._app.chat_page._graph_source_ids,
-                    ],
-                    show_progress="hidden",
-                ).success(
-                    fn=lambda x: x,
-                    inputs=self.quick_upload_state,
-                    outputs=self._app.chat_page._indices_input[1],
-                ).success(
-                    fn=self._app.chat_page.persist_conversation_source_scope,
-                    inputs=[
-                        self._app.chat_page.chat_control.conversation_id,
-                        self._app.user_id,
-                        self._app.chat_page._graph_source_ids,
-                    ],
-                    outputs=[self._app.chat_page._graph_source_ids],
-                    show_progress="hidden",
-                ).then(
-                    fn=lambda: gr.update(value="Indexing completed."),
-                    outputs=self._app.chat_page.quick_file_upload_status,
+                quickURLUploadedEvent = (
+                    quickURLUploadedEvent.success(
+                        fn=self._app.chat_page.merge_graph_source_ids,
+                        inputs=[
+                            self._app.chat_page._graph_source_ids,
+                            self.quick_upload_state,
+                        ],
+                        outputs=[self._app.chat_page._graph_source_ids],
+                        show_progress="hidden",
+                    )
+                    .then(
+                        fn=self._app.chat_page.refresh_chat_file_list,
+                        inputs=[
+                            self._app.chat_page.chat_control.conversation_id,
+                            self._app.user_id,
+                            self._app.chat_page.first_selector_choices,
+                            self._app.chat_page._indices_input[1],
+                            self._app.chat_page._graph_source_ids,
+                            self._app.chat_page.chat_file_filter,
+                        ],
+                        outputs=[
+                            self._app.chat_page.chat_file_rows,
+                            self._app.chat_page.chat_file_list,
+                            self._app.chat_page.chat_selected_file,
+                        ],
+                        show_progress="hidden",
+                    )
+                    .then(
+                        fn=self._app.chat_page.show_knowledge_graph_loading,
+                        inputs=[self._app.chat_page.chat_control.conversation_id],
+                        outputs=[
+                            self._app.chat_page.plot_panel,
+                            self._app.chat_page.knowledge_graph_status,
+                        ],
+                        show_progress="hidden",
+                    )
+                    .then(
+                        fn=self._app.chat_page.refresh_knowledge_graph,
+                        inputs=[
+                            self._app.chat_page.chat_control.conversation_id,
+                            self._app.chat_page._graph_source_ids,
+                            self._app.chat_page._active_file_id,
+                            self._app.chat_page._indices_input[1],
+                        ],
+                        outputs=[
+                            self._app.chat_page.plot_panel,
+                            self._app.chat_page.state_plot_panel,
+                            self._app.chat_page.knowledge_graph_status,
+                            self._app.chat_page._graph_source_ids,
+                        ],
+                        show_progress="hidden",
+                    )
+                    .success(
+                        fn=lambda x: x,
+                        inputs=self.quick_upload_state,
+                        outputs=self._app.chat_page._indices_input[1],
+                    )
+                    .success(
+                        fn=self._app.chat_page.persist_conversation_source_scope,
+                        inputs=[
+                            self._app.chat_page.chat_control.conversation_id,
+                            self._app.user_id,
+                            self._app.chat_page._graph_source_ids,
+                        ],
+                        outputs=[self._app.chat_page._graph_source_ids],
+                        show_progress="hidden",
+                    )
+                    .then(
+                        fn=lambda: gr.update(value="Indexing completed."),
+                        outputs=self._app.chat_page.quick_file_upload_status,
+                    )
                 )
 
                 if not KH_DEMO_MODE:
@@ -981,18 +989,15 @@ class FileIndexPage(BasePage):
             ],
         )
 
-        onDeletedAll = (
-            self.delete_all_button_confirm.click(
-                fn=self.delete_all_files,
-                inputs=[self.file_list],
-                outputs=[],
-                show_progress="hidden",
-            )
-            .then(
-                fn=self.list_file,
-                inputs=[self._app.user_id, self.filter],
-                outputs=[self.file_list_state, self.file_list],
-            )
+        onDeletedAll = self.delete_all_button_confirm.click(
+            fn=self.delete_all_files,
+            inputs=[self.file_list],
+            outputs=[],
+            show_progress="hidden",
+        ).then(
+            fn=self.list_file,
+            inputs=[self._app.user_id, self.filter],
+            outputs=[self.file_list_state, self.file_list],
         )
         for event in self._app.get_event(f"onFileIndex{self._index.id}Changed"):
             onDeletedAll = onDeletedAll.then(**event)
@@ -1055,19 +1060,16 @@ class FileIndexPage(BasePage):
             )
         )
 
-        uploadedEvent = (
-            onUploaded.then(
-                fn=self.collect_new_source_ids,
-                inputs=[self.upload_before_source_ids, self._app.user_id],
-                outputs=[self.upload_new_source_ids],
-                show_progress="hidden",
-            )
-            .then(
-                fn=self.list_file,
-                inputs=[self._app.user_id, self.filter],
-                outputs=[self.file_list_state, self.file_list],
-                concurrency_limit=20,
-            )
+        uploadedEvent = onUploaded.then(
+            fn=self.collect_new_source_ids,
+            inputs=[self.upload_before_source_ids, self._app.user_id],
+            outputs=[self.upload_new_source_ids],
+            show_progress="hidden",
+        ).then(
+            fn=self.list_file,
+            inputs=[self._app.user_id, self.filter],
+            outputs=[self.file_list_state, self.file_list],
+            concurrency_limit=20,
         )
         for event in self._app.get_event(f"onFileIndex{self._index.id}Changed"):
             uploadedEvent = uploadedEvent.then(**event)
@@ -1638,7 +1640,9 @@ class FileIndexPage(BasePage):
             if cleaned:
                 return cleaned
 
-        return self._normalize_selected_ids_from_payload(data_source.get("selected", {}))
+        return self._normalize_selected_ids_from_payload(
+            data_source.get("selected", {})
+        )
 
     @staticmethod
     def _format_conversation_scope(conversation_names: list[str]) -> str:

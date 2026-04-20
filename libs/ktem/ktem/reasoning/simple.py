@@ -234,10 +234,14 @@ class FullQAPipeline(BaseReasoning):
                     for doc in all_retriever_docs
                     if _is_active_file_doc(doc) and _is_current_page_doc(doc)
                 ]
-            active_file_docs = [doc for doc in all_retriever_docs if _is_active_file_doc(doc)]
+            active_file_docs = [
+                doc for doc in all_retriever_docs if _is_active_file_doc(doc)
+            ]
             graph_docs = []
             if graph_related_file_ids:
-                graph_docs = [doc for doc in all_retriever_docs if _is_graph_related_doc(doc)]
+                graph_docs = [
+                    doc for doc in all_retriever_docs if _is_graph_related_doc(doc)
+                ]
 
             if page_docs:
                 retriever_docs = page_docs

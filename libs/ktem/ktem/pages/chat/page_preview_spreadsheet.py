@@ -1,6 +1,6 @@
 import re
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 
 
 def extract_xlsx_text(file_path: str, max_chars: int = 9000) -> str:
@@ -16,7 +16,11 @@ def extract_xlsx_text(file_path: str, max_chars: int = 9000) -> str:
 
             cells: list[str] = []
             sheet_names = sorted(
-                [name for name in zf.namelist() if re.match(r"xl/worksheets/sheet\d+\.xml", name)]
+                [
+                    name
+                    for name in zf.namelist()
+                    if re.match(r"xl/worksheets/sheet\d+\.xml", name)
+                ]
             )
             for sheet in sheet_names:
                 with zf.open(sheet) as file_obj:

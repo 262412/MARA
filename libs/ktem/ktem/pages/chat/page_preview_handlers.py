@@ -56,7 +56,7 @@ class _OfficeFamilyPreviewHandler:
         office_pdf = self._controller._get_cached_office_pdf_preview(
             context.effective_path
         )
-        
+
         # If we have a valid cached PDF, use it immediately
         if office_pdf and os.path.isfile(office_pdf):
             total_pages = self._controller._safe_pdf_page_count(
@@ -85,7 +85,7 @@ class _OfficeFamilyPreviewHandler:
                 fallback_src,
                 self._controller._notice_html(""),
             )
-        
+
         # No cached PDF found, show placeholder and schedule conversion
         show_placeholder_once = bool(
             context.file_id
@@ -100,9 +100,7 @@ class _OfficeFamilyPreviewHandler:
                     context.effective_path,
                     context.page,
                 )
-                pages = self._controller._non_pdf_preview_cache.get(
-                    context.file_id, []
-                )
+                pages = self._controller._non_pdf_preview_cache.get(context.file_id, [])
             if pages:
                 total_pages = max(1, len(pages))
                 page = self._controller._clamp_page(context.page, total_pages)

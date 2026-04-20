@@ -12,7 +12,9 @@ def _to_slug(text: str) -> str:
     return safe or "benchmark"
 
 
-def write_reports(report: dict[str, Any], output_dir: str | Path, suite_name: str) -> Path:
+def write_reports(
+    report: dict[str, Any], output_dir: str | Path, suite_name: str
+) -> Path:
     output_dir = Path(output_dir).resolve()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = output_dir / f"{timestamp}_{_to_slug(suite_name)}"

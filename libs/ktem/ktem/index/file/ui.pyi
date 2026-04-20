@@ -104,7 +104,6 @@ class File(gr.File):
                 + ". Please choose from: 'filepath', 'binary'."
             )
 
-
 class DirectoryUpload(BasePage):
     def __init__(self, app, index):
         super().__init__(app)
@@ -116,7 +115,6 @@ class DirectoryUpload(BasePage):
             each.strip() for each in self._supported_file_types_str.split(",")
         ]
         self.on_building_ui()
-
     def on_building_ui(self):
         with gr.Accordion(label="Directory upload", open=False):
             gr.Markdown(f"Supported file types: {self._supported_file_types_str}")
@@ -130,7 +128,6 @@ class DirectoryUpload(BasePage):
                     )
 
             self.upload_button = gr.Button("Upload and Index")
-
 
 class FileIndexPage(BasePage):
     def __init__(self, app, index):
@@ -150,7 +147,6 @@ class FileIndexPage(BasePage):
 
         if not KH_DEMO_MODE:
             self.on_building_ui()
-
     def upload_instruction(self) -> str:
         msgs = []
         if self._supported_file_types:
@@ -166,7 +162,6 @@ class FileIndexPage(BasePage):
             return "\n".join(msgs)
 
         return ""
-
     def render_file_list(self):
         self.filter = gr.Textbox(
             value="",
@@ -235,7 +230,6 @@ class FileIndexPage(BasePage):
                     "Confirm delete", variant="stop", visible=False
                 )
                 self.delete_all_button_cancel = gr.Button("Cancel", visible=False)
-
     def render_group_list(self):
         self.group_list_state = gr.State(value=None)
         self.group_list = gr.DataFrame(
@@ -286,7 +280,6 @@ class FileIndexPage(BasePage):
                 "Save",
                 variant="primary",
             )
-
     def on_building_ui(self):
         """Build the UI of the app"""
         with gr.Row():
@@ -342,7 +335,6 @@ class FileIndexPage(BasePage):
 
                 with gr.Tab("Groups"):
                     self.render_group_list()
-
     def on_subscribe_public_events(self):
         """Subscribe to the declared public event of the app"""
         if KH_DEMO_MODE:
@@ -395,7 +387,6 @@ class FileIndexPage(BasePage):
                     "show_progress": "hidden",
                 },
             )
-
     def file_selected(self, file_id):
         chunks = []
         if file_id is not None:
@@ -447,7 +438,6 @@ class FileIndexPage(BasePage):
             gr.update(visible=file_id is not None),
             gr.update(visible=file_id is not None),
         )
-
     def delete_event(self, file_id):
         file_name = ""
         with Session(engine) as session:
@@ -482,13 +472,11 @@ class FileIndexPage(BasePage):
         gr.Info(f"File {file_name} has been deleted")
 
         return None, self.selected_panel_false
-
     def delete_no_event(self):
         return (
             gr.update(visible=True),
             gr.update(visible=False),
         )
-
     def download_single_file(self, is_zipped_state, file_id):
         with Session(engine) as session:
             source = session.execute(
@@ -524,7 +512,6 @@ class FileIndexPage(BasePage):
             )
 
         return not is_zipped_state, new_button
-
     def download_single_file_simple(self, is_zipped_state, file_html, file_id):
         with Session(engine) as session:
             source = session.execute(
@@ -552,7 +539,6 @@ class FileIndexPage(BasePage):
             )
 
         return not is_zipped_state, new_button
-
     def download_all_files(self):
         if self._index.config.get("private", False):
             raise gr.Error("This feature is not available for private collection.")
@@ -570,16 +556,13 @@ class FileIndexPage(BasePage):
                 arcname = Path(file)
                 zipMe.write(file, arcname=arcname.name)
         return gr.DownloadButton(label=DOWNLOAD_MESSAGE, value=f"{zip_file_path}.zip")
-
     def delete_all_files(self, file_list):
         for file_id in file_list.id.values:
             if not file_id or str(file_id) == "-":
                 continue
             self.delete_event(file_id)
-
     def set_file_id_selector(self, selected_file_id):
         return [selected_file_id, "select", gr.Tabs(selected="chat-tab")]
-
     def show_delete_all_confirm(self, file_list):
         # when the list of files is empty it shows a single line with id equal to -
         if len(file_list) == 0 or (
@@ -597,7 +580,6 @@ class FileIndexPage(BasePage):
                 gr.update(visible=True),
                 gr.update(visible=True),
             ]
-
     def on_register_quick_uploads(self):
         try:
             # quick file upload event registration of first Index only
@@ -729,7 +711,6 @@ class FileIndexPage(BasePage):
 
         except Exception as e:
             print(e)
-
     def on_register_events(self):
         """Register all events to the app"""
         self.on_register_quick_uploads()
@@ -1042,7 +1023,6 @@ class FileIndexPage(BasePage):
         for event in self._app.get_event(f"onFileIndex{self._index.id}Changed"):
             onGroupDeleted = onGroupDeleted.then(**event)
             onGroupSaved = onGroupSaved.then(**event)
-
     def _on_app_created(self):
         """Called when the app is created"""
         if KH_DEMO_MODE:
@@ -1061,7 +1041,6 @@ class FileIndexPage(BasePage):
             inputs=[self.file_list_state],
             outputs=[self.group_files],
         )
-
     def _may_extract_zip(self, files, zip_dir: str):
         """Handle zip files"""
         zip_files = [file for file in files if file.endswith(".zip")]
@@ -1095,7 +1074,6 @@ class FileIndexPage(BasePage):
             print(f"Update zip files: {n_zip_file}")
 
         return remaining_files, errors
-
     def index_fn(
         self, files, urls, reindex: bool, settings, user_id
     ) -> Generator[tuple[str, str], None, None]:
@@ -1166,7 +1144,6 @@ class FileIndexPage(BasePage):
             gr.Warning(f"Have errors for {n_errors} files")
 
         return results
-
     def index_fn_file_with_default_loaders(
         self, files, reindex: bool, settings, user_id
     ) -> list["str"]:
@@ -1206,7 +1183,6 @@ class FileIndexPage(BasePage):
                 returned_ids = e.value
 
         return exist_ids + returned_ids
-
     def index_fn_url_with_default_loaders(
         self,
         urls,
@@ -1270,7 +1246,6 @@ class FileIndexPage(BasePage):
                     returned_ids = e.value
 
         return returned_ids
-
     def index_files_from_dir(
         self, folder_path, reindex, settings, user_id
     ) -> Generator[tuple[str, str], None, None]:
@@ -1343,7 +1318,6 @@ class FileIndexPage(BasePage):
                 files = [f for f in files if not fnmatch.fnmatch(name=f, pat=p)]
 
         yield from self.index_fn(files, [], reindex, settings, user_id)
-
     def format_size_human_readable(self, num: float | str, suffix="B"):
         try:
             num = float(num)
@@ -1355,7 +1329,6 @@ class FileIndexPage(BasePage):
                 return f"{num:3.0f}{unit}{suffix}"
             num /= 1024.0
         return f"{num:.0f}Yi{suffix}"
-
     def list_file(self, user_id, name_pattern=""):
         if user_id is None:
             # not signed in
@@ -1410,7 +1383,6 @@ class FileIndexPage(BasePage):
             )
 
         return results, file_list
-
     def list_file_names(self, file_list_state):
         if file_list_state:
             file_names = [(item["name"], item["id"]) for item in file_list_state]
@@ -1418,7 +1390,6 @@ class FileIndexPage(BasePage):
             file_names = []
 
         return gr.update(choices=file_names)
-
     def list_group(self, user_id, file_list):
         # supply file_list to display the file names in the group
         if file_list:
@@ -1485,7 +1456,6 @@ class FileIndexPage(BasePage):
             )
 
         return results, group_list
-
     def set_group_id_selector(self, selected_group_id):
         FileGroup = self._index._resources["FileGroup"]
 
@@ -1497,7 +1467,6 @@ class FileIndexPage(BasePage):
 
         file_ids = [json.dumps(current_group.data["files"])]
         return [file_ids, "select", gr.Tabs(selected="chat-tab")]
-
     def save_group(self, group_id, group_name, group_files, user_id):
         FileGroup = self._index._resources["FileGroup"]
         current_group = None
@@ -1534,7 +1503,6 @@ class FileIndexPage(BasePage):
 
         gr.Info(f"Group {group_name} has been saved")
         return group_id
-
     def delete_group(self, group_id):
         if not group_id:
             raise gr.Error("No group is selected")
@@ -1554,7 +1522,6 @@ class FileIndexPage(BasePage):
                 raise gr.Error("No group found")
 
         return None
-
     def interact_file_list(self, list_files, ev: gr.SelectData):
         if ev.value == "-" and ev.index[0] == 0:
             gr.Info("No file is uploaded")
@@ -1566,7 +1533,6 @@ class FileIndexPage(BasePage):
         return list_files["id"][ev.index[0]], self.selected_panel_true.format(
             name=list_files["name"][ev.index[0]]
         )
-
     def interact_group_list(self, list_groups, ev: gr.SelectData):
         selected_id = ev.index[0]
         if (not ev.value or ev.value == "-") and selected_id == 0:
@@ -1580,7 +1546,6 @@ class FileIndexPage(BasePage):
             selected_item["name"],
             selected_item["files"],
         )
-
     def validate_files(self, files: list[str]):
         """Validate if the files are valid"""
         paths = [Path(file) for file in files]
@@ -1609,7 +1574,6 @@ class FileIndexPage(BasePage):
                 )
 
         return errors
-
     def validate_urls(self, urls: list[str]):
         """Validate if the urls are valid"""
         errors = []
@@ -1618,7 +1582,6 @@ class FileIndexPage(BasePage):
                 errors.append(f"Invalid url `{url}`")
         return errors
 
-
 class FileSelector(BasePage):
     """File selector UI in the Chat page"""
 
@@ -1626,12 +1589,10 @@ class FileSelector(BasePage):
         super().__init__(app)
         self._index = index
         self.on_building_ui()
-
     def default(self):
         if self._app.f_user_management:
             return "disabled", [], -1
         return "disabled", [], 1
-
     def on_building_ui(self):
         default_mode, default_selector, user_id = self.default()
 
@@ -1657,7 +1618,6 @@ class FileSelector(BasePage):
             value=[],
             visible=False,
         )
-
     def on_register_events(self):
         self.mode.change(
             fn=lambda mode, user_id: (gr.update(visible=mode == "select"), user_id),
@@ -1672,10 +1632,8 @@ class FileSelector(BasePage):
                 js=update_file_list_js,
                 show_progress="hidden",
             )
-
     def as_gradio_component(self):
         return [self.mode, self.selector, self.selector_user_id]
-
     def get_selected_ids(self, components):
         mode, selected, user_id = components[0], components[1], components[2]
         if user_id is None:
@@ -1698,7 +1656,6 @@ class FileSelector(BasePage):
                 file_ids.append(id)
 
         return file_ids
-
     def load_files(self, selected_files, user_id):
         options: list = []
         available_ids = []
@@ -1742,14 +1699,12 @@ class FileSelector(BasePage):
             ]
 
         return gr.update(value=selected_files, choices=options), options
-
     def _on_app_created(self):
         self._app.app.load(
             self.load_files,
             inputs=[self.selector, self._app.user_id],
             outputs=[self.selector, self.selector_choices],
         )
-
     def on_subscribe_public_events(self):
         self._app.subscribe_event(
             name=f"onFileIndex{self._index.id}Changed",

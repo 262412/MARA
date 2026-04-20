@@ -18,7 +18,9 @@ class NonPdfPreviewService:
     def __init__(self, controller):
         self._controller = controller
 
-    def get_preview_src(self, file_id: str, file_name: str, file_path: str, page: int) -> str:
+    def get_preview_src(
+        self, file_id: str, file_name: str, file_path: str, page: int
+    ) -> str:
         if not file_id:
             return ""
 
@@ -29,7 +31,9 @@ class NonPdfPreviewService:
             return cached[page_idx] if cached else ""
 
         preview_chunks = self._get_index_preview_chunks(file_id)
-        resolved_file_path = file_path or self._controller._resolve_file_path_by_file_id(file_id)
+        resolved_file_path = (
+            file_path or self._controller._resolve_file_path_by_file_id(file_id)
+        )
         preview_text = "\n\n".join(preview_chunks).strip()
         rich_html = self._build_rich_html(file_name, resolved_file_path)
         if (not preview_text) and file_name:

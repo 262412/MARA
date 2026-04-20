@@ -120,7 +120,9 @@ def update_reasoning_state(request_key: str, reasoning_state: dict | None) -> No
         entry = GENERATION_CACHE.get(request_key)
         if not entry:
             return
-        entry["reasoning_state"] = deepcopy(reasoning_state) if reasoning_state else None
+        entry["reasoning_state"] = (
+            deepcopy(reasoning_state) if reasoning_state else None
+        )
         _touch(entry)
 
 

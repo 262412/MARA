@@ -3,12 +3,10 @@ import os
 import re
 import subprocess
 import sys
-from pathlib import Path
 
 import click
 import yaml
 from trogon import tui
-
 
 PLATFORM_CHOICES = ("claude-code", "codex")
 
@@ -179,9 +177,8 @@ def _run_docqa_acceptance_matrix(*, keep_artifacts=False, verbose=False):
 def _collect_app_doctor_payload():
     _bootstrap_runtime_settings()
 
-    from theflow.settings import settings as flowsettings
-
     from ktem.runtime_bootstrap import describe_runtime_settings
+    from theflow.settings import settings as flowsettings
 
     runtime = _create_docqa_runtime()
     payload = describe_runtime_settings()
@@ -190,9 +187,7 @@ def _collect_app_doctor_payload():
             "app_name": getattr(flowsettings, "KH_APP_NAME", "Kotaemon"),
             "app_version": getattr(flowsettings, "KH_APP_VERSION", ""),
             "app_data_dir": str(getattr(flowsettings, "KH_APP_DATA_DIR", "")),
-            "file_storage_path": str(
-                getattr(flowsettings, "KH_FILESTORAGE_PATH", "")
-            ),
+            "file_storage_path": str(getattr(flowsettings, "KH_FILESTORAGE_PATH", "")),
             "docqa": runtime.doctor().as_dict(),
         }
     )
@@ -489,7 +484,9 @@ def _run_docqa_repl(
 
     selected_file_ids_override = None
     if file_refs:
-        selected_file_ids_override = [record.file_id for record in _resolve_cli_files(runtime, file_refs)]
+        selected_file_ids_override = [
+            record.file_id for record in _resolve_cli_files(runtime, file_refs)
+        ]
 
     active_record = _resolve_cli_active_file(runtime, active_file_ref)
     active_file_id = active_record.file_id if active_record else ""
@@ -505,7 +502,9 @@ def _run_docqa_repl(
 
     while True:
         try:
-            prompt = click.prompt("docqa", prompt_suffix="> ", show_default=False, default="")
+            prompt = click.prompt(
+                "docqa", prompt_suffix="> ", show_default=False, default=""
+            )
         except (EOFError, click.Abort):
             _echo_text("")
             break
@@ -522,10 +521,17 @@ def _run_docqa_repl(
             )
             continue
         if prompt == "/files":
-            _print_file_records(runtime.list_files(), selected_ids=selected_file_ids_override or session.graph_source_ids)
+            _print_file_records(
+                runtime.list_files(),
+                selected_ids=selected_file_ids_override or session.graph_source_ids,
+            )
             continue
         if prompt.startswith("/use"):
-            refs = [part for part in re.split(r"[,\s]+", prompt[len("/use") :].strip()) if part]
+            refs = [
+                part
+                for part in re.split(r"[,\s]+", prompt[len("/use") :].strip())
+                if part
+            ]
             if not refs:
                 _echo_text("Usage: /use <file-id-or-name> [another-file]")
                 continue
@@ -1196,9 +1202,7 @@ def platform_validate(platform_name, installed, target_dir):
         if not platform_name:
             raise click.UsageError("--platform is required when using --installed.")
         result = validate_installed(platform_name, target_dir=target_dir)
-        click.echo(
-            f"{result.platform}: {'PASS' if result.valid else 'FAIL'}"
-        )
+        click.echo(f"{result.platform}: {'PASS' if result.valid else 'FAIL'}")
         for error in result.errors:
             click.echo(f"  - {error}")
         if not result.valid:

@@ -1,15 +1,16 @@
 import os
 from pathlib import Path
 
-from theflow.settings import settings as flowsettings
-
 from ktem.assets import ASSETS_DIR
 from ktem.launcher import ensure_gradio_temp_dir
+from theflow.settings import settings as flowsettings
 
 KH_APP_DATA_DIR = getattr(flowsettings, "KH_APP_DATA_DIR", ".")
 KH_GRADIO_SHARE = getattr(flowsettings, "KH_GRADIO_SHARE", False)
 KH_FILESTORAGE_PATH = getattr(
-    flowsettings, "KH_FILESTORAGE_PATH", os.path.join(KH_APP_DATA_DIR, "user_data", "files")
+    flowsettings,
+    "KH_FILESTORAGE_PATH",
+    os.path.join(KH_APP_DATA_DIR, "user_data", "files"),
 )
 GRADIO_TEMP_DIR = os.getenv("GRADIO_TEMP_DIR", None)
 # override GRADIO_TEMP_DIR if it's not set
