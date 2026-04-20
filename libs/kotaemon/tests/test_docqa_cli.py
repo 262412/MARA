@@ -1,9 +1,11 @@
 import json
+import sys
 from types import SimpleNamespace
 
 from click.testing import CliRunner
+from unittest.mock import Mock
 
-from kotaemon.cli import _extract_json_payload, main
+from kotaemon.cli import _extract_json_payload, _run_docqa_acceptance_matrix, main
 
 
 class _DummyFileRecord:
@@ -329,6 +331,33 @@ def test_docqa_acceptance_command(monkeypatch):
 
     assert json_result.exit_code == 0, json_result.output
     assert _extract_json_payload(json_result.output)["status"] == "pass"
+
+
+def test_docqa_acceptance_runner_uses_packaged_module(monkeypatch):
+    completed = Mock()
+    completed.returncode = 0
+    completed.stdout = json.dumps(
+        {
+            "status": "pass",
+            "user_id": "default",
+            "work_dir": "temp/kotaemon-acceptance-demo",
+            "results": [],
+        }
+    )
+    completed.stderr = ""
+    run_mock = Mock(return_value=completed)
+    monkeypatch.setattr("kotaemon.cli.subprocess.run", run_mock)
+
+    payload = _run_docqa_acceptance_matrix()
+
+    assert payload["status"] == "pass"
+    run_args, run_kwargs = run_mock.call_args
+    assert run_args[0][:3] == [
+        sys.executable,
+        "-m",
+        "ktem.docqa.acceptance",
+    ]
+    assert "cwd" not in run_kwargs
 
 
 def test_docqa_ask_help_lists_shared_parameters():

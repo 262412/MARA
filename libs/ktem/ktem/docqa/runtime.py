@@ -27,6 +27,7 @@ from ktem.embeddings.manager import embedding_models_manager
 from ktem.index import IndexManager
 from ktem.index.file import FileIndex
 from ktem.llms.manager import llms
+from ktem.rerankings.manager import reranking_models_manager
 from ktem.settings import BaseSettingGroup, SettingGroup, SettingReasoningGroup
 from ktem.utils.commands import WEB_SEARCH_COMMAND
 from ktem.utils.conversation import sync_retrieval_n_message
@@ -185,6 +186,7 @@ class DocQADoctorResult:
     session_count: int
     graph_cache_dir: str
     issues: list[str]
+    warnings: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -199,6 +201,7 @@ class DocQADoctorResult:
             "session_count": self.session_count,
             "graph_cache_dir": self.graph_cache_dir,
             "issues": self.issues,
+            "warnings": self.warnings,
         }
 
 
@@ -1278,6 +1281,7 @@ class DocQARuntime:
     def doctor(self, user_id: Any = None) -> DocQADoctorResult:
         resolved_user_id = self._resolve_user_id(user_id)
         issues: list[str] = []
+        warnings: list[str] = []
 
         index_name = ""
         index_id: int | None = None
@@ -1298,6 +1302,18 @@ class DocQARuntime:
         except Exception as exc:
             default_embedding = ""
             issues.append(f"Unable to load default embedding model: {exc}")
+
+        warnings.extend(
+            f"Invalid LLM configuration: {error}" for error in llms.load_errors()
+        )
+        warnings.extend(
+            f"Invalid embedding configuration: {error}"
+            for error in embedding_models_manager.load_errors()
+        )
+        warnings.extend(
+            f"Invalid reranking configuration: {error}"
+            for error in reranking_models_manager.load_errors()
+        )
 
         try:
             file_count = len(self.list_files(user_id=resolved_user_id))
@@ -1327,4 +1343,5 @@ class DocQARuntime:
             session_count=session_count,
             graph_cache_dir=graph_cache_dir,
             issues=issues,
+            warnings=warnings,
         )

@@ -4,10 +4,10 @@ from copy import deepcopy
 
 import gradio as gr
 from ktem.app import BasePage
+from ktem.assets import ICONS_DIR
 from ktem.db.models import Conversation, User, engine
 from sqlmodel import Session, or_, select
-
-import flowsettings
+from theflow.settings import settings as flowsettings
 
 from ...utils.conversation import sync_retrieval_n_message
 from .chat_suggestion import ChatSuggestion
@@ -17,9 +17,7 @@ logger = logging.getLogger(__name__)
 
 KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
-ASSETS_DIR = "assets/icons"
-if not os.path.isdir(ASSETS_DIR):
-    ASSETS_DIR = "libs/ktem/ktem/assets/icons"
+ASSETS_DIR = str(ICONS_DIR)
 
 
 logout_js = """

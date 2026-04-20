@@ -54,6 +54,14 @@ main.add_command(platform)
 
 
 @click.group()
+def app():
+    """Launch and inspect the packaged Kotaemon application runtime."""
+
+
+main.add_command(app)
+
+
+@click.group()
 def docqa():
     """Document QA CLI backed by the app's runtime/index/session data."""
 
@@ -61,7 +69,20 @@ def docqa():
 main.add_command(docqa)
 
 
+def _bootstrap_runtime_settings():
+    from ktem.runtime_bootstrap import bootstrap_runtime_settings
+
+    return bootstrap_runtime_settings()
+
+
+def _get_runtime_paths():
+    from ktem.runtime_bootstrap import get_runtime_paths
+
+    return get_runtime_paths()
+
+
 def _create_docqa_runtime():
+    _bootstrap_runtime_settings()
     from ktem.docqa import DocQARuntime
 
     return DocQARuntime()
@@ -112,22 +133,8 @@ def _extract_json_payload(raw_output):
     )
 
 
-def _repo_root():
-    return Path(__file__).resolve().parents[3]
-
-
-def _docqa_acceptance_script_path():
-    return _repo_root() / "scripts" / "docqa_acceptance_matrix.py"
-
-
 def _run_docqa_acceptance_matrix(*, keep_artifacts=False, verbose=False):
-    script_path = _docqa_acceptance_script_path()
-    if not script_path.exists():
-        raise click.ClickException(
-            f"Acceptance matrix script not found: {script_path}"
-        )
-
-    command = [sys.executable, str(script_path)]
+    command = [sys.executable, "-m", "ktem.docqa.acceptance"]
     if keep_artifacts:
         command.append("--keep-artifacts")
     if verbose:
@@ -135,7 +142,6 @@ def _run_docqa_acceptance_matrix(*, keep_artifacts=False, verbose=False):
 
     completed = subprocess.run(
         command,
-        cwd=str(_repo_root()),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -168,6 +174,63 @@ def _run_docqa_acceptance_matrix(*, keep_artifacts=False, verbose=False):
         raise click.ClickException("\n".join(details))
 
     return payload
+
+
+def _collect_app_doctor_payload():
+    _bootstrap_runtime_settings()
+
+    from theflow.settings import settings as flowsettings
+
+    from ktem.runtime_bootstrap import describe_runtime_settings
+
+    runtime = _create_docqa_runtime()
+    payload = describe_runtime_settings()
+    payload.update(
+        {
+            "app_name": getattr(flowsettings, "KH_APP_NAME", "Kotaemon"),
+            "app_version": getattr(flowsettings, "KH_APP_VERSION", ""),
+            "app_data_dir": str(getattr(flowsettings, "KH_APP_DATA_DIR", "")),
+            "file_storage_path": str(
+                getattr(flowsettings, "KH_FILESTORAGE_PATH", "")
+            ),
+            "docqa": runtime.doctor().as_dict(),
+        }
+    )
+    return payload
+
+
+def _write_app_init_files(*, force=False):
+    from ktem.runtime_bootstrap import (
+        build_user_env_example,
+        build_user_flowsettings_template,
+    )
+
+    runtime_paths = _get_runtime_paths()
+    runtime_paths.config_dir.mkdir(parents=True, exist_ok=True)
+    runtime_paths.data_dir.mkdir(parents=True, exist_ok=True)
+    runtime_paths.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    if runtime_paths.flowsettings_path.exists() and not force:
+        raise click.ClickException(
+            f"Config file already exists: {runtime_paths.flowsettings_path}"
+        )
+
+    runtime_paths.flowsettings_path.write_text(
+        build_user_flowsettings_template(),
+        encoding="utf-8",
+    )
+    runtime_paths.env_path.write_text(build_user_env_example(), encoding="utf-8")
+    env_example_path = runtime_paths.config_dir / ".env.example"
+    env_example_path.write_text(build_user_env_example(), encoding="utf-8")
+
+    return {
+        "config_dir": str(runtime_paths.config_dir),
+        "data_dir": str(runtime_paths.data_dir),
+        "cache_dir": str(runtime_paths.cache_dir),
+        "flowsettings_path": str(runtime_paths.flowsettings_path),
+        "env_path": str(runtime_paths.env_path),
+        "env_example_path": str(env_example_path),
+    }
 
 
 def _print_docqa_response(response):
@@ -219,6 +282,100 @@ def _print_docqa_acceptance_summary(payload):
         _echo_text(f"Artifacts: {payload['work_dir']}")
     if coverage:
         _echo_text(f"Coverage: {', '.join(coverage)}")
+
+
+@app.command("init")
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Overwrite the generated user flowsettings template if it already exists.",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def app_init(force, json_output):
+    """Initialize the packaged user config directory with editable templates."""
+    payload = _write_app_init_files(force=force)
+    if json_output:
+        _echo_json(payload)
+        return
+
+    _echo_text(f"Config dir: {payload['config_dir']}")
+    _echo_text(f"Flowsettings: {payload['flowsettings_path']}")
+    _echo_text(f"Env example: {payload['env_example_path']}")
+
+
+@app.command("doctor")
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def app_doctor(json_output):
+    """Inspect packaged runtime settings, app data paths, and DocQA readiness."""
+    payload = _collect_app_doctor_payload()
+
+    if json_output:
+        _echo_json(payload)
+    else:
+        _echo_text(f"Settings source: {payload['settings_source']}")
+        _echo_text(f"Settings module: {payload['settings_module']}")
+        _echo_text(f"Config dir: {payload['config_dir']}")
+        _echo_text(f"Data dir: {payload['data_dir']}")
+        _echo_text(f"Cache dir: {payload['cache_dir']}")
+        _echo_text(f"App data dir: {payload['app_data_dir']}")
+        _echo_text(f"File storage: {payload['file_storage_path']}")
+        docqa = payload["docqa"]
+        _echo_text(f"DocQA status: {'OK' if docqa.get('ok') else 'FAIL'}")
+        if docqa.get("issues"):
+            for issue in docqa["issues"]:
+                _echo_text(f"- {issue}")
+        if docqa.get("warnings"):
+            for warning in docqa["warnings"]:
+                _echo_text(f"! {warning}")
+
+    if not payload["docqa"].get("ok"):
+        raise click.ClickException("App runtime is not healthy.")
+
+
+@app.command("run")
+@click.option("--host", default=None, help="Host/interface to bind Gradio to.")
+@click.option("--port", default=None, type=int, help="Port to bind Gradio to.")
+@click.option(
+    "--share",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Enable Gradio share for this run.",
+)
+@click.option(
+    "--no-browser",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Do not automatically open the browser.",
+)
+def app_run(host, port, share, no_browser):
+    """Launch the packaged Web UI without requiring the source repository."""
+    _bootstrap_runtime_settings()
+    from ktem.launcher import launch_app
+
+    launch_app(
+        host=host,
+        port=port,
+        share=True if share else None,
+        inbrowser=not no_browser,
+    )
 
 
 def _docqa_shared_options(command):
@@ -463,6 +620,8 @@ def docqa_doctor(json_output):
             click.echo(f"Graph cache: {result.graph_cache_dir}")
         for issue in result.issues:
             click.echo(f"- {issue}")
+        for warning in result.warnings:
+            click.echo(f"! {warning}")
 
     if not result.ok:
         raise click.ClickException("DocQA runtime is not healthy.")

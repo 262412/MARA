@@ -138,3 +138,46 @@ def test_ensure_default_managed_user_creates_missing_admin(monkeypatch):
     assert created_user.username_lower == username.lower()
     assert created_user.admin is True
     assert created_user.password == hashlib.sha256(password.encode()).hexdigest()
+
+
+def test_doctor_reports_invalid_optional_models_as_warnings(monkeypatch):
+    runtime = object.__new__(DocQARuntime)
+    object.__setattr__(runtime, "_user_id", "user-1")
+    object.__setattr__(runtime, "_app", SimpleNamespace(app_name="Kotaemon"))
+    object.__setattr__(runtime, "file_index", SimpleNamespace(name="File Collection", id=1))
+    object.__setattr__(runtime, "knowledge_graph", None)
+    object.__setattr__(runtime, "_resolve_user_id", lambda user_id=None: "user-1")
+    object.__setattr__(runtime, "list_files", lambda user_id=None: [])
+    object.__setattr__(runtime, "list_sessions", lambda user_id=None: [])
+
+    monkeypatch.setattr(runtime_module.llms, "get_default_name", lambda: "default-llm")
+    monkeypatch.setattr(
+        runtime_module.embedding_models_manager,
+        "get_default_name",
+        lambda: "default-embedding",
+    )
+    monkeypatch.setattr(
+        runtime_module.llms,
+        "load_errors",
+        lambda: ["cohere: missing credential"],
+    )
+    monkeypatch.setattr(
+        runtime_module.embedding_models_manager,
+        "load_errors",
+        lambda: ["cohere: missing credential"],
+    )
+    monkeypatch.setattr(
+        runtime_module.reranking_models_manager,
+        "load_errors",
+        lambda: ["voyage: missing credential"],
+    )
+
+    result = runtime.doctor()
+
+    assert result.ok is True
+    assert result.issues == []
+    assert result.warnings == [
+        "Invalid LLM configuration: cohere: missing credential",
+        "Invalid embedding configuration: cohere: missing credential",
+        "Invalid reranking configuration: voyage: missing credential",
+    ]
