@@ -126,7 +126,7 @@ def llm():
     "openai.resources.chat.completions.Completions.create",
     side_effect=_openai_chat_completion_responses_rewoo_error,
 )
-def test_agent_fail(openai_completion, llm, mock_google_search):
+def test_agent_fail(openai_completion, llm, mock_google_search, mock_wikipedia_search):
     plugins = [
         GoogleSearchTool(),
         WikipediaTool(),
@@ -145,7 +145,7 @@ def test_agent_fail(openai_completion, llm, mock_google_search):
     "openai.resources.chat.completions.Completions.create",
     side_effect=_openai_chat_completion_responses_rewoo,
 )
-def test_rewoo_agent(openai_completion, llm, mock_google_search):
+def test_rewoo_agent(openai_completion, llm, mock_google_search, mock_wikipedia_search):
     plugins = [
         GoogleSearchTool(),
         WikipediaTool(),
@@ -163,7 +163,7 @@ def test_rewoo_agent(openai_completion, llm, mock_google_search):
     "openai.resources.chat.completions.Completions.create",
     side_effect=_openai_chat_completion_responses_react,
 )
-def test_react_agent(openai_completion, llm, mock_google_search):
+def test_react_agent(openai_completion, llm, mock_google_search, mock_wikipedia_search):
     plugins = [
         GoogleSearchTool(),
         WikipediaTool(),
@@ -226,7 +226,9 @@ def test_wrapper_agent_langchain(openai_completion, llm, mock_google_search):
     "openai.resources.chat.completions.Completions.create",
     side_effect=_openai_chat_completion_responses_react_langchain_tool,
 )
-def test_react_agent_with_langchain_tools(openai_completion, llm):
+def test_react_agent_with_langchain_tools(
+    openai_completion, llm, mock_wikipedia_search, mock_duckduckgo_search
+):
     from langchain_community.tools import DuckDuckGoSearchRun, WikipediaQueryRun
     from langchain_community.utilities import WikipediaAPIWrapper
 
