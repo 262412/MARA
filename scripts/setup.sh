@@ -34,7 +34,7 @@ echo ""
 # ----------------------------------------------------------------------------
 install_libreoffice() {
     echo "📦 Installing LibreOffice..."
-    
+
     case $OS in
         ubuntu|debian|linuxmint)
             echo "Installing via apt..."
@@ -64,7 +64,7 @@ install_libreoffice() {
             exit 1
             ;;
     esac
-    
+
     # Verify installation
     if command -v soffice &> /dev/null; then
         SOFFICE_VERSION=$(soffice --version)
@@ -80,7 +80,7 @@ install_libreoffice() {
 # ----------------------------------------------------------------------------
 install_poppler() {
     echo "📦 Installing Poppler (optional PDF utilities)..."
-    
+
     case $OS in
         ubuntu|debian|linuxmint)
             sudo apt-get install -y poppler-utils
@@ -92,7 +92,7 @@ install_poppler() {
             brew install poppler
             ;;
     esac
-    
+
     echo "✅ Poppler installed successfully"
 }
 
@@ -101,7 +101,7 @@ install_poppler() {
 # ----------------------------------------------------------------------------
 install_tesseract() {
     echo "📦 Installing Tesseract OCR (optional text recognition)..."
-    
+
     case $OS in
         ubuntu|debian|linuxmint)
             sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
@@ -113,7 +113,7 @@ install_tesseract() {
             brew install tesseract
             ;;
     esac
-    
+
     echo "✅ Tesseract installed successfully"
 }
 

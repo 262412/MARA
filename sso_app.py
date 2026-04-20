@@ -8,7 +8,9 @@ from theflow.settings import settings as flowsettings
 
 KH_APP_DATA_DIR = getattr(flowsettings, "KH_APP_DATA_DIR", ".")
 KH_FILESTORAGE_PATH = getattr(
-    flowsettings, "KH_FILESTORAGE_PATH", os.path.join(KH_APP_DATA_DIR, "user_data", "files")
+    flowsettings,
+    "KH_FILESTORAGE_PATH",
+    os.path.join(KH_APP_DATA_DIR, "user_data", "files"),
 )
 GRADIO_TEMP_DIR = os.getenv("GRADIO_TEMP_DIR", None)
 AUTHENTICATION_METHOD = config("AUTHENTICATION_METHOD", "GOOGLE")

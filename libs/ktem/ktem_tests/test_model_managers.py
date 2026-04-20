@@ -17,7 +17,9 @@ class _FakeSession:
 
 def _exercise_manager_load(monkeypatch, module, manager_cls):
     broken = SimpleNamespace(name="broken", spec={"__type__": "broken"}, default=True)
-    working = SimpleNamespace(name="working", spec={"__type__": "working"}, default=False)
+    working = SimpleNamespace(
+        name="working", spec={"__type__": "working"}, default=False
+    )
     rows = [(broken,), (working,)]
 
     monkeypatch.setattr(module, "Session", lambda _engine: _FakeSession(rows))

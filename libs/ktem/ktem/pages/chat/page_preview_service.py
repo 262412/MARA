@@ -4,26 +4,39 @@ Routes preview requests to the correct handler based on file type.
 Supports PDF, Office documents, text files, and unknown formats.
 """
 import os
+from typing import Protocol
 
 from .page_preview_handlers import (
     DocumentOfficePreviewHandler,
-    PresentationOfficePreviewHandler,
     PdfPreviewHandler,
+    PresentationOfficePreviewHandler,
     SpreadsheetOfficePreviewHandler,
     TextLikePreviewHandler,
     UnknownPreviewHandler,
 )
-from .page_preview_models import PreviewPayload, PreviewPayloadContext, PreviewPayloadRequest
+from .page_preview_models import (
+    PreviewPayload,
+    PreviewPayloadContext,
+    PreviewPayloadRequest,
+)
 from .page_preview_types import detect_source_extension
+
+
+class _PreviewHandler(Protocol):
+    def supports(self, context: PreviewPayloadContext) -> bool:
+        ...
+
+    def build(self, context: PreviewPayloadContext) -> PreviewPayload:
+        ...
 
 
 class PreviewPayloadService:
     """Orchestrates preview payload generation by routing to appropriate handler."""
-    
+
     def __init__(self, controller):
         self._controller = controller
         # Ordered list of preview handlers (first match wins)
-        self._handlers = [
+        self._handlers: list[_PreviewHandler] = [
             PdfPreviewHandler(controller),
             DocumentOfficePreviewHandler(controller),
             PresentationOfficePreviewHandler(controller),
@@ -34,10 +47,10 @@ class PreviewPayloadService:
 
     def build_payload(self, request: PreviewPayloadRequest) -> PreviewPayload:
         """Build preview payload by finding the appropriate handler for the file type.
-        
+
         Args:
             request: Preview request containing file info and page number
-            
+
         Returns:
             PreviewPayload with preview source, total pages, and notices
         """
@@ -59,11 +72,13 @@ class PreviewPayloadService:
                 self._controller._notice_html("Select a PDF file to preview."),
             )
 
-        effective_name = request.file_name or self._controller._resolve_file_name_by_file_id(
-            request.file_id
+        effective_name = (
+            request.file_name
+            or self._controller._resolve_file_name_by_file_id(request.file_id)
         )
-        effective_path = request.file_path or self._controller._resolve_file_path_by_file_id(
-            request.file_id
+        effective_path = (
+            request.file_path
+            or self._controller._resolve_file_path_by_file_id(request.file_id)
         )
         if not effective_path or not os.path.isfile(effective_path):
             return PreviewPayload(

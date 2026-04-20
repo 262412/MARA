@@ -368,14 +368,20 @@ class FileIndex(BaseIndex):
         if self._selector_ui_cls is None:
             self._setup_file_selector_ui_cls()
         if self._selector_ui is None:
-            self._selector_ui = self._selector_ui_cls(self._app, self)
+            selector_ui_cls = self._selector_ui_cls
+            if selector_ui_cls is None:
+                raise RuntimeError("File selector UI class is not configured.")
+            self._selector_ui = selector_ui_cls(self._app, self)
         return self._selector_ui
 
     def get_index_page_ui(self):
         if self._index_ui_cls is None:
             self._setup_file_index_ui_cls()
         if self._index_ui is None:
-            self._index_ui = self._index_ui_cls(self._app, self)
+            index_ui_cls = self._index_ui_cls
+            if index_ui_cls is None:
+                raise RuntimeError("File index page UI class is not configured.")
+            self._index_ui = index_ui_cls(self._app, self)
         return self._index_ui
 
     def get_user_settings(self):
@@ -606,7 +612,7 @@ class FileIndex(BaseIndex):
         )
 
     def get_retriever_pipelines(
-        self, settings: dict, user_id: int, selected: Any = None
+        self, settings: dict, user_id: int | str | None, selected: Any = None
     ) -> list["BaseFileIndexRetriever"]:
         # retrieval settings
         prefix = f"index.options.{self.id}."

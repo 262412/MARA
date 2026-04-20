@@ -9,9 +9,8 @@ from typing import Optional
 
 import gradio as gr
 from ktem.app import BasePage
-from ktem.components import reasonings
-from ktem.docqa import DocQARequest, DocQARuntime
 from ktem.db.models import Conversation, engine
+from ktem.docqa import DocQARequest, DocQARuntime
 from ktem.index.file.ui import File
 from ktem.reasoning.prompt_optimization.mindmap import MINDMAP_HTML_EXPORT_TEMPLATE
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
@@ -20,7 +19,6 @@ from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
 from ktem.reasoning.prompt_optimization.suggest_followup_chat import (
     SuggestFollowupQuesPipeline,
 )
-from plotly.io import from_json
 from pypdf import PdfReader
 from sqlmodel import Session, select
 from theflow.settings import settings as flowsettings
@@ -35,6 +33,10 @@ from ...utils.commands import WEB_SEARCH_COMMAND
 from ...utils.hf_papers import get_recommended_papers
 from ...utils.rate_limit import check_rate_limit
 from .chat_panel import ChatPanel
+from .chat_suggestion import ChatSuggestion
+from .common import STATE
+from .control import ConversationControl
+from .demo_hint import HintPage
 from .generation_store import (
     get_current_view,
     init_cache_entry,
@@ -50,10 +52,6 @@ from .generation_store import (
 )
 from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
-from .chat_suggestion import ChatSuggestion
-from .common import STATE
-from .control import ConversationControl
-from .demo_hint import HintPage
 from .paper_list import PaperListPage
 from .report import ReportIssue
 
@@ -233,7 +231,7 @@ function() {
             }
         }
     }, 30);
-    
+
     // Setup MutationObserver to auto-scroll on content changes (real-time streaming)
     setTimeout(() => {
         var answer_expand = document.querySelector("#answer-expand");
@@ -241,7 +239,8 @@ function() {
             var observer = new MutationObserver(function(mutations) {
                 var answer_panel = document.querySelector("#answer-panel");
                 if (answer_panel) {
-                    // Scroll immediately without smooth animation for real-time following
+                    // Scroll immediately without smooth animation
+                    // for real-time following
                     if (answer_panel.scrollHeight > answer_panel.clientHeight) {
                         answer_panel.scrollTop = answer_panel.scrollHeight;
                     } else {
@@ -256,7 +255,7 @@ function() {
                     }
                 }
             });
-            
+
             observer.observe(answer_expand, {
                 childList: true,
                 subtree: true,
@@ -264,16 +263,16 @@ function() {
             });
         }
     }, 100);
-    
+
     // Initialize drag-to-pan for all file previews
     setTimeout(() => {
         function initDragPan(container) {
             if (!container || container.dataset.dragInitialized === 'true') return;
-            
+
             let isDragging = false;
             let startX = 0, startY = 0;
             let scrollLeft = 0, scrollTop = 0;
-            
+
             const onMouseDown = (e) => {
                 isDragging = true;
                 startX = e.pageX - container.offsetLeft;
@@ -284,19 +283,19 @@ function() {
                 container.style.userSelect = 'none';
                 e.preventDefault();
             };
-            
+
             const onMouseLeave = () => {
                 isDragging = false;
                 container.style.cursor = 'grab';
                 container.style.userSelect = '';
             };
-            
+
             const onMouseUp = () => {
                 isDragging = false;
                 container.style.cursor = 'grab';
                 container.style.userSelect = '';
             };
-            
+
             const onMouseMove = (e) => {
                 if (!isDragging) return;
                 e.preventDefault();
@@ -307,19 +306,23 @@ function() {
                 container.scrollLeft = scrollLeft - walkX;
                 container.scrollTop = scrollTop - walkY;
             };
-            
+
             container.addEventListener('mousedown', onMouseDown);
             container.addEventListener('mouseleave', onMouseLeave);
             container.addEventListener('mouseup', onMouseUp);
             container.addEventListener('mousemove', onMouseMove);
-            
+
             container.dataset.dragInitialized = 'true';
         }
-        
-        ['.pdf-preview-shell', '.docx-preview', '.pptx-preview-shell', '.xlsx-preview-shell']
-            .forEach(selector => {
-                document.querySelectorAll(selector).forEach(el => initDragPan(el));
-            });
+
+        [
+            '.pdf-preview-shell',
+            '.docx-preview',
+            '.pptx-preview-shell',
+            '.xlsx-preview-shell'
+        ].forEach(selector => {
+            document.querySelectorAll(selector).forEach(el => initDragPan(el));
+        });
     }, 150);
 
     return [links.length]
@@ -365,11 +368,11 @@ preview_drag_pan_js = """
 function() {
     function initDragPan(container) {
         if (!container || container.dataset.dragInitialized === 'true') return;
-        
+
         let isDragging = false;
         let startX = 0, startY = 0;
         let scrollLeft = 0, scrollTop = 0;
-        
+
         const onMouseDown = (e) => {
             isDragging = true;
             startX = e.pageX - container.offsetLeft;
@@ -380,19 +383,19 @@ function() {
             container.style.userSelect = 'none';
             e.preventDefault();
         };
-        
+
         const onMouseLeave = () => {
             isDragging = false;
             container.style.cursor = 'grab';
             container.style.userSelect = '';
         };
-        
+
         const onMouseUp = () => {
             isDragging = false;
             container.style.cursor = 'grab';
             container.style.userSelect = '';
         };
-        
+
         const onMouseMove = (e) => {
             if (!isDragging) return;
             e.preventDefault();
@@ -403,7 +406,7 @@ function() {
             container.scrollLeft = scrollLeft - walkX;
             container.scrollTop = scrollTop - walkY;
         };
-        
+
         // Touch support
         const onTouchStart = (e) => {
             if (e.touches.length !== 1) return;
@@ -415,11 +418,11 @@ function() {
             scrollTop = container.scrollTop;
             e.preventDefault();
         };
-        
+
         const onTouchEnd = () => {
             isDragging = false;
         };
-        
+
         const onTouchMove = (e) => {
             if (!isDragging || e.touches.length !== 1) return;
             e.preventDefault();
@@ -431,21 +434,21 @@ function() {
             container.scrollLeft = scrollLeft - walkX;
             container.scrollTop = scrollTop - walkY;
         };
-        
+
         // Mouse events
         container.addEventListener('mousedown', onMouseDown);
         container.addEventListener('mouseleave', onMouseLeave);
         container.addEventListener('mouseup', onMouseUp);
         container.addEventListener('mousemove', onMouseMove);
-        
+
         // Touch events
         container.addEventListener('touchstart', onTouchStart, { passive: false });
         container.addEventListener('touchend', onTouchEnd);
         container.addEventListener('touchmove', onTouchMove, { passive: false });
-        
+
         container.dataset.dragInitialized = 'true';
     }
-    
+
     // Initialize on all preview containers
     setTimeout(() => {
         const selectors = [
@@ -454,7 +457,7 @@ function() {
             '.pptx-preview-shell',
             '.xlsx-preview-shell'
         ];
-        
+
         selectors.forEach(selector => {
             const elements = document.querySelectorAll(selector);
             elements.forEach(el => initDragPan(el));
@@ -496,7 +499,8 @@ class ChatPage(BasePage):
         self._active_file_name = gr.State(value="")
         self._active_file_path = gr.State(value="")
         self._active_file_total_pages = gr.State(value=1)
-        # Page-level output cache for chat isolation: {file_id_page_num: {last_question, mindmap_html, answer_text, chat_history}}
+        # Page-level output cache for chat isolation:
+        # {file_id_page_num: {last_question, mindmap_html, answer_text, chat_history}}
         self._page_outputs_cache = gr.State(value={})
         # Last question asked about the current page
         self._last_question = gr.State(value="")
@@ -533,8 +537,11 @@ class ChatPage(BasePage):
                 self.chat_control = ConversationControl(self._app)
 
                 self.upload_scope_hint = gr.Markdown(
-                    "**Sources in this conversation are treated as related by default.** "
-                    "If files are weakly related, the knowledge graph will split them into separate systems.",
+                    (
+                        "**Sources in this conversation are treated as related "
+                        "by default.** If files are weakly related, the "
+                        "knowledge graph will split them into separate systems."
+                    ),
                     elem_id="chat-upload-hint",
                 )
                 with gr.Column(elem_id="chat-file-browser"):
@@ -684,7 +691,8 @@ class ChatPage(BasePage):
                                 show_label=False,
                             )
 
-                            # Keep advanced settings as internal defaults for pipeline compatibility.
+                            # Keep advanced settings as internal defaults for
+                            # pipeline compatibility.
                             self.model_type = gr.State(value=DEFAULT_SETTING)
                             self.citation = gr.State(value=DEFAULT_SETTING)
                             self.use_mindmap = gr.State(value=DEFAULT_SETTING)
@@ -694,7 +702,9 @@ class ChatPage(BasePage):
             with gr.Column(
                 scale=INFO_PANEL_SCALES[False], elem_id="chat-info-panel"
             ) as self.info_column:
-                with gr.Accordion(label="Knowledge Graph", open=True, elem_id="info-expand"):
+                with gr.Accordion(
+                    label="Knowledge Graph", open=True, elem_id="info-expand"
+                ):
                     self.modal = gr.HTML("<div id='pdf-modal'></div>")
                     self.knowledge_graph_status = gr.Markdown(
                         "Status: no graph generated yet.",
@@ -705,14 +715,17 @@ class ChatPage(BasePage):
                         variant="secondary",
                         elem_id="knowledge-graph-refresh",
                     )
-                    self.plot_panel = gr.HTML("", visible=True, elem_id="knowledge-graph-plot")
+                    self.plot_panel = gr.HTML(
+                        "", visible=True, elem_id="knowledge-graph-plot"
+                    )
                     self.info_panel = gr.HTML(elem_id="html-info-panel")
 
                 with gr.Accordion(label="Answer", open=True, elem_id="answer-expand"):
                     self.kg_answer_hint = gr.HTML(
                         value=(
                             "<div class='kg-answer-hint kg-answer-hint--empty'>"
-                            "Select a node in the knowledge graph tree to pin context and get a suggested question."
+                            "Select a node in the knowledge graph tree to pin "
+                            "context and get a suggested question."
                             "</div>"
                         ),
                         elem_id="kg-answer-hint",
@@ -729,7 +742,9 @@ class ChatPage(BasePage):
                 html_payload = str(json_dict.get("html", "") or "")
             else:
                 try:
-                    html_payload = html.escape(json.dumps(json_dict, ensure_ascii=False))
+                    html_payload = html.escape(
+                        json.dumps(json_dict, ensure_ascii=False)
+                    )
                 except Exception:
                     html_payload = ""
         elif isinstance(json_dict, str):
@@ -908,7 +923,9 @@ class ChatPage(BasePage):
 
         try:
             with Session(engine) as session:
-                statement = select(Conversation).where(Conversation.id == conversation_id)
+                statement = select(Conversation).where(
+                    Conversation.id == conversation_id
+                )
                 row = session.exec(statement).one_or_none()
                 if not row:
                     return normalized_ids
@@ -932,7 +949,9 @@ class ChatPage(BasePage):
 
         return normalized_ids
 
-    def _render_chat_file_list_html(self, rows: list[dict], selected_ids: set[str]) -> str:
+    def _render_chat_file_list_html(
+        self, rows: list[dict], selected_ids: set[str]
+    ) -> str:
         if not rows:
             return "<div class='chat-file-empty'>No files uploaded</div>"
 
@@ -941,9 +960,13 @@ class ChatPage(BasePage):
             file_id = str(row.get("id", "") or "")
             file_name = str(row.get("name", "") or file_id)
             is_selected = file_id in selected_ids
-            item_class = "chat-file-entry is-selected" if is_selected else "chat-file-entry"
+            item_class = (
+                "chat-file-entry is-selected" if is_selected else "chat-file-entry"
+            )
             items.append(
-                f"<button type='button' class='{item_class}' data-chat-file-id='{html.escape(file_id, quote=True)}'>"
+                "<button type='button' "
+                f"class='{item_class}' "
+                f"data-chat-file-id='{html.escape(file_id, quote=True)}'>"
                 "<span class='chat-file-entry__name'>"
                 f"{html.escape(file_name)}"
                 "</span>"
@@ -1014,21 +1037,27 @@ class ChatPage(BasePage):
             return []
         try:
             with Session(engine) as session:
-                statement = select(Conversation).where(Conversation.id == conversation_id)
+                statement = select(Conversation).where(
+                    Conversation.id == conversation_id
+                )
                 result = session.exec(statement).one_or_none()
         except Exception:
             return []
         if not result:
             return []
         data_source = dict(result.data_source or {})
-        value = self._normalize_selected_file_ids(data_source.get("graph_source_ids", []))
+        value = self._normalize_selected_file_ids(
+            data_source.get("graph_source_ids", [])
+        )
         fallback_ids = self._extract_selected_ids_from_data_source(data_source)
         merged_ids = self._merge_unique_file_ids(value, fallback_ids)
         if merged_ids and merged_ids != value:
             data_source["graph_source_ids"] = merged_ids
             try:
                 with Session(engine) as session:
-                    statement = select(Conversation).where(Conversation.id == conversation_id)
+                    statement = select(Conversation).where(
+                        Conversation.id == conversation_id
+                    )
                     row = session.exec(statement).one_or_none()
                     if row:
                         row.data_source = data_source
@@ -1042,7 +1071,9 @@ class ChatPage(BasePage):
             data_source["graph_source_ids"] = fallback_ids
             try:
                 with Session(engine) as session:
-                    statement = select(Conversation).where(Conversation.id == conversation_id)
+                    statement = select(Conversation).where(
+                        Conversation.id == conversation_id
+                    )
                     row = session.exec(statement).one_or_none()
                     if row:
                         row.data_source = data_source
@@ -1131,7 +1162,8 @@ class ChatPage(BasePage):
         focus_file_id,
         selected_file_ids=None,
     ):
-        # Keep backward compatibility with existing event wiring but do not force rebuild.
+        # Keep backward compatibility with existing event wiring without
+        # forcing a rebuild.
         return self.refresh_knowledge_graph(
             conversation_id=conversation_id,
             graph_source_ids=graph_source_ids,
@@ -1178,16 +1210,26 @@ class ChatPage(BasePage):
     def _format_chat_message(self, content: str, role: str) -> str:
         """Format a chat message as a bubble"""
         import html
-        
+
         escaped_content = html.escape(content)
         # Replace newlines with <br> for proper line breaks
-        formatted_content = escaped_content.replace('\n', '<br>')
-        return f'<div class="chat-message {role}"><div class="chat-message-content">{formatted_content}</div></div>'
+        formatted_content = escaped_content.replace("\n", "<br>")
+        return (
+            f'<div class="chat-message {role}">'
+            f'<div class="chat-message-content">{formatted_content}</div>'
+            "</div>"
+        )
 
-    def _generate_answer_panel_html(self, preserved_history: list, user_input: str, ai_response: str, is_thinking: bool = False) -> str:
+    def _generate_answer_panel_html(
+        self,
+        preserved_history: list,
+        user_input: str,
+        ai_response: str,
+        is_thinking: bool = False,
+    ) -> str:
         """Generate HTML for answer panel with chat bubbles"""
         messages_html = ""
-        
+
         # Add preserved history (previous Q&A on the same page)
         for item in preserved_history:
             if isinstance(item, (list, tuple)) and len(item) == 2:
@@ -1198,16 +1240,22 @@ class ChatPage(BasePage):
                     messages_html += self._format_chat_message(str(ai_msg), "assistant")
                 # Add separator between conversation turns
                 messages_html += '<div style="height: 8px;"></div>'
-        
+
         # Add current exchange
         if user_input:
             messages_html += self._format_chat_message(user_input, "user")
-        
+
         if is_thinking:
-            messages_html += '<div class="chat-message assistant"><div class="chat-message-content"><div class="typing-indicator"><span></span><span></span><span></span></div></div></div>'
+            messages_html += (
+                '<div class="chat-message assistant">'
+                '<div class="chat-message-content">'
+                '<div class="typing-indicator">'
+                "<span></span><span></span><span></span>"
+                "</div></div></div>"
+            )
         elif ai_response:
             messages_html += self._format_chat_message(ai_response, "assistant")
-        
+
         return messages_html
 
     def rerun_page_answer(
@@ -1460,14 +1508,17 @@ class ChatPage(BasePage):
             js=pdfview_js,
         )
 
+        text_input = self.chat_panel.text_input
+        assert text_input is not None
+
         chat_event = (
             gr.on(
                 triggers=[
-                    self.chat_panel.text_input.submit,
+                    text_input.submit,
                 ],
                 fn=self.submit_msg,
                 inputs=[
-                    self.chat_panel.text_input,
+                    text_input,
                     self.chat_panel.chatbot,
                     self._app.user_id,
                     self._app.settings_state,
@@ -2371,7 +2422,9 @@ class ChatPage(BasePage):
 
         # add new file ids to the first selector choices
         first_selector_choices.extend(zip(urls, file_ids))
-        merged_graph_source_ids = self.merge_graph_source_ids(graph_source_ids, file_ids)
+        merged_graph_source_ids = self.merge_graph_source_ids(
+            graph_source_ids, file_ids
+        )
 
         # if file_ids is not empty and chat_input_text is empty
         # set the input to summary
@@ -2389,12 +2442,12 @@ class ChatPage(BasePage):
                 pass
             elif chat_input_text:
                 chat_input_text = (
-                    f"{chat_input_text}\n\n"
-                    f"{selection_marker}\n{selected_page_text}"
+                    f"{chat_input_text}\n\n" f"{selection_marker}\n{selected_page_text}"
                 )
             else:
                 chat_input_text = (
-                    "Please explain the following selected text from the current page:\n"
+                    "Please explain the following selected text from the "
+                    "current page:\n"
                     f"{selected_page_text}"
                 )
 
@@ -2768,9 +2821,7 @@ class ChatPage(BasePage):
         """
         try:
             graph_context = (
-                json.loads(selected_graph_context)
-                if selected_graph_context
-                else {}
+                json.loads(selected_graph_context) if selected_graph_context else {}
             )
             if not isinstance(graph_context, dict):
                 graph_context = {}
@@ -2822,8 +2873,9 @@ class ChatPage(BasePage):
         """Chat function"""
         # Extract the latest user input and any existing output
         chat_input, chat_output = chat_history[-1] if chat_history else ("", None)
-        
-        # Preserve the chat history excluding the latest entry which has the user input and None output
+
+        # Preserve the chat history excluding the latest entry which has the
+        # user input and None output.
         preserved_history = chat_history[:-1] if chat_history else []
 
         selection_marker = "[Selected text from current page]"
@@ -2920,7 +2972,9 @@ class ChatPage(BasePage):
         )
 
         try:
-            for response in pipeline.stream(chat_input, conversation_id, preserved_history):
+            for response in pipeline.stream(
+                chat_input, conversation_id, preserved_history
+            ):
 
                 if not isinstance(response, Document):
                     continue
