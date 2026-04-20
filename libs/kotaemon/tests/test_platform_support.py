@@ -26,6 +26,7 @@ def test_install_claude_minimal_creates_expected_assets(tmp_path):
     assert (tmp_path / "skills").exists()
     assert (tmp_path / "agents").exists()
     assert (tmp_path / "CLAUDE.md").exists()
+    assert (tmp_path / "skills" / "kotaemon-docqa" / "SKILL.md").exists()
 
 
 def test_install_claude_settings_template_merges_existing_json(tmp_path):
@@ -62,6 +63,29 @@ def test_install_codex_agents_uses_sidecar_when_existing_file_present(tmp_path):
     assert primary.read_text(encoding="utf-8") == "user owned content\n"
     assert sidecar.exists()
     assert str(sidecar) in result.sidecar_paths
+
+
+def test_install_codex_minimal_includes_docqa_skill(tmp_path):
+    result = install_platform(
+        platform_name="codex",
+        mode="minimal",
+        target_dir=tmp_path,
+    )
+
+    assert result.platform == "codex"
+    assert (tmp_path / "skills" / "kotaemon-docqa" / "SKILL.md").exists()
+
+
+def test_install_claude_selective_commands_include_docqa_wrapper(tmp_path):
+    result = install_platform(
+        platform_name="claude-code",
+        mode="selective",
+        items=["commands"],
+        target_dir=tmp_path,
+    )
+
+    assert result.platform == "claude-code"
+    assert (tmp_path / "commands" / "kotaemon-docqa.md").exists()
 
 
 def test_validate_bundle_passes_for_packaged_assets():

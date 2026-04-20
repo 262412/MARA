@@ -1,3 +1,4 @@
+import logging
 import threading
 from collections import defaultdict
 from typing import Generator
@@ -36,6 +37,7 @@ CITATION_TIMEOUT = 5.0
 CONTEXT_RELEVANT_WARNING_SCORE = config(
     "CONTEXT_RELEVANT_WARNING_SCORE", 0.3, cast=float
 )
+logger = logging.getLogger(__name__)
 
 DEFAULT_QA_TEXT_PROMPT = (
     "Use the following pieces of context to answer the question at the end in detail with clear explanation. "  # noqa: E501
@@ -224,7 +226,7 @@ class AnswerWithContextPipeline(BaseComponent):
         **kwargs,
     ) -> Generator[Document, None, Document]:
         history = kwargs.get("history", [])
-        print(f"Got {len(images)} images")
+        logger.debug("Got %s images", len(images))
         # check if evidence exists, use QA prompt
         if evidence:
             prompt, evidence = self.get_prompt(question, evidence, evidence_mode)
@@ -269,7 +271,10 @@ class AnswerWithContextPipeline(BaseComponent):
 
         if self.use_multimodal and evidence_mode == EVIDENCE_MODE_FIGURE:
             # create image message:
-            print(f"Multimodal mode enabled. Preparing {len(images[:MAX_IMAGES])} images")
+            logger.debug(
+                "Multimodal mode enabled. Preparing %s images",
+                len(images[:MAX_IMAGES]),
+            )
             image_messages = [
                 {
                     "type": "image_url",
@@ -277,7 +282,7 @@ class AnswerWithContextPipeline(BaseComponent):
                 }
                 for image in images[:MAX_IMAGES]
             ]
-            print(f"Image messages created: {len(image_messages)}")
+            logger.debug("Image messages created: %s", len(image_messages))
             messages.append(
                 HumanMessage(
                     content=[
@@ -286,21 +291,28 @@ class AnswerWithContextPipeline(BaseComponent):
                     + image_messages,
                 )
             )
-            print(f"Total message content length: {len(messages[-1].content)}")
+            logger.debug(
+                "Total multimodal message content length: %s",
+                len(messages[-1].content),
+            )
         else:
             # append main prompt
-            print(f"Using text-only mode (use_multimodal={self.use_multimodal}, evidence_mode={evidence_mode})")
+            logger.debug(
+                "Using text-only mode (use_multimodal=%s, evidence_mode=%s)",
+                self.use_multimodal,
+                evidence_mode,
+            )
             messages.append(HumanMessage(content=prompt))
 
         try:
             # try streaming first
-            print("Trying LLM streaming")
+            logger.debug("Trying LLM streaming")
             for out_msg in self.llm.stream(messages):
                 output += out_msg.text
                 logprobs += out_msg.logprobs
                 yield Document(channel="chat", content=out_msg.text)
         except NotImplementedError:
-            print("Streaming is not supported, falling back to normal processing")
+            logger.debug("Streaming is not supported, falling back to normal processing")
             output = self.llm(messages).text
             yield Document(channel="chat", content=output)
 
@@ -409,7 +421,7 @@ class AnswerWithContextPipeline(BaseComponent):
                 )
             )
 
-        print("Got {} cited docs".format(len(with_citation)))
+        logger.debug("Got %s cited docs", len(with_citation))
 
         sorted_not_detected_items_with_scores = [
             (id_, id2docs[id_].metadata.get("llm_trulens_score", 0.0))

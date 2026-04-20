@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime
 from typing import Any, Optional, Type
@@ -8,6 +9,7 @@ from ktem.index.base import BaseIndex
 from sqlalchemy import JSON, Column, DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import MutableDict
+from sqlmodel import Session, select
 from theflow.settings import settings as flowsettings
 from theflow.utils.modules import import_dotted_string
 from tzlocal import get_localzone
@@ -40,9 +42,9 @@ class FileIndex(BaseIndex):
 
         self._indexing_pipeline_cls: Type[BaseFileIndexIndexing]
         self._retriever_pipeline_cls: list[Type[BaseFileIndexRetriever]]
-        self._selector_ui_cls: Type
+        self._selector_ui_cls: Optional[Type] = None
         self._selector_ui: Any = None
-        self._index_ui_cls: Type
+        self._index_ui_cls: Optional[Type] = None
         self._index_ui: Any = None
 
         self._default_settings: dict[str, dict] = {}
@@ -361,15 +363,17 @@ class FileIndex(BaseIndex):
         self._normalize_supported_file_types()
         self._setup_indexing_cls()
         self._setup_retriever_cls()
-        self._setup_file_index_ui_cls()
-        self._setup_file_selector_ui_cls()
 
     def get_selector_component_ui(self):
+        if self._selector_ui_cls is None:
+            self._setup_file_selector_ui_cls()
         if self._selector_ui is None:
             self._selector_ui = self._selector_ui_cls(self._app, self)
         return self._selector_ui
 
     def get_index_page_ui(self):
+        if self._index_ui_cls is None:
+            self._setup_file_index_ui_cls()
         if self._index_ui is None:
             self._index_ui = self._index_ui_cls(self._app, self)
         return self._index_ui
@@ -475,6 +479,132 @@ class FileIndex(BaseIndex):
 
         return obj
 
+    @staticmethod
+    def _normalize_selected_values(selected: Any) -> list[str]:
+        if selected in (None, ""):
+            return []
+
+        values = selected if isinstance(selected, (list, tuple, set)) else [selected]
+        normalized: list[str] = []
+        seen: set[str] = set()
+
+        for value in values:
+            if value in (None, ""):
+                continue
+            if isinstance(value, (list, tuple, set)):
+                nested = FileIndex._normalize_selected_values(list(value))
+                for item in nested:
+                    if item not in seen:
+                        seen.add(item)
+                        normalized.append(item)
+                continue
+            if isinstance(value, dict):
+                continue
+
+            item = str(value).strip()
+            if not item:
+                continue
+
+            if item.startswith("[") and item.endswith("]"):
+                try:
+                    decoded = json.loads(item)
+                except Exception:
+                    decoded = None
+                if isinstance(decoded, list):
+                    nested = FileIndex._normalize_selected_values(decoded)
+                    for nested_item in nested:
+                        if nested_item not in seen:
+                            seen.add(nested_item)
+                            normalized.append(nested_item)
+                    continue
+
+            if item not in seen:
+                seen.add(item)
+                normalized.append(item)
+
+        return normalized
+
+    def list_source_rows(self, user_id: int | str | None) -> list[dict[str, Any]]:
+        source_table = self._resources["Source"]
+        statement = select(source_table)
+        if self.config.get("private", False):
+            statement = statement.where(source_table.user == user_id)
+
+        rows: list[dict[str, Any]] = []
+        with Session(engine) as session:
+            results = session.exec(statement).all()
+
+        for item in results:
+            rows.append(
+                {
+                    "id": str(getattr(item, "id", "") or ""),
+                    "name": str(getattr(item, "name", "") or ""),
+                    "path": str(getattr(item, "path", "") or ""),
+                    "size": int(getattr(item, "size", 0) or 0),
+                    "date_created": getattr(item, "date_created", None),
+                    "user": getattr(item, "user", None),
+                    "note": dict(getattr(item, "note", {}) or {}),
+                }
+            )
+
+        rows.sort(
+            key=lambda row: (
+                row.get("date_created") is not None,
+                row.get("date_created"),
+            ),
+            reverse=True,
+        )
+        return rows
+
+    def list_source_ids(self, user_id: int | str | None) -> list[str]:
+        return [
+            str(row.get("id", "") or "")
+            for row in self.list_source_rows(user_id)
+            if str(row.get("id", "") or "")
+        ]
+
+    def resolve_selected_ids(
+        self, user_id: int | str | None, selected: Any = None
+    ) -> list[str]:
+        if selected in (None, ""):
+            return self.list_source_ids(user_id)
+        if isinstance(selected, list) and len(selected) == 0:
+            return []
+
+        if self._selector_ui is not None:
+            try:
+                resolved = self._selector_ui.get_selected_ids(selected)
+            except Exception:
+                resolved = None
+            if resolved is not None:
+                return self._normalize_selected_values(resolved)
+
+        if isinstance(selected, (list, tuple)) and len(selected) >= 3:
+            mode = selected[0]
+            selected_value = selected[1]
+            selected_user_id = selected[2]
+            if mode == "disabled":
+                return []
+            if mode == "select":
+                return self._normalize_selected_values(selected_value)
+            if mode == "all":
+                return self.list_source_ids(selected_user_id)
+
+        normalized = self._normalize_selected_values(selected)
+        if normalized:
+            return normalized
+
+        return self.list_source_ids(user_id)
+
+    def get_retriever_pipelines_for_ids(
+        self, settings: dict, user_id: int | str | None, selected_ids: Any = None
+    ) -> list["BaseFileIndexRetriever"]:
+        return self.get_retriever_pipelines(
+            settings=settings,
+            user_id=user_id,
+            selected=selected_ids,
+        )
+
     def get_retriever_pipelines(
         self, settings: dict, user_id: int, selected: Any = None
     ) -> list["BaseFileIndexRetriever"]:
@@ -486,7 +616,7 @@ class FileIndex(BaseIndex):
                 stripped_settings[key[len(prefix) :]] = value
 
         # transform selected id
-        selected_ids: Optional[list[str]] = self._selector_ui.get_selected_ids(selected)
+        selected_ids: Optional[list[str]] = self.resolve_selected_ids(user_id, selected)
 
         retrievers = []
         for cls in self._retriever_pipeline_cls:

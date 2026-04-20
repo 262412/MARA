@@ -1,10 +1,13 @@
 import html
+import logging
 from functools import partial
 
 import tiktoken
 
 from kotaemon.base import BaseComponent, Document, RetrievedDocument
 from kotaemon.indices.splitters import TokenSplitter
+
+logger = logging.getLogger(__name__)
 
 EVIDENCE_MODE_TEXT = 0
 EVIDENCE_MODE_TABLE = 1
@@ -47,7 +50,7 @@ class PrepareEvidencePipeline(BaseComponent):
             )
         )
 
-        print(f"[PrepareEvidence] Total docs to process: {len(docs)}")
+        logger.debug("PrepareEvidence processing %d docs", len(docs))
         for _idx, retrieved_item in enumerate(docs):
             # skip duplicate documents by doc_id
             if retrieved_item.doc_id in seen_doc_ids:
@@ -58,8 +61,14 @@ class PrepareEvidencePipeline(BaseComponent):
             page = retrieved_item.metadata.get("page_label", None)
             source = filename = retrieved_item.metadata.get("file_name", "-")
             doc_type = retrieved_item.metadata.get("type", "text")
-            print(f"[PrepareEvidence] Doc {_idx}: page={page}, type={doc_type}, "
-                  f"file={filename}, text_len={len(retrieved_item.text)}")
+            logger.debug(
+                "PrepareEvidence doc %d page=%s type=%s file=%s text_len=%d",
+                _idx,
+                page,
+                doc_type,
+                filename,
+                len(retrieved_item.text),
+            )
             if page:
                 source += f" (Page {page})"
             if retrieved_item.metadata.get("type", "") == "table":
@@ -114,10 +123,10 @@ class PrepareEvidencePipeline(BaseComponent):
             evidence_mode = EVIDENCE_MODE_TABLE
 
         # trim context by trim_len
-        print("len (original)", len(evidence))
+        logger.debug("PrepareEvidence original length=%d", len(evidence))
         if evidence:
             texts = evidence_trim_func([Document(text=evidence)])
             evidence = texts[0].text
-            print("len (trimmed)", len(evidence))
+            logger.debug("PrepareEvidence trimmed length=%d", len(evidence))
 
         return Document(content=(evidence_mode, evidence, images))
