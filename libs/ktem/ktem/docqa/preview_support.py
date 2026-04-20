@@ -13,6 +13,7 @@ from pypdf import PdfReader
 from sqlmodel import Session, select
 
 from ktem.db.models import engine
+from ktem.utils.dependencies import find_soffice_binary
 
 try:
     from pptx import Presentation
@@ -228,32 +229,7 @@ class OfficePreviewConversionService:
 
     @staticmethod
     def find_soffice_binary() -> str:
-        env_path = os.environ.get("SOFFICE_PATH", "").strip()
-        if env_path and os.path.isfile(env_path):
-            return env_path
-
-        found = shutil.which("soffice")
-        if found and os.path.isfile(found):
-            return found
-
-        candidates = [
-            "/usr/bin/soffice",
-            "/usr/local/bin/soffice",
-            "/snap/bin/soffice",
-            "/opt/libreoffice/program/soffice",
-            "/usr/lib/libreoffice/program/soffice",
-            "/usr/lib64/libreoffice/program/soffice",
-            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-            "/Applications/OpenOffice.app/Contents/MacOS/soffice",
-            r"C:\Program Files\LibreOffice\program\soffice.exe",
-            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-            r"C:\Program Files\OpenOffice\program\soffice.exe",
-            r"C:\Program Files (x86)\OpenOffice\program\soffice.exe",
-        ]
-        for path in candidates:
-            if os.path.isfile(path):
-                return path
-        return ""
+        return find_soffice_binary()
 
     def convert_to_pdf_preview(self, file_path: str, file_name: str) -> str:
         if not file_path or not os.path.isfile(file_path):

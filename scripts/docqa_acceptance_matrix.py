@@ -52,7 +52,7 @@ from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARequest, DocQARuntime
 from ktem.index.file.index import FileIndex
 from ktem.main import App
-from ktem.utils.dependencies import DependencyChecker
+from ktem.utils.dependencies import DependencyChecker, find_soffice_binary
 
 
 class AcceptanceFailure(RuntimeError):
@@ -295,17 +295,7 @@ class AcceptanceMatrix:
         if not available:
             raise AcceptanceFailure("LibreOffice is required to generate the PDF sample.")
 
-        soffice = None
-        common_candidates = [
-            shutil.which("soffice"),
-            shutil.which("soffice.exe"),
-            r"C:\Program Files\LibreOffice\program\soffice.exe",
-            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-        ]
-        for candidate in common_candidates:
-            if candidate and Path(candidate).exists():
-                soffice = candidate
-                break
+        soffice = find_soffice_binary()
         if not soffice:
             raise AcceptanceFailure(f"Unable to locate LibreOffice executable: {libreoffice_info}")
 
