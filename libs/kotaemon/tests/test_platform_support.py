@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from click.testing import CliRunner
 
@@ -142,3 +143,64 @@ def test_cli_platform_validate_bundle_command():
 
     assert result.exit_code == 0, result.output
     assert "codex: PASS" in result.output
+
+
+def test_docqa_skill_parity_between_platforms():
+    codex_skill = Path(
+        "D:/PythonProject/kotaemon/libs/kotaemon/kotaemon/platform_support/assets/codex/skills/kotaemon-docqa/SKILL.md"
+    ).read_text(encoding="utf-8")
+    claude_skill = Path(
+        "D:/PythonProject/kotaemon/libs/kotaemon/kotaemon/platform_support/assets/claude-code/skills/kotaemon-docqa/SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    shared_tokens = [
+        "kotaemon docqa doctor",
+        "kotaemon docqa index <path...> [--reindex]",
+        "kotaemon docqa files",
+        "kotaemon docqa delete <file-id-or-name>...",
+        "kotaemon docqa ask --prompt \"...\"",
+        "kotaemon docqa chat",
+        "kotaemon docqa sessions",
+        "kotaemon docqa resume <conversation-id>",
+        "kotaemon docqa acceptance",
+        "--conversation <conversation-id>",
+        "--file <file-id-or-name>",
+        "--active-file <file-id-or-name>",
+        "--page <n>",
+        "--selected-text \"...\"",
+        "--graph-context-file <path.json>",
+        "--reasoning <reasoning-id>",
+        "--llm <llm-name>",
+        "--citation highlight|inline|off",
+        "--language <language>",
+        "--mindmap",
+        "--json",
+        "--keep-artifacts",
+        "--verbose",
+    ]
+
+    for token in shared_tokens:
+        assert token in codex_skill
+        assert token in claude_skill
+
+
+def test_cli_operations_skill_parity_between_platforms():
+    codex_skill = Path(
+        "D:/PythonProject/kotaemon/libs/kotaemon/kotaemon/platform_support/assets/codex/skills/kotaemon-cli-operations/SKILL.md"
+    ).read_text(encoding="utf-8")
+    claude_skill = Path(
+        "D:/PythonProject/kotaemon/libs/kotaemon/kotaemon/platform_support/assets/claude-code/skills/kotaemon-cli-operations/SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    shared_tokens = [
+        "kotaemon modelcli init-config --output modelcli.yml",
+        "kotaemon modelcli providers --config modelcli.yml",
+        "kotaemon modelcli run --prompt \"...\" --model ds-chat --provider openai --config modelcli.yml --dry-run",
+        "kotaemon modelcli run --prompt \"...\" --model ds-chat --provider openai --config modelcli.yml",
+        "kotaemon promptui run promptui.yml --port 7860",
+        "python -m benchmark run --manifest benchmark/manifests/format_robustness.json --suite-name smoke",
+    ]
+
+    for token in shared_tokens:
+        assert token in codex_skill
+        assert token in claude_skill

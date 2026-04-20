@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from click.testing import CliRunner
 
-from kotaemon.cli import main
+from kotaemon.cli import _extract_json_payload, main
 
 
 class _DummyFileRecord:
@@ -186,7 +186,7 @@ def test_docqa_ask_json(monkeypatch, tmp_path):
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _extract_json_payload(result.output)
     assert payload["conversation_id"] == "conv-1"
     assert payload["answer"] == "dummy answer"
     assert runtime.last_request.selected_file_ids == ["file-1"]
@@ -218,7 +218,7 @@ def test_docqa_ask_defaults_to_document_scope(monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _extract_json_payload(result.output)
     assert payload["conversation_id"] == "conv-1"
     assert runtime.last_request.selected_file_ids == ["file-1"]
     assert runtime.last_request.page_number is None
@@ -328,4 +328,36 @@ def test_docqa_acceptance_command(monkeypatch):
     assert "Coverage: ask, doctor, platform_install" in result.output
 
     assert json_result.exit_code == 0, json_result.output
-    assert json.loads(json_result.output)["status"] == "pass"
+    assert _extract_json_payload(json_result.output)["status"] == "pass"
+
+
+def test_docqa_ask_help_lists_shared_parameters():
+    runner = CliRunner()
+    result = runner.invoke(main, ["docqa", "ask", "--help"])
+
+    assert result.exit_code == 0, result.output
+    for token in [
+        "--prompt",
+        "--conversation",
+        "--file",
+        "--active-file",
+        "--page",
+        "--selected-text",
+        "--graph-context-file",
+        "--reasoning",
+        "--llm",
+        "--citation",
+        "--language",
+        "--mindmap",
+        "--json",
+    ]:
+        assert token in result.output
+
+
+def test_docqa_acceptance_help_lists_parameters():
+    runner = CliRunner()
+    result = runner.invoke(main, ["docqa", "acceptance", "--help"])
+
+    assert result.exit_code == 0, result.output
+    for token in ["--keep-artifacts", "--verbose", "--json"]:
+        assert token in result.output

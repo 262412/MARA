@@ -1,18 +1,35 @@
 ---
 name: kotaemon-cli-operations
-description: This skill should be used when the user asks to run or debug kotaemon CLI workflows for model routing, promptui, and benchmark verification.
+description: This skill should be used when the user asks to validate, troubleshoot, or automate kotaemon CLI operations such as modelcli routing, promptui startup, and benchmark execution.
 version: 1.0.0
 ---
 
-# Kotaemon CLI Operations (Codex)
+# Kotaemon CLI Operations
 
-Use natural-language prompts as default entrypoint.
-Use explicit invocation with $kotaemon-cli-operations when deterministic handling is needed.
+## Scope
 
-## Workflow
+Use this skill to guide users through predictable kotaemon CLI workflows.
 
-1. Confirm active virtual environment.
-2. Validate providers using modelcli providers.
-3. Run dry-run route check.
-4. Execute real call and summarize output.
-5. Record failing command with actionable fix.
+## Core Workflow
+
+1. Confirm working directory and virtual environment.
+2. Run provider and config validation commands.
+3. Execute dry-run before network calls.
+4. Execute real call and summarize results.
+5. Capture failures with exact command and remediation.
+
+## Command Set
+
+- `kotaemon modelcli init-config --output modelcli.yml`
+- `kotaemon modelcli providers --config modelcli.yml`
+- `kotaemon modelcli run --prompt "..." --model ds-chat --provider openai --config modelcli.yml --dry-run`
+- `kotaemon modelcli run --prompt "..." --model ds-chat --provider openai --config modelcli.yml`
+- `kotaemon promptui run promptui.yml --port 7860`
+- `python -m benchmark run --manifest benchmark/manifests/format_robustness.json --suite-name smoke`
+
+## Quality Gates
+
+- `providers` reports the expected provider as available.
+- Dry-run resolves model and provider correctly.
+- Real run returns model output without exception.
+- Benchmark run exits with code 0 and produces artifacts.

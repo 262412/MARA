@@ -28,6 +28,40 @@ Use this skill to drive Kotaemon document QA through `kotaemon docqa ...` comman
 - `kotaemon docqa chat`
 - `kotaemon docqa sessions`
 - `kotaemon docqa resume <conversation-id>`
+- `kotaemon docqa acceptance`
+
+## Parameter Reference
+
+Shared `ask` / `chat` options:
+
+- `--conversation <conversation-id>`: continue an existing saved conversation.
+- `--file <file-id-or-name>`: restrict retrieval to one or more indexed files. Repeat for multiple files.
+- `--active-file <file-id-or-name>`: set the active file for page-focused QA when multiple files are selected.
+- `--page <n>`: enable page-level QA for one page. If omitted, use whole-document QA.
+- `--selected-text "..."`: focus retrieval on a text span without forcing page 1.
+- `--graph-context-file <path.json>`: inject graph context from a JSON file.
+- `--reasoning <reasoning-id>`: temporarily override the reasoning pipeline.
+- `--llm <llm-name>`: temporarily override the chat model.
+- `--citation highlight|inline|off`: override citation rendering.
+- `--language <language>`: force the response language.
+- `--mindmap`: request mindmap output when supported.
+- `--json`: emit structured JSON output.
+
+Other command options:
+
+- `doctor --json`
+- `index <path...> [--reindex] [--json]`
+- `files [--json]`
+- `delete <file-id-or-name>... [--json]`
+- `sessions [--json]`
+- `resume <conversation-id> [--json]`
+- `acceptance [--keep-artifacts] [--verbose] [--json]`
+
+## Scope Examples
+
+- Whole-document QA: `kotaemon docqa ask --file report.pdf --prompt "Summarize this document"`
+- Page-level QA: `kotaemon docqa ask --file report.pdf --active-file report.pdf --page 12 --prompt "What does this page say?"`
+- Text-focused QA: `kotaemon docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"`
 
 ## Quality Gates
 

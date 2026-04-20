@@ -94,13 +94,15 @@ def _parse_graph_context_file(graph_context_file):
 def _extract_json_payload(raw_output):
     lines = [line for line in str(raw_output or "").splitlines() if line.strip()]
     errors = []
+    decoder = json.JSONDecoder()
     for index, line in enumerate(lines):
         stripped = line.lstrip()
         if not (stripped.startswith("{") or stripped.startswith("[")):
             continue
         payload = "\n".join(lines[index:])
         try:
-            return json.loads(payload)
+            parsed, _offset = decoder.raw_decode(payload)
+            return parsed
         except json.JSONDecodeError as exc:
             errors.append(f"line {index + 1}: {exc}")
     raise click.ClickException(
@@ -490,7 +492,11 @@ def docqa_doctor(json_output):
     help="Emit structured JSON output.",
 )
 def docqa_acceptance(keep_artifacts, verbose, json_output):
-    """Run the end-to-end DocQA acceptance matrix as a one-command health check."""
+    """Run the end-to-end DocQA acceptance matrix as a one-command health check.
+
+    Use `--keep-artifacts` to preserve temporary samples/install targets for debugging,
+    `--verbose` to surface in-process logs, and `--json` for machine-readable output.
+    """
     payload = _run_docqa_acceptance_matrix(
         keep_artifacts=keep_artifacts,
         verbose=verbose,
@@ -524,7 +530,10 @@ docqa.add_command(docqa_acceptance, "check")
     help="Emit structured JSON output.",
 )
 def docqa_index(paths, reindex, json_output):
-    """Index one or more local paths or URLs into the default file collection."""
+    """Index one or more local paths or URLs into the default file collection.
+
+    Use `--reindex` to replace files that already exist in the collection.
+    """
     runtime = _create_docqa_runtime()
     result = runtime.index_paths(list(paths), reindex=reindex)
 
@@ -577,7 +586,10 @@ def docqa_files(json_output):
     help="Emit structured JSON output.",
 )
 def docqa_delete(refs, json_output):
-    """Delete one or more indexed files by id or name."""
+    """Delete one or more indexed files by id or name.
+
+    Use file ids or names from `kotaemon docqa files`.
+    """
     runtime = _create_docqa_runtime()
     deleted = runtime.delete_files(list(refs))
 
@@ -600,7 +612,10 @@ def docqa_delete(refs, json_output):
     help="Emit structured JSON output.",
 )
 def docqa_sessions(json_output):
-    """List saved DocQA conversations."""
+    """List saved DocQA conversations.
+
+    Use the returned conversation ids with `kotaemon docqa resume`.
+    """
     runtime = _create_docqa_runtime()
     summaries = runtime.list_sessions()
 
@@ -629,7 +644,11 @@ def docqa_ask(
     mindmap,
     json_output,
 ):
-    """Run one DocQA turn and persist it to a conversation."""
+    """Run one DocQA turn and persist it to a conversation.
+
+    Use `--file` to scope retrieval, `--page` for page-level QA, and
+    `--selected-text` for snippet-focused QA.
+    """
     from ktem.docqa import DocQARequest
 
     runtime = _create_docqa_runtime()
@@ -679,7 +698,11 @@ def docqa_chat(
     mindmap,
     json_output,
 ):
-    """Open an interactive DocQA REPL backed by saved conversation state."""
+    """Open an interactive DocQA REPL backed by saved conversation state.
+
+    Use `/help` inside the session for REPL commands such as `/files`, `/use`,
+    `/page <n|clear>`, `/selected-text [text]`, and `/history`.
+    """
     runtime = _create_docqa_runtime()
     if conversation:
         session = runtime.load_session(conversation)
@@ -716,7 +739,10 @@ def docqa_chat(
     help="Emit structured JSON output for each REPL answer.",
 )
 def docqa_resume(conversation_id, json_output):
-    """Resume an existing conversation in the interactive DocQA REPL."""
+    """Resume an existing conversation in the interactive DocQA REPL.
+
+    Use `/help` inside the session for REPL commands.
+    """
     runtime = _create_docqa_runtime()
     _run_docqa_repl(
         runtime=runtime,
