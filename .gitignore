@@ -519,3 +519,6 @@ doc_env/
 
 # Local modelcli runtime config may contain API keys
 /modelcli.yml
+
+# Local platform installation metadata
+.kotaemon-platform-install.json

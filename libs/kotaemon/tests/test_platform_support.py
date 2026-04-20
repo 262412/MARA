@@ -146,11 +146,30 @@ def test_cli_platform_validate_bundle_command():
 
 
 def test_docqa_skill_parity_between_platforms():
-    codex_skill = Path(
-        "D:/PythonProject/kotaemon/libs/kotaemon/kotaemon/platform_support/assets/codex/skills/kotaemon-docqa/SKILL.md"
+    repo_root = Path(__file__).resolve().parents[3]
+    codex_skill = (
+        repo_root
+        / "libs"
+        / "kotaemon"
+        / "kotaemon"
+        / "platform_support"
+        / "assets"
+        / "codex"
+        / "skills"
+        / "kotaemon-docqa"
+        / "SKILL.md"
     ).read_text(encoding="utf-8")
-    claude_skill = Path(
-        "D:/PythonProject/kotaemon/libs/kotaemon/kotaemon/platform_support/assets/claude-code/skills/kotaemon-docqa/SKILL.md"
+    claude_skill = (
+        repo_root
+        / "libs"
+        / "kotaemon"
+        / "kotaemon"
+        / "platform_support"
+        / "assets"
+        / "claude-code"
+        / "skills"
+        / "kotaemon-docqa"
+        / "SKILL.md"
     ).read_text(encoding="utf-8")
 
     shared_tokens = [
@@ -185,11 +204,30 @@ def test_docqa_skill_parity_between_platforms():
 
 
 def test_cli_operations_skill_parity_between_platforms():
-    codex_skill = Path(
-        "D:/PythonProject/kotaemon/libs/kotaemon/kotaemon/platform_support/assets/codex/skills/kotaemon-cli-operations/SKILL.md"
+    repo_root = Path(__file__).resolve().parents[3]
+    codex_skill = (
+        repo_root
+        / "libs"
+        / "kotaemon"
+        / "kotaemon"
+        / "platform_support"
+        / "assets"
+        / "codex"
+        / "skills"
+        / "kotaemon-cli-operations"
+        / "SKILL.md"
     ).read_text(encoding="utf-8")
-    claude_skill = Path(
-        "D:/PythonProject/kotaemon/libs/kotaemon/kotaemon/platform_support/assets/claude-code/skills/kotaemon-cli-operations/SKILL.md"
+    claude_skill = (
+        repo_root
+        / "libs"
+        / "kotaemon"
+        / "kotaemon"
+        / "platform_support"
+        / "assets"
+        / "claude-code"
+        / "skills"
+        / "kotaemon-cli-operations"
+        / "SKILL.md"
     ).read_text(encoding="utf-8")
 
     shared_tokens = [

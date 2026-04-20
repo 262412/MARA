@@ -5,10 +5,45 @@ This module provides utilities to check if required external dependencies
 are available on the system, such as LibreOffice and PDF.js.
 """
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
+
+
+COMMON_SOFFICE_PATHS = (
+    "/usr/bin/soffice",
+    "/usr/local/bin/soffice",
+    "/snap/bin/soffice",
+    "/opt/libreoffice/program/soffice",
+    "/usr/lib/libreoffice/program/soffice",
+    "/usr/lib64/libreoffice/program/soffice",
+    "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+    "/Applications/OpenOffice.app/Contents/MacOS/soffice",
+    r"C:\Program Files\LibreOffice\program\soffice.exe",
+    r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+    r"C:\Program Files\OpenOffice\program\soffice.exe",
+    r"C:\Program Files (x86)\OpenOffice\program\soffice.exe",
+)
+
+
+def find_soffice_binary() -> str:
+    """Locate the LibreOffice/OpenOffice CLI across supported platforms."""
+    env_path = os.environ.get("SOFFICE_PATH", "").strip()
+    if env_path and Path(env_path).is_file():
+        return env_path
+
+    for command in ("soffice", "soffice.exe"):
+        discovered = shutil.which(command)
+        if discovered and Path(discovered).is_file():
+            return discovered
+
+    for candidate in COMMON_SOFFICE_PATHS:
+        if Path(candidate).is_file():
+            return candidate
+
+    return ""
 
 
 class DependencyChecker:
@@ -23,24 +58,7 @@ class DependencyChecker:
             Tuple of (is_available, version_or_error_message)
         """
         try:
-            # Try to find soffice executable
-            soffice_path = shutil.which("soffice")
-
-            if not soffice_path:
-                # Try common paths on Windows
-                if shutil.which("soffice.exe"):
-                    soffice_path = shutil.which("soffice.exe")
-                else:
-                    # Check common installation paths on Windows
-                    common_paths = [
-                        r"C:\Program Files\LibreOffice\program\soffice.exe",
-                        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-                    ]
-                    for path in common_paths:
-                        if Path(path).exists():
-                            soffice_path = path
-                            break
-
+            soffice_path = find_soffice_binary()
             if not soffice_path:
                 return False, None
 

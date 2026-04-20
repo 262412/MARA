@@ -306,7 +306,7 @@ def test_docqa_acceptance_command(monkeypatch):
     payload = {
         "status": "pass",
         "user_id": "default",
-        "work_dir": "C:\\temp\\kotaemon-acceptance-demo",
+        "work_dir": "temp/kotaemon-acceptance-demo",
         "results": [
             {"name": "doctor"},
             {"name": "ask"},

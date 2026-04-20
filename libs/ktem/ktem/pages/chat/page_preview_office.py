@@ -5,6 +5,8 @@ import subprocess
 import threading
 import time
 
+from ktem.utils.dependencies import find_soffice_binary
+
 from .page_preview_runtime import get_file_signature, get_pdf_preview_dir, is_valid_pdf
 from .page_preview_types import detect_office_extension, is_office_source
 
@@ -57,49 +59,7 @@ class OfficePreviewConversionService:
         Returns:
             Path to soffice binary or empty string if not found
         """
-        # 1. Check environment variable first (works on all platforms)
-        env_path = os.environ.get("SOFFICE_PATH", "").strip()
-        if env_path and os.path.isfile(env_path):
-            return env_path
-
-        # 2. Try to find in system PATH (cross-platform)
-        for cmd in ("soffice",):
-            found = shutil.which(cmd)
-            if found and os.path.isfile(found):
-                return found
-
-        # 3. Common installation paths for different platforms
-        candidates = []
-        
-        # Linux/Unix paths
-        candidates.extend([
-            "/usr/bin/soffice",
-            "/usr/local/bin/soffice",
-            "/snap/bin/soffice",
-            "/opt/libreoffice/program/soffice",
-            "/usr/lib/libreoffice/program/soffice",
-            "/usr/lib64/libreoffice/program/soffice",
-        ])
-        
-        # macOS paths
-        candidates.extend([
-            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-            "/Applications/OpenOffice.app/Contents/MacOS/soffice",
-        ])
-        
-        # Windows paths (generic, not user-specific)
-        candidates.extend([
-            r"C:\Program Files\LibreOffice\program\soffice.exe",
-            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-            r"C:\Program Files\OpenOffice\program\soffice.exe",
-            r"C:\Program Files (x86)\OpenOffice\program\soffice.exe",
-        ])
-        
-        for path in candidates:
-            if os.path.isfile(path):
-                return path
-        
-        return ""
+        return find_soffice_binary()
 
     def get_status(self, file_path: str) -> str:
         """Get the status of an Office to PDF conversion job.
