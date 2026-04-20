@@ -36,8 +36,6 @@ jobs:
     steps:
       - name: Clone the repo
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Get Head Commit Message
         id: get-head-commit-message

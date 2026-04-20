@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 
 
@@ -13,6 +15,34 @@ def mock_google_search(monkeypatch):
         )
 
     monkeypatch.setattr(googlesearch, "search", result)
+
+
+@pytest.fixture(scope="function")
+def mock_wikipedia_search(monkeypatch):
+    import wikipedia
+
+    page = SimpleNamespace(
+        content="Cinnamon AI is an enterprise AI company based in Japan.",
+        summary="Cinnamon AI is an enterprise AI company based in Japan.",
+        title="Cinnamon AI",
+        url="https://en.wikipedia.org/wiki/Cinnamon_AI",
+    )
+
+    monkeypatch.setattr(wikipedia, "page", lambda *args, **kwargs: page)
+    monkeypatch.setattr(wikipedia, "search", lambda *args, **kwargs: ["Cinnamon AI"])
+
+
+@pytest.fixture(scope="function")
+def mock_duckduckgo_search(monkeypatch):
+    from langchain_community.tools import DuckDuckGoSearchRun
+
+    monkeypatch.setattr(
+        DuckDuckGoSearchRun,
+        "_run",
+        lambda self, query, run_manager=None: (
+            "Cinnamon AI is an enterprise AI company."
+        ),
+    )
 
 
 def if_haystack_not_installed():

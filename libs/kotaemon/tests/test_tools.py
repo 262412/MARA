@@ -22,7 +22,7 @@ def test_google_tool(mock_google_search):
     assert output
 
 
-def test_wikipedia_tool():
+def test_wikipedia_tool(mock_wikipedia_search):
     tool = WikipediaTool()
     assert tool.name
     assert tool.description
@@ -34,7 +34,7 @@ def test_wikipedia_tool():
     "openai.resources.embeddings.Embeddings.create",
     side_effect=lambda *args, **kwargs: openai_embedding,
 )
-def test_pipeline_tool(tmp_path):
+def test_pipeline_tool(_openai_embeddings_create, tmp_path):
     db = ChromaVectorStore(path=str(tmp_path))
     doc_store = InMemoryDocumentStore()
     embedding = AzureOpenAIEmbeddings(

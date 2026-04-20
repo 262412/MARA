@@ -1,9 +1,9 @@
 import json
 import sys
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 from click.testing import CliRunner
-from unittest.mock import Mock
 
 from kotaemon.cli import _extract_json_payload, _run_docqa_acceptance_matrix, main
 
@@ -102,7 +102,9 @@ class _DummyRuntime:
             failures=[],
             debug_messages=[],
             as_dict=lambda: {
-                "successes": [{"file_name": path, "status": "success"} for path in paths],
+                "successes": [
+                    {"file_name": path, "status": "success"} for path in paths
+                ],
                 "failures": [],
                 "debug_messages": [],
             },
@@ -112,7 +114,11 @@ class _DummyRuntime:
         return list(self.files)
 
     def delete_files(self, refs):
-        return [record for record in self.files if record.file_id in refs or record.name in refs]
+        return [
+            record
+            for record in self.files
+            if record.file_id in refs or record.name in refs
+        ]
 
     def list_sessions(self):
         return [_DummySessionSummary("conv-1", "Conversation 1")]
@@ -129,7 +135,9 @@ class _DummyRuntime:
     def run_turn(self, request):
         self.last_request = request
         conversation_id = request.conversation_id or "conv-1"
-        self.sessions.setdefault(conversation_id, []).append((request.prompt, "dummy answer"))
+        self.sessions.setdefault(conversation_id, []).append(
+            (request.prompt, "dummy answer")
+        )
         active_file_name = request.active_file_name or "alpha.pdf"
         return _DummyResponse(
             conversation_id=conversation_id,
@@ -191,6 +199,7 @@ def test_docqa_ask_json(monkeypatch, tmp_path):
     payload = _extract_json_payload(result.output)
     assert payload["conversation_id"] == "conv-1"
     assert payload["answer"] == "dummy answer"
+    assert runtime.last_request is not None
     assert runtime.last_request.selected_file_ids == ["file-1"]
     assert runtime.last_request.active_file_id == "file-1"
     assert runtime.last_request.page_number == 3
@@ -222,6 +231,7 @@ def test_docqa_ask_defaults_to_document_scope(monkeypatch):
     assert result.exit_code == 0, result.output
     payload = _extract_json_payload(result.output)
     assert payload["conversation_id"] == "conv-1"
+    assert runtime.last_request is not None
     assert runtime.last_request.selected_file_ids == ["file-1"]
     assert runtime.last_request.page_number is None
     assert runtime.last_request.selected_text == ""
@@ -248,6 +258,7 @@ def test_docqa_ask_selected_text_without_page_keeps_document_scope(monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
+    assert runtime.last_request is not None
     assert runtime.last_request.page_number is None
     assert runtime.last_request.selected_text == "focused snippet"
 
@@ -266,6 +277,7 @@ def test_docqa_chat_repl(monkeypatch):
     assert result.exit_code == 0, result.output
     assert "Conversation:" in result.output
     assert "dummy answer" in result.output
+    assert runtime.last_request is not None
     assert runtime.last_request.prompt == "What is alpha?"
     assert runtime.last_request.selected_file_ids == ["file-1"]
     assert runtime.last_request.page_number is None
@@ -279,13 +291,17 @@ def test_docqa_chat_repl_page_clear(monkeypatch):
     result = runner.invoke(
         main,
         ["docqa", "chat", "--file", "alpha.pdf"],
-        input="/page 4\n/page clear\n/selected-text focus\n/selected-text\nWhat is alpha?\n/exit\n",
+        input=(
+            "/page 4\n/page clear\n/selected-text focus\n"
+            "/selected-text\nWhat is alpha?\n/exit\n"
+        ),
     )
 
     assert result.exit_code == 0, result.output
     assert "Page set to 4." in result.output
     assert "Page focus cleared. Using whole-document QA." in result.output
     assert "Selected text cleared." in result.output
+    assert runtime.last_request is not None
     assert runtime.last_request.page_number is None
     assert runtime.last_request.selected_text == ""
 
@@ -390,3 +406,28 @@ def test_docqa_acceptance_help_lists_parameters():
     assert result.exit_code == 0, result.output
     for token in ["--keep-artifacts", "--verbose", "--json"]:
         assert token in result.output
+
+
+def test_docqa_commands_work_after_agents_import(monkeypatch):
+    import kotaemon.agents  # noqa: F401
+
+    runtime = _DummyRuntime()
+    monkeypatch.setattr("kotaemon.cli._create_docqa_runtime", lambda: runtime)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "docqa",
+            "ask",
+            "--prompt",
+            "Summarize alpha.",
+            "--file",
+            "alpha.pdf",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert runtime.last_request is not None
+    assert runtime.last_request.selected_file_ids == ["file-1"]

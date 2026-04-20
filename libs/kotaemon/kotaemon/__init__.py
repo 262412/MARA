@@ -1,5 +1,11 @@
-# Disable telemetry with monkey patching
 import logging
+
+try:
+    from ktem.runtime_bootstrap import bootstrap_runtime_settings
+except ImportError:  # pragma: no cover - standalone kotaemon installs
+    bootstrap_runtime_settings = None
+else:
+    bootstrap_runtime_settings()
 
 logger = logging.getLogger(__name__)
 try:
