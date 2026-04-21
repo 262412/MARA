@@ -1,3 +1,5 @@
+import sys
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -5,6 +7,7 @@ from openai.types.chat.chat_completion import ChatCompletion
 
 from kotaemon.base import Document
 from kotaemon.indices.rankings import LLMReranking
+from kotaemon.indices.rankings.cohere import CohereReranking
 from kotaemon.llms import AzureChatOpenAI
 
 _openai_chat_completion_responses = [
@@ -61,3 +64,37 @@ def test_reranking(openai_completion, llm):
     rerank_docs = reranker(documents, query=query)
 
     assert len(rerank_docs) == 2
+
+
+def test_cohere_reranking_uses_injected_api_key_resolver(monkeypatch):
+    client_calls = {}
+
+    class _FakeClient:
+        def __init__(self, api_key):
+            client_calls["api_key"] = api_key
+
+        def rerank(self, *, model, query, documents):
+            client_calls["model"] = model
+            client_calls["query"] = query
+            client_calls["documents"] = documents
+            return SimpleNamespace(
+                results=[SimpleNamespace(index=0, relevance_score=0.91)]
+            )
+
+    monkeypatch.setitem(sys.modules, "cohere", SimpleNamespace(Client=_FakeClient))
+
+    reranker = CohereReranking(
+        cohere_api_key="",
+        cohere_api_key_resolver=lambda: "resolved-key",
+    )
+    documents = [Document(text="alpha")]
+
+    reranked = reranker.run(documents, query="alpha?")
+
+    assert client_calls == {
+        "api_key": "resolved-key",
+        "model": reranker.model_name,
+        "query": "alpha?",
+        "documents": ["alpha"],
+    }
+    assert reranked[0].metadata["reranking_score"] == 0.91

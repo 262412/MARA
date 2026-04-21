@@ -1,14 +1,30 @@
 import logging
-from typing import Callable
+from importlib import import_module
 
-bootstrap_runtime_settings: Callable[[], str] | None
-try:
-    from ktem.runtime_bootstrap import bootstrap_runtime_settings
-except ImportError:  # pragma: no cover - standalone kotaemon installs
-    bootstrap_runtime_settings = None
-else:
-    if bootstrap_runtime_settings is not None:
-        bootstrap_runtime_settings()
+
+def bootstrap_runtime_settings() -> str | None:
+    """Best-effort bridge to the app runtime bootstrap.
+
+    Keep this import lazy so importing ``kotaemon`` does not pull ``ktem`` into
+    standalone core-library processes.
+    """
+
+    try:
+        from ktem.runtime_bootstrap import (
+            bootstrap_runtime_settings as _bootstrap_runtime_settings,
+        )
+    except ImportError:  # pragma: no cover - standalone kotaemon installs
+        return None
+
+    return _bootstrap_runtime_settings()
+
+
+def __getattr__(name: str):
+    if name == "cli":
+        module = import_module(f"{__name__}.cli")
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 logger = logging.getLogger(__name__)
 try:

@@ -25,19 +25,41 @@ from .format_context import (
 )
 from .utils import find_text
 
-try:
-    from ktem.llms.manager import llms
-    from ktem.reasoning.prompt_optimization.mindmap import CreateMindmapPipeline
-    from ktem.utils.render import Render
-except ImportError:
-    raise ImportError("Please install `ktem` to use this component")
-
 MAX_IMAGES = 10
 CITATION_TIMEOUT = 5.0
 CONTEXT_RELEVANT_WARNING_SCORE = config(
     "CONTEXT_RELEVANT_WARNING_SCORE", 0.3, cast=float
 )
 logger = logging.getLogger(__name__)
+
+
+def _get_default_llm():
+    try:
+        from ktem.llms.manager import llms
+    except ImportError as exc:
+        raise ImportError(
+            "Please install `ktem` to use the default QA runtime."
+        ) from exc
+
+    return llms.get_default()
+
+
+def _create_default_mindmap_pipeline():
+    try:
+        from ktem.reasoning.prompt_optimization.mindmap import CreateMindmapPipeline
+    except ImportError as exc:
+        raise ImportError("Please install `ktem` to enable mindmap generation.") from exc
+
+    return CreateMindmapPipeline(llm=_get_default_llm())
+
+
+def _get_render():
+    try:
+        from ktem.utils.render import Render
+    except ImportError as exc:
+        raise ImportError("Please install `ktem` to render QA citations.") from exc
+
+    return Render
 
 DEFAULT_QA_TEXT_PROMPT = (
     "Use the following pieces of context to answer the question at the end in detail with clear explanation. "  # noqa: E501
@@ -125,14 +147,14 @@ class AnswerWithContextPipeline(BaseComponent):
         lang: the language of the answer. Currently support English and Japanese
     """
 
-    llm: ChatLLM = Node(default_callback=lambda _: llms.get_default())
+    llm: ChatLLM = Node(default_callback=lambda _: _get_default_llm())
     vlm_endpoint: str = getattr(flowsettings, "KH_VLM_ENDPOINT", "")
     use_multimodal: bool = getattr(flowsettings, "KH_REASONINGS_USE_MULTIMODAL", True)
     citation_pipeline: CitationPipeline = Node(
-        default_callback=lambda _: CitationPipeline(llm=llms.get_default())
+        default_callback=lambda _: CitationPipeline(llm=_get_default_llm())
     )
-    create_mindmap_pipeline: CreateMindmapPipeline = Node(
-        default_callback=lambda _: CreateMindmapPipeline(llm=llms.get_default())
+    create_mindmap_pipeline: BaseComponent = Node(
+        default_callback=lambda _: _create_default_mindmap_pipeline()
     )
 
     qa_template: str = DEFAULT_QA_TEXT_PROMPT
@@ -370,6 +392,7 @@ class AnswerWithContextPipeline(BaseComponent):
         """Prepare the citations to show on the UI"""
         with_citation, without_citation = [], []
         has_llm_score = any("llm_trulens_score" in doc.metadata for doc in docs)
+        render = _get_render()
 
         spans = self.match_evidence_with_context(answer, docs)
         id2docs = {doc.doc_id: doc for doc in docs}
@@ -402,7 +425,7 @@ class AnswerWithContextPipeline(BaseComponent):
                 if span_idx is not None:
                     to_highlight = f"【{span_idx}】" + to_highlight
 
-                text += Render.highlight(
+                text += render.highlight(
                     to_highlight,
                     elem_id=str(span_idx) if span_idx is not None else None,
                 )
@@ -414,7 +437,7 @@ class AnswerWithContextPipeline(BaseComponent):
             with_citation.append(
                 Document(
                     channel="info",
-                    content=Render.collapsible_with_header_score(
+                    content=render.collapsible_with_header_score(
                         cur_doc,
                         override_text=text,
                         highlight_text=highlight_text,
@@ -442,7 +465,7 @@ class AnswerWithContextPipeline(BaseComponent):
             without_citation.append(
                 Document(
                     channel="info",
-                    content=Render.collapsible_with_header_score(
+                    content=render.collapsible_with_header_score(
                         doc, open_collapsible=is_open
                     ),
                 )
