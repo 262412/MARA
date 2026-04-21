@@ -50,8 +50,12 @@ class BaseApp:
         dir_assets = Path(__file__).parent / "assets"
         with (dir_assets / "css" / "main.css").open() as fi:
             self._css = fi.read()
+        with (dir_assets / "js" / "knowledge_graph_viewer.js").open(
+            encoding="utf-8"
+        ) as fi:
+            self._kg_viewer_js = fi.read()
         with (dir_assets / "js" / "main.js").open() as fi:
-            self._js = fi.read()
+            self._js = self._kg_viewer_js + "\n" + fi.read()
             self._js = self._js.replace("KH_APP_VERSION", self.app_version)
         with (dir_assets / "js" / "pdf_viewer.js").open(encoding="utf-8") as fi:
             self._pdf_view_js = fi.read()

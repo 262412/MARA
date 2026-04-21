@@ -364,6 +364,70 @@ def test_payload_attr_includes_prompt_and_graph_context(monkeypatch, tmp_path):
     assert payload["prompt"] != payload["suggested_question"]
 
 
+def test_render_graph_html_wraps_ready_graph_in_preview_card_and_viewer(
+    monkeypatch, tmp_path
+):
+    service = _make_service(monkeypatch, tmp_path)
+
+    graph = {
+        "schema_version": 2,
+        "source_ids": ["file-a", "file-b"],
+        "maps": [
+            {
+                "id": "map::1",
+                "type": "knowledge_map",
+                "kind": "map",
+                "label": "Knowledge System 1",
+                "summary": "Connected source set.",
+                "related_file_ids": ["file-a", "file-b"],
+                "component_ids": ["component::1"],
+                "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+                "support_chunk_ids": {"file-a": ["chunk-a"], "file-b": ["chunk-b"]},
+            }
+        ],
+        "components": [
+            {
+                "id": "component::1",
+                "type": "component",
+                "kind": "component",
+                "label": "Component 1",
+                "summary": "Shared concepts",
+                "related_file_ids": ["file-a", "file-b"],
+                "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+                "support_chunk_ids": {"file-a": ["chunk-a"], "file-b": ["chunk-b"]},
+                "children": [],
+            }
+        ],
+        "themes": [],
+        "subthemes": [],
+        "knowledge_points": [],
+        "node_index": {
+            "component::1": {
+                "id": "component::1",
+                "type": "component",
+                "kind": "component",
+                "label": "Component 1",
+                "summary": "Shared concepts",
+                "related_file_ids": ["file-a", "file-b"],
+                "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+                "support_chunk_ids": {"file-a": ["chunk-a"], "file-b": ["chunk-b"]},
+                "children": [],
+            }
+        },
+        "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+        "support_chunk_ids": {"file-a": ["chunk-a"], "file-b": ["chunk-b"]},
+    }
+
+    rendered = service._render_graph_html(graph, focus_file_id="", status="ready")
+
+    assert "kg-preview-card" in rendered
+    assert "data-kg-open-viewer='true'" in rendered
+    assert "kg-viewer-overlay" in rendered
+    assert "kg-viewer-viewport" in rendered
+    assert "kg-viewer-stage" in rendered
+    assert "Component 1" in rendered
+
+
 def test_render_graph_html_renders_flat_v2_map_branches(monkeypatch, tmp_path):
     service = _make_service(monkeypatch, tmp_path)
 
@@ -562,6 +626,65 @@ def test_render_graph_html_shows_split_banner_for_multiple_maps(monkeypatch, tmp
 
     assert "kg-map-split-banner" in rendered
     assert "split into 2 separate maps" in rendered
+
+
+def test_render_graph_html_shows_split_summary_on_preview_card(monkeypatch, tmp_path):
+    service = _make_service(monkeypatch, tmp_path)
+
+    graph = {
+        "schema_version": 2,
+        "source_ids": ["file-a", "file-b"],
+        "split_reason": "weakly_connected_sources",
+        "maps": [
+            {
+                "id": "map::1",
+                "type": "knowledge_map",
+                "kind": "map",
+                "label": "Map 1",
+                "summary": "A",
+                "related_file_ids": ["file-a"],
+                "component_ids": [],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            {
+                "id": "map::2",
+                "type": "knowledge_map",
+                "kind": "map",
+                "label": "Map 2",
+                "summary": "B",
+                "related_file_ids": ["file-b"],
+                "component_ids": [],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+        ],
+        "components": [],
+        "themes": [],
+        "subthemes": [],
+        "knowledge_points": [],
+        "node_index": {},
+        "support_pages": {},
+        "support_chunk_ids": {},
+    }
+
+    rendered = service._render_graph_html(graph, focus_file_id="", status="ready")
+
+    assert "kg-preview-card" in rendered
+    assert "Split into 2 separate maps" in rendered
+
+
+def test_render_empty_html_uses_non_interactive_preview_card(monkeypatch, tmp_path):
+    service = _make_service(monkeypatch, tmp_path)
+
+    rendered = service._render_empty_html(
+        "No graph available yet.",
+        "Upload related sources to generate a map.",
+    )
+
+    assert "kg-preview-card" in rendered
+    assert "data-kg-open-viewer='false'" in rendered
+    assert "No graph available yet." in rendered
 
 
 def test_conversation_graph_builds_schema_v2_theme_first_artifact(

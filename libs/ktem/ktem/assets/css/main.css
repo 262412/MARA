@@ -1222,12 +1222,10 @@ div.markmap {
   min-height: 100%;
   flex: 1 1 auto;
   max-height: none;
-  overflow: auto !important;
-  overscroll-behavior: contain;
+  overflow: visible !important;
   padding: 10px 8px 18px;
   cursor: default;
   touch-action: auto;
-  scrollbar-gutter: stable both-edges;
 }
 
 #knowledge-graph-plot .knowledge-graph-shell.is-loading {
@@ -1300,6 +1298,152 @@ div.markmap {
 
 #knowledge-graph-plot .knowledge-graph-shell.is-dragging {
   user-select: none;
+}
+
+#knowledge-graph-plot .kg-preview-card {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 34%, #d4d4d8);
+  border-radius: 20px;
+  background:
+    radial-gradient(130% 180% at 0% 0%, rgba(109, 125, 255, 0.18), transparent 52%),
+    linear-gradient(140deg, rgba(18, 24, 44, 0.98), rgba(8, 12, 22, 0.96));
+  color: var(--body-text-color, #f8fafc);
+  text-align: left;
+  cursor: pointer;
+  box-shadow:
+    0 18px 36px rgba(3, 6, 14, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+#knowledge-graph-plot .kg-preview-card:hover {
+  border-color: color-mix(in srgb, var(--color-accent, #2563eb) 62%, #94a3b8);
+  transform: translateY(-1px);
+  box-shadow:
+    0 24px 40px rgba(3, 6, 14, 0.34),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+#knowledge-graph-plot .kg-preview-card__title {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+#knowledge-graph-plot .kg-preview-card__meta {
+  font-size: 0.88rem;
+  color: color-mix(in srgb, var(--body-text-color-subdued, #94a3b8) 88%, #dbeafe);
+}
+
+#knowledge-graph-plot .kg-preview-card__cta {
+  width: fit-content;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 38%, #cbd5e1);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--body-text-color, #f8fafc);
+}
+
+#knowledge-graph-plot .kg-preview-card--disabled {
+  cursor: default;
+  opacity: 0.78;
+  transform: none !important;
+}
+
+#knowledge-graph-plot .kg-viewer-overlay[hidden] {
+  display: none !important;
+}
+
+#knowledge-graph-plot .kg-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: block;
+  background:
+    radial-gradient(120% 180% at 8% 100%, rgba(90, 122, 255, 0.14), transparent 72%),
+    radial-gradient(120% 180% at 92% 100%, rgba(52, 186, 112, 0.12), transparent 72%),
+    rgba(3, 6, 14, 0.82);
+  padding: 20px;
+  backdrop-filter: blur(8px);
+}
+
+#knowledge-graph-plot .kg-viewer-dialog {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 30%, #334155);
+  background:
+    radial-gradient(120% 180% at 0% 0%, rgba(109, 125, 255, 0.16), transparent 50%),
+    linear-gradient(140deg, rgba(10, 14, 24, 0.98), rgba(6, 9, 18, 0.98));
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.34),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  padding: 18px;
+}
+
+#knowledge-graph-plot .kg-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#knowledge-graph-plot .kg-viewer-toolbar button {
+  min-width: 44px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 24%, #64748b);
+  background:
+    radial-gradient(120% 180% at 0% 0%, rgba(109, 125, 255, 0.14), transparent 52%),
+    rgba(15, 23, 42, 0.62);
+  color: var(--body-text-color, #f8fafc);
+  box-shadow: none;
+}
+
+#knowledge-graph-plot .kg-viewer-viewport {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--border-color-primary, #334155) 86%, transparent);
+  background:
+    radial-gradient(120% 180% at 0% 0%, rgba(109, 125, 255, 0.06), transparent 56%),
+    rgba(3, 7, 18, 0.72);
+  cursor: grab;
+}
+
+#knowledge-graph-plot .kg-viewer-viewport.is-dragging {
+  cursor: grabbing;
+}
+
+#knowledge-graph-plot .kg-viewer-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  transform-origin: 0 0;
+  will-change: transform;
+  padding: 28px 32px 40px;
+}
+
+#knowledge-graph-plot .kg-viewer-stage .kg-mindmap-root,
+#knowledge-graph-plot .kg-viewer-stage .kg-map-sections {
+  width: max-content;
+}
+
+body.kg-viewer-open {
+  overflow: hidden;
 }
 
 #knowledge-graph-plot .kg-empty {

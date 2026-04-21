@@ -393,34 +393,37 @@ class KnowledgeGraphRenderer:
         }
         return html.escape(json.dumps(payload, ensure_ascii=False), quote=True)
 
-    def render_empty_html(self, message: str, hint: str = "") -> str:
-        hint_html = f"<p class='kg-empty__hint'>{html.escape(hint)}</p>" if hint else ""
+    def _preview_title(self, maps: list[dict[str, Any]]) -> str:
+        return "Conversation Knowledge Map" if len(maps) <= 1 else "Conversation Knowledge Maps"
+
+    def _preview_meta(self, graph: dict[str, Any], maps: list[dict[str, Any]], status: str) -> str:
+        if status != "ready":
+            return "Knowledge graph is not ready yet."
+        if len(maps) > 1:
+            return f"Split into {len(maps)} separate maps"
+        source_count = len(list(graph.get("source_ids", []) or []))
+        if source_count == 1:
+            return "Based on 1 source"
+        return f"Based on {source_count} sources"
+
+    def _render_preview_card(
+        self, graph: dict[str, Any], maps: list[dict[str, Any]], status: str
+    ) -> str:
+        title = self._preview_title(maps)
+        meta = self._preview_meta(graph, maps, status)
         return (
-            "<div class='knowledge-graph-shell is-empty'>"
-            "<div class='kg-empty'>"
-            f"<h4>{html.escape(message)}</h4>"
-            f"{hint_html}"
-            "</div>"
-            "</div>"
+            "<button type='button' class='kg-preview-card' "
+            "data-kg-open-viewer='true'>"
+            f"<span class='kg-preview-card__title'>{html.escape(title)}</span>"
+            f"<span class='kg-preview-card__meta'>{html.escape(meta)}</span>"
+            "<span class='kg-preview-card__cta'>Open Graph</span>"
+            "</button>"
         )
 
-    def render_graph_html(
-        self, graph: dict[str, Any], focus_file_id: str, status: str
-    ) -> str:
+    def _render_graph_canvas(self, graph: dict[str, Any], focus_file_id: str) -> str:
         maps = self._graph_maps(graph)
 
-        shell_classes = "knowledge-graph-shell"
-        if status == "stale":
-            shell_classes += " is-stale"
-        if len(maps) > 1:
-            shell_classes += " is-split"
-
-        shell_html = [
-            f"<div class='{shell_classes}' id='knowledge-graph-panel' ",
-            f"data-kg-status='{html.escape(status, quote=True)}' ",
-            "data-kg-layout='mindmap' data-kg-schema='v2'>",
-        ]
-
+        shell_html: list[str] = []
         root_source_ids = list(graph.get("source_ids", []) or [])
         if len(maps) == 1:
             single_root = self._materialize_v2_item(
@@ -442,8 +445,9 @@ class KnowledgeGraphRenderer:
                 "knowledge_root",
             )
             shell_html.append("<div class='kg-mindmap-root'>")
-            shell_html.append(self._render_branch(single_root, focus_file_id, "knowledge_root", 0))
-            shell_html.append("</div>")
+            shell_html.append(
+                self._render_branch(single_root, focus_file_id, "knowledge_root", 0)
+            )
             shell_html.append("</div>")
             return "".join(shell_html)
 
@@ -478,7 +482,6 @@ class KnowledgeGraphRenderer:
                 self._render_branch(root_item, focus_file_id, "knowledge_root", 0)
             )
             shell_html.append("</div>")
-            shell_html.append("</div>")
             return "".join(shell_html)
 
         root_summary = (
@@ -501,7 +504,9 @@ class KnowledgeGraphRenderer:
             "knowledge_root",
         )
         shell_html.append("<div class='kg-mindmap-root kg-mindmap-root--split'>")
-        shell_html.append(self._render_branch(split_root, focus_file_id, "knowledge_root", 0))
+        shell_html.append(
+            self._render_branch(split_root, focus_file_id, "knowledge_root", 0)
+        )
         shell_html.append("</div>")
         shell_html.append(
             "<div class='kg-map-split-banner'>"
@@ -521,6 +526,68 @@ class KnowledgeGraphRenderer:
                 self._render_branch(materialized_map, focus_file_id, "knowledge_map", 0)
             )
             shell_html.append("</section>")
+        shell_html.append("</div>")
+        return "".join(shell_html)
+
+    def render_empty_html(self, message: str, hint: str = "") -> str:
+        meta = html.escape(hint) if hint else "Knowledge graph is not ready yet."
+        return (
+            "<div class='knowledge-graph-shell is-empty' "
+            "data-kg-status='empty' data-kg-layout='mindmap' data-kg-schema='v2'>"
+            "<div class='kg-preview-card kg-preview-card--disabled' "
+            "data-kg-open-viewer='false'>"
+            f"<span class='kg-preview-card__title'>{html.escape(message)}</span>"
+            f"<span class='kg-preview-card__meta'>{meta}</span>"
+            "</div>"
+            "</div>"
+        )
+
+    def render_graph_html(
+        self, graph: dict[str, Any], focus_file_id: str, status: str
+    ) -> str:
+        maps = self._graph_maps(graph)
+
+        shell_classes = "knowledge-graph-shell"
+        if status == "stale":
+            shell_classes += " is-stale"
+        if len(maps) > 1:
+            shell_classes += " is-split"
+
+        shell_html = [
+            f"<div class='{shell_classes}' id='knowledge-graph-panel' ",
+            f"data-kg-status='{html.escape(status, quote=True)}' ",
+            "data-kg-layout='mindmap' data-kg-schema='v2'>",
+        ]
+        shell_html.append(self._render_preview_card(graph, maps, status))
+        shell_html.append("<div class='kg-viewer-overlay' data-kg-viewer-overlay='true' hidden>")
+        shell_html.append("<div class='kg-viewer-dialog'>")
+        shell_html.append("<div class='kg-viewer-toolbar'>")
+        shell_html.append(
+            "<button type='button' data-kg-viewer-action='zoom-in'>+</button>"
+        )
+        shell_html.append(
+            "<button type='button' data-kg-viewer-action='zoom-out'>-</button>"
+        )
+        shell_html.append(
+            "<button type='button' data-kg-viewer-action='fit'>Fit</button>"
+        )
+        shell_html.append(
+            "<button type='button' data-kg-viewer-action='reset'>Reset</button>"
+        )
+        shell_html.append(
+            "<button type='button' data-kg-viewer-close='true'>Close</button>"
+        )
+        shell_html.append("</div>")
+        shell_html.append(
+            "<div class='kg-viewer-viewport' data-kg-viewer-viewport='true'>"
+        )
+        shell_html.append(
+            "<div class='kg-viewer-stage' data-kg-viewer-stage='true'>"
+        )
+        shell_html.append(self._render_graph_canvas(graph, focus_file_id))
+        shell_html.append("</div>")
+        shell_html.append("</div>")
+        shell_html.append("</div>")
         shell_html.append("</div>")
         shell_html.append("</div>")
         return "".join(shell_html)
