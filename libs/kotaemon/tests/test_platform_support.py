@@ -10,6 +10,7 @@ from kotaemon.platform_support import (
     validate_bundle,
     validate_installed,
 )
+from kotaemon.platform_support import validator as platform_validator
 
 DOCQA_ACTION_SKILLS = (
     "kotaemon-docqa-ask",
@@ -168,12 +169,8 @@ def test_validate_bundle_reports_missing_split_docqa_asset(monkeypatch, tmp_path
         )
         bundle_root = tmp_path
 
-    monkeypatch.setattr(
-        "kotaemon.platform_support.validator.get_platform_spec", lambda _: _Spec()
-    )
-    monkeypatch.setattr(
-        "kotaemon.platform_support.validator.list_platform_names", lambda: ["codex"]
-    )
+    monkeypatch.setattr(platform_validator, "get_platform_spec", lambda _: _Spec())
+    monkeypatch.setattr(platform_validator, "list_platform_names", lambda: ["codex"])
 
     result = validate_bundle("codex")[0]
 
