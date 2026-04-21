@@ -225,13 +225,19 @@ class BaseApp:
 
     def register_child_page(self, attr_name: str, page: "BasePage") -> "BasePage":
         setattr(self, attr_name, page)
-        if page not in self._registered_child_pages:
-            self._registered_child_pages.append(page)
+        registered_child_pages = getattr(self, "_registered_child_pages", None)
+        if registered_child_pages is None:
+            registered_child_pages = []
+            self._registered_child_pages = registered_child_pages
+        if isinstance(page, BasePage) and page not in registered_child_pages:
+            registered_child_pages.append(page)
         return page
 
     def _iter_child_pages(self):
         seen: set[int] = set()
-        for page in self._registered_child_pages:
+        for page in getattr(self, "_registered_child_pages", []):
+            if not isinstance(page, BasePage):
+                continue
             page_id = id(page)
             if page_id in seen:
                 continue
@@ -306,13 +312,19 @@ class BasePage:
 
     def register_child_page(self, attr_name: str, page: "BasePage") -> "BasePage":
         setattr(self, attr_name, page)
-        if page not in self._registered_child_pages:
-            self._registered_child_pages.append(page)
+        registered_child_pages = getattr(self, "_registered_child_pages", None)
+        if registered_child_pages is None:
+            registered_child_pages = []
+            self._registered_child_pages = registered_child_pages
+        if isinstance(page, BasePage) and page not in registered_child_pages:
+            registered_child_pages.append(page)
         return page
 
     def _iter_child_pages(self):
         seen: set[int] = set()
-        for page in self._registered_child_pages:
+        for page in getattr(self, "_registered_child_pages", []):
+            if not isinstance(page, BasePage):
+                continue
             page_id = id(page)
             if page_id in seen:
                 continue

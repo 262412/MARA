@@ -44,6 +44,24 @@ class _RecorderApp(BaseApp):
         self._tracker.append(("app", "created"))
 
 
+class _LegacyPage(BasePage):
+    public_events = ["legacy:event"]
+
+    def __init__(self, app, events, name):
+        self._app = app
+        self._events = events
+        self._name = name
+
+    def on_subscribe_public_events(self):
+        self._events.append((self._name, "subscribe"))
+
+    def on_register_events(self):
+        self._events.append((self._name, "register"))
+
+    def _on_app_created(self):
+        self._events.append((self._name, "created"))
+
+
 def test_base_page_child_lifecycle_prefers_registered_pages_without_duplicates():
     tracker = []
     app = _RecorderApp()
@@ -98,3 +116,40 @@ def test_base_app_child_lifecycle_prefers_registered_pages_without_duplicates():
         ("legacy", "created"),
     ]
     assert app._declared == ["recorder:event", "recorder:event"]
+
+
+def test_base_page_lifecycle_supports_legacy_pages_without_base_init():
+    app = _RecorderApp()
+    legacy_page = _LegacyPage(app, app._tracker, "legacy")
+
+    legacy_page.declare_public_events()
+    legacy_page.subscribe_public_events()
+    legacy_page.register_events()
+    legacy_page.on_app_created()
+
+    assert app._declared == ["legacy:event"]
+    assert app._tracker == [
+        ("legacy", "subscribe"),
+        ("legacy", "register"),
+        ("legacy", "created"),
+    ]
+
+
+def test_register_child_page_ignores_non_basepage_objects():
+    app = _RecorderApp()
+    helper = object()
+
+    returned = app.register_child_page("helper", helper)
+    app.declare_public_events()
+    app.subscribe_public_events()
+    app.register_events()
+    app.on_app_created()
+
+    assert returned is helper
+    assert app.helper is helper
+    assert app._declared == []
+    assert app._tracker == [
+        ("app", "subscribe"),
+        ("app", "register"),
+        ("app", "created"),
+    ]
