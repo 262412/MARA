@@ -1,10 +1,9 @@
 ﻿from __future__ import annotations
 
-import html
 import json
 import re
 import threading
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +14,8 @@ from sqlmodel import Session
 from theflow.settings import settings as flowsettings
 
 from kotaemon.base import HumanMessage, SystemMessage
+from .knowledge_graph_builder import KnowledgeGraphBuilder
+from .knowledge_graph_renderer import KnowledgeGraphRenderer
 
 _EN_STOPWORDS = {
     "about",
@@ -75,24 +76,6 @@ def _limit_unique_strings(values: list[str], limit: int) -> list[str]:
     return output
 
 
-class _UnionFind:
-    def __init__(self, values: list[str]):
-        self.parent = {value: value for value in values}
-
-    def find(self, value: str) -> str:
-        parent = self.parent.get(value, value)
-        if parent != value:
-            parent = self.find(parent)
-            self.parent[value] = parent
-        return parent
-
-    def union(self, left: str, right: str) -> None:
-        left_root = self.find(left)
-        right_root = self.find(right)
-        if left_root != right_root:
-            self.parent[right_root] = left_root
-
-
 class GlobalKnowledgeGraphService:
     """Conversation-scoped knowledge graph service."""
 
@@ -100,6 +83,8 @@ class GlobalKnowledgeGraphService:
         self._app = app
         self._index = index
         self._lock = threading.Lock()
+        self._builder = KnowledgeGraphBuilder(self)
+        self._renderer = KnowledgeGraphRenderer(self)
 
         root_dir = Path(getattr(flowsettings, "KH_APP_DATA_DIR", Path.cwd()))
         self._storage_dir = root_dir / "knowledge_graph" / "conversations"
@@ -503,641 +488,50 @@ class GlobalKnowledgeGraphService:
         return self._parse_outline_json(response_text)
 
     def _build_file_graph(self, file_id: str, source: dict[str, Any]) -> dict[str, Any]:
-        docs = self._load_file_docs(file_id)
-        candidates, pages_seen = self._make_sentence_candidates(docs)
-        candidates, top_keywords = self._score_candidates(candidates)
-
-        llm_outline = self._generate_outline_with_llm(
-            source.get("name", file_id), candidates[:16]
-        )
-
-        if llm_outline and llm_outline.get("knowledge_points"):
-            summary_text = self._trim_sentence(llm_outline.get("summary", ""), 132)
-            if not summary_text and candidates:
-                summary_text = self._trim_sentence(candidates[0].get("text", ""), 132)
-            summary_candidate = (
-                candidates[0] if candidates else {"page_label": "", "doc_id": ""}
-            )
-
-            knowledge_points: list[dict[str, Any]] = []
-            for point in llm_outline.get("knowledge_points", []):
-                label = self._trim_sentence(str(point.get("label", "") or ""), 110)
-                if not label or self._is_duplicate_point(knowledge_points, label):
-                    continue
-                match = (
-                    candidates[len(knowledge_points)]
-                    if len(candidates) > len(knowledge_points)
-                    else summary_candidate
-                )
-                support_pages = _limit_unique_strings([match.get("page_label", "")], 8)
-                support_chunk_ids = _limit_unique_strings([match.get("doc_id", "")], 8)
-                knowledge_points.append(
-                    {
-                        "id": f"point::{file_id}::{len(knowledge_points) + 1}",
-                        "type": "knowledge_point",
-                        "file_id": file_id,
-                        "label": label,
-                        "keywords": _limit_unique_strings(
-                            list(point.get("keywords", []))
-                            + self._extract_keywords(label, limit=6),
-                            6,
-                        ),
-                        "related_file_ids": [file_id],
-                        "support_pages": {file_id: support_pages},
-                        "support_chunk_ids": {file_id: support_chunk_ids},
-                    }
-                )
-                if len(knowledge_points) >= 6:
-                    break
-            if not knowledge_points:
-                llm_outline = None
-
-        if not llm_outline:
-            if candidates:
-                summary_candidate = candidates[0]
-                summary_text = self._trim_sentence(
-                    summary_candidate.get("text", ""), 132
-                )
-            else:
-                summary_text = (
-                    f"{source.get('name', file_id)} contains indexed content "
-                    "for this conversation."
-                )
-                summary_candidate = {"page_label": "", "doc_id": ""}
-
-            knowledge_points = []
-            for candidate in candidates:
-                label = self._trim_sentence(candidate.get("text", ""), 110)
-                if not label or self._is_duplicate_point(knowledge_points, label):
-                    continue
-                support_pages = _limit_unique_strings(
-                    [candidate.get("page_label", "")], 8
-                )
-                support_chunk_ids = _limit_unique_strings(
-                    [candidate.get("doc_id", "")], 8
-                )
-                knowledge_points.append(
-                    {
-                        "id": f"point::{file_id}::{len(knowledge_points) + 1}",
-                        "type": "knowledge_point",
-                        "file_id": file_id,
-                        "label": label,
-                        "keywords": _limit_unique_strings(
-                            candidate.get("keywords", []), 6
-                        ),
-                        "related_file_ids": [file_id],
-                        "support_pages": {file_id: support_pages},
-                        "support_chunk_ids": {file_id: support_chunk_ids},
-                    }
-                )
-                if len(knowledge_points) >= 6:
-                    break
-            if not knowledge_points:
-                knowledge_points.append(
-                    {
-                        "id": f"point::{file_id}::1",
-                        "type": "knowledge_point",
-                        "file_id": file_id,
-                        "label": self._trim_sentence(summary_text, 110),
-                        "keywords": top_keywords[:4],
-                        "related_file_ids": [file_id],
-                        "support_pages": {
-                            file_id: _limit_unique_strings(
-                                [summary_candidate.get("page_label", "")], 8
-                            )
-                        },
-                        "support_chunk_ids": {
-                            file_id: _limit_unique_strings(
-                                [summary_candidate.get("doc_id", "")], 8
-                            )
-                        },
-                    }
-                )
-
-        summary_pages = _limit_unique_strings(
-            [summary_candidate.get("page_label", "")] + pages_seen,
-            12,
-        )
-        summary_chunks = _limit_unique_strings(
-            [summary_candidate.get("doc_id", "")], 12
-        )
-
-        return {
-            "file_id": file_id,
-            "file_name": source.get("name", file_id),
-            "signature": self._make_signature(source),
-            "summary": summary_text,
-            "pages": pages_seen,
-            "top_keywords": top_keywords,
-            "summary_support_pages": {file_id: summary_pages},
-            "summary_support_chunk_ids": {file_id: summary_chunks},
-            "knowledge_points": knowledge_points,
-        }
+        return self._builder.build_file_graph(file_id, source)
 
     def _shared_keywords(
         self, left: dict[str, Any], right: dict[str, Any]
     ) -> list[str]:
-        right_keywords = set(right.get("top_keywords", []))
-        shared = [
-            keyword
-            for keyword in left.get("top_keywords", [])
-            if keyword in right_keywords
-        ]
-        return _limit_unique_strings(shared, 6)
+        return self._builder.shared_keywords(left, right)
 
     def _group_files_into_systems(
         self, file_graphs: list[dict[str, Any]]
     ) -> list[list[dict[str, Any]]]:
-        file_ids = [graph["file_id"] for graph in file_graphs]
-        union_find = _UnionFind(file_ids)
-        graph_map = {graph["file_id"]: graph for graph in file_graphs}
-
-        for index, left_id in enumerate(file_ids):
-            for right_id in file_ids[index + 1 :]:
-                shared = self._shared_keywords(graph_map[left_id], graph_map[right_id])
-                if len(shared) >= 2:
-                    union_find.union(left_id, right_id)
-
-        grouped_ids: dict[str, list[str]] = defaultdict(list)
-        for file_id in file_ids:
-            grouped_ids[union_find.find(file_id)].append(file_id)
-
-        ordered_systems: list[list[dict[str, Any]]] = []
-        for cluster_ids in grouped_ids.values():
-            cluster_graphs = [graph_map[file_id] for file_id in cluster_ids]
-            cluster_graphs.sort(
-                key=lambda item: item.get("file_name", item["file_id"]).lower()
-            )
-            ordered_systems.append(cluster_graphs)
-
-        ordered_systems.sort(
-            key=lambda cluster: (
-                -len(cluster),
-                cluster[0].get("file_name", cluster[0]["file_id"]).lower(),
-            )
-        )
-        return ordered_systems
+        return self._builder.group_files_into_systems(file_graphs)
 
     @staticmethod
     def _merge_support_dict(
         target: dict[str, list[str]], source: dict[str, list[str]] | None, limit: int
     ) -> dict[str, list[str]]:
-        for file_id, values in (source or {}).items():
-            key = str(file_id or "").strip()
-            if not key:
-                continue
-            target[key] = _limit_unique_strings(
-                target.get(key, []) + list(values or []), limit
-            )
-        return target
+        return KnowledgeGraphBuilder.merge_support_dict(target, source, limit)
 
     def _build_conversation_graph(
         self, conversation_id: str, sources: dict[str, dict[str, Any]]
     ) -> dict[str, Any]:
-        file_graphs = [
-            self._build_file_graph(file_id, source)
-            for file_id, source in sources.items()
-        ]
-
-        systems: list[dict[str, Any]] = []
-        file_cards: list[dict[str, Any]] = []
-        knowledge_points: list[dict[str, Any]] = []
-        edges: list[dict[str, Any]] = []
-        support_pages: dict[str, list[str]] = {}
-        support_chunk_ids: dict[str, list[str]] = {}
-
-        for system_index, grouped_file_graphs in enumerate(
-            self._group_files_into_systems(file_graphs), start=1
-        ):
-            system_id = f"system::{system_index}"
-            related_file_ids = [graph["file_id"] for graph in grouped_file_graphs]
-            shared_keywords = _limit_unique_strings(
-                [
-                    keyword
-                    for graph in grouped_file_graphs
-                    for keyword in graph.get("top_keywords", [])
-                ],
-                6,
-            )
-            system_support_pages = {
-                file_id: graph.get("summary_support_pages", {}).get(file_id, [])
-                for graph in grouped_file_graphs
-                for file_id in [graph["file_id"]]
-            }
-            system_support_chunk_ids = {
-                file_id: graph.get("summary_support_chunk_ids", {}).get(file_id, [])
-                for graph in grouped_file_graphs
-                for file_id in [graph["file_id"]]
-            }
-
-            themes: list[dict[str, Any]] = []
-            if len(grouped_file_graphs) > 1:
-                for idx, keyword in enumerate(shared_keywords[:4], start=1):
-                    theme = {
-                        "id": f"theme::{system_index}::{idx}",
-                        "type": "system_relation",
-                        "label": keyword,
-                        "summary": f"Shared theme '{keyword}' across "
-                        f"{len(related_file_ids)} files.",
-                        "related_file_ids": related_file_ids,
-                        "support_pages": system_support_pages,
-                        "support_chunk_ids": system_support_chunk_ids,
-                    }
-                    themes.append(theme)
-                    edges.append(
-                        {
-                            "source": system_id,
-                            "target": theme["id"],
-                            "type": "system_theme",
-                            "related_file_ids": related_file_ids,
-                        }
-                    )
-
-            if len(grouped_file_graphs) == 1:
-                file_name = grouped_file_graphs[0].get(
-                    "file_name", grouped_file_graphs[0]["file_id"]
-                )
-                label = f"{file_name} system"
-                summary = f"Centered on {file_name} and its core ideas."
-            else:
-                label = "Shared knowledge system"
-                summary = (
-                    f"Connects {len(grouped_file_graphs)} sources through "
-                    f"{', '.join(shared_keywords[:3])}."
-                    if shared_keywords
-                    else f"Connects {len(grouped_file_graphs)} uploaded sources."
-                )
-
-            systems.append(
-                {
-                    "id": system_id,
-                    "type": "knowledge_system",
-                    "label": label,
-                    "summary": summary,
-                    "related_file_ids": related_file_ids,
-                    "shared_keywords": shared_keywords,
-                    "support_pages": system_support_pages,
-                    "support_chunk_ids": system_support_chunk_ids,
-                    "themes": themes,
-                }
-            )
-
-            for graph in grouped_file_graphs:
-                file_id = graph["file_id"]
-                file_card = {
-                    "id": f"file::{file_id}",
-                    "type": "file_summary",
-                    "system_id": system_id,
-                    "file_id": file_id,
-                    "label": graph.get("file_name", file_id),
-                    "summary": graph.get("summary", ""),
-                    "related_file_ids": related_file_ids,
-                    "support_pages": graph.get("summary_support_pages", {}),
-                    "support_chunk_ids": graph.get("summary_support_chunk_ids", {}),
-                    "top_keywords": graph.get("top_keywords", [])[:6],
-                }
-                file_cards.append(file_card)
-                edges.append(
-                    {
-                        "source": system_id,
-                        "target": file_card["id"],
-                        "type": "system_file",
-                        "related_file_ids": related_file_ids,
-                    }
-                )
-
-                for point in graph.get("knowledge_points", []):
-                    point = dict(point)
-                    point["system_id"] = system_id
-                    point["related_file_ids"] = related_file_ids
-                    knowledge_points.append(point)
-                    edges.append(
-                        {
-                            "source": file_card["id"],
-                            "target": point["id"],
-                            "type": "file_point",
-                            "related_file_ids": related_file_ids,
-                        }
-                    )
-
-                self._merge_support_dict(
-                    support_pages, graph.get("summary_support_pages", {}), 24
-                )
-                self._merge_support_dict(
-                    support_chunk_ids, graph.get("summary_support_chunk_ids", {}), 36
-                )
-                for point in graph.get("knowledge_points", []):
-                    self._merge_support_dict(
-                        support_pages, point.get("support_pages", {}), 24
-                    )
-                    self._merge_support_dict(
-                        support_chunk_ids, point.get("support_chunk_ids", {}), 36
-                    )
-
-        return {
-            "conversation_id": conversation_id,
-            "source_ids": list(sources.keys()),
-            "systems": systems,
-            "file_cards": file_cards,
-            "knowledge_points": knowledge_points,
-            "edges": edges,
-            "support_pages": support_pages,
-            "support_chunk_ids": support_chunk_ids,
-        }
+        return self._builder.build_conversation_graph(conversation_id, sources)
 
     def _make_graph_context(
         self, item: dict[str, Any], focus_file_id: str
     ) -> dict[str, Any]:
-        related_file_ids = _limit_unique_strings(
-            [focus_file_id] + list(item.get("related_file_ids", []) or []),
-            12,
-        )
-        return {
-            "label": item.get("label", ""),
-            "type": item.get("type", ""),
-            "focus_file_id": focus_file_id,
-            "related_file_ids": related_file_ids,
-            "support_pages": item.get("support_pages", {}),
-            "support_chunk_ids": item.get("support_chunk_ids", {}),
-        }
+        return self._renderer.make_graph_context(item, focus_file_id)
 
     def _build_suggested_question(self, item: dict[str, Any]) -> str:
-        label = str(item.get("label", "") or "this topic")
-        item_type = str(item.get("type", "") or "")
-        if item_type == "knowledge_root":
-            return (
-                "Can you summarize the major knowledge systems in this "
-                "conversation and explain how they differ?"
-            )
-        if item_type == "knowledge_system":
-            return (
-                f"Can you explain the knowledge system '{label}' and how it "
-                "connects across uploaded files?"
-            )
-        if item_type == "file_summary":
-            return (
-                f"Can you explain the role of '{label}' and its most important "
-                "ideas in the selected file?"
-            )
-        if item_type == "system_relation":
-            return (
-                f"Can you explain why '{label}' is a shared theme across these files?"
-            )
-        return f"Can you explain this knowledge point: '{label}'?"
+        return self._renderer.build_suggested_question(item)
 
     def _build_prompt(self, item: dict[str, Any], focus_file_id: str) -> str:
-        label = str(item.get("label", "") or "this topic")
-        graph_context = self._make_graph_context(item, focus_file_id)
-        related_ids = list(graph_context.get("related_file_ids", []) or [])
-
-        if len(related_ids) > 1:
-            relation_clause = (
-                " Then add how it connects with related files from the same "
-                "conversation."
-            )
-        else:
-            relation_clause = (
-                " Then mention whether any cross-file relation is supported."
-            )
-
-        return (
-            f"Please explain '{label}' using current-file/current-page evidence first."
-            + relation_clause
-        )
+        return self._renderer.build_prompt(item, focus_file_id)
 
     def _payload_attr(self, item: dict[str, Any], focus_file_id: str) -> str:
-        summary = str(item.get("summary", "") or "")
-        if not summary:
-            summary = str(item.get("label", "") or "")
-        prompt = self._build_prompt(item, focus_file_id)
-        payload = {
-            "graph_context": self._make_graph_context(item, focus_file_id),
-            "node_label": str(item.get("label", "") or ""),
-            "node_type": str(item.get("type", "") or ""),
-            "summary": summary,
-            "prompt": prompt,
-            "suggested_question": prompt,
-        }
-        return html.escape(json.dumps(payload, ensure_ascii=False), quote=True)
+        return self._renderer.payload_attr(item, focus_file_id)
 
     def _render_empty_html(self, message: str, hint: str = "") -> str:
-        hint_html = f"<p class='kg-empty__hint'>{html.escape(hint)}</p>" if hint else ""
-        return (
-            "<div class='knowledge-graph-shell is-empty'>"
-            "<div class='kg-empty'>"
-            f"<h4>{html.escape(message)}</h4>"
-            f"{hint_html}"
-            "</div>"
-            "</div>"
-        )
+        return self._renderer.render_empty_html(message, hint)
 
     def _render_graph_html(
         self, graph: dict[str, Any], focus_file_id: str, status: str
     ) -> str:
-        systems = list(graph.get("systems", []) or [])
-        file_cards = list(graph.get("file_cards", []) or [])
-        knowledge_points = list(graph.get("knowledge_points", []) or [])
-
-        if not systems:
-            return self._render_empty_html(
-                "No knowledge graph available yet.",
-                "Generate a graph after uploading related sources to this "
-                "conversation.",
-            )
-
-        file_cards_by_system: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for file_card in file_cards:
-            file_cards_by_system[str(file_card.get("system_id", ""))].append(file_card)
-
-        points_by_file: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for point in knowledge_points:
-            points_by_file[str(point.get("file_id", ""))].append(point)
-
-        systems.sort(
-            key=lambda item: (
-                0 if focus_file_id in (item.get("related_file_ids", []) or []) else 1,
-                str(item.get("label", "")),
-            )
-        )
-
-        root_item = {
-            "id": "root::conversation",
-            "type": "knowledge_root",
-            "label": "Conversation Knowledge Tree",
-            "summary": (
-                f"{len(file_cards)} file node(s), "
-                f"{len(knowledge_points)} knowledge point(s), "
-                f"{len(systems)} system(s)."
-            ),
-            "related_file_ids": list(graph.get("source_ids", []) or []),
-            "support_pages": graph.get("support_pages", {}) or {},
-            "support_chunk_ids": graph.get("support_chunk_ids", {}) or {},
-        }
-
-        system_html_parts: list[str] = []
-        for system in systems:
-            system_id = str(system.get("id", "") or "")
-            file_group = file_cards_by_system.get(system_id, [])
-            file_group.sort(
-                key=lambda item: (
-                    0 if item.get("file_id") == focus_file_id else 1,
-                    str(item.get("label", "")).lower(),
-                )
-            )
-            is_focus_system = bool(
-                focus_file_id
-                and focus_file_id in (system.get("related_file_ids", []) or [])
-            )
-            system_classes = (
-                "kg-tree-item kg-tree-item--system kg-system is-focused"
-                if is_focus_system
-                else "kg-tree-item kg-tree-item--system kg-system"
-            )
-            system_html_parts.append(f"<li class='{system_classes}'>")
-            system_html_parts.append(
-                "<button type='button' "
-                "class='kg-tree-node kg-tree-node--system kg-pill "
-                "kg-system__title' "
-                f'data-kg-payload="{self._payload_attr(system, focus_file_id)}">'
-                f"{html.escape(str(system.get('label', 'Knowledge system')))}"
-                "</button>"
-            )
-            system_html_parts.append(
-                "<p class='kg-tree-item__meta kg-system__summary'>"
-                f"{html.escape(str(system.get('summary', '') or ''))}"
-                "</p>"
-            )
-
-            themes = list(system.get("themes", []) or [])
-            if themes:
-                system_html_parts.append("<div class='kg-tree-item__keywords'>")
-                for theme in themes:
-                    system_html_parts.append(
-                        "<button type='button' "
-                        "class='kg-tree-node kg-tree-node--theme "
-                        "kg-theme-node' "
-                        f'data-kg-payload="{self._payload_attr(theme, focus_file_id)}">'
-                        f"{html.escape(str(theme.get('label', '') or 'theme'))}"
-                        "</button>"
-                    )
-                system_html_parts.append("</div>")
-
-            system_html_parts.append(
-                "<ul class='kg-tree-list kg-tree-list--files kg-system__files'>"
-            )
-            for file_card in file_group:
-                file_id = str(file_card.get("file_id", "") or "")
-                safe_file_id = html.escape(file_id, quote=True)
-                is_focused_file = bool(focus_file_id and file_id == focus_file_id)
-                file_classes = (
-                    "kg-tree-item kg-tree-item--file kg-file-card is-focused"
-                    if is_focused_file
-                    else "kg-tree-item kg-tree-item--file kg-file-card"
-                )
-                system_html_parts.append(
-                    f"<li class='{file_classes}' data-kg-file-card='{safe_file_id}'>"
-                )
-                system_html_parts.append(
-                    "<button type='button' "
-                    "class='kg-tree-node kg-tree-node--file "
-                    "kg-file-card__title' "
-                    f'data-kg-payload="{self._payload_attr(file_card, focus_file_id)}">'
-                    f"{html.escape(str(file_card.get('label', file_id) or file_id))}"
-                    "</button>"
-                )
-                system_html_parts.append(
-                    "<p class='kg-tree-item__meta kg-file-card__summary'>"
-                    f"{html.escape(str(file_card.get('summary', '') or ''))}"
-                    "</p>"
-                )
-
-                file_points = list(points_by_file.get(file_id, []))
-                collapsed_points: list[dict[str, Any]] = []
-                visible_points = file_points
-                if not is_focused_file and len(file_group) > 1:
-                    visible_points = file_points[:2]
-                    collapsed_points = file_points[2:]
-
-                if visible_points or collapsed_points:
-                    system_html_parts.append(
-                        "<ul class='kg-tree-list kg-tree-list--points kg-point-list'>"
-                    )
-                    for point in visible_points:
-                        point_payload = self._payload_attr(point, focus_file_id)
-                        point_label = html.escape(
-                            str(point.get("label", "") or "Knowledge point")
-                        )
-                        system_html_parts.append(
-                            "<li class='kg-tree-item kg-tree-item--point'>"
-                            "<button type='button' "
-                            "class='kg-tree-node kg-tree-node--point "
-                            "kg-point-card' "
-                            f'data-kg-payload="{point_payload}">'
-                            f"{point_label}"
-                            "</button>"
-                            "</li>"
-                        )
-
-                    for point in collapsed_points:
-                        point_payload = self._payload_attr(point, focus_file_id)
-                        point_label = html.escape(
-                            str(point.get("label", "") or "Knowledge point")
-                        )
-                        system_html_parts.append(
-                            "<li class='kg-tree-item kg-tree-item--point "
-                            "kg-point-item is-collapsed-point'>"
-                            "<button type='button' "
-                            "class='kg-tree-node kg-tree-node--point "
-                            "kg-point-card' "
-                            f'data-kg-payload="{point_payload}">'
-                            f"{point_label}"
-                            "</button>"
-                            "</li>"
-                        )
-
-                    if collapsed_points:
-                        more_label = f"+{len(collapsed_points)} more point(s)"
-                        less_label = "Show less"
-                        system_html_parts.append(
-                            "<li class='kg-tree-item kg-tree-item--more'>"
-                            "<button type='button' "
-                            "class='kg-point-more kg-point-more--toggle' "
-                            f"data-kg-toggle-points='{safe_file_id}' "
-                            "data-kg-more-label='"
-                            f"{html.escape(more_label, quote=True)}' "
-                            "data-kg-less-label='"
-                            f"{html.escape(less_label, quote=True)}' "
-                            "aria-expanded='false'>"
-                            f"{html.escape(more_label)}"
-                            "</button>"
-                            "</li>"
-                        )
-                    system_html_parts.append("</ul>")
-                system_html_parts.append("</li>")
-            system_html_parts.append("</ul>")
-            system_html_parts.append("</li>")
-
-        shell_classes = "knowledge-graph-shell"
-        if status == "stale":
-            shell_classes += " is-stale"
-
-        return (
-            f"<div class='{shell_classes}' id='knowledge-graph-panel' "
-            f"data-kg-status='{html.escape(status, quote=True)}'>"
-            + "<div class='kg-tree-root'>"
-            + "<button type='button' class='kg-tree-node kg-tree-node--root' "
-            + f'data-kg-payload="{self._payload_attr(root_item, focus_file_id)}">'
-            + html.escape(str(root_item.get("label", "Conversation Knowledge Tree")))
-            + "</button>"
-            + "<p class='kg-tree-root__meta'>"
-            + html.escape(str(root_item.get("summary", "") or ""))
-            + "</p>"
-            + "</div>"
-            + "<ul class='kg-tree-list kg-tree-list--systems'>"
-            + "".join(system_html_parts)
-            + "</ul>"
-            + "</div>"
-        )
+        return self._renderer.render_graph_html(graph, focus_file_id, status)
 
     def get_graph_view(
         self,

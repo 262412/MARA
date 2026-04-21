@@ -50,7 +50,7 @@ class App(BaseApp):
                 with gr.Tab(
                     "Welcome", elem_id="login-tab", id="login-tab"
                 ) as self._tabs["login-tab"]:
-                    self.login_page = LoginPage(self)
+                    self.register_child_page("login_page", LoginPage(self))
 
             with gr.Tab(
                 "Chat",
@@ -58,7 +58,7 @@ class App(BaseApp):
                 id="chat-tab",
                 visible=not self.f_user_management,
             ) as self._tabs["chat-tab"]:
-                self.chat_page = ChatPage(self)
+                self.register_child_page("chat_page", ChatPage(self))
 
             if len(self.index_manager.indices) == 1:
                 for index in self.index_manager.indices:
@@ -73,8 +73,10 @@ class App(BaseApp):
                         id="indices-tab",
                         visible=not self.f_user_management and not KH_DEMO_MODE,
                     ) as self._tabs[f"{index.id}-tab"]:
-                        page = index.get_index_page_ui()
-                        setattr(self, f"_index_{index.id}", page)
+                        page = self.register_child_page(
+                            f"_index_{index.id}",
+                            index.get_index_page_ui(),
+                        )
             elif len(self.index_manager.indices) > 1:
                 with gr.Tab(
                     "Files",
@@ -88,8 +90,10 @@ class App(BaseApp):
                             index.name,
                             elem_id=f"{index.id}-tab",
                         ) as self._tabs[f"{index.id}-tab"]:
-                            page = index.get_index_page_ui()
-                            setattr(self, f"_index_{index.id}", page)
+                            page = self.register_child_page(
+                                f"_index_{index.id}",
+                                index.get_index_page_ui(),
+                            )
 
             if not KH_DEMO_MODE:
                 if not KH_SSO_ENABLED:
@@ -100,7 +104,7 @@ class App(BaseApp):
                         visible=not self.f_user_management,
                         elem_classes=["fill-main-area-height", "scrollable"],
                     ) as self._tabs["resources-tab"]:
-                        self.resources_page = ResourcesTab(self)
+                        self.register_child_page("resources_page", ResourcesTab(self))
 
                 with gr.Tab(
                     "Settings",
@@ -109,7 +113,7 @@ class App(BaseApp):
                     visible=not self.f_user_management,
                     elem_classes=["fill-main-area-height", "scrollable"],
                 ) as self._tabs["settings-tab"]:
-                    self.settings_page = SettingsPage(self)
+                    self.register_child_page("settings_page", SettingsPage(self))
 
             with gr.Tab(
                 "Help",
@@ -118,11 +122,11 @@ class App(BaseApp):
                 visible=not self.f_user_management,
                 elem_classes=["fill-main-area-height", "scrollable"],
             ) as self._tabs["help-tab"]:
-                self.help_page = HelpPage(self)
+                self.register_child_page("help_page", HelpPage(self))
 
         if KH_ENABLE_FIRST_SETUP:
             with gr.Column(visible=False) as self.setup_page_wrapper:
-                self.setup_page = SetupPage(self)
+                self.register_child_page("setup_page", SetupPage(self))
 
     def on_subscribe_public_events(self):
         if self.f_user_management:

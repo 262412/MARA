@@ -76,6 +76,44 @@ def test_conversation_graph_groups_related_and_unrelated_files(monkeypatch, tmp_
     assert "file-a-chunk-1" in graph["support_chunk_ids"]["file-a"]
 
 
+def test_builder_conversation_graph_uses_service_file_graph_seam(
+    monkeypatch, tmp_path
+):
+    service = _make_service(monkeypatch, tmp_path)
+
+    monkeypatch.setattr(
+        service._builder,
+        "build_file_graph",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("builder should route through service._build_file_graph")
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_build_file_graph",
+        lambda file_id, source: {
+            "file_id": file_id,
+            "file_name": source["name"],
+            "summary": f"Summary for {source['name']}",
+            "summary_support_pages": {file_id: ["1"]},
+            "summary_support_chunk_ids": {file_id: [f"{file_id}-chunk-summary"]},
+            "top_keywords": ["rag", "retrieval"],
+            "knowledge_points": [],
+        },
+    )
+
+    graph = service._builder.build_conversation_graph(
+        "conv-builder",
+        {
+            "file-a": {"name": "Alpha.pdf"},
+            "file-b": {"name": "Beta.pdf"},
+        },
+    )
+
+    assert graph["source_ids"] == ["file-a", "file-b"]
+    assert len(graph["file_cards"]) == 2
+
+
 def test_get_graph_view_does_not_auto_build_without_force_rebuild(
     monkeypatch, tmp_path
 ):
