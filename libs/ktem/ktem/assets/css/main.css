@@ -1222,12 +1222,12 @@ div.markmap {
   min-height: 100%;
   flex: 1 1 auto;
   max-height: none;
-  overflow: visible !important;
+  overflow: auto !important;
   overscroll-behavior: contain;
-  padding: 8px 6px 16px;
+  padding: 10px 8px 18px;
   cursor: default;
   touch-action: auto;
-  scrollbar-gutter: auto;
+  scrollbar-gutter: stable both-edges;
 }
 
 #knowledge-graph-plot .knowledge-graph-shell.is-loading {
@@ -1320,75 +1320,81 @@ div.markmap {
   line-height: 1.5;
 }
 
-#knowledge-graph-plot .kg-tree-root {
-  padding: 0 0 2px;
+#knowledge-graph-plot .kg-mindmap-root {
+  min-width: 100%;
+  width: max-content;
 }
 
-#knowledge-graph-plot .kg-tree-root__meta {
+#knowledge-graph-plot .kg-branch {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+}
+
+#knowledge-graph-plot .kg-branch::before {
+  content: "";
+  flex: 0 0 18px;
+  width: 18px;
+  margin-top: 24px;
+  border-top: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 34%, #64748b);
+}
+
+#knowledge-graph-plot .kg-branch--knowledge_root::before {
+  content: none;
+}
+
+#knowledge-graph-plot .kg-branch__card {
+  min-width: 0;
+  max-width: min(100%, 340px);
+}
+
+#knowledge-graph-plot .kg-branch__summary {
   margin: 8px 0 0 2px;
-  color: var(--body-text-color-subdued, #6b7280);
-  font-size: 0.86rem;
-  line-height: 1.45;
+  color: var(--body-text-color-subdued, #4b5563);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  max-width: min(86vw, 760px);
 }
 
-#knowledge-graph-plot .kg-tree-list {
-  list-style: none;
-  margin: 0;
-  padding: 0 0 12px 28px;
-  position: relative;
-}
-
-#knowledge-graph-plot .kg-tree-list::before {
-  content: "";
-  position: absolute;
-  left: 11px;
-  top: 4px;
-  bottom: 0;
-  border-left: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 32%, #64748b);
-}
-
-#knowledge-graph-plot .kg-tree-list--systems {
+#knowledge-graph-plot .kg-branch__children {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
   padding-left: 18px;
+  border-left: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 26%, #64748b);
 }
 
-#knowledge-graph-plot .kg-tree-list--systems::before {
-  display: block;
-  left: 11px;
-  top: -8px;
+#knowledge-graph-plot .kg-branch__children-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
 }
 
-#knowledge-graph-plot .kg-tree-item {
-  position: relative;
-  margin: 8px 0;
-}
-
-#knowledge-graph-plot .kg-tree-item::before {
-  content: "";
-  position: absolute;
-  left: -17px;
-  top: 19px;
-  width: 17px;
-  border-top: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 38%, #64748b);
-}
-
-#knowledge-graph-plot .kg-tree-list--systems > .kg-tree-item::before {
-  left: -11px;
-  width: 11px;
+#knowledge-graph-plot .kg-branch__children-group + .kg-branch__children-group {
+  margin-top: 2px;
 }
 
 #knowledge-graph-plot .kg-tree-node {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
   width: fit-content;
-  max-width: min(92%, 760px);
+  min-width: min(240px, 100%);
+  max-width: min(100%, 340px);
   border: 1px solid color-mix(in srgb, var(--border-color-primary, #d4d4d8) 92%, transparent);
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--background-fill-primary, #fff);
   color: var(--body-text-color, #111827);
-  padding: 8px 12px;
+  padding: 10px 14px;
   font: inherit;
   text-align: left;
   line-height: 1.45;
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 #knowledge-graph-plot .kg-tree-node:hover {
@@ -1396,31 +1402,46 @@ div.markmap {
   transform: translateY(-1px);
 }
 
-#knowledge-graph-plot .kg-tree-node.is-selected {
-  border-color: color-mix(in srgb, var(--color-accent, #2563eb) 75%, #d4d4d8);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent, #2563eb) 24%, transparent);
+#knowledge-graph-plot .kg-tree-node.is-selected,
+#knowledge-graph-plot .kg-tree-node.is-focused,
+#knowledge-graph-plot .kg-tree-node[data-kg-focus-match="true"] {
+  border-color: color-mix(in srgb, var(--color-accent, #2563eb) 78%, #d4d4d8);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-accent, #2563eb) 24%, transparent),
+    0 10px 24px rgba(15, 23, 42, 0.12);
 }
 
 #knowledge-graph-plot .kg-tree-node--root {
   background:
-    linear-gradient(145deg, rgba(14, 116, 144, 0.2), rgba(2, 132, 199, 0.08)),
+    linear-gradient(145deg, rgba(14, 116, 144, 0.24), rgba(2, 132, 199, 0.08)),
     var(--background-fill-primary, #fff);
-  border-radius: 14px;
+  border-radius: 18px;
+  font-weight: 700;
+}
+
+#knowledge-graph-plot .kg-tree-node--component,
+#knowledge-graph-plot .kg-tree-node--system {
+  background:
+    linear-gradient(150deg, rgba(30, 64, 175, 0.2), rgba(37, 99, 235, 0.04)),
+    var(--background-fill-primary, #fff);
   font-weight: 650;
 }
 
-#knowledge-graph-plot .kg-tree-node--system {
+#knowledge-graph-plot .kg-tree-node--theme {
   background:
-    linear-gradient(150deg, rgba(30, 64, 175, 0.18), rgba(37, 99, 235, 0.04)),
+    linear-gradient(145deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.04)),
     var(--background-fill-primary, #fff);
-  font-weight: 620;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  padding: 8px 12px;
 }
 
+#knowledge-graph-plot .kg-tree-node--subtheme,
 #knowledge-graph-plot .kg-tree-node--file {
   background:
-    linear-gradient(145deg, rgba(15, 118, 110, 0.15), rgba(16, 185, 129, 0.03)),
+    linear-gradient(145deg, rgba(15, 118, 110, 0.18), rgba(16, 185, 129, 0.03)),
     var(--background-fill-primary, #fff);
-  font-weight: 600;
+  font-weight: 620;
 }
 
 #knowledge-graph-plot .kg-tree-node--point {
@@ -1430,56 +1451,20 @@ div.markmap {
   font-size: 0.9rem;
 }
 
-#knowledge-graph-plot .kg-tree-node--theme {
-  background:
-    linear-gradient(145deg, rgba(245, 158, 11, 0.18), rgba(245, 158, 11, 0.03)),
-    var(--background-fill-primary, #fff);
-  border-radius: 999px;
-  font-size: 0.84rem;
-  padding: 6px 10px;
+#knowledge-graph-plot .kg-file-card,
+#knowledge-graph-plot .kg-point-card {
+  position: relative;
 }
 
-#knowledge-graph-plot .kg-tree-item--file.is-focused > .kg-tree-node--file {
+#knowledge-graph-plot .kg-file-card[data-kg-focus-match="true"],
+#knowledge-graph-plot .kg-file-card.is-focused,
+#knowledge-graph-plot .kg-tree-node--subtheme[data-kg-focus-match="true"] {
   border-color: color-mix(in srgb, var(--color-accent, #2563eb) 74%, #d4d4d8);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent, #2563eb) 20%, transparent);
 }
 
-#knowledge-graph-plot .kg-tree-item__meta {
-  margin: 6px 0 0 3px;
-  font-size: 0.91rem;
-  line-height: 1.5;
+#knowledge-graph-plot .kg-tree-node__meta {
+  font-size: 0.8rem;
   color: var(--body-text-color-subdued, #4b5563);
-  max-width: min(88%, 740px);
-}
-
-#knowledge-graph-plot .kg-tree-item__keywords {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 8px 0 0 2px;
-}
-
-#knowledge-graph-plot .kg-keyword {
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, #e2e8f0 72%, #fff);
-  font-size: 0.78rem;
-  color: var(--body-text-color-subdued, #4b5563);
-}
-
-#knowledge-graph-plot .kg-point-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 8px;
-}
-
-#knowledge-graph-plot .kg-point-item.is-collapsed-point {
-  display: none;
-}
-
-#knowledge-graph-plot .kg-tree-item--file.is-points-expanded .kg-point-item.is-collapsed-point {
-  display: list-item;
 }
 
 #knowledge-graph-plot .kg-point-more {
@@ -1603,7 +1588,19 @@ div.markmap {
     var(--background-fill-primary, #fff);
 }
 
+#kg-answer-hint .kg-answer-hint__node.kg-tree-node--component {
+  background:
+    linear-gradient(150deg, rgba(30, 64, 175, 0.18), rgba(37, 99, 235, 0.04)),
+    var(--background-fill-primary, #fff);
+}
+
 #kg-answer-hint .kg-answer-hint__node.kg-tree-node--file {
+  background:
+    linear-gradient(145deg, rgba(15, 118, 110, 0.15), rgba(16, 185, 129, 0.03)),
+    var(--background-fill-primary, #fff);
+}
+
+#kg-answer-hint .kg-answer-hint__node.kg-tree-node--subtheme {
   background:
     linear-gradient(145deg, rgba(15, 118, 110, 0.15), rgba(16, 185, 129, 0.03)),
     var(--background-fill-primary, #fff);
@@ -1721,17 +1718,17 @@ div.markmap {
     -webkit-line-clamp: 4;
   }
 
-  #knowledge-graph-plot .kg-tree-list {
-    padding-left: 20px;
+  #knowledge-graph-plot .kg-branch {
+    gap: 10px;
   }
 
-  #knowledge-graph-plot .kg-tree-item::before {
-    left: -13px;
-    width: 13px;
+  #knowledge-graph-plot .kg-branch__children {
+    padding-left: 12px;
   }
 
   #knowledge-graph-plot .kg-tree-node {
-    max-width: calc(100vw - 90px);
+    min-width: min(200px, calc(100vw - 120px));
+    max-width: calc(100vw - 100px);
   }
 }
 

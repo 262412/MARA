@@ -351,7 +351,13 @@ def test_payload_attr_includes_prompt_and_graph_context(monkeypatch, tmp_path):
     assert payload["node_label"] == "Evidence alignment"
     assert payload["prompt"]
     assert payload["suggested_question"]
-    assert payload["prompt"] == payload["suggested_question"]
+    assert payload["node_role"] == "knowledge_point"
+    assert payload["node_id"] == ""
+    assert payload["suggested_question"] == (
+        "Can you explain this knowledge point: 'Evidence alignment'?"
+    )
+    assert payload["fill_question"] == payload["suggested_question"]
+    assert payload["prompt"] != payload["suggested_question"]
 
 
 def test_render_graph_html_includes_toggle_for_collapsed_points(monkeypatch, tmp_path):
@@ -359,83 +365,51 @@ def test_render_graph_html_includes_toggle_for_collapsed_points(monkeypatch, tmp
 
     graph = {
         "source_ids": ["file-a", "file-b"],
-        "systems": [
+        "components": [
             {
-                "id": "system::1",
-                "type": "knowledge_system",
-                "label": "System 1",
+                "id": "component::1",
+                "type": "component",
+                "label": "Component 1",
                 "summary": "Shared concepts",
                 "related_file_ids": ["file-a", "file-b"],
-                "support_pages": {},
-                "support_chunk_ids": {},
-                "themes": [],
+                "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+                "support_chunk_ids": {"file-a": ["chunk-a"], "file-b": ["chunk-b"]},
+                "themes": [
+                    {
+                        "id": "theme::1",
+                        "type": "theme",
+                        "label": "Theme 1",
+                        "summary": "Shared concepts",
+                        "related_file_ids": ["file-a", "file-b"],
+                        "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+                        "support_chunk_ids": {
+                            "file-a": ["chunk-a"],
+                            "file-b": ["chunk-b"],
+                        },
+                        "subthemes": [
+                            {
+                                "id": "subtheme::1",
+                                "type": "subtheme",
+                                "label": "Subtheme 1",
+                                "summary": "Focus details",
+                                "related_file_ids": ["file-a"],
+                                "support_pages": {"file-a": ["1"]},
+                                "support_chunk_ids": {"file-a": ["chunk-a"]},
+                                "knowledge_points": [
+                                    {
+                                        "id": "point::1",
+                                        "type": "knowledge_point",
+                                        "label": "Point 1",
+                                        "related_file_ids": ["file-a"],
+                                        "support_pages": {"file-a": ["1"]},
+                                        "support_chunk_ids": {"file-a": ["chunk-a"]},
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
             }
-        ],
-        "file_cards": [
-            {
-                "id": "file::file-a",
-                "type": "file_summary",
-                "system_id": "system::1",
-                "file_id": "file-a",
-                "label": "Alpha.pdf",
-                "summary": "Alpha summary",
-                "related_file_ids": ["file-a"],
-                "support_pages": {},
-                "support_chunk_ids": {},
-            },
-            {
-                "id": "file::file-b",
-                "type": "file_summary",
-                "system_id": "system::1",
-                "file_id": "file-b",
-                "label": "Beta.pdf",
-                "summary": "Beta summary",
-                "related_file_ids": ["file-b"],
-                "support_pages": {},
-                "support_chunk_ids": {},
-            },
-        ],
-        "knowledge_points": [
-            {
-                "id": "point::file-a::1",
-                "type": "knowledge_point",
-                "system_id": "system::1",
-                "file_id": "file-a",
-                "label": "Point A1",
-                "related_file_ids": ["file-a"],
-                "support_pages": {},
-                "support_chunk_ids": {},
-            },
-            {
-                "id": "point::file-a::2",
-                "type": "knowledge_point",
-                "system_id": "system::1",
-                "file_id": "file-a",
-                "label": "Point A2",
-                "related_file_ids": ["file-a"],
-                "support_pages": {},
-                "support_chunk_ids": {},
-            },
-            {
-                "id": "point::file-a::3",
-                "type": "knowledge_point",
-                "system_id": "system::1",
-                "file_id": "file-a",
-                "label": "Point A3",
-                "related_file_ids": ["file-a"],
-                "support_pages": {},
-                "support_chunk_ids": {},
-            },
-            {
-                "id": "point::file-a::4",
-                "type": "knowledge_point",
-                "system_id": "system::1",
-                "file_id": "file-a",
-                "label": "Point A4",
-                "related_file_ids": ["file-a"],
-                "support_pages": {},
-                "support_chunk_ids": {},
-            },
         ],
         "support_pages": {},
         "support_chunk_ids": {},
@@ -443,6 +417,239 @@ def test_render_graph_html_includes_toggle_for_collapsed_points(monkeypatch, tmp
 
     rendered = service._render_graph_html(graph, focus_file_id="", status="ready")
 
-    assert "data-kg-toggle-points='file-a'" in rendered
-    assert "+2 more point(s)" in rendered
-    assert "is-collapsed-point" in rendered
+    assert "data-kg-layout='mindmap'" in rendered
+    assert "data-kg-schema='v2'" in rendered
+    assert "kg-branch--component" in rendered
+    assert "kg-branch--theme" in rendered
+    assert "kg-branch--subtheme" in rendered
+    assert "kg-tree-node--knowledge_point" in rendered
+
+
+def test_conversation_graph_builds_schema_v2_theme_first_artifact(
+    monkeypatch, tmp_path
+):
+    service = _make_service(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        service,
+        "_build_file_graph",
+        lambda file_id, source: {
+            "file_id": file_id,
+            "file_name": source["name"],
+            "summary": f"Summary for {source['name']}",
+            "summary_support_pages": {file_id: ["1"]},
+            "summary_support_chunk_ids": {file_id: [f"{file_id}-chunk-summary"]},
+            "top_keywords": {
+                "file-a": ["rag", "retrieval", "grounding"],
+                "file-b": ["rag", "retrieval", "citation"],
+            }[file_id],
+            "knowledge_points": [
+                {
+                    "id": f"point::{file_id}::1",
+                    "type": "knowledge_point",
+                    "file_id": file_id,
+                    "label": f"Point for {source['name']}",
+                    "keywords": ["rag", "retrieval"],
+                    "related_file_ids": [file_id],
+                    "support_pages": {file_id: ["1"]},
+                    "support_chunk_ids": {file_id: [f"{file_id}-chunk-1"]},
+                }
+            ],
+        },
+    )
+
+    graph = service._build_conversation_graph(
+        "conv-v2",
+        {
+            "file-a": {"name": "Alpha.pdf"},
+            "file-b": {"name": "Beta.pdf"},
+        },
+    )
+
+    assert graph["schema_version"] == 2
+    assert graph["root"]["id"] == "root::conversation"
+    assert graph["components"]
+    assert graph["themes"]
+    assert graph["node_index"]["root::conversation"]["kind"] == "root"
+    assert graph["support_pages"]["file-a"] == ["1"]
+    assert graph["support_chunk_ids"]["file-b"]
+
+
+def test_get_graph_view_marks_legacy_cache_stale_even_when_manifest_matches(
+    monkeypatch, tmp_path
+):
+    service = _make_service(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        service,
+        "_load_sources",
+        lambda source_ids: {
+            "file-a": {
+                "id": "file-a",
+                "name": "Alpha.pdf",
+                "path": "",
+                "size": 1,
+                "date_created": "2026-01-01",
+            }
+        },
+    )
+    manifest = {
+        "file-a": "file-a|Alpha.pdf||1|2026-01-01",
+    }
+    monkeypatch.setattr(
+        service,
+        "_make_signature",
+        lambda source: manifest[str(source["id"])],
+    )
+    monkeypatch.setattr(
+        service,
+        "_load_cached_state",
+        lambda conversation_id: {
+            "conversation_id": conversation_id,
+            "manifest": manifest,
+            "graph": {
+                "conversation_id": conversation_id,
+                "source_ids": ["file-a"],
+                "systems": [],
+                "file_cards": [],
+                "knowledge_points": [],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+        },
+    )
+
+    graph_view = service.get_graph_view(
+        "conv-cache",
+        ["file-a"],
+        focus_file_id="file-a",
+        force_rebuild=False,
+    )
+
+    assert graph_view["status"] == "stale"
+    assert "schema" in graph_view["status_message"].lower()
+
+
+def test_get_graph_view_rebuilds_stale_graph_to_ready_when_forced(
+    monkeypatch, tmp_path
+):
+    service = _make_service(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        service,
+        "_load_sources",
+        lambda source_ids: {
+            "file-a": {
+                "id": "file-a",
+                "name": "Alpha.pdf",
+                "path": "",
+                "size": 1,
+                "date_created": "2026-01-01",
+            }
+        },
+    )
+
+    stale_graph = {
+        "conversation_id": "conv-stale",
+        "source_ids": ["file-a"],
+        "systems": [],
+        "file_cards": [],
+        "knowledge_points": [],
+        "edges": [],
+        "support_pages": {"file-a": ["old-page"]},
+        "support_chunk_ids": {"file-a": ["old-chunk"]},
+    }
+    cached_manifest = {"file-a": "file-a|Alpha.pdf||1|2025-01-01"}
+    monkeypatch.setattr(
+        service,
+        "_load_cached_state",
+        lambda conversation_id: {
+            "conversation_id": conversation_id,
+            "manifest": cached_manifest,
+            "graph": stale_graph,
+        },
+    )
+
+    build_calls = []
+    saved_states = []
+
+    def _build_graph(conversation_id, sources):
+        build_calls.append((conversation_id, sorted(sources.keys())))
+        return {
+            "conversation_id": conversation_id,
+            "source_ids": list(sources.keys()),
+            "systems": [
+                {
+                    "id": "system::1",
+                    "type": "knowledge_system",
+                    "label": "Shared knowledge system",
+                    "summary": "Rebuilt from current sources.",
+                    "related_file_ids": ["file-a"],
+                    "support_pages": {"file-a": ["1"]},
+                    "support_chunk_ids": {"file-a": ["chunk-1"]},
+                    "themes": [],
+                }
+            ],
+            "file_cards": [],
+            "knowledge_points": [],
+            "edges": [],
+            "support_pages": {"file-a": ["1"]},
+            "support_chunk_ids": {"file-a": ["chunk-1"]},
+        }
+
+    monkeypatch.setattr(service, "_build_conversation_graph", _build_graph)
+    monkeypatch.setattr(
+        service,
+        "_save_cached_state",
+        lambda conversation_id, state: saved_states.append((conversation_id, state)),
+    )
+
+    stale_view = service.get_graph_view(
+        "conv-stale",
+        ["file-a"],
+        focus_file_id="file-a",
+        force_rebuild=False,
+    )
+    assert stale_view["status"] == "stale"
+    assert stale_view["graph"] == stale_graph
+    assert build_calls == []
+
+    ready_view = service.get_graph_view(
+        "conv-stale",
+        ["file-a"],
+        focus_file_id="file-a",
+        force_rebuild=True,
+    )
+    assert ready_view["status"] == "ready"
+    assert ready_view["graph"]["systems"][0]["id"] == "system::1"
+    assert ready_view["status_message"].startswith("Ready: 1 sources")
+    assert build_calls == [("conv-stale", ["file-a"])]
+    assert saved_states[-1][0] == "conv-stale"
+    assert saved_states[-1][1]["manifest"] == {
+        "file-a": "file-a|Alpha.pdf||1|2026-01-01",
+    }
+    assert saved_states[-1][1]["graph"] == ready_view["graph"]
+
+
+def test_payload_attr_keeps_graph_context_aliases_and_v2_node_metadata(
+    monkeypatch, tmp_path
+):
+    service = _make_service(monkeypatch, tmp_path)
+
+    payload = service._payload_attr(
+        {
+            "id": "component::1",
+            "type": "knowledge_system",
+            "label": "Evidence alignment",
+            "related_file_ids": ["file-a"],
+            "support_pages": {"file-a": ["2"]},
+            "support_chunk_ids": {"file-a": ["chunk-2"]},
+        },
+        "file-a",
+    )
+    payload = json.loads(html.unescape(payload))
+
+    assert payload["graph_context"]["node_id"] == "component::1"
+    assert payload["graph_context"]["node_role"] == "component"
+    assert payload["node_role"] == "component"
+    assert payload["node_type"] == "knowledge_system"
+    assert payload["graph_context"]["focus_file_id"] == "file-a"
+    assert payload["graph_context"]["support_pages"] == {"file-a": ["2"]}
+    assert payload["graph_context"]["support_chunk_ids"] == {"file-a": ["chunk-2"]}

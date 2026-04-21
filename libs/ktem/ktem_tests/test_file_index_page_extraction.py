@@ -272,6 +272,44 @@ def test_register_file_index_events_wires_delete_chat_and_upload_flows():
     assert upload_chain[6] == ("then", {"fn": "public-event"})
 
 
+def test_register_file_index_events_keeps_graph_refresh_tail_wired():
+    page = _build_page(index_id=1, with_chat_refresh=True)
+
+    register_file_index_events(
+        page,
+        demo_mode=False,
+        sso_enabled=False,
+    )
+
+    upload_chain = page.upload_button.calls
+    assert [entry[1]["fn"] for entry in upload_chain[7:11]] == [
+        page._app.chat_page.merge_graph_source_ids,
+        page._app.chat_page.persist_conversation_source_scope,
+        page._app.chat_page.refresh_chat_file_list,
+        page._app.chat_page.refresh_knowledge_graph,
+    ]
+    assert upload_chain[7][1]["inputs"] == [
+        page._app.chat_page._graph_source_ids,
+        page.upload_new_source_ids,
+    ]
+    assert upload_chain[8][1]["inputs"] == [
+        page._app.chat_page.chat_control.conversation_id,
+        page._app.user_id,
+        page._app.chat_page._graph_source_ids,
+    ]
+    assert upload_chain[9][1]["outputs"] == [
+        page._app.chat_page.chat_file_rows,
+        page._app.chat_page.chat_file_list,
+        page._app.chat_page.chat_selected_file,
+    ]
+    assert upload_chain[10][1]["inputs"] == [
+        page._app.chat_page.chat_control.conversation_id,
+        page._app.chat_page._graph_source_ids,
+        page._app.chat_page._active_file_id,
+        page._app.chat_page._indices_input[1],
+    ]
+
+
 def test_register_quick_upload_events_wires_file_and_url_uploads():
     page = _build_page(index_id=1, with_chat_refresh=True)
 

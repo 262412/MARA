@@ -597,7 +597,7 @@ function run() {
 
     if (!payload || typeof payload !== "object") {
       hintContainer.innerHTML =
-        "<div class='kg-answer-hint kg-answer-hint--empty'>Select a node in the knowledge graph tree to pin context and get a suggested question.</div>";
+        "<div class='kg-answer-hint kg-answer-hint--empty'>Select a node in the knowledge graph mind map to pin context and load a draft question.</div>";
       return;
     }
 
@@ -605,22 +605,30 @@ function run() {
     const label = String(payload.node_label || graphContext.label || "Selected node").trim();
     const summary = String(payload.summary || "").trim();
     const suggestedQuestion = String(
-      payload.prompt || payload.suggested_question || ""
+      payload.fill_question || payload.suggested_question || payload.prompt || ""
     ).trim();
-    const rawNodeType = String(payload.node_type || graphContext.type || "").trim();
+    const rawNodeType = String(
+      payload.node_role || payload.node_type || graphContext.node_role || graphContext.type || ""
+    ).trim();
     const nodeTypeMap = {
       knowledge_root: "Root",
-      knowledge_system: "Knowledge System",
-      file_summary: "File",
-      knowledge_point: "Knowledge Point",
+      component: "Component",
+      knowledge_system: "Component",
+      theme: "Theme",
       system_relation: "Theme",
+      subtheme: "Subtheme",
+      file_summary: "Subtheme",
+      knowledge_point: "Knowledge Point",
     };
     const nodeStyleClassMap = {
       knowledge_root: "kg-tree-node--root",
-      knowledge_system: "kg-tree-node--system",
-      file_summary: "kg-tree-node--file",
-      knowledge_point: "kg-tree-node--point",
+      component: "kg-tree-node--component",
+      knowledge_system: "kg-tree-node--component",
+      theme: "kg-tree-node--theme",
       system_relation: "kg-tree-node--theme",
+      subtheme: "kg-tree-node--subtheme",
+      file_summary: "kg-tree-node--subtheme",
+      knowledge_point: "kg-tree-node--point",
     };
     const nodeType = nodeTypeMap[rawNodeType] || (rawNodeType || "Node");
     const nodeStyleClass =
@@ -636,9 +644,9 @@ function run() {
         ${summary ? `<p class="kg-answer-hint__summary">${escapeHtml(summary)}</p>` : ""}
         ${
           suggestedQuestion
-            ? `<div class="kg-answer-hint__actions"><button type="button" class="kg-answer-hint__ask kg-tree-node--file" data-kg-fill-question="${escapeHtml(
+            ? `<div class="kg-answer-hint__actions"><button type="button" class="kg-answer-hint__ask ${nodeStyleClass}" data-kg-fill-question="${escapeHtml(
                 suggestedQuestion
-              )}">Use this in answer box</button></div>`
+              )}">Load into chat</button></div>`
             : ""
         }
       </div>
@@ -1046,6 +1054,12 @@ function run() {
           trigger.classList.add("is-selected");
         }
         renderKnowledgeGraphAnswerHint(payload);
+        const fillQuestion = String(
+          payload.fill_question || payload.suggested_question || payload.prompt || ""
+        ).trim();
+        if (fillQuestion) {
+          fillChatInputWithoutSubmit(fillQuestion);
+        }
       });
     }
 

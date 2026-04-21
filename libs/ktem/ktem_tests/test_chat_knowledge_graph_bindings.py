@@ -120,7 +120,20 @@ def test_bind_knowledge_graph_events_wires_refresh_chains():
 
     refresh_click_chain = page.knowledge_graph_refresh.calls[0]
     assert refresh_click_chain.steps[0][0] == "click"
+    assert refresh_click_chain.steps[0][1]["inputs"] == [page.chat_control.conversation_id]
+    assert refresh_click_chain.steps[0][1]["outputs"] == [
+        page.plot_panel,
+        page.knowledge_graph_status,
+    ]
+    assert refresh_click_chain.steps[0][1]["show_progress"] == "hidden"
     assert refresh_click_chain.steps[1][1]["fn"] is page.generate_knowledge_graph
+    assert refresh_click_chain.steps[1][1]["inputs"] == [
+        page.chat_control.conversation_id,
+        page._graph_source_ids,
+        page._active_file_id,
+        page._indices_input[1],
+    ]
+    assert refresh_click_chain.steps[1][1]["show_progress"] == "minimal"
 
 
 def test_subscribe_public_knowledge_graph_events_registers_refresh_pipeline():
