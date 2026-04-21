@@ -61,7 +61,19 @@ main.add_command(app)
 
 @click.group()
 def docqa():
-    """Document QA CLI backed by the app's runtime/index/session data."""
+    """Document QA CLI backed by the app's runtime/index/session data.
+
+    Action guide:
+    - Ask one question: `kotaemon docqa ask` (platform skill: kotaemon-docqa-ask)
+    - Index documents: `kotaemon docqa index` (platform skill: kotaemon-docqa-index)
+    - Interactive chat: `kotaemon docqa chat` (platform skill: kotaemon-docqa-chat)
+    - Resume a conversation: `kotaemon docqa resume` (platform skill: kotaemon-docqa-resume)
+    - Health check: `kotaemon docqa doctor` (platform skill: kotaemon-docqa-doctor)
+    - Full acceptance check: `kotaemon docqa acceptance` (platform skill: kotaemon-docqa-acceptance)
+
+    Use the umbrella `kotaemon-docqa` platform skill when you need the full command
+    surface instead of one focused action.
+    """
 
 
 main.add_command(docqa)
@@ -607,7 +619,12 @@ def _run_docqa_repl(
     help="Emit structured JSON output.",
 )
 def docqa_doctor(json_output):
-    """Check DocQA runtime/index/session prerequisites."""
+    """Check DocQA runtime/index/session prerequisites.
+
+    Platform skill: kotaemon-docqa-doctor
+
+    Use this before a first DocQA run in a new environment.
+    """
     runtime = _create_docqa_runtime()
     result = runtime.doctor()
 
@@ -659,6 +676,8 @@ def docqa_doctor(json_output):
 def docqa_acceptance(keep_artifacts, verbose, json_output):
     """Run the end-to-end DocQA acceptance matrix as a one-command health check.
 
+    Platform skill: kotaemon-docqa-acceptance
+
     Use `--keep-artifacts` to preserve temporary samples/install targets for debugging,
     `--verbose` to surface in-process logs, and `--json` for machine-readable output.
     """
@@ -697,7 +716,12 @@ docqa.add_command(docqa_acceptance, "check")
 def docqa_index(paths, reindex, json_output):
     """Index one or more local paths or URLs into the default file collection.
 
+    Platform skill: kotaemon-docqa-index
+
     Use `--reindex` to replace files that already exist in the collection.
+
+    Example:
+    `kotaemon docqa index ./docs/report.pdf ./docs/appendix.docx`
     """
     runtime = _create_docqa_runtime()
     result = runtime.index_paths(list(paths), reindex=reindex)
@@ -729,7 +753,10 @@ def docqa_index(paths, reindex, json_output):
     help="Emit structured JSON output.",
 )
 def docqa_files(json_output):
-    """List indexed files in the default file collection."""
+    """List indexed files in the default file collection.
+
+    Platform skill: kotaemon-docqa-files
+    """
     runtime = _create_docqa_runtime()
     records = runtime.list_files()
 
@@ -752,6 +779,8 @@ def docqa_files(json_output):
 )
 def docqa_delete(refs, json_output):
     """Delete one or more indexed files by id or name.
+
+    Platform skill: kotaemon-docqa-delete
 
     Use file ids or names from `kotaemon docqa files`.
     """
@@ -778,6 +807,8 @@ def docqa_delete(refs, json_output):
 )
 def docqa_sessions(json_output):
     """List saved DocQA conversations.
+
+    Platform skill: kotaemon-docqa-sessions
 
     Use the returned conversation ids with `kotaemon docqa resume`.
     """
@@ -811,8 +842,19 @@ def docqa_ask(
 ):
     """Run one DocQA turn and persist it to a conversation.
 
+    Platform skill: kotaemon-docqa-ask
+
     Use `--file` to scope retrieval, `--page` for page-level QA, and
     `--selected-text` for snippet-focused QA.
+
+    Whole-document QA:
+    `kotaemon docqa ask --file report.pdf --prompt "Summarize this document"`
+
+    Page-level QA:
+    `kotaemon docqa ask --file report.pdf --page 12 --prompt "What does this page say?"`
+
+    Text-focused QA:
+    `kotaemon docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"`
     """
     from ktem.docqa import DocQARequest
 
@@ -865,6 +907,8 @@ def docqa_chat(
 ):
     """Open an interactive DocQA REPL backed by saved conversation state.
 
+    Platform skill: kotaemon-docqa-chat
+
     Use `/help` inside the session for REPL commands such as `/files`, `/use`,
     `/page <n|clear>`, `/selected-text [text]`, and `/history`.
     """
@@ -905,6 +949,8 @@ def docqa_chat(
 )
 def docqa_resume(conversation_id, json_output):
     """Resume an existing conversation in the interactive DocQA REPL.
+
+    Platform skill: kotaemon-docqa-resume
 
     Use `/help` inside the session for REPL commands.
     """

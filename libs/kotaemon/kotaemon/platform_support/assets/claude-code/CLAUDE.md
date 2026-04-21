@@ -12,4 +12,12 @@ Recommended checks:
 4. kotaemon docqa doctor
 5. kotaemon docqa ask --prompt "What is this document about?"
 
+Preferred DocQA entry points:
+
+1. Use `kotaemon-docqa-ask` for one-shot QA.
+2. Use `kotaemon-docqa-index` to ingest documents.
+3. Use `kotaemon-docqa-chat` and `kotaemon-docqa-resume` for multi-turn sessions.
+4. Use `kotaemon-docqa-doctor` and `kotaemon-docqa-acceptance` for health checks.
+5. Use the umbrella `kotaemon-docqa` workflow when the task spans multiple DocQA actions.
+
 If a user already maintains CLAUDE.md, merge this profile manually from CLAUDE.kotaemon.md.

@@ -28,6 +28,18 @@ If `kotaemon` is not available, install the packaged runtime first:
 6. If the user asks for an interactive or resumable session, use:
    !`kotaemon docqa chat`
 
+Prefer the focused command wrappers when the user intent is specific:
+
+- `kotaemon-docqa-ask`
+- `kotaemon-docqa-index`
+- `kotaemon-docqa-chat`
+- `kotaemon-docqa-files`
+- `kotaemon-docqa-delete`
+- `kotaemon-docqa-sessions`
+- `kotaemon-docqa-resume`
+- `kotaemon-docqa-doctor`
+- `kotaemon-docqa-acceptance`
+
 If the collection is empty, index files first with `kotaemon docqa index ...`.
 
 Available shared QA parameters:

@@ -406,6 +406,30 @@ def test_docqa_ask_help_lists_shared_parameters():
         "--json",
     ]:
         assert token in result.output
+    assert "Whole-document QA:" in result.output
+    assert "Page-level QA:" in result.output
+    assert "Text-focused QA:" in result.output
+
+
+def test_docqa_help_lists_action_navigation():
+    runner = CliRunner()
+    result = runner.invoke(main, ["docqa", "--help"])
+
+    assert result.exit_code == 0, result.output
+    for token in [
+        "Action guide:",
+        "Ask one question",
+        "kotaemon-docqa-ask",
+        "Index documents",
+        "kotaemon-docqa-index",
+        "Interactive chat",
+        "kotaemon-docqa-chat",
+        "Resume a conversation",
+        "kotaemon-docqa-resume",
+        "Health check",
+        "kotaemon-docqa-doctor",
+    ]:
+        assert token in result.output
 
 
 def test_docqa_acceptance_help_lists_parameters():
@@ -415,6 +439,7 @@ def test_docqa_acceptance_help_lists_parameters():
     assert result.exit_code == 0, result.output
     for token in ["--keep-artifacts", "--verbose", "--json"]:
         assert token in result.output
+    assert "Platform skill: kotaemon-docqa-acceptance" in result.output
 
 
 def test_docqa_commands_work_after_agents_import(monkeypatch):

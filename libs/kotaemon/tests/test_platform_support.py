@@ -11,6 +11,18 @@ from kotaemon.platform_support import (
     validate_installed,
 )
 
+DOCQA_ACTION_SKILLS = (
+    "kotaemon-docqa-ask",
+    "kotaemon-docqa-index",
+    "kotaemon-docqa-chat",
+    "kotaemon-docqa-files",
+    "kotaemon-docqa-delete",
+    "kotaemon-docqa-sessions",
+    "kotaemon-docqa-resume",
+    "kotaemon-docqa-doctor",
+    "kotaemon-docqa-acceptance",
+)
+
 
 def test_platform_registry_names():
     assert set(list_platform_names()) == {"claude-code", "codex"}
@@ -28,6 +40,8 @@ def test_install_claude_minimal_creates_expected_assets(tmp_path):
     assert (tmp_path / "agents").exists()
     assert (tmp_path / "CLAUDE.md").exists()
     assert (tmp_path / "skills" / "kotaemon-docqa" / "SKILL.md").exists()
+    for skill_name in DOCQA_ACTION_SKILLS:
+        assert (tmp_path / "skills" / skill_name / "SKILL.md").exists()
 
 
 def test_install_claude_settings_template_merges_existing_json(tmp_path):
@@ -75,6 +89,8 @@ def test_install_codex_minimal_includes_docqa_skill(tmp_path):
 
     assert result.platform == "codex"
     assert (tmp_path / "skills" / "kotaemon-docqa" / "SKILL.md").exists()
+    for skill_name in DOCQA_ACTION_SKILLS:
+        assert (tmp_path / "skills" / skill_name / "SKILL.md").exists()
 
 
 def test_install_claude_selective_commands_include_docqa_wrapper(tmp_path):
@@ -87,6 +103,8 @@ def test_install_claude_selective_commands_include_docqa_wrapper(tmp_path):
 
     assert result.platform == "claude-code"
     assert (tmp_path / "commands" / "kotaemon-docqa.md").exists()
+    for skill_name in DOCQA_ACTION_SKILLS:
+        assert (tmp_path / "commands" / f"{skill_name}.md").exists()
 
 
 def test_validate_bundle_passes_for_packaged_assets():
@@ -95,6 +113,49 @@ def test_validate_bundle_passes_for_packaged_assets():
     assert all(item.valid for item in results), [
         (item.platform, item.errors) for item in results
     ]
+
+
+def test_validate_bundle_reports_missing_split_docqa_asset(monkeypatch, tmp_path):
+    skills_dir = tmp_path / "skills"
+    commands_dir = tmp_path / "commands"
+    agents_dir = tmp_path / "agents"
+    utils_dir = tmp_path / "utils"
+    scripts_dir = tmp_path / "scripts"
+
+    for path in (skills_dir, commands_dir, agents_dir, utils_dir, scripts_dir):
+        path.mkdir(parents=True, exist_ok=True)
+
+    (tmp_path / "AGENTS.md").write_text("profile\n", encoding="utf-8")
+    (tmp_path / "config.toml.template").write_text(
+        "# BEGIN KOTAEMON PLATFORM BLOCK\n", encoding="utf-8"
+    )
+    (skills_dir / "kotaemon-docqa").mkdir()
+    (skills_dir / "kotaemon-docqa" / "SKILL.md").write_text(
+        "umbrella\n", encoding="utf-8"
+    )
+
+    class _Spec:
+        selectable_components = (
+            "skills",
+            "agents",
+            "utils",
+            "scripts",
+            "AGENTS.md",
+            "config.toml.template",
+        )
+        bundle_root = tmp_path
+
+    monkeypatch.setattr(
+        "kotaemon.platform_support.validator.get_platform_spec", lambda _: _Spec()
+    )
+    monkeypatch.setattr(
+        "kotaemon.platform_support.validator.list_platform_names", lambda: ["codex"]
+    )
+
+    result = validate_bundle("codex")[0]
+
+    assert result.valid is False
+    assert any("kotaemon-docqa-ask" in error for error in result.errors)
 
 
 def test_validate_installed_reports_missing_minimal_components(tmp_path):
@@ -205,6 +266,68 @@ def test_docqa_skill_parity_between_platforms():
     for token in shared_tokens:
         assert token in codex_skill
         assert token in claude_skill
+
+
+def test_split_docqa_action_skills_match_between_platforms():
+    repo_root = Path(__file__).resolve().parents[3]
+    shared_tokens = [
+        "pip install kotaemon-app",
+        "uv tool install kotaemon-app",
+        "kotaemon app init",
+        "kotaemon app doctor",
+    ]
+
+    for skill_name in DOCQA_ACTION_SKILLS:
+        codex_skill = (
+            repo_root
+            / "libs"
+            / "kotaemon"
+            / "kotaemon"
+            / "platform_support"
+            / "assets"
+            / "codex"
+            / "skills"
+            / skill_name
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        claude_skill = (
+            repo_root
+            / "libs"
+            / "kotaemon"
+            / "kotaemon"
+            / "platform_support"
+            / "assets"
+            / "claude-code"
+            / "skills"
+            / skill_name
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+        for token in shared_tokens:
+            assert token in codex_skill
+            assert token in claude_skill
+
+
+def test_claude_docqa_action_commands_match_skill_names():
+    repo_root = Path(__file__).resolve().parents[3]
+    commands_dir = (
+        repo_root
+        / "libs"
+        / "kotaemon"
+        / "kotaemon"
+        / "platform_support"
+        / "assets"
+        / "claude-code"
+        / "commands"
+    )
+
+    for skill_name in DOCQA_ACTION_SKILLS:
+        command_path = commands_dir / f"{skill_name}.md"
+        assert command_path.exists()
+        command_text = command_path.read_text(encoding="utf-8")
+        assert "pip install kotaemon-app" in command_text
+        assert "kotaemon app init" in command_text
+        assert "kotaemon app doctor" in command_text
 
 
 def test_cli_operations_skill_parity_between_platforms():
