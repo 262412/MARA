@@ -66,3 +66,33 @@ def test_app_init_writes_user_config_files(tmp_path):
     assert Path(payload["flowsettings_path"]).exists()
     assert Path(payload["env_path"]).exists()
     assert Path(payload["env_example_path"]).exists()
+
+
+def test_app_help_lists_action_navigation(tmp_path):
+    result = _run_package_mode_cli(tmp_path, "app", "--help")
+
+    assert result.returncode == 0, result.stdout + "\nSTDERR:\n" + result.stderr
+    for token in [
+        "Action guide:",
+        "Initialize user config",
+        "kotaemon-app-init",
+        "Inspect runtime health",
+        "kotaemon-app-doctor",
+        "Launch the packaged Web UI",
+        "kotaemon-app-run",
+    ]:
+        assert token in result.stdout
+
+
+def test_app_doctor_help_lists_platform_skill(tmp_path):
+    result = _run_package_mode_cli(tmp_path, "app", "doctor", "--help")
+
+    assert result.returncode == 0, result.stdout + "\nSTDERR:\n" + result.stderr
+    assert "Platform skill: kotaemon-app-doctor" in result.stdout
+
+
+def test_app_run_help_lists_platform_skill(tmp_path):
+    result = _run_package_mode_cli(tmp_path, "app", "run", "--help")
+
+    assert result.returncode == 0, result.stdout + "\nSTDERR:\n" + result.stderr
+    assert "Platform skill: kotaemon-app-run" in result.stdout

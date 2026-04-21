@@ -22,4 +22,10 @@ If `kotaemon` is not available, install the packaged runtime first:
 3. If dry-run succeeds, run the real call:
    !`kotaemon modelcli run --prompt "$ARGUMENTS" --model ds-chat --provider openai --config modelcli.yml`
 
+Prefer the focused command wrappers when the user intent is specific:
+
+- `kotaemon-modelcli-init-config`
+- `kotaemon-modelcli-providers`
+- `kotaemon-modelcli-run`
+
 If any step fails, report the exact failing step and suggest the fix.

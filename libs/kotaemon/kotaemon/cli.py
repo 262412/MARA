@@ -37,7 +37,16 @@ main.add_command(promptui)
 
 @click.group()
 def modelcli():
-    """Cross-model CLI commands (experimental)."""
+    """Cross-model CLI commands (experimental).
+
+    Action guide:
+    - Initialize config: `kotaemon modelcli init-config` (platform skill: kotaemon-modelcli-init-config)
+    - Check providers: `kotaemon modelcli providers` (platform skill: kotaemon-modelcli-providers)
+    - Run one routed call: `kotaemon modelcli run` (platform skill: kotaemon-modelcli-run)
+
+    Use the umbrella `kotaemon-modelcli` skill for mixed model routing workflows,
+    and keep `kotaemon-cli-operations` for promptui or benchmark tasks.
+    """
 
 
 main.add_command(modelcli)
@@ -53,7 +62,16 @@ main.add_command(platform)
 
 @click.group()
 def app():
-    """Launch and inspect the packaged Kotaemon application runtime."""
+    """Launch and inspect the packaged Kotaemon application runtime.
+
+    Action guide:
+    - Initialize user config: `kotaemon app init` (platform skill: kotaemon-app-init)
+    - Inspect runtime health: `kotaemon app doctor` (platform skill: kotaemon-app-doctor)
+    - Launch the packaged Web UI: `kotaemon app run` (platform skill: kotaemon-app-run)
+
+    Use the umbrella `kotaemon-app` skill when the task spans setup, inspection,
+    and launch in one workflow.
+    """
 
 
 main.add_command(app)
@@ -308,7 +326,10 @@ def _print_docqa_acceptance_summary(payload):
     help="Emit structured JSON output.",
 )
 def app_init(force, json_output):
-    """Initialize the packaged user config directory with editable templates."""
+    """Initialize the packaged user config directory with editable templates.
+
+    Platform skill: kotaemon-app-init
+    """
     payload = _write_app_init_files(force=force)
     if json_output:
         _echo_json(payload)
@@ -329,7 +350,10 @@ def app_init(force, json_output):
     help="Emit structured JSON output.",
 )
 def app_doctor(json_output):
-    """Inspect packaged runtime settings, app data paths, and DocQA readiness."""
+    """Inspect packaged runtime settings, app data paths, and DocQA readiness.
+
+    Platform skill: kotaemon-app-doctor
+    """
     payload = _collect_app_doctor_payload()
 
     if json_output:
@@ -373,7 +397,10 @@ def app_doctor(json_output):
     help="Do not automatically open the browser.",
 )
 def app_run(host, port, share, no_browser):
-    """Launch the packaged Web UI without requiring the source repository."""
+    """Launch the packaged Web UI without requiring the source repository.
+
+    Platform skill: kotaemon-app-run
+    """
     _bootstrap_runtime_settings()
     from ktem.launcher import launch_app
 
@@ -977,7 +1004,10 @@ def docqa_resume(conversation_id, json_output):
     help="Overwrite the config file if it already exists.",
 )
 def modelcli_init_config(output, force):
-    """Generate default multi-provider config file."""
+    """Generate default multi-provider config file.
+
+    Platform skill: kotaemon-modelcli-init-config
+    """
     from kotaemon.modelcli import write_default_config
 
     try:
@@ -997,7 +1027,10 @@ def modelcli_init_config(output, force):
     help="Runtime config path.",
 )
 def modelcli_providers(config_path):
-    """List provider availability from current environment."""
+    """List provider availability from current environment.
+
+    Platform skill: kotaemon-modelcli-providers
+    """
     from pathlib import Path
 
     from kotaemon.modelcli import build_registry, load_runtime_config
@@ -1058,7 +1091,12 @@ def modelcli_run(
     config_path,
     dry_run,
 ):
-    """Run a single completion through provider router."""
+    """Run a single completion through provider router.
+
+    Platform skill: kotaemon-modelcli-run
+
+    Use `--dry-run` first when validating a new model alias or provider route.
+    """
     from pathlib import Path
 
     from kotaemon.modelcli import (

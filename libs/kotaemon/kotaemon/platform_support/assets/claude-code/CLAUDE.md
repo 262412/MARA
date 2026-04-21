@@ -20,4 +20,18 @@ Preferred DocQA entry points:
 4. Use `kotaemon-docqa-doctor` and `kotaemon-docqa-acceptance` for health checks.
 5. Use the umbrella `kotaemon-docqa` workflow when the task spans multiple DocQA actions.
 
+Preferred model routing entry points:
+
+1. Use `kotaemon-modelcli-init-config` to generate a config.
+2. Use `kotaemon-modelcli-providers` to inspect provider availability.
+3. Use `kotaemon-modelcli-run` for one routed call, usually with `--dry-run` first.
+4. Use the umbrella `kotaemon-modelcli` workflow when the task spans multiple model routing actions.
+
+Preferred packaged app entry points:
+
+1. Use `kotaemon-app-init` to bootstrap user config.
+2. Use `kotaemon-app-doctor` to inspect runtime health.
+3. Use `kotaemon-app-run` to launch the packaged Web UI.
+4. Use the umbrella `kotaemon-app` workflow when the task spans multiple app actions.
+
 If a user already maintains CLAUDE.md, merge this profile manually from CLAUDE.kotaemon.md.

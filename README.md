@@ -279,6 +279,17 @@ entries instead of a single catch-all skill:
 - Full acceptance check -> `kotaemon-docqa-acceptance` -> `kotaemon docqa acceptance`
 - Advanced or mixed workflows -> `kotaemon-docqa` -> any `kotaemon docqa ...` command
 
+Model routing and packaged app workflows follow the same pattern:
+
+- Generate modelcli config -> `kotaemon-modelcli-init-config` -> `kotaemon modelcli init-config`
+- Inspect provider availability -> `kotaemon-modelcli-providers` -> `kotaemon modelcli providers`
+- Run one routed call -> `kotaemon-modelcli-run` -> `kotaemon modelcli run`
+- Mixed routing workflows -> `kotaemon-modelcli` -> any `kotaemon modelcli ...` command
+- Initialize packaged app config -> `kotaemon-app-init` -> `kotaemon app init`
+- Inspect packaged runtime health -> `kotaemon-app-doctor` -> `kotaemon app doctor`
+- Launch the packaged Web UI -> `kotaemon-app-run` -> `kotaemon app run`
+- Mixed packaged app workflows -> `kotaemon-app` -> any `kotaemon app ...` command
+
 Index one or more files into the default file collection:
 
 ```shell

@@ -45,6 +45,30 @@ _REQUIRED_CLAUDE_DOCQA_COMMAND_FILES = (
     Path("commands/kotaemon-docqa-doctor.md"),
     Path("commands/kotaemon-docqa-acceptance.md"),
 )
+_REQUIRED_MODELCLI_SKILL_FILES = (
+    Path("skills/kotaemon-modelcli/SKILL.md"),
+    Path("skills/kotaemon-modelcli-init-config/SKILL.md"),
+    Path("skills/kotaemon-modelcli-providers/SKILL.md"),
+    Path("skills/kotaemon-modelcli-run/SKILL.md"),
+)
+_REQUIRED_APP_SKILL_FILES = (
+    Path("skills/kotaemon-app/SKILL.md"),
+    Path("skills/kotaemon-app-init/SKILL.md"),
+    Path("skills/kotaemon-app-doctor/SKILL.md"),
+    Path("skills/kotaemon-app-run/SKILL.md"),
+)
+_REQUIRED_CLAUDE_MODELCLI_COMMAND_FILES = (
+    Path("commands/kotaemon-modelcli.md"),
+    Path("commands/kotaemon-modelcli-init-config.md"),
+    Path("commands/kotaemon-modelcli-providers.md"),
+    Path("commands/kotaemon-modelcli-run.md"),
+)
+_REQUIRED_CLAUDE_APP_COMMAND_FILES = (
+    Path("commands/kotaemon-app.md"),
+    Path("commands/kotaemon-app-init.md"),
+    Path("commands/kotaemon-app-doctor.md"),
+    Path("commands/kotaemon-app-run.md"),
+)
 
 
 def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
@@ -69,6 +93,14 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
         for rel in _REQUIRED_DOCQA_SKILL_FILES:
             if not (spec.bundle_root / rel).exists():
                 errors.append(f"Missing required DocQA skill asset: {rel.as_posix()}")
+        for rel in _REQUIRED_MODELCLI_SKILL_FILES:
+            if not (spec.bundle_root / rel).exists():
+                errors.append(
+                    f"Missing required modelcli skill asset: {rel.as_posix()}"
+                )
+        for rel in _REQUIRED_APP_SKILL_FILES:
+            if not (spec.bundle_root / rel).exists():
+                errors.append(f"Missing required app skill asset: {rel.as_posix()}")
 
         if current == "claude-code":
             for rel in _REQUIRED_HOOK_FILES:
@@ -79,6 +111,16 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
                 if not (spec.bundle_root / rel).exists():
                     errors.append(
                         f"Missing required DocQA command asset: {rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_CLAUDE_MODELCLI_COMMAND_FILES:
+                if not (spec.bundle_root / rel).exists():
+                    errors.append(
+                        f"Missing required modelcli command asset: {rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_CLAUDE_APP_COMMAND_FILES:
+                if not (spec.bundle_root / rel).exists():
+                    errors.append(
+                        f"Missing required app command asset: {rel.as_posix()}"
                     )
 
             hooks_json = spec.bundle_root / "hooks" / "hooks.json"
@@ -129,6 +171,20 @@ def validate_installed(
                         "Missing installed DocQA skill asset: "
                         f"{installed_rel.as_posix()}"
                     )
+            for rel in _REQUIRED_MODELCLI_SKILL_FILES:
+                installed_rel = Path(*rel.parts[1:])
+                if not (resolved_target / installed_rel).exists():
+                    errors.append(
+                        "Missing installed modelcli skill asset: "
+                        f"{installed_rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_APP_SKILL_FILES:
+                installed_rel = Path(*rel.parts[1:])
+                if not (resolved_target / installed_rel).exists():
+                    errors.append(
+                        "Missing installed app skill asset: "
+                        f"{installed_rel.as_posix()}"
+                    )
 
         if platform_name == "claude-code":
             commands_dir = resolved_target / "commands"
@@ -138,6 +194,20 @@ def validate_installed(
                     if not (resolved_target / installed_rel).exists():
                         errors.append(
                             "Missing installed DocQA command asset: "
+                            f"{installed_rel.as_posix()}"
+                        )
+                for rel in _REQUIRED_CLAUDE_MODELCLI_COMMAND_FILES:
+                    installed_rel = Path(*rel.parts[1:])
+                    if not (resolved_target / installed_rel).exists():
+                        errors.append(
+                            "Missing installed modelcli command asset: "
+                            f"{installed_rel.as_posix()}"
+                        )
+                for rel in _REQUIRED_CLAUDE_APP_COMMAND_FILES:
+                    installed_rel = Path(*rel.parts[1:])
+                    if not (resolved_target / installed_rel).exists():
+                        errors.append(
+                            "Missing installed app command asset: "
                             f"{installed_rel.as_posix()}"
                         )
 

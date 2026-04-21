@@ -22,6 +22,16 @@ DOCQA_ACTION_SKILLS = (
     "kotaemon-docqa-doctor",
     "kotaemon-docqa-acceptance",
 )
+MODELCLI_ACTION_SKILLS = (
+    "kotaemon-modelcli-init-config",
+    "kotaemon-modelcli-providers",
+    "kotaemon-modelcli-run",
+)
+APP_ACTION_SKILLS = (
+    "kotaemon-app-init",
+    "kotaemon-app-doctor",
+    "kotaemon-app-run",
+)
 
 
 def test_platform_registry_names():
@@ -41,6 +51,10 @@ def test_install_claude_minimal_creates_expected_assets(tmp_path):
     assert (tmp_path / "CLAUDE.md").exists()
     assert (tmp_path / "skills" / "kotaemon-docqa" / "SKILL.md").exists()
     for skill_name in DOCQA_ACTION_SKILLS:
+        assert (tmp_path / "skills" / skill_name / "SKILL.md").exists()
+    assert (tmp_path / "skills" / "kotaemon-modelcli" / "SKILL.md").exists()
+    assert (tmp_path / "skills" / "kotaemon-app" / "SKILL.md").exists()
+    for skill_name in MODELCLI_ACTION_SKILLS + APP_ACTION_SKILLS:
         assert (tmp_path / "skills" / skill_name / "SKILL.md").exists()
 
 
@@ -91,6 +105,10 @@ def test_install_codex_minimal_includes_docqa_skill(tmp_path):
     assert (tmp_path / "skills" / "kotaemon-docqa" / "SKILL.md").exists()
     for skill_name in DOCQA_ACTION_SKILLS:
         assert (tmp_path / "skills" / skill_name / "SKILL.md").exists()
+    assert (tmp_path / "skills" / "kotaemon-modelcli" / "SKILL.md").exists()
+    assert (tmp_path / "skills" / "kotaemon-app" / "SKILL.md").exists()
+    for skill_name in MODELCLI_ACTION_SKILLS + APP_ACTION_SKILLS:
+        assert (tmp_path / "skills" / skill_name / "SKILL.md").exists()
 
 
 def test_install_claude_selective_commands_include_docqa_wrapper(tmp_path):
@@ -104,6 +122,10 @@ def test_install_claude_selective_commands_include_docqa_wrapper(tmp_path):
     assert result.platform == "claude-code"
     assert (tmp_path / "commands" / "kotaemon-docqa.md").exists()
     for skill_name in DOCQA_ACTION_SKILLS:
+        assert (tmp_path / "commands" / f"{skill_name}.md").exists()
+    assert (tmp_path / "commands" / "kotaemon-modelcli.md").exists()
+    assert (tmp_path / "commands" / "kotaemon-app.md").exists()
+    for skill_name in MODELCLI_ACTION_SKILLS + APP_ACTION_SKILLS:
         assert (tmp_path / "commands" / f"{skill_name}.md").exists()
 
 
@@ -129,10 +151,11 @@ def test_validate_bundle_reports_missing_split_docqa_asset(monkeypatch, tmp_path
     (tmp_path / "config.toml.template").write_text(
         "# BEGIN KOTAEMON PLATFORM BLOCK\n", encoding="utf-8"
     )
-    (skills_dir / "kotaemon-docqa").mkdir()
-    (skills_dir / "kotaemon-docqa" / "SKILL.md").write_text(
-        "umbrella\n", encoding="utf-8"
-    )
+    for skill_name in ("kotaemon-docqa", "kotaemon-modelcli", "kotaemon-app"):
+        (skills_dir / skill_name).mkdir()
+        (skills_dir / skill_name / "SKILL.md").write_text(
+            "umbrella\n", encoding="utf-8"
+        )
 
     class _Spec:
         selectable_components = (
@@ -268,6 +291,89 @@ def test_docqa_skill_parity_between_platforms():
         assert token in claude_skill
 
 
+def test_modelcli_skill_parity_between_platforms():
+    repo_root = Path(__file__).resolve().parents[3]
+    codex_skill = (
+        repo_root
+        / "libs"
+        / "kotaemon"
+        / "kotaemon"
+        / "platform_support"
+        / "assets"
+        / "codex"
+        / "skills"
+        / "kotaemon-modelcli"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    claude_skill = (
+        repo_root
+        / "libs"
+        / "kotaemon"
+        / "kotaemon"
+        / "platform_support"
+        / "assets"
+        / "claude-code"
+        / "skills"
+        / "kotaemon-modelcli"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    shared_tokens = [
+        "pip install kotaemon-app",
+        "uv tool install kotaemon-app",
+        "kotaemon app init",
+        "kotaemon app doctor",
+        "kotaemon modelcli init-config --output modelcli.yml",
+        "kotaemon modelcli providers --config modelcli.yml",
+        'kotaemon modelcli run --prompt "..." --model ds-chat --provider openai --config modelcli.yml --dry-run',
+        'kotaemon modelcli run --prompt "..." --model ds-chat --provider openai --config modelcli.yml',
+    ]
+
+    for token in shared_tokens:
+        assert token in codex_skill
+        assert token in claude_skill
+
+
+def test_app_skill_parity_between_platforms():
+    repo_root = Path(__file__).resolve().parents[3]
+    codex_skill = (
+        repo_root
+        / "libs"
+        / "kotaemon"
+        / "kotaemon"
+        / "platform_support"
+        / "assets"
+        / "codex"
+        / "skills"
+        / "kotaemon-app"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    claude_skill = (
+        repo_root
+        / "libs"
+        / "kotaemon"
+        / "kotaemon"
+        / "platform_support"
+        / "assets"
+        / "claude-code"
+        / "skills"
+        / "kotaemon-app"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    shared_tokens = [
+        "pip install kotaemon-app",
+        "uv tool install kotaemon-app",
+        "kotaemon app init",
+        "kotaemon app doctor",
+        "kotaemon app run",
+    ]
+
+    for token in shared_tokens:
+        assert token in codex_skill
+        assert token in claude_skill
+
+
 def test_split_docqa_action_skills_match_between_platforms():
     repo_root = Path(__file__).resolve().parents[3]
     shared_tokens = [
@@ -278,6 +384,86 @@ def test_split_docqa_action_skills_match_between_platforms():
     ]
 
     for skill_name in DOCQA_ACTION_SKILLS:
+        codex_skill = (
+            repo_root
+            / "libs"
+            / "kotaemon"
+            / "kotaemon"
+            / "platform_support"
+            / "assets"
+            / "codex"
+            / "skills"
+            / skill_name
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        claude_skill = (
+            repo_root
+            / "libs"
+            / "kotaemon"
+            / "kotaemon"
+            / "platform_support"
+            / "assets"
+            / "claude-code"
+            / "skills"
+            / skill_name
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+        for token in shared_tokens:
+            assert token in codex_skill
+            assert token in claude_skill
+
+
+def test_split_modelcli_action_skills_match_between_platforms():
+    repo_root = Path(__file__).resolve().parents[3]
+    shared_tokens = [
+        "pip install kotaemon-app",
+        "uv tool install kotaemon-app",
+        "kotaemon app init",
+        "kotaemon app doctor",
+    ]
+
+    for skill_name in MODELCLI_ACTION_SKILLS:
+        codex_skill = (
+            repo_root
+            / "libs"
+            / "kotaemon"
+            / "kotaemon"
+            / "platform_support"
+            / "assets"
+            / "codex"
+            / "skills"
+            / skill_name
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        claude_skill = (
+            repo_root
+            / "libs"
+            / "kotaemon"
+            / "kotaemon"
+            / "platform_support"
+            / "assets"
+            / "claude-code"
+            / "skills"
+            / skill_name
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+        for token in shared_tokens:
+            assert token in codex_skill
+            assert token in claude_skill
+
+
+def test_split_app_action_skills_match_between_platforms():
+    repo_root = Path(__file__).resolve().parents[3]
+    shared_tokens = [
+        "pip install kotaemon-app",
+        "uv tool install kotaemon-app",
+        "kotaemon app init",
+        "kotaemon app doctor",
+    ]
+
+    for skill_name in APP_ACTION_SKILLS:
         codex_skill = (
             repo_root
             / "libs"
@@ -322,6 +508,31 @@ def test_claude_docqa_action_commands_match_skill_names():
     )
 
     for skill_name in DOCQA_ACTION_SKILLS:
+        command_path = commands_dir / f"{skill_name}.md"
+        assert command_path.exists()
+        command_text = command_path.read_text(encoding="utf-8")
+        assert "pip install kotaemon-app" in command_text
+        assert "kotaemon app init" in command_text
+        assert "kotaemon app doctor" in command_text
+
+
+def test_claude_modelcli_and_app_commands_match_skill_names():
+    repo_root = Path(__file__).resolve().parents[3]
+    commands_dir = (
+        repo_root
+        / "libs"
+        / "kotaemon"
+        / "kotaemon"
+        / "platform_support"
+        / "assets"
+        / "claude-code"
+        / "commands"
+    )
+
+    for command_name in ("kotaemon-modelcli.md", "kotaemon-app.md"):
+        assert (commands_dir / command_name).exists()
+
+    for skill_name in MODELCLI_ACTION_SKILLS + APP_ACTION_SKILLS:
         command_path = commands_dir / f"{skill_name}.md"
         assert command_path.exists()
         command_text = command_path.read_text(encoding="utf-8")

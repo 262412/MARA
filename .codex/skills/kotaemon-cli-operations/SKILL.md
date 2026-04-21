@@ -25,6 +25,19 @@ If `kotaemon` is not on `PATH`, install the packaged runtime first:
 4. Execute real call and summarize results.
 5. Capture failures with exact command and remediation.
 
+## Focused Skills
+
+Prefer these focused skills when the user intent is narrow:
+
+- `kotaemon-modelcli-init-config`
+- `kotaemon-modelcli-providers`
+- `kotaemon-modelcli-run`
+- `kotaemon-app-init`
+- `kotaemon-app-doctor`
+- `kotaemon-app-run`
+
+Keep this umbrella skill for promptui, benchmark, or mixed CLI workflows.
+
 ## Command Set
 
 - `kotaemon modelcli init-config --output modelcli.yml`
