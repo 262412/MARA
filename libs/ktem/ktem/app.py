@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypeVar
 
 import gradio as gr
 import pluggy
@@ -15,6 +15,7 @@ from theflow.settings import settings
 from theflow.utils.modules import import_dotted_string
 
 BASE_PATH = os.environ.get("GR_FILE_ROOT_PATH", "")
+_PageT = TypeVar("_PageT")
 
 
 class BaseApp:
@@ -39,6 +40,7 @@ class BaseApp:
     public_events: list[str] = []
 
     def __init__(self):
+        self._registered_child_pages: list["BasePage"] = []
         self.dev_mode = getattr(settings, "KH_MODE", "") == "dev"
         self.app_name = getattr(settings, "KH_APP_NAME", "Kotaemon")
         self.app_version = getattr(settings, "KH_APP_VERSION", "")
@@ -222,35 +224,61 @@ class BaseApp:
 
         return demo
 
+    def register_child_page(self, attr_name: str, page: _PageT) -> _PageT:
+        setattr(self, attr_name, page)
+        registered_child_pages = getattr(self, "_registered_child_pages", None)
+        if registered_child_pages is None:
+            registered_child_pages = []
+            self._registered_child_pages = registered_child_pages
+        if isinstance(page, BasePage) and page not in registered_child_pages:
+            registered_child_pages.append(page)
+        return page
+
+    def _iter_child_pages(self):
+        seen: set[int] = set()
+        for page in getattr(self, "_registered_child_pages", []):
+            if not isinstance(page, BasePage):
+                continue
+            page_id = id(page)
+            if page_id in seen:
+                continue
+            seen.add(page_id)
+            yield page
+
+        for value in self.__dict__.values():
+            if not isinstance(value, BasePage):
+                continue
+            page_id = id(value)
+            if page_id in seen:
+                continue
+            seen.add(page_id)
+            yield value
+
     def declare_public_events(self):
         """Declare an event for the app"""
         for event in self.public_events:
             self.declare_event(event)
 
-        for value in self.__dict__.values():
-            if isinstance(value, BasePage):
-                value.declare_public_events()
+        for value in self._iter_child_pages():
+            value.declare_public_events()
 
     def subscribe_public_events(self):
         """Subscribe to an event"""
         self.on_subscribe_public_events()
-        for value in self.__dict__.values():
-            if isinstance(value, BasePage):
-                value.subscribe_public_events()
+        for value in self._iter_child_pages():
+            value.subscribe_public_events()
 
     def register_events(self):
         """Register all events"""
         self.on_register_events()
-        for value in self.__dict__.values():
-            if isinstance(value, BasePage):
-                value.register_events()
+        for value in self._iter_child_pages():
+            value.register_events()
 
     def on_app_created(self):
         """Execute on app created callbacks"""
         self._on_app_created()
-        for value in self.__dict__.values():
-            if isinstance(value, BasePage):
-                value.on_app_created()
+        for value in self._iter_child_pages():
+            value.on_app_created()
 
 
 class BasePage:
@@ -260,6 +288,7 @@ class BasePage:
 
     def __init__(self, app):
         self._app = app
+        self._registered_child_pages: list["BasePage"] = []
 
     def on_building_ui(self):
         """Build the UI of the app"""
@@ -282,46 +311,72 @@ class BasePage:
         """
         return None
 
+    def register_child_page(self, attr_name: str, page: _PageT) -> _PageT:
+        setattr(self, attr_name, page)
+        registered_child_pages = getattr(self, "_registered_child_pages", None)
+        if registered_child_pages is None:
+            registered_child_pages = []
+            self._registered_child_pages = registered_child_pages
+        if isinstance(page, BasePage) and page not in registered_child_pages:
+            registered_child_pages.append(page)
+        return page
+
+    def _iter_child_pages(self):
+        seen: set[int] = set()
+        for page in getattr(self, "_registered_child_pages", []):
+            if not isinstance(page, BasePage):
+                continue
+            page_id = id(page)
+            if page_id in seen:
+                continue
+            seen.add(page_id)
+            yield page
+
+        for value in self.__dict__.values():
+            if not isinstance(value, BasePage):
+                continue
+            page_id = id(value)
+            if page_id in seen:
+                continue
+            seen.add(page_id)
+            yield value
+
     def render(self):
         for value in self.__dict__.values():
             if isinstance(value, gr.blocks.Block):
                 value.render()
-            if isinstance(value, BasePage):
-                value.render()
+        for value in self._iter_child_pages():
+            value.render()
 
     def unrender(self):
         for value in self.__dict__.values():
             if isinstance(value, gr.blocks.Block):
                 value.unrender()
-            if isinstance(value, BasePage):
-                value.unrender()
+        for value in self._iter_child_pages():
+            value.unrender()
 
     def declare_public_events(self):
         """Declare an event for the app"""
         for event in self.public_events:
             self._app.declare_event(event)
 
-        for value in self.__dict__.values():
-            if isinstance(value, BasePage):
-                value.declare_public_events()
+        for value in self._iter_child_pages():
+            value.declare_public_events()
 
     def subscribe_public_events(self):
         """Subscribe to an event"""
         self.on_subscribe_public_events()
-        for value in self.__dict__.values():
-            if isinstance(value, BasePage):
-                value.subscribe_public_events()
+        for value in self._iter_child_pages():
+            value.subscribe_public_events()
 
     def register_events(self):
         """Register all events"""
         self.on_register_events()
-        for value in self.__dict__.values():
-            if isinstance(value, BasePage):
-                value.register_events()
+        for value in self._iter_child_pages():
+            value.register_events()
 
     def on_app_created(self):
         """Execute on app created callbacks"""
         self._on_app_created()
-        for value in self.__dict__.values():
-            if isinstance(value, BasePage):
-                value.on_app_created()
+        for value in self._iter_child_pages():
+            value.on_app_created()

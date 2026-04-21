@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import os
 import sys
 from dataclasses import dataclass
@@ -10,6 +12,7 @@ from platformdirs import PlatformDirs
 
 PACKAGE_FLOWSETTINGS_MODULE = "ktem.default_flowsettings"
 BOOTSTRAP_MARKER_ENV = "KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED"
+RUNTIME_SOURCE_ATTR = "_kotaemon_runtime_source"
 
 
 @dataclass(frozen=True)
@@ -52,17 +55,71 @@ def find_local_flowsettings() -> Path | None:
     return None
 
 
+def _load_settings_module_from_path(settings_path: Path):
+    spec = importlib.util.spec_from_file_location("flowsettings", settings_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load flowsettings from {settings_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_settings_values(settings_source: str) -> dict[str, object]:
+    if settings_source == PACKAGE_FLOWSETTINGS_MODULE:
+        load_packaged_runtime_env()
+
+    settings_path = Path(settings_source)
+    if settings_path.is_file():
+        module = _load_settings_module_from_path(settings_path)
+    else:
+        module = importlib.import_module(settings_source)
+
+    return {
+        setting: getattr(module, setting)
+        for setting in dir(module)
+        if setting.isupper()
+    }
+
+
+def _synchronize_theflow_settings(settings_source: str) -> None:
+    from theflow.settings import settings as flowsettings
+
+    if not getattr(flowsettings, "_initialized", False):
+        return
+
+    if (
+        getattr(flowsettings, RUNTIME_SOURCE_ATTR, None) == settings_source
+        and "KH_FILESTORAGE_PATH" in flowsettings.__dict__
+    ):
+        return
+
+    loaded_settings = _load_settings_values(settings_source)
+    for setting in [name for name in flowsettings.__dict__ if name.isupper()]:
+        del flowsettings.__dict__[setting]
+
+    for setting, value in loaded_settings.items():
+        setattr(flowsettings, setting, value)
+
+    setattr(flowsettings, RUNTIME_SOURCE_ATTR, settings_source)
+    flowsettings._initialized = True
+
+
 def bootstrap_runtime_settings() -> str:
     explicit_module = str(os.environ.get("THEFLOW_SETTINGS_MODULE", "") or "").strip()
     if explicit_module:
+        _synchronize_theflow_settings(explicit_module)
         return explicit_module
 
     local_flowsettings = find_local_flowsettings()
     if local_flowsettings is not None:
-        return str(local_flowsettings)
+        settings_source = str(local_flowsettings)
+        _synchronize_theflow_settings(settings_source)
+        return settings_source
 
     os.environ["THEFLOW_SETTINGS_MODULE"] = PACKAGE_FLOWSETTINGS_MODULE
     os.environ[BOOTSTRAP_MARKER_ENV] = "1"
+    _synchronize_theflow_settings(PACKAGE_FLOWSETTINGS_MODULE)
     return PACKAGE_FLOWSETTINGS_MODULE
 
 

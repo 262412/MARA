@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
+import kotaemon.agents.tools.mcp as mcp_module
 from kotaemon.agents.tools.mcp import (
     MCPTool,
     _json_schema_type_to_python,
@@ -237,13 +238,13 @@ class TestCreateToolsFromConfig:
             ),
         ]
 
-    @patch("kotaemon.agents.tools.mcp._run_async")
+    @patch.object(mcp_module, "_run_async")
     def test_no_filter_returns_all(self, mock_run_async):
         mock_run_async.return_value = self._make_mock_tools()
         tools = create_tools_from_config({"command": "uvx"})
         assert len(tools) == 2
 
-    @patch("kotaemon.agents.tools.mcp._run_async")
+    @patch.object(mcp_module, "_run_async")
     def test_enabled_tools_filter(self, mock_run_async):
         """Non-empty filter returns only nominated tools; empty list returns all."""
         mock_run_async.return_value = self._make_mock_tools()

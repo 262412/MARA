@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 from click.testing import CliRunner
+from theflow.settings import default as default_settings
+from theflow.settings import settings as flowsettings
 
 from kotaemon.cli import _extract_json_payload, _run_docqa_acceptance_matrix, main
 
@@ -159,6 +161,13 @@ class _DummyRuntime:
         conversation_id = f"conv-{len(self.sessions) + 1}"
         self.sessions[conversation_id] = []
         return SimpleNamespace(conversation_id=conversation_id)
+
+
+def _reset_theflow_settings():
+    for key in list(flowsettings.__dict__.keys()):
+        if key.isupper() or key == "_kotaemon_runtime_source":
+            del flowsettings.__dict__[key]
+    flowsettings._initialized = False
 
 
 def test_docqa_ask_json(monkeypatch, tmp_path):
@@ -427,6 +436,40 @@ def test_docqa_commands_work_after_agents_import(monkeypatch):
             "--json",
         ],
     )
+
+    assert result.exit_code == 0, result.output
+    assert runtime.last_request is not None
+    assert runtime.last_request.selected_file_ids == ["file-1"]
+
+
+def test_docqa_commands_recover_after_theflow_defaults_initialized(monkeypatch):
+    monkeypatch.delenv("THEFLOW_SETTINGS_MODULE", raising=False)
+    monkeypatch.delenv("KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED", raising=False)
+    _reset_theflow_settings()
+    getattr(
+        flowsettings,
+        next(name for name in dir(default_settings) if name.isupper()),
+    )
+
+    runtime = _DummyRuntime()
+    monkeypatch.setattr("kotaemon.cli._create_docqa_runtime", lambda: runtime)
+
+    try:
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "docqa",
+                "ask",
+                "--prompt",
+                "Summarize alpha.",
+                "--file",
+                "alpha.pdf",
+                "--json",
+            ],
+        )
+    finally:
+        _reset_theflow_settings()
 
     assert result.exit_code == 0, result.output
     assert runtime.last_request is not None

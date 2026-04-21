@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Callable
+
 from decouple import config
 
 from kotaemon.base import Document
@@ -7,9 +9,20 @@ from kotaemon.base import Document
 from .base import BaseReranking
 
 
+def _resolve_cohere_api_key_from_ktem() -> str:
+    from ktem.embeddings.manager import embedding_models_manager as embeddings
+
+    cohere_model = embeddings.get("cohere")
+    cohere_kwargs = getattr(cohere_model, "_kwargs", None)
+    if not isinstance(cohere_kwargs, dict):
+        return ""
+    return str(cohere_kwargs.get("cohere_api_key", "") or "")
+
+
 class CohereReranking(BaseReranking):
     model_name: str = "rerank-v4.0-fast"
     cohere_api_key: str = config("COHERE_API_KEY", "")
+    cohere_api_key_resolver: Callable[[], str | None] | None = None
     use_key_from_ktem: bool = False
 
     def run(self, documents: list[Document], query: str) -> list[Document]:
@@ -23,20 +36,19 @@ class CohereReranking(BaseReranking):
             )
 
         # try to get COHERE_API_KEY from embeddings
-        if not self.cohere_api_key and self.use_key_from_ktem:
-            try:
-                from ktem.embeddings.manager import (
-                    embedding_models_manager as embeddings,
-                )
+        if not self.cohere_api_key:
+            resolved_api_key = None
 
-                cohere_model = embeddings.get("cohere")
-                ktem_cohere_api_key = cohere_model._kwargs.get(  # type: ignore
-                    "cohere_api_key"
-                )
-                if ktem_cohere_api_key != "your-key":
-                    self.cohere_api_key = ktem_cohere_api_key
-            except Exception as e:
-                print("Cannot get Cohere API key from `ktem`", e)
+            if self.cohere_api_key_resolver is not None:
+                resolved_api_key = self.cohere_api_key_resolver()
+            elif self.use_key_from_ktem:
+                try:
+                    resolved_api_key = _resolve_cohere_api_key_from_ktem()
+                except Exception as e:
+                    print("Cannot get Cohere API key from `ktem`", e)
+
+            if resolved_api_key and resolved_api_key != "your-key":
+                self.cohere_api_key = resolved_api_key
 
         if not self.cohere_api_key:
             print("Cohere API key not found. Skipping rerankings.")
