@@ -1493,6 +1493,35 @@ div.markmap {
   border-radius: 4px;
 }
 
+#knowledge-graph-plot .kg-map-split-banner {
+  margin: 0 0 14px;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 28%, #d4d4d8);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(14, 116, 144, 0.12), rgba(2, 132, 199, 0.04)),
+    var(--background-fill-primary, #fff);
+  color: var(--body-text-color, #111827);
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+#knowledge-graph-plot .kg-map-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+#knowledge-graph-plot .kg-map-section {
+  border-top: 1px solid color-mix(in srgb, var(--border-color-primary, #d4d4d8) 78%, transparent);
+  padding-top: 16px;
+}
+
+#knowledge-graph-plot .kg-map-section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
 #kg-answer-hint {
   margin: 0 0 10px;
 }

@@ -612,6 +612,7 @@ function run() {
     ).trim();
     const nodeTypeMap = {
       knowledge_root: "Root",
+      knowledge_map: "Knowledge Map",
       component: "Component",
       knowledge_system: "Component",
       theme: "Theme",
@@ -622,6 +623,7 @@ function run() {
     };
     const nodeStyleClassMap = {
       knowledge_root: "kg-tree-node--root",
+      knowledge_map: "kg-tree-node--root",
       component: "kg-tree-node--component",
       knowledge_system: "kg-tree-node--component",
       theme: "kg-tree-node--theme",

@@ -638,11 +638,19 @@ class GlobalKnowledgeGraphService:
                 html_content = self._render_graph_html(graph, focus_file_id, status)
 
             if status == "ready":
-                status_message = (
-                    f"Ready: {len(valid_source_ids)} sources, "
-                    f"{len(graph.get('systems', []) if graph else [])} "
-                    "knowledge systems."
-                )
+                map_count = len(graph.get("maps", []) if graph else []) if graph else 0
+                if map_count > 1:
+                    status_message = (
+                        f"Ready: {len(valid_source_ids)} sources split into "
+                        f"{map_count} separate maps because some uploads do not form "
+                        "one connected knowledge system."
+                    )
+                else:
+                    status_message = (
+                        f"Ready: {len(valid_source_ids)} sources, "
+                        f"{len(graph.get('systems', []) if graph else [])} "
+                        "knowledge systems."
+                    )
             elif status == "stale" and schema_outdated and graph:
                 status_message = (
                     "Stale: cached graph uses an older schema. Refresh the "

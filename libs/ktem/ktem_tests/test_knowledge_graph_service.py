@@ -69,6 +69,10 @@ def test_conversation_graph_groups_related_and_unrelated_files(monkeypatch, tmp_
     assert len(systems) == 2
     system_sizes = sorted(len(system["related_file_ids"]) for system in systems)
     assert system_sizes == [1, 2]
+    assert graph["split_reason"] == "weakly_connected_sources"
+    assert len(graph["maps"]) == 2
+    map_sizes = sorted(len(item["related_file_ids"]) for item in graph["maps"])
+    assert map_sizes == [1, 2]
     assert graph["support_pages"]["file-a"] == ["1"]
     assert graph["support_pages"]["file-b"] == ["1"]
     assert graph["support_pages"]["file-c"] == ["1"]
@@ -360,57 +364,145 @@ def test_payload_attr_includes_prompt_and_graph_context(monkeypatch, tmp_path):
     assert payload["prompt"] != payload["suggested_question"]
 
 
-def test_render_graph_html_includes_toggle_for_collapsed_points(monkeypatch, tmp_path):
+def test_render_graph_html_renders_flat_v2_map_branches(monkeypatch, tmp_path):
     service = _make_service(monkeypatch, tmp_path)
 
     graph = {
+        "schema_version": 2,
         "source_ids": ["file-a", "file-b"],
+        "maps": [
+            {
+                "id": "map::1",
+                "type": "knowledge_map",
+                "kind": "map",
+                "label": "Knowledge System 1",
+                "summary": "Connected source set.",
+                "related_file_ids": ["file-a", "file-b"],
+                "component_ids": ["component::1"],
+                "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+                "support_chunk_ids": {"file-a": ["chunk-a"], "file-b": ["chunk-b"]},
+            }
+        ],
         "components": [
             {
                 "id": "component::1",
                 "type": "component",
+                "kind": "component",
                 "label": "Component 1",
                 "summary": "Shared concepts",
                 "related_file_ids": ["file-a", "file-b"],
                 "support_pages": {"file-a": ["1"], "file-b": ["2"]},
                 "support_chunk_ids": {"file-a": ["chunk-a"], "file-b": ["chunk-b"]},
-                "themes": [
-                    {
-                        "id": "theme::1",
-                        "type": "theme",
-                        "label": "Theme 1",
-                        "summary": "Shared concepts",
-                        "related_file_ids": ["file-a", "file-b"],
-                        "support_pages": {"file-a": ["1"], "file-b": ["2"]},
-                        "support_chunk_ids": {
-                            "file-a": ["chunk-a"],
-                            "file-b": ["chunk-b"],
-                        },
-                        "subthemes": [
-                            {
-                                "id": "subtheme::1",
-                                "type": "subtheme",
-                                "label": "Subtheme 1",
-                                "summary": "Focus details",
-                                "related_file_ids": ["file-a"],
-                                "support_pages": {"file-a": ["1"]},
-                                "support_chunk_ids": {"file-a": ["chunk-a"]},
-                                "knowledge_points": [
-                                    {
-                                        "id": "point::1",
-                                        "type": "knowledge_point",
-                                        "label": "Point 1",
-                                        "related_file_ids": ["file-a"],
-                                        "support_pages": {"file-a": ["1"]},
-                                        "support_chunk_ids": {"file-a": ["chunk-a"]},
-                                    }
-                                ],
-                            }
-                        ],
-                    }
-                ],
+                "children": ["theme::1"],
             }
         ],
+        "themes": [
+            {
+                "id": "theme::1",
+                "type": "theme",
+                "kind": "theme",
+                "label": "Theme 1",
+                "summary": "Shared concepts",
+                "related_file_ids": ["file-a", "file-b"],
+                "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+                "support_chunk_ids": {
+                    "file-a": ["chunk-a"],
+                    "file-b": ["chunk-b"],
+                },
+                "component_id": "component::1",
+                "parent_id": "component::1",
+                "children": ["subtheme::1"],
+            }
+        ],
+        "subthemes": [
+            {
+                "id": "subtheme::1",
+                "type": "subtheme",
+                "kind": "subtheme",
+                "label": "Subtheme 1",
+                "summary": "Focus details",
+                "related_file_ids": ["file-a"],
+                "support_pages": {"file-a": ["1"]},
+                "support_chunk_ids": {"file-a": ["chunk-a"]},
+                "component_id": "component::1",
+                "theme_id": "theme::1",
+                "parent_id": "theme::1",
+                "children": ["point::1"],
+            }
+        ],
+        "knowledge_points": [
+            {
+                "id": "point::1",
+                "type": "knowledge_point",
+                "kind": "knowledge_point",
+                "label": "Point 1",
+                "related_file_ids": ["file-a"],
+                "file_id": "file-a",
+                "component_id": "component::1",
+                "theme_id": "theme::1",
+                "subtheme_id": "subtheme::1",
+                "parent_id": "subtheme::1",
+                "support_pages": {"file-a": ["1"]},
+                "support_chunk_ids": {"file-a": ["chunk-a"]},
+            }
+        ],
+        "node_index": {
+            "component::1": {
+                "id": "component::1",
+                "type": "component",
+                "kind": "component",
+                "label": "Component 1",
+                "summary": "Shared concepts",
+                "related_file_ids": ["file-a", "file-b"],
+                "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+                "support_chunk_ids": {"file-a": ["chunk-a"], "file-b": ["chunk-b"]},
+                "children": ["theme::1"],
+            },
+            "theme::1": {
+                "id": "theme::1",
+                "type": "theme",
+                "kind": "theme",
+                "label": "Theme 1",
+                "summary": "Shared concepts",
+                "related_file_ids": ["file-a", "file-b"],
+                "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+                "support_chunk_ids": {
+                    "file-a": ["chunk-a"],
+                    "file-b": ["chunk-b"],
+                },
+                "component_id": "component::1",
+                "parent_id": "component::1",
+                "children": ["subtheme::1"],
+            },
+            "subtheme::1": {
+                "id": "subtheme::1",
+                "type": "subtheme",
+                "kind": "subtheme",
+                "label": "Subtheme 1",
+                "summary": "Focus details",
+                "related_file_ids": ["file-a"],
+                "support_pages": {"file-a": ["1"]},
+                "support_chunk_ids": {"file-a": ["chunk-a"]},
+                "component_id": "component::1",
+                "theme_id": "theme::1",
+                "parent_id": "theme::1",
+                "children": ["point::1"],
+            },
+            "point::1": {
+                "id": "point::1",
+                "type": "knowledge_point",
+                "kind": "knowledge_point",
+                "label": "Point 1",
+                "related_file_ids": ["file-a"],
+                "file_id": "file-a",
+                "component_id": "component::1",
+                "theme_id": "theme::1",
+                "subtheme_id": "subtheme::1",
+                "parent_id": "subtheme::1",
+                "support_pages": {"file-a": ["1"]},
+                "support_chunk_ids": {"file-a": ["chunk-a"]},
+            },
+        },
         "support_pages": {},
         "support_chunk_ids": {},
     }
@@ -419,10 +511,57 @@ def test_render_graph_html_includes_toggle_for_collapsed_points(monkeypatch, tmp
 
     assert "data-kg-layout='mindmap'" in rendered
     assert "data-kg-schema='v2'" in rendered
-    assert "kg-branch--component" in rendered
-    assert "kg-branch--theme" in rendered
-    assert "kg-branch--subtheme" in rendered
-    assert "kg-tree-node--knowledge_point" in rendered
+    assert "Conversation Knowledge Map" in rendered
+    assert "Component 1" in rendered
+    assert "Theme 1" in rendered
+    assert "Subtheme 1" in rendered
+    assert "Point 1" in rendered
+
+
+def test_render_graph_html_shows_split_banner_for_multiple_maps(monkeypatch, tmp_path):
+    service = _make_service(monkeypatch, tmp_path)
+
+    graph = {
+        "schema_version": 2,
+        "source_ids": ["file-a", "file-b"],
+        "split_reason": "weakly_connected_sources",
+        "maps": [
+            {
+                "id": "map::1",
+                "type": "knowledge_map",
+                "kind": "map",
+                "label": "Knowledge System 1",
+                "summary": "Related sources A.",
+                "related_file_ids": ["file-a"],
+                "component_ids": [],
+                "support_pages": {"file-a": ["1"]},
+                "support_chunk_ids": {"file-a": ["chunk-a"]},
+            },
+            {
+                "id": "map::2",
+                "type": "knowledge_map",
+                "kind": "map",
+                "label": "Knowledge System 2",
+                "summary": "Related sources B.",
+                "related_file_ids": ["file-b"],
+                "component_ids": [],
+                "support_pages": {"file-b": ["2"]},
+                "support_chunk_ids": {"file-b": ["chunk-b"]},
+            },
+        ],
+        "components": [],
+        "themes": [],
+        "subthemes": [],
+        "knowledge_points": [],
+        "node_index": {},
+        "support_pages": {},
+        "support_chunk_ids": {},
+    }
+
+    rendered = service._render_graph_html(graph, focus_file_id="", status="ready")
+
+    assert "kg-map-split-banner" in rendered
+    assert "split into 2 separate maps" in rendered
 
 
 def test_conversation_graph_builds_schema_v2_theme_first_artifact(
@@ -467,6 +606,7 @@ def test_conversation_graph_builds_schema_v2_theme_first_artifact(
 
     assert graph["schema_version"] == 2
     assert graph["root"]["id"] == "root::conversation"
+    assert graph["maps"]
     assert graph["components"]
     assert graph["themes"]
     assert graph["node_index"]["root::conversation"]["kind"] == "root"
@@ -628,6 +768,83 @@ def test_get_graph_view_rebuilds_stale_graph_to_ready_when_forced(
     assert saved_states[-1][1]["graph"] == ready_view["graph"]
 
 
+def test_get_graph_view_ready_status_mentions_split_maps(monkeypatch, tmp_path):
+    service = _make_service(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        service,
+        "_load_sources",
+        lambda source_ids: {
+            "file-a": {
+                "id": "file-a",
+                "name": "Alpha.pdf",
+                "path": "",
+                "size": 1,
+                "date_created": "2026-01-01",
+            },
+            "file-b": {
+                "id": "file-b",
+                "name": "Beta.pdf",
+                "path": "",
+                "size": 1,
+                "date_created": "2026-01-02",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "_build_conversation_graph",
+        lambda conversation_id, sources: {
+            "schema_version": 2,
+            "conversation_id": conversation_id,
+            "source_ids": list(sources.keys()),
+            "maps": [
+                {
+                    "id": "map::1",
+                    "type": "knowledge_map",
+                    "kind": "map",
+                    "label": "Knowledge System 1",
+                    "summary": "Map A",
+                    "related_file_ids": ["file-a"],
+                    "component_ids": [],
+                    "support_pages": {"file-a": ["1"]},
+                    "support_chunk_ids": {"file-a": ["chunk-a"]},
+                },
+                {
+                    "id": "map::2",
+                    "type": "knowledge_map",
+                    "kind": "map",
+                    "label": "Knowledge System 2",
+                    "summary": "Map B",
+                    "related_file_ids": ["file-b"],
+                    "component_ids": [],
+                    "support_pages": {"file-b": ["2"]},
+                    "support_chunk_ids": {"file-b": ["chunk-b"]},
+                },
+            ],
+            "components": [],
+            "themes": [],
+            "subthemes": [],
+            "knowledge_points": [],
+            "node_index": {},
+            "systems": [],
+            "file_cards": [],
+            "support_pages": {"file-a": ["1"], "file-b": ["2"]},
+            "support_chunk_ids": {"file-a": ["chunk-a"], "file-b": ["chunk-b"]},
+            "split_reason": "weakly_connected_sources",
+        },
+    )
+
+    graph_view = service.get_graph_view(
+        "conv-split",
+        ["file-a", "file-b"],
+        focus_file_id="",
+        force_rebuild=True,
+    )
+
+    assert graph_view["status"] == "ready"
+    assert "split into 2 separate maps" in graph_view["status_message"].lower()
+
+
 def test_payload_attr_keeps_graph_context_aliases_and_v2_node_metadata(
     monkeypatch, tmp_path
 ):
@@ -637,6 +854,9 @@ def test_payload_attr_keeps_graph_context_aliases_and_v2_node_metadata(
         {
             "id": "component::1",
             "type": "knowledge_system",
+            "kind": "component",
+            "component_id": "component::1",
+            "map_id": "map::1",
             "label": "Evidence alignment",
             "related_file_ids": ["file-a"],
             "support_pages": {"file-a": ["2"]},
@@ -648,6 +868,9 @@ def test_payload_attr_keeps_graph_context_aliases_and_v2_node_metadata(
 
     assert payload["graph_context"]["node_id"] == "component::1"
     assert payload["graph_context"]["node_role"] == "component"
+    assert payload["graph_context"]["kind"] == "component"
+    assert payload["graph_context"]["component_id"] == "component::1"
+    assert payload["graph_context"]["map_id"] == "map::1"
     assert payload["node_role"] == "component"
     assert payload["node_type"] == "knowledge_system"
     assert payload["graph_context"]["focus_file_id"] == "file-a"

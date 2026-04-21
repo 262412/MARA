@@ -547,6 +547,7 @@ class KnowledgeGraphBuilder:
                 "conversation_id": conversation_id,
                 "source_ids": list(sources.keys()),
                 "root": root_node,
+                "maps": [],
                 "components": [],
                 "themes": [],
                 "subthemes": [],
@@ -557,6 +558,7 @@ class KnowledgeGraphBuilder:
                 "support_chunk_ids": {},
                 "evidence_pages": {},
                 "evidence_chunk_ids": {},
+                "split_reason": "",
                 **legacy_graph,
             }
 
@@ -700,6 +702,131 @@ class KnowledgeGraphBuilder:
         root_theme_ids = [theme["id"] for theme in theme_nodes]
         root_subtheme_ids = [subtheme["id"] for subtheme in subtheme_nodes]
         root_point_ids = [point["id"] for point in canonical_points]
+        system_groups = self.group_files_into_systems(file_graphs)
+        if not system_groups:
+            system_groups = [list(file_graphs)]
+
+        system_file_sets = [
+            {str(graph.get("file_id", "") or "") for graph in grouped_file_graphs}
+            for grouped_file_graphs in system_groups
+        ]
+        component_map_indices: dict[str, int] = {}
+        for component in component_nodes:
+            component_id = str(component.get("id", "") or "")
+            related_file_ids = {
+                str(file_id or "").strip()
+                for file_id in component.get("related_file_ids", []) or []
+                if str(file_id or "").strip()
+            }
+            best_index = 0
+            best_score = -1
+            for index, file_set in enumerate(system_file_sets):
+                score = len(related_file_ids.intersection(file_set))
+                if score > best_score:
+                    best_score = score
+                    best_index = index
+            component_map_indices[component_id] = best_index
+
+        maps: list[dict[str, Any]] = []
+        map_ids: list[str] = []
+        for map_index, grouped_file_graphs in enumerate(system_groups, start=1):
+            map_id = f"map::{map_index}"
+            related_file_ids = _limit_unique_strings(
+                [str(graph.get("file_id", "") or "") for graph in grouped_file_graphs],
+                24,
+            )
+            component_ids = [
+                str(component.get("id", "") or "")
+                for component in component_nodes
+                if component_map_indices.get(str(component.get("id", "") or ""), 0)
+                == (map_index - 1)
+            ]
+
+            map_support_pages: dict[str, list[str]] = {}
+            map_support_chunk_ids: dict[str, list[str]] = {}
+            if component_ids:
+                for component_id in component_ids:
+                    component = next(
+                        item for item in component_nodes if item.get("id") == component_id
+                    )
+                    self._merge_support_dict(
+                        map_support_pages, component.get("support_pages", {}), 24
+                    )
+                    self._merge_support_dict(
+                        map_support_chunk_ids,
+                        component.get("support_chunk_ids", {}),
+                        36,
+                    )
+            else:
+                for file_graph in grouped_file_graphs:
+                    self._merge_support_dict(
+                        map_support_pages,
+                        file_graph.get("summary_support_pages", {}),
+                        24,
+                    )
+                    self._merge_support_dict(
+                        map_support_chunk_ids,
+                        file_graph.get("summary_support_chunk_ids", {}),
+                        36,
+                    )
+
+            if len(system_groups) == 1:
+                map_label = "Conversation Knowledge Map"
+                map_summary = (
+                    f"Connected map across {len(related_file_ids)} source(s), "
+                    f"{len(component_ids)} component(s), and {len(root_point_ids)} knowledge point(s)."
+                )
+            elif len(related_file_ids) == 1:
+                file_name = str(
+                    grouped_file_graphs[0].get("file_name", related_file_ids[0])
+                    or related_file_ids[0]
+                )
+                map_label = f"{file_name} Knowledge Map"
+                map_summary = (
+                    "Separated into its own map because it does not strongly connect "
+                    "to the other uploaded sources."
+                )
+            else:
+                map_label = f"Knowledge System {map_index}"
+                map_summary = (
+                    f"Separate map for {len(related_file_ids)} related sources that "
+                    "share stronger overlap with each other than with the rest of "
+                    "this conversation."
+                )
+
+            map_node = self._annotate_evidence_aliases(
+                {
+                    "id": map_id,
+                    "type": "knowledge_map",
+                    "kind": "map",
+                    "schema_version": self.SCHEMA_VERSION,
+                    "label": map_label,
+                    "summary": map_summary,
+                    "related_file_ids": related_file_ids,
+                    "component_ids": component_ids,
+                    "children": component_ids,
+                },
+                map_support_pages,
+                map_support_chunk_ids,
+                24,
+                36,
+            )
+            for component_id in component_ids:
+                for component in component_nodes:
+                    if component.get("id") == component_id:
+                        component["map_id"] = map_id
+                for theme in theme_nodes:
+                    if theme.get("component_id") == component_id:
+                        theme["map_id"] = map_id
+                for subtheme in subtheme_nodes:
+                    if subtheme.get("component_id") == component_id:
+                        subtheme["map_id"] = map_id
+                for point in canonical_points:
+                    if point.get("component_id") == component_id:
+                        point["map_id"] = map_id
+            maps.append(map_node)
+            map_ids.append(map_id)
+            node_index[map_id] = map_node
 
         root_node = self._annotate_evidence_aliases(
             {
@@ -712,10 +839,12 @@ class KnowledgeGraphBuilder:
                     f"{len(component_nodes)} component(s), "
                     f"{len(theme_nodes)} theme(s), "
                     f"{len(subtheme_nodes)} subtheme(s), "
-                    f"{len(canonical_points)} knowledge point(s)."
+                    f"{len(canonical_points)} knowledge point(s) across "
+                    f"{len(maps)} map(s)."
                 ),
                 "related_file_ids": list(sources.keys()),
                 "children": root_children,
+                "map_ids": map_ids,
                 "component_ids": root_children,
                 "theme_ids": root_theme_ids,
                 "subtheme_ids": root_subtheme_ids,
@@ -742,6 +871,7 @@ class KnowledgeGraphBuilder:
             "conversation_id": conversation_id,
             "source_ids": list(sources.keys()),
             "root": root_node,
+            "maps": maps,
             "components": component_nodes,
             "themes": theme_nodes,
             "subthemes": subtheme_nodes,
@@ -755,6 +885,7 @@ class KnowledgeGraphBuilder:
             "evidence_chunk_ids": root_node.get("evidence_chunk_ids", {}),
             "systems": legacy_systems,
             "file_cards": legacy_file_cards,
+            "split_reason": "weakly_connected_sources" if len(maps) > 1 else "",
         }
 
     def build_file_graph(self, file_id: str, source: dict[str, Any]) -> dict[str, Any]:
