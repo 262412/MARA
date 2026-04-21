@@ -1,6 +1,8 @@
 import logging
 from importlib import import_module
 
+_LAZY_SUBMODULES = {"agents", "cli"}
+
 
 def bootstrap_runtime_settings() -> str | None:
     """Best-effort bridge to the app runtime bootstrap.
@@ -20,8 +22,8 @@ def bootstrap_runtime_settings() -> str | None:
 
 
 def __getattr__(name: str):
-    if name == "cli":
-        module = import_module(f"{__name__}.cli")
+    if name in _LAZY_SUBMODULES:
+        module = import_module(f"{__name__}.{name}")
         globals()[name] = module
         return module
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

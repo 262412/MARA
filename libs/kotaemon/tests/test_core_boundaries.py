@@ -101,6 +101,17 @@ def test_citation_qa_import_does_not_require_ktem(monkeypatch):
     assert attempted == []
 
 
+def test_kotaemon_top_level_can_lazy_load_agents_without_ktem(monkeypatch):
+    _clear_modules("kotaemon", "kotaemon.agents", "ktem")
+
+    module, attempted = _import_with_blocked_ktem(monkeypatch, "kotaemon")
+    agents_module = module.agents
+
+    assert agents_module is not None
+    assert agents_module.__name__ == "kotaemon.agents"
+    assert attempted == []
+
+
 def test_core_package_ktem_imports_are_runtime_local_and_allowlisted():
     discovered_files = set()
     module_level_imports: list[str] = []
