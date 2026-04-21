@@ -3,10 +3,26 @@ import uuid
 from types import SimpleNamespace
 
 import ktem.docqa.runtime as runtime_module
+from ktem.docqa import _runtime_app, _runtime_models, _runtime_utils
 from ktem.db.models import User, engine
 from ktem.docqa.knowledge_graph import GlobalKnowledgeGraphService
 from ktem.docqa.runtime import DocQARuntime
 from sqlmodel import Session, select
+
+
+def test_runtime_module_reexports_extracted_runtime_components():
+    assert runtime_module.DocQARequest is _runtime_models.DocQARequest
+    assert runtime_module.DocQAResponse is _runtime_models.DocQAResponse
+    assert runtime_module.DocQASession is _runtime_models.DocQASession
+    assert runtime_module.DocQASessionSummary is _runtime_models.DocQASessionSummary
+    assert runtime_module.DocQAFileRecord is _runtime_models.DocQAFileRecord
+    assert runtime_module.DocQAIndexResult is _runtime_models.DocQAIndexResult
+    assert runtime_module.DocQADoctorResult is _runtime_models.DocQADoctorResult
+    assert runtime_module._PreparedPipeline is _runtime_models._PreparedPipeline
+    assert runtime_module._serialize_value is _runtime_utils._serialize_value
+    assert runtime_module._html_to_text is _runtime_utils._html_to_text
+    assert runtime_module._RuntimeAppContext is _runtime_app._RuntimeAppContext
+    assert runtime_module._DocQAPreviewService is _runtime_app._DocQAPreviewService
 
 
 def test_extract_selected_ids_from_data_source_handles_cli_shape():
