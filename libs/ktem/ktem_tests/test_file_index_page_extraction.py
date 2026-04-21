@@ -1,8 +1,8 @@
 from types import SimpleNamespace
-
-import pandas as pd
+from typing import Any, cast
 
 import ktem.index.file.ui as file_ui_module
+import pandas as pd
 from ktem.index.file._deletion import FileIndexDeletionController
 from ktem.index.file._events import (
     register_file_index_events,
@@ -52,6 +52,25 @@ class _FakeComponent:
     def input(self, *args, **kwargs):
         self.calls.append(("input", {"args": args, "kwargs": kwargs}))
         return _FakeChain(self.calls)
+
+
+class _DeletionSpy(FileIndexDeletionController):
+    def __init__(self):
+        super().__init__(index=SimpleNamespace(), selected_panel_false="Selected")
+        self.deleted_ids: list[str] = []
+
+    def delete_event(self, file_id):
+        self.deleted_ids.append(file_id)
+
+
+class _ListingControllerStub:
+    @staticmethod
+    def list_file(user_id, name_pattern=""):
+        return "rows", "frame"
+
+    @staticmethod
+    def list_file_names(file_list_state):
+        return "choices", file_list_state
 
 
 def _build_page(index_id=7, with_chat_refresh=False):
@@ -200,15 +219,11 @@ def test_format_conversation_scope_compacts_long_lists():
 
 
 def test_delete_all_files_skips_placeholder_rows():
-    controller = FileIndexDeletionController(index=SimpleNamespace(), selected_panel_false="Selected")
-    deleted_ids = []
-    controller.delete_event = deleted_ids.append
+    controller = _DeletionSpy()
 
-    controller.delete_all_files(
-        pd.DataFrame({"id": ["file-1", "-", None, "file-2"]})
-    )
+    controller.delete_all_files(pd.DataFrame({"id": ["file-1", "-", None, "file-2"]}))
 
-    assert deleted_ids == ["file-1", "file-2"]
+    assert controller.deleted_ids == ["file-1", "file-2"]
 
 
 def test_register_file_index_events_wires_delete_chat_and_upload_flows():
@@ -270,16 +285,15 @@ def test_register_quick_upload_events_wires_file_and_url_uploads():
     assert file_upload_chain[0][0] == "upload"
     assert file_upload_chain[1][1]["fn"] == page.index_fn_file_with_default_loaders
     assert file_upload_chain[3] == ("then", {"fn": "public-event"})
-    assert page._app.chat_page.quick_urls.calls[1][1]["fn"] == page.index_fn_url_with_default_loaders
+    assert (
+        page._app.chat_page.quick_urls.calls[1][1]["fn"]
+        == page.index_fn_url_with_default_loaders
+    )
 
 
 def test_file_index_page_listing_wrappers_delegate_to_active_helpers(monkeypatch):
     page = FileIndexPage.__new__(FileIndexPage)
-    listing_controller = SimpleNamespace(
-        list_file=lambda user_id, name_pattern="": ("rows", "frame"),
-        list_file_names=lambda file_list_state: ("choices", file_list_state),
-    )
-    page._listing_controller = listing_controller
+    page._listing_controller = cast(Any, _ListingControllerStub())
 
     monkeypatch.setattr(
         file_ui_module,
@@ -314,10 +328,7 @@ def test_file_index_page_listing_wrappers_delegate_to_active_helpers(monkeypatch
 
 def test_file_index_page_event_wrapper_methods_delegate_to_registrars(monkeypatch):
     page = FileIndexPage.__new__(FileIndexPage)
-    page.on_register_quick_uploads = FileIndexPage.on_register_quick_uploads.__get__(
-        page, FileIndexPage
-    )
-    calls = []
+    calls: list[tuple[str, object, dict[str, object]]] = []
 
     monkeypatch.setattr(
         file_ui_module,

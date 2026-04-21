@@ -14,7 +14,7 @@ import warnings
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 def _configure_noise_controls() -> None:
@@ -479,7 +479,7 @@ class AcceptanceMatrix:
     def run_cli_to_web_restore_matrix(self) -> None:
         app = App()
         app.make()
-        chat_page = app.chat_page
+        chat_page = cast(Any, app).chat_page
         file_index = next(
             index for index in app.index_manager.indices if isinstance(index, FileIndex)
         )
@@ -618,7 +618,7 @@ class AcceptanceMatrix:
     def run_web_to_cli_resume(self) -> None:
         app = App()
         app.make()
-        chat_page = app.chat_page
+        chat_page = cast(Any, app).chat_page
 
         sample = next(item for item in self.sample_files if item.kind == "docx")
         file_record = self.file_records["docx"]
@@ -828,8 +828,9 @@ def main() -> int:
         if matrix.verbose:
             result = matrix.run()
         else:
-            with contextlib.redirect_stdout(stdout_buffer), contextlib.redirect_stderr(
-                stderr_buffer
+            with (
+                contextlib.redirect_stdout(stdout_buffer),
+                contextlib.redirect_stderr(stderr_buffer),
             ):
                 result = matrix.run()
     except Exception as exc:

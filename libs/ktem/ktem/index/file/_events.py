@@ -4,7 +4,6 @@ import logging
 
 import gradio as gr
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -30,31 +29,35 @@ def register_quick_upload_events(
         )
 
         if not demo_mode:
-            quick_uploaded_event = page._app.chat_page.quick_file_upload.upload(
-                fn=lambda: gr.update(
-                    value="Please wait for the indexing process "
-                    "to complete before adding your question."
-                ),
-                outputs=page._app.chat_page.quick_file_upload_status,
-            ).then(
-                fn=page.index_fn_file_with_default_loaders,
-                inputs=[
-                    page._app.chat_page.quick_file_upload,
-                    gr.State(value=False),
-                    page._app.settings_state,
-                    page._app.user_id,
-                ],
-                outputs=page.quick_upload_state,
-                concurrency_limit=10,
-            ).success(
-                fn=lambda: [
-                    gr.update(value=None),
-                    gr.update(value="select"),
-                ],
-                outputs=[
-                    page._app.chat_page.quick_file_upload,
-                    page._app.chat_page._indices_input[0],
-                ],
+            quick_uploaded_event = (
+                page._app.chat_page.quick_file_upload.upload(
+                    fn=lambda: gr.update(
+                        value="Please wait for the indexing process "
+                        "to complete before adding your question."
+                    ),
+                    outputs=page._app.chat_page.quick_file_upload_status,
+                )
+                .then(
+                    fn=page.index_fn_file_with_default_loaders,
+                    inputs=[
+                        page._app.chat_page.quick_file_upload,
+                        gr.State(value=False),
+                        page._app.settings_state,
+                        page._app.user_id,
+                    ],
+                    outputs=page.quick_upload_state,
+                    concurrency_limit=10,
+                )
+                .success(
+                    fn=lambda: [
+                        gr.update(value=None),
+                        gr.update(value="select"),
+                    ],
+                    outputs=[
+                        page._app.chat_page.quick_file_upload,
+                        page._app.chat_page._indices_input[0],
+                    ],
+                )
             )
             for event in _iter_index_changed_events(page):
                 quick_uploaded_event = quick_uploaded_event.then(**event)
@@ -144,31 +147,35 @@ def register_quick_upload_events(
                 )
             )
 
-        quick_url_uploaded_event = page._app.chat_page.quick_urls.submit(
-            fn=lambda: gr.update(
-                value="Please wait for the indexing process "
-                "to complete before adding your question."
-            ),
-            outputs=page._app.chat_page.quick_file_upload_status,
-        ).then(
-            fn=page.index_fn_url_with_default_loaders,
-            inputs=[
-                page._app.chat_page.quick_urls,
-                gr.State(value=False),
-                page._app.settings_state,
-                page._app.user_id,
-            ],
-            outputs=page.quick_upload_state,
-            concurrency_limit=10,
-        ).success(
-            fn=lambda: [
-                gr.update(value=None),
-                gr.update(value="select"),
-            ],
-            outputs=[
-                page._app.chat_page.quick_urls,
-                page._app.chat_page._indices_input[0],
-            ],
+        quick_url_uploaded_event = (
+            page._app.chat_page.quick_urls.submit(
+                fn=lambda: gr.update(
+                    value="Please wait for the indexing process "
+                    "to complete before adding your question."
+                ),
+                outputs=page._app.chat_page.quick_file_upload_status,
+            )
+            .then(
+                fn=page.index_fn_url_with_default_loaders,
+                inputs=[
+                    page._app.chat_page.quick_urls,
+                    gr.State(value=False),
+                    page._app.settings_state,
+                    page._app.user_id,
+                ],
+                outputs=page.quick_upload_state,
+                concurrency_limit=10,
+            )
+            .success(
+                fn=lambda: [
+                    gr.update(value=None),
+                    gr.update(value="select"),
+                ],
+                outputs=[
+                    page._app.chat_page.quick_urls,
+                    page._app.chat_page._indices_input[0],
+                ],
+            )
         )
         for event in _iter_index_changed_events(page):
             quick_url_uploaded_event = quick_url_uploaded_event.then(**event)
@@ -277,30 +284,35 @@ def register_file_index_events(
         page._app.tabs,
     ]
 
-    on_deleted = page.delete_button.click(
-        fn=page.delete_event,
-        inputs=[page.selected_file_id],
-        outputs=None,
-    ).then(
-        fn=lambda: (None, page.selected_panel_false),
-        inputs=[],
-        outputs=[page.selected_file_id, page.selected_panel],
-        show_progress="hidden",
-    ).then(
-        fn=page.list_file,
-        inputs=[page._app.user_id, page.filter],
-        outputs=[page.file_list_state, page.file_list],
-    ).then(
-        fn=page.file_selected,
-        inputs=[page.selected_file_id],
-        outputs=[
-            page.chunks,
-            page.deselect_button,
-            page.delete_button,
-            page.download_single_button,
-            page.chat_button,
-        ],
-        show_progress="hidden",
+    on_deleted = (
+        page.delete_button.click(
+            fn=page.delete_event,
+            inputs=[page.selected_file_id],
+            outputs=None,
+        )
+        .then(
+            fn=lambda: (None, page.selected_panel_false),
+            inputs=[],
+            outputs=[page.selected_file_id, page.selected_panel],
+            show_progress="hidden",
+        )
+        .then(
+            fn=page.list_file,
+            inputs=[page._app.user_id, page.filter],
+            outputs=[page.file_list_state, page.file_list],
+        )
+        .then(
+            fn=page.file_selected,
+            inputs=[page.selected_file_id],
+            outputs=[
+                page.chunks,
+                page.deselect_button,
+                page.delete_button,
+                page.download_single_button,
+                page.chat_button,
+            ],
+            show_progress="hidden",
+        )
     )
     for event in _iter_index_changed_events(page):
         on_deleted = on_deleted.then(**event)
@@ -402,28 +414,33 @@ def register_file_index_events(
             show_progress="hidden",
         )
 
-    on_uploaded = page.upload_button.click(
-        fn=lambda: gr.update(visible=True),
-        outputs=[page.upload_progress_panel],
-    ).then(
-        fn=page.snapshot_source_ids,
-        inputs=[page._app.user_id],
-        outputs=[page.upload_before_source_ids],
-        show_progress="hidden",
-    ).then(
-        fn=page.index_fn,
-        inputs=[
-            page.files,
-            page.urls,
-            page.reindex,
-            page._app.settings_state,
-            page._app.user_id,
-        ],
-        outputs=[page.upload_result, page.upload_info],
-        concurrency_limit=20,
-    ).then(
-        fn=lambda: gr.update(value=""),
-        outputs=[page.urls],
+    on_uploaded = (
+        page.upload_button.click(
+            fn=lambda: gr.update(visible=True),
+            outputs=[page.upload_progress_panel],
+        )
+        .then(
+            fn=page.snapshot_source_ids,
+            inputs=[page._app.user_id],
+            outputs=[page.upload_before_source_ids],
+            show_progress="hidden",
+        )
+        .then(
+            fn=page.index_fn,
+            inputs=[
+                page.files,
+                page.urls,
+                page.reindex,
+                page._app.settings_state,
+                page._app.user_id,
+            ],
+            outputs=[page.upload_result, page.upload_info],
+            concurrency_limit=20,
+        )
+        .then(
+            fn=lambda: gr.update(value=""),
+            outputs=[page.urls],
+        )
     )
 
     uploaded_event = on_uploaded.then(
@@ -607,27 +624,35 @@ def register_file_index_events(
         ],
     }
     page.group_close_button.click(**on_group_closed_event)
-    on_group_saved = page.group_save_button.click(
-        fn=page.save_group,
-        inputs=[
-            page.selected_group_id,
-            page.group_name,
-            page.group_files,
-            page._app.user_id,
-        ],
-    ).then(
-        fn=page.list_group,
-        inputs=[page._app.user_id, page.file_list_state],
-        outputs=[page.group_list_state, page.group_list],
-    ).then(**on_group_closed_event)
-    on_group_deleted = page.group_delete_button.click(
-        fn=page.delete_group,
-        inputs=[page.selected_group_id],
-    ).then(
-        fn=page.list_group,
-        inputs=[page._app.user_id, page.file_list_state],
-        outputs=[page.group_list_state, page.group_list],
-    ).then(**on_group_closed_event)
+    on_group_saved = (
+        page.group_save_button.click(
+            fn=page.save_group,
+            inputs=[
+                page.selected_group_id,
+                page.group_name,
+                page.group_files,
+                page._app.user_id,
+            ],
+        )
+        .then(
+            fn=page.list_group,
+            inputs=[page._app.user_id, page.file_list_state],
+            outputs=[page.group_list_state, page.group_list],
+        )
+        .then(**on_group_closed_event)
+    )
+    on_group_deleted = (
+        page.group_delete_button.click(
+            fn=page.delete_group,
+            inputs=[page.selected_group_id],
+        )
+        .then(
+            fn=page.list_group,
+            inputs=[page._app.user_id, page.file_list_state],
+            outputs=[page.group_list_state, page.group_list],
+        )
+        .then(**on_group_closed_event)
+    )
 
     for event in _iter_index_changed_events(page):
         on_group_deleted = on_group_deleted.then(**event)

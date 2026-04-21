@@ -26,6 +26,7 @@ def __getattr__(name: str):
         return module
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
+
 logger = logging.getLogger(__name__)
 try:
     import posthog

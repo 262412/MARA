@@ -3,8 +3,8 @@ import uuid
 from types import SimpleNamespace
 
 import ktem.docqa.runtime as runtime_module
-from ktem.docqa import _runtime_app, _runtime_models, _runtime_utils
 from ktem.db.models import User, engine
+from ktem.docqa import _runtime_app, _runtime_models, _runtime_utils
 from ktem.docqa.knowledge_graph import GlobalKnowledgeGraphService
 from ktem.docqa.runtime import DocQARuntime
 from sqlmodel import Session, select

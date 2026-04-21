@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Callable
 
 import gradio as gr
 import pandas as pd
@@ -8,7 +8,6 @@ from ktem.db.engine import engine
 from ktem.db.models import Conversation
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 
 _EMPTY_FILE_ROWS = [
     {

@@ -3,11 +3,15 @@ from ktem.app import BaseApp, BasePage
 
 class _RecorderPage(BasePage):
     public_events = ["recorder:event"]
+    alias_child: BasePage | None
+    legacy_child: BasePage | None
 
     def __init__(self, app, events, name):
         super().__init__(app)
         self._events = events
         self._name = name
+        self.alias_child = None
+        self.legacy_child = None
 
     def declare_public_events(self):
         self._events.append((self._name, "declare"))
@@ -24,11 +28,18 @@ class _RecorderPage(BasePage):
 
 
 class _RecorderApp(BaseApp):
+    alias_child: BasePage | None
+    legacy_child: BasePage | None
+    helper: object | None
+
     def __init__(self):
         self._registered_child_pages = []
         self._events = {}
         self._declared = []
         self._tracker = []
+        self.alias_child = None
+        self.legacy_child = None
+        self.helper = None
 
     def declare_event(self, name: str):
         self._declared.append(name)
@@ -63,10 +74,12 @@ class _LegacyPage(BasePage):
 
 
 def test_base_page_child_lifecycle_prefers_registered_pages_without_duplicates():
-    tracker = []
+    tracker: list[tuple[str, str]] = []
     app = _RecorderApp()
     page = _RecorderPage(app, tracker, "parent")
-    child = page.register_child_page("registered_child", _RecorderPage(app, tracker, "child"))
+    child = page.register_child_page(
+        "registered_child", _RecorderPage(app, tracker, "child")
+    )
     page.alias_child = child
     page.legacy_child = _RecorderPage(app, tracker, "legacy")
 
@@ -93,7 +106,9 @@ def test_base_page_child_lifecycle_prefers_registered_pages_without_duplicates()
 
 def test_base_app_child_lifecycle_prefers_registered_pages_without_duplicates():
     app = _RecorderApp()
-    child = app.register_child_page("registered_child", _RecorderPage(app, app._tracker, "child"))
+    child = app.register_child_page(
+        "registered_child", _RecorderPage(app, app._tracker, "child")
+    )
     app.alias_child = child
     app.legacy_child = _RecorderPage(app, app._tracker, "legacy")
 

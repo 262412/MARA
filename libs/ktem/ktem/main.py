@@ -73,7 +73,7 @@ class App(BaseApp):
                         id="indices-tab",
                         visible=not self.f_user_management and not KH_DEMO_MODE,
                     ) as self._tabs[f"{index.id}-tab"]:
-                        page = self.register_child_page(
+                        self.register_child_page(
                             f"_index_{index.id}",
                             index.get_index_page_ui(),
                         )
@@ -90,7 +90,7 @@ class App(BaseApp):
                             index.name,
                             elem_id=f"{index.id}-tab",
                         ) as self._tabs[f"{index.id}-tab"]:
-                            page = self.register_child_page(
+                            self.register_child_page(
                                 f"_index_{index.id}",
                                 index.get_index_page_ui(),
                             )

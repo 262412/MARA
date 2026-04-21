@@ -48,7 +48,9 @@ def _create_default_mindmap_pipeline():
     try:
         from ktem.reasoning.prompt_optimization.mindmap import CreateMindmapPipeline
     except ImportError as exc:
-        raise ImportError("Please install `ktem` to enable mindmap generation.") from exc
+        raise ImportError(
+            "Please install `ktem` to enable mindmap generation."
+        ) from exc
 
     return CreateMindmapPipeline(llm=_get_default_llm())
 
@@ -60,6 +62,7 @@ def _get_render():
         raise ImportError("Please install `ktem` to render QA citations.") from exc
 
     return Render
+
 
 DEFAULT_QA_TEXT_PROMPT = (
     "Use the following pieces of context to answer the question at the end in detail with clear explanation. "  # noqa: E501

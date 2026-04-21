@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
-import re
 import tempfile
 import zipfile
 from copy import deepcopy
@@ -24,6 +22,7 @@ from theflow.settings import settings as flowsettings
 from theflow.utils.modules import import_dotted_string
 
 from kotaemon.base import Document
+
 from ._runtime_app import _DocQAPreviewService, _RuntimeAppContext
 from ._runtime_models import (
     DocQADoctorResult,
@@ -453,9 +452,9 @@ class DocQARuntime:
             )
 
             updated_data_source = {
-                "selected": selected_mapping
-                if is_owner
-                else data_source.get("selected", {}),
+                "selected": (
+                    selected_mapping if is_owner else data_source.get("selected", {})
+                ),
                 "messages": messages,
                 "retrieval_messages": retrieval_history_to_store,
                 "plot_history": plot_history_to_store,

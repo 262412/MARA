@@ -4,7 +4,6 @@ import importlib
 import sys
 from pathlib import Path
 
-
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "kotaemon"
 ALLOWED_KTEM_IMPORT_FILES = {
     "__init__.py",
@@ -104,7 +103,7 @@ def test_citation_qa_import_does_not_require_ktem(monkeypatch):
 
 def test_core_package_ktem_imports_are_runtime_local_and_allowlisted():
     discovered_files = set()
-    module_level_imports = []
+    module_level_imports: list[str] = []
 
     for path in PACKAGE_ROOT.rglob("*.py"):
         relative_path = path.relative_to(PACKAGE_ROOT).as_posix()

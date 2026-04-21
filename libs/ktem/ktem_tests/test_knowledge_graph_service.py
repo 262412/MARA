@@ -76,9 +76,7 @@ def test_conversation_graph_groups_related_and_unrelated_files(monkeypatch, tmp_
     assert "file-a-chunk-1" in graph["support_chunk_ids"]["file-a"]
 
 
-def test_builder_conversation_graph_uses_service_file_graph_seam(
-    monkeypatch, tmp_path
-):
+def test_builder_conversation_graph_uses_service_file_graph_seam(monkeypatch, tmp_path):
     service = _make_service(monkeypatch, tmp_path)
 
     monkeypatch.setattr(

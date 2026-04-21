@@ -14,6 +14,7 @@ from sqlmodel import Session
 from theflow.settings import settings as flowsettings
 
 from kotaemon.base import HumanMessage, SystemMessage
+
 from .knowledge_graph_builder import KnowledgeGraphBuilder
 from .knowledge_graph_renderer import KnowledgeGraphRenderer
 

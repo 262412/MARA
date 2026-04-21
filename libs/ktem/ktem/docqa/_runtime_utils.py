@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from html import unescape
 from pathlib import Path
 from typing import Any
-import re
-
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 

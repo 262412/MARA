@@ -37,16 +37,6 @@ jobs:
       - name: Clone the repo
         uses: actions/checkout@v4
 
-      - name: Get Head Commit Message
-        id: get-head-commit-message
-        run: echo "message=$(git show -s --format=%s)" | tee -a ${{ matrix.GITHUB_OUTPUT }}
-
-      - name: Check ignore caching
-        id: check-ignore-cache
-        run: |
-          ignore_cache=${{ contains(steps.get-head-commit-message.outputs.message, '[ignore cache]') }}
-          echo "check=$ignore_cache" | tee -a ${{ matrix.GITHUB_OUTPUT }}
-
       - name: Set up Python ${{ matrix.python-version }} on ${{ runner.os }}
         uses: actions/setup-python@v4
         id: setup_python
@@ -60,44 +50,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
-      - name: Get cache key
-        id: get-cache-key
-        run: |
-          pip install "setuptools-git-versioning>=2.0,<3"
-          package_version=$(setuptools-git-versioning)
-          cache_key="${{ runner.os }}-py${{ matrix.python-version }}-v${package_version}"
-          echo "key=$cache_key" | tee -a ${{ matrix.GITHUB_OUTPUT }}
-
-      - name: Try to restore dependencies from ${{ steps.get-cache-key.outputs.key }}
-        id: restore-dependencies
-        if: steps.check-ignore-cache.outputs.check != 'true'
-        uses: actions/cache/restore@v3
-        with:
-          path: ${{ env.pythonLocation }}
-          key: ${{ steps.get-cache-key.outputs.key }}
-          # could using cache of previous ver to reuse unchanged packages
-          restore-keys: ${{ runner.os }}-py${{ matrix.python-version }}
-
-      - name: Check cache hit
-        id: check-cache-hit
-        run: |
-          echo "cache-hit=${{ steps.restore-dependencies.outputs.cache-hit }}"
-          echo "cache-matched-key=${{ steps.restore-dependencies.outputs.cache-matched-key }}"
-          cache_hit=${{ steps.restore-dependencies.outputs.cache-primary-key == steps.restore-dependencies.outputs.cache-matched-key }}
-          echo "check=$cache_hit" | tee -a ${{ matrix.GITHUB_OUTPUT }}
-
       - name: Install additional dependencies (if any)
         run: |
           uv sync --frozen --no-cache
-
-      - name: New dependencies cache for key ${{ steps.restore-dependencies.outputs.cache-primary-key }}
-        if: |
-          steps.check-ignore-cache.outputs.check != 'true' &&
-          steps.check-cache-hit.outputs.check != 'true'
-        uses: actions/cache/save@v3
-        with:
-          path: ${{ env.pythonLocation }}
-          key: ${{ steps.restore-dependencies.outputs.cache-primary-key }}
 
       - name: Install OS-based packages
         run: |

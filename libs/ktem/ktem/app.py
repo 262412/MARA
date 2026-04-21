@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypeVar
 
 import gradio as gr
 import pluggy
@@ -15,6 +15,7 @@ from theflow.settings import settings
 from theflow.utils.modules import import_dotted_string
 
 BASE_PATH = os.environ.get("GR_FILE_ROOT_PATH", "")
+_PageT = TypeVar("_PageT")
 
 
 class BaseApp:
@@ -223,7 +224,7 @@ class BaseApp:
 
         return demo
 
-    def register_child_page(self, attr_name: str, page: "BasePage") -> "BasePage":
+    def register_child_page(self, attr_name: str, page: _PageT) -> _PageT:
         setattr(self, attr_name, page)
         registered_child_pages = getattr(self, "_registered_child_pages", None)
         if registered_child_pages is None:
@@ -310,7 +311,7 @@ class BasePage:
         """
         return None
 
-    def register_child_page(self, attr_name: str, page: "BasePage") -> "BasePage":
+    def register_child_page(self, attr_name: str, page: _PageT) -> _PageT:
         setattr(self, attr_name, page)
         registered_child_pages = getattr(self, "_registered_child_pages", None)
         if registered_child_pages is None:

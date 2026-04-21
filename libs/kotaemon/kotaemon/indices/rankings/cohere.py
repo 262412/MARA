@@ -10,12 +10,13 @@ from .base import BaseReranking
 
 
 def _resolve_cohere_api_key_from_ktem() -> str:
-    from ktem.embeddings.manager import (
-        embedding_models_manager as embeddings,
-    )
+    from ktem.embeddings.manager import embedding_models_manager as embeddings
 
     cohere_model = embeddings.get("cohere")
-    return cohere_model._kwargs.get("cohere_api_key", "")  # type: ignore[attr-defined]
+    cohere_kwargs = getattr(cohere_model, "_kwargs", None)
+    if not isinstance(cohere_kwargs, dict):
+        return ""
+    return str(cohere_kwargs.get("cohere_api_key", "") or "")
 
 
 class CohereReranking(BaseReranking):

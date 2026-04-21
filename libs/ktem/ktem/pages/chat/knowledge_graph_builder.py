@@ -182,9 +182,7 @@ class KnowledgeGraphBuilder:
             "knowledge_points": knowledge_points,
         }
 
-    def shared_keywords(
-        self, left: dict[str, Any], right: dict[str, Any]
-    ) -> list[str]:
+    def shared_keywords(self, left: dict[str, Any], right: dict[str, Any]) -> list[str]:
         right_keywords = set(right.get("top_keywords", []))
         shared = [
             keyword
