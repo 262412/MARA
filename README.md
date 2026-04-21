@@ -265,6 +265,31 @@ configured in the app, then validate the runtime:
 kotaemon docqa doctor
 ```
 
+If you install the Codex or Claude Code platform bundle, DocQA now exposes focused action
+entries instead of a single catch-all skill:
+
+- Ask one question -> `kotaemon-docqa-ask` -> `kotaemon docqa ask`
+- Index documents -> `kotaemon-docqa-index` -> `kotaemon docqa index`
+- Interactive chat -> `kotaemon-docqa-chat` -> `kotaemon docqa chat`
+- List indexed files -> `kotaemon-docqa-files` -> `kotaemon docqa files`
+- Delete indexed files -> `kotaemon-docqa-delete` -> `kotaemon docqa delete`
+- List saved sessions -> `kotaemon-docqa-sessions` -> `kotaemon docqa sessions`
+- Resume a conversation -> `kotaemon-docqa-resume` -> `kotaemon docqa resume`
+- Runtime health check -> `kotaemon-docqa-doctor` -> `kotaemon docqa doctor`
+- Full acceptance check -> `kotaemon-docqa-acceptance` -> `kotaemon docqa acceptance`
+- Advanced or mixed workflows -> `kotaemon-docqa` -> any `kotaemon docqa ...` command
+
+Model routing and packaged app workflows follow the same pattern:
+
+- Generate modelcli config -> `kotaemon-modelcli-init-config` -> `kotaemon modelcli init-config`
+- Inspect provider availability -> `kotaemon-modelcli-providers` -> `kotaemon modelcli providers`
+- Run one routed call -> `kotaemon-modelcli-run` -> `kotaemon modelcli run`
+- Mixed routing workflows -> `kotaemon-modelcli` -> any `kotaemon modelcli ...` command
+- Initialize packaged app config -> `kotaemon-app-init` -> `kotaemon app init`
+- Inspect packaged runtime health -> `kotaemon-app-doctor` -> `kotaemon app doctor`
+- Launch the packaged Web UI -> `kotaemon-app-run` -> `kotaemon app run`
+- Mixed packaged app workflows -> `kotaemon-app` -> any `kotaemon app ...` command
+
 Index one or more files into the default file collection:
 
 ```shell

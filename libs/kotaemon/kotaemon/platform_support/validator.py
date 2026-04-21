@@ -20,6 +20,56 @@ _REQUIRED_HOOK_FILES = (
     Path("hooks/scripts/security-guard.sh"),
 )
 
+_REQUIRED_DOCQA_SKILL_FILES = (
+    Path("skills/kotaemon-docqa/SKILL.md"),
+    Path("skills/kotaemon-docqa-ask/SKILL.md"),
+    Path("skills/kotaemon-docqa-index/SKILL.md"),
+    Path("skills/kotaemon-docqa-chat/SKILL.md"),
+    Path("skills/kotaemon-docqa-files/SKILL.md"),
+    Path("skills/kotaemon-docqa-delete/SKILL.md"),
+    Path("skills/kotaemon-docqa-sessions/SKILL.md"),
+    Path("skills/kotaemon-docqa-resume/SKILL.md"),
+    Path("skills/kotaemon-docqa-doctor/SKILL.md"),
+    Path("skills/kotaemon-docqa-acceptance/SKILL.md"),
+)
+
+_REQUIRED_CLAUDE_DOCQA_COMMAND_FILES = (
+    Path("commands/kotaemon-docqa.md"),
+    Path("commands/kotaemon-docqa-ask.md"),
+    Path("commands/kotaemon-docqa-index.md"),
+    Path("commands/kotaemon-docqa-chat.md"),
+    Path("commands/kotaemon-docqa-files.md"),
+    Path("commands/kotaemon-docqa-delete.md"),
+    Path("commands/kotaemon-docqa-sessions.md"),
+    Path("commands/kotaemon-docqa-resume.md"),
+    Path("commands/kotaemon-docqa-doctor.md"),
+    Path("commands/kotaemon-docqa-acceptance.md"),
+)
+_REQUIRED_MODELCLI_SKILL_FILES = (
+    Path("skills/kotaemon-modelcli/SKILL.md"),
+    Path("skills/kotaemon-modelcli-init-config/SKILL.md"),
+    Path("skills/kotaemon-modelcli-providers/SKILL.md"),
+    Path("skills/kotaemon-modelcli-run/SKILL.md"),
+)
+_REQUIRED_APP_SKILL_FILES = (
+    Path("skills/kotaemon-app/SKILL.md"),
+    Path("skills/kotaemon-app-init/SKILL.md"),
+    Path("skills/kotaemon-app-doctor/SKILL.md"),
+    Path("skills/kotaemon-app-run/SKILL.md"),
+)
+_REQUIRED_CLAUDE_MODELCLI_COMMAND_FILES = (
+    Path("commands/kotaemon-modelcli.md"),
+    Path("commands/kotaemon-modelcli-init-config.md"),
+    Path("commands/kotaemon-modelcli-providers.md"),
+    Path("commands/kotaemon-modelcli-run.md"),
+)
+_REQUIRED_CLAUDE_APP_COMMAND_FILES = (
+    Path("commands/kotaemon-app.md"),
+    Path("commands/kotaemon-app-init.md"),
+    Path("commands/kotaemon-app-doctor.md"),
+    Path("commands/kotaemon-app-run.md"),
+)
+
 
 def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
     platforms = [platform_name] if platform_name else list_platform_names()
@@ -40,10 +90,38 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
             if not (spec.bundle_root / component).exists():
                 errors.append(f"Missing component in bundle: {component}")
 
+        for rel in _REQUIRED_DOCQA_SKILL_FILES:
+            if not (spec.bundle_root / rel).exists():
+                errors.append(f"Missing required DocQA skill asset: {rel.as_posix()}")
+        for rel in _REQUIRED_MODELCLI_SKILL_FILES:
+            if not (spec.bundle_root / rel).exists():
+                errors.append(
+                    f"Missing required modelcli skill asset: {rel.as_posix()}"
+                )
+        for rel in _REQUIRED_APP_SKILL_FILES:
+            if not (spec.bundle_root / rel).exists():
+                errors.append(f"Missing required app skill asset: {rel.as_posix()}")
+
         if current == "claude-code":
             for rel in _REQUIRED_HOOK_FILES:
                 if not (spec.bundle_root / rel).exists():
                     errors.append(f"Missing required hook asset: {rel.as_posix()}")
+
+            for rel in _REQUIRED_CLAUDE_DOCQA_COMMAND_FILES:
+                if not (spec.bundle_root / rel).exists():
+                    errors.append(
+                        f"Missing required DocQA command asset: {rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_CLAUDE_MODELCLI_COMMAND_FILES:
+                if not (spec.bundle_root / rel).exists():
+                    errors.append(
+                        f"Missing required modelcli command asset: {rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_CLAUDE_APP_COMMAND_FILES:
+                if not (spec.bundle_root / rel).exists():
+                    errors.append(
+                        f"Missing required app command asset: {rel.as_posix()}"
+                    )
 
             hooks_json = spec.bundle_root / "hooks" / "hooks.json"
             if hooks_json.exists():
@@ -83,5 +161,54 @@ def validate_installed(
     resolved_target = resolve_target_dir(spec, target_dir=target_dir)
     if not resolved_target.exists():
         errors.append(f"Target directory not found: {resolved_target}")
+    else:
+        skills_dir = resolved_target / "skills"
+        if skills_dir.exists():
+            for rel in _REQUIRED_DOCQA_SKILL_FILES:
+                installed_rel = Path(*rel.parts[1:])
+                if not (resolved_target / installed_rel).exists():
+                    errors.append(
+                        "Missing installed DocQA skill asset: "
+                        f"{installed_rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_MODELCLI_SKILL_FILES:
+                installed_rel = Path(*rel.parts[1:])
+                if not (resolved_target / installed_rel).exists():
+                    errors.append(
+                        "Missing installed modelcli skill asset: "
+                        f"{installed_rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_APP_SKILL_FILES:
+                installed_rel = Path(*rel.parts[1:])
+                if not (resolved_target / installed_rel).exists():
+                    errors.append(
+                        "Missing installed app skill asset: "
+                        f"{installed_rel.as_posix()}"
+                    )
+
+        if platform_name == "claude-code":
+            commands_dir = resolved_target / "commands"
+            if commands_dir.exists():
+                for rel in _REQUIRED_CLAUDE_DOCQA_COMMAND_FILES:
+                    installed_rel = Path(*rel.parts[1:])
+                    if not (resolved_target / installed_rel).exists():
+                        errors.append(
+                            "Missing installed DocQA command asset: "
+                            f"{installed_rel.as_posix()}"
+                        )
+                for rel in _REQUIRED_CLAUDE_MODELCLI_COMMAND_FILES:
+                    installed_rel = Path(*rel.parts[1:])
+                    if not (resolved_target / installed_rel).exists():
+                        errors.append(
+                            "Missing installed modelcli command asset: "
+                            f"{installed_rel.as_posix()}"
+                        )
+                for rel in _REQUIRED_CLAUDE_APP_COMMAND_FILES:
+                    installed_rel = Path(*rel.parts[1:])
+                    if not (resolved_target / installed_rel).exists():
+                        errors.append(
+                            "Missing installed app command asset: "
+                            f"{installed_rel.as_posix()}"
+                        )
 
     return ValidationResult(platform=platform_name, valid=not errors, errors=errors)

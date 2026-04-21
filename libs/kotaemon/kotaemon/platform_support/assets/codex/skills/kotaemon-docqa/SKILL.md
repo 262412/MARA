@@ -8,7 +8,8 @@ version: 1.0.0
 
 ## Scope
 
-Use this skill to drive Kotaemon document QA through `kotaemon docqa ...` commands.
+Use this skill when the user needs Kotaemon document QA through the shared
+`kotaemon docqa ...` CLI and the request spans multiple DocQA actions.
 
 If `kotaemon` is not on `PATH`, install the packaged runtime first:
 
@@ -24,6 +25,22 @@ If `kotaemon` is not on `PATH`, install the packaged runtime first:
 3. Review the available collection with `kotaemon docqa files` if file scope matters.
 4. Run `kotaemon docqa ask --prompt "..."` for a single QA turn.
 5. Run `kotaemon docqa chat` or `kotaemon docqa resume <conversation-id>` for multi-turn work.
+
+## Focused Action Skills
+
+Prefer these focused skills when the user intent is narrow:
+
+- `kotaemon-docqa-ask`: one-shot QA
+- `kotaemon-docqa-index`: ingest files or URLs
+- `kotaemon-docqa-chat`: start interactive multi-turn chat
+- `kotaemon-docqa-files`: inspect indexed files
+- `kotaemon-docqa-delete`: remove indexed files
+- `kotaemon-docqa-sessions`: list saved conversations
+- `kotaemon-docqa-resume`: reopen a saved conversation
+- `kotaemon-docqa-doctor`: validate runtime health
+- `kotaemon-docqa-acceptance`: run the full end-to-end acceptance matrix
+
+Use this umbrella skill when the user needs more than one of those actions in one workflow.
 
 ## Command Set
 

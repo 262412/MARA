@@ -59,3 +59,29 @@ def test_modelcli_run_dry_run_resolves_provider(tmp_path):
     assert "mode: dry-run" in run_result.output
     assert "provider: openai" in run_result.output
     assert "model: gpt-4o-mini" in run_result.output
+
+
+def test_modelcli_help_lists_action_navigation():
+    runner = CliRunner()
+    result = runner.invoke(main, ["modelcli", "--help"])
+
+    assert result.exit_code == 0, result.output
+    for token in [
+        "Action guide:",
+        "Initialize config",
+        "kotaemon-modelcli-init-config",
+        "Check providers",
+        "kotaemon-modelcli-providers",
+        "kotaemon modelcli run",
+        "kotaemon-modelcli-run",
+    ]:
+        assert token in result.output
+
+
+def test_modelcli_run_help_lists_platform_skill_and_dry_run_hint():
+    runner = CliRunner()
+    result = runner.invoke(main, ["modelcli", "run", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "Platform skill: kotaemon-modelcli-run" in result.output
+    assert "Use `--dry-run` first" in result.output
