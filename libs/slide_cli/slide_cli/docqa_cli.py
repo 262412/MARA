@@ -2,16 +2,35 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass, field
+from typing import Any
 
 import click
 
-from ktem.docqa import DocQARequest
 
-from .docqa_runtime import (
-    create_docqa_runtime,
-    parse_graph_context_file,
-    run_docqa_acceptance_matrix,
-)
+@dataclass
+class _DocQARequest:
+    prompt: str
+    conversation_id: str = ""
+    selected_file_ids: list[str] | None = None
+    selected_inputs: dict[int, Any] | None = None
+    active_file_id: str = ""
+    active_file_name: str = ""
+    page_number: int | None = None
+    selected_text: str = ""
+    graph_context: dict[str, Any] = field(default_factory=dict)
+    graph_source_ids: list[str] | None = None
+    settings: dict[str, Any] | None = None
+    state: dict[str, Any] | None = None
+    history: list[tuple[str, str]] | None = None
+    reasoning_type: str | None = None
+    llm: str | None = None
+    use_mindmap: bool | str | None = None
+    use_citation: str | None = None
+    language: str | None = None
+    command_state: str | None = None
+    user_id: Any = None
+    origin: str = "cli"
 
 
 def _echo_json(payload):
@@ -30,6 +49,52 @@ def _echo_text(message=""):
         click.echo(text.encode("ascii", errors="backslashreplace").decode("ascii"))
 
 
+def create_docqa_runtime():
+    from .docqa_runtime import create_docqa_runtime as _create_docqa_runtime
+
+    return _create_docqa_runtime()
+
+
+def collect_docqa_doctor_payload():
+    from .docqa_runtime import (
+        collect_docqa_doctor_payload as _collect_docqa_doctor_payload,
+    )
+
+    return _collect_docqa_doctor_payload()
+
+
+def collect_docqa_file_records():
+    from .docqa_runtime import collect_docqa_file_records as _collect_docqa_file_records
+
+    return _collect_docqa_file_records()
+
+
+def collect_docqa_session_summaries():
+    from .docqa_runtime import (
+        collect_docqa_session_summaries as _collect_docqa_session_summaries,
+    )
+
+    return _collect_docqa_session_summaries()
+
+
+def parse_graph_context_file(graph_context_file: str):
+    from .docqa_runtime import parse_graph_context_file as _parse_graph_context_file
+
+    return _parse_graph_context_file(graph_context_file)
+
+
+def run_docqa_acceptance_matrix(**kwargs):
+    from .docqa_runtime import (
+        run_docqa_acceptance_matrix as _run_docqa_acceptance_matrix,
+    )
+
+    return _run_docqa_acceptance_matrix(**kwargs)
+
+
+def _create_docqa_request(**kwargs):
+    return _DocQARequest(**kwargs)
+
+
 def _print_docqa_response(response):
     _echo_text(f"Conversation: {response.conversation_id}")
     if response.active_file_name:
@@ -43,13 +108,20 @@ def _print_docqa_response(response):
         _echo_text(response.references_text)
 
 
+def _value(item, key, default=""):
+    if isinstance(item, dict):
+        return item.get(key, default)
+    return getattr(item, key, default)
+
+
 def _print_file_records(records, selected_ids=None):
     selected_ids = set(selected_ids or [])
     _echo_text("ID\tName\tTokens\tSize\tLoader")
     for record in records:
-        marker = "*" if record.file_id in selected_ids else ""
+        record_id = str(_value(record, "file_id", "") or "")
+        marker = "*" if record_id in selected_ids else ""
         _echo_text(
-            f"{record.file_id}{marker}\t{record.name}\t{record.tokens}\t{record.size}\t{record.loader}"
+            f"{record_id}{marker}\t{_value(record, 'name', '')}\t{_value(record, 'tokens', 0)}\t{_value(record, 'size', 0)}\t{_value(record, 'loader', '')}"
         )
 
 
@@ -57,7 +129,7 @@ def _print_session_summaries(summaries):
     _echo_text("ID\tName\tMessages\tFiles\tOrigin")
     for summary in summaries:
         _echo_text(
-            f"{summary.conversation_id}\t{summary.name}\t{summary.message_count}\t{summary.graph_source_count}\t{summary.origin}"
+            f"{_value(summary, 'conversation_id', '')}\t{_value(summary, 'name', '')}\t{_value(summary, 'message_count', 0)}\t{_value(summary, 'graph_source_count', 0)}\t{_value(summary, 'origin', '')}"
         )
 
 
@@ -274,7 +346,7 @@ def _run_docqa_repl(
             continue
 
         response = runtime.run_turn(
-            DocQARequest(
+            _create_docqa_request(
                 prompt=prompt,
                 conversation_id=conversation_id,
                 selected_file_ids=selected_file_ids_override,
@@ -304,15 +376,19 @@ def docqa():
     """Document QA CLI backed by the app's runtime/index/session data.
 
     Action guide:
-    - Ask one question: `slide docqa ask` (platform skill: slide-docqa-ask)
-    - Index documents: `slide docqa index` (platform skill: slide-docqa-index)
-    - Interactive chat: `slide docqa chat` (platform skill: slide-docqa-chat)
-    - Resume a conversation: `slide docqa resume` (platform skill: slide-docqa-resume)
     - Health check: `slide docqa doctor` (platform skill: slide-docqa-doctor)
-    - Full acceptance check: `slide docqa acceptance` (platform skill: slide-docqa-acceptance)
+    - Index documents: `slide docqa index` (platform skill: slide-docqa-index)
+    - Inspect indexed files: `slide docqa files` (platform skill: slide-docqa-files)
+    - Delete indexed files: `slide docqa delete` (platform skill: slide-docqa-delete)
+    - Ask one question: `slide docqa ask` (platform skill: slide-docqa-ask)
+    - Interactive chat: `slide docqa chat` (platform skill: slide-docqa-chat)
+    - Inspect saved sessions: `slide docqa sessions` (platform skill: slide-docqa-sessions)
+    - Resume a conversation: `slide docqa resume` (platform skill: slide-docqa-resume)
+    - Maintainer acceptance check: `slide docqa acceptance` or `slide docqa check`
 
-    Use the umbrella `slide-docqa` surface when you need the full command
-    surface instead of one focused action.
+    Use the umbrella `slide-docqa` surface for the DocQA mainline. The
+    acceptance/check commands stay available under `slide docqa`, but they are
+    maintainer workflows rather than part of the focused slide skill family.
     """
 
 
@@ -326,28 +402,29 @@ def docqa():
     help="Emit structured JSON output.",
 )
 def docqa_doctor(json_output):
-    runtime = create_docqa_runtime()
-    result = runtime.doctor()
+    result = collect_docqa_doctor_payload()
 
     if json_output:
-        _echo_payload_json(result.as_dict())
+        _echo_payload_json(result)
     else:
-        _echo_text(f"Status: {'OK' if result.ok else 'FAIL'}")
-        _echo_text(f"App: {result.app_name}")
-        _echo_text(f"Default user: {result.default_user_id}")
-        _echo_text(f"Index: {result.index_name or '(missing)'}")
-        _echo_text(f"Default LLM: {result.llm_default or '(missing)'}")
-        _echo_text(f"Default embedding: {result.embedding_default or '(missing)'}")
-        _echo_text(f"Indexed files: {result.file_count}")
-        _echo_text(f"Saved sessions: {result.session_count}")
-        if result.graph_cache_dir:
-            _echo_text(f"Graph cache: {result.graph_cache_dir}")
-        for issue in result.issues:
+        _echo_text(f"Status: {'OK' if result['ok'] else 'FAIL'}")
+        _echo_text(f"App: {result['app_name']}")
+        _echo_text(f"Default user: {result['default_user_id']}")
+        _echo_text(f"Index: {result['index_name'] or '(missing)'}")
+        _echo_text(f"Default LLM: {result['llm_default'] or '(missing)'}")
+        _echo_text(
+            f"Default embedding: {result['embedding_default'] or '(missing)'}"
+        )
+        _echo_text(f"Indexed files: {result['file_count']}")
+        _echo_text(f"Saved sessions: {result['session_count']}")
+        if result["graph_cache_dir"]:
+            _echo_text(f"Graph cache: {result['graph_cache_dir']}")
+        for issue in result["issues"]:
             _echo_text(f"- {issue}")
-        for warning in result.warnings:
+        for warning in result["warnings"]:
             _echo_text(f"! {warning}")
 
-    if not result.ok:
+    if not result["ok"]:
         raise click.ClickException("DocQA runtime is not healthy.")
 
 
@@ -441,11 +518,10 @@ def docqa_index(paths, reindex, json_output):
     help="Emit structured JSON output.",
 )
 def docqa_files(json_output):
-    runtime = create_docqa_runtime()
-    records = runtime.list_files()
+    records = collect_docqa_file_records()
 
     if json_output:
-        _echo_payload_json([record.as_dict() for record in records])
+        _echo_payload_json(records)
         return
 
     _print_file_records(records)
@@ -484,11 +560,10 @@ def docqa_delete(refs, json_output):
     help="Emit structured JSON output.",
 )
 def docqa_sessions(json_output):
-    runtime = create_docqa_runtime()
-    summaries = runtime.list_sessions()
+    summaries = collect_docqa_session_summaries()
 
     if json_output:
-        _echo_payload_json([summary.as_dict() for summary in summaries])
+        _echo_payload_json(summaries)
         return
 
     _print_session_summaries(summaries)
@@ -531,7 +606,7 @@ def docqa_ask(
     active_record = _resolve_cli_active_file(runtime, active_file)
 
     response = runtime.run_turn(
-        DocQARequest(
+        _create_docqa_request(
             prompt=prompt,
             conversation_id=conversation or "",
             selected_file_ids=[record.file_id for record in selected_records]

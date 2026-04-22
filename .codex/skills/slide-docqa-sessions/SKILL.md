@@ -1,6 +1,6 @@
 ---
 name: slide-docqa-sessions
-description: Use when the user wants to list saved slide DocQA conversations through `slide sessions` or `slide docqa sessions`.
+description: Use when the user wants to list saved slide DocQA conversations through `slide docqa sessions`.
 version: 1.0.0
 ---
 
@@ -10,7 +10,6 @@ Use this skill when the user wants to inspect saved DocQA conversations and resu
 
 Examples:
 
-- `slide docqa-sessions`
 - `slide docqa sessions`
 
-Use `slide docqa resume <conversation-id>` or `slide resume-docqa <conversation-id>` to reopen a conversation.
+Use `slide docqa resume <conversation-id>` to reopen a conversation.

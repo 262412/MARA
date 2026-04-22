@@ -1,6 +1,6 @@
 # slide-cli
 
-Standalone slide-focused agent CLI built on top of the existing `kotaemon` and `ktem` libraries.
+Standalone slide DocQA CLI built on top of the existing `kotaemon` and `ktem` libraries.
 
 ## Install
 
@@ -32,23 +32,9 @@ slide --help
 slide docqa --help
 ```
 
-## Top-Level Aliases
-
-The canonical DocQA entry point remains `slide docqa ...`, but the following shortcuts are available for quick access:
-
-- `slide ask`
-- `slide index`
-- `slide files`
-- `slide docqa-sessions`
-- `slide resume-docqa`
-
-`slide resume` stays reserved for the phase-1 slide-session workflow.
-
-Codex users can also pick up the slide-specific `slide-docqa*` skill family from `.codex/skills`.
-
 ## Recommended Packaged Runtime Workflow
 
-If you want the slide CLI to live beside the packaged Kotaemon runtime, install the app with the slide extra and initialize it once:
+If you want the packaged Kotaemon runtime alongside the canonical slide DocQA workflow, install the app with the slide extra and initialize it once:
 
 ```shell
 pip install "kotaemon-app[slide]"
@@ -58,18 +44,16 @@ slide doctor
 slide docqa --help
 ```
 
-Use `slide docqa doctor` first in a fresh environment, then `slide docqa index`, `slide docqa ask`, `slide docqa chat`, and `slide docqa resume` as needed.
+Use `slide docqa doctor` first in a fresh environment, then `slide docqa index`, `slide docqa files`, `slide docqa delete`, `slide docqa ask`, `slide docqa chat`, `slide docqa resume`, and `slide docqa sessions` as needed.
+`slide docqa acceptance` and `slide docqa check` stay available as maintainer commands rather than part of the focused slide skill family.
 
 ## Examples
 
 ```shell
-slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --dry-run
-slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --apply
-slide chat --file ./docs/sample.pptx
+slide docqa files
+slide docqa delete old-deck-id
 slide docqa ask --file ./docs/sample.pptx --prompt "Summarize this deck"
 ```
-
-Interactive chat previews deck patches first and confirms before writing. You can apply the latest patch from the REPL with `/apply` or `/apply ./out/deck.rewritten.pptx`.
 
 ## Release Model
 

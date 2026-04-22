@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 
@@ -10,6 +11,11 @@ from kotaemon.storages import (
     MilvusVectorStore,
     QdrantVectorStore,
     SimpleFileVectorStore,
+)
+
+_HAS_MILVUS_LOCAL_BACKEND = (
+    importlib.util.find_spec("llama_index.vector_stores.milvus") is not None
+    and importlib.util.find_spec("milvus_lite") is not None
 )
 
 
@@ -159,6 +165,31 @@ class TestSimpleFileVectorStore:
         os.remove(tmp_path / collection_name)
 
 
+def test_milvus_local_backend_dependency_error_is_clear(monkeypatch, tmp_path):
+    import kotaemon.storages.vectorstores.base as base_module
+
+    db = MilvusVectorStore(path=str(tmp_path), overwrite=True)
+
+    def _raise_missing_backend(self, *args, **kwargs):
+        raise ModuleNotFoundError("No module named 'milvus_lite'")
+
+    monkeypatch.setattr(
+        base_module.LlamaIndexVectorStore,
+        "__init__",
+        _raise_missing_backend,
+    )
+
+    with pytest.raises(
+        ImportError,
+        match="Milvus local file backend requires the optional 'milvus-lite' package",
+    ):
+        db.add(embeddings=[[0.1, 0.2, 0.3]], metadatas=[{"a": 1}], ids=["1"])
+
+
+@pytest.mark.skipif(
+    not _HAS_MILVUS_LOCAL_BACKEND,
+    reason="Milvus local backend requires llama-index Milvus support and milvus_lite.",
+)
 class TestMilvusVectorStore:
     def test_add(self, tmp_path):
         """Test that the DB add correctly"""

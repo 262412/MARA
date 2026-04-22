@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-from copy import copy
 from pathlib import Path
 
 import click
-
-from .docqa_cli import docqa as docqa_group
-
-from .runtime import apply_session_patch, collect_doctor_payload, run_slide_task
-from .session_store import SlideSessionStore
 
 
 def _echo_json(payload):
@@ -25,39 +19,61 @@ def _echo_text(message=""):
 
 
 def _collect_doctor_payload():
+    from .runtime import collect_doctor_payload
+
     return collect_doctor_payload()
 
 
-def _get_docqa_command(command_name: str) -> click.Command:
-    command = docqa_group.get_command(None, command_name)
-    if command is None:
-        raise RuntimeError(f"DocQA command '{command_name}' is unavailable.")
-    return command
+def run_slide_task(**kwargs):
+    from .runtime import run_slide_task as _run_slide_task
+
+    return _run_slide_task(**kwargs)
 
 
-def _clone_docqa_command(command_name: str) -> click.Command:
-    command = _get_docqa_command(command_name)
-    return click.Command(
-        name=command.name,
-        callback=command.callback,
-        params=[copy(param) for param in command.params],
-        help=command.help,
-        short_help=command.short_help,
-        context_settings=getattr(command, "context_settings", None),
-        epilog=getattr(command, "epilog", None),
-        add_help_option=getattr(command, "add_help_option", True),
-        no_args_is_help=getattr(command, "no_args_is_help", False),
-        hidden=getattr(command, "hidden", False),
+def apply_session_patch(session_id, *, output_path=None, base_dir=None):
+    from .runtime import apply_session_patch as _apply_session_patch
+
+    return _apply_session_patch(
+        session_id,
+        output_path=output_path,
+        base_dir=base_dir,
     )
 
 
-DOCQA_TOP_LEVEL_ALIASES = {
-    "ask": "ask",
-    "index": "index",
-    "files": "files",
-    "docqa-sessions": "sessions",
-    "resume-docqa": "resume",
-}
+def _slide_session_store_cls():
+    from .session_store import SlideSessionStore
+
+    return SlideSessionStore
+
+
+def _load_docqa_group() -> click.Group:
+    from .docqa_cli import docqa
+
+    return docqa
+
+
+class _LazyDocQAGroup(click.Group):
+    def __init__(self) -> None:
+        super().__init__(
+            name="docqa",
+            help="Document QA CLI backed by the app's runtime/index/session data.",
+            short_help="Document QA CLI backed by the app's runtime/index/session data.",
+        )
+
+    def _group(self) -> click.Group:
+        return _load_docqa_group()
+
+    def list_commands(self, ctx):
+        return self._group().list_commands(ctx)
+
+    def get_command(self, ctx, cmd_name):
+        return self._group().get_command(ctx, cmd_name)
+
+    def get_help(self, ctx):
+        return self._group().get_help(ctx)
+
+    def invoke(self, ctx):
+        return self._group().invoke(ctx)
 
 
 @click.group()
@@ -65,10 +81,7 @@ def main():
     """Agent CLI for reviewing and rewriting slide decks."""
 
 
-main.add_command(docqa_group, "docqa")
-
-for alias_name, command_name in DOCQA_TOP_LEVEL_ALIASES.items():
-    main.add_command(_clone_docqa_command(command_name), alias_name)
+main.add_command(_LazyDocQAGroup(), "docqa")
 
 
 @main.command("doctor")
@@ -217,7 +230,7 @@ def run_cmd(
     help="Emit structured JSON output.",
 )
 def sessions_cmd(json_output):
-    store = SlideSessionStore()
+    store = _slide_session_store_cls()()
     sessions = store.list_sessions()
     payload = [session.as_dict() for session in sessions]
     if json_output:
@@ -247,7 +260,7 @@ def _run_repl(
     _echo_text(f"Session: {session_id}")
     _echo_text("Commands: /exit, /history, /apply [output-path]")
 
-    store = SlideSessionStore()
+    store = _slide_session_store_cls()()
     while True:
         try:
             user_prompt = click.prompt("slide", prompt_suffix="> ", show_default=False, default="")
@@ -364,7 +377,7 @@ def chat_cmd(
     max_iterations,
     json_output,
 ):
-    store = SlideSessionStore()
+    store = _slide_session_store_cls()()
     session = store.create_session(
         mode="chat",
         title=f"Chat: {Path(input_path).name}",
@@ -458,7 +471,7 @@ def resume_cmd(
     max_iterations,
     json_output,
 ):
-    store = SlideSessionStore()
+    store = _slide_session_store_cls()()
     session = store.load_session(session_id)
     if session is None:
         raise click.ClickException(f"Session '{session_id}' does not exist.")

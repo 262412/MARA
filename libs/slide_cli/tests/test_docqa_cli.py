@@ -245,8 +245,12 @@ def test_docqa_chat_repl_basic_flow(monkeypatch):
 def test_docqa_files_and_sessions_listing(monkeypatch):
     runtime = _DummyRuntime()
     monkeypatch.setattr(
-        "slide_cli.docqa_cli.create_docqa_runtime",
-        lambda: runtime,
+        "slide_cli.docqa_cli.collect_docqa_file_records",
+        lambda: [record.as_dict() for record in runtime.list_files()],
+    )
+    monkeypatch.setattr(
+        "slide_cli.docqa_cli.collect_docqa_session_summaries",
+        lambda: [summary.as_dict() for summary in runtime.list_sessions()],
     )
 
     runner = CliRunner()
@@ -291,6 +295,111 @@ def test_docqa_acceptance_command(monkeypatch):
     assert _extract_json_payload(json_result.output)["status"] == "pass"
 
 
+def test_docqa_doctor_uses_lightweight_payload(monkeypatch):
+    payload = {
+        "ok": True,
+        "app_name": "Kotaemon",
+        "default_user_id": "default",
+        "index_name": "File Collection",
+        "index_id": 1,
+        "llm_default": "openai",
+        "embedding_default": "openai",
+        "file_count": 2,
+        "session_count": 3,
+        "graph_cache_dir": "D:/tmp/knowledge_graph/conversations",
+        "issues": [],
+        "warnings": ["Default LLM appears to use placeholder credentials."],
+    }
+
+    def _unexpected_runtime():
+        raise AssertionError("docqa doctor should not create the full DocQA runtime")
+
+    monkeypatch.setattr("slide_cli.docqa_cli.create_docqa_runtime", _unexpected_runtime)
+    monkeypatch.setattr(
+        "slide_cli.docqa_cli.collect_docqa_doctor_payload",
+        lambda: payload,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(docqa, ["doctor", "--json"])
+    text_result = runner.invoke(docqa, ["doctor"])
+
+    assert result.exit_code == 0, result.output
+    assert _extract_json_payload(result.output) == payload
+
+    assert text_result.exit_code == 0, text_result.output
+    assert "Status: OK" in text_result.output
+    assert "Default LLM: openai" in text_result.output
+    assert "! Default LLM appears to use placeholder credentials." in text_result.output
+
+
+def test_docqa_files_use_lightweight_collection(monkeypatch):
+    payload = [
+        {
+            "file_id": "file-1",
+            "name": "alpha.pptx",
+            "tokens": 10,
+            "size": 100,
+            "loader": "dummy",
+            "path": "D:/tmp/alpha.pptx",
+            "date_created": "2026-04-22T12:00:00",
+        }
+    ]
+
+    def _unexpected_runtime():
+        raise AssertionError("docqa files should not create the full DocQA runtime")
+
+    monkeypatch.setattr("slide_cli.docqa_cli.create_docqa_runtime", _unexpected_runtime)
+    monkeypatch.setattr(
+        "slide_cli.docqa_cli.collect_docqa_file_records",
+        lambda: payload,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(docqa, ["files", "--json"])
+    text_result = runner.invoke(docqa, ["files"])
+
+    assert result.exit_code == 0, result.output
+    assert _extract_json_payload(result.output) == payload
+    assert text_result.exit_code == 0, text_result.output
+    assert "alpha.pptx" in text_result.output
+
+
+def test_docqa_sessions_use_lightweight_collection(monkeypatch):
+    payload = [
+        {
+            "conversation_id": "conv-1",
+            "name": "Conversation 1",
+            "message_count": 2,
+            "graph_source_count": 1,
+            "origin": "cli",
+            "is_public": False,
+            "date_created": "2026-04-22T12:00:00",
+            "date_updated": "2026-04-22T12:05:00",
+        }
+    ]
+
+    def _unexpected_runtime():
+        raise AssertionError(
+            "docqa sessions should not create the full DocQA runtime"
+        )
+
+    monkeypatch.setattr("slide_cli.docqa_cli.create_docqa_runtime", _unexpected_runtime)
+    monkeypatch.setattr(
+        "slide_cli.docqa_cli.collect_docqa_session_summaries",
+        lambda: payload,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(docqa, ["sessions", "--json"])
+    text_result = runner.invoke(docqa, ["sessions"])
+
+    assert result.exit_code == 0, result.output
+    assert _extract_json_payload(result.output) == payload
+    assert text_result.exit_code == 0, text_result.output
+    assert "Conversation 1" in text_result.output
+
+
 def test_docqa_ask_help_lists_shared_parameters():
     runner = CliRunner()
     result = runner.invoke(docqa, ["ask", "--help"])
@@ -324,11 +433,14 @@ def test_docqa_help_lists_action_navigation():
     assert result.exit_code == 0, result.output
     for token in [
         "Action guide:",
+        "Inspect indexed files",
+        "Delete indexed files",
         "Ask one question",
         "Index documents",
         "Interactive chat",
+        "Inspect saved sessions",
         "Resume a conversation",
         "Health check",
-        "Full acceptance check",
+        "Maintainer acceptance check",
     ]:
         assert token in result.output

@@ -5,12 +5,32 @@ from click.testing import CliRunner
 from slide_cli.cli import main
 
 
+def _listed_commands(help_output: str) -> set[str]:
+    commands: set[str] = set()
+    in_commands = False
+    for raw_line in help_output.splitlines():
+        line = raw_line.rstrip()
+        if line.startswith("Commands:"):
+            in_commands = True
+            continue
+        if not in_commands:
+            continue
+        if not line.strip():
+            break
+        stripped = line.strip()
+        if not stripped:
+            continue
+        commands.add(stripped.split()[0])
+    return commands
+
+
 def test_help_lists_core_commands():
     runner = CliRunner()
 
     result = runner.invoke(main, ["--help"])
 
     assert result.exit_code == 0, result.output
+    commands = _listed_commands(result.output)
     for token in [
         "doctor",
         "run",
@@ -18,11 +38,38 @@ def test_help_lists_core_commands():
         "sessions",
         "resume",
         "docqa",
+    ]:
+        assert token in commands
+    for token in [
         "ask",
         "index",
         "files",
         "docqa-sessions",
         "resume-docqa",
+    ]:
+        assert token not in commands
+
+
+def test_top_level_docqa_aliases_are_not_available():
+    runner = CliRunner()
+
+    for command_name in ["ask", "index", "files", "docqa-sessions", "resume-docqa"]:
+        result = runner.invoke(main, [command_name, "--help"])
+        assert result.exit_code != 0
+        assert "No such command" in result.output
+
+
+def test_top_level_docqa_help_includes_mainline_action_guide():
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["docqa", "--help"])
+
+    assert result.exit_code == 0, result.output
+    for token in [
+        "Inspect indexed files",
+        "Delete indexed files",
+        "Inspect saved sessions",
+        "Maintainer acceptance check",
     ]:
         assert token in result.output
 

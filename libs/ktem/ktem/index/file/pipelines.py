@@ -225,10 +225,12 @@ class DocumentRetrievalPipeline(BaseFileIndexRetriever):
         from ktem.llms.manager import llms
 
         try:
-            reranking_llm = llms.get_default_name()
             reranking_llm_choices = list(llms.options().keys())
+            reranking_llm = (
+                llms.get_default_name() if reranking_llm_choices else None
+            )
         except Exception as e:
-            logger.error(e)
+            logger.debug("Unable to load LLM options for file retrieval settings: %s", e)
             reranking_llm = None
             reranking_llm_choices = []
 

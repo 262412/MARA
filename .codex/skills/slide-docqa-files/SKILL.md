@@ -1,6 +1,6 @@
 ---
 name: slide-docqa-files
-description: Use when the user wants to inspect indexed slide DocQA files through `slide files` or `slide docqa files`.
+description: Use when the user wants to inspect indexed slide DocQA files through `slide docqa files`.
 version: 1.0.0
 ---
 
@@ -10,12 +10,9 @@ Use this skill when the user needs to inspect the indexed file set before asking
 
 Examples:
 
-- `slide files`
 - `slide docqa files`
 
 Helpful follow-up commands:
 
-- `slide ask`
 - `slide docqa ask`
 - `slide docqa index`
-

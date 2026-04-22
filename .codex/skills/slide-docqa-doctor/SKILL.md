@@ -6,12 +6,8 @@ version: 1.0.0
 
 # Slide DocQA Doctor
 
-Use this skill for a quick runtime readiness check before slide DocQA work.
+Use this skill for a quick slide DocQA readiness check before further `slide docqa` work.
 
 Examples:
 
-- `slide doctor`
 - `slide docqa doctor`
-
-If the runtime is packaged, the common first steps are `kotaemon app init` and `kotaemon app doctor`.
-

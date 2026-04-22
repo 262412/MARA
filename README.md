@@ -134,7 +134,7 @@ If you want the packaged app and the standalone slide CLI together:
 pip install "kotaemon-app[slide]"
 ```
 
-This packaged runtime is the recommended phase-2 workflow for DocQA plus slide work: initialize the runtime once, inspect it with `kotaemon app doctor`, then discover the slide-specific DocQA commands with `slide docqa --help`.
+This packaged runtime is the recommended phase-2 workflow for slide DocQA: initialize the runtime once, inspect it with `kotaemon app doctor`, then discover the canonical `slide docqa ...` commands with `slide docqa --help`.
 
 Initialize and inspect the runtime:
 
@@ -378,9 +378,9 @@ This runs the end-to-end DocQA acceptance matrix, which is useful after changing
 
 ### CLI Slide Agent
 
-`slide` is a standalone slide-focused CLI for reviewing or rewriting `.pptx` decks from the terminal.
+`slide` is a standalone CLI whose canonical slide DocQA mainline is `slide docqa ...`.
 
-If you installed `kotaemon-app[slide]`, the packaged runtime is the easiest way to discover the combined slide and DocQA flow. Start with `kotaemon app init`, `kotaemon app doctor`, and `slide docqa --help`.
+If you installed `kotaemon-app[slide]`, the packaged runtime is the easiest way to discover the canonical slide DocQA flow. Start with `kotaemon app init`, `kotaemon app doctor`, and `slide docqa --help`.
 
 Direct package install:
 
@@ -394,18 +394,6 @@ Start with a runtime check:
 slide doctor
 ```
 
-Top-level DocQA aliases:
-
-- `slide ask`
-- `slide index`
-- `slide files`
-- `slide docqa-sessions`
-- `slide resume-docqa`
-
-Use `slide resume` for the separate phase-1 slide-session workflow; use `slide resume-docqa` for DocQA conversation resumes.
-
-Codex users also get a slide-specific `slide-docqa*` skill family under `.codex/skills`.
-
 To explore the DocQA command group:
 
 ```shell
@@ -413,49 +401,16 @@ slide docqa --help
 slide docqa doctor
 ```
 
-Try a dry run against a deck:
+Codex users also get a slide-specific `slide-docqa*` skill family under `.codex/skills`.
+The focused family covers the DocQA mainline, including `slide-docqa-delete`; `slide docqa acceptance` and `slide docqa check` remain available as maintainer commands.
+
+Example:
 
 ```shell
-slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --dry-run
+slide docqa delete old-deck-id
+slide docqa ask --file ./docs/sample.pptx --prompt "Summarize this deck"
+slide docqa files
 ```
-
-Write the resulting patch to a new deck copy:
-
-```shell
-slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --apply
-```
-
-Or open an interactive session:
-
-```shell
-slide chat --file ./docs/sample.pptx
-```
-
-Inside chat, `slide-cli` stays in preview mode by default and asks before writing. You can also apply the latest patch later with `/apply` or `/apply ./out/deck.rewritten.pptx`.
-
-#### Model routing and platform support
-
-Model routing:
-
-```shell
-kotaemon modelcli init-config --output modelcli.yml
-kotaemon modelcli providers --config modelcli.yml
-kotaemon modelcli run --prompt "health check" --model gpt-4o-mini --dry-run
-```
-
-`modelcli` ships with a default routing template for OpenAI, Anthropic, Gemini, and OpenRouter.
-
-Platform support:
-
-```shell
-kotaemon platform list
-kotaemon platform install --platform codex --mode full --yes
-kotaemon platform install --platform claude-code --mode full --yes
-kotaemon platform status --platform codex
-kotaemon platform validate
-```
-
-This is useful if you want to install the repository's assistant assets, commands, or skills into external AI coding assistant environments.
 
 ### Knowledge Graph And Retrieval (Default)
 

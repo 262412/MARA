@@ -1,3 +1,4 @@
+import importlib.util
 import os
 from typing import Any, Optional, cast
 
@@ -50,13 +51,30 @@ class MilvusVectorStore(LlamaIndexVectorStore):
                 uri = os.path.join(self._path, self._uri)
             else:
                 uri = self._uri
-            super().__init__(
-                uri=uri,
-                token=self._token,
-                collection_name=self._collection_name,
-                dim=dim,
-                **self._kwargs,
-            )
+            try:
+                if not self._uri.startswith("http") and importlib.util.find_spec(
+                    "milvus_lite"
+                ) is None:
+                    raise ImportError(
+                        "Milvus local file backend requires the optional "
+                        "'milvus-lite' package. Install it on a supported "
+                        "platform, or use a remote Milvus URI instead."
+                    )
+                super().__init__(
+                    uri=uri,
+                    token=self._token,
+                    collection_name=self._collection_name,
+                    dim=dim,
+                    **self._kwargs,
+                )
+            except ModuleNotFoundError as exc:
+                if exc.name == "milvus_lite" and not self._uri.startswith("http"):
+                    raise ImportError(
+                        "Milvus local file backend requires the optional "
+                        "'milvus-lite' package. Install it on a supported "
+                        "platform, or use a remote Milvus URI instead."
+                    ) from exc
+                raise
             from llama_index.vector_stores.milvus import (
                 MilvusVectorStore as LIMilvusVectorStore,
             )

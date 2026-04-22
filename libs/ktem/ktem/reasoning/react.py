@@ -2,7 +2,6 @@ import html
 import logging
 from typing import AnyStr, Optional, Type
 
-from ktem.llms.manager import llms
 from ktem.mcp.manager import mcp_manager
 from ktem.reasoning.base import BaseReasoning
 from ktem.utils.generator import Generator
@@ -25,6 +24,12 @@ from ..utils import SUPPORTED_LANGUAGE_MAP
 
 logger = logging.getLogger(__name__)
 DEFAULT_AGENT_STEPS = 4
+
+
+def _get_llms():
+    from ktem.llms.manager import llms
+
+    return llms
 
 
 class DocSearchArgs(BaseModel):
@@ -163,7 +168,7 @@ class RewriteQuestionPipeline(BaseComponent):
         lang: the language of the answer. Currently support English and Japanese
     """
 
-    llm: ChatLLM = Node(default_callback=lambda _: llms.get_default())
+    llm: ChatLLM = Node(default_callback=lambda _: _get_llms().get_default())
     rewrite_template: str = DEFAULT_REWRITE_PROMPT
 
     lang: str = "English"
@@ -266,6 +271,7 @@ class ReactAgentPipeline(BaseReasoning):
         prefix = f"reasoning.options.{_id}"
 
         llm_name = settings[f"{prefix}.llm"]
+        llms = _get_llms()
         llm = llms.get(llm_name, llms.get_default())
 
         max_context_length_setting = settings.get("reasoning.max_context_length", None)
@@ -310,6 +316,7 @@ class ReactAgentPipeline(BaseReasoning):
         llm = ""
         llm_choices = [("(default)", "")]
         try:
+            llms = _get_llms()
             llm_choices += [(_, _) for _ in llms.options().keys()]
         except Exception as e:
             logger.exception(f"Failed to get LLM options: {e}")

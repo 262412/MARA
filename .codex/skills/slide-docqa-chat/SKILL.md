@@ -12,5 +12,4 @@ Examples:
 
 - `slide docqa chat --file deck.pptx`
 
-If the user already has a saved conversation, prefer `slide docqa resume` or `slide resume-docqa`.
-
+If the user already has a saved conversation, prefer `slide docqa resume`.

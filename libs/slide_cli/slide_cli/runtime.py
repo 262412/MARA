@@ -5,17 +5,35 @@ import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from kotaemon.modelcli import build_registry, load_runtime_config
-
-from .agent import SlideAgentRunner
 from .config import SlideAgentConfig
-from .deck import DeckPatch, TextReplaceOp, apply_deck_patch
-from .session_store import SlideSessionStore
+
+if TYPE_CHECKING:
+    from .deck import DeckPatch
+
+
+def SlideAgentRunner(*args, **kwargs):
+    from .agent import SlideAgentRunner as _SlideAgentRunner
+
+    return _SlideAgentRunner(*args, **kwargs)
+
+
+def SlideSessionStore(*args, **kwargs):
+    from .session_store import SlideSessionStore as _SlideSessionStore
+
+    return _SlideSessionStore(*args, **kwargs)
+
+
+def apply_deck_patch(*args, **kwargs):
+    from .deck import apply_deck_patch as _apply_deck_patch
+
+    return _apply_deck_patch(*args, **kwargs)
 
 
 def collect_doctor_payload(config_path: str = "modelcli.yml") -> dict[str, Any]:
+    from kotaemon.modelcli import build_registry, load_runtime_config
+
     resolved_config_path = (
         str(Path(config_path).resolve()) if config_path and Path(config_path).exists() else ""
     )
@@ -45,13 +63,15 @@ def collect_doctor_payload(config_path: str = "modelcli.yml") -> dict[str, Any]:
     }
 
 
-def _patch_to_dict(patch: DeckPatch | None) -> dict[str, Any] | None:
+def _patch_to_dict(patch: "DeckPatch | None") -> dict[str, Any] | None:
     if patch is None:
         return None
     return patch.as_dict()
 
 
-def _patch_from_dict(payload: dict[str, Any] | None) -> DeckPatch | None:
+def _patch_from_dict(payload: dict[str, Any] | None) -> "DeckPatch | None":
+    from .deck import DeckPatch, TextReplaceOp
+
     if not payload:
         return None
     edits = []
@@ -74,7 +94,7 @@ def _patch_from_dict(payload: dict[str, Any] | None) -> DeckPatch | None:
     return DeckPatch(summary=str(payload.get("summary", "")), edits=edits)
 
 
-def _write_patch_artifact(session, patch: DeckPatch | None) -> str:
+def _write_patch_artifact(session, patch: "DeckPatch | None") -> str:
     if patch is None:
         return ""
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

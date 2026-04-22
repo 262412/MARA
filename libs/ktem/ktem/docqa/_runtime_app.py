@@ -4,20 +4,14 @@ import logging
 import os
 from pathlib import Path
 
-import pluggy
-from ktem import extension_protocol
-from ktem.components import reasonings
-from ktem.index import IndexManager
-from ktem.settings import BaseSettingGroup, SettingGroup, SettingReasoningGroup
-from pypdf import PdfReader
-from theflow.settings import settings as flowsettings
-from theflow.utils.modules import import_dotted_string
-
 logger = logging.getLogger(__name__)
 
 
 class _RuntimeAppContext:
     def __init__(self):
+        from ktem.settings import BaseSettingGroup, SettingGroup, SettingReasoningGroup
+        from theflow.settings import settings as flowsettings
+
         self.dev_mode = getattr(flowsettings, "KH_MODE", "") == "dev"
         self.app_name = getattr(flowsettings, "KH_APP_NAME", "Kotaemon")
         self.app_version = getattr(flowsettings, "KH_APP_VERSION", "")
@@ -38,6 +32,9 @@ class _RuntimeAppContext:
         self.default_settings.index.finalize()
 
     def initialize_indices(self):
+        from ktem.index import IndexManager
+        from ktem.settings import BaseSettingGroup
+
         self.index_manager = IndexManager(self)
         self.index_manager.on_application_startup()
 
@@ -48,6 +45,11 @@ class _RuntimeAppContext:
             )
 
     def register_reasonings(self):
+        from ktem.components import reasonings
+        from ktem.settings import BaseSettingGroup
+        from theflow.settings import settings as flowsettings
+        from theflow.utils.modules import import_dotted_string
+
         if getattr(flowsettings, "KH_REASONINGS", None) is None:
             return
 
@@ -61,6 +63,11 @@ class _RuntimeAppContext:
             )
 
     def register_extensions(self):
+        import pluggy
+
+        from ktem import extension_protocol
+        from ktem.settings import BaseSettingGroup
+
         self.exman = pluggy.PluginManager("ktem")
         self.exman.add_hookspecs(extension_protocol)
         self.exman.load_setuptools_entrypoints("ktem")
@@ -119,6 +126,8 @@ class _DocQAPreviewService:
     ) -> str:
         if not pdf_path or not os.path.isfile(pdf_path):
             return ""
+        from pypdf import PdfReader
+
         try:
             reader = PdfReader(pdf_path)
             if not reader.pages:

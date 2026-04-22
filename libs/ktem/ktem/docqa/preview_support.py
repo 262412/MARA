@@ -11,7 +11,6 @@ from pathlib import Path
 
 from ktem.db.models import engine
 from ktem.utils.dependencies import find_soffice_binary
-from pypdf import PdfReader
 from sqlmodel import Session, select
 
 try:
@@ -214,6 +213,8 @@ class OfficePreviewConversionService:
                 return False
             if os.path.getsize(pdf_path) < 64:
                 return False
+            from pypdf import PdfReader
+
             pages = len(PdfReader(pdf_path, strict=False).pages)
             return pages > 0
         except Exception:
@@ -497,6 +498,8 @@ class PreviewSupportService:
     ) -> str:
         if not pdf_path or not os.path.isfile(pdf_path):
             return ""
+        from pypdf import PdfReader
+
         try:
             reader = PdfReader(pdf_path)
             if not reader.pages:
