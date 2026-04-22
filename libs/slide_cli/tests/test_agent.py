@@ -107,3 +107,44 @@ def test_agent_runner_supports_phase_one_tools(monkeypatch, tmp_path):
     assert (tmp_path / "notes.txt").read_text(encoding="utf-8") == "Hello from slide-cli"
     assert "notes.txt" in write_result
     assert str(pdf_path) in export_result
+
+
+def test_agent_runner_instruction_uses_top_level_agent_line_language(monkeypatch, tmp_path):
+    deck_path = tmp_path / "deck.pptx"
+
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+    slide.shapes.title.text = "QBR"
+    slide.placeholders[1].text = "Revenue is flat."
+    presentation.save(deck_path)
+
+    monkeypatch.setattr(
+        "slide_cli.agent.run_completion",
+        lambda **kwargs: SimpleNamespace(
+            text=(
+                "Thought: I now know the final answer.\n"
+                "Final Answer: "
+                + json.dumps(
+                    {
+                        "assistant_response": "No deck patch required.",
+                        "patch": {"summary": "No deck edits", "edits": []},
+                    }
+                )
+            )
+        ),
+    )
+
+    runner = SlideAgentRunner(
+        input_path=str(deck_path),
+        model="gpt-4o-mini",
+        config_path="missing.yml",
+        cwd=str(tmp_path),
+    )
+    instruction = runner._build_instruction(
+        user_prompt="Review the workspace notes before deciding on deck changes.",
+        history_text="(none)",
+    )
+
+    assert "top-level Slide CLI agent line" in instruction
+    assert "high-permission workflow" in instruction
+    assert "workspace-side file changes" in instruction

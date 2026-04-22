@@ -134,7 +134,7 @@ If you want the packaged app and the standalone slide CLI together:
 pip install "kotaemon-app[slide]"
 ```
 
-This packaged runtime is the recommended phase-2 workflow for slide DocQA: initialize the runtime once, inspect it with `kotaemon app doctor`, then discover the canonical `slide docqa ...` commands with `slide docqa --help`.
+This packaged runtime is the recommended phase-3 workflow for slide: initialize the runtime once, inspect it with `kotaemon app doctor`, then use the top-level `slide ...` product shell for high-permission workflows and workspace operations such as `slide apply`, `slide export-pdf`, `slide review`, `slide files`, `slide read`, `slide write`, `slide delete`, and `slide shell`, while `slide docqa ...` stays the specialist DocQA line.
 
 Initialize and inspect the runtime:
 
@@ -154,6 +154,7 @@ In this mode:
 - The runtime manages its own config, data, and cache directories
 - `kotaemon app doctor` shows the actual active paths
 - `kotaemon docqa ...` and `slide docqa ...` reuse the same configuration and data
+- `slide ...` is the product line entrypoint for high-permission runtime commands and workspace operations, including `slide apply`, `slide export-pdf`, and `slide review`, while `slide docqa ...` is the focused DocQA surface
 
 ##### Option 1b: install the standalone slide CLI from PyPI
 
@@ -378,9 +379,33 @@ This runs the end-to-end DocQA acceptance matrix, which is useful after changing
 
 ### CLI Slide Agent
 
-`slide` is a standalone CLI whose canonical slide DocQA mainline is `slide docqa ...`.
+`slide` is the standalone product shell for the packaged slide runtime.
 
-If you installed `kotaemon-app[slide]`, the packaged runtime is the easiest way to discover the canonical slide DocQA flow. Start with `kotaemon app init`, `kotaemon app doctor`, and `slide docqa --help`.
+The phase-3 model is intentionally split into two lines:
+
+- `slide ...` for the high-permission product shell
+- `slide docqa ...` for the specialist document-QA line
+
+The top-level shell currently centers on:
+
+- `slide doctor`
+- `slide run`
+- `slide chat`
+- `slide sessions`
+- `slide resume`
+- `slide inspect`
+- `slide read-slide`
+- `slide extract`
+- `slide search`
+- `slide files`
+- `slide read`
+- `slide write`
+- `slide delete`
+- `slide shell`
+
+`slide inspect`, `slide read-slide`, `slide extract`, and `slide search` are the canonical read-only deck-observability commands on the top-level line. They sit alongside the broader runtime and workspace commands, while `slide docqa ...` remains the specialist document-QA line.
+
+If you installed `kotaemon-app[slide]`, the packaged runtime is the easiest way to discover that split. Start with `kotaemon app init`, `kotaemon app doctor`, `slide --help`, and `slide docqa --help`.
 
 Direct package install:
 
@@ -401,14 +426,16 @@ slide docqa --help
 slide docqa doctor
 ```
 
-Codex users also get a slide-specific `slide-docqa*` skill family under `.codex/skills`.
+Codex users also get a top-level `slide*` skill family and a specialist `slide-docqa*` skill family under `.codex/skills`.
 The focused family covers the DocQA mainline, including `slide-docqa-delete`; `slide docqa acceptance` and `slide docqa check` remain available as maintainer commands.
 
 Example:
 
 ```shell
-slide docqa delete old-deck-id
-slide docqa ask --file ./docs/sample.pptx --prompt "Summarize this deck"
+slide --help
+slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --dry-run
+slide docqa delete old-document-id
+slide docqa ask --file ./docs/sample.pptx --prompt "Summarize this document"
 slide docqa files
 ```
 

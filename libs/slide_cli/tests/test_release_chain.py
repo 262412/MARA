@@ -66,3 +66,46 @@ def test_phase2_docs_cover_slide_docqa_mainline_boundary():
     assert "slide-docqa-delete" in root_readme
     assert "maintainer" in release_doc.lower()
     assert "slide docqa acceptance" in release_doc
+
+
+def test_phase3_docs_cover_two_line_slide_model():
+    root_readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    package_readme = (REPO_ROOT / "libs" / "slide_cli" / "README.md").read_text(
+        encoding="utf-8"
+    )
+    release_doc = (REPO_ROOT / "docs" / "slide_cli_release.md").read_text(
+        encoding="utf-8"
+    )
+    phase3_plan = (
+        REPO_ROOT
+        / "docs"
+        / "superpowers"
+        / "plans"
+        / "2026-04-22-slide-cli-phase3-foundation.md"
+    ).read_text(encoding="utf-8")
+
+    assert "`slide ...` is the product line entrypoint" in root_readme
+    assert "`slide docqa ...` is the focused DocQA surface" in root_readme
+    assert "The phase-3 shell is split into two lines:" in package_readme
+    assert "`slide ...` is the high-permission product line" in package_readme
+    for command in [
+        "slide inspect",
+        "slide read-slide",
+        "slide extract",
+        "slide search",
+        "slide files",
+        "slide read",
+        "slide write",
+        "slide delete",
+        "slide shell",
+    ]:
+        assert command in root_readme
+        assert command in package_readme
+        assert command in release_doc
+    assert "slide docqa ..." in package_readme
+    assert (
+        "Phase 3 keeps the user-facing shell intentionally split into two lines"
+        in release_doc
+    )
+    assert "`slide docqa ...` is the specialist document-QA line" in release_doc
+    assert "two-line model" in phase3_plan

@@ -24,6 +24,109 @@ def _collect_doctor_payload():
     return collect_doctor_payload()
 
 
+def _resolve_workspace_path(
+    candidate: str,
+    *,
+    cwd: str | None = None,
+    allow_missing: bool = False,
+):
+    from .runtime import resolve_workspace_path as _resolve_workspace_path_impl
+
+    return _resolve_workspace_path_impl(candidate, cwd=cwd, allow_missing=allow_missing)
+
+
+def list_workspace_files(*, cwd: str | None = None):
+    from .runtime import list_workspace_files as _list_workspace_files
+
+    return _list_workspace_files(cwd=cwd)
+
+
+def read_workspace_file(path: str, *, cwd: str | None = None):
+    from .runtime import read_workspace_file as _read_workspace_file
+
+    return _read_workspace_file(path, cwd=cwd)
+
+
+def write_workspace_file(
+    *,
+    path: str,
+    content: str,
+    cwd: str | None = None,
+    append: bool = False,
+):
+    from .runtime import write_workspace_file as _write_workspace_file
+
+    return _write_workspace_file(path=path, content=content, cwd=cwd, append=append)
+
+
+def delete_workspace_path(
+    path: str,
+    *,
+    cwd: str | None = None,
+    recursive: bool = False,
+    yes: bool = False,
+):
+    from .runtime import delete_workspace_path as _delete_workspace_path
+
+    return _delete_workspace_path(
+        path,
+        cwd=cwd,
+        recursive=recursive,
+        yes=yes,
+    )
+
+
+def run_workspace_shell(
+    *,
+    command: str,
+    cwd: str | None = None,
+    shell_timeout_sec: int = 15,
+):
+    from .runtime import run_workspace_shell as _run_workspace_shell
+
+    return _run_workspace_shell(
+        command=command,
+        cwd=cwd,
+        shell_timeout_sec=shell_timeout_sec,
+    )
+
+
+def export_deck_pdf(source_path: str, *, output_path: str | None = None):
+    from .deck import export_deck_pdf as _export_deck_pdf
+
+    return _export_deck_pdf(source_path, output_path=output_path)
+
+
+def inspect_slide_deck(input_path: str):
+    from .runtime import inspect_slide_deck as _inspect_slide_deck
+
+    return _inspect_slide_deck(input_path)
+
+
+def read_slide_summary(input_path: str, *, slide_number: int):
+    from .runtime import read_slide_summary as _read_slide_summary
+
+    return _read_slide_summary(input_path, slide_number=slide_number)
+
+
+def extract_slide_text(input_path: str, *, slide_number: int | None = None):
+    from .runtime import extract_slide_text as _extract_slide_text
+
+    return _extract_slide_text(input_path, slide_number=slide_number)
+
+
+def search_slide_deck(input_path: str, *, query: str):
+    from .runtime import search_slide_deck as _search_slide_deck
+
+    return _search_slide_deck(input_path, query=query)
+
+
+def review_slide_deck(input_path: str):
+    from .runtime import review_slide_deck as _review_slide_deck
+
+    return _review_slide_deck(input_path)
+
+
 def run_slide_task(**kwargs):
     from .runtime import run_slide_task as _run_slide_task
 
@@ -78,7 +181,23 @@ class _LazyDocQAGroup(click.Group):
 
 @click.group()
 def main():
-    """Agent CLI for reviewing and rewriting slide decks."""
+    """Slide CLI with two product lines.
+
+    Top-level agent line:
+    - `slide doctor` validates the agent runtime and provider setup.
+    - `slide inspect`, `slide read-slide`, `slide extract`, and
+      `slide search` expose read-only deck observability commands.
+    - `slide files`, `slide read`, `slide write`, `slide delete`, and
+      `slide shell` expose explicit high-permission workspace operations.
+    - `slide apply`, `slide export-pdf`, and `slide review` expose
+      deterministic deck-output and inspection workflows.
+    - `slide run` executes one high-permission deck workflow.
+    - `slide chat`, `slide sessions`, and `slide resume` manage interactive
+      deck-agent sessions.
+
+    Specialist DocQA line:
+    - `slide docqa ...` owns the document QA workflow and focused DocQA skills.
+    """
 
 
 main.add_command(_LazyDocQAGroup(), "docqa")
@@ -94,6 +213,7 @@ main.add_command(_LazyDocQAGroup(), "docqa")
     help="Emit structured JSON output.",
 )
 def doctor(json_output):
+    """Validate the top-level slide agent runtime and provider setup."""
     payload = _collect_doctor_payload()
     if json_output:
         _echo_json(payload)
@@ -107,6 +227,391 @@ def doctor(json_output):
     for name, info in payload.get("providers", {}).items():
         status = "yes" if info.get("available") else "no"
         _echo_text(f"- {name}: {status} ({info.get('reason')})")
+
+
+@main.command("files")
+@click.option("--cwd", default=None, help="Workspace root to inspect.")
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def files_cmd(cwd, json_output):
+    """List workspace files available to the top-level agent line."""
+    payload = list_workspace_files(cwd=cwd)
+    if json_output:
+        _echo_json(payload)
+        return
+
+    for path in payload["paths"]:
+        _echo_text(path)
+
+
+@main.command("read")
+@click.argument("path", required=True)
+@click.option("--cwd", default=None, help="Workspace root to inspect.")
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def read_cmd(path, cwd, json_output):
+    """Read one workspace text file from the top-level agent line."""
+    try:
+        payload = read_workspace_file(path, cwd=cwd)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    if json_output:
+        _echo_json(payload)
+        return
+
+    _echo_text(payload["content"])
+
+
+@main.command("write")
+@click.argument("path", required=True)
+@click.option("--content", required=True, help="UTF-8 text content to write.")
+@click.option(
+    "--append",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Append instead of overwrite.",
+)
+@click.option("--cwd", default=None, help="Workspace root to inspect.")
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def write_cmd(path, content, append, cwd, json_output):
+    """Write or append one workspace text file from the top-level agent line."""
+    try:
+        payload = write_workspace_file(path=path, content=content, cwd=cwd, append=append)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    if json_output:
+        _echo_json(payload)
+        return
+
+    _echo_text(
+        f"Wrote {payload['chars_written']} characters to {payload['path']}"
+        + (" (append)" if payload["append"] else "")
+    )
+
+
+@main.command("delete")
+@click.argument("path", required=True)
+@click.option(
+    "--recursive",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Allow recursive directory deletion inside the workspace root.",
+)
+@click.option(
+    "--yes",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Skip the interactive confirmation prompt.",
+)
+@click.option("--cwd", default=None, help="Workspace root to inspect.")
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def delete_cmd(path, recursive, yes, cwd, json_output):
+    """Delete one workspace file or directory from the top-level agent line."""
+    try:
+        _workspace_root, resolved = _resolve_workspace_path(path, cwd=cwd)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    if not yes:
+        target_kind = "directory" if resolved.is_dir() else "file"
+        prompt = (
+            f"Delete {target_kind} '{resolved}'"
+            + (" recursively" if resolved.is_dir() else "")
+            + "?"
+        )
+        click.confirm(prompt, default=False, abort=True)
+
+    try:
+        payload = delete_workspace_path(
+            path,
+            cwd=cwd,
+            recursive=recursive,
+            yes=yes,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    if json_output:
+        _echo_json(payload)
+        return
+
+    _echo_text(f"Deleted {payload['deleted_type']} {payload['path']}")
+
+
+@main.command("shell")
+@click.option("--command", required=True, help="Shell command to execute.")
+@click.option("--cwd", default=None, help="Workspace root to inspect.")
+@click.option(
+    "--shell-timeout",
+    "shell_timeout_sec",
+    default=15,
+    show_default=True,
+    type=int,
+    help="Shell command timeout in seconds.",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def shell_cmd(command, cwd, shell_timeout_sec, json_output):
+    """Run one workspace shell command from the top-level agent line."""
+    try:
+        payload = run_workspace_shell(
+            command=command,
+            cwd=cwd,
+            shell_timeout_sec=shell_timeout_sec,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    if json_output:
+        _echo_json(payload)
+        return
+
+    _echo_text(f"returncode: {payload['returncode']}")
+    _echo_text(f"stdout:\n{payload['stdout'] or '(empty)'}")
+    _echo_text(f"stderr:\n{payload['stderr'] or '(empty)'}")
+
+
+@main.command("inspect")
+@click.option("--file", "input_path", required=True, type=click.Path(exists=True))
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def inspect_cmd(input_path, json_output):
+    """Inspect one slide deck from the top-level agent line."""
+    try:
+        payload = inspect_slide_deck(str(input_path))
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    if json_output:
+        _echo_json(payload)
+        return
+
+    _echo_text(payload["summary"])
+
+
+@main.command("read-slide")
+@click.option("--file", "input_path", required=True, type=click.Path(exists=True))
+@click.option("--slide", "slide_number", required=True, type=int, help="Slide number to read.")
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def read_slide_cmd(input_path, slide_number, json_output):
+    """Read one slide summary from the top-level agent line."""
+    try:
+        payload = read_slide_summary(str(input_path), slide_number=slide_number)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    if json_output:
+        _echo_json(payload)
+        return
+
+    _echo_text(payload["summary"])
+
+
+@main.command("extract")
+@click.option("--file", "input_path", required=True, type=click.Path(exists=True))
+@click.option(
+    "--slide",
+    "slide_number",
+    default=None,
+    type=int,
+    help="Optional slide number to extract instead of the whole deck.",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def extract_cmd(input_path, slide_number, json_output):
+    """Extract plain text from one slide deck or one slide."""
+    try:
+        payload = extract_slide_text(str(input_path), slide_number=slide_number)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    if json_output:
+        _echo_json(payload)
+        return
+
+    _echo_text(payload["text"])
+
+
+@main.command("search")
+@click.option("--file", "input_path", required=True, type=click.Path(exists=True))
+@click.option("--query", required=True, help="Case-insensitive search string.")
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def search_cmd(input_path, query, json_output):
+    """Search one slide deck summary from the top-level agent line."""
+    try:
+        payload = search_slide_deck(str(input_path), query=query)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    if json_output:
+        _echo_json(payload)
+        return
+
+    if payload["matches"]:
+        for match in payload["matches"]:
+            _echo_text(match)
+        return
+
+    _echo_text("No matches found.")
+
+
+@main.command("apply")
+@click.argument("session_id", required=True, metavar="session_id")
+@click.option(
+    "--output",
+    default=None,
+    type=click.Path(dir_okay=False),
+    help="Optional output deck path for the applied patch.",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def apply_cmd(session_id, output, json_output):
+    """Apply the latest saved patch from a top-level slide session."""
+    try:
+        payload = apply_session_patch(
+            session_id,
+            output_path=str(output) if output else None,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    if json_output:
+        _echo_json(payload)
+        return
+
+    _echo_text(f"Session: {payload['session_id']}")
+    _echo_text(f"Output: {payload['output_path']}")
+    _echo_text(f"Applied edits: {payload.get('applied_count', 0)}")
+
+
+@main.command("export-pdf")
+@click.option("--file", "input_path", required=True, type=click.Path(exists=True))
+@click.option(
+    "--output",
+    default=None,
+    type=click.Path(dir_okay=False),
+    help="Optional output PDF path.",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def export_pdf_cmd(input_path, output, json_output):
+    """Export one slide deck to PDF from the top-level agent line."""
+    try:
+        output_path = export_deck_pdf(
+            str(input_path),
+            output_path=str(output) if output else None,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    payload = {
+        "input_path": str(input_path),
+        "output_path": str(output_path),
+    }
+    if json_output:
+        _echo_json(payload)
+        return
+
+    _echo_text(f"Output: {payload['output_path']}")
+
+
+@main.command("review")
+@click.option("--file", "input_path", required=True, type=click.Path(exists=True))
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Emit structured JSON output.",
+)
+def review_cmd(input_path, json_output):
+    """Review one slide deck with deterministic top-level heuristics."""
+    try:
+        payload = review_slide_deck(str(input_path))
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from None
+
+    if json_output:
+        _echo_json(payload)
+        return
+
+    _echo_text(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 @main.command("run")
@@ -187,6 +692,7 @@ def run_cmd(
     max_iterations,
     json_output,
 ):
+    """Run one high-permission slide agent workflow."""
     if apply and dry_run:
         raise click.ClickException("--apply and --dry-run cannot be used together.")
 
@@ -230,6 +736,7 @@ def run_cmd(
     help="Emit structured JSON output.",
 )
 def sessions_cmd(json_output):
+    """Inspect saved top-level slide agent sessions."""
     store = _slide_session_store_cls()()
     sessions = store.list_sessions()
     payload = [session.as_dict() for session in sessions]
@@ -377,6 +884,7 @@ def chat_cmd(
     max_iterations,
     json_output,
 ):
+    """Open an interactive high-permission slide agent session."""
     store = _slide_session_store_cls()()
     session = store.create_session(
         mode="chat",
@@ -471,6 +979,7 @@ def resume_cmd(
     max_iterations,
     json_output,
 ):
+    """Resume a saved top-level slide agent session."""
     store = _slide_session_store_cls()()
     session = store.load_session(session_id)
     if session is None:

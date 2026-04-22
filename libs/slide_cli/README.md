@@ -1,6 +1,33 @@
 # slide-cli
 
-Standalone slide DocQA CLI built on top of the existing `kotaemon` and `ktem` libraries.
+Standalone slide CLI built on top of the existing `kotaemon` and `ktem` libraries.
+
+The phase-3 shell is split into two lines:
+
+- `slide ...` is the high-permission product line for runtime commands and workspace operations, including `slide apply`, `slide export-pdf`, and `slide review`
+- `slide docqa ...` is the specialist document-QA line
+
+The top-level line currently centers on:
+
+- `slide apply`
+- `slide export-pdf`
+- `slide review`
+- `slide doctor`
+- `slide run`
+- `slide chat`
+- `slide sessions`
+- `slide resume`
+- `slide inspect`
+- `slide read-slide`
+- `slide extract`
+- `slide search`
+- `slide files`
+- `slide read`
+- `slide write`
+- `slide delete`
+- `slide shell`
+
+`slide inspect`, `slide read-slide`, `slide extract`, and `slide search` are the canonical read-only deck-observability commands on the top-level line. `slide docqa ...` remains the specialist document-QA line.
 
 ## Install
 
@@ -34,7 +61,7 @@ slide docqa --help
 
 ## Recommended Packaged Runtime Workflow
 
-If you want the packaged Kotaemon runtime alongside the canonical slide DocQA workflow, install the app with the slide extra and initialize it once:
+If you want the packaged Kotaemon runtime alongside the phase-3 slide shell, install the app with the slide extra and initialize it once:
 
 ```shell
 pip install "kotaemon-app[slide]"
@@ -50,9 +77,11 @@ Use `slide docqa doctor` first in a fresh environment, then `slide docqa index`,
 ## Examples
 
 ```shell
+slide --help
+slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --dry-run
 slide docqa files
-slide docqa delete old-deck-id
-slide docqa ask --file ./docs/sample.pptx --prompt "Summarize this deck"
+slide docqa delete old-document-id
+slide docqa ask --file ./docs/sample.pptx --prompt "Summarize this document"
 ```
 
 ## Release Model

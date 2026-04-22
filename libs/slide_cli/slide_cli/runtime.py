@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -29,6 +30,245 @@ def apply_deck_patch(*args, **kwargs):
     from .deck import apply_deck_patch as _apply_deck_patch
 
     return _apply_deck_patch(*args, **kwargs)
+
+
+def resolve_workspace_root(cwd: str | None = None) -> Path:
+    if cwd:
+        return Path(cwd).resolve()
+    return Path(os.getcwd()).resolve()
+
+
+def resolve_workspace_path(
+    candidate: str | Path,
+    *,
+    cwd: str | None = None,
+    allow_missing: bool = False,
+) -> tuple[Path, Path]:
+    workspace_root = resolve_workspace_root(cwd)
+    raw_value = str(candidate or "").strip()
+    if not raw_value:
+        raise ValueError("No file path provided.")
+
+    path = Path(raw_value)
+    resolved = (
+        path.resolve() if path.is_absolute() else (workspace_root / path).resolve()
+    )
+    try:
+        resolved.relative_to(workspace_root)
+    except ValueError as exc:
+        raise ValueError(f"Path '{resolved}' is outside the workspace root.") from exc
+
+    if not allow_missing and not resolved.exists():
+        raise FileNotFoundError(f"Path '{resolved}' does not exist.")
+    return workspace_root, resolved
+
+
+def list_workspace_files(
+    *,
+    cwd: str | None = None,
+    max_listed_paths: int = 200,
+) -> dict[str, Any]:
+    workspace_root = resolve_workspace_root(cwd)
+    paths = sorted(
+        str(path.relative_to(workspace_root))
+        for path in workspace_root.rglob("*")
+        if path.is_file()
+    )
+    return {
+        "workspace_root": str(workspace_root),
+        "count": len(paths),
+        "paths": paths[:max_listed_paths],
+    }
+
+
+def read_workspace_file(
+    path: str | Path,
+    *,
+    cwd: str | None = None,
+    max_file_chars: int = 4000,
+) -> dict[str, Any]:
+    workspace_root, resolved = resolve_workspace_path(path, cwd=cwd)
+    relative = str(resolved.relative_to(workspace_root))
+    content = resolved.read_text(encoding="utf-8", errors="replace")[:max_file_chars]
+    return {
+        "workspace_root": str(workspace_root),
+        "path": relative,
+        "content": content,
+    }
+
+
+def write_workspace_file(
+    *,
+    path: str | Path,
+    content: str,
+    cwd: str | None = None,
+    append: bool = False,
+) -> dict[str, Any]:
+    workspace_root, resolved = resolve_workspace_path(path, cwd=cwd, allow_missing=True)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    mode = "a" if append else "w"
+    with resolved.open(mode, encoding="utf-8") as file_obj:
+        file_obj.write(content)
+    return {
+        "workspace_root": str(workspace_root),
+        "path": str(resolved.relative_to(workspace_root)),
+        "chars_written": len(content),
+        "append": append,
+    }
+
+
+def delete_workspace_path(
+    path: str | Path,
+    *,
+    cwd: str | None = None,
+    recursive: bool = False,
+    yes: bool = False,
+) -> dict[str, Any]:
+    _ignored_yes = yes
+    workspace_root, resolved = resolve_workspace_path(path, cwd=cwd)
+    relative = str(resolved.relative_to(workspace_root))
+
+    if resolved.is_dir():
+        if not recursive:
+            raise ValueError(
+                "Directory deletion requires recursive=True to avoid accidental removal."
+            )
+        shutil.rmtree(resolved)
+        deleted_type = "directory"
+    else:
+        resolved.unlink()
+        deleted_type = "file"
+
+    return {
+        "workspace_root": str(workspace_root),
+        "path": relative,
+        "deleted_type": deleted_type,
+    }
+
+
+def run_workspace_shell(
+    *,
+    command: str,
+    cwd: str | None = None,
+    shell_timeout_sec: int = 15,
+) -> dict[str, Any]:
+    raw_command = str(command or "").strip()
+    if not raw_command:
+        raise ValueError("No command provided.")
+
+    workspace_root = resolve_workspace_root(cwd)
+    try:
+        completed = subprocess.run(
+            raw_command,
+            cwd=str(workspace_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            shell=True,
+            timeout=shell_timeout_sec,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError(
+            f"Command timed out after {shell_timeout_sec} seconds: {raw_command}"
+        ) from exc
+
+    return {
+        "workspace_root": str(workspace_root),
+        "command": raw_command,
+        "returncode": int(completed.returncode),
+        "stdout": completed.stdout.strip(),
+        "stderr": completed.stderr.strip(),
+    }
+
+
+def _load_slide_tool_context(input_path: str | Path):
+    from .deck import load_deck_snapshot
+    from .tools import SlideToolContext
+
+    path = Path(input_path).resolve()
+    snapshot = load_deck_snapshot(path)
+    context = SlideToolContext(
+        input_path=path,
+        workspace_root=path.parent,
+        snapshot=snapshot,
+    )
+    return path, snapshot, context
+
+
+def inspect_slide_deck(input_path: str | Path) -> dict[str, Any]:
+    path, snapshot, context = _load_slide_tool_context(input_path)
+    return {
+        "input_path": str(path),
+        "slide_count": snapshot.slide_count,
+        "summary": context.inspect_deck(),
+    }
+
+
+def read_slide_summary(
+    input_path: str | Path,
+    *,
+    slide_number: int,
+) -> dict[str, Any]:
+    path, _snapshot, context = _load_slide_tool_context(input_path)
+    return {
+        "input_path": str(path),
+        "slide_number": int(slide_number),
+        "summary": context.read_slide(int(slide_number)),
+    }
+
+
+def extract_slide_text(
+    input_path: str | Path,
+    *,
+    slide_number: int | None = None,
+) -> dict[str, Any]:
+    path, _snapshot, context = _load_slide_tool_context(input_path)
+    normalized_slide_number = None if slide_number is None else int(slide_number)
+    return {
+        "input_path": str(path),
+        "slide_number": normalized_slide_number,
+        "text": context.extract_slide_text(normalized_slide_number),
+    }
+
+
+def search_slide_deck(
+    input_path: str | Path,
+    *,
+    query: str,
+) -> dict[str, Any]:
+    path, _snapshot, context = _load_slide_tool_context(input_path)
+    result_text = context.search_text(query)
+    if result_text in {"No pattern provided.", "No matches found."}:
+        matches: list[str] = []
+    else:
+        matches = [line for line in result_text.splitlines() if line.strip()]
+    return {
+        "input_path": str(path),
+        "query": str(query),
+        "count": len(matches),
+        "matches": matches,
+    }
+
+
+def review_slide_deck(input_path: str | Path) -> dict[str, Any]:
+    path, _snapshot, context = _load_slide_tool_context(input_path)
+    review_text = context.review_deck()
+    try:
+        payload = json.loads(review_text)
+    except json.JSONDecodeError:
+        return {
+            "input_path": str(path),
+            "review": review_text,
+        }
+
+    if isinstance(payload, dict):
+        payload.setdefault("input_path", str(path))
+        return payload
+
+    return {
+        "input_path": str(path),
+        "review": payload,
+    }
 
 
 def collect_doctor_payload(config_path: str = "modelcli.yml") -> dict[str, Any]:

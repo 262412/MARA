@@ -118,7 +118,8 @@ def _collect_raw_responses(intermediate_steps: list[tuple[Any, str]] | None, fin
 
 SLIDE_REACT_PROMPT = PromptTemplate(
     template=(
-        "You are Slide CLI, a slide-focused editing harness.\n"
+        "You are Slide CLI's top-level agent line.\n"
+        "This is a high-permission workflow for deck work plus workspace-side file changes.\n"
         "Use the available tools deliberately and keep your reasoning concise.\n"
         "You must follow this exact format:\n\n"
         "Question: the user request you must solve\n"
@@ -265,8 +266,9 @@ class SlideAgentRunner:
         history_text: str,
     ) -> str:
         return (
-            "You are working inside Slide CLI.\n"
-            "Inspect the deck, optionally inspect the workspace, and then produce a structured slide patch.\n\n"
+            "You are working inside the top-level Slide CLI agent line.\n"
+            "This is the high-permission workflow for deck work plus workspace-side file changes.\n"
+            "Inspect the deck, inspect the workspace when needed, and produce a structured slide patch when deck changes are required.\n\n"
             f"Working directory: {self.workspace_root}\n"
             f"Deck path: {self.input_path}\n"
             f"Conversation history:\n{history_text}\n\n"
