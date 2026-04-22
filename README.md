@@ -128,6 +128,12 @@ This is the best path if you just want to use the app:
 pip install kotaemon-app
 ```
 
+If you want the packaged app and the standalone slide CLI together:
+
+```shell
+pip install "kotaemon-app[slide]"
+```
+
 Initialize and inspect the runtime:
 
 ```shell
@@ -147,9 +153,29 @@ In this mode:
 - `kotaemon app doctor` shows the actual active paths
 - `kotaemon docqa ...` reuses the same configuration and data
 
+##### Option 1b: install the standalone slide CLI from PyPI
+
+If you only want the slide-focused terminal workflow, you can install it directly:
+
+```shell
+pip install slide-cli
+slide doctor
+slide --help
+```
+
+If you want to validate the package before a full release, you can install it from TestPyPI:
+
+```shell
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple slide-cli
+```
+
+`slide-cli`, `ktem`, `kotaemon`, and `kotaemon-app` share the same repository tag version line. A tag such as `v0.0.9` publishes the matching build of each package in dependency order.
+The release checklist for the standalone CLI lives in [docs/slide_cli_release.md](docs/slide_cli_release.md).
+
 ##### Option 2: use the installer scripts in this repo
 
 The repository includes cross-platform installer scripts that create a virtual environment, install dependencies, and run the basic initialization steps.
+When the source tree also contains `libs/slide_cli`, these scripts install the standalone `slide` command into the same virtual environment.
 
 macOS / Linux:
 
@@ -175,6 +201,12 @@ INSTALL_CLAUDE_CODE=1 bash install.sh
 ./install.ps1 -InstallClaudeCode
 ```
 
+After the setup finishes, you can validate the slide agent runtime with:
+
+```shell
+slide doctor
+```
+
 ##### Option 3: source install for local development
 
 This is the right path if you want to modify the repository directly.
@@ -197,11 +229,12 @@ Windows PowerShell:
 .venv\Scripts\Activate.ps1
 ```
 
-2. Install the two main packages
+2. Install the local packages
 
 ```shell
 pip install -e "libs/kotaemon[all]"
 pip install -e "libs/ktem"
+pip install -e "libs/slide_cli"
 ```
 
 3. Prepare environment variables
@@ -214,6 +247,13 @@ pip install -e "libs/ktem"
 
 ```shell
 python app.py
+```
+
+Validate the slide CLI and inspect the available commands:
+
+```shell
+slide doctor
+slide --help
 ```
 
 Source-mode characteristics:
@@ -333,6 +373,34 @@ kotaemon docqa check
 ```
 
 This runs the end-to-end DocQA acceptance matrix, which is useful after changing indexing, preview, knowledge graph, or CLI behavior.
+
+### CLI Slide Agent
+
+`slide` is a standalone slide-focused CLI for reviewing or rewriting `.pptx` decks from the terminal.
+
+Direct package install:
+
+```shell
+pip install slide-cli
+```
+
+Start with a runtime check:
+
+```shell
+slide doctor
+```
+
+Try a dry run against a deck:
+
+```shell
+slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --dry-run
+```
+
+Or open an interactive session:
+
+```shell
+slide chat --file ./docs/sample.pptx
+```
 
 #### Model routing and platform support
 
@@ -563,6 +631,7 @@ If you want to continue developing inside this repository, the recommended path 
 ```shell
 pip install -e "libs/kotaemon[all]"
 pip install -e "libs/ktem"
+pip install -e "libs/slide_cli"
 pre-commit install
 pytest libs/kotaemon/tests libs/ktem/ktem_tests
 ```

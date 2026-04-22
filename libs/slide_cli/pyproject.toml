@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools >= 61.0", "wheel", "setuptools-git-versioning>=2.0,<3"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = false
+packages.find.include = ["slide_cli*"]
+packages.find.exclude = ["tests*"]
+
+[tool.setuptools-git-versioning]
+enabled = true
+dev_template = "{tag}"
+dirty_template = "{tag}"
+tag_filter = "v?\\d+(\\.\\d+)*.*"
+
+[project]
+name = "slide-cli"
+dynamic = ["version"]
+requires-python = ">= 3.10"
+description = "Slide-focused agent CLI for reviewing and rewriting PowerPoint decks."
+readme = "README.md"
+dependencies = [
+    "click>=8.1.7,<9",
+    "platformdirs>=4.2.1,<5",
+    "PyYAML>=6.0,<7",
+    "python-pptx>=1.0.2,<2",
+    "kotaemon",
+    "ktem",
+]
+authors = [
+    { name = "@trducng", email = "john@cinnamon.is" },
+    { name = "@lone17", email = "ian@cinnamon.is" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+slide = "slide_cli.cli:main"
+slide-cli = "slide_cli.cli:main"
+
+[tool.uv.sources]
+kotaemon = { workspace = true }
+ktem = { workspace = true }
+
+[project.urls]
+Homepage = "https://github.com/Cinnamon/kotaemon/"
+Repository = "https://github.com/Cinnamon/kotaemon/"

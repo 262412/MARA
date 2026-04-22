@@ -36,14 +36,19 @@ if (-not (Test-Path $venvDir)) {
 
 $venvPython = Join-Path $venvDir "Scripts\\python.exe"
 $venvKotaemon = Join-Path $venvDir "Scripts\\kotaemon.exe"
+$venvSlide = Join-Path $venvDir "Scripts\\slide.exe"
 
 & $venvPython -m pip install --upgrade pip
 
 $localKtem = Join-Path $scriptRoot "libs\\ktem\\pyproject.toml"
 $localKotaemon = Join-Path $scriptRoot "libs\\kotaemon\\pyproject.toml"
+$localSlideCli = Join-Path $scriptRoot "libs\\slide_cli\\pyproject.toml"
 if ((Test-Path $localKtem) -and (Test-Path $localKotaemon)) {
     & $venvPython -m pip install (Join-Path $scriptRoot "libs\\ktem")
     & $venvPython -m pip install ((Join-Path $scriptRoot "libs\\kotaemon") + "[all]")
+    if (Test-Path $localSlideCli) {
+        & $venvPython -m pip install (Join-Path $scriptRoot "libs\\slide_cli")
+    }
 } else {
     & $venvPython -m pip install kotaemon-app
 }
@@ -66,3 +71,6 @@ Write-Host ""
 Write-Host "Kotaemon is ready."
 Write-Host "Run '$venvKotaemon app run' to launch the Web UI."
 Write-Host "Run '$venvKotaemon docqa doctor' to validate the shared DocQA runtime."
+if (Test-Path $localSlideCli) {
+    Write-Host "Run '$venvSlide doctor' to validate the slide-cli runtime."
+}
