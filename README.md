@@ -1,344 +1,313 @@
+<a id="top"></a>
+
 <div align="center">
 
 # kotaemon
 
-An open-source clean & customizable RAG UI for chatting with your documents. Built with both end users and
-developers in mind.
+A local RAG application repository built around document QA, page-level preview, knowledge graph exploration, and multi-model routing.
 
-![Preview](https://raw.githubusercontent.com/Cinnamon/kotaemon/main/docs/images/preview-graph.png)
+[English](#english) | [中文](#chinese)
 
-<a href="https://trendshift.io/repositories/11607" target="_blank"><img src="https://trendshift.io/api/badge/repositories/11607" alt="Cinnamon%2Fkotaemon | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-
-[Live Demo #1](https://huggingface.co/spaces/cin-model/kotaemon) |
-[Live Demo #2](https://huggingface.co/spaces/cin-model/kotaemon-demo) |
-[Online Install](https://cinnamon.github.io/kotaemon/online_install/) |
-[Colab Notebook (Local RAG)](https://colab.research.google.com/drive/1eTfieec_UOowNizTJA1NjawBJH9y_1nn)
-
-[User Guide](https://cinnamon.github.io/kotaemon/) |
-[Developer Guide](https://cinnamon.github.io/kotaemon/development/) |
-[Feedback](https://github.com/Cinnamon/kotaemon/issues) |
-[Contact](mailto:kotaemon.support@cinnamon.is)
-
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-31013/)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-<a href="https://github.com/Cinnamon/kotaemon/pkgs/container/kotaemon" target="_blank">
-<img src="https://img.shields.io/badge/docker_pull-kotaemon:latest-brightgreen" alt="docker pull ghcr.io/cinnamon/kotaemon:latest"></a>
-![download](https://img.shields.io/github/downloads/Cinnamon/kotaemon/total.svg?label=downloads&color=blue)
-<a href='https://huggingface.co/spaces/cin-model/kotaemon-demo'><img src='https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue'></a>
-<a href="https://hellogithub.com/en/repository/d3141471a0244d5798bc654982b263eb" target="_blank"><img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=d3141471a0244d5798bc654982b263eb&claim_uid=RLiD9UZ1rEHNaMf&theme=small" alt="Featured｜HelloGitHub" /></a>
+[Introduction](#introduction) |
+[Key Features](#key-features) |
+[Installation](#installation) |
+[CLI Document QA](#cli-document-qa) |
+[Knowledge Graph And Retrieval](#knowledge-graph-and-retrieval) |
+[Customize your application](#customize-your-application) |
+[Contribution](#contribution)
 
 </div>
 
+> [Screenshot placeholder: project overview, recommended to show the chat area, document preview area, and the knowledge graph panel on the right]
+
 <!-- start-intro -->
 
-## Introduction
+<a id="english"></a>
 
-This project serves as a functional RAG UI for both end users who want to do QA on their
-documents and developers who want to build their own RAG pipeline.
+## English
 
-**✨ Enhanced with Page-Driven QA System**: Each page of each file maintains independent chat history, enabling precise page-level questions and answers.
-<br>
+### Introduction
 
-```yml
-+----------------------------------------------------------------------------+
-| End users: Those who use apps built with `kotaemon`.                       |
-| (You use an app like the one in the demo above)                            |
-|     +----------------------------------------------------------------+     |
-|     | Developers: Those who built with `kotaemon`.                   |     |
-|     | (You have `import kotaemon` somewhere in your project)         |     |
-|     |     +----------------------------------------------------+     |     |
-|     |     | Contributors: Those who make `kotaemon` better.    |     |     |
-|     |     | (You make PR to this repo)                         |     |     |
-|     |     +----------------------------------------------------+     |     |
-|     +----------------------------------------------------------------+     |
-+----------------------------------------------------------------------------+
+This repository is not just a single demo page. It is a full document QA runtime that you can run directly, extend in your own codebase, or integrate into terminal-based workflows through the CLI. The current project is built around these core parts:
+
+- A Gradio-based Web UI for document upload, page preview, question answering, citation review, and knowledge graph browsing
+- A shared `kotaemon docqa` CLI that uses the same runtime, index, and conversation data as the Web UI
+- A `kotaemon modelcli` command group for model routing and environment validation
+- A `kotaemon platform` command group for installing Codex / Claude Code platform assets
+- A local repository entrypoint in `app.py` and an SSO-oriented entrypoint in `sso_app.py`
+
+The current design goal is to let one configuration, one document index, and one conversation context serve both the browser experience and the CLI experience. You can use this project as a ready-to-run document QA app, or treat it as the foundation for your own RAG application.
+
+#### For end users
+
+- Upload documents in the browser and ask document-level, page-level, or selected-text-focused questions
+- Preview PDFs, Office files, and text-based documents inside the app
+- Generate a conversation knowledge graph and use graph nodes to shape follow-up questions
+- Reuse the same document index and saved conversations through `kotaemon docqa`
+- Run local-model or API-model workflows for private or semi-private RAG use cases
+
+#### For developers
+
+- Control runtime behavior, model wiring, and indexing settings through `flowsettings.py`, `.env`, and `modelcli.yml`
+- Extend the application-layer UI, DocQA runtime, knowledge graph features, and page preview logic in `libs/ktem`
+- Extend the CLI, model routing, and platform support in `libs/kotaemon`
+- Use the repository directly for local development, Docker deployment, or assistant-platform integration
+
+### Key Features
+
+- **Shared Web UI and CLI runtime**: the browser UI and `kotaemon docqa` share configuration, file indexes, conversations, and knowledge graph state.
+- **Page-level document QA**: the chat page supports page-aware preview and page-scoped context for precise questions such as "What does page 3 say?"
+- **Knowledge graph workflow**: the right-side panel can generate or refresh a knowledge graph; graph nodes can pin context and load suggested questions into chat.
+- **Fullscreen mindmap viewer**: the knowledge graph includes a preview card and fullscreen viewer with drag-to-pan, wheel zoom, zoom in, zoom out, Fit, and Reset.
+- **Multi-format document handling**: the default file collection supports `.png`, `.jpeg`, `.jpg`, `.tiff`, `.tif`, `.pdf`, `.xls`, `.xlsx`, `.doc`, `.docx`, `.ppt`, `.pptx`, `.csv`, `.html`, `.mhtml`, `.txt`, `.md`, and `.zip`.
+- **ZIP expansion during indexing**: `docqa index` can accept directories and `.zip` files, and the runtime will extract and continue indexing supported files inside them.
+- **Switchable reasoning pipelines**: the default runtime includes `FullQAPipeline`, `FullDecomposeQAPipeline`, `ReAct`, and `ReWOO`.
+- **Multi-model and multi-provider support**: the runtime supports OpenAI, Azure OpenAI, Anthropic, Gemini, Cohere, Mistral, VoyageAI, Ollama, and related paths; `modelcli` adds cross-provider routing support.
+- **Answer-to-citation linking**: answers can carry citations that are easy to inspect again through the preview area.
+- **Multiple startup paths**: the repository supports local source launch, packaged runtime launch, Docker multi-target builds, and optional Google / Keycloak SSO entrypoints.
+
+> [Screenshot placeholder: knowledge graph preview card and fullscreen mindmap viewer]
+
+### Installation
+
+#### System requirements
+
+1. Python 3.10 or newer
+2. Docker, if you want to run the project in containers
+3. LibreOffice, if you want preview support for `.doc/.docx/.ppt/.pptx/.xls/.xlsx`
+4. PDF.js, which is already bundled in this repository by default
+5. Provider credentials in `.env` if you want to use API-based models such as OpenAI, Azure OpenAI, Anthropic, Gemini, Cohere, or VoyageAI
+
+#### With Docker (recommended)
+
+This repository includes a multi-stage `Dockerfile` with these targets:
+
+- `lite`
+  Good for baseline Web UI / DocQA usage
+- `full`
+  Adds a more complete document-processing stack, including LibreOffice, Tesseract, and `unstructured`
+- `ollama`
+  Extends `full` with an embedded Ollama service
+
+Build images:
+
+```bash
+docker build --target lite -t kotaemon:lite .
+docker build --target full -t kotaemon:full .
+docker build --target ollama -t kotaemon:ollama .
 ```
 
-### For end users
+Run a container:
 
-- **Clean & Minimalistic UI**: A user-friendly interface for RAG-based QA.
-- **Page-Level Chat Isolation**: Each page maintains separate chat history. Ask "What's on page 3?" without context mixing.
-- **Advanced Document Preview**: Faithful format preservation for PDF, Office documents with native-like viewing experience.
-- **Support for Various LLMs**: Compatible with LLM API providers (OpenAI, AzureOpenAI, Cohere, etc.) and local LLMs (via `ollama` and `llama-cpp-python`).
-- **Easy Installation**: Simple scripts to get you started quickly.
+```bash
+docker run \
+  -e GRADIO_SERVER_NAME=0.0.0.0 \
+  -e GRADIO_SERVER_PORT=7860 \
+  -v ./ktem_app_data:/app/ktem_app_data \
+  -p 7860:7860 \
+  --rm -it \
+  kotaemon:full
+```
 
-### For developers
+Notes:
 
-- **Framework for RAG Pipelines**: Tools to build your own RAG-based document QA pipeline.
-- **Customizable UI**: See your RAG pipeline in action with the provided UI, built with <a href='https://github.com/gradio-app/gradio'>Gradio <img src='https://img.shields.io/github/stars/gradio-app/gradio'></a>.
-- **Cross-platform CLI profiles**: Install and validate single-repo support bundles for Claude Code and Codex with `kotaemon platform` commands.
+- The default entry script is `launch.sh`
+- Setting `KH_SSO_ENABLED=true` inside the container switches startup to `sso_app.py`
+- Setting `KH_DEMO_MODE=true` switches startup to `sso_app_demo.py`
+- If you still need legacy GraphRAG dependencies, add `--build-arg INSTALL_LEGACY_GRAPHRAG=true` during build
 
-## Key Features
+After startup, open `http://localhost:7860/`.
 
-- **Host your own document QA (RAG) web-UI**: Support multi-user login, organize your files in private/public collections, collaborate and share your favorite chat with others.
+#### Without Docker
 
-- **🌟 Page-Driven QA System**: Unique page-level conversation isolation. Each page of each file maintains independent chat history. Ask questions like "What's on page 3?" with precise context awareness.
+##### Option 1: install the packaged app without cloning the repo
 
-- **📄 Advanced Document Preview**: Clean, minimalistic preview UI for different file types:
-
-  - **PDF Files**: Native PDF.js viewer with smooth scrolling and zooming
-  - **Office Documents** (DOC/DOCX, PPT/PPTX, XLS/XLSX): Auto-convert to PDF for faithful format preservation
-  - **Text Files** (TXT, MD, HTML): Syntax-highlighted text preview
-  - All previews support page-level navigation and question anchoring
-
-- **Organize your LLM & Embedding models**: Support both local LLMs & popular API providers (OpenAI, Azure, Ollama, Groq).
-
-- **Hybrid RAG pipeline**: Sane default RAG pipeline with hybrid (full-text & vector) retriever and re-ranking to ensure best retrieval quality.
-
-- **Advanced citations with document preview**: By default the system will provide detailed citations to ensure the correctness of LLM answers. View your citations (incl. relevant score) directly in the _in-browser PDF viewer_ with highlights. Warning when retrieval pipeline return low relevant articles.
-
-- **Support complex reasoning methods**: Use question decomposition to answer your complex/multi-hop question. Support agent-based reasoning with `ReAct` and `ReWOO` agents.
-
-- **Configurable settings UI**: You can adjust most important aspects of retrieval & generation process on the UI (incl. prompts).
-
-- **Extensible**: Being built on Gradio, you are free to customize or add any UI elements as you like. Also, we aim to support multiple strategies for document indexing & retrieval. `GraphRAG` indexing pipeline is provided as an example.
-
-![Preview](https://raw.githubusercontent.com/Cinnamon/kotaemon/main/docs/images/preview.png)
-
-## Installation
-
-> If you are not a developer and just want to use the app, please check out our easy-to-follow [User Guide](https://cinnamon.github.io/kotaemon/). Download the `.zip` file from the [latest release](https://github.com/Cinnamon/kotaemon/releases/latest) to get all the newest features and bug fixes.
-
-### System requirements
-
-1. [Python](https://www.python.org/downloads/) >= 3.10
-2. [Docker](https://www.docker.com/): optional, if you [install with Docker](#with-docker-recommended)
-3. [Unstructured](https://docs.unstructured.io/open-source/installation/full-installation#full-installation) if you want to process files other than `.pdf`, `.html`, `.mhtml`, and `.xlsx` documents. Installation steps differ depending on your operating system. Please visit the link and follow the specific instructions provided there.
-4. **LibreOffice** (optional): Required for previewing Office documents (`.doc`, `.docx`, `.ppt`, `.pptx`, `.xls`, `.xlsx`). Install from [libreoffice.org](https://www.libreoffice.org/download/download/).
-   - **Windows**: Default installation path `C:\Program Files\LibreOffice\program\soffice.exe`
-   - **Linux**: `sudo apt-get install libreoffice` or `dnf install libreoffice`
-   - **macOS**: `brew install --cask libreoffice`
-   - Configure via environment variable: `SOFFICE_PATH=/path/to/soffice`
-
-### With Docker (recommended)
-
-1. We support both `lite` & `full` version of Docker images. With `full` version, the extra packages of `unstructured` will be installed, which can support additional file types (`.doc`, `.docx`, ...) but the cost is larger docker image size. For most users, the `lite` image should work well in most cases.
-
-   **Note**: Docker images include LibreOffice for Office document preview. No additional setup required.
-
-   - To use the `full` version.
-
-     ```bash
-     docker run \
-     -e GRADIO_SERVER_NAME=0.0.0.0 \
-     -e GRADIO_SERVER_PORT=7860 \
-     -v ./ktem_app_data:/app/ktem_app_data \
-     -p 7860:7860 -it --rm \
-     ghcr.io/cinnamon/kotaemon:main-full
-     ```
-
-   - To use the `full` version with bundled **Ollama** for _local / private RAG_.
-
-     ```bash
-     # change image name to
-     docker run <...> ghcr.io/cinnamon/kotaemon:main-ollama
-     ```
-
-   - To use the `lite` version.
-
-   ```bash
-    # change image name to
-    docker run <...> ghcr.io/cinnamon/kotaemon:main-lite
-   ```
-
-2. We currently support and test two platforms: `linux/amd64` and `linux/arm64` (for newer Mac). You can specify the platform by passing `--platform` in the `docker run` command. For example:
-
-   ```bash
-   # To run docker with platform linux/arm64
-   docker run \
-   -e GRADIO_SERVER_NAME=0.0.0.0 \
-   -e GRADIO_SERVER_PORT=7860 \
-   -v ./ktem_app_data:/app/ktem_app_data \
-   -p 7860:7860 -it --rm \
-   --platform linux/arm64 \
-   ghcr.io/cinnamon/kotaemon:main-lite
-   ```
-
-3. Once everything is set up correctly, you can go to `http://localhost:7860/` to access the WebUI.
-
-4. We use [GHCR](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) to store docker images, all images can be found [here.](https://github.com/Cinnamon/kotaemon/pkgs/container/kotaemon)
-
-### Without Docker
-
-#### Option 1: Install the packaged app without cloning the repo
-
-1. Install the runtime with `pip` or `uv`.
-
-   ```shell
-   pip install kotaemon-app
-   # or
-   uv tool install kotaemon-app
-   ```
-
-2. Initialize your user config directory and inspect the runtime:
-
-   ```shell
-   kotaemon app init
-   kotaemon app doctor
-   ```
-
-3. Start the packaged Web UI from any directory:
-
-   ```shell
-   kotaemon app run
-   ```
-
-   - User config is stored in your platform config directory.
-   - User data, file storage, and caches are stored in platform-specific data/cache directories.
-   - If you need custom defaults, edit the generated `flowsettings.py` in your user config directory and keep secrets in the adjacent `.env`.
-
-#### Option 2: Use the release installer scripts
-
-If you downloaded a release archive instead of cloning the repository, run the bundled installer:
+This is the best path if you just want to use the app:
 
 ```shell
-# macOS / Linux
-bash install.sh
-
-# Windows PowerShell
-./install.ps1
+pip install kotaemon-app
 ```
 
-The installer creates a virtual environment, installs the Kotaemon runtime, runs `kotaemon app init`, and leaves you with a ready-to-use `kotaemon` CLI.
-
-#### Option 3: Source install for local development
-
-1. Clone and install required packages on a fresh python environment.
-
-   ```shell
-   # optional (setup env)
-   conda create -n kotaemon python=3.10
-   conda activate kotaemon
-
-   # clone this repo
-   git clone https://github.com/Cinnamon/kotaemon
-   cd kotaemon
-
-   pip install -e "libs/kotaemon[all]"
-   pip install -e "libs/ktem"
-   ```
-
-2. Create a `.env` file in the root of this project. Use `.env.example` as a template
-
-   The `.env` file is there to serve use cases where users want to pre-config the models before starting up the app (e.g. deploy the app on HF hub). The file will only be used to populate the db once upon the first run, it will no longer be used in consequent runs.
-
-3. (Optional) To enable in-browser `PDF_JS` viewer, download [PDF_JS_DIST](https://github.com/mozilla/pdf.js/releases/download/v4.0.379/pdfjs-4.0.379-dist.zip) then extract it to `libs/ktem/ktem/assets/prebuilt`
-
-<img src="https://raw.githubusercontent.com/Cinnamon/kotaemon/main/docs/images/pdf-viewer-setup.png" alt="pdf-setup" width="300">
-
-4. (Optional) **Office Document Preview Setup**: If you want to preview Office documents (`.doc`, `.docx`, `.ppt`, `.pptx`, `.xls`, `.xlsx`):
-
-   - Install LibreOffice from [libreoffice.org](https://www.libreoffice.org/download/download/)
-   - Verify installation: Run `soffice --version` in terminal
-   - Configure path if needed: Set `SOFFICE_PATH` environment variable
-   - The system will automatically convert Office files to PDF for faithful format preservation
-
-5. Start the web server:
-
-   ```shell
-   python app.py
-   ```
-
-   - The app will be automatically launched in your browser.
-   - Default username and password are both `admin`. You can set up additional users directly through the UI.
-
-   ![Chat tab](https://raw.githubusercontent.com/Cinnamon/kotaemon/main/docs/images/chat-tab.png)
-
-6. Check the `Resources` tab and `LLMs and Embeddings` and ensure that your `api_key` value is set correctly from your `.env` file. If it is not set, you can set it there.
-
-### CLI Document QA
-
-Kotaemon also ships with a shared `docqa` CLI that uses the same runtime, settings, indexes,
-and saved conversations as the Web UI.
-
-If you installed the packaged app instead of cloning the repository, start with:
+Initialize and inspect the runtime:
 
 ```shell
 kotaemon app init
 kotaemon app doctor
 ```
 
-Before using the CLI for the first time, make sure your chat model and embedding model are
-configured in the app, then validate the runtime:
+Start the Web UI:
 
 ```shell
+kotaemon app run
+```
+
+In this mode:
+
+- The runtime manages its own config, data, and cache directories
+- `kotaemon app doctor` shows the actual active paths
+- `kotaemon docqa ...` reuses the same configuration and data
+
+##### Option 2: use the installer scripts in this repo
+
+The repository includes cross-platform installer scripts that create a virtual environment, install dependencies, and run the basic initialization steps.
+
+macOS / Linux:
+
+```shell
+bash install.sh
+```
+
+Windows PowerShell:
+
+```powershell
+./install.ps1
+```
+
+If you also want to install platform assets:
+
+```shell
+INSTALL_CODEX=1 bash install.sh
+INSTALL_CLAUDE_CODE=1 bash install.sh
+```
+
+```powershell
+./install.ps1 -InstallCodex
+./install.ps1 -InstallClaudeCode
+```
+
+##### Option 3: source install for local development
+
+This is the right path if you want to modify the repository directly.
+
+1. Create and activate a virtual environment
+
+```shell
+python -m venv .venv
+```
+
+macOS / Linux:
+
+```shell
+source .venv/bin/activate
+```
+
+Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+2. Install the two main packages
+
+```shell
+pip install -e "libs/kotaemon[all]"
+pip install -e "libs/ktem"
+```
+
+3. Prepare environment variables
+
+- Copy `.env.example` to `.env`
+- Fill in the credentials for the providers you actually use
+- If you need Office preview, make sure `soffice` can be discovered, or set `SOFFICE_PATH` explicitly
+
+4. Start the app
+
+```shell
+python app.py
+```
+
+Source-mode characteristics:
+
+- The repository root `flowsettings.py` is the runtime entry configuration
+- Application data is stored locally in `./ktem_app_data`
+- This mode is best for debugging UI, knowledge graph, indexing, and reasoning-chain behavior
+
+5. Optional SSO startup path
+
+If you want to wrap Gradio through FastAPI and enable SSO:
+
+```shell
+uvicorn sso_app:app --host 0.0.0.0 --port 7860
+```
+
+This path reads:
+
+- Google SSO: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- Keycloak SSO: `AUTHENTICATION_METHOD=KEYCLOAK`, `KEYCLOAK_SERVER_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`
+
+### CLI Document QA
+
+`kotaemon docqa` uses the same application runtime, so it shares:
+
+- Runtime configuration
+- File indexes
+- Conversation and resume capability
+- Knowledge graph cache
+
+For a fresh setup, start with:
+
+```shell
+kotaemon app init
+kotaemon app doctor
 kotaemon docqa doctor
 ```
 
-If you install the Codex or Claude Code platform bundle, DocQA now exposes focused action
-entries instead of a single catch-all skill:
+#### Index documents
 
-- Ask one question -> `kotaemon-docqa-ask` -> `kotaemon docqa ask`
-- Index documents -> `kotaemon-docqa-index` -> `kotaemon docqa index`
-- Interactive chat -> `kotaemon-docqa-chat` -> `kotaemon docqa chat`
-- List indexed files -> `kotaemon-docqa-files` -> `kotaemon docqa files`
-- Delete indexed files -> `kotaemon-docqa-delete` -> `kotaemon docqa delete`
-- List saved sessions -> `kotaemon-docqa-sessions` -> `kotaemon docqa sessions`
-- Resume a conversation -> `kotaemon-docqa-resume` -> `kotaemon docqa resume`
-- Runtime health check -> `kotaemon-docqa-doctor` -> `kotaemon docqa doctor`
-- Full acceptance check -> `kotaemon-docqa-acceptance` -> `kotaemon docqa acceptance`
-- Advanced or mixed workflows -> `kotaemon-docqa` -> any `kotaemon docqa ...` command
-
-Model routing and packaged app workflows follow the same pattern:
-
-- Generate modelcli config -> `kotaemon-modelcli-init-config` -> `kotaemon modelcli init-config`
-- Inspect provider availability -> `kotaemon-modelcli-providers` -> `kotaemon modelcli providers`
-- Run one routed call -> `kotaemon-modelcli-run` -> `kotaemon modelcli run`
-- Mixed routing workflows -> `kotaemon-modelcli` -> any `kotaemon modelcli ...` command
-- Initialize packaged app config -> `kotaemon-app-init` -> `kotaemon app init`
-- Inspect packaged runtime health -> `kotaemon-app-doctor` -> `kotaemon app doctor`
-- Launch the packaged Web UI -> `kotaemon-app-run` -> `kotaemon app run`
-- Mixed packaged app workflows -> `kotaemon-app` -> any `kotaemon app ...` command
-
-Index one or more files into the default file collection:
+Index one file, an entire directory, or zip archives:
 
 ```shell
-kotaemon docqa index ./docs/report.pdf ./docs/appendix.docx
-```
-
-List indexed files:
-
-```shell
+kotaemon docqa index ./docs/report.pdf
+kotaemon docqa index ./docs ./archive.zip --reindex
 kotaemon docqa files
 ```
 
-Run one-shot QA:
+Notes:
+
+- Directories are expanded recursively and filtered by supported file types
+- `.zip` files are extracted automatically before indexing
+- `--reindex` can replace existing indexed copies
+
+#### Ask one question
+
+Document-level QA:
 
 ```shell
-# Whole-document QA (default when --page is omitted)
 kotaemon docqa ask --file report.pdf --prompt "Summarize this document"
+```
 
-# Page-level QA (explicit page focus)
+Page-level QA:
+
+```shell
 kotaemon docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
+```
 
-# Text-focused QA (bias retrieval to an explicit snippet)
+Selected-text-focused QA:
+
+```shell
 kotaemon docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
 ```
 
-Important CLI scoping rules:
+You can also pass graph context from disk:
 
-- Omitting `--page` means whole-document QA.
-- Passing `--page <n>` enables page-level QA for that request.
-- Passing `--selected-text "..."` focuses retrieval on the provided text without forcing page 1.
-- `--file` restricts retrieval to one or more indexed files.
-- `--active-file` pins the active file for page-level context when multiple files are selected.
+```shell
+kotaemon docqa ask --graph-context-file ./graph-context.json --prompt "What should I focus on next?"
+```
 
-Shared `ask` / `chat` options:
+Common options:
 
-- `--conversation <conversation-id>`: continue an existing saved conversation.
-- `--file <file-id-or-name>`: restrict retrieval to one or more indexed files. Repeat the flag to select multiple files.
-- `--active-file <file-id-or-name>`: set the active file for page-focused QA when multiple files are selected.
-- `--page <n>`: enable page-level QA for one page. If omitted, QA uses the whole document scope.
-- `--selected-text "..."`: bias retrieval to an explicit text span without forcing page 1.
-- `--graph-context-file <path.json>`: inject graph context from a JSON object on disk.
-- `--reasoning <reasoning-id>`: temporarily override the reasoning pipeline.
-- `--llm <llm-name>`: temporarily override the chat model.
-- `--citation highlight|inline|off`: override citation rendering.
-- `--language <language>`: force the answer language for this run.
-- `--mindmap`: request mindmap output when supported by the selected reasoning pipeline.
-- `--json`: return structured JSON instead of the text UI.
+- `--conversation <id>`: continue an existing conversation
+- `--file <id-or-name>`: limit retrieval to one or more files
+- `--active-file <id-or-name>`: define the active file in multi-file page-level workflows
+- `--page <n>`: switch the request into page-level QA
+- `--selected-text "..."`: provide an explicit text anchor for retrieval
+- `--reasoning <id>`: override the reasoning pipeline for one run
+- `--llm <name>`: override the chat model for one run
+- `--citation highlight|inline|off`: control citation rendering mode
+- `--mindmap`: request mindmap output
+- `--json`: return structured JSON
 
-For multi-turn sessions:
+#### Multi-turn sessions
 
 ```shell
 kotaemon docqa chat --file report.pdf
@@ -346,7 +315,7 @@ kotaemon docqa sessions
 kotaemon docqa resume <conversation-id>
 ```
 
-Inside `kotaemon docqa chat`, you can use:
+Inside the interactive session, you can use:
 
 - `/files`
 - `/use <file>`
@@ -356,235 +325,855 @@ Inside `kotaemon docqa chat`, you can use:
 - `/history`
 - `/exit`
 
-To run the full end-to-end acceptance matrix:
+#### Acceptance and health checks
 
 ```shell
 kotaemon docqa acceptance
-# or
 kotaemon docqa check
 ```
 
-Other `docqa` command options:
+This runs the end-to-end DocQA acceptance matrix, which is useful after changing indexing, preview, knowledge graph, or CLI behavior.
 
-- `kotaemon docqa doctor --json`: inspect runtime health in structured form.
-- `kotaemon docqa index <path...> [--reindex] [--json]`: ingest local paths or URLs, optionally replacing existing indexed copies.
-- `kotaemon docqa files [--json]`: list indexed files with ids you can reuse in later commands.
-- `kotaemon docqa delete <file-id-or-name>... [--json]`: remove indexed files by id or file name.
-- `kotaemon docqa sessions [--json]`: list saved CLI/Web conversations.
-- `kotaemon docqa resume <conversation-id> [--json]`: reopen an existing interactive conversation.
-- `kotaemon docqa acceptance [--keep-artifacts] [--verbose] [--json]`: run the full acceptance matrix, optionally keeping temporary artifacts or surfacing low-level logs.
+#### Model routing and platform support
 
-If you want Codex or Claude Code to expose Kotaemon's bundled skills/commands, install the
-platform bundle after the Python packages are installed:
+Model routing:
 
 ```shell
+kotaemon modelcli init-config --output modelcli.yml
+kotaemon modelcli providers --config modelcli.yml
+kotaemon modelcli run --prompt "health check" --model gpt-4o-mini --dry-run
+```
+
+`modelcli` ships with a default routing template for OpenAI, Anthropic, Gemini, and OpenRouter.
+
+Platform support:
+
+```shell
+kotaemon platform list
 kotaemon platform install --platform codex --mode full --yes
 kotaemon platform install --platform claude-code --mode full --yes
+kotaemon platform status --platform codex
+kotaemon platform validate
 ```
+
+This is useful if you want to install the repository's assistant assets, commands, or skills into external AI coding assistant environments.
 
 ### Knowledge Graph And Retrieval (Default)
 
-Kotaemon now uses a unified default retrieval path for single-page QA:
+The default knowledge graph and retrieval path is built around `FileIndex` and conversation-scoped graph caching:
 
-- `FileIndex` is the default and only built-in index in the standard runtime.
-- The conversation knowledge graph is generated from uploaded sources and supports interactive node-to-question workflows.
-- Selecting files or graph nodes scopes QA through graph context (related file IDs/pages/chunks).
+- `ktem.index.file.FileIndex` is the default file index type
+- Uploaded documents, selected files, page context, and graph context all feed into the same QA path
+- The knowledge graph is generated per conversation and cached as part of the runtime flow
+- If the current sources do not form a single connected graph, the runtime splits them into separate maps
 
-### Legacy GraphRAG Modules (Deprecated)
+Current knowledge graph workflow:
 
-Legacy GraphRAG families (Nano/Light/MS) are no longer part of the default runtime flow.
+1. Click `Generate / Refresh Knowledge Graph` in the right-side chat panel
+2. The app generates or refreshes a mindmap from the current conversation sources
+3. If the uploaded sources belong to disconnected knowledge systems, the status area explains that they are split into separate maps
+4. Clicking a graph node updates the `Answer` panel with node summary and a suggested follow-up
+5. Clicking `Load into chat` inserts the suggested question into the chat input
+6. If you need more space, open the fullscreen graph viewer and use pan, zoom, Fit, and Reset
 
-- Existing code paths are retained for backward compatibility and custom experimentation.
-- Legacy environment variables are deprecated in `.env.example`.
-- To re-enable missing-dependency startup warnings for legacy modules, set `KH_SHOW_LEGACY_RAG_WARNINGS=true`.
-- In Docker, legacy GraphRAG dependencies are installed only when `INSTALL_LEGACY_GRAPHRAG=true` is passed at build time.
+At the moment, this module works best as a conversation-navigation, follow-up-question, and source-relationship aid rather than a replacement for the main retrieval and answer chain.
 
-### Setup Local Models (for local/private RAG)
+#### Legacy GraphRAG Modules (Deprecated)
 
-See [Local model setup](docs/local_model.md).
+Legacy GraphRAG families are no longer part of the default runtime path, but compatibility hooks are still present for migration and experimentation.
+
+- `.env.example` still contains legacy GraphRAG variable examples
+- The default single-page QA path does not depend on Nano / Light / MS GraphRAG
+- To re-enable legacy warnings, set `KH_SHOW_LEGACY_RAG_WARNINGS=true`
+- Docker builds can still install old dependencies through `INSTALL_LEGACY_GRAPHRAG=true`
+
+#### Setup Local Models (for local/private RAG)
+
+Start with [docs/local_model.md](docs/local_model.md). The most common local path is Ollama:
+
+```shell
+ollama pull qwen2.5:7b
+ollama pull nomic-embed-text
+```
+
+Then configure `.env`:
+
+```shell
+LOCAL_MODEL=qwen2.5:7b
+LOCAL_MODEL_EMBEDDINGS=nomic-embed-text
+```
+
+If you want Ollama bundled into the container, use the `ollama` target in the `Dockerfile`.
 
 ### Customize your application
 
-- In packaged installs, application data lives in your platform-specific user data directory. You can inspect the active paths with `kotaemon app doctor`.
-- In source installs, application data is stored in the local `./ktem_app_data` folder. You can back up or copy this folder to transfer your installation to a new machine.
+#### Runtime layout
 
-- For advanced users or specific use cases, you can customize these files:
-
-  - `flowsettings.py`
-  - `.env`
+- In packaged installs, config, data, and cache directories are managed by `kotaemon app init` and `kotaemon app doctor`
+- In source installs, the repository-root `flowsettings.py` is the active entrypoint and local data is written to `./ktem_app_data`
+- The default Web UI entrypoint is `app.py`, and the SSO entrypoint is `sso_app.py`
 
 #### Document Preview System
 
-The application provides advanced document preview capabilities:
+The preview system has two layers: supported upload/index formats, and the actual preview rendering path.
 
-**Supported File Types:**
+Default file collection support includes:
 
-- **PDF Files** (`.pdf`): Native PDF.js viewer with smooth scrolling and zooming
-- **Word Documents** (`.doc`, `.docx`): Auto-convert to PDF via LibreOffice
-- **PowerPoint Presentations** (`.ppt`, `.pptx`): Auto-convert to PDF via LibreOffice
-- **Excel Spreadsheets** (`.xls`, `.xlsx`): Auto-convert to PDF via LibreOffice
-- **Text Files** (`.txt`, `.md`, `.html`, `.mhtml`): Syntax-highlighted text preview
+- `.png`
+- `.jpeg`
+- `.jpg`
+- `.tiff`
+- `.tif`
+- `.pdf`
+- `.xls`
+- `.xlsx`
+- `.doc`
+- `.docx`
+- `.ppt`
+- `.pptx`
+- `.csv`
+- `.html`
+- `.mhtml`
+- `.txt`
+- `.md`
+- `.zip`
 
-**Page-Driven QA Architecture:**
+Main preview rendering paths:
 
-```
+- **PDF**: page-level preview through the bundled PDF.js viewer
+- **Office documents**: converted to PDF through LibreOffice before preview
+- **Text / Markdown / HTML**: shown through paginated text rendering
+- **PPT/PPTX**: includes additional presentation-oriented display and zoom handling
+
+The basic page-driven QA relationship looks like this:
+
+```text
 Conversation
-├── File A
-│   ├── Page 1 → Independent chat history
-│   ├── Page 2 → Independent chat history
-│   └── Page 3 → Independent chat history
-└── File B
-    ├── Page 1 → Independent chat history
-    └── Page 2 → Independent chat history
+|-- File A
+|   |-- Page 1 -> isolated page-level context
+|   |-- Page 2 -> isolated page-level context
+|   `-- Page 3 -> isolated page-level context
+`-- File B
+    |-- Page 1 -> isolated page-level context
+    `-- Page 2 -> isolated page-level context
 ```
 
-Each page maintains completely isolated conversation history, enabling precise page-specific questions.
+That means:
+
+- Changing the current page is not only a display action, it also affects page-level QA context
+- The current page, selected text, and graph node context can all influence the answer path together
 
 #### `flowsettings.py`
 
-This file contains the configuration of your application. You can use the example
-[here](flowsettings.py) as the starting point.
-
-<details>
-
-<summary>Notable settings</summary>
+The workspace [flowsettings.py](flowsettings.py) uses `build_kotaemon_settings(...)` to build the local development runtime:
 
 ```python
-# setup your preferred document store (with full-text search capabilities)
-KH_DOCSTORE=(Elasticsearch | LanceDB | SimpleFileDocumentStore)
+globals().update(
+    build_kotaemon_settings(
+        base_dir=this_dir,
+        app_data_dir=this_dir / "ktem_app_data",
+        docs_dir=this_dir / "docs",
+        mode="dev",
+    )
+)
 
-# setup your preferred vectorstore (for vector-based search)
-KH_VECTORSTORE=(ChromaDB | LanceDB | InMemory | Milvus | Qdrant)
-
-# Setup your new reasoning pipeline or modify existing one.
-KH_REASONINGS = [
-    "ktem.reasoning.simple.FullQAPipeline",
-    "ktem.reasoning.simple.FullDecomposeQAPipeline",
-    "ktem.reasoning.react.ReactAgentPipeline",
-    "ktem.reasoning.rewoo.RewooAgentPipeline",
-]
+KH_SETTINGS_SOURCE = "workspace-flowsettings"
 ```
 
-</details>
+This is usually the first place to change local default behavior, for example:
+
+- Changing the application data directory
+- Adjusting development mode and resource roots
+- Taking over the active settings source
 
 #### `.env`
 
-This file provides another way to configure your models and credentials.
+`.env` controls model wiring, credentials, and selected runtime switches. Start from [.env.example](.env.example).
 
-<details>
+Exposed variables in the current repository include:
 
-<summary>Configure model via the .env file</summary>
+- OpenAI: `OPENAI_API_BASE`, `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDINGS_MODEL`
+- Azure OpenAI: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `OPENAI_API_VERSION`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT`
+- Cohere / VoyageAI / Mistral
+- Local models: `LOCAL_MODEL`, `LOCAL_MODEL_EMBEDDINGS`
+- PDF.js: `PDFJS_VERSION_DIST`
+- Office preview: `SOFFICE_PATH`
+- Authentication: `AUTHENTICATION_METHOD`
+- Keycloak: `KEYCLOAK_SERVER_URL`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_SECRET`
 
-- Alternatively, you can configure the models via the `.env` file with the information needed to connect to the LLMs. This file is located in the folder of the application. If you don't see it, you can create one.
+If you enable Google SSO, you also need to define:
 
-- Currently, the following providers are supported:
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
 
-  - **OpenAI**
+#### `modelcli.yml`
 
-    In the `.env` file, set the `OPENAI_API_KEY` variable with your OpenAI API key in order
-    to enable access to OpenAI's models. There are other variables that can be modified,
-    please feel free to edit them to fit your case. Otherwise, the default parameter should
-    work for most people.
+If you want to separate model aliases, provider priority, and environment validation into a dedicated config, use `modelcli.yml`:
 
-    ```shell
-    OPENAI_API_BASE=https://api.openai.com/v1
-    OPENAI_API_KEY=<your OpenAI API key here>
-    OPENAI_CHAT_MODEL=gpt-3.5-turbo
-    OPENAI_EMBEDDINGS_MODEL=text-embedding-ada-002
-    ```
+```shell
+kotaemon modelcli init-config --output modelcli.yml
+kotaemon modelcli providers --config modelcli.yml
+kotaemon modelcli run --prompt "hello" --model gpt-4o-mini --dry-run
+```
 
-  - **Azure OpenAI**
+Useful scenarios:
 
-    For OpenAI models via Azure platform, you need to provide your Azure endpoint and API
-    key. Your might also need to provide your developments' name for the chat model and the
-    embedding model depending on how you set up Azure development.
+- Standardizing model aliases across a team
+- Quickly checking whether a provider key is available in the environment
+- Validating routing behavior before making a real API call
 
-    ```shell
-    AZURE_OPENAI_ENDPOINT=
-    AZURE_OPENAI_API_KEY=
-    OPENAI_API_VERSION=2024-02-15-preview
-    AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-35-turbo
-    AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=text-embedding-ada-002
-    ```
+#### Adding your own RAG pipeline
 
-  - **Local Models**
+##### Custom Reasoning Pipeline
 
-    - Using `ollama` OpenAI compatible server:
+The default reasoning pipelines currently live in:
 
-      - Install [ollama](https://github.com/ollama/ollama) and start the application.
+- `libs/ktem/ktem/reasoning/simple.py`
+- `libs/ktem/ktem/reasoning/react.py`
+- `libs/ktem/ktem/reasoning/rewoo.py`
 
-      - Pull your model, for example:
+Suggested extension path:
 
-        ```shell
-        ollama pull llama3.1:8b
-        ollama pull nomic-embed-text
-        ```
+1. Add your implementation under `libs/ktem/ktem/reasoning/`
+2. Match the interface and metadata patterns used by the existing reasoning classes
+3. Add the dotted path to `KH_REASONINGS`
+4. Expose it through the settings system so the UI or CLI can use it
 
-      - Set the model names on web UI and make it as default:
+##### Custom Indexing Pipeline
 
-        ![Models](https://raw.githubusercontent.com/Cinnamon/kotaemon/main/docs/images/models.png)
+The default file index lives in:
 
-    - Using `GGUF` with `llama-cpp-python`
+- `libs/ktem/ktem/index/file/`
 
-      You can search and download a LLM to be ran locally from the [Hugging Face Hub](https://huggingface.co/models). Currently, these model formats are supported:
+If you want a new index type, you will usually need to:
 
-      - GGUF
+1. Add the index implementation
+2. Register the type in `KH_INDEX_TYPES`
+3. Declare the runtime instance in `KH_INDICES`
+4. Connect it to preview, retrieval, conversation, and knowledge graph flows as needed
 
-        You should choose a model whose size is less than your device's memory and should leave
-        about 2 GB. For example, if you have 16 GB of RAM in total, of which 12 GB is available,
-        then you should choose a model that takes up at most 10 GB of RAM. Bigger models tend to
-        give better generation but also take more processing time.
-
-        Here are some recommendations and their size in memory:
-
-      - [Qwen1.5-1.8B-Chat-GGUF](https://huggingface.co/Qwen/Qwen1.5-1.8B-Chat-GGUF/resolve/main/qwen1_5-1_8b-chat-q8_0.gguf?download=true): around 2 GB
-
-        Add a new LlamaCpp model with the provided model name on the web UI.
-
-  </details>
-
-### Adding your own RAG pipeline
-
-#### Custom Reasoning Pipeline
-
-1. Check the default pipeline implementation in [here](libs/ktem/ktem/reasoning/simple.py). You can make quick adjustment to how the default QA pipeline work.
-2. Add new `.py` implementation in `libs/ktem/ktem/reasoning/` and later include it in `flowssettings` to enable it on the UI.
-
-#### Custom Indexing Pipeline
-
-- Check sample implementation in `libs/ktem/ktem/index/file/graph`
-
-> (more instruction WIP).
+If you only want to change the behavior of the existing file collection, you usually do not need a brand-new index type. Adjusting the existing `FileIndex` configuration is often enough.
 
 <!-- end-intro -->
 
-## Citation
-
-Please cite this project as
-
-```BibTeX
-@misc{kotaemon2024,
-    title = {Kotaemon - An open-source RAG-based tool for chatting with any content.},
-    author = {The Kotaemon Team},
-    year = {2024},
-    howpublished = {\url{https://github.com/Cinnamon/kotaemon}},
-}
-```
-
-## Star History
-
-<a href="https://star-history.com/#Cinnamon/kotaemon&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Cinnamon/kotaemon&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Cinnamon/kotaemon&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Cinnamon/kotaemon&type=Date" />
- </picture>
-</a>
-
 ## Contribution
 
-Since our project is actively being developed, we greatly value your feedback and contributions. Please see our [Contributing Guide](https://github.com/Cinnamon/kotaemon/blob/main/CONTRIBUTING.md) to get started. Thank you to all our contributors!
+If you want to continue developing inside this repository, the recommended path is source-mode development:
 
-<a href="https://github.com/Cinnamon/kotaemon/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Cinnamon/kotaemon" />
-</a>
+```shell
+pip install -e "libs/kotaemon[all]"
+pip install -e "libs/ktem"
+pre-commit install
+pytest libs/kotaemon/tests libs/ktem/ktem_tests
+```
+
+Good directories to read first:
+
+- [app.py](app.py): local development entrypoint
+- [sso_app.py](sso_app.py): SSO wrapper entrypoint
+- [libs/kotaemon/kotaemon/cli.py](libs/kotaemon/kotaemon/cli.py): all CLI entrypoints
+- [libs/ktem/ktem/docqa](libs/ktem/ktem/docqa): shared DocQA runtime
+- [libs/ktem/ktem/pages/chat](libs/ktem/ktem/pages/chat): chat page, page preview, and knowledge graph UI/service code
+
+Before submitting changes, it is a good idea to verify at least:
+
+- `kotaemon app doctor`
+- `kotaemon docqa doctor`
+- The tests related to your change
+
+If you want fuller collaboration guidance, continue updating [CONTRIBUTING.md](CONTRIBUTING.md).
+
+<p align="right"><a href="#top">Back to top</a> | <a href="#chinese">Jump to 中文</a></p>
+
+---
+
+<a id="chinese"></a>
+
+## 中文
+
+[English](#english) | [中文](#chinese)
+
+[介绍](#zh-introduction) |
+[核心功能](#zh-key-features) |
+[安装](#zh-installation) |
+[CLI 文档问答](#zh-cli-document-qa) |
+[知识图谱与检索](#zh-knowledge-graph-and-retrieval) |
+[自定义应用](#zh-customize-your-application) |
+[参与开发](#zh-contribution)
+
+> [截图占位：项目首页总览，建议展示聊天区、文档预览区和右侧知识图谱区]
+
+<a id="zh-introduction"></a>
+
+### 介绍
+
+这个仓库提供的不是单一页面示例，而是一套可以直接运行、继续二次开发、也可以通过 CLI 接入工作流的完整文档问答运行时。当前项目的核心组成包括：
+
+- 基于 Gradio 的 Web UI，支持文档上传、页面预览、问答、引用回看和知识图谱浏览
+- 与 Web UI 共享同一套运行时、索引和会话数据的 `kotaemon docqa` CLI
+- 用于多模型路由与环境校验的 `kotaemon modelcli`
+- 用于安装 Codex / Claude Code 平台资源的 `kotaemon platform`
+- 面向本地仓库开发的 `app.py`、面向 SSO 场景的 `sso_app.py`
+
+这个项目当前的设计重点是“同一份配置、同一份文档索引、同一份会话上下文可以同时服务浏览器端和命令行端”。你既可以把它当成一套现成的文档 QA 应用来用，也可以把它当成自己的 RAG 应用底座继续扩展。
+
+#### 面向使用者
+
+- 通过浏览器上传文档并进行文档级、页级、选中文本级问答
+- 在页面预览区查看 PDF、Office 文档和文本文件内容
+- 为当前会话生成知识图谱，并基于图谱节点快速构造后续问题
+- 在终端中使用 `kotaemon docqa` 复用同一套文档索引和会话
+- 使用本地模型或 API 模型运行私有 / 半私有 RAG 流程
+
+#### 面向开发者
+
+- 通过 `flowsettings.py`、`.env` 和 `modelcli.yml` 控制运行时、模型和索引行为
+- 在 `libs/ktem` 中扩展应用层 UI、DocQA 运行时、知识图谱和页面预览
+- 在 `libs/kotaemon` 中扩展 CLI、多模型路由和平台支持能力
+- 用当前仓库直接进行本地开发、Docker 部署或助手平台集成
+
+<a id="zh-key-features"></a>
+
+### 核心功能
+
+- **Web UI + CLI 共用运行时**：浏览器端和 `kotaemon docqa` 共用配置、文件索引、会话与知识图谱状态，避免两套系统分别维护。
+- **页面级文档问答**：聊天页支持 page-level 预览和页级上下文，适合“第 3 页写了什么”这类精确问题。
+- **知识图谱工作流**：右侧面板可以生成或刷新知识图谱；图谱节点支持选中、挂载上下文，并把推荐问题直接填入聊天框。
+- **全屏 Mindmap 浏览器**：知识图谱提供预览卡和全屏查看器，支持拖拽平移、滚轮缩放、放大、缩小、Fit、Reset。
+- **多格式文档处理**：默认文件集合支持 `.png`、`.jpeg`、`.jpg`、`.tiff`、`.tif`、`.pdf`、`.xls`、`.xlsx`、`.doc`、`.docx`、`.ppt`、`.pptx`、`.csv`、`.html`、`.mhtml`、`.txt`、`.md`、`.zip`。
+- **ZIP 自动展开索引**：`docqa index` 可以直接接收目录和 `.zip` 压缩包，运行时会自动提取其中受支持的文件类型继续索引。
+- **可切换的推理管线**：默认内置 `FullQAPipeline`、`FullDecomposeQAPipeline`、`ReAct`、`ReWOO` 四类推理管线。
+- **多模型与多提供商接入**：运行时支持 OpenAI、Azure OpenAI、Anthropic、Gemini、Cohere、Mistral、VoyageAI、Ollama 等模型路径；`modelcli` 额外支持跨提供商路由。
+- **引用与答案联动**：答案可附带引用，结合文档预览区回看证据位置，便于做基于原文的 QA。
+- **多种启动方式**：支持本地源码启动、打包安装启动、Docker 多目标构建，以及可选的 Google / Keycloak SSO 启动入口。
+
+> [截图占位：知识图谱预览卡 + 全屏 Mindmap 查看器]
+
+<a id="zh-installation"></a>
+
+### 安装
+
+#### 系统要求
+
+1. Python 3.10 及以上
+2. Docker
+   如果你希望通过容器运行项目，则需要 Docker
+3. LibreOffice
+   如果你需要预览 `.doc/.docx/.ppt/.pptx/.xls/.xlsx`，建议安装 LibreOffice，并在必要时通过 `SOFFICE_PATH` 指向 `soffice`
+4. PDF.js
+   仓库默认已经带有预构建 PDF.js 资源
+5. 模型提供商凭证
+   如果你使用 OpenAI、Azure OpenAI、Anthropic、Gemini、Cohere、VoyageAI 等 API，需要在 `.env` 中提供对应密钥
+
+#### 使用 Docker（推荐）
+
+当前仓库自带多阶段 `Dockerfile`，可以直接按目标构建：
+
+- `lite`
+  适合基本 Web UI / DocQA 场景
+- `full`
+  额外包含 LibreOffice、Tesseract、`unstructured` 等更完整的文档处理依赖
+- `ollama`
+  在 `full` 的基础上内置 Ollama 服务
+
+构建镜像：
+
+```bash
+docker build --target lite -t kotaemon:lite .
+docker build --target full -t kotaemon:full .
+docker build --target ollama -t kotaemon:ollama .
+```
+
+运行容器：
+
+```bash
+docker run \
+  -e GRADIO_SERVER_NAME=0.0.0.0 \
+  -e GRADIO_SERVER_PORT=7860 \
+  -v ./ktem_app_data:/app/ktem_app_data \
+  -p 7860:7860 \
+  --rm -it \
+  kotaemon:full
+```
+
+补充说明：
+
+- 默认入口脚本是 `launch.sh`
+- 容器中设置 `KH_SSO_ENABLED=true` 时会切换到 `sso_app.py`
+- 容器中设置 `KH_DEMO_MODE=true` 时会切换到 `sso_app_demo.py`
+- 如果你需要兼容旧版 GraphRAG 依赖，可以在构建时追加 `--build-arg INSTALL_LEGACY_GRAPHRAG=true`
+
+启动完成后访问 `http://localhost:7860/`。
+
+#### 不使用 Docker
+
+##### 方案 1：不克隆仓库，直接安装打包应用
+
+如果你只是想使用应用，这是最省事的路径：
+
+```shell
+pip install kotaemon-app
+```
+
+初始化并检查运行时：
+
+```shell
+kotaemon app init
+kotaemon app doctor
+```
+
+启动 Web UI：
+
+```shell
+kotaemon app run
+```
+
+这一模式下：
+
+- 配置目录、数据目录、缓存目录由运行时自动管理
+- `kotaemon app doctor` 会告诉你实际落盘路径
+- `kotaemon docqa ...` 会复用这套配置和数据目录
+
+##### 方案 2：使用仓库自带安装脚本
+
+仓库已经提供了跨平台安装脚本，会自动创建虚拟环境、安装依赖并执行基础初始化。
+
+macOS / Linux:
+
+```shell
+bash install.sh
+```
+
+Windows PowerShell:
+
+```powershell
+./install.ps1
+```
+
+如果你还希望顺手安装平台资源：
+
+```shell
+INSTALL_CODEX=1 bash install.sh
+INSTALL_CLAUDE_CODE=1 bash install.sh
+```
+
+```powershell
+./install.ps1 -InstallCodex
+./install.ps1 -InstallClaudeCode
+```
+
+##### 方案 3：源码安装，用于本地开发
+
+如果你准备直接改动仓库代码，这条路径最合适。
+
+1. 创建并激活虚拟环境
+
+```shell
+python -m venv .venv
+```
+
+macOS / Linux:
+
+```shell
+source .venv/bin/activate
+```
+
+Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+2. 安装两个核心包
+
+```shell
+pip install -e "libs/kotaemon[all]"
+pip install -e "libs/ktem"
+```
+
+3. 准备环境变量
+
+- 复制 `.env.example` 为 `.env`
+- 根据你实际使用的模型提供商填写密钥
+- 如果你需要 Office 预览，确认 `soffice` 可执行文件可被找到，或显式设置 `SOFFICE_PATH`
+
+4. 启动应用
+
+```shell
+python app.py
+```
+
+源码模式特点：
+
+- 当前仓库根目录下的 `flowsettings.py` 会作为运行时配置入口
+- 应用数据默认落在本地 `./ktem_app_data`
+- 更适合调试 UI、知识图谱、索引和推理链实现
+
+5. 可选的 SSO 启动方式
+
+如果你想通过 FastAPI 包裹 Gradio 并启用 SSO：
+
+```shell
+uvicorn sso_app:app --host 0.0.0.0 --port 7860
+```
+
+这一路径会读取：
+
+- Google SSO: `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`
+- Keycloak SSO: `AUTHENTICATION_METHOD=KEYCLOAK`、`KEYCLOAK_SERVER_URL`、`KEYCLOAK_REALM`、`KEYCLOAK_CLIENT_ID`、`KEYCLOAK_CLIENT_SECRET`
+
+<a id="zh-cli-document-qa"></a>
+
+### CLI 文档问答
+
+`kotaemon docqa` 使用的就是应用运行时本身，因此它和 Web UI 共享：
+
+- 运行时配置
+- 文件索引
+- 会话与会话恢复能力
+- 知识图谱缓存
+
+首次使用建议先检查运行时：
+
+```shell
+kotaemon app init
+kotaemon app doctor
+kotaemon docqa doctor
+```
+
+#### 索引文档
+
+索引单个文件、整个目录或压缩包：
+
+```shell
+kotaemon docqa index ./docs/report.pdf
+kotaemon docqa index ./docs ./archive.zip --reindex
+kotaemon docqa files
+```
+
+说明：
+
+- 目录会递归展开并索引受支持的文件类型
+- `.zip` 会被自动解压并筛选受支持文件
+- `--reindex` 可以覆盖已有索引副本
+
+#### 单次提问
+
+文档级问答：
+
+```shell
+kotaemon docqa ask --file report.pdf --prompt "Summarize this document"
+```
+
+页级问答：
+
+```shell
+kotaemon docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
+```
+
+选中文本优先问答：
+
+```shell
+kotaemon docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
+```
+
+也可以额外传入图谱上下文文件：
+
+```shell
+kotaemon docqa ask --graph-context-file ./graph-context.json --prompt "What should I focus on next?"
+```
+
+常用参数：
+
+- `--conversation <id>`：接着已有会话继续问
+- `--file <id-or-name>`：限制到一个或多个文件
+- `--active-file <id-or-name>`：多文件场景下指定当前页级上下文所属文件
+- `--page <n>`：切到页级 QA
+- `--selected-text "..."`：给检索提供显式文本锚点
+- `--reasoning <id>`：临时切换推理管线
+- `--llm <name>`：临时切换聊天模型
+- `--citation highlight|inline|off`：控制引用输出方式
+- `--mindmap`：请求思维导图输出
+- `--json`：输出结构化 JSON
+
+#### 多轮会话
+
+```shell
+kotaemon docqa chat --file report.pdf
+kotaemon docqa sessions
+kotaemon docqa resume <conversation-id>
+```
+
+交互式会话中支持：
+
+- `/files`
+- `/use <file>`
+- `/page <n>`
+- `/page clear`
+- `/selected-text <text>`
+- `/history`
+- `/exit`
+
+#### 验收与健康检查
+
+```shell
+kotaemon docqa acceptance
+kotaemon docqa check
+```
+
+这会跑完整的 DocQA 验收矩阵，适合在你修改索引、预览、知识图谱或 CLI 之后做回归验证。
+
+#### 模型路由与平台支持
+
+模型路由：
+
+```shell
+kotaemon modelcli init-config --output modelcli.yml
+kotaemon modelcli providers --config modelcli.yml
+kotaemon modelcli run --prompt "health check" --model gpt-4o-mini --dry-run
+```
+
+`modelcli` 默认提供 OpenAI、Anthropic、Gemini、OpenRouter 的路由配置模板。
+
+平台支持：
+
+```shell
+kotaemon platform list
+kotaemon platform install --platform codex --mode full --yes
+kotaemon platform install --platform claude-code --mode full --yes
+kotaemon platform status --platform codex
+kotaemon platform validate
+```
+
+这个能力适合把项目附带的技能、命令和平台说明安装到外部 AI coding assistant 环境里。
+
+<a id="zh-knowledge-graph-and-retrieval"></a>
+
+### 知识图谱与检索（默认路径）
+
+当前仓库默认的知识图谱与检索路径围绕 `FileIndex` 和会话级图谱缓存展开：
+
+- `ktem.index.file.FileIndex` 是默认文件索引类型
+- 文档上传、文件选择、页级上下文和图谱上下文都会进入同一条 QA 路径
+- 知识图谱按会话生成并缓存，不是独立的旁路功能
+- 如果当前来源不能组成单一连通图，运行时会自动拆成多个独立 map 展示
+
+当前知识图谱 UI 工作流：
+
+1. 在聊天页右侧点击 `Generate / Refresh Knowledge Graph`
+2. 系统根据当前会话来源生成或刷新 Mindmap
+3. 如果文档之间存在断开的知识系统，状态区会明确提示它们被拆成多个 map
+4. 点击图谱节点后，节点摘要与推荐问题会显示在 `Answer` 面板
+5. 点击 `Load into chat` 可以把该问题直接填入聊天输入框
+6. 需要更大视图时，可打开全屏图谱查看器并执行平移、缩放、Fit、Reset
+
+这个模块当前更适合作为“会话导航 + 追问入口 + 文档关联理解”工具，而不是替代原本的检索和回答链路。
+
+#### 旧版 GraphRAG 模块（已弃用）
+
+旧版 GraphRAG 家族目前不再是默认运行路径的一部分，但仓库仍保留兼容入口，方便迁移或做实验性回归。
+
+- `.env.example` 中仍保留了 legacy GraphRAG 相关变量示例
+- 默认单页 QA 流程不依赖 Nano / Light / MS GraphRAG
+- 如果你想重新显示 legacy 提示，可以设置 `KH_SHOW_LEGACY_RAG_WARNINGS=true`
+- Docker 构建时可以通过 `INSTALL_LEGACY_GRAPHRAG=true` 安装旧依赖
+
+#### 本地模型配置（用于本地 / 私有 RAG）
+
+推荐从 [docs/local_model.md](docs/local_model.md) 开始。最常见的方式是配合 Ollama：
+
+```shell
+ollama pull qwen2.5:7b
+ollama pull nomic-embed-text
+```
+
+然后在 `.env` 中配置：
+
+```shell
+LOCAL_MODEL=qwen2.5:7b
+LOCAL_MODEL_EMBEDDINGS=nomic-embed-text
+```
+
+如果你想把 Ollama 一起打进容器，可以直接构建 `Dockerfile` 里的 `ollama` 目标。
+
+<a id="zh-customize-your-application"></a>
+
+### 自定义应用
+
+#### 运行时布局
+
+- 打包安装模式下：配置、数据和缓存目录由 `kotaemon app init` / `kotaemon app doctor` 管理
+- 源码模式下：当前仓库根目录的 `flowsettings.py` 是入口，本地数据默认写入 `./ktem_app_data`
+- Web UI 默认从 `app.py` 启动，SSO 入口在 `sso_app.py`
+
+#### 文档预览系统
+
+当前项目的预览能力分为“支持上传 / 索引的文件类型”和“实际预览呈现方式”两层。
+
+默认文件集合支持上传和索引：
+
+- `.png`
+- `.jpeg`
+- `.jpg`
+- `.tiff`
+- `.tif`
+- `.pdf`
+- `.xls`
+- `.xlsx`
+- `.doc`
+- `.docx`
+- `.ppt`
+- `.pptx`
+- `.csv`
+- `.html`
+- `.mhtml`
+- `.txt`
+- `.md`
+- `.zip`
+
+当前主要预览呈现方式：
+
+- **PDF**：通过内置 PDF.js 进行页级预览
+- **Office 文档**：通过 LibreOffice 后台转换为 PDF 后预览
+- **文本 / Markdown / HTML**：以可分页文本方式展示
+- **PPT/PPTX**：带有额外的展示与缩放处理逻辑
+
+Page-driven QA 的基本关系如下：
+
+```text
+Conversation
+|-- File A
+|   |-- Page 1 -> 独立页级上下文
+|   |-- Page 2 -> 独立页级上下文
+|   `-- Page 3 -> 独立页级上下文
+`-- File B
+    |-- Page 1 -> 独立页级上下文
+    `-- Page 2 -> 独立页级上下文
+```
+
+这意味着：
+
+- 页码切换不是纯展示动作，也会影响页级问答上下文
+- 当前页、选中文本和图谱节点都可以共同影响回答路径
+
+#### `flowsettings.py`
+
+当前工作区的 [flowsettings.py](flowsettings.py) 使用 `build_kotaemon_settings(...)` 构建本地开发环境的运行时配置：
+
+```python
+globals().update(
+    build_kotaemon_settings(
+        base_dir=this_dir,
+        app_data_dir=this_dir / "ktem_app_data",
+        docs_dir=this_dir / "docs",
+        mode="dev",
+    )
+)
+
+KH_SETTINGS_SOURCE = "workspace-flowsettings"
+```
+
+如果你要改本地仓库的默认行为，通常会先从这里入手，例如：
+
+- 切换应用数据目录
+- 改变开发模式与资源根目录
+- 接管默认设置来源
+
+#### `.env`
+
+`.env` 负责模型、凭证和部分运行时开关。建议从 [.env.example](.env.example) 开始。
+
+当前仓库已经显式暴露的常见变量包括：
+
+- OpenAI: `OPENAI_API_BASE`、`OPENAI_API_KEY`、`OPENAI_CHAT_MODEL`、`OPENAI_EMBEDDINGS_MODEL`
+- Azure OpenAI: `AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_API_KEY`、`OPENAI_API_VERSION`、`AZURE_OPENAI_CHAT_DEPLOYMENT`、`AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT`
+- Cohere / VoyageAI / Mistral
+- 本地模型: `LOCAL_MODEL`、`LOCAL_MODEL_EMBEDDINGS`
+- PDF.js: `PDFJS_VERSION_DIST`
+- Office 预览: `SOFFICE_PATH`
+- 认证方式: `AUTHENTICATION_METHOD`
+- Keycloak: `KEYCLOAK_SERVER_URL`、`KEYCLOAK_CLIENT_ID`、`KEYCLOAK_REALM`、`KEYCLOAK_CLIENT_SECRET`
+
+如果你启用 Google SSO，还需要自行补充：
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+
+#### `modelcli.yml`
+
+如果你希望把“模型别名 + 提供商优先级 + 环境可用性检查”从应用运行时中拆出来统一管理，可以使用 `modelcli.yml`：
+
+```shell
+kotaemon modelcli init-config --output modelcli.yml
+kotaemon modelcli providers --config modelcli.yml
+kotaemon modelcli run --prompt "hello" --model gpt-4o-mini --dry-run
+```
+
+适合的场景：
+
+- 团队内部统一模型别名
+- 快速检查某个提供商密钥是否已经注入环境
+- 在真正调用 API 前先验证路由是否会落到预期提供商
+
+#### 添加你自己的 RAG 管线
+
+##### 自定义推理管线
+
+当前默认推理管线来自：
+
+- `libs/ktem/ktem/reasoning/simple.py`
+- `libs/ktem/ktem/reasoning/react.py`
+- `libs/ktem/ktem/reasoning/rewoo.py`
+
+扩展方式建议如下：
+
+1. 在 `libs/ktem/ktem/reasoning/` 下新增你的推理实现
+2. 为该实现提供与现有类一致的接口和元信息
+3. 把类路径加入 `KH_REASONINGS`
+4. 让它通过设置系统暴露到 UI 或 CLI
+
+##### 自定义索引管线
+
+默认文件索引位于：
+
+- `libs/ktem/ktem/index/file/`
+
+如果你要增加新的索引类型，通常需要：
+
+1. 新增索引实现
+2. 在运行时把索引类型注册到 `KH_INDEX_TYPES`
+3. 在 `KH_INDICES` 中声明实例化配置
+4. 处理它与预览、检索、会话和知识图谱的衔接关系
+
+如果你只是想改当前文件集合的行为，往往不需要另起新索引类型，直接调整现有 `FileIndex` 配置就够了。
+
+<a id="zh-contribution"></a>
+
+### 参与开发
+
+如果你要继续在这个仓库上开发，推荐从本地源码模式开始：
+
+```shell
+pip install -e "libs/kotaemon[all]"
+pip install -e "libs/ktem"
+pre-commit install
+pytest libs/kotaemon/tests libs/ktem/ktem_tests
+```
+
+几个最值得先读的目录：
+
+- [app.py](app.py)：本地开发启动入口
+- [sso_app.py](sso_app.py)：SSO 包装入口
+- [libs/kotaemon/kotaemon/cli.py](libs/kotaemon/kotaemon/cli.py)：所有 CLI 入口
+- [libs/ktem/ktem/docqa](libs/ktem/ktem/docqa)：共享 DocQA 运行时
+- [libs/ktem/ktem/pages/chat](libs/ktem/ktem/pages/chat)：聊天页、页面预览、知识图谱 UI 与服务
+
+提交改动前建议至少验证：
+
+- `kotaemon app doctor`
+- `kotaemon docqa doctor`
+- 你改动涉及的测试用例
+
+如果你需要更完整的协作说明，可以继续补充或同步更新 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+<p align="right"><a href="#top">回到顶部</a> | <a href="#english">Jump to English</a></p>
