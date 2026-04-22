@@ -1,4 +1,4 @@
-from ktem.app import BaseApp, BasePage
+from ktem.app import BaseApp, BasePage, compose_blocks_js
 
 
 class _RecorderPage(BasePage):
@@ -168,3 +168,15 @@ def test_register_child_page_ignores_non_basepage_objects():
         ("app", "register"),
         ("app", "created"),
     ]
+
+
+def test_compose_blocks_js_wraps_helper_code_in_callable_expression():
+    main_js = "function run() { return 1; }"
+    helper_js = "(function () { globalThis.__kg = true; })();"
+
+    composed = compose_blocks_js(main_js, helper_js)
+
+    assert composed.startswith("() => {")
+    assert "globalThis.__kg = true;" in composed
+    assert "function run() { return 1; }" in composed
+    assert "return run();" in composed

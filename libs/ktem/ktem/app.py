@@ -18,6 +18,32 @@ BASE_PATH = os.environ.get("GR_FILE_ROOT_PATH", "")
 _PageT = TypeVar("_PageT")
 
 
+def compose_blocks_js(main_js: str, helper_js: str = "") -> str:
+    """Compose Gradio Blocks JS into a callable expression.
+
+    `gr.Blocks(js=...)` expects a callable JavaScript expression because the
+    frontend wraps it as `(<js>)()`. When we need helper script code before the
+    main `run()` entrypoint, we must wrap both into a single function body and
+    explicitly return `run()`.
+    """
+
+    helper = (helper_js or "").strip()
+    main = (main_js or "").strip()
+    if not helper:
+        return main
+    return "\n".join(
+        [
+            "() => {",
+            helper,
+            "",
+            main,
+            "",
+            "return run();",
+            "}",
+        ]
+    )
+
+
 class BaseApp:
     """The main app of Kotaemon
 
@@ -50,8 +76,12 @@ class BaseApp:
         dir_assets = Path(__file__).parent / "assets"
         with (dir_assets / "css" / "main.css").open() as fi:
             self._css = fi.read()
+        with (dir_assets / "js" / "knowledge_graph_viewer.js").open(
+            encoding="utf-8"
+        ) as fi:
+            self._kg_viewer_js = fi.read()
         with (dir_assets / "js" / "main.js").open() as fi:
-            self._js = fi.read()
+            self._js = compose_blocks_js(fi.read(), self._kg_viewer_js)
             self._js = self._js.replace("KH_APP_VERSION", self.app_version)
         with (dir_assets / "js" / "pdf_viewer.js").open(encoding="utf-8") as fi:
             self._pdf_view_js = fi.read()

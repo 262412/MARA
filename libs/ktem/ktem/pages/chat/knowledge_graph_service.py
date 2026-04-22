@@ -80,6 +80,8 @@ def _limit_unique_strings(values: list[str], limit: int) -> list[str]:
 class GlobalKnowledgeGraphService:
     """Conversation-scoped knowledge graph service."""
 
+    EXPECTED_SCHEMA_VERSION = KnowledgeGraphBuilder.SCHEMA_VERSION
+
     def __init__(self, app, index):
         self._app = app
         self._index = index
@@ -142,16 +144,36 @@ class GlobalKnowledgeGraphService:
         safe_key = re.sub(r"[^A-Za-z0-9_\-]", "_", conversation_key)
         return self._storage_dir / f"{safe_key}.json"
 
+    @staticmethod
+    def _graph_schema_version(graph: dict[str, Any] | None) -> int:
+        if not isinstance(graph, dict):
+            return 0
+        try:
+            return int(graph.get("schema_version", 0) or 0)
+        except Exception:
+            return 0
+
     def _load_cached_state(self, conversation_id: str) -> dict[str, Any]:
         path = self._get_storage_path(conversation_id)
         if not path.exists():
-            return {"conversation_id": conversation_id, "manifest": {}, "graph": None}
+            return {
+                "conversation_id": conversation_id,
+                "schema_version": 0,
+                "manifest": {},
+                "graph": None,
+            }
         try:
             with path.open("r", encoding="utf-8") as file_obj:
                 data = json.load(file_obj)
         except Exception:
-            return {"conversation_id": conversation_id, "manifest": {}, "graph": None}
+            return {
+                "conversation_id": conversation_id,
+                "schema_version": 0,
+                "manifest": {},
+                "graph": None,
+            }
         data.setdefault("conversation_id", conversation_id)
+        data.setdefault("schema_version", 0)
         data.setdefault("manifest", {})
         data.setdefault("graph", None)
         return data
@@ -554,6 +576,11 @@ class GlobalKnowledgeGraphService:
             cached_state = self._load_cached_state(conversation_id)
             cached_manifest = cached_state.get("manifest", {}) or {}
             cached_graph = cached_state.get("graph")
+            cached_schema_version = int(
+                cached_state.get("schema_version")
+                or self._graph_schema_version(cached_graph)
+                or 0
+            )
             missing_count = max(0, len(source_ids) - len(valid_source_ids))
 
             if not valid_source_ids:
@@ -574,12 +601,22 @@ class GlobalKnowledgeGraphService:
                     "support_chunk_ids": {},
                 }
 
-            is_fresh = bool(cached_graph) and cached_manifest == manifest
+            is_fresh = (
+                bool(cached_graph)
+                and cached_manifest == manifest
+                and cached_schema_version == self.EXPECTED_SCHEMA_VERSION
+            )
             graph: dict[str, Any] | None
+            schema_outdated = (
+                bool(cached_graph)
+                and cached_manifest == manifest
+                and cached_schema_version != self.EXPECTED_SCHEMA_VERSION
+            )
             if force_rebuild:
                 graph = self._build_conversation_graph(conversation_id, sources)
                 cached_state = {
                     "conversation_id": conversation_id,
+                    "schema_version": self.EXPECTED_SCHEMA_VERSION,
                     "manifest": manifest,
                     "graph": graph,
                 }
@@ -601,10 +638,23 @@ class GlobalKnowledgeGraphService:
                 html_content = self._render_graph_html(graph, focus_file_id, status)
 
             if status == "ready":
+                map_count = len(graph.get("maps", []) if graph else []) if graph else 0
+                if map_count > 1:
+                    status_message = (
+                        f"Ready: {len(valid_source_ids)} sources split into "
+                        f"{map_count} separate maps because some uploads do not form "
+                        "one connected knowledge system."
+                    )
+                else:
+                    status_message = (
+                        f"Ready: {len(valid_source_ids)} sources, "
+                        f"{len(graph.get('systems', []) if graph else [])} "
+                        "knowledge systems."
+                    )
+            elif status == "stale" and schema_outdated and graph:
                 status_message = (
-                    f"Ready: {len(valid_source_ids)} sources, "
-                    f"{len(graph.get('systems', []) if graph else [])} "
-                    "knowledge systems."
+                    "Stale: cached graph uses an older schema. Refresh the "
+                    "knowledge graph to rebuild the v2 mind map."
                 )
             elif status == "stale" and graph:
                 status_message = (

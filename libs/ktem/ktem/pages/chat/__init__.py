@@ -542,9 +542,9 @@ class ChatPage(BasePage):
 
                 self.upload_scope_hint = gr.Markdown(
                     (
-                        "**Sources in this conversation are treated as related "
-                        "by default.** If files are weakly related, the "
-                        "knowledge graph will split them into separate systems."
+                        "**Upload files from the same knowledge system when "
+                        "possible.** If some sources are only weakly related, "
+                        "the knowledge graph will split them into separate maps."
                     ),
                     elem_id="chat-upload-hint",
                 )
@@ -728,7 +728,7 @@ class ChatPage(BasePage):
                     self.kg_answer_hint = gr.HTML(
                         value=(
                             "<div class='kg-answer-hint kg-answer-hint--empty'>"
-                            "Select a node in the knowledge graph tree to pin "
+                            "Select a node in the knowledge graph mind map to pin "
                             "context and get a suggested question."
                             "</div>"
                         ),

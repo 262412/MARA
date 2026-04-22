@@ -597,7 +597,7 @@ function run() {
 
     if (!payload || typeof payload !== "object") {
       hintContainer.innerHTML =
-        "<div class='kg-answer-hint kg-answer-hint--empty'>Select a node in the knowledge graph tree to pin context and get a suggested question.</div>";
+        "<div class='kg-answer-hint kg-answer-hint--empty'>Select a node in the knowledge graph mind map to pin context and load a draft question.</div>";
       return;
     }
 
@@ -605,22 +605,32 @@ function run() {
     const label = String(payload.node_label || graphContext.label || "Selected node").trim();
     const summary = String(payload.summary || "").trim();
     const suggestedQuestion = String(
-      payload.prompt || payload.suggested_question || ""
+      payload.fill_question || payload.suggested_question || payload.prompt || ""
     ).trim();
-    const rawNodeType = String(payload.node_type || graphContext.type || "").trim();
+    const rawNodeType = String(
+      payload.node_role || payload.node_type || graphContext.node_role || graphContext.type || ""
+    ).trim();
     const nodeTypeMap = {
       knowledge_root: "Root",
-      knowledge_system: "Knowledge System",
-      file_summary: "File",
-      knowledge_point: "Knowledge Point",
+      knowledge_map: "Knowledge Map",
+      component: "Component",
+      knowledge_system: "Component",
+      theme: "Theme",
       system_relation: "Theme",
+      subtheme: "Subtheme",
+      file_summary: "Subtheme",
+      knowledge_point: "Knowledge Point",
     };
     const nodeStyleClassMap = {
       knowledge_root: "kg-tree-node--root",
-      knowledge_system: "kg-tree-node--system",
-      file_summary: "kg-tree-node--file",
-      knowledge_point: "kg-tree-node--point",
+      knowledge_map: "kg-tree-node--root",
+      component: "kg-tree-node--component",
+      knowledge_system: "kg-tree-node--component",
+      theme: "kg-tree-node--theme",
       system_relation: "kg-tree-node--theme",
+      subtheme: "kg-tree-node--subtheme",
+      file_summary: "kg-tree-node--subtheme",
+      knowledge_point: "kg-tree-node--point",
     };
     const nodeType = nodeTypeMap[rawNodeType] || (rawNodeType || "Node");
     const nodeStyleClass =
@@ -636,9 +646,9 @@ function run() {
         ${summary ? `<p class="kg-answer-hint__summary">${escapeHtml(summary)}</p>` : ""}
         ${
           suggestedQuestion
-            ? `<div class="kg-answer-hint__actions"><button type="button" class="kg-answer-hint__ask kg-tree-node--file" data-kg-fill-question="${escapeHtml(
+            ? `<div class="kg-answer-hint__actions"><button type="button" class="kg-answer-hint__ask ${nodeStyleClass}" data-kg-fill-question="${escapeHtml(
                 suggestedQuestion
-              )}">Use this in answer box</button></div>`
+              )}">Load into chat</button></div>`
             : ""
         }
       </div>
@@ -859,6 +869,256 @@ function run() {
     });
   }
 
+  function bindKnowledgeGraphViewer() {
+    const graphPanel = document.querySelector("#knowledge-graph-plot");
+    const shell = graphPanel?.querySelector(".knowledge-graph-shell");
+    const overlay = shell?.querySelector("[data-kg-viewer-overlay='true']");
+    const dialog = overlay?.querySelector(".kg-viewer-dialog");
+    const viewport = overlay?.querySelector("[data-kg-viewer-viewport='true']");
+    const stage = overlay?.querySelector("[data-kg-viewer-stage='true']");
+    const utils = globalThis.KnowledgeGraphViewerUtils;
+
+    if (
+      !graphPanel ||
+      !shell ||
+      !overlay ||
+      !dialog ||
+      !viewport ||
+      !stage ||
+      !utils ||
+      shell.dataset.kgViewerBound === "true"
+    ) {
+      return;
+    }
+    shell.dataset.kgViewerBound = "true";
+
+    let viewState = { scale: 1, translateX: 0, translateY: 0 };
+    let pointerState = null;
+    let suppressClick = false;
+
+    const applyStageTransform = () => {
+      stage.style.transform = `translate(${viewState.translateX}px, ${viewState.translateY}px) scale(${viewState.scale})`;
+      stage.setAttribute("data-kg-scale", String(viewState.scale));
+    };
+
+    const fitViewer = () => {
+      const previousTransform = stage.style.transform;
+      stage.style.transform = "translate(0px, 0px) scale(1)";
+      const viewportRect = viewport.getBoundingClientRect();
+      const contentWidth = Math.max(stage.scrollWidth || 0, stage.offsetWidth || 0, 1);
+      const contentHeight = Math.max(stage.scrollHeight || 0, stage.offsetHeight || 0, 1);
+      viewState = utils.computeFittedTransform({
+        viewportWidth: viewportRect.width || viewport.clientWidth || 1,
+        viewportHeight: viewportRect.height || viewport.clientHeight || 1,
+        contentWidth,
+        contentHeight,
+        padding: 40,
+        minScale: 0.35,
+        maxScale: 2.5,
+      });
+      if (!previousTransform && !Number.isFinite(viewState.scale)) {
+        viewState = { scale: 1, translateX: 0, translateY: 0 };
+      }
+      applyStageTransform();
+    };
+
+    const openViewer = () => {
+      overlay.hidden = false;
+      shell.classList.add("is-viewer-open");
+      document.body.classList.add("kg-viewer-open");
+      window.requestAnimationFrame(() => {
+        fitViewer();
+      });
+    };
+
+    const closeViewer = () => {
+      overlay.hidden = true;
+      shell.classList.remove("is-viewer-open");
+      document.body.classList.remove("kg-viewer-open");
+      pointerState = null;
+      suppressClick = false;
+      viewport.classList.remove("is-dragging");
+    };
+
+    const queueClickReset = () => {
+      window.setTimeout(() => {
+        suppressClick = false;
+      }, 140);
+    };
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        closeViewer();
+      }
+    });
+
+    shell.addEventListener("click", (event) => {
+      const openTrigger = event.target.closest("[data-kg-open-viewer='true']");
+      if (openTrigger) {
+        event.preventDefault();
+        openViewer();
+        return;
+      }
+
+      const closeTrigger = event.target.closest("[data-kg-viewer-close='true']");
+      if (closeTrigger) {
+        event.preventDefault();
+        closeViewer();
+        return;
+      }
+
+      const actionTrigger = event.target.closest("[data-kg-viewer-action]");
+      if (!actionTrigger) {
+        return;
+      }
+      event.preventDefault();
+
+      const action = actionTrigger.getAttribute("data-kg-viewer-action") || "";
+      if (action === "fit" || action === "reset") {
+        fitViewer();
+        return;
+      }
+
+      const midpoint = {
+        cursorX: (viewport.clientWidth || 0) / 2,
+        cursorY: (viewport.clientHeight || 0) / 2,
+        minScale: 0.35,
+        maxScale: 2.5,
+        zoomStep: 0.14,
+      };
+      if (action === "zoom-in") {
+        viewState = utils.applyWheelZoom(
+          viewState,
+          Object.assign({}, midpoint, { deltaY: -120 })
+        );
+        applyStageTransform();
+        return;
+      }
+      if (action === "zoom-out") {
+        viewState = utils.applyWheelZoom(
+          viewState,
+          Object.assign({}, midpoint, { deltaY: 120 })
+        );
+        applyStageTransform();
+      }
+    });
+
+    viewport.addEventListener(
+      "click",
+      (event) => {
+        if (!suppressClick) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") {
+          event.stopImmediatePropagation();
+        }
+        suppressClick = false;
+      },
+      true
+    );
+
+    viewport.addEventListener(
+      "wheel",
+      (event) => {
+        event.preventDefault();
+        const rect = viewport.getBoundingClientRect();
+        viewState = utils.applyWheelZoom(viewState, {
+          deltaY: event.deltaY,
+          cursorX: event.clientX - rect.left,
+          cursorY: event.clientY - rect.top,
+          minScale: 0.35,
+          maxScale: 2.5,
+          zoomStep: 0.14,
+        });
+        applyStageTransform();
+      },
+      { passive: false }
+    );
+
+    viewport.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      pointerState = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        originX: viewState.translateX,
+        originY: viewState.translateY,
+        didDrag: false,
+      };
+      suppressClick = false;
+      viewport.setPointerCapture(event.pointerId);
+    });
+
+    viewport.addEventListener("pointermove", (event) => {
+      if (!pointerState || event.pointerId !== pointerState.pointerId) {
+        return;
+      }
+      if (
+        !pointerState.didDrag &&
+        !utils.hasExceededDragThreshold(
+          pointerState.startX,
+          pointerState.startY,
+          event.clientX,
+          event.clientY,
+          8
+        )
+      ) {
+        return;
+      }
+      pointerState.didDrag = true;
+      suppressClick = true;
+      viewport.classList.add("is-dragging");
+      viewState.translateX = pointerState.originX + (event.clientX - pointerState.startX);
+      viewState.translateY = pointerState.originY + (event.clientY - pointerState.startY);
+      applyStageTransform();
+      event.preventDefault();
+    });
+
+    const clearPointerState = (event) => {
+      if (!pointerState || event.pointerId !== pointerState.pointerId) {
+        return;
+      }
+      if (viewport.hasPointerCapture?.(event.pointerId)) {
+        viewport.releasePointerCapture(event.pointerId);
+      }
+      if (pointerState.didDrag) {
+        queueClickReset();
+      } else {
+        suppressClick = false;
+      }
+      pointerState = null;
+      viewport.classList.remove("is-dragging");
+    };
+
+    viewport.addEventListener("pointerup", clearPointerState);
+    viewport.addEventListener("pointercancel", clearPointerState);
+
+    if (!globalThis._ktemKnowledgeGraphEscapeBound) {
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") {
+          return;
+        }
+        document
+          .querySelectorAll("[data-kg-viewer-overlay='true']")
+          .forEach((node) => {
+            if (!(node instanceof HTMLElement) || node.hidden) {
+              return;
+            }
+            node.hidden = true;
+          });
+        document
+          .querySelectorAll(".knowledge-graph-shell.is-viewer-open")
+          .forEach((node) => node.classList.remove("is-viewer-open"));
+        document.body.classList.remove("kg-viewer-open");
+      });
+      globalThis._ktemKnowledgeGraphEscapeBound = true;
+    }
+  }
+
   function applyIconOnlyButtonTooltips() {
     const iconButtonHints = {
       "new-conv-button": "Start a new chat",
@@ -993,6 +1253,7 @@ function run() {
     localizeUploadDropzoneText();
     cleanupKnowledgeGraphOverlayNodes();
     cleanupHtmlInfoPanelOverlay();
+    bindKnowledgeGraphViewer();
 
     const graphPanel = document.querySelector("#knowledge-graph-plot");
     if (graphPanel && graphPanel.dataset.kgBound !== "true") {
@@ -1046,6 +1307,12 @@ function run() {
           trigger.classList.add("is-selected");
         }
         renderKnowledgeGraphAnswerHint(payload);
+        const fillQuestion = String(
+          payload.fill_question || payload.suggested_question || payload.prompt || ""
+        ).trim();
+        if (fillQuestion) {
+          fillChatInputWithoutSubmit(fillQuestion);
+        }
       });
     }
 
@@ -1080,8 +1347,6 @@ function run() {
         setChatFileClick(fileId);
       });
     }
-
-    // Drag-pan frequently suppresses click events on dense/long trees; rely on native scroll.
     syncKnowledgeGraphFocus();
   }
 
