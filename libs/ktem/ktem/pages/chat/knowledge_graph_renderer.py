@@ -102,7 +102,10 @@ class KnowledgeGraphRenderer:
         return item.get("evidence_chunk_ids", {}) or {}
 
     def _focus_matches(
-        self, item: dict[str, Any], focus_file_id: str, fallback_type: str = "knowledge_point"
+        self,
+        item: dict[str, Any],
+        focus_file_id: str,
+        fallback_type: str = "knowledge_point",
     ) -> bool:
         if not focus_file_id:
             return False
@@ -185,8 +188,7 @@ class KnowledgeGraphRenderer:
                 "kind": "map",
                 "label": "Conversation Knowledge Map",
                 "summary": (
-                    "Connected mind map built from the current conversation "
-                    "sources."
+                    "Connected mind map built from the current conversation " "sources."
                 ),
                 "related_file_ids": list(graph.get("source_ids", []) or []),
                 "component_ids": [str(item.get("id", "") or "") for item in components],
@@ -285,7 +287,9 @@ class KnowledgeGraphRenderer:
             "<div class='kg-branch__card'>",
             "<button ",
         ]
-        html_parts.append(" ".join(f"{key}='{value}'" for key, value in node_attrs.items()))
+        html_parts.append(
+            " ".join(f"{key}='{value}'" for key, value in node_attrs.items())
+        )
         html_parts.append(f">{html.escape(node_label)}</button>")
         if node_summary:
             html_parts.append(
@@ -333,9 +337,7 @@ class KnowledgeGraphRenderer:
                 "how its themes connect?"
             )
         if node_role == "component":
-            return (
-                f"Can you explain the component '{label}' and the themes it groups?"
-            )
+            return f"Can you explain the component '{label}' and the themes it groups?"
         if node_role == "theme":
             return (
                 f"Can you explain the theme '{label}' and how it connects the "
@@ -366,8 +368,7 @@ class KnowledgeGraphRenderer:
         if node_role in {"knowledge_root", "knowledge_map"}:
             return (
                 f"Please explain '{label}' using component/theme/subtheme/knowledge "
-                "point evidence first."
-                + relation_clause
+                "point evidence first." + relation_clause
             )
         return (
             f"Please explain '{label}' using current-file/current-page evidence first."
@@ -394,9 +395,15 @@ class KnowledgeGraphRenderer:
         return html.escape(json.dumps(payload, ensure_ascii=False), quote=True)
 
     def _preview_title(self, maps: list[dict[str, Any]]) -> str:
-        return "Conversation Knowledge Map" if len(maps) <= 1 else "Conversation Knowledge Maps"
+        return (
+            "Conversation Knowledge Map"
+            if len(maps) <= 1
+            else "Conversation Knowledge Maps"
+        )
 
-    def _preview_meta(self, graph: dict[str, Any], maps: list[dict[str, Any]], status: str) -> str:
+    def _preview_meta(
+        self, graph: dict[str, Any], maps: list[dict[str, Any]], status: str
+    ) -> str:
         if status != "ready":
             return "Knowledge graph is not ready yet."
         if len(maps) > 1:
@@ -559,7 +566,9 @@ class KnowledgeGraphRenderer:
             "data-kg-layout='mindmap' data-kg-schema='v2'>",
         ]
         shell_html.append(self._render_preview_card(graph, maps, status))
-        shell_html.append("<div class='kg-viewer-overlay' data-kg-viewer-overlay='true' hidden>")
+        shell_html.append(
+            "<div class='kg-viewer-overlay' data-kg-viewer-overlay='true' hidden>"
+        )
         shell_html.append("<div class='kg-viewer-dialog'>")
         shell_html.append("<div class='kg-viewer-toolbar'>")
         shell_html.append(
@@ -581,9 +590,7 @@ class KnowledgeGraphRenderer:
         shell_html.append(
             "<div class='kg-viewer-viewport' data-kg-viewer-viewport='true'>"
         )
-        shell_html.append(
-            "<div class='kg-viewer-stage' data-kg-viewer-stage='true'>"
-        )
+        shell_html.append("<div class='kg-viewer-stage' data-kg-viewer-stage='true'>")
         shell_html.append(self._render_graph_canvas(graph, focus_file_id))
         shell_html.append("</div>")
         shell_html.append("</div>")

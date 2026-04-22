@@ -35,6 +35,7 @@
 ## Task 1: Wrap Ready Graphs In A Preview Card And Fullscreen Viewer Shell
 
 **Files:**
+
 - Modify: `D:\PythonProject\kotaemon\libs\ktem\ktem_tests\test_knowledge_graph_service.py`
 - Modify: `D:\PythonProject\kotaemon\libs\ktem\ktem\pages\chat\knowledge_graph_renderer.py`
 
@@ -195,6 +196,7 @@ git commit -m "feat: add knowledge graph preview card shell"
 ## Task 2: Cover Split-State And Non-Ready Card Rendering
 
 **Files:**
+
 - Modify: `D:\PythonProject\kotaemon\libs\ktem\ktem_tests\test_knowledge_graph_service.py`
 - Modify: `D:\PythonProject\kotaemon\libs\ktem\ktem\pages\chat\knowledge_graph_renderer.py`
 
@@ -313,6 +315,7 @@ git commit -m "feat: add knowledge graph preview card states"
 ## Task 3: Add Testable Pan/Zoom Math Helpers
 
 **Files:**
+
 - Create: `D:\PythonProject\kotaemon\libs\ktem\ktem\assets\js\knowledge_graph_viewer.test.js`
 - Create: `D:\PythonProject\kotaemon\libs\ktem\ktem\assets\js\knowledge_graph_viewer.js`
 - Modify: `D:\PythonProject\kotaemon\libs\ktem\ktem\app.py`
@@ -385,24 +388,40 @@ Expected: `FAIL` with module resolution errors for `knowledge_graph_viewer.js`.
   }
 
   function computeFittedTransform(options) {
-    const availableWidth = Math.max(1, options.viewportWidth - options.padding * 2);
-    const availableHeight = Math.max(1, options.viewportHeight - options.padding * 2);
+    const availableWidth = Math.max(
+      1,
+      options.viewportWidth - options.padding * 2
+    );
+    const availableHeight = Math.max(
+      1,
+      options.viewportHeight - options.padding * 2
+    );
     const fitScale = clampGraphScale(
-      Math.min(availableWidth / options.contentWidth, availableHeight / options.contentHeight),
+      Math.min(
+        availableWidth / options.contentWidth,
+        availableHeight / options.contentHeight
+      ),
       options.minScale,
       options.maxScale
     );
     return {
       scale: fitScale,
       translateX: (options.viewportWidth - options.contentWidth * fitScale) / 2,
-      translateY: (options.viewportHeight - options.contentHeight * fitScale) / 2,
+      translateY:
+        (options.viewportHeight - options.contentHeight * fitScale) / 2,
     };
   }
 
-  function hasExceededDragThreshold(startX, startY, currentX, currentY, threshold) {
+  function hasExceededDragThreshold(
+    startX,
+    startY,
+    pointerX,
+    pointerY,
+    threshold
+  ) {
     return (
-      Math.abs(currentX - startX) >= threshold ||
-      Math.abs(currentY - startY) >= threshold
+      Math.abs(pointerX - startX) >= threshold ||
+      Math.abs(pointerY - startY) >= threshold
     );
   }
 
@@ -416,8 +435,10 @@ Expected: `FAIL` with module resolution errors for `knowledge_graph_viewer.js`.
     const ratio = nextScale / state.scale;
     return {
       scale: nextScale,
-      translateX: options.cursorX - (options.cursorX - state.translateX) * ratio,
-      translateY: options.cursorY - (options.cursorY - state.translateY) * ratio,
+      translateX:
+        options.cursorX - (options.cursorX - state.translateX) * ratio,
+      translateY:
+        options.cursorY - (options.cursorY - state.translateY) * ratio,
     };
   }
 
@@ -453,6 +474,7 @@ git commit -m "feat: add knowledge graph viewer math helpers"
 ## Task 4: Wire The Fullscreen Viewer, Preserve Node Clicks, And Add Overlay Styling
 
 **Files:**
+
 - Modify: `D:\PythonProject\kotaemon\libs\ktem\ktem\assets\js\main.js`
 - Modify: `D:\PythonProject\kotaemon\libs\ktem\ktem\assets\css\main.css`
 - Modify: `D:\PythonProject\kotaemon\libs\ktem\ktem_tests\test_knowledge_graph_service.py`
@@ -512,7 +534,14 @@ function bindKnowledgeGraphViewer() {
   const viewport = overlay?.querySelector("[data-kg-viewer-viewport='true']");
   const stage = overlay?.querySelector("[data-kg-viewer-stage='true']");
   const utils = globalThis.KnowledgeGraphViewerUtils;
-  if (!shell || !overlay || !viewport || !stage || !utils || shell.dataset.kgViewerBound === "true") {
+  if (
+    !shell ||
+    !overlay ||
+    !viewport ||
+    !stage ||
+    !utils ||
+    shell.dataset.kgViewerBound === "true"
+  ) {
     return;
   }
 
@@ -585,19 +614,23 @@ function bindKnowledgeGraphViewer() {
     }
   });
 
-  viewport.addEventListener("wheel", (event) => {
-    event.preventDefault();
-    const rect = viewport.getBoundingClientRect();
-    viewState = utils.applyWheelZoom(viewState, {
-      deltaY: event.deltaY,
-      cursorX: event.clientX - rect.left,
-      cursorY: event.clientY - rect.top,
-      minScale: 0.35,
-      maxScale: 2.5,
-      zoomStep: 0.14,
-    });
-    applyStageTransform();
-  }, { passive: false });
+  viewport.addEventListener(
+    "wheel",
+    (event) => {
+      event.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      viewState = utils.applyWheelZoom(viewState, {
+        deltaY: event.deltaY,
+        cursorX: event.clientX - rect.left,
+        cursorY: event.clientY - rect.top,
+        minScale: 0.35,
+        maxScale: 2.5,
+        zoomStep: 0.14,
+      });
+      applyStageTransform();
+    },
+    { passive: false }
+  );
 
   viewport.addEventListener("pointerdown", (event) => {
     pointerState = {
@@ -628,8 +661,10 @@ function bindKnowledgeGraphViewer() {
       return;
     }
     pointerState.didDrag = true;
-    viewState.translateX = pointerState.originX + (event.clientX - pointerState.startX);
-    viewState.translateY = pointerState.originY + (event.clientY - pointerState.startY);
+    viewState.translateX =
+      pointerState.originX + (event.clientX - pointerState.startX);
+    viewState.translateY =
+      pointerState.originY + (event.clientY - pointerState.startY);
     applyStageTransform();
   });
 
@@ -662,9 +697,11 @@ function bindKnowledgeGraphInteractions() {
   padding: 18px 20px;
   border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 34%, #d4d4d8);
-  background:
-    radial-gradient(130% 180% at 0% 0%, rgba(109, 125, 255, 0.16), transparent 52%),
-    linear-gradient(140deg, rgba(18, 24, 44, 0.98), rgba(8, 12, 22, 0.96));
+  background: radial-gradient(
+      130% 180% at 0% 0%,
+      rgba(109, 125, 255, 0.16),
+      transparent 52%
+    ), linear-gradient(140deg, rgba(18, 24, 44, 0.98), rgba(8, 12, 22, 0.96));
   text-align: left;
 }
 
@@ -688,7 +725,11 @@ function bindKnowledgeGraphInteractions() {
   gap: 12px;
   border-radius: 20px;
   border: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 30%, #334155);
-  background: linear-gradient(140deg, rgba(10, 14, 24, 0.98), rgba(6, 9, 18, 0.98));
+  background: linear-gradient(
+    140deg,
+    rgba(10, 14, 24, 0.98),
+    rgba(6, 9, 18, 0.98)
+  );
   padding: 18px;
 }
 

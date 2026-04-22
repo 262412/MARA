@@ -120,7 +120,9 @@ def test_bind_knowledge_graph_events_wires_refresh_chains():
 
     refresh_click_chain = page.knowledge_graph_refresh.calls[0]
     assert refresh_click_chain.steps[0][0] == "click"
-    assert refresh_click_chain.steps[0][1]["inputs"] == [page.chat_control.conversation_id]
+    assert refresh_click_chain.steps[0][1]["inputs"] == [
+        page.chat_control.conversation_id
+    ]
     assert refresh_click_chain.steps[0][1]["outputs"] == [
         page.plot_panel,
         page.knowledge_graph_status,

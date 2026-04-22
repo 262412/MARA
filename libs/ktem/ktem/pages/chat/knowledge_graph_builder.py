@@ -50,19 +50,25 @@ class KnowledgeGraphBuilder:
         chunk_limit: int,
     ) -> dict[str, dict[str, list[str]]]:
         pages = {
-            str(file_id or "").strip(): _limit_unique_strings(list(values or []), page_limit)
+            str(file_id or "").strip(): _limit_unique_strings(
+                list(values or []), page_limit
+            )
             for file_id, values in (support_pages or {}).items()
             if str(file_id or "").strip()
         }
         chunks = {
-            str(file_id or "").strip(): _limit_unique_strings(list(values or []), chunk_limit)
+            str(file_id or "").strip(): _limit_unique_strings(
+                list(values or []), chunk_limit
+            )
             for file_id, values in (support_chunk_ids or {}).items()
             if str(file_id or "").strip()
         }
         return {
             "support_pages": pages,
             "support_chunk_ids": chunks,
-            "evidence_pages": {file_id: list(values) for file_id, values in pages.items()},
+            "evidence_pages": {
+                file_id: list(values) for file_id, values in pages.items()
+            },
             "evidence_chunk_ids": {
                 file_id: list(values) for file_id, values in chunks.items()
             },
@@ -84,7 +90,9 @@ class KnowledgeGraphBuilder:
         return node
 
     @staticmethod
-    def _sorted_unique_keywords(points: list[dict[str, Any]], limit: int = 8) -> list[str]:
+    def _sorted_unique_keywords(
+        points: list[dict[str, Any]], limit: int = 8
+    ) -> list[str]:
         counter: Counter[str] = Counter()
         display_names: dict[str, str] = {}
         for point in points:
@@ -107,14 +115,20 @@ class KnowledgeGraphBuilder:
 
         union_find = _UnionFind([point["id"] for point in point_records])
         keyword_sets = {
-            point["id"]: {str(keyword or "").strip().lower() for keyword in point.get("keywords", []) if str(keyword or "").strip()}
+            point["id"]: {
+                str(keyword or "").strip().lower()
+                for keyword in point.get("keywords", [])
+                if str(keyword or "").strip()
+            }
             for point in point_records
         }
 
         for index, left_point in enumerate(point_records):
             left_keywords = keyword_sets.get(left_point["id"], set())
             for right_point in point_records[index + 1 :]:
-                shared = left_keywords.intersection(keyword_sets.get(right_point["id"], set()))
+                shared = left_keywords.intersection(
+                    keyword_sets.get(right_point["id"], set())
+                )
                 if shared:
                     union_find.union(left_point["id"], right_point["id"])
 
@@ -171,7 +185,9 @@ class KnowledgeGraphBuilder:
             file_id = str(file_graph.get("file_id", "") or "")
             file_name = str(file_graph.get("file_name", file_id) or file_id)
             file_keywords = list(file_graph.get("top_keywords", []) or [])
-            for index, point in enumerate(file_graph.get("knowledge_points", []) or [], start=1):
+            for index, point in enumerate(
+                file_graph.get("knowledge_points", []) or [], start=1
+            ):
                 point_id = str(point.get("id", "") or f"point::{file_id}::{index}")
                 label = str(point.get("label", "") or "").strip()
                 keywords = _limit_unique_strings(
@@ -220,8 +236,11 @@ class KnowledgeGraphBuilder:
                         "label": synthetic_label,
                         "keywords": synthetic_keywords,
                         "summary": synthetic_label,
-                        "support_pages": file_graph.get("summary_support_pages", {}) or {},
-                        "support_chunk_ids": file_graph.get("summary_support_chunk_ids", {})
+                        "support_pages": file_graph.get("summary_support_pages", {})
+                        or {},
+                        "support_chunk_ids": file_graph.get(
+                            "summary_support_chunk_ids", {}
+                        )
                         or {},
                         "synthetic": True,
                     }
@@ -255,7 +274,9 @@ class KnowledgeGraphBuilder:
             )
             if not component_label:
                 component_label = (
-                    " / ".join(component_keywords[:2]) if component_keywords else "Conversation component"
+                    " / ".join(component_keywords[:2])
+                    if component_keywords
+                    else "Conversation component"
                 )
             component_summary = (
                 f"Theme cluster centered on {component_label} across "
@@ -289,7 +310,9 @@ class KnowledgeGraphBuilder:
             component_nodes.append(component_node)
             node_index[component_id] = component_node
             self._merge_support_dict(root_support_pages, component_support_pages, 24)
-            self._merge_support_dict(root_support_chunk_ids, component_support_chunk_ids, 36)
+            self._merge_support_dict(
+                root_support_chunk_ids, component_support_chunk_ids, 36
+            )
 
             keyword_to_points: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for point in cluster_points:
@@ -297,7 +320,9 @@ class KnowledgeGraphBuilder:
                     self._service._normalize_term(keyword)
                     for keyword in point.get("keywords", [])
                 ]
-                normalized_keywords = [keyword for keyword in normalized_keywords if keyword]
+                normalized_keywords = [
+                    keyword for keyword in normalized_keywords if keyword
+                ]
                 primary_keyword = normalized_keywords[0] if normalized_keywords else ""
                 if primary_keyword:
                     keyword_to_points[primary_keyword].append(point)
@@ -307,7 +332,10 @@ class KnowledgeGraphBuilder:
             ordered_theme_keys = _limit_unique_strings(
                 [keyword for keyword in component_keywords if keyword], 4
             )
-            if "__general__" in keyword_to_points and "__general__" not in ordered_theme_keys:
+            if (
+                "__general__" in keyword_to_points
+                and "__general__" not in ordered_theme_keys
+            ):
                 ordered_theme_keys.append("__general__")
 
             assigned_point_ids: set[str] = set()
@@ -323,29 +351,38 @@ class KnowledgeGraphBuilder:
                     assigned_point_ids.update(point["id"] for point in group_points)
 
             remaining_points = [
-                point for point in cluster_points if point["id"] not in assigned_point_ids
+                point
+                for point in cluster_points
+                if point["id"] not in assigned_point_ids
             ]
             if remaining_points:
-                fallback_keyword = component_keywords[0] if component_keywords else "general"
+                fallback_keyword = (
+                    component_keywords[0] if component_keywords else "general"
+                )
                 theme_groups.append((fallback_keyword, remaining_points))
 
-            for theme_index, (theme_keyword, theme_points) in enumerate(theme_groups, start=1):
+            for theme_index, (theme_keyword, theme_points) in enumerate(
+                theme_groups, start=1
+            ):
                 theme_id = f"theme::{component_index}::{theme_index}"
                 theme_keywords = self._sorted_unique_keywords(theme_points, limit=4)
                 theme_label = theme_keyword
                 if theme_label == "__general__":
                     theme_label = (
-                        self._service._trim_sentence(theme_points[0].get("label", ""), 84)
+                        self._service._trim_sentence(
+                            theme_points[0].get("label", ""), 84
+                        )
                         if theme_points
                         else "General theme"
                     )
                 elif len(theme_points) == 1:
-                    theme_label = self._service._trim_sentence(
-                        theme_points[0].get("label", ""), 84
-                    ) or theme_keyword
-                theme_summary = (
-                    f"Theme around {theme_label} within {component_label}."
-                )
+                    theme_label = (
+                        self._service._trim_sentence(
+                            theme_points[0].get("label", ""), 84
+                        )
+                        or theme_keyword
+                    )
+                theme_summary = f"Theme around {theme_label} within {component_label}."
 
                 theme_support_pages: dict[str, list[str]] = {}
                 theme_support_chunk_ids: dict[str, list[str]] = {}
@@ -384,13 +421,19 @@ class KnowledgeGraphBuilder:
                         "source": component_id,
                         "target": theme_id,
                         "type": "component_theme",
-                        "related_file_ids": list(theme_node.get("related_file_ids", [])),
+                        "related_file_ids": list(
+                            theme_node.get("related_file_ids", [])
+                        ),
                     }
                 )
                 self._merge_support_dict(root_support_pages, theme_support_pages, 24)
-                self._merge_support_dict(root_support_chunk_ids, theme_support_chunk_ids, 36)
+                self._merge_support_dict(
+                    root_support_chunk_ids, theme_support_chunk_ids, 36
+                )
 
-                subtheme_groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+                subtheme_groups: dict[
+                    tuple[str, str], list[dict[str, Any]]
+                ] = defaultdict(list)
                 for point in theme_points:
                     signature = self._make_subtheme_signature(point, theme_keyword)
                     subtheme_groups[signature].append(point)
@@ -405,7 +448,9 @@ class KnowledgeGraphBuilder:
                     ),
                     start=1,
                 ):
-                    subtheme_id = f"subtheme::{component_index}::{theme_index}::{subtheme_index}"
+                    subtheme_id = (
+                        f"subtheme::{component_index}::{theme_index}::{subtheme_index}"
+                    )
                     subtheme_keywords = self._sorted_unique_keywords(
                         subtheme_points, limit=4
                     )
@@ -465,11 +510,17 @@ class KnowledgeGraphBuilder:
                             "source": theme_id,
                             "target": subtheme_id,
                             "type": "theme_subtheme",
-                            "related_file_ids": list(subtheme_node.get("related_file_ids", [])),
+                            "related_file_ids": list(
+                                subtheme_node.get("related_file_ids", [])
+                            ),
                         }
                     )
-                    self._merge_support_dict(root_support_pages, subtheme_support_pages, 24)
-                    self._merge_support_dict(root_support_chunk_ids, subtheme_support_chunk_ids, 36)
+                    self._merge_support_dict(
+                        root_support_pages, subtheme_support_pages, 24
+                    )
+                    self._merge_support_dict(
+                        root_support_chunk_ids, subtheme_support_chunk_ids, 36
+                    )
 
                     for point in subtheme_points:
                         point_to_component[point["id"]] = component_id
@@ -515,13 +566,16 @@ class KnowledgeGraphBuilder:
                             root_support_pages, point.get("support_pages", {}), 24
                         )
                         self._merge_support_dict(
-                            root_support_chunk_ids, point.get("support_chunk_ids", {}), 36
+                            root_support_chunk_ids,
+                            point.get("support_chunk_ids", {}),
+                            36,
                         )
 
         if not component_nodes:
             empty_root_support = self._build_support_bundle({}, {}, 24, 36)
+            root_node_id = "root::conversation"
             root_node = {
-                "id": "root::conversation",
+                "id": root_node_id,
                 "type": "knowledge_root",
                 "kind": "root",
                 "schema_version": self.SCHEMA_VERSION,
@@ -535,8 +589,8 @@ class KnowledgeGraphBuilder:
                 "point_ids": [],
                 **empty_root_support,
             }
-            node_index[root_node["id"]] = root_node
-            legacy_graph = {
+            node_index[root_node_id] = root_node
+            legacy_graph: dict[str, list[dict[str, Any]]] = {
                 "systems": [],
                 "file_cards": [],
                 "knowledge_points": [],
@@ -574,7 +628,9 @@ class KnowledgeGraphBuilder:
 
         component_to_points: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for point_node in canonical_points:
-            component_to_points[str(point_node.get("component_id", ""))].append(point_node)
+            component_to_points[str(point_node.get("component_id", ""))].append(
+                point_node
+            )
 
         file_primary_component: dict[str, str] = {}
         for file_graph in file_graphs:
@@ -629,7 +685,9 @@ class KnowledgeGraphBuilder:
                         "source": legacy_system_id,
                         "target": legacy_theme["id"],
                         "type": "system_theme",
-                        "related_file_ids": list(legacy_theme.get("related_file_ids", [])),
+                        "related_file_ids": list(
+                            legacy_theme.get("related_file_ids", [])
+                        ),
                     }
                 )
             legacy_system = {
@@ -649,7 +707,9 @@ class KnowledgeGraphBuilder:
 
         for file_graph in file_graphs:
             file_id = str(file_graph.get("file_id", "") or "")
-            primary_component_id = file_primary_component.get(file_id, component_nodes[0]["id"])
+            primary_component_id = file_primary_component.get(
+                file_id, component_nodes[0]["id"]
+            )
             legacy_system_id = component_to_legacy_system_id[primary_component_id]
             file_card = {
                 "id": f"file::{file_id}",
@@ -683,7 +743,9 @@ class KnowledgeGraphBuilder:
 
         for point_node in canonical_points:
             component_id = str(point_node.get("component_id", ""))
-            legacy_system_id = component_to_legacy_system_id.get(component_id, "system::1")
+            legacy_system_id = component_to_legacy_system_id.get(
+                component_id, "system::1"
+            )
             legacy_point = dict(point_node)
             legacy_point["system_id"] = legacy_system_id
             legacy_point["type"] = "knowledge_point"
@@ -713,7 +775,7 @@ class KnowledgeGraphBuilder:
         component_map_indices: dict[str, int] = {}
         for component in component_nodes:
             component_id = str(component.get("id", "") or "")
-            related_file_ids = {
+            related_file_id_set = {
                 str(file_id or "").strip()
                 for file_id in component.get("related_file_ids", []) or []
                 if str(file_id or "").strip()
@@ -721,7 +783,7 @@ class KnowledgeGraphBuilder:
             best_index = 0
             best_score = -1
             for index, file_set in enumerate(system_file_sets):
-                score = len(related_file_ids.intersection(file_set))
+                score = len(related_file_id_set.intersection(file_set))
                 if score > best_score:
                     best_score = score
                     best_index = index
@@ -747,7 +809,9 @@ class KnowledgeGraphBuilder:
             if component_ids:
                 for component_id in component_ids:
                     component = next(
-                        item for item in component_nodes if item.get("id") == component_id
+                        item
+                        for item in component_nodes
+                        if item.get("id") == component_id
                     )
                     self._merge_support_dict(
                         map_support_pages, component.get("support_pages", {}), 24
@@ -828,9 +892,10 @@ class KnowledgeGraphBuilder:
             map_ids.append(map_id)
             node_index[map_id] = map_node
 
+        root_node_id = "root::conversation"
         root_node = self._annotate_evidence_aliases(
             {
-                "id": "root::conversation",
+                "id": root_node_id,
                 "type": "knowledge_root",
                 "kind": "root",
                 "schema_version": self.SCHEMA_VERSION,
@@ -855,7 +920,7 @@ class KnowledgeGraphBuilder:
             24,
             36,
         )
-        node_index[root_node["id"]] = root_node
+        node_index[root_node_id] = root_node
 
         for component in component_nodes:
             node_index[component["id"]] = component
