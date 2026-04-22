@@ -580,6 +580,11 @@ def test_render_graph_html_renders_flat_v2_map_branches(monkeypatch, tmp_path):
     assert "Theme 1" in rendered
     assert "Subtheme 1" in rendered
     assert "Point 1" in rendered
+    assert "data-kg-branch-toggle='true'" in rendered
+    assert "data-kg-collapsible='true'" in rendered
+    assert rendered.count(">Theme 1</button>") == 1
+    assert rendered.count(">Subtheme 1</button>") == 1
+    assert rendered.count(">Point 1</button>") == 1
 
 
 def test_render_graph_html_shows_split_banner_for_multiple_maps(monkeypatch, tmp_path):

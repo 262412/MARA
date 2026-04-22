@@ -672,6 +672,31 @@ function run() {
     return document.querySelector("#chat-input textarea");
   }
 
+  function toggleKnowledgeGraphBranch(toggleTrigger) {
+    const branch = toggleTrigger?.closest("[data-kg-collapsible='true']");
+    if (!branch) {
+      return false;
+    }
+
+    const wasCollapsed = branch.getAttribute("data-kg-collapsed") === "true";
+    const isCollapsed = !wasCollapsed;
+    branch.setAttribute("data-kg-collapsed", isCollapsed ? "true" : "false");
+    toggleTrigger.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+
+    const expandLabel = toggleTrigger.getAttribute("data-kg-expand-label") || ">";
+    const collapseLabel =
+      toggleTrigger.getAttribute("data-kg-collapse-label") || "<";
+    toggleTrigger.textContent = isCollapsed ? expandLabel : collapseLabel;
+
+    const nodeButton = branch.querySelector("[data-kg-payload]");
+    const nodeLabel = (nodeButton?.textContent || "this branch").trim();
+    const nextAction = isCollapsed ? "Expand" : "Collapse";
+    const title = `${nextAction} branch for ${nodeLabel}`;
+    toggleTrigger.setAttribute("title", title);
+    toggleTrigger.setAttribute("aria-label", title);
+    return true;
+  }
+
   function submitChatInput() {
     const chatInput = getChatInputField();
     if (!chatInput) {
@@ -939,6 +964,8 @@ function run() {
       suppressClick = false;
       viewport.classList.remove("is-dragging");
     };
+
+    overlay._ktemCloseViewer = closeViewer;
 
     const queueClickReset = () => {
       window.setTimeout(() => {
@@ -1259,6 +1286,14 @@ function run() {
     if (graphPanel && graphPanel.dataset.kgBound !== "true") {
       graphPanel.dataset.kgBound = "true";
       graphPanel.addEventListener("click", (event) => {
+        const branchToggle = event.target.closest("[data-kg-branch-toggle='true']");
+        if (branchToggle) {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleKnowledgeGraphBranch(branchToggle);
+          return;
+        }
+
         const toggleTrigger = event.target.closest("[data-kg-toggle-points]");
         if (toggleTrigger) {
           const fileCard = toggleTrigger.closest("[data-kg-file-card]");
@@ -1310,8 +1345,20 @@ function run() {
         const fillQuestion = String(
           payload.fill_question || payload.suggested_question || payload.prompt || ""
         ).trim();
+        const viewerOverlay = trigger.closest("[data-kg-viewer-overlay='true']");
+        const shouldCloseViewer =
+          viewerOverlay instanceof HTMLElement && !viewerOverlay.hidden;
+        if (shouldCloseViewer && typeof viewerOverlay._ktemCloseViewer === "function") {
+          viewerOverlay._ktemCloseViewer();
+        }
         if (fillQuestion) {
-          fillChatInputWithoutSubmit(fillQuestion);
+          if (shouldCloseViewer) {
+            window.requestAnimationFrame(() => {
+              fillChatInputWithoutSubmit(fillQuestion);
+            });
+          } else {
+            fillChatInputWithoutSubmit(fillQuestion);
+          }
         }
       });
     }

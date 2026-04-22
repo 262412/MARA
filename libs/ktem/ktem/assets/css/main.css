@@ -1493,6 +1493,35 @@ body.kg-viewer-open {
   max-width: min(100%, 340px);
 }
 
+#knowledge-graph-plot .kg-branch__toggle {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  margin-top: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color-primary, #94a3b8) 78%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--background-fill-primary, #fff) 92%, #cbd5e1 8%);
+  color: var(--body-text-color, #e5e7eb);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+}
+
+#knowledge-graph-plot .kg-branch__toggle:hover {
+  border-color: color-mix(in srgb, var(--color-accent, #2563eb) 62%, #cbd5e1);
+  transform: translateY(-1px);
+}
+
+#knowledge-graph-plot .kg-branch[data-kg-collapsible="true"][data-kg-collapsed="true"] > .kg-branch__children {
+  display: none;
+}
+
+#knowledge-graph-plot .kg-branch[data-kg-collapsible="true"][data-kg-collapsed="true"] > .kg-branch__card .kg-branch__summary {
+  display: none;
+}
+
 #knowledge-graph-plot .kg-branch__summary {
   margin: 8px 0 0 2px;
   color: var(--body-text-color-subdued, #4b5563);
