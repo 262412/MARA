@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
+import shutil
+import subprocess
 from typing import Callable
 
 try:
@@ -201,6 +204,56 @@ def apply_deck_patch(
         applied_target_ids=applied,
         skipped=skipped,
     )
+
+
+def export_deck_pdf(
+    source_path: PathLike,
+    *,
+    output_path: PathLike | None = None,
+    soffice_path: str | None = None,
+    timeout_sec: int = 120,
+) -> Path:
+    source = Path(source_path).resolve()
+    if not source.exists():
+        raise FileNotFoundError(source)
+
+    resolved_soffice = soffice_path or os.environ.get("SOFFICE_PATH") or shutil.which("soffice")
+    if not resolved_soffice:
+        raise RuntimeError("LibreOffice is required to export slide decks to PDF.")
+
+    requested_output = Path(output_path).resolve() if output_path is not None else None
+    target_dir = requested_output.parent if requested_output is not None else source.parent
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    completed = subprocess.run(
+        [
+            str(resolved_soffice),
+            "--headless",
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            str(target_dir),
+            str(source),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=timeout_sec,
+        check=False,
+    )
+    if completed.returncode != 0:
+        details = completed.stderr.strip() or completed.stdout.strip() or "unknown error"
+        raise RuntimeError(f"LibreOffice export failed: {details}")
+
+    converted_path = target_dir / f"{source.stem}.pdf"
+    if not converted_path.exists():
+        raise RuntimeError("LibreOffice export did not create the expected PDF output.")
+
+    if requested_output is not None and converted_path != requested_output:
+        requested_output.parent.mkdir(parents=True, exist_ok=True)
+        converted_path.replace(requested_output)
+        return requested_output
+    return converted_path
 
 
 def _open_presentation(path: Path):

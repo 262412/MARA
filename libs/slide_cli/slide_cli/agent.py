@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from kotaemon.agents import ReactAgent
+from kotaemon.agents.io import AgentAction
+from kotaemon.base import LLMInterface
+from kotaemon.llms import BaseLLM, PromptTemplate
 from kotaemon.modelcli import ModelRequest, build_registry, load_runtime_config, run_completion
 
-from .deck import DeckPatch, TextReplaceOp, load_deck_snapshot
+from .config import SlideAgentConfig
+from .deck import DeckPatch, TextReplaceOp, export_deck_pdf, load_deck_snapshot
+from .tools import SlideToolContext, build_default_tools
 
 
 def _strip_fence(raw_text: str) -> str:
@@ -35,6 +40,14 @@ def _extract_json_object(raw_text: str) -> dict[str, Any] | None:
         if isinstance(parsed, dict):
             return parsed
     return None
+
+
+def _extract_final_answer_text(raw_text: str) -> str:
+    text = str(raw_text or "").strip()
+    marker = "Final Answer:"
+    if marker in text:
+        return text.split(marker, maxsplit=1)[-1].strip()
+    return text
 
 
 def _history_excerpt(events: list[dict[str, Any]], max_items: int = 6) -> str:
@@ -81,9 +94,92 @@ def _coerce_patch(payload: dict[str, Any] | None) -> DeckPatch | None:
     return DeckPatch(summary=str(patch_payload.get("summary", "")), edits=edits)
 
 
+def _collect_observations(intermediate_steps: list[tuple[Any, str]] | None) -> list[dict[str, Any]]:
+    observations: list[dict[str, Any]] = []
+    for action, observation in intermediate_steps or []:
+        if not isinstance(action, AgentAction):
+            continue
+        observations.append(
+            {
+                "tool": action.tool,
+                "input": action.tool_input,
+                "output": str(observation),
+            }
+        )
+    return observations
+
+
+def _collect_raw_responses(intermediate_steps: list[tuple[Any, str]] | None, final_text: str) -> list[str]:
+    responses = [action.log for action, _observation in intermediate_steps or [] if action]
+    if final_text and (not responses or str(responses[-1]).strip() != final_text.strip()):
+        responses.append(final_text)
+    return [str(item) for item in responses if str(item).strip()]
+
+
+SLIDE_REACT_PROMPT = PromptTemplate(
+    template=(
+        "You are Slide CLI, a slide-focused editing harness.\n"
+        "Use the available tools deliberately and keep your reasoning concise.\n"
+        "You must follow this exact format:\n\n"
+        "Question: the user request you must solve\n"
+        "Thought: reason briefly about the next best step\n"
+        "Action: the tool to call, must be one of [{tool_names}]\n"
+        "Action Input: the tool input. Use either a plain string or compact JSON.\n"
+        "Observation: the tool result\n"
+        "... (repeat Thought/Action/Action Input/Observation as needed)\n"
+        "Thought: I now know the final answer\n"
+        "Final Answer: a single JSON object with keys `assistant_response` and `patch`\n\n"
+        "Rules:\n"
+        "- `patch` must be an object like "
+        "{{\"summary\":\"what changed\",\"edits\":[{{\"slide_number\":1,\"target_id\":\"slide-1/shape-2/text\",\"before_text\":\"old\",\"after_text\":\"new\"}}]}}\n"
+        "- If no deck change is needed, return `patch` with an empty `edits` list.\n"
+        "- Tools that accept structured input should receive compact JSON in Action Input.\n"
+        "- Do not wrap the final JSON in markdown fences.\n\n"
+        "Available tools:\n"
+        "{tool_description}\n"
+        "Conversation language: {lang}\n\n"
+        "Question: {instruction}\n"
+        "Thought:{agent_scratchpad}"
+    )
+)
+
+
+class ModelCliLLM(BaseLLM):
+    model: str
+    provider: str | None = None
+    config_path: str = "modelcli.yml"
+
+    def _complete(self, prompt: str) -> LLMInterface:
+        cfg = load_runtime_config(self.config_path if Path(self.config_path).exists() else None)
+        registry = build_registry()
+        response = run_completion(
+            registry=registry,
+            cfg=cfg,
+            request=ModelRequest(prompt=prompt, model=self.model),
+            provider=self.provider,
+        )
+        return LLMInterface(text=str(response.text))
+
+    def to_langchain_format(self):
+        raise NotImplementedError("ModelCliLLM does not expose a LangChain adapter.")
+
+    def invoke(self, prompt: str, *args, **kwargs) -> LLMInterface:
+        return self._complete(prompt)
+
+    async def ainvoke(self, prompt: str, *args, **kwargs) -> LLMInterface:
+        return self._complete(prompt)
+
+    def stream(self, prompt: str, *args, **kwargs):
+        yield self._complete(prompt)
+
+    async def astream(self, prompt: str, *args, **kwargs):
+        yield self._complete(prompt)
+
+
 @dataclass(slots=True)
 class SlideAgentRunner:
     input_path: str
+    config: SlideAgentConfig | None = None
     model: str = "gpt-4o-mini"
     provider: str | None = None
     config_path: str = "modelcli.yml"
@@ -92,64 +188,69 @@ class SlideAgentRunner:
     shell_timeout_sec: int = 15
     workspace_root: Path = field(init=False)
     snapshot: Any = field(init=False)
+    tools: list[Any] = field(init=False)
+    tool_map: dict[str, Any] = field(init=False)
+    agent: ReactAgent = field(init=False)
 
     def __post_init__(self) -> None:
+        if self.config is None:
+            self.config = SlideAgentConfig(
+                cwd=self.cwd,
+                shell_timeout_sec=self.shell_timeout_sec,
+                model=self.model,
+                provider=self.provider,
+                config_path=self.config_path,
+                max_iterations=self.max_iterations,
+            )
+        self.model = self.config.model
+        self.provider = self.config.provider
+        self.config_path = self.config.config_path
+        self.max_iterations = self.config.max_iterations
+        self.shell_timeout_sec = self.config.shell_timeout_sec
         self.input_path = str(Path(self.input_path).resolve())
-        self.workspace_root = self._resolve_workspace_root(self.cwd, self.input_path)
+        self.workspace_root = self._resolve_workspace_root(self.config.cwd, self.input_path)
         self.snapshot = load_deck_snapshot(self.input_path)
+        tool_context = SlideToolContext(
+            input_path=Path(self.input_path),
+            workspace_root=self.workspace_root,
+            snapshot=self.snapshot,
+            shell_timeout_sec=self.shell_timeout_sec,
+            export_pdf_func=export_deck_pdf,
+        )
+        self.tools = build_default_tools(tool_context)
+        self.tool_map = {tool.name: tool for tool in self.tools}
+        self.agent = ReactAgent(
+            llm=ModelCliLLM(
+                model=self.model,
+                provider=self.provider,
+                config_path=self.config_path,
+            ),
+            plugins=self.tools,
+            max_iterations=self.max_iterations,
+            prompt_template=SLIDE_REACT_PROMPT,
+        )
 
     def run(self, user_prompt: str, history: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         history = list(history or [])
-        observations: list[dict[str, Any]] = []
-        raw_responses: list[str] = []
-        cfg = load_runtime_config(self.config_path if Path(self.config_path).exists() else None)
-        registry = build_registry()
+        instruction = self._build_instruction(
+            user_prompt=user_prompt,
+            history_text=_history_excerpt(history),
+        )
+        result = self.agent.run(instruction, max_iterations=self.max_iterations)
+        final_text = str(result.text or "").strip()
+        observations = _collect_observations(result.intermediate_steps)
+        raw_responses = _collect_raw_responses(result.intermediate_steps, final_text)
+        decoded = _extract_json_object(_extract_final_answer_text(final_text))
 
-        for _ in range(self.max_iterations):
-            prompt = self._build_prompt(
-                user_prompt=user_prompt,
-                history_text=_history_excerpt(history),
-                observations=observations,
-            )
-            response = run_completion(
-                registry=registry,
-                cfg=cfg,
-                request=ModelRequest(prompt=prompt, model=self.model),
-                provider=self.provider,
-            )
-            raw_responses.append(str(response.text))
-            decoded = _extract_json_object(response.text)
+        if decoded and ("assistant_response" in decoded or "patch" in decoded):
+            return {
+                "assistant_response": str(decoded.get("assistant_response", "")).strip()
+                or "Completed slide rewrite analysis.",
+                "patch": _coerce_patch(decoded),
+                "observations": observations,
+                "raw_responses": raw_responses,
+            }
 
-            if not decoded:
-                break
-
-            response_type = str(decoded.get("type", "")).strip().lower()
-            if response_type == "tool":
-                tool_name = str(decoded.get("tool", "")).strip()
-                tool_input = decoded.get("input", "")
-                try:
-                    observation_text = self._execute_tool(tool_name, tool_input)
-                except Exception as exc:
-                    observation_text = f"Tool error: {exc}"
-                observations.append(
-                    {
-                        "tool": tool_name,
-                        "input": tool_input,
-                        "output": observation_text,
-                    }
-                )
-                continue
-
-            if response_type == "final" or "assistant_response" in decoded or "patch" in decoded:
-                return {
-                    "assistant_response": str(decoded.get("assistant_response", "")).strip()
-                    or "Completed slide rewrite analysis.",
-                    "patch": _coerce_patch(decoded),
-                    "observations": observations,
-                    "raw_responses": raw_responses,
-                }
-
-        final_text = raw_responses[-1] if raw_responses else "No response generated."
         return {
             "assistant_response": final_text.strip() or "No response generated.",
             "patch": None,
@@ -157,118 +258,32 @@ class SlideAgentRunner:
             "raw_responses": raw_responses,
         }
 
-    def _build_prompt(
+    def _build_instruction(
         self,
         *,
         user_prompt: str,
         history_text: str,
-        observations: list[dict[str, Any]],
     ) -> str:
-        observation_text = "(none)"
-        if observations:
-            lines = []
-            for item in observations[-6:]:
-                lines.append(f"TOOL {item['tool']} INPUT {item['input']}")
-                lines.append(f"OBSERVATION: {item['output']}")
-            observation_text = "\n".join(lines)
-
         return (
-            "You are Slide CLI, a slide-focused coding and editing harness.\n"
-            "You may inspect the deck, inspect files in the working directory, and run limited shell commands before deciding on a final patch.\n"
-            "Available tools:\n"
-            "- inspect_deck: ignore input, returns a structured summary of the entire deck.\n"
-            "- read_slide: input is a slide number like `1`, returns one slide summary.\n"
-            "- list_files: ignore input, returns files under the current workspace root.\n"
-            "- read_file: input is a relative or absolute file path inside the workspace root.\n"
-            "- search_text: input is a text pattern, searches the deck summary.\n"
-            "- run_shell: input is a shell command to execute inside the workspace root.\n\n"
-            "Return JSON only.\n"
-            "If you need a tool, return:\n"
-            '{"type":"tool","tool":"read_slide","input":"1","reason":"brief reason"}\n'
-            "When you are done, return:\n"
-            "{"
-            '"type":"final",'
-            '"assistant_response":"short user-facing response",'
-            '"patch":{"summary":"what changed","edits":[{"slide_number":1,"target_id":"slide-1/shape-2/text","before_text":"old","after_text":"new"}]}'
-            "}\n"
-            "If no deck change is needed, return an empty edits list.\n\n"
+            "You are working inside Slide CLI.\n"
+            "Inspect the deck, optionally inspect the workspace, and then produce a structured slide patch.\n\n"
             f"Working directory: {self.workspace_root}\n"
             f"Deck path: {self.input_path}\n"
             f"Conversation history:\n{history_text}\n\n"
-            f"Tool observations:\n{observation_text}\n\n"
             f"Deck summary:\n{self.snapshot.summary_text(max_chars=180)}\n\n"
             f"User request:\n{user_prompt}\n"
         )
 
     def _execute_tool(self, tool_name: str, tool_input: Any) -> str:
         normalized = str(tool_name or "").strip()
-        if normalized == "inspect_deck":
-            return self.snapshot.summary_text(max_chars=180)
-        if normalized == "read_slide":
-            slide_number = int(str(tool_input or "1").strip())
-            for slide in self.snapshot.slides:
-                if slide.slide_number == slide_number:
-                    return slide.summary_text(max_chars=180)
-            return f"Slide {slide_number} was not found."
-        if normalized == "list_files":
-            paths = sorted(
-                str(path.relative_to(self.workspace_root))
-                for path in self.workspace_root.iterdir()
-            )
-            return "\n".join(paths[:200]) or "(no files)"
-        if normalized == "read_file":
-            path = self._resolve_workspace_path(str(tool_input or ""))
-            return path.read_text(encoding="utf-8", errors="replace")[:4000]
-        if normalized == "search_text":
-            pattern = str(tool_input or "").strip().lower()
-            if not pattern:
-                return "No pattern provided."
-            matches = [
-                line
-                for line in self.snapshot.summary_text(max_chars=240).splitlines()
-                if pattern in line.lower()
-            ]
-            return "\n".join(matches[:50]) or "No matches found."
-        if normalized == "run_shell":
-            command = str(tool_input or "").strip()
-            if not command:
-                return "No command provided."
-            completed = subprocess.run(
-                command,
-                cwd=str(self.workspace_root),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                shell=True,
-                timeout=self.shell_timeout_sec,
-            )
-            stdout = completed.stdout.strip()
-            stderr = completed.stderr.strip()
-            return (
-                f"returncode: {completed.returncode}\n"
-                f"stdout:\n{stdout or '(empty)'}\n"
-                f"stderr:\n{stderr or '(empty)'}"
-            )
-        return f"Unknown tool '{normalized}'."
+        tool = self.tool_map.get(normalized)
+        if tool is None:
+            available = ", ".join(sorted(self.tool_map))
+            return f"Unknown tool '{normalized}'. Available tools: {available}"
+        return str(tool.run(tool_input))
 
     @staticmethod
     def _resolve_workspace_root(cwd: str | None, input_path: str) -> Path:
         if cwd:
             return Path(cwd).resolve()
         return Path(input_path).resolve().parent
-
-    def _resolve_workspace_path(self, candidate: str) -> Path:
-        value = str(candidate or "").strip()
-        if not value:
-            raise FileNotFoundError("No file path provided.")
-        path = Path(value)
-        resolved = path.resolve() if path.is_absolute() else (self.workspace_root / path).resolve()
-
-        try:
-            resolved.relative_to(self.workspace_root)
-        except ValueError as exc:
-            raise PermissionError(f"Path '{resolved}' is outside the workspace root.") from exc
-
-        if not resolved.exists():
-            raise FileNotFoundError(resolved)
-        return resolved

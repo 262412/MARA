@@ -1,6 +1,13 @@
+import pytest
 from pptx import Presentation
 
-from slide_cli.deck import DeckPatch, TextReplaceOp, apply_deck_patch, load_deck_snapshot
+from slide_cli.deck import (
+    DeckPatch,
+    TextReplaceOp,
+    apply_deck_patch,
+    export_deck_pdf,
+    load_deck_snapshot,
+)
 
 
 def test_load_snapshot_and_apply_patch(tmp_path):
@@ -38,3 +45,18 @@ def test_load_snapshot_and_apply_patch(tmp_path):
     assert result.written is True
     assert result.output_path == output_path
     assert rewritten.slides[0].shapes.title.text == "Executive Quarterly Business Review"
+
+
+def test_export_deck_pdf_requires_libreoffice(monkeypatch, tmp_path):
+    source_path = tmp_path / "source.pptx"
+
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+    slide.shapes.title.text = "Quarterly Business Review"
+    presentation.save(source_path)
+
+    monkeypatch.setattr("slide_cli.deck.shutil.which", lambda _: None)
+    monkeypatch.delenv("SOFFICE_PATH", raising=False)
+
+    with pytest.raises(RuntimeError, match="LibreOffice"):
+        export_deck_pdf(source_path)

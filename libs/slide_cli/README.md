@@ -35,8 +35,11 @@ slide --help
 
 ```shell
 slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --dry-run
+slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --apply
 slide chat --file ./docs/sample.pptx
 ```
+
+Interactive chat previews deck patches first and confirms before writing. You can apply the latest patch from the REPL with `/apply` or `/apply ./out/deck.rewritten.pptx`.
 
 ## Release Model
 

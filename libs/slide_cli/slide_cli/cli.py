@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from .runtime import collect_doctor_payload, run_slide_task
+from .runtime import apply_session_patch, collect_doctor_payload, run_slide_task
 from .session_store import SlideSessionStore
 
 
@@ -65,6 +65,13 @@ def doctor(json_output):
     help="Optional output file path for an applied rewrite.",
 )
 @click.option(
+    "--apply",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Apply the generated patch to a deck copy. Without this flag, run stays in preview mode unless --output is provided.",
+)
+@click.option(
     "--dry-run",
     is_flag=True,
     default=False,
@@ -82,6 +89,28 @@ def doctor(json_output):
 )
 @click.option("--cwd", default=None, help="Working directory for session context.")
 @click.option(
+    "--approval-policy",
+    type=click.Choice(["auto", "confirm"]),
+    default="confirm",
+    show_default=True,
+    help="Approval policy for operations that may write artifacts.",
+)
+@click.option(
+    "--shell-timeout",
+    "shell_timeout_sec",
+    default=15,
+    show_default=True,
+    type=int,
+    help="Shell command timeout in seconds.",
+)
+@click.option(
+    "--max-iterations",
+    default=4,
+    show_default=True,
+    type=int,
+    help="Maximum number of agent reasoning steps.",
+)
+@click.option(
     "--json",
     "json_output",
     is_flag=True,
@@ -89,7 +118,25 @@ def doctor(json_output):
     show_default=True,
     help="Emit structured JSON output.",
 )
-def run_cmd(input_path, prompt, output, dry_run, model, provider, config_path, cwd, json_output):
+def run_cmd(
+    input_path,
+    prompt,
+    output,
+    apply,
+    dry_run,
+    model,
+    provider,
+    config_path,
+    cwd,
+    approval_policy,
+    shell_timeout_sec,
+    max_iterations,
+    json_output,
+):
+    if apply and dry_run:
+        raise click.ClickException("--apply and --dry-run cannot be used together.")
+
+    apply_mode = "apply" if apply or output else "preview"
     result = run_slide_task(
         input_path=str(input_path),
         prompt=prompt,
@@ -99,6 +146,10 @@ def run_cmd(input_path, prompt, output, dry_run, model, provider, config_path, c
         provider=provider,
         config_path=config_path,
         cwd=cwd,
+        apply_mode=apply_mode,
+        approval_policy=approval_policy,
+        shell_timeout_sec=shell_timeout_sec,
+        max_iterations=max_iterations,
     )
     if json_output:
         _echo_json(result)
@@ -111,6 +162,8 @@ def run_cmd(input_path, prompt, output, dry_run, model, provider, config_path, c
         _echo_text(f"Patch summary: {result['patch'].get('summary', '')}")
     if result.get("output_path"):
         _echo_text(f"Output: {result['output_path']}")
+    elif result.get("suggested_output_path"):
+        _echo_text(f"Preview only. Use --apply or --output to write: {result['suggested_output_path']}")
 
 
 @main.command("sessions")
@@ -137,9 +190,21 @@ def sessions_cmd(json_output):
         )
 
 
-def _run_repl(*, session_id: str, input_path: str, model: str, provider: str | None, config_path: str, cwd: str | None, json_output: bool):
+def _run_repl(
+    *,
+    session_id: str,
+    input_path: str,
+    model: str,
+    provider: str | None,
+    config_path: str,
+    cwd: str | None,
+    approval_policy: str,
+    shell_timeout_sec: int,
+    max_iterations: int,
+    json_output: bool,
+):
     _echo_text(f"Session: {session_id}")
-    _echo_text("Commands: /exit, /history")
+    _echo_text("Commands: /exit, /history, /apply [output-path]")
 
     store = SlideSessionStore()
     while True:
@@ -154,6 +219,15 @@ def _run_repl(*, session_id: str, input_path: str, model: str, provider: str | N
             continue
         if user_prompt == "/exit":
             break
+        if user_prompt.startswith("/apply"):
+            output_path = user_prompt[len("/apply") :].strip() or None
+            try:
+                applied = apply_session_patch(session_id, output_path=output_path)
+            except Exception as exc:
+                _echo_text(f"Apply failed: {exc}")
+            else:
+                _echo_text(f"Output: {applied['output_path']}")
+            continue
         if user_prompt == "/history":
             session = store.load_session(session_id)
             if session is None or not session.events:
@@ -174,11 +248,24 @@ def _run_repl(*, session_id: str, input_path: str, model: str, provider: str | N
             config_path=config_path,
             cwd=cwd,
             session_id=session_id,
+            apply_mode="confirm",
+            approval_policy=approval_policy,
+            shell_timeout_sec=shell_timeout_sec,
+            max_iterations=max_iterations,
         )
         if json_output:
             _echo_json(result)
         else:
             _echo_text(result["response"])
+            if result.get("can_apply"):
+                output_hint = result.get("suggested_output_path") or "(default output path)"
+                if click.confirm(f"Apply this patch to a deck copy now? [{output_hint}]", default=False):
+                    try:
+                        applied = apply_session_patch(session_id)
+                    except Exception as exc:
+                        _echo_text(f"Apply failed: {exc}")
+                    else:
+                        _echo_text(f"Output: {applied['output_path']}")
 
 
 @main.command("chat")
@@ -195,6 +282,28 @@ def _run_repl(*, session_id: str, input_path: str, model: str, provider: str | N
 )
 @click.option("--cwd", default=None, help="Working directory for session context.")
 @click.option(
+    "--approval-policy",
+    type=click.Choice(["auto", "confirm"]),
+    default="confirm",
+    show_default=True,
+    help="Approval policy for operations that may write artifacts.",
+)
+@click.option(
+    "--shell-timeout",
+    "shell_timeout_sec",
+    default=15,
+    show_default=True,
+    type=int,
+    help="Shell command timeout in seconds.",
+)
+@click.option(
+    "--max-iterations",
+    default=4,
+    show_default=True,
+    type=int,
+    help="Maximum number of agent reasoning steps.",
+)
+@click.option(
     "--json",
     "json_output",
     is_flag=True,
@@ -202,7 +311,18 @@ def _run_repl(*, session_id: str, input_path: str, model: str, provider: str | N
     show_default=True,
     help="Emit structured JSON output for each answer.",
 )
-def chat_cmd(input_path, prompt, model, provider, config_path, cwd, json_output):
+def chat_cmd(
+    input_path,
+    prompt,
+    model,
+    provider,
+    config_path,
+    cwd,
+    approval_policy,
+    shell_timeout_sec,
+    max_iterations,
+    json_output,
+):
     store = SlideSessionStore()
     session = store.create_session(
         mode="chat",
@@ -222,6 +342,10 @@ def chat_cmd(input_path, prompt, model, provider, config_path, cwd, json_output)
             config_path=config_path,
             cwd=cwd,
             session_id=session.session_id,
+            apply_mode="confirm",
+            approval_policy=approval_policy,
+            shell_timeout_sec=shell_timeout_sec,
+            max_iterations=max_iterations,
         )
         if json_output:
             _echo_json(result)
@@ -235,6 +359,9 @@ def chat_cmd(input_path, prompt, model, provider, config_path, cwd, json_output)
         provider=provider,
         config_path=config_path,
         cwd=cwd,
+        approval_policy=approval_policy,
+        shell_timeout_sec=shell_timeout_sec,
+        max_iterations=max_iterations,
         json_output=json_output,
     )
 
@@ -251,6 +378,28 @@ def chat_cmd(input_path, prompt, model, provider, config_path, cwd, json_output)
     help="Runtime config path.",
 )
 @click.option(
+    "--approval-policy",
+    type=click.Choice(["auto", "confirm"]),
+    default="confirm",
+    show_default=True,
+    help="Approval policy for operations that may write artifacts.",
+)
+@click.option(
+    "--shell-timeout",
+    "shell_timeout_sec",
+    default=15,
+    show_default=True,
+    type=int,
+    help="Shell command timeout in seconds.",
+)
+@click.option(
+    "--max-iterations",
+    default=4,
+    show_default=True,
+    type=int,
+    help="Maximum number of agent reasoning steps.",
+)
+@click.option(
     "--json",
     "json_output",
     is_flag=True,
@@ -258,7 +407,16 @@ def chat_cmd(input_path, prompt, model, provider, config_path, cwd, json_output)
     show_default=True,
     help="Emit structured JSON output for each answer.",
 )
-def resume_cmd(session_id, model, provider, config_path, json_output):
+def resume_cmd(
+    session_id,
+    model,
+    provider,
+    config_path,
+    approval_policy,
+    shell_timeout_sec,
+    max_iterations,
+    json_output,
+):
     store = SlideSessionStore()
     session = store.load_session(session_id)
     if session is None:
@@ -270,6 +428,9 @@ def resume_cmd(session_id, model, provider, config_path, json_output):
         provider=provider,
         config_path=config_path,
         cwd=session.cwd,
+        approval_policy=approval_policy,
+        shell_timeout_sec=shell_timeout_sec,
+        max_iterations=max_iterations,
         json_output=json_output,
     )
 

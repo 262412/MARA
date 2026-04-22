@@ -396,11 +396,19 @@ Try a dry run against a deck:
 slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --dry-run
 ```
 
+Write the resulting patch to a new deck copy:
+
+```shell
+slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --apply
+```
+
 Or open an interactive session:
 
 ```shell
 slide chat --file ./docs/sample.pptx
 ```
+
+Inside chat, `slide-cli` stays in preview mode by default and asks before writing. You can also apply the latest patch later with `/apply` or `/apply ./out/deck.rewritten.pptx`.
 
 #### Model routing and platform support
 

@@ -17,31 +17,32 @@ def test_agent_runner_can_use_tool_before_final(monkeypatch, tmp_path):
 
     responses = [
         SimpleNamespace(
-            text=json.dumps(
-                {
-                    "type": "tool",
-                    "tool": "read_slide",
-                    "input": "1",
-                }
+            text=(
+                "Thought: I should inspect the first slide before rewriting it.\n"
+                "Action: read_slide\n"
+                "Action Input: 1"
             )
         ),
         SimpleNamespace(
-            text=json.dumps(
-                {
-                    "type": "final",
-                    "assistant_response": "Reframed the title for executives.",
-                    "patch": {
-                        "summary": "Update slide title",
-                        "edits": [
-                            {
-                                "slide_number": 1,
-                                "target_id": "slide-1/shape-2/text",
-                                "before_text": "QBR",
-                                "after_text": "Executive QBR",
-                            }
-                        ],
-                    },
-                }
+            text=(
+                "Thought: I now know the final answer.\n"
+                "Final Answer: "
+                + json.dumps(
+                    {
+                        "assistant_response": "Reframed the title for executives.",
+                        "patch": {
+                            "summary": "Update slide title",
+                            "edits": [
+                                {
+                                    "slide_number": 1,
+                                    "target_id": "slide-1/shape-2/text",
+                                    "before_text": "QBR",
+                                    "after_text": "Executive QBR",
+                                }
+                            ],
+                        },
+                    }
+                )
             )
         ),
     ]
@@ -63,3 +64,46 @@ def test_agent_runner_can_use_tool_before_final(monkeypatch, tmp_path):
     assert result["patch"].summary == "Update slide title"
     assert result["patch"].edits[0].after_text == "Executive QBR"
     assert result["observations"]
+
+
+def test_agent_runner_supports_phase_one_tools(monkeypatch, tmp_path):
+    from slide_cli.config import SlideAgentConfig
+
+    deck_path = tmp_path / "deck.pptx"
+    pdf_path = tmp_path / "deck.pdf"
+
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+    slide.shapes.title.text = "QBR"
+    slide.placeholders[1].text = "Revenue is flat."
+    presentation.save(deck_path)
+
+    monkeypatch.setattr(
+        "slide_cli.agent.export_deck_pdf",
+        lambda source_path, output_path=None, **kwargs: pdf_path,
+    )
+
+    runner = SlideAgentRunner(
+        input_path=str(deck_path),
+        config=SlideAgentConfig(
+            cwd=str(tmp_path),
+            config_path="missing.yml",
+        ),
+    )
+
+    extracted = runner._execute_tool("extract_slide_text", "1")
+    review = runner._execute_tool("review_deck", "")
+    write_result = runner._execute_tool(
+        "write_file",
+        json.dumps({"path": "notes.txt", "content": "Hello from slide-cli"}),
+    )
+    export_result = runner._execute_tool(
+        "export_pdf",
+        json.dumps({"output_path": str(pdf_path)}),
+    )
+
+    assert "Revenue is flat." in extracted
+    assert "slide_count" in review
+    assert (tmp_path / "notes.txt").read_text(encoding="utf-8") == "Hello from slide-cli"
+    assert "notes.txt" in write_result
+    assert str(pdf_path) in export_result
