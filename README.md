@@ -134,6 +134,8 @@ If you want the packaged app and the standalone slide CLI together:
 pip install "kotaemon-app[slide]"
 ```
 
+This packaged runtime is the recommended phase-2 workflow for DocQA plus slide work: initialize the runtime once, inspect it with `kotaemon app doctor`, then discover the slide-specific DocQA commands with `slide docqa --help`.
+
 Initialize and inspect the runtime:
 
 ```shell
@@ -151,7 +153,7 @@ In this mode:
 
 - The runtime manages its own config, data, and cache directories
 - `kotaemon app doctor` shows the actual active paths
-- `kotaemon docqa ...` reuses the same configuration and data
+- `kotaemon docqa ...` and `slide docqa ...` reuse the same configuration and data
 
 ##### Option 1b: install the standalone slide CLI from PyPI
 
@@ -378,6 +380,8 @@ This runs the end-to-end DocQA acceptance matrix, which is useful after changing
 
 `slide` is a standalone slide-focused CLI for reviewing or rewriting `.pptx` decks from the terminal.
 
+If you installed `kotaemon-app[slide]`, the packaged runtime is the easiest way to discover the combined slide and DocQA flow. Start with `kotaemon app init`, `kotaemon app doctor`, and `slide docqa --help`.
+
 Direct package install:
 
 ```shell
@@ -388,6 +392,25 @@ Start with a runtime check:
 
 ```shell
 slide doctor
+```
+
+Top-level DocQA aliases:
+
+- `slide ask`
+- `slide index`
+- `slide files`
+- `slide docqa-sessions`
+- `slide resume-docqa`
+
+Use `slide resume` for the separate phase-1 slide-session workflow; use `slide resume-docqa` for DocQA conversation resumes.
+
+Codex users also get a slide-specific `slide-docqa*` skill family under `.codex/skills`.
+
+To explore the DocQA command group:
+
+```shell
+slide docqa --help
+slide docqa doctor
 ```
 
 Try a dry run against a deck:

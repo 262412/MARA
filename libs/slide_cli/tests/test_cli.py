@@ -11,7 +11,19 @@ def test_help_lists_core_commands():
     result = runner.invoke(main, ["--help"])
 
     assert result.exit_code == 0, result.output
-    for token in ["doctor", "run", "chat", "sessions", "resume"]:
+    for token in [
+        "doctor",
+        "run",
+        "chat",
+        "sessions",
+        "resume",
+        "docqa",
+        "ask",
+        "index",
+        "files",
+        "docqa-sessions",
+        "resume-docqa",
+    ]:
         assert token in result.output
 
 

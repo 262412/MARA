@@ -33,6 +33,24 @@ Build and validate the full chain without uploading:
 python scripts/publish_packages.py release --repository testpypi --skip-upload
 ```
 
+## Packaged Runtime Workflow
+
+The recommended phase-2 user path is to install the packaged runtime with the slide extra, initialize it once, and then discover the slide DocQA command group from that environment:
+
+```shell
+pip install "kotaemon-app[slide]"
+kotaemon app init
+kotaemon app doctor
+slide doctor
+slide docqa --help
+```
+
+For a fresh environment, run `slide docqa doctor` before your first `slide docqa index`, `slide docqa ask`, or `slide docqa chat` command.
+
+The same install also exposes the productized top-level shortcuts `slide ask`, `slide index`, `slide files`, `slide docqa-sessions`, and `slide resume-docqa`. `slide resume` remains the separate slide-session command.
+
+Codex users also get the slide-specific `slide-docqa*` skill family under `.codex/skills`.
+
 ## Publish Targets
 
 Manual TestPyPI release:

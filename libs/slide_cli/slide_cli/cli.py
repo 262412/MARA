@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+from copy import copy
 from pathlib import Path
 
 import click
+
+from .docqa_cli import docqa as docqa_group
 
 from .runtime import apply_session_patch, collect_doctor_payload, run_slide_task
 from .session_store import SlideSessionStore
@@ -25,9 +28,47 @@ def _collect_doctor_payload():
     return collect_doctor_payload()
 
 
+def _get_docqa_command(command_name: str) -> click.Command:
+    command = docqa_group.get_command(None, command_name)
+    if command is None:
+        raise RuntimeError(f"DocQA command '{command_name}' is unavailable.")
+    return command
+
+
+def _clone_docqa_command(command_name: str) -> click.Command:
+    command = _get_docqa_command(command_name)
+    return click.Command(
+        name=command.name,
+        callback=command.callback,
+        params=[copy(param) for param in command.params],
+        help=command.help,
+        short_help=command.short_help,
+        context_settings=getattr(command, "context_settings", None),
+        epilog=getattr(command, "epilog", None),
+        add_help_option=getattr(command, "add_help_option", True),
+        no_args_is_help=getattr(command, "no_args_is_help", False),
+        hidden=getattr(command, "hidden", False),
+    )
+
+
+DOCQA_TOP_LEVEL_ALIASES = {
+    "ask": "ask",
+    "index": "index",
+    "files": "files",
+    "docqa-sessions": "sessions",
+    "resume-docqa": "resume",
+}
+
+
 @click.group()
 def main():
     """Agent CLI for reviewing and rewriting slide decks."""
+
+
+main.add_command(docqa_group, "docqa")
+
+for alias_name, command_name in DOCQA_TOP_LEVEL_ALIASES.items():
+    main.add_command(_clone_docqa_command(command_name), alias_name)
 
 
 @main.command("doctor")
