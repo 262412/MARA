@@ -580,6 +580,17 @@ def test_render_graph_html_renders_flat_v2_map_branches(monkeypatch, tmp_path):
     assert "Theme 1" in rendered
     assert "Subtheme 1" in rendered
     assert "Point 1" in rendered
+    assert "data-kg-branch-toggle='true'" in rendered
+    assert "data-kg-collapsible='true'" in rendered
+    assert "class='kg-branch__self'" in rendered
+    assert "data-kg-branch-anchor='true'" in rendered
+    assert "class='kg-branch__toggle-anchor'" in rendered
+    assert "class='kg-branch__children-viewport'" in rendered
+    assert "data-kg-animate-branch='true'" in rendered
+    assert "data-kg-connector-layer='true'" in rendered
+    assert rendered.count(">Theme 1</button>") == 1
+    assert rendered.count(">Subtheme 1</button>") == 1
+    assert rendered.count(">Point 1</button>") == 1
 
 
 def test_render_graph_html_shows_split_banner_for_multiple_maps(monkeypatch, tmp_path):
@@ -626,6 +637,399 @@ def test_render_graph_html_shows_split_banner_for_multiple_maps(monkeypatch, tmp
 
     assert "kg-map-split-banner" in rendered
     assert "split into 2 separate maps" in rendered
+
+
+def test_render_graph_html_collapses_nodes_with_downstream_branching_by_default(
+    monkeypatch, tmp_path
+):
+    service = _make_service(monkeypatch, tmp_path)
+
+    graph = {
+        "schema_version": 2,
+        "source_ids": ["file-a"],
+        "maps": [
+            {
+                "id": "map::1",
+                "type": "knowledge_map",
+                "kind": "map",
+                "label": "Knowledge Map 1",
+                "summary": "Connected source set.",
+                "related_file_ids": ["file-a"],
+                "component_ids": ["component::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            }
+        ],
+        "components": [
+            {
+                "id": "component::1",
+                "type": "component",
+                "kind": "component",
+                "label": "Component 1",
+                "summary": "Linear intro",
+                "related_file_ids": ["file-a"],
+                "children": ["theme::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            }
+        ],
+        "themes": [
+            {
+                "id": "theme::1",
+                "type": "theme",
+                "kind": "theme",
+                "label": "Theme 1",
+                "summary": "Still linear",
+                "related_file_ids": ["file-a"],
+                "children": ["subtheme::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            }
+        ],
+        "subthemes": [
+            {
+                "id": "subtheme::1",
+                "type": "subtheme",
+                "kind": "subtheme",
+                "label": "Subtheme 1",
+                "summary": "First branching node",
+                "related_file_ids": ["file-a"],
+                "children": ["point::1", "point::2"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            }
+        ],
+        "knowledge_points": [
+            {
+                "id": "point::1",
+                "type": "knowledge_point",
+                "kind": "knowledge_point",
+                "label": "Point 1",
+                "related_file_ids": ["file-a"],
+                "file_id": "file-a",
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            {
+                "id": "point::2",
+                "type": "knowledge_point",
+                "kind": "knowledge_point",
+                "label": "Point 2",
+                "related_file_ids": ["file-a"],
+                "file_id": "file-a",
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+        ],
+        "node_index": {
+            "component::1": {
+                "id": "component::1",
+                "type": "component",
+                "kind": "component",
+                "label": "Component 1",
+                "summary": "Linear intro",
+                "related_file_ids": ["file-a"],
+                "children": ["theme::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            "theme::1": {
+                "id": "theme::1",
+                "type": "theme",
+                "kind": "theme",
+                "label": "Theme 1",
+                "summary": "Still linear",
+                "related_file_ids": ["file-a"],
+                "children": ["subtheme::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            "subtheme::1": {
+                "id": "subtheme::1",
+                "type": "subtheme",
+                "kind": "subtheme",
+                "label": "Subtheme 1",
+                "summary": "First branching node",
+                "related_file_ids": ["file-a"],
+                "children": ["point::1", "point::2"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            "point::1": {
+                "id": "point::1",
+                "type": "knowledge_point",
+                "kind": "knowledge_point",
+                "label": "Point 1",
+                "related_file_ids": ["file-a"],
+                "file_id": "file-a",
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            "point::2": {
+                "id": "point::2",
+                "type": "knowledge_point",
+                "kind": "knowledge_point",
+                "label": "Point 2",
+                "related_file_ids": ["file-a"],
+                "file_id": "file-a",
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+        },
+        "support_pages": {},
+        "support_chunk_ids": {},
+    }
+
+    rendered = service._render_graph_html(graph, focus_file_id="", status="ready")
+
+    assert (
+        "data-kg-node-id='component::1' data-kg-collapsible='true' "
+        "data-kg-collapsed='true'"
+    ) in rendered
+    assert (
+        "data-kg-node-id='theme::1' data-kg-collapsible='true' "
+        "data-kg-collapsed='true'"
+    ) in rendered
+    assert (
+        "data-kg-node-id='subtheme::1' data-kg-collapsible='true' "
+        "data-kg-collapsed='true'"
+    ) in rendered
+
+
+def test_render_graph_html_keeps_single_path_branches_expanded_by_default(
+    monkeypatch, tmp_path
+):
+    service = _make_service(monkeypatch, tmp_path)
+
+    graph = {
+        "schema_version": 2,
+        "source_ids": ["file-a"],
+        "maps": [
+            {
+                "id": "map::1",
+                "type": "knowledge_map",
+                "kind": "map",
+                "label": "Knowledge Map 1",
+                "summary": "Connected source set.",
+                "related_file_ids": ["file-a"],
+                "component_ids": ["component::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            }
+        ],
+        "components": [
+            {
+                "id": "component::1",
+                "type": "component",
+                "kind": "component",
+                "label": "Component 1",
+                "summary": "Linear intro",
+                "related_file_ids": ["file-a"],
+                "children": ["theme::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            }
+        ],
+        "themes": [
+            {
+                "id": "theme::1",
+                "type": "theme",
+                "kind": "theme",
+                "label": "Theme 1",
+                "summary": "Still linear",
+                "related_file_ids": ["file-a"],
+                "children": ["subtheme::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            }
+        ],
+        "subthemes": [
+            {
+                "id": "subtheme::1",
+                "type": "subtheme",
+                "kind": "subtheme",
+                "label": "Subtheme 1",
+                "summary": "Still linear",
+                "related_file_ids": ["file-a"],
+                "children": ["point::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            }
+        ],
+        "knowledge_points": [
+            {
+                "id": "point::1",
+                "type": "knowledge_point",
+                "kind": "knowledge_point",
+                "label": "Point 1",
+                "related_file_ids": ["file-a"],
+                "file_id": "file-a",
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+        ],
+        "node_index": {
+            "component::1": {
+                "id": "component::1",
+                "type": "component",
+                "kind": "component",
+                "label": "Component 1",
+                "summary": "Linear intro",
+                "related_file_ids": ["file-a"],
+                "children": ["theme::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            "theme::1": {
+                "id": "theme::1",
+                "type": "theme",
+                "kind": "theme",
+                "label": "Theme 1",
+                "summary": "Still linear",
+                "related_file_ids": ["file-a"],
+                "children": ["subtheme::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            "subtheme::1": {
+                "id": "subtheme::1",
+                "type": "subtheme",
+                "kind": "subtheme",
+                "label": "Subtheme 1",
+                "summary": "Still linear",
+                "related_file_ids": ["file-a"],
+                "children": ["point::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            "point::1": {
+                "id": "point::1",
+                "type": "knowledge_point",
+                "kind": "knowledge_point",
+                "label": "Point 1",
+                "related_file_ids": ["file-a"],
+                "file_id": "file-a",
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+        },
+        "support_pages": {},
+        "support_chunk_ids": {},
+    }
+
+    rendered = service._render_graph_html(graph, focus_file_id="", status="ready")
+
+    assert (
+        "data-kg-node-id='component::1' data-kg-collapsible='true' "
+        "data-kg-collapsed='false'"
+    ) in rendered
+    assert (
+        "data-kg-node-id='theme::1' data-kg-collapsible='true' "
+        "data-kg-collapsed='false'"
+    ) in rendered
+    assert (
+        "data-kg-node-id='subtheme::1' data-kg-collapsible='true' "
+        "data-kg-collapsed='false'"
+    ) in rendered
+
+
+def test_render_graph_html_keeps_root_open_but_collapses_second_level_branching_nodes(
+    monkeypatch, tmp_path
+):
+    service = _make_service(monkeypatch, tmp_path)
+
+    graph = {
+        "schema_version": 2,
+        "source_ids": ["file-a", "file-b"],
+        "maps": [
+            {
+                "id": "map::1",
+                "type": "knowledge_map",
+                "kind": "map",
+                "label": "Map 1",
+                "summary": "Branching map",
+                "related_file_ids": ["file-a", "file-b"],
+                "component_ids": ["component::1"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            }
+        ],
+        "components": [
+            {
+                "id": "component::1",
+                "type": "component",
+                "kind": "component",
+                "label": "Component 1",
+                "related_file_ids": ["file-a"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+                "children": ["theme::1", "theme::2"],
+            },
+        ],
+        "themes": [
+            {
+                "id": "theme::1",
+                "type": "theme",
+                "kind": "theme",
+                "label": "Theme 1",
+                "related_file_ids": ["file-a"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            {
+                "id": "theme::2",
+                "type": "theme",
+                "kind": "theme",
+                "label": "Theme 2",
+                "related_file_ids": ["file-b"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+        ],
+        "node_index": {
+            "component::1": {
+                "id": "component::1",
+                "type": "component",
+                "kind": "component",
+                "label": "Component 1",
+                "related_file_ids": ["file-a"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+                "children": ["theme::1", "theme::2"],
+            },
+            "theme::1": {
+                "id": "theme::1",
+                "type": "theme",
+                "kind": "theme",
+                "label": "Theme 1",
+                "related_file_ids": ["file-a"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+            "theme::2": {
+                "id": "theme::2",
+                "type": "theme",
+                "kind": "theme",
+                "label": "Theme 2",
+                "related_file_ids": ["file-b"],
+                "support_pages": {},
+                "support_chunk_ids": {},
+            },
+        },
+        "support_pages": {},
+        "support_chunk_ids": {},
+    }
+
+    rendered = service._render_graph_html(graph, focus_file_id="", status="ready")
+
+    assert (
+        "data-kg-node-id='root::conversation' data-kg-collapsible='true' "
+        "data-kg-collapsed='false'"
+    ) in rendered
+    assert (
+        "data-kg-node-id='component::1' data-kg-collapsible='true' "
+        "data-kg-collapsed='true'"
+    ) in rendered
 
 
 def test_render_graph_html_shows_split_summary_on_preview_card(monkeypatch, tmp_path):

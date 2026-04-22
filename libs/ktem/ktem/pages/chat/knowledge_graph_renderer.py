@@ -52,6 +52,16 @@ class KnowledgeGraphRenderer:
         "subtheme": [("knowledge_points", "knowledge_point")],
     }
 
+    _CHILD_ID_FALLBACKS = {
+        "components": ("component_ids", "children"),
+        "systems": ("system_ids",),
+        "themes": ("theme_ids", "children"),
+        "subthemes": ("subtheme_ids", "children"),
+        "knowledge_points": ("point_ids", "children"),
+        "maps": ("map_ids",),
+        "file_cards": ("file_card_ids",),
+    }
+
     def __init__(self, service):
         self._service = service
 
@@ -145,9 +155,61 @@ class KnowledgeGraphRenderer:
         raw_children = list(item.get(child_key, []) or [])
         if raw_children:
             return raw_children
-        if child_key == "components":
-            return list(item.get("component_ids", []) or item.get("children", []) or [])
-        return list(item.get("children", []) or [])
+        for fallback_key in self._CHILD_ID_FALLBACKS.get(child_key, ()):
+            fallback_children = list(item.get(fallback_key, []) or [])
+            if fallback_children:
+                return fallback_children
+        return []
+
+    def _direct_child_count(self, item: dict[str, Any], node_type: str) -> int:
+        total = 0
+        for child_key, _child_fallback in self._child_specs(node_type):
+            children = [
+                child
+                for child in list(item.get(child_key, []) or [])
+                if isinstance(child, dict)
+            ]
+            total += len(children)
+        return total
+
+    def _descends_as_single_path(
+        self, item: dict[str, Any], fallback_type: str
+    ) -> bool:
+        node_type = self._node_type(item, fallback_type)
+        child_nodes: list[tuple[dict[str, Any], str]] = []
+        for child_key, child_fallback in self._child_specs(node_type):
+            for child in list(item.get(child_key, []) or []):
+                if not isinstance(child, dict):
+                    continue
+                child_nodes.append((child, child_fallback))
+
+        if len(child_nodes) <= 1:
+            if not child_nodes:
+                return True
+            child_item, child_fallback = child_nodes[0]
+            return self._descends_as_single_path(child_item, child_fallback)
+
+        return False
+
+    def _default_collapsed(
+        self,
+        item: dict[str, Any],
+        node_role: str,
+        level: int,
+        focus_match: bool,
+        has_children: bool,
+    ) -> bool:
+        if not has_children:
+            return False
+        if node_role == "knowledge_root":
+            return False
+        if level <= 0:
+            return False
+        if focus_match:
+            return False
+        return not self._descends_as_single_path(
+            item, self._node_type(item, node_role or "knowledge_point")
+        )
 
     def _materialize_v2_item(
         self, item: dict[str, Any], graph: dict[str, Any], fallback_type: str
@@ -279,11 +341,21 @@ class KnowledgeGraphRenderer:
                 )
             children_html.append("</div>")
 
+        has_children = bool(children_html)
+        is_collapsed = self._default_collapsed(
+            item, node_role, level, focus_match, has_children
+        )
+
         html_parts = [
             f"<section class='{' '.join(branch_classes)}' "
             f"data-kg-branch-level='{level}' "
             f"data-kg-branch-type='{self._escape_attr(node_role)}' "
+            f"data-kg-node-id='{self._escape_attr(node_id)}' "
+            f"data-kg-collapsible='{'true' if has_children else 'false'}' "
+            f"data-kg-collapsed='{'true' if is_collapsed else 'false'}' "
             f"data-kg-focus-match='{'true' if focus_match else 'false'}'>",
+            "<div class='kg-branch__self' data-kg-branch-anchor='true'>",
+            "<span class='kg-branch__lead' aria-hidden='true'></span>",
             "<div class='kg-branch__card'>",
             "<button ",
         ]
@@ -296,9 +368,37 @@ class KnowledgeGraphRenderer:
                 f"<p class='kg-branch__summary'>{html.escape(node_summary)}</p>"
             )
         html_parts.append("</div>")
+        if has_children:
+            toggle_title = (
+                f"{'Expand' if is_collapsed else 'Collapse'} branch for {node_label}"
+            )
+            html_parts.append(
+                "<div class='kg-branch__toggle-anchor'>"
+                "<button type='button' class='kg-branch__toggle' "
+                "data-kg-branch-toggle='true' "
+                f"data-kg-expand-label='{html.escape('+', quote=True)}' "
+                f"data-kg-collapse-label='{html.escape('−', quote=True)}' "
+                f"aria-expanded='{'false' if is_collapsed else 'true'}' "
+                f"title='{self._escape_attr(toggle_title)}' "
+                f"aria-label='{self._escape_attr(toggle_title)}'>"
+                f"{html.escape('+' if is_collapsed else '−')}"
+                "</button>"
+                "</div>"
+            )
+        html_parts.append("</div>")
         if children_html:
+            html_parts.append(
+                "<div class='kg-branch__children-viewport' "
+                "data-kg-animate-branch='true'>"
+            )
+            html_parts.append(
+                "<svg class='kg-branch__connector-layer' "
+                "data-kg-connector-layer='true' "
+                "aria-hidden='true'></svg>"
+            )
             html_parts.append("<div class='kg-branch__children'>")
             html_parts.extend(children_html)
+            html_parts.append("</div>")
             html_parts.append("</div>")
         html_parts.append("</section>")
         return "".join(html_parts)
@@ -571,6 +671,8 @@ class KnowledgeGraphRenderer:
         )
         shell_html.append("<div class='kg-viewer-dialog'>")
         shell_html.append("<div class='kg-viewer-toolbar'>")
+        shell_html.append("<div class='kg-viewer-title'>Mindmap</div>")
+        shell_html.append("<div class='kg-viewer-toolbar__actions'>")
         shell_html.append(
             "<button type='button' data-kg-viewer-action='zoom-in'>+</button>"
         )
@@ -586,6 +688,7 @@ class KnowledgeGraphRenderer:
         shell_html.append(
             "<button type='button' data-kg-viewer-close='true'>Close</button>"
         )
+        shell_html.append("</div>")
         shell_html.append("</div>")
         shell_html.append(
             "<div class='kg-viewer-viewport' data-kg-viewer-viewport='true'>"

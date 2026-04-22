@@ -672,6 +672,328 @@ function run() {
     return document.querySelector("#chat-input textarea");
   }
 
+  function primeKnowledgeGraphBranchMeasurements(branch) {
+    const childrenViewport = branch?.querySelector(
+      ":scope > .kg-branch__children-viewport"
+    );
+    const children = childrenViewport?.querySelector(":scope > .kg-branch__children");
+    if (!childrenViewport || !children) {
+      return null;
+    }
+
+    const inlineSize = Math.max(
+      children.scrollWidth || 0,
+      children.offsetWidth || 0,
+      1
+    );
+    const blockSize = Math.max(
+      children.scrollHeight || 0,
+      children.offsetHeight || 0,
+      1
+    );
+
+    childrenViewport.style.setProperty(
+      "--kg-children-inline-size",
+      `${Math.ceil(inlineSize)}px`
+    );
+    childrenViewport.style.setProperty(
+      "--kg-children-block-size",
+      `${Math.ceil(blockSize)}px`
+    );
+    return { childrenViewport, inlineSize, blockSize };
+  }
+
+  function primeKnowledgeGraphBranchMeasurementsWithin(root) {
+    if (!root || typeof root.querySelectorAll !== "function") {
+      return;
+    }
+
+    if (root.matches?.("[data-kg-collapsible='true']")) {
+      primeKnowledgeGraphBranchMeasurements(root);
+    }
+    root
+      .querySelectorAll("[data-kg-collapsible='true']")
+      .forEach((branch) => primeKnowledgeGraphBranchMeasurements(branch));
+  }
+
+  function collectKnowledgeGraphDirectChildBranches(children) {
+    if (!children) {
+      return [];
+    }
+
+    const directChildren = [];
+    children
+      .querySelectorAll(":scope > .kg-branch__children-group")
+      .forEach((group) => {
+        group
+          .querySelectorAll(":scope > .kg-branch")
+          .forEach((branch) => directChildren.push(branch));
+      });
+    children
+      .querySelectorAll(":scope > .kg-branch")
+      .forEach((branch) => directChildren.push(branch));
+    return directChildren;
+  }
+
+  function renderKnowledgeGraphConnectorLayer(branch) {
+    const utils = globalThis.KnowledgeGraphViewerUtils;
+    const childrenViewport = branch?.querySelector(
+      ":scope > .kg-branch__children-viewport"
+    );
+    const children = childrenViewport?.querySelector(":scope > .kg-branch__children");
+    const connectorLayer = childrenViewport?.querySelector(
+      ":scope > [data-kg-connector-layer='true']"
+    );
+    const toggleAnchor = branch?.querySelector(
+      ":scope > .kg-branch__self > .kg-branch__toggle-anchor"
+    );
+    const selfAnchor =
+      branch?.querySelector(":scope > .kg-branch__self > .kg-branch__card > [data-kg-payload]") ||
+      branch?.querySelector(":scope > .kg-branch__self > .kg-branch__card") ||
+      branch?.querySelector(":scope > .kg-branch__self");
+    if (
+      !childrenViewport ||
+      !children ||
+      !connectorLayer ||
+      typeof utils?.buildConnectorPath !== "function" ||
+      typeof utils?.measureOffsetBoxWithin !== "function" ||
+      typeof utils?.computeConnectorStartY !== "function"
+    ) {
+      return;
+    }
+
+    connectorLayer.replaceChildren();
+
+    if (branch.getAttribute("data-kg-collapsed") === "true") {
+      connectorLayer.setAttribute("viewBox", "0 0 0 0");
+      return;
+    }
+
+    const viewportBox = utils.measureOffsetBoxWithin(childrenViewport, branch);
+    const toggleBox = toggleAnchor
+      ? utils.measureOffsetBoxWithin(toggleAnchor, branch)
+      : null;
+    const selfBox = selfAnchor
+      ? utils.measureOffsetBoxWithin(selfAnchor, branch)
+      : null;
+    const directChildren = collectKnowledgeGraphDirectChildBranches(children);
+    if (!viewportBox?.width || !viewportBox?.height || !directChildren.length) {
+      connectorLayer.setAttribute("viewBox", "0 0 0 0");
+      return;
+    }
+
+    const startY = utils.computeConnectorStartY({
+      viewportBox,
+      toggleBox,
+      selfBox,
+      fallbackY: 24,
+    });
+    let maxX = 1;
+    let maxY = Math.max(1, startY);
+    const namespace = "http://www.w3.org/2000/svg";
+    const childAnchors = [];
+
+    directChildren.forEach((childBranch) => {
+      const target =
+        childBranch.querySelector(
+          ":scope > .kg-branch__self > .kg-branch__card > [data-kg-payload]"
+        ) ||
+        childBranch.querySelector(":scope > .kg-branch__self > .kg-branch__card");
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const targetBox = utils.measureOffsetBoxWithin(target, branch);
+      if (!targetBox) {
+        return;
+      }
+      const endX = Math.max(10, targetBox.left - viewportBox.left);
+      const endY = targetBox.top + targetBox.height / 2 - viewportBox.top;
+      maxX = Math.max(maxX, endX + 8);
+      maxY = Math.max(maxY, endY + 8);
+      childAnchors.push({ endX, endY });
+    });
+
+    if (!childAnchors.length) {
+      connectorLayer.setAttribute("viewBox", "0 0 0 0");
+      return;
+    }
+
+    if (childAnchors.length === 1) {
+      const { endX, endY } = childAnchors[0];
+      const path = document.createElementNS(namespace, "path");
+      path.setAttribute(
+        "d",
+        utils.buildConnectorPath({ startX: 0, startY, endX, endY })
+      );
+      path.setAttribute("class", "kg-branch__connector-path");
+      connectorLayer.appendChild(path);
+    } else {
+      const childEndXs = childAnchors.map((item) => item.endX);
+      const childEndYs = childAnchors.map((item) => item.endY);
+      const trunkX = Math.max(
+        16,
+        Math.min(24, Number((Math.min(...childEndXs) * 0.24).toFixed(1)))
+      );
+      const topY = Math.min(startY, ...childEndYs);
+      const bottomY = Math.max(startY, ...childEndYs);
+
+      if (typeof utils.buildConnectorTrunkPath === "function") {
+        const trunkPath = document.createElementNS(namespace, "path");
+        trunkPath.setAttribute(
+          "d",
+          utils.buildConnectorTrunkPath({
+            startX: 0,
+            startY,
+            trunkX,
+            topY,
+            bottomY,
+          })
+        );
+        trunkPath.setAttribute(
+          "class",
+          "kg-branch__connector-path kg-branch__connector-path--trunk"
+        );
+        connectorLayer.appendChild(trunkPath);
+      }
+
+      childAnchors.forEach(({ endX, endY }) => {
+        const branchPath = document.createElementNS(namespace, "path");
+        branchPath.setAttribute(
+          "d",
+          utils.buildConnectorPath({
+            startX: trunkX,
+            startY: endY,
+            endX,
+            endY,
+          })
+        );
+        branchPath.setAttribute("class", "kg-branch__connector-path");
+        connectorLayer.appendChild(branchPath);
+      });
+    }
+
+    const width = Math.max(
+      Math.ceil(children.scrollWidth || 0),
+      Math.ceil(maxX),
+      1
+    );
+    const height = Math.max(
+      Math.ceil(children.scrollHeight || 0),
+      Math.ceil(maxY),
+      1
+    );
+    connectorLayer.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  }
+
+  function renderKnowledgeGraphConnectorLayersWithin(root) {
+    if (!root || typeof root.querySelectorAll !== "function") {
+      return;
+    }
+
+    if (root.matches?.("[data-kg-collapsible='true']")) {
+      renderKnowledgeGraphConnectorLayer(root);
+    }
+    root
+      .querySelectorAll("[data-kg-collapsible='true']")
+      .forEach((branch) => renderKnowledgeGraphConnectorLayer(branch));
+  }
+
+  function clearKnowledgeGraphConnectorRefreshTimers(root) {
+    if (!root?._ktemKgConnectorRefreshTimers?.length) {
+      return;
+    }
+    root._ktemKgConnectorRefreshTimers.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    root._ktemKgConnectorRefreshTimers = [];
+  }
+
+  function scheduleKnowledgeGraphConnectorRefresh(root, options = {}) {
+    if (!root || typeof root.querySelectorAll !== "function") {
+      return;
+    }
+
+    const utils = globalThis.KnowledgeGraphViewerUtils;
+    const delays =
+      typeof utils?.getConnectorRefreshDelays === "function"
+        ? utils.getConnectorRefreshDelays({
+            transitionMs: options.transitionMs || 320,
+          })
+        : [0, 160, 360];
+
+    clearKnowledgeGraphConnectorRefreshTimers(root);
+    root._ktemKgConnectorRefreshTimers = delays.map((delay) =>
+      window.setTimeout(() => {
+        window.requestAnimationFrame(() => {
+          primeKnowledgeGraphBranchMeasurementsWithin(root);
+          renderKnowledgeGraphConnectorLayersWithin(root);
+        });
+      }, delay)
+    );
+  }
+
+  function markKnowledgeGraphBranchAnimating(branch) {
+    if (!branch) {
+      return;
+    }
+
+    branch.setAttribute("data-kg-animating", "true");
+    if (branch._ktemKgAnimationTimer) {
+      window.clearTimeout(branch._ktemKgAnimationTimer);
+    }
+    branch._ktemKgAnimationTimer = window.setTimeout(() => {
+      branch.removeAttribute("data-kg-animating");
+      branch._ktemKgAnimationTimer = null;
+    }, 340);
+  }
+
+  function toggleKnowledgeGraphBranch(toggleTrigger) {
+    const branch = toggleTrigger?.closest("[data-kg-collapsible='true']");
+    if (!branch) {
+      return false;
+    }
+
+    const branchAnchor =
+      branch.querySelector("[data-kg-branch-anchor='true']") || branch;
+    const viewerOverlay = branch.closest("[data-kg-viewer-overlay='true']");
+    const anchorRect =
+      viewerOverlay instanceof HTMLElement && !viewerOverlay.hidden
+        ? branchAnchor.getBoundingClientRect()
+        : null;
+
+    const wasCollapsed = branch.getAttribute("data-kg-collapsed") === "true";
+    const isCollapsed = !wasCollapsed;
+    primeKnowledgeGraphBranchMeasurements(branch);
+    markKnowledgeGraphBranchAnimating(branch);
+    branch.setAttribute("data-kg-collapsed", isCollapsed ? "true" : "false");
+    toggleTrigger.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+
+    const expandLabel = toggleTrigger.getAttribute("data-kg-expand-label") || ">";
+    const collapseLabel =
+      toggleTrigger.getAttribute("data-kg-collapse-label") || "<";
+    toggleTrigger.textContent = isCollapsed ? expandLabel : collapseLabel;
+
+    const nodeButton = branch.querySelector("[data-kg-payload]");
+    const nodeLabel = (nodeButton?.textContent || "this branch").trim();
+    const nextAction = isCollapsed ? "Expand" : "Collapse";
+    const title = `${nextAction} branch for ${nodeLabel}`;
+    toggleTrigger.setAttribute("title", title);
+    toggleTrigger.setAttribute("aria-label", title);
+
+    if (
+      anchorRect &&
+      viewerOverlay instanceof HTMLElement &&
+      typeof viewerOverlay._ktemAdjustForBranchToggle === "function"
+    ) {
+      viewerOverlay._ktemAdjustForBranchToggle(branchAnchor, anchorRect);
+    }
+    scheduleKnowledgeGraphConnectorRefresh(
+      viewerOverlay instanceof HTMLElement ? viewerOverlay : branch,
+      { transitionMs: 320 }
+    );
+    return true;
+  }
+
   function submitChatInput() {
     const chatInput = getChatInputField();
     if (!chatInput) {
@@ -845,6 +1167,9 @@ function run() {
       if (event.button !== 0) {
         return;
       }
+      if (globalThis.KnowledgeGraphViewerUtils?.shouldIgnorePanTarget?.(event.target)) {
+        return;
+      }
       if (event.target.closest("input, textarea, select")) {
         return;
       }
@@ -895,10 +1220,24 @@ function run() {
     let viewState = { scale: 1, translateX: 0, translateY: 0 };
     let pointerState = null;
     let suppressClick = false;
+    let stageTransitionTimer = null;
 
     const applyStageTransform = () => {
       stage.style.transform = `translate(${viewState.translateX}px, ${viewState.translateY}px) scale(${viewState.scale})`;
       stage.setAttribute("data-kg-scale", String(viewState.scale));
+    };
+
+    const animateStageTransform = () => {
+      if (stageTransitionTimer) {
+        window.clearTimeout(stageTransitionTimer);
+      }
+      stage.style.transition = "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)";
+      stage.setAttribute("data-kg-recentering", "true");
+      stageTransitionTimer = window.setTimeout(() => {
+        stage.style.transition = "";
+        stage.removeAttribute("data-kg-recentering");
+        stageTransitionTimer = null;
+      }, 320);
     };
 
     const fitViewer = () => {
@@ -913,7 +1252,7 @@ function run() {
         contentWidth,
         contentHeight,
         padding: 40,
-        minScale: 0.35,
+        minScale: 0.12,
         maxScale: 2.5,
       });
       if (!previousTransform && !Number.isFinite(viewState.scale)) {
@@ -926,6 +1265,7 @@ function run() {
       overlay.hidden = false;
       shell.classList.add("is-viewer-open");
       document.body.classList.add("kg-viewer-open");
+      scheduleKnowledgeGraphConnectorRefresh(stage, { transitionMs: 0 });
       window.requestAnimationFrame(() => {
         fitViewer();
       });
@@ -938,7 +1278,94 @@ function run() {
       pointerState = null;
       suppressClick = false;
       viewport.classList.remove("is-dragging");
+      clearKnowledgeGraphConnectorRefreshTimers(stage);
+      if (stageTransitionTimer) {
+        window.clearTimeout(stageTransitionTimer);
+        stageTransitionTimer = null;
+      }
+      stage.style.transition = "";
+      stage.removeAttribute("data-kg-recentering");
     };
+
+    overlay._ktemCloseViewer = closeViewer;
+    overlay._ktemAdjustForBranchToggle = (branchAnchor, beforeRect) => {
+      if (
+        !branchAnchor ||
+        !beforeRect ||
+        overlay.hidden ||
+        typeof utils.computeModeratedAnchorTranslation !== "function"
+      ) {
+        return;
+      }
+
+      const referenceRect = {
+        left: Number(beforeRect.left) || 0,
+        top: Number(beforeRect.top) || 0,
+      };
+
+      const applyCorrection = (remainingPasses) => {
+        if (overlay.hidden || !branchAnchor.isConnected) {
+          return;
+        }
+
+        const afterRect = branchAnchor.getBoundingClientRect();
+        const delta = utils.computeModeratedAnchorTranslation(
+          referenceRect,
+          afterRect,
+          {
+            threshold: 4,
+            maxShift: 96,
+          }
+        );
+
+        if (delta.translateX || delta.translateY) {
+          animateStageTransform();
+          viewState.translateX += delta.translateX;
+          viewState.translateY += delta.translateY;
+          applyStageTransform();
+        }
+
+        if (remainingPasses > 0) {
+          window.setTimeout(() => {
+            applyCorrection(remainingPasses - 1);
+          }, 120);
+        }
+      };
+
+      window.requestAnimationFrame(() => {
+        applyCorrection(2);
+      });
+    };
+
+    overlay.addEventListener("transitionend", (event) => {
+      if (
+        !(event.target instanceof HTMLElement) ||
+        !event.target.closest(".kg-branch__children-viewport")
+      ) {
+        return;
+      }
+      if (
+        typeof utils.shouldRefreshConnectorForTransition === "function" &&
+        !utils.shouldRefreshConnectorForTransition(event.propertyName)
+      ) {
+        return;
+      }
+      scheduleKnowledgeGraphConnectorRefresh(stage, { transitionMs: 0 });
+    });
+
+    if (typeof ResizeObserver === "function") {
+      const refreshObserver = new ResizeObserver(() => {
+        if (overlay.hidden) {
+          return;
+        }
+        scheduleKnowledgeGraphConnectorRefresh(stage, { transitionMs: 0 });
+      });
+      refreshObserver.observe(stage);
+      stage
+        .querySelectorAll(".kg-branch__children-viewport, .kg-branch__children")
+        .forEach((node) => refreshObserver.observe(node));
+      overlay._ktemKgRefreshObserver = refreshObserver;
+    }
 
     const queueClickReset = () => {
       window.setTimeout(() => {
@@ -982,7 +1409,7 @@ function run() {
       const midpoint = {
         cursorX: (viewport.clientWidth || 0) / 2,
         cursorY: (viewport.clientHeight || 0) / 2,
-        minScale: 0.35,
+        minScale: 0.12,
         maxScale: 2.5,
         zoomStep: 0.14,
       };
@@ -1028,7 +1455,7 @@ function run() {
           deltaY: event.deltaY,
           cursorX: event.clientX - rect.left,
           cursorY: event.clientY - rect.top,
-          minScale: 0.35,
+          minScale: 0.12,
           maxScale: 2.5,
           zoomStep: 0.14,
         });
@@ -1039,6 +1466,9 @@ function run() {
 
     viewport.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) {
+        return;
+      }
+      if (utils.shouldIgnorePanTarget?.(event.target)) {
         return;
       }
       pointerState = {
@@ -1259,6 +1689,14 @@ function run() {
     if (graphPanel && graphPanel.dataset.kgBound !== "true") {
       graphPanel.dataset.kgBound = "true";
       graphPanel.addEventListener("click", (event) => {
+        const branchToggle = event.target.closest("[data-kg-branch-toggle='true']");
+        if (branchToggle) {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleKnowledgeGraphBranch(branchToggle);
+          return;
+        }
+
         const toggleTrigger = event.target.closest("[data-kg-toggle-points]");
         if (toggleTrigger) {
           const fileCard = toggleTrigger.closest("[data-kg-file-card]");
@@ -1310,8 +1748,20 @@ function run() {
         const fillQuestion = String(
           payload.fill_question || payload.suggested_question || payload.prompt || ""
         ).trim();
+        const viewerOverlay = trigger.closest("[data-kg-viewer-overlay='true']");
+        const shouldCloseViewer =
+          viewerOverlay instanceof HTMLElement && !viewerOverlay.hidden;
+        if (shouldCloseViewer && typeof viewerOverlay._ktemCloseViewer === "function") {
+          viewerOverlay._ktemCloseViewer();
+        }
         if (fillQuestion) {
-          fillChatInputWithoutSubmit(fillQuestion);
+          if (shouldCloseViewer) {
+            window.requestAnimationFrame(() => {
+              fillChatInputWithoutSubmit(fillQuestion);
+            });
+          } else {
+            fillChatInputWithoutSubmit(fillQuestion);
+          }
         }
       });
     }
