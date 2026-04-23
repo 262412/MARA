@@ -13,7 +13,7 @@ class _RuntimeAppContext:
         from theflow.settings import settings as flowsettings
 
         self.dev_mode = getattr(flowsettings, "KH_MODE", "") == "dev"
-        self.app_name = getattr(flowsettings, "KH_APP_NAME", "Kotaemon")
+        self.app_name = getattr(flowsettings, "KH_APP_NAME", "Slides")
         self.app_version = getattr(flowsettings, "KH_APP_VERSION", "")
         self.f_user_management = getattr(
             flowsettings, "KH_FEATURE_USER_MANAGEMENT", False

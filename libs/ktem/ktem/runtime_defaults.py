@@ -47,7 +47,7 @@ def build_kotaemon_settings(
 
     settings: dict[str, Any] = {
         "KH_PACKAGE_NAME": package_name,
-        "KH_APP_NAME": "Kotaemon",
+        "KH_APP_NAME": "Slides",
         "KH_APP_VERSION": app_version,
         "KH_GRADIO_SHARE": config("KH_GRADIO_SHARE", default=False, cast=bool),
         "KH_ENABLE_FIRST_SETUP": config(

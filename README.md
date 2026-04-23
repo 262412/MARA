@@ -2,9 +2,11 @@
 
 <div align="center">
 
-# kotaemon
+# Slides
 
 A local RAG application repository built around document QA, page-level preview, knowledge graph exploration, and multi-model routing.
+
+Slides is a branded fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon). The original project is licensed under the Apache License 2.0; this fork keeps the original license and attribution while presenting the application as Slides. Internal package names and compatibility CLI commands are intentionally left unchanged.
 
 [English](#english) | [中文](#chinese)
 
