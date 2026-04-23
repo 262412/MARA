@@ -1,11 +1,14 @@
-from typing import Optional, Type, overload
+from __future__ import annotations
+
+from collections.abc import Iterator, Mapping
+from typing import TYPE_CHECKING, Any, Optional, Type, overload
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from theflow.settings import settings as flowsettings
 from theflow.utils.modules import deserialize, import_dotted_string
 
-from kotaemon.llms import ChatLLM
+if TYPE_CHECKING:
+    from kotaemon.llms import ChatLLM
 
 from .db import LLMTable, engine
 
@@ -14,6 +17,8 @@ class LLMManager:
     """Represent a pool of models"""
 
     def __init__(self):
+        from theflow.settings import settings as flowsettings
+
         self._models: dict[str, ChatLLM] = {}
         self._info: dict[str, dict] = {}
         self._default: str = ""
@@ -35,7 +40,6 @@ class LLMManager:
                         session.commit()
 
         self.load()
-        self.load_vendors()
 
     def load(self):
         """Load the model pool from database"""
@@ -50,20 +54,35 @@ class LLMManager:
                     "spec": item.spec,
                     "default": item.default,
                 }
-                try:
-                    model = deserialize(item.spec, safe=False)
-                except Exception as exc:
-                    info["load_error"] = str(exc)
-                    self._info[item.name] = info
-                    self._load_errors.append(f"{item.name}: {exc}")
-                    continue
-
-                self._models[item.name] = model
                 self._info[item.name] = info
                 if item.default:
                     self._default = item.name
 
+    def _load_model(self, key: str) -> "ChatLLM":
+        if key not in self._info:
+            raise KeyError(key)
+
+        if key in self._models:
+            return self._models[key]
+
+        spec = self._info[key]["spec"]
+        try:
+            model = deserialize(spec, safe=False)
+        except Exception as exc:
+            message = str(exc)
+            self._info[key]["load_error"] = message
+            formatted = f"{key}: {message}"
+            if formatted not in self._load_errors:
+                self._load_errors.append(formatted)
+            raise
+
+        self._models[key] = model
+        self._info[key].pop("load_error", None)
+        return model
+
     def load_vendors(self):
+        from theflow.settings import settings as flowsettings
+
         from kotaemon.llms import (
             AzureChatOpenAI,
             ChatOpenAI,
@@ -89,11 +108,11 @@ class LLMManager:
 
     def __getitem__(self, key: str) -> ChatLLM:
         """Get model by name"""
-        return self._models[key]
+        return self._load_model(key)
 
     def __contains__(self, key: str) -> bool:
         """Check if model exists"""
-        return key in self._models
+        return key in self._info
 
     @overload
     def get(self, key: str, default: None) -> Optional[ChatLLM]:
@@ -105,7 +124,9 @@ class LLMManager:
 
     def get(self, key: str, default: Optional[ChatLLM] = None) -> Optional[ChatLLM]:
         """Get model by name with default value"""
-        return self._models.get(key, default)
+        if key not in self:
+            return default
+        return self._load_model(key)
 
     def settings(self) -> dict:
         """Present model pools option for gradio"""
@@ -115,9 +136,9 @@ class LLMManager:
             "value": self.get_default_name(),
         }
 
-    def options(self) -> dict:
+    def options(self) -> Mapping[str, Any]:
         """Present a dict of models"""
-        return self._models
+        return _LazyOptionsView(self)
 
     def get_random_name(self) -> str:
         """Get the name of random model
@@ -127,10 +148,10 @@ class LLMManager:
         """
         import random
 
-        if not self._models:
+        if not self._info:
             raise ValueError("No models in pool")
 
-        return random.choice(list(self._models.keys()))
+        return random.choice(list(self._info.keys()))
 
     def get_default_name(self) -> str:
         """Get the name of default model
@@ -151,7 +172,7 @@ class LLMManager:
 
     def get_random(self) -> ChatLLM:
         """Get random model"""
-        return self._models[self.get_random_name()]
+        return self[self.get_random_name()]
 
     def get_default(self) -> ChatLLM:
         """Get default model
@@ -162,7 +183,7 @@ class LLMManager:
         Returns:
             ChatLLM: model
         """
-        return self._models[self.get_default_name()]
+        return self[self.get_default_name()]
 
     def info(self) -> dict:
         """List all models"""
@@ -241,7 +262,96 @@ class LLMManager:
 
     def vendors(self) -> dict:
         """Return list of vendors"""
+        if not self._vendors:
+            self.load_vendors()
         return {vendor.__qualname__: vendor for vendor in self._vendors}
 
 
-llms = LLMManager()
+class _LazyManagerProxy:
+    def __init__(self, factory):
+        object.__setattr__(self, "_factory", factory)
+        object.__setattr__(self, "_manager", None)
+
+    def _get_manager(self):
+        manager = object.__getattribute__(self, "_manager")
+        if manager is None:
+            manager = object.__getattribute__(self, "_factory")()
+            object.__setattr__(self, "_manager", manager)
+        return manager
+
+    def __getattribute__(self, name):
+        if name in {
+            "_factory",
+            "_manager",
+            "_get_manager",
+            "__class__",
+            "__dict__",
+            "__weakref__",
+            "__repr__",
+            "__getitem__",
+            "__contains__",
+            "__setattr__",
+            "__delattr__",
+        }:
+            return object.__getattribute__(self, name)
+
+        local_dict = object.__getattribute__(self, "__dict__")
+        if not name.startswith("_") and name in local_dict:
+            return local_dict[name]
+        return getattr(self._get_manager(), name)
+
+    def __setattr__(self, name, value):
+        if name in {"_factory", "_manager"}:
+            object.__setattr__(self, name, value)
+            return
+        if name.startswith("_"):
+            setattr(self._get_manager(), name, value)
+            return
+
+        local_dict = object.__getattribute__(self, "__dict__")
+        if object.__getattribute__(self, "_manager") is None:
+            local_dict[name] = value
+            return
+        setattr(self._get_manager(), name, value)
+
+    def __delattr__(self, name):
+        if name in {"_factory", "_manager"}:
+            raise AttributeError(name)
+        if name.startswith("_"):
+            delattr(self._get_manager(), name)
+            return
+
+        local_dict = object.__getattribute__(self, "__dict__")
+        if name in local_dict:
+            del local_dict[name]
+            return
+        delattr(self._get_manager(), name)
+
+    def __getitem__(self, key):
+        return self._get_manager()[key]
+
+    def __contains__(self, key):
+        return key in self._get_manager()
+
+    def __repr__(self):
+        manager = object.__getattribute__(self, "_manager")
+        if manager is None:
+            return "<LazyManagerProxy uninitialized>"
+        return repr(manager)
+
+
+class _LazyOptionsView(Mapping[str, Any]):
+    def __init__(self, manager: LLMManager):
+        self._manager = manager
+
+    def __getitem__(self, key: str) -> Any:
+        return self._manager[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._manager._info.keys())
+
+    def __len__(self) -> int:
+        return len(self._manager._info)
+
+
+llms = _LazyManagerProxy(LLMManager)

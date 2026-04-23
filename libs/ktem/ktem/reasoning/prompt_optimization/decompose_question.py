@@ -1,6 +1,5 @@
 import logging
 
-from ktem.llms.manager import llms
 from ktem.reasoning.prompt_optimization.rewrite_question import RewriteQuestionPipeline
 from pydantic import BaseModel, Field
 
@@ -8,6 +7,12 @@ from kotaemon.base import Document, HumanMessage, Node, SystemMessage
 from kotaemon.llms import ChatLLM
 
 logger = logging.getLogger(__name__)
+
+
+def _get_llms():
+    from ktem.llms.manager import llms
+
+    return llms
 
 
 class SubQuery(BaseModel):
@@ -28,7 +33,9 @@ class DecomposeQuestionPipeline(RewriteQuestionPipeline):
     """
 
     llm: ChatLLM = Node(
-        default_callback=lambda _: llms.get("openai-gpt4-turbo", llms.get_default())
+        default_callback=lambda _: _get_llms().get(
+            "openai-gpt4-turbo", _get_llms().get_default()
+        )
     )
     DECOMPOSE_SYSTEM_PROMPT_TEMPLATE = (
         "You are an expert at converting user complex questions into sub questions. "

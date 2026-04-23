@@ -201,6 +201,50 @@ def test_doctor_reports_invalid_optional_models_as_warnings(monkeypatch):
     ]
 
 
+def test_doctor_treats_missing_default_models_as_warnings(monkeypatch):
+    runtime = object.__new__(DocQARuntime)
+    object.__setattr__(runtime, "_user_id", "user-1")
+    object.__setattr__(runtime, "_app", SimpleNamespace(app_name="Kotaemon"))
+    object.__setattr__(
+        runtime, "file_index", SimpleNamespace(name="File Collection", id=1)
+    )
+    object.__setattr__(runtime, "knowledge_graph", None)
+    object.__setattr__(runtime, "_resolve_user_id", lambda user_id=None: "user-1")
+    object.__setattr__(runtime, "list_files", lambda user_id=None: [])
+    object.__setattr__(runtime, "list_sessions", lambda user_id=None: [])
+
+    monkeypatch.setattr(
+        runtime_module.llms,
+        "get_default_name",
+        lambda: (_ for _ in ()).throw(ValueError("No models in pool")),
+    )
+    monkeypatch.setattr(
+        runtime_module.embedding_models_manager,
+        "get_default_name",
+        lambda: (_ for _ in ()).throw(ValueError("No models in pool")),
+    )
+    monkeypatch.setattr(runtime_module.llms, "load_errors", lambda: [])
+    monkeypatch.setattr(
+        runtime_module.embedding_models_manager,
+        "load_errors",
+        lambda: [],
+    )
+    monkeypatch.setattr(
+        runtime_module.reranking_models_manager,
+        "load_errors",
+        lambda: [],
+    )
+
+    result = runtime.doctor()
+
+    assert result.ok is True
+    assert result.issues == []
+    assert result.warnings == [
+        "No default LLM configured yet. DocQA doctor can still run before model setup.",
+        "No default embedding model configured yet. DocQA doctor can still run before model setup.",
+    ]
+
+
 def test_knowledge_graph_empty_sources_return_empty_graph_shape(tmp_path):
     service = object.__new__(GlobalKnowledgeGraphService)
     service._index = None

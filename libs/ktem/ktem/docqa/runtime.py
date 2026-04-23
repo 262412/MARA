@@ -980,13 +980,25 @@ class DocQARuntime:
             default_llm = llms.get_default_name()
         except Exception as exc:
             default_llm = ""
-            issues.append(f"Unable to load default LLM: {exc}")
+            if isinstance(exc, ValueError) and "No models in pool" in str(exc):
+                warnings.append(
+                    "No default LLM configured yet. "
+                    "DocQA doctor can still run before model setup."
+                )
+            else:
+                issues.append(f"Unable to load default LLM: {exc}")
 
         try:
             default_embedding = embedding_models_manager.get_default_name()
         except Exception as exc:
             default_embedding = ""
-            issues.append(f"Unable to load default embedding model: {exc}")
+            if isinstance(exc, ValueError) and "No models in pool" in str(exc):
+                warnings.append(
+                    "No default embedding model configured yet. "
+                    "DocQA doctor can still run before model setup."
+                )
+            else:
+                issues.append(f"Unable to load default embedding model: {exc}")
 
         warnings.extend(
             f"Invalid LLM configuration: {error}" for error in llms.load_errors()

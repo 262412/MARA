@@ -3,7 +3,6 @@ import uuid
 from pathlib import Path
 
 from ktem.components import get_docstore, get_vectorstore
-from ktem.llms.manager import llms
 from ktem.reasoning.prompt_optimization.rewrite_question import (
     DEFAULT_REWRITE_PROMPT,
     RewriteQuestionPipeline,
@@ -14,6 +13,12 @@ from kotaemon.base import AIMessage, Document, HumanMessage, Node, SystemMessage
 from kotaemon.embeddings import BaseEmbeddings
 from kotaemon.llms import ChatLLM
 from kotaemon.storages import BaseDocumentStore, BaseVectorStore
+
+
+def _get_llms():
+    from ktem.llms.manager import llms
+
+    return llms
 
 
 class FewshotRewriteQuestionPipeline(RewriteQuestionPipeline):
@@ -29,7 +34,7 @@ class FewshotRewriteQuestionPipeline(RewriteQuestionPipeline):
         k: the number of examples to retrieve for rewriting
     """
 
-    llm: ChatLLM = Node(default_callback=lambda _: llms.get_default())
+    llm: ChatLLM = Node(default_callback=lambda _: _get_llms().get_default())
     rewrite_template: str = DEFAULT_REWRITE_PROMPT
     lang: str = "English"
     embedding: BaseEmbeddings

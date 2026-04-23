@@ -42,6 +42,15 @@ def test_kotaemon_app_package_has_readme_metadata():
     assert 'readme = "README.md"' in content
 
 
+def test_kotaemon_adv_dependency_includes_milvus_lite_for_local_backend():
+    repo_root = _repo_root()
+    pyproject_path = repo_root / "libs" / "kotaemon" / "pyproject.toml"
+
+    content = pyproject_path.read_text(encoding="utf-8")
+    assert '"llama-index-vector-stores-milvus"' in content
+    assert '"milvus-lite>=2.4.0; sys_platform != \\"win32\\""' in content
+
+
 def test_publish_wrappers_exist():
     repo_root = _repo_root()
 

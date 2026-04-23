@@ -128,6 +128,14 @@ This is the best path if you just want to use the app:
 pip install kotaemon-app
 ```
 
+If you want the packaged app and the standalone slide CLI together:
+
+```shell
+pip install "kotaemon-app[slide]"
+```
+
+This packaged runtime is the recommended phase-3 workflow for slide: initialize the runtime once, inspect it with `kotaemon app doctor`, then use the top-level `slide ...` product shell for high-permission workflows and workspace operations such as `slide apply`, `slide export-pdf`, `slide review`, `slide files`, `slide read`, `slide write`, `slide delete`, and `slide shell`, while `slide docqa ...` stays the specialist DocQA line.
+
 Initialize and inspect the runtime:
 
 ```shell
@@ -145,11 +153,32 @@ In this mode:
 
 - The runtime manages its own config, data, and cache directories
 - `kotaemon app doctor` shows the actual active paths
-- `kotaemon docqa ...` reuses the same configuration and data
+- `kotaemon docqa ...` and `slide docqa ...` reuse the same configuration and data
+- `slide ...` is the product line entrypoint for high-permission runtime commands and workspace operations, including `slide apply`, `slide export-pdf`, and `slide review`, while `slide docqa ...` is the focused DocQA surface
+
+##### Option 1b: install the standalone slide CLI from PyPI
+
+If you only want the slide-focused terminal workflow, you can install it directly:
+
+```shell
+pip install slide-cli
+slide doctor
+slide --help
+```
+
+If you want to validate the package before a full release, you can install it from TestPyPI:
+
+```shell
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple slide-cli
+```
+
+`slide-cli`, `ktem`, `kotaemon`, and `kotaemon-app` share the same repository tag version line. A tag such as `v0.0.9` publishes the matching build of each package in dependency order.
+The release checklist for the standalone CLI lives in [docs/slide_cli_release.md](docs/slide_cli_release.md).
 
 ##### Option 2: use the installer scripts in this repo
 
 The repository includes cross-platform installer scripts that create a virtual environment, install dependencies, and run the basic initialization steps.
+When the source tree also contains `libs/slide_cli`, these scripts install the standalone `slide` command into the same virtual environment.
 
 macOS / Linux:
 
@@ -175,6 +204,12 @@ INSTALL_CLAUDE_CODE=1 bash install.sh
 ./install.ps1 -InstallClaudeCode
 ```
 
+After the setup finishes, you can validate the slide agent runtime with:
+
+```shell
+slide doctor
+```
+
 ##### Option 3: source install for local development
 
 This is the right path if you want to modify the repository directly.
@@ -197,11 +232,12 @@ Windows PowerShell:
 .venv\Scripts\Activate.ps1
 ```
 
-2. Install the two main packages
+2. Install the local packages
 
 ```shell
 pip install -e "libs/kotaemon[all]"
 pip install -e "libs/ktem"
+pip install -e "libs/slide_cli"
 ```
 
 3. Prepare environment variables
@@ -214,6 +250,13 @@ pip install -e "libs/ktem"
 
 ```shell
 python app.py
+```
+
+Validate the slide CLI and inspect the available commands:
+
+```shell
+slide doctor
+slide --help
 ```
 
 Source-mode characteristics:
@@ -334,29 +377,67 @@ kotaemon docqa check
 
 This runs the end-to-end DocQA acceptance matrix, which is useful after changing indexing, preview, knowledge graph, or CLI behavior.
 
-#### Model routing and platform support
+### CLI Slide Agent
 
-Model routing:
+`slide` is the standalone product shell for the packaged slide runtime.
+
+The phase-3 model is intentionally split into two lines:
+
+- `slide ...` for the high-permission product shell
+- `slide docqa ...` for the specialist document-QA line
+
+The top-level shell currently centers on:
+
+- `slide doctor`
+- `slide run`
+- `slide chat`
+- `slide sessions`
+- `slide resume`
+- `slide inspect`
+- `slide read-slide`
+- `slide extract`
+- `slide search`
+- `slide files`
+- `slide read`
+- `slide write`
+- `slide delete`
+- `slide shell`
+
+`slide inspect`, `slide read-slide`, `slide extract`, and `slide search` are the canonical read-only deck-observability commands on the top-level line. They sit alongside the broader runtime and workspace commands, while `slide docqa ...` remains the specialist document-QA line.
+
+If you installed `kotaemon-app[slide]`, the packaged runtime is the easiest way to discover that split. Start with `kotaemon app init`, `kotaemon app doctor`, `slide --help`, and `slide docqa --help`.
+
+Direct package install:
 
 ```shell
-kotaemon modelcli init-config --output modelcli.yml
-kotaemon modelcli providers --config modelcli.yml
-kotaemon modelcli run --prompt "health check" --model gpt-4o-mini --dry-run
+pip install slide-cli
 ```
 
-`modelcli` ships with a default routing template for OpenAI, Anthropic, Gemini, and OpenRouter.
-
-Platform support:
+Start with a runtime check:
 
 ```shell
-kotaemon platform list
-kotaemon platform install --platform codex --mode full --yes
-kotaemon platform install --platform claude-code --mode full --yes
-kotaemon platform status --platform codex
-kotaemon platform validate
+slide doctor
 ```
 
-This is useful if you want to install the repository's assistant assets, commands, or skills into external AI coding assistant environments.
+To explore the DocQA command group:
+
+```shell
+slide docqa --help
+slide docqa doctor
+```
+
+Codex users also get a top-level `slide*` skill family and a specialist `slide-docqa*` skill family under `.codex/skills`.
+The focused family covers the DocQA mainline, including `slide-docqa-delete`; `slide docqa acceptance` and `slide docqa check` remain available as maintainer commands.
+
+Example:
+
+```shell
+slide --help
+slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --dry-run
+slide docqa delete old-document-id
+slide docqa ask --file ./docs/sample.pptx --prompt "Summarize this document"
+slide docqa files
+```
 
 ### Knowledge Graph And Retrieval (Default)
 
@@ -563,6 +644,7 @@ If you want to continue developing inside this repository, the recommended path 
 ```shell
 pip install -e "libs/kotaemon[all]"
 pip install -e "libs/ktem"
+pip install -e "libs/slide_cli"
 pre-commit install
 pytest libs/kotaemon/tests libs/ktem/ktem_tests
 ```

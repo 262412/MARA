@@ -1,7 +1,12 @@
-from ktem.llms.manager import llms
-
 from kotaemon.base import BaseComponent, Document, HumanMessage, Node, SystemMessage
 from kotaemon.llms import ChatLLM, PromptTemplate
+
+
+def _get_llms():
+    from ktem.llms.manager import llms
+
+    return llms
+
 
 DEFAULT_REWRITE_PROMPT = (
     "Given the following question, rephrase and expand it "
@@ -23,7 +28,7 @@ class RewriteQuestionPipeline(BaseComponent):
         lang: the language of the answer. Currently support English and Japanese
     """
 
-    llm: ChatLLM = Node(default_callback=lambda _: llms.get_default())
+    llm: ChatLLM = Node(default_callback=lambda _: _get_llms().get_default())
     rewrite_template: str = DEFAULT_REWRITE_PROMPT
 
     lang: str = "English"

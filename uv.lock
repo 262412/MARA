@@ -14,6 +14,7 @@ members = [
     "kotaemon",
     "kotaemon-app",
     "ktem",
+    "slide-cli",
 ]
 
 [[package]]
@@ -2737,6 +2738,7 @@ adv = [
     { name = "llama-index-vector-stores-milvus" },
     { name = "llama-index-vector-stores-qdrant" },
     { name = "mcp", extra = ["cli"] },
+    { name = "milvus-lite", marker = "sys_platform != 'win32'" },
     { name = "onnxruntime" },
     { name = "sentence-transformers" },
     { name = "tabulate" },
@@ -2759,6 +2761,7 @@ all = [
     { name = "llama-index-vector-stores-milvus" },
     { name = "llama-index-vector-stores-qdrant" },
     { name = "mcp", extra = ["cli"] },
+    { name = "milvus-lite", marker = "sys_platform != 'win32'" },
     { name = "onnxruntime" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -2824,6 +2827,7 @@ requires-dist = [
     { name = "matplotlib" },
     { name = "matplotlib-inline" },
     { name = "mcp", extras = ["cli"], marker = "extra == 'adv'", specifier = ">=1.0.0" },
+    { name = "milvus-lite", marker = "sys_platform != 'win32' and extra == 'adv'", specifier = ">=2.4.0" },
     { name = "onnxruntime", marker = "extra == 'adv'", specifier = "<1.20" },
     { name = "openai", specifier = ">=1.23.6,<2" },
     { name = "openpyxl", specifier = ">=3.1.2,<3.2" },
@@ -2862,6 +2866,11 @@ dependencies = [
     { name = "ktem" },
 ]
 
+[package.optional-dependencies]
+slide = [
+    { name = "slide-cli" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "black" },
@@ -2880,7 +2889,9 @@ dev = [
 requires-dist = [
     { name = "kotaemon", extras = ["all"], editable = "libs/kotaemon" },
     { name = "ktem", editable = "libs/ktem" },
+    { name = "slide-cli", marker = "extra == 'slide'", editable = "libs/slide_cli" },
 ]
+provides-extras = ["slide"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -6534,6 +6545,28 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "slide-cli"
+source = { editable = "libs/slide_cli" }
+dependencies = [
+    { name = "click" },
+    { name = "kotaemon" },
+    { name = "ktem" },
+    { name = "platformdirs" },
+    { name = "python-pptx" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.1.7,<9" },
+    { name = "kotaemon", editable = "libs/kotaemon" },
+    { name = "ktem", editable = "libs/ktem" },
+    { name = "platformdirs", specifier = ">=4.2.1,<5" },
+    { name = "python-pptx", specifier = ">=1.0.2,<2" },
+    { name = "pyyaml", specifier = ">=6.0,<7" },
 ]
 
 [[package]]

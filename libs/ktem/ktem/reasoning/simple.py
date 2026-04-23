@@ -3,17 +3,14 @@ import os
 import threading
 from copy import deepcopy
 from textwrap import dedent
-from typing import Generator
+from typing import Any, Generator
 
 from decouple import config
-from ktem.embeddings.manager import embedding_models_manager as embeddings
-from ktem.llms.manager import llms
 from ktem.reasoning.prompt_optimization import (
     DecomposeQuestionPipeline,
     RewriteQuestionPipeline,
 )
 from ktem.utils.render import Render
-from ktem.utils.visualize_cited import CreateCitationVizPipeline
 from plotly.io import to_json
 
 from kotaemon.base import (
@@ -41,10 +38,28 @@ from .base import BaseReasoning
 logger = logging.getLogger(__name__)
 
 
+def _get_llms():
+    from ktem.llms.manager import llms
+
+    return llms
+
+
+def _get_embeddings():
+    from ktem.embeddings.manager import embedding_models_manager as embeddings
+
+    return embeddings
+
+
+def _create_citation_viz_pipeline():
+    from ktem.utils.visualize_cited import CreateCitationVizPipeline
+
+    return CreateCitationVizPipeline(embedding=_get_embeddings().get_default())
+
+
 class AddQueryContextPipeline(BaseComponent):
 
     n_last_interactions: int = 5
-    llm: ChatLLM = Node(default_callback=lambda _: llms.get_default())
+    llm: ChatLLM = Node(default_callback=lambda _: _get_llms().get_default())
 
     def run(self, question: str, history: list) -> Document:
         messages = [
@@ -100,10 +115,8 @@ class FullQAPipeline(BaseReasoning):
     evidence_pipeline: PrepareEvidencePipeline = PrepareEvidencePipeline.withx()
     answering_pipeline: AnswerWithContextPipeline
     rewrite_pipeline: RewriteQuestionPipeline | None = None
-    create_citation_viz_pipeline: CreateCitationVizPipeline = Node(
-        default_callback=lambda _: CreateCitationVizPipeline(
-            embedding=embeddings.get_default()
-        )
+    create_citation_viz_pipeline: Any = Node(
+        default_callback=lambda _: _create_citation_viz_pipeline()
     )
     add_query_context: AddQueryContextPipeline = AddQueryContextPipeline.withx()
 
@@ -495,6 +508,7 @@ class FullQAPipeline(BaseReasoning):
 
         prefix = f"reasoning.options.{cls.get_info()['id']}"
         llm_name = settings.get(f"{prefix}.llm", None)
+        llms = _get_llms()
         llm = llms.get(llm_name, llms.get_default())
 
         # prepare evidence pipeline configuration

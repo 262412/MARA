@@ -1,17 +1,21 @@
 import logging
 
-from ktem.llms.manager import llms
-
 from kotaemon.base import AIMessage, BaseComponent, Document, HumanMessage, Node
 from kotaemon.llms import ChatLLM, PromptTemplate
 
 logger = logging.getLogger(__name__)
 
 
+def _get_llms():
+    from ktem.llms.manager import llms
+
+    return llms
+
+
 class SuggestConvNamePipeline(BaseComponent):
     """Suggest a good conversation name based on the chat history."""
 
-    llm: ChatLLM = Node(default_callback=lambda _: llms.get_default())
+    llm: ChatLLM = Node(default_callback=lambda _: _get_llms().get_default())
     SUGGEST_NAME_PROMPT_TEMPLATE = (
         "You are an expert at suggesting good and memorable conversation name. "
         "Based on the chat history above, "

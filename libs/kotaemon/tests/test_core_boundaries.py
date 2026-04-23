@@ -112,6 +112,57 @@ def test_kotaemon_top_level_can_lazy_load_agents_without_ktem(monkeypatch):
     assert attempted == []
 
 
+def test_storages_base_exports_do_not_eagerly_load_optional_backends():
+    _clear_modules(
+        "kotaemon.storages",
+        "kotaemon.storages.docstores",
+        "kotaemon.storages.vectorstores",
+        "kotaemon.storages.docstores.elasticsearch",
+        "kotaemon.storages.docstores.lancedb",
+        "kotaemon.storages.vectorstores.chroma",
+        "kotaemon.storages.vectorstores.lancedb",
+        "kotaemon.storages.vectorstores.milvus",
+        "kotaemon.storages.vectorstores.qdrant",
+        "chromadb",
+        "elasticsearch",
+        "lancedb",
+        "pymilvus",
+        "qdrant_client",
+    )
+
+    storages_module = importlib.import_module("kotaemon.storages")
+
+    assert storages_module.BaseDocumentStore.__name__ == "BaseDocumentStore"
+    assert storages_module.BaseVectorStore.__name__ == "BaseVectorStore"
+    for module_name in [
+        "kotaemon.storages.docstores.elasticsearch",
+        "kotaemon.storages.docstores.lancedb",
+        "kotaemon.storages.vectorstores.chroma",
+        "kotaemon.storages.vectorstores.lancedb",
+        "kotaemon.storages.vectorstores.milvus",
+        "kotaemon.storages.vectorstores.qdrant",
+        "chromadb",
+        "elasticsearch",
+        "lancedb",
+        "pymilvus",
+        "qdrant_client",
+    ]:
+        assert module_name not in sys.modules
+
+
+def test_storages_can_lazy_load_concrete_exports_on_demand():
+    _clear_modules(
+        "kotaemon.storages",
+        "kotaemon.storages.vectorstores",
+        "kotaemon.storages.vectorstores.in_memory",
+    )
+
+    storages_module = importlib.import_module("kotaemon.storages")
+
+    assert storages_module.InMemoryVectorStore.__name__ == "InMemoryVectorStore"
+    assert "kotaemon.storages.vectorstores.in_memory" in sys.modules
+
+
 def test_core_package_ktem_imports_are_runtime_local_and_allowlisted():
     discovered_files = set()
     module_level_imports: list[str] = []

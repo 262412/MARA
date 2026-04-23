@@ -2,12 +2,16 @@ import logging
 import re
 from textwrap import dedent
 
-from ktem.llms.manager import llms
-
 from kotaemon.base import BaseComponent, Document, HumanMessage, Node, SystemMessage
 from kotaemon.llms import ChatLLM, PromptTemplate
 
 logger = logging.getLogger(__name__)
+
+
+def _get_llms():
+    from ktem.llms.manager import llms
+
+    return llms
 
 
 MINDMAP_HTML_EXPORT_TEMPLATE = dedent(
@@ -40,7 +44,7 @@ MINDMAP_HTML_EXPORT_TEMPLATE = dedent(
 class CreateMindmapPipeline(BaseComponent):
     """Create a mindmap from the question and context"""
 
-    llm: ChatLLM = Node(default_callback=lambda _: llms.get_default())
+    llm: ChatLLM = Node(default_callback=lambda _: _get_llms().get_default())
     lang: str = "English"
 
     SYSTEM_PROMPT = """

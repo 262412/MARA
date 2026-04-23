@@ -1,11 +1,14 @@
-from typing import Optional, Type
+from __future__ import annotations
+
+from collections.abc import Iterator, Mapping
+from typing import TYPE_CHECKING, Any, Optional, Type
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from theflow.settings import settings as flowsettings
 from theflow.utils.modules import deserialize
 
-from kotaemon.embeddings.base import BaseEmbeddings
+if TYPE_CHECKING:
+    from kotaemon.embeddings.base import BaseEmbeddings
 
 from .db import EmbeddingTable, engine
 
@@ -14,6 +17,8 @@ class EmbeddingManager:
     """Represent a pool of models"""
 
     def __init__(self):
+        from theflow.settings import settings as flowsettings
+
         self._models: dict[str, BaseEmbeddings] = {}
         self._info: dict[str, dict] = {}
         self._default: str = ""
@@ -33,7 +38,6 @@ class EmbeddingManager:
                     )
 
         self.load()
-        self.load_vendors()
 
     def load(self):
         """Load the model pool from database"""
@@ -48,19 +52,40 @@ class EmbeddingManager:
                     "spec": item.spec,
                     "default": item.default,
                 }
-                try:
-                    model = deserialize(item.spec, safe=False)
-                except Exception as exc:
-                    info["load_error"] = str(exc)
-                    self._info[item.name] = info
-                    self._load_errors.append(f"{item.name}: {exc}")
-                    continue
-
-                self._models[item.name] = model
                 self._info[item.name] = info
                 if item.default:
                     self._default = item.name
-                    self._models["default"] = self._models[item.name]
+
+    def _resolve_key(self, key: str) -> str:
+        if key == "default" and self._default:
+            return self._default
+        return key
+
+    def _load_model(self, key: str) -> "BaseEmbeddings":
+        resolved_key = self._resolve_key(key)
+        if resolved_key not in self._info:
+            raise KeyError(key)
+
+        if resolved_key in self._models:
+            model = self._models[resolved_key]
+        else:
+            spec = self._info[resolved_key]["spec"]
+            try:
+                model = deserialize(spec, safe=False)
+            except Exception as exc:
+                message = str(exc)
+                self._info[resolved_key]["load_error"] = message
+                formatted = f"{resolved_key}: {message}"
+                if formatted not in self._load_errors:
+                    self._load_errors.append(formatted)
+                raise
+
+            self._models[resolved_key] = model
+            self._info[resolved_key].pop("load_error", None)
+
+        if key == "default" and self._default:
+            self._models["default"] = model
+        return model
 
     def load_vendors(self):
         from kotaemon.embeddings import (
@@ -89,17 +114,21 @@ class EmbeddingManager:
 
     def __getitem__(self, key: str) -> BaseEmbeddings:
         """Get model by name"""
-        return self._models[key]
+        return self._load_model(key)
 
     def __contains__(self, key: str) -> bool:
         """Check if model exists"""
-        return key in self._models
+        if key == "default":
+            return bool(self._default)
+        return key in self._info
 
     def get(
         self, key: str, default: Optional[BaseEmbeddings] = None
     ) -> Optional[BaseEmbeddings]:
         """Get model by name with default value"""
-        return self._models.get(key, default)
+        if key not in self:
+            return default
+        return self._load_model(key)
 
     def settings(self) -> dict:
         """Present model pools option for gradio"""
@@ -109,9 +138,9 @@ class EmbeddingManager:
             "value": self.get_default_name(),
         }
 
-    def options(self) -> dict:
+    def options(self) -> Mapping[str, Any]:
         """Present a dict of models"""
-        return self._models
+        return _LazyOptionsView(self)
 
     def get_random_name(self) -> str:
         """Get the name of random model
@@ -121,10 +150,10 @@ class EmbeddingManager:
         """
         import random
 
-        if not self._models:
+        if not self._info:
             raise ValueError("No models in pool")
 
-        return random.choice(list(self._models.keys()))
+        return random.choice(list(self._info.keys()))
 
     def get_default_name(self) -> str:
         """Get the name of default model
@@ -145,7 +174,7 @@ class EmbeddingManager:
 
     def get_random(self) -> BaseEmbeddings:
         """Get random model"""
-        return self._models[self.get_random_name()]
+        return self[self.get_random_name()]
 
     def get_default(self) -> BaseEmbeddings:
         """Get default model
@@ -156,7 +185,7 @@ class EmbeddingManager:
         Returns:
             BaseEmbeddings: model
         """
-        return self._models[self.get_default_name()]
+        return self[self.get_default_name()]
 
     def info(self) -> dict:
         """List all models"""
@@ -234,7 +263,99 @@ class EmbeddingManager:
 
     def vendors(self) -> dict:
         """Return list of vendors"""
+        if not self._vendors:
+            self.load_vendors()
         return {vendor.__qualname__: vendor for vendor in self._vendors}
 
 
-embedding_models_manager = EmbeddingManager()
+class _LazyManagerProxy:
+    def __init__(self, factory):
+        object.__setattr__(self, "_factory", factory)
+        object.__setattr__(self, "_manager", None)
+
+    def _get_manager(self):
+        manager = object.__getattribute__(self, "_manager")
+        if manager is None:
+            manager = object.__getattribute__(self, "_factory")()
+            object.__setattr__(self, "_manager", manager)
+        return manager
+
+    def __getattribute__(self, name):
+        if name in {
+            "_factory",
+            "_manager",
+            "_get_manager",
+            "__class__",
+            "__dict__",
+            "__weakref__",
+            "__repr__",
+            "__getitem__",
+            "__contains__",
+            "__setattr__",
+            "__delattr__",
+        }:
+            return object.__getattribute__(self, name)
+
+        local_dict = object.__getattribute__(self, "__dict__")
+        if not name.startswith("_") and name in local_dict:
+            return local_dict[name]
+        return getattr(self._get_manager(), name)
+
+    def __setattr__(self, name, value):
+        if name in {"_factory", "_manager"}:
+            object.__setattr__(self, name, value)
+            return
+        if name.startswith("_"):
+            setattr(self._get_manager(), name, value)
+            return
+
+        local_dict = object.__getattribute__(self, "__dict__")
+        if object.__getattribute__(self, "_manager") is None:
+            local_dict[name] = value
+            return
+        setattr(self._get_manager(), name, value)
+
+    def __delattr__(self, name):
+        if name in {"_factory", "_manager"}:
+            raise AttributeError(name)
+        if name.startswith("_"):
+            delattr(self._get_manager(), name)
+            return
+
+        local_dict = object.__getattribute__(self, "__dict__")
+        if name in local_dict:
+            del local_dict[name]
+            return
+        delattr(self._get_manager(), name)
+
+    def __getitem__(self, key):
+        return self._get_manager()[key]
+
+    def __contains__(self, key):
+        return key in self._get_manager()
+
+    def __repr__(self):
+        manager = object.__getattribute__(self, "_manager")
+        if manager is None:
+            return "<LazyManagerProxy uninitialized>"
+        return repr(manager)
+
+
+class _LazyOptionsView(Mapping[str, Any]):
+    def __init__(self, manager: EmbeddingManager):
+        self._manager = manager
+
+    def __getitem__(self, key: str) -> Any:
+        return self._manager[key]
+
+    def __iter__(self) -> Iterator[str]:
+        keys = list(self._manager._info.keys())
+        if self._manager._default:
+            keys.append("default")
+        return iter(keys)
+
+    def __len__(self) -> int:
+        return len(self._manager._info) + int(bool(self._manager._default))
+
+
+embedding_models_manager = _LazyManagerProxy(EmbeddingManager)

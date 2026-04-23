@@ -3,7 +3,6 @@ import logging
 from difflib import SequenceMatcher
 from typing import AnyStr, Generator, Optional, Type
 
-from ktem.llms.manager import llms
 from ktem.mcp.manager import mcp_manager
 from ktem.reasoning.base import BaseReasoning
 from ktem.utils.generator import Generator as GeneratorWrapper
@@ -26,6 +25,12 @@ from ..utils import SUPPORTED_LANGUAGE_MAP
 
 logger = logging.getLogger(__name__)
 DEFAULT_AGENT_STEPS = 4
+
+
+def _get_llms():
+    from ktem.llms.manager import llms
+
+    return llms
 
 
 DEFAULT_PLANNER_PROMPT = (
@@ -182,7 +187,7 @@ class RewriteQuestionPipeline(BaseComponent):
         lang: the language of the answer. Currently support English and Japanese
     """
 
-    llm: ChatLLM = Node(default_callback=lambda _: llms.get_default())
+    llm: ChatLLM = Node(default_callback=lambda _: _get_llms().get_default())
     rewrite_template: str = DEFAULT_REWRITE_PROMPT
 
     lang: str = "English"
@@ -394,6 +399,7 @@ class RewooAgentPipeline(BaseReasoning):
         max_context_length_setting = settings.get("reasoning.max_context_length", None)
 
         planner_llm_name = settings[f"{prefix}.planner_llm"]
+        llms = _get_llms()
         planner_llm = llms.get(planner_llm_name, llms.get_default())
         solver_llm_name = settings[f"{prefix}.solver_llm"]
         solver_llm = llms.get(solver_llm_name, llms.get_default())
@@ -447,6 +453,7 @@ class RewooAgentPipeline(BaseReasoning):
         llm = ""
         llm_choices = [("(default)", "")]
         try:
+            llms = _get_llms()
             llm_choices += [(_, _) for _ in llms.options().keys()]
         except Exception as e:
             logger.exception(f"Failed to get LLM options: {e}")

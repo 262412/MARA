@@ -33,13 +33,17 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+[project.optional-dependencies]
+slide = ["slide-cli"]
+
 [tool.uv.sources]
 kotaemon = { workspace = true }
 ktem = { workspace = true }
+"slide-cli" = { workspace = true }
 
 # uv workspace configuration
 [tool.uv.workspace]
-members = ["libs/kotaemon", "libs/ktem"]
+members = ["libs/kotaemon", "libs/ktem", "libs/slide_cli"]
 
 [dependency-groups]
 dev = [

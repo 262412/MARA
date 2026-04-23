@@ -123,8 +123,8 @@ class KnetRetrievalPipeline(BaseFileIndexRetriever):
         from ktem.llms.manager import llms
 
         try:
-            reranking_llm = llms.get_default_name()
             reranking_llm_choices = list(llms.options().keys())
+            reranking_llm = llms.get_default_name() if reranking_llm_choices else None
         except Exception:
             reranking_llm = None
             reranking_llm_choices = []

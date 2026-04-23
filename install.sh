@@ -24,12 +24,16 @@ fi
 
 VENV_PYTHON="$VENV_DIR/bin/python"
 VENV_KOTAEMON="$VENV_DIR/bin/kotaemon"
+VENV_SLIDE="$VENV_DIR/bin/slide"
 
 "$VENV_PYTHON" -m pip install --upgrade pip
 
 if [[ -f "$SCRIPT_DIR/libs/ktem/pyproject.toml" && -f "$SCRIPT_DIR/libs/kotaemon/pyproject.toml" ]]; then
   "$VENV_PYTHON" -m pip install "$SCRIPT_DIR/libs/ktem"
   "$VENV_PYTHON" -m pip install "$SCRIPT_DIR/libs/kotaemon[all]"
+  if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
+    "$VENV_PYTHON" -m pip install "$SCRIPT_DIR/libs/slide_cli"
+  fi
 else
   "$VENV_PYTHON" -m pip install kotaemon-app
 fi
@@ -52,3 +56,6 @@ echo
 echo "Kotaemon is ready."
 echo "Run '$VENV_KOTAEMON app run' to launch the Web UI."
 echo "Run '$VENV_KOTAEMON docqa doctor' to validate the shared DocQA runtime."
+if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
+  echo "Run '$VENV_SLIDE doctor' to validate the slide-cli runtime."
+fi

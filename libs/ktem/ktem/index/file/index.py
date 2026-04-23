@@ -51,6 +51,9 @@ class FileIndex(BaseIndex):
         self._setting_mappings: dict[str, dict] = {}
 
     def _setup_resources(self):
+        if hasattr(self, "_resources"):
+            return
+
         """Setup resources for the file index
 
         The resources include:
@@ -163,6 +166,11 @@ class FileIndex(BaseIndex):
             "DocStore": self._docstore,
             "FileStoragePath": self._fs_path,
         }
+
+    def _ensure_resources(self) -> None:
+        if hasattr(self, "_resources"):
+            return
+        self._setup_resources()
 
     def _setup_indexing_cls(self):
         """Retrieve the indexing class for the file index
@@ -349,7 +357,7 @@ class FileIndex(BaseIndex):
         """Clean up the index when the user delete it"""
         import shutil
 
-        self._setup_resources()
+        self._ensure_resources()
         self._resources["Source"].__table__.drop(engine)  # type: ignore
         self._resources["Index"].__table__.drop(engine)  # type: ignore
         self._resources["FileGroup"].__table__.drop(engine)  # type: ignore
@@ -359,7 +367,6 @@ class FileIndex(BaseIndex):
 
     def on_start(self):
         """Setup the classes and hooks"""
-        self._setup_resources()
         self._normalize_supported_file_types()
         self._setup_indexing_cls()
         self._setup_retriever_cls()
@@ -465,6 +472,7 @@ class FileIndex(BaseIndex):
 
     def get_indexing_pipeline(self, settings, user_id) -> BaseFileIndexIndexing:
         """Define the interface of the indexing pipeline"""
+        self._ensure_resources()
 
         prefix = f"index.options.{self.id}."
         stripped_settings = {}
@@ -531,6 +539,7 @@ class FileIndex(BaseIndex):
         return normalized
 
     def list_source_rows(self, user_id: int | str | None) -> list[dict[str, Any]]:
+        self._ensure_resources()
         source_table = cast(Any, self._resources["Source"])
         statement = select(source_table)
         if self.config.get("private", False):
@@ -614,6 +623,7 @@ class FileIndex(BaseIndex):
     def get_retriever_pipelines(
         self, settings: dict, user_id: int | str | None, selected: Any = None
     ) -> list["BaseFileIndexRetriever"]:
+        self._ensure_resources()
         # retrieval settings
         prefix = f"index.options.{self.id}."
         stripped_settings = {}

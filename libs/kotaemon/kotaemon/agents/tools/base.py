@@ -1,3 +1,4 @@
+import json
 from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 
 from langchain.agents import Tool as LCTool
@@ -33,6 +34,28 @@ class BaseTool(BaseComponent):
     ] = False
     """Handle the content of the ToolException thrown."""
 
+    @staticmethod
+    def _validate_schema(args_schema: Type[BaseModel], payload: Any) -> BaseModel:
+        if hasattr(args_schema, "model_validate"):
+            return args_schema.model_validate(payload)
+        return args_schema.parse_obj(payload)
+
+    @staticmethod
+    def _schema_field_names(args_schema: Type[BaseModel]) -> list[str]:
+        model_fields = getattr(args_schema, "model_fields", None)
+        if isinstance(model_fields, dict):
+            return list(model_fields.keys())
+        legacy_fields = getattr(args_schema, "__fields__", None)
+        if isinstance(legacy_fields, dict):
+            return list(legacy_fields.keys())
+        return []
+
+    @staticmethod
+    def _dump_schema(model: BaseModel) -> Dict[str, Any]:
+        if hasattr(model, "model_dump"):
+            return model.model_dump()
+        return model.dict()
+
     def _parse_input(
         self,
         tool_input: Union[str, Dict],
@@ -41,13 +64,22 @@ class BaseTool(BaseComponent):
         args_schema = self.args_schema
         if isinstance(tool_input, str):
             if args_schema is not None:
-                key_ = next(iter(args_schema.model_fields.keys()))
-                args_schema.validate({key_: tool_input})
+                stripped_input = tool_input.strip()
+                if stripped_input.startswith("{") or stripped_input.startswith("["):
+                    parsed_input = json.loads(stripped_input)
+                    result = self._validate_schema(args_schema, parsed_input)
+                    dumped = self._dump_schema(result)
+                    if isinstance(parsed_input, dict):
+                        return {k: v for k, v in dumped.items() if k in parsed_input}
+                    return dumped
+                key_ = self._schema_field_names(args_schema)[0]
+                self._validate_schema(args_schema, {key_: tool_input})
             return tool_input
         else:
             if args_schema is not None:
-                result = args_schema.parse_obj(tool_input)
-                return {k: v for k, v in result.dict().items() if k in tool_input}
+                result = self._validate_schema(args_schema, tool_input)
+                dumped = self._dump_schema(result)
+                return {k: v for k, v in dumped.items() if k in tool_input}
         return tool_input
 
     def _run_tool(
