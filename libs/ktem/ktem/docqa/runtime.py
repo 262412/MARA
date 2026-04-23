@@ -1030,7 +1030,7 @@ class DocQARuntime:
 
         return DocQADoctorResult(
             ok=not issues,
-            app_name=getattr(self._app, "app_name", "Kotaemon"),
+            app_name=getattr(self._app, "app_name", "Slides"),
             default_user_id=resolved_user_id,
             index_name=index_name,
             index_id=index_id,

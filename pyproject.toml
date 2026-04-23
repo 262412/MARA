@@ -16,7 +16,7 @@ tag_filter = "v?\\d+(\\.\\d+)*.*"
 name = "kotaemon-app"
 dynamic = ["version"]
 requires-python = ">= 3.10"
-description = "Kotaemon App"
+description = "Slides App"
 readme = "README.md"
 dependencies = [
     "kotaemon[all]",
@@ -58,9 +58,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://cinnamon.github.io/kotaemon/"
-Repository = "https://github.com/Cinnamon/kotaemon/"
+Homepage = "https://github.com/262412/kotaemon/"
+Repository = "https://github.com/262412/kotaemon/"
 Documentation = "https://cinnamon.github.io/kotaemon/"
+Upstream = "https://github.com/Cinnamon/kotaemon/"
 
 [tool.codespell]
 skip = "*.js,*.css,*.map"

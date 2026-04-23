@@ -67,7 +67,7 @@ class HelpPage:
             with gr.Accordion("Create Your Own Space"):
                 gr.Markdown(
                     "This is a demo with limited functionality. "
-                    "Use **Create space** button to install Kotaemon "
+                    "Use **Create space** button to install Slides "
                     "in your own space with all features "
                     "(including upload and manage your private "
                     "documents securely)."
