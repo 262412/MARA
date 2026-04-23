@@ -5,6 +5,30 @@ from pathlib import Path
 from typing import Any
 
 
+STANDARD_BENCHMARK_ENGINES = (
+    "legacy_text_rag",
+    "docqa_runtime",
+    "direct_paste",
+    "oracle_page",
+)
+LEGACY_ENGINE_ALIASES = {
+    "kotaemon-text-rag": "legacy_text_rag",
+}
+CLI_ENGINE_CHOICES = (*STANDARD_BENCHMARK_ENGINES, *LEGACY_ENGINE_ALIASES)
+
+
+def normalize_engine_name(engine: str | None) -> str:
+    value = str(engine or "legacy_text_rag").strip()
+    return LEGACY_ENGINE_ALIASES.get(value, value)
+
+
+def normalize_scope(scope: str | None) -> str:
+    value = str(scope or "document").strip()
+    if value == "multi-document":
+        return "multi_document"
+    return value
+
+
 @dataclass(slots=True)
 class BenchmarkDocument:
     document_id: str
@@ -52,9 +76,9 @@ class ManifestBundle:
 class BenchmarkConfig:
     suite_name: str
     output_dir: Path
-    engine: str = "kotaemon-text-rag"
+    engine: str = "legacy_text_rag"
     scope: str = "document"
-    route: str = "hybrid"
+    route: str = "all"
     cost_profile: str | None = None
     reader_mode: str = "default"
     retrieval_mode: str = "hybrid"
@@ -67,6 +91,10 @@ class BenchmarkConfig:
     llm_name: str | None = None
     use_generation: bool = True
     prompt_template: str | None = None
+
+    def __post_init__(self) -> None:
+        self.engine = normalize_engine_name(self.engine)
+        self.scope = normalize_scope(self.scope)
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)

@@ -52,9 +52,9 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
             "--manifest",
             str(manifest_path),
             "--engine",
-            "mock-engine",
+            "direct_paste",
             "--scope",
-            "multi_document",
+            "multi-document",
             "--route",
             "table",
             "--cost-profile",
@@ -63,7 +63,7 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     )
 
     assert exit_code == 0
-    assert captured["config"].engine == "mock-engine"
+    assert captured["config"].engine == "direct_paste"
     assert captured["config"].scope == "multi_document"
     assert captured["config"].route == "table"
     assert captured["config"].cost_profile == "low-cost"

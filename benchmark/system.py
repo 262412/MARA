@@ -308,10 +308,26 @@ class KotaemonTextRAGSystem:
         document: BenchmarkDocument,
         example: BenchmarkExample,
     ) -> dict[str, Any]:
-        parsed_index = self._build_index(document)
-        retrieval_hits, retrieval_seconds = self._retrieve(
-            example.question, parsed_index
+        return self.run_example_documents([document], example)
+
+    def run_example_documents(
+        self,
+        documents: list[BenchmarkDocument],
+        example: BenchmarkExample,
+    ) -> dict[str, Any]:
+        parsed_indexes = [self._build_index(document) for document in documents]
+        retrieval_hits: list[RetrievedDocument] = []
+        retrieval_seconds = 0.0
+        for parsed_index in parsed_indexes:
+            hits, seconds = self._retrieve(example.question, parsed_index)
+            retrieval_hits.extend(hits)
+            retrieval_seconds += seconds
+        retrieval_hits.sort(
+            key=lambda hit: float(hit.score) if hit.score is not None else 0.0,
+            reverse=True,
         )
+        retrieval_hits = retrieval_hits[: self.config.top_k]
+
         answer, evidence, generation_seconds = self._generate_answer(
             example, retrieval_hits
         )
@@ -322,13 +338,18 @@ class KotaemonTextRAGSystem:
             if hit.metadata.get("page_label") is not None
         ]
         predicted_sources = [
-            f"{hit.metadata.get('file_name', document.path.name)}#page:{hit.metadata.get('page_label', '-')}"
+            f"{hit.metadata.get('file_name', documents[0].path.name)}#page:{hit.metadata.get('page_label', '-')}"
             for hit in retrieval_hits
+        ]
+        predicted_element_ids = [
+            str(hit.metadata["element_id"])
+            for hit in retrieval_hits
+            if str(hit.metadata.get("element_id") or "").strip()
         ]
 
         return {
             "example_id": example.example_id,
-            "document_id": document.document_id,
+            "document_id": example.document_id,
             "question": example.question,
             "gold_answers": example.answers,
             "gold_pages": example.evidence_pages,
@@ -336,21 +357,40 @@ class KotaemonTextRAGSystem:
             "predicted_answer": answer,
             "predicted_pages": predicted_pages,
             "predicted_sources": predicted_sources,
+            "predicted_element_ids": predicted_element_ids,
             "retrieved_hits": [
                 {
                     "doc_id": hit.doc_id,
+                    "document_id": hit.metadata.get("file_id")
+                    or hit.metadata.get("source_id")
+                    or hit.metadata.get("file_name"),
                     "score": round(float(hit.score), 4)
                     if hit.score is not None
                     else None,
                     "page_label": hit.metadata.get("page_label"),
-                    "file_name": hit.metadata.get("file_name", document.path.name),
+                    "element_id": hit.metadata.get("element_id"),
+                    "element_type": hit.metadata.get("element_type")
+                    or hit.metadata.get("type"),
+                    "file_name": hit.metadata.get("file_name", documents[0].path.name),
                     "text_preview": (hit.text or "")[:400],
                 }
                 for hit in retrieval_hits
             ],
+            "retrieval_trace": [
+                {
+                    "stage": "legacy_retrieval",
+                    "document_id": parsed_index.document.document_id,
+                    "chunk_count": len(parsed_index.index_documents),
+                }
+                for parsed_index in parsed_indexes
+            ],
             "timings": {
-                "parse_seconds": round(parsed_index.parse_seconds, 4),
-                "index_seconds": round(parsed_index.index_seconds, 4),
+                "parse_seconds": round(
+                    sum(item.parse_seconds for item in parsed_indexes), 4
+                ),
+                "index_seconds": round(
+                    sum(item.index_seconds for item in parsed_indexes), 4
+                ),
                 "retrieval_seconds": round(retrieval_seconds, 4),
                 "generation_seconds": round(generation_seconds, 4),
             },

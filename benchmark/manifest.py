@@ -4,7 +4,13 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-from .schemas import BenchmarkDocument, BenchmarkExample, ManifestBundle
+from .schemas import (
+    BenchmarkDocument,
+    BenchmarkExample,
+    ManifestBundle,
+    normalize_engine_name,
+    normalize_scope,
+)
 
 
 def _ensure_list(value: Any) -> list[Any]:
@@ -85,6 +91,38 @@ def _coerce_examples(
         documents=documents,
         examples=examples,
     )
+
+
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    return bool(value)
+
+
+def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
+    route_id = str(
+        record.get("route_id")
+        or record.get("id")
+        or record.get("route")
+        or record.get("name")
+        or "default"
+    ).strip()
+    route_name = str(record.get("route_name") or record.get("name") or route_id).strip()
+    return {
+        "route_id": route_id,
+        "route_name": route_name,
+        "engine": normalize_engine_name(record.get("engine")),
+        "scope": normalize_scope(record.get("scope")),
+        "reader_mode": str(record.get("reader_mode") or "default").strip(),
+        "retrieval_mode": str(record.get("retrieval_mode") or "hybrid").strip(),
+        "top_k": int(record.get("top_k") or 5),
+        "use_generation": _coerce_bool(record.get("use_generation"), True),
+        "cost_profile": record.get("cost_profile"),
+    }
 
 
 def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> ManifestBundle:
@@ -172,7 +210,7 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
         examples=examples,
         schema_version=2,
         routes=[
-            dict(item)
+            _coerce_route(item)
             for item in _ensure_list(payload.get("routes") or payload.get("route_matrix"))
             if isinstance(item, dict)
         ],
@@ -182,7 +220,7 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
 def load_manifest(manifest_path: str | Path) -> ManifestBundle:
     manifest_path = Path(manifest_path).resolve()
     suffix = manifest_path.suffix.lower()
-    raw = manifest_path.read_text(encoding="utf-8")
+    raw = manifest_path.read_text(encoding="utf-8-sig")
 
     if suffix == ".jsonl":
         records = [json.loads(line) for line in raw.splitlines() if line.strip()]

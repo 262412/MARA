@@ -126,7 +126,17 @@ def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evid
     assert bundle.dataset_name == "v2_suite"
     assert bundle.documents["doc-b"].modality == "table"
     assert bundle.routes == [
-        {"engine": "text-rag", "scope": "multi_document", "route": "hybrid"}
+        {
+            "route_id": "hybrid",
+            "route_name": "hybrid",
+            "engine": "text-rag",
+            "scope": "multi_document",
+            "reader_mode": "default",
+            "retrieval_mode": "hybrid",
+            "top_k": 5,
+            "use_generation": True,
+            "cost_profile": None,
+        }
     ]
     example = bundle.examples[0]
     assert example.document_ids == ["doc-a", "doc-b"]
@@ -134,6 +144,78 @@ def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evid
     assert example.modality == "table"
     assert example.answer_type == "numeric"
     assert example.gold_evidence[0]["element_id"] == "table-1"
+
+
+def test_load_v2_manifest_normalizes_route_matrix_defaults_and_aliases(tmp_path):
+    (tmp_path / "doc.pdf").write_text("pdf", encoding="utf-8")
+    manifest_path = tmp_path / "v2-routes.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "route_suite",
+                "documents": [
+                    {
+                        "document_id": "doc",
+                        "path": "doc.pdf",
+                    }
+                ],
+                "examples": [
+                    {
+                        "document_id": "doc",
+                        "question": "What is it?",
+                        "answer": "pdf",
+                    }
+                ],
+                "route_matrix": [
+                    {
+                        "id": "docqa-hybrid",
+                        "name": "DocQA hybrid",
+                        "engine": "docqa_runtime",
+                        "scope": "multi-document",
+                        "reader_mode": "docling",
+                        "retrieval_mode": "hybrid",
+                        "top_k": 8,
+                        "use_generation": False,
+                        "cost_profile": "quality",
+                    },
+                    {
+                        "route": "legacy",
+                        "engine": "kotaemon-text-rag",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    bundle = load_manifest(manifest_path)
+
+    assert bundle.routes == [
+        {
+            "route_id": "docqa-hybrid",
+            "route_name": "DocQA hybrid",
+            "engine": "docqa_runtime",
+            "scope": "multi_document",
+            "reader_mode": "docling",
+            "retrieval_mode": "hybrid",
+            "top_k": 8,
+            "use_generation": False,
+            "cost_profile": "quality",
+        },
+        {
+            "route_id": "legacy",
+            "route_name": "legacy",
+            "engine": "legacy_text_rag",
+            "scope": "document",
+            "reader_mode": "default",
+            "retrieval_mode": "hybrid",
+            "top_k": 5,
+            "use_generation": True,
+            "cost_profile": None,
+        },
+    ]
 
 
 def test_load_v1_manifest_sets_v2_defaults(tmp_path):
@@ -165,3 +247,19 @@ def test_load_v1_manifest_sets_v2_defaults(tmp_path):
     assert example.modality == "text"
     assert example.answer_type == "extractive"
     assert example.document_ids == ["doc"]
+
+
+def test_load_manifest_accepts_utf8_bom(tmp_path):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "bom.json"
+    manifest_path.write_text(
+        '\ufeff{"dataset_name": "bom", "examples": ['
+        '{"document_id": "doc", "document_path": "doc.txt", '
+        '"question": "What?", "answer": "alpha"}]}',
+        encoding="utf-8",
+    )
+
+    bundle = load_manifest(manifest_path)
+
+    assert bundle.dataset_name == "bom"
+    assert bundle.examples[0].answers == ["alpha"]
