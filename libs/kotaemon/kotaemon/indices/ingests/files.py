@@ -10,6 +10,7 @@ from kotaemon.base import BaseComponent, Document, Param
 from kotaemon.indices.extractors import BaseDocParser
 from kotaemon.indices.extractors.doc_parsers import ElementDocParser
 from kotaemon.indices.elements import annotate_document_with_element_metadata
+from kotaemon.indices.formulas import extract_formula_elements
 from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
 from kotaemon.loaders import (
     AdobeReader,
@@ -36,9 +37,9 @@ azure_reader = AzureAIDocumentIntelligenceLoader(
     cache_dir=getattr(flowsettings, "KH_MARKDOWN_OUTPUT_DIR", None),
 )
 docling_reader = DoclingReader()
-adobe_reader.vlm_endpoint = (
-    azure_reader.vlm_endpoint
-) = docling_reader.vlm_endpoint = getattr(flowsettings, "KH_VLM_ENDPOINT", "")
+adobe_reader.vlm_endpoint = azure_reader.vlm_endpoint = docling_reader.vlm_endpoint = (
+    getattr(flowsettings, "KH_VLM_ENDPOINT", "")
+)
 
 
 KH_DEFAULT_FILE_EXTRACTORS: dict[str, BaseReader] = {
@@ -87,7 +88,7 @@ class DocumentIngestor(BaseComponent):
         chunk_size=1024,
         chunk_overlap=256,
         separator="\n\n",
-        backup_separators=["\n", ".", " ", "\u200B"],
+        backup_separators=["\n", ".", " ", "\u200b"],
     )
     override_file_extractors: dict[str, Type[BaseReader]] = {}
 
@@ -118,10 +119,61 @@ class DocumentIngestor(BaseComponent):
     def _normalize_source_documents(self, documents: list[Document]) -> list[Document]:
         """Normalize loader output into element-aware documents before splitting."""
 
+        for document in documents:
+            self._ensure_multimodal_search_text(document)
+
+        documents = self._expand_text_formulas(documents)
         normalized = [
             annotate_document_with_element_metadata(document) for document in documents
         ]
         return ElementDocParser()(normalized)
+
+    @staticmethod
+    def _ensure_multimodal_search_text(document: Document) -> None:
+        """Use figure captions/OCR as searchable text when loaders return empty text."""
+
+        metadata = dict(document.metadata or {})
+        doc_type = (
+            str(metadata.get("type") or metadata.get("element_type") or "")
+            .strip()
+            .lower()
+        )
+        if doc_type not in {"image", "figure"}:
+            return
+
+        text = str(getattr(document, "text", "") or "").strip()
+        if text:
+            return
+
+        text_parts = []
+        for key in ("caption", "ocr_text", "image_text"):
+            value = metadata.get(key)
+            if value:
+                text_parts.append(str(value).strip())
+
+        search_text = "\n".join(part for part in text_parts if part)
+        if not search_text:
+            return
+
+        if hasattr(document, "set_content"):
+            document.set_content(search_text)
+        document.text = search_text
+        document.content = search_text
+
+    @staticmethod
+    def _expand_text_formulas(documents: list[Document]) -> list[Document]:
+        expanded: list[Document] = list(documents)
+        for document in documents:
+            metadata = dict(document.metadata or {})
+            doc_type = (
+                str(metadata.get("type") or metadata.get("element_type") or "text")
+                .strip()
+                .lower()
+            )
+            if doc_type not in {"", "text", "page"}:
+                continue
+            expanded.extend(extract_formula_elements(document))
+        return expanded
 
     def _normalize_split_nodes(
         self, nodes: list[Document], source_documents: list[Document]

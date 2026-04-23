@@ -130,14 +130,7 @@ class AzureAIDocumentIntelligenceLoader(BaseReader):
         """Extract the input file, allowing multi-modal extraction"""
         metadata = extra_info or {}
         file_name = Path(file_path)
-        with open(file_path, "rb") as fi:
-            poller = self.client_.begin_analyze_document(
-                self.model,
-                body=fi,
-                content_type="application/octet-stream",
-                output_content_format=self.output_content_format,
-            )
-            result = poller.result()
+        result = self._analyze_document(file_path)
 
         # the total text content of the document in `output_content_format` format
         text_content = result.content
@@ -146,16 +139,17 @@ class AzureAIDocumentIntelligenceLoader(BaseReader):
         # extract the figures
         figures = []
         for figure_desc in result.get("figures", []):
-            if not self.vlm_endpoint:
-                continue
             if file_path.suffix.lower() not in self.figure_friendly_filetypes:
                 continue
 
             # read & crop the image
-            page_number = figure_desc["boundingRegions"][0]["pageNumber"]
+            bounding_regions = figure_desc.get("boundingRegions") or []
+            if not bounding_regions:
+                continue
+            page_number = bounding_regions[0]["pageNumber"]
             page_width = result.pages[page_number - 1]["width"]
             page_height = result.pages[page_number - 1]["height"]
-            polygon = figure_desc["boundingRegions"][0]["polygon"]
+            polygon = bounding_regions[0]["polygon"]
             xs = [polygon[i] for i in range(0, len(polygon), 2)]
             ys = [polygon[i] for i in range(1, len(polygon), 2)]
             bbox = [
@@ -173,16 +167,28 @@ class AzureAIDocumentIntelligenceLoader(BaseReader):
             img_base64 = f"data:image/png;base64,{img_base64}"
 
             # caption the image
-            caption = generate_single_figure_caption(
-                figure=img_base64, vlm_endpoint=self.vlm_endpoint
-            )
+            extractive_caption = self._extract_figure_caption(text_content, figure_desc)
+            if self.vlm_endpoint:
+                gen_caption = generate_single_figure_caption(
+                    figure=img_base64, vlm_endpoint=self.vlm_endpoint
+                )
+            else:
+                gen_caption = ""
+            caption = "\n".join(
+                part for part in (extractive_caption, gen_caption) if part
+            ).strip()
 
             # store the image into document
             figure_metadata = {
                 "image_origin": img_base64,
                 "type": "image",
                 "page_label": page_number,
+                "file_name": file_name.name,
+                "file_path": file_path,
+                "bbox": bbox,
             }
+            if caption:
+                figure_metadata["caption"] = caption
             figure_metadata.update(metadata)
 
             figures.append(
@@ -238,3 +244,29 @@ class AzureAIDocumentIntelligenceLoader(BaseReader):
             )
 
         return [Document(content=text_content, metadata=metadata)] + figures + tables
+
+    def _analyze_document(self, file_path: Path):
+        with open(file_path, "rb") as fi:
+            poller = self.client_.begin_analyze_document(
+                self.model,
+                body=fi,
+                content_type="application/octet-stream",
+                output_content_format=self.output_content_format,
+            )
+            return poller.result()
+
+    @staticmethod
+    def _extract_figure_caption(text_content: str, figure_desc: dict) -> str:
+        """Extract a figure caption from Azure DI spans when available."""
+
+        caption = figure_desc.get("caption") or {}
+        spans = caption.get("spans") or figure_desc.get("spans") or []
+        parts = []
+        for span in spans:
+            try:
+                offset = int(span["offset"])
+                length = int(span["length"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            parts.append(text_content[offset : offset + length].strip())
+        return "\n".join(part for part in parts if part)
