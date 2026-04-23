@@ -6,11 +6,16 @@ from typing import Any
 from .manifest import load_manifest
 from .metrics import (
     anls_score,
+    citation_recall_score,
+    element_hit_score,
     exact_match_score,
+    formula_normalized_match_score,
+    numeric_tolerance_score,
     page_hit_score,
     recall_score,
     round_metric,
     safe_mean,
+    span_recall_score,
     token_f1_score,
 )
 from .schemas import BenchmarkConfig
@@ -20,10 +25,14 @@ from .system import KotaemonTextRAGSystem
 def _score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
     gold_answers = prediction["gold_answers"]
     predicted_answer = prediction["predicted_answer"]
-    return {
+    metrics = {
         "em": exact_match_score(predicted_answer, gold_answers),
         "f1": token_f1_score(predicted_answer, gold_answers),
         "anls": anls_score(predicted_answer, gold_answers),
+        "formula_match": formula_normalized_match_score(
+            predicted_answer, gold_answers
+        ),
+        "numeric_match": numeric_tolerance_score(predicted_answer, gold_answers),
         "page_hit": page_hit_score(
             prediction["predicted_pages"], prediction["gold_pages"]
         ),
@@ -31,6 +40,16 @@ def _score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
             prediction["predicted_sources"], prediction["gold_sources"]
         ),
     }
+    gold_evidence = prediction.get("gold_evidence", [])
+    if gold_evidence:
+        metrics["element_hit"] = element_hit_score(
+            prediction.get("predicted_element_ids", []), gold_evidence
+        )
+        metrics["span_recall"] = span_recall_score(predicted_answer, gold_evidence)
+        metrics["citation_recall"] = citation_recall_score(
+            prediction["predicted_sources"], gold_evidence
+        )
+    return metrics
 
 
 def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]:
@@ -52,9 +71,11 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                 "gold_answers": example.answers,
                 "gold_pages": example.evidence_pages,
                 "gold_sources": example.evidence_sources,
+                "gold_evidence": example.gold_evidence,
                 "predicted_answer": "",
                 "predicted_pages": [],
                 "predicted_sources": [],
+                "predicted_element_ids": [],
                 "retrieved_hits": [],
                 "timings": {
                     "parse_seconds": 0.0,
@@ -65,8 +86,13 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                 "context_preview": "",
                 "error": str(exc),
             }
-        prediction["metrics"] = _score_prediction(prediction)
         prediction["document_path"] = str(document.path)
+        prediction["document_ids"] = example.document_ids or [example.document_id]
+        prediction["scope"] = example.scope
+        prediction["modality"] = example.modality
+        prediction["answer_type"] = example.answer_type
+        prediction["gold_evidence"] = example.gold_evidence
+        prediction["metrics"] = _score_prediction(prediction)
         predictions.append(prediction)
 
     summary = {
@@ -83,6 +109,18 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         ),
         "avg_citation_recall": round_metric(
             safe_mean([item["metrics"]["citation_recall"] for item in predictions])
+        ),
+        "avg_element_hit": round_metric(
+            safe_mean([item["metrics"].get("element_hit") for item in predictions])
+        ),
+        "avg_span_recall": round_metric(
+            safe_mean([item["metrics"].get("span_recall") for item in predictions])
+        ),
+        "avg_formula_match": round_metric(
+            safe_mean([item["metrics"]["formula_match"] for item in predictions])
+        ),
+        "avg_numeric_match": round_metric(
+            safe_mean([item["metrics"]["numeric_match"] for item in predictions])
         ),
         "avg_retrieval_seconds": round_metric(
             mean(item["timings"]["retrieval_seconds"] for item in predictions)

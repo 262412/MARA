@@ -10,6 +10,54 @@ from ktem.docqa.runtime import DocQARuntime
 from sqlmodel import Session, select
 
 
+def _make_scope_runtime(monkeypatch):
+    class _FakeReasoning:
+        @staticmethod
+        def get_info():
+            return {"id": "simple"}
+
+        @staticmethod
+        def get_pipeline(_settings, _state, _retrievers):
+            return SimpleNamespace()
+
+    class _FakeIndex:
+        id = 9
+
+        def get_retriever_pipelines(self, _settings, _user_id, _selected_input):
+            return []
+
+    class _FakeFileIndex:
+        id = 9
+
+        def resolve_selected_ids(self, _user_id, _selected_input):
+            return ["file-1"]
+
+    class _FakePreview:
+        def __init__(self):
+            self.page_context_calls = []
+
+        def resolve_file_name(self, _file_id):
+            return "alpha.pdf"
+
+        def resolve_selected_file(self, _selected_file_ids):
+            return "file-1", "alpha.pdf", None
+
+        def get_page_context_text(self, file_id, file_name, page_number):
+            self.page_context_calls.append((file_id, file_name, page_number))
+            return "page-only context"
+
+    monkeypatch.setattr(runtime_module, "reasonings", {"simple": _FakeReasoning})
+
+    runtime = object.__new__(DocQARuntime)
+    runtime._resolve_user_id = lambda user_id=None: "user-1"
+    runtime.load_settings = lambda user_id=None: {"reasoning.use": "simple"}
+    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[_FakeIndex()]))
+    runtime._web_search_cls = None
+    runtime.file_index = _FakeFileIndex()
+    runtime._preview = _FakePreview()
+    return runtime
+
+
 def test_runtime_module_reexports_extracted_runtime_components():
     assert runtime_module.DocQARequest is _runtime_models.DocQARequest
     assert runtime_module.DocQAResponse is _runtime_models.DocQAResponse
@@ -52,6 +100,47 @@ def test_normalize_page_number_supports_document_scope():
     assert DocQARuntime._normalize_page_number("") is None
     assert DocQARuntime._normalize_page_number(5) == 5
     assert DocQARuntime._normalize_page_number(0) == 1
+
+
+def test_prepare_pipeline_page_scope_uses_current_page_context(monkeypatch):
+    runtime = _make_scope_runtime(monkeypatch)
+
+    prepared = runtime._prepare_pipeline(
+        runtime_module.DocQARequest(
+            prompt="What does this page say?",
+            selected_inputs={9: ["file-1"]},
+            active_file_id="file-1",
+            page_number=3,
+            qa_scope="page",
+        )
+    )
+
+    assert prepared.qa_scope == "page"
+    assert prepared.pipeline.qa_scope == "page"
+    assert prepared.pipeline.page_number == 3
+    assert prepared.pipeline.selected_text == "page-only context"
+    assert runtime._preview.page_context_calls == [("file-1", "alpha.pdf", 3)]
+
+
+def test_prepare_pipeline_document_scope_does_not_force_selected_page(monkeypatch):
+    runtime = _make_scope_runtime(monkeypatch)
+
+    prepared = runtime._prepare_pipeline(
+        runtime_module.DocQARequest(
+            prompt="Summarize the whole document.",
+            selected_inputs={9: ["file-1"]},
+            active_file_id="file-1",
+            page_number=3,
+            qa_scope="document",
+        )
+    )
+
+    assert prepared.qa_scope == "document"
+    assert prepared.page_number is None
+    assert prepared.pipeline.qa_scope == "document"
+    assert prepared.pipeline.page_number is None
+    assert prepared.pipeline.selected_text == ""
+    assert runtime._preview.page_context_calls == []
 
 
 def test_ensure_default_managed_user_reuses_existing_admin(monkeypatch):

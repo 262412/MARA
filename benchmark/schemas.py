@@ -10,6 +10,7 @@ class BenchmarkDocument:
     document_id: str
     path: Path
     format_type: str
+    modality: str = "text"
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -24,8 +25,13 @@ class BenchmarkExample:
     document_id: str
     question: str
     answers: list[str]
+    document_ids: list[str] = field(default_factory=list)
+    scope: str = "document"
+    modality: str = "text"
+    answer_type: str = "extractive"
     evidence_pages: list[int | str] = field(default_factory=list)
     evidence_sources: list[str] = field(default_factory=list)
+    gold_evidence: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -38,12 +44,18 @@ class ManifestBundle:
     manifest_path: Path
     documents: dict[str, BenchmarkDocument]
     examples: list[BenchmarkExample]
+    schema_version: int = 1
+    routes: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(slots=True)
 class BenchmarkConfig:
     suite_name: str
     output_dir: Path
+    engine: str = "kotaemon-text-rag"
+    scope: str = "document"
+    route: str = "hybrid"
+    cost_profile: str | None = None
     reader_mode: str = "default"
     retrieval_mode: str = "hybrid"
     chunk_size: int = 1024

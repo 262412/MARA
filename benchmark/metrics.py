@@ -8,6 +8,7 @@ from statistics import mean
 
 PUNCT_TABLE = str.maketrans("", "", string.punctuation)
 WHITESPACE_RE = re.compile(r"\s+")
+NUMBER_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
 
 
 def normalize_text(text: str) -> str:
@@ -123,6 +124,105 @@ def recall_score(predicted_items: list[str], gold_items: list[str]) -> float | N
     if not gold:
         return None
     return len(predicted & gold) / len(gold)
+
+
+def _gold_values_from_evidence(
+    gold_evidence: list[dict[str, object]],
+    key: str,
+) -> list[str]:
+    return [
+        str(item[key]).strip()
+        for item in gold_evidence
+        if str(item.get(key) or "").strip()
+    ]
+
+
+def element_hit_score(
+    predicted_element_ids: list[str],
+    gold_evidence: list[dict[str, object]],
+) -> float | None:
+    gold_element_ids = _gold_values_from_evidence(gold_evidence, "element_id")
+    if not gold_element_ids:
+        return None
+    predicted = {
+        str(element_id).strip()
+        for element_id in predicted_element_ids
+        if str(element_id).strip()
+    }
+    return float(bool(predicted & set(gold_element_ids)))
+
+
+def span_recall_score(
+    predicted_text: str,
+    gold_evidence: list[dict[str, object]],
+) -> float | None:
+    gold_spans = _gold_values_from_evidence(gold_evidence, "span")
+    if not gold_spans:
+        return None
+    normalized_prediction = normalize_text(predicted_text)
+    if not normalized_prediction:
+        return 0.0
+    hits = sum(
+        1 for span in gold_spans if normalize_text(span) in normalized_prediction
+    )
+    return hits / len(gold_spans)
+
+
+def citation_recall_score(
+    predicted_citations: list[str],
+    gold_evidence: list[dict[str, object]],
+) -> float | None:
+    return recall_score(
+        predicted_citations,
+        _gold_values_from_evidence(gold_evidence, "citation"),
+    )
+
+
+def _normalize_formula(text: str) -> str:
+    formula = str(text or "").strip().lower()
+    if formula.startswith("="):
+        formula = formula[1:]
+    return WHITESPACE_RE.sub("", formula)
+
+
+def formula_normalized_match_score(
+    prediction: str,
+    gold_answers: list[str],
+) -> float:
+    normalized_prediction = _normalize_formula(prediction)
+    if not normalized_prediction or not gold_answers:
+        return 0.0
+    return float(
+        any(
+            normalized_prediction == _normalize_formula(answer)
+            for answer in gold_answers
+        )
+    )
+
+
+def _extract_number(text: str) -> float | None:
+    match = NUMBER_RE.search(str(text or ""))
+    if not match:
+        return None
+    return float(match.group(0).replace(",", ""))
+
+
+def numeric_tolerance_score(
+    prediction: str,
+    gold_answers: list[str],
+    tolerance: float = 0.001,
+) -> float:
+    predicted = _extract_number(prediction)
+    if predicted is None or not gold_answers:
+        return 0.0
+    for answer in gold_answers:
+        gold = _extract_number(answer)
+        if gold is None:
+            continue
+        allowed_delta = abs(gold) * tolerance
+        if abs(predicted - gold) <= allowed_delta:
+            return 1.0
+    return 0.0
 
 
 def safe_mean(values: list[float | None]) -> float | None:

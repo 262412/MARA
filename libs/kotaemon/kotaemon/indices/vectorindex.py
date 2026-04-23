@@ -13,6 +13,7 @@ from kotaemon.embeddings import BaseEmbeddings
 from kotaemon.storages import BaseDocumentStore, BaseVectorStore
 
 from .base import BaseIndexing, BaseRetrieval
+from .elements import annotate_document_with_element_metadata
 from .rankings import BaseReranking, LLMReranking
 
 VECTOR_STORE_FNAME = "vectorstore"
@@ -101,9 +102,13 @@ class VectorIndexing(BaseIndexing):
 
         for item in cast(list, text):
             if isinstance(item, str):
-                input_.append(Document(text=item, id_=str(uuid.uuid4())))
+                input_.append(
+                    annotate_document_with_element_metadata(
+                        Document(text=item, id_=str(uuid.uuid4()))
+                    )
+                )
             elif isinstance(item, Document):
-                input_.append(item)
+                input_.append(annotate_document_with_element_metadata(Document(item)))
             else:
                 raise ValueError(
                     f"Invalid input type {type(item)}, should be str or Document"
@@ -132,6 +137,49 @@ class VectorRetrieval(BaseRetrieval):
         if top_k:
             documents = documents[:top_k]
         return documents
+
+    @staticmethod
+    def _reciprocal_rank_fuse(
+        vector_docs: list[RetrievedDocument],
+        text_docs: list[RetrievedDocument],
+        k: int = 60,
+    ) -> list[RetrievedDocument]:
+        if not vector_docs:
+            return text_docs
+        if not text_docs:
+            return vector_docs
+
+        fused_scores: dict[str, float] = {}
+        fused_docs: dict[str, RetrievedDocument] = {}
+        best_ranks: dict[str, int] = {}
+
+        for docs in (vector_docs, text_docs):
+            for rank, doc in enumerate(docs, start=1):
+                doc_id = doc.doc_id
+                fused_scores[doc_id] = fused_scores.get(doc_id, 0.0) + 1 / (k + rank)
+
+                current_best_rank = best_ranks.get(doc_id)
+                current_doc = fused_docs.get(doc_id)
+                keep_doc = current_doc is None or rank < current_best_rank
+                if (
+                    current_doc is not None
+                    and rank == current_best_rank
+                    and len(doc.metadata) > len(current_doc.metadata)
+                ):
+                    keep_doc = True
+
+                if keep_doc:
+                    fused_docs[doc_id] = doc
+                    best_ranks[doc_id] = rank
+
+        result = []
+        for doc_id, score in fused_scores.items():
+            doc = fused_docs[doc_id]
+            doc_dict = doc.to_dict()
+            doc_dict["score"] = score
+            result.append(RetrievedDocument(**doc_dict))
+
+        return sorted(result, key=lambda doc: doc.score, reverse=True)
 
     def run(
         self, text: str | Document, top_k: Optional[int] = None, **kwargs
@@ -226,16 +274,15 @@ class VectorRetrieval(BaseRetrieval):
             vs_query_thread.join()
             ds_query_thread.join()
 
-            vs_id_set = set(vs_ids)
-            result = [
+            ds_result = [
                 RetrievedDocument(**doc.to_dict(), score=-1.0)
                 for doc in ds_docs
-                if doc.doc_id not in vs_id_set
             ]
-            result += [
+            vs_result = [
                 RetrievedDocument(**doc.to_dict(), score=score)
                 for doc, score in zip(vs_docs, vs_scores)
             ]
+            result = self._reciprocal_rank_fuse(vs_result, ds_result)
             logger.debug("Got %s from vectorstore", len(vs_docs))
             logger.debug("Got %s from docstore", len(ds_docs))
 
