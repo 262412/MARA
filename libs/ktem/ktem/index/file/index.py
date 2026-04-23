@@ -50,8 +50,18 @@ class FileIndex(BaseIndex):
         self._default_settings: dict[str, dict] = {}
         self._setting_mappings: dict[str, dict] = {}
 
+    def __getattr__(self, name: str) -> Any:
+        if name == "_resources":
+            self._setup_resources()
+            try:
+                return self.__dict__["_resources"]
+            except KeyError as exc:
+                raise AttributeError(name) from exc
+
+        raise AttributeError(f"{type(self).__name__!s} object has no attribute {name!r}")
+
     def _setup_resources(self):
-        if hasattr(self, "_resources"):
+        if "_resources" in self.__dict__:
             return
 
         """Setup resources for the file index
@@ -168,7 +178,7 @@ class FileIndex(BaseIndex):
         }
 
     def _ensure_resources(self) -> None:
-        if hasattr(self, "_resources"):
+        if "_resources" in self.__dict__:
             return
         self._setup_resources()
 

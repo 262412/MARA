@@ -166,6 +166,26 @@ def test_file_index_list_source_rows_initializes_resources_on_demand(monkeypatch
     assert calls == ["resources"]
 
 
+def test_file_index_direct_resources_access_initializes_on_demand(monkeypatch):
+    import ktem.index.file.index as file_index_module
+
+    index = file_index_module.FileIndex(app=object(), id=1, name="Files", config={})
+    calls: list[str] = []
+
+    def _fake_setup_resources(self):
+        calls.append("resources")
+        self._resources = {"Source": object()}
+
+    monkeypatch.setattr(
+        file_index_module.FileIndex,
+        "_setup_resources",
+        _fake_setup_resources,
+    )
+
+    assert index._resources["Source"] is not None
+    assert calls == ["resources"]
+
+
 def test_react_user_settings_uses_lazy_llm_registry(monkeypatch, caplog):
     import ktem.reasoning.react as module
 
