@@ -64,7 +64,6 @@ class _RuntimeAppContext:
 
     def register_extensions(self):
         import pluggy
-
         from ktem import extension_protocol
         from ktem.settings import BaseSettingGroup
 

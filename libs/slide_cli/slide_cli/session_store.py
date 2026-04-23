@@ -34,7 +34,9 @@ def _atomic_write_text(path: Path, content: str) -> None:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     _atomic_write_text(
         path,
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, default=_json_default),
+        json.dumps(
+            payload, ensure_ascii=False, indent=2, sort_keys=True, default=_json_default
+        ),
     )
 
 
@@ -82,7 +84,9 @@ def _coerce_text(value: Any) -> str:
 def _normalize_mode(mode: str) -> str:
     normalized = str(mode or "").strip().lower()
     if normalized not in SESSION_MODES:
-        raise ValueError(f"Unsupported session mode '{mode}'. Expected one of {sorted(SESSION_MODES)}.")
+        raise ValueError(
+            f"Unsupported session mode '{mode}'. Expected one of {sorted(SESSION_MODES)}."
+        )
     return normalized
 
 
@@ -190,7 +194,9 @@ class SlideSessionStore:
         normalized_mode = _normalize_mode(mode)
         created_at = _utc_now_iso()
         resolved_session_id = session_id or _build_session_id()
-        session_paths = self.runtime_paths.session_paths(resolved_session_id).ensure_exists()
+        session_paths = self.runtime_paths.session_paths(
+            resolved_session_id
+        ).ensure_exists()
 
         if session_paths.metadata_path.exists():
             raise FileExistsError(f"Session '{resolved_session_id}' already exists.")
@@ -224,13 +230,19 @@ class SlideSessionStore:
         return self.persist_session(session)
 
     def persist_session(self, session: SlideSession) -> SlideSession:
-        session_paths = self.runtime_paths.session_paths(session.session_id).ensure_exists()
+        session_paths = self.runtime_paths.session_paths(
+            session.session_id
+        ).ensure_exists()
         existing_payload = (
             _read_json(session_paths.metadata_path)
             if session_paths.metadata_path.exists()
             else {}
         )
-        created_at = _coerce_text(session.created_at) or _coerce_text(existing_payload.get("created_at")) or _utc_now_iso()
+        created_at = (
+            _coerce_text(session.created_at)
+            or _coerce_text(existing_payload.get("created_at"))
+            or _utc_now_iso()
+        )
         updated_at = _coerce_text(session.updated_at) or _utc_now_iso()
         events = [dict(event) for event in session.events]
 
@@ -274,7 +286,9 @@ class SlideSessionStore:
         event_payload.setdefault("timestamp", _utc_now_iso())
         session.events.append(event_payload)
         session.event_count = len(session.events)
-        session.updated_at = _coerce_text(event_payload.get("timestamp")) or _utc_now_iso()
+        session.updated_at = (
+            _coerce_text(event_payload.get("timestamp")) or _utc_now_iso()
+        )
 
         with session.transcript_path.open("a", encoding="utf-8") as file_obj:
             file_obj.write(
@@ -304,7 +318,9 @@ class SlideSessionStore:
             payload = _read_json(metadata_path)
             if normalized_mode is not None and payload.get("mode") != normalized_mode:
                 continue
-            session_id = _coerce_text(payload.get("session_id")) or metadata_path.parent.name
+            session_id = (
+                _coerce_text(payload.get("session_id")) or metadata_path.parent.name
+            )
             session_paths = self.runtime_paths.session_paths(session_id).ensure_exists()
             sessions.append(self._summary_from_payload(payload, session_paths))
 
@@ -324,7 +340,9 @@ class SlideSessionStore:
         session_paths.ensure_exists()
         payload = _read_json(session_paths.metadata_path)
         events = _read_jsonl(session_paths.transcript_path)
-        summary = self._summary_from_payload(payload, session_paths, event_count=len(events))
+        summary = self._summary_from_payload(
+            payload, session_paths, event_count=len(events)
+        )
         return SlideSession(
             session_id=summary.session_id,
             mode=summary.mode,
@@ -371,7 +389,8 @@ class SlideSessionStore:
     ) -> SlideSessionSummary:
         normalized_mode = _normalize_mode(_coerce_text(payload.get("mode")))
         return SlideSessionSummary(
-            session_id=_coerce_text(payload.get("session_id")) or session_paths.session_id,
+            session_id=_coerce_text(payload.get("session_id"))
+            or session_paths.session_id,
             mode=normalized_mode,
             title=_build_title(
                 mode=normalized_mode,

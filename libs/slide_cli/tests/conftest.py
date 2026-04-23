@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 
-
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 KOTAEMON_ROOT = PACKAGE_ROOT.parents[1] / "kotaemon"
 

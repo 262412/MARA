@@ -1,7 +1,6 @@
 import subprocess
 
 from pptx import Presentation
-
 from slide_cli.deck import load_deck_snapshot
 from slide_cli.tools import ReadFileTool, RunShellTool, SlideToolContext
 
@@ -41,6 +40,6 @@ def test_run_shell_reports_timeout(monkeypatch, tmp_path):
 
     monkeypatch.setattr("slide_cli.tools.subprocess.run", _raise_timeout)
 
-    result = tool.run("python -c \"import time; time.sleep(5)\"")
+    result = tool.run('python -c "import time; time.sleep(5)"')
 
     assert "timed out after 1 seconds" in result

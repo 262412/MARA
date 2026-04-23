@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import os
-from pathlib import Path
 import shutil
 import subprocess
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable
 
 try:
@@ -153,6 +153,20 @@ class _TextTargetBinding:
     set_text: Callable[[str], None]
 
 
+def _make_text_getter(target) -> Callable[[], str]:
+    def _get_text() -> str:
+        return getattr(target, "text", "") or ""
+
+    return _get_text
+
+
+def _make_text_setter(target) -> Callable[[str], None]:
+    def _set_text(value: str) -> None:
+        setattr(target, "text", value or "")
+
+    return _set_text
+
+
 def load_deck_snapshot(source_path: PathLike) -> DeckSnapshot:
     path = Path(source_path)
     presentation = _open_presentation(path)
@@ -194,7 +208,9 @@ def apply_deck_patch(
         binding.set_text(edit.after_text)
         applied.append(edit.target_id)
 
-    destination = Path(output_path) if output_path is not None else _default_output_path(path)
+    destination = (
+        Path(output_path) if output_path is not None else _default_output_path(path)
+    )
     destination.parent.mkdir(parents=True, exist_ok=True)
     presentation.save(str(destination))
 
@@ -217,12 +233,16 @@ def export_deck_pdf(
     if not source.exists():
         raise FileNotFoundError(source)
 
-    resolved_soffice = soffice_path or os.environ.get("SOFFICE_PATH") or shutil.which("soffice")
+    resolved_soffice = (
+        soffice_path or os.environ.get("SOFFICE_PATH") or shutil.which("soffice")
+    )
     if not resolved_soffice:
         raise RuntimeError("LibreOffice is required to export slide decks to PDF.")
 
     requested_output = Path(output_path).resolve() if output_path is not None else None
-    target_dir = requested_output.parent if requested_output is not None else source.parent
+    target_dir = (
+        requested_output.parent if requested_output is not None else source.parent
+    )
     target_dir.mkdir(parents=True, exist_ok=True)
 
     completed = subprocess.run(
@@ -242,7 +262,9 @@ def export_deck_pdf(
         check=False,
     )
     if completed.returncode != 0:
-        details = completed.stderr.strip() or completed.stdout.strip() or "unknown error"
+        details = (
+            completed.stderr.strip() or completed.stdout.strip() or "unknown error"
+        )
         raise RuntimeError(f"LibreOffice export failed: {details}")
 
     converted_path = target_dir / f"{source.stem}.pdf"
@@ -398,12 +420,8 @@ def _collect_shape_bindings(
                                 shape_path,
                                 f"table-r{row_index}c{column_index}",
                             ),
-                            get_text=lambda cell=cell: getattr(cell, "text", "") or "",
-                            set_text=lambda value, cell=cell: setattr(
-                                cell,
-                                "text",
-                                value or "",
-                            ),
+                            get_text=_make_text_getter(cell),
+                            set_text=_make_text_setter(cell),
                         )
                     )
         except Exception:
@@ -415,12 +433,8 @@ def _collect_shape_bindings(
             _TextTargetBinding(
                 slide_number=slide_number,
                 target_id=_target_id(slide_number, shape_path, "text"),
-                get_text=lambda shape=shape: getattr(shape, "text", "") or "",
-                set_text=lambda value, shape=shape: setattr(
-                    shape,
-                    "text",
-                    value or "",
-                ),
+                get_text=_make_text_getter(shape),
+                set_text=_make_text_setter(shape),
             )
         )
 

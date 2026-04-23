@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
 import sys
-
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -41,9 +40,9 @@ def test_release_docs_cover_direct_slide_cli_publish_and_install():
     package_readme = (REPO_ROOT / "libs" / "slide_cli" / "README.md").read_text(
         encoding="utf-8"
     )
-    workflow = (REPO_ROOT / ".github" / "workflows" / "publish-packages.yaml").read_text(
-        encoding="utf-8"
-    )
+    workflow = (
+        REPO_ROOT / ".github" / "workflows" / "publish-packages.yaml"
+    ).read_text(encoding="utf-8")
 
     assert "pip install slide-cli" in root_readme
     assert "testpypi" in root_readme.lower()

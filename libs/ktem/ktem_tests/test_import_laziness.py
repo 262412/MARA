@@ -75,7 +75,9 @@ def test_prompt_optimization_package_defers_optional_submodules(monkeypatch):
     _ = package.RewriteQuestionPipeline
     _ = package.DecomposeQuestionPipeline
 
-    assert "ktem.reasoning.prompt_optimization.fewshot_rewrite_question" not in sys.modules
+    assert (
+        "ktem.reasoning.prompt_optimization.fewshot_rewrite_question" not in sys.modules
+    )
     assert "ktem.reasoning.prompt_optimization.mindmap" not in sys.modules
 
 
@@ -85,15 +87,23 @@ def test_file_index_on_start_defers_storage_setup(monkeypatch):
     index = file_index_module.FileIndex(app=object(), id=1, name="Files", config={})
     calls: list[str] = []
 
+    def _get_docstore(*_args, **_kwargs):
+        calls.append("docstore")
+        return object()
+
+    def _get_vectorstore(*_args, **_kwargs):
+        calls.append("vectorstore")
+        return object()
+
     monkeypatch.setattr(
         file_index_module,
         "get_docstore",
-        lambda *_args, **_kwargs: calls.append("docstore") or object(),
+        _get_docstore,
     )
     monkeypatch.setattr(
         file_index_module,
         "get_vectorstore",
-        lambda *_args, **_kwargs: calls.append("vectorstore") or object(),
+        _get_vectorstore,
     )
     monkeypatch.setattr(
         file_index_module.FileIndex,

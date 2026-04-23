@@ -305,7 +305,11 @@ def _run_docqa_repl(
             )
             continue
         if prompt.startswith("/use"):
-            refs = [part for part in re.split(r"[,\s]+", prompt[len("/use") :].strip()) if part]
+            refs = [
+                part
+                for part in re.split(r"[,\s]+", prompt[len("/use") :].strip())
+                if part
+            ]
             if not refs:
                 _echo_text("Usage: /use <file-id-or-name> [another-file]")
                 continue
@@ -412,9 +416,7 @@ def docqa_doctor(json_output):
         _echo_text(f"Default user: {result['default_user_id']}")
         _echo_text(f"Index: {result['index_name'] or '(missing)'}")
         _echo_text(f"Default LLM: {result['llm_default'] or '(missing)'}")
-        _echo_text(
-            f"Default embedding: {result['embedding_default'] or '(missing)'}"
-        )
+        _echo_text(f"Default embedding: {result['embedding_default'] or '(missing)'}")
         _echo_text(f"Indexed files: {result['file_count']}")
         _echo_text(f"Saved sessions: {result['session_count']}")
         if result["graph_cache_dir"]:
@@ -691,7 +693,9 @@ def docqa_chat(
 def docqa_resume(conversation_id, json_output):
     """Resume an existing conversation in the interactive DocQA REPL."""
     runtime = create_docqa_runtime()
-    _run_docqa_repl(runtime=runtime, conversation_id=conversation_id, json_output=json_output)
+    _run_docqa_repl(
+        runtime=runtime, conversation_id=conversation_id, json_output=json_output
+    )
 
 
 main = docqa

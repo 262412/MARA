@@ -7,6 +7,7 @@ def _get_llms():
 
     return llms
 
+
 DEFAULT_REWRITE_PROMPT = (
     "Given the following question, rephrase and expand it "
     "to help you do better answering. Maintain all information "

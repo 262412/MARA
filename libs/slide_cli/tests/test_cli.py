@@ -1,10 +1,9 @@
 import json
 import sys
 
+import pytest
 from click.testing import CliRunner
 from pptx import Presentation
-import pytest
-
 from slide_cli.cli import main
 
 
@@ -76,9 +75,7 @@ def test_help_lists_core_commands():
         ("review", ["--file", "--json"]),
     ],
 )
-def test_phase3_command_help_exposes_canonical_arguments(
-    command_name, expected_tokens
-):
+def test_phase3_command_help_exposes_canonical_arguments(command_name, expected_tokens):
     runner = CliRunner()
 
     result = runner.invoke(main, [command_name, "--help"])
@@ -389,7 +386,9 @@ def test_export_pdf_json_emits_output_path(monkeypatch, tmp_path):
         )
         return output_path
 
-    monkeypatch.setattr("slide_cli.cli.export_deck_pdf", _fake_export_deck_pdf, raising=False)
+    monkeypatch.setattr(
+        "slide_cli.cli.export_deck_pdf", _fake_export_deck_pdf, raising=False
+    )
     monkeypatch.setattr("slide_cli.deck.export_deck_pdf", _fake_export_deck_pdf)
 
     runner = CliRunner()
@@ -434,7 +433,9 @@ def test_review_json_emits_structured_deck_summary(monkeypatch, tmp_path):
             indent=2,
         )
 
-    monkeypatch.setattr("slide_cli.tools.SlideToolContext.review_deck", _fake_review_deck)
+    monkeypatch.setattr(
+        "slide_cli.tools.SlideToolContext.review_deck", _fake_review_deck
+    )
 
     runner = CliRunner()
     result = runner.invoke(

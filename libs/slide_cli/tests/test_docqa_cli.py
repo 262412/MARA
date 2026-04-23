@@ -2,7 +2,6 @@ import json
 from types import SimpleNamespace
 
 from click.testing import CliRunner
-
 from slide_cli.docqa_cli import docqa
 
 
@@ -380,9 +379,7 @@ def test_docqa_sessions_use_lightweight_collection(monkeypatch):
     ]
 
     def _unexpected_runtime():
-        raise AssertionError(
-            "docqa sessions should not create the full DocQA runtime"
-        )
+        raise AssertionError("docqa sessions should not create the full DocQA runtime")
 
     monkeypatch.setattr("slide_cli.docqa_cli.create_docqa_runtime", _unexpected_runtime)
     monkeypatch.setattr(

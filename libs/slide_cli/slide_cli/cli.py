@@ -297,7 +297,9 @@ def read_cmd(path, cwd, json_output):
 def write_cmd(path, content, append, cwd, json_output):
     """Write or append one workspace text file from the top-level agent line."""
     try:
-        payload = write_workspace_file(path=path, content=content, cwd=cwd, append=append)
+        payload = write_workspace_file(
+            path=path, content=content, cwd=cwd, append=append
+        )
     except Exception as exc:
         raise click.ClickException(str(exc)) from None
 
@@ -434,7 +436,9 @@ def inspect_cmd(input_path, json_output):
 
 @main.command("read-slide")
 @click.option("--file", "input_path", required=True, type=click.Path(exists=True))
-@click.option("--slide", "slide_number", required=True, type=int, help="Slide number to read.")
+@click.option(
+    "--slide", "slide_number", required=True, type=int, help="Slide number to read."
+)
 @click.option(
     "--json",
     "json_output",
@@ -723,7 +727,9 @@ def run_cmd(
     if result.get("output_path"):
         _echo_text(f"Output: {result['output_path']}")
     elif result.get("suggested_output_path"):
-        _echo_text(f"Preview only. Use --apply or --output to write: {result['suggested_output_path']}")
+        _echo_text(
+            f"Preview only. Use --apply or --output to write: {result['suggested_output_path']}"
+        )
 
 
 @main.command("sessions")
@@ -770,7 +776,9 @@ def _run_repl(
     store = _slide_session_store_cls()()
     while True:
         try:
-            user_prompt = click.prompt("slide", prompt_suffix="> ", show_default=False, default="")
+            user_prompt = click.prompt(
+                "slide", prompt_suffix="> ", show_default=False, default=""
+            )
         except (EOFError, click.Abort):
             _echo_text("")
             break
@@ -819,8 +827,13 @@ def _run_repl(
         else:
             _echo_text(result["response"])
             if result.get("can_apply"):
-                output_hint = result.get("suggested_output_path") or "(default output path)"
-                if click.confirm(f"Apply this patch to a deck copy now? [{output_hint}]", default=False):
+                output_hint = (
+                    result.get("suggested_output_path") or "(default output path)"
+                )
+                if click.confirm(
+                    f"Apply this patch to a deck copy now? [{output_hint}]",
+                    default=False,
+                ):
                     try:
                         applied = apply_session_patch(session_id)
                     except Exception as exc:

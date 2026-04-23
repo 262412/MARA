@@ -124,7 +124,6 @@ def delete_workspace_path(
     recursive: bool = False,
     yes: bool = False,
 ) -> dict[str, Any]:
-    _ignored_yes = yes
     workspace_root, resolved = resolve_workspace_path(path, cwd=cwd)
     relative = str(resolved.relative_to(workspace_root))
 
@@ -275,7 +274,9 @@ def collect_doctor_payload(config_path: str = "modelcli.yml") -> dict[str, Any]:
     from kotaemon.modelcli import build_registry, load_runtime_config
 
     resolved_config_path = (
-        str(Path(config_path).resolve()) if config_path and Path(config_path).exists() else ""
+        str(Path(config_path).resolve())
+        if config_path and Path(config_path).exists()
+        else ""
     )
     cfg = load_runtime_config(config_path if resolved_config_path else None)
     registry = build_registry()
@@ -324,7 +325,9 @@ def _patch_from_dict(payload: dict[str, Any] | None) -> "DeckPatch | None":
                     slide_number=int(item["slide_number"]),
                     target_id=str(item["target_id"]),
                     before_text=(
-                        None if item.get("before_text") is None else str(item.get("before_text"))
+                        None
+                        if item.get("before_text") is None
+                        else str(item.get("before_text"))
                     ),
                     after_text=str(item["after_text"]),
                 )
@@ -407,7 +410,11 @@ def run_slide_task(
         apply_mode="preview" if dry_run else apply_mode,
         output_path=output_path,
     )
-    store = SlideSessionStore(base_dir=base_dir) if base_dir is not None else SlideSessionStore()
+    store = (
+        SlideSessionStore(base_dir=base_dir)
+        if base_dir is not None
+        else SlideSessionStore()
+    )
     session = store.load_session(session_id) if session_id else None
     if session is None:
         session = store.create_session(
@@ -429,7 +436,9 @@ def run_slide_task(
     )
     agent_result = runner.run(prompt, history=session.events)
     patch = agent_result["patch"]
-    assistant_response = str(agent_result["assistant_response"]).strip() or "No response generated."
+    assistant_response = (
+        str(agent_result["assistant_response"]).strip() or "No response generated."
+    )
 
     for observation in agent_result["observations"]:
         session = store.append_event(
@@ -446,7 +455,9 @@ def run_slide_task(
     suggested_output_path = ""
     apply_result: dict[str, Any] | None = None
     if patch and patch.edits:
-        suggested_output_path = str(_resolve_output_path(input_path, config.output_path))
+        suggested_output_path = str(
+            _resolve_output_path(input_path, config.output_path)
+        )
     if patch and patch.edits and config.should_apply:
         destination = _resolve_output_path(input_path, config.output_path)
         result = apply_deck_patch(input_path, patch, output_path=destination)
@@ -508,7 +519,11 @@ def apply_session_patch(
     output_path: str | None = None,
     base_dir: str | Path | None = None,
 ) -> dict[str, Any]:
-    store = SlideSessionStore(base_dir=base_dir) if base_dir is not None else SlideSessionStore()
+    store = (
+        SlideSessionStore(base_dir=base_dir)
+        if base_dir is not None
+        else SlideSessionStore()
+    )
     session = store.load_session(session_id)
     if session is None:
         raise FileNotFoundError(f"Session '{session_id}' was not found.")
@@ -522,11 +537,15 @@ def apply_session_patch(
         None,
     )
     if final_event is None:
-        raise ValueError(f"Session '{session_id}' does not contain an applyable patch.")
+        raise ValueError(
+            f"Session '{session_id}' does not contain an applicable patch."
+        )
 
     patch = _patch_from_dict(final_event.get("patch"))
     if patch is None or not patch.edits:
-        raise ValueError(f"Session '{session_id}' does not contain an applyable patch.")
+        raise ValueError(
+            f"Session '{session_id}' does not contain an applicable patch."
+        )
 
     destination = _resolve_output_path(session.input_path, output_path)
     result = apply_deck_patch(session.input_path, patch, output_path=destination)

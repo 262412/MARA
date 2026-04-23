@@ -52,9 +52,10 @@ class MilvusVectorStore(LlamaIndexVectorStore):
             else:
                 uri = self._uri
             try:
-                if not self._uri.startswith("http") and importlib.util.find_spec(
-                    "milvus_lite"
-                ) is None:
+                if (
+                    not self._uri.startswith("http")
+                    and importlib.util.find_spec("milvus_lite") is None
+                ):
                     raise ImportError(
                         "Milvus local file backend requires the optional "
                         "'milvus-lite' package. Install it on a supported "
@@ -68,7 +69,10 @@ class MilvusVectorStore(LlamaIndexVectorStore):
                     **self._kwargs,
                 )
             except ModuleNotFoundError as exc:
-                if exc.name == "milvus_lite" and not self._uri.startswith("http"):
+                missing_milvus_lite = exc.name == "milvus_lite" or (
+                    "milvus_lite" in str(exc)
+                )
+                if missing_milvus_lite and not self._uri.startswith("http"):
                     raise ImportError(
                         "Milvus local file backend requires the optional "
                         "'milvus-lite' package. Install it on a supported "

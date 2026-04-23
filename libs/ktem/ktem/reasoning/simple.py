@@ -3,7 +3,7 @@ import os
 import threading
 from copy import deepcopy
 from textwrap import dedent
-from typing import Any, TYPE_CHECKING, Generator
+from typing import Any, Generator
 
 from decouple import config
 from ktem.reasoning.prompt_optimization import (
@@ -34,9 +34,6 @@ from kotaemon.llms import ChatLLM
 
 from ..utils import SUPPORTED_LANGUAGE_MAP
 from .base import BaseReasoning
-
-if TYPE_CHECKING:
-    from ktem.utils.visualize_cited import CreateCitationVizPipeline
 
 logger = logging.getLogger(__name__)
 

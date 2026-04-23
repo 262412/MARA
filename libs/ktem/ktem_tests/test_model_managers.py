@@ -27,7 +27,9 @@ def _build_manager(module, manager_cls):
     return manager
 
 
-def _exercise_manager_lazy_load(monkeypatch, module, manager_cls, *, expect_default_alias):
+def _exercise_manager_lazy_load(
+    monkeypatch, module, manager_cls, *, expect_default_alias
+):
     broken = SimpleNamespace(name="broken", spec={"__type__": "broken"}, default=True)
     working = SimpleNamespace(
         name="working", spec={"__type__": "working"}, default=False
@@ -55,7 +57,9 @@ def _exercise_manager_lazy_load(monkeypatch, module, manager_cls, *, expect_defa
     assert set(manager.info().keys()) == {"broken", "working"}
     assert "load_error" not in manager.info()["broken"]
     assert set(manager.options().keys()) == (
-        {"broken", "working", "default"} if expect_default_alias else {"broken", "working"}
+        {"broken", "working", "default"}
+        if expect_default_alias
+        else {"broken", "working"}
     )
     assert "working" in manager
     assert "broken" in manager

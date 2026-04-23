@@ -174,7 +174,7 @@ def test_create_docqa_runtime_bootstraps_before_import(monkeypatch):
     def _bootstrap():
         events.append("bootstrap")
 
-    fake_bootstrap_module.bootstrap_runtime_settings = _bootstrap
+    setattr(fake_bootstrap_module, "bootstrap_runtime_settings", _bootstrap)
 
     fake_docqa_module = types.ModuleType("ktem.docqa")
 
@@ -182,7 +182,7 @@ def test_create_docqa_runtime_bootstraps_before_import(monkeypatch):
         def __init__(self):
             events.append("runtime")
 
-    fake_docqa_module.DocQARuntime = _FakeRuntime
+    setattr(fake_docqa_module, "DocQARuntime", _FakeRuntime)
 
     monkeypatch.setitem(sys.modules, "ktem.runtime_bootstrap", fake_bootstrap_module)
     monkeypatch.setitem(sys.modules, "ktem.docqa", fake_docqa_module)

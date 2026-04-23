@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from pptx import Presentation
-
 from slide_cli.deck import DeckPatch, TextReplaceOp
 from slide_cli.session_store import SlideSessionStore
 

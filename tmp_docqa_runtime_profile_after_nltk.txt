@@ -64,5 +64,3 @@
      2424    0.015    0.000    1.051    0.000 D:\PythonProject\kotaemon\.venv\lib\site-packages\pydantic\_internal\_generate_schema.py:1521(_generate_parameter_schema)
         1    0.000    0.000    1.048    1.048 D:\PythonProject\kotaemon\.venv\lib\site-packages\nltk\chunk\api.py:1(<module>)
         1    0.000    0.000    1.023    1.023 D:\PythonProject\kotaemon\libs\ktem\ktem\reasoning\prompt_optimization\__init__.py:1(<module>)
-
-

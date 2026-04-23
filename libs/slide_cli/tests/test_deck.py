@@ -1,6 +1,5 @@
 import pytest
 from pptx import Presentation
-
 from slide_cli.deck import (
     DeckPatch,
     TextReplaceOp,
@@ -44,7 +43,9 @@ def test_load_snapshot_and_apply_patch(tmp_path):
 
     assert result.written is True
     assert result.output_path == output_path
-    assert rewritten.slides[0].shapes.title.text == "Executive Quarterly Business Review"
+    assert (
+        rewritten.slides[0].shapes.title.text == "Executive Quarterly Business Review"
+    )
 
 
 def test_export_deck_pdf_requires_libreoffice(monkeypatch, tmp_path):

@@ -41,9 +41,11 @@ def _extract_graph_source_ids(data_source: Any) -> list[str]:
 
     graph_source_ids = data_source.get("graph_source_ids", [])
     if isinstance(graph_source_ids, list):
-        output = [str(item) for item in graph_source_ids if str(item or "").strip()]
-        if output:
-            return output
+        normalized_items = [
+            str(item) for item in graph_source_ids if str(item or "").strip()
+        ]
+        if normalized_items:
+            return normalized_items
     elif graph_source_ids not in (None, ""):
         return [str(graph_source_ids)]
 
@@ -188,13 +190,17 @@ def _pick_default_model_name(
     return selected_name
 
 
-def _resolve_file_index_definition(flowsettings, engine) -> tuple[str, int | None, bool, list[str]]:
+def _resolve_file_index_definition(
+    flowsettings, engine
+) -> tuple[str, int | None, bool, list[str]]:
     configured_name = ""
     configured_private = False
     for item in getattr(flowsettings, "KH_INDICES", []) or []:
         if str((item or {}).get("index_type", "")).endswith("FileIndex"):
             configured_name = str((item or {}).get("name", "") or "")
-            configured_private = bool(((item or {}).get("config", {}) or {}).get("private", False))
+            configured_private = bool(
+                ((item or {}).get("config", {}) or {}).get("private", False)
+            )
             break
 
     from ktem.index.models import Index
@@ -247,7 +253,9 @@ def _count_indexed_files(
     return count, []
 
 
-def _count_saved_sessions(engine, conversation_model, default_user_id: str) -> tuple[int, list[str]]:
+def _count_saved_sessions(
+    engine, conversation_model, default_user_id: str
+) -> tuple[int, list[str]]:
     from sqlmodel import Session, select
 
     try:
@@ -269,9 +277,12 @@ def collect_docqa_file_records() -> list[dict[str, Any]]:
     from theflow.settings import settings as flowsettings
 
     default_user_id, _issues = _resolve_default_user_id(flowsettings, engine, User)
-    _index_name, index_id, private_index, _index_issues = _resolve_file_index_definition(
-        flowsettings, engine
-    )
+    (
+        _index_name,
+        index_id,
+        private_index,
+        _index_issues,
+    ) = _resolve_file_index_definition(flowsettings, engine)
 
     if index_id is None:
         return []
@@ -353,7 +364,10 @@ def collect_docqa_session_summaries() -> list[dict[str, Any]]:
 
 
 def collect_docqa_doctor_payload() -> dict[str, Any]:
-    from ktem.runtime_bootstrap import bootstrap_runtime_settings, describe_runtime_settings
+    from ktem.runtime_bootstrap import (
+        bootstrap_runtime_settings,
+        describe_runtime_settings,
+    )
 
     bootstrap_runtime_settings()
     runtime_settings = describe_runtime_settings()
@@ -402,7 +416,9 @@ def collect_docqa_doctor_payload() -> dict[str, Any]:
 
     graph_cache_dir = str(
         Path(
-            getattr(flowsettings, "KH_APP_DATA_DIR", runtime_settings.get("data_dir", ""))
+            getattr(
+                flowsettings, "KH_APP_DATA_DIR", runtime_settings.get("data_dir", "")
+            )
         )
         / "knowledge_graph"
         / "conversations"

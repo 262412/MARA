@@ -24,17 +24,25 @@ class SlideToolContext:
     max_file_chars: int = 4000
     max_listed_paths: int = 200
 
-    def resolve_workspace_path(self, candidate: str | Path, *, allow_missing: bool = False) -> Path:
+    def resolve_workspace_path(
+        self, candidate: str | Path, *, allow_missing: bool = False
+    ) -> Path:
         raw_value = str(candidate or "").strip()
         if not raw_value:
             raise ToolException("No file path provided.")
 
         path = Path(raw_value)
-        resolved = path.resolve() if path.is_absolute() else (self.workspace_root / path).resolve()
+        resolved = (
+            path.resolve()
+            if path.is_absolute()
+            else (self.workspace_root / path).resolve()
+        )
         try:
             resolved.relative_to(self.workspace_root)
         except ValueError as exc:
-            raise ToolException(f"Path '{resolved}' is outside the workspace root.") from exc
+            raise ToolException(
+                f"Path '{resolved}' is outside the workspace root."
+            ) from exc
 
         if not allow_missing and not resolved.exists():
             raise ToolException(f"Path '{resolved}' does not exist.")
@@ -59,7 +67,9 @@ class SlideToolContext:
 
     def read_file(self, path: str) -> str:
         resolved = self.resolve_workspace_path(path)
-        return resolved.read_text(encoding="utf-8", errors="replace")[: self.max_file_chars]
+        return resolved.read_text(encoding="utf-8", errors="replace")[
+            : self.max_file_chars
+        ]
 
     def write_file(self, *, path: str, content: str, append: bool = False) -> str:
         resolved = self.resolve_workspace_path(path, allow_missing=True)
@@ -84,7 +94,9 @@ class SlideToolContext:
         slides = self.snapshot.slides
         if slide_number is not None:
             slides = tuple(
-                slide for slide in self.snapshot.slides if slide.slide_number == slide_number
+                slide
+                for slide in self.snapshot.slides
+                if slide.slide_number == slide_number
             )
             if not slides:
                 return f"Slide {slide_number} was not found."
@@ -107,7 +119,9 @@ class SlideToolContext:
             if not shape.text.strip()
         ]
         untitled_slides = [
-            slide.slide_number for slide in self.snapshot.slides if not slide.title.strip()
+            slide.slide_number
+            for slide in self.snapshot.slides
+            if not slide.title.strip()
         ]
         long_targets = [
             shape.target_id
@@ -181,7 +195,9 @@ class ExtractSlideTextArgs(BaseModel):
 
 
 class ExportPdfArgs(BaseModel):
-    output_path: str | None = Field(default=None, description="Optional output PDF path.")
+    output_path: str | None = Field(
+        default=None, description="Optional output PDF path."
+    )
 
 
 class ShellArgs(BaseModel):
@@ -200,9 +216,13 @@ class _SlideTool(BaseTool):
 
     @staticmethod
     def _schema_field_names(args_schema: Type[BaseModel]) -> list[str]:
-        if hasattr(args_schema, "model_fields"):
-            return list(args_schema.model_fields.keys())
-        return list(args_schema.__fields__.keys())
+        model_fields = getattr(args_schema, "model_fields", None)
+        if isinstance(model_fields, dict):
+            return list(model_fields.keys())
+        legacy_fields = getattr(args_schema, "__fields__", None)
+        if isinstance(legacy_fields, dict):
+            return list(legacy_fields.keys())
+        return []
 
     @staticmethod
     def _dump_schema(model: BaseModel) -> dict:

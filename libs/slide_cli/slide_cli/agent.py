@@ -10,7 +10,12 @@ from kotaemon.agents import ReactAgent
 from kotaemon.agents.io import AgentAction
 from kotaemon.base import LLMInterface
 from kotaemon.llms import BaseLLM, PromptTemplate
-from kotaemon.modelcli import ModelRequest, build_registry, load_runtime_config, run_completion
+from kotaemon.modelcli import (
+    ModelRequest,
+    build_registry,
+    load_runtime_config,
+    run_completion,
+)
 
 from .config import SlideAgentConfig
 from .deck import DeckPatch, TextReplaceOp, export_deck_pdf, load_deck_snapshot
@@ -83,7 +88,9 @@ def _coerce_patch(payload: dict[str, Any] | None) -> DeckPatch | None:
                     slide_number=int(item["slide_number"]),
                     target_id=str(item["target_id"]),
                     before_text=(
-                        None if item.get("before_text") is None else str(item.get("before_text"))
+                        None
+                        if item.get("before_text") is None
+                        else str(item.get("before_text"))
                     ),
                     after_text=str(item["after_text"]),
                 )
@@ -94,7 +101,9 @@ def _coerce_patch(payload: dict[str, Any] | None) -> DeckPatch | None:
     return DeckPatch(summary=str(patch_payload.get("summary", "")), edits=edits)
 
 
-def _collect_observations(intermediate_steps: list[tuple[Any, str]] | None) -> list[dict[str, Any]]:
+def _collect_observations(
+    intermediate_steps: list[tuple[Any, str]] | None
+) -> list[dict[str, Any]]:
     observations: list[dict[str, Any]] = []
     for action, observation in intermediate_steps or []:
         if not isinstance(action, AgentAction):
@@ -109,9 +118,15 @@ def _collect_observations(intermediate_steps: list[tuple[Any, str]] | None) -> l
     return observations
 
 
-def _collect_raw_responses(intermediate_steps: list[tuple[Any, str]] | None, final_text: str) -> list[str]:
-    responses = [action.log for action, _observation in intermediate_steps or [] if action]
-    if final_text and (not responses or str(responses[-1]).strip() != final_text.strip()):
+def _collect_raw_responses(
+    intermediate_steps: list[tuple[Any, str]] | None, final_text: str
+) -> list[str]:
+    responses = [
+        action.log for action, _observation in intermediate_steps or [] if action
+    ]
+    if final_text and (
+        not responses or str(responses[-1]).strip() != final_text.strip()
+    ):
         responses.append(final_text)
     return [str(item) for item in responses if str(item).strip()]
 
@@ -132,7 +147,7 @@ SLIDE_REACT_PROMPT = PromptTemplate(
         "Final Answer: a single JSON object with keys `assistant_response` and `patch`\n\n"
         "Rules:\n"
         "- `patch` must be an object like "
-        "{{\"summary\":\"what changed\",\"edits\":[{{\"slide_number\":1,\"target_id\":\"slide-1/shape-2/text\",\"before_text\":\"old\",\"after_text\":\"new\"}}]}}\n"
+        '{{"summary":"what changed","edits":[{{"slide_number":1,"target_id":"slide-1/shape-2/text","before_text":"old","after_text":"new"}}]}}\n'
         "- If no deck change is needed, return `patch` with an empty `edits` list.\n"
         "- Tools that accept structured input should receive compact JSON in Action Input.\n"
         "- Do not wrap the final JSON in markdown fences.\n\n"
@@ -151,7 +166,9 @@ class ModelCliLLM(BaseLLM):
     config_path: str = "modelcli.yml"
 
     def _complete(self, prompt: str) -> LLMInterface:
-        cfg = load_runtime_config(self.config_path if Path(self.config_path).exists() else None)
+        cfg = load_runtime_config(
+            self.config_path if Path(self.config_path).exists() else None
+        )
         registry = build_registry()
         response = run_completion(
             registry=registry,
@@ -209,7 +226,9 @@ class SlideAgentRunner:
         self.max_iterations = self.config.max_iterations
         self.shell_timeout_sec = self.config.shell_timeout_sec
         self.input_path = str(Path(self.input_path).resolve())
-        self.workspace_root = self._resolve_workspace_root(self.config.cwd, self.input_path)
+        self.workspace_root = self._resolve_workspace_root(
+            self.config.cwd, self.input_path
+        )
         self.snapshot = load_deck_snapshot(self.input_path)
         tool_context = SlideToolContext(
             input_path=Path(self.input_path),
@@ -231,7 +250,9 @@ class SlideAgentRunner:
             prompt_template=SLIDE_REACT_PROMPT,
         )
 
-    def run(self, user_prompt: str, history: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    def run(
+        self, user_prompt: str, history: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
         history = list(history or [])
         instruction = self._build_instruction(
             user_prompt=user_prompt,

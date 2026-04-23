@@ -3,9 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from click.testing import CliRunner
-
 from slide_cli.docqa_cli import docqa
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILLS_ROOT = REPO_ROOT / ".codex" / "skills"

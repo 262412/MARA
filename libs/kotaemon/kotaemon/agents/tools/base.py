@@ -42,9 +42,13 @@ class BaseTool(BaseComponent):
 
     @staticmethod
     def _schema_field_names(args_schema: Type[BaseModel]) -> list[str]:
-        if hasattr(args_schema, "model_fields"):
-            return list(args_schema.model_fields.keys())
-        return list(args_schema.__fields__.keys())
+        model_fields = getattr(args_schema, "model_fields", None)
+        if isinstance(model_fields, dict):
+            return list(model_fields.keys())
+        legacy_fields = getattr(args_schema, "__fields__", None)
+        if isinstance(legacy_fields, dict):
+            return list(legacy_fields.keys())
+        return []
 
     @staticmethod
     def _dump_schema(model: BaseModel) -> Dict[str, Any]:

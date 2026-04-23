@@ -84,5 +84,3 @@
 7378/2716    0.003    0.000    0.857    0.000 D:\PythonProject\kotaemon\.venv\lib\site-packages\pydantic\_internal\_generate_schema.py:2127(<lambda>)
         1    0.000    0.000    0.854    0.854 D:\PythonProject\kotaemon\libs\kotaemon\kotaemon\embeddings\openai.py:1(<module>)
         1    0.000    0.000    0.844    0.844 D:\PythonProject\kotaemon\.venv\lib\site-packages\openai\__init__.py:1(<module>)
-
-

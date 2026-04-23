@@ -2,7 +2,6 @@ import json
 from types import SimpleNamespace
 
 from pptx import Presentation
-
 from slide_cli.agent import SlideAgentRunner
 
 
@@ -104,12 +103,16 @@ def test_agent_runner_supports_phase_one_tools(monkeypatch, tmp_path):
 
     assert "Revenue is flat." in extracted
     assert "slide_count" in review
-    assert (tmp_path / "notes.txt").read_text(encoding="utf-8") == "Hello from slide-cli"
+    assert (tmp_path / "notes.txt").read_text(
+        encoding="utf-8"
+    ) == "Hello from slide-cli"
     assert "notes.txt" in write_result
     assert str(pdf_path) in export_result
 
 
-def test_agent_runner_instruction_uses_top_level_agent_line_language(monkeypatch, tmp_path):
+def test_agent_runner_instruction_uses_top_level_agent_line_language(
+    monkeypatch, tmp_path
+):
     deck_path = tmp_path / "deck.pptx"
 
     presentation = Presentation()

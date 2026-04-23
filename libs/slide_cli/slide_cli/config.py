@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 VALID_APPLY_MODES = {"preview", "confirm", "apply"}
 VALID_APPROVAL_POLICIES = {"auto", "confirm"}
 
