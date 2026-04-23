@@ -118,3 +118,11 @@ def test_reranking_manager_deserializes_on_access(monkeypatch):
         module.RerankingManager,
         expect_default_alias=False,
     )
+
+
+def test_reranking_manager_lists_local_multilingual_vendor():
+    import ktem.rerankings.manager as module
+
+    manager = _build_manager(module, module.RerankingManager)
+
+    assert "LocalMultilingualReranking" in manager.vendors()

@@ -15,6 +15,7 @@ from kotaemon.storages import BaseDocumentStore, BaseVectorStore
 from .base import BaseIndexing, BaseRetrieval
 from .elements import annotate_document_with_element_metadata
 from .rankings import BaseReranking, LLMReranking
+from .retrieval_quality import QueryRoute, route_query
 
 VECTOR_STORE_FNAME = "vectorstore"
 DOC_STORE_FNAME = "docstore"
@@ -129,6 +130,11 @@ class VectorRetrieval(BaseRetrieval):
     rerankers: Sequence[BaseReranking] = []
     top_k: int = 5
     first_round_top_k_mult: int = 10
+    dense_top_k: int = 100
+    sparse_top_k: int = 100
+    rerank_top_k: int = 50
+    rrf_k: int = 60
+    modality_boost: float = 0.05
     retrieval_mode: str = "hybrid"  # vector, text, hybrid
 
     def _filter_docs(
@@ -181,6 +187,54 @@ class VectorRetrieval(BaseRetrieval):
 
         return sorted(result, key=lambda doc: doc.score, reverse=True)
 
+    def _apply_query_route_boost(
+        self, documents: list[RetrievedDocument], route: QueryRoute
+    ) -> list[RetrievedDocument]:
+        boost_element_types = set(route.retrieval_hints.get("boost_element_types", []))
+        if not boost_element_types or boost_element_types == {"text"}:
+            for document in documents:
+                document.retrieval_metadata = {
+                    **document.retrieval_metadata,
+                    "query_modality": route.modality,
+                }
+            return documents
+
+        boosted = []
+        for index, document in enumerate(documents):
+            element_type = self._normalize_element_type(
+                document.metadata.get("element_type", document.metadata.get("type"))
+            )
+            score = document.score
+            if element_type in boost_element_types:
+                score += self.modality_boost * route.modality_weights.get(
+                    element_type, 1.0
+                )
+
+            document_dict = document.to_dict()
+            document_dict["score"] = score
+            boosted_document = RetrievedDocument(**document_dict)
+            boosted_document.retrieval_metadata = {
+                **document.retrieval_metadata,
+                "query_modality": route.modality,
+                "query_modality_weights": route.modality_weights,
+                "query_boost_element_types": list(boost_element_types),
+            }
+            boosted.append((index, boosted_document))
+
+        return [
+            document
+            for _, document in sorted(
+                boosted, key=lambda item: (-item[1].score, item[0])
+            )
+        ]
+
+    @staticmethod
+    def _normalize_element_type(value: object) -> str:
+        element_type = str(value or "text").strip().lower()
+        if element_type in {"image", "fig", "chart", "plot"}:
+            return "figure"
+        return element_type
+
     def run(
         self, text: str | Document, top_k: Optional[int] = None, **kwargs
     ) -> list[RetrievedDocument]:
@@ -203,6 +257,16 @@ class VectorRetrieval(BaseRetrieval):
             top_k_first_round = top_k * self.first_round_top_k_mult
         else:
             top_k_first_round = top_k
+        dense_top_k = kwargs.pop(
+            "dense_top_k", self.dense_top_k if do_extend else top_k_first_round
+        )
+        sparse_top_k = kwargs.pop(
+            "sparse_top_k", self.sparse_top_k if do_extend else top_k_first_round
+        )
+        rerank_top_k = kwargs.pop(
+            "rerank_top_k", self.rerank_top_k if do_extend else top_k_first_round
+        )
+        rrf_k = kwargs.pop("rrf_k", self.rrf_k)
 
         if self.doc_store is None:
             raise ValueError(
@@ -213,12 +277,14 @@ class VectorRetrieval(BaseRetrieval):
         result: list[RetrievedDocument] = []
         # TODO: should declare scope directly in the run params
         scope = kwargs.pop("scope", None)
+        query = text.text if isinstance(text, Document) else text
+        query_route = route_query(query)
         emb: list[float]
 
         if self.retrieval_mode == "vector":
             emb = self.embedding(text)[0].embedding
             _, scores, ids = self.vector_store.query(
-                embedding=emb, top_k=top_k_first_round, doc_ids=scope, **kwargs
+                embedding=emb, top_k=dense_top_k, doc_ids=scope, **kwargs
             )
             docs = self.doc_store.get(ids)
             result = [
@@ -226,12 +292,9 @@ class VectorRetrieval(BaseRetrieval):
                 for doc, score in zip(docs, scores)
             ]
         elif self.retrieval_mode == "text":
-            query = text.text if isinstance(text, Document) else text
             docs = []
             if scope:
-                docs = self.doc_store.query(
-                    query, top_k=top_k_first_round, doc_ids=scope
-                )
+                docs = self.doc_store.query(query, top_k=sparse_top_k, doc_ids=scope)
             result = [RetrievedDocument(**doc.to_dict(), score=-1.0) for doc in docs]
         elif self.retrieval_mode == "hybrid":
             # similarity search section
@@ -247,7 +310,7 @@ class VectorRetrieval(BaseRetrieval):
 
                 assert self.doc_store is not None
                 _, vs_scores, vs_ids = self.vector_store.query(
-                    embedding=emb, top_k=top_k_first_round, doc_ids=scope, **kwargs
+                    embedding=emb, top_k=dense_top_k, doc_ids=scope, **kwargs
                 )
                 if vs_ids:
                     vs_docs = self.doc_store.get(vs_ids)
@@ -259,10 +322,9 @@ class VectorRetrieval(BaseRetrieval):
                 nonlocal ds_docs
 
                 assert self.doc_store is not None
-                query = text.text if isinstance(text, Document) else text
                 if scope:
                     ds_docs = self.doc_store.query(
-                        query, top_k=top_k_first_round, doc_ids=scope
+                        query, top_k=sparse_top_k, doc_ids=scope
                     )
 
             vs_query_thread = threading.Thread(target=query_vectorstore)
@@ -275,19 +337,22 @@ class VectorRetrieval(BaseRetrieval):
             ds_query_thread.join()
 
             ds_result = [
-                RetrievedDocument(**doc.to_dict(), score=-1.0)
-                for doc in ds_docs
+                RetrievedDocument(**doc.to_dict(), score=-1.0) for doc in ds_docs
             ]
             vs_result = [
                 RetrievedDocument(**doc.to_dict(), score=score)
                 for doc, score in zip(vs_docs, vs_scores)
             ]
-            result = self._reciprocal_rank_fuse(vs_result, ds_result)
+            result = self._reciprocal_rank_fuse(vs_result, ds_result, k=rrf_k)
             logger.debug("Got %s from vectorstore", len(vs_docs))
             logger.debug("Got %s from docstore", len(ds_docs))
 
+        result = self._apply_query_route_boost(result, query_route)
+
         # use additional reranker to re-order the document list
         if self.rerankers and text:
+            if rerank_top_k:
+                result = self._filter_docs(result, top_k=rerank_top_k)
             for reranker in self.rerankers:
                 # if reranker is LLMReranking, limit the document with top_k items only
                 if isinstance(reranker, LLMReranking):

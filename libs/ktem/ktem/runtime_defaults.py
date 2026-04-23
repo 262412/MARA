@@ -289,13 +289,19 @@ def build_kotaemon_settings(
         },
         "default": False,
     }
+    settings["KH_RERANKINGS"]["local"] = {
+        "spec": {
+            "__type__": "kotaemon.rerankings.LocalMultilingualReranking",
+        },
+        "default": True,
+    }
     settings["KH_RERANKINGS"]["cohere"] = {
         "spec": {
             "__type__": "kotaemon.rerankings.CohereReranking",
             "model_name": "rerank-v4.0-fast",
             "cohere_api_key": config("COHERE_API_KEY", default=""),
         },
-        "default": True,
+        "default": False,
     }
 
     settings["KH_REASONINGS"] = [
@@ -307,12 +313,12 @@ def build_kotaemon_settings(
     settings["KH_REASONINGS_USE_MULTIMODAL"] = config(
         "USE_MULTIMODAL", default=False, cast=bool
     )
-    settings[
-        "KH_VLM_ENDPOINT"
-    ] = "{0}/openai/deployments/{1}/chat/completions?api-version={2}".format(
-        config("AZURE_OPENAI_ENDPOINT", default=""),
-        config("OPENAI_VISION_DEPLOYMENT_NAME", default="gpt-4o"),
-        config("OPENAI_API_VERSION", default=""),
+    settings["KH_VLM_ENDPOINT"] = (
+        "{0}/openai/deployments/{1}/chat/completions?api-version={2}".format(
+            config("AZURE_OPENAI_ENDPOINT", default=""),
+            config("OPENAI_VISION_DEPLOYMENT_NAME", default="gpt-4o"),
+            config("OPENAI_API_VERSION", default=""),
+        )
     )
 
     settings["SETTINGS_APP"] = {}
