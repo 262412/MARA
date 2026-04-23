@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Iterator
+from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Any, Optional, Type
 
 from sqlalchemy import select
@@ -138,7 +138,7 @@ class EmbeddingManager:
             "value": self.get_default_name(),
         }
 
-    def options(self) -> dict:
+    def options(self) -> Mapping[str, Any]:
         """Present a dict of models"""
         return _LazyOptionsView(self)
 
