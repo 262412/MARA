@@ -6,7 +6,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-ElementType = Literal["text", "table", "figure", "formula", "page", "thumbnail"]
+ElementType = Literal[
+    "text", "table", "figure", "formula", "page", "thumbnail", "annotation"
+]
 
 _TYPE_MAP: dict[str, ElementType] = {
     "text": "text",
@@ -16,6 +18,7 @@ _TYPE_MAP: dict[str, ElementType] = {
     "formula": "formula",
     "page": "page",
     "thumbnail": "thumbnail",
+    "annotation": "annotation",
 }
 
 
@@ -33,6 +36,15 @@ class DocumentElement:
     file_name: str | None = None
     parser: str | None = None
     confidence: float | None = None
+    parent_element_id: str | None = None
+    neighbor_element_ids: tuple[str, ...] = ()
+    caption: str | None = None
+    ocr_text: str | None = None
+    table: Any = None
+    raw_pdf_text: str | None = None
+    normalized_formula: str | None = None
+    formula_image: Any = None
+    layout_blocks: Any = None
     formula: dict[str, Any] | None = None
     image_origin: Any = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -45,7 +57,10 @@ def document_to_element(document: Any) -> DocumentElement:
     element_type = _normalize_element_type(metadata.get("type"))
     text = _document_text(document)
     if element_type == "formula":
-        text = normalize_formula_text(_metadata_first(metadata, "formula_text", "latex") or text)
+        text = normalize_formula_text(
+            _metadata_first(metadata, "normalized_formula", "formula_text", "latex")
+            or text
+        )
 
     page_number = _normalize_page_number(
         _metadata_first(metadata, "page_number", "page", "page_idx")
@@ -62,6 +77,23 @@ def document_to_element(document: Any) -> DocumentElement:
     file_name = _string_or_none(_metadata_first(metadata, "file_name", "filename"))
     parser = _string_or_none(metadata.get("parser"))
     confidence = _normalize_float(metadata.get("confidence"))
+    parent_element_id = _string_or_none(
+        _metadata_first(metadata, "parent_element_id", "parent_id")
+    )
+    neighbor_element_ids = _normalize_string_tuple(
+        _metadata_first(metadata, "neighbor_element_ids", "neighbors")
+    )
+    caption = _string_or_none(metadata.get("caption"))
+    ocr_text = _string_or_none(_metadata_first(metadata, "ocr_text", "image_text"))
+    table = _metadata_first(
+        metadata, "table", "table_origin", "table_json", "text_as_html"
+    )
+    raw_pdf_text = _string_or_none(metadata.get("raw_pdf_text"))
+    normalized_formula = text if element_type == "formula" else _string_or_none(
+        metadata.get("normalized_formula")
+    )
+    formula_image = _metadata_first(metadata, "formula_image", "image_origin")
+    layout_blocks = metadata.get("layout_blocks")
     formula = _formula_payload(metadata, text) if element_type == "formula" else None
     image_origin = metadata.get("image_origin")
 
@@ -85,6 +117,15 @@ def document_to_element(document: Any) -> DocumentElement:
         file_name=file_name,
         parser=parser,
         confidence=confidence,
+        parent_element_id=parent_element_id,
+        neighbor_element_ids=neighbor_element_ids,
+        caption=caption,
+        ocr_text=ocr_text,
+        table=table,
+        raw_pdf_text=raw_pdf_text,
+        normalized_formula=normalized_formula,
+        formula_image=formula_image,
+        layout_blocks=layout_blocks,
         formula=formula,
         image_origin=image_origin,
         metadata=metadata,
@@ -110,18 +151,29 @@ def annotate_document_with_element_metadata(document: Any) -> Any:
     _set_metadata_if_present(metadata, "file_name", element.file_name)
     _set_metadata_if_present(metadata, "parser", element.parser)
     _set_metadata_if_present(metadata, "confidence", element.confidence)
-    _set_metadata_if_present(metadata, "image_origin", element.image_origin)
+    _set_metadata_if_present(metadata, "parent_element_id", element.parent_element_id)
+    if element.neighbor_element_ids:
+        metadata.pop("neighbors", None)
+        metadata.pop("neighbor_element_ids", None)
+        _set_metadata_json(metadata, "neighbor_element_ids", element.neighbor_element_ids)
+    _set_metadata_if_present(metadata, "caption", element.caption)
+    _set_metadata_if_present(metadata, "ocr_text", element.ocr_text)
+    _set_metadata_if_present(metadata, "raw_pdf_text", element.raw_pdf_text)
+    _set_metadata_complex(metadata, "table", element.table)
+    _set_metadata_complex(metadata, "layout_blocks", element.layout_blocks)
+    _set_metadata_complex(metadata, "formula_image", element.formula_image)
+    _set_metadata_complex(metadata, "image_origin", element.image_origin)
 
     if element.formula is not None:
-        metadata.setdefault("formula_text", element.text)
+        metadata["formula_text"] = element.text
+        metadata["normalized_formula"] = element.text
         if element.formula.get("format") is not None:
             metadata.setdefault("formula_format", str(element.formula["format"]))
         if "formula" in metadata and not _is_flat_metadata_value(metadata["formula"]):
-            metadata["formula_json"] = json.dumps(
-                metadata.pop("formula"), ensure_ascii=False, sort_keys=True
-            )
+            _set_metadata_json(metadata, "formula", metadata.pop("formula"))
         _set_document_text(document, element.text)
 
+    _flatten_metadata_for_vector_store(metadata)
     document.metadata = metadata
     return document
 
@@ -194,6 +246,30 @@ def _normalize_bbox(value: Any) -> tuple[float, ...] | None:
         return None
 
 
+def _normalize_string_tuple(value: Any) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return ()
+        try:
+            value = json.loads(stripped)
+        except json.JSONDecodeError:
+            value = stripped.split(",")
+    if isinstance(value, dict):
+        value = value.values()
+    try:
+        return tuple(
+            item
+            for item in (_string_or_none(part) for part in value)
+            if item is not None
+        )
+    except TypeError:
+        item = _string_or_none(value)
+        return (item,) if item is not None else ()
+
+
 def _normalize_float(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
@@ -215,12 +291,41 @@ def _set_metadata_if_present(metadata: dict[str, Any], key: str, value: Any) -> 
         metadata.setdefault(key, value)
 
 
+def _set_metadata_complex(metadata: dict[str, Any], key: str, value: Any) -> None:
+    if value is None:
+        return
+    if _is_flat_metadata_value(value):
+        metadata.setdefault(key, value)
+        return
+    metadata.pop(key, None)
+    _set_metadata_json(metadata, key, value)
+
+
+def _set_metadata_json(metadata: dict[str, Any], key: str, value: Any) -> None:
+    metadata[f"{key}_json"] = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+
+
 def _bbox_to_metadata_value(bbox: tuple[float, ...]) -> str:
     return json.dumps(list(bbox), ensure_ascii=False, separators=(",", ":"))
 
 
 def _is_flat_metadata_value(value: Any) -> bool:
     return value is None or isinstance(value, (str, int, float))
+
+
+def _flatten_metadata_for_vector_store(metadata: dict[str, Any]) -> None:
+    for key, value in list(metadata.items()):
+        if _is_flat_metadata_value(value):
+            continue
+        if key.endswith("_json"):
+            metadata[key] = json.dumps(
+                value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            )
+            continue
+        metadata.pop(key)
+        _set_metadata_json(metadata, key, value)
 
 
 def _set_document_text(document: Any, text: str) -> None:

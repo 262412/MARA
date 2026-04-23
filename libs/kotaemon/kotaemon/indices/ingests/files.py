@@ -8,6 +8,8 @@ from theflow.settings import settings as flowsettings
 
 from kotaemon.base import BaseComponent, Document, Param
 from kotaemon.indices.extractors import BaseDocParser
+from kotaemon.indices.extractors.doc_parsers import ElementDocParser
+from kotaemon.indices.elements import annotate_document_with_element_metadata
 from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
 from kotaemon.loaders import (
     AdobeReader,
@@ -113,6 +115,98 @@ class DocumentIngestor(BaseComponent):
 
         return main_reader
 
+    def _normalize_source_documents(self, documents: list[Document]) -> list[Document]:
+        """Normalize loader output into element-aware documents before splitting."""
+
+        normalized = [
+            annotate_document_with_element_metadata(document) for document in documents
+        ]
+        return ElementDocParser()(normalized)
+
+    def _normalize_split_nodes(
+        self, nodes: list[Document], source_documents: list[Document]
+    ) -> list[Document]:
+        source_by_element_id = {
+            document.metadata["element_id"]: document
+            for document in source_documents
+            if document.metadata.get("element_id")
+        }
+        non_page_sources = [
+            document
+            for document in source_documents
+            if document.metadata.get("element_type") != "page"
+        ]
+
+        for node in nodes:
+            metadata = dict(node.metadata or {})
+            source = self._resolve_split_source(
+                node=node,
+                metadata=metadata,
+                source_by_element_id=source_by_element_id,
+                non_page_sources=non_page_sources,
+            )
+            if source is not None:
+                self._copy_element_metadata_to_chunk(metadata, source.metadata)
+                source_element_id = source.metadata.get("element_id")
+                if source_element_id:
+                    metadata.setdefault("parent_element_id", source_element_id)
+                    if metadata.get("element_id") == source_element_id:
+                        metadata.pop("element_id", None)
+            node.metadata = metadata
+            annotate_document_with_element_metadata(node)
+        return nodes
+
+    @staticmethod
+    def _resolve_split_source(
+        *,
+        node: Document,
+        metadata: dict,
+        source_by_element_id: dict[str, Document],
+        non_page_sources: list[Document],
+    ) -> Document | None:
+        for key in ("parent_element_id", "element_id"):
+            element_id = metadata.get(key)
+            if element_id in source_by_element_id:
+                return source_by_element_id[element_id]
+
+        node_text = str(getattr(node, "text", "") or "")
+        if node_text:
+            for source in non_page_sources:
+                source_text = str(getattr(source, "text", "") or "")
+                if node_text in source_text:
+                    return source
+
+        if len(non_page_sources) == 1:
+            return non_page_sources[0]
+        return None
+
+    @staticmethod
+    def _copy_element_metadata_to_chunk(metadata: dict, source_metadata: dict) -> None:
+        for key in (
+            "type",
+            "element_type",
+            "source_id",
+            "file_name",
+            "page_number",
+            "page_label",
+            "bbox",
+            "parser",
+            "confidence",
+            "caption",
+            "ocr_text",
+            "raw_pdf_text",
+            "normalized_formula",
+            "formula_text",
+            "image_origin",
+            "table_origin",
+            "table_json",
+            "formula_json",
+            "formula_image_json",
+            "layout_blocks_json",
+        ):
+            if source_metadata.get(key) is not None:
+                metadata.setdefault(key, source_metadata[key])
+
     def run(self, file_paths: list[str | Path] | str | Path) -> list[Document]:
         """Ingest the file paths into Document
 
@@ -127,7 +221,9 @@ class DocumentIngestor(BaseComponent):
 
         documents = self._get_reader(input_files=file_paths)()
         print(f"Read {len(file_paths)} files into {len(documents)} documents.")
+        documents = self._normalize_source_documents(documents)
         nodes = self.text_splitter(documents)
+        nodes = self._normalize_split_nodes(nodes, documents)
         print(f"Transform {len(documents)} documents into {len(nodes)} nodes.")
         self.log_progress(".num_docs", num_docs=len(nodes))
 
