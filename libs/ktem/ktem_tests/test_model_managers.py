@@ -61,6 +61,10 @@ def _exercise_manager_lazy_load(
         if expect_default_alias
         else {"broken", "working"}
     )
+    assert manager.get_default_name() == "broken"
+    settings = manager.settings()
+    assert settings["choices"] == ["broken", "working"]
+    assert settings["value"] == "broken"
     assert "working" in manager
     assert "broken" in manager
 

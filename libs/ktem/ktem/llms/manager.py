@@ -132,7 +132,7 @@ class LLMManager:
         """Present model pools option for gradio"""
         return {
             "label": "LLM",
-            "choices": list(self._models.keys()),
+            "choices": list(self._info.keys()),
             "value": self.get_default_name(),
         }
 
@@ -162,7 +162,7 @@ class LLMManager:
         Returns:
             str: model name
         """
-        if not self._models:
+        if not self._info:
             raise ValueError("No models in pool")
 
         if not self._default:
