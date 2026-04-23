@@ -13,6 +13,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--manifest", required=True, help="Normalized manifest path"
     )
     run_parser.add_argument("--suite-name", default="kotaemon-benchmark")
+    run_parser.add_argument("--engine", default="kotaemon-text-rag")
+    run_parser.add_argument(
+        "--scope",
+        default="document",
+        choices=["page", "document", "multi_document"],
+    )
+    run_parser.add_argument("--route", default="hybrid")
+    run_parser.add_argument("--cost-profile")
     run_parser.add_argument(
         "--output-dir",
         default="benchmark/artifacts",
@@ -103,6 +111,10 @@ def main(argv: list[str] | None = None) -> int:
     config = BenchmarkConfig(
         suite_name=args.suite_name,
         output_dir=Path(args.output_dir),
+        engine=args.engine,
+        scope=args.scope,
+        route=args.route,
+        cost_profile=args.cost_profile,
         reader_mode=args.reader_mode,
         retrieval_mode=args.retrieval_mode,
         chunk_size=args.chunk_size,

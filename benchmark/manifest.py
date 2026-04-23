@@ -44,6 +44,7 @@ def _coerce_examples(
                 document_id=document_id,
                 path=document_path,
                 format_type=format_type,
+                modality=str(record.get("modality") or "text"),
                 metadata=dict(record.get("document_metadata") or {}),
             )
 
@@ -57,6 +58,10 @@ def _coerce_examples(
             BenchmarkExample(
                 example_id=str(record.get("example_id") or f"{document_id}_{index}"),
                 document_id=document_id,
+                document_ids=[document_id],
+                scope=str(record.get("scope") or "document"),
+                modality=str(record.get("modality") or "text"),
+                answer_type=str(record.get("answer_type") or "extractive"),
                 question=str(record["question"]).strip(),
                 answers=answers,
                 evidence_pages=_ensure_list(record.get("evidence_pages")),
@@ -64,6 +69,11 @@ def _coerce_examples(
                     str(item).strip()
                     for item in _ensure_list(record.get("evidence_sources"))
                     if str(item).strip()
+                ],
+                gold_evidence=[
+                    dict(item)
+                    for item in _ensure_list(record.get("gold_evidence"))
+                    if isinstance(item, dict)
                 ],
                 metadata=dict(record.get("metadata") or {}),
             )
@@ -74,6 +84,98 @@ def _coerce_examples(
         manifest_path=manifest_path,
         documents=documents,
         examples=examples,
+    )
+
+
+def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> ManifestBundle:
+    documents: dict[str, BenchmarkDocument] = {}
+    for record in payload.get("documents", []):
+        document_id = str(record["document_id"])
+        document_path = _resolve_path(
+            manifest_path, str(record.get("path") or record.get("document_path"))
+        )
+        documents[document_id] = BenchmarkDocument(
+            document_id=document_id,
+            path=document_path,
+            format_type=str(
+                record.get("format_type") or document_path.suffix.lower().lstrip(".")
+            ).lower(),
+            modality=str(record.get("modality") or "text"),
+            metadata=dict(record.get("metadata") or {}),
+        )
+
+    examples: list[BenchmarkExample] = []
+    for index, record in enumerate(payload.get("examples", [])):
+        document_ids = [
+            str(item)
+            for item in _ensure_list(
+                record.get("document_ids") or record.get("document_id")
+            )
+            if str(item).strip()
+        ]
+        if not document_ids:
+            raise ValueError("v2 manifest example must include document_ids")
+
+        answers = [str(item).strip() for item in _ensure_list(record.get("answers"))]
+        if not answers:
+            answer = str(record.get("answer", "")).strip()
+            if answer:
+                answers = [answer]
+
+        gold_evidence = [
+            dict(item)
+            for item in _ensure_list(record.get("gold_evidence"))
+            if isinstance(item, dict)
+        ]
+        evidence_pages = _ensure_list(record.get("evidence_pages"))
+        evidence_sources = [
+            str(item).strip()
+            for item in _ensure_list(record.get("evidence_sources"))
+            if str(item).strip()
+        ]
+        if not evidence_pages:
+            evidence_pages = [
+                item["page"]
+                for item in gold_evidence
+                if item.get("page") is not None
+            ]
+        if not evidence_sources:
+            evidence_sources = [
+                str(item["citation"]).strip()
+                for item in gold_evidence
+                if str(item.get("citation") or "").strip()
+            ]
+
+        examples.append(
+            BenchmarkExample(
+                example_id=str(
+                    record.get("example_id") or f"{document_ids[0]}_{index}"
+                ),
+                document_id=document_ids[0],
+                document_ids=document_ids,
+                scope=str(record.get("scope") or "document"),
+                modality=str(record.get("modality") or "text"),
+                answer_type=str(record.get("answer_type") or "extractive"),
+                question=str(record["question"]).strip(),
+                answers=answers,
+                evidence_pages=evidence_pages,
+                evidence_sources=evidence_sources,
+                gold_evidence=gold_evidence,
+                metadata=dict(record.get("metadata") or {}),
+            )
+        )
+
+    return ManifestBundle(
+        dataset_name=str(payload.get("dataset_name") or "custom_manifest"),
+        manifest_path=manifest_path,
+        documents=documents,
+        examples=examples,
+        schema_version=2,
+        routes=[
+            dict(item)
+            for item in _ensure_list(payload.get("routes") or payload.get("route_matrix"))
+            if isinstance(item, dict)
+        ],
     )
 
 
@@ -92,6 +194,9 @@ def load_manifest(manifest_path: str | Path) -> ManifestBundle:
 
     if not isinstance(payload, dict):
         raise ValueError(f"Unsupported manifest payload type: {type(payload)!r}")
+
+    if int(payload.get("schema_version") or 1) == 2:
+        return _coerce_v2_manifest(payload, manifest_path)
 
     dataset_name = str(payload.get("dataset_name") or "custom_manifest")
     examples_payload = payload.get("examples", [])

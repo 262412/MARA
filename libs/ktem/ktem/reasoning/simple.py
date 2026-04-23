@@ -143,6 +143,7 @@ class FullQAPipeline(BaseReasoning):
 
         active_file_id = str(getattr(self, "active_file_id", "") or "")
         active_file_name = getattr(self, "active_file_name", "")
+        qa_scope = str(getattr(self, "qa_scope", "document") or "document")
         page_number = getattr(self, "page_number", None)
         selected_text = getattr(self, "selected_text", "") or ""
         graph_context = getattr(self, "graph_context", {}) or {}
@@ -238,18 +239,21 @@ class FullQAPipeline(BaseReasoning):
             retriever_node = self._prepare_child(retriever, f"retriever_{idx}")
             all_retriever_docs = retriever_node(text=query)
 
-            # Retrieval order is explicit to preserve single-page QA behavior:
-            # current page -> active file -> graph-related files -> fallback.
+            # Retrieval order is scope-aware: page mode preserves the existing
+            # single-page workflow, document mode prefers the active file, and
+            # multi-document mode keeps the retriever's selected-file result set.
             page_docs = []
-            if page_number:
+            if qa_scope == "page" and page_number:
                 page_docs = [
                     doc
                     for doc in all_retriever_docs
                     if _is_active_file_doc(doc) and _is_current_page_doc(doc)
                 ]
-            active_file_docs = [
-                doc for doc in all_retriever_docs if _is_active_file_doc(doc)
-            ]
+            active_file_docs = []
+            if qa_scope in {"page", "document"}:
+                active_file_docs = [
+                    doc for doc in all_retriever_docs if _is_active_file_doc(doc)
+                ]
             graph_docs = []
             if graph_related_file_ids:
                 graph_docs = [

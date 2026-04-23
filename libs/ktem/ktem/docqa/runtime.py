@@ -125,6 +125,22 @@ class DocQARuntime:
         return max(1, int(page_number))
 
     @staticmethod
+    def _normalize_qa_scope(qa_scope: Any, page_number: Any = None) -> str:
+        value = str(qa_scope or "auto").strip().lower().replace("-", "_")
+        if value in {"", "auto"}:
+            return "page" if page_number not in (None, "") else "document"
+        if value in {"doc", "whole_document", "full_document"}:
+            return "document"
+        if value in {"multi", "multi_doc", "multi_docs", "multi_document"}:
+            return "multi_document"
+        if value not in {"page", "document", "multi_document"}:
+            raise ValueError(
+                "Unknown QA scope '{}'. Expected page, document, multi-document, "
+                "or auto.".format(qa_scope)
+            )
+        return value
+
+    @staticmethod
     def _merge_unique_file_ids(*groups) -> list[str]:
         merged: list[str] = []
         seen = set()
@@ -579,8 +595,11 @@ class DocQARuntime:
                 active_file_name = active_file_name or inferred_name
 
         normalized_page_number = self._normalize_page_number(request.page_number)
+        qa_scope = self._normalize_qa_scope(request.qa_scope, normalized_page_number)
         selected_text = str(request.selected_text or "").strip()
         if (
+            qa_scope == "page"
+            and
             (not selected_text)
             and normalized_page_number is not None
             and active_file_id
@@ -596,13 +615,15 @@ class DocQARuntime:
             request.graph_context if isinstance(request.graph_context, dict) else {}
         )
         is_pdf_file = str(active_file_name or "").lower().endswith(".pdf")
-        pipeline.active_file_id = active_file_id or ""
-        pipeline.active_file_name = active_file_name
-        pipeline.page_number = (
+        scoped_page_number = (
             normalized_page_number
-            if is_pdf_file and normalized_page_number is not None
+            if qa_scope == "page" and is_pdf_file and normalized_page_number is not None
             else None
         )
+        pipeline.active_file_id = active_file_id or ""
+        pipeline.active_file_name = active_file_name
+        pipeline.qa_scope = qa_scope
+        pipeline.page_number = scoped_page_number
         pipeline.selected_text = selected_text
         pipeline.graph_context = graph_context
 
@@ -612,7 +633,8 @@ class DocQARuntime:
             selected_file_ids=selected_file_ids,
             active_file_id=active_file_id or "",
             active_file_name=active_file_name,
-            page_number=normalized_page_number,
+            qa_scope=qa_scope,
+            page_number=scoped_page_number,
             selected_text=selected_text,
             graph_context=graph_context,
             settings=settings,
@@ -658,6 +680,7 @@ class DocQARuntime:
             selected_inputs=selected_inputs,
             active_file_id=request.active_file_id,
             active_file_name=request.active_file_name,
+            qa_scope=request.qa_scope,
             page_number=request.page_number,
             selected_text=request.selected_text,
             graph_context=deepcopy(request.graph_context),
@@ -774,6 +797,7 @@ class DocQARuntime:
             graph_source_ids=graph_source_ids,
             active_file_id=prepared.active_file_id,
             active_file_name=prepared.active_file_name,
+            qa_scope=prepared.qa_scope,
             page_number=prepared.page_number,
             selected_text=prepared.selected_text,
             graph_context=_serialize_value(prepared.graph_context),

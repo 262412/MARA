@@ -14,6 +14,7 @@ class _DocQARequest:
     conversation_id: str = ""
     selected_file_ids: list[str] | None = None
     selected_inputs: dict[int, Any] | None = None
+    qa_scope: str = "auto"
     active_file_id: str = ""
     active_file_name: str = ""
     page_number: int | None = None
@@ -178,6 +179,16 @@ def _docqa_shared_options(command):
             help="Focus QA on one page. Omit to use whole-document QA.",
         ),
         click.option(
+            "--scope",
+            "qa_scope",
+            default="auto",
+            type=click.Choice(["auto", "page", "document", "multi-document"]),
+            help=(
+                "QA retrieval scope: auto, current page, current document, "
+                "or multiple selected documents."
+            ),
+        ),
+        click.option(
             "--selected-text",
             default="",
             help="Explicit selected text to focus retrieval without forcing page 1.",
@@ -247,6 +258,7 @@ def _run_docqa_repl(
     file_refs=(),
     active_file_ref="",
     page=None,
+    qa_scope="auto",
     selected_text="",
     graph_context_file="",
     reasoning=None,
@@ -356,6 +368,7 @@ def _run_docqa_repl(
                 selected_file_ids=selected_file_ids_override,
                 active_file_id=active_file_id,
                 active_file_name=active_file_name,
+                qa_scope=str(qa_scope or "auto").replace("-", "_"),
                 page_number=current_page,
                 selected_text=current_selected_text,
                 graph_context=graph_context,
@@ -580,6 +593,7 @@ def docqa_ask(
     file_refs,
     active_file,
     page,
+    qa_scope,
     selected_text,
     graph_context_file,
     reasoning,
@@ -616,6 +630,7 @@ def docqa_ask(
             else None,
             active_file_id=active_record.file_id if active_record else "",
             active_file_name=active_record.name if active_record else "",
+            qa_scope=str(qa_scope or "auto").replace("-", "_"),
             page_number=page,
             selected_text=selected_text or "",
             graph_context=parse_graph_context_file(graph_context_file),
@@ -641,6 +656,7 @@ def docqa_chat(
     file_refs,
     active_file,
     page,
+    qa_scope,
     selected_text,
     graph_context_file,
     reasoning,
@@ -669,6 +685,7 @@ def docqa_chat(
         file_refs=file_refs,
         active_file_ref=active_file,
         page=page,
+        qa_scope=qa_scope,
         selected_text=selected_text,
         graph_context_file=graph_context_file,
         reasoning=reasoning,

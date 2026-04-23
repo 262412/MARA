@@ -246,6 +246,31 @@ def test_docqa_ask_defaults_to_document_scope(monkeypatch):
     assert runtime.last_request.selected_text == ""
 
 
+def test_docqa_ask_passes_explicit_scope(monkeypatch):
+    runtime = _DummyRuntime()
+    monkeypatch.setattr("kotaemon.cli._create_docqa_runtime", lambda: runtime)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "docqa",
+            "ask",
+            "--prompt",
+            "Compare selected documents.",
+            "--file",
+            "alpha.pdf",
+            "--scope",
+            "multi-document",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert runtime.last_request is not None
+    assert runtime.last_request.qa_scope == "multi_document"
+
+
 def test_docqa_ask_selected_text_without_page_keeps_document_scope(monkeypatch):
     runtime = _DummyRuntime()
     monkeypatch.setattr("kotaemon.cli._create_docqa_runtime", lambda: runtime)
@@ -396,6 +421,7 @@ def test_docqa_ask_help_lists_shared_parameters():
         "--file",
         "--active-file",
         "--page",
+        "--scope",
         "--selected-text",
         "--graph-context-file",
         "--reasoning",
