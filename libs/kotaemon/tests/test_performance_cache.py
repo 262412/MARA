@@ -53,7 +53,8 @@ def test_json_disk_cache_tracks_hit_miss_and_write(tmp_path):
     cache.set(key, {"pages": [1, 2]})
 
     assert cache.get(key) == {"pages": [1, 2]}
-    assert cache.stats.to_dict() == {"hits": 1, "misses": 1, "writes": 1}
+    assert cache.get_with_status(key) == (True, {"pages": [1, 2]})
+    assert cache.stats.to_dict() == {"hits": 2, "misses": 1, "writes": 1}
 
 
 def test_get_or_compute_only_computes_on_miss(tmp_path):

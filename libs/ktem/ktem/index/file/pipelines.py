@@ -37,6 +37,7 @@ from kotaemon.base import BaseComponent, Document, Node, Param, RetrievedDocumen
 from kotaemon.embeddings import BaseEmbeddings
 from kotaemon.indices import VectorIndexing, VectorRetrieval
 from kotaemon.indices.indexing_status import IndexingStatusTracker, refresh_vector_store
+from kotaemon.indices.parse_cache import CachedLoadResult, load_data_with_parse_cache
 from kotaemon.indices.ingests.files import (
     KH_DEFAULT_FILE_EXTRACTORS,
     adobe_reader,
@@ -346,12 +347,44 @@ class IndexPipeline(BaseComponent):
     run_embedding_in_thread: bool = False
     embedding: BaseEmbeddings
     last_indexing_status: dict | None = None
+    parse_cache_dir: str | None = getattr(settings, "KH_PARSE_CACHE_DIR", None)
+    last_parse_cache_stats: dict[str, int] = {"hits": 0, "misses": 0, "writes": 0}
 
     @Node.auto(depends_on=["Source", "Index", "embedding"])
     def vector_indexing(self) -> VectorIndexing:
         return VectorIndexing(
             vector_store=self.VS, doc_store=self.DS, embedding=self.embedding
         )
+
+    def load_docs_with_parse_cache(
+        self, file_path: str | Path, extra_info: dict
+    ) -> CachedLoadResult:
+        if not isinstance(file_path, Path):
+            docs = self.loader.load_data(file_path, extra_info=extra_info)
+            self.last_parse_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
+            return CachedLoadResult(
+                documents=list(docs),
+                stats=self.last_parse_cache_stats,
+                cache_hit=False,
+            )
+
+        result = load_data_with_parse_cache(
+            self.loader,
+            file_path,
+            extra_info=extra_info,
+            cache_dir=self.parse_cache_dir,
+            reader_policy=self._parse_reader_policy(),
+        )
+        self.last_parse_cache_stats = result.stats
+        return result
+
+    def _parse_reader_policy(self) -> dict:
+        return {
+            "loader": (
+                f"{self.loader.__class__.__module__}."
+                f"{self.loader.__class__.__name__}"
+            ),
+        }
 
     def handle_docs(self, docs, file_id, file_name) -> Generator[Document, None, int]:
         s_time = time.time()
@@ -684,8 +717,17 @@ class IndexPipeline(BaseComponent):
         extra_info["collection_name"] = self.collection_name
 
         yield Document(f" => Converting {file_name} to text", channel="debug")
-        docs = self.loader.load_data(file_path, extra_info=extra_info)
-        yield Document(f" => Converted {file_name} to text", channel="debug")
+        parse_result = self.load_docs_with_parse_cache(file_path, extra_info)
+        docs = parse_result.documents
+        cache_status = "hit" if parse_result.cache_hit else "miss"
+        yield Document(
+            f" => Converted {file_name} to text"
+            f" (parse cache {cache_status}; "
+            f"hits={parse_result.stats.get('hits', 0)}, "
+            f"misses={parse_result.stats.get('misses', 0)}, "
+            f"writes={parse_result.stats.get('writes', 0)})",
+            channel="debug",
+        )
         yield from self.handle_docs(docs, file_id, file_name)
 
         self.finish(file_id, file_path)

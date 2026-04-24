@@ -31,6 +31,11 @@ def build_kotaemon_settings(
     user_data_dir = _ensure_dir(app_data_dir / "user_data")
     markdown_output_dir = _ensure_dir(app_data_dir / "markdown_cache_dir")
     chunks_output_dir = _ensure_dir(app_data_dir / "chunks_cache_dir")
+    parse_cache_dir = _ensure_dir(app_data_dir / "parse_cache_dir")
+    embedding_cache_dir = _ensure_dir(app_data_dir / "embedding_cache_dir")
+    vision_cache_dir = _ensure_dir(app_data_dir / "vision_cache_dir")
+    ocr_cache_dir = _ensure_dir(app_data_dir / "ocr_cache_dir")
+    formula_ocr_cache_dir = _ensure_dir(app_data_dir / "formula_ocr_cache_dir")
     zip_output_dir = _ensure_dir(app_data_dir / "zip_cache_dir")
     zip_input_dir = _ensure_dir(app_data_dir / "zip_cache_dir_in")
     file_storage_path = _ensure_dir(user_data_dir / "files")
@@ -60,6 +65,11 @@ def build_kotaemon_settings(
         "KH_USER_DATA_DIR": user_data_dir,
         "KH_MARKDOWN_OUTPUT_DIR": markdown_output_dir,
         "KH_CHUNKS_OUTPUT_DIR": chunks_output_dir,
+        "KH_PARSE_CACHE_DIR": parse_cache_dir,
+        "KH_EMBEDDING_CACHE_DIR": embedding_cache_dir,
+        "KH_VISION_CACHE_DIR": vision_cache_dir,
+        "KH_OCR_CACHE_DIR": ocr_cache_dir,
+        "KH_FORMULA_OCR_CACHE_DIR": formula_ocr_cache_dir,
         "KH_ZIP_OUTPUT_DIR": zip_output_dir,
         "KH_ZIP_INPUT_DIR": zip_input_dir,
         "KH_DOC_DIR": docs_dir,

@@ -74,6 +74,9 @@ class JsonDiskCache:
         found, value = self._read(key)
         return value if found else None
 
+    def get_with_status(self, key: str) -> tuple[bool, Any | None]:
+        return self._read(key)
+
     def set(self, key: str, value: Any) -> None:
         encoded = _json_dumps_cache_value(value)
         target = self._path_for_key(key)
