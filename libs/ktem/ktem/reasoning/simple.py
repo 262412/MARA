@@ -342,6 +342,7 @@ class FullQAPipeline(BaseReasoning):
             evidence=evidence,
             evidence_mode=evidence_mode,
             images=images,
+            source_documents=docs,
             conv_id=conv_id,
             **kwargs,
         )
@@ -405,6 +406,9 @@ class FullQAPipeline(BaseReasoning):
         )
         answer_pipeline.enable_mindmap = settings[f"{prefix}.create_mindmap"]
         answer_pipeline.enable_citation_viz = settings[f"{prefix}.create_citation_viz"]
+        answer_pipeline.enable_claim_verification = settings.get(
+            f"{prefix}.verify_claims", True
+        )
         answer_pipeline.use_multimodal = settings[f"{prefix}.use_multimodal"]
         answer_pipeline.system_prompt = settings[f"{prefix}.system_prompt"]
         answer_pipeline.qa_template = settings[f"{prefix}.qa_prompt"]
@@ -479,6 +483,15 @@ class FullQAPipeline(BaseReasoning):
                 "value": False,
                 "component": "checkbox",
             },
+            "verify_claims": {
+                "name": "Verify Claims Against Evidence",
+                "value": True,
+                "component": "checkbox",
+                "info": (
+                    "Check generated factual claims against retrieved evidence and "
+                    "revise or abstain when claims are unsupported."
+                ),
+            },
             "system_prompt": {
                 "name": "System Prompt",
                 "value": ("This is a question answering system."),
@@ -540,6 +553,7 @@ class FullDecomposeQAPipeline(FullQAPipeline):
                 evidence=evidence,
                 evidence_mode=evidence_mode,
                 images=images,
+                source_documents=docs,
                 conv_id=conv_id,
                 **kwargs,
             )
@@ -587,6 +601,7 @@ class FullDecomposeQAPipeline(FullQAPipeline):
             evidence=evidence + "\n" + sub_question_answer_output,
             evidence_mode=evidence_mode,
             images=images,
+            source_documents=docs,
             conv_id=conv_id,
             **kwargs,
         )

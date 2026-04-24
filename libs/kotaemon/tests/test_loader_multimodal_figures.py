@@ -3,6 +3,8 @@ from unittest.mock import Mock
 
 from PIL import Image
 
+import kotaemon.loaders.azureai_document_intelligence_loader as azure_loader_module
+import kotaemon.loaders.docling_loader as docling_loader_module
 from kotaemon.loaders.azureai_document_intelligence_loader import (
     AzureAIDocumentIntelligenceLoader,
 )
@@ -50,12 +52,14 @@ def test_docling_reader_keeps_figure_crop_and_caption_without_vlm(
         "pages": {"1": {"size": {"width": 100, "height": 100}}},
     }
     monkeypatch.setattr(
-        "kotaemon.loaders.docling_loader.crop_image",
+        docling_loader_module,
+        "crop_image",
         lambda file_path, bbox, page_number: Image.new("RGB", (4, 4), color="white"),
     )
     caption_mock = Mock(return_value="generated caption")
     monkeypatch.setattr(
-        "kotaemon.loaders.docling_loader.generate_single_figure_caption",
+        docling_loader_module,
+        "generate_single_figure_caption",
         caption_mock,
     )
 
@@ -108,12 +112,14 @@ def test_azure_reader_keeps_figure_crop_and_caption_without_vlm(monkeypatch, tmp
     pdf_path = tmp_path / "sample.pdf"
     pdf_path.write_bytes(b"%PDF-1.4")
     monkeypatch.setattr(
-        "kotaemon.loaders.azureai_document_intelligence_loader.crop_image",
+        azure_loader_module,
+        "crop_image",
         lambda file_path, bbox, page_number: Image.new("RGB", (4, 4), color="white"),
     )
     caption_mock = Mock(return_value="generated caption")
     monkeypatch.setattr(
-        "kotaemon.loaders.azureai_document_intelligence_loader.generate_single_figure_caption",
+        azure_loader_module,
+        "generate_single_figure_caption",
         caption_mock,
     )
 

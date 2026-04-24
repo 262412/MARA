@@ -304,19 +304,36 @@ class AnswerWithInlineCitation(AnswerWithContextPipeline):
         if mindmap_thread:
             mindmap_thread.join(timeout=CITATION_TIMEOUT)
 
+        claim_verification = None
+        answer_text = final_answer or output
+        if kwargs.get("enable_claim_verification", self.enable_claim_verification):
+            claim_verification, verified_answer = self.verify_answer_claims(
+                answer_text=answer_text,
+                evidence=evidence,
+                source_documents=kwargs.get("source_documents") or [],
+                claim_verifier=kwargs.get("claim_verifier"),
+            )
+            if verified_answer != answer_text:
+                final_answer = verified_answer
+                answer_text = verified_answer
+
+        answer_metadata = {
+            "citation_viz": self.enable_citation_viz,
+            "mindmap": mindmap,
+            "citation": citation,
+            "qa_score": qa_score,
+        }
+        if claim_verification is not None:
+            answer_metadata["claim_verification"] = claim_verification
+
         # convert citation to link
         answer = Document(
-            text=final_answer,
-            metadata={
-                "citation_viz": self.enable_citation_viz,
-                "mindmap": mindmap,
-                "citation": citation,
-                "qa_score": qa_score,
-            },
+            text=answer_text,
+            metadata=answer_metadata,
         )
 
         # yield the final answer
-        final_answer = self.replace_citation_with_link(final_answer)
+        final_answer = self.replace_citation_with_link(answer_text)
 
         if final_answer:
             yield Document(channel="chat", content=None)

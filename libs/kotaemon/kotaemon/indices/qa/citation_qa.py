@@ -1,6 +1,8 @@
 import logging
 import threading
 from collections import defaultdict
+from dataclasses import asdict, is_dataclass
+from enum import Enum
 from typing import Generator
 
 import numpy as np
@@ -18,6 +20,8 @@ from kotaemon.base import (
 from kotaemon.llms import ChatLLM, PromptTemplate
 
 from .citation import CitationPipeline
+from .citation_refs import citation_target_from_document, citation_targets_from_spans
+from .claim_verification import revise_or_abstain, verify_claims
 from .format_context import (
     EVIDENCE_MODE_FIGURE,
     EVIDENCE_MODE_TABLE,
@@ -168,6 +172,9 @@ class AnswerWithContextPipeline(BaseComponent):
     enable_citation: bool = False
     enable_mindmap: bool = False
     enable_citation_viz: bool = False
+    enable_claim_verification: bool = getattr(
+        flowsettings, "KH_ENABLE_CLAIM_VERIFICATION", False
+    )
 
     system_prompt: str = ""
     lang: str = "English"  # support English and Japanese
@@ -353,17 +360,98 @@ class AnswerWithContextPipeline(BaseComponent):
         if mindmap_thread:
             mindmap_thread.join(timeout=CITATION_TIMEOUT)
 
+        claim_verification = None
+        if kwargs.get("enable_claim_verification", self.enable_claim_verification):
+            claim_verification, verified_output = self.verify_answer_claims(
+                answer_text=output,
+                evidence=evidence,
+                source_documents=kwargs.get("source_documents") or [],
+                claim_verifier=kwargs.get("claim_verifier"),
+            )
+            if verified_output != output:
+                output = verified_output
+                yield Document(channel="chat", content=None)
+                yield Document(channel="chat", content=output)
+
+        answer_metadata = {
+            "citation_viz": self.enable_citation_viz,
+            "mindmap": mindmap,
+            "citation": citation,
+            "qa_score": qa_score,
+        }
+        if claim_verification is not None:
+            answer_metadata["claim_verification"] = claim_verification
+
         answer = Document(
             text=output,
-            metadata={
-                "citation_viz": self.enable_citation_viz,
-                "mindmap": mindmap,
-                "citation": citation,
-                "qa_score": qa_score,
-            },
+            metadata=answer_metadata,
         )
 
         return answer
+
+    def verify_answer_claims(
+        self,
+        *,
+        answer_text: str,
+        evidence: str,
+        source_documents: list[Document] | None = None,
+        claim_verifier=None,
+    ) -> tuple[dict | None, str]:
+        """Verify generated claims and return metadata plus a safe answer text."""
+
+        if not answer_text.strip():
+            return None, answer_text
+
+        evidence_texts = [evidence] if evidence else []
+        source_documents = source_documents or []
+        verifier = claim_verifier or verify_claims
+
+        if hasattr(verifier, "verify"):
+            result = verifier.verify(
+                answer=answer_text,
+                evidence_texts=evidence_texts,
+                source_documents=source_documents,
+            )
+        else:
+            result = verifier(
+                answer=answer_text,
+                evidence_texts=evidence_texts,
+                source_documents=source_documents,
+            )
+
+        metadata = self._claim_verification_to_metadata(result)
+        revised_answer = metadata.get("revised_answer")
+
+        if revised_answer is None and not isinstance(result, dict):
+            revision = revise_or_abstain(result)
+            revised_answer = revision.text
+            metadata["revised_answer"] = revision.text
+            metadata["abstained"] = revision.abstained
+            if revision.verification_note:
+                metadata["verification_note"] = revision.verification_note
+
+        if not revised_answer:
+            revised_answer = answer_text
+
+        return metadata, str(revised_answer)
+
+    @classmethod
+    def _claim_verification_to_metadata(cls, result) -> dict:
+        if isinstance(result, dict):
+            return cls._metadata_value(result)
+        return cls._metadata_value(result)
+
+    @classmethod
+    def _metadata_value(cls, value):
+        if isinstance(value, Enum):
+            return value.value
+        if is_dataclass(value):
+            return cls._metadata_value(asdict(value))
+        if isinstance(value, dict):
+            return {key: cls._metadata_value(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [cls._metadata_value(item) for item in value]
+        return value
 
     def match_evidence_with_context(self, answer, docs) -> dict[str, list[dict]]:
         """Match the evidence with the context"""
@@ -398,6 +486,16 @@ class AnswerWithContextPipeline(BaseComponent):
         render = _get_render()
 
         spans = self.match_evidence_with_context(answer, docs)
+        citation_targets = [
+            target.to_dict() for target in citation_targets_from_spans(spans, docs)
+        ]
+        answer.metadata["citation_targets"] = citation_targets
+        targets_by_doc_id: dict[str, list[dict]] = defaultdict(list)
+        for target in citation_targets:
+            doc_id = target.get("doc_id")
+            if doc_id:
+                targets_by_doc_id[doc_id].append(target)
+
         id2docs = {doc.doc_id: doc for doc in docs}
         not_detected = set(id2docs.keys()) - set(spans.keys())
 
@@ -440,6 +538,7 @@ class AnswerWithContextPipeline(BaseComponent):
             with_citation.append(
                 Document(
                     channel="info",
+                    metadata={"citation_targets": targets_by_doc_id.get(_id, [])},
                     content=render.collapsible_with_header_score(
                         cur_doc,
                         override_text=text,
@@ -468,6 +567,11 @@ class AnswerWithContextPipeline(BaseComponent):
             without_citation.append(
                 Document(
                     channel="info",
+                    metadata={
+                        "citation_targets": [
+                            citation_target_from_document(doc).to_dict()
+                        ]
+                    },
                     content=render.collapsible_with_header_score(
                         doc, open_collapsible=is_open
                     ),
