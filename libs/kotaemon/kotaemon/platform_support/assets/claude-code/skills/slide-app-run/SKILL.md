@@ -17,4 +17,3 @@ Use this skill to launch the packaged Web UI through the `slide` product CLI.
 ## Focus
 
 Run `slide app doctor` first when the environment is new or recently changed.
-

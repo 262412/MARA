@@ -28,4 +28,3 @@ Prefer these focused skills when the user intent is narrow:
 - `slide-app-init`
 - `slide-app-doctor`
 - `slide-app-run`
-

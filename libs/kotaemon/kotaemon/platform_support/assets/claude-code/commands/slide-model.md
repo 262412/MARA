@@ -18,4 +18,3 @@ Prefer focused command wrappers when the user intent is specific:
 - `slide-model-run`
 
 Use `slide-model-run` with `--dry-run` before real network calls.
-

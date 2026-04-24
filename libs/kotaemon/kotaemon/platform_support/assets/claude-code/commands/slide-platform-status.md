@@ -13,4 +13,3 @@ If `slide` is not available, install the standalone CLI first:
 
 Run:
 !`slide platform status $ARGUMENTS`
-

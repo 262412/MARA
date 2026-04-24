@@ -18,4 +18,3 @@ Use this skill to run one routed completion through the `slide` product CLI.
 ## Focus
 
 Prefer `--dry-run` first for new model aliases, providers, or config files.
-

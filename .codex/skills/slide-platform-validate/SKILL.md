@@ -21,4 +21,3 @@ Use this skill to validate platform support bundles or installed targets through
 ## Focus
 
 Run bundle validation before publishing and installed validation after `slide platform install`.
-

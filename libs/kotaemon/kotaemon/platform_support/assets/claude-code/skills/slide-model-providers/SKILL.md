@@ -17,4 +17,3 @@ Use this skill to inspect configured provider availability through the `slide` p
 ## Focus
 
 Run this before real model calls, especially after config or secret changes.
-

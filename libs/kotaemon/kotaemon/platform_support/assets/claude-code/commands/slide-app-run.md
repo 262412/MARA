@@ -15,4 +15,3 @@ If `slide` is not available, install the standalone CLI first:
    !`slide app doctor`
 2. Run:
    !`slide app run $ARGUMENTS`
-

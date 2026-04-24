@@ -17,4 +17,3 @@ Use this skill to validate packaged app runtime readiness through the `slide` pr
 ## Focus
 
 Run this before app launch or when config/runtime problems are suspected.
-

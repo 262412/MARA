@@ -34,4 +34,3 @@ Prefer these focused skills when the user intent is narrow:
 - `slide-platform-status`
 - `slide-platform-install`
 - `slide-platform-validate`
-

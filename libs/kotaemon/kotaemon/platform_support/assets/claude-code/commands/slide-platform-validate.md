@@ -15,4 +15,3 @@ If `slide` is not available, install the standalone CLI first:
    !`slide platform validate $ARGUMENTS`
 2. Validate installed targets after install:
    !`slide platform validate $ARGUMENTS --installed`
-

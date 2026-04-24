@@ -18,4 +18,3 @@ Use this skill to inspect installed Codex or Claude Code support assets through 
 ## Focus
 
 Use `--target-dir <path>` when validating a non-default `.codex` or `.claude` directory.
-

@@ -15,4 +15,3 @@ If `slide` is not available, install the standalone CLI first:
    !`slide model run $ARGUMENTS --dry-run`
 2. If the route looks correct and the user wants a real call, run:
    !`slide model run $ARGUMENTS`
-

@@ -17,4 +17,3 @@ Use this skill to inspect which platform bundles are supported through the `slid
 ## Focus
 
 Use this before install/status workflows when the target platform is unclear.
-

@@ -18,4 +18,3 @@ Use this skill to install Codex or Claude Code support assets through the `slide
 ## Focus
 
 Use `--mode minimal` for skills, agents, and profile docs only. Use `--mode full` when the user also wants Claude commands, hooks, scripts, and templates.
-

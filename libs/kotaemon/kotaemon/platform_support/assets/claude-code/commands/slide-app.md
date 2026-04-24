@@ -18,4 +18,3 @@ Prefer focused command wrappers when the user intent is specific:
 - `slide-app-run`
 
 Use this umbrella entry when the workflow spans multiple app actions.
-

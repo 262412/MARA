@@ -19,4 +19,3 @@ Prefer focused command wrappers when the user intent is specific:
 - `slide-platform-validate`
 
 Use this umbrella entry when the workflow spans multiple platform actions.
-

@@ -29,4 +29,3 @@ Prefer these focused skills when the user intent is narrow:
 - `slide-model-init-config`
 - `slide-model-providers`
 - `slide-model-run`
-
