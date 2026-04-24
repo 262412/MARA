@@ -19,6 +19,12 @@ from ktem.db.models import engine
 from ktem.embeddings.manager import embedding_models_manager
 from ktem.llms.manager import llms
 from ktem.rerankings.manager import reranking_models_manager
+from ktem.utils.office_conversion import (
+    LAYOUT_PRESERVING_OFFICE_EXTENSIONS,
+    OfficeToPdfConversionService,
+    detect_office_extension,
+    is_valid_pdf,
+)
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.readers.file.base import default_file_metadata_func
 from llama_index.core.vector_stores import (
@@ -53,6 +59,14 @@ from kotaemon.loaders import MathpixPDFReader
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
 
 logger = logging.getLogger(__name__)
+_office_pdf_converter: OfficeToPdfConversionService | None = None
+
+
+def get_office_pdf_converter() -> OfficeToPdfConversionService:
+    global _office_pdf_converter
+    if _office_pdf_converter is None:
+        _office_pdf_converter = OfficeToPdfConversionService(logger=logger)
+    return _office_pdf_converter
 
 
 @lru_cache
@@ -674,45 +688,57 @@ class IndexPipeline(BaseComponent):
         raise NotImplementedError
 
     def stream(
-        self, file_path: str | Path, reindex: bool, **kwargs
+        self,
+        file_path: str | Path,
+        reindex: bool,
+        *,
+        source_file_path: str | Path | None = None,
+        source_file_name: str | None = None,
+        layout_metadata: dict | None = None,
+        **kwargs,
     ) -> Generator[Document, None, tuple[str, list[Document]]]:
         # check if the file is already indexed
         if isinstance(file_path, Path):
             file_path = file_path.resolve()
+        if isinstance(source_file_path, Path):
+            source_file_path = source_file_path.resolve()
 
-        file_id = self.get_id_if_exists(file_path)
+        stored_file_path = source_file_path or file_path
+        file_id = self.get_id_if_exists(stored_file_path)
 
-        if isinstance(file_path, Path):
+        if isinstance(stored_file_path, Path):
             if file_id is not None:
                 if not reindex:
                     raise ValueError(
-                        f"File {file_path.name} already indexed. Please rerun with "
+                        f"File {stored_file_path.name} already indexed. Please rerun with "
                         "reindex=True to force reindexing."
                     )
                 else:
                     # remove the existing records
                     yield Document(
-                        f" => Removing old {file_path.name}", channel="debug"
+                        f" => Removing old {stored_file_path.name}", channel="debug"
                     )
                     self.delete_file(file_id)
-                    file_id = self.store_file(file_path)
+                    file_id = self.store_file(stored_file_path)
             else:
                 # add record to db
-                file_id = self.store_file(file_path)
+                file_id = self.store_file(stored_file_path)
         else:
             if file_id is not None:
-                raise ValueError(f"URL {file_path} already indexed.")
+                raise ValueError(f"URL {stored_file_path} already indexed.")
             else:
                 # add record to db
-                file_id = self.store_url(file_path)
+                file_id = self.store_url(stored_file_path)
 
         # extract the file
-        if isinstance(file_path, Path):
-            extra_info = default_file_metadata_func(str(file_path))
-            file_name = file_path.name
+        if isinstance(stored_file_path, Path):
+            extra_info = default_file_metadata_func(str(stored_file_path))
+            file_name = source_file_name or stored_file_path.name
         else:
-            extra_info = {"file_name": file_path}
-            file_name = file_path
+            extra_info = {"file_name": stored_file_path}
+            file_name = source_file_name or stored_file_path
+        if layout_metadata:
+            extra_info.update(layout_metadata)
 
         extra_info["file_id"] = file_id
         extra_info["collection_name"] = self.collection_name
@@ -731,7 +757,7 @@ class IndexPipeline(BaseComponent):
         )
         yield from self.handle_docs(docs, file_id, file_name)
 
-        self.finish(file_id, file_path)
+        self.finish(file_id, stored_file_path)
 
         yield Document(f" => Finished indexing {file_name}", channel="debug")
         return file_id, docs
@@ -858,6 +884,53 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
 
         return pipeline
 
+    def layout_preserving_office_extension(self, file_path: str | Path) -> str:
+        if self.is_url(file_path) or not isinstance(file_path, Path):
+            return ""
+        ext = detect_office_extension(file_path.name, str(file_path))
+        if ext in LAYOUT_PRESERVING_OFFICE_EXTENSIONS:
+            return ext
+        return ""
+
+    def prepare_layout_preserving_parse_file(
+        self, file_path: Path
+    ) -> tuple[Path, dict | None]:
+        ext = self.layout_preserving_office_extension(file_path)
+        if not ext or not getattr(settings, "KH_OFFICE_TO_PDF_INDEXING", True):
+            return file_path, None
+
+        converted_pdf = get_office_pdf_converter().convert_to_pdf(
+            file_path, file_path.name
+        )
+        if converted_pdf and is_valid_pdf(converted_pdf):
+            converted_path = Path(converted_pdf).resolve()
+            return converted_path, {
+                "source_file_name": file_path.name,
+                "source_file_path": str(file_path),
+                "source_file_extension": ext,
+                "converted_from_office": True,
+                "converted_pdf_path": str(converted_path),
+                "layout_preserving_parse": True,
+            }
+
+        message = (
+            f"Failed to convert {file_path.name} to PDF for layout-preserving "
+            "indexing. Install LibreOffice or set KH_OFFICE_TO_PDF_INDEXING=false "
+            "to use direct Office text extraction."
+        )
+        if getattr(settings, "KH_OFFICE_TO_PDF_INDEXING_STRICT", True):
+            raise RuntimeError(message)
+
+        logger.warning(message)
+        return file_path, {
+            "source_file_name": file_path.name,
+            "source_file_path": str(file_path),
+            "source_file_extension": ext,
+            "converted_from_office": False,
+            "layout_preserving_parse": False,
+            "office_pdf_conversion_error": message,
+        }
+
     def run(
         self, file_paths: str | Path | list[str | Path], *args, **kwargs
     ) -> tuple[list[str | None], list[str | None]]:
@@ -890,9 +963,40 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
             )
 
             try:
-                pipeline = self.route(file_path)
+                parse_file_path = file_path
+                layout_metadata = None
+                if isinstance(file_path, Path):
+                    office_ext = self.layout_preserving_office_extension(file_path)
+                    if office_ext and getattr(
+                        settings, "KH_OFFICE_TO_PDF_INDEXING", True
+                    ):
+                        yield Document(
+                            content=(
+                                f" => Converting {file_name} to PDF for "
+                                "layout-preserving indexing"
+                            ),
+                            channel="debug",
+                        )
+                    parse_file_path, layout_metadata = (
+                        self.prepare_layout_preserving_parse_file(file_path)
+                    )
+                    if layout_metadata and layout_metadata.get("converted_from_office"):
+                        yield Document(
+                            content=(
+                                f" => Converted {file_name} to PDF for "
+                                "layout-preserving indexing"
+                            ),
+                            channel="debug",
+                        )
+
+                pipeline = self.route(parse_file_path)
                 file_id, docs = yield from pipeline.stream(
-                    file_path, reindex=reindex, **kwargs
+                    parse_file_path,
+                    reindex=reindex,
+                    source_file_path=file_path if isinstance(file_path, Path) else None,
+                    source_file_name=file_name,
+                    layout_metadata=layout_metadata,
+                    **kwargs,
                 )
                 all_docs.extend(docs)
                 file_ids.append(file_id)

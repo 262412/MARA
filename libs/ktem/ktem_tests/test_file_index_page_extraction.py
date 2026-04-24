@@ -1,8 +1,10 @@
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
 import ktem.index.file.ui as file_ui_module
 import pandas as pd
+import pytest
 from ktem.index.file._deletion import FileIndexDeletionController
 from ktem.index.file._events import (
     register_file_index_events,
@@ -409,3 +411,52 @@ def test_file_loader_settings_expose_mathpix_formula_ocr_mode():
     values = [value for _label, value in reader_mode["choices"]]
 
     assert "mathpix" in values
+
+
+def test_layout_preserving_docx_conversion_routes_indexing_to_pdf(
+    monkeypatch, tmp_path
+):
+    source_path = tmp_path / "layout.docx"
+    converted_path = tmp_path / "layout.pdf"
+    source_path.write_bytes(b"docx")
+    converted_path.write_bytes(b"pdf")
+
+    monkeypatch.setattr(
+        "ktem.index.file.pipelines.get_office_pdf_converter",
+        lambda: SimpleNamespace(
+            convert_to_pdf=lambda file_path, file_name: str(converted_path)
+        ),
+    )
+    monkeypatch.setattr(
+        "ktem.index.file.pipelines.is_valid_pdf",
+        lambda path: Path(path) == converted_path,
+    )
+
+    pipeline = IndexDocumentPipeline(embedding=SimpleNamespace())
+    parse_path, metadata = pipeline.prepare_layout_preserving_parse_file(source_path)
+
+    assert parse_path == converted_path.resolve()
+    assert metadata is not None
+    assert metadata["converted_from_office"] is True
+    assert metadata["layout_preserving_parse"] is True
+    assert metadata["source_file_name"] == "layout.docx"
+    assert metadata["converted_pdf_path"] == str(converted_path.resolve())
+
+
+def test_layout_preserving_docx_conversion_fails_strictly(monkeypatch, tmp_path):
+    source_path = tmp_path / "layout.docx"
+    source_path.write_bytes(b"docx")
+
+    monkeypatch.setattr(
+        "ktem.index.file.pipelines.get_office_pdf_converter",
+        lambda: SimpleNamespace(convert_to_pdf=lambda file_path, file_name: ""),
+    )
+    monkeypatch.setattr(
+        "ktem.index.file.pipelines.settings.KH_OFFICE_TO_PDF_INDEXING_STRICT",
+        True,
+        raising=False,
+    )
+
+    pipeline = IndexDocumentPipeline(embedding=SimpleNamespace())
+    with pytest.raises(RuntimeError, match="Failed to convert layout.docx to PDF"):
+        pipeline.prepare_layout_preserving_parse_file(source_path)
