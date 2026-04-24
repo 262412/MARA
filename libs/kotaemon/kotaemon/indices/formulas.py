@@ -25,6 +25,12 @@ _DELIMITER_PATTERNS: tuple[tuple[re.Pattern[str], FormulaKind], ...] = (
     (re.compile(r"\\\((?P<body>.+?)\\\)", re.DOTALL), "inline"),
     (re.compile(r"(?<!\$)\$(?!\$)(?P<body>.+?)(?<!\$)\$(?!\$)", re.DOTALL), "inline"),
 )
+_ENVIRONMENT_PATTERN = re.compile(
+    r"\\begin\{(?P<env>align\*?|aligned|equation\*?|gather\*?)\}"
+    r"(?P<body>.+?)"
+    r"\\end\{(?P=env)\}",
+    re.DOTALL,
+)
 
 _EQUATION_PATTERN = re.compile(
     r"(?<![\w\\])"
@@ -69,15 +75,19 @@ def expand_documents_with_formula_elements(documents: Iterable[Any]) -> list[Any
 def detect_formulas(text: str) -> list[FormulaMatch]:
     """Find delimited formulas and simple equation-like text spans."""
 
-    matches = _detect_delimited_formulas(text)
+    matches = _detect_environment_formulas(text)
+    occupied_spans = [(match.start, match.end) for match in matches]
+    matches.extend(_detect_delimited_formulas(text, occupied_spans))
     occupied_spans = [(match.start, match.end) for match in matches]
     matches.extend(_detect_equation_like_formulas(text, occupied_spans))
     return sorted(matches, key=lambda match: match.start)
 
 
-def _detect_delimited_formulas(text: str) -> list[FormulaMatch]:
+def _detect_delimited_formulas(
+    text: str, occupied_spans: list[tuple[int, int]] | None = None
+) -> list[FormulaMatch]:
     matches: list[FormulaMatch] = []
-    occupied_spans: list[tuple[int, int]] = []
+    occupied_spans = list(occupied_spans or [])
 
     for pattern, formula_kind in _DELIMITER_PATTERNS:
         for regex_match in pattern.finditer(text):
@@ -103,6 +113,48 @@ def _detect_delimited_formulas(text: str) -> list[FormulaMatch]:
             occupied_spans.append((start, end))
 
     return matches
+
+
+def _detect_environment_formulas(text: str) -> list[FormulaMatch]:
+    matches: list[FormulaMatch] = []
+    for regex_match in _ENVIRONMENT_PATTERN.finditer(text):
+        body = regex_match.group("body")
+        body_start = regex_match.start("body")
+        for row_start, raw_row in _iter_environment_rows(body):
+            cleaned_row = _clean_environment_row(raw_row)
+            normalized = normalize_formula_text(cleaned_row)
+            if not _looks_like_equation(normalized):
+                continue
+
+            start = body_start + row_start
+            end = start + len(raw_row)
+            matches.append(
+                FormulaMatch(
+                    raw_text=raw_row.strip(),
+                    normalized_formula=normalized,
+                    formula_kind="display",
+                    start=start,
+                    end=end,
+                )
+            )
+    return matches
+
+
+def _iter_environment_rows(body: str) -> Iterable[tuple[int, str]]:
+    cursor = 0
+    for raw_row in re.split(r"\\\\", body):
+        row_start = body.find(raw_row, cursor)
+        if row_start < 0:
+            row_start = cursor
+        cursor = row_start + len(raw_row)
+        if raw_row.strip():
+            yield row_start, raw_row
+
+
+def _clean_environment_row(row: str) -> str:
+    row = re.sub(r"\\(?:notag|nonumber)\b", "", row)
+    row = re.sub(r"\\tag\{[^}]*\}", "", row)
+    return row.replace("&", "").strip()
 
 
 def _detect_equation_like_formulas(

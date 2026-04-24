@@ -48,6 +48,7 @@ from kotaemon.indices.ingests.files import (
 )
 from kotaemon.indices.rankings import BaseReranking, LLMReranking, LLMTrulensScoring
 from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
+from kotaemon.loaders import MathpixPDFReader
 
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
 
@@ -762,6 +763,8 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
             readers[".pdf"] = azure_reader
         elif self.reader_mode == "docling":
             readers[".pdf"] = docling_reader
+        elif self.reader_mode == "mathpix":
+            readers[".pdf"] = MathpixPDFReader()
 
         dev_readers, _, _ = dev_settings()
         readers.update(dev_readers)
@@ -782,6 +785,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
                         "azure-di",
                     ),
                     ("Docling (figure+table extraction)", "docling"),
+                    ("Mathpix API (formula OCR)", "mathpix"),
                 ],
                 "component": "dropdown",
             },

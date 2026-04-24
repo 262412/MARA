@@ -407,7 +407,21 @@ button.selected {
 #answer-panel .chat-message-content {
   line-height: 1.6;
   white-space: normal;
+  overflow-x: auto;
   overflow-wrap: break-word;
+}
+
+#answer-panel .chat-message-content table {
+  width: max-content;
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
+#answer-panel .chat-message-content th,
+#answer-panel .chat-message-content td {
+  padding: 6px 8px;
+  border: 1px solid var(--border-color-primary);
+  vertical-align: top;
 }
 
 #answer-panel .typing-indicator {

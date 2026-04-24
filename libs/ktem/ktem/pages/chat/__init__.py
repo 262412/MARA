@@ -8,6 +8,7 @@ from copy import deepcopy
 from typing import Optional
 
 import gradio as gr
+import markdown
 from ktem.app import BasePage
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARequest, DocQARuntime
@@ -734,7 +735,16 @@ class ChatPage(BasePage):
                         ),
                         elem_id="kg-answer-hint",
                     )
-                    self.answer_panel = gr.Markdown(value="", elem_id="answer-panel")
+                    self.answer_panel = gr.Markdown(
+                        value="",
+                        elem_id="answer-panel",
+                        latex_delimiters=[
+                            {"left": "$$", "right": "$$", "display": True},
+                            {"left": "$", "right": "$", "display": False},
+                            {"left": "\\(", "right": "\\)", "display": False},
+                            {"left": "\\[", "right": "\\]", "display": True},
+                        ],
+                    )
 
         self.followup_questions = self.chat_suggestion.examples
         self.followup_questions_ui = self.chat_suggestion.accordion
@@ -1216,8 +1226,18 @@ class ChatPage(BasePage):
         import html
 
         escaped_content = html.escape(content)
-        # Replace newlines with <br> for proper line breaks
-        formatted_content = escaped_content.replace("\n", "<br>")
+        if role == "assistant":
+            formatted_content = markdown.markdown(
+                escaped_content,
+                extensions=[
+                    "markdown.extensions.tables",
+                    "markdown.extensions.fenced_code",
+                    "markdown.extensions.nl2br",
+                ],
+            )
+        else:
+            # User messages are rendered as plain text inside the bubble.
+            formatted_content = escaped_content.replace("\n", "<br>")
         return (
             f'<div class="chat-message {role}">'
             f'<div class="chat-message-content">{formatted_content}</div>'

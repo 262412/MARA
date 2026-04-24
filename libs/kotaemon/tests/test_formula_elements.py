@@ -55,6 +55,45 @@ def test_extracts_multiple_display_and_inline_delimiter_styles():
     ]
 
 
+def test_extracts_multiple_rows_from_latex_align_environment():
+    doc = Document(
+        text=(
+            "The derivation is "
+            "\\begin{align}"
+            "a &= b + c \\\\ "
+            "d &= e + f"
+            "\\end{align}"
+        ),
+        metadata={"page_number": 4},
+    )
+
+    formulas = extract_formula_elements(doc)
+
+    assert [formula.text for formula in formulas] == [
+        "a = b + c",
+        "d = e + f",
+    ]
+    assert [formula.metadata["formula_kind"] for formula in formulas] == [
+        "display",
+        "display",
+    ]
+    assert all(formula.metadata["page_number"] == 4 for formula in formulas)
+
+
+def test_delimited_latex_environment_returns_rows_without_wrapper_duplicate():
+    doc = Document(
+        text="\\[\\begin{aligned} a &= b + c \\\\ d &= e + f \\end{aligned}\\]",
+        metadata={},
+    )
+
+    formulas = extract_formula_elements(doc)
+
+    assert [formula.text for formula in formulas] == [
+        "a = b + c",
+        "d = e + f",
+    ]
+
+
 def test_extracts_equation_like_text_without_delimiters():
     doc = Document(
         text="The relationship is E = mc^2. Another row: x_i = y_i + z_i.",

@@ -36,6 +36,48 @@ CONTEXT_RELEVANT_WARNING_SCORE = config(
 )
 logger = logging.getLogger(__name__)
 
+_PAGE_VISUAL_CONTEXT_KEYS = (
+    "thumbnail_doc_id",
+    "page_thumbnail_doc_id",
+    "page_image_origin",
+    "page_image",
+    "preview_image",
+    "rendered_page_image",
+)
+_VISUAL_CONTEXT_TERMS = (
+    "figure",
+    "fig.",
+    "image",
+    "diagram",
+    "chart",
+    "graph",
+    "flowchart",
+    "plot",
+    "box",
+    "arrow",
+    "node",
+    "edge",
+    "layout",
+    "visual",
+    "\u56fe",
+    "\u56fe\u7247",
+    "\u56fe\u50cf",
+    "\u56fe\u793a",
+    "\u793a\u610f\u56fe",
+    "\u6d41\u7a0b\u56fe",
+    "\u7ed3\u6784\u56fe",
+    "\u6846",
+    "\u7ebf\u6846",
+    "\u7bad\u5934",
+    "\u8282\u70b9",
+    "\u5e03\u5c40",
+)
+
+
+def _looks_like_visual_question_or_answer(*texts: str) -> bool:
+    combined = " ".join(str(text or "").casefold() for text in texts)
+    return any(term in combined for term in _VISUAL_CONTEXT_TERMS)
+
 
 def _get_default_llm():
     try:
@@ -362,16 +404,29 @@ class AnswerWithContextPipeline(BaseComponent):
 
         claim_verification = None
         if kwargs.get("enable_claim_verification", self.enable_claim_verification):
+            source_documents = kwargs.get("source_documents") or []
             claim_verification, verified_output = self.verify_answer_claims(
                 answer_text=output,
                 evidence=evidence,
-                source_documents=kwargs.get("source_documents") or [],
+                source_documents=source_documents,
                 claim_verifier=kwargs.get("claim_verifier"),
             )
             if verified_output != output:
-                output = verified_output
-                yield Document(channel="chat", content=None)
-                yield Document(channel="chat", content=output)
+                if self._should_keep_original_after_verification(
+                    evidence_mode=evidence_mode,
+                    images=images,
+                    source_documents=source_documents,
+                    question=question,
+                    answer_text=output,
+                ):
+                    claim_verification["rewrite_skipped"] = True
+                    claim_verification["rewrite_skip_reason"] = (
+                        "multimodal_or_formula_evidence"
+                    )
+                else:
+                    output = verified_output
+                    yield Document(channel="chat", content=None)
+                    yield Document(channel="chat", content=output)
 
         answer_metadata = {
             "citation_viz": self.enable_citation_viz,
@@ -434,6 +489,49 @@ class AnswerWithContextPipeline(BaseComponent):
             revised_answer = answer_text
 
         return metadata, str(revised_answer)
+
+    @staticmethod
+    def _should_keep_original_after_verification(
+        *,
+        evidence_mode: int,
+        images: list[str],
+        source_documents: list[Document],
+        question: str = "",
+        answer_text: str = "",
+    ) -> bool:
+        if evidence_mode == EVIDENCE_MODE_FIGURE or images:
+            return True
+
+        has_page_visual_context = False
+        for document in source_documents:
+            metadata = dict(getattr(document, "metadata", None) or {})
+            kinds = {
+                str(metadata.get("type") or "").strip().lower(),
+                str(metadata.get("element_type") or "").strip().lower(),
+            }
+            if kinds & {"image", "figure", "formula", "formula_image", "thumbnail"}:
+                return True
+            if any(
+                metadata.get(key)
+                for key in (
+                    "image_origin",
+                    "formula_image",
+                    "normalized_formula",
+                    "formula_text",
+                    "formula_json",
+                    "formula_image_json",
+                )
+            ):
+                return True
+            if any(metadata.get(key) for key in _PAGE_VISUAL_CONTEXT_KEYS):
+                has_page_visual_context = True
+
+        if has_page_visual_context and _looks_like_visual_question_or_answer(
+            question, answer_text
+        ):
+            return True
+
+        return False
 
     @classmethod
     def _claim_verification_to_metadata(cls, result) -> dict:

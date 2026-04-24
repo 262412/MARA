@@ -307,15 +307,28 @@ class AnswerWithInlineCitation(AnswerWithContextPipeline):
         claim_verification = None
         answer_text = final_answer or output
         if kwargs.get("enable_claim_verification", self.enable_claim_verification):
+            source_documents = kwargs.get("source_documents") or []
             claim_verification, verified_answer = self.verify_answer_claims(
                 answer_text=answer_text,
                 evidence=evidence,
-                source_documents=kwargs.get("source_documents") or [],
+                source_documents=source_documents,
                 claim_verifier=kwargs.get("claim_verifier"),
             )
             if verified_answer != answer_text:
-                final_answer = verified_answer
-                answer_text = verified_answer
+                if self._should_keep_original_after_verification(
+                    evidence_mode=evidence_mode,
+                    images=images,
+                    source_documents=source_documents,
+                    question=question,
+                    answer_text=answer_text,
+                ):
+                    claim_verification["rewrite_skipped"] = True
+                    claim_verification["rewrite_skip_reason"] = (
+                        "multimodal_or_formula_evidence"
+                    )
+                else:
+                    final_answer = verified_answer
+                    answer_text = verified_answer
 
         answer_metadata = {
             "citation_viz": self.enable_citation_viz,
