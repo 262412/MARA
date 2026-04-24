@@ -9,6 +9,31 @@ from statistics import mean
 PUNCT_TABLE = str.maketrans("", "", string.punctuation)
 WHITESPACE_RE = re.compile(r"\s+")
 NUMBER_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
+ABSTENTION_RE = re.compile(
+    "|".join(
+        [
+            r"文档证据无法支持",
+            r"证据无法支持",
+            r"无法根据(?:所给|当前)?文档",
+            r"没有足够(?:的)?(?:文档)?证据",
+            r"insufficient evidence",
+            r"not enough evidence",
+            r"not supported by (?:the )?document",
+            r"cannot be supported by (?:the )?document",
+            r"cannot answer (?:from|based on)",
+            r"unable to answer (?:from|based on)",
+        ]
+    ),
+    flags=re.IGNORECASE,
+)
+TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$")
+LATEX_SIGNAL_RE = re.compile(
+    r"(\\[a-zA-Z]+|[_^]\s*\{?[\w+\-=]+|[A-Za-z0-9]\s*[_^]\s*\{)"
+)
+LATEX_DELIMITED_RE = re.compile(
+    r"(\$\$.*?\$\$|\$[^$\n]+?\$|\\\(.*?\\\)|\\\[.*?\\\])",
+    flags=re.DOTALL,
+)
 
 
 def normalize_text(text: str) -> str:
@@ -221,6 +246,60 @@ def numeric_tolerance_score(
             continue
         allowed_delta = abs(gold) * tolerance
         if abs(predicted - gold) <= allowed_delta:
+            return 1.0
+    return 0.0
+
+
+def is_abstention_answer(prediction: str) -> bool:
+    return bool(ABSTENTION_RE.search(str(prediction or "")))
+
+
+def false_abstention_score(prediction: str, gold_answers: list[str]) -> float:
+    has_gold_answer = any(str(answer or "").strip() for answer in gold_answers)
+    return float(has_gold_answer and is_abstention_answer(prediction))
+
+
+def _split_markdown_table_row(line: str) -> list[str]:
+    row = line.strip()
+    if row.startswith("|"):
+        row = row[1:]
+    if row.endswith("|"):
+        row = row[:-1]
+    return [cell.strip() for cell in row.split("|")]
+
+
+def markdown_table_renderable_score(prediction: str) -> float | None:
+    lines = [
+        line.rstrip()
+        for line in str(prediction or "").splitlines()
+        if "|" in line and line.strip()
+    ]
+    if not lines:
+        return None
+
+    table_like = False
+    for index in range(len(lines) - 1):
+        header = lines[index]
+        separator = lines[index + 1]
+        if header.count("|") < 2:
+            continue
+        table_like = True
+        if not TABLE_SEPARATOR_RE.match(separator):
+            continue
+        header_cells = _split_markdown_table_row(header)
+        separator_cells = _split_markdown_table_row(separator)
+        if len(header_cells) >= 2 and len(header_cells) == len(separator_cells):
+            return 1.0
+
+    return 0.0 if table_like else None
+
+
+def latex_renderable_score(prediction: str) -> float | None:
+    text = str(prediction or "")
+    if not LATEX_SIGNAL_RE.search(text):
+        return None
+    for match in LATEX_DELIMITED_RE.finditer(text):
+        if LATEX_SIGNAL_RE.search(match.group(0)):
             return 1.0
     return 0.0
 

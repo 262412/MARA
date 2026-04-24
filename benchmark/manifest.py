@@ -28,6 +28,23 @@ def _resolve_path(manifest_path: Path, document_path: str) -> Path:
     return (manifest_path.parent / path).resolve()
 
 
+def _coerce_expected_formats(record: dict[str, Any]) -> list[str]:
+    return [
+        str(item).strip()
+        for item in _ensure_list(
+            record.get("expected_formats") or record.get("expected_format")
+        )
+        if str(item).strip()
+    ]
+
+
+def _coerce_expected_guardrails(record: dict[str, Any]) -> dict[str, Any]:
+    value = record.get("expected_guardrails")
+    if value is None:
+        value = record.get("expected_guardrail")
+    return dict(value) if isinstance(value, dict) else {}
+
+
 def _coerce_examples(
     records: Iterable[dict[str, Any]],
     manifest_path: Path,
@@ -81,6 +98,8 @@ def _coerce_examples(
                     for item in _ensure_list(record.get("gold_evidence"))
                     if isinstance(item, dict)
                 ],
+                expected_formats=_coerce_expected_formats(record),
+                expected_guardrails=_coerce_expected_guardrails(record),
                 metadata=dict(record.get("metadata") or {}),
             )
         )
@@ -173,9 +192,7 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
         ]
         if not evidence_pages:
             evidence_pages = [
-                item["page"]
-                for item in gold_evidence
-                if item.get("page") is not None
+                item["page"] for item in gold_evidence if item.get("page") is not None
             ]
         if not evidence_sources:
             evidence_sources = [
@@ -199,6 +216,8 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
                 evidence_pages=evidence_pages,
                 evidence_sources=evidence_sources,
                 gold_evidence=gold_evidence,
+                expected_formats=_coerce_expected_formats(record),
+                expected_guardrails=_coerce_expected_guardrails(record),
                 metadata=dict(record.get("metadata") or {}),
             )
         )
@@ -211,7 +230,9 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
         schema_version=2,
         routes=[
             _coerce_route(item)
-            for item in _ensure_list(payload.get("routes") or payload.get("route_matrix"))
+            for item in _ensure_list(
+                payload.get("routes") or payload.get("route_matrix")
+            )
             if isinstance(item, dict)
         ],
     )

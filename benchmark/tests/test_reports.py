@@ -21,6 +21,12 @@ def test_write_reports_emits_required_artifacts_with_jsonl_and_route_metadata(tm
             "avg_anls": 1.0,
             "avg_page_hit": 1.0,
             "avg_citation_recall": 1.0,
+            "avg_abstention_rate": 0.0,
+            "avg_false_abstention": 0.0,
+            "avg_markdown_table_renderable": 1.0,
+            "avg_latex_renderable": 1.0,
+            "avg_rewrite_skipped": 1.0,
+            "avg_guardrail_expectation_match": 1.0,
             "avg_retrieval_seconds": 0.2,
             "avg_generation_seconds": 0.4,
             "engine": "local",
@@ -50,16 +56,16 @@ def test_write_reports_emits_required_artifacts_with_jsonl_and_route_metadata(tm
         "retrieval_traces.jsonl",
         "summary.json",
     ]
-    assert json.loads((run_dir / "summary.json").read_text(encoding="utf-8")) == report[
-        "summary"
-    ]
+    assert (
+        json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+        == report["summary"]
+    )
     assert _read_jsonl(run_dir / "predictions.jsonl") == report["predictions"]
-    assert json.loads((run_dir / "documents.json").read_text(encoding="utf-8")) == report[
-        "documents"
-    ]
-    assert _read_jsonl(run_dir / "retrieval_traces.jsonl") == report[
-        "retrieval_traces"
-    ]
+    assert (
+        json.loads((run_dir / "documents.json").read_text(encoding="utf-8"))
+        == report["documents"]
+    )
+    assert _read_jsonl(run_dir / "retrieval_traces.jsonl") == report["retrieval_traces"]
 
     markdown = (run_dir / "report.md").read_text(encoding="utf-8")
     assert "predictions.jsonl" in markdown
@@ -68,6 +74,10 @@ def test_write_reports_emits_required_artifacts_with_jsonl_and_route_metadata(tm
     assert "- Engine: `local`" in markdown
     assert "- Route: `hybrid`" in markdown
     assert "- Scope: `smoke`" in markdown
+    assert "- False Abstention: `0.0`" in markdown
+    assert "- Markdown Table Renderable: `1.0`" in markdown
+    assert "- LaTeX Renderable: `1.0`" in markdown
+    assert "- Guardrail Expectation Match: `1.0`" in markdown
 
 
 def test_write_reports_derives_minimal_traces_from_predictions_when_missing(tmp_path):

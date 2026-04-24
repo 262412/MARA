@@ -2,7 +2,11 @@ from benchmark.metrics import (
     anls_score,
     element_hit_score,
     exact_match_score,
+    false_abstention_score,
     formula_normalized_match_score,
+    is_abstention_answer,
+    latex_renderable_score,
+    markdown_table_renderable_score,
     numeric_tolerance_score,
     span_recall_score,
     token_f1_score,
@@ -52,3 +56,25 @@ def test_formula_normalized_match_ignores_whitespace_case_and_wrappers():
 def test_numeric_tolerance_accepts_close_values():
     assert numeric_tolerance_score("$1,001.00", ["1000"], tolerance=0.01) == 1.0
     assert numeric_tolerance_score("950", ["1000"], tolerance=0.01) == 0.0
+
+
+def test_false_abstention_flags_supported_answers_rewritten_to_no_evidence():
+    assert is_abstention_answer("文档证据无法支持该回答") is True
+    assert false_abstention_score("文档证据无法支持该回答", ["Transformer"]) == 1.0
+    assert false_abstention_score("The answer is Transformer.", ["Transformer"]) == 0.0
+
+
+def test_markdown_table_renderable_score_requires_separator_row():
+    renderable = """| Component | Input |
+| :--- | :--- |
+| Encoder | Embeddings |"""
+    malformed = """| Component | Input |
+| Encoder | Embeddings |"""
+
+    assert markdown_table_renderable_score(renderable) == 1.0
+    assert markdown_table_renderable_score(malformed) == 0.0
+
+
+def test_latex_renderable_score_requires_formula_delimiters():
+    assert latex_renderable_score(r"The update is $w_{t+1}=w_t-\eta\nabla L$.") == 1.0
+    assert latex_renderable_score(r"The update is w_{t+1}=w_t-\eta\nabla L.") == 0.0

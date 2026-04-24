@@ -56,6 +56,8 @@ class BenchmarkExample:
     evidence_pages: list[int | str] = field(default_factory=list)
     evidence_sources: list[str] = field(default_factory=list)
     gold_evidence: list[dict[str, Any]] = field(default_factory=list)
+    expected_formats: list[str] = field(default_factory=list)
+    expected_guardrails: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:

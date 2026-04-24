@@ -22,6 +22,9 @@ def test_engine_run_result_exposes_phase_two_fields():
     assert result.timings == {}
     assert result.context_preview == ""
     assert result.retrieval_trace == []
+    assert result.evidence_metadata == {}
+    assert result.claim_verification == {}
+    assert result.presentation == {}
 
 
 @pytest.mark.parametrize(
@@ -112,6 +115,9 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     class FakeResponse:
         answer = "runtime answer"
         references_text = "doc.txt#page:1"
+        evidence_metadata = {"has_formula_evidence": True}
+        claim_verification = {"rewrite_skipped": True}
+        presentation = {"markdown_normalized": True}
 
     class FakeRecord:
         file_id = "file-1"
@@ -171,3 +177,6 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert result.answer == "runtime answer"
     assert result.predicted_pages == ["1"]
     assert result.predicted_sources == ["doc.txt#page:1"]
+    assert result.evidence_metadata == {"has_formula_evidence": True}
+    assert result.claim_verification == {"rewrite_skipped": True}
+    assert result.presentation == {"markdown_normalized": True}

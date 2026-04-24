@@ -24,6 +24,9 @@ class EngineRunResult:
     cost: dict[str, Any] = field(default_factory=dict)
     context_preview: str = ""
     retrieval_trace: list[dict[str, Any]] = field(default_factory=list)
+    evidence_metadata: dict[str, Any] = field(default_factory=dict)
+    claim_verification: dict[str, Any] = field(default_factory=dict)
+    presentation: dict[str, Any] = field(default_factory=dict)
 
 
 @runtime_checkable
@@ -80,7 +83,7 @@ class BaseBenchmarkEngine:
 
     def _generate_from_context(
         self, example: Any, context: str
-    ) -> tuple[str, str, float]:
+    ) -> tuple[str, str, float, dict[str, Any]]:
         system = self._get_system()
         synthetic_hit = RetrievedDocument(
             text=context,
@@ -211,6 +214,9 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 "generation_seconds": generation_seconds,
             },
             context_preview=response.references_text[: self.max_context_length],
+            evidence_metadata=dict(getattr(response, "evidence_metadata", {}) or {}),
+            claim_verification=dict(getattr(response, "claim_verification", {}) or {}),
+            presentation=dict(getattr(response, "presentation", {}) or {}),
             retrieval_trace=[
                 {
                     "engine": self.name,
@@ -237,8 +243,8 @@ class DirectPasteEngine(BaseBenchmarkEngine):
         system = self._get_text_system()
         parsed_indexes = [system._build_index(document) for document in documents]
         context = self._truncate_context(_parsed_indexes_to_context(parsed_indexes))
-        answer, _evidence, generation_seconds = self._generate_from_context(
-            example, context
+        answer, _evidence, generation_seconds, evidence_metadata = (
+            self._generate_from_context(example, context)
         )
         timings = {
             "parse_seconds": sum(item.parse_seconds for item in parsed_indexes),
@@ -265,6 +271,7 @@ class DirectPasteEngine(BaseBenchmarkEngine):
             performance=_performance_from_timings(timings, parsed_indexes),
             cache=_parsed_indexes_cache(parsed_indexes),
             context_preview=context,
+            evidence_metadata=evidence_metadata,
             retrieval_trace=[
                 {
                     "engine": self.name,
@@ -313,8 +320,8 @@ class OraclePageEngine(BaseBenchmarkEngine):
             _parsed_indexes_to_context(parsed_indexes, wanted_pages=wanted_pages)
             or _parsed_indexes_to_context(parsed_indexes)
         )
-        answer, _evidence, generation_seconds = self._generate_from_context(
-            example, context
+        answer, _evidence, generation_seconds, evidence_metadata = (
+            self._generate_from_context(example, context)
         )
         timings = {
             "parse_seconds": sum(item.parse_seconds for item in parsed_indexes),
@@ -343,6 +350,7 @@ class OraclePageEngine(BaseBenchmarkEngine):
             performance=_performance_from_timings(timings, parsed_indexes),
             cache=_parsed_indexes_cache(parsed_indexes),
             context_preview=context,
+            evidence_metadata=evidence_metadata,
             retrieval_trace=[
                 {
                     "engine": self.name,
@@ -425,6 +433,9 @@ def _prediction_to_result(prediction: dict[str, Any]) -> EngineRunResult:
         cost=dict(prediction.get("cost") or {}),
         context_preview=str(prediction.get("context_preview") or ""),
         retrieval_trace=list(prediction.get("retrieval_trace") or []),
+        evidence_metadata=dict(prediction.get("evidence_metadata") or {}),
+        claim_verification=dict(prediction.get("claim_verification") or {}),
+        presentation=dict(prediction.get("presentation") or {}),
     )
 
 

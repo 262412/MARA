@@ -50,6 +50,79 @@ def _sum_cache_stats(items: list[dict[str, int]]) -> dict[str, int]:
     return total
 
 
+def _metadata_kind(metadata: dict[str, Any]) -> str:
+    for key in ("element_type", "type", "kind", "category", "content_type"):
+        value = str(metadata.get(key) or "").strip().lower()
+        if value:
+            return value
+    return ""
+
+
+def _evidence_metadata(
+    evidence_mode: str,
+    images: list[Any] | tuple[Any, ...] | None,
+    hits: list[RetrievedDocument],
+) -> dict[str, Any]:
+    image_items = [image for image in images or [] if image is not None]
+    kinds = sorted(
+        {
+            kind
+            for hit in hits
+            for kind in [_metadata_kind(dict(getattr(hit, "metadata", {}) or {}))]
+            if kind
+        }
+    )
+    figure_markers = {
+        "chart",
+        "diagram",
+        "drawing",
+        "figure",
+        "image",
+        "page_image",
+        "picture",
+        "shape",
+        "table_image",
+        "thumbnail",
+        "visual",
+    }
+    formula_markers = {"equation", "formula", "formula_image", "latex", "math"}
+    visual_keys = {
+        "image_path",
+        "image_origin",
+        "page_image",
+        "page_image_path",
+        "thumbnail",
+        "thumbnail_path",
+        "visual_path",
+    }
+    formula_keys = {"formula", "formula_text", "latex", "math_text", "tex"}
+
+    has_figure = bool(image_items) or any(
+        any(marker in kind for marker in figure_markers) for kind in kinds
+    )
+    has_formula = any(
+        any(marker in kind for marker in formula_markers) for kind in kinds
+    )
+    has_page_visual = bool(image_items)
+    for hit in hits:
+        metadata = dict(getattr(hit, "metadata", {}) or {})
+        if any(metadata.get(key) for key in visual_keys):
+            has_figure = True
+            has_page_visual = True
+        if any(metadata.get(key) for key in formula_keys):
+            has_formula = True
+
+    return {
+        "evidence_mode": evidence_mode,
+        "image_count": len(image_items),
+        "has_images": bool(image_items),
+        "has_figure_evidence": has_figure,
+        "has_formula_evidence": has_formula,
+        "has_page_visual_context": has_page_visual,
+        "source_kinds": kinds,
+    }
+
+
 @dataclass(slots=True)
 class ParsedIndex:
     document: BenchmarkDocument
@@ -397,14 +470,14 @@ class KotaemonTextRAGSystem:
         self,
         example: BenchmarkExample,
         hits: list[RetrievedDocument],
-    ) -> tuple[str, str, float]:
+    ) -> tuple[str, str, float, dict[str, Any]]:
         start = time.perf_counter()
-        evidence_mode, evidence, _images = self.evidence_pipeline(hits).content
-        del evidence_mode
+        evidence_mode, evidence, images = self.evidence_pipeline(hits).content
+        evidence_metadata = _evidence_metadata(evidence_mode, images, hits)
 
         if not self.config.use_generation:
             answer = hits[0].text if hits else ""
-            return answer, evidence, time.perf_counter() - start
+            return answer, evidence, time.perf_counter() - start, evidence_metadata
 
         if self.llm is None:
             raise ValueError(
@@ -418,7 +491,7 @@ class KotaemonTextRAGSystem:
         )
         response = self.llm(prompt)
         answer = getattr(response, "text", "") or str(response)
-        return answer.strip(), evidence, time.perf_counter() - start
+        return answer.strip(), evidence, time.perf_counter() - start, evidence_metadata
 
     def run_example(
         self,
@@ -461,7 +534,7 @@ class KotaemonTextRAGSystem:
         )
         retrieval_hits = retrieval_hits[: self.config.top_k]
 
-        answer, evidence, generation_seconds = self._generate_answer(
+        answer, evidence, generation_seconds, evidence_metadata = self._generate_answer(
             example, retrieval_hits
         )
 
@@ -535,6 +608,7 @@ class KotaemonTextRAGSystem:
                 for hit in retrieval_hits
             ],
             "retrieval_trace": retrieval_trace,
+            "evidence_metadata": evidence_metadata,
             "timings": timings,
             "performance": performance,
             "cache": cache,

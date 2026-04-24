@@ -183,6 +183,98 @@ def test_run_benchmark_filters_manifest_route_by_id(monkeypatch, tmp_path):
     assert report["predictions"][0]["route"] == "keep"
 
 
+def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "format_guardrails",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "examples": [
+                    {
+                        "example_id": "format-ex",
+                        "document_id": "doc",
+                        "question": "Summarize the table and formula.",
+                        "answers": ["Encoder uses self-attention."],
+                        "expected_formats": ["markdown_table", "latex"],
+                        "expected_guardrails": {
+                            "allow_abstention": False,
+                            "rewrite_skipped": True,
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class _GuardrailEngine:
+        def __init__(self, engine_name, config):
+            self.engine_name = engine_name
+            self.config = config
+
+        def run_example(self, bundle, example):
+            return {
+                "example_id": example.example_id,
+                "document_id": example.document_id,
+                "question": example.question,
+                "gold_answers": example.answers,
+                "gold_pages": example.evidence_pages,
+                "gold_sources": example.evidence_sources,
+                "predicted_answer": (
+                    "| Component | Mechanism |\n"
+                    "| :--- | :--- |\n"
+                    "| Encoder | Self-attention |\n\n"
+                    r"The formula is $w_{t+1}=w_t-\eta\nabla L$."
+                ),
+                "predicted_pages": [],
+                "predicted_sources": [],
+                "predicted_element_ids": [],
+                "retrieved_hits": [],
+                "claim_verification": {
+                    "abstained": False,
+                    "rewrite_skipped": True,
+                },
+                "evidence_metadata": {
+                    "has_formula_evidence": True,
+                    "has_figure_evidence": True,
+                },
+            }
+
+        def document_reports(self):
+            return []
+
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _GuardrailEngine(engine_name, config),
+    )
+
+    report = run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="format_guardrails",
+            output_dir=tmp_path / "out",
+            use_generation=False,
+        ),
+    )
+
+    prediction = report["predictions"][0]
+    assert prediction["expected_formats"] == ["markdown_table", "latex"]
+    assert prediction["expected_guardrails"]["rewrite_skipped"] is True
+    assert prediction["evidence_metadata"]["has_formula_evidence"] is True
+    assert prediction["metrics"]["markdown_table_renderable"] == 1.0
+    assert prediction["metrics"]["latex_renderable"] == 1.0
+    assert prediction["metrics"]["false_abstention"] == 0.0
+    assert prediction["metrics"]["rewrite_skipped"] == 1.0
+    assert prediction["metrics"]["guardrail_expectation_match"] == 1.0
+    assert report["summary"]["avg_markdown_table_renderable"] == 1.0
+    assert report["summary"]["avg_latex_renderable"] == 1.0
+    assert report["summary"]["avg_false_abstention"] == 0.0
+    assert report["summary"]["avg_guardrail_expectation_match"] == 1.0
+
+
 def test_run_benchmark_handles_empty_manifest(tmp_path):
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text(

@@ -63,7 +63,9 @@ def test_normalize_financebench_manifest(tmp_path):
     assert bundle.examples[0].evidence_sources == ["Revenue was 10."]
 
 
-def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evidence(tmp_path):
+def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evidence(
+    tmp_path,
+):
     (tmp_path / "doc-a.pdf").write_text("a", encoding="utf-8")
     (tmp_path / "doc-b.xlsx").write_text("b", encoding="utf-8")
     manifest_path = tmp_path / "v2.json"
@@ -95,6 +97,11 @@ def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evid
                         "answer_type": "numeric",
                         "question": "What is the combined revenue?",
                         "answers": ["42"],
+                        "expected_formats": ["markdown_table", "latex"],
+                        "expected_guardrails": {
+                            "allow_abstention": False,
+                            "rewrite_skipped": True,
+                        },
                         "gold_evidence": [
                             {
                                 "document_id": "doc-a",
@@ -143,6 +150,11 @@ def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evid
     assert example.scope == "multi_document"
     assert example.modality == "table"
     assert example.answer_type == "numeric"
+    assert example.expected_formats == ["markdown_table", "latex"]
+    assert example.expected_guardrails == {
+        "allow_abstention": False,
+        "rewrite_skipped": True,
+    }
     assert example.gold_evidence[0]["element_id"] == "table-1"
 
 

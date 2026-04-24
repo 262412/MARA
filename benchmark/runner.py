@@ -9,7 +9,11 @@ from .metrics import (
     citation_recall_score,
     element_hit_score,
     exact_match_score,
+    false_abstention_score,
     formula_normalized_match_score,
+    is_abstention_answer,
+    latex_renderable_score,
+    markdown_table_renderable_score,
     numeric_tolerance_score,
     page_hit_score,
     recall_score,
@@ -22,9 +26,58 @@ from .schemas import BenchmarkConfig, ManifestBundle
 from .engines import EngineRunResult, get_engine
 
 
+_TABLE_FORMATS = {"markdown_table", "markdown-table", "table"}
+_LATEX_FORMATS = {"latex", "math", "formula", "math_formula", "math-formula"}
+
+
+def _normalized_expected_formats(prediction: dict[str, Any]) -> set[str]:
+    return {
+        str(item).strip().lower()
+        for item in prediction.get("expected_formats", [])
+        if str(item).strip()
+    }
+
+
+def _guardrail_expectation_match(
+    prediction: dict[str, Any],
+    abstained: bool,
+) -> float | None:
+    expected = dict(prediction.get("expected_guardrails") or {})
+    if not expected:
+        return None
+
+    claim_verification = dict(prediction.get("claim_verification") or {})
+    checks: list[bool] = []
+    if "rewrite_skipped" in expected:
+        checks.append(
+            bool(claim_verification.get("rewrite_skipped"))
+            == bool(expected["rewrite_skipped"])
+        )
+    if "allow_abstention" in expected:
+        checks.append(bool(expected["allow_abstention"]) or not abstained)
+    if not checks:
+        return None
+    return sum(1 for item in checks if item) / len(checks)
+
+
 def _score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
     gold_answers = prediction["gold_answers"]
     predicted_answer = prediction["predicted_answer"]
+    expected_formats = _normalized_expected_formats(prediction)
+    claim_verification = dict(prediction.get("claim_verification") or {})
+    abstained = bool(claim_verification.get("abstained")) or is_abstention_answer(
+        predicted_answer
+    )
+    markdown_table_score = markdown_table_renderable_score(predicted_answer)
+    latex_score = latex_renderable_score(predicted_answer)
+    if expected_formats & _TABLE_FORMATS and markdown_table_score is None:
+        markdown_table_score = 0.0
+    if expected_formats & _LATEX_FORMATS and latex_score is None:
+        latex_score = 0.0
+    false_abstention = false_abstention_score(predicted_answer, gold_answers)
+    if abstained and any(str(answer or "").strip() for answer in gold_answers):
+        false_abstention = 1.0
+
     metrics = {
         "em": exact_match_score(predicted_answer, gold_answers),
         "f1": token_f1_score(predicted_answer, gold_answers),
@@ -36,6 +89,14 @@ def _score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
         ),
         "citation_recall": recall_score(
             prediction["predicted_sources"], prediction["gold_sources"]
+        ),
+        "abstained": float(abstained),
+        "false_abstention": false_abstention,
+        "markdown_table_renderable": markdown_table_score,
+        "latex_renderable": latex_score,
+        "rewrite_skipped": float(bool(claim_verification.get("rewrite_skipped"))),
+        "guardrail_expectation_match": _guardrail_expectation_match(
+            prediction, abstained
         ),
     }
     gold_evidence = prediction.get("gold_evidence", [])
@@ -192,6 +253,9 @@ def _engine_result_to_prediction(
         "predicted_element_ids": result.predicted_element_ids,
         "retrieved_hits": result.retrieved_hits,
         "retrieval_trace": result.retrieval_trace,
+        "evidence_metadata": result.evidence_metadata,
+        "claim_verification": result.claim_verification,
+        "presentation": result.presentation,
         "timings": {
             "parse_seconds": round(float(result.timings.get("parse_seconds", 0.0)), 4),
             "index_seconds": round(float(result.timings.get("index_seconds", 0.0)), 4),
@@ -207,6 +271,9 @@ def _engine_result_to_prediction(
         "cost": result.cost,
         "context_preview": result.context_preview,
         "document_path": str(document.path),
+        "gold_evidence": example.gold_evidence,
+        "expected_formats": example.expected_formats,
+        "expected_guardrails": example.expected_guardrails,
     }
 
 
@@ -243,6 +310,9 @@ def _error_prediction(
         "predicted_element_ids": [],
         "retrieved_hits": [],
         "retrieval_trace": [],
+        "evidence_metadata": {},
+        "claim_verification": {},
+        "presentation": {},
         "timings": {
             "parse_seconds": 0.0,
             "index_seconds": 0.0,
@@ -265,6 +335,8 @@ def _error_prediction(
         "engine": route_config.engine,
         "route": route_config.route,
         "scope": route_config.scope,
+        "expected_formats": example.expected_formats,
+        "expected_guardrails": example.expected_guardrails,
         "error": str(exc),
     }
 
@@ -299,6 +371,11 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
             prediction["engine"] = route_config.engine
             prediction["route"] = route_config.route
             prediction["scope"] = route_config.scope or example.scope
+            prediction.setdefault("expected_formats", example.expected_formats)
+            prediction.setdefault("expected_guardrails", example.expected_guardrails)
+            prediction.setdefault("evidence_metadata", {})
+            prediction.setdefault("claim_verification", {})
+            prediction.setdefault("presentation", {})
             _normalize_operational_fields(prediction)
             prediction["modality"] = example.modality
             prediction["answer_type"] = example.answer_type
@@ -344,6 +421,34 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         "avg_numeric_match": round_metric(
             safe_mean([item["metrics"]["numeric_match"] for item in predictions])
         ),
+        "avg_abstention_rate": round_metric(
+            safe_mean([item["metrics"]["abstained"] for item in predictions])
+        ),
+        "avg_false_abstention": round_metric(
+            safe_mean([item["metrics"]["false_abstention"] for item in predictions])
+        ),
+        "avg_markdown_table_renderable": round_metric(
+            safe_mean(
+                [
+                    item["metrics"].get("markdown_table_renderable")
+                    for item in predictions
+                ]
+            )
+        ),
+        "avg_latex_renderable": round_metric(
+            safe_mean([item["metrics"].get("latex_renderable") for item in predictions])
+        ),
+        "avg_rewrite_skipped": round_metric(
+            safe_mean([item["metrics"].get("rewrite_skipped") for item in predictions])
+        ),
+        "avg_guardrail_expectation_match": round_metric(
+            safe_mean(
+                [
+                    item["metrics"].get("guardrail_expectation_match")
+                    for item in predictions
+                ]
+            )
+        ),
         "avg_retrieval_seconds": round_metric(
             safe_mean([item["timings"]["retrieval_seconds"] for item in predictions])
         ),
@@ -386,6 +491,9 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                 "document_ids": item["document_ids"],
                 "retrieved_hits": item.get("retrieved_hits", []),
                 "retrieval_trace": item.get("retrieval_trace", []),
+                "evidence_metadata": item.get("evidence_metadata", {}),
+                "claim_verification": item.get("claim_verification", {}),
+                "presentation": item.get("presentation", {}),
                 "timings": item.get("timings", {}),
                 "performance": item.get("performance", {}),
                 "cache": item.get("cache", {}),

@@ -1,6 +1,6 @@
 from benchmark.schemas import BenchmarkConfig, BenchmarkDocument
-from benchmark.system import KotaemonTextRAGSystem
-from kotaemon.base import Document
+from benchmark.system import KotaemonTextRAGSystem, _evidence_metadata
+from kotaemon.base import Document, RetrievedDocument
 
 
 class _CountingReader:
@@ -75,3 +75,28 @@ def test_text_rag_system_bypasses_parse_cache_when_requested(monkeypatch, tmp_pa
     assert second.parse_cache_hit is False
     assert first.parse_cache_stats == {"hits": 0, "misses": 0, "writes": 0}
     assert second.parse_cache_stats == {"hits": 0, "misses": 0, "writes": 0}
+
+
+def test_evidence_metadata_marks_visual_and_formula_context():
+    metadata = _evidence_metadata(
+        "multimodal",
+        images=["page-image"],
+        hits=[
+            RetrievedDocument(
+                text="formula text",
+                metadata={
+                    "element_type": "formula",
+                    "latex": r"E=mc^2",
+                    "page_image_path": "page.png",
+                },
+                score=1.0,
+            )
+        ],
+    )
+
+    assert metadata["evidence_mode"] == "multimodal"
+    assert metadata["image_count"] == 1
+    assert metadata["has_figure_evidence"] is True
+    assert metadata["has_formula_evidence"] is True
+    assert metadata["has_page_visual_context"] is True
+    assert metadata["source_kinds"] == ["formula"]
