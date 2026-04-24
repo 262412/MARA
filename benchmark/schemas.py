@@ -91,6 +91,7 @@ class BenchmarkConfig:
     embedding_name: str | None = None
     reranker_name: str | None = None
     llm_name: str | None = None
+    docqa_citation_mode: str | None = None
     use_generation: bool = True
     prompt_template: str | None = None
 

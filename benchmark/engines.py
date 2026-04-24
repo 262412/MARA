@@ -39,8 +39,7 @@ class BenchmarkEngine(Protocol):
         *,
         example: Any,
         documents: list[Any],
-    ) -> EngineRunResult:
-        ...
+    ) -> EngineRunResult: ...
 
 
 class BaseBenchmarkEngine:
@@ -173,26 +172,72 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             self._runtime = DocQARuntime()
         return self._runtime
 
+    def _resolve_indexed_file_id(
+        self, runtime: Any, document: BenchmarkDocument
+    ) -> str:
+        document_path = Path(document.path)
+        document_path_text = str(document_path)
+        normalized_document_path = _normalized_path(document_path_text)
+
+        try:
+            records = list(runtime.list_files())
+        except Exception:
+            records = []
+
+        for record in records:
+            record_path = str(getattr(record, "path", "") or "")
+            if (
+                record_path
+                and _normalized_path(record_path) == normalized_document_path
+            ):
+                return str(getattr(record, "file_id", "") or "")
+
+        exact_name_matches = [
+            record
+            for record in records
+            if str(getattr(record, "name", "") or "").lower()
+            == document_path.name.lower()
+        ]
+        if len(exact_name_matches) == 1:
+            return str(getattr(exact_name_matches[0], "file_id", "") or "")
+
+        for ref in (document.document_id, document_path.name, document_path_text):
+            try:
+                resolved = runtime.resolve_file_refs([ref])
+            except Exception:
+                resolved = []
+            if len(resolved) == 1:
+                return str(getattr(resolved[0], "file_id", "") or "")
+
+        return ""
+
     def _index_documents(self, documents: list[BenchmarkDocument]) -> list[str]:
         runtime = self._get_runtime()
-        paths = [str(document.path) for document in documents]
-        missing_paths = [path for path in paths if path not in self._indexed_paths]
+        selected_ids: list[str] = []
+        missing_documents: list[BenchmarkDocument] = []
+
+        for document in documents:
+            file_id = self._resolve_indexed_file_id(runtime, document)
+            if file_id:
+                if file_id not in selected_ids:
+                    selected_ids.append(file_id)
+                self._indexed_paths.add(str(document.path))
+            else:
+                missing_documents.append(document)
+
+        missing_paths = [
+            str(document.path)
+            for document in missing_documents
+            if str(document.path) not in self._indexed_paths
+        ]
         if missing_paths:
             runtime.index_paths(missing_paths, reindex=False)
             self._indexed_paths.update(missing_paths)
 
-        selected_ids: list[str] = []
-        for document in documents:
-            for ref in (document.document_id, document.path.name, str(document.path)):
-                try:
-                    records = runtime.resolve_file_refs([ref])
-                except Exception:
-                    records = []
-                for record in records:
-                    if record.file_id and record.file_id not in selected_ids:
-                        selected_ids.append(record.file_id)
-                if selected_ids:
-                    break
+        for document in missing_documents:
+            file_id = self._resolve_indexed_file_id(runtime, document)
+            if file_id and file_id not in selected_ids:
+                selected_ids.append(file_id)
         return selected_ids
 
     def run(
@@ -227,6 +272,8 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 active_file_id=getattr(active_record, "file_id", ""),
                 active_file_name=getattr(active_record, "name", ""),
                 page_number=_first_evidence_page(example),
+                llm=_config_value(self.config, "llm_name", None),
+                use_citation=_config_value(self.config, "docqa_citation_mode", None),
                 origin="benchmark",
             )
         )
@@ -588,6 +635,13 @@ def _first_evidence_page(example: Any) -> int | None:
 
 def _normalize_page(page: Any) -> str:
     return str(page).strip()
+
+
+def _normalized_path(path: str) -> str:
+    try:
+        return str(Path(path).resolve()).lower()
+    except Exception:
+        return str(path or "").strip().lower()
 
 
 def _extract_citations(text: str) -> list[str]:

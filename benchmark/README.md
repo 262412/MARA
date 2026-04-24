@@ -131,6 +131,24 @@ python -m benchmark run `
 
 Outputs are written under `benchmark/artifacts/`.
 
+When benchmarking `docqa_runtime` with an LLM that does not support
+OpenAI-compatible tool calling, disable citation highlighting for the run:
+
+```powershell
+python -m benchmark run `
+  --manifest benchmark/manifests/format_robustness.json `
+  --suite-name docqa-document-deepseek `
+  --engine docqa_runtime `
+  --scope document `
+  --llm-name Deepseek `
+  --docqa-citation-mode off
+```
+
+`--docqa-citation-mode` accepts `highlight`, `inline`, or `off`. Use
+`highlight`/`inline` only with models that support function/tool calling;
+otherwise the citation sub-pipeline can fail while the overall benchmark still
+finishes.
+
 Each prediction row now includes:
 
 - `evidence_metadata`: whether figure/image/formula/page visual context reached the generation path

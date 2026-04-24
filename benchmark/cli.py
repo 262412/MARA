@@ -59,6 +59,14 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--reranker-name")
     run_parser.add_argument("--llm-name")
     run_parser.add_argument(
+        "--docqa-citation-mode",
+        choices=["highlight", "inline", "off"],
+        help=(
+            "Override DocQA citation mode. Use 'off' for LLMs that do not "
+            "support OpenAI-compatible tool_choice/function calling."
+        ),
+    )
+    run_parser.add_argument(
         "--no-generate",
         action="store_true",
         help="Skip answer generation and return the top retrieved chunk text.",
@@ -140,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         embedding_name=args.embedding_name,
         reranker_name=args.reranker_name,
         llm_name=args.llm_name,
+        docqa_citation_mode=args.docqa_citation_mode,
         use_generation=not args.no_generate,
     )
     report = run_benchmark(args.manifest, config)
