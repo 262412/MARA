@@ -83,8 +83,8 @@ def test_phase3_docs_cover_two_line_slide_model():
         / "2026-04-22-slide-cli-phase3-foundation.md"
     ).read_text(encoding="utf-8")
 
-    assert "`slide ...` is the product line entrypoint" in root_readme
-    assert "`slide docqa ...` is the focused DocQA surface" in root_readme
+    assert "`slide ...` for the high-permission product shell" in root_readme
+    assert "`slide docqa ...` for the specialist document-QA line" in root_readme
     assert "The phase-3 shell is split into two lines:" in package_readme
     assert "`slide ...` is the high-permission product line" in package_readme
     for command in [

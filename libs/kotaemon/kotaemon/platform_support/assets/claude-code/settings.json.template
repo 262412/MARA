@@ -1,5 +1,5 @@
 {
-  "customInstructions": "Prefer kotaemon modelcli validation before real API calls.",
+  "customInstructions": "Prefer slide model validation before real API calls.",
   "hooks": {
     "PreToolUse": [
       {

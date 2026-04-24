@@ -69,11 +69,11 @@ def test_modelcli_help_lists_action_navigation():
     for token in [
         "Action guide:",
         "Initialize config",
-        "kotaemon-modelcli-init-config",
+        "slide-model-init-config",
         "Check providers",
-        "kotaemon-modelcli-providers",
-        "kotaemon modelcli run",
-        "kotaemon-modelcli-run",
+        "slide-model-providers",
+        "slide model run",
+        "slide-model-run",
     ]:
         assert token in result.output
 
@@ -83,5 +83,5 @@ def test_modelcli_run_help_lists_platform_skill_and_dry_run_hint():
     result = runner.invoke(main, ["modelcli", "run", "--help"])
 
     assert result.exit_code == 0, result.output
-    assert "Platform skill: kotaemon-modelcli-run" in result.output
+    assert "Platform skill: slide-model-run" in result.output
     assert "Use `--dry-run` first" in result.output

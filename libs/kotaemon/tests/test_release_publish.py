@@ -51,6 +51,14 @@ def test_kotaemon_adv_dependency_includes_milvus_lite_for_local_backend():
     assert '"milvus-lite>=2.4.0; sys_platform != \\"win32\\""' in content
 
 
+def test_kotaemon_core_package_does_not_install_public_console_script():
+    repo_root = _repo_root()
+    pyproject_path = repo_root / "libs" / "kotaemon" / "pyproject.toml"
+
+    content = pyproject_path.read_text(encoding="utf-8")
+    assert 'kotaemon = "kotaemon.cli:main"' not in content
+
+
 def test_publish_wrappers_exist():
     repo_root = _repo_root()
 

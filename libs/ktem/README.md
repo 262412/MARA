@@ -1,6 +1,6 @@
 # ktem
 
-`ktem` is the application/runtime layer for Kotaemon.
+`ktem` is the application/runtime layer for the slide product.
 
 It contains the shared Web UI runtime, DocQA runtime, settings bootstrap, packaged
 launch helpers, database models, indexing orchestration, page preview services,
@@ -9,16 +9,16 @@ library.
 
 ## Relationship to the other packages
 
-- `kotaemon`: core building blocks for LLMs, embeddings, retrieval, indexing, and platform assets.
-- `ktem`: application runtime and UI/service layer that assembles those building blocks into the Kotaemon app.
-- `kotaemon-app`: thin top-level installer package that depends on both `ktem` and `kotaemon`.
+- `kotaemon`: internal core building blocks for LLMs, embeddings, retrieval, indexing, and platform assets.
+- `ktem`: application runtime and UI/service layer that assembles those building blocks into the slide app.
+- `slide-cli`: public user-facing CLI package that exposes the `slide` command.
 
 ## Install
 
-For end users, prefer the top-level package:
+For end users, prefer the public CLI package:
 
 ```bash
-pip install kotaemon-app
+pip install slide-cli
 ```
 
 For local development from source:
@@ -30,13 +30,13 @@ pip install -e "libs/ktem"
 
 ## Packaged runtime entrypoints
 
-After installing `kotaemon-app`, the shared CLI is available:
+After installing `slide-cli`, the shared CLI is available:
 
 ```bash
-kotaemon app init
-kotaemon app doctor
-kotaemon app run
-kotaemon docqa doctor
+slide app init
+slide app doctor
+slide app run
+slide docqa doctor
 ```
 
 ## Source repository

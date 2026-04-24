@@ -29,7 +29,7 @@ def _listed_commands(help_output: str) -> set[str]:
 def test_help_lists_core_commands():
     runner = CliRunner()
 
-    result = runner.invoke(main, ["--help"])
+    result = runner.invoke(main, ["--help"], terminal_width=300)
 
     assert result.exit_code == 0, result.output
     commands = _listed_commands(result.output)
@@ -88,15 +88,19 @@ def test_phase3_command_help_exposes_canonical_arguments(command_name, expected_
 def test_help_describes_two_line_product_model():
     runner = CliRunner()
 
-    result = runner.invoke(main, ["--help"])
+    result = runner.invoke(main, ["--help"], terminal_width=300)
 
     assert result.exit_code == 0, result.output
     for token in [
-        "Slide CLI with two product lines.",
+        "Unified slide product CLI.",
         "Top-level agent line:",
         "Specialist DocQA line:",
+        "Support lines:",
         "`slide run`",
         "read-only deck observability commands",
+        "`slide app ...`",
+        "`slide model ...`",
+        "`slide platform ...`",
         "`slide docqa ...`",
     ]:
         assert token in result.output

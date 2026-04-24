@@ -1,4 +1,4 @@
-<a id="top"></a>
+﻿<a id="top"></a>
 
 <div align="center">
 
@@ -6,7 +6,7 @@
 
 A local RAG application repository built around document QA, page-level preview, knowledge graph exploration, and multi-model routing.
 
-Slides is a branded fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon). The original project is licensed under the Apache License 2.0; this fork keeps the original license and attribution while presenting the application as Slides. Internal package names and compatibility CLI commands are intentionally left unchanged.
+Slides is a branded fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon). The original project is licensed under the Apache License 2.0; this fork keeps the original license and attribution while presenting the user-facing product as `slide`. Some internal Python package names remain for compatibility, but users install and operate the CLI through `slide`.
 
 [English](#english) | [中文](#chinese)
 
@@ -33,9 +33,9 @@ Slides is a branded fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kota
 This repository is not just a single demo page. It is a full document QA runtime that you can run directly, extend in your own codebase, or integrate into terminal-based workflows through the CLI. The current project is built around these core parts:
 
 - A Gradio-based Web UI for document upload, page preview, question answering, citation review, and knowledge graph browsing
-- A shared `kotaemon docqa` CLI that uses the same runtime, index, and conversation data as the Web UI
-- A `kotaemon modelcli` command group for model routing and environment validation
-- A `kotaemon platform` command group for installing Codex / Claude Code platform assets
+- A shared `slide docqa` CLI that uses the same runtime, index, and conversation data as the Web UI
+- A `slide model` command group for model routing and environment validation
+- A `slide platform` command group for installing Codex / Claude Code platform assets
 - A local repository entrypoint in `app.py` and an SSO-oriented entrypoint in `sso_app.py`
 
 The current design goal is to let one configuration, one document index, and one conversation context serve both the browser experience and the CLI experience. You can use this project as a ready-to-run document QA app, or treat it as the foundation for your own RAG application.
@@ -45,7 +45,7 @@ The current design goal is to let one configuration, one document index, and one
 - Upload documents in the browser and ask document-level, page-level, or selected-text-focused questions
 - Preview PDFs, Office files, and text-based documents inside the app
 - Generate a conversation knowledge graph and use graph nodes to shape follow-up questions
-- Reuse the same document index and saved conversations through `kotaemon docqa`
+- Reuse the same document index and saved conversations through `slide docqa`
 - Run local-model or API-model workflows for private or semi-private RAG use cases
 
 #### For developers
@@ -57,7 +57,7 @@ The current design goal is to let one configuration, one document index, and one
 
 ### Key Features
 
-- **Shared Web UI and CLI runtime**: the browser UI and `kotaemon docqa` share configuration, file indexes, conversations, and knowledge graph state.
+- **Shared Web UI and CLI runtime**: the browser UI and `slide docqa` share configuration, file indexes, conversations, and knowledge graph state.
 - **Page-level document QA**: the chat page supports page-aware preview and page-scoped context for precise questions such as "What does page 3 say?"
 - **Knowledge graph workflow**: the right-side panel can generate or refresh a knowledge graph; graph nodes can pin context and load suggested questions into chat.
 - **Fullscreen mindmap viewer**: the knowledge graph includes a preview card and fullscreen viewer with drag-to-pan, wheel zoom, zoom in, zoom out, Fit, and Reset.
@@ -122,45 +122,39 @@ After startup, open `http://localhost:7860/`.
 
 #### Without Docker
 
-##### Option 1: install the packaged app without cloning the repo
+##### Option 1: install slide without cloning the repo
 
-This is the best path if you just want to use the app:
-
-```shell
-pip install kotaemon-app
-```
-
-If you want the packaged app and the standalone slide CLI together:
+This is the best path if you want the user-facing product CLI:
 
 ```shell
-pip install "kotaemon-app[slide]"
+pip install slide-cli
 ```
 
-This packaged runtime is the recommended phase-3 workflow for slide: initialize the runtime once, inspect it with `kotaemon app doctor`, then use the top-level `slide ...` product shell for high-permission workflows and workspace operations such as `slide apply`, `slide export-pdf`, `slide review`, `slide files`, `slide read`, `slide write`, `slide delete`, and `slide shell`, while `slide docqa ...` stays the specialist DocQA line.
+The PyPI project is `slide-cli`; it installs the command `slide`. Initialize the runtime once, inspect it with `slide app doctor`, then use the top-level `slide ...` product shell for high-permission workflows and workspace operations such as `slide apply`, `slide export-pdf`, `slide review`, `slide files`, `slide read`, `slide write`, `slide delete`, and `slide shell`, while `slide docqa ...` stays the specialist DocQA line.
 
 Initialize and inspect the runtime:
 
 ```shell
-kotaemon app init
-kotaemon app doctor
+slide app init
+slide app doctor
 ```
 
 Start the Web UI:
 
 ```shell
-kotaemon app run
+slide app run
 ```
 
 In this mode:
 
 - The runtime manages its own config, data, and cache directories
-- `kotaemon app doctor` shows the actual active paths
-- `kotaemon docqa ...` and `slide docqa ...` reuse the same configuration and data
-- `slide ...` is the product line entrypoint for high-permission runtime commands and workspace operations, including `slide apply`, `slide export-pdf`, and `slide review`, while `slide docqa ...` is the focused DocQA surface
+- `slide app doctor` shows the actual active paths
+- `slide docqa ...` reuses the same configuration and data
+- `slide app ...`, `slide model ...`, and `slide platform ...` expose app runtime, model routing, and platform support workflows under the same product CLI
 
 ##### Option 1b: install the standalone slide CLI from PyPI
 
-If you only want the slide-focused terminal workflow, you can install it directly:
+This is the same direct package install path, kept here as a quick command reference:
 
 ```shell
 pip install slide-cli
@@ -174,7 +168,7 @@ If you want to validate the package before a full release, you can install it fr
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple slide-cli
 ```
 
-`slide-cli`, `ktem`, `kotaemon`, and `kotaemon-app` share the same repository tag version line. A tag such as `v0.0.9` publishes the matching build of each package in dependency order.
+`slide-cli`, `ktem`, `kotaemon`, and the legacy app package share the same repository tag version line. A tag such as `v0.0.9` publishes the matching build of each package in dependency order, while `slide-cli` is the public CLI users install.
 The release checklist for the standalone CLI lives in [docs/slide_cli_release.md](docs/slide_cli_release.md).
 
 ##### Option 2: use the installer scripts in this repo
@@ -282,7 +276,7 @@ This path reads:
 
 ### CLI Document QA
 
-`kotaemon docqa` uses the same application runtime, so it shares:
+`slide docqa` uses the same application runtime, so it shares:
 
 - Runtime configuration
 - File indexes
@@ -292,9 +286,9 @@ This path reads:
 For a fresh setup, start with:
 
 ```shell
-kotaemon app init
-kotaemon app doctor
-kotaemon docqa doctor
+slide app init
+slide app doctor
+slide docqa doctor
 ```
 
 #### Index documents
@@ -302,9 +296,9 @@ kotaemon docqa doctor
 Index one file, an entire directory, or zip archives:
 
 ```shell
-kotaemon docqa index ./docs/report.pdf
-kotaemon docqa index ./docs ./archive.zip --reindex
-kotaemon docqa files
+slide docqa index ./docs/report.pdf
+slide docqa index ./docs ./archive.zip --reindex
+slide docqa files
 ```
 
 Notes:
@@ -318,25 +312,25 @@ Notes:
 Document-level QA:
 
 ```shell
-kotaemon docqa ask --file report.pdf --prompt "Summarize this document"
+slide docqa ask --file report.pdf --prompt "Summarize this document"
 ```
 
 Page-level QA:
 
 ```shell
-kotaemon docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
+slide docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
 ```
 
 Selected-text-focused QA:
 
 ```shell
-kotaemon docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
+slide docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
 ```
 
 You can also pass graph context from disk:
 
 ```shell
-kotaemon docqa ask --graph-context-file ./graph-context.json --prompt "What should I focus on next?"
+slide docqa ask --graph-context-file ./graph-context.json --prompt "What should I focus on next?"
 ```
 
 Common options:
@@ -355,9 +349,9 @@ Common options:
 #### Multi-turn sessions
 
 ```shell
-kotaemon docqa chat --file report.pdf
-kotaemon docqa sessions
-kotaemon docqa resume <conversation-id>
+slide docqa chat --file report.pdf
+slide docqa sessions
+slide docqa resume <conversation-id>
 ```
 
 Inside the interactive session, you can use:
@@ -373,8 +367,8 @@ Inside the interactive session, you can use:
 #### Acceptance and health checks
 
 ```shell
-kotaemon docqa acceptance
-kotaemon docqa check
+slide docqa acceptance
+slide docqa check
 ```
 
 This runs the end-to-end DocQA acceptance matrix, which is useful after changing indexing, preview, knowledge graph, or CLI behavior.
@@ -390,6 +384,7 @@ The phase-3 model is intentionally split into two lines:
 
 The top-level shell currently centers on:
 
+- `slide app`
 - `slide doctor`
 - `slide run`
 - `slide chat`
@@ -404,10 +399,12 @@ The top-level shell currently centers on:
 - `slide write`
 - `slide delete`
 - `slide shell`
+- `slide model`
+- `slide platform`
 
-`slide inspect`, `slide read-slide`, `slide extract`, and `slide search` are the canonical read-only deck-observability commands on the top-level line. They sit alongside the broader runtime and workspace commands, while `slide docqa ...` remains the specialist document-QA line.
+`slide inspect`, `slide read-slide`, `slide extract`, and `slide search` are the canonical read-only deck-observability commands on the top-level line. They sit alongside `slide app ...`, `slide model ...`, `slide platform ...`, and the broader runtime and workspace commands, while `slide docqa ...` remains the specialist document-QA line.
 
-If you installed `kotaemon-app[slide]`, the packaged runtime is the easiest way to discover that split. Start with `kotaemon app init`, `kotaemon app doctor`, `slide --help`, and `slide docqa --help`.
+After installing `slide-cli`, start with `slide app init`, `slide app doctor`, `slide --help`, and `slide docqa --help`.
 
 Direct package install:
 
@@ -430,7 +427,7 @@ slide docqa doctor
 
 Codex users get a top-level `slide*` skill family and a specialist `slide-docqa*` skill family under `.codex/skills`.
 Claude Code users get matching `slide*` skills plus command wrappers under `.claude/commands`.
-Both platform bundles also expose the same `kotaemon-app*`, `kotaemon-docqa*`, `kotaemon-modelcli*`, `kotaemon-platform*`, and `kotaemon-cli-operations` support surface.
+Both platform bundles expose the same slide-only support surface: `slide*`, `slide-app*`, `slide-model*`, `slide-platform*`, and `slide-docqa*`.
 The focused DocQA family covers the mainline, including `slide-docqa-delete`; `slide docqa acceptance` and `slide docqa check` remain available as maintainer commands.
 
 Example:
@@ -494,7 +491,7 @@ If you want Ollama bundled into the container, use the `ollama` target in the `D
 
 #### Runtime layout
 
-- In packaged installs, config, data, and cache directories are managed by `kotaemon app init` and `kotaemon app doctor`
+- In packaged installs, config, data, and cache directories are managed by `slide app init` and `slide app doctor`
 - In source installs, the repository-root `flowsettings.py` is the active entrypoint and local data is written to `./ktem_app_data`
 - The default Web UI entrypoint is `app.py`, and the SSO entrypoint is `sso_app.py`
 
@@ -596,9 +593,9 @@ If you enable Google SSO, you also need to define:
 If you want to separate model aliases, provider priority, and environment validation into a dedicated config, use `modelcli.yml`:
 
 ```shell
-kotaemon modelcli init-config --output modelcli.yml
-kotaemon modelcli providers --config modelcli.yml
-kotaemon modelcli run --prompt "hello" --model gpt-4o-mini --dry-run
+slide model init-config --output modelcli.yml
+slide model providers --config modelcli.yml
+slide model run --prompt "hello" --model gpt-4o-mini --dry-run
 ```
 
 Useful scenarios:
@@ -663,8 +660,8 @@ Good directories to read first:
 
 Before submitting changes, it is a good idea to verify at least:
 
-- `kotaemon app doctor`
-- `kotaemon docqa doctor`
+- `slide app doctor`
+- `slide docqa doctor`
 - The tests related to your change
 
 If you want fuller collaboration guidance, continue updating [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -696,9 +693,9 @@ If you want fuller collaboration guidance, continue updating [CONTRIBUTING.md](C
 这个仓库提供的不是单一页面示例，而是一套可以直接运行、继续二次开发、也可以通过 CLI 接入工作流的完整文档问答运行时。当前项目的核心组成包括：
 
 - 基于 Gradio 的 Web UI，支持文档上传、页面预览、问答、引用回看和知识图谱浏览
-- 与 Web UI 共享同一套运行时、索引和会话数据的 `kotaemon docqa` CLI
-- 用于多模型路由与环境校验的 `kotaemon modelcli`
-- 用于安装 Codex / Claude Code 平台资源的 `kotaemon platform`
+- 与 Web UI 共享同一套运行时、索引和会话数据的 `slide docqa` CLI
+- 用于多模型路由与环境校验的 `slide model`
+- 用于安装 Codex / Claude Code 平台资源的 `slide platform`
 - 面向本地仓库开发的 `app.py`、面向 SSO 场景的 `sso_app.py`
 
 这个项目当前的设计重点是“同一份配置、同一份文档索引、同一份会话上下文可以同时服务浏览器端和命令行端”。你既可以把它当成一套现成的文档 QA 应用来用，也可以把它当成自己的 RAG 应用底座继续扩展。
@@ -708,7 +705,7 @@ If you want fuller collaboration guidance, continue updating [CONTRIBUTING.md](C
 - 通过浏览器上传文档并进行文档级、页级、选中文本级问答
 - 在页面预览区查看 PDF、Office 文档和文本文件内容
 - 为当前会话生成知识图谱，并基于图谱节点快速构造后续问题
-- 在终端中使用 `kotaemon docqa` 复用同一套文档索引和会话
+- 在终端中使用 `slide docqa` 复用同一套文档索引和会话
 - 使用本地模型或 API 模型运行私有 / 半私有 RAG 流程
 
 #### 面向开发者
@@ -722,7 +719,7 @@ If you want fuller collaboration guidance, continue updating [CONTRIBUTING.md](C
 
 ### 核心功能
 
-- **Web UI + CLI 共用运行时**：浏览器端和 `kotaemon docqa` 共用配置、文件索引、会话与知识图谱状态，避免两套系统分别维护。
+- **Web UI + CLI 共用运行时**：浏览器端和 `slide docqa` 共用配置、文件索引、会话与知识图谱状态，避免两套系统分别维护。
 - **页面级文档问答**：聊天页支持 page-level 预览和页级上下文，适合“第 3 页写了什么”这类精确问题。
 - **知识图谱工作流**：右侧面板可以生成或刷新知识图谱；图谱节点支持选中、挂载上下文，并把推荐问题直接填入聊天框。
 - **全屏 Mindmap 浏览器**：知识图谱提供预览卡和全屏查看器，支持拖拽平移、滚轮缩放、放大、缩小、Fit、Reset。
@@ -798,27 +795,27 @@ docker run \
 如果你只是想使用应用，这是最省事的路径：
 
 ```shell
-pip install kotaemon-app
+pip install slide-cli
 ```
 
 初始化并检查运行时：
 
 ```shell
-kotaemon app init
-kotaemon app doctor
+slide app init
+slide app doctor
 ```
 
 启动 Web UI：
 
 ```shell
-kotaemon app run
+slide app run
 ```
 
 这一模式下：
 
 - 配置目录、数据目录、缓存目录由运行时自动管理
-- `kotaemon app doctor` 会告诉你实际落盘路径
-- `kotaemon docqa ...` 会复用这套配置和数据目录
+- `slide app doctor` 会告诉你实际落盘路径
+- `slide docqa ...` 会复用这套配置和数据目录
 
 ##### 方案 2：使用仓库自带安装脚本
 
@@ -912,7 +909,7 @@ uvicorn sso_app:app --host 0.0.0.0 --port 7860
 
 ### CLI 文档问答
 
-`kotaemon docqa` 使用的就是应用运行时本身，因此它和 Web UI 共享：
+`slide docqa` 使用的就是应用运行时本身，因此它和 Web UI 共享：
 
 - 运行时配置
 - 文件索引
@@ -922,9 +919,9 @@ uvicorn sso_app:app --host 0.0.0.0 --port 7860
 首次使用建议先检查运行时：
 
 ```shell
-kotaemon app init
-kotaemon app doctor
-kotaemon docqa doctor
+slide app init
+slide app doctor
+slide docqa doctor
 ```
 
 #### 索引文档
@@ -932,9 +929,9 @@ kotaemon docqa doctor
 索引单个文件、整个目录或压缩包：
 
 ```shell
-kotaemon docqa index ./docs/report.pdf
-kotaemon docqa index ./docs ./archive.zip --reindex
-kotaemon docqa files
+slide docqa index ./docs/report.pdf
+slide docqa index ./docs ./archive.zip --reindex
+slide docqa files
 ```
 
 说明：
@@ -948,25 +945,25 @@ kotaemon docqa files
 文档级问答：
 
 ```shell
-kotaemon docqa ask --file report.pdf --prompt "Summarize this document"
+slide docqa ask --file report.pdf --prompt "Summarize this document"
 ```
 
 页级问答：
 
 ```shell
-kotaemon docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
+slide docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
 ```
 
 选中文本优先问答：
 
 ```shell
-kotaemon docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
+slide docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
 ```
 
 也可以额外传入图谱上下文文件：
 
 ```shell
-kotaemon docqa ask --graph-context-file ./graph-context.json --prompt "What should I focus on next?"
+slide docqa ask --graph-context-file ./graph-context.json --prompt "What should I focus on next?"
 ```
 
 常用参数：
@@ -985,9 +982,9 @@ kotaemon docqa ask --graph-context-file ./graph-context.json --prompt "What shou
 #### 多轮会话
 
 ```shell
-kotaemon docqa chat --file report.pdf
-kotaemon docqa sessions
-kotaemon docqa resume <conversation-id>
+slide docqa chat --file report.pdf
+slide docqa sessions
+slide docqa resume <conversation-id>
 ```
 
 交互式会话中支持：
@@ -1003,8 +1000,8 @@ kotaemon docqa resume <conversation-id>
 #### 验收与健康检查
 
 ```shell
-kotaemon docqa acceptance
-kotaemon docqa check
+slide docqa acceptance
+slide docqa check
 ```
 
 这会跑完整的 DocQA 验收矩阵，适合在你修改索引、预览、知识图谱或 CLI 之后做回归验证。
@@ -1014,9 +1011,9 @@ kotaemon docqa check
 模型路由：
 
 ```shell
-kotaemon modelcli init-config --output modelcli.yml
-kotaemon modelcli providers --config modelcli.yml
-kotaemon modelcli run --prompt "health check" --model gpt-4o-mini --dry-run
+slide model init-config --output modelcli.yml
+slide model providers --config modelcli.yml
+slide model run --prompt "health check" --model gpt-4o-mini --dry-run
 ```
 
 `modelcli` 默认提供 OpenAI、Anthropic、Gemini、OpenRouter 的路由配置模板。
@@ -1024,11 +1021,11 @@ kotaemon modelcli run --prompt "health check" --model gpt-4o-mini --dry-run
 平台支持：
 
 ```shell
-kotaemon platform list
-kotaemon platform install --platform codex --mode full --yes
-kotaemon platform install --platform claude-code --mode full --yes
-kotaemon platform status --platform codex
-kotaemon platform validate
+slide platform list
+slide platform install --platform codex --mode full --yes
+slide platform install --platform claude-code --mode full --yes
+slide platform status --platform codex
+slide platform validate
 ```
 
 这个能力适合把项目附带的技能、命令和平台说明安装到外部 AI coding assistant 环境里。
@@ -1088,7 +1085,7 @@ LOCAL_MODEL_EMBEDDINGS=nomic-embed-text
 
 #### 运行时布局
 
-- 打包安装模式下：配置、数据和缓存目录由 `kotaemon app init` / `kotaemon app doctor` 管理
+- 打包安装模式下：配置、数据和缓存目录由 `slide app init` / `slide app doctor` 管理
 - 源码模式下：当前仓库根目录的 `flowsettings.py` 是入口，本地数据默认写入 `./ktem_app_data`
 - Web UI 默认从 `app.py` 启动，SSO 入口在 `sso_app.py`
 
@@ -1190,9 +1187,9 @@ KH_SETTINGS_SOURCE = "workspace-flowsettings"
 如果你希望把“模型别名 + 提供商优先级 + 环境可用性检查”从应用运行时中拆出来统一管理，可以使用 `modelcli.yml`：
 
 ```shell
-kotaemon modelcli init-config --output modelcli.yml
-kotaemon modelcli providers --config modelcli.yml
-kotaemon modelcli run --prompt "hello" --model gpt-4o-mini --dry-run
+slide model init-config --output modelcli.yml
+slide model providers --config modelcli.yml
+slide model run --prompt "hello" --model gpt-4o-mini --dry-run
 ```
 
 适合的场景：
@@ -1256,8 +1253,8 @@ pytest libs/kotaemon/tests libs/ktem/ktem_tests
 
 提交改动前建议至少验证：
 
-- `kotaemon app doctor`
-- `kotaemon docqa doctor`
+- `slide app doctor`
+- `slide docqa doctor`
 - 你改动涉及的测试用例
 
 如果你需要更完整的协作说明，可以继续补充或同步更新 [CONTRIBUTING.md](CONTRIBUTING.md)。

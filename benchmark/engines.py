@@ -39,7 +39,8 @@ class BenchmarkEngine(Protocol):
         *,
         example: Any,
         documents: list[Any],
-    ) -> EngineRunResult: ...
+    ) -> EngineRunResult:
+        ...
 
 
 class BaseBenchmarkEngine:

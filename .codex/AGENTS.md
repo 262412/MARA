@@ -1,4 +1,4 @@
-# Kotaemon Codex Agent Profile
+# Slide Codex Agent Profile
 
 Session discipline:
 
@@ -8,4 +8,4 @@ Session discipline:
 4. Avoid destructive shell commands unless user explicitly requests.
 5. Treat `slide ...` as the top-level slide/deck/workspace CLI line, including high-permission actions such as `slide write`, `slide delete`, and `slide shell`.
 6. Treat `slide docqa ...` as the focused document-QA line; prefer focused `$slide-docqa-*` skills when the user asks for indexing, asking, chat, sessions, resume, files, delete, or doctor.
-7. Use `$kotaemon-platform` or focused `$kotaemon-platform-*` skills for Codex and Claude Code support asset install/status/validation workflows.
+7. Use `$slide-app`, `$slide-model`, and `$slide-platform` for app runtime, model routing, and Codex/Claude Code support asset workflows.
