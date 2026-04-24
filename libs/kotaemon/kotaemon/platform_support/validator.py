@@ -33,6 +33,39 @@ _REQUIRED_DOCQA_SKILL_FILES = (
     Path("skills/kotaemon-docqa-acceptance/SKILL.md"),
 )
 
+_REQUIRED_SLIDE_SKILL_FILES = (
+    Path("skills/slide/SKILL.md"),
+    Path("skills/slide-apply/SKILL.md"),
+    Path("skills/slide-chat/SKILL.md"),
+    Path("skills/slide-delete/SKILL.md"),
+    Path("skills/slide-doctor/SKILL.md"),
+    Path("skills/slide-export-pdf/SKILL.md"),
+    Path("skills/slide-extract/SKILL.md"),
+    Path("skills/slide-files/SKILL.md"),
+    Path("skills/slide-inspect/SKILL.md"),
+    Path("skills/slide-read/SKILL.md"),
+    Path("skills/slide-read-slide/SKILL.md"),
+    Path("skills/slide-resume/SKILL.md"),
+    Path("skills/slide-review/SKILL.md"),
+    Path("skills/slide-run/SKILL.md"),
+    Path("skills/slide-search/SKILL.md"),
+    Path("skills/slide-sessions/SKILL.md"),
+    Path("skills/slide-shell/SKILL.md"),
+    Path("skills/slide-write/SKILL.md"),
+)
+
+_REQUIRED_SLIDE_DOCQA_SKILL_FILES = (
+    Path("skills/slide-docqa/SKILL.md"),
+    Path("skills/slide-docqa-ask/SKILL.md"),
+    Path("skills/slide-docqa-chat/SKILL.md"),
+    Path("skills/slide-docqa-delete/SKILL.md"),
+    Path("skills/slide-docqa-doctor/SKILL.md"),
+    Path("skills/slide-docqa-files/SKILL.md"),
+    Path("skills/slide-docqa-index/SKILL.md"),
+    Path("skills/slide-docqa-resume/SKILL.md"),
+    Path("skills/slide-docqa-sessions/SKILL.md"),
+)
+
 _REQUIRED_CLAUDE_DOCQA_COMMAND_FILES = (
     Path("commands/kotaemon-docqa.md"),
     Path("commands/kotaemon-docqa-ask.md"),
@@ -44,6 +77,35 @@ _REQUIRED_CLAUDE_DOCQA_COMMAND_FILES = (
     Path("commands/kotaemon-docqa-resume.md"),
     Path("commands/kotaemon-docqa-doctor.md"),
     Path("commands/kotaemon-docqa-acceptance.md"),
+)
+_REQUIRED_CLAUDE_SLIDE_COMMAND_FILES = (
+    Path("commands/slide.md"),
+    Path("commands/slide-apply.md"),
+    Path("commands/slide-chat.md"),
+    Path("commands/slide-delete.md"),
+    Path("commands/slide-doctor.md"),
+    Path("commands/slide-export-pdf.md"),
+    Path("commands/slide-extract.md"),
+    Path("commands/slide-files.md"),
+    Path("commands/slide-inspect.md"),
+    Path("commands/slide-read.md"),
+    Path("commands/slide-read-slide.md"),
+    Path("commands/slide-resume.md"),
+    Path("commands/slide-review.md"),
+    Path("commands/slide-run.md"),
+    Path("commands/slide-search.md"),
+    Path("commands/slide-sessions.md"),
+    Path("commands/slide-shell.md"),
+    Path("commands/slide-write.md"),
+    Path("commands/slide-docqa.md"),
+    Path("commands/slide-docqa-ask.md"),
+    Path("commands/slide-docqa-chat.md"),
+    Path("commands/slide-docqa-delete.md"),
+    Path("commands/slide-docqa-doctor.md"),
+    Path("commands/slide-docqa-files.md"),
+    Path("commands/slide-docqa-index.md"),
+    Path("commands/slide-docqa-resume.md"),
+    Path("commands/slide-docqa-sessions.md"),
 )
 _REQUIRED_MODELCLI_SKILL_FILES = (
     Path("skills/kotaemon-modelcli/SKILL.md"),
@@ -93,6 +155,14 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
         for rel in _REQUIRED_DOCQA_SKILL_FILES:
             if not (spec.bundle_root / rel).exists():
                 errors.append(f"Missing required DocQA skill asset: {rel.as_posix()}")
+        for rel in _REQUIRED_SLIDE_SKILL_FILES:
+            if not (spec.bundle_root / rel).exists():
+                errors.append(f"Missing required slide skill asset: {rel.as_posix()}")
+        for rel in _REQUIRED_SLIDE_DOCQA_SKILL_FILES:
+            if not (spec.bundle_root / rel).exists():
+                errors.append(
+                    f"Missing required slide DocQA skill asset: {rel.as_posix()}"
+                )
         for rel in _REQUIRED_MODELCLI_SKILL_FILES:
             if not (spec.bundle_root / rel).exists():
                 errors.append(
@@ -111,6 +181,11 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
                 if not (spec.bundle_root / rel).exists():
                     errors.append(
                         f"Missing required DocQA command asset: {rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_CLAUDE_SLIDE_COMMAND_FILES:
+                if not (spec.bundle_root / rel).exists():
+                    errors.append(
+                        f"Missing required slide command asset: {rel.as_posix()}"
                     )
             for rel in _REQUIRED_CLAUDE_MODELCLI_COMMAND_FILES:
                 if not (spec.bundle_root / rel).exists():
@@ -165,50 +240,57 @@ def validate_installed(
         skills_dir = resolved_target / "skills"
         if skills_dir.exists():
             for rel in _REQUIRED_DOCQA_SKILL_FILES:
-                installed_rel = Path(*rel.parts[1:])
-                if not (resolved_target / installed_rel).exists():
+                if not (resolved_target / rel).exists():
                     errors.append(
-                        "Missing installed DocQA skill asset: "
-                        f"{installed_rel.as_posix()}"
+                        "Missing installed DocQA skill asset: " f"{rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_SLIDE_SKILL_FILES:
+                if not (resolved_target / rel).exists():
+                    errors.append(
+                        "Missing installed slide skill asset: " f"{rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_SLIDE_DOCQA_SKILL_FILES:
+                if not (resolved_target / rel).exists():
+                    errors.append(
+                        "Missing installed slide DocQA skill asset: "
+                        f"{rel.as_posix()}"
                     )
             for rel in _REQUIRED_MODELCLI_SKILL_FILES:
-                installed_rel = Path(*rel.parts[1:])
-                if not (resolved_target / installed_rel).exists():
+                if not (resolved_target / rel).exists():
                     errors.append(
-                        "Missing installed modelcli skill asset: "
-                        f"{installed_rel.as_posix()}"
+                        "Missing installed modelcli skill asset: " f"{rel.as_posix()}"
                     )
             for rel in _REQUIRED_APP_SKILL_FILES:
-                installed_rel = Path(*rel.parts[1:])
-                if not (resolved_target / installed_rel).exists():
+                if not (resolved_target / rel).exists():
                     errors.append(
-                        "Missing installed app skill asset: "
-                        f"{installed_rel.as_posix()}"
+                        "Missing installed app skill asset: " f"{rel.as_posix()}"
                     )
 
         if platform_name == "claude-code":
             commands_dir = resolved_target / "commands"
             if commands_dir.exists():
                 for rel in _REQUIRED_CLAUDE_DOCQA_COMMAND_FILES:
-                    installed_rel = Path(*rel.parts[1:])
-                    if not (resolved_target / installed_rel).exists():
+                    if not (resolved_target / rel).exists():
                         errors.append(
                             "Missing installed DocQA command asset: "
-                            f"{installed_rel.as_posix()}"
+                            f"{rel.as_posix()}"
+                        )
+                for rel in _REQUIRED_CLAUDE_SLIDE_COMMAND_FILES:
+                    if not (resolved_target / rel).exists():
+                        errors.append(
+                            "Missing installed slide command asset: "
+                            f"{rel.as_posix()}"
                         )
                 for rel in _REQUIRED_CLAUDE_MODELCLI_COMMAND_FILES:
-                    installed_rel = Path(*rel.parts[1:])
-                    if not (resolved_target / installed_rel).exists():
+                    if not (resolved_target / rel).exists():
                         errors.append(
                             "Missing installed modelcli command asset: "
-                            f"{installed_rel.as_posix()}"
+                            f"{rel.as_posix()}"
                         )
                 for rel in _REQUIRED_CLAUDE_APP_COMMAND_FILES:
-                    installed_rel = Path(*rel.parts[1:])
-                    if not (resolved_target / installed_rel).exists():
+                    if not (resolved_target / rel).exists():
                         errors.append(
-                            "Missing installed app command asset: "
-                            f"{installed_rel.as_posix()}"
+                            "Missing installed app command asset: " f"{rel.as_posix()}"
                         )
 
     return ValidationResult(platform=platform_name, valid=not errors, errors=errors)

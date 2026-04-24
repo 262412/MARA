@@ -19,5 +19,9 @@ Session discipline: 0. If `kotaemon` is missing, install the packaged runtime wi
    - `$kotaemon-docqa-chat` / `$kotaemon-docqa-resume` for multi-turn work
    - `$kotaemon-docqa-doctor` / `$kotaemon-docqa-acceptance` for health checks
 7. Use `$kotaemon-docqa` or `kotaemon docqa ...` when the user needs the full DocQA command surface or mixed workflows.
-8. Record command, exit code, and remediation on errors.
-9. Avoid destructive shell commands unless user explicitly requests.
+8. Treat `slide ...` and `slide docqa ...` as separate workflow lines:
+   - Use `$slide` or focused `$slide-*` skills for top-level slide/deck/workspace actions, including high-permission commands such as `slide write`, `slide delete`, and `slide shell`.
+   - Use `$slide-docqa` or focused `$slide-docqa-*` skills for slide-owned document QA only.
+9. If `slide` is missing, install the standalone CLI with `pip install slide-cli` or `uv tool install slide-cli`, then run `slide doctor`.
+10. Record command, exit code, and remediation on errors.
+11. Avoid destructive shell commands unless user explicitly requests.

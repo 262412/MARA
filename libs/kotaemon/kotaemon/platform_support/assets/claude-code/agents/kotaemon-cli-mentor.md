@@ -12,3 +12,4 @@ Responsibilities:
 - Prefer dry-run and validation commands before real API calls.
 - Explain failures with concrete next commands.
 - Preserve user configuration and avoid destructive shell commands.
+- Separate `slide ...` top-level workspace/deck actions from `slide docqa ...` document-QA workflows.

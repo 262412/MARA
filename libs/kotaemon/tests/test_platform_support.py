@@ -33,6 +33,35 @@ APP_ACTION_SKILLS = (
     "kotaemon-app-doctor",
     "kotaemon-app-run",
 )
+SLIDE_ACTION_SKILLS = (
+    "slide-apply",
+    "slide-chat",
+    "slide-delete",
+    "slide-doctor",
+    "slide-export-pdf",
+    "slide-extract",
+    "slide-files",
+    "slide-inspect",
+    "slide-read",
+    "slide-read-slide",
+    "slide-resume",
+    "slide-review",
+    "slide-run",
+    "slide-search",
+    "slide-sessions",
+    "slide-shell",
+    "slide-write",
+)
+SLIDE_DOCQA_ACTION_SKILLS = (
+    "slide-docqa-ask",
+    "slide-docqa-chat",
+    "slide-docqa-delete",
+    "slide-docqa-doctor",
+    "slide-docqa-files",
+    "slide-docqa-index",
+    "slide-docqa-resume",
+    "slide-docqa-sessions",
+)
 
 
 def test_platform_registry_names():
@@ -56,6 +85,10 @@ def test_install_claude_minimal_creates_expected_assets(tmp_path):
     assert (tmp_path / "skills" / "kotaemon-modelcli" / "SKILL.md").exists()
     assert (tmp_path / "skills" / "kotaemon-app" / "SKILL.md").exists()
     for skill_name in MODELCLI_ACTION_SKILLS + APP_ACTION_SKILLS:
+        assert (tmp_path / "skills" / skill_name / "SKILL.md").exists()
+    assert (tmp_path / "skills" / "slide" / "SKILL.md").exists()
+    assert (tmp_path / "skills" / "slide-docqa" / "SKILL.md").exists()
+    for skill_name in SLIDE_ACTION_SKILLS + SLIDE_DOCQA_ACTION_SKILLS:
         assert (tmp_path / "skills" / skill_name / "SKILL.md").exists()
 
 
@@ -110,6 +143,10 @@ def test_install_codex_minimal_includes_docqa_skill(tmp_path):
     assert (tmp_path / "skills" / "kotaemon-app" / "SKILL.md").exists()
     for skill_name in MODELCLI_ACTION_SKILLS + APP_ACTION_SKILLS:
         assert (tmp_path / "skills" / skill_name / "SKILL.md").exists()
+    assert (tmp_path / "skills" / "slide" / "SKILL.md").exists()
+    assert (tmp_path / "skills" / "slide-docqa" / "SKILL.md").exists()
+    for skill_name in SLIDE_ACTION_SKILLS + SLIDE_DOCQA_ACTION_SKILLS:
+        assert (tmp_path / "skills" / skill_name / "SKILL.md").exists()
 
 
 def test_install_claude_selective_commands_include_docqa_wrapper(tmp_path):
@@ -127,6 +164,10 @@ def test_install_claude_selective_commands_include_docqa_wrapper(tmp_path):
     assert (tmp_path / "commands" / "kotaemon-modelcli.md").exists()
     assert (tmp_path / "commands" / "kotaemon-app.md").exists()
     for skill_name in MODELCLI_ACTION_SKILLS + APP_ACTION_SKILLS:
+        assert (tmp_path / "commands" / f"{skill_name}.md").exists()
+    assert (tmp_path / "commands" / "slide.md").exists()
+    assert (tmp_path / "commands" / "slide-docqa.md").exists()
+    for skill_name in SLIDE_ACTION_SKILLS + SLIDE_DOCQA_ACTION_SKILLS:
         assert (tmp_path / "commands" / f"{skill_name}.md").exists()
 
 
@@ -184,6 +225,34 @@ def test_validate_installed_reports_missing_minimal_components(tmp_path):
     assert any(
         message.startswith("Missing minimal component") for message in result.errors
     )
+
+
+def test_validate_installed_passes_after_minimal_install(tmp_path):
+    for platform_name in ("codex", "claude-code"):
+        target_dir = tmp_path / platform_name
+        install_platform(
+            platform_name=platform_name,
+            mode="minimal",
+            target_dir=target_dir,
+        )
+
+        result = validate_installed(platform_name, target_dir=target_dir)
+
+        assert result.valid is True, (platform_name, result.errors)
+
+
+def test_validate_installed_passes_after_full_install(tmp_path):
+    for platform_name in ("codex", "claude-code"):
+        target_dir = tmp_path / platform_name
+        install_platform(
+            platform_name=platform_name,
+            mode="full",
+            target_dir=target_dir,
+        )
+
+        result = validate_installed(platform_name, target_dir=target_dir)
+
+        assert result.valid is True, (platform_name, result.errors)
 
 
 def test_cli_platform_list_command():
@@ -536,6 +605,67 @@ def test_claude_modelcli_and_app_commands_match_skill_names():
         assert "pip install kotaemon-app" in command_text
         assert "kotaemon app init" in command_text
         assert "kotaemon app doctor" in command_text
+
+
+def test_slide_skill_parity_between_platforms():
+    repo_root = Path(__file__).resolve().parents[3]
+
+    for skill_name in (
+        "slide",
+        "slide-docqa",
+        *SLIDE_ACTION_SKILLS,
+        *SLIDE_DOCQA_ACTION_SKILLS,
+    ):
+        codex_skill = (
+            repo_root
+            / "libs"
+            / "kotaemon"
+            / "kotaemon"
+            / "platform_support"
+            / "assets"
+            / "codex"
+            / "skills"
+            / skill_name
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        claude_skill = (
+            repo_root
+            / "libs"
+            / "kotaemon"
+            / "kotaemon"
+            / "platform_support"
+            / "assets"
+            / "claude-code"
+            / "skills"
+            / skill_name
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+        assert codex_skill == claude_skill
+
+
+def test_claude_slide_commands_match_skill_names():
+    repo_root = Path(__file__).resolve().parents[3]
+    commands_dir = (
+        repo_root
+        / "libs"
+        / "kotaemon"
+        / "kotaemon"
+        / "platform_support"
+        / "assets"
+        / "claude-code"
+        / "commands"
+    )
+
+    for command_name in ("slide.md", "slide-docqa.md"):
+        command_text = (commands_dir / command_name).read_text(encoding="utf-8")
+        assert "pip install slide-cli" in command_text
+
+    for skill_name in SLIDE_ACTION_SKILLS + SLIDE_DOCQA_ACTION_SKILLS:
+        command_path = commands_dir / f"{skill_name}.md"
+        assert command_path.exists()
+        command_text = command_path.read_text(encoding="utf-8")
+        assert "pip install slide-cli" in command_text
 
 
 def test_cli_operations_skill_parity_between_platforms():

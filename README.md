@@ -428,8 +428,9 @@ slide docqa --help
 slide docqa doctor
 ```
 
-Codex users also get a top-level `slide*` skill family and a specialist `slide-docqa*` skill family under `.codex/skills`.
-The focused family covers the DocQA mainline, including `slide-docqa-delete`; `slide docqa acceptance` and `slide docqa check` remain available as maintainer commands.
+Codex users get a top-level `slide*` skill family and a specialist `slide-docqa*` skill family under `.codex/skills`.
+Claude Code users get matching `slide*` skills plus command wrappers under `.claude/commands`.
+The focused DocQA family covers the mainline, including `slide-docqa-delete`; `slide docqa acceptance` and `slide docqa check` remain available as maintainer commands.
 
 Example:
 
