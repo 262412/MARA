@@ -12,20 +12,19 @@ TBD
 pip install kotaemon@git+ssh://git@github.com/Cinnamon/kotaemon.git
 ```
 
-## Experimental cross-model CLI
+## Shared model routing
 
-The package now exposes an experimental `modelcli` command group under the existing
-`kotaemon` CLI.
+The user-facing model routing command group is exposed through `slide model`.
 
 ```shell
 # Generate a default provider config
-kotaemon modelcli init-config --output modelcli.yml
+slide model init-config --output modelcli.yml
 
 # Inspect provider availability from environment variables
-kotaemon modelcli providers --config modelcli.yml
+slide model providers --config modelcli.yml
 
 # Run routing/model resolution without calling provider APIs
-kotaemon modelcli run --prompt "hello" --model gpt-4o-mini --dry-run
+slide model run --prompt "hello" --model gpt-4o-mini --dry-run
 ```
 
 The default config supports OpenAI, Anthropic, Gemini, and OpenRouter via provider
@@ -33,19 +32,19 @@ API keys in environment variables.
 
 ## Platform CLI support
 
-The package also exposes a `platform` command group to install and validate AI coding
-assistant bundles in a single repository.
+Platform support is exposed through `slide platform` to install and validate AI
+coding assistant bundles in a single repository.
 
 ```shell
 # List supported platforms
-kotaemon platform list
+slide platform list
 
 # Install a minimal Codex profile to a custom target
-kotaemon platform install --platform codex --mode minimal --target-dir ./tmp/codex --yes
+slide platform install --platform codex --mode minimal --target-dir ./tmp/codex --yes
 
 # Validate source bundles and installed target
-kotaemon platform validate
-kotaemon platform validate --installed --platform codex --target-dir ./tmp/codex
+slide platform validate
+slide platform validate --installed --platform codex --target-dir ./tmp/codex
 ```
 
 Supported platforms: `claude-code`, `codex`.

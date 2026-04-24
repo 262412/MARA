@@ -1,7 +1,7 @@
-# BEGIN KOTAEMON PLATFORM BLOCK
+# BEGIN SLIDE PLATFORM BLOCK
 
-[profiles.kotaemon]
-default_skill = "kotaemon-cli-operations"
-notes = "Use modelcli providers and dry-run checks before real calls."
+[profiles.slide]
+default_skill = "slide"
+notes = "Use slide doctor, slide model providers, and dry-run checks before real calls."
 
-# END KOTAEMON PLATFORM BLOCK
+# END SLIDE PLATFORM BLOCK

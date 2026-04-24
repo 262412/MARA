@@ -132,18 +132,18 @@ def platform_status(
 def _component_present(spec: PlatformSpec, target_dir: Path, component: str) -> bool:
     if component == "CLAUDE.md":
         return (target_dir / "CLAUDE.md").exists() or (
-            target_dir / "CLAUDE.kotaemon.md"
+            target_dir / "CLAUDE.slide.md"
         ).exists()
     if component == "AGENTS.md":
         return (target_dir / "AGENTS.md").exists() or (
-            target_dir / "AGENTS.kotaemon.md"
+            target_dir / "AGENTS.slide.md"
         ).exists()
     if component == "settings.json.template":
-        return (target_dir / "settings.kotaemon.template.json").exists() or (
+        return (target_dir / "settings.slide.template.json").exists() or (
             target_dir / "settings.json"
         ).exists()
     if component == "config.toml.template":
-        return (target_dir / "config.kotaemon.template.toml").exists() or (
+        return (target_dir / "config.slide.template.toml").exists() or (
             target_dir / "config.toml"
         ).exists()
 
@@ -178,7 +178,7 @@ def _install_primary_doc(
     result: InstallResult,
 ) -> None:
     target = result.target_dir / source.name
-    sidecar = result.target_dir / f"{source.stem}.kotaemon{source.suffix}"
+    sidecar = result.target_dir / f"{source.stem}.slide{source.suffix}"
     destination = target if not target.exists() else sidecar
 
     if destination.exists():
@@ -203,7 +203,7 @@ def _apply_claude_settings_template(
     source: Path,
     result: InstallResult,
 ) -> None:
-    sidecar = result.target_dir / "settings.kotaemon.template.json"
+    sidecar = result.target_dir / "settings.slide.template.json"
     if sidecar.exists():
         _backup_existing(spec, sidecar, result)
 
@@ -240,7 +240,7 @@ def _apply_codex_config_template(
     source: Path,
     result: InstallResult,
 ) -> None:
-    sidecar = result.target_dir / "config.kotaemon.template.toml"
+    sidecar = result.target_dir / "config.slide.template.toml"
     if sidecar.exists():
         _backup_existing(spec, sidecar, result)
 
@@ -253,7 +253,7 @@ def _apply_codex_config_template(
     else:
         existing_text = ""
 
-    marker = "BEGIN KOTAEMON PLATFORM BLOCK"
+    marker = "BEGIN SLIDE PLATFORM BLOCK"
     if marker in existing_text:
         merged_text = existing_text
         changed = False
@@ -344,7 +344,7 @@ def _ensure_backup_dir(spec: PlatformSpec, result: InstallResult) -> Path | None
         return result.backup_dir
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup_dir = result.target_dir / ".kotaemon-platform-backups" / stamp
+    backup_dir = result.target_dir / ".slide-platform-backups" / stamp
     result.backup_dir = backup_dir
 
     if result.dry_run:
@@ -355,7 +355,7 @@ def _ensure_backup_dir(spec: PlatformSpec, result: InstallResult) -> Path | None
 
 
 def _write_install_metadata(result: InstallResult) -> None:
-    metadata_path = result.target_dir / ".kotaemon-platform-install.json"
+    metadata_path = result.target_dir / ".slide-platform-install.json"
     payload = {
         "platform": result.platform,
         "mode": result.mode,

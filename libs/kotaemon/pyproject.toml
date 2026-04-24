@@ -108,6 +108,3 @@ dev = [
     "sphinx",
 ]
 all = ["kotaemon[adv,dev]"]
-
-[project.scripts]
-kotaemon = "kotaemon.cli:main"

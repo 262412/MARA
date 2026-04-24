@@ -1,8 +1,8 @@
-# Getting Started with Kotaemon
+# Getting Started with Slide
 
 ![type:video](https://github.com/Cinnamon/kotaemon/assets/25688648/815ecf68-3a02-4914-a0dd-3f8ec7e75cd9)
 
-This page is intended for **end users** who want to use the `kotaemon` tool for Question
+This page is intended for **end users** who want to use the `slide` tool for Question
 Answering on local documents. If you are a **developer** who wants contribute to the project, please visit the [development](development/index.md) page.
 
 ## Installation (Online HuggingFace Space) - easy (10 mins)
@@ -13,7 +13,7 @@ Visit this [guide](online_install.md).
 
 ### Download
 
-Download the `kotaemon-app.zip` file from the [latest release](https://github.com/Cinnamon/kotaemon/releases/latest/).
+Download the `slide-app.zip` file from the [latest release](https://github.com/Cinnamon/kotaemon/releases/latest/).
 
 ### Run setup script
 
