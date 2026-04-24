@@ -35,21 +35,29 @@ Prefer these focused skills when the user intent is narrow:
 - `kotaemon-app-init`
 - `kotaemon-app-doctor`
 - `kotaemon-app-run`
+- `kotaemon-platform`
 
-Keep this umbrella skill for promptui, benchmark, or mixed CLI workflows.
+Keep this umbrella skill for promptui, makedoc, start-project, terminal UI,
+benchmark, or mixed CLI workflows.
+Use `kotaemon-platform` for Codex or Claude Code platform asset workflows.
 
 ## Command Set
 
-- kotaemon modelcli init-config --output modelcli.yml
-- kotaemon modelcli providers --config modelcli.yml
-- kotaemon modelcli run --prompt "..." --model ds-chat --provider openai --config modelcli.yml --dry-run
-- kotaemon modelcli run --prompt "..." --model ds-chat --provider openai --config modelcli.yml
-- kotaemon promptui run promptui.yml --port 7860
-- python -m benchmark run --manifest benchmark/manifests/format_robustness.json --suite-name smoke
+- `kotaemon modelcli init-config --output modelcli.yml`
+- `kotaemon modelcli providers --config modelcli.yml`
+- `kotaemon modelcli run --prompt "..." --model ds-chat --provider openai --config modelcli.yml --dry-run`
+- `kotaemon modelcli run --prompt "..." --model ds-chat --provider openai --config modelcli.yml`
+- `kotaemon promptui export <pipeline-path> --output promptui.yml`
+- `kotaemon promptui run promptui.yml --port 7860`
+- `kotaemon makedoc <module> --output docs.md`
+- `kotaemon start-project --template project-default`
+- `kotaemon ui`
+- `python -m benchmark run --manifest benchmark/manifests/format_robustness.json --suite-name smoke`
 
 ## Quality Gates
 
-- Providers command reports expected provider as available.
+- `providers` reports the expected provider as available.
 - Dry-run resolves model and provider correctly.
 - Real run returns model output without exception.
+- Promptui export writes a config before promptui run.
 - Benchmark run exits with code 0 and produces artifacts.

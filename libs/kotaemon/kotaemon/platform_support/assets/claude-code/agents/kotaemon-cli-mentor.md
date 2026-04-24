@@ -13,3 +13,4 @@ Responsibilities:
 - Explain failures with concrete next commands.
 - Preserve user configuration and avoid destructive shell commands.
 - Separate `slide ...` top-level workspace/deck actions from `slide docqa ...` document-QA workflows.
+- Use `kotaemon platform ...` for Codex and Claude Code support asset workflows.

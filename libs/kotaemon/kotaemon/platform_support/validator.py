@@ -113,11 +113,24 @@ _REQUIRED_MODELCLI_SKILL_FILES = (
     Path("skills/kotaemon-modelcli-providers/SKILL.md"),
     Path("skills/kotaemon-modelcli-run/SKILL.md"),
 )
+_REQUIRED_CLI_OPERATIONS_SKILL_FILES = (
+    Path("skills/kotaemon-cli-operations/SKILL.md"),
+)
 _REQUIRED_APP_SKILL_FILES = (
     Path("skills/kotaemon-app/SKILL.md"),
     Path("skills/kotaemon-app-init/SKILL.md"),
     Path("skills/kotaemon-app-doctor/SKILL.md"),
     Path("skills/kotaemon-app-run/SKILL.md"),
+)
+_REQUIRED_PLATFORM_SKILL_FILES = (
+    Path("skills/kotaemon-platform/SKILL.md"),
+    Path("skills/kotaemon-platform-install/SKILL.md"),
+    Path("skills/kotaemon-platform-list/SKILL.md"),
+    Path("skills/kotaemon-platform-status/SKILL.md"),
+    Path("skills/kotaemon-platform-validate/SKILL.md"),
+)
+_REQUIRED_CLAUDE_CLI_OPERATIONS_COMMAND_FILES = (
+    Path("commands/kotaemon-cli-operations.md"),
 )
 _REQUIRED_CLAUDE_MODELCLI_COMMAND_FILES = (
     Path("commands/kotaemon-modelcli.md"),
@@ -130,6 +143,13 @@ _REQUIRED_CLAUDE_APP_COMMAND_FILES = (
     Path("commands/kotaemon-app-init.md"),
     Path("commands/kotaemon-app-doctor.md"),
     Path("commands/kotaemon-app-run.md"),
+)
+_REQUIRED_CLAUDE_PLATFORM_COMMAND_FILES = (
+    Path("commands/kotaemon-platform.md"),
+    Path("commands/kotaemon-platform-install.md"),
+    Path("commands/kotaemon-platform-list.md"),
+    Path("commands/kotaemon-platform-status.md"),
+    Path("commands/kotaemon-platform-validate.md"),
 )
 
 
@@ -168,9 +188,19 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
                 errors.append(
                     f"Missing required modelcli skill asset: {rel.as_posix()}"
                 )
+        for rel in _REQUIRED_CLI_OPERATIONS_SKILL_FILES:
+            if not (spec.bundle_root / rel).exists():
+                errors.append(
+                    f"Missing required CLI operations skill asset: {rel.as_posix()}"
+                )
         for rel in _REQUIRED_APP_SKILL_FILES:
             if not (spec.bundle_root / rel).exists():
                 errors.append(f"Missing required app skill asset: {rel.as_posix()}")
+        for rel in _REQUIRED_PLATFORM_SKILL_FILES:
+            if not (spec.bundle_root / rel).exists():
+                errors.append(
+                    f"Missing required platform skill asset: {rel.as_posix()}"
+                )
 
         if current == "claude-code":
             for rel in _REQUIRED_HOOK_FILES:
@@ -192,10 +222,21 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
                     errors.append(
                         f"Missing required modelcli command asset: {rel.as_posix()}"
                     )
+            for rel in _REQUIRED_CLAUDE_CLI_OPERATIONS_COMMAND_FILES:
+                if not (spec.bundle_root / rel).exists():
+                    errors.append(
+                        "Missing required CLI operations command asset: "
+                        f"{rel.as_posix()}"
+                    )
             for rel in _REQUIRED_CLAUDE_APP_COMMAND_FILES:
                 if not (spec.bundle_root / rel).exists():
                     errors.append(
                         f"Missing required app command asset: {rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_CLAUDE_PLATFORM_COMMAND_FILES:
+                if not (spec.bundle_root / rel).exists():
+                    errors.append(
+                        f"Missing required platform command asset: {rel.as_posix()}"
                     )
 
             hooks_json = spec.bundle_root / "hooks" / "hooks.json"
@@ -260,10 +301,21 @@ def validate_installed(
                     errors.append(
                         "Missing installed modelcli skill asset: " f"{rel.as_posix()}"
                     )
+            for rel in _REQUIRED_CLI_OPERATIONS_SKILL_FILES:
+                if not (resolved_target / rel).exists():
+                    errors.append(
+                        "Missing installed CLI operations skill asset: "
+                        f"{rel.as_posix()}"
+                    )
             for rel in _REQUIRED_APP_SKILL_FILES:
                 if not (resolved_target / rel).exists():
                     errors.append(
                         "Missing installed app skill asset: " f"{rel.as_posix()}"
+                    )
+            for rel in _REQUIRED_PLATFORM_SKILL_FILES:
+                if not (resolved_target / rel).exists():
+                    errors.append(
+                        "Missing installed platform skill asset: " f"{rel.as_posix()}"
                     )
 
         if platform_name == "claude-code":
@@ -287,10 +339,22 @@ def validate_installed(
                             "Missing installed modelcli command asset: "
                             f"{rel.as_posix()}"
                         )
+                for rel in _REQUIRED_CLAUDE_CLI_OPERATIONS_COMMAND_FILES:
+                    if not (resolved_target / rel).exists():
+                        errors.append(
+                            "Missing installed CLI operations command asset: "
+                            f"{rel.as_posix()}"
+                        )
                 for rel in _REQUIRED_CLAUDE_APP_COMMAND_FILES:
                     if not (resolved_target / rel).exists():
                         errors.append(
                             "Missing installed app command asset: " f"{rel.as_posix()}"
+                        )
+                for rel in _REQUIRED_CLAUDE_PLATFORM_COMMAND_FILES:
+                    if not (resolved_target / rel).exists():
+                        errors.append(
+                            "Missing installed platform command asset: "
+                            f"{rel.as_posix()}"
                         )
 
     return ValidationResult(platform=platform_name, valid=not errors, errors=errors)

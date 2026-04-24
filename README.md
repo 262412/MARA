@@ -430,6 +430,7 @@ slide docqa doctor
 
 Codex users get a top-level `slide*` skill family and a specialist `slide-docqa*` skill family under `.codex/skills`.
 Claude Code users get matching `slide*` skills plus command wrappers under `.claude/commands`.
+Both platform bundles also expose the same `kotaemon-app*`, `kotaemon-docqa*`, `kotaemon-modelcli*`, `kotaemon-platform*`, and `kotaemon-cli-operations` support surface.
 The focused DocQA family covers the mainline, including `slide-docqa-delete`; `slide docqa acceptance` and `slide docqa check` remain available as maintainer commands.
 
 Example:

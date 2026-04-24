@@ -54,7 +54,17 @@ main.add_command(modelcli)
 
 @click.group()
 def platform():
-    """Install and validate platform bundles for Claude Code and Codex."""
+    """Install and validate platform bundles for Claude Code and Codex.
+
+    Action guide:
+    - List supported bundles: `kotaemon platform list` (platform skill: kotaemon-platform-list)
+    - Inspect installed assets: `kotaemon platform status` (platform skill: kotaemon-platform-status)
+    - Install assets: `kotaemon platform install` (platform skill: kotaemon-platform-install)
+    - Validate assets: `kotaemon platform validate` (platform skill: kotaemon-platform-validate)
+
+    Use the umbrella `kotaemon-platform` skill when the task spans multiple
+    platform actions.
+    """
 
 
 main.add_command(platform)

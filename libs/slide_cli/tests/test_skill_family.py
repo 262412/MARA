@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import click
 from click.testing import CliRunner
+from slide_cli.cli import main
 from slide_cli.docqa_cli import docqa
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -46,10 +48,40 @@ TOP_LEVEL_FOCUSED_SKILLS = [
     "slide-delete",
     "slide-shell",
 ]
+DOCQA_COMMANDS = {
+    "acceptance",
+    "ask",
+    "chat",
+    "check",
+    "delete",
+    "doctor",
+    "files",
+    "index",
+    "resume",
+    "sessions",
+}
+DOCQA_MAINLINE_COMMANDS = DOCQA_COMMANDS - {"acceptance", "check"}
 
 
 def _read_skill(name: str) -> str:
     return (SKILLS_ROOT / name / "SKILL.md").read_text(encoding="utf-8")
+
+
+def _command_names(group: click.Group) -> set[str]:
+    with click.Context(group) as ctx:
+        return set(group.list_commands(ctx))
+
+
+def test_slide_cli_commands_match_top_level_skill_family():
+    expected_commands = {
+        command.replace("slide ", "", 1) for command in TOP_LEVEL_COMMANDS
+    }
+    actual_commands = _command_names(main)
+
+    assert actual_commands == expected_commands
+    assert {
+        f"slide-{command}" for command in actual_commands if command != "docqa"
+    } == set(TOP_LEVEL_FOCUSED_SKILLS)
 
 
 def test_slide_top_level_skill_family_matches_agent_line():
@@ -126,6 +158,36 @@ def test_slide_docqa_skill_family_matches_docqa_mainline_only():
     }
 
     assert actual == expected
+
+
+def test_slide_docqa_cli_commands_match_mainline_skill_family():
+    actual_commands = _command_names(docqa)
+
+    assert actual_commands == DOCQA_COMMANDS
+    assert {
+        f"slide-docqa-{command}"
+        for command in actual_commands
+        if command in DOCQA_MAINLINE_COMMANDS
+    } == {
+        "slide-docqa-ask",
+        "slide-docqa-chat",
+        "slide-docqa-delete",
+        "slide-docqa-doctor",
+        "slide-docqa-files",
+        "slide-docqa-index",
+        "slide-docqa-resume",
+        "slide-docqa-sessions",
+    }
+    assert "slide-docqa-acceptance" not in {
+        path.name
+        for path in SKILLS_ROOT.iterdir()
+        if path.is_dir() and (path / "SKILL.md").is_file()
+    }
+    assert "slide-docqa-check" not in {
+        path.name
+        for path in SKILLS_ROOT.iterdir()
+        if path.is_dir() and (path / "SKILL.md").is_file()
+    }
 
 
 def test_slide_docqa_umbrella_skill_stays_on_docqa_mainline():

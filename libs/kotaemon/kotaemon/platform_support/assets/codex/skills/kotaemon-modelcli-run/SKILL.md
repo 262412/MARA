@@ -27,7 +27,7 @@ If `kotaemon` is not on `PATH`, install the packaged runtime first:
 - `--prompt "..."` (required)
 - `--model <name>` (required)
 - `--provider <name>`
-- `--system-prompt "..." `
+- `--system-prompt "..."`
 - `--temperature <float>`
 - `--max-tokens <n>`
 - `--config <path>`

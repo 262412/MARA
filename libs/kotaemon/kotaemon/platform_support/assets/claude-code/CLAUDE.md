@@ -38,6 +38,14 @@ Preferred packaged app entry points:
 3. Use `kotaemon-app-run` to launch the packaged Web UI.
 4. Use the umbrella `kotaemon-app` workflow when the task spans multiple app actions.
 
+Preferred platform support entry points:
+
+1. Use `kotaemon-platform-list` to inspect supported platforms.
+2. Use `kotaemon-platform-install` to install Codex or Claude Code support assets.
+3. Use `kotaemon-platform-status` to inspect installed assets.
+4. Use `kotaemon-platform-validate` before publishing or after install.
+5. Use the umbrella `kotaemon-platform` workflow when the task spans multiple platform actions.
+
 Preferred slide entry points:
 
 1. Use `slide` for top-level slide/deck/workspace workflows.
