@@ -62,7 +62,7 @@ class DoclingReader(BaseReader):
 
         metadata = extra_info or {}
 
-        result = self.converter_.convert(file_path)
+        result = self._convert_file(file_path)
         result_dict = result.document.export_to_dict()
 
         file_path = Path(file_path)
@@ -72,32 +72,29 @@ class DoclingReader(BaseReader):
         figures = []
         gen_caption_count = 0
         for figure_obj in result_dict.get("pictures", []):
-            if not self.vlm_endpoint:
-                continue
             if file_path.suffix.lower() not in self.figure_friendly_filetypes:
                 continue
 
             # retrieve extractive captions provided by docling
-            caption_refs = [caption["$ref"] for caption in figure_obj["captions"]]
-            extractive_captions = []
-            for caption_ref in caption_refs:
-                text_id = caption_ref.split("/")[-1]
-                try:
-                    caption_text = result_dict["texts"][int(text_id)]["text"]
-                    extractive_captions.append(caption_text)
-                except (ValueError, TypeError, IndexError) as e:
-                    print(e)
-                    continue
+            caption_refs = [
+                caption["$ref"]
+                for caption in figure_obj.get("captions", [])
+                if caption.get("$ref")
+            ]
+            extractive_captions = self._extract_caption_texts(result_dict, caption_refs)
 
             # read & crop image
-            page_number = figure_obj["prov"][0]["page_no"]
+            prov = figure_obj.get("prov") or []
+            if not prov:
+                continue
+            page_number = prov[0]["page_no"]
 
             try:
                 page_number_text = str(page_number)
                 page_width = result_dict["pages"][page_number_text]["size"]["width"]
                 page_height = result_dict["pages"][page_number_text]["size"]["height"]
 
-                bbox_obj = figure_obj["prov"][0]["bbox"]
+                bbox_obj = prov[0]["bbox"]
                 bbox: list[float] = [
                     bbox_obj["l"],
                     bbox_obj["t"],
@@ -119,7 +116,7 @@ class DoclingReader(BaseReader):
             img_base64 = f"data:image/png;base64,{img_base64}"
 
             # generate the generative caption
-            if gen_caption_count >= self.max_figure_to_caption:
+            if not self.vlm_endpoint or gen_caption_count >= self.max_figure_to_caption:
                 gen_caption = ""
             else:
                 gen_caption_count += 1
@@ -128,7 +125,9 @@ class DoclingReader(BaseReader):
                 )
 
             # join the extractive and generative captions
-            caption = "\n".join(extractive_captions + [gen_caption])
+            caption = "\n".join(
+                part for part in [*extractive_captions, gen_caption] if part
+            ).strip()
 
             # store the image into document
             figure_metadata = {
@@ -137,7 +136,10 @@ class DoclingReader(BaseReader):
                 "page_label": page_number,
                 "file_name": file_name,
                 "file_path": file_path,
+                "bbox": bbox,
             }
+            if caption:
+                figure_metadata["caption"] = caption
             figure_metadata.update(metadata)
 
             figures.append(
@@ -219,6 +221,26 @@ class DoclingReader(BaseReader):
             x1 / page_width,
             (page_height - y0) / page_height,
         ]
+
+    def _convert_file(self, file_path: str | Path):
+        return self.converter_.convert(file_path)
+
+    def _extract_caption_texts(
+        self, result_dict: dict, caption_refs: list[str]
+    ) -> list[str]:
+        """Retrieve extractive caption strings from Docling text references."""
+
+        extractive_captions = []
+        for caption_ref in caption_refs:
+            text_id = caption_ref.split("/")[-1]
+            try:
+                caption_text = result_dict["texts"][int(text_id)]["text"]
+            except (KeyError, ValueError, TypeError, IndexError) as e:
+                print(e)
+                continue
+            if caption_text:
+                extractive_captions.append(str(caption_text))
+        return extractive_captions
 
     def _parse_table(self, table_obj: dict) -> str:
         """Convert docling table object to markdown table"""

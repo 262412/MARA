@@ -1,14 +1,17 @@
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 from uuid import uuid4
 
 import requests
 from llama_index.core.readers.base import BaseReader
 from tenacity import after_log, retry, stop_after_attempt, wait_exponential
+from theflow.settings import settings as flowsettings
 
 from kotaemon.base import Document
+from kotaemon.indices.performance_cache import file_hash
+from kotaemon.indices.vision_cache import cached_model_result
 
 from .utils.pdf_ocr import parse_ocr_output, read_pdf_unstructured
 from .utils.table import strip_special_chars_markdown
@@ -54,10 +57,13 @@ class OCRReader(BaseReader):
     def __init__(self, endpoint: Optional[str] = None, use_ocr=True):
         """Init the OCR reader with OCR endpoint (FullOCR pipeline)"""
         super().__init__()
-        self.ocr_endpoint = endpoint or os.getenv(
-            "OCR_READER_ENDPOINT", DEFAULT_OCR_ENDPOINT
+        self.ocr_endpoint: str = (
+            endpoint
+            or os.getenv("OCR_READER_ENDPOINT", DEFAULT_OCR_ENDPOINT)
+            or DEFAULT_OCR_ENDPOINT
         )
         self.use_ocr = use_ocr
+        self.last_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
 
     def load_data(
         self, file_path: Path, extra_info: Optional[dict] = None, **kwargs
@@ -77,13 +83,27 @@ class OCRReader(BaseReader):
         # call the API from FullOCR endpoint
         if "response_content" in kwargs:
             # overriding response content if specified
-            ocr_results = kwargs["response_content"]
+            ocr_results = cast(list[dict[str, Any]], kwargs["response_content"])
+            self.last_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
         else:
             # call original API
-            resp = tenacious_api_post(
-                url=self.ocr_endpoint, file_path=file_path, table_only=not self.use_ocr
+            cache_result = cached_model_result(
+                cache_dir=getattr(flowsettings, "KH_OCR_CACHE_DIR", None)
+                or getattr(flowsettings, "KH_VISION_CACHE_DIR", None),
+                namespace="ocr",
+                payload={
+                    "file_hash": file_hash(file_path),
+                    "table_only": not self.use_ocr,
+                },
+                model_name=self.ocr_endpoint,
+                compute=lambda: tenacious_api_post(
+                    url=self.ocr_endpoint,
+                    file_path=file_path,
+                    table_only=not self.use_ocr,
+                ).json()["result"],
             )
-            ocr_results = resp.json()["result"]
+            ocr_results = cast(list[dict[str, Any]], cache_result.value)
+            self.last_ocr_cache_stats = cache_result.stats
 
         debug_path = kwargs.pop("debug_path", None)
         artifact_path = kwargs.pop("artifact_path", None)
@@ -150,9 +170,12 @@ class ImageReader(BaseReader):
     def __init__(self, endpoint: Optional[str] = None):
         """Init the OCR reader with OCR endpoint (FullOCR pipeline)"""
         super().__init__()
-        self.ocr_endpoint = endpoint or os.getenv(
-            "OCR_READER_ENDPOINT", DEFAULT_OCR_ENDPOINT
+        self.ocr_endpoint: str = (
+            endpoint
+            or os.getenv("OCR_READER_ENDPOINT", DEFAULT_OCR_ENDPOINT)
+            or DEFAULT_OCR_ENDPOINT
         )
+        self.last_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
 
     def load_data(
         self, file_path: Path, extra_info: Optional[dict] = None, **kwargs
@@ -172,22 +195,34 @@ class ImageReader(BaseReader):
         # call the API from FullOCR endpoint
         if "response_content" in kwargs:
             # overriding response content if specified
-            ocr_results = kwargs["response_content"]
+            ocr_results = cast(list[dict[str, Any]], kwargs["response_content"])
+            self.last_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
         else:
             # call original API
-            resp = tenacious_api_post(
-                url=self.ocr_endpoint, file_path=file_path, table_only=False
+            cache_result = cached_model_result(
+                cache_dir=getattr(flowsettings, "KH_OCR_CACHE_DIR", None)
+                or getattr(flowsettings, "KH_VISION_CACHE_DIR", None),
+                namespace="ocr",
+                payload={
+                    "file_hash": file_hash(file_path),
+                    "table_only": False,
+                },
+                model_name=self.ocr_endpoint,
+                compute=lambda: tenacious_api_post(
+                    url=self.ocr_endpoint, file_path=file_path, table_only=False
+                ).json()["result"],
             )
-            ocr_results = resp.json()["result"]
+            ocr_results = cast(list[dict[str, Any]], cache_result.value)
+            self.last_ocr_cache_stats = cache_result.stats
 
         extra_info = extra_info or {}
-        result = []
+        documents: list[Document] = []
         for ocr_result in ocr_results:
-            result.append(
+            documents.append(
                 Document(
                     content=ocr_result["csv_string"],
                     metadata=extra_info,
                 )
             )
 
-        return result
+        return documents

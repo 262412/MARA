@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .schemas import CLI_ENGINE_CHOICES, normalize_scope
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Kotaemon benchmark toolkit")
@@ -13,6 +15,27 @@ def _build_parser() -> argparse.ArgumentParser:
         "--manifest", required=True, help="Normalized manifest path"
     )
     run_parser.add_argument("--suite-name", default="kotaemon-benchmark")
+    run_parser.add_argument(
+        "--engine",
+        default="legacy_text_rag",
+        choices=CLI_ENGINE_CHOICES,
+    )
+    run_parser.add_argument(
+        "--scope",
+        default="document",
+        choices=["page", "document", "multi_document", "multi-document"],
+    )
+    run_parser.add_argument("--route", default="all")
+    run_parser.add_argument("--cost-profile")
+    run_parser.add_argument(
+        "--cache-mode",
+        default="warm",
+        choices=["warm", "cold", "bypass"],
+        help=(
+            "warm reuses benchmark caches, cold starts from an empty run-local "
+            "cache, bypass disables benchmark parse cache."
+        ),
+    )
     run_parser.add_argument(
         "--output-dir",
         default="benchmark/artifacts",
@@ -103,6 +126,11 @@ def main(argv: list[str] | None = None) -> int:
     config = BenchmarkConfig(
         suite_name=args.suite_name,
         output_dir=Path(args.output_dir),
+        engine=args.engine,
+        scope=normalize_scope(args.scope),
+        route=args.route,
+        cost_profile=args.cost_profile,
+        cache_mode=args.cache_mode,
         reader_mode=args.reader_mode,
         retrieval_mode=args.retrieval_mode,
         chunk_size=args.chunk_size,

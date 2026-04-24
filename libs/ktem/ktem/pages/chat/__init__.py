@@ -8,6 +8,7 @@ from copy import deepcopy
 from typing import Optional
 
 import gradio as gr
+import markdown
 from ktem.app import BasePage
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARequest, DocQARuntime
@@ -734,7 +735,16 @@ class ChatPage(BasePage):
                         ),
                         elem_id="kg-answer-hint",
                     )
-                    self.answer_panel = gr.Markdown(value="", elem_id="answer-panel")
+                    self.answer_panel = gr.Markdown(
+                        value="",
+                        elem_id="answer-panel",
+                        latex_delimiters=[
+                            {"left": "$$", "right": "$$", "display": True},
+                            {"left": "$", "right": "$", "display": False},
+                            {"left": "\\(", "right": "\\)", "display": False},
+                            {"left": "\\[", "right": "\\]", "display": True},
+                        ],
+                    )
 
         self.followup_questions = self.chat_suggestion.examples
         self.followup_questions_ui = self.chat_suggestion.accordion
@@ -1216,8 +1226,18 @@ class ChatPage(BasePage):
         import html
 
         escaped_content = html.escape(content)
-        # Replace newlines with <br> for proper line breaks
-        formatted_content = escaped_content.replace("\n", "<br>")
+        if role == "assistant":
+            formatted_content = markdown.markdown(
+                escaped_content,
+                extensions=[
+                    "markdown.extensions.tables",
+                    "markdown.extensions.fenced_code",
+                    "markdown.extensions.nl2br",
+                ],
+            )
+        else:
+            # User messages are rendered as plain text inside the bubble.
+            formatted_content = escaped_content.replace("\n", "<br>")
         return (
             f'<div class="chat-message {role}">'
             f'<div class="chat-message-content">{formatted_content}</div>'
@@ -1320,6 +1340,7 @@ class ChatPage(BasePage):
             active_file_id,
             active_file_name,
             page_number,
+            "page",
             selected_page_text,
             *selecteds,
         ):
@@ -1568,6 +1589,7 @@ class ChatPage(BasePage):
                     self._active_file_id,
                     self._active_file_name,
                     self.chat_panel.page_number,
+                    self.chat_panel.qa_scope,
                     self._selected_page_text,
                     self._selected_graph_context,
                     self.state_plot_panel,
@@ -2453,6 +2475,7 @@ class ChatPage(BasePage):
         active_file_id: str,
         active_file_name: str,
         page_number: int,
+        qa_scope: str,
         selected_page_text: str,
         selected_graph_context: str,
         *selecteds,
@@ -2482,6 +2505,7 @@ class ChatPage(BasePage):
             selected_inputs=self._build_selected_input_map(*selecteds),
             active_file_id=active_file_id or "",
             active_file_name=active_file_name or "",
+            qa_scope=str(qa_scope or "page").replace("-", "_"),
             page_number=max(1, int(page_number or 1)),
             selected_text=(selected_page_text or "").strip(),
             graph_context=graph_context,
@@ -2513,6 +2537,7 @@ class ChatPage(BasePage):
         active_file_id,
         active_file_name,
         page_number,
+        qa_scope,
         selected_page_text,
         selected_graph_context,
         state_plot_panel,
@@ -2571,6 +2596,7 @@ class ChatPage(BasePage):
             active_file_id,
             active_file_name,
             page_number,
+            qa_scope,
             selected_page_text,
             selected_graph_context,
             *selecteds,

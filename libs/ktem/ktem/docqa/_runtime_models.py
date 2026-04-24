@@ -12,6 +12,7 @@ class DocQARequest:
     conversation_id: str = ""
     selected_file_ids: Optional[list[str]] = None
     selected_inputs: Optional[dict[int, Any]] = None
+    qa_scope: str = "auto"
     active_file_id: str = ""
     active_file_name: str = ""
     page_number: Optional[int] = None
@@ -48,6 +49,7 @@ class DocQAResponse:
     graph_source_ids: list[str]
     active_file_id: str
     active_file_name: str
+    qa_scope: str
     page_number: Optional[int]
     selected_text: str
     graph_context: dict[str, Any]
@@ -177,6 +179,7 @@ class _PreparedPipeline:
     selected_file_ids: list[str]
     active_file_id: str
     active_file_name: str
+    qa_scope: str
     page_number: Optional[int]
     selected_text: str
     graph_context: dict[str, Any]

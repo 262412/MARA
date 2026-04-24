@@ -1,7 +1,5 @@
 import logging
-import os
 import threading
-from copy import deepcopy
 from textwrap import dedent
 from typing import Any, Generator
 
@@ -34,6 +32,7 @@ from kotaemon.llms import ChatLLM
 
 from ..utils import SUPPORTED_LANGUAGE_MAP
 from .base import BaseReasoning
+from .retrieval_policy import apply_retrieval_policy
 
 logger = logging.getLogger(__name__)
 
@@ -143,151 +142,26 @@ class FullQAPipeline(BaseReasoning):
 
         active_file_id = str(getattr(self, "active_file_id", "") or "")
         active_file_name = getattr(self, "active_file_name", "")
+        qa_scope = str(getattr(self, "qa_scope", "document") or "document")
         page_number = getattr(self, "page_number", None)
         selected_text = getattr(self, "selected_text", "") or ""
         graph_context = getattr(self, "graph_context", {}) or {}
         if not isinstance(graph_context, dict):
             graph_context = {}
 
-        graph_related_file_ids = [
-            str(item or "").strip()
-            for item in list(graph_context.get("related_file_ids", []) or [])
-            if str(item or "").strip()
-        ]
-        graph_support_pages = graph_context.get("support_pages", {}) or {}
-        graph_support_chunk_ids = graph_context.get("support_chunk_ids", {}) or {}
-
-        selected_text_norm = " ".join(selected_text.lower().split())
-        active_file_name_norm = os.path.basename(str(active_file_name or "")).lower()
-
-        def _doc_with_only_selected_text(doc: RetrievedDocument) -> RetrievedDocument:
-            selected_doc = deepcopy(doc)
-            try:
-                selected_doc.text = selected_text
-            except Exception:
-                pass
-            try:
-                selected_doc.content = selected_text
-            except Exception:
-                pass
-            return selected_doc
-
-        def _normalize_file_name(file_name: str) -> str:
-            return os.path.basename(str(file_name or "")).lower()
-
-        def _is_active_file_doc(doc: RetrievedDocument) -> bool:
-            if not active_file_name and not active_file_id:
-                return True
-
-            doc_file_id = str(doc.metadata.get("file_id", "") or "")
-            if active_file_id and doc_file_id:
-                return doc_file_id == active_file_id
-
-            if not active_file_name:
-                return True
-
-            doc_file_name = _normalize_file_name(doc.metadata.get("file_name", ""))
-            return bool(doc_file_name) and doc_file_name == active_file_name_norm
-
-        def _is_current_page_doc(doc: RetrievedDocument) -> bool:
-            if not page_number:
-                return True
-
-            page_label = doc.metadata.get("page_label", None)
-            if page_label is None:
-                return False
-
-            try:
-                return int(page_label) == int(page_number)
-            except Exception:
-                return False
-
-        def _is_graph_related_doc(doc: RetrievedDocument) -> bool:
-            if not graph_related_file_ids:
-                return False
-
-            doc_file_id = str(doc.metadata.get("file_id", "") or "")
-            if doc_file_id and doc_file_id not in graph_related_file_ids:
-                return False
-
-            if doc_file_id:
-                allowed_pages = [
-                    str(item).strip()
-                    for item in list(graph_support_pages.get(doc_file_id, []) or [])
-                    if str(item).strip()
-                ]
-                allowed_chunks = [
-                    str(item).strip()
-                    for item in list(graph_support_chunk_ids.get(doc_file_id, []) or [])
-                    if str(item).strip()
-                ]
-
-                if allowed_pages:
-                    page_label = str(doc.metadata.get("page_label", "") or "").strip()
-                    if page_label and page_label not in allowed_pages:
-                        return False
-
-                if allowed_chunks:
-                    doc_id = str(getattr(doc, "doc_id", "") or "").strip()
-                    if doc_id and doc_id not in allowed_chunks:
-                        return False
-
-            return True
-
         for idx, retriever in enumerate(self.retrievers):
             retriever_node = self._prepare_child(retriever, f"retriever_{idx}")
             all_retriever_docs = retriever_node(text=query)
 
-            # Retrieval order is explicit to preserve single-page QA behavior:
-            # current page -> active file -> graph-related files -> fallback.
-            page_docs = []
-            if page_number:
-                page_docs = [
-                    doc
-                    for doc in all_retriever_docs
-                    if _is_active_file_doc(doc) and _is_current_page_doc(doc)
-                ]
-            active_file_docs = [
-                doc for doc in all_retriever_docs if _is_active_file_doc(doc)
-            ]
-            graph_docs = []
-            if graph_related_file_ids:
-                graph_docs = [
-                    doc for doc in all_retriever_docs if _is_graph_related_doc(doc)
-                ]
-
-            if page_docs:
-                retriever_docs = page_docs
-            elif active_file_docs:
-                retriever_docs = active_file_docs
-            elif graph_docs:
-                retriever_docs = graph_docs
-            else:
-                retriever_docs = list(all_retriever_docs)
-
-            if selected_text_norm:
-                selected_filtered_docs = []
-                for doc in retriever_docs:
-                    doc_text = (doc.text or "") if hasattr(doc, "text") else ""
-                    doc_text_norm = " ".join(doc_text.lower().split())
-                    if selected_text_norm in doc_text_norm:
-                        selected_filtered_docs.append(doc)
-                if selected_filtered_docs:
-                    retriever_docs = [
-                        _doc_with_only_selected_text(selected_filtered_docs[0])
-                    ]
-                elif retriever_docs:
-                    retriever_docs = [_doc_with_only_selected_text(retriever_docs[0])]
-                else:
-                    retriever_docs = [
-                        RetrievedDocument(
-                            text=selected_text,
-                            metadata={
-                                "file_id": active_file_id,
-                                "file_name": active_file_name,
-                            },
-                        )
-                    ]
+            retriever_docs = apply_retrieval_policy(
+                all_retriever_docs,
+                qa_scope=qa_scope,
+                active_file_id=active_file_id,
+                active_file_name=active_file_name,
+                page_number=page_number,
+                selected_text=selected_text,
+                graph_context=graph_context,
+            )
 
             retriever_docs_text = []
             retriever_docs_plot = []
@@ -468,6 +342,7 @@ class FullQAPipeline(BaseReasoning):
             evidence=evidence,
             evidence_mode=evidence_mode,
             images=images,
+            source_documents=docs,
             conv_id=conv_id,
             **kwargs,
         )
@@ -531,6 +406,9 @@ class FullQAPipeline(BaseReasoning):
         )
         answer_pipeline.enable_mindmap = settings[f"{prefix}.create_mindmap"]
         answer_pipeline.enable_citation_viz = settings[f"{prefix}.create_citation_viz"]
+        answer_pipeline.enable_claim_verification = settings.get(
+            f"{prefix}.verify_claims", True
+        )
         answer_pipeline.use_multimodal = settings[f"{prefix}.use_multimodal"]
         answer_pipeline.system_prompt = settings[f"{prefix}.system_prompt"]
         answer_pipeline.qa_template = settings[f"{prefix}.qa_prompt"]
@@ -605,6 +483,15 @@ class FullQAPipeline(BaseReasoning):
                 "value": False,
                 "component": "checkbox",
             },
+            "verify_claims": {
+                "name": "Verify Claims Against Evidence",
+                "value": True,
+                "component": "checkbox",
+                "info": (
+                    "Check generated factual claims against retrieved evidence and "
+                    "revise or abstain when claims are unsupported."
+                ),
+            },
             "system_prompt": {
                 "name": "System Prompt",
                 "value": ("This is a question answering system."),
@@ -666,6 +553,7 @@ class FullDecomposeQAPipeline(FullQAPipeline):
                 evidence=evidence,
                 evidence_mode=evidence_mode,
                 images=images,
+                source_documents=docs,
                 conv_id=conv_id,
                 **kwargs,
             )
@@ -713,6 +601,7 @@ class FullDecomposeQAPipeline(FullQAPipeline):
             evidence=evidence + "\n" + sub_question_answer_output,
             evidence_mode=evidence_mode,
             images=images,
+            source_documents=docs,
             conv_id=conv_id,
             **kwargs,
         )

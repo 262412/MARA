@@ -7,8 +7,11 @@ from typing import Any, Dict, Generator, List, Optional, Union
 import requests
 from langchain.utils import get_from_dict_or_env
 from llama_index.core.readers.base import BaseReader
+from theflow.settings import settings as flowsettings
 
 from kotaemon.base import Document
+from kotaemon.indices.performance_cache import file_hash
+from kotaemon.indices.vision_cache import cached_model_result
 
 from .utils.table import strip_special_chars_markdown
 
@@ -34,6 +37,7 @@ class MathpixPDFReader(BaseReader):
             should_clean_pdf: a flag to clean the PDF file. Default is False.
             **kwargs: additional keyword arguments.
         """
+        super().__init__()
         self.mathpix_api_key = get_from_dict_or_env(
             kwargs, "mathpix_api_key", "MATHPIX_API_KEY", default="empty"
         )
@@ -43,7 +47,15 @@ class MathpixPDFReader(BaseReader):
         self.processed_file_format = processed_file_format
         self.max_wait_time_seconds = max_wait_time_seconds
         self.should_clean_pdf = should_clean_pdf
-        super().__init__()
+        self.last_formula_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
+
+    @staticmethod
+    def _coerce_file_path(file: Union[str, List[str], Path]) -> Path:
+        if isinstance(file, list):
+            if not file:
+                raise ValueError("file list cannot be empty")
+            return Path(file[0])
+        return Path(file)
 
     @property
     def _mathpix_headers(self) -> Dict[str, str]:
@@ -206,13 +218,25 @@ class MathpixPDFReader(BaseReader):
         **load_kwargs: Any,
     ) -> List[Document]:
         """Load data from file path."""
-        file_path = Path(file) if isinstance(file, str) else file
+        file_path = self._coerce_file_path(file)
 
         if "response_content" in load_kwargs:
             content = load_kwargs["response_content"]
+            self.last_formula_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
         else:
-            pdf_id = self.send_pdf(file_path)
-            content = self.get_processed_pdf(pdf_id)
+            result = cached_model_result(
+                cache_dir=getattr(flowsettings, "KH_FORMULA_OCR_CACHE_DIR", None)
+                or getattr(flowsettings, "KH_VISION_CACHE_DIR", None),
+                namespace="formula_ocr",
+                payload={
+                    "file_hash": file_hash(file_path),
+                    "processed_file_format": self.processed_file_format,
+                },
+                model_name=f"mathpix:{self.processed_file_format}",
+                compute=lambda: self.get_processed_pdf(self.send_pdf(file_path)),
+            )
+            content = str(result.value or "")
+            self.last_formula_ocr_cache_stats = result.stats
 
         if self.should_clean_pdf:
             content = self.clean_pdf(content)
@@ -275,14 +299,25 @@ class MathpixPDFReader(BaseReader):
         **load_kwargs: Any,
     ) -> Generator[Document, None, None]:
         """Lazy load data from file path."""
-        file_path = Path(file) if isinstance(file, str) else file
+        file_path = self._coerce_file_path(file)
 
         if "response_content" in load_kwargs:
             content = load_kwargs["response_content"]
+            self.last_formula_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
         else:
-            pdf_id = self.send_pdf(file_path)
-            print(f"PDF ID: {pdf_id}")
-            content = self.get_processed_pdf(pdf_id)
+            result = cached_model_result(
+                cache_dir=getattr(flowsettings, "KH_FORMULA_OCR_CACHE_DIR", None)
+                or getattr(flowsettings, "KH_VISION_CACHE_DIR", None),
+                namespace="formula_ocr",
+                payload={
+                    "file_hash": file_hash(file_path),
+                    "processed_file_format": self.processed_file_format,
+                },
+                model_name=f"mathpix:{self.processed_file_format}",
+                compute=lambda: self.get_processed_pdf(self.send_pdf(file_path)),
+            )
+            content = str(result.value or "")
+            self.last_formula_ocr_cache_stats = result.stats
 
         if self.should_clean_pdf:
             content = self.clean_pdf(content)

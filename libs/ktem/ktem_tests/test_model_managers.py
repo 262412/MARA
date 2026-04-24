@@ -61,6 +61,10 @@ def _exercise_manager_lazy_load(
         if expect_default_alias
         else {"broken", "working"}
     )
+    assert manager.get_default_name() == "broken"
+    settings = manager.settings()
+    assert settings["choices"] == ["broken", "working"]
+    assert settings["value"] == "broken"
     assert "working" in manager
     assert "broken" in manager
 
@@ -114,3 +118,11 @@ def test_reranking_manager_deserializes_on_access(monkeypatch):
         module.RerankingManager,
         expect_default_alias=False,
     )
+
+
+def test_reranking_manager_lists_local_multilingual_vendor():
+    import ktem.rerankings.manager as module
+
+    manager = _build_manager(module, module.RerankingManager)
+
+    assert "LocalMultilingualReranking" in manager.vendors()

@@ -29,6 +29,7 @@ class ChatPanel(BasePage):
     def __init__(self, app):
         self._app = app
         self.text_input = None
+        self.qa_scope = None
         self.on_building_ui()
 
     def on_building_ui(self):
@@ -95,10 +96,23 @@ class ChatPanel(BasePage):
     def render_input(self):
         """Render the chat input box with multimodal support."""
         with gr.Row(elem_id="chat-input-row"):
+            self.qa_scope = gr.Radio(
+                choices=[
+                    ("Page", "page"),
+                    ("Document", "document"),
+                    ("Multi-doc", "multi_document"),
+                ],
+                value="page",
+                container=False,
+                show_label=False,
+                scale=4,
+                min_width=220,
+                elem_id="qa-scope",
+            )
             # Multimodal input supporting text and file uploads
             self.text_input = gr.MultimodalTextbox(
                 interactive=True,
-                scale=20,
+                scale=16,
                 file_count="multiple",
                 placeholder=(
                     "Type a message, search the @web, or tag a file with @filename"

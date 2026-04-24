@@ -13,6 +13,7 @@ from ktem.index.file._listing import (
     format_conversation_scope,
     normalize_selected_ids_from_payload,
 )
+from ktem.index.file.pipelines import IndexDocumentPipeline
 from ktem.index.file.ui import FileIndexPage
 
 
@@ -400,3 +401,11 @@ def test_file_index_page_event_wrapper_methods_delegate_to_registrars(monkeypatc
             },
         ),
     ]
+
+
+def test_file_loader_settings_expose_mathpix_formula_ocr_mode():
+    reader_mode = IndexDocumentPipeline.get_user_settings()["reader_mode"]
+
+    values = [value for _label, value in reader_mode["choices"]]
+
+    assert "mathpix" in values

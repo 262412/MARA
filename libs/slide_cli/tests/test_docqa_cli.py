@@ -408,6 +408,7 @@ def test_docqa_ask_help_lists_shared_parameters():
         "--file",
         "--active-file",
         "--page",
+        "--scope",
         "--selected-text",
         "--graph-context-file",
         "--reasoning",

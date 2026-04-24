@@ -36,6 +36,7 @@ from theflow.utils.modules import import_dotted_string
 from kotaemon.base import BaseComponent, Document, Node, Param, RetrievedDocument
 from kotaemon.embeddings import BaseEmbeddings
 from kotaemon.indices import VectorIndexing, VectorRetrieval
+from kotaemon.indices.indexing_status import IndexingStatusTracker, refresh_vector_store
 from kotaemon.indices.ingests.files import (
     KH_DEFAULT_FILE_EXTRACTORS,
     adobe_reader,
@@ -44,8 +45,10 @@ from kotaemon.indices.ingests.files import (
     unstructured,
     web_reader,
 )
+from kotaemon.indices.parse_cache import CachedLoadResult, load_data_with_parse_cache
 from kotaemon.indices.rankings import BaseReranking, LLMReranking, LLMTrulensScoring
 from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
+from kotaemon.loaders import MathpixPDFReader
 
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
 
@@ -344,6 +347,9 @@ class IndexPipeline(BaseComponent):
     private: bool = False
     run_embedding_in_thread: bool = False
     embedding: BaseEmbeddings
+    last_indexing_status: dict | None = None
+    parse_cache_dir: str | None = getattr(settings, "KH_PARSE_CACHE_DIR", None)
+    last_parse_cache_stats: dict[str, int] = {"hits": 0, "misses": 0, "writes": 0}
 
     @Node.auto(depends_on=["Source", "Index", "embedding"])
     def vector_indexing(self) -> VectorIndexing:
@@ -351,12 +357,49 @@ class IndexPipeline(BaseComponent):
             vector_store=self.VS, doc_store=self.DS, embedding=self.embedding
         )
 
+    def load_docs_with_parse_cache(
+        self, file_path: str | Path, extra_info: dict
+    ) -> CachedLoadResult:
+        if not isinstance(file_path, Path):
+            docs = self.loader.load_data(file_path, extra_info=extra_info)
+            self.last_parse_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
+            return CachedLoadResult(
+                documents=list(docs),
+                stats=self.last_parse_cache_stats,
+                cache_hit=False,
+            )
+
+        result = load_data_with_parse_cache(
+            self.loader,
+            file_path,
+            extra_info=extra_info,
+            cache_dir=self.parse_cache_dir,
+            reader_policy=self._parse_reader_policy(),
+        )
+        self.last_parse_cache_stats = result.stats
+        return result
+
+    def _parse_reader_policy(self) -> dict:
+        return {
+            "loader": (
+                f"{self.loader.__class__.__module__}."
+                f"{self.loader.__class__.__name__}"
+            ),
+        }
+
     def handle_docs(self, docs, file_id, file_name) -> Generator[Document, None, int]:
         s_time = time.time()
+        status_tracker = IndexingStatusTracker()
         text_docs = []
         non_text_docs = []
         thumbnail_docs = []
 
+        def update_status():
+            self.last_indexing_status = status_tracker.to_dict()
+
+        status_tracker.start("parse", count=len(docs))
+        status_tracker.finish("parse", count=len(docs))
+        update_status()
         for doc in docs:
             doc_type = doc.metadata.get("type", "text")
             if doc_type == "text":
@@ -383,11 +426,15 @@ class IndexPipeline(BaseComponent):
                 chunk.metadata["thumbnail_doc_id"] = page_label_to_thumbnail[page_label]
 
         to_index_chunks = all_chunks + non_text_docs + thumbnail_docs
+        status_tracker.start("chunk", count=len(to_index_chunks))
+        status_tracker.finish("chunk", count=len(to_index_chunks))
+        update_status()
 
         # add to doc store
         chunks = []
         n_chunks = 0
         chunk_size = self.chunk_batch_size * 4
+        status_tracker.start("docstore_write", count=len(to_index_chunks))
         for start_idx in range(0, len(to_index_chunks), chunk_size):
             chunks = to_index_chunks[start_idx : start_idx + chunk_size]
             self.handle_chunks_docstore(chunks, file_id)
@@ -396,20 +443,45 @@ class IndexPipeline(BaseComponent):
                 f" => [{file_name}] Processed {n_chunks} chunks",
                 channel="debug",
             )
+        status_tracker.finish("docstore_write", count=n_chunks)
+        update_status()
 
         def insert_chunks_to_vectorstore():
             chunks = []
             n_chunks = 0
             chunk_size = self.chunk_batch_size
+            status_tracker.start("embed", count=len(to_index_chunks))
+            status_tracker.start("vector_write", count=len(to_index_chunks))
             for start_idx in range(0, len(to_index_chunks), chunk_size):
                 chunks = to_index_chunks[start_idx : start_idx + chunk_size]
                 self.handle_chunks_vectorstore(chunks, file_id)
                 n_chunks += len(chunks)
                 if self.VS:
+                    cache_stats = self.vector_indexing.last_embedding_cache_stats
+                    cache_msg = (
+                        " cache "
+                        f"hits={cache_stats.get('hits', 0)}, "
+                        f"misses={cache_stats.get('misses', 0)}, "
+                        f"writes={cache_stats.get('writes', 0)}"
+                    )
                     yield Document(
-                        f" => [{file_name}] Created embedding for {n_chunks} chunks",
+                        f" => [{file_name}] Created embedding for {n_chunks} chunks;"
+                        f"{cache_msg}",
                         channel="debug",
                     )
+            status_tracker.finish("embed", count=n_chunks)
+            status_tracker.finish("vector_write", count=n_chunks)
+            update_status()
+            status_tracker.start("refresh", count=1 if self.VS else 0)
+            refresh_method = refresh_vector_store(self.VS) if self.VS else None
+            status_tracker.finish("refresh", count=1 if self.VS else 0)
+            update_status()
+            if self.VS:
+                yield Document(
+                    f" => [{file_name}] Refreshed vector index"
+                    f" ({refresh_method or 'no-op'})",
+                    channel="debug",
+                )
 
         # run vector indexing in thread if specified
         if self.run_embedding_in_thread:
@@ -646,8 +718,17 @@ class IndexPipeline(BaseComponent):
         extra_info["collection_name"] = self.collection_name
 
         yield Document(f" => Converting {file_name} to text", channel="debug")
-        docs = self.loader.load_data(file_path, extra_info=extra_info)
-        yield Document(f" => Converted {file_name} to text", channel="debug")
+        parse_result = self.load_docs_with_parse_cache(file_path, extra_info)
+        docs = parse_result.documents
+        cache_status = "hit" if parse_result.cache_hit else "miss"
+        yield Document(
+            f" => Converted {file_name} to text"
+            f" (parse cache {cache_status}; "
+            f"hits={parse_result.stats.get('hits', 0)}, "
+            f"misses={parse_result.stats.get('misses', 0)}, "
+            f"writes={parse_result.stats.get('writes', 0)})",
+            channel="debug",
+        )
         yield from self.handle_docs(docs, file_id, file_name)
 
         self.finish(file_id, file_path)
@@ -682,6 +763,8 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
             readers[".pdf"] = azure_reader
         elif self.reader_mode == "docling":
             readers[".pdf"] = docling_reader
+        elif self.reader_mode == "mathpix":
+            readers[".pdf"] = MathpixPDFReader()
 
         dev_readers, _, _ = dev_settings()
         readers.update(dev_readers)
@@ -702,6 +785,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
                         "azure-di",
                     ),
                     ("Docling (figure+table extraction)", "docling"),
+                    ("Mathpix API (formula OCR)", "mathpix"),
                 ],
                 "component": "dropdown",
             },
@@ -759,7 +843,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
                 chunk_size=chunk_size or 1024,
                 chunk_overlap=chunk_overlap or 256,
                 separator="\n\n",
-                backup_separators=["\n", ".", "\u200B"],
+                backup_separators=["\n", ".", "\u200b"],
             ),
             run_embedding_in_thread=self.run_embedding_in_thread,
             Source=self.Source,
