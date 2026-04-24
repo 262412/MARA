@@ -28,6 +28,15 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--route", default="all")
     run_parser.add_argument("--cost-profile")
     run_parser.add_argument(
+        "--cache-mode",
+        default="warm",
+        choices=["warm", "cold", "bypass"],
+        help=(
+            "warm reuses benchmark caches, cold starts from an empty run-local "
+            "cache, bypass disables benchmark parse cache."
+        ),
+    )
+    run_parser.add_argument(
         "--output-dir",
         default="benchmark/artifacts",
         help="Directory for benchmark outputs",
@@ -121,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
         scope=normalize_scope(args.scope),
         route=args.route,
         cost_profile=args.cost_profile,
+        cache_mode=args.cache_mode,
         reader_mode=args.reader_mode,
         retrieval_mode=args.retrieval_mode,
         chunk_size=args.chunk_size,

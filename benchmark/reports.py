@@ -27,6 +27,14 @@ def _derive_retrieval_traces(predictions: list[dict[str, Any]]) -> list[dict[str
             trace["retrieved_hits"] = prediction["retrieved_hits"]
         if "retrieval_trace" in prediction:
             trace["retrieval_trace"] = prediction["retrieval_trace"]
+        if "timings" in prediction:
+            trace["timings"] = prediction["timings"]
+        if "performance" in prediction:
+            trace["performance"] = prediction["performance"]
+        if "cache" in prediction:
+            trace["cache"] = prediction["cache"]
+        if "cost" in prediction:
+            trace["cost"] = prediction["cost"]
         traces.append(trace)
     return traces
 
@@ -86,8 +94,13 @@ def write_reports(
         f"- Span Recall: `{summary.get('avg_span_recall')}`",
         f"- Formula Match: `{summary.get('avg_formula_match')}`",
         f"- Numeric Match: `{summary.get('avg_numeric_match')}`",
+        f"- Avg Parse Seconds: `{summary.get('avg_parse_seconds')}`",
+        f"- Avg Index Seconds: `{summary.get('avg_index_seconds')}`",
         f"- Avg Retrieval Seconds: `{summary.get('avg_retrieval_seconds')}`",
         f"- Avg Generation Seconds: `{summary.get('avg_generation_seconds')}`",
+        f"- Cache Mode: `{summary.get('cache_mode')}`",
+        f"- Parse Cache Hit Rate: `{summary.get('parse_cache_hit_rate')}`",
+        f"- Embedding Cache Hit Rate: `{summary.get('embedding_cache_hit_rate')}`",
     ]
     for label, key in (("Engine", "engine"), ("Route", "route"), ("Scope", "scope")):
         value = _first_present(summary, config, key=key)

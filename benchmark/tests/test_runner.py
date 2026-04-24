@@ -39,11 +39,23 @@ class _FakeEngine:
                 "retrieved_elements": ["hit-1"],
             },
             "timings": {
-                "parse_seconds": 0.0,
-                "index_seconds": 0.0,
+                "parse_seconds": 0.1,
+                "index_seconds": 0.2,
                 "retrieval_seconds": 0.01,
                 "generation_seconds": 0.02,
             },
+            "performance": {
+                "parse_seconds": 0.1,
+                "index_seconds": 0.2,
+                "retrieval_seconds": 0.01,
+                "generation_seconds": 0.02,
+                "total_seconds": 0.33,
+            },
+            "cache": {
+                "parse": {"hits": 1, "misses": 0, "writes": 0},
+                "embedding": {"hits": 2, "misses": 1, "writes": 1},
+            },
+            "cost": {"estimated_usd": 0.0},
             "context_preview": "context",
         }
 
@@ -112,7 +124,17 @@ def test_run_benchmark_expands_manifest_route_matrix(monkeypatch, tmp_path):
         "direct_paste",
     ]
     assert report["summary"]["num_routes"] == 2
+    assert report["summary"]["avg_parse_seconds"] == 0.1
+    assert report["summary"]["avg_index_seconds"] == 0.2
+    assert report["summary"]["parse_cache_hits"] == 2
+    assert report["summary"]["parse_cache_misses"] == 0
+    assert report["summary"]["parse_cache_hit_rate"] == 1.0
+    assert report["summary"]["embedding_cache_hits"] == 4
+    assert report["summary"]["embedding_cache_misses"] == 2
+    assert report["summary"]["embedding_cache_hit_rate"] == 0.6667
     assert len(report["retrieval_traces"]) == 2
+    assert report["retrieval_traces"][0]["performance"]["parse_seconds"] == 0.1
+    assert report["retrieval_traces"][0]["cache"]["parse"]["hits"] == 1
 
 
 def test_run_benchmark_filters_manifest_route_by_id(monkeypatch, tmp_path):

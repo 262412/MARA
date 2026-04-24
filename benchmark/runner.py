@@ -29,9 +29,7 @@ def _score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
         "em": exact_match_score(predicted_answer, gold_answers),
         "f1": token_f1_score(predicted_answer, gold_answers),
         "anls": anls_score(predicted_answer, gold_answers),
-        "formula_match": formula_normalized_match_score(
-            predicted_answer, gold_answers
-        ),
+        "formula_match": formula_normalized_match_score(predicted_answer, gold_answers),
         "numeric_match": numeric_tolerance_score(predicted_answer, gold_answers),
         "page_hit": page_hit_score(
             prediction["predicted_pages"], prediction["gold_pages"]
@@ -52,6 +50,68 @@ def _score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
     return metrics
 
 
+_TIMING_KEYS = (
+    "parse_seconds",
+    "index_seconds",
+    "retrieval_seconds",
+    "generation_seconds",
+)
+_CACHE_KEYS = ("hits", "misses", "writes")
+
+
+def _normalize_timings(timings: dict[str, Any] | None) -> dict[str, float]:
+    source = timings or {}
+    return {key: round(float(source.get(key, 0.0) or 0.0), 4) for key in _TIMING_KEYS}
+
+
+def _normalize_cache_stats(stats: dict[str, Any] | None) -> dict[str, int]:
+    source = stats or {}
+    return {key: int(source.get(key, 0) or 0) for key in _CACHE_KEYS}
+
+
+def _normalize_cache(cache: dict[str, Any] | None) -> dict[str, dict[str, int]]:
+    source = cache or {}
+    return {
+        "parse": _normalize_cache_stats(source.get("parse")),
+        "embedding": _normalize_cache_stats(source.get("embedding")),
+    }
+
+
+def _performance_from_timings(timings: dict[str, float]) -> dict[str, Any]:
+    return {
+        **timings,
+        "total_seconds": round(sum(timings.values()), 4),
+    }
+
+
+def _normalize_operational_fields(prediction: dict[str, Any]) -> None:
+    timings = _normalize_timings(prediction.get("timings"))
+    prediction["timings"] = timings
+
+    performance = dict(prediction.get("performance") or {})
+    for key, value in _performance_from_timings(timings).items():
+        performance.setdefault(key, value)
+    prediction["performance"] = performance
+    prediction["cache"] = _normalize_cache(prediction.get("cache"))
+    prediction["cost"] = dict(prediction.get("cost") or {})
+
+
+def _sum_cache_stat(predictions: list[dict[str, Any]], section: str, stat: str) -> int:
+    return sum(
+        int(((prediction.get("cache") or {}).get(section) or {}).get(stat, 0) or 0)
+        for prediction in predictions
+    )
+
+
+def _cache_hit_rate(predictions: list[dict[str, Any]], section: str) -> float | None:
+    hits = _sum_cache_stat(predictions, section, "hits")
+    misses = _sum_cache_stat(predictions, section, "misses")
+    total = hits + misses
+    if total == 0:
+        return None
+    return round_metric(hits / total)
+
+
 _CONFIG_FIELD_NAMES = {field.name for field in fields(BenchmarkConfig)}
 
 
@@ -65,7 +125,9 @@ def _route_id(route: dict[str, Any], fallback: str) -> str:
     )
 
 
-def _active_routes(bundle: ManifestBundle, config: BenchmarkConfig) -> list[dict[str, Any]]:
+def _active_routes(
+    bundle: ManifestBundle, config: BenchmarkConfig
+) -> list[dict[str, Any]]:
     routes = list(bundle.routes or [])
     if not routes:
         return [
@@ -140,6 +202,9 @@ def _engine_result_to_prediction(
                 float(result.timings.get("generation_seconds", 0.0)), 4
             ),
         },
+        "performance": result.performance,
+        "cache": result.cache,
+        "cost": result.cost,
         "context_preview": result.context_preview,
         "document_path": str(document.path),
     }
@@ -184,6 +249,18 @@ def _error_prediction(
             "retrieval_seconds": 0.0,
             "generation_seconds": 0.0,
         },
+        "performance": {
+            "parse_seconds": 0.0,
+            "index_seconds": 0.0,
+            "retrieval_seconds": 0.0,
+            "generation_seconds": 0.0,
+            "total_seconds": 0.0,
+        },
+        "cache": {
+            "parse": {"hits": 0, "misses": 0, "writes": 0},
+            "embedding": {"hits": 0, "misses": 0, "writes": 0},
+        },
+        "cost": {},
         "context_preview": "",
         "engine": route_config.engine,
         "route": route_config.route,
@@ -222,6 +299,7 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
             prediction["engine"] = route_config.engine
             prediction["route"] = route_config.route
             prediction["scope"] = route_config.scope or example.scope
+            _normalize_operational_fields(prediction)
             prediction["modality"] = example.modality
             prediction["answer_type"] = example.answer_type
             prediction["gold_evidence"] = example.gold_evidence
@@ -272,6 +350,21 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         "avg_generation_seconds": round_metric(
             safe_mean([item["timings"]["generation_seconds"] for item in predictions])
         ),
+        "avg_parse_seconds": round_metric(
+            safe_mean([item["timings"]["parse_seconds"] for item in predictions])
+        ),
+        "avg_index_seconds": round_metric(
+            safe_mean([item["timings"]["index_seconds"] for item in predictions])
+        ),
+        "cache_mode": config.cache_mode,
+        "parse_cache_hits": _sum_cache_stat(predictions, "parse", "hits"),
+        "parse_cache_misses": _sum_cache_stat(predictions, "parse", "misses"),
+        "parse_cache_writes": _sum_cache_stat(predictions, "parse", "writes"),
+        "parse_cache_hit_rate": _cache_hit_rate(predictions, "parse"),
+        "embedding_cache_hits": _sum_cache_stat(predictions, "embedding", "hits"),
+        "embedding_cache_misses": _sum_cache_stat(predictions, "embedding", "misses"),
+        "embedding_cache_writes": _sum_cache_stat(predictions, "embedding", "writes"),
+        "embedding_cache_hit_rate": _cache_hit_rate(predictions, "embedding"),
     }
 
     return {
@@ -293,6 +386,11 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                 "document_ids": item["document_ids"],
                 "retrieved_hits": item.get("retrieved_hits", []),
                 "retrieval_trace": item.get("retrieval_trace", []),
+                "timings": item.get("timings", {}),
+                "performance": item.get("performance", {}),
+                "cache": item.get("cache", {}),
+                "cost": item.get("cost", {}),
+                "error": item.get("error"),
             }
             for item in predictions
         ],

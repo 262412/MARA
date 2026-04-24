@@ -19,6 +19,9 @@ class EngineRunResult:
     predicted_element_ids: list[str] = field(default_factory=list)
     retrieved_hits: list[dict[str, Any]] = field(default_factory=list)
     timings: dict[str, float] = field(default_factory=dict)
+    performance: dict[str, Any] = field(default_factory=dict)
+    cache: dict[str, Any] = field(default_factory=dict)
+    cost: dict[str, Any] = field(default_factory=dict)
     context_preview: str = ""
     retrieval_trace: list[dict[str, Any]] = field(default_factory=list)
 
@@ -32,8 +35,7 @@ class BenchmarkEngine(Protocol):
         *,
         example: Any,
         documents: list[Any],
-    ) -> EngineRunResult:
-        ...
+    ) -> EngineRunResult: ...
 
 
 class BaseBenchmarkEngine:
@@ -238,6 +240,11 @@ class DirectPasteEngine(BaseBenchmarkEngine):
         answer, _evidence, generation_seconds = self._generate_from_context(
             example, context
         )
+        timings = {
+            "parse_seconds": sum(item.parse_seconds for item in parsed_indexes),
+            "index_seconds": sum(item.index_seconds for item in parsed_indexes),
+            "generation_seconds": generation_seconds,
+        }
         return EngineRunResult(
             answer=answer,
             predicted_pages=_all_context_pages(parsed_indexes),
@@ -254,11 +261,9 @@ class DirectPasteEngine(BaseBenchmarkEngine):
                 }
                 for parsed_index in parsed_indexes
             ],
-            timings={
-                "parse_seconds": sum(item.parse_seconds for item in parsed_indexes),
-                "index_seconds": sum(item.index_seconds for item in parsed_indexes),
-                "generation_seconds": generation_seconds,
-            },
+            timings=timings,
+            performance=_performance_from_timings(timings, parsed_indexes),
+            cache=_parsed_indexes_cache(parsed_indexes),
             context_preview=context,
             retrieval_trace=[
                 {
@@ -288,7 +293,11 @@ class OraclePageEngine(BaseBenchmarkEngine):
                         if text:
                             selected_texts.append(text)
 
-        context = "\n\n".join(selected_texts) if selected_texts else _join_document_texts(documents)
+        context = (
+            "\n\n".join(selected_texts)
+            if selected_texts
+            else _join_document_texts(documents)
+        )
         return self._truncate_context(context)
 
     def run(
@@ -307,6 +316,11 @@ class OraclePageEngine(BaseBenchmarkEngine):
         answer, _evidence, generation_seconds = self._generate_from_context(
             example, context
         )
+        timings = {
+            "parse_seconds": sum(item.parse_seconds for item in parsed_indexes),
+            "index_seconds": sum(item.index_seconds for item in parsed_indexes),
+            "generation_seconds": generation_seconds,
+        }
         return EngineRunResult(
             answer=answer,
             predicted_pages=sorted(_evidence_page_set(example), key=str),
@@ -325,11 +339,9 @@ class OraclePageEngine(BaseBenchmarkEngine):
                 for parsed_index in parsed_indexes
                 for page in sorted(wanted_pages, key=str)
             ],
-            timings={
-                "parse_seconds": sum(item.parse_seconds for item in parsed_indexes),
-                "index_seconds": sum(item.index_seconds for item in parsed_indexes),
-                "generation_seconds": generation_seconds,
-            },
+            timings=timings,
+            performance=_performance_from_timings(timings, parsed_indexes),
+            cache=_parsed_indexes_cache(parsed_indexes),
             context_preview=context,
             retrieval_trace=[
                 {
@@ -408,13 +420,60 @@ def _prediction_to_result(prediction: dict[str, Any]) -> EngineRunResult:
         predicted_element_ids=list(prediction.get("predicted_element_ids") or []),
         retrieved_hits=list(prediction.get("retrieved_hits") or []),
         timings=dict(prediction.get("timings") or {}),
+        performance=dict(prediction.get("performance") or {}),
+        cache=dict(prediction.get("cache") or {}),
+        cost=dict(prediction.get("cost") or {}),
         context_preview=str(prediction.get("context_preview") or ""),
         retrieval_trace=list(prediction.get("retrieval_trace") or []),
     )
 
 
+def _empty_cache_stats() -> dict[str, int]:
+    return {"hits": 0, "misses": 0, "writes": 0}
+
+
+def _sum_cache_stats(stats: list[dict[str, int]]) -> dict[str, int]:
+    total = _empty_cache_stats()
+    for item in stats:
+        for key in total:
+            total[key] += int(item.get(key, 0) or 0)
+    return total
+
+
+def _parsed_indexes_cache(parsed_indexes: list[Any]) -> dict[str, dict[str, int]]:
+    return {
+        "parse": _sum_cache_stats(
+            [
+                dict(getattr(item, "parse_cache_stats", {}) or {})
+                for item in parsed_indexes
+            ]
+        ),
+        "embedding": _sum_cache_stats(
+            [
+                dict(getattr(item, "embedding_cache_stats", {}) or {})
+                for item in parsed_indexes
+            ]
+        ),
+    }
+
+
+def _performance_from_timings(
+    timings: dict[str, float], parsed_indexes: list[Any]
+) -> dict[str, Any]:
+    return {
+        **timings,
+        "total_seconds": round(sum(float(value) for value in timings.values()), 4),
+        "num_documents": len(parsed_indexes),
+        "num_chunks": sum(
+            len(getattr(item, "index_documents", []) or []) for item in parsed_indexes
+        ),
+    }
+
+
 def _parsed_indexes_to_context(parsed_indexes: list[Any], wanted_pages=None) -> str:
-    wanted_pages = {str(page).strip() for page in wanted_pages or [] if str(page).strip()}
+    wanted_pages = {
+        str(page).strip() for page in wanted_pages or [] if str(page).strip()
+    }
     chunks: list[str] = []
     for parsed_index in parsed_indexes:
         for document in parsed_index.parsed_documents:
@@ -451,7 +510,9 @@ def _all_context_pages(parsed_indexes: list[Any]) -> list[str]:
 
 
 def _evidence_page_set(example: Any) -> set[str]:
-    pages = {_normalize_page(page) for page in _field_value(example, "evidence_pages", [])}
+    pages = {
+        _normalize_page(page) for page in _field_value(example, "evidence_pages", [])
+    }
     for evidence in _field_value(example, "gold_evidence", []):
         page = _field_value(evidence, "page", None)
         if page is None:
