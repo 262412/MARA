@@ -107,11 +107,13 @@ def test_vector_indexing_refreshes_after_batch_and_records_status(tmp_path):
     pipeline(text=[Document(text="alpha", id_="a"), Document(text="beta", id_="b")])
 
     assert vector_store.refresh_calls == 1
-    assert pipeline.last_indexing_status["status"] == "completed"
-    assert pipeline.last_indexing_status["stages"]["embed"]["count"] == 2
-    assert pipeline.last_indexing_status["stages"]["vector_write"]["count"] == 2
-    assert pipeline.last_indexing_status["stages"]["docstore_write"]["count"] == 2
-    assert pipeline.last_indexing_status["stages"]["refresh"]["count"] == 1
+    indexing_status = pipeline.last_indexing_status
+    assert indexing_status is not None
+    assert indexing_status["status"] == "completed"
+    assert indexing_status["stages"]["embed"]["count"] == 2
+    assert indexing_status["stages"]["vector_write"]["count"] == 2
+    assert indexing_status["stages"]["docstore_write"]["count"] == 2
+    assert indexing_status["stages"]["refresh"]["count"] == 1
 
 
 def test_vector_retrieval_exposes_trace_for_multi_document_results():
@@ -148,7 +150,9 @@ def test_vector_retrieval_exposes_trace_for_multi_document_results():
     result = retrieval(text="compare figures", do_extend=True)
 
     assert [doc.doc_id for doc in result] == ["alpha", "beta"]
-    assert retrieval.last_trace["query"] == "compare figures"
-    assert retrieval.last_trace["elements"][0]["source_id"] == "source-a"
-    assert retrieval.last_trace["elements"][1]["element_type"] == "figure"
-    assert retrieval.last_trace["multi_document_summary"]["total_files"] == 2
+    trace = retrieval.last_trace
+    assert trace is not None
+    assert trace["query"] == "compare figures"
+    assert trace["elements"][0]["source_id"] == "source-a"
+    assert trace["elements"][1]["element_type"] == "figure"
+    assert trace["multi_document_summary"]["total_files"] == 2

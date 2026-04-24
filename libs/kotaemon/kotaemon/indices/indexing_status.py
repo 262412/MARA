@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any
 
-
 DEFAULT_INDEXING_STAGES = (
     "parse",
     "chunk",

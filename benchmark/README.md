@@ -61,14 +61,31 @@ For route-matrix evaluation, use schema version 2:
   "schema_version": 2,
   "dataset_name": "docqa_acceptance",
   "documents": [
-    {"document_id": "paper", "path": "paper.pdf", "format_type": "pdf", "modality": "mixed"}
+    {
+      "document_id": "paper",
+      "path": "paper.pdf",
+      "format_type": "pdf",
+      "modality": "mixed"
+    }
   ],
   "routes": [
-    {"route_id": "direct_paste_document", "engine": "direct_paste", "scope": "document"},
-    {"route_id": "oracle_page", "engine": "oracle_page", "scope": "page"},
-    {"route_id": "docqa_page", "engine": "docqa_runtime", "scope": "page"},
-    {"route_id": "docqa_document", "engine": "docqa_runtime", "scope": "document"},
-    {"route_id": "docqa_multi_document", "engine": "docqa_runtime", "scope": "multi_document"}
+    {
+      "route_id": "direct_paste_document",
+      "engine": "direct_paste",
+      "scope": "document"
+    },
+    { "route_id": "oracle_page", "engine": "oracle_page", "scope": "page" },
+    { "route_id": "docqa_page", "engine": "docqa_runtime", "scope": "page" },
+    {
+      "route_id": "docqa_document",
+      "engine": "docqa_runtime",
+      "scope": "document"
+    },
+    {
+      "route_id": "docqa_multi_document",
+      "engine": "docqa_runtime",
+      "scope": "multi_document"
+    }
   ],
   "examples": [
     {
@@ -79,9 +96,11 @@ For route-matrix evaluation, use schema version 2:
       "answer_type": "descriptive",
       "question": "What structure is shown in Figure 1?",
       "answers": ["..."],
-      "gold_evidence": [{"page": 1, "element_id": "figure-1", "citation": "paper#page:1"}],
+      "gold_evidence": [
+        { "page": 1, "element_id": "figure-1", "citation": "paper#page:1" }
+      ],
       "expected_formats": ["markdown_table"],
-      "expected_guardrails": {"allow_abstention": false}
+      "expected_guardrails": { "allow_abstention": false }
     }
   ]
 }

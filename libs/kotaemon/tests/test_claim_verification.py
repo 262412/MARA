@@ -39,7 +39,9 @@ def test_verify_supported_claim_with_text_overlap():
     assert result.has_unsupported_claims is False
     assert result.claims[0].status == ClaimSupportStatus.SUPPORTED
     assert result.claims[0].score > 0
-    assert "revenue increased" in result.claims[0].best_match.evidence_text.lower()
+    best_match = result.claims[0].best_match
+    assert best_match is not None
+    assert "revenue increased" in best_match.evidence_text.lower()
 
 
 def test_verify_claim_with_number_and_formula_overlap():

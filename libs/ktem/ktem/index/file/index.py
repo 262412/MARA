@@ -58,7 +58,9 @@ class FileIndex(BaseIndex):
             except KeyError as exc:
                 raise AttributeError(name) from exc
 
-        raise AttributeError(f"{type(self).__name__!s} object has no attribute {name!r}")
+        raise AttributeError(
+            f"{type(self).__name__!s} object has no attribute {name!r}"
+        )
 
     def _setup_resources(self):
         if "_resources" in self.__dict__:

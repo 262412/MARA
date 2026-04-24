@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
 import re
 import time
-from typing import Any, Protocol, runtime_checkable
+from dataclasses import dataclass, field, replace
+from pathlib import Path
+from typing import Any, Protocol, cast, runtime_checkable
 
 from kotaemon.base import RetrievedDocument
 
-from .schemas import BenchmarkDocument
+from .schemas import BenchmarkConfig, BenchmarkDocument
 from .system import KotaemonTextRAGSystem
 
 
@@ -38,7 +39,8 @@ class BenchmarkEngine(Protocol):
         *,
         example: Any,
         documents: list[Any],
-    ) -> EngineRunResult: ...
+    ) -> EngineRunResult:
+        ...
 
 
 class BaseBenchmarkEngine:
@@ -69,17 +71,44 @@ class BaseBenchmarkEngine:
 
     def _get_system(self) -> KotaemonTextRAGSystem:
         if self._system is None:
-            self._system = KotaemonTextRAGSystem(self.config)
+            self._system = KotaemonTextRAGSystem(self._benchmark_config())
         return self._system
 
     def _get_text_system(self) -> KotaemonTextRAGSystem:
         if self._text_system is None:
-            if isinstance(self.config, dict):
-                config = {**self.config, "retrieval_mode": "text"}
-            else:
-                config = replace(self.config, retrieval_mode="text")
+            config = self._benchmark_config(retrieval_mode="text")
             self._text_system = KotaemonTextRAGSystem(config)
         return self._text_system
+
+    def _benchmark_config(self, **overrides: Any) -> BenchmarkConfig:
+        if isinstance(self.config, BenchmarkConfig):
+            return replace(self.config, **overrides) if overrides else self.config
+        if isinstance(self.config, dict):
+            payload: dict[str, Any] = {
+                "suite_name": "benchmark",
+                "output_dir": Path("benchmark/artifacts"),
+                "engine": self.name,
+                "scope": "document",
+                "route": "all",
+                "cost_profile": None,
+                "cache_mode": "warm",
+                "reader_mode": "default",
+                "retrieval_mode": "hybrid",
+                "chunk_size": 1024,
+                "chunk_overlap": 256,
+                "top_k": 5,
+                "max_context_length": 16000,
+                "embedding_name": None,
+                "reranker_name": None,
+                "llm_name": None,
+                "use_generation": True,
+                "prompt_template": None,
+            }
+            payload.update(self.config)
+            payload.update(overrides)
+            payload["output_dir"] = Path(payload["output_dir"])
+            return BenchmarkConfig(**payload)
+        return cast(BenchmarkConfig, self.config)
 
     def _generate_from_context(
         self, example: Any, context: str
@@ -124,7 +153,8 @@ class KotaemonTextRAGEngine(BaseBenchmarkEngine):
         example: Any,
         documents: list[BenchmarkDocument],
     ) -> EngineRunResult:
-        return LegacyTextRAGEngine.run(self, example=example, documents=documents)
+        prediction = self._get_system().run_example_documents(documents, example)
+        return _prediction_to_result(prediction)
 
 
 class DocQARuntimeEngine(BaseBenchmarkEngine):
@@ -133,10 +163,10 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
 
     def __init__(self, config: Any) -> None:
         super().__init__(config)
-        self._runtime = None
+        self._runtime: Any | None = None
         self._indexed_paths: set[str] = set()
 
-    def _get_runtime(self):
+    def _get_runtime(self) -> Any:
         if self._runtime is None:
             from ktem.docqa import DocQARuntime
 
@@ -243,9 +273,12 @@ class DirectPasteEngine(BaseBenchmarkEngine):
         system = self._get_text_system()
         parsed_indexes = [system._build_index(document) for document in documents]
         context = self._truncate_context(_parsed_indexes_to_context(parsed_indexes))
-        answer, _evidence, generation_seconds, evidence_metadata = (
-            self._generate_from_context(example, context)
-        )
+        (
+            answer,
+            _evidence,
+            generation_seconds,
+            evidence_metadata,
+        ) = self._generate_from_context(example, context)
         timings = {
             "parse_seconds": sum(item.parse_seconds for item in parsed_indexes),
             "index_seconds": sum(item.index_seconds for item in parsed_indexes),
@@ -253,7 +286,7 @@ class DirectPasteEngine(BaseBenchmarkEngine):
         }
         return EngineRunResult(
             answer=answer,
-            predicted_pages=_all_context_pages(parsed_indexes),
+            predicted_pages=cast(list[int | str], _all_context_pages(parsed_indexes)),
             predicted_sources=[
                 f"{parsed_index.document.document_id}#full"
                 for parsed_index in parsed_indexes
@@ -320,9 +353,12 @@ class OraclePageEngine(BaseBenchmarkEngine):
             _parsed_indexes_to_context(parsed_indexes, wanted_pages=wanted_pages)
             or _parsed_indexes_to_context(parsed_indexes)
         )
-        answer, _evidence, generation_seconds, evidence_metadata = (
-            self._generate_from_context(example, context)
-        )
+        (
+            answer,
+            _evidence,
+            generation_seconds,
+            evidence_metadata,
+        ) = self._generate_from_context(example, context)
         timings = {
             "parse_seconds": sum(item.parse_seconds for item in parsed_indexes),
             "index_seconds": sum(item.index_seconds for item in parsed_indexes),

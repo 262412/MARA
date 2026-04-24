@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import fields, replace
 from typing import Any
 
+from .engines import EngineRunResult, get_engine
 from .manifest import load_manifest
 from .metrics import (
     anls_score,
@@ -23,8 +24,6 @@ from .metrics import (
     token_f1_score,
 )
 from .schemas import BenchmarkConfig, ManifestBundle
-from .engines import EngineRunResult, get_engine
-
 
 _TABLE_FORMATS = {"markdown_table", "markdown-table", "table"}
 _LATEX_FORMATS = {"latex", "math", "formula", "math_formula", "math-formula"}

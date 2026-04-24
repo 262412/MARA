@@ -37,6 +37,7 @@ class MathpixPDFReader(BaseReader):
             should_clean_pdf: a flag to clean the PDF file. Default is False.
             **kwargs: additional keyword arguments.
         """
+        super().__init__()
         self.mathpix_api_key = get_from_dict_or_env(
             kwargs, "mathpix_api_key", "MATHPIX_API_KEY", default="empty"
         )
@@ -47,7 +48,14 @@ class MathpixPDFReader(BaseReader):
         self.max_wait_time_seconds = max_wait_time_seconds
         self.should_clean_pdf = should_clean_pdf
         self.last_formula_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
-        super().__init__()
+
+    @staticmethod
+    def _coerce_file_path(file: Union[str, List[str], Path]) -> Path:
+        if isinstance(file, list):
+            if not file:
+                raise ValueError("file list cannot be empty")
+            return Path(file[0])
+        return Path(file)
 
     @property
     def _mathpix_headers(self) -> Dict[str, str]:
@@ -210,7 +218,7 @@ class MathpixPDFReader(BaseReader):
         **load_kwargs: Any,
     ) -> List[Document]:
         """Load data from file path."""
-        file_path = Path(file) if isinstance(file, str) else file
+        file_path = self._coerce_file_path(file)
 
         if "response_content" in load_kwargs:
             content = load_kwargs["response_content"]
@@ -291,7 +299,7 @@ class MathpixPDFReader(BaseReader):
         **load_kwargs: Any,
     ) -> Generator[Document, None, None]:
         """Lazy load data from file path."""
-        file_path = Path(file) if isinstance(file, str) else file
+        file_path = self._coerce_file_path(file)
 
         if "response_content" in load_kwargs:
             content = load_kwargs["response_content"]

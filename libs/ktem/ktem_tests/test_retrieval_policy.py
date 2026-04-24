@@ -1,6 +1,6 @@
-from kotaemon.base import RetrievedDocument
-
 from ktem.reasoning.retrieval_policy import apply_retrieval_policy
+
+from kotaemon.base import RetrievedDocument
 
 
 def _doc(

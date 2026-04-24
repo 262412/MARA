@@ -1,6 +1,7 @@
 import hashlib
 import uuid
 from types import SimpleNamespace
+from typing import Any, cast
 
 import ktem.docqa.runtime as runtime_module
 from ktem.db.models import User, engine
@@ -48,10 +49,12 @@ def _make_scope_runtime(monkeypatch):
 
     monkeypatch.setattr(runtime_module, "reasonings", {"simple": _FakeReasoning})
 
-    runtime = object.__new__(DocQARuntime)
+    runtime = cast(Any, object.__new__(DocQARuntime))
     runtime._resolve_user_id = lambda user_id=None: "user-1"
     runtime.load_settings = lambda user_id=None: {"reasoning.use": "simple"}
-    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[_FakeIndex()]))
+    runtime._app = SimpleNamespace(
+        index_manager=SimpleNamespace(indices=[_FakeIndex()])
+    )
     runtime._web_search_cls = None
     runtime.file_index = _FakeFileIndex()
     runtime._preview = _FakePreview()

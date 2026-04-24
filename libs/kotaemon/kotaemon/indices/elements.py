@@ -89,8 +89,10 @@ def document_to_element(document: Any) -> DocumentElement:
         metadata, "table", "table_origin", "table_json", "text_as_html"
     )
     raw_pdf_text = _string_or_none(metadata.get("raw_pdf_text"))
-    normalized_formula = text if element_type == "formula" else _string_or_none(
-        metadata.get("normalized_formula")
+    normalized_formula = (
+        text
+        if element_type == "formula"
+        else _string_or_none(metadata.get("normalized_formula"))
     )
     formula_image = _metadata_first(metadata, "formula_image", "image_origin")
     layout_blocks = metadata.get("layout_blocks")
@@ -155,7 +157,9 @@ def annotate_document_with_element_metadata(document: Any) -> Any:
     if element.neighbor_element_ids:
         metadata.pop("neighbors", None)
         metadata.pop("neighbor_element_ids", None)
-        _set_metadata_json(metadata, "neighbor_element_ids", element.neighbor_element_ids)
+        _set_metadata_json(
+            metadata, "neighbor_element_ids", element.neighbor_element_ids
+        )
     _set_metadata_if_present(metadata, "caption", element.caption)
     _set_metadata_if_present(metadata, "ocr_text", element.ocr_text)
     _set_metadata_if_present(metadata, "raw_pdf_text", element.raw_pdf_text)
@@ -367,5 +371,7 @@ def _stable_element_id(
         "text": text,
         "bbox": bbox,
     }
-    payload = json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    payload = json.dumps(
+        identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()

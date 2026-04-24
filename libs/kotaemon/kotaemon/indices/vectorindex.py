@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 import threading
-from time import perf_counter
 import uuid
 from pathlib import Path
+from time import perf_counter
 from typing import Optional, Sequence, cast
 
 from theflow.settings import settings as flowsettings
@@ -115,13 +115,13 @@ class VectorIndexing(BaseIndexing):
 
     def _embed_documents(self, docs: list[Document]) -> list[DocumentWithEmbedding]:
         if not self.embedding_cache_dir:
-            embeddings = self.embedding(docs)
+            embedded_docs = self.embedding(docs)
             self.last_embedding_cache_stats = {
                 "hits": 0,
                 "misses": len(docs),
                 "writes": 0,
             }
-            return cast(list[DocumentWithEmbedding], embeddings)
+            return cast(list[DocumentWithEmbedding], embedded_docs)
 
         cache = JsonDiskCache(self.embedding_cache_dir, "embedding")
         model_key = self._embedding_model_key()
@@ -299,7 +299,9 @@ class VectorRetrieval(BaseRetrieval):
 
                 current_best_rank = best_ranks.get(doc_id)
                 current_doc = fused_docs.get(doc_id)
-                keep_doc = current_doc is None or rank < current_best_rank
+                keep_doc = current_doc is None or (
+                    current_best_rank is not None and rank < current_best_rank
+                )
                 if (
                     current_doc is not None
                     and rank == current_best_rank

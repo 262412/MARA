@@ -1,5 +1,5 @@
-from kotaemon.base import Document
 import kotaemon.indices.qa.citation_qa as citation_qa_module
+from kotaemon.base import Document
 from kotaemon.indices.qa.citation import CiteEvidence
 from kotaemon.indices.qa.citation_qa import AnswerWithContextPipeline
 

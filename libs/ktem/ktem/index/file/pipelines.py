@@ -37,7 +37,6 @@ from kotaemon.base import BaseComponent, Document, Node, Param, RetrievedDocumen
 from kotaemon.embeddings import BaseEmbeddings
 from kotaemon.indices import VectorIndexing, VectorRetrieval
 from kotaemon.indices.indexing_status import IndexingStatusTracker, refresh_vector_store
-from kotaemon.indices.parse_cache import CachedLoadResult, load_data_with_parse_cache
 from kotaemon.indices.ingests.files import (
     KH_DEFAULT_FILE_EXTRACTORS,
     adobe_reader,
@@ -46,6 +45,7 @@ from kotaemon.indices.ingests.files import (
     unstructured,
     web_reader,
 )
+from kotaemon.indices.parse_cache import CachedLoadResult, load_data_with_parse_cache
 from kotaemon.indices.rankings import BaseReranking, LLMReranking, LLMTrulensScoring
 from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
 from kotaemon.loaders import MathpixPDFReader

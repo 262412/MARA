@@ -1,5 +1,4 @@
 import json
-from types import SimpleNamespace
 
 from benchmark.runner import run_benchmark
 from benchmark.schemas import BenchmarkConfig
@@ -98,7 +97,7 @@ def test_run_benchmark_expands_manifest_route_matrix(monkeypatch, tmp_path):
         ),
         encoding="utf-8",
     )
-    calls = []
+    calls: list[tuple[str, str, str]] = []
 
     def fake_get_engine(engine_name, config):
         return _FakeEngine(engine_name, config, calls)
@@ -161,7 +160,7 @@ def test_run_benchmark_filters_manifest_route_by_id(monkeypatch, tmp_path):
         ),
         encoding="utf-8",
     )
-    calls = []
+    calls: list[tuple[str, str, str]] = []
 
     monkeypatch.setattr(
         "benchmark.runner.get_engine",

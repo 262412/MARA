@@ -6,10 +6,10 @@ from kotaemon.indices.multimodal import (
     NoOpVLMCaptionPlugin,
     recommend_multimodal_plugins,
 )
-from kotaemon.indices.retrieval_quality import QueryRoute
+from kotaemon.indices.retrieval_quality import QueryModality, QueryRoute
 
 
-def _route(modality: str) -> QueryRoute:
+def _route(modality: QueryModality) -> QueryRoute:
     return QueryRoute(
         query="query",
         modality=modality,

@@ -7,8 +7,8 @@ from openai.types.create_embedding_response import CreateEmbeddingResponse
 
 from kotaemon.base import Document, RetrievedDocument
 from kotaemon.embeddings import AzureOpenAIEmbeddings
-from kotaemon.indices.rankings import BaseReranking
 from kotaemon.indices import VectorIndexing, VectorRetrieval
+from kotaemon.indices.rankings import BaseReranking
 from kotaemon.storages import ChromaVectorStore, InMemoryDocumentStore
 
 with open(Path(__file__).parent / "resources" / "embedding_openai.json") as f:

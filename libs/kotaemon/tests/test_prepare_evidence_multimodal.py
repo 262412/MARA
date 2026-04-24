@@ -1,4 +1,4 @@
-from kotaemon.base import Document, RetrievedDocument
+from kotaemon.base import RetrievedDocument
 from kotaemon.indices.qa.format_context import (
     EVIDENCE_MODE_FIGURE,
     EVIDENCE_MODE_TABLE,

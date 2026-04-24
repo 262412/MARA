@@ -221,7 +221,9 @@ def _build_evidence_items(
     evidence_texts: Sequence[str],
     source_documents: Sequence[Any],
 ) -> list[tuple[str, dict[str, Any]]]:
-    items = [(str(text), {}) for text in evidence_texts if str(text).strip()]
+    items: list[tuple[str, dict[str, Any]]] = [
+        (str(text), {}) for text in evidence_texts if str(text).strip()
+    ]
     for doc in source_documents:
         text = getattr(doc, "text", None) or getattr(doc, "content", None) or str(doc)
         metadata = dict(getattr(doc, "metadata", None) or {})

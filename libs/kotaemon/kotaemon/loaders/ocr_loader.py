@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 from uuid import uuid4
 
 import requests
@@ -57,8 +57,10 @@ class OCRReader(BaseReader):
     def __init__(self, endpoint: Optional[str] = None, use_ocr=True):
         """Init the OCR reader with OCR endpoint (FullOCR pipeline)"""
         super().__init__()
-        self.ocr_endpoint = endpoint or os.getenv(
-            "OCR_READER_ENDPOINT", DEFAULT_OCR_ENDPOINT
+        self.ocr_endpoint: str = (
+            endpoint
+            or os.getenv("OCR_READER_ENDPOINT", DEFAULT_OCR_ENDPOINT)
+            or DEFAULT_OCR_ENDPOINT
         )
         self.use_ocr = use_ocr
         self.last_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
@@ -81,11 +83,11 @@ class OCRReader(BaseReader):
         # call the API from FullOCR endpoint
         if "response_content" in kwargs:
             # overriding response content if specified
-            ocr_results = kwargs["response_content"]
+            ocr_results = cast(list[dict[str, Any]], kwargs["response_content"])
             self.last_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
         else:
             # call original API
-            result = cached_model_result(
+            cache_result = cached_model_result(
                 cache_dir=getattr(flowsettings, "KH_OCR_CACHE_DIR", None)
                 or getattr(flowsettings, "KH_VISION_CACHE_DIR", None),
                 namespace="ocr",
@@ -100,8 +102,8 @@ class OCRReader(BaseReader):
                     table_only=not self.use_ocr,
                 ).json()["result"],
             )
-            ocr_results = result.value
-            self.last_ocr_cache_stats = result.stats
+            ocr_results = cast(list[dict[str, Any]], cache_result.value)
+            self.last_ocr_cache_stats = cache_result.stats
 
         debug_path = kwargs.pop("debug_path", None)
         artifact_path = kwargs.pop("artifact_path", None)
@@ -168,8 +170,10 @@ class ImageReader(BaseReader):
     def __init__(self, endpoint: Optional[str] = None):
         """Init the OCR reader with OCR endpoint (FullOCR pipeline)"""
         super().__init__()
-        self.ocr_endpoint = endpoint or os.getenv(
-            "OCR_READER_ENDPOINT", DEFAULT_OCR_ENDPOINT
+        self.ocr_endpoint: str = (
+            endpoint
+            or os.getenv("OCR_READER_ENDPOINT", DEFAULT_OCR_ENDPOINT)
+            or DEFAULT_OCR_ENDPOINT
         )
         self.last_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
 
@@ -191,11 +195,11 @@ class ImageReader(BaseReader):
         # call the API from FullOCR endpoint
         if "response_content" in kwargs:
             # overriding response content if specified
-            ocr_results = kwargs["response_content"]
+            ocr_results = cast(list[dict[str, Any]], kwargs["response_content"])
             self.last_ocr_cache_stats = {"hits": 0, "misses": 0, "writes": 0}
         else:
             # call original API
-            result = cached_model_result(
+            cache_result = cached_model_result(
                 cache_dir=getattr(flowsettings, "KH_OCR_CACHE_DIR", None)
                 or getattr(flowsettings, "KH_VISION_CACHE_DIR", None),
                 namespace="ocr",
@@ -208,17 +212,17 @@ class ImageReader(BaseReader):
                     url=self.ocr_endpoint, file_path=file_path, table_only=False
                 ).json()["result"],
             )
-            ocr_results = result.value
-            self.last_ocr_cache_stats = result.stats
+            ocr_results = cast(list[dict[str, Any]], cache_result.value)
+            self.last_ocr_cache_stats = cache_result.stats
 
         extra_info = extra_info or {}
-        result = []
+        documents: list[Document] = []
         for ocr_result in ocr_results:
-            result.append(
+            documents.append(
                 Document(
                     content=ocr_result["csv_string"],
                     metadata=extra_info,
                 )
             )
 
-        return result
+        return documents

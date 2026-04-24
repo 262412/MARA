@@ -419,10 +419,12 @@ class AnswerWithContextPipeline(BaseComponent):
                     question=question,
                     answer_text=output,
                 ):
+                    if claim_verification is None:
+                        claim_verification = {}
                     claim_verification["rewrite_skipped"] = True
-                    claim_verification["rewrite_skip_reason"] = (
-                        "multimodal_or_formula_evidence"
-                    )
+                    claim_verification[
+                        "rewrite_skip_reason"
+                    ] = "multimodal_or_formula_evidence"
                 else:
                     output = verified_output
                     yield Document(channel="chat", content=None)

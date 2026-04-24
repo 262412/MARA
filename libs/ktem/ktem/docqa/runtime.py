@@ -599,8 +599,7 @@ class DocQARuntime:
         selected_text = str(request.selected_text or "").strip()
         if (
             qa_scope == "page"
-            and
-            (not selected_text)
+            and (not selected_text)
             and normalized_page_number is not None
             and active_file_id
             and active_file_name

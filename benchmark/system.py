@@ -14,7 +14,6 @@ from ktem.rerankings.manager import reranking_models_manager
 from kotaemon.base import Document, RetrievedDocument
 from kotaemon.embeddings import FastEmbedEmbeddings
 from kotaemon.indices import VectorIndexing, VectorRetrieval
-from kotaemon.indices.parse_cache import load_data_with_parse_cache
 from kotaemon.indices.ingests.files import (
     KH_DEFAULT_FILE_EXTRACTORS,
     adobe_reader,
@@ -22,6 +21,7 @@ from kotaemon.indices.ingests.files import (
     docling_reader,
     unstructured,
 )
+from kotaemon.indices.parse_cache import load_data_with_parse_cache
 from kotaemon.indices.qa.citation_qa import DEFAULT_QA_TEXT_PROMPT
 from kotaemon.indices.qa.format_context import PrepareEvidencePipeline
 from kotaemon.indices.splitters import TokenSplitter

@@ -2,7 +2,6 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-
 QueryModality = Literal["text", "table", "figure", "formula", "mixed"]
 
 

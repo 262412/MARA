@@ -1,0 +1,125 @@
+{
+  "dataset_name": "format_robustness",
+  "examples": [
+    {
+      "dataset_name": "format_robustness",
+      "example_id": "docx_1_0",
+      "document_id": "docx_1",
+      "document_path": "D:\\PythonProject\\kotaemon\\data\\test_documents\\docx\\1_项目需求文档.docx",
+      "format_type": "docx",
+      "question": "项目的主要目标是什么？",
+      "answers": [
+        "开发一个高效的文档处理系统"
+      ],
+      "metadata": {
+        "source_metadata_file": "D:\\PythonProject\\kotaemon\\data\\test_documents\\docx\\1_metadata.json",
+        "file_name": "项目需求文档.docx"
+      }
+    },
+    {
+      "dataset_name": "format_robustness",
+      "example_id": "docx_1_1",
+      "document_id": "docx_1",
+      "document_path": "D:\\PythonProject\\kotaemon\\data\\test_documents\\docx\\1_项目需求文档.docx",
+      "format_type": "docx",
+      "question": "目标用户是谁？",
+      "answers": [
+        "需要处理大量文档的企业和个人用户"
+      ],
+      "metadata": {
+        "source_metadata_file": "D:\\PythonProject\\kotaemon\\data\\test_documents\\docx\\1_metadata.json",
+        "file_name": "项目需求文档.docx"
+      }
+    },
+    {
+      "dataset_name": "format_robustness",
+      "example_id": "pdf_1_0",
+      "document_id": "pdf_1",
+      "document_path": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pdf\\1_人工智能简介.txt",
+      "format_type": "pdf",
+      "question": "什么是人工智能？",
+      "answers": [
+        "人工智能是模拟人类智能的技术"
+      ],
+      "metadata": {
+        "source_metadata_file": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pdf\\1_metadata.json",
+        "file_name": "人工智能简介.pdf"
+      }
+    },
+    {
+      "dataset_name": "format_robustness",
+      "example_id": "pdf_1_1",
+      "document_id": "pdf_1",
+      "document_path": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pdf\\1_人工智能简介.txt",
+      "format_type": "pdf",
+      "question": "机器学习有哪些应用？",
+      "answers": [
+        "图像识别、自然语言处理、推荐系统等"
+      ],
+      "metadata": {
+        "source_metadata_file": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pdf\\1_metadata.json",
+        "file_name": "人工智能简介.pdf"
+      }
+    },
+    {
+      "dataset_name": "format_robustness",
+      "example_id": "pdf_2_0",
+      "document_id": "pdf_2",
+      "document_path": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pdf\\2_气候变化报告.txt",
+      "format_type": "pdf",
+      "question": "全球变暖的主要原因是什么？",
+      "answers": [
+        "温室气体排放，特别是二氧化碳"
+      ],
+      "metadata": {
+        "source_metadata_file": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pdf\\2_metadata.json",
+        "file_name": "气候变化报告.pdf"
+      }
+    },
+    {
+      "dataset_name": "format_robustness",
+      "example_id": "pdf_2_1",
+      "document_id": "pdf_2",
+      "document_path": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pdf\\2_气候变化报告.txt",
+      "format_type": "pdf",
+      "question": "气候变化的影响有哪些？",
+      "answers": [
+        "海平面上升、极端天气、生态系统破坏"
+      ],
+      "metadata": {
+        "source_metadata_file": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pdf\\2_metadata.json",
+        "file_name": "气候变化报告.pdf"
+      }
+    },
+    {
+      "dataset_name": "format_robustness",
+      "example_id": "pptx_1_0",
+      "document_id": "pptx_1",
+      "document_path": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pptx\\1_产品介绍.pptx",
+      "format_type": "pptx",
+      "question": "产品的核心功能是什么？",
+      "answers": [
+        "智能文档解析和问答"
+      ],
+      "metadata": {
+        "source_metadata_file": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pptx\\1_metadata.json",
+        "file_name": "产品介绍.pptx"
+      }
+    },
+    {
+      "dataset_name": "format_robustness",
+      "example_id": "pptx_1_1",
+      "document_id": "pptx_1",
+      "document_path": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pptx\\1_产品介绍.pptx",
+      "format_type": "pptx",
+      "question": "产品优势有哪些？",
+      "answers": [
+        "快速、准确、支持多种格式"
+      ],
+      "metadata": {
+        "source_metadata_file": "D:\\PythonProject\\kotaemon\\data\\test_documents\\pptx\\1_metadata.json",
+        "file_name": "产品介绍.pptx"
+      }
+    }
+  ]
+}

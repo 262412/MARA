@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from kotaemon.base import Document
 
@@ -43,7 +43,11 @@ def load_data_with_parse_cache(
     key = build_parse_cache_key(loader, file_path, reader_policy=reader_policy)
     found, cached_payload = cache.get_with_status(key)
     if found:
-        documents = documents_from_cache_payload(cached_payload)
+        payload = cast(
+            list[dict[str, Any]],
+            cached_payload if isinstance(cached_payload, list) else [],
+        )
+        documents = documents_from_cache_payload(payload)
         return CachedLoadResult(
             documents=_apply_extra_info(documents, extra_info),
             stats=cache.stats.to_dict(),

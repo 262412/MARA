@@ -103,7 +103,9 @@ def test_element_id_is_stable_for_same_source_page_type_text_and_bbox():
         },
     )
 
-    assert document_to_element(first).element_id == document_to_element(second).element_id
+    assert (
+        document_to_element(first).element_id == document_to_element(second).element_id
+    )
 
 
 def test_document_to_element_normalizes_structure_aliases():

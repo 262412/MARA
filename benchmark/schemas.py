@@ -4,7 +4,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 STANDARD_BENCHMARK_ENGINES = (
     "legacy_text_rag",
     "docqa_runtime",

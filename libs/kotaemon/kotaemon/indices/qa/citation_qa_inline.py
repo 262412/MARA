@@ -322,10 +322,12 @@ class AnswerWithInlineCitation(AnswerWithContextPipeline):
                     question=question,
                     answer_text=answer_text,
                 ):
+                    if claim_verification is None:
+                        claim_verification = {}
                     claim_verification["rewrite_skipped"] = True
-                    claim_verification["rewrite_skip_reason"] = (
-                        "multimodal_or_formula_evidence"
-                    )
+                    claim_verification[
+                        "rewrite_skip_reason"
+                    ] = "multimodal_or_formula_evidence"
                 else:
                     final_answer = verified_answer
                     answer_text = verified_answer

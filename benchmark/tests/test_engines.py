@@ -1,6 +1,7 @@
-import pytest
 import sys
 import types
+
+import pytest
 
 from benchmark.engines import (
     DirectPasteEngine,

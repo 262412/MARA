@@ -7,9 +7,9 @@ from llama_index.readers.file import PDFReader
 from theflow.settings import settings as flowsettings
 
 from kotaemon.base import BaseComponent, Document, Param
+from kotaemon.indices.elements import annotate_document_with_element_metadata
 from kotaemon.indices.extractors import BaseDocParser
 from kotaemon.indices.extractors.doc_parsers import ElementDocParser
-from kotaemon.indices.elements import annotate_document_with_element_metadata
 from kotaemon.indices.formulas import extract_formula_elements
 from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
 from kotaemon.loaders import (
@@ -37,9 +37,9 @@ azure_reader = AzureAIDocumentIntelligenceLoader(
     cache_dir=getattr(flowsettings, "KH_MARKDOWN_OUTPUT_DIR", None),
 )
 docling_reader = DoclingReader()
-adobe_reader.vlm_endpoint = azure_reader.vlm_endpoint = docling_reader.vlm_endpoint = (
-    getattr(flowsettings, "KH_VLM_ENDPOINT", "")
-)
+adobe_reader.vlm_endpoint = (
+    azure_reader.vlm_endpoint
+) = docling_reader.vlm_endpoint = getattr(flowsettings, "KH_VLM_ENDPOINT", "")
 
 
 KH_DEFAULT_FILE_EXTRACTORS: dict[str, BaseReader] = {

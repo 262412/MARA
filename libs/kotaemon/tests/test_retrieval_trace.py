@@ -1,8 +1,5 @@
 from kotaemon.base import Document, RetrievedDocument
-from kotaemon.indices.retrieval_trace import (
-    RetrievalCostStats,
-    RetrievalTrace,
-)
+from kotaemon.indices.retrieval_trace import RetrievalCostStats, RetrievalTrace
 
 
 def _retrieved(

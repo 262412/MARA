@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-
 _HASH_CHUNK_SIZE = 1024 * 1024
 
 __all__ = [
