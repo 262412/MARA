@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "ktem"
 THEME_FILE = PACKAGE_ROOT / "assets" / "theme.py"
 CSS_FILE = PACKAGE_ROOT / "assets" / "css" / "main.css"
@@ -150,7 +149,9 @@ def test_management_pages_use_consistent_scrollable_frames():
         for block in css.split("}")
         if "#indices-tab" in block or "#resources-tab" in block
     ]
-    assert all("white-space: nowrap !important;" not in block for block in management_blocks)
+    assert all(
+        "white-space: nowrap !important;" not in block for block in management_blocks
+    )
     assert "white-space: pre;" not in css
     assert "#indices-tab .cm-content" not in css
     assert "#resources-tab .cm-content" not in css
@@ -171,10 +172,10 @@ def test_management_tables_keep_row_separation_and_detail_scrolling():
         "max-height: var(--management-detail-max-height) !important;",
         "overscroll-behavior: contain;",
         "#resources-tab .management-detail-panel .gradio-markdown",
-        "#indices-tab [role=\"grid\"].table-wrap tbody tr:nth-child(even) td",
-        "#resources-tab [role=\"grid\"].table-wrap tbody tr:nth-child(even) td",
+        '#indices-tab [role="grid"].table-wrap tbody tr:nth-child(even) td',
+        '#resources-tab [role="grid"].table-wrap tbody tr:nth-child(even) td',
         "#file_list_view tbody tr:nth-child(even) td",
-        "#resources-tab [role=\"grid\"].table-wrap tbody tr:hover td",
+        '#resources-tab [role="grid"].table-wrap tbody tr:hover td',
         "border-bottom: 1px solid var(--app-border) !important;",
         "border-right: 1px solid var(--app-border) !important;",
     ]
@@ -192,10 +193,10 @@ def test_rounded_controls_keep_text_inside_their_backgrounds():
     expected_tokens = [
         "/* Rounded controls: keep labels away from curved borders and prevent spillover. */",
         ".gradio-container .tab-nav button",
-        ".gradio-container [role=\"tab\"]",
+        '.gradio-container [role="tab"]',
         ".gradio-container .gr-button",
         ".gradio-container .block-label",
-        ".gradio-container [data-testid=\"block-label\"]",
+        '.gradio-container [data-testid="block-label"]',
         "#info-expand-button.no-background",
         "#rename-conv-button.no-background",
         "#new-conv-button.no-background",
@@ -210,7 +211,7 @@ def test_rounded_controls_keep_text_inside_their_backgrounds():
         ".gradio-container .tab-nav button",
         "padding: 8px 16px !important;",
         "padding: 0 !important;",
-        "#indices-tab [role=\"grid\"].table-wrap button",
+        '#indices-tab [role="grid"].table-wrap button',
         "padding: 6px 8px !important;",
     ]
 
@@ -235,14 +236,14 @@ def test_pdf_pager_keeps_page_number_background_uniform():
         "background: transparent !important;",
         "border-color: transparent !important;",
         "box-shadow: none !important;",
-        "#pdf-page-number input[type=\"number\"]",
+        '#pdf-page-number input[type="number"]',
         "background: var(--app-surface) !important;",
         "border: 1px solid var(--app-border) !important;",
         "padding: 0 12px !important;",
         "appearance: textfield;",
         "-moz-appearance: textfield;",
-        "#pdf-page-number input[type=\"number\"]::-webkit-outer-spin-button",
-        "#pdf-page-number input[type=\"number\"]::-webkit-inner-spin-button",
+        '#pdf-page-number input[type="number"]::-webkit-outer-spin-button',
+        '#pdf-page-number input[type="number"]::-webkit-inner-spin-button',
         "-webkit-appearance: none;",
     ]
 
@@ -255,10 +256,10 @@ def test_radio_selected_state_is_visually_prominent_across_pages():
 
     expected_tokens = [
         "/* Radio choices: make selected pills obvious across chat, files, settings, and setup pages. */",
-        ".gradio-container label:has(input[type=\"radio\"])",
+        '.gradio-container label:has(input[type="radio"])',
         ".gradio-container .gradio-radio label",
-        ".gradio-container label.selected:has(input[type=\"radio\"])",
-        ".gradio-container label:has(input[type=\"radio\"][aria-checked=\"true\"])",
+        '.gradio-container label.selected:has(input[type="radio"])',
+        '.gradio-container label:has(input[type="radio"][aria-checked="true"])',
         ".gradio-container .gradio-radio label.selected",
         "background: linear-gradient(",
         "border-color: var(--app-accent) !important;",
@@ -292,7 +293,7 @@ def test_chat_radio_scope_does_not_shift_or_show_separator_before_input():
         "box-shadow: none !important;",
         "#qa-scope .wrap {\n  display: flex !important;",
         "flex-wrap: wrap !important;",
-        "#qa-scope label:has(input[type=\"radio\"])",
+        '#qa-scope label:has(input[type="radio"])',
         "flex: 0 0 auto !important;",
         "min-height: 34px;",
         "padding: 7px 12px !important;",
@@ -301,9 +302,9 @@ def test_chat_radio_scope_does_not_shift_or_show_separator_before_input():
         "border-radius: 0 !important;",
         "#chat-input > label,\n#chat-input label,\n#chat-input > div,",
         "overflow: visible !important;",
-        "#chat-input [aria-label=\"Upload files\"],",
-        "#chat-input [data-testid=\"file-upload\"],",
-        "#chat-input [data-testid=\"upload-button\"]",
+        '#chat-input [aria-label="Upload files"],',
+        '#chat-input [data-testid="file-upload"],',
+        '#chat-input [data-testid="upload-button"]',
         "position: absolute !important;",
         "display: none !important;",
         "opacity: 0 !important;",
@@ -314,7 +315,7 @@ def test_chat_radio_scope_does_not_shift_or_show_separator_before_input():
         "border: 0 !important;",
         "border-radius: 0 !important;",
         "overflow: visible !important;",
-        "#chat-input .scroll-hide,\n#chat-input [data-testid=\"textbox\"]",
+        '#chat-input .scroll-hide,\n#chat-input [data-testid="textbox"]',
         "height: 42px !important;",
         "padding: 10px 14px !important;",
         "border: 1px solid var(--app-border) !important;",
@@ -342,7 +343,7 @@ def test_dark_light_toggle_is_visible_and_wired():
     assert "toggle-dark-button" not in control
     assert "toggle-dark-button" not in css
     assert "toggle-dark-button" not in main_js
-    assert "darkToggle.style.display = \"none\"" not in main_js
+    assert 'darkToggle.style.display = "none"' not in main_js
     assert "ktem-ui-mode" in main_js
     assert "ktem-theme-toggle" in main_js
     assert "ensureGlobalThemeToggle" in main_js

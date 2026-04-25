@@ -43,10 +43,11 @@ def _page_label_sort_key(doc):
     if page_label in (None, ""):
         return (2, float("inf"), "")
 
+    page_label_text = str(page_label)
     try:
-        return (0, float(page_label), str(page_label))
+        return (0, float(page_label_text), page_label_text)
     except (TypeError, ValueError):
-        return (1, float("inf"), str(page_label))
+        return (1, float("inf"), page_label_text)
 
 
 chat_input_focus_js = """

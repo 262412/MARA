@@ -952,7 +952,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
         n_files = len(file_paths)
         for idx, file_path in enumerate(file_paths):
             if self.is_url(file_path):
-                file_name = file_path
+                file_name = str(file_path)
             else:
                 file_path = Path(file_path)
                 file_name = file_path.name
@@ -977,9 +977,10 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
                             ),
                             channel="debug",
                         )
-                    parse_file_path, layout_metadata = (
-                        self.prepare_layout_preserving_parse_file(file_path)
-                    )
+                    (
+                        parse_file_path,
+                        layout_metadata,
+                    ) = self.prepare_layout_preserving_parse_file(file_path)
                     if layout_metadata and layout_metadata.get("converted_from_office"):
                         yield Document(
                             content=(

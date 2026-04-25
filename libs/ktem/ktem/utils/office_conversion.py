@@ -101,7 +101,9 @@ class OfficeToPdfConversionService:
         self._logger = logger or logging.getLogger(__name__)
         self._cache: dict[str, str] = {}
 
-    def convert_to_pdf(self, file_path: str | Path, file_name: str | None = None) -> str:
+    def convert_to_pdf(
+        self, file_path: str | Path, file_name: str | None = None
+    ) -> str:
         source_path = Path(file_path)
         if not source_path.is_file():
             return ""
