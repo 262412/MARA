@@ -1,7 +1,0 @@
-# BEGIN KOTAEMON PLATFORM BLOCK
-
-[profiles.kotaemon]
-default_skill = "kotaemon-cli-operations"
-notes = "Use modelcli providers and dry-run checks before real calls."
-
-# END KOTAEMON PLATFORM BLOCK

@@ -155,6 +155,12 @@ def _load_docqa_group() -> click.Group:
     return docqa
 
 
+def _load_kotaemon_group(group_name: str) -> click.Group:
+    from kotaemon import cli as kotaemon_cli
+
+    return getattr(kotaemon_cli, group_name)
+
+
 class _LazyDocQAGroup(click.Group):
     def __init__(self) -> None:
         super().__init__(
@@ -179,9 +185,24 @@ class _LazyDocQAGroup(click.Group):
         return self._group().invoke(ctx)
 
 
+class _LazyKotaemonGroup(click.Group):
+    def __init__(self, *, name: str, source_group: str, help_text: str) -> None:
+        self.source_group = source_group
+        super().__init__(name=name, help=help_text, short_help=help_text)
+
+    def _group(self) -> click.Group:
+        return _load_kotaemon_group(self.source_group)
+
+    def list_commands(self, ctx):
+        return self._group().list_commands(ctx)
+
+    def get_command(self, ctx, cmd_name):
+        return self._group().get_command(ctx, cmd_name)
+
+
 @click.group()
 def main():
-    """Slide CLI with two product lines.
+    """Unified slide product CLI.
 
     Top-level agent line:
     - `slide doctor` validates the agent runtime and provider setup.
@@ -197,10 +218,39 @@ def main():
 
     Specialist DocQA line:
     - `slide docqa ...` owns the document QA workflow and focused DocQA skills.
+
+    Support lines:
+    - `slide app ...` owns packaged app setup, doctor, and launch workflows.
+    - `slide model ...` owns shared model routing workflows.
+    - `slide platform ...` owns Codex and Claude Code support asset workflows.
     """
 
 
 main.add_command(_LazyDocQAGroup(), "docqa")
+main.add_command(
+    _LazyKotaemonGroup(
+        name="app",
+        source_group="app",
+        help_text="Packaged app setup, doctor, and launch workflows.",
+    ),
+    "app",
+)
+main.add_command(
+    _LazyKotaemonGroup(
+        name="model",
+        source_group="modelcli",
+        help_text="Shared model routing workflows.",
+    ),
+    "model",
+)
+main.add_command(
+    _LazyKotaemonGroup(
+        name="platform",
+        source_group="platform",
+        help_text="Install and validate Codex and Claude Code support assets.",
+    ),
+    "platform",
+)
 
 
 @main.command("doctor")

@@ -59,6 +59,10 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
             "table",
             "--cost-profile",
             "low-cost",
+            "--llm-name",
+            "Deepseek",
+            "--docqa-citation-mode",
+            "off",
         ]
     )
 
@@ -67,3 +71,5 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     assert captured["config"].scope == "multi_document"
     assert captured["config"].route == "table"
     assert captured["config"].cost_profile == "low-cost"
+    assert captured["config"].llm_name == "Deepseek"
+    assert captured["config"].docqa_citation_mode == "off"

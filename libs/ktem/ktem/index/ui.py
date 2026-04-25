@@ -49,7 +49,10 @@ class IndexManagement(BasePage):
                 column_widths=[10, 30, 60],
             )
 
-            with gr.Column(visible=False) as self._selected_panel:
+            with gr.Column(
+                visible=False,
+                elem_classes=["management-detail-panel"],
+            ) as self._selected_panel:
                 self.selected_index_id = gr.Number(value=-1, visible=False)
                 with gr.Row():
                     with gr.Column():

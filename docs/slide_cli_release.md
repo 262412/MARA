@@ -1,16 +1,19 @@
 # slide-cli Release Flow
 
-`slide-cli` is published as its own Python package and shares the monorepo tag line with `ktem`, `kotaemon`, and `kotaemon-app`.
+`slide-cli` is published as its own Python package and shares the monorepo tag line with its internal runtime packages.
 
 Phase 3 keeps the user-facing shell intentionally split into two lines:
 
-- `slide ...` is the high-permission product shell for runtime commands and workspace operations, including `slide apply`, `slide export-pdf`, and `slide review`
+- `slide ...` is the high-permission product shell for runtime commands, app lifecycle, model routing, platform support, and workspace operations, including `slide apply`, `slide export-pdf`, and `slide review`
 - `slide docqa ...` is the specialist document-QA line
 
 The canonical top-level commands currently are:
 
 - `slide apply`
+- `slide app`
 - `slide export-pdf`
+- `slide model`
+- `slide platform`
 - `slide review`
 - `slide doctor`
 - `slide run`
@@ -62,12 +65,12 @@ python scripts/publish_packages.py release --repository testpypi --skip-upload
 
 ## Packaged Runtime Workflow
 
-The recommended slide user path is to install the packaged runtime with the slide extra, initialize it once, and then discover the canonical two-line shell from that environment:
+The recommended slide user path is to install the public CLI package, initialize the packaged runtime once, and then discover the canonical two-line shell from that environment:
 
 ```shell
-pip install "kotaemon-app[slide]"
-kotaemon app init
-kotaemon app doctor
+pip install slide-cli
+slide app init
+slide app doctor
 slide --help
 slide doctor
 slide docqa --help

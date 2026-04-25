@@ -1556,7 +1556,6 @@ function run() {
       "delete-conv-button": "Delete this chat",
       "info-expand-button": "Expand or collapse the right panel",
       "chat-expand-button": "Expand or collapse the chat panel",
-      "toggle-dark-button": "Toggle theme",
     };
 
     Object.entries(iconButtonHints).forEach(([id, label]) => {
@@ -1944,6 +1943,73 @@ function run() {
     return null;
   }
 
+  const THEME_STORAGE_KEY = "ktem-ui-mode";
+  const GLOBAL_THEME_TOGGLE_ID = "ktem-theme-toggle";
+  const THEME_ICON_DARK =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.6A7.6 7.6 0 0 1 9.4 3a8.8 8.8 0 1 0 11.6 11.6Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
+  const THEME_ICON_LIGHT =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M4.9 4.9 7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+  function ensureGlobalThemeToggle() {
+    let button = document.getElementById(GLOBAL_THEME_TOGGLE_ID);
+    if (button) {
+      return button;
+    }
+
+    button = document.createElement("button");
+    button.type = "button";
+    button.id = GLOBAL_THEME_TOGGLE_ID;
+    button.className = "ktem-theme-toggle";
+    document.body.appendChild(button);
+    return button;
+  }
+
+  function applyThemeMode(mode) {
+    const isDarkMode = mode === "dark";
+    document.body.classList.toggle("ktem-dark-mode", isDarkMode);
+    document.body.classList.toggle("ktem-light-mode", !isDarkMode);
+    document.documentElement.classList.toggle("ktem-dark-mode", isDarkMode);
+    document.documentElement.classList.toggle("ktem-light-mode", !isDarkMode);
+
+    [ensureGlobalThemeToggle()].forEach((toggleButton) => {
+      toggleButton.setAttribute("aria-pressed", isDarkMode ? "true" : "false");
+      toggleButton.setAttribute(
+        "title",
+        isDarkMode ? "Switch to light mode" : "Switch to dark mode"
+      );
+      toggleButton.setAttribute(
+        "aria-label",
+        isDarkMode ? "Switch to light mode" : "Switch to dark mode"
+      );
+      if (toggleButton.id === GLOBAL_THEME_TOGGLE_ID) {
+        toggleButton.innerHTML = isDarkMode ? THEME_ICON_LIGHT : THEME_ICON_DARK;
+      }
+    });
+  }
+
+  function bindThemeToggleButton(toggleButton) {
+    if (!toggleButton || toggleButton.dataset.ktemThemeToggleBound === "true") {
+      return;
+    }
+    toggleButton.dataset.ktemThemeToggleBound = "true";
+    toggleButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      const nextMode = document.body.classList.contains("ktem-dark-mode")
+        ? "light"
+        : "dark";
+      localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+      applyThemeMode(nextMode);
+    });
+  }
+
+  function initThemeToggle() {
+    const globalToggle = ensureGlobalThemeToggle();
+    const storedMode = localStorage.getItem(THEME_STORAGE_KEY);
+    const initialMode = storedMode === "dark" ? "dark" : "light";
+    applyThemeMode(initialMode);
+    bindThemeToggleButton(globalToggle);
+  }
+
   function initMainShellLayout() {
     const mainParent = document.getElementById("chat-tab")?.parentNode;
     if (!mainParent) {
@@ -1969,10 +2035,7 @@ function run() {
     }
     versionNode.textContent = "version: KH_APP_VERSION";
 
-    const darkToggle = document.getElementById("toggle-dark-button");
-    if (darkToggle) {
-      darkToggle.style.display = "none";
-    }
+    initThemeToggle();
 
     const favicon = document.createElement("link");
     favicon.rel = "icon";

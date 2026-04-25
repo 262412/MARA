@@ -4,11 +4,14 @@ Standalone slide CLI built on top of the existing `kotaemon` and `ktem` librarie
 
 The phase-3 shell is split into two lines:
 
-- `slide ...` is the high-permission product line for runtime commands and workspace operations, including `slide apply`, `slide export-pdf`, and `slide review`
+- `slide ...` is the high-permission product line for runtime commands, app lifecycle, model routing, platform support, and workspace operations, including `slide apply`, `slide export-pdf`, and `slide review`
 - `slide docqa ...` is the specialist document-QA line
 
 The top-level line currently centers on:
 
+- `slide app`
+- `slide model`
+- `slide platform`
 - `slide apply`
 - `slide export-pdf`
 - `slide review`
@@ -61,12 +64,12 @@ slide docqa --help
 
 ## Recommended Packaged Runtime Workflow
 
-If you want the packaged Kotaemon runtime alongside the phase-3 slide shell, install the app with the slide extra and initialize it once:
+Install the public CLI package and initialize the packaged runtime once:
 
 ```shell
-pip install "kotaemon-app[slide]"
-kotaemon app init
-kotaemon app doctor
+pip install slide-cli
+slide app init
+slide app doctor
 slide doctor
 slide docqa --help
 ```
@@ -86,9 +89,9 @@ slide docqa ask --file ./docs/sample.pptx --prompt "Summarize this document"
 
 ## Release Model
 
-This package is published from the monorepo's shared git tag line together with `ktem`, `kotaemon`, and `kotaemon-app`.
+This package is published from the monorepo's shared git tag line together with its internal runtime packages.
 
 - Repository tags use the `v0.0.x` pattern.
-- Releases publish in dependency order: `ktem -> kotaemon -> slide-cli -> kotaemon-app`.
+- Releases publish in dependency order: `ktem -> kotaemon -> slide-cli -> legacy app package`.
 - Local release automation is available via `python scripts/publish_packages.py release --packages slide-cli --repository testpypi`.
 - A fuller release walkthrough lives in `docs/slide_cli_release.md`.

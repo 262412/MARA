@@ -36,6 +36,7 @@ def build_kotaemon_settings(
     vision_cache_dir = _ensure_dir(app_data_dir / "vision_cache_dir")
     ocr_cache_dir = _ensure_dir(app_data_dir / "ocr_cache_dir")
     formula_ocr_cache_dir = _ensure_dir(app_data_dir / "formula_ocr_cache_dir")
+    office_pdf_cache_dir = _ensure_dir(app_data_dir / "office_pdf_cache_dir")
     zip_output_dir = _ensure_dir(app_data_dir / "zip_cache_dir")
     zip_input_dir = _ensure_dir(app_data_dir / "zip_cache_dir_in")
     file_storage_path = _ensure_dir(user_data_dir / "files")
@@ -70,6 +71,13 @@ def build_kotaemon_settings(
         "KH_VISION_CACHE_DIR": vision_cache_dir,
         "KH_OCR_CACHE_DIR": ocr_cache_dir,
         "KH_FORMULA_OCR_CACHE_DIR": formula_ocr_cache_dir,
+        "KH_OFFICE_PDF_CACHE_DIR": office_pdf_cache_dir,
+        "KH_OFFICE_TO_PDF_INDEXING": config(
+            "KH_OFFICE_TO_PDF_INDEXING", default=True, cast=bool
+        ),
+        "KH_OFFICE_TO_PDF_INDEXING_STRICT": config(
+            "KH_OFFICE_TO_PDF_INDEXING_STRICT", default=True, cast=bool
+        ),
         "KH_ZIP_OUTPUT_DIR": zip_output_dir,
         "KH_ZIP_INPUT_DIR": zip_input_dir,
         "KH_DOC_DIR": docs_dir,
