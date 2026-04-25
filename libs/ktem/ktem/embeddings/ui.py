@@ -36,7 +36,10 @@ class EmbeddingManagement(BasePage):
                 column_widths=[30, 40, 30],
             )
 
-            with gr.Column(visible=False) as self._selected_panel:
+            with gr.Column(
+                visible=False,
+                elem_classes=["management-detail-panel"],
+            ) as self._selected_panel:
                 self.selected_emb_name = gr.Textbox(value="", visible=False)
                 with gr.Row():
                     with gr.Column():

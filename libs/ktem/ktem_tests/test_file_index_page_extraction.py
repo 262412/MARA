@@ -229,6 +229,26 @@ def test_delete_all_files_skips_placeholder_rows():
     assert controller.deleted_ids == ["file-1", "file-2"]
 
 
+def test_page_label_sort_key_handles_mixed_page_label_types():
+    docs = [
+        SimpleNamespace(metadata={"page_label": "appendix"}),
+        SimpleNamespace(metadata={"page_label": None}),
+        SimpleNamespace(metadata={"page_label": "2"}),
+        SimpleNamespace(metadata={"page_label": 1.0}),
+        SimpleNamespace(metadata={}),
+    ]
+
+    sorted_docs = sorted(docs, key=file_ui_module._page_label_sort_key)
+
+    assert [doc.metadata.get("page_label") for doc in sorted_docs] == [
+        1.0,
+        "2",
+        "appendix",
+        None,
+        None,
+    ]
+
+
 def test_register_file_index_events_wires_delete_chat_and_upload_flows():
     page = _build_page(index_id=9)
 

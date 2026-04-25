@@ -37,6 +37,18 @@ DOWNLOAD_MESSAGE = "Start download"
 MAX_FILENAME_LENGTH = 20
 MAX_FILE_COUNT = 200
 
+
+def _page_label_sort_key(doc):
+    page_label = getattr(doc, "metadata", {}).get("page_label")
+    if page_label in (None, ""):
+        return (2, float("inf"), "")
+
+    try:
+        return (0, float(page_label), str(page_label))
+    except (TypeError, ValueError):
+        return (1, float("inf"), str(page_label))
+
+
 chat_input_focus_js = """
 function() {
     let chatInput = document.querySelector("#chat-input textarea");
@@ -436,9 +448,7 @@ class FileIndexPage(BasePage):
                 )
                 doc_ids = [doc.target_id for (doc,) in matches]
                 docs = self._index._docstore.get(doc_ids)
-                docs = sorted(
-                    docs, key=lambda x: x.metadata.get("page_label", float("inf"))
-                )
+                docs = sorted(docs, key=_page_label_sort_key)
 
                 for idx, doc in enumerate(docs):
                     title = html.escape(
