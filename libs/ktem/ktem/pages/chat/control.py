@@ -50,15 +50,6 @@ class ConversationControl(BasePage):
         with gr.Row():
             title_text = "Conversations" if not KH_DEMO_MODE else "Slides Papers"
             gr.Markdown("## {}".format(title_text))
-            self.btn_toggle_dark_mode = gr.Button(
-                value="",
-                icon=f"{ASSETS_DIR}/dark_mode.svg",
-                scale=1,
-                size="sm",
-                elem_classes=["no-background", "body-text-color"],
-                elem_id="toggle-dark-button",
-                visible=False,
-            )
             self.btn_chat_expand = gr.Button(
                 value="",
                 icon=f"{ASSETS_DIR}/expand.svg",
@@ -77,9 +68,6 @@ class ConversationControl(BasePage):
                 elem_classes=["no-background", "body-text-color"],
                 elem_id="info-expand-button",
             )
-
-            # Dark/light toggle is intentionally disabled for the current visual theme.
-
         self.conversation_id = gr.State(value="")
         self.conversation = gr.Dropdown(
             label="Chat sessions",

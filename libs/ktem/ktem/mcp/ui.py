@@ -34,7 +34,10 @@ class MCPManagement(BasePage):
                 column_widths=[30, 70],
             )
 
-            with gr.Column(visible=False) as self._selected_panel:
+            with gr.Column(
+                visible=False,
+                elem_classes=["management-detail-panel"],
+            ) as self._selected_panel:
                 self.selected_mcp_name = gr.Textbox(value="", visible=False)
                 with gr.Row():
                     with gr.Column():
