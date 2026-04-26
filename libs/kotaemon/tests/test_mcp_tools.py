@@ -5,7 +5,6 @@ tool formatting, and MCPTool construction (without real MCP servers).
 """
 
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 
@@ -238,22 +237,25 @@ class TestCreateToolsFromConfig:
             ),
         ]
 
-    @patch.object(mcp_module, "_run_async")
-    def test_no_filter_returns_all(self, mock_run_async):
-        mock_run_async.return_value = self._make_mock_tools()
+    def _patch_discovery(self, monkeypatch):
+        async def _fake_discover_tools(_parsed):
+            return self._make_mock_tools()
+
+        monkeypatch.setattr(mcp_module, "_async_discover_tools", _fake_discover_tools)
+
+    def test_no_filter_returns_all(self, monkeypatch):
+        self._patch_discovery(monkeypatch)
         tools = create_tools_from_config({"command": "uvx"})
         assert len(tools) == 2
 
-    @patch.object(mcp_module, "_run_async")
-    def test_enabled_tools_filter(self, mock_run_async):
+    def test_enabled_tools_filter(self, monkeypatch):
         """Non-empty filter returns only nominated tools; empty list returns all."""
-        mock_run_async.return_value = self._make_mock_tools()
+        self._patch_discovery(monkeypatch)
         filtered = create_tools_from_config({"command": "uvx"}, enabled_tools=["fetch"])
         assert len(filtered) == 1
         assert filtered[0].mcp_tool_name == "fetch"
 
         # Empty list == no filter
-        mock_run_async.return_value = self._make_mock_tools()
         all_tools = create_tools_from_config({"command": "uvx"}, enabled_tools=[])
         assert len(all_tools) == 2
 
