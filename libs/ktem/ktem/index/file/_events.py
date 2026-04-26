@@ -11,6 +11,163 @@ def _iter_index_changed_events(page):
     return page._app.get_event(f"onFileIndex{page._index.id}Changed")
 
 
+def _append_index_changed_events(event_chain, page):
+    for event in _iter_index_changed_events(page):
+        event_chain = event_chain.then(**event)
+    return event_chain
+
+
+def _append_file_list_refresh(event_chain, page):
+    return event_chain.then(
+        fn=page.list_file,
+        inputs=[page._app.user_id, page.filter],
+        outputs=[page.file_list_state, page.file_list],
+        concurrency_limit=20,
+    )
+
+
+def _file_selection_outputs(page):
+    return [
+        page.chunks,
+        page.deselect_button,
+        page.delete_button,
+        page.download_single_button,
+        page.chat_button,
+    ]
+
+
+def _append_quick_upload_chat_refresh(event_chain, page):
+    return (
+        event_chain.success(
+            fn=page._app.chat_page.merge_graph_source_ids,
+            inputs=[
+                page._app.chat_page._graph_source_ids,
+                page.quick_upload_state,
+            ],
+            outputs=[page._app.chat_page._graph_source_ids],
+            show_progress="hidden",
+        )
+        .then(
+            fn=page._app.chat_page.refresh_chat_file_list,
+            inputs=[
+                page._app.chat_page.chat_control.conversation_id,
+                page._app.user_id,
+                page._app.chat_page.first_selector_choices,
+                page._app.chat_page._indices_input[1],
+                page._app.chat_page._graph_source_ids,
+                page._app.chat_page.chat_file_filter,
+            ],
+            outputs=[
+                page._app.chat_page.chat_file_rows,
+                page._app.chat_page.chat_file_list,
+                page._app.chat_page.chat_selected_file,
+            ],
+            show_progress="hidden",
+        )
+        .then(
+            fn=page._app.chat_page.show_knowledge_graph_loading,
+            inputs=[page._app.chat_page.chat_control.conversation_id],
+            outputs=[
+                page._app.chat_page.plot_panel,
+                page._app.chat_page.knowledge_graph_status,
+            ],
+            show_progress="hidden",
+        )
+        .then(
+            fn=page._app.chat_page.refresh_knowledge_graph,
+            inputs=[
+                page._app.chat_page.chat_control.conversation_id,
+                page._app.chat_page._graph_source_ids,
+                page._app.chat_page._active_file_id,
+                page._app.chat_page._indices_input[1],
+            ],
+            outputs=[
+                page._app.chat_page.plot_panel,
+                page._app.chat_page.state_plot_panel,
+                page._app.chat_page.knowledge_graph_status,
+                page._app.chat_page._graph_source_ids,
+            ],
+            show_progress="hidden",
+        )
+        .success(
+            fn=lambda x: x,
+            inputs=page.quick_upload_state,
+            outputs=page._app.chat_page._indices_input[1],
+        )
+        .success(
+            fn=page._app.chat_page.persist_conversation_source_scope,
+            inputs=[
+                page._app.chat_page.chat_control.conversation_id,
+                page._app.user_id,
+                page._app.chat_page._graph_source_ids,
+            ],
+            outputs=[page._app.chat_page._graph_source_ids],
+            show_progress="hidden",
+        )
+        .then(
+            fn=lambda: gr.update(value="Indexing completed."),
+            outputs=page._app.chat_page.quick_file_upload_status,
+        )
+    )
+
+
+def _append_uploaded_chat_graph_refresh(event_chain, page):
+    return (
+        event_chain.then(
+            fn=page._app.chat_page.merge_graph_source_ids,
+            inputs=[
+                page._app.chat_page._graph_source_ids,
+                page.upload_new_source_ids,
+            ],
+            outputs=[page._app.chat_page._graph_source_ids],
+            show_progress="hidden",
+        )
+        .then(
+            fn=page._app.chat_page.persist_conversation_source_scope,
+            inputs=[
+                page._app.chat_page.chat_control.conversation_id,
+                page._app.user_id,
+                page._app.chat_page._graph_source_ids,
+            ],
+            outputs=[page._app.chat_page._graph_source_ids],
+            show_progress="hidden",
+        )
+        .then(
+            fn=page._app.chat_page.refresh_chat_file_list,
+            inputs=[
+                page._app.chat_page.chat_control.conversation_id,
+                page._app.user_id,
+                page._app.chat_page.first_selector_choices,
+                page._app.chat_page._indices_input[1],
+                page._app.chat_page._graph_source_ids,
+                page._app.chat_page.chat_file_filter,
+            ],
+            outputs=[
+                page._app.chat_page.chat_file_rows,
+                page._app.chat_page.chat_file_list,
+                page._app.chat_page.chat_selected_file,
+            ],
+            show_progress="hidden",
+        )
+        .then(
+            fn=page._app.chat_page.refresh_knowledge_graph,
+            inputs=[
+                page._app.chat_page.chat_control.conversation_id,
+                page._app.chat_page._graph_source_ids,
+                page._app.chat_page._active_file_id,
+                page._app.chat_page._indices_input[1],
+            ],
+            outputs=[
+                page._app.chat_page.plot_panel,
+                page._app.chat_page.state_plot_panel,
+                page._app.chat_page.knowledge_graph_status,
+                page._app.chat_page._graph_source_ids,
+            ],
+            show_progress="hidden",
+        )
+    )
+
+
 def register_quick_upload_events(
     page,
     *,
@@ -59,92 +216,19 @@ def register_quick_upload_events(
                     ],
                 )
             )
-            for event in _iter_index_changed_events(page):
-                quick_uploaded_event = quick_uploaded_event.then(**event)
-
-            quick_uploaded_event = (
-                quick_uploaded_event.success(
-                    fn=page._app.chat_page.merge_graph_source_ids,
-                    inputs=[
-                        page._app.chat_page._graph_source_ids,
-                        page.quick_upload_state,
-                    ],
-                    outputs=[page._app.chat_page._graph_source_ids],
-                    show_progress="hidden",
-                )
-                .then(
-                    fn=page._app.chat_page.refresh_chat_file_list,
-                    inputs=[
-                        page._app.chat_page.chat_control.conversation_id,
-                        page._app.user_id,
-                        page._app.chat_page.first_selector_choices,
-                        page._app.chat_page._indices_input[1],
-                        page._app.chat_page._graph_source_ids,
-                        page._app.chat_page.chat_file_filter,
-                    ],
-                    outputs=[
-                        page._app.chat_page.chat_file_rows,
-                        page._app.chat_page.chat_file_list,
-                        page._app.chat_page.chat_selected_file,
-                    ],
-                    show_progress="hidden",
-                )
-                .then(
-                    fn=page._app.chat_page.show_knowledge_graph_loading,
-                    inputs=[page._app.chat_page.chat_control.conversation_id],
-                    outputs=[
-                        page._app.chat_page.plot_panel,
-                        page._app.chat_page.knowledge_graph_status,
-                    ],
-                    show_progress="hidden",
-                )
-                .then(
-                    fn=page._app.chat_page.refresh_knowledge_graph,
-                    inputs=[
-                        page._app.chat_page.chat_control.conversation_id,
-                        page._app.chat_page._graph_source_ids,
-                        page._app.chat_page._active_file_id,
-                        page._app.chat_page._indices_input[1],
-                    ],
-                    outputs=[
-                        page._app.chat_page.plot_panel,
-                        page._app.chat_page.state_plot_panel,
-                        page._app.chat_page.knowledge_graph_status,
-                        page._app.chat_page._graph_source_ids,
-                    ],
-                    show_progress="hidden",
-                )
-                .success(
-                    fn=lambda x: x,
-                    inputs=page.quick_upload_state,
-                    outputs=page._app.chat_page._indices_input[1],
-                )
-                .success(
-                    fn=page._app.chat_page.persist_conversation_source_scope,
-                    inputs=[
-                        page._app.chat_page.chat_control.conversation_id,
-                        page._app.user_id,
-                        page._app.chat_page._graph_source_ids,
-                    ],
-                    outputs=[page._app.chat_page._graph_source_ids],
-                    show_progress="hidden",
-                )
-                .then(
-                    fn=lambda: gr.update(value="Indexing completed."),
-                    outputs=page._app.chat_page.quick_file_upload_status,
-                )
-                .then(
-                    fn=page.list_file,
-                    inputs=[page._app.user_id, page.filter],
-                    outputs=[page.file_list_state, page.file_list],
-                    concurrency_limit=20,
-                )
-                .then(
-                    fn=lambda: True,
-                    inputs=None,
-                    outputs=None,
-                    js=chat_input_focus_js,
-                )
+            quick_uploaded_event = _append_index_changed_events(
+                quick_uploaded_event, page
+            )
+            quick_uploaded_event = _append_quick_upload_chat_refresh(
+                quick_uploaded_event, page
+            )
+            quick_uploaded_event = _append_file_list_refresh(
+                quick_uploaded_event, page
+            ).then(
+                fn=lambda: True,
+                inputs=None,
+                outputs=None,
+                js=chat_input_focus_js,
             )
 
         quick_url_uploaded_event = (
@@ -177,88 +261,16 @@ def register_quick_upload_events(
                 ],
             )
         )
-        for event in _iter_index_changed_events(page):
-            quick_url_uploaded_event = quick_url_uploaded_event.then(**event)
-
-        quick_url_uploaded_event = (
-            quick_url_uploaded_event.success(
-                fn=page._app.chat_page.merge_graph_source_ids,
-                inputs=[
-                    page._app.chat_page._graph_source_ids,
-                    page.quick_upload_state,
-                ],
-                outputs=[page._app.chat_page._graph_source_ids],
-                show_progress="hidden",
-            )
-            .then(
-                fn=page._app.chat_page.refresh_chat_file_list,
-                inputs=[
-                    page._app.chat_page.chat_control.conversation_id,
-                    page._app.user_id,
-                    page._app.chat_page.first_selector_choices,
-                    page._app.chat_page._indices_input[1],
-                    page._app.chat_page._graph_source_ids,
-                    page._app.chat_page.chat_file_filter,
-                ],
-                outputs=[
-                    page._app.chat_page.chat_file_rows,
-                    page._app.chat_page.chat_file_list,
-                    page._app.chat_page.chat_selected_file,
-                ],
-                show_progress="hidden",
-            )
-            .then(
-                fn=page._app.chat_page.show_knowledge_graph_loading,
-                inputs=[page._app.chat_page.chat_control.conversation_id],
-                outputs=[
-                    page._app.chat_page.plot_panel,
-                    page._app.chat_page.knowledge_graph_status,
-                ],
-                show_progress="hidden",
-            )
-            .then(
-                fn=page._app.chat_page.refresh_knowledge_graph,
-                inputs=[
-                    page._app.chat_page.chat_control.conversation_id,
-                    page._app.chat_page._graph_source_ids,
-                    page._app.chat_page._active_file_id,
-                    page._app.chat_page._indices_input[1],
-                ],
-                outputs=[
-                    page._app.chat_page.plot_panel,
-                    page._app.chat_page.state_plot_panel,
-                    page._app.chat_page.knowledge_graph_status,
-                    page._app.chat_page._graph_source_ids,
-                ],
-                show_progress="hidden",
-            )
-            .success(
-                fn=lambda x: x,
-                inputs=page.quick_upload_state,
-                outputs=page._app.chat_page._indices_input[1],
-            )
-            .success(
-                fn=page._app.chat_page.persist_conversation_source_scope,
-                inputs=[
-                    page._app.chat_page.chat_control.conversation_id,
-                    page._app.user_id,
-                    page._app.chat_page._graph_source_ids,
-                ],
-                outputs=[page._app.chat_page._graph_source_ids],
-                show_progress="hidden",
-            )
-            .then(
-                fn=lambda: gr.update(value="Indexing completed."),
-                outputs=page._app.chat_page.quick_file_upload_status,
-            )
+        quick_url_uploaded_event = _append_index_changed_events(
+            quick_url_uploaded_event, page
+        )
+        quick_url_uploaded_event = _append_quick_upload_chat_refresh(
+            quick_url_uploaded_event, page
         )
 
         if not demo_mode:
-            quick_url_uploaded_event = quick_url_uploaded_event.then(
-                fn=page.list_file,
-                inputs=[page._app.user_id, page.filter],
-                outputs=[page.file_list_state, page.file_list],
-                concurrency_limit=20,
+            quick_url_uploaded_event = _append_file_list_refresh(
+                quick_url_uploaded_event, page
             )
 
         quick_url_uploaded_event.then(
@@ -304,18 +316,11 @@ def register_file_index_events(
         .then(
             fn=page.file_selected,
             inputs=[page.selected_file_id],
-            outputs=[
-                page.chunks,
-                page.deselect_button,
-                page.delete_button,
-                page.download_single_button,
-                page.chat_button,
-            ],
+            outputs=_file_selection_outputs(page),
             show_progress="hidden",
         )
     )
-    for event in _iter_index_changed_events(page):
-        on_deleted = on_deleted.then(**event)
+    on_deleted = _append_index_changed_events(on_deleted, page)
 
     page.deselect_button.click(
         fn=lambda: (None, page.selected_panel_false),
@@ -325,13 +330,7 @@ def register_file_index_events(
     ).then(
         fn=page.file_selected,
         inputs=[page.selected_file_id],
-        outputs=[
-            page.chunks,
-            page.deselect_button,
-            page.delete_button,
-            page.download_single_button,
-            page.chat_button,
-        ],
+        outputs=_file_selection_outputs(page),
         show_progress="hidden",
     )
 
@@ -382,8 +381,7 @@ def register_file_index_events(
         inputs=[page._app.user_id, page.filter],
         outputs=[page.file_list_state, page.file_list],
     )
-    for event in _iter_index_changed_events(page):
-        on_deleted_all = on_deleted_all.then(**event)
+    on_deleted_all = _append_index_changed_events(on_deleted_all, page)
 
     on_deleted_all.then(
         fn=lambda: [
@@ -448,14 +446,9 @@ def register_file_index_events(
         inputs=[page.upload_before_source_ids, page._app.user_id],
         outputs=[page.upload_new_source_ids],
         show_progress="hidden",
-    ).then(
-        fn=page.list_file,
-        inputs=[page._app.user_id, page.filter],
-        outputs=[page.file_list_state, page.file_list],
-        concurrency_limit=20,
     )
-    for event in _iter_index_changed_events(page):
-        uploaded_event = uploaded_event.then(**event)
+    uploaded_event = _append_file_list_refresh(uploaded_event, page)
+    uploaded_event = _append_index_changed_events(uploaded_event, page)
 
     if (
         page._index.id == 1
@@ -463,60 +456,7 @@ def register_file_index_events(
         and getattr(page._app.chat_page, "knowledge_graph", None) is not None
         and len(getattr(page._app.chat_page, "_indices_input", [])) > 1
     ):
-        uploaded_event = (
-            uploaded_event.then(
-                fn=page._app.chat_page.merge_graph_source_ids,
-                inputs=[
-                    page._app.chat_page._graph_source_ids,
-                    page.upload_new_source_ids,
-                ],
-                outputs=[page._app.chat_page._graph_source_ids],
-                show_progress="hidden",
-            )
-            .then(
-                fn=page._app.chat_page.persist_conversation_source_scope,
-                inputs=[
-                    page._app.chat_page.chat_control.conversation_id,
-                    page._app.user_id,
-                    page._app.chat_page._graph_source_ids,
-                ],
-                outputs=[page._app.chat_page._graph_source_ids],
-                show_progress="hidden",
-            )
-            .then(
-                fn=page._app.chat_page.refresh_chat_file_list,
-                inputs=[
-                    page._app.chat_page.chat_control.conversation_id,
-                    page._app.user_id,
-                    page._app.chat_page.first_selector_choices,
-                    page._app.chat_page._indices_input[1],
-                    page._app.chat_page._graph_source_ids,
-                    page._app.chat_page.chat_file_filter,
-                ],
-                outputs=[
-                    page._app.chat_page.chat_file_rows,
-                    page._app.chat_page.chat_file_list,
-                    page._app.chat_page.chat_selected_file,
-                ],
-                show_progress="hidden",
-            )
-            .then(
-                fn=page._app.chat_page.refresh_knowledge_graph,
-                inputs=[
-                    page._app.chat_page.chat_control.conversation_id,
-                    page._app.chat_page._graph_source_ids,
-                    page._app.chat_page._active_file_id,
-                    page._app.chat_page._indices_input[1],
-                ],
-                outputs=[
-                    page._app.chat_page.plot_panel,
-                    page._app.chat_page.state_plot_panel,
-                    page._app.chat_page.knowledge_graph_status,
-                    page._app.chat_page._graph_source_ids,
-                ],
-                show_progress="hidden",
-            )
-        )
+        uploaded_event = _append_uploaded_chat_graph_refresh(uploaded_event, page)
 
     on_uploaded.success(
         fn=lambda: None,
@@ -536,13 +476,7 @@ def register_file_index_events(
     ).then(
         fn=page.file_selected,
         inputs=[page.selected_file_id],
-        outputs=[
-            page.chunks,
-            page.deselect_button,
-            page.delete_button,
-            page.download_single_button,
-            page.chat_button,
-        ],
+        outputs=_file_selection_outputs(page),
         show_progress="hidden",
     )
 
@@ -654,9 +588,8 @@ def register_file_index_events(
         .then(**on_group_closed_event)
     )
 
-    for event in _iter_index_changed_events(page):
-        on_group_deleted = on_group_deleted.then(**event)
-        on_group_saved = on_group_saved.then(**event)
+    on_group_deleted = _append_index_changed_events(on_group_deleted, page)
+    on_group_saved = _append_index_changed_events(on_group_saved, page)
 
     if demo_mode:
         return

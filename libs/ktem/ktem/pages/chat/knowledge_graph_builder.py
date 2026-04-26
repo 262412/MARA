@@ -172,15 +172,13 @@ class KnowledgeGraphBuilder:
         )
         return theme_keyword, label_prefix or theme_keyword
 
-    def _build_canonical_graph(
-        self,
-        conversation_id: str,
-        sources: dict[str, dict[str, Any]],
-        file_graphs: list[dict[str, Any]],
-    ) -> dict[str, Any]:
+    def _collect_canonical_point_records(
+        self, file_graphs: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], dict[str, list[str]], dict[str, list[str]]]:
         root_support_pages: dict[str, list[str]] = {}
         root_support_chunk_ids: dict[str, list[str]] = {}
         point_records: list[dict[str, Any]] = []
+
         for file_graph in file_graphs:
             file_id = str(file_graph.get("file_id", "") or "")
             file_name = str(file_graph.get("file_name", file_id) or file_id)
@@ -216,40 +214,316 @@ class KnowledgeGraphBuilder:
                 36,
             )
 
-        if not point_records:
-            for file_graph in file_graphs:
-                file_id = str(file_graph.get("file_id", "") or "")
-                file_name = str(file_graph.get("file_name", file_id) or file_id)
-                synthetic_label = self._service._trim_sentence(
-                    str(file_graph.get("summary", "") or file_name), 110
-                )
-                synthetic_keywords = _limit_unique_strings(
-                    list(file_graph.get("top_keywords", []) or [])
-                    + self._service._extract_keywords(synthetic_label, limit=4),
-                    6,
-                )
-                point_records.append(
-                    {
-                        "id": f"point::{file_id}::summary",
-                        "file_id": file_id,
-                        "file_name": file_name,
-                        "label": synthetic_label,
-                        "keywords": synthetic_keywords,
-                        "summary": synthetic_label,
-                        "support_pages": file_graph.get("summary_support_pages", {})
-                        or {},
-                        "support_chunk_ids": file_graph.get(
-                            "summary_support_chunk_ids", {}
-                        )
-                        or {},
-                        "synthetic": True,
-                    }
-                )
+        return point_records, root_support_pages, root_support_chunk_ids
 
-        clusters = self._cluster_points(point_records)
-        if not clusters and point_records:
-            clusters = [point_records]
+    def _append_synthetic_point_records(
+        self,
+        point_records: list[dict[str, Any]],
+        file_graphs: list[dict[str, Any]],
+    ) -> None:
+        for file_graph in file_graphs:
+            file_id = str(file_graph.get("file_id", "") or "")
+            file_name = str(file_graph.get("file_name", file_id) or file_id)
+            synthetic_label = self._service._trim_sentence(
+                str(file_graph.get("summary", "") or file_name), 110
+            )
+            synthetic_keywords = _limit_unique_strings(
+                list(file_graph.get("top_keywords", []) or [])
+                + self._service._extract_keywords(synthetic_label, limit=4),
+                6,
+            )
+            point_records.append(
+                {
+                    "id": f"point::{file_id}::summary",
+                    "file_id": file_id,
+                    "file_name": file_name,
+                    "label": synthetic_label,
+                    "keywords": synthetic_keywords,
+                    "summary": synthetic_label,
+                    "support_pages": file_graph.get("summary_support_pages", {}) or {},
+                    "support_chunk_ids": file_graph.get("summary_support_chunk_ids", {})
+                    or {},
+                    "synthetic": True,
+                }
+            )
 
+    def _collect_item_support(
+        self, items: list[dict[str, Any]]
+    ) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+        support_pages: dict[str, list[str]] = {}
+        support_chunk_ids: dict[str, list[str]] = {}
+        for item in items:
+            self._merge_support_dict(support_pages, item.get("support_pages", {}), 24)
+            self._merge_support_dict(
+                support_chunk_ids, item.get("support_chunk_ids", {}), 36
+            )
+        return support_pages, support_chunk_ids
+
+    def _build_component_node(
+        self, component_index: int, cluster_points: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any], dict[str, list[str]], dict[str, list[str]]]:
+        component_id = f"component::{component_index}"
+        component_keywords = self._sorted_unique_keywords(cluster_points, limit=6)
+        related_file_ids = _limit_unique_strings(
+            [point["file_id"] for point in cluster_points], 24
+        )
+        representative_point = cluster_points[0]
+        component_label = self._service._trim_sentence(
+            representative_point.get("label", ""), 96
+        )
+        if not component_label:
+            component_label = (
+                " / ".join(component_keywords[:2])
+                if component_keywords
+                else "Conversation component"
+            )
+        component_summary = (
+            f"Theme cluster centered on {component_label} across "
+            f"{len(related_file_ids)} source(s)."
+        )
+
+        (
+            component_support_pages,
+            component_support_chunk_ids,
+        ) = self._collect_item_support(cluster_points)
+        component_node = self._annotate_evidence_aliases(
+            {
+                "id": component_id,
+                "type": "component",
+                "kind": "component",
+                "schema_version": self.SCHEMA_VERSION,
+                "label": component_label,
+                "summary": component_summary,
+                "related_file_ids": related_file_ids,
+                "keywords": component_keywords,
+                "children": [],
+            },
+            component_support_pages,
+            component_support_chunk_ids,
+        )
+        return component_node, component_support_pages, component_support_chunk_ids
+
+    def _build_theme_groups(
+        self,
+        cluster_points: list[dict[str, Any]],
+        component_keywords: list[str],
+    ) -> list[tuple[str, list[dict[str, Any]]]]:
+        keyword_to_points: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for point in cluster_points:
+            normalized_keywords = [
+                self._service._normalize_term(keyword)
+                for keyword in point.get("keywords", [])
+            ]
+            normalized_keywords = [
+                keyword for keyword in normalized_keywords if keyword
+            ]
+            primary_keyword = normalized_keywords[0] if normalized_keywords else ""
+            if primary_keyword:
+                keyword_to_points[primary_keyword].append(point)
+            else:
+                keyword_to_points["__general__"].append(point)
+
+        ordered_theme_keys = _limit_unique_strings(
+            [keyword for keyword in component_keywords if keyword], 4
+        )
+        if (
+            "__general__" in keyword_to_points
+            and "__general__" not in ordered_theme_keys
+        ):
+            ordered_theme_keys.append("__general__")
+
+        assigned_point_ids: set[str] = set()
+        theme_groups: list[tuple[str, list[dict[str, Any]]]] = []
+        for keyword in ordered_theme_keys:
+            group_points = [
+                point
+                for point in keyword_to_points.get(keyword, [])
+                if point["id"] not in assigned_point_ids
+            ]
+            if group_points:
+                theme_groups.append((keyword, group_points))
+                assigned_point_ids.update(point["id"] for point in group_points)
+
+        remaining_points = [
+            point for point in cluster_points if point["id"] not in assigned_point_ids
+        ]
+        if remaining_points:
+            fallback_keyword = (
+                component_keywords[0] if component_keywords else "general"
+            )
+            theme_groups.append((fallback_keyword, remaining_points))
+
+        return theme_groups
+
+    def _build_theme_node(
+        self,
+        component_index: int,
+        theme_index: int,
+        theme_keyword: str,
+        theme_points: list[dict[str, Any]],
+        component_id: str,
+        component_label: str,
+    ) -> tuple[str, dict[str, Any], dict[str, list[str]], dict[str, list[str]]]:
+        theme_id = f"theme::{component_index}::{theme_index}"
+        theme_keywords = self._sorted_unique_keywords(theme_points, limit=4)
+        theme_label = theme_keyword
+        if theme_label == "__general__":
+            theme_label = (
+                self._service._trim_sentence(theme_points[0].get("label", ""), 84)
+                if theme_points
+                else "General theme"
+            )
+        elif len(theme_points) == 1:
+            theme_label = (
+                self._service._trim_sentence(theme_points[0].get("label", ""), 84)
+                or theme_keyword
+            )
+        theme_summary = f"Theme around {theme_label} within {component_label}."
+
+        theme_support_pages, theme_support_chunk_ids = self._collect_item_support(
+            theme_points
+        )
+        theme_node = self._annotate_evidence_aliases(
+            {
+                "id": theme_id,
+                "type": "theme",
+                "kind": "theme",
+                "schema_version": self.SCHEMA_VERSION,
+                "label": theme_label,
+                "summary": theme_summary,
+                "related_file_ids": _limit_unique_strings(
+                    [point["file_id"] for point in theme_points], 24
+                ),
+                "keywords": theme_keywords,
+                "component_id": component_id,
+                "children": [],
+                "parent_id": component_id,
+            },
+            theme_support_pages,
+            theme_support_chunk_ids,
+        )
+        return theme_id, theme_node, theme_support_pages, theme_support_chunk_ids
+
+    def _sorted_subtheme_groups(
+        self, theme_points: list[dict[str, Any]], theme_keyword: str
+    ) -> list[tuple[tuple[str, str], list[dict[str, Any]]]]:
+        subtheme_groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+        for point in theme_points:
+            signature = self._make_subtheme_signature(point, theme_keyword)
+            subtheme_groups[signature].append(point)
+        return sorted(
+            subtheme_groups.items(),
+            key=lambda item: (
+                -len(item[1]),
+                item[1][0].get("label", "").lower(),
+            ),
+        )
+
+    def _build_subtheme_node(
+        self,
+        component_index: int,
+        theme_index: int,
+        subtheme_index: int,
+        signature: tuple[str, str],
+        subtheme_points: list[dict[str, Any]],
+        component_id: str,
+        theme_id: str,
+        theme_label: str,
+    ) -> tuple[str, dict[str, Any], dict[str, list[str]], dict[str, list[str]]]:
+        subtheme_id = f"subtheme::{component_index}::{theme_index}::{subtheme_index}"
+        subtheme_keywords = self._sorted_unique_keywords(subtheme_points, limit=4)
+        subtheme_label = (
+            self._service._trim_sentence(
+                max(
+                    (point.get("label", "") for point in subtheme_points),
+                    key=len,
+                    default="",
+                ),
+                84,
+            )
+            or " / ".join([value for value in signature if value])
+            or theme_label
+        )
+        subtheme_summary = (
+            f"Subtheme connecting {len(subtheme_points)} knowledge point(s) "
+            f"under {theme_label}."
+        )
+        subtheme_support_pages, subtheme_support_chunk_ids = self._collect_item_support(
+            subtheme_points
+        )
+        subtheme_node = self._annotate_evidence_aliases(
+            {
+                "id": subtheme_id,
+                "type": "subtheme",
+                "kind": "subtheme",
+                "schema_version": self.SCHEMA_VERSION,
+                "label": subtheme_label,
+                "summary": subtheme_summary,
+                "related_file_ids": _limit_unique_strings(
+                    [point["file_id"] for point in subtheme_points], 24
+                ),
+                "keywords": subtheme_keywords,
+                "component_id": component_id,
+                "theme_id": theme_id,
+                "children": [],
+                "parent_id": theme_id,
+            },
+            subtheme_support_pages,
+            subtheme_support_chunk_ids,
+        )
+        return (
+            subtheme_id,
+            subtheme_node,
+            subtheme_support_pages,
+            subtheme_support_chunk_ids,
+        )
+
+    def _build_canonical_point_node(
+        self,
+        point: dict[str, Any],
+        component_id: str,
+        theme_id: str,
+        subtheme_id: str,
+        component_index: int,
+    ) -> dict[str, Any]:
+        point_node = dict(point)
+        point_node.update(
+            {
+                "type": "knowledge_point",
+                "kind": "knowledge_point",
+                "schema_version": self.SCHEMA_VERSION,
+                "component_id": component_id,
+                "theme_id": theme_id,
+                "subtheme_id": subtheme_id,
+                "parent_id": subtheme_id,
+                "children": [],
+                "related_file_ids": [point["file_id"]],
+                "file_id": point["file_id"],
+                "system_id": f"system::{component_index}",
+            }
+        )
+        self._annotate_evidence_aliases(
+            point_node,
+            point.get("support_pages", {}),
+            point.get("support_chunk_ids", {}),
+            8,
+            8,
+        )
+        return point_node
+
+    def _build_canonical_hierarchy(
+        self,
+        clusters: list[list[dict[str, Any]]],
+        root_support_pages: dict[str, list[str]],
+        root_support_chunk_ids: dict[str, list[str]],
+    ) -> tuple[
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        dict[str, dict[str, Any]],
+    ]:
         component_nodes: list[dict[str, Any]] = []
         theme_nodes: list[dict[str, Any]] = []
         subtheme_nodes: list[dict[str, Any]] = []
@@ -263,50 +537,12 @@ class KnowledgeGraphBuilder:
         point_to_cluster_index: dict[str, int] = {}
 
         for component_index, cluster_points in enumerate(clusters, start=1):
-            component_id = f"component::{component_index}"
-            component_keywords = self._sorted_unique_keywords(cluster_points, limit=6)
-            related_file_ids = _limit_unique_strings(
-                [point["file_id"] for point in cluster_points], 24
-            )
-            representative_point = cluster_points[0]
-            component_label = self._service._trim_sentence(
-                representative_point.get("label", ""), 96
-            )
-            if not component_label:
-                component_label = (
-                    " / ".join(component_keywords[:2])
-                    if component_keywords
-                    else "Conversation component"
-                )
-            component_summary = (
-                f"Theme cluster centered on {component_label} across "
-                f"{len(related_file_ids)} source(s)."
-            )
-
-            component_support_pages: dict[str, list[str]] = {}
-            component_support_chunk_ids: dict[str, list[str]] = {}
-            for point in cluster_points:
-                self._merge_support_dict(
-                    component_support_pages, point.get("support_pages", {}), 24
-                )
-                self._merge_support_dict(
-                    component_support_chunk_ids, point.get("support_chunk_ids", {}), 36
-                )
-            component_node = self._annotate_evidence_aliases(
-                {
-                    "id": component_id,
-                    "type": "component",
-                    "kind": "component",
-                    "schema_version": self.SCHEMA_VERSION,
-                    "label": component_label,
-                    "summary": component_summary,
-                    "related_file_ids": related_file_ids,
-                    "keywords": component_keywords,
-                    "children": [],
-                },
+            (
+                component_node,
                 component_support_pages,
                 component_support_chunk_ids,
-            )
+            ) = self._build_component_node(component_index, cluster_points)
+            component_id = str(component_node["id"])
             component_nodes.append(component_node)
             node_index[component_id] = component_node
             self._merge_support_dict(root_support_pages, component_support_pages, 24)
@@ -314,104 +550,26 @@ class KnowledgeGraphBuilder:
                 root_support_chunk_ids, component_support_chunk_ids, 36
             )
 
-            keyword_to_points: dict[str, list[dict[str, Any]]] = defaultdict(list)
-            for point in cluster_points:
-                normalized_keywords = [
-                    self._service._normalize_term(keyword)
-                    for keyword in point.get("keywords", [])
-                ]
-                normalized_keywords = [
-                    keyword for keyword in normalized_keywords if keyword
-                ]
-                primary_keyword = normalized_keywords[0] if normalized_keywords else ""
-                if primary_keyword:
-                    keyword_to_points[primary_keyword].append(point)
-                else:
-                    keyword_to_points["__general__"].append(point)
-
-            ordered_theme_keys = _limit_unique_strings(
-                [keyword for keyword in component_keywords if keyword], 4
+            theme_groups = self._build_theme_groups(
+                cluster_points, list(component_node.get("keywords", []))
             )
-            if (
-                "__general__" in keyword_to_points
-                and "__general__" not in ordered_theme_keys
-            ):
-                ordered_theme_keys.append("__general__")
-
-            assigned_point_ids: set[str] = set()
-            theme_groups: list[tuple[str, list[dict[str, Any]]]] = []
-            for keyword in ordered_theme_keys:
-                group_points = [
-                    point
-                    for point in keyword_to_points.get(keyword, [])
-                    if point["id"] not in assigned_point_ids
-                ]
-                if group_points:
-                    theme_groups.append((keyword, group_points))
-                    assigned_point_ids.update(point["id"] for point in group_points)
-
-            remaining_points = [
-                point
-                for point in cluster_points
-                if point["id"] not in assigned_point_ids
-            ]
-            if remaining_points:
-                fallback_keyword = (
-                    component_keywords[0] if component_keywords else "general"
-                )
-                theme_groups.append((fallback_keyword, remaining_points))
+            component_label = str(component_node.get("label", ""))
 
             for theme_index, (theme_keyword, theme_points) in enumerate(
                 theme_groups, start=1
             ):
-                theme_id = f"theme::{component_index}::{theme_index}"
-                theme_keywords = self._sorted_unique_keywords(theme_points, limit=4)
-                theme_label = theme_keyword
-                if theme_label == "__general__":
-                    theme_label = (
-                        self._service._trim_sentence(
-                            theme_points[0].get("label", ""), 84
-                        )
-                        if theme_points
-                        else "General theme"
-                    )
-                elif len(theme_points) == 1:
-                    theme_label = (
-                        self._service._trim_sentence(
-                            theme_points[0].get("label", ""), 84
-                        )
-                        or theme_keyword
-                    )
-                theme_summary = f"Theme around {theme_label} within {component_label}."
-
-                theme_support_pages: dict[str, list[str]] = {}
-                theme_support_chunk_ids: dict[str, list[str]] = {}
-                for point in theme_points:
-                    self._merge_support_dict(
-                        theme_support_pages, point.get("support_pages", {}), 24
-                    )
-                    self._merge_support_dict(
-                        theme_support_chunk_ids, point.get("support_chunk_ids", {}), 36
-                    )
-
-                theme_node = self._annotate_evidence_aliases(
-                    {
-                        "id": theme_id,
-                        "type": "theme",
-                        "kind": "theme",
-                        "schema_version": self.SCHEMA_VERSION,
-                        "label": theme_label,
-                        "summary": theme_summary,
-                        "related_file_ids": _limit_unique_strings(
-                            [point["file_id"] for point in theme_points], 24
-                        ),
-                        "keywords": theme_keywords,
-                        "component_id": component_id,
-                        "children": [],
-                        "parent_id": component_id,
-                    },
+                (
+                    theme_id,
+                    theme_node,
                     theme_support_pages,
                     theme_support_chunk_ids,
+                ) = self._build_theme_node(
+                    component_index,
+                    theme_index,
+                    theme_keyword,
+                    theme_points,
+                    component_id,
+                    component_label,
                 )
                 theme_nodes.append(theme_node)
                 node_index[theme_id] = theme_node
@@ -431,76 +589,24 @@ class KnowledgeGraphBuilder:
                     root_support_chunk_ids, theme_support_chunk_ids, 36
                 )
 
-                subtheme_groups: dict[
-                    tuple[str, str], list[dict[str, Any]]
-                ] = defaultdict(list)
-                for point in theme_points:
-                    signature = self._make_subtheme_signature(point, theme_keyword)
-                    subtheme_groups[signature].append(point)
-
                 for subtheme_index, (signature, subtheme_points) in enumerate(
-                    sorted(
-                        subtheme_groups.items(),
-                        key=lambda item: (
-                            -len(item[1]),
-                            item[1][0].get("label", "").lower(),
-                        ),
-                    ),
+                    self._sorted_subtheme_groups(theme_points, theme_keyword),
                     start=1,
                 ):
-                    subtheme_id = (
-                        f"subtheme::{component_index}::{theme_index}::{subtheme_index}"
-                    )
-                    subtheme_keywords = self._sorted_unique_keywords(
-                        subtheme_points, limit=4
-                    )
-                    subtheme_label = (
-                        self._service._trim_sentence(
-                            max(
-                                (point.get("label", "") for point in subtheme_points),
-                                key=len,
-                                default="",
-                            ),
-                            84,
-                        )
-                        or " / ".join([value for value in signature if value])
-                        or theme_label
-                    )
-                    subtheme_summary = (
-                        f"Subtheme connecting {len(subtheme_points)} knowledge point(s) "
-                        f"under {theme_label}."
-                    )
-                    subtheme_support_pages: dict[str, list[str]] = {}
-                    subtheme_support_chunk_ids: dict[str, list[str]] = {}
-                    for point in subtheme_points:
-                        self._merge_support_dict(
-                            subtheme_support_pages, point.get("support_pages", {}), 24
-                        )
-                        self._merge_support_dict(
-                            subtheme_support_chunk_ids,
-                            point.get("support_chunk_ids", {}),
-                            36,
-                        )
-
-                    subtheme_node = self._annotate_evidence_aliases(
-                        {
-                            "id": subtheme_id,
-                            "type": "subtheme",
-                            "kind": "subtheme",
-                            "schema_version": self.SCHEMA_VERSION,
-                            "label": subtheme_label,
-                            "summary": subtheme_summary,
-                            "related_file_ids": _limit_unique_strings(
-                                [point["file_id"] for point in subtheme_points], 24
-                            ),
-                            "keywords": subtheme_keywords,
-                            "component_id": component_id,
-                            "theme_id": theme_id,
-                            "children": [],
-                            "parent_id": theme_id,
-                        },
+                    (
+                        subtheme_id,
+                        subtheme_node,
                         subtheme_support_pages,
                         subtheme_support_chunk_ids,
+                    ) = self._build_subtheme_node(
+                        component_index,
+                        theme_index,
+                        subtheme_index,
+                        signature,
+                        subtheme_points,
+                        component_id,
+                        theme_id,
+                        str(theme_node.get("label", "")),
                     )
                     subtheme_nodes.append(subtheme_node)
                     node_index[subtheme_id] = subtheme_node
@@ -528,28 +634,12 @@ class KnowledgeGraphBuilder:
                         point_to_subtheme[point["id"]] = subtheme_id
                         point_to_cluster_index[point["id"]] = component_index
 
-                        point_node = dict(point)
-                        point_node.update(
-                            {
-                                "type": "knowledge_point",
-                                "kind": "knowledge_point",
-                                "schema_version": self.SCHEMA_VERSION,
-                                "component_id": component_id,
-                                "theme_id": theme_id,
-                                "subtheme_id": subtheme_id,
-                                "parent_id": subtheme_id,
-                                "children": [],
-                                "related_file_ids": [point["file_id"]],
-                                "file_id": point["file_id"],
-                                "system_id": f"system::{component_index}",
-                            }
-                        )
-                        self._annotate_evidence_aliases(
-                            point_node,
-                            point.get("support_pages", {}),
-                            point.get("support_chunk_ids", {}),
-                            8,
-                            8,
+                        point_node = self._build_canonical_point_node(
+                            point,
+                            component_id,
+                            theme_id,
+                            subtheme_id,
+                            component_index,
                         )
                         canonical_points.append(point_node)
                         node_index[point_node["id"]] = point_node
@@ -571,51 +661,72 @@ class KnowledgeGraphBuilder:
                             36,
                         )
 
-        if not component_nodes:
-            empty_root_support = self._build_support_bundle({}, {}, 24, 36)
-            root_node_id = "root::conversation"
-            root_node = {
-                "id": root_node_id,
-                "type": "knowledge_root",
-                "kind": "root",
-                "schema_version": self.SCHEMA_VERSION,
-                "label": "Conversation Knowledge Map",
-                "summary": "No thematic structure could be derived yet.",
-                "related_file_ids": list(sources.keys()),
-                "children": [],
-                "component_ids": [],
-                "theme_ids": [],
-                "subtheme_ids": [],
-                "point_ids": [],
-                **empty_root_support,
-            }
-            node_index[root_node_id] = root_node
-            legacy_graph: dict[str, list[dict[str, Any]]] = {
-                "systems": [],
-                "file_cards": [],
-                "knowledge_points": [],
-                "legacy_edges": [],
-            }
-            return {
-                "schema_version": self.SCHEMA_VERSION,
-                "conversation_id": conversation_id,
-                "source_ids": list(sources.keys()),
-                "root": root_node,
-                "maps": [],
-                "components": [],
-                "themes": [],
-                "subthemes": [],
-                "knowledge_points": [],
-                "edges": [],
-                "node_index": node_index,
-                "support_pages": {},
-                "support_chunk_ids": {},
-                "evidence_pages": {},
-                "evidence_chunk_ids": {},
-                "split_reason": "",
-                **legacy_graph,
-            }
+        return (
+            component_nodes,
+            theme_nodes,
+            subtheme_nodes,
+            canonical_points,
+            canonical_edges,
+            node_index,
+        )
 
+    def _build_empty_canonical_graph(
+        self,
+        conversation_id: str,
+        sources: dict[str, dict[str, Any]],
+        node_index: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        empty_root_support = self._build_support_bundle({}, {}, 24, 36)
+        root_node_id = "root::conversation"
+        root_node = {
+            "id": root_node_id,
+            "type": "knowledge_root",
+            "kind": "root",
+            "schema_version": self.SCHEMA_VERSION,
+            "label": "Conversation Knowledge Map",
+            "summary": "No thematic structure could be derived yet.",
+            "related_file_ids": list(sources.keys()),
+            "children": [],
+            "component_ids": [],
+            "theme_ids": [],
+            "subtheme_ids": [],
+            "point_ids": [],
+            **empty_root_support,
+        }
+        node_index[root_node_id] = root_node
+        legacy_graph: dict[str, list[dict[str, Any]]] = {
+            "systems": [],
+            "file_cards": [],
+            "knowledge_points": [],
+            "legacy_edges": [],
+        }
+        return {
+            "schema_version": self.SCHEMA_VERSION,
+            "conversation_id": conversation_id,
+            "source_ids": list(sources.keys()),
+            "root": root_node,
+            "maps": [],
+            "components": [],
+            "themes": [],
+            "subthemes": [],
+            "knowledge_points": [],
+            "edges": [],
+            "node_index": node_index,
+            "support_pages": {},
+            "support_chunk_ids": {},
+            "evidence_pages": {},
+            "evidence_chunk_ids": {},
+            "split_reason": "",
+            **legacy_graph,
+        }
+
+    def _build_legacy_graph_artifacts(
+        self,
+        file_graphs: list[dict[str, Any]],
+        component_nodes: list[dict[str, Any]],
+        theme_nodes: list[dict[str, Any]],
+        canonical_points: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         component_to_legacy_system_id = {
             component["id"]: f"system::{index}"
             for index, component in enumerate(component_nodes, start=1)
@@ -760,10 +871,18 @@ class KnowledgeGraphBuilder:
                 }
             )
 
-        root_children = [component["id"] for component in component_nodes]
-        root_theme_ids = [theme["id"] for theme in theme_nodes]
-        root_subtheme_ids = [subtheme["id"] for subtheme in subtheme_nodes]
-        root_point_ids = [point["id"] for point in canonical_points]
+        return legacy_systems, legacy_file_cards, legacy_edges
+
+    def _build_knowledge_maps(
+        self,
+        file_graphs: list[dict[str, Any]],
+        component_nodes: list[dict[str, Any]],
+        theme_nodes: list[dict[str, Any]],
+        subtheme_nodes: list[dict[str, Any]],
+        canonical_points: list[dict[str, Any]],
+        root_point_ids: list[str],
+        node_index: dict[str, dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         system_groups = self.group_files_into_systems(file_graphs)
         if not system_groups:
             system_groups = [list(file_graphs)]
@@ -892,8 +1011,26 @@ class KnowledgeGraphBuilder:
             map_ids.append(map_id)
             node_index[map_id] = map_node
 
+        return maps, map_ids
+
+    def _build_root_node(
+        self,
+        sources: dict[str, dict[str, Any]],
+        component_nodes: list[dict[str, Any]],
+        theme_nodes: list[dict[str, Any]],
+        subtheme_nodes: list[dict[str, Any]],
+        canonical_points: list[dict[str, Any]],
+        maps: list[dict[str, Any]],
+        map_ids: list[str],
+        root_support_pages: dict[str, list[str]],
+        root_support_chunk_ids: dict[str, list[str]],
+    ) -> dict[str, Any]:
+        root_children = [component["id"] for component in component_nodes]
+        root_theme_ids = [theme["id"] for theme in theme_nodes]
+        root_subtheme_ids = [subtheme["id"] for subtheme in subtheme_nodes]
+        root_point_ids = [point["id"] for point in canonical_points]
         root_node_id = "root::conversation"
-        root_node = self._annotate_evidence_aliases(
+        return self._annotate_evidence_aliases(
             {
                 "id": root_node_id,
                 "type": "knowledge_root",
@@ -920,8 +1057,15 @@ class KnowledgeGraphBuilder:
             24,
             36,
         )
-        node_index[root_node_id] = root_node
 
+    @staticmethod
+    def _index_canonical_nodes(
+        node_index: dict[str, dict[str, Any]],
+        component_nodes: list[dict[str, Any]],
+        theme_nodes: list[dict[str, Any]],
+        subtheme_nodes: list[dict[str, Any]],
+        canonical_points: list[dict[str, Any]],
+    ) -> None:
         for component in component_nodes:
             node_index[component["id"]] = component
         for theme in theme_nodes:
@@ -930,6 +1074,80 @@ class KnowledgeGraphBuilder:
             node_index[subtheme["id"]] = subtheme
         for point in canonical_points:
             node_index[point["id"]] = point
+
+    def _build_canonical_graph(
+        self,
+        conversation_id: str,
+        sources: dict[str, dict[str, Any]],
+        file_graphs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        (
+            point_records,
+            root_support_pages,
+            root_support_chunk_ids,
+        ) = self._collect_canonical_point_records(file_graphs)
+        if not point_records:
+            self._append_synthetic_point_records(point_records, file_graphs)
+
+        clusters = self._cluster_points(point_records)
+        if not clusters and point_records:
+            clusters = [point_records]
+
+        (
+            component_nodes,
+            theme_nodes,
+            subtheme_nodes,
+            canonical_points,
+            canonical_edges,
+            node_index,
+        ) = self._build_canonical_hierarchy(
+            clusters, root_support_pages, root_support_chunk_ids
+        )
+
+        if not component_nodes:
+            return self._build_empty_canonical_graph(
+                conversation_id, sources, node_index
+            )
+
+        (
+            legacy_systems,
+            legacy_file_cards,
+            legacy_edges,
+        ) = self._build_legacy_graph_artifacts(
+            file_graphs, component_nodes, theme_nodes, canonical_points
+        )
+
+        root_point_ids = [point["id"] for point in canonical_points]
+        maps, map_ids = self._build_knowledge_maps(
+            file_graphs,
+            component_nodes,
+            theme_nodes,
+            subtheme_nodes,
+            canonical_points,
+            root_point_ids,
+            node_index,
+        )
+        root_node_id = "root::conversation"
+        root_node = self._build_root_node(
+            sources,
+            component_nodes,
+            theme_nodes,
+            subtheme_nodes,
+            canonical_points,
+            maps,
+            map_ids,
+            root_support_pages,
+            root_support_chunk_ids,
+        )
+        node_index[root_node_id] = root_node
+
+        self._index_canonical_nodes(
+            node_index,
+            component_nodes,
+            theme_nodes,
+            subtheme_nodes,
+            canonical_points,
+        )
 
         return {
             "schema_version": self.SCHEMA_VERSION,
