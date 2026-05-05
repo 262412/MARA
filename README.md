@@ -2,7 +2,7 @@
 
 <div align="center">
 
-# Slides
+# MARA: Multimodal Agentic Retrieval and Answering Framework
 
 A local RAG application repository built around document QA, page-level preview, knowledge graph exploration, and multi-model routing.
 
