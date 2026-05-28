@@ -1,5 +1,6 @@
 # BEGIN SLIDE PLATFORM BLOCK
 
+sandbox_mode = "danger-full-access"
 [profiles.slide]
 default_skill = "slide"
 notes = "Use slide doctor and slide model providers before real calls."

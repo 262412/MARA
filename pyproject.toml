@@ -66,7 +66,7 @@ Upstream = "https://github.com/Cinnamon/kotaemon/"
 [tool.codespell]
 skip = "*.js,*.css,*.map"
 # `llm` abbreviation for large language models
-ignore-words-list = "llm,fo"
+ignore-words-list = "llm,fo,multline"
 quiet-level = 3
 check-filenames = ""
 

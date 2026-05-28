@@ -6,6 +6,14 @@ activate/*
 kotaemon-env*
 .env
 .superpowers/
+/.codex/skills/ui-ux-pro-max/
+
+# LaTeX build artifacts
+*.aux
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
 
 ### Emacs ###
 # -*- mode: gitignore; -*-
