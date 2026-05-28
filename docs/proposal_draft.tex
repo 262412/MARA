@@ -43,85 +43,89 @@
 \maketitle
 
 \begin{abstract}
-MARA is proposed as a multimodal agentic retrieval and answering framework for searching, summarising and exploring multi-format document collections. The system will use an LLM agent not only to generate answers, but also to plan requests, select tools, retrieve evidence from text, slides, tables and image-based document content, and produce cited responses. The prototype will combine multimodal ingestion, retrieval-augmented generation, citation review, page-level preview and knowledge graph navigation in a research-workbench interface supported by both a web UI and command-line workflow.
+MARA is a multimodal agentic retrieval and answering framework for searching, summarising and exploring collections of documents in multiple formats. The LLM agent will plan different workflows based on different documents, select appropriate tools, look for evidence from text, page or slide structure, tables and limited OCR/image derivative content, and then generate a cited response. This prototype integrates features such as multimodal information processing, RAG, citation review, page preview, and knowledge graph into the Web and CLI.
 \end{abstract}
 
 \section*{Statement of Ethical Compliance}
 
-Proposed data and participant categories: A0/A1 for public, synthetic or self-provided project documents. The planned evaluation will use benchmark tasks and technical experiments rather than human participants. I will follow the School ethical guidance, use only permitted data sources, avoid confidential personal data, and confirm any change in data or participant activity with my supervisor before it begins.
+Data category: A0/A1 for public, synthetic or self-provided project documents. No human participants are planned. The evaluation will employ benchmark testing and manual testing. I will follow the School ethical guidance, use permitted data only, avoid confidential personal data, and confirm any later change with my supervisor before it begins.
 
 \section{Project Description}
 
-MARA will be a multimodal agentic retrieval and answering framework that helps users search, understand and navigate mixed document collections through a web interface and command-line workflow. In this proposal, ``multimodal'' means that text, page or slide structure, and tables are core inputs, while OCR or image-derived descriptions are scoped extensions for selected visual content. ``Agentic'' means that an LLM is used not only to write answers, but also to decide which retrieval, extraction, preview or reasoning tool should be used for a given query.
+MARA will help users search and understand mixed document collections through a web interface and command-line workflow. Here, ``multimodal'' means text, page or slide structure, tables and a scoped OCR/image adapter for selected figures, screenshots or scanned regions. ``Agentic'' behaviour will be defined as query classification, tool selection, multi-step execution and logged tool-use decisions, rather than only using an LLM to write the final answer.
 
-The project builds on the existing Python repository, a fork of Kotaemon/Slides, and extends its retrieval-augmented generation (RAG), page-level document preview, citation review and knowledge graph exploration capabilities. A user will be able to upload documents such as PDFs, Word files, slides, spreadsheets, Markdown and text files, index them locally, then ask natural-language questions. MARA will retrieve relevant evidence, reason over the selected context, generate an answer, show citations, and allow the user to inspect the original page, slide, table or image-derived evidence.
+The project builds on the existing Python repository, a fork of Kotaemon/Slides, and extends its retrieval-augmented generation (RAG), page preview, citation review and knowledge graph features. Users will upload PDFs, Word files, slides, spreadsheets, Markdown and text files, index them locally, then ask natural-language questions. MARA will retrieve evidence, generate a cited answer, and let the user inspect the original page, slide, table or image-derived source.
 
-Ordinary file search is weak for complex academic or professional documents, while generic chatbots may answer without showing where their claims came from. MARA will therefore combine conversational interaction with visible evidence and a lightweight trace of the tools used by the agent. The final application should look like a research workbench: a file index, a chat area, an agent/tool trace, a document preview panel, and a knowledge graph viewer for exploring relationships between topics.
+Ordinary file search is weak for complex documents, while generic chatbots may answer without showing sources. MARA therefore combines conversation with visible evidence and a lightweight tool-use trace. The application will look like a research workbench: file index, chat area, preview panel, tool trace and knowledge graph. Graph nodes will represent documents, pages or slides, entities/topics and cited evidence; edges will represent containment, citation, co-occurrence or follow-up relations.
 
 \section{Aims and Requirements}
 
 The aims of the project are:
 
 \begin{itemize}
-  \item To design and implement a local multimodal agentic retrieval and answering framework for question answering, summarisation and knowledge exploration across documents, slides, tables and image-based content.
-  \item To investigate how an LLM agent can plan user requests, select retrieval or analysis tools, and produce evidence-grounded answers.
+  \item To design and implement a local multimodal agentic framework for question answering, summarisation and knowledge exploration across documents, slides, tables and scoped visual/OCR evidence.
+  \item To investigate how an LLM agent can classify queries, select tools, plan multi-step workflows, and produce evidence-grounded answers.
   \item To improve transparency by linking generated answers to retrieved evidence, page or slide previews, citation review and a lightweight knowledge graph.
-  \item To evaluate whether the system meets representative practical requirements for searching, summarising and exploring multimodal document collections.
+  \item To evaluate whether the system meets representative practical requirements for multimodal document exploration.
 \end{itemize}
 
 \textbf{Essential requirements:}
 \begin{itemize}
-  \item Users can upload and index supported document formats, including PDF, Office, presentation, spreadsheet, text and Markdown files.
+  \item Users can upload and index PDF, Word, PowerPoint, Excel/CSV, Markdown and plain-text files.
   \item Users can ask questions over all indexed documents or selected files.
-  \item The system extracts and indexes text, metadata, page or slide structure, and table evidence from supported files.
-  \item The LLM agent selects retrieval, preview, summarisation or reasoning tools according to the user's query.
+  \item The system extracts and indexes text, metadata, page or slide structure and table evidence from supported files, with scoped OCR/image-derived evidence for selected visual content where available.
+  \item The LLM agent classifies queries, selects tools, executes multi-step workflows, and logs tool-use decisions.
   \item The system retrieves relevant evidence and generates answers with citations.
-  \item Users can open cited sources in a preview panel and inspect page-level, slide-level, table or generated visual evidence.
+  \item Users can open cited sources in a preview panel and inspect page-level, slide-level, table or image-derived evidence.
   \item Conversations and indexes are persisted locally so the web UI and CLI can share the same runtime state.
   \item The interface shows enough agent/tool state to make the tool-use trace inspectable.
+  \item The evaluation includes a text-only RAG baseline using the same benchmark queries.
   \item The project includes automated tests for multimodal ingestion, tool routing, retrieval, citation handling, CLI behaviour and important UI services.
 \end{itemize}
 
 \textbf{Desirable requirements:}
 \begin{itemize}
   \item Local-model support for privacy-sensitive use cases.
-  \item OCR or image-derived descriptions for selected figures, screenshots or scanned document regions.
-  \item A fullscreen knowledge graph viewer with pan and zoom.
-  \item A benchmark set comparing text-only RAG against the multimodal agentic workflow.
-  \item A polished light and dark UI theme suitable for long reading sessions.
+  \item Richer graph interaction, such as full-screen pan, zoom and node filtering.
 \end{itemize}
 
 \section{Key Literature and Background Reading}
 
-The technical basis of the project is retrieval-augmented generation. Lewis et al. describe RAG as a method that combines a parametric language model with a non-parametric external knowledge source, allowing generated answers to be grounded in retrieved passages rather than relying only on model memory \cite{lewis2020rag}. This supports MARA's evidence-first design: documents are indexed, relevant evidence is retrieved, and the answer generator must cite the selected context.
+The technical basis is retrieval-augmented generation. Lewis et al. describe RAG as combining a language model with an external knowledge source, so answers can be grounded in retrieved passages rather than model memory alone \cite{lewis2020rag}. Dense passage retrieval embeds questions and passages into a shared vector space \cite{karpukhin2020dpr}. Recent surveys show that RAG can improve grounding, but retrieval quality, chunking and evaluation remain difficult \cite{gao2023rag}. MARA therefore exposes retrieved evidence, citations and page preview, and evaluates retrieval separately from generation.
 
-Dense retrieval is also important. Karpukhin et al. show that dense passage retrieval can outperform traditional sparse retrieval in open-domain question answering by embedding questions and passages into a shared vector space \cite{karpukhin2020dpr}. MARA will use this idea through vector indexes and embedding models, with hybrid or reranking options where useful.
+The agentic part is informed by work on reasoning and tool use. ReAct shows that language models can interleave reasoning with actions \cite{yao2022react}, while Toolformer demonstrates external tool calls \cite{schick2023toolformer}. MARA applies this through query classification, tool selection, multi-step execution, and logged decisions for text retrieval, slide-aware retrieval, OCR/image extraction, citation lookup or graph exploration.
 
-Recent RAG surveys emphasise that RAG can reduce hallucination, improve factual grounding and make language-model applications easier to update \cite{gao2023rag}. However, retrieval quality, chunking strategy and evaluation remain difficult. For this reason, MARA will not treat the language model as the whole solution. It will expose retrieved evidence, show citations, support page preview, and test retrieval separately from generation.
+The multimodal part is motivated by image-text and document AI work. CLIP aligns visual and textual representations \cite{radford2021clip}; LayoutLMv3 combines text, layout and visual signals for document understanding \cite{huang2022layoutlmv3}. These ideas justify treating documents as more than plain text when answers depend on layout, figures or slide structure.
 
-The agentic part of the project is informed by work on reasoning and tool use. ReAct shows that language models can interleave reasoning traces with actions, making it possible to combine planning with external information gathering \cite{yao2022react}. Toolformer further demonstrates the value of teaching models to call external tools rather than relying only on internal model knowledge \cite{schick2023toolformer}. MARA will apply this principle practically: the agent should decide whether a query needs normal text retrieval, slide-aware retrieval, image/table extraction, citation lookup or graph exploration.
-
-The multimodal part is motivated by research on image-text and document understanding. CLIP shows how visual and textual representations can be aligned for open-vocabulary retrieval and recognition \cite{radford2021clip}. LayoutLMv3 shows that document AI benefits from combining text, layout and visual signals, which is especially relevant for PDFs, forms, tables and slides \cite{huang2022layoutlmv3}. These ideas justify treating documents as more than plain text when the answer depends on layout, figures or presentation structure.
-
-The UI is equally important because the user must inspect sources, not just receive an answer. Gradio is suitable because it supports Python-first interactive interfaces with upload controls, chat components, preview panels and settings \cite{gradioDocs}. The design will follow a workbench style because the target use case is repeated document analysis.
-
-OWASP's guidance on LLM applications highlights risks such as sensitive information disclosure and prompt injection \cite{owaspLLM}. MARA will reduce these risks by using local storage by default, avoiding unnecessary personal data collection, warning users not to upload confidential third-party material during evaluation, and testing on public or synthetic documents.
+The UI matters because users must inspect sources, not just receive answers. Gradio supports Python-first upload, chat, preview and settings components \cite{gradioDocs}, which fits the workbench design. OWASP guidance highlights LLM risks such as sensitive information disclosure and prompt injection \cite{owaspLLM}; MARA will reduce these risks through local storage, minimal personal data use and public or synthetic test data.
 
 \section{Development and Implementation Summary}
 
-The project will be implemented mainly in Python 3.10+. The existing repository has three main layers: \texttt{kotaemon} provides LLM wrappers, document loaders, vector stores, indexing and retrieval; \texttt{ktem} provides the application runtime, Gradio UI, settings, database models, page preview and DocQA orchestration; and \texttt{slide-cli} exposes the public \texttt{slide} command line interface. This structure will be preserved because it separates core RAG logic, application services and user-facing commands.
+The project will be implemented mainly in Python 3.10+. The repository has three main layers: \texttt{kotaemon} for LLM wrappers, loaders, vector stores and retrieval; \texttt{ktem} for the Gradio app runtime, settings, preview and DocQA orchestration; and \texttt{slide-cli} for the public \texttt{slide} CLI. This separates core RAG logic, services and user-facing commands.
 
-Development will begin with background reading and a review of the current codebase. I will then stabilise the baseline application, define a small evaluation document set, and improve the workflow in increments: multimodal ingestion, tool routing, cited answers, page or slide preview, knowledge graph interaction, and UI polish. Each change will be tested with targeted unit or integration tests before wider regression checks. Git will be used for version control and a short development log.
+\textbf{Baseline and new work:}
+\begin{center}
+\scriptsize
+\begin{tabularx}{\textwidth}{p{0.31\textwidth}X}
+\toprule
+Inherited baseline & Existing loaders, vector store integration, Gradio runtime, settings, preview services and basic DocQA flow. \\
+\midrule
+New or extended work & Multimodal evidence schema, scoped OCR/image adapter, agent tool routing, citation resolver, benchmark design, text-only RAG baseline, shared CLI/web state and inspectable tool-use trace. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Development will begin with reading and code review, then progress through multimodal ingestion, tool routing, cited answers, preview, knowledge graph interaction and UI polish. Targeted tests, Git and a short development log will support project management.
 
 The main workflow will be:
 \begin{enumerate}
-  \item Load or upload documents through the web UI or CLI.
-  \item Extract text, metadata, page or slide structure, table content, and scoped OCR or image-derived descriptions for selected visual content.
+  \item Load documents through the web UI or CLI.
+  \item Extract text, metadata, page or slide structure, table content, and scoped OCR/image-derived descriptions.
   \item Split the extracted content into retrievable units and store them in document and vector stores.
   \item Receive a user query and let the LLM agent classify the task, plan steps, and select tools.
-  \item Run the selected retrieval, preview, summarisation, graph or reasoning tools.
-  \item Pass the retrieved multimodal evidence and tool outputs to the answer generator.
-  \item Display the answer, citations, evidence cards, preview links and a concise agent/tool trace.
+  \item Run selected retrieval, preview, summarisation, comparison, citation-checking or graph tools.
+  \item Generate an answer from multimodal evidence and tool outputs.
+  \item Display the answer, citations, evidence cards, preview links and concise tool-use trace.
   \item Build or refresh a conversation knowledge graph for follow-up exploration.
 \end{enumerate}
 
@@ -144,19 +148,19 @@ Knowledge graph builder & Conversation and retrieved evidence & Topic graph and 
 
 \section{Data Sources}
 
-The project will use public, open-licence, synthetic or self-created documents for development and demonstration, such as academic papers, technical documentation, generated reports, screenshots and presentation slides. These will be used only where permitted and cited if they appear in the dissertation. The application may also process non-sensitive documents uploaded by the developer during testing.
+The project will use public, open-licence, synthetic or self-created documents such as papers, technical documentation, generated reports, screenshots and slides. These will be used only where permitted and cited if they appear in the dissertation. The application may also process self-provided non-sensitive test files during development.Self-created screenshots and slides will avoid personal, confidential or copyrighted third-party content unless permission is clear.
 
-The evaluation will use a fixed benchmark set of public or synthetic multimodal documents and manually prepared question-answer pairs. Each benchmark item will include a query, target modality, expected answer, accepted evidence references, and source identifiers such as file name, page, slide, table, figure or image region. The project will not require scraping private websites, collecting personal records, storing confidential user documents, or collecting participant feedback.
+The evaluation will use a fixed benchmark of public or synthetic multimodal documents and manually prepared question-answer pairs. Each item will include a query, target modality, expected answer, accepted evidence references, and source identifiers such as file name, page, slide, table, figure or image region. No private scraping, personal records, confidential documents or participant feedback are required.
 
 \section{Testing and Evaluation}
 
-Technical testing will show that the software works as intended. Unit tests will cover document parsing, multimodal extraction adapters, indexing, agent tool routing, retrieval, citation construction, CLI commands and knowledge graph services. Integration tests will check that a document or slide deck can be indexed, queried and cited through the shared runtime. Manual UI testing will verify upload, chat, preview, citation navigation, graph generation, tool trace display and theme behaviour.
+Technical testing will cover document parsing, multimodal extraction adapters, indexing, agent tool routing, retrieval, citation construction, CLI commands and knowledge graph services. Integration tests will check that a document or slide deck can be indexed, queried and cited. Manual UI testing will verify upload, chat, preview, citation navigation, graph generation and tool-use trace display.
 
-Evaluation will focus on whether MARA meets the original requirements without relying on human beta testers. I will create a small benchmark of representative multimodal tasks, including document question answering, slide summarisation, table or figure-based questions, cross-document comparison and citation lookup. Ground truth will be manually annotated from the source documents: for each task I will record the expected answer, acceptable supporting evidence, and the page, slide, table or visual region that should justify the answer. MARA will be compared against a simpler text-only RAG baseline where possible. The main measures will be retrieval recall@k, whether the cited evidence supports the answer, answer faithfulness, task completion on the benchmark, latency, and qualitative error analysis of failed cases. This evaluation will show not only whether the prototype works, but also where the agentic multimodal approach improves over a simpler retrieval pipeline.
+Evaluation will use representative tasks: document QA, slide summarisation, table or figure questions, cross-document comparison and citation lookup. Ground truth will be manually annotated from the sources, recording the expected answer, expected tool type, acceptable evidence, and the page, slide, table or visual region that justifies it. MARA will be compared with a simple text-only RAG baseline using the same benchmark queries. Measures will include retrieval recall@k and MRR; routing accuracy against the labelled expected tool; citation support as the proportion of answer claims supported by accepted evidence; answer faithfulness using a manual rubric; optional LLM-assisted scoring may be used only as a secondary aid and will be checked manually.; benchmark item success rate; latency and cost; and qualitative error analysis.
 
 \section{Project Ethics and Human Participants}
 
-No human participants or beta testers are planned for this assessment stage. The project evaluation will use technical tests and benchmark tasks built from public, synthetic or self-provided non-sensitive documents. Therefore no participant recruitment, interview, survey, observation or personal feedback data will be collected. If I later decide to add a user study or beta-testing activity, I will update the ethical statement and check the plan with my supervisor before starting.
+No human participants or beta testers are planned. Evaluation will use technical tests and benchmark tasks built from public, synthetic or self-provided non-sensitive documents. No recruitment, interview, survey, observation or personal feedback data will be collected. If I later add a user study, I will update the ethics statement and check with my supervisor first.
 
 \section{BCS Project Criteria}
 
@@ -164,37 +168,45 @@ No human participants or beta testers are planned for this assessment stage. The
 \toprule
 BCS outcome & How this project will address it \\
 \midrule
-Practical and analytical skills & The project applies Python development, software testing, information retrieval, multimodal processing, agent design and experimental evaluation. \\
-Innovation or creativity & The creative element is the combination of LLM tool use, multimodal retrieval, citation preview and knowledge graph exploration in one workbench. \\
-Synthesis and evaluation & The solution combines literature on RAG, LLM agents, multimodal document understanding and UI design, then evaluates the result against benchmark tasks. \\
-Real need in a wider context & Students and knowledge workers often need to understand complex document and slide collections while checking source evidence. \\
-Self-management & The project will be planned through milestones, version control, tests, benchmark design, risk tracking and dissertation writing time. \\
-Critical self-evaluation & The final dissertation will reflect on design decisions, failed approaches, retrieval limitations, agent routing errors and future improvements. \\
+Practical and analytical skills & Python development, testing, retrieval, multimodal processing, agent design and evaluation. \\
+Innovation or creativity & LLM tool use, multimodal retrieval, citation preview and knowledge graph exploration in one workbench. \\
+Synthesis and evaluation & Literature on RAG, agents, document understanding and UI design, evaluated through benchmark tasks. \\
+Real need in a wider context & Students and knowledge workers need to inspect complex document and slide collections with evidence. \\
+Self-management & Milestones, version control, tests, benchmark design, risk tracking and dissertation writing time. \\
+Critical self-evaluation & Reflection on design choices, failed approaches, retrieval limits, agent routing errors and future work. \\
 \bottomrule
 \end{tabularx}
 
-\Needspace{24\baselineskip}
+\Needspace{36\baselineskip}
 \section{UI/UX Mockup}
 
-The intended interface will be a multimodal research workbench rather than a simple chatbot. A rough wireframe is shown below.
+The interface will be a multimodal research workbench: corpus browser on the left, page-level preview in the centre, and page-aware answering, citations, tool-use trace and knowledge map on the right.
 
-\begin{Verbatim}[fontsize=\scriptsize]
-+--------------------------------------------------------------------------------+
-| MARA     Chat    |    File Index   |    Resources   |   Settings   |    Theme   |
-+--------------------------------------------------------------------------------+
-| Conversations / Sources      | Chat and Agent Answer           | Evidence/Trace |
-| -----------------------      | ------------------------------  | -------------- |
-| + New conversation           | User: compare slide 3 + fig. 2  | Tool: slides   |
-| Search all files             | MARA: cited answer [1] [2]      | Tool: image    |
-| [x] report.pdf               |                                 | Citation 1     |
-| [x] deck.pptx                | Ask a follow-up... [Send]       | page preview   |
-| [ ] notes.docx               |                                 | slide preview  |
-| File Index                   | Knowledge Graph Preview         | Graph Context  |
-| Upload and Index             | [Open fullscreen graph]         | selected node  |
-+--------------------------------------------------------------------------------+
+\begin{Verbatim}[fontsize=\tiny]
++----------------------------------------------------------------------------------------------------+
+| MARA  Multimodal Agentic Retrieval and Answering Framework      Dataset: Thesis Corpus   Search  |
+| Workbench | Corpus | Knowledge Map | Evaluation | Settings                                       |
++------------------+------------------+--------------------------------------+------------------+
+| Corpus           | Transformers in  | PDF / Slide Viewer                   | Ask this page     |
+| + Add   Search   | Vision.pdf       | hand select annotate search zoom     | [question box] >  |
+| PDF (12)         | 28 pages Indexed | ------------------------------------ | Suggested qs      |
+|  Attention...    | Search in file   | Page 2: Vision Transformer (ViT)     | - main idea?      |
+| >Transformers... |                  | highlighted evidence spans 2.1-2.3   | - how sequence?   |
+|  CLIP.pdf        | [thumb p1]       |                                      | Answer            |
+| Images (8)       | [thumb p2] *     |      figure / architecture diagram   | cited summary     |
+|  Diagram.png     | [thumb p3]       |                                      | Citations         |
+| Slides (6)       | [thumb p4]       | selected text + figure grounding     | [2.1][2.2][2.3]   |
+|  ViT deck.pptx   |                  |                                      | Tool-use Trace    |
+| Documents (5)    |                  | Metadata: modality, page, OCR, lang  | rewrite/retrieve  |
+|  Related.docx    |                  |                                      | rerank/synthesis  |
+|                  |                  |                                      | Knowledge Map     |
+| storage/model    |                  |                                      | page-level graph  |
++------------------+------------------+--------------------------------------+------------------+
+| Model: GPT-4o | Embedding: text-embedding-3-large | Tokens: 1932/2048 | Latency: 2.18s |
++----------------------------------------------------------------------------------------------------+
 \end{Verbatim}
 
-The left panel supports conversation and source selection. The centre panel is the main chat flow. The right panel shows retrieved evidence, citation targets, preview output and a short trace of the tools selected by the agent. The knowledge graph preview will open into a larger viewer so users can pan, zoom and click nodes without losing the chat context.
+The left panel manages PDFs, images, slides and documents. The middle combines thumbnails with page preview, highlighted text, figures, metadata and OCR status. The right panel provides page questions, cited answers, citation chips, a compact tool-use trace and a page-level knowledge map. The aim is to keep answers, evidence and selected tools visible together.
 
 \section{Project Plan}
 
@@ -225,14 +237,14 @@ Dissertation and presentation & & & & & & & & & X & X & X & X \\
 \toprule
 \textbf{Risks} & \textbf{Contingencies} & \textbf{Likelihood} & \textbf{Impact} \\
 \midrule
-Agent chooses the wrong tool & Start with a small set of explicit tool routes, log decisions, and evaluate routing errors separately & Medium & High \\
-Multimodal extraction quality is weak & Prioritise text, slides and tables first; treat image understanding as scoped and document limitations & Medium & High \\
-Retrieval quality is too weak for useful answers & Build a small benchmark set, tune chunking/retrieval settings, and report limitations honestly & Medium & High \\
-Hallucinated or unsupported citations & Require answer generation to cite retrieved evidence and manually check citation support in evaluation & Medium & High \\
-LLM API cost or availability problems & Support local models and keep tests independent of paid APIs where possible & Medium & Medium \\
-Scope becomes too broad & Prioritise essential requirements and keep advanced modalities or UI polish as desirable items & Medium & High \\
-Hardware or data loss & Use Git, remote backups and exported benchmark/evaluation data copies & Low & High \\
-Ethical scope changes unexpectedly & Stop collection and confirm revised plans with the supervisor before proceeding & Low & High \\
+Agent chooses the wrong tool & Start with explicit routes, log decisions, and evaluate routing errors separately & Medium & High \\
+Multimodal extraction quality is weak & Prioritise text, slides and tables; keep image understanding scoped & Medium & High \\
+Retrieval quality is too weak & Tune chunking/retrieval settings and report limits honestly & Medium & High \\
+Unsupported citations & Require citations to retrieved evidence and manually check support & Medium & High \\
+LLM API cost or availability problems & Support local models and keep offline benchmark tests independent of paid APIs & Medium & Medium \\
+Scope becomes too broad & Prioritise essentials and keep advanced modalities or UI polish as desirable & Medium & High \\
+Hardware or data loss & Use Git, remote backups and exported benchmark data copies & Low & High \\
+Ethical scope changes unexpectedly & Stop collection and confirm revised plans with the supervisor & Low & High \\
 \bottomrule
 \end{tabularx}
 
