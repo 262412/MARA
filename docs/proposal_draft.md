@@ -1,6 +1,6 @@
 # MARA: A Local Retrieval-Augmented Document QA and Knowledge Exploration System
 
-Name: [Chenghao Zhang]  
+Name: [Chenghao Zhang]
 Student ID: [201844864]
 
 ## Statement of Ethical Compliance
@@ -87,14 +87,14 @@ The evaluation data will be limited to anonymised task results, ratings and opti
 
 ## BCS Project Criteria
 
-| BCS outcome | How this project will address it |
-| --- | --- |
-| Practical and analytical skills | The project applies Python development, software testing, information retrieval, UI design and evaluation methods learned during the degree. |
-| Innovation or creativity | The creative element is the combination of local RAG, citation preview and knowledge graph exploration in one research workbench. |
-| Synthesis and evaluation | The solution combines literature on RAG, dense retrieval, UI design and software engineering, then evaluates the result technically and with users. |
-| Real need in a wider context | Students and knowledge workers often need to understand large document collections while checking source evidence. |
-| Self-management | The project will be planned through milestones, version control, tests, risk tracking and dissertation writing time. |
-| Critical self-evaluation | The final dissertation will reflect on design decisions, failed approaches, limitations of retrieval accuracy, and future improvements. |
+| BCS outcome                     | How this project will address it                                                                                                                    |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Practical and analytical skills | The project applies Python development, software testing, information retrieval, UI design and evaluation methods learned during the degree.        |
+| Innovation or creativity        | The creative element is the combination of local RAG, citation preview and knowledge graph exploration in one research workbench.                   |
+| Synthesis and evaluation        | The solution combines literature on RAG, dense retrieval, UI design and software engineering, then evaluates the result technically and with users. |
+| Real need in a wider context    | Students and knowledge workers often need to understand large document collections while checking source evidence.                                  |
+| Self-management                 | The project will be planned through milestones, version control, tests, risk tracking and dissertation writing time.                                |
+| Critical self-evaluation        | The final dissertation will reflect on design decisions, failed approaches, limitations of retrieval accuracy, and future improvements.             |
 
 ## UI/UX Mockup
 
@@ -120,30 +120,30 @@ The left panel supports conversation and source selection. The centre panel is t
 
 ## Project Plan
 
-| Stage | W1 | W2 | W3 | W4 | W5 | W6 | W7 | W8 | W9 | W10 | W11 | W12 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Background reading and proposal | X | X | | | | | | | | | | |
-| Baseline setup and code review | | X | X | | | | | | | | | |
-| Data set and evaluation design | | | X | X | | | | | | | | |
-| Ingestion/retrieval improvements | | | | X | X | | | | | | | |
-| Citation and preview workflow | | | | | X | X | | | | | | |
-| Knowledge graph/UI refinement | | | | | | X | X | X | | | | |
-| Automated testing and benchmark checks | | | | | X | X | X | X | X | | | |
-| User evaluation | | | | | | | | X | X | | | |
-| Analysis, dissertation and presentation | | | | | | | | | X | X | X | X |
+| Stage                                   | W1  | W2  | W3  | W4  | W5  | W6  | W7  | W8  | W9  | W10 | W11 | W12 |
+| --------------------------------------- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Background reading and proposal         | X   | X   |     |     |     |     |     |     |     |     |     |     |
+| Baseline setup and code review          |     | X   | X   |     |     |     |     |     |     |     |     |     |
+| Data set and evaluation design          |     |     | X   | X   |     |     |     |     |     |     |     |     |
+| Ingestion/retrieval improvements        |     |     |     | X   | X   |     |     |     |     |     |     |     |
+| Citation and preview workflow           |     |     |     |     | X   | X   |     |     |     |     |     |     |
+| Knowledge graph/UI refinement           |     |     |     |     |     | X   | X   | X   |     |     |     |     |
+| Automated testing and benchmark checks  |     |     |     |     | X   | X   | X   | X   | X   |     |     |     |
+| User evaluation                         |     |     |     |     |     |     |     | X   | X   |     |     |     |
+| Analysis, dissertation and presentation |     |     |     |     |     |     |     |     | X   | X   | X   | X   |
 
 ## Risks and Contingency Plans
 
-| Risks | Contingencies | Likelihood | Impact |
-| --- | --- | --- | --- |
-| Retrieval quality is too weak for useful answers | Build a small benchmark set, tune chunking/retrieval settings, and report limitations honestly | Medium | High |
-| LLM API cost or availability problems | Support local models and keep tests independent of paid APIs where possible | Medium | Medium |
-| Document conversion fails for some formats | Prioritise PDF, text and Markdown; treat Office preview as desirable if time is short | Medium | Medium |
-| UI becomes too complex for users | Use a simple workbench layout and evaluate with task-based usability testing | Medium | Medium |
-| Running out of time | Prioritise essential requirements: upload, index, chat, citation and evaluation | Medium | High |
-| Hardware or data loss | Use Git, remote backups and exported evaluation data copies | Low | High |
-| Participant recruitment is delayed | Use fewer participants and strengthen technical evaluation with benchmark tasks | Medium | Medium |
-| Ethical scope changes unexpectedly | Stop collection and confirm revised plans with the supervisor before proceeding | Low | High |
+| Risks                                            | Contingencies                                                                                  | Likelihood | Impact |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------- | ---------- | ------ |
+| Retrieval quality is too weak for useful answers | Build a small benchmark set, tune chunking/retrieval settings, and report limitations honestly | Medium     | High   |
+| LLM API cost or availability problems            | Support local models and keep tests independent of paid APIs where possible                    | Medium     | Medium |
+| Document conversion fails for some formats       | Prioritise PDF, text and Markdown; treat Office preview as desirable if time is short          | Medium     | Medium |
+| UI becomes too complex for users                 | Use a simple workbench layout and evaluate with task-based usability testing                   | Medium     | Medium |
+| Running out of time                              | Prioritise essential requirements: upload, index, chat, citation and evaluation                | Medium     | High   |
+| Hardware or data loss                            | Use Git, remote backups and exported evaluation data copies                                    | Low        | High   |
+| Participant recruitment is delayed               | Use fewer participants and strengthen technical evaluation with benchmark tasks                | Medium     | Medium |
+| Ethical scope changes unexpectedly               | Stop collection and confirm revised plans with the supervisor before proceeding                | Low        | High   |
 
 ## References
 
