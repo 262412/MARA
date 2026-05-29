@@ -48,7 +48,7 @@ class ConversationControl(BasePage):
 
     def on_building_ui(self):
         with gr.Row():
-            title_text = "Conversations" if not KH_DEMO_MODE else "Slides Papers"
+            title_text = "Session" if not KH_DEMO_MODE else "Slides Papers"
             gr.Markdown("## {}".format(title_text))
             self.btn_chat_expand = gr.Button(
                 value="",

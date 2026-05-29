@@ -17,6 +17,7 @@ def _chat_file_list_outputs(page):
         page.chat_file_rows,
         page.chat_file_list,
         page.chat_selected_file,
+        page.workbench_file_summary,
     ]
 
 

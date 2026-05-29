@@ -2,6 +2,7 @@
 
 Provides the main chat interface with integrated PDF/document preview and page navigation.
 """
+
 import gradio as gr
 from ktem.app import BasePage
 from theflow.settings import settings as flowsettings
@@ -34,6 +35,10 @@ class ChatPanel(BasePage):
 
     def on_building_ui(self):
         """Build the chat panel UI components."""
+        self.render_preview_frame()
+
+    def render_preview_frame(self):
+        """Render the hidden chat history and central page preview frame."""
         # Chatbot for displaying conversations
         self.chatbot = gr.Chatbot(
             label=self._app.app_name,
@@ -58,7 +63,9 @@ class ChatPanel(BasePage):
                 "<div class='pdf-preview-shell'>"
                 "<iframe id='main-pdf-preview-frame' title='PDF Preview' loading='lazy'></iframe>"
                 "<img id='main-pdf-preview-image' class='pdf-preview-image' alt='PDF page preview' />"
-                "<div id='main-pdf-preview-empty' class='pdf-preview-empty'>Select a PDF file to preview.</div>"
+                "<div id='main-pdf-preview-empty' class='pdf-preview-empty pdf-preview-empty--prototype'>"
+                "<div class='preview-empty-state'>Select a file and page to preview.</div>"
+                "</div>"
                 "</div>"
             ),
             elem_id="main-pdf-preview",
@@ -74,7 +81,7 @@ class ChatPanel(BasePage):
         """Render PDF preview notice message and page navigation controls."""
         # Notice message shown above PDF preview
         self.pdf_preview_notice = gr.HTML(
-            value="<div class='pdf-preview-notice'>Select a PDF file to preview.</div>",
+            value="<div class='pdf-preview-notice'>Selected page preview.</div>",
             elem_id="pdf-preview-notice",
         )
 
@@ -114,9 +121,7 @@ class ChatPanel(BasePage):
                 interactive=True,
                 scale=16,
                 file_count="multiple",
-                placeholder=(
-                    "Type a message, search the @web, or tag a file with @filename"
-                ),
+                placeholder="Ask a question about the selected page",
                 container=False,
                 show_label=False,
                 elem_id="chat-input",

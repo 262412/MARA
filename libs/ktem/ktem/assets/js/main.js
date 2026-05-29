@@ -12,6 +12,7 @@ function run() {
   let officeZoomSlider = null;
   let officeZoomLabel = null;
   let isOfficePreview = false;
+  let readerZoom = Number(globalThis._ktemReaderZoom || 100);
   let lastNonEmptySelectionTs = 0;
   let lastAssignedPreviewSrc = globalThis._ktemLastAssignedPreviewSrc || "";
   let lastStablePreviewSrc = globalThis._ktemLastStablePreviewSrc || "";
@@ -1968,8 +1969,10 @@ function run() {
     const isDarkMode = mode === "dark";
     document.body.classList.toggle("ktem-dark-mode", isDarkMode);
     document.body.classList.toggle("ktem-light-mode", !isDarkMode);
+    document.body.classList.toggle("dark", isDarkMode);
     document.documentElement.classList.toggle("ktem-dark-mode", isDarkMode);
     document.documentElement.classList.toggle("ktem-light-mode", !isDarkMode);
+    document.documentElement.classList.toggle("dark", isDarkMode);
 
     [ensureGlobalThemeToggle()].forEach((toggleButton) => {
       toggleButton.setAttribute("aria-pressed", isDarkMode ? "true" : "false");
@@ -2010,6 +2013,158 @@ function run() {
     bindThemeToggleButton(globalToggle);
   }
 
+  function selectMaraTab(tabId) {
+    const labelByTab = {
+      "chat-tab": "chat",
+      "indices-tab": "files",
+      "resources-tab": "resources",
+      "help-tab": "help",
+      "settings-tab": "settings",
+    };
+    const targetLabel = labelByTab[tabId] || "";
+    const panel = document.getElementById(tabId);
+    const labelledBy = panel?.getAttribute("aria-labelledby");
+    const labelledButton = labelledBy ? document.getElementById(labelledBy) : null;
+    if (labelledButton) {
+      labelledButton.click();
+      return true;
+    }
+
+    const buttons = Array.from(
+      document.querySelectorAll(".header-bar button, [role='tab']")
+    );
+    const target = buttons.find((button) => {
+      const text = (button.textContent || "").trim().toLowerCase();
+      return text === targetLabel;
+    });
+    if (target) {
+      target.click();
+      return true;
+    }
+    return false;
+  }
+
+  function focusCorpusSearch() {
+    selectMaraTab("chat-tab");
+    setTimeout(() => {
+      const searchInput = document.querySelector(
+        "#chat-file-filter textarea, #chat-file-filter input"
+      );
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select?.();
+      }
+    }, 120);
+  }
+
+  function bindMaraShellActions(actions) {
+    if (!actions || actions.dataset.maraActionsBound === "true") {
+      return;
+    }
+    actions.dataset.maraActionsBound = "true";
+    actions.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-target-tab], [data-mara-action]");
+      if (!trigger) {
+        return;
+      }
+      const targetTab = trigger.getAttribute("data-target-tab");
+      const action = trigger.getAttribute("data-mara-action");
+      if (action === "search") {
+        focusCorpusSearch();
+        return;
+      }
+      if (targetTab) {
+        selectMaraTab(targetTab);
+      }
+    });
+  }
+
+  function deriveAvatarInitials(name) {
+    const cleaned = String(name || "").replace(/@/g, " ").trim();
+    if (!cleaned) {
+      return "U";
+    }
+    const parts = cleaned.split(/[^A-Za-z0-9]+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    const compact = (parts[0] || cleaned).replace(/\s+/g, "");
+    return compact.slice(0, 2).toUpperCase() || "U";
+  }
+
+  function syncMaraAvatar() {
+    const avatar = document.querySelector("#mara-shell-actions .mara-avatar span");
+    if (!avatar) {
+      return;
+    }
+    const source = document.querySelector(
+      "#mara-user-identity-source [data-user-initials]"
+    );
+    const storedUsername = (() => {
+      try {
+        return globalThis.getStorage?.("username", "") || localStorage.getItem("username") || "";
+      } catch (error) {
+        return "";
+      }
+    })();
+    const sourceInitials = source?.getAttribute("data-user-initials") || "";
+    const sourceName = source?.getAttribute("data-user-name") || "";
+    const displayName = sourceName || storedUsername;
+    avatar.textContent = sourceInitials || deriveAvatarInitials(displayName);
+    avatar.parentElement?.setAttribute(
+      "title",
+      displayName ? `Signed in as ${displayName}` : "Signed in user"
+    );
+  }
+
+  function observeMaraUserIdentity() {
+    const source = document.getElementById("mara-user-identity-source");
+    if (!source || source.dataset.maraIdentityObserved === "true") {
+      return;
+    }
+    source.dataset.maraIdentityObserved = "true";
+    const observer = new MutationObserver(syncMaraAvatar);
+    observer.observe(source, { childList: true, subtree: true, attributes: true });
+    syncMaraAvatar();
+  }
+
+  function ensureMaraMasthead(headerBar) {
+    if (!headerBar) {
+      return;
+    }
+
+    let brand = document.getElementById("mara-brand-lockup");
+    if (!brand) {
+      brand = document.createElement("div");
+      brand.id = "mara-brand-lockup";
+      brand.innerHTML = `
+        <div class="mara-brand-mark">MARA</div>
+      `;
+      headerBar.prepend(brand);
+    }
+
+    let actions = document.getElementById("mara-shell-actions");
+    if (!actions) {
+      actions = document.createElement("div");
+      actions.id = "mara-shell-actions";
+      actions.innerHTML = `
+        <button type="button" class="mara-dataset-switcher" data-target-tab="indices-tab" title="Open files">Dataset: <strong>Current Corpus</strong></button>
+        <button type="button" aria-label="Search files" title="Search files" class="mara-icon-button" data-mara-action="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" /></svg>
+        </button>
+        <button type="button" aria-label="Resources" title="Open resources" class="mara-icon-button" data-target-tab="resources-tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z" /></svg>
+        </button>
+        <button type="button" aria-label="Settings" title="Signed in user" class="mara-avatar" data-target-tab="settings-tab"><span>U</span></button>
+      `;
+      headerBar.appendChild(actions);
+    }
+    actions.appendChild(ensureGlobalThemeToggle());
+    bindMaraShellActions(actions);
+    observeMaraUserIdentity();
+    syncMaraAvatar();
+  }
+
   function initMainShellLayout() {
     const mainParent = document.getElementById("chat-tab")?.parentNode;
     if (!mainParent) {
@@ -2018,6 +2173,7 @@ function run() {
 
     if (mainParent.childNodes?.[0]?.classList) {
       mainParent.childNodes[0].classList.add("header-bar");
+      ensureMaraMasthead(mainParent.childNodes[0]);
     }
     mainParent.style = "padding: 0; margin: 0; position: relative";
     if (mainParent.parentNode) {
@@ -2047,6 +2203,147 @@ function run() {
     if (convDropdown) {
       convDropdown.placeholder = "Browse conversation";
     }
+  }
+
+  function setReaderPageNumber(page) {
+    const pageInput = document.querySelector(
+      "#pdf-page-number input, #pdf-page-number textarea"
+    );
+    if (!pageInput) {
+      return;
+    }
+    pageInput.value = String(page);
+    pageInput.dispatchEvent(new Event("input", { bubbles: true }));
+    pageInput.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function bindPageThumbnailControls() {
+    const thumbnailList = document.querySelector("#page-thumbnail-list");
+    if (thumbnailList && thumbnailList.dataset.pageThumbnailsBound !== "true") {
+      thumbnailList.dataset.pageThumbnailsBound = "true";
+      thumbnailList.addEventListener("click", (event) => {
+        const trigger = event.target.closest("[data-page-number]");
+        if (!trigger) {
+          return;
+        }
+        const page = parseInt(trigger.getAttribute("data-page-number") || "", 10);
+        if (Number.isFinite(page) && page > 0) {
+          setReaderPageNumber(page);
+        }
+      });
+    }
+
+    const corpusAddTrigger = document.getElementById("corpus-add-trigger");
+    const corpusAddPanel = document.getElementById("corpus-add-panel");
+    if (corpusAddTrigger && corpusAddPanel && corpusAddTrigger.dataset.corpusAddBound !== "true") {
+      corpusAddTrigger.dataset.corpusAddBound = "true";
+      corpusAddTrigger.addEventListener("click", () => {
+        corpusAddPanel.classList.toggle("is-open");
+      });
+    }
+  }
+
+  function applyReaderZoom() {
+    const boundedZoom = Math.max(50, Math.min(200, readerZoom || 100));
+    readerZoom = boundedZoom;
+    globalThis._ktemReaderZoom = boundedZoom;
+    document.documentElement.style.setProperty(
+      "--reader-preview-zoom",
+      String(boundedZoom / 100)
+    );
+
+    const zoomLabel = document.getElementById("reader-zoom-label");
+    if (zoomLabel) {
+      zoomLabel.textContent = `${boundedZoom}%`;
+    }
+  }
+
+  function setReaderMode(toolbar, mode) {
+    const readerPanel = document.getElementById("document-reader-panel");
+    if (readerPanel) {
+      readerPanel.dataset.readerMode = mode;
+    }
+    toolbar
+      .querySelectorAll("[data-reader-action='pan'], [data-reader-action='select'], [data-reader-action='area'], [data-reader-action='annotate']")
+      .forEach((button) => {
+        button.classList.toggle(
+          "is-active",
+          button.getAttribute("data-reader-action") === mode
+        );
+      });
+  }
+
+  function getReaderPreviewSrc() {
+    const field = findLastActiveField(
+      "#main-pdf-preview-src textarea, #main-pdf-preview-src input"
+    );
+    const fieldValue = (field?.value || "").trim();
+    const iframe = document.getElementById("main-pdf-preview-frame");
+    const image = document.getElementById("main-pdf-preview-image");
+    return (
+      fieldValue ||
+      lastStablePreviewSrc ||
+      globalThis._ktemLastPreviewSrc ||
+      (image?.getAttribute("src") || "") ||
+      (iframe?.getAttribute("src") || "")
+    ).trim();
+  }
+
+  function downloadReaderPreview() {
+    const src = getReaderPreviewSrc();
+    if (!src || src.startsWith("<")) {
+      return;
+    }
+
+    const link = document.createElement("a");
+    link.href = toAbsolutePreviewSrc(src);
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.download = "";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  function bindReaderToolbarControls() {
+    const toolbar = document.getElementById("reader-toolbar");
+    if (!toolbar || toolbar.dataset.readerToolbarBound === "true") {
+      return;
+    }
+    toolbar.dataset.readerToolbarBound = "true";
+    applyReaderZoom();
+    setReaderMode(toolbar, "pan");
+
+    toolbar.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-reader-action]");
+      if (!trigger) {
+        return;
+      }
+      const action = trigger.getAttribute("data-reader-action");
+      if (["pan", "select", "area", "annotate"].includes(action)) {
+        setReaderMode(toolbar, action);
+        return;
+      }
+      if (action === "zoom-out") {
+        readerZoom -= 10;
+        applyReaderZoom();
+        return;
+      }
+      if (action === "zoom-in") {
+        readerZoom += 10;
+        applyReaderZoom();
+        return;
+      }
+      if (action === "download") {
+        downloadReaderPreview();
+        return;
+      }
+      if (action === "more") {
+        const expanded = toolbar.classList.toggle("reader-toolbar--expanded");
+        trigger.classList.toggle("is-active", expanded);
+        trigger.setAttribute("aria-expanded", String(expanded));
+      }
+    });
   }
 
   function initChatPanelControls() {
@@ -2126,6 +2423,8 @@ function run() {
   syncMainPdfPreview();
   initMainShellLayout();
   initChatPanelControls();
+  bindPageThumbnailControls();
+  bindReaderToolbarControls();
   initReportControls();
 
   // clpse
