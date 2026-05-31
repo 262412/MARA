@@ -1,6 +1,12 @@
-# Slide Claude Code Profile
+# MARA Claude Code Profile
 
 This profile adds focused workflows for the user-facing MARA CLI.
+
+Mandatory development contract: for every non-trivial repository change, follow
+`docs/development/codebase-hygiene-contract.md`. Preserve the `MARA` /
+`MARA-cli` public command surface, identify affected public surfaces before
+editing, run the relevant verification gates, and do not refresh
+`scripts/codebase_hygiene_baseline.json` just to make the hygiene gate pass.
 
 If `MARA` is not installed yet, use `pip install slide-cli` or `uv tool install slide-cli`, then run `MARA doctor`.
 

@@ -1,4 +1,10 @@
-# Slide Codex Agent Profile
+# MARA Codex Agent Profile
+
+Mandatory development contract: for every non-trivial repository change, follow
+`docs/development/codebase-hygiene-contract.md`. Preserve the `MARA` /
+`MARA-cli` public command surface, identify affected public surfaces before
+editing, run the relevant verification gates, and do not refresh
+`scripts/codebase_hygiene_baseline.json` just to make the hygiene gate pass.
 
 Session discipline: 0. If `MARA` is missing, install the product CLI with `pip install slide-cli` or `uv tool install slide-cli`, then run `MARA doctor`.
 

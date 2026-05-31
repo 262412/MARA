@@ -37,11 +37,13 @@ existing debt; it is the line future changes must not make worse.
 
 ## Product Priority
 
-`MARA` is the public product line.
+`MARA` is the public product line. The public console entrypoints are `MARA`
+and `MARA-cli`; `MARA` is canonical, and `MARA-cli` is the explicit CLI alias.
 
 Every future change must preserve:
 
 - `MARA --help`
+- `MARA-cli --help`
 - `MARA doctor`
 - `MARA run`
 - `MARA chat`
@@ -51,6 +53,8 @@ Every future change must preserve:
 - `MARA app ...`
 - `MARA model ...`
 - `MARA platform ...`
+
+`MARA-cli ...` must dispatch to the same command surface as `MARA ...`.
 
 If there is a conflict between preserving `MARA` behavior and simplifying an
 internal compatibility path, preserve `MARA` first and document the tradeoff.
@@ -62,8 +66,8 @@ Use this workflow for every non-trivial change.
 1. Identify the public surface.
 
    State which user-visible commands, APIs, DB tables, files, or UI events may
-   be affected. If `MARA` may be affected, start by running or adding
-   MARA CLI contract tests in the internal `slide_cli` package.
+   be affected. If `MARA` or `MARA-cli` may be affected, start by running or
+   adding MARA CLI contract tests in the internal `slide_cli` package.
 
 2. Add characterization coverage before refactoring.
 
@@ -140,9 +144,9 @@ Do not refresh the baseline just to make the gate pass.
 Use this priority order when deciding what must be fixed now and what can stay
 as tracked residual risk.
 
-- P0: changes that can break the `MARA` public command surface, lazy imports,
-  Gradio event order, CLI options, JSON keys, DB schema, persisted session
-  shape, or DocQA behavior parity.
+- P0: changes that can break the `MARA` / `MARA-cli` public command surface,
+  lazy imports, Gradio event order, CLI options, JSON keys, DB schema,
+  persisted session shape, or DocQA behavior parity.
 - P1: changes that grow baseline debt, add new over-budget functions/classes,
   add non-actionable broad exception handling, or duplicate DocQA request/session
   behavior across entrypoints.
@@ -156,8 +160,9 @@ follow-up. P2 issues should be tracked, but do not block unrelated product work.
 
 ### MARA CLI (`slide_cli`)
 
-- `MARA` is the public shell. `slide_cli` is the internal implementation package
-  name until the codebase itself is intentionally renamed.
+- `MARA` and `MARA-cli` are the public shells. `slide_cli` is the internal
+  implementation package name until the codebase itself is intentionally
+  renamed.
 - Keep heavy imports lazy. Importing the internal `slide_cli.cli` module must
   not initialize DocQA, app runtime, LLMs, PDF parsing, or NLTK downloads.
 - Public command names, options, JSON fields, and help text require contract
@@ -204,7 +209,7 @@ Always for changed Python files:
 uv run --python 3.10 python -m pre_commit run --files <changed-files>
 ```
 
-For the public MARA CLI:
+For the public MARA CLI entrypoints:
 
 ```powershell
 uv run --python 3.10 python -m pytest -q
@@ -213,7 +218,7 @@ uv run --python 3.10 python -m pytest -q
 Run from:
 
 ```powershell
-D:\PythonProject\kotaemon\libs\slide_cli
+D:\PythonProject\MARA\libs\slide_cli
 ```
 
 For the GitHub Actions unit-test path:
@@ -225,7 +230,7 @@ uv run --python 3.10 python -m pytest -q
 Run from:
 
 ```powershell
-D:\PythonProject\kotaemon\libs\kotaemon
+D:\PythonProject\MARA\libs\kotaemon
 ```
 
 For knowledge graph changes:
@@ -253,7 +258,7 @@ the existing root collection conflicts are fixed.
 
 Before merging, answer these questions:
 
-- Did this change preserve the `MARA` public command surface?
+- Did this change preserve the `MARA` / `MARA-cli` public command surface?
 - Did every moved behavior have characterization coverage?
 - Did the change avoid adding new eager imports?
 - Did the change avoid growing existing large functions or classes?
@@ -276,7 +281,7 @@ Before merging, answer these questions:
 
 Stop and reassess before continuing if any of these happen:
 
-- A `MARA` contract test fails.
+- A `MARA` or `MARA-cli` contract test fails.
 - A Gradio event chain changes order without an intentional behavior note.
 - A CLI option, JSON key, DB schema, or persisted session shape changes.
 - A refactor requires deleting dynamic/public-looking methods without call-site
