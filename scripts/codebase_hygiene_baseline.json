@@ -1,0 +1,749 @@
+{
+  "version": 1,
+  "budgets": {
+    "function_lines": 80,
+    "class_lines": 300,
+    "module_lines": 600
+  },
+  "files": {
+    "benchmark/cli.py": {
+      "module_lines": 157,
+      "functions": {
+        "_build_parser": 90
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "benchmark/engines.py": {
+      "module_lines": 654,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 4
+    },
+    "benchmark/manifest.py": {
+      "module_lines": 282,
+      "functions": {
+        "_coerce_v2_manifest": 92
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "benchmark/runner.py": {
+      "module_lines": 504,
+      "functions": {
+        "run_benchmark": 162
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "benchmark/system.py": {
+      "module_lines": 620,
+      "functions": {
+        "KotaemonTextRAGSystem._build_index": 88,
+        "KotaemonTextRAGSystem.run_example_documents": 115
+      },
+      "classes": {
+        "KotaemonTextRAGSystem": 456
+      },
+      "non_actionable_broad_exceptions": 1
+    },
+    "benchmark/tests/test_engines.py": {
+      "module_lines": 270,
+      "functions": {
+        "test_docqa_runtime_engine_indexes_documents_and_runs_turn": 82
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "benchmark/tests/test_manifest.py": {
+      "module_lines": 277,
+      "functions": {
+        "test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evidence": 93
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "benchmark/tests/test_runner.py": {
+      "module_lines": 296,
+      "functions": {
+        "test_run_benchmark_scores_format_and_guardrail_fields": 90
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/agents/base.py": {
+      "module_lines": 57,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/kotaemon/kotaemon/agents/react/agent.py": {
+      "module_lines": 361,
+      "functions": {
+        "ReactAgent.stream": 104
+      },
+      "classes": {
+        "ReactAgent": 344
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/agents/rewoo/agent.py": {
+      "module_lines": 384,
+      "functions": {},
+      "classes": {
+        "RewooAgent": 363
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/cli.py": {
+      "module_lines": 1489,
+      "functions": {
+        "_docqa_shared_options": 83,
+        "_run_docqa_repl": 136
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/contribs/promptui/themes.py": {
+      "module_lines": 95,
+      "functions": {
+        "John.__init__": 86
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/contribs/promptui/ui/blocks.py": {
+      "module_lines": 181,
+      "functions": {
+        "ChatBlock._setup_events": 85
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/contribs/promptui/ui/chat.py": {
+      "module_lines": 307,
+      "functions": {
+        "build_chat_ui": 153,
+        "construct_chat_ui": 107
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/contribs/promptui/ui/pipeline.py": {
+      "module_lines": 246,
+      "functions": {
+        "build_pipeline_ui": 101,
+        "construct_pipeline_ui": 86
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/indices/elements.py": {
+      "module_lines": 377,
+      "functions": {
+        "document_to_element": 82
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/indices/qa/citation_qa.py": {
+      "module_lines": 680,
+      "functions": {
+        "AnswerWithContextPipeline.prepare_citations": 99,
+        "AnswerWithContextPipeline.stream": 154
+      },
+      "classes": {
+        "AnswerWithContextPipeline": 497
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/indices/qa/citation_qa_inline.py": {
+      "module_lines": 398,
+      "functions": {
+        "AnswerWithInlineCitation.stream": 162
+      },
+      "classes": {
+        "AnswerWithInlineCitation": 310
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/indices/qa/format_context.py": {
+      "module_lines": 197,
+      "functions": {
+        "PrepareEvidencePipeline.run": 110
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/indices/vectorindex.py": {
+      "module_lines": 617,
+      "functions": {
+        "VectorRetrieval.run": 236
+      },
+      "classes": {
+        "VectorRetrieval": 353
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/llms/chats/langchain_based.py": {
+      "module_lines": 397,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/kotaemon/kotaemon/loaders/adobe_loader.py": {
+      "module_lines": 189,
+      "functions": {
+        "AdobeReader.load_data": 134
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/loaders/azureai_document_intelligence_loader.py": {
+      "module_lines": 272,
+      "functions": {
+        "AzureAIDocumentIntelligenceLoader.load_data": 120
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/loaders/docling_loader.py": {
+      "module_lines": 254,
+      "functions": {
+        "DoclingReader.load_data": 154
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/loaders/mathpix_loader.py": {
+      "module_lines": 373,
+      "functions": {},
+      "classes": {
+        "MathpixPDFReader": 353
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/loaders/ocr_loader.py": {
+      "module_lines": 228,
+      "functions": {
+        "OCRReader.load_data": 81
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/loaders/unstructured_loader.py": {
+      "module_lines": 288,
+      "functions": {
+        "UnstructuredReader.load_data": 85
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 6
+    },
+    "libs/kotaemon/kotaemon/loaders/utils/adobe.py": {
+      "module_lines": 261,
+      "functions": {
+        "request_adobe_service": 92
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/loaders/utils/gpt4v.py": {
+      "module_lines": 135,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/kotaemon/kotaemon/loaders/utils/pdf_ocr.py": {
+      "module_lines": 295,
+      "functions": {
+        "merge_table_cell_and_ocr": 110
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/kotaemon/kotaemon/storages/vectorstores/milvus.py": {
+      "module_lines": 137,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/docqa/_runtime_app.py": {
+      "module_lines": 195,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/docqa/acceptance.py": {
+      "module_lines": 862,
+      "functions": {
+        "AcceptanceMatrix.prepare_sample_files": 116,
+        "AcceptanceMatrix.run_cli_to_web_restore_matrix": 143
+      },
+      "classes": {
+        "AcceptanceMatrix": 745
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/docqa/knowledge_graph.py": {
+      "module_lines": 370,
+      "functions": {
+        "GlobalKnowledgeGraphService._build_nodes_and_edges": 104
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/docqa/preview_support.py": {
+      "module_lines": 561,
+      "functions": {
+        "OfficePreviewConversionService.convert_to_pdf_preview": 95
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 18
+    },
+    "libs/ktem/ktem/docqa/runtime.py": {
+      "module_lines": 1067,
+      "functions": {
+        "DocQARuntime._prepare_pipeline": 117,
+        "DocQARuntime.run_turn": 153
+      },
+      "classes": {
+        "DocQARuntime": 1023
+      },
+      "non_actionable_broad_exceptions": 6
+    },
+    "libs/ktem/ktem/embeddings/ui.py": {
+      "module_lines": 413,
+      "functions": {
+        "EmbeddingManagement.on_building_ui": 103,
+        "EmbeddingManagement.on_register_events": 96
+      },
+      "classes": {
+        "EmbeddingManagement": 391
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/index/file/_events.py": {
+      "module_lines": 597,
+      "functions": {
+        "register_file_index_events": 310,
+        "register_quick_upload_events": 113
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/index/file/graph/lightrag_pipelines.py": {
+      "module_lines": 552,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 2
+    },
+    "libs/ktem/ktem/index/file/graph/pipelines.py": {
+      "module_lines": 403,
+      "functions": {
+        "GraphRAGRetrieverPipeline._build_graph_search": 106
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/index/file/graph/visualize.py": {
+      "module_lines": 102,
+      "functions": {
+        "visualize_graph": 83
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/index/file/index.py": {
+      "module_lines": 662,
+      "functions": {
+        "FileIndex._setup_resources": 116
+      },
+      "classes": {
+        "FileIndex": 637
+      },
+      "non_actionable_broad_exceptions": 2
+    },
+    "libs/ktem/ktem/index/file/knet/pipelines.py": {
+      "module_lines": 172,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/index/file/pipelines.py": {
+      "module_lines": 1027,
+      "functions": {
+        "DocumentRetrievalPipeline.run": 99,
+        "IndexDocumentPipeline.stream": 89,
+        "IndexPipeline.handle_docs": 107
+      },
+      "classes": {
+        "IndexPipeline": 417
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/index/file/ui.py": {
+      "module_lines": 1284,
+      "functions": {},
+      "classes": {
+        "FileIndexPage": 976
+      },
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/index/ui.py": {
+      "module_lines": 348,
+      "functions": {
+        "IndexManagement.on_register_events": 97
+      },
+      "classes": {
+        "IndexManagement": 314
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/llms/ui.py": {
+      "module_lines": 410,
+      "functions": {
+        "LLMManagement.on_building_ui": 102,
+        "LLMManagement.on_register_events": 96
+      },
+      "classes": {
+        "LLMManagement": 388
+      },
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/main.py": {
+      "module_lines": 324,
+      "functions": {
+        "App.on_subscribe_public_events": 91,
+        "App.ui": 100
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 3
+    },
+    "libs/ktem/ktem/mcp/ui.py": {
+      "module_lines": 352,
+      "functions": {},
+      "classes": {
+        "MCPManagement": 329
+      },
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/pages/chat/__init__.py": {
+      "module_lines": 3664,
+      "functions": {
+        "ChatPage._render_chat_file_list_html": 86,
+        "ChatPage.chat_fn": 266,
+        "ChatPage.on_building_ui": 318,
+        "ChatPage.on_register_events": 899,
+        "ChatPage.rerun_page_answer": 81,
+        "ChatPage.submit_msg": 132
+      },
+      "classes": {
+        "ChatPage": 3189
+      },
+      "non_actionable_broad_exceptions": 10
+    },
+    "libs/ktem/ktem/pages/chat/chat_knowledge_graph_bindings.py": {
+      "module_lines": 230,
+      "functions": {
+        "bind_knowledge_graph_events": 81
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/pages/chat/control.py": {
+      "module_lines": 453,
+      "functions": {
+        "ConversationControl.on_building_ui": 133
+      },
+      "classes": {
+        "ConversationControl": 413
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/pages/chat/knowledge_graph_builder.py": {
+      "module_lines": 1404,
+      "functions": {
+        "KnowledgeGraphBuilder._build_canonical_graph": 95,
+        "KnowledgeGraphBuilder._build_canonical_hierarchy": 158,
+        "KnowledgeGraphBuilder._build_knowledge_maps": 139,
+        "KnowledgeGraphBuilder._build_legacy_graph_artifacts": 152,
+        "KnowledgeGraphBuilder.build_file_graph": 159
+      },
+      "classes": {
+        "KnowledgeGraphBuilder": 1366
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/pages/chat/knowledge_graph_renderer.py": {
+      "module_lines": 703,
+      "functions": {
+        "KnowledgeGraphRenderer._render_branch": 143,
+        "KnowledgeGraphRenderer._render_graph_canvas": 108
+      },
+      "classes": {
+        "KnowledgeGraphRenderer": 682
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/pages/chat/knowledge_graph_service.py": {
+      "module_lines": 693,
+      "functions": {
+        "GlobalKnowledgeGraphService.get_graph_view": 135
+      },
+      "classes": {
+        "GlobalKnowledgeGraphService": 614
+      },
+      "non_actionable_broad_exceptions": 5
+    },
+    "libs/ktem/ktem/pages/chat/page_preview.py": {
+      "module_lines": 844,
+      "functions": {
+        "ChatPagePreviewController.on_page_change": 97,
+        "ChatPagePreviewController.on_page_set": 86
+      },
+      "classes": {
+        "ChatPagePreviewController": 790
+      },
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/pages/chat/page_preview_document.py": {
+      "module_lines": 394,
+      "functions": {
+        "extract_docx_html": 277,
+        "paginate_docx_html": 89
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 11
+    },
+    "libs/ktem/ktem/pages/chat/page_preview_handlers.py": {
+      "module_lines": 236,
+      "functions": {
+        "_OfficeFamilyPreviewHandler.build": 103
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/pages/chat/page_preview_office.py": {
+      "module_lines": 280,
+      "functions": {
+        "OfficePreviewConversionService.convert_to_pdf_preview": 106
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 4
+    },
+    "libs/ktem/ktem/pages/chat/page_preview_presentation.py": {
+      "module_lines": 524,
+      "functions": {},
+      "classes": {
+        "PresentationPreviewService": 483
+      },
+      "non_actionable_broad_exceptions": 17
+    },
+    "libs/ktem/ktem/pages/chat/page_preview_resolver.py": {
+      "module_lines": 114,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/pages/chat/page_preview_runtime.py": {
+      "module_lines": 186,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 3
+    },
+    "libs/ktem/ktem/pages/chat/page_preview_spreadsheet.py": {
+      "module_lines": 53,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 2
+    },
+    "libs/ktem/ktem/pages/chat/page_preview_text.py": {
+      "module_lines": 87,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/pages/chat/page_preview_types.py": {
+      "module_lines": 116,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 2
+    },
+    "libs/ktem/ktem/pages/help.py": {
+      "module_lines": 119,
+      "functions": {
+        "HelpPage.__init__": 85
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/pages/resources/user.py": {
+      "module_lines": 457,
+      "functions": {},
+      "classes": {
+        "UserManagement": 335
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/pages/settings.py": {
+      "module_lines": 450,
+      "functions": {},
+      "classes": {
+        "SettingsPage": 392
+      },
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/pages/setup.py": {
+      "module_lines": 412,
+      "functions": {
+        "SetupPage.on_building_ui": 81,
+        "SetupPage.update_model": 203
+      },
+      "classes": {
+        "SetupPage": 364
+      },
+      "non_actionable_broad_exceptions": 2
+    },
+    "libs/ktem/ktem/reasoning/retrieval_policy.py": {
+      "module_lines": 199,
+      "functions": {
+        "apply_retrieval_policy": 124
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 3
+    },
+    "libs/ktem/ktem/reasoning/rewoo.py": {
+      "module_lines": 525,
+      "functions": {},
+      "classes": {
+        "RewooAgentPipeline": 310
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/reasoning/simple.py": {
+      "module_lines": 653,
+      "functions": {
+        "FullQAPipeline.get_user_settings": 84
+      },
+      "classes": {
+        "FullQAPipeline": 429
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/rerankings/ui.py": {
+      "module_lines": 414,
+      "functions": {
+        "RerankingManagement.on_building_ui": 103,
+        "RerankingManagement.on_register_events": 93
+      },
+      "classes": {
+        "RerankingManagement": 390
+      },
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem/runtime_bootstrap.py": {
+      "module_lines": 197,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/runtime_defaults.py": {
+      "module_lines": 388,
+      "functions": {
+        "build_kotaemon_settings": 372
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/ktem/ktem/utils/dependencies.py": {
+      "module_lines": 169,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 2
+    },
+    "libs/ktem/ktem/utils/office_conversion.py": {
+      "module_lines": 211,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 6
+    },
+    "libs/ktem/ktem_tests/test_file_index_page_extraction.py": {
+      "module_lines": 485,
+      "functions": {
+        "_build_page": 103
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/ktem/ktem_tests/test_knowledge_graph_service.py": {
+      "module_lines": 1405,
+      "functions": {
+        "test_get_graph_view_rebuilds_stale_graph_to_ready_when_forced": 98,
+        "test_get_graph_view_returns_focus_html_and_prunes_missing_sources": 87,
+        "test_render_graph_html_collapses_nodes_with_downstream_branching_by_default": 155,
+        "test_render_graph_html_keeps_root_open_but_collapses_second_level_branching_nodes": 97,
+        "test_render_graph_html_keeps_single_path_branches_expanded_by_default": 135,
+        "test_render_graph_html_renders_flat_v2_map_branches": 163
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/slide_cli/slide_cli/agent.py": {
+      "module_lines": 312,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 1
+    },
+    "libs/slide_cli/slide_cli/cli.py": {
+      "module_lines": 1065,
+      "functions": {
+        "_run_repl": 83
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 2
+    },
+    "libs/slide_cli/slide_cli/deck.py": {
+      "module_lines": 523,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 5
+    },
+    "libs/slide_cli/slide_cli/docqa_cli.py": {
+      "module_lines": 726,
+      "functions": {
+        "_docqa_shared_options": 83,
+        "_run_docqa_repl": 134
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "libs/slide_cli/slide_cli/docqa_runtime.py": {
+      "module_lines": 531,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 4
+    },
+    "libs/slide_cli/slide_cli/runtime.py": {
+      "module_lines": 568,
+      "functions": {
+        "run_slide_task": 129
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 2
+    },
+    "libs/slide_cli/tests/test_cli.py": {
+      "module_lines": 616,
+      "functions": {},
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    },
+    "scripts/publish_packages.py": {
+      "module_lines": 322,
+      "functions": {
+        "build_parser": 88
+      },
+      "classes": {},
+      "non_actionable_broad_exceptions": 0
+    }
+  }
+}

@@ -1,4 +1,11 @@
 repos:
+  - repo: local
+    hooks:
+      - id: codebase-hygiene
+        name: codebase hygiene ratchet
+        entry: python scripts/check_codebase_hygiene.py
+        language: python
+        types: [python]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.3.0
     hooks:
