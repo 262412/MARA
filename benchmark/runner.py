@@ -15,6 +15,7 @@ from .metrics import (
     is_abstention_answer,
     latex_renderable_score,
     markdown_table_renderable_score,
+    modality_hit_score,
     numeric_tolerance_score,
     page_hit_score,
     recall_score,
@@ -98,6 +99,14 @@ def _score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
             prediction, abstained
         ),
     }
+    for modality in ("table", "figure", "formula", "slide"):
+        metrics[f"{modality}_hit"] = modality_hit_score(
+            modality,
+            expected_modality=str(prediction.get("modality") or ""),
+            evidence_metadata=dict(prediction.get("evidence_metadata") or {}),
+            retrieved_hits=list(prediction.get("retrieved_hits") or []),
+            gold_evidence=list(prediction.get("gold_evidence") or []),
+        )
     gold_evidence = prediction.get("gold_evidence", [])
     if gold_evidence:
         metrics["element_hit"] = element_hit_score(
@@ -170,6 +179,17 @@ def _cache_hit_rate(predictions: list[dict[str, Any]], section: str) -> float | 
     if total == 0:
         return None
     return round_metric(hits / total)
+
+
+def _multimodal_hit_summary(
+    predictions: list[dict[str, Any]]
+) -> dict[str, float | None]:
+    return {
+        f"avg_{modality}_hit": round_metric(
+            safe_mean([item["metrics"].get(f"{modality}_hit") for item in predictions])
+        )
+        for modality in ("table", "figure", "formula", "slide")
+    }
 
 
 _CONFIG_FIELD_NAMES = {field.name for field in fields(BenchmarkConfig)}
@@ -252,6 +272,7 @@ def _engine_result_to_prediction(
         "predicted_element_ids": result.predicted_element_ids,
         "retrieved_hits": result.retrieved_hits,
         "retrieval_trace": result.retrieval_trace,
+        "agent_trace": result.agent_trace,
         "evidence_metadata": result.evidence_metadata,
         "claim_verification": result.claim_verification,
         "presentation": result.presentation,
@@ -309,6 +330,7 @@ def _error_prediction(
         "predicted_element_ids": [],
         "retrieved_hits": [],
         "retrieval_trace": [],
+        "agent_trace": [],
         "evidence_metadata": {},
         "claim_verification": {},
         "presentation": {},
@@ -340,6 +362,26 @@ def _error_prediction(
     }
 
 
+def _prepare_prediction_defaults(
+    prediction: dict[str, Any],
+    *,
+    example,
+    document,
+    route_config: BenchmarkConfig,
+) -> None:
+    prediction["document_path"] = str(document.path)
+    prediction["document_ids"] = example.document_ids or [example.document_id]
+    prediction["engine"] = route_config.engine
+    prediction["route"] = route_config.route
+    prediction["scope"] = route_config.scope or example.scope
+    prediction.setdefault("expected_formats", example.expected_formats)
+    prediction.setdefault("expected_guardrails", example.expected_guardrails)
+    prediction.setdefault("evidence_metadata", {})
+    prediction.setdefault("agent_trace", [])
+    prediction.setdefault("claim_verification", {})
+    prediction.setdefault("presentation", {})
+
+
 def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]:
     bundle = load_manifest(manifest_path)
     predictions: list[dict[str, Any]] = []
@@ -365,16 +407,12 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                     route_config=route_config,
                     exc=exc,
                 )
-            prediction["document_path"] = str(document.path)
-            prediction["document_ids"] = example.document_ids or [example.document_id]
-            prediction["engine"] = route_config.engine
-            prediction["route"] = route_config.route
-            prediction["scope"] = route_config.scope or example.scope
-            prediction.setdefault("expected_formats", example.expected_formats)
-            prediction.setdefault("expected_guardrails", example.expected_guardrails)
-            prediction.setdefault("evidence_metadata", {})
-            prediction.setdefault("claim_verification", {})
-            prediction.setdefault("presentation", {})
+            _prepare_prediction_defaults(
+                prediction,
+                example=example,
+                document=document,
+                route_config=route_config,
+            )
             _normalize_operational_fields(prediction)
             prediction["modality"] = example.modality
             prediction["answer_type"] = example.answer_type
@@ -411,6 +449,7 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         "avg_element_hit": round_metric(
             safe_mean([item["metrics"].get("element_hit") for item in predictions])
         ),
+        **_multimodal_hit_summary(predictions),
         "avg_span_recall": round_metric(
             safe_mean([item["metrics"].get("span_recall") for item in predictions])
         ),
@@ -490,6 +529,7 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                 "document_ids": item["document_ids"],
                 "retrieved_hits": item.get("retrieved_hits", []),
                 "retrieval_trace": item.get("retrieval_trace", []),
+                "agent_trace": item.get("agent_trace", []),
                 "evidence_metadata": item.get("evidence_metadata", {}),
                 "claim_verification": item.get("claim_verification", {}),
                 "presentation": item.get("presentation", {}),

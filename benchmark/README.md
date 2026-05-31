@@ -17,6 +17,7 @@ It is built around one normalized manifest format so we can compare:
 - page hit rate when gold pages exist
 - citation recall when gold evidence strings exist
 - element hit and span recall when gold evidence carries element ids or spans
+- table, figure, formula, and slide hit rates for modality-aware routes
 - formula normalized match and numeric tolerance
 - abstention rate and false abstention, especially answers rewritten to "document evidence cannot support this answer"
 - Markdown table renderability for table answers
@@ -85,6 +86,20 @@ For route-matrix evaluation, use schema version 2:
       "route_id": "docqa_multi_document",
       "engine": "docqa_runtime",
       "scope": "multi_document"
+    },
+    {
+      "route_id": "mara_fast",
+      "engine": "docqa_runtime",
+      "scope": "document",
+      "reasoning": "mara",
+      "agent_mode": "fast"
+    },
+    {
+      "route_id": "mara_thorough",
+      "engine": "docqa_runtime",
+      "scope": "document",
+      "reasoning": "mara",
+      "agent_mode": "thorough"
     }
   ],
   "examples": [
@@ -106,7 +121,7 @@ For route-matrix evaluation, use schema version 2:
 }
 ```
 
-Use `direct_paste_document` as the "user pasted all available text" baseline. The DocQA routes should beat it on questions that require citations, page scope, figure/formula evidence, or multi-document retrieval. `oracle_page` is an upper-bound diagnostic route: it answers from the gold page context and helps separate retrieval failures from generation or formatting failures.
+Use `direct_paste_document` as the "user pasted all available text" baseline. The DocQA routes should beat it on questions that require citations, page scope, figure/formula evidence, or multi-document retrieval. `mara_fast` and `mara_thorough` run the same runtime through the MARA reasoning mode for agentic ablations. `oracle_page` is an upper-bound diagnostic route: it answers from the gold page context and helps separate retrieval failures from generation or formatting failures.
 
 ## Quick Start
 
@@ -152,6 +167,7 @@ finishes.
 Each prediction row now includes:
 
 - `evidence_metadata`: whether figure/image/formula/page visual context reached the generation path
+- `agent_trace`: MARA planning, retrieval, verification, and final-decision events when the engine exposes them
 - `claim_verification`: abstention and rewrite-skip behavior when the engine exposes it
 - `presentation`: renderer or answer-format metadata when the engine exposes it
 - `metrics`: text accuracy, retrieval grounding, false abstention, Markdown table, LaTeX, and guardrail scores

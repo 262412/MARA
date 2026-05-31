@@ -60,6 +60,12 @@ from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
 from .paper_list import PaperListPage
 from .report import ReportIssue
+from .studio_artifacts import (
+    extract_mara_artifact,
+    render_conversation_notebook_update,
+    render_notebook_panel_html,
+    render_studio_trace_panel,
+)
 
 KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
@@ -760,15 +766,6 @@ class ChatPage(BasePage):
                 with gr.Accordion(
                     label="Ask This Page", open=True, elem_id="answer-expand"
                 ):
-                    gr.HTML(
-                        (
-                            "<div class='right-ask-tabs'>"
-                            "<button type='button' class='is-active'>Ask this page</button>"
-                            "<button type='button'>Notes <span>2</span></button>"
-                            "</div>"
-                        ),
-                        elem_id="right-ask-tabs",
-                    )
                     self.chat_panel.render_input()
                     gr.HTML(
                         (
@@ -809,6 +806,9 @@ class ChatPage(BasePage):
                     self.reasoning_trace_panel = gr.HTML(
                         self._render_reasoning_trace_html(),
                         elem_id="reasoning-trace-card",
+                    )
+                    self.notebook_panel = gr.HTML(
+                        render_notebook_panel_html(), elem_id="notebook-panel-card"
                     )
 
                 with gr.Accordion(
@@ -1508,16 +1508,18 @@ class ChatPage(BasePage):
         answer_html: str = "",
         active_file_id: str = "",
         page_number=None,
+        artifact_payload=None,
     ) -> str:
         question_text = self._strip_html_text(question)
         retrieval_text = self._strip_html_text(retrieval_html)
         answer_text = self._strip_html_text(answer_html)
         if not question_text and not retrieval_text and not answer_text:
-            return (
+            return render_studio_trace_panel(
                 "<div class='reasoning-trace-card reasoning-trace-card--empty'>"
                 "<div><strong>Reasoning Trace</strong><span>Waiting</span></div>"
                 "<p>Run a page question to see actual retrieval / answer steps.</p>"
-                "</div>"
+                "</div>",
+                artifact_payload,
             )
 
         evidence_count = self._count_evidence_items(retrieval_html)
@@ -1570,11 +1572,11 @@ class ChatPage(BasePage):
             for title, detail, status in steps
         )
         done_count = sum(1 for _, _, status in steps if status == "done")
-        return (
+        return render_studio_trace_panel(
             "<div class='reasoning-trace-card'>"
             f"<div><strong>Reasoning Trace</strong><span>Real steps {done_count}/{len(steps)}</span></div>"
-            f"<ol>{items}</ol>"
-            "</div>"
+            f"<ol>{items}</ol></div>",
+            artifact_payload,
         )
 
     def _render_citations_card_html(self, retrieval_html: str = "") -> str:
@@ -2414,9 +2416,6 @@ class ChatPage(BasePage):
             ],
             "show_progress": "hidden",
         }
-        # chat_event = chat_event.success(**onSuggestChatEvent)
-
-        # final data persist
         if not KH_DEMO_MODE:
             chat_event = chat_event.then(
                 fn=self.persist_data_source,
@@ -2866,8 +2865,9 @@ class ChatPage(BasePage):
             **onSuggestChatEvent
         )
         self.chat_control.conversation_id.change(
-            lambda: gr.update(visible=False),
-            outputs=self.plot_panel,
+            render_conversation_notebook_update,
+            [self.chat_control.conversation_id],
+            [self.plot_panel, self.notebook_panel],
         )
 
         self.followup_questions.select(
@@ -3369,12 +3369,7 @@ class ChatPage(BasePage):
         *selecteds,
         request: gr.Request | None = None,
     ):
-        """Chat function"""
-        # Extract the latest user input and any existing output
         chat_input, chat_output = chat_history[-1] if chat_history else ("", None)
-
-        # Preserve the chat history excluding the latest entry which has the
-        # user input and None output.
         preserved_history = chat_history[:-1] if chat_history else []
 
         selection_marker = "[Selected text from current page]"
@@ -3407,7 +3402,6 @@ class ChatPage(BasePage):
 
         queue: asyncio.Queue[Optional[dict]] = asyncio.Queue()
 
-        # construct the pipeline
         pipeline, reasoning_state = self.create_pipeline(
             settings,
             reasoning_type,
@@ -3431,6 +3425,7 @@ class ChatPage(BasePage):
         text, refs, plot = "", "", state_plot_panel
         plot_gr = self._json_to_plot(state_plot_panel)
         mindmap_html = ""
+        artifact_payload = None
         msg_placeholder = getattr(
             flowsettings, "KH_CHAT_MSG_PLACEHOLDER", "Thinking ..."
         )
@@ -3439,7 +3434,6 @@ class ChatPage(BasePage):
             current_view = get_current_view(session_key) if session_key else None
             return (current_view is None) or (current_view == page_key)
 
-        # Generate answer panel HTML with chat bubbles and thinking indicator
         answer_html = self._generate_answer_panel_html(
             preserved_history, chat_input, "", is_thinking=True
         )
@@ -3454,7 +3448,6 @@ class ChatPage(BasePage):
         update_mindmap(request_key, mindmap_html)
         update_plot(request_key, plot)
 
-        # Initially show the user's question with a placeholder for AI response
         active_view = is_active_view()
         yield (
             chat_history_full if active_view else gr.skip(),
@@ -3470,6 +3463,7 @@ class ChatPage(BasePage):
                 answer_html,
                 active_file_id or "",
                 normalized_page_number,
+                artifact_payload,
             )
             if active_view
             else gr.skip(),
@@ -3485,7 +3479,6 @@ class ChatPage(BasePage):
             for response in pipeline.stream(
                 chat_input, conversation_id, preserved_history
             ):
-
                 if not isinstance(response, Document):
                     continue
 
@@ -3511,11 +3504,11 @@ class ChatPage(BasePage):
                     # Keep the knowledge graph panel stable during answer streaming.
                     plot = state_plot_panel
                     plot_gr = self._json_to_plot(state_plot_panel)
+                artifact_payload = extract_mara_artifact(response) or artifact_payload
 
                 chat_state[pipeline.get_info()["id"]] = reasoning_state["pipeline"]
                 update_reasoning_state(request_key, reasoning_state["pipeline"])
 
-                # Generate answer panel HTML with chat bubbles
                 answer_html = self._generate_answer_panel_html(
                     preserved_history, chat_input, text, is_thinking=(not text)
                 )
@@ -3532,7 +3525,6 @@ class ChatPage(BasePage):
                 update_mindmap(request_key, mindmap_html)
                 update_plot(request_key, plot)
 
-                # Update the chat history with the latest response
                 active_view = is_active_view()
                 yield (
                     chat_history_full if active_view else gr.skip(),
@@ -3550,6 +3542,7 @@ class ChatPage(BasePage):
                         answer_html,
                         active_file_id or "",
                         normalized_page_number,
+                        artifact_payload,
                     )
                     if active_view
                     else gr.skip(),
@@ -3570,7 +3563,6 @@ class ChatPage(BasePage):
                 "KH_CHAT_EMPTY_MSG_PLACEHOLDER",
                 "(Sorry, I don't know)",
             )
-            # Generate answer panel HTML with chat bubbles
             answer_html = self._generate_answer_panel_html(
                 preserved_history, chat_input, text or empty_msg, is_thinking=False
             )
@@ -3600,6 +3592,7 @@ class ChatPage(BasePage):
                     answer_html,
                     active_file_id or "",
                     normalized_page_number,
+                    artifact_payload,
                 )
                 if active_view
                 else gr.skip(),

@@ -148,6 +148,6 @@ def test_agent_runner_instruction_uses_top_level_agent_line_language(
         history_text="(none)",
     )
 
-    assert "top-level Slide CLI agent line" in instruction
+    assert "top-level MARA CLI agent line" in instruction
     assert "high-permission workflow" in instruction
     assert "workspace-side file changes" in instruction

@@ -8,6 +8,7 @@ from typing import Any, Protocol, cast, runtime_checkable
 
 from kotaemon.base import RetrievedDocument
 
+from .engine_helpers import _parsed_indexes_cache, _performance_from_timings
 from .schemas import BenchmarkConfig, BenchmarkDocument
 from .system import KotaemonTextRAGSystem
 
@@ -25,6 +26,7 @@ class EngineRunResult:
     cost: dict[str, Any] = field(default_factory=dict)
     context_preview: str = ""
     retrieval_trace: list[dict[str, Any]] = field(default_factory=list)
+    agent_trace: list[dict[str, Any]] = field(default_factory=list)
     evidence_metadata: dict[str, Any] = field(default_factory=dict)
     claim_verification: dict[str, Any] = field(default_factory=dict)
     presentation: dict[str, Any] = field(default_factory=dict)
@@ -101,6 +103,10 @@ class BaseBenchmarkEngine:
                 "embedding_name": None,
                 "reranker_name": None,
                 "llm_name": None,
+                "reasoning_type": None,
+                "agent_mode": None,
+                "task_type": None,
+                "artifact_type": None,
                 "use_generation": True,
                 "prompt_template": None,
             }
@@ -275,6 +281,10 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 page_number=_first_evidence_page(example),
                 llm=_config_value(self.config, "llm_name", None),
                 use_citation=_config_value(self.config, "docqa_citation_mode", None),
+                reasoning_type=_config_value(self.config, "reasoning_type", None),
+                agent_mode=_config_value(self.config, "agent_mode", None),
+                task_type=_config_value(self.config, "task_type", None),
+                artifact_type=_config_value(self.config, "artifact_type", None),
                 origin="benchmark",
             )
         )
@@ -292,6 +302,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 "generation_seconds": generation_seconds,
             },
             context_preview=response.references_text[: self.max_context_length],
+            agent_trace=list(getattr(response, "agent_trace", []) or []),
             evidence_metadata=dict(getattr(response, "evidence_metadata", {}) or {}),
             claim_verification=dict(getattr(response, "claim_verification", {}) or {}),
             presentation=dict(getattr(response, "presentation", {}) or {}),
@@ -299,6 +310,10 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 {
                     "engine": self.name,
                     "selected_file_ids": selected_file_ids,
+                    "reasoning_type": _config_value(
+                        self.config, "reasoning_type", None
+                    ),
+                    "agent_mode": _config_value(self.config, "agent_mode", None),
                     "references_text": response.references_text[:2000],
                 }
             ],
@@ -517,52 +532,11 @@ def _prediction_to_result(prediction: dict[str, Any]) -> EngineRunResult:
         cost=dict(prediction.get("cost") or {}),
         context_preview=str(prediction.get("context_preview") or ""),
         retrieval_trace=list(prediction.get("retrieval_trace") or []),
+        agent_trace=list(prediction.get("agent_trace") or []),
         evidence_metadata=dict(prediction.get("evidence_metadata") or {}),
         claim_verification=dict(prediction.get("claim_verification") or {}),
         presentation=dict(prediction.get("presentation") or {}),
     )
-
-
-def _empty_cache_stats() -> dict[str, int]:
-    return {"hits": 0, "misses": 0, "writes": 0}
-
-
-def _sum_cache_stats(stats: list[dict[str, int]]) -> dict[str, int]:
-    total = _empty_cache_stats()
-    for item in stats:
-        for key in total:
-            total[key] += int(item.get(key, 0) or 0)
-    return total
-
-
-def _parsed_indexes_cache(parsed_indexes: list[Any]) -> dict[str, dict[str, int]]:
-    return {
-        "parse": _sum_cache_stats(
-            [
-                dict(getattr(item, "parse_cache_stats", {}) or {})
-                for item in parsed_indexes
-            ]
-        ),
-        "embedding": _sum_cache_stats(
-            [
-                dict(getattr(item, "embedding_cache_stats", {}) or {})
-                for item in parsed_indexes
-            ]
-        ),
-    }
-
-
-def _performance_from_timings(
-    timings: dict[str, float], parsed_indexes: list[Any]
-) -> dict[str, Any]:
-    return {
-        **timings,
-        "total_seconds": round(sum(float(value) for value in timings.values()), 4),
-        "num_documents": len(parsed_indexes),
-        "num_chunks": sum(
-            len(getattr(item, "index_documents", []) or []) for item in parsed_indexes
-        ),
-    }
 
 
 def _parsed_indexes_to_context(parsed_indexes: list[Any], wanted_pages=None) -> str:

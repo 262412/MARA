@@ -11,62 +11,65 @@ from kotaemon.platform_support import (
     validate_installed,
 )
 
-SLIDE_TOP_LEVEL_SKILLS = (
-    "slide",
-    "slide-apply",
-    "slide-chat",
-    "slide-delete",
-    "slide-doctor",
-    "slide-export-pdf",
-    "slide-extract",
-    "slide-files",
-    "slide-inspect",
-    "slide-read",
-    "slide-read-slide",
-    "slide-resume",
-    "slide-review",
-    "slide-run",
-    "slide-search",
-    "slide-sessions",
-    "slide-shell",
-    "slide-write",
+MARA_TOP_LEVEL_SKILLS = (
+    "MARA",
+    "MARA-apply",
+    "MARA-chat",
+    "MARA-delete",
+    "MARA-doctor",
+    "MARA-export-pdf",
+    "MARA-extract",
+    "MARA-files",
+    "MARA-inspect",
+    "MARA-read",
+    "MARA-read-slide",
+    "MARA-resume",
+    "MARA-review",
+    "MARA-run",
+    "MARA-search",
+    "MARA-sessions",
+    "MARA-shell",
+    "MARA-write",
 )
-SLIDE_DOCQA_SKILLS = (
-    "slide-docqa",
-    "slide-docqa-ask",
-    "slide-docqa-chat",
-    "slide-docqa-delete",
-    "slide-docqa-doctor",
-    "slide-docqa-files",
-    "slide-docqa-index",
-    "slide-docqa-resume",
-    "slide-docqa-sessions",
+MARA_DOCQA_SKILLS = (
+    "MARA-docqa",
+    "MARA-docqa-artifacts",
+    "MARA-docqa-ask",
+    "MARA-docqa-chat",
+    "MARA-docqa-delete",
+    "MARA-docqa-doctor",
+    "MARA-docqa-files",
+    "MARA-docqa-index",
+    "MARA-docqa-notes",
+    "MARA-docqa-resume",
+    "MARA-docqa-sessions",
+    "MARA-docqa-sources",
 )
-SLIDE_APP_SKILLS = (
-    "slide-app",
-    "slide-app-doctor",
-    "slide-app-init",
-    "slide-app-run",
+MARA_APP_SKILLS = (
+    "MARA-app",
+    "MARA-app-doctor",
+    "MARA-app-init",
+    "MARA-app-run",
 )
-SLIDE_MODEL_SKILLS = (
-    "slide-model",
-    "slide-model-init-config",
-    "slide-model-providers",
-    "slide-model-run",
+MARA_MODEL_SKILLS = (
+    "MARA-model",
+    "MARA-model-init-config",
+    "MARA-model-providers",
+    "MARA-model-run",
 )
-SLIDE_PLATFORM_SKILLS = (
-    "slide-platform",
-    "slide-platform-install",
-    "slide-platform-list",
-    "slide-platform-status",
-    "slide-platform-validate",
+MARA_PLATFORM_SKILLS = (
+    "MARA-platform",
+    "MARA-platform-install",
+    "MARA-platform-list",
+    "MARA-platform-status",
+    "MARA-platform-validate",
 )
 CANONICAL_PROJECT_SKILLS = {
-    *SLIDE_TOP_LEVEL_SKILLS,
-    *SLIDE_DOCQA_SKILLS,
-    *SLIDE_APP_SKILLS,
-    *SLIDE_MODEL_SKILLS,
-    *SLIDE_PLATFORM_SKILLS,
+    *MARA_TOP_LEVEL_SKILLS,
+    *MARA_DOCQA_SKILLS,
+    *MARA_APP_SKILLS,
+    *MARA_MODEL_SKILLS,
+    *MARA_PLATFORM_SKILLS,
 }
 
 
@@ -98,7 +101,7 @@ def test_platform_registry_names():
     assert set(list_platform_names()) == {"claude-code", "codex"}
 
 
-def test_install_claude_minimal_creates_slide_only_assets(tmp_path):
+def test_install_claude_minimal_creates_mara_only_assets(tmp_path):
     result = install_platform(
         platform_name="claude-code",
         mode="minimal",
@@ -112,7 +115,7 @@ def test_install_claude_minimal_creates_slide_only_assets(tmp_path):
     assert _skill_names(tmp_path / "skills") == CANONICAL_PROJECT_SKILLS
 
 
-def test_install_codex_minimal_creates_slide_only_assets(tmp_path):
+def test_install_codex_minimal_creates_mara_only_assets(tmp_path):
     result = install_platform(
         platform_name="codex",
         mode="minimal",
@@ -162,7 +165,7 @@ def test_install_codex_agents_uses_sidecar_when_existing_file_present(tmp_path):
     assert str(sidecar) in result.sidecar_paths
 
 
-def test_install_uses_slide_named_sidecars_and_metadata(tmp_path):
+def test_install_uses_existing_platform_sidecars_and_metadata(tmp_path):
     install_platform(
         platform_name="codex",
         mode="full",
@@ -185,7 +188,7 @@ def test_install_uses_slide_named_sidecars_and_metadata(tmp_path):
     assert not (tmp_path / "claude" / ".kotaemon-platform-install.json").exists()
 
 
-def test_install_claude_selective_commands_match_slide_skill_surface(tmp_path):
+def test_install_claude_selective_commands_match_mara_skill_surface(tmp_path):
     result = install_platform(
         platform_name="claude-code",
         mode="selective",
@@ -205,7 +208,7 @@ def test_validate_bundle_passes_for_packaged_assets():
     ]
 
 
-def test_platform_skill_surfaces_are_exactly_slide_only():
+def test_platform_skill_surfaces_are_exactly_mara_only():
     repo_root = Path(__file__).resolve().parents[3]
     root_codex_skills = repo_root / ".codex" / "skills"
     packaged_codex_skills = _platform_assets_root("codex") / "skills"

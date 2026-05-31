@@ -177,6 +177,63 @@ def element_hit_score(
     return float(bool(predicted & set(gold_element_ids)))
 
 
+def _modality_tokens(*values: object) -> set[str]:
+    tokens: set[str] = set()
+    for value in values:
+        text = str(value or "").strip().lower().replace("-", "_")
+        if not text:
+            continue
+        tokens.add(text)
+        tokens.update(item for item in re.split(r"[^a-z0-9_]+", text) if item)
+    return tokens
+
+
+def _gold_evidence_modalities(gold_evidence: list[dict[str, object]]) -> set[str]:
+    keys = ("modality", "element_type", "type", "kind", "category", "content_type")
+    return {
+        token
+        for item in gold_evidence
+        for key in keys
+        for token in _modality_tokens(item.get(key))
+    }
+
+
+def _contains_modality(tokens: set[str], target: str) -> bool:
+    return any(token == target or token.startswith(f"{target}_") for token in tokens)
+
+
+def modality_hit_score(
+    modality: str,
+    *,
+    expected_modality: str,
+    evidence_metadata: dict[str, object],
+    retrieved_hits: list[dict[str, object]],
+    gold_evidence: list[dict[str, object]],
+) -> float | None:
+    target = str(modality or "").strip().lower().replace("-", "_")
+    expected = _modality_tokens(expected_modality)
+    gold_modalities = _gold_evidence_modalities(gold_evidence)
+    if not _contains_modality(expected | gold_modalities, target):
+        return None
+
+    if bool(evidence_metadata.get(f"has_{target}_evidence")):
+        return 1.0
+    modality_counts = evidence_metadata.get("modality_counts")
+    if isinstance(modality_counts, dict) and int(modality_counts.get(target) or 0) > 0:
+        return 1.0
+
+    for hit in retrieved_hits:
+        hit_tokens = _modality_tokens(
+            hit.get("modality"),
+            hit.get("element_type"),
+            hit.get("type"),
+            hit.get("kind"),
+        )
+        if _contains_modality(hit_tokens, target):
+            return 1.0
+    return 0.0
+
+
 def span_recall_score(
     predicted_text: str,
     gold_evidence: list[dict[str, object]],

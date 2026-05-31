@@ -1,12 +1,12 @@
-﻿<a id="top"></a>
+<a id="top"></a>
 
 <div align="center">
 
-# Slides
+# MARA
 
 A local RAG application repository built around document QA, page-level preview, knowledge graph exploration, and multi-model routing.
 
-Slides is a branded fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon). The original project is licensed under the Apache License 2.0; this fork keeps the original license and attribution while presenting the user-facing product as `slide`. Some internal Python package names remain for compatibility, but users install and operate the CLI through `slide`.
+MARA is a branded fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon). The original project is licensed under the Apache License 2.0; this fork keeps the original license and attribution while presenting the user-facing product as `MARA`. Some internal Python package names remain for compatibility, but users install and operate the CLI through `MARA`.
 
 [English](#english) | [中文](#chinese)
 
@@ -15,6 +15,7 @@ Slides is a branded fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kota
 [Installation](#installation) |
 [CLI Document QA](#cli-document-qa) |
 [Knowledge Graph And Retrieval](#knowledge-graph-and-retrieval) |
+[Thesis MVP](docs/mara_thesis_mvp.md) |
 [Customize your application](#customize-your-application) |
 [Contribution](#contribution)
 
@@ -33,9 +34,9 @@ Slides is a branded fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kota
 This repository is not just a single demo page. It is a full document QA runtime that you can run directly, extend in your own codebase, or integrate into terminal-based workflows through the CLI. The current project is built around these core parts:
 
 - A Gradio-based Web UI for document upload, page preview, question answering, citation review, and knowledge graph browsing
-- A shared `slide docqa` CLI that uses the same runtime, index, and conversation data as the Web UI
-- A `slide model` command group for model routing and environment validation
-- A `slide platform` command group for installing Codex / Claude Code platform assets
+- A shared `MARA docqa` CLI that uses the same runtime, index, and conversation data as the Web UI
+- A `MARA model` command group for model routing and environment validation
+- A `MARA platform` command group for installing Codex / Claude Code platform assets
 - A local repository entrypoint in `app.py` and an SSO-oriented entrypoint in `sso_app.py`
 
 The current design goal is to let one configuration, one document index, and one conversation context serve both the browser experience and the CLI experience. You can use this project as a ready-to-run document QA app, or treat it as the foundation for your own RAG application.
@@ -45,7 +46,7 @@ The current design goal is to let one configuration, one document index, and one
 - Upload documents in the browser and ask document-level, page-level, or selected-text-focused questions
 - Preview PDFs, Office files, and text-based documents inside the app
 - Generate a conversation knowledge graph and use graph nodes to shape follow-up questions
-- Reuse the same document index and saved conversations through `slide docqa`
+- Reuse the same document index and saved conversations through `MARA docqa`
 - Run local-model or API-model workflows for private or semi-private RAG use cases
 
 #### For developers
@@ -57,7 +58,8 @@ The current design goal is to let one configuration, one document index, and one
 
 ### Key Features
 
-- **Shared Web UI and CLI runtime**: the browser UI and `slide docqa` share configuration, file indexes, conversations, and knowledge graph state.
+- **Shared Web UI and CLI runtime**: the browser UI and `MARA docqa` share configuration, file indexes, conversations, and knowledge graph state.
+- **MARA agentic reasoning mode**: `MARA docqa ask --reasoning mara` can request fast or thorough agent mode, evidence metadata, trace output, and study artifacts.
 - **Page-level document QA**: the chat page supports page-aware preview and page-scoped context for precise questions such as "What does page 3 say?"
 - **Knowledge graph workflow**: the right-side panel can generate or refresh a knowledge graph; graph nodes can pin context and load suggested questions into chat.
 - **Fullscreen mindmap viewer**: the knowledge graph includes a preview card and fullscreen viewer with drag-to-pan, wheel zoom, zoom in, zoom out, Fit, and Reset.
@@ -122,7 +124,7 @@ After startup, open `http://localhost:7860/`.
 
 #### Without Docker
 
-##### Option 1: install slide without cloning the repo
+##### Option 1: install MARA without cloning the repo
 
 This is the best path if you want the user-facing product CLI:
 
@@ -130,36 +132,36 @@ This is the best path if you want the user-facing product CLI:
 pip install slide-cli
 ```
 
-The PyPI project is `slide-cli`; it installs the command `slide`. Initialize the runtime once, inspect it with `slide app doctor`, then use the top-level `slide ...` product shell for high-permission workflows and workspace operations such as `slide apply`, `slide export-pdf`, `slide review`, `slide files`, `slide read`, `slide write`, `slide delete`, and `slide shell`, while `slide docqa ...` stays the specialist DocQA line.
+The PyPI project is `slide-cli`; it installs the command `MARA`. Initialize the runtime once, inspect it with `MARA app doctor`, then use the top-level `MARA ...` product shell for high-permission workflows and workspace operations such as `MARA apply`, `MARA export-pdf`, `MARA review`, `MARA files`, `MARA read`, `MARA write`, `MARA delete`, and `MARA shell`, while `MARA docqa ...` stays the specialist DocQA line.
 
 Initialize and inspect the runtime:
 
 ```shell
-slide app init
-slide app doctor
+MARA app init
+MARA app doctor
 ```
 
 Start the Web UI:
 
 ```shell
-slide app run
+MARA app run
 ```
 
 In this mode:
 
 - The runtime manages its own config, data, and cache directories
-- `slide app doctor` shows the actual active paths
-- `slide docqa ...` reuses the same configuration and data
-- `slide app ...`, `slide model ...`, and `slide platform ...` expose app runtime, model routing, and platform support workflows under the same product CLI
+- `MARA app doctor` shows the actual active paths
+- `MARA docqa ...` reuses the same configuration and data
+- `MARA app ...`, `MARA model ...`, and `MARA platform ...` expose app runtime, model routing, and platform support workflows under the same product CLI
 
-##### Option 1b: install the standalone slide CLI from PyPI
+##### Option 1b: install the standalone MARA CLI from PyPI
 
 This is the same direct package install path, kept here as a quick command reference:
 
 ```shell
 pip install slide-cli
-slide doctor
-slide --help
+MARA doctor
+MARA --help
 ```
 
 If you want to validate the package before a full release, you can install it from TestPyPI:
@@ -174,7 +176,7 @@ The release checklist for the standalone CLI lives in [docs/slide_cli_release.md
 ##### Option 2: use the installer scripts in this repo
 
 The repository includes cross-platform installer scripts that create a virtual environment, install dependencies, and run the basic initialization steps.
-When the source tree also contains `libs/slide_cli`, these scripts install the standalone `slide` command into the same virtual environment.
+When the source tree also contains `libs/slide_cli`, these scripts install the standalone `MARA` command into the same virtual environment.
 
 macOS / Linux:
 
@@ -200,10 +202,10 @@ INSTALL_CLAUDE_CODE=1 bash install.sh
 ./install.ps1 -InstallClaudeCode
 ```
 
-After the setup finishes, you can validate the slide agent runtime with:
+After the setup finishes, you can validate the MARA agent runtime with:
 
 ```shell
-slide doctor
+MARA doctor
 ```
 
 ##### Option 3: source install for local development
@@ -248,11 +250,11 @@ pip install -e "libs/slide_cli"
 python app.py
 ```
 
-Validate the slide CLI and inspect the available commands:
+Validate the MARA CLI and inspect the available commands:
 
 ```shell
-slide doctor
-slide --help
+MARA doctor
+MARA --help
 ```
 
 Source-mode characteristics:
@@ -276,7 +278,7 @@ This path reads:
 
 ### CLI Document QA
 
-`slide docqa` uses the same application runtime, so it shares:
+`MARA docqa` uses the same application runtime, so it shares:
 
 - Runtime configuration
 - File indexes
@@ -286,9 +288,9 @@ This path reads:
 For a fresh setup, start with:
 
 ```shell
-slide app init
-slide app doctor
-slide docqa doctor
+MARA app init
+MARA app doctor
+MARA docqa doctor
 ```
 
 #### Index documents
@@ -296,9 +298,9 @@ slide docqa doctor
 Index one file, an entire directory, or zip archives:
 
 ```shell
-slide docqa index ./docs/report.pdf
-slide docqa index ./docs ./archive.zip --reindex
-slide docqa files
+MARA docqa index ./docs/report.pdf
+MARA docqa index ./docs ./archive.zip --reindex
+MARA docqa files
 ```
 
 Notes:
@@ -312,25 +314,25 @@ Notes:
 Document-level QA:
 
 ```shell
-slide docqa ask --file report.pdf --prompt "Summarize this document"
+MARA docqa ask --file report.pdf --prompt "Summarize this document"
 ```
 
 Page-level QA:
 
 ```shell
-slide docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
+MARA docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
 ```
 
 Selected-text-focused QA:
 
 ```shell
-slide docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
+MARA docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
 ```
 
 You can also pass graph context from disk:
 
 ```shell
-slide docqa ask --graph-context-file ./graph-context.json --prompt "What should I focus on next?"
+MARA docqa ask --graph-context-file ./graph-context.json --prompt "What should I focus on next?"
 ```
 
 Common options:
@@ -349,9 +351,9 @@ Common options:
 #### Multi-turn sessions
 
 ```shell
-slide docqa chat --file report.pdf
-slide docqa sessions
-slide docqa resume <conversation-id>
+MARA docqa chat --file report.pdf
+MARA docqa sessions
+MARA docqa resume <conversation-id>
 ```
 
 Inside the interactive session, you can use:
@@ -367,44 +369,44 @@ Inside the interactive session, you can use:
 #### Acceptance and health checks
 
 ```shell
-slide docqa acceptance
-slide docqa check
+MARA docqa acceptance
+MARA docqa check
 ```
 
 This runs the end-to-end DocQA acceptance matrix, which is useful after changing indexing, preview, knowledge graph, or CLI behavior.
 
-### CLI Slide Agent
+### CLI MARA agent
 
-`slide` is the standalone product shell for the packaged slide runtime.
+`MARA` is the standalone product shell for the packaged MARA runtime.
 
 The phase-3 model is intentionally split into two lines:
 
-- `slide ...` for the high-permission product shell
-- `slide docqa ...` for the specialist document-QA line
+- `MARA ...` for the high-permission product shell
+- `MARA docqa ...` for the specialist document-QA line
 
 The top-level shell currently centers on:
 
-- `slide app`
-- `slide doctor`
-- `slide run`
-- `slide chat`
-- `slide sessions`
-- `slide resume`
-- `slide inspect`
-- `slide read-slide`
-- `slide extract`
-- `slide search`
-- `slide files`
-- `slide read`
-- `slide write`
-- `slide delete`
-- `slide shell`
-- `slide model`
-- `slide platform`
+- `MARA app`
+- `MARA doctor`
+- `MARA run`
+- `MARA chat`
+- `MARA sessions`
+- `MARA resume`
+- `MARA inspect`
+- `MARA read-slide`
+- `MARA extract`
+- `MARA search`
+- `MARA files`
+- `MARA read`
+- `MARA write`
+- `MARA delete`
+- `MARA shell`
+- `MARA model`
+- `MARA platform`
 
-`slide inspect`, `slide read-slide`, `slide extract`, and `slide search` are the canonical read-only deck-observability commands on the top-level line. They sit alongside `slide app ...`, `slide model ...`, `slide platform ...`, and the broader runtime and workspace commands, while `slide docqa ...` remains the specialist document-QA line.
+`MARA inspect`, `MARA read-slide`, `MARA extract`, and `MARA search` are the canonical read-only deck-observability commands on the top-level line. They sit alongside `MARA app ...`, `MARA model ...`, `MARA platform ...`, and the broader runtime and workspace commands, while `MARA docqa ...` remains the specialist document-QA line.
 
-After installing `slide-cli`, start with `slide app init`, `slide app doctor`, `slide --help`, and `slide docqa --help`.
+After installing `slide-cli`, start with `MARA app init`, `MARA app doctor`, `MARA --help`, and `MARA docqa --help`.
 
 Direct package install:
 
@@ -415,29 +417,29 @@ pip install slide-cli
 Start with a runtime check:
 
 ```shell
-slide doctor
+MARA doctor
 ```
 
 To explore the DocQA command group:
 
 ```shell
-slide docqa --help
-slide docqa doctor
+MARA docqa --help
+MARA docqa doctor
 ```
 
-Codex users get a top-level `slide*` skill family and a specialist `slide-docqa*` skill family under `.codex/skills`.
-Claude Code users get matching `slide*` skills plus command wrappers under `.claude/commands`.
-Both platform bundles expose the same slide-only support surface: `slide*`, `slide-app*`, `slide-model*`, `slide-platform*`, and `slide-docqa*`.
-The focused DocQA family covers the mainline, including `slide-docqa-delete`; `slide docqa acceptance` and `slide docqa check` remain available as maintainer commands.
+Codex users get a top-level `MARA*` skill family and a specialist `MARA-docqa*` skill family under `.codex/skills`.
+Claude Code users get matching `MARA*` skills plus command wrappers under `.claude/commands`.
+Both platform bundles expose the same MARA-only support surface: `MARA*`, `MARA-app*`, `MARA-model*`, `MARA-platform*`, and `MARA-docqa*`.
+The focused DocQA family covers the mainline, including `MARA-docqa-delete`; `MARA docqa acceptance` and `MARA docqa check` remain available as maintainer commands.
 
 Example:
 
 ```shell
-slide --help
-slide run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --dry-run
-slide docqa delete old-document-id
-slide docqa ask --file ./docs/sample.pptx --prompt "Summarize this document"
-slide docqa files
+MARA --help
+MARA run --file ./docs/sample.pptx --prompt "Rewrite the opening for executives" --dry-run
+MARA docqa delete old-document-id
+MARA docqa ask --file ./docs/sample.pptx --prompt "Summarize this document"
+MARA docqa files
 ```
 
 ### Knowledge Graph And Retrieval (Default)
@@ -491,7 +493,7 @@ If you want Ollama bundled into the container, use the `ollama` target in the `D
 
 #### Runtime layout
 
-- In packaged installs, config, data, and cache directories are managed by `slide app init` and `slide app doctor`
+- In packaged installs, config, data, and cache directories are managed by `MARA app init` and `MARA app doctor`
 - In source installs, the repository-root `flowsettings.py` is the active entrypoint and local data is written to `./ktem_app_data`
 - The default Web UI entrypoint is `app.py`, and the SSO entrypoint is `sso_app.py`
 
@@ -593,9 +595,9 @@ If you enable Google SSO, you also need to define:
 If you want to separate model aliases, provider priority, and environment validation into a dedicated config, use `modelcli.yml`:
 
 ```shell
-slide model init-config --output modelcli.yml
-slide model providers --config modelcli.yml
-slide model run --prompt "hello" --model gpt-4o-mini --dry-run
+MARA model init-config --output modelcli.yml
+MARA model providers --config modelcli.yml
+MARA model run --prompt "hello" --model gpt-4o-mini --dry-run
 ```
 
 Useful scenarios:
@@ -660,8 +662,8 @@ Good directories to read first:
 
 Before submitting changes, it is a good idea to verify at least:
 
-- `slide app doctor`
-- `slide docqa doctor`
+- `MARA app doctor`
+- `MARA docqa doctor`
 - The tests related to your change
 
 If you want fuller collaboration guidance, continue updating [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -693,9 +695,9 @@ If you want fuller collaboration guidance, continue updating [CONTRIBUTING.md](C
 这个仓库提供的不是单一页面示例，而是一套可以直接运行、继续二次开发、也可以通过 CLI 接入工作流的完整文档问答运行时。当前项目的核心组成包括：
 
 - 基于 Gradio 的 Web UI，支持文档上传、页面预览、问答、引用回看和知识图谱浏览
-- 与 Web UI 共享同一套运行时、索引和会话数据的 `slide docqa` CLI
-- 用于多模型路由与环境校验的 `slide model`
-- 用于安装 Codex / Claude Code 平台资源的 `slide platform`
+- 与 Web UI 共享同一套运行时、索引和会话数据的 `MARA docqa` CLI
+- 用于多模型路由与环境校验的 `MARA model`
+- 用于安装 Codex / Claude Code 平台资源的 `MARA platform`
 - 面向本地仓库开发的 `app.py`、面向 SSO 场景的 `sso_app.py`
 
 这个项目当前的设计重点是“同一份配置、同一份文档索引、同一份会话上下文可以同时服务浏览器端和命令行端”。你既可以把它当成一套现成的文档 QA 应用来用，也可以把它当成自己的 RAG 应用底座继续扩展。
@@ -705,7 +707,7 @@ If you want fuller collaboration guidance, continue updating [CONTRIBUTING.md](C
 - 通过浏览器上传文档并进行文档级、页级、选中文本级问答
 - 在页面预览区查看 PDF、Office 文档和文本文件内容
 - 为当前会话生成知识图谱，并基于图谱节点快速构造后续问题
-- 在终端中使用 `slide docqa` 复用同一套文档索引和会话
+- 在终端中使用 `MARA docqa` 复用同一套文档索引和会话
 - 使用本地模型或 API 模型运行私有 / 半私有 RAG 流程
 
 #### 面向开发者
@@ -719,7 +721,7 @@ If you want fuller collaboration guidance, continue updating [CONTRIBUTING.md](C
 
 ### 核心功能
 
-- **Web UI + CLI 共用运行时**：浏览器端和 `slide docqa` 共用配置、文件索引、会话与知识图谱状态，避免两套系统分别维护。
+- **Web UI + CLI 共用运行时**：浏览器端和 `MARA docqa` 共用配置、文件索引、会话与知识图谱状态，避免两套系统分别维护。
 - **页面级文档问答**：聊天页支持 page-level 预览和页级上下文，适合“第 3 页写了什么”这类精确问题。
 - **知识图谱工作流**：右侧面板可以生成或刷新知识图谱；图谱节点支持选中、挂载上下文，并把推荐问题直接填入聊天框。
 - **全屏 Mindmap 浏览器**：知识图谱提供预览卡和全屏查看器，支持拖拽平移、滚轮缩放、放大、缩小、Fit、Reset。
@@ -801,21 +803,21 @@ pip install slide-cli
 初始化并检查运行时：
 
 ```shell
-slide app init
-slide app doctor
+MARA app init
+MARA app doctor
 ```
 
 启动 Web UI：
 
 ```shell
-slide app run
+MARA app run
 ```
 
 这一模式下：
 
 - 配置目录、数据目录、缓存目录由运行时自动管理
-- `slide app doctor` 会告诉你实际落盘路径
-- `slide docqa ...` 会复用这套配置和数据目录
+- `MARA app doctor` 会告诉你实际落盘路径
+- `MARA docqa ...` 会复用这套配置和数据目录
 
 ##### 方案 2：使用仓库自带安装脚本
 
@@ -909,7 +911,7 @@ uvicorn sso_app:app --host 0.0.0.0 --port 7860
 
 ### CLI 文档问答
 
-`slide docqa` 使用的就是应用运行时本身，因此它和 Web UI 共享：
+`MARA docqa` 使用的就是应用运行时本身，因此它和 Web UI 共享：
 
 - 运行时配置
 - 文件索引
@@ -919,9 +921,9 @@ uvicorn sso_app:app --host 0.0.0.0 --port 7860
 首次使用建议先检查运行时：
 
 ```shell
-slide app init
-slide app doctor
-slide docqa doctor
+MARA app init
+MARA app doctor
+MARA docqa doctor
 ```
 
 #### 索引文档
@@ -929,9 +931,9 @@ slide docqa doctor
 索引单个文件、整个目录或压缩包：
 
 ```shell
-slide docqa index ./docs/report.pdf
-slide docqa index ./docs ./archive.zip --reindex
-slide docqa files
+MARA docqa index ./docs/report.pdf
+MARA docqa index ./docs ./archive.zip --reindex
+MARA docqa files
 ```
 
 说明：
@@ -945,25 +947,25 @@ slide docqa files
 文档级问答：
 
 ```shell
-slide docqa ask --file report.pdf --prompt "Summarize this document"
+MARA docqa ask --file report.pdf --prompt "Summarize this document"
 ```
 
 页级问答：
 
 ```shell
-slide docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
+MARA docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
 ```
 
 选中文本优先问答：
 
 ```shell
-slide docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
+MARA docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
 ```
 
 也可以额外传入图谱上下文文件：
 
 ```shell
-slide docqa ask --graph-context-file ./graph-context.json --prompt "What should I focus on next?"
+MARA docqa ask --graph-context-file ./graph-context.json --prompt "What should I focus on next?"
 ```
 
 常用参数：
@@ -982,9 +984,9 @@ slide docqa ask --graph-context-file ./graph-context.json --prompt "What should 
 #### 多轮会话
 
 ```shell
-slide docqa chat --file report.pdf
-slide docqa sessions
-slide docqa resume <conversation-id>
+MARA docqa chat --file report.pdf
+MARA docqa sessions
+MARA docqa resume <conversation-id>
 ```
 
 交互式会话中支持：
@@ -1000,8 +1002,8 @@ slide docqa resume <conversation-id>
 #### 验收与健康检查
 
 ```shell
-slide docqa acceptance
-slide docqa check
+MARA docqa acceptance
+MARA docqa check
 ```
 
 这会跑完整的 DocQA 验收矩阵，适合在你修改索引、预览、知识图谱或 CLI 之后做回归验证。
@@ -1011,9 +1013,9 @@ slide docqa check
 模型路由：
 
 ```shell
-slide model init-config --output modelcli.yml
-slide model providers --config modelcli.yml
-slide model run --prompt "health check" --model gpt-4o-mini --dry-run
+MARA model init-config --output modelcli.yml
+MARA model providers --config modelcli.yml
+MARA model run --prompt "health check" --model gpt-4o-mini --dry-run
 ```
 
 `modelcli` 默认提供 OpenAI、Anthropic、Gemini、OpenRouter 的路由配置模板。
@@ -1021,11 +1023,11 @@ slide model run --prompt "health check" --model gpt-4o-mini --dry-run
 平台支持：
 
 ```shell
-slide platform list
-slide platform install --platform codex --mode full --yes
-slide platform install --platform claude-code --mode full --yes
-slide platform status --platform codex
-slide platform validate
+MARA platform list
+MARA platform install --platform codex --mode full --yes
+MARA platform install --platform claude-code --mode full --yes
+MARA platform status --platform codex
+MARA platform validate
 ```
 
 这个能力适合把项目附带的技能、命令和平台说明安装到外部 AI coding assistant 环境里。
@@ -1085,7 +1087,7 @@ LOCAL_MODEL_EMBEDDINGS=nomic-embed-text
 
 #### 运行时布局
 
-- 打包安装模式下：配置、数据和缓存目录由 `slide app init` / `slide app doctor` 管理
+- 打包安装模式下：配置、数据和缓存目录由 `MARA app init` / `MARA app doctor` 管理
 - 源码模式下：当前仓库根目录的 `flowsettings.py` 是入口，本地数据默认写入 `./ktem_app_data`
 - Web UI 默认从 `app.py` 启动，SSO 入口在 `sso_app.py`
 
@@ -1187,9 +1189,9 @@ KH_SETTINGS_SOURCE = "workspace-flowsettings"
 如果你希望把“模型别名 + 提供商优先级 + 环境可用性检查”从应用运行时中拆出来统一管理，可以使用 `modelcli.yml`：
 
 ```shell
-slide model init-config --output modelcli.yml
-slide model providers --config modelcli.yml
-slide model run --prompt "hello" --model gpt-4o-mini --dry-run
+MARA model init-config --output modelcli.yml
+MARA model providers --config modelcli.yml
+MARA model run --prompt "hello" --model gpt-4o-mini --dry-run
 ```
 
 适合的场景：
@@ -1253,8 +1255,8 @@ pytest libs/kotaemon/tests libs/ktem/ktem_tests
 
 提交改动前建议至少验证：
 
-- `slide app doctor`
-- `slide docqa doctor`
+- `MARA app doctor`
+- `MARA docqa doctor`
 - 你改动涉及的测试用例
 
 如果你需要更完整的协作说明，可以继续补充或同步更新 [CONTRIBUTING.md](CONTRIBUTING.md)。

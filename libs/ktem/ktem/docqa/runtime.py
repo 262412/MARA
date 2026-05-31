@@ -23,6 +23,8 @@ from theflow.utils.modules import import_dotted_string
 
 from kotaemon.base import Document
 
+from . import _runtime_mara as _mara
+from . import _runtime_notebook as _nb
 from ._runtime_app import _DocQAPreviewService, _RuntimeAppContext
 from ._runtime_models import (
     DocQADoctorResult,
@@ -37,9 +39,7 @@ from ._runtime_models import (
 from ._runtime_utils import _html_to_text, _serialize_value
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_SETTING = "(default)"
-STATE = {"app": {"regen": False}}
+DEFAULT_SETTING, STATE = "(default)", {"app": {"regen": False}}
 
 
 class DocQARuntime:
@@ -484,7 +484,7 @@ class DocQARuntime:
                 )
             if origin or data_source.get("origin"):
                 updated_data_source["origin"] = origin or data_source.get("origin")
-
+            updated_data_source = _nb.preserve_state(updated_data_source, data_source)
             row.data_source = updated_data_source
             row.date_updated = datetime.now()
             session.add(row)
@@ -624,7 +624,7 @@ class DocQARuntime:
         pipeline.qa_scope = qa_scope
         pipeline.page_number = scoped_page_number
         pipeline.selected_text = selected_text
-        pipeline.graph_context = graph_context
+        _mara.apply_request_context(pipeline, request, graph_context)
 
         return _PreparedPipeline(
             pipeline=pipeline,
@@ -665,17 +665,12 @@ class DocQARuntime:
             session_info = self.create_session(user_id=resolved_user_id)
 
         selected_inputs = self._resolve_selected_inputs(request, session_info)
-        selected_file_ids_from_request = None
-        if self.file_index is not None and self.file_index.id in selected_inputs:
-            selected_file_ids_from_request = self.file_index.resolve_selected_ids(
-                resolved_user_id,
-                selected_inputs[self.file_index.id],
-            )
+        request_file_ids = _mara.selected_ids(self, resolved_user_id, selected_inputs)
 
         request_to_run = DocQARequest(
             prompt=request.prompt,
             conversation_id=session_info.conversation_id,
-            selected_file_ids=selected_file_ids_from_request,
+            selected_file_ids=request_file_ids,
             selected_inputs=selected_inputs,
             active_file_id=request.active_file_id,
             active_file_name=request.active_file_name,
@@ -696,6 +691,7 @@ class DocQARuntime:
             user_id=resolved_user_id,
             origin=request.origin,
         )
+        _mara.copy_request_fields(request_to_run, request)
         prepared = self._prepare_pipeline(request_to_run)
         request_state = request_to_run.state or deepcopy(STATE)
         request_to_run.state = request_state
@@ -706,6 +702,7 @@ class DocQARuntime:
         plot = None
         mindmap_html = ""
         stream_events: list[dict[str, Any]] = []
+        mara_capture = _mara.ResponseCapture()
 
         for response in prepared.pipeline.stream(
             request.prompt,
@@ -720,6 +717,7 @@ class DocQARuntime:
                 "content": _serialize_value(response.content),
             }
             stream_events.append(event)
+            mara_capture.ingest(response.channel, event["content"])
 
             if response.channel == "chat":
                 if response.content is None:
@@ -732,8 +730,8 @@ class DocQARuntime:
                     mindmap_html = ""
                 else:
                     refs += str(response.content)
-                    if "markmap" in str(response.content):
-                        mindmap_html += str(response.content)
+                if "markmap" in str(response.content):
+                    mindmap_html += str(response.content)
             elif response.channel == "plot":
                 plot = response.content
 
@@ -772,6 +770,7 @@ class DocQARuntime:
             selected_file_ids=prepared.selected_file_ids,
             origin=request.origin,
         )
+        _nb.save_captured_artifact(session_info.conversation_id, mara_capture.artifact)
 
         selected_mapping = self._build_selected_mapping(
             selected_inputs=selected_inputs,
@@ -806,6 +805,7 @@ class DocQARuntime:
             graph_cache=_serialize_value(
                 self.get_conversation_graph_cache(session_info.conversation_id)
             ),
+            **_serialize_value(mara_capture.as_response_kwargs()),
         )
 
     def _expand_zip_inputs(self, paths: list[str]) -> list[str]:
@@ -1053,7 +1053,7 @@ class DocQARuntime:
 
         return DocQADoctorResult(
             ok=not issues,
-            app_name=getattr(self._app, "app_name", "Slides"),
+            app_name=getattr(self._app, "app_name", "MARA"),
             default_user_id=resolved_user_id,
             index_name=index_name,
             index_id=index_id,

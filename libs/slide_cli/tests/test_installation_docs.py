@@ -7,18 +7,28 @@ def test_windows_installer_installs_slide_cli():
     install_script = (REPO_ROOT / "install.ps1").read_text(encoding="utf-8")
 
     assert "slide_cli" in install_script
-    assert "slide.exe" in install_script
+    assert "MARA.exe" in install_script
+    assert "Run '$venvMARA app run' to launch the Web UI." in install_script
+    assert (
+        "Run '$venvMARA docqa doctor' to validate the shared DocQA runtime."
+        in install_script
+    )
 
 
 def test_posix_installer_installs_slide_cli():
     install_script = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
 
     assert "libs/slide_cli" in install_script
-    assert "/bin/slide" in install_script
+    assert "/bin/MARA" in install_script
+    assert "Run '$VENV_MARA app run' to launch the Web UI." in install_script
+    assert (
+        "Run '$VENV_MARA docqa doctor' to validate the shared DocQA runtime."
+        in install_script
+    )
 
 
 def test_root_readme_documents_slide_cli_source_install():
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 
     assert 'pip install -e "libs/slide_cli"' in readme
-    assert "slide doctor" in readme
+    assert "MARA doctor" in readme

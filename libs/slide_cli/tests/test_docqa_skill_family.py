@@ -5,24 +5,30 @@ SKILL_ROOT = REPO_ROOT / ".codex" / "skills"
 
 
 EXPECTED_SKILLS = {
-    "slide-docqa": [
-        "slide docqa doctor",
-        "slide docqa index",
-        "slide docqa files",
-        "slide docqa delete",
-        "slide docqa ask",
-        "slide docqa chat",
-        "slide docqa sessions",
-        "slide docqa resume",
+    "MARA-docqa": [
+        "MARA docqa doctor",
+        "MARA docqa index",
+        "MARA docqa files",
+        "MARA docqa delete",
+        "MARA docqa ask",
+        "MARA docqa chat",
+        "MARA docqa sessions",
+        "MARA docqa notes",
+        "MARA docqa sources",
+        "MARA docqa artifacts",
+        "MARA docqa resume",
     ],
-    "slide-docqa-ask": ["slide docqa ask"],
-    "slide-docqa-chat": ["slide docqa chat"],
-    "slide-docqa-doctor": ["slide docqa doctor"],
-    "slide-docqa-delete": ["slide docqa delete"],
-    "slide-docqa-files": ["slide docqa files"],
-    "slide-docqa-index": ["slide docqa index"],
-    "slide-docqa-resume": ["slide docqa resume"],
-    "slide-docqa-sessions": ["slide docqa sessions"],
+    "MARA-docqa-artifacts": ["MARA docqa artifacts"],
+    "MARA-docqa-ask": ["MARA docqa ask"],
+    "MARA-docqa-chat": ["MARA docqa chat"],
+    "MARA-docqa-doctor": ["MARA docqa doctor"],
+    "MARA-docqa-delete": ["MARA docqa delete"],
+    "MARA-docqa-files": ["MARA docqa files"],
+    "MARA-docqa-index": ["MARA docqa index"],
+    "MARA-docqa-notes": ["MARA docqa notes"],
+    "MARA-docqa-resume": ["MARA docqa resume"],
+    "MARA-docqa-sessions": ["MARA docqa sessions"],
+    "MARA-docqa-sources": ["MARA docqa sources"],
 }
 
 
@@ -30,7 +36,7 @@ def _read_skill(skill_name: str) -> str:
     return (SKILL_ROOT / skill_name / "SKILL.md").read_text(encoding="utf-8")
 
 
-def test_slide_docqa_skill_family_is_anchored_to_grouped_mainline_commands():
+def test_mara_docqa_skill_family_is_anchored_to_grouped_mainline_commands():
     for skill_name, anchors in EXPECTED_SKILLS.items():
         text = _read_skill(skill_name)
         assert f"name: {skill_name}" in text
@@ -38,13 +44,13 @@ def test_slide_docqa_skill_family_is_anchored_to_grouped_mainline_commands():
             assert anchor in text, f"{skill_name} is missing canonical anchor: {anchor}"
 
 
-def test_slide_docqa_skill_family_has_no_missing_files():
+def test_mara_docqa_skill_family_has_no_missing_files():
     expected_files = set(EXPECTED_SKILLS)
     actual_files = {
         path.name
         for path in SKILL_ROOT.iterdir()
         if path.is_dir()
-        and path.name.startswith("slide-docqa")
+        and path.name.startswith("MARA-docqa")
         and (path / "SKILL.md").is_file()
     }
 

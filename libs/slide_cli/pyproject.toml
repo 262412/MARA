@@ -37,8 +37,8 @@ classifiers = [
 ]
 
 [project.scripts]
-slide = "slide_cli.cli:main"
-slide-cli = "slide_cli.cli:main"
+MARA = "slide_cli.cli:main"
+MARA-cli = "slide_cli.cli:main"
 
 [tool.uv.sources]
 kotaemon = { workspace = true }

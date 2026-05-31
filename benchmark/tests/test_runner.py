@@ -37,6 +37,7 @@ class _FakeEngine:
                 "engine": self.engine_name,
                 "retrieved_elements": ["hit-1"],
             },
+            "agent_trace": [{"stage": "planner", "route": self.config.route}],
             "timings": {
                 "parse_seconds": 0.1,
                 "index_seconds": 0.2,
@@ -132,6 +133,9 @@ def test_run_benchmark_expands_manifest_route_matrix(monkeypatch, tmp_path):
     assert report["summary"]["embedding_cache_misses"] == 2
     assert report["summary"]["embedding_cache_hit_rate"] == 0.6667
     assert len(report["retrieval_traces"]) == 2
+    expected_agent_trace = [{"stage": "planner", "route": "page_fast"}]
+    assert report["predictions"][0]["agent_trace"] == expected_agent_trace
+    assert report["retrieval_traces"][0]["agent_trace"] == expected_agent_trace
     assert report["retrieval_traces"][0]["performance"]["parse_seconds"] == 0.1
     assert report["retrieval_traces"][0]["cache"]["parse"]["hits"] == 1
 
@@ -182,7 +186,7 @@ def test_run_benchmark_filters_manifest_route_by_id(monkeypatch, tmp_path):
     assert report["predictions"][0]["route"] == "keep"
 
 
-def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path):
+def _write_format_guardrail_manifest(tmp_path):
     (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text(
@@ -202,13 +206,18 @@ def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path)
                             "allow_abstention": False,
                             "rewrite_skipped": True,
                         },
+                        "modality": "figure",
+                        "gold_evidence": [{"element_type": "formula"}],
                     }
                 ],
             }
         ),
         encoding="utf-8",
     )
+    return manifest_path
 
+
+def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path):
     class _GuardrailEngine:
         def __init__(self, engine_name, config):
             self.engine_name = engine_name
@@ -251,7 +260,7 @@ def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path)
     )
 
     report = run_benchmark(
-        manifest_path,
+        _write_format_guardrail_manifest(tmp_path),
         BenchmarkConfig(
             suite_name="format_guardrails",
             output_dir=tmp_path / "out",
@@ -263,12 +272,17 @@ def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path)
     assert prediction["expected_formats"] == ["markdown_table", "latex"]
     assert prediction["expected_guardrails"]["rewrite_skipped"] is True
     assert prediction["evidence_metadata"]["has_formula_evidence"] is True
+    assert prediction["metrics"]["figure_hit"] == 1.0
+    assert prediction["metrics"]["formula_hit"] == 1.0
+    assert prediction["metrics"]["table_hit"] is None
     assert prediction["metrics"]["markdown_table_renderable"] == 1.0
     assert prediction["metrics"]["latex_renderable"] == 1.0
     assert prediction["metrics"]["false_abstention"] == 0.0
     assert prediction["metrics"]["rewrite_skipped"] == 1.0
     assert prediction["metrics"]["guardrail_expectation_match"] == 1.0
     assert report["summary"]["avg_markdown_table_renderable"] == 1.0
+    assert report["summary"]["avg_figure_hit"] == 1.0
+    assert report["summary"]["avg_formula_hit"] == 1.0
     assert report["summary"]["avg_latex_renderable"] == 1.0
     assert report["summary"]["avg_false_abstention"] == 0.0
     assert report["summary"]["avg_guardrail_expectation_match"] == 1.0

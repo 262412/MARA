@@ -18,7 +18,7 @@ if not KH_DEMO_MODE:
     )
 else:
     PLACEHOLDER_TEXT = (
-        "Welcome to Slides Demo. "
+        "Welcome to MARA Demo. "
         "Start by browsing preloaded conversations to get onboard.\n"
         "Check out Hint section for more tips."
     )

@@ -6,6 +6,35 @@ from pathlib import Path
 from .schemas import CLI_ENGINE_CHOICES, normalize_scope
 
 
+def _add_docqa_runtime_options(run_parser: argparse.ArgumentParser) -> None:
+    run_parser.add_argument(
+        "--docqa-citation-mode",
+        choices=["highlight", "inline", "off"],
+        help=(
+            "Override DocQA citation mode. Use 'off' for LLMs that do not "
+            "support OpenAI-compatible tool_choice/function calling."
+        ),
+    )
+    run_parser.add_argument(
+        "--reasoning",
+        dest="reasoning_type",
+        help="DocQA reasoning mode, for example 'mara'.",
+    )
+    run_parser.add_argument(
+        "--agent-mode",
+        choices=["auto", "fast", "thorough"],
+        help="MARA agent mode for DocQA runtime benchmarks.",
+    )
+    run_parser.add_argument(
+        "--task-type",
+        help="MARA task type, for example 'qa', 'quiz', or 'slide_outline'.",
+    )
+    run_parser.add_argument(
+        "--artifact-type",
+        help="MARA Studio artifact type to request during DocQA benchmarks.",
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Kotaemon benchmark toolkit")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -58,14 +87,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--embedding-name")
     run_parser.add_argument("--reranker-name")
     run_parser.add_argument("--llm-name")
-    run_parser.add_argument(
-        "--docqa-citation-mode",
-        choices=["highlight", "inline", "off"],
-        help=(
-            "Override DocQA citation mode. Use 'off' for LLMs that do not "
-            "support OpenAI-compatible tool_choice/function calling."
-        ),
-    )
+    _add_docqa_runtime_options(run_parser)
     run_parser.add_argument(
         "--no-generate",
         action="store_true",
@@ -149,6 +171,10 @@ def main(argv: list[str] | None = None) -> int:
         reranker_name=args.reranker_name,
         llm_name=args.llm_name,
         docqa_citation_mode=args.docqa_citation_mode,
+        reasoning_type=args.reasoning_type,
+        agent_mode=args.agent_mode,
+        task_type=args.task_type,
+        artifact_type=args.artifact_type,
         use_generation=not args.no_generate,
     )
     report = run_benchmark(args.manifest, config)

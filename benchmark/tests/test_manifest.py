@@ -75,12 +75,7 @@ def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evid
                 "schema_version": 2,
                 "dataset_name": "v2_suite",
                 "documents": [
-                    {
-                        "document_id": "doc-a",
-                        "path": "doc-a.pdf",
-                        "format_type": "pdf",
-                        "modality": "text",
-                    },
+                    {"document_id": "doc-a", "path": "doc-a.pdf", "format_type": "pdf"},
                     {
                         "document_id": "doc-b",
                         "path": "doc-b.xlsx",
@@ -110,16 +105,20 @@ def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evid
                                 "span": "Revenue was 20",
                                 "citation": "doc-a#page:2",
                             },
-                            {
-                                "document_id": "doc-b",
-                                "element_id": "cell-b2",
-                                "span": "Revenue was 22",
-                            },
+                            {"document_id": "doc-b", "element_id": "cell-b2"},
                         ],
                     }
                 ],
                 "routes": [
-                    {"engine": "text-rag", "scope": "multi_document", "route": "hybrid"}
+                    {
+                        "engine": "text-rag",
+                        "scope": "multi_document",
+                        "route": "hybrid",
+                        "reasoning": "mara",
+                        "agent_mode": "fast",
+                        "task_type": "qa",
+                        "artifact_type": "study_guide",
+                    }
                 ],
             },
             ensure_ascii=False,
@@ -132,19 +131,14 @@ def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evid
     assert bundle.schema_version == 2
     assert bundle.dataset_name == "v2_suite"
     assert bundle.documents["doc-b"].modality == "table"
-    assert bundle.routes == [
-        {
-            "route_id": "hybrid",
-            "route_name": "hybrid",
-            "engine": "text-rag",
-            "scope": "multi_document",
-            "reader_mode": "default",
-            "retrieval_mode": "hybrid",
-            "top_k": 5,
-            "use_generation": True,
-            "cost_profile": None,
-        }
-    ]
+    route = bundle.routes[0]
+    assert route["route_id"] == "hybrid"
+    assert route["engine"] == "text-rag"
+    assert route["scope"] == "multi_document"
+    assert route["reasoning_type"] == "mara"
+    assert route["agent_mode"] == "fast"
+    assert route["task_type"] == "qa"
+    assert route["artifact_type"] == "study_guide"
     example = bundle.examples[0]
     assert example.document_ids == ["doc-a", "doc-b"]
     assert example.scope == "multi_document"
@@ -166,18 +160,9 @@ def test_load_v2_manifest_normalizes_route_matrix_defaults_and_aliases(tmp_path)
             {
                 "schema_version": 2,
                 "dataset_name": "route_suite",
-                "documents": [
-                    {
-                        "document_id": "doc",
-                        "path": "doc.pdf",
-                    }
-                ],
+                "documents": [{"document_id": "doc", "path": "doc.pdf"}],
                 "examples": [
-                    {
-                        "document_id": "doc",
-                        "question": "What is it?",
-                        "answer": "pdf",
-                    }
+                    {"document_id": "doc", "question": "What is it?", "answer": "pdf"}
                 ],
                 "route_matrix": [
                     {
@@ -190,6 +175,10 @@ def test_load_v2_manifest_normalizes_route_matrix_defaults_and_aliases(tmp_path)
                         "top_k": 8,
                         "use_generation": False,
                         "cost_profile": "quality",
+                        "reasoning_type": "mara",
+                        "agent_mode": "thorough",
+                        "task_type": "summary",
+                        "artifact_type": "slide_outline",
                     },
                     {
                         "route": "legacy",
@@ -215,6 +204,10 @@ def test_load_v2_manifest_normalizes_route_matrix_defaults_and_aliases(tmp_path)
             "top_k": 8,
             "use_generation": False,
             "cost_profile": "quality",
+            "reasoning_type": "mara",
+            "agent_mode": "thorough",
+            "task_type": "summary",
+            "artifact_type": "slide_outline",
         },
         {
             "route_id": "legacy",
@@ -226,6 +219,10 @@ def test_load_v2_manifest_normalizes_route_matrix_defaults_and_aliases(tmp_path)
             "top_k": 5,
             "use_generation": True,
             "cost_profile": None,
+            "reasoning_type": None,
+            "agent_mode": None,
+            "task_type": None,
+            "artifact_type": None,
         },
     ]
 

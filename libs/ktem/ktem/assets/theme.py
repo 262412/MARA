@@ -145,7 +145,7 @@ light_mode = dict(
 
 class Kotaemon(Soft):
     """
-    Official theme of Slides.
+    Official theme of MARA.
     Public version: https://huggingface.co/spaces/lone17/kotaemon
     """
 
@@ -184,7 +184,7 @@ class Kotaemon(Soft):
             font=font,
             font_mono=font_mono,
         )
-        self.name = "slides"
+        self.name = "mara"
         super().set(
             **common,
             **dark_mode,

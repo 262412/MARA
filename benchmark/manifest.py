@@ -141,6 +141,10 @@ def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
         "top_k": int(record.get("top_k") or 5),
         "use_generation": _coerce_bool(record.get("use_generation"), True),
         "cost_profile": record.get("cost_profile"),
+        "reasoning_type": record.get("reasoning_type") or record.get("reasoning"),
+        "agent_mode": record.get("agent_mode"),
+        "task_type": record.get("task_type"),
+        "artifact_type": record.get("artifact_type"),
     }
 
 

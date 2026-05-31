@@ -36,7 +36,7 @@ if (-not (Test-Path $venvDir)) {
 
 $venvPython = Join-Path $venvDir "Scripts\\python.exe"
 $venvKotaemon = Join-Path $venvDir "Scripts\\kotaemon.exe"
-$venvSlide = Join-Path $venvDir "Scripts\\slide.exe"
+$venvMARA = Join-Path $venvDir "Scripts\\MARA.exe"
 
 & $venvPython -m pip install --upgrade pip
 
@@ -54,23 +54,43 @@ if ((Test-Path $localKtem) -and (Test-Path $localKotaemon)) {
 }
 
 if (-not $SkipInit) {
-    & $venvKotaemon app init
+    if (Test-Path $localSlideCli) {
+        & $venvMARA app init
+    } else {
+        & $venvKotaemon app init
+    }
 }
 
-& $venvKotaemon app doctor
+if (Test-Path $localSlideCli) {
+    & $venvMARA app doctor
+} else {
+    & $venvKotaemon app doctor
+}
 
 if ($InstallCodex) {
-    & $venvKotaemon platform install --platform codex --mode full --yes
+    if (Test-Path $localSlideCli) {
+        & $venvMARA platform install --platform codex --mode full --yes
+    } else {
+        & $venvKotaemon platform install --platform codex --mode full --yes
+    }
 }
 
 if ($InstallClaudeCode) {
-    & $venvKotaemon platform install --platform claude-code --mode full --yes
+    if (Test-Path $localSlideCli) {
+        & $venvMARA platform install --platform claude-code --mode full --yes
+    } else {
+        & $venvKotaemon platform install --platform claude-code --mode full --yes
+    }
 }
 
 Write-Host ""
-Write-Host "Kotaemon is ready."
-Write-Host "Run '$venvKotaemon app run' to launch the Web UI."
-Write-Host "Run '$venvKotaemon docqa doctor' to validate the shared DocQA runtime."
 if (Test-Path $localSlideCli) {
-    Write-Host "Run '$venvSlide doctor' to validate the slide-cli runtime."
+    Write-Host "MARA is ready."
+    Write-Host "Run '$venvMARA app run' to launch the Web UI."
+    Write-Host "Run '$venvMARA docqa doctor' to validate the shared DocQA runtime."
+    Write-Host "Run '$venvMARA doctor' to validate the MARA runtime."
+} else {
+    Write-Host "Kotaemon is ready."
+    Write-Host "Run '$venvKotaemon app run' to launch the Web UI."
+    Write-Host "Run '$venvKotaemon docqa doctor' to validate the shared DocQA runtime."
 }

@@ -4,33 +4,33 @@
 
 Phase 3 keeps the user-facing shell intentionally split into two lines:
 
-- `slide ...` is the high-permission product shell for runtime commands, app lifecycle, model routing, platform support, and workspace operations, including `slide apply`, `slide export-pdf`, and `slide review`
-- `slide docqa ...` is the specialist document-QA line
+- `MARA ...` is the high-permission product shell for runtime commands, app lifecycle, model routing, platform support, and workspace operations, including `MARA apply`, `MARA export-pdf`, and `MARA review`
+- `MARA docqa ...` is the specialist document-QA line
 
 The canonical top-level commands currently are:
 
-- `slide apply`
-- `slide app`
-- `slide export-pdf`
-- `slide model`
-- `slide platform`
-- `slide review`
-- `slide doctor`
-- `slide run`
-- `slide chat`
-- `slide sessions`
-- `slide resume`
-- `slide inspect`
-- `slide read-slide`
-- `slide extract`
-- `slide search`
-- `slide files`
-- `slide read`
-- `slide write`
-- `slide delete`
-- `slide shell`
+- `MARA apply`
+- `MARA app`
+- `MARA export-pdf`
+- `MARA model`
+- `MARA platform`
+- `MARA review`
+- `MARA doctor`
+- `MARA run`
+- `MARA chat`
+- `MARA sessions`
+- `MARA resume`
+- `MARA inspect`
+- `MARA read-slide`
+- `MARA extract`
+- `MARA search`
+- `MARA files`
+- `MARA read`
+- `MARA write`
+- `MARA delete`
+- `MARA shell`
 
-`slide inspect`, `slide read-slide`, `slide extract`, and `slide search` are the canonical read-only deck-observability commands on the top-level line.
+`MARA inspect`, `MARA read-slide`, `MARA extract`, and `MARA search` are the canonical read-only deck-observability commands on the top-level line.
 
 ## Version Chain
 
@@ -65,21 +65,21 @@ python scripts/publish_packages.py release --repository testpypi --skip-upload
 
 ## Packaged Runtime Workflow
 
-The recommended slide user path is to install the public CLI package, initialize the packaged runtime once, and then discover the canonical two-line shell from that environment:
+The recommended MARA user path is to install the public CLI package, initialize the packaged runtime once, and then discover the canonical two-line shell from that environment:
 
 ```shell
 pip install slide-cli
-slide app init
-slide app doctor
-slide --help
-slide doctor
-slide docqa --help
+MARA app init
+MARA app doctor
+MARA --help
+MARA doctor
+MARA docqa --help
 ```
 
-For a fresh environment, run `slide doctor` first, then use `slide docqa doctor` before your first `slide docqa index`, `slide docqa files`, `slide docqa delete`, `slide docqa ask`, `slide docqa chat`, `slide docqa resume`, or `slide docqa sessions` command.
+For a fresh environment, run `MARA doctor` first, then use `MARA docqa doctor` before your first `MARA docqa index`, `MARA docqa files`, `MARA docqa delete`, `MARA docqa ask`, `MARA docqa chat`, `MARA docqa resume`, or `MARA docqa sessions` command.
 
-The same install also exposes the top-level `slide*` skill family plus the specialist `slide-docqa*` skill family under `.codex/skills`, including `slide-docqa-delete`.
-`slide docqa acceptance` and `slide docqa check` remain available as maintainer workflows outside the focused DocQA mainline skill family.
+The same install also exposes the top-level `MARA*` skill family plus the specialist `MARA-docqa*` skill family under `.codex/skills`, including `MARA-docqa-delete`.
+`MARA docqa acceptance` and `MARA docqa check` remain available as maintainer workflows outside the focused DocQA mainline skill family.
 
 The release docs stay with the product shell plus the DocQA specialist line.
 
@@ -105,8 +105,8 @@ Verify the published package after upload:
 
 ```shell
 pip install slide-cli
-slide doctor
-slide --help
+MARA doctor
+MARA --help
 ```
 
 Or use TestPyPI:

@@ -105,6 +105,9 @@ def test_write_reports_derives_minimal_traces_from_predictions_when_missing(tmp_
                 "example_id": "with-trace",
                 "prediction": "beta",
                 "retrieval_trace": {"hits": [{"document_id": "doc-2"}]},
+                "agent_trace": [{"stage": "planner", "decision": "retrieve"}],
+                "evidence_metadata": {"has_table_evidence": True},
+                "claim_verification": {"abstained": False},
             },
         ],
         "documents": [],
@@ -121,5 +124,40 @@ def test_write_reports_derives_minimal_traces_from_predictions_when_missing(tmp_
         {
             "example_id": "with-trace",
             "retrieval_trace": {"hits": [{"document_id": "doc-2"}]},
+            "agent_trace": [{"stage": "planner", "decision": "retrieve"}],
+            "evidence_metadata": {"has_table_evidence": True},
+            "claim_verification": {"abstained": False},
         },
     ]
+
+
+def test_write_reports_includes_multimodal_summary_metrics(tmp_path):
+    report = {
+        "summary": {
+            "suite_name": "MARA Suite",
+            "dataset_name": "sample",
+            "num_examples": 1,
+            "num_documents": 1,
+            "avg_em": 0.0,
+            "avg_f1": 0.0,
+            "avg_anls": 0.0,
+            "avg_page_hit": 0.0,
+            "avg_citation_recall": 0.0,
+            "avg_table_hit": 1.0,
+            "avg_figure_hit": 0.5,
+            "avg_formula_hit": 1.0,
+            "avg_slide_hit": 0.0,
+            "avg_retrieval_seconds": 0.0,
+            "avg_generation_seconds": 0.0,
+        },
+        "predictions": [],
+        "documents": [],
+    }
+
+    run_dir = write_reports(report, tmp_path, "MARA Suite")
+
+    markdown = (run_dir / "report.md").read_text(encoding="utf-8")
+    assert "- Table Hit: `1.0`" in markdown
+    assert "- Figure Hit: `0.5`" in markdown
+    assert "- Formula Hit: `1.0`" in markdown
+    assert "- Slide Hit: `0.0`" in markdown

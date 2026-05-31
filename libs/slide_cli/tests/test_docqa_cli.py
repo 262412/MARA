@@ -165,6 +165,12 @@ def test_docqa_ask_json(monkeypatch, tmp_path):
             str(graph_context_path),
             "--reasoning",
             "chain",
+            "--task",
+            "study_guide",
+            "--agent-mode",
+            "thorough",
+            "--artifact",
+            "study_guide",
             "--llm",
             "gpt-4o-mini",
             "--citation",
@@ -189,6 +195,9 @@ def test_docqa_ask_json(monkeypatch, tmp_path):
     assert runtime.last_request.selected_text == "focus text"
     assert runtime.last_request.graph_context == {"related_file_ids": ["file-1"]}
     assert runtime.last_request.reasoning_type == "chain"
+    assert runtime.last_request.task_type == "study_guide"
+    assert runtime.last_request.agent_mode == "thorough"
+    assert runtime.last_request.artifact_type == "study_guide"
     assert runtime.last_request.llm == "gpt-4o-mini"
     assert runtime.last_request.use_citation == "inline"
     assert runtime.last_request.language == "zh"
@@ -412,6 +421,9 @@ def test_docqa_ask_help_lists_shared_parameters():
         "--selected-text",
         "--graph-context-file",
         "--reasoning",
+        "--task",
+        "--agent-mode",
+        "--artifact",
         "--llm",
         "--citation",
         "--language",
@@ -438,6 +450,9 @@ def test_docqa_help_lists_action_navigation():
         "Interactive chat",
         "Inspect saved sessions",
         "Resume a conversation",
+        "Manage notebook notes",
+        "Manage selected sources",
+        "Manage generated artifacts",
         "Health check",
         "Maintainer acceptance check",
     ]:

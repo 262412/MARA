@@ -75,11 +75,11 @@ def test_app_help_lists_action_navigation(tmp_path):
     for token in [
         "Action guide:",
         "Initialize user config",
-        "slide-app-init",
+        "MARA-app-init",
         "Inspect runtime health",
-        "slide-app-doctor",
+        "MARA-app-doctor",
         "Launch the packaged Web UI",
-        "slide-app-run",
+        "MARA-app-run",
     ]:
         assert token in result.stdout
 
@@ -88,11 +88,11 @@ def test_app_doctor_help_lists_platform_skill(tmp_path):
     result = _run_package_mode_cli(tmp_path, "app", "doctor", "--help")
 
     assert result.returncode == 0, result.stdout + "\nSTDERR:\n" + result.stderr
-    assert "Platform skill: slide-app-doctor" in result.stdout
+    assert "Platform skill: MARA-app-doctor" in result.stdout
 
 
 def test_app_run_help_lists_platform_skill(tmp_path):
     result = _run_package_mode_cli(tmp_path, "app", "run", "--help")
 
     assert result.returncode == 0, result.stdout + "\nSTDERR:\n" + result.stderr
-    assert "Platform skill: slide-app-run" in result.stdout
+    assert "Platform skill: MARA-app-run" in result.stdout

@@ -92,16 +92,16 @@ def test_help_describes_two_line_product_model():
 
     assert result.exit_code == 0, result.output
     for token in [
-        "Unified slide product CLI.",
+        "Unified MARA product CLI.",
         "Top-level agent line:",
         "Specialist DocQA line:",
         "Support lines:",
-        "`slide run`",
+        "`MARA run`",
         "read-only deck observability commands",
-        "`slide app ...`",
-        "`slide model ...`",
-        "`slide platform ...`",
-        "`slide docqa ...`",
+        "`MARA app ...`",
+        "`MARA model ...`",
+        "`MARA platform ...`",
+        "`MARA docqa ...`",
     ]:
         assert token in result.output
 
@@ -113,7 +113,7 @@ def test_run_help_describes_high_permission_agent_workflow():
 
     assert result.exit_code == 0, result.output
     for token in [
-        "Run one high-permission slide agent workflow.",
+        "Run one high-permission MARA agent workflow.",
         "--file",
         "--prompt",
         "--approval-policy",
@@ -128,7 +128,7 @@ def test_chat_help_describes_interactive_agent_workflow():
 
     assert result.exit_code == 0, result.output
     for token in [
-        "Open an interactive high-permission slide agent session.",
+        "Open an interactive high-permission MARA agent session.",
         "--file",
         "--prompt",
         "--approval-policy",

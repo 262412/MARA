@@ -60,14 +60,14 @@ def test_phase2_docs_cover_slide_docqa_mainline_boundary():
     )
 
     for content in [root_readme, package_readme, release_doc]:
-        assert "slide docqa delete" in content
+        assert "MARA docqa delete" in content
 
-    assert "slide-docqa-delete" in root_readme
+    assert "MARA-docqa-delete" in root_readme
     assert "maintainer" in release_doc.lower()
-    assert "slide docqa acceptance" in release_doc
+    assert "MARA docqa acceptance" in release_doc
 
 
-def test_phase3_docs_cover_two_line_slide_model():
+def test_phase3_docs_cover_two_line_mara_model():
     root_readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     package_readme = (REPO_ROOT / "libs" / "slide_cli" / "README.md").read_text(
         encoding="utf-8"
@@ -83,28 +83,28 @@ def test_phase3_docs_cover_two_line_slide_model():
         / "2026-04-22-slide-cli-phase3-foundation.md"
     ).read_text(encoding="utf-8")
 
-    assert "`slide ...` for the high-permission product shell" in root_readme
-    assert "`slide docqa ...` for the specialist document-QA line" in root_readme
+    assert "`MARA ...` for the high-permission product shell" in root_readme
+    assert "`MARA docqa ...` for the specialist document-QA line" in root_readme
     assert "The phase-3 shell is split into two lines:" in package_readme
-    assert "`slide ...` is the high-permission product line" in package_readme
+    assert "`MARA ...` is the high-permission product line" in package_readme
     for command in [
-        "slide inspect",
-        "slide read-slide",
-        "slide extract",
-        "slide search",
-        "slide files",
-        "slide read",
-        "slide write",
-        "slide delete",
-        "slide shell",
+        "MARA inspect",
+        "MARA read-slide",
+        "MARA extract",
+        "MARA search",
+        "MARA files",
+        "MARA read",
+        "MARA write",
+        "MARA delete",
+        "MARA shell",
     ]:
         assert command in root_readme
         assert command in package_readme
         assert command in release_doc
-    assert "slide docqa ..." in package_readme
+    assert "MARA docqa ..." in package_readme
     assert (
         "Phase 3 keeps the user-facing shell intentionally split into two lines"
         in release_doc
     )
-    assert "`slide docqa ...` is the specialist document-QA line" in release_doc
+    assert "`MARA docqa ...` is the specialist document-QA line" in release_doc
     assert "two-line model" in phase3_plan

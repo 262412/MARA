@@ -4108,7 +4108,9 @@ body.ktem-dark-mode .gradio-container {
 
 .suggested-question-list,
 .citations-card,
-.reasoning-trace-card {
+.reasoning-trace-card,
+.studio-artifacts-card,
+.notebook-panel-card {
   display: grid;
   gap: 8px;
   color: var(--app-text);
@@ -4156,7 +4158,9 @@ body.ktem-dark-mode .gradio-container {
 }
 
 .citations-card,
-.reasoning-trace-card {
+.reasoning-trace-card,
+.studio-artifacts-card,
+.notebook-panel-card {
   padding: 12px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -4234,6 +4238,62 @@ body.ktem-dark-mode .gradio-container {
 .reasoning-trace-card--empty p {
   margin: 0;
   color: var(--app-text-muted);
+}
+
+.studio-artifacts-card {
+  margin-top: 10px;
+}
+
+.studio-artifacts-card > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.studio-artifacts-card span,
+.studio-artifacts-card--empty p {
+  color: var(--app-text-muted);
+  font-size: 11px;
+}
+
+.studio-artifacts-card h4,
+.studio-artifacts-card p,
+.studio-artifacts-card ul {
+  margin: 0;
+}
+
+.studio-artifacts-card ul {
+  display: grid;
+  gap: 6px;
+  padding-left: 16px;
+  color: var(--app-text-muted);
+  line-height: 1.4;
+}
+
+.notebook-panel-card {
+  margin-top: 10px;
+}
+
+.notebook-panel-card > div,
+.notebook-panel-card section > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notebook-panel-card section {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid #eef2f7;
+}
+
+.notebook-panel-card span,
+.notebook-panel-card small,
+.notebook-panel-card p {
+  margin: 0;
+  color: var(--app-text-muted);
+  font-size: 11px;
 }
 
 #knowledge-graph-status {
@@ -4320,7 +4380,9 @@ body.ktem-dark-mode .page-metadata-strip strong,
 body.ktem-dark-mode .answer-panel-label,
 body.ktem-dark-mode .suggested-question-list,
 body.ktem-dark-mode .citations-card,
-body.ktem-dark-mode .reasoning-trace-card {
+body.ktem-dark-mode .reasoning-trace-card,
+body.ktem-dark-mode .studio-artifacts-card,
+body.ktem-dark-mode .notebook-panel-card {
   color: #f8fafc !important;
 }
 
@@ -4331,6 +4393,8 @@ body.ktem-dark-mode .page-metadata-strip,
 body.ktem-dark-mode #answer-panel,
 body.ktem-dark-mode .citations-card,
 body.ktem-dark-mode .reasoning-trace-card,
+body.ktem-dark-mode .studio-artifacts-card,
+body.ktem-dark-mode .notebook-panel-card,
 body.ktem-dark-mode #knowledge-graph-plot,
 body.ktem-dark-mode #html-info-panel,
 body.ktem-dark-mode #answer-expand #chat-input-row {
@@ -4383,6 +4447,8 @@ html.ktem-dark-mode .answer-panel-label,
 html.ktem-dark-mode .suggested-question-list,
 html.ktem-dark-mode .citations-card,
 html.ktem-dark-mode .reasoning-trace-card,
+html.ktem-dark-mode .studio-artifacts-card,
+html.ktem-dark-mode .notebook-panel-card,
 body.dark .mara-brand-title,
 body.dark .header-bar button,
 body.dark #conv-settings-panel h2,
@@ -4396,7 +4462,9 @@ body.dark .page-metadata-strip strong,
 body.dark .answer-panel-label,
 body.dark .suggested-question-list,
 body.dark .citations-card,
-body.dark .reasoning-trace-card {
+body.dark .reasoning-trace-card,
+body.dark .studio-artifacts-card,
+body.dark .notebook-panel-card {
   color: #f8fafc !important;
 }
 
@@ -4407,6 +4475,8 @@ html.ktem-dark-mode .page-metadata-strip,
 html.ktem-dark-mode #answer-panel,
 html.ktem-dark-mode .citations-card,
 html.ktem-dark-mode .reasoning-trace-card,
+html.ktem-dark-mode .studio-artifacts-card,
+html.ktem-dark-mode .notebook-panel-card,
 html.ktem-dark-mode #knowledge-graph-plot,
 html.ktem-dark-mode #html-info-panel,
 html.ktem-dark-mode #answer-expand #chat-input-row,
@@ -4420,6 +4490,8 @@ body.dark .page-metadata-strip,
 body.dark #answer-panel,
 body.dark .citations-card,
 body.dark .reasoning-trace-card,
+body.dark .studio-artifacts-card,
+body.dark .notebook-panel-card,
 body.dark #knowledge-graph-plot,
 body.dark #html-info-panel,
 body.dark #answer-expand #chat-input-row,

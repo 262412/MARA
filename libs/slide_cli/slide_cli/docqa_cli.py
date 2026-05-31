@@ -2,36 +2,17 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
-from typing import Any
 
 import click
 
+from .docqa_notebook_cli import register_docqa_notebook_commands
+from .docqa_options import docqa_shared_options as _docqa_shared_options
+from .docqa_request import DocQARequest
 
-@dataclass
-class _DocQARequest:
-    prompt: str
-    conversation_id: str = ""
-    selected_file_ids: list[str] | None = None
-    selected_inputs: dict[int, Any] | None = None
-    qa_scope: str = "auto"
-    active_file_id: str = ""
-    active_file_name: str = ""
-    page_number: int | None = None
-    selected_text: str = ""
-    graph_context: dict[str, Any] = field(default_factory=dict)
-    graph_source_ids: list[str] | None = None
-    settings: dict[str, Any] | None = None
-    state: dict[str, Any] | None = None
-    history: list[tuple[str, str]] | None = None
-    reasoning_type: str | None = None
-    llm: str | None = None
-    use_mindmap: bool | str | None = None
-    use_citation: str | None = None
-    language: str | None = None
-    command_state: str | None = None
-    user_id: Any = None
-    origin: str = "cli"
+_REPL_COMMANDS = (
+    "Commands: /files, /use <file>, /page <n|clear>, /selected-text [text], "
+    "/history, /help, /exit"
+)
 
 
 def _echo_json(payload):
@@ -93,7 +74,7 @@ def run_docqa_acceptance_matrix(**kwargs):
 
 
 def _create_docqa_request(**kwargs):
-    return _DocQARequest(**kwargs)
+    return DocQARequest(**kwargs)
 
 
 def _print_docqa_response(response):
@@ -154,91 +135,6 @@ def _print_docqa_acceptance_summary(payload):
         _echo_text(f"Coverage: {', '.join(coverage)}")
 
 
-def _docqa_shared_options(command):
-    options = [
-        click.option(
-            "--conversation",
-            default="",
-            help="Existing conversation id to continue.",
-        ),
-        click.option(
-            "--file",
-            "file_refs",
-            multiple=True,
-            help="Restrict retrieval to one or more file ids or names.",
-        ),
-        click.option(
-            "--active-file",
-            default="",
-            help="Active file id or name for page-level QA focus.",
-        ),
-        click.option(
-            "--page",
-            default=None,
-            type=click.IntRange(min=1),
-            help="Focus QA on one page. Omit to use whole-document QA.",
-        ),
-        click.option(
-            "--scope",
-            "qa_scope",
-            default="auto",
-            type=click.Choice(["auto", "page", "document", "multi-document"]),
-            help=(
-                "QA retrieval scope: auto, current page, current document, "
-                "or multiple selected documents."
-            ),
-        ),
-        click.option(
-            "--selected-text",
-            default="",
-            help="Explicit selected text to focus retrieval without forcing page 1.",
-        ),
-        click.option(
-            "--graph-context-file",
-            default="",
-            help="JSON file containing graph context to inject.",
-        ),
-        click.option(
-            "--reasoning",
-            default=None,
-            help="Temporary reasoning override.",
-        ),
-        click.option(
-            "--llm",
-            default=None,
-            help="Temporary LLM override.",
-        ),
-        click.option(
-            "--citation",
-            default=None,
-            type=click.Choice(["highlight", "inline", "off"]),
-            help="Citation mode override.",
-        ),
-        click.option(
-            "--language",
-            default=None,
-            help="Response language override.",
-        ),
-        click.option(
-            "--mindmap",
-            flag_value=True,
-            default=None,
-            help="Enable mindmap output for this run.",
-        ),
-        click.option(
-            "--json",
-            "json_output",
-            is_flag=True,
-            default=False,
-            show_default=True,
-            help="Emit structured JSON output.",
-        ),
-    ]
-    for option in reversed(options):
-        command = option(command)
-    return command
-
-
 def _resolve_cli_files(runtime, file_refs):
     if not file_refs:
         return []
@@ -252,6 +148,23 @@ def _resolve_cli_active_file(runtime, active_file_ref):
     return matches[0] if matches else None
 
 
+def _run_docqa_turn(runtime, **request_kwargs):
+    request_kwargs["qa_scope"] = str(request_kwargs.get("qa_scope") or "auto").replace(
+        "-", "_"
+    )
+    return runtime.run_turn(_create_docqa_request(**request_kwargs))
+
+
+def _print_repl_history(runtime, conversation_id):
+    latest = runtime.load_session(conversation_id)
+    if not latest or not latest.messages:
+        _echo_text("No messages yet.")
+        return
+    for index, (question, answer) in enumerate(latest.messages, start=1):
+        _echo_text(f"[{index}] Q: {question}")
+        _echo_text(f"[{index}] A: {answer}")
+
+
 def _run_docqa_repl(
     runtime,
     conversation_id,
@@ -262,6 +175,9 @@ def _run_docqa_repl(
     selected_text="",
     graph_context_file="",
     reasoning=None,
+    task_type=None,
+    agent_mode=None,
+    artifact_type=None,
     llm=None,
     citation=None,
     language=None,
@@ -284,11 +200,20 @@ def _run_docqa_repl(
     current_page = max(1, int(page)) if page not in (None, "") else None
     current_selected_text = str(selected_text or "").strip()
     graph_context = parse_graph_context_file(graph_context_file)
+    request_overrides = {
+        "graph_context": graph_context,
+        "reasoning_type": reasoning,
+        "task_type": task_type,
+        "agent_mode": agent_mode,
+        "artifact_type": artifact_type,
+        "llm": llm,
+        "use_mindmap": mindmap,
+        "use_citation": citation,
+        "language": language,
+    }
 
     _echo_text(f"Conversation: {conversation_id}")
-    _echo_text(
-        "Commands: /files, /use <file>, /page <n|clear>, /selected-text [text], /history, /help, /exit"
-    )
+    _echo_text(_REPL_COMMANDS)
 
     while True:
         try:
@@ -306,9 +231,7 @@ def _run_docqa_repl(
         if prompt == "/exit":
             break
         if prompt == "/help":
-            _echo_text(
-                "Commands: /files, /use <file>, /page <n|clear>, /selected-text [text], /history, /help, /exit"
-            )
+            _echo_text(_REPL_COMMANDS)
             continue
         if prompt == "/files":
             _print_file_records(
@@ -352,32 +275,20 @@ def _run_docqa_repl(
                 _echo_text("Selected text cleared.")
             continue
         if prompt == "/history":
-            latest = runtime.load_session(conversation_id)
-            if not latest or not latest.messages:
-                _echo_text("No messages yet.")
-                continue
-            for index, (question, answer) in enumerate(latest.messages, start=1):
-                _echo_text(f"[{index}] Q: {question}")
-                _echo_text(f"[{index}] A: {answer}")
+            _print_repl_history(runtime, conversation_id)
             continue
 
-        response = runtime.run_turn(
-            _create_docqa_request(
-                prompt=prompt,
-                conversation_id=conversation_id,
-                selected_file_ids=selected_file_ids_override,
-                active_file_id=active_file_id,
-                active_file_name=active_file_name,
-                qa_scope=str(qa_scope or "auto").replace("-", "_"),
-                page_number=current_page,
-                selected_text=current_selected_text,
-                graph_context=graph_context,
-                reasoning_type=reasoning,
-                llm=llm,
-                use_mindmap=mindmap,
-                use_citation=citation,
-                language=language,
-            )
+        response = _run_docqa_turn(
+            runtime,
+            prompt=prompt,
+            conversation_id=conversation_id,
+            selected_file_ids=selected_file_ids_override,
+            active_file_id=active_file_id,
+            active_file_name=active_file_name,
+            qa_scope=qa_scope,
+            page_number=current_page,
+            selected_text=current_selected_text,
+            **request_overrides,
         )
         conversation_id = response.conversation_id
         if json_output:
@@ -393,23 +304,26 @@ def docqa():
     """Document QA CLI backed by the app's runtime/index/session data.
 
     Action guide:
-    - Health check: `slide docqa doctor` (platform skill: slide-docqa-doctor)
-    - Index documents: `slide docqa index` (platform skill: slide-docqa-index)
-    - Inspect indexed files: `slide docqa files` (platform skill: slide-docqa-files)
-    - Delete indexed files: `slide docqa delete` (platform skill: slide-docqa-delete)
-    - Ask one question: `slide docqa ask` (platform skill: slide-docqa-ask)
-    - Interactive chat: `slide docqa chat` (platform skill: slide-docqa-chat)
-    - Inspect saved sessions: `slide docqa sessions` (platform skill: slide-docqa-sessions)
-    - Resume a conversation: `slide docqa resume` (platform skill: slide-docqa-resume)
-    - Maintainer acceptance check: `slide docqa acceptance` or `slide docqa check`
+    - Health check: `MARA docqa doctor`
+    - Index documents: `MARA docqa index`
+    - Inspect indexed files: `MARA docqa files`
+    - Delete indexed files: `MARA docqa delete`
+    - Ask one question: `MARA docqa ask`
+    - Interactive chat: `MARA docqa chat`
+    - Inspect saved sessions: `MARA docqa sessions`
+    - Manage selected sources: `MARA docqa sources`
+    - Manage notebook notes: `MARA docqa notes`
+    - Manage generated artifacts: `MARA docqa artifacts`
+    - Resume a conversation: `MARA docqa resume`
+    - Maintainer acceptance check: `MARA docqa acceptance` or `MARA docqa check`
 
-    Use the umbrella `slide-docqa` surface for the DocQA mainline. The
-    acceptance/check commands stay available under `slide docqa`, but they are
-    maintainer workflows rather than part of the focused slide skill family.
+    Use the umbrella `MARA-docqa` surface for the DocQA mainline. The
+    acceptance/check commands stay available under `MARA docqa`, but they are
+    maintainer workflows rather than part of the focused MARA skill family.
     """
 
 
-@docqa.command("doctor")
+@docqa.command("doctor", short_help="Health check")
 @click.option(
     "--json",
     "json_output",
@@ -443,7 +357,7 @@ def docqa_doctor(json_output):
         raise click.ClickException("DocQA runtime is not healthy.")
 
 
-@docqa.command("acceptance")
+@docqa.command("acceptance", short_help="Maintainer acceptance check")
 @click.option(
     "--keep-artifacts",
     is_flag=True,
@@ -485,7 +399,7 @@ def docqa_acceptance(keep_artifacts, verbose, json_output):
 docqa.add_command(docqa_acceptance, "check")
 
 
-@docqa.command("index")
+@docqa.command("index", short_help="Index documents")
 @click.argument("paths", nargs=-1, required=True)
 @click.option(
     "--reindex",
@@ -523,7 +437,7 @@ def docqa_index(paths, reindex, json_output):
         raise click.ClickException("Some inputs failed to index.")
 
 
-@docqa.command("files")
+@docqa.command("files", short_help="Inspect indexed files")
 @click.option(
     "--json",
     "json_output",
@@ -542,7 +456,7 @@ def docqa_files(json_output):
     _print_file_records(records)
 
 
-@docqa.command("delete")
+@docqa.command("delete", short_help="Delete indexed files")
 @click.argument("refs", nargs=-1, required=True)
 @click.option(
     "--json",
@@ -565,7 +479,7 @@ def docqa_delete(refs, json_output):
         _echo_text(f"- {record.name} ({record.file_id})")
 
 
-@docqa.command("sessions")
+@docqa.command("sessions", short_help="Inspect saved sessions")
 @click.option(
     "--json",
     "json_output",
@@ -584,7 +498,7 @@ def docqa_sessions(json_output):
     _print_session_summaries(summaries)
 
 
-@docqa.command("ask")
+@docqa.command("ask", short_help="Ask one question")
 @click.option("--prompt", required=True, help="Question to ask.")
 @_docqa_shared_options
 def docqa_ask(
@@ -597,6 +511,9 @@ def docqa_ask(
     selected_text,
     graph_context_file,
     reasoning,
+    task_type,
+    agent_mode,
+    artifact_type,
     llm,
     citation,
     language,
@@ -609,37 +526,39 @@ def docqa_ask(
     `--selected-text` for snippet-focused QA.
 
     Whole-document QA:
-    `slide docqa ask --file report.pdf --prompt "Summarize this document"`
+    `MARA docqa ask --file report.pdf --prompt "Summarize this document"`
 
     Page-level QA:
-    `slide docqa ask --file report.pdf --page 12 --prompt "What does this page say?"`
+    `MARA docqa ask --file report.pdf --page 12 --prompt "What does this page say?"`
 
     Text-focused QA:
-    `slide docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"`
+    `MARA docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"`
     """
     runtime = create_docqa_runtime()
     selected_records = _resolve_cli_files(runtime, file_refs)
     active_record = _resolve_cli_active_file(runtime, active_file)
 
-    response = runtime.run_turn(
-        _create_docqa_request(
-            prompt=prompt,
-            conversation_id=conversation or "",
-            selected_file_ids=[record.file_id for record in selected_records]
-            if file_refs
-            else None,
-            active_file_id=active_record.file_id if active_record else "",
-            active_file_name=active_record.name if active_record else "",
-            qa_scope=str(qa_scope or "auto").replace("-", "_"),
-            page_number=page,
-            selected_text=selected_text or "",
-            graph_context=parse_graph_context_file(graph_context_file),
-            reasoning_type=reasoning,
-            llm=llm,
-            use_mindmap=mindmap,
-            use_citation=citation,
-            language=language,
-        )
+    response = _run_docqa_turn(
+        runtime,
+        prompt=prompt,
+        conversation_id=conversation or "",
+        selected_file_ids=[record.file_id for record in selected_records]
+        if file_refs
+        else None,
+        active_file_id=active_record.file_id if active_record else "",
+        active_file_name=active_record.name if active_record else "",
+        qa_scope=qa_scope,
+        page_number=page,
+        selected_text=selected_text or "",
+        graph_context=parse_graph_context_file(graph_context_file),
+        reasoning_type=reasoning,
+        task_type=task_type,
+        agent_mode=agent_mode,
+        artifact_type=artifact_type,
+        llm=llm,
+        use_mindmap=mindmap,
+        use_citation=citation,
+        language=language,
     )
 
     if json_output:
@@ -649,7 +568,7 @@ def docqa_ask(
     _print_docqa_response(response)
 
 
-@docqa.command("chat")
+@docqa.command("chat", short_help="Interactive chat")
 @_docqa_shared_options
 def docqa_chat(
     conversation,
@@ -660,6 +579,9 @@ def docqa_chat(
     selected_text,
     graph_context_file,
     reasoning,
+    task_type,
+    agent_mode,
+    artifact_type,
     llm,
     citation,
     language,
@@ -689,6 +611,9 @@ def docqa_chat(
         selected_text=selected_text,
         graph_context_file=graph_context_file,
         reasoning=reasoning,
+        task_type=task_type,
+        agent_mode=agent_mode,
+        artifact_type=artifact_type,
         llm=llm,
         citation=citation,
         language=language,
@@ -697,7 +622,7 @@ def docqa_chat(
     )
 
 
-@docqa.command("resume")
+@docqa.command("resume", short_help="Resume a conversation")
 @click.argument("conversation_id", required=True)
 @click.option(
     "--json",
@@ -715,12 +640,5 @@ def docqa_resume(conversation_id, json_output):
     )
 
 
+register_docqa_notebook_commands(docqa)
 main = docqa
-
-
-__all__ = [
-    "docqa",
-    "main",
-    "create_docqa_runtime",
-    "run_docqa_acceptance_matrix",
-]

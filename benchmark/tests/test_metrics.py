@@ -7,6 +7,7 @@ from benchmark.metrics import (
     is_abstention_answer,
     latex_renderable_score,
     markdown_table_renderable_score,
+    modality_hit_score,
     numeric_tolerance_score,
     span_recall_score,
     token_f1_score,
@@ -36,6 +37,39 @@ def test_element_hit_matches_gold_evidence_element_ids():
         ],
     )
     assert score == 1.0
+
+
+def test_modality_hit_uses_expected_modality_and_evidence_metadata():
+    assert (
+        modality_hit_score(
+            "table",
+            expected_modality="table",
+            evidence_metadata={"has_table_evidence": True},
+            retrieved_hits=[],
+            gold_evidence=[],
+        )
+        == 1.0
+    )
+    assert (
+        modality_hit_score(
+            "figure",
+            expected_modality="figure",
+            evidence_metadata={"has_figure_evidence": False},
+            retrieved_hits=[{"element_type": "figure_caption"}],
+            gold_evidence=[],
+        )
+        == 1.0
+    )
+    assert (
+        modality_hit_score(
+            "slide",
+            expected_modality="text",
+            evidence_metadata={"has_slide_evidence": True},
+            retrieved_hits=[],
+            gold_evidence=[],
+        )
+        is None
+    )
 
 
 def test_span_recall_matches_predicted_text_against_gold_evidence_spans():

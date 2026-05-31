@@ -103,6 +103,7 @@ def test_css_applies_reading_surface_to_preview_and_evidence_cards():
     assert "#main-pdf-preview {\n  background: var(--reading-surface)" in css
     assert "#kg-answer-hint .kg-answer-hint__node" in css
     assert "background: var(--reading-surface" in css
+    assert ".studio-artifacts-card" in css and ".notebook-panel-card" in css
 
 
 def test_chat_page_uses_page_centric_workbench_layout():
@@ -152,6 +153,7 @@ def test_workbench_matches_reference_prototype_structure():
         'elem_id="suggested-question-list"',
         'elem_id="citations-card"',
         'elem_id="reasoning-trace-card"',
+        'elem_id="notebook-panel-card"',
         'elem_id="conversation-dock"',
         'elem_id="reader-hidden-settings"',
     ]
@@ -200,6 +202,9 @@ def test_workbench_matches_reference_prototype_structure():
     assert "--reader-preview-zoom" in main_js
     assert "self._render_reasoning_trace_html()" in chat_page
     assert "self._render_citations_card_html()" in chat_page
+    assert "render_studio_trace_panel" in chat_page
+    assert "extract_mara_artifact" in chat_page
+    assert "render_conversation_notebook_update" in chat_page
     assert "render_latest_reasoning_trace" in chat_page
     assert "render_latest_citations_card" in chat_page
     assert "Citations (3)" not in chat_page

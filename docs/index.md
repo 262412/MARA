@@ -1,9 +1,10 @@
-# Getting Started with Slide
+# Getting Started with MARA
 
 ![type:video](https://github.com/Cinnamon/kotaemon/assets/25688648/815ecf68-3a02-4914-a0dd-3f8ec7e75cd9)
 
-This page is intended for **end users** who want to use the `slide` tool for Question
-Answering on local documents. If you are a **developer** who wants contribute to the project, please visit the [development](development/index.md) page.
+This page is intended for **end users** who want to use MARA for question
+answering on local documents. If you are a **developer** who wants contribute to
+the project, please visit the [development](development/index.md) page.
 
 ## Installation (Online HuggingFace Space) - easy (10 mins)
 
@@ -13,7 +14,8 @@ Visit this [guide](online_install.md).
 
 ### Download
 
-Download the `slide-app.zip` file from the [latest release](https://github.com/Cinnamon/kotaemon/releases/latest/).
+Download the MARA app package from the
+[latest release](https://github.com/Cinnamon/kotaemon/releases/latest/).
 
 ### Run setup script
 
@@ -42,6 +44,9 @@ A browser window will be opened and greets you with this screen:
 
 For how to use the application, see [Usage](usage.md). This page will also be available to
 you within the application.
+
+For the thesis-oriented MVP scope, research questions, benchmark matrix, and
+demo script, see [MARA Thesis MVP](mara_thesis_mvp.md).
 
 ## Feedback
 

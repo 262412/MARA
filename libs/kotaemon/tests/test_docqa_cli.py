@@ -442,20 +442,21 @@ def test_docqa_help_lists_action_navigation():
     result = runner.invoke(main, ["docqa", "--help"], terminal_width=300)
 
     assert result.exit_code == 0, result.output
+    normalized_output = result.output.replace("MARA-\n  docqa", "MARA-docqa")
     for token in [
         "Action guide:",
         "Ask one question",
-        "slide-docqa-ask",
+        "MARA-docqa-ask",
         "Index documents",
-        "slide-docqa-index",
+        "MARA-docqa-index",
         "Interactive chat",
-        "slide-docqa-chat",
+        "MARA-docqa-chat",
         "Resume a conversation",
-        "slide-docqa-resume",
+        "MARA-docqa-resume",
         "Health check",
-        "slide-docqa-doctor",
+        "MARA-docqa-doctor",
     ]:
-        assert token in result.output
+        assert token in normalized_output
 
 
 def test_docqa_acceptance_help_lists_parameters():
@@ -465,7 +466,7 @@ def test_docqa_acceptance_help_lists_parameters():
     assert result.exit_code == 0, result.output
     for token in ["--keep-artifacts", "--verbose", "--json"]:
         assert token in result.output
-    assert "Maintainer command: slide docqa acceptance" in result.output
+    assert "Maintainer command: MARA docqa acceptance" in result.output
 
 
 def test_docqa_commands_work_after_agents_import(monkeypatch):

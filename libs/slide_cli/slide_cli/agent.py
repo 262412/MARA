@@ -287,7 +287,7 @@ class SlideAgentRunner:
         history_text: str,
     ) -> str:
         return (
-            "You are working inside the top-level Slide CLI agent line.\n"
+            "You are working inside the top-level MARA CLI agent line.\n"
             "This is the high-permission workflow for deck work plus workspace-side file changes.\n"
             "Inspect the deck, inspect the workspace when needed, and produce a structured slide patch when deck changes are required.\n\n"
             f"Working directory: {self.workspace_root}\n"

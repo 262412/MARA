@@ -98,5 +98,29 @@ def test_evidence_metadata_marks_visual_and_formula_context():
     assert metadata["image_count"] == 1
     assert metadata["has_figure_evidence"] is True
     assert metadata["has_formula_evidence"] is True
+    assert metadata["has_table_evidence"] is False
+    assert metadata["has_slide_evidence"] is False
     assert metadata["has_page_visual_context"] is True
     assert metadata["source_kinds"] == ["formula"]
+
+
+def test_evidence_metadata_marks_table_and_slide_context():
+    metadata = _evidence_metadata(
+        "hybrid",
+        images=[],
+        hits=[
+            RetrievedDocument(
+                text="table text",
+                metadata={"element_type": "table", "table_html": "<table></table>"},
+                score=1.0,
+            ),
+            RetrievedDocument(
+                text="slide text",
+                metadata={"content_type": "slide", "slide_number": 4},
+                score=1.0,
+            ),
+        ],
+    )
+
+    assert metadata["has_table_evidence"] is True
+    assert metadata["has_slide_evidence"] is True
