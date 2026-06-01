@@ -12,8 +12,8 @@ Use this skill for packaged app setup, doctor, and launch workflows through the 
 
 If `MARA` is not on `PATH`, install the standalone CLI first:
 
-- `pip install slide-cli`
-- or `uv tool install slide-cli`
+- `pip install mara-research-cli`
+- or `uv tool install mara-research-cli`
 
 ## Command Set
 

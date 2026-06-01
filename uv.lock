@@ -14,7 +14,7 @@ members = [
     "kotaemon",
     "kotaemon-app",
     "ktem",
-    "slide-cli",
+    "mara-research-cli",
 ]
 
 [[package]]
@@ -2867,8 +2867,8 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-slide = [
-    { name = "slide-cli" },
+mara = [
+    { name = "mara-research-cli" },
 ]
 
 [package.dev-dependencies]
@@ -2889,9 +2889,9 @@ dev = [
 requires-dist = [
     { name = "kotaemon", extras = ["all"], editable = "libs/kotaemon" },
     { name = "ktem", editable = "libs/ktem" },
-    { name = "slide-cli", marker = "extra == 'slide'", editable = "libs/slide_cli" },
+    { name = "mara-research-cli", marker = "extra == 'mara'", editable = "libs/slide_cli" },
 ]
-provides-extras = ["slide"]
+provides-extras = ["mara"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -3720,6 +3720,28 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7a/c1/27428a2ff348e994ab4f8777d3a0ad510b6b92d37718e5887d2da99952a2/lxml-6.0.2-pp311-pypy311_pp73-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:60fa43be34f78bebb27812ed90f1925ec99560b0fa1decdb7d12b84d857d31e9", size = 4272119, upload-time = "2025-09-22T04:04:51.801Z" },
     { url = "https://files.pythonhosted.org/packages/f0/d0/3020fa12bcec4ab62f97aab026d57c2f0cfd480a558758d9ca233bb6a79d/lxml-6.0.2-pp311-pypy311_pp73-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:21c73b476d3cfe836be731225ec3421fa2f048d84f6df6a8e70433dff1376d5a", size = 4417314, upload-time = "2025-09-22T04:04:55.024Z" },
     { url = "https://files.pythonhosted.org/packages/6c/77/d7f491cbc05303ac6801651aabeb262d43f319288c1ea96c66b1d2692ff3/lxml-6.0.2-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:27220da5be049e936c3aca06f174e8827ca6445a4353a1995584311487fc4e3e", size = 3518768, upload-time = "2025-09-22T04:04:57.097Z" },
+]
+
+[[package]]
+name = "mara-research-cli"
+source = { editable = "libs/slide_cli" }
+dependencies = [
+    { name = "click" },
+    { name = "kotaemon" },
+    { name = "ktem" },
+    { name = "platformdirs" },
+    { name = "python-pptx" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.1.7,<9" },
+    { name = "kotaemon", editable = "libs/kotaemon" },
+    { name = "ktem", editable = "libs/ktem" },
+    { name = "platformdirs", specifier = ">=4.2.1,<5" },
+    { name = "python-pptx", specifier = ">=1.0.2,<2" },
+    { name = "pyyaml", specifier = ">=6.0,<7" },
 ]
 
 [[package]]
@@ -6545,28 +6567,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
-]
-
-[[package]]
-name = "slide-cli"
-source = { editable = "libs/slide_cli" }
-dependencies = [
-    { name = "click" },
-    { name = "kotaemon" },
-    { name = "ktem" },
-    { name = "platformdirs" },
-    { name = "python-pptx" },
-    { name = "pyyaml" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = ">=8.1.7,<9" },
-    { name = "kotaemon", editable = "libs/kotaemon" },
-    { name = "ktem", editable = "libs/ktem" },
-    { name = "platformdirs", specifier = ">=4.2.1,<5" },
-    { name = "python-pptx", specifier = ">=1.0.2,<2" },
-    { name = "pyyaml", specifier = ">=6.0,<7" },
 ]
 
 [[package]]

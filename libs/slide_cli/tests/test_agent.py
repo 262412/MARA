@@ -94,7 +94,7 @@ def test_agent_runner_supports_phase_one_tools(monkeypatch, tmp_path):
     review = runner._execute_tool("review_deck", "")
     write_result = runner._execute_tool(
         "write_file",
-        json.dumps({"path": "notes.txt", "content": "Hello from slide-cli"}),
+        json.dumps({"path": "notes.txt", "content": "Hello from mara-research-cli"}),
     )
     export_result = runner._execute_tool(
         "export_pdf",
@@ -105,7 +105,7 @@ def test_agent_runner_supports_phase_one_tools(monkeypatch, tmp_path):
     assert "slide_count" in review
     assert (tmp_path / "notes.txt").read_text(
         encoding="utf-8"
-    ) == "Hello from slide-cli"
+    ) == "Hello from mara-research-cli"
     assert "notes.txt" in write_result
     assert str(pdf_path) in export_result
 

@@ -1,4 +1,4 @@
-# Slide CLI Phase 3 Docs Framing Plan
+# MARA CLI Phase 3 Docs Framing Plan
 
 > **For agentic workers:** This file records the approved phase-3 documentation framing. Keep the owned docs aligned on the same two-line model and avoid adding a third product line.
 
@@ -12,8 +12,8 @@
 
 - `D:\PythonProject\kotaemon\README.md`
 - `D:\PythonProject\kotaemon\libs\slide_cli\README.md`
-- `D:\PythonProject\kotaemon\docs\slide_cli_release.md`
-- `D:\PythonProject\kotaemon\docs\superpowers\plans\2026-04-22-slide-cli-phase3-foundation.md`
+- `D:\PythonProject\kotaemon\docs\mara_research_cli_release.md`
+- `D:\PythonProject\kotaemon\docs\superpowers\plans\2026-04-22-mara-research-cli-phase3-foundation.md`
 
 ## Approved Framing
 

@@ -21,7 +21,7 @@ class PackageSpec:
 PACKAGE_ORDER = (
     PackageSpec("ktem", REPO_ROOT / "libs" / "ktem"),
     PackageSpec("kotaemon", REPO_ROOT / "libs" / "kotaemon"),
-    PackageSpec("slide-cli", REPO_ROOT / "libs" / "slide_cli"),
+    PackageSpec("mara-research-cli", REPO_ROOT / "libs" / "slide_cli"),
     PackageSpec("kotaemon-app", REPO_ROOT),
 )
 

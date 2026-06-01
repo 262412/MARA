@@ -252,6 +252,26 @@ def test_no_kotaemon_skills_or_commands_are_user_facing():
     )
 
 
+def test_platform_assets_reference_mara_research_cli_install_package():
+    repo_root = Path(__file__).resolve().parents[3]
+    asset_roots = [
+        repo_root / ".codex",
+        _platform_assets_root("codex"),
+        _platform_assets_root("claude-code"),
+    ]
+
+    for root in asset_roots:
+        for path in root.rglob("*"):
+            if not path.is_file() or path.suffix not in {".md", ".py"}:
+                continue
+            assert "slide-cli" not in path.name
+            text = path.read_text(encoding="utf-8")
+            assert "pip install slide-cli" not in text
+            assert "uv tool install slide-cli" not in text
+            if "MARA CLI not found" in text or "pip install" in text:
+                assert "mara-research-cli" in text
+
+
 def test_validate_installed_reports_missing_minimal_components(tmp_path):
     result = validate_installed("codex", target_dir=tmp_path)
     assert result.valid is False

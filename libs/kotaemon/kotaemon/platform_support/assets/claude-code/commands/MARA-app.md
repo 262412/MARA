@@ -8,8 +8,8 @@ Work with the packaged app runtime through `MARA app ...`.
 
 If `MARA` is not available, install the standalone CLI first:
 
-- `pip install slide-cli`
-- or `uv tool install slide-cli`
+- `pip install mara-research-cli`
+- or `uv tool install mara-research-cli`
 
 Prefer focused command wrappers when the user intent is specific:
 

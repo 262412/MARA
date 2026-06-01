@@ -17,25 +17,26 @@ def _load_publish_module():
     return module
 
 
-def test_publish_script_includes_slide_cli_in_dependency_order():
+def test_publish_script_includes_mara_research_cli_in_dependency_order():
     publish_packages = _load_publish_module()
 
     assert [package.name for package in publish_packages.PACKAGE_ORDER] == [
         "ktem",
         "kotaemon",
-        "slide-cli",
+        "mara-research-cli",
         "kotaemon-app",
     ]
 
 
-def test_root_package_exposes_slide_cli_optional_extra():
+def test_root_package_exposes_mara_optional_extra():
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
     assert "[project.optional-dependencies]" in pyproject
-    assert 'slide = ["slide-cli"]' in pyproject
+    assert 'mara = ["mara-research-cli"]' in pyproject
+    assert "slide = [" not in pyproject
 
 
-def test_release_docs_cover_direct_slide_cli_publish_and_install():
+def test_release_docs_cover_direct_mara_research_cli_publish_and_install():
     root_readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     package_readme = (REPO_ROOT / "libs" / "slide_cli" / "README.md").read_text(
         encoding="utf-8"
@@ -44,10 +45,10 @@ def test_release_docs_cover_direct_slide_cli_publish_and_install():
         REPO_ROOT / ".github" / "workflows" / "publish-packages.yaml"
     ).read_text(encoding="utf-8")
 
-    assert "pip install slide-cli" in root_readme
+    assert "pip install mara-research-cli" in root_readme
     assert "testpypi" in root_readme.lower()
-    assert "pip install slide-cli" in package_readme
-    assert "ktem -> kotaemon -> slide-cli -> kotaemon-app" in workflow
+    assert "pip install mara-research-cli" in package_readme
+    assert "ktem -> kotaemon -> mara-research-cli -> kotaemon-app" in workflow
 
 
 def test_phase2_docs_cover_slide_docqa_mainline_boundary():
@@ -55,7 +56,7 @@ def test_phase2_docs_cover_slide_docqa_mainline_boundary():
     package_readme = (REPO_ROOT / "libs" / "slide_cli" / "README.md").read_text(
         encoding="utf-8"
     )
-    release_doc = (REPO_ROOT / "docs" / "slide_cli_release.md").read_text(
+    release_doc = (REPO_ROOT / "docs" / "mara_research_cli_release.md").read_text(
         encoding="utf-8"
     )
 
@@ -72,7 +73,7 @@ def test_phase3_docs_cover_two_line_mara_model():
     package_readme = (REPO_ROOT / "libs" / "slide_cli" / "README.md").read_text(
         encoding="utf-8"
     )
-    release_doc = (REPO_ROOT / "docs" / "slide_cli_release.md").read_text(
+    release_doc = (REPO_ROOT / "docs" / "mara_research_cli_release.md").read_text(
         encoding="utf-8"
     )
     phase3_plan = (
@@ -80,7 +81,7 @@ def test_phase3_docs_cover_two_line_mara_model():
         / "docs"
         / "superpowers"
         / "plans"
-        / "2026-04-22-slide-cli-phase3-foundation.md"
+        / "2026-04-22-mara-research-cli-phase3-foundation.md"
     ).read_text(encoding="utf-8")
 
     assert "`MARA ...` for the high-permission product shell" in root_readme

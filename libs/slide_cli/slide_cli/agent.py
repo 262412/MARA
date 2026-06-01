@@ -133,7 +133,7 @@ def _collect_raw_responses(
 
 SLIDE_REACT_PROMPT = PromptTemplate(
     template=(
-        "You are Slide CLI's top-level agent line.\n"
+        "You are MARA's top-level agent line.\n"
         "This is a high-permission workflow for deck work plus workspace-side file changes.\n"
         "Use the available tools deliberately and keep your reasoning concise.\n"
         "You must follow this exact format:\n\n"

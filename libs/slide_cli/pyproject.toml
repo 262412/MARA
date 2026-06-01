@@ -14,10 +14,10 @@ dirty_template = "{tag}"
 tag_filter = "v?\\d+(\\.\\d+)*.*"
 
 [project]
-name = "slide-cli"
+name = "mara-research-cli"
 dynamic = ["version"]
 requires-python = ">= 3.10"
-description = "Slide-focused agent CLI for reviewing and rewriting PowerPoint decks."
+description = "MARA research assistant CLI for document QA, study artifacts, and slide workflows."
 readme = "README.md"
 dependencies = [
     "click>=8.1.7,<9",

@@ -1,6 +1,6 @@
-# slide-cli Release Flow
+# mara-research-cli Release Flow
 
-`slide-cli` is published as its own Python package and shares the monorepo tag line with its internal runtime packages.
+`mara-research-cli` is published as its own Python package and shares the monorepo tag line with its internal runtime packages.
 
 Phase 3 keeps the user-facing shell intentionally split into two lines:
 
@@ -44,17 +44,17 @@ Release automation publishes packages in dependency order:
 
 1. `ktem`
 2. `kotaemon`
-3. `slide-cli`
+3. `mara-research-cli`
 4. `kotaemon-app`
 
 This order is enforced by `scripts/publish_packages.py` and used by `.github/workflows/publish-packages.yaml`.
 
 ## Local Release Checks
 
-Build and validate only `slide-cli`:
+Build and validate only `mara-research-cli`:
 
 ```shell
-python scripts/publish_packages.py release --packages slide-cli --repository testpypi --skip-upload
+python scripts/publish_packages.py release --packages mara-research-cli --repository testpypi --skip-upload
 ```
 
 Build and validate the full chain without uploading:
@@ -68,7 +68,7 @@ python scripts/publish_packages.py release --repository testpypi --skip-upload
 The recommended MARA user path is to install the public CLI package, initialize the packaged runtime once, and then discover the canonical two-line shell from that environment:
 
 ```shell
-pip install slide-cli
+pip install mara-research-cli
 MARA app init
 MARA app doctor
 MARA --help
@@ -104,7 +104,7 @@ GitHub Actions can publish the same flow through the `Publish Packages` workflow
 Verify the published package after upload:
 
 ```shell
-pip install slide-cli
+pip install mara-research-cli
 MARA doctor
 MARA --help
 ```
@@ -112,5 +112,5 @@ MARA --help
 Or use TestPyPI:
 
 ```shell
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple slide-cli
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mara-research-cli
 ```

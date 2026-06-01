@@ -12,7 +12,7 @@ Use this skill when the user needs the top-level `MARA ...` workflow and the req
 
 If `MARA` is not on `PATH`, install the MARA CLI first:
 
-- `pip install slide-cli`
+- `pip install mara-research-cli`
 - or install the packaged runtime with the `MARA` extra
 
 ## Command Set

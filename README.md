@@ -84,12 +84,15 @@ The main design goal is to let one configuration, one local index, and one conve
 
 #### CLI And Automation
 
-- The `slide-cli` package installs the public `MARA` and `MARA-cli` commands.
+- The `mara-research-cli` package installs the public `MARA` and `MARA-cli` commands.
+- Use `MARA ...` for the high-permission product shell and `MARA docqa ...` for the specialist document-QA line.
 - `MARA docqa` reuses the application runtime, file index, conversation state, and graph cache.
+- Common DocQA commands include `MARA docqa index`, `MARA docqa files`, `MARA docqa delete`, `MARA docqa ask`, `MARA docqa chat`, and `MARA docqa resume`.
+- Focused DocQA platform skills include `MARA-docqa-delete` for source removal.
 - `MARA app` initializes, checks, and launches the packaged Web UI runtime.
 - `MARA model` generates model routing config, checks provider availability, and runs one routed model call.
 - `MARA platform` installs and validates Codex / Claude Code support assets.
-- The top-level `MARA` line also exposes deck inspection, review, PDF export, workspace file operations, and shell execution.
+- The top-level `MARA` line also exposes `MARA inspect`, `MARA read-slide`, `MARA extract`, `MARA search`, `MARA files`, `MARA read`, `MARA write`, `MARA delete`, `MARA shell`, review, and PDF export.
 
 #### MARA Reasoning And Study Artifacts
 
@@ -149,10 +152,16 @@ The current runtime covers OpenAI, Azure OpenAI, Google Gemini, Anthropic Claude
 Use this path when you want MARA's application and CLI capabilities without editing the source tree.
 
 ```shell
-pip install slide-cli
+pip install mara-research-cli
 MARA app init
 MARA app doctor
 MARA app run
+```
+
+For TestPyPI validation, use:
+
+```shell
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mara-research-cli
 ```
 
 After startup, open the local URL printed by Gradio, usually `http://localhost:7860/`.
@@ -189,9 +198,7 @@ source .venv/bin/activate
 Install local packages:
 
 ```shell
-pip install -e "libs/kotaemon[all]"
-pip install -e "libs/ktem"
-pip install -e "libs/slide_cli"
+uv sync --extra mara
 ```
 
 Prepare environment variables:
@@ -562,7 +569,7 @@ MARA 不是单页演示应用，而是一套可以本地运行、可以通过 CL
 
 #### CLI 与自动化
 
-- `slide-cli` 包安装公开命令 `MARA` 和 `MARA-cli`。
+- `mara-research-cli` 包安装公开命令 `MARA` 和 `MARA-cli`。
 - `MARA docqa` 复用应用运行时、文件索引、会话状态和图谱缓存。
 - `MARA app` 管理打包运行时的初始化、健康检查和 Web UI 启动。
 - `MARA model` 提供模型路由配置生成、Provider 可用性检查和一次性模型调用。
@@ -627,10 +634,16 @@ MARA 不是单页演示应用，而是一套可以本地运行、可以通过 CL
 适合直接使用 MARA 的应用和命令行能力。
 
 ```shell
-pip install slide-cli
+pip install mara-research-cli
 MARA app init
 MARA app doctor
 MARA app run
+```
+
+验证 TestPyPI 发布包时使用：
+
+```shell
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mara-research-cli
 ```
 
 启动后访问 Gradio 输出的本地地址，默认通常是 `http://localhost:7860/`。
@@ -669,7 +682,7 @@ source .venv/bin/activate
 ```shell
 pip install -e "libs/kotaemon[all]"
 pip install -e "libs/ktem"
-pip install -e "libs/slide_cli"
+uv sync --extra mara
 ```
 
 准备环境变量：

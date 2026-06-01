@@ -8,8 +8,8 @@ Resume a saved MARA DocQA conversation.
 
 If `MARA` is not available, install the standalone CLI first:
 
-- `pip install slide-cli`
-- or `uv tool install slide-cli`
+- `pip install mara-research-cli`
+- or `uv tool install mara-research-cli`
 
 1. Inspect sessions if no id is provided:
    !`MARA docqa sessions`

@@ -1,4 +1,4 @@
-# Slide CLI Safety Rules
+# MARA CLI Safety Rules
 
 - Validate provider availability before model invocation.
 - Use dry-run for first-time route checks.

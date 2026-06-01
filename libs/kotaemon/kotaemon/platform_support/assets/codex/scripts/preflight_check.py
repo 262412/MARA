@@ -13,8 +13,8 @@ def main() -> int:
         print(f"Detected MARA CLI: {mara_path}")
     else:
         print(
-            "MARA CLI not found. Install it with 'pip install slide-cli' "
-            "or 'uv tool install slide-cli', then run 'MARA doctor'."
+            "MARA CLI not found. Install it with 'pip install mara-research-cli' "
+            "or 'uv tool install mara-research-cli', then run 'MARA doctor'."
         )
     print(f"Detected keys: {', '.join(present) if present else 'none'}")
     return 0

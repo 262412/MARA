@@ -8,7 +8,7 @@ Mandatory development contract: for every non-trivial repository change, follow
 editing, run the relevant verification gates, and do not refresh
 `scripts/codebase_hygiene_baseline.json` just to make the hygiene gate pass.
 
-If `MARA` is not installed yet, use `pip install slide-cli` or `uv tool install slide-cli`, then run `MARA doctor`.
+If `MARA` is not installed yet, use `pip install mara-research-cli` or `uv tool install mara-research-cli`, then run `MARA doctor`.
 
 Recommended checks:
 

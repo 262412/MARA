@@ -43,10 +43,28 @@ def test_public_entry_points_expose_only_mara_commands():
     pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
     text = pyproject.read_text(encoding="utf-8")
 
+    assert 'name = "mara-research-cli"' in text
+    assert 'name = "slide-cli"' not in text
     assert 'MARA = "slide_cli.cli:main"' in text
     assert 'MARA-cli = "slide_cli.cli:main"' in text
     assert 'slide = "slide_cli.cli:main"' not in text
     assert 'slide-cli = "slide_cli.cli:main"' not in text
+
+
+def test_public_runtime_paths_use_mara_app_name():
+    paths_module = Path(__file__).resolve().parents[1] / "slide_cli" / "paths.py"
+    text = paths_module.read_text(encoding="utf-8")
+
+    assert 'DEFAULT_APP_NAME = "MARA"' in text
+    assert 'DEFAULT_APP_NAME = "mara-research-cli"' not in text
+
+
+def test_public_agent_prompt_uses_mara_brand():
+    agent_module = Path(__file__).resolve().parents[1] / "slide_cli" / "agent.py"
+    text = agent_module.read_text(encoding="utf-8")
+
+    assert "You are MARA's top-level agent line." in text
+    assert "You are Slide CLI" not in text
 
 
 def test_public_mara_help_keeps_canonical_command_surface():

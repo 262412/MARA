@@ -5,7 +5,7 @@ from pathlib import Path
 
 from platformdirs import PlatformDirs
 
-DEFAULT_APP_NAME = "slide-cli"
+DEFAULT_APP_NAME = "MARA"
 DEFAULT_APP_AUTHOR = "Cinnamon"
 
 

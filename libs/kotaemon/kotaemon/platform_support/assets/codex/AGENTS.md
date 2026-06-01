@@ -6,7 +6,7 @@ Mandatory development contract: for every non-trivial repository change, follow
 editing, run the relevant verification gates, and do not refresh
 `scripts/codebase_hygiene_baseline.json` just to make the hygiene gate pass.
 
-Session discipline: 0. If `MARA` is missing, install the product CLI with `pip install slide-cli` or `uv tool install slide-cli`, then run `MARA doctor`.
+Session discipline: 0. If `MARA` is missing, install the product CLI with `pip install mara-research-cli` or `uv tool install mara-research-cli`, then run `MARA doctor`.
 
 1. Validate environment and config before running model calls.
 2. Prefer focused MARA model skills when the user intent is specific:
