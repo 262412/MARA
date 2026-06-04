@@ -2,34 +2,17 @@ from __future__ import annotations
 
 import re
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Protocol, cast, runtime_checkable
 
 from kotaemon.base import RetrievedDocument
 
+from . import controller_fields as cf
 from .engine_helpers import _parsed_indexes_cache, _performance_from_timings
+from .engine_result import EngineRunResult
 from .schemas import BenchmarkConfig, BenchmarkDocument
 from .system import KotaemonTextRAGSystem
-
-
-@dataclass(slots=True)
-class EngineRunResult:
-    answer: str
-    predicted_pages: list[int | str] = field(default_factory=list)
-    predicted_sources: list[str] = field(default_factory=list)
-    predicted_element_ids: list[str] = field(default_factory=list)
-    retrieved_hits: list[dict[str, Any]] = field(default_factory=list)
-    timings: dict[str, float] = field(default_factory=dict)
-    performance: dict[str, Any] = field(default_factory=dict)
-    cache: dict[str, Any] = field(default_factory=dict)
-    cost: dict[str, Any] = field(default_factory=dict)
-    context_preview: str = ""
-    retrieval_trace: list[dict[str, Any]] = field(default_factory=list)
-    agent_trace: list[dict[str, Any]] = field(default_factory=list)
-    evidence_metadata: dict[str, Any] = field(default_factory=dict)
-    claim_verification: dict[str, Any] = field(default_factory=dict)
-    presentation: dict[str, Any] = field(default_factory=dict)
 
 
 @runtime_checkable
@@ -247,6 +230,35 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 selected_ids.append(file_id)
         return selected_ids
 
+    def _docqa_request_kwargs(
+        self,
+        *,
+        example: Any,
+        selected_file_ids: list[str],
+        active_record: Any,
+    ) -> dict[str, Any]:
+        return {
+            "prompt": _field_value(example, "question", ""),
+            "selected_file_ids": selected_file_ids or None,
+            "qa_scope": str(
+                _config_value(self.config, "scope", None)
+                or _field_value(example, "scope", "document")
+            ).replace("-", "_"),
+            "active_file_id": getattr(active_record, "file_id", ""),
+            "active_file_name": getattr(active_record, "name", ""),
+            "page_number": _first_evidence_page(example),
+            "llm": _config_value(self.config, "llm_name", None),
+            "use_citation": _config_value(self.config, "docqa_citation_mode", None),
+            "reasoning_type": _config_value(self.config, "reasoning_type", None),
+            "agent_mode": _config_value(self.config, "agent_mode", None),
+            "task_type": _config_value(self.config, "task_type", None),
+            "artifact_type": _config_value(self.config, "artifact_type", None),
+            **cf.controller_config_kwargs(
+                lambda key: _config_value(self.config, key, None)
+            ),
+            "origin": "benchmark",
+        }
+
     def run(
         self,
         *,
@@ -270,22 +282,11 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         generation_start = time.perf_counter()
         response = runtime.run_turn(
             DocQARequest(
-                prompt=_field_value(example, "question", ""),
-                selected_file_ids=selected_file_ids or None,
-                qa_scope=str(
-                    _config_value(self.config, "scope", None)
-                    or _field_value(example, "scope", "document")
-                ).replace("-", "_"),
-                active_file_id=getattr(active_record, "file_id", ""),
-                active_file_name=getattr(active_record, "name", ""),
-                page_number=_first_evidence_page(example),
-                llm=_config_value(self.config, "llm_name", None),
-                use_citation=_config_value(self.config, "docqa_citation_mode", None),
-                reasoning_type=_config_value(self.config, "reasoning_type", None),
-                agent_mode=_config_value(self.config, "agent_mode", None),
-                task_type=_config_value(self.config, "task_type", None),
-                artifact_type=_config_value(self.config, "artifact_type", None),
-                origin="benchmark",
+                **self._docqa_request_kwargs(
+                    example=example,
+                    selected_file_ids=selected_file_ids,
+                    active_record=active_record,
+                )
             )
         )
         generation_seconds = time.perf_counter() - generation_start
@@ -304,6 +305,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             context_preview=response.references_text[: self.max_context_length],
             agent_trace=list(getattr(response, "agent_trace", []) or []),
             evidence_metadata=dict(getattr(response, "evidence_metadata", {}) or {}),
+            **cf.controller_response_kwargs(response),
             claim_verification=dict(getattr(response, "claim_verification", {}) or {}),
             presentation=dict(getattr(response, "presentation", {}) or {}),
             retrieval_trace=[
@@ -534,6 +536,7 @@ def _prediction_to_result(prediction: dict[str, Any]) -> EngineRunResult:
         retrieval_trace=list(prediction.get("retrieval_trace") or []),
         agent_trace=list(prediction.get("agent_trace") or []),
         evidence_metadata=dict(prediction.get("evidence_metadata") or {}),
+        **cf.controller_prediction_kwargs(prediction),
         claim_verification=dict(prediction.get("claim_verification") or {}),
         presentation=dict(prediction.get("presentation") or {}),
     )

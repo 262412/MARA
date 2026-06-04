@@ -24,6 +24,11 @@ class DocQARequest:
     task_type: str | None = None
     agent_mode: str | None = None
     artifact_type: str | None = None
+    controller_mode: str | None = None
+    route_policy: str | None = None
+    planner_model: str | None = None
+    allowed_routes: list[str] | None = None
+    verification_mode: str | None = None
     llm: str | None = None
     use_mindmap: bool | str | None = None
     use_citation: str | None = None

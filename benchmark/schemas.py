@@ -96,6 +96,11 @@ class BenchmarkConfig:
     agent_mode: str | None = None
     task_type: str | None = None
     artifact_type: str | None = None
+    controller_mode: str | None = None
+    route_policy: str | None = None
+    planner_model: str | None = None
+    allowed_routes: list[str] | None = None
+    verification_mode: str | None = None
     use_generation: bool = True
     prompt_template: str | None = None
 

@@ -250,6 +250,77 @@ def span_recall_score(
     return hits / len(gold_spans)
 
 
+def image_quote_hit_score(
+    predicted_text: str,
+    gold_evidence: list[dict[str, object]],
+) -> float | None:
+    image_quotes = [
+        str(item.get("image_quote") or item.get("visual_quote") or "").strip()
+        for item in gold_evidence
+        if _contains_modality(
+            _modality_tokens(
+                item.get("modality"),
+                item.get("element_type"),
+                item.get("type"),
+            ),
+            "page_image",
+        )
+        or _contains_modality(
+            _modality_tokens(
+                item.get("modality"),
+                item.get("element_type"),
+                item.get("type"),
+            ),
+            "figure",
+        )
+    ]
+    image_quotes = [quote for quote in image_quotes if quote]
+    if not image_quotes:
+        return None
+    normalized_prediction = normalize_text(predicted_text)
+    if not normalized_prediction:
+        return 0.0
+    hits = sum(
+        1 for quote in image_quotes if normalize_text(quote) in normalized_prediction
+    )
+    return hits / len(image_quotes)
+
+
+def multimodal_support_score(
+    *,
+    evidence_bundle: dict[str, object],
+    retrieved_hits: list[dict[str, object]],
+    gold_evidence: list[dict[str, object]],
+) -> float | None:
+    gold_modalities = _gold_evidence_modalities(gold_evidence) - {"text"}
+    if not gold_modalities:
+        return None
+    predicted_modalities = _predicted_evidence_modalities(
+        evidence_bundle, retrieved_hits
+    )
+    if not predicted_modalities:
+        return 0.0
+    hits = sum(
+        1
+        for modality in gold_modalities
+        if _contains_modality(predicted_modalities, modality)
+    )
+    return hits / len(gold_modalities)
+
+
+def hard_negative_rejection_score(
+    *,
+    retrieved_hits: list[dict[str, object]],
+    evidence_bundle: dict[str, object],
+    gold_evidence: list[dict[str, object]],
+) -> float | None:
+    hard_negative_ids = _hard_negative_ids(gold_evidence)
+    if not hard_negative_ids:
+        return None
+    predicted_ids = _predicted_evidence_ids(evidence_bundle, retrieved_hits)
+    return float(not (predicted_ids & hard_negative_ids))
+
+
 def citation_recall_score(
     predicted_citations: list[str],
     gold_evidence: list[dict[str, object]],
@@ -260,11 +331,128 @@ def citation_recall_score(
     )
 
 
+def citation_precision_score(
+    predicted_citations: list[str],
+    gold_evidence: list[dict[str, object]],
+) -> float | None:
+    gold = {
+        str(item).strip()
+        for item in _gold_values_from_evidence(gold_evidence, "citation")
+        if str(item).strip()
+    }
+    if not gold:
+        return None
+    predicted = {str(item).strip() for item in predicted_citations if str(item).strip()}
+    if not predicted:
+        return 0.0
+    return len(predicted & gold) / len(predicted)
+
+
+def cross_page_evidence_hit_score(
+    predicted_pages: list[int | str],
+    *,
+    evidence_bundle: dict[str, object],
+    retrieved_hits: list[dict[str, object]],
+    gold_evidence: list[dict[str, object]],
+) -> float | None:
+    gold_pages = _gold_evidence_pages(gold_evidence)
+    if len(gold_pages) < 2:
+        return None
+    predicted = {str(page) for page in predicted_pages if str(page).strip()}
+    predicted.update(_predicted_pages_from_evidence(evidence_bundle, retrieved_hits))
+    return float(len(predicted & gold_pages) >= min(2, len(gold_pages)))
+
+
 def _normalize_formula(text: str) -> str:
     formula = str(text or "").strip().lower()
     if formula.startswith("="):
         formula = formula[1:]
     return WHITESPACE_RE.sub("", formula)
+
+
+def _predicted_evidence_modalities(
+    evidence_bundle: dict[str, object],
+    retrieved_hits: list[dict[str, object]],
+) -> set[str]:
+    bundle_items = (
+        evidence_bundle.get("items") if isinstance(evidence_bundle, dict) else []
+    )
+    evidence_items = bundle_items if isinstance(bundle_items, list) else []
+    return {
+        token
+        for item in [*evidence_items, *retrieved_hits]
+        if isinstance(item, dict)
+        for token in _modality_tokens(
+            item.get("modality"),
+            item.get("element_type"),
+            item.get("type"),
+            item.get("kind"),
+        )
+    }
+
+
+def _hard_negative_ids(gold_evidence: list[dict[str, object]]) -> set[str]:
+    ids: set[str] = set()
+    for item in gold_evidence:
+        for key in ("hard_negative_id", "hard_negative_evidence_id"):
+            value = str(item.get(key) or "").strip()
+            if value:
+                ids.add(value)
+        hard_negative_ids = item.get("hard_negative_ids")
+        if isinstance(hard_negative_ids, list):
+            ids.update(str(value).strip() for value in hard_negative_ids)
+    return {item for item in ids if item}
+
+
+def _predicted_evidence_ids(
+    evidence_bundle: dict[str, object],
+    retrieved_hits: list[dict[str, object]],
+) -> set[str]:
+    bundle_items = (
+        evidence_bundle.get("items") if isinstance(evidence_bundle, dict) else []
+    )
+    evidence_items = bundle_items if isinstance(bundle_items, list) else []
+    return {
+        str(value).strip()
+        for item in [*evidence_items, *retrieved_hits]
+        if isinstance(item, dict)
+        for value in (
+            item.get("evidence_id"),
+            item.get("doc_id"),
+            item.get("element_id"),
+            item.get("source_id"),
+        )
+        if str(value or "").strip()
+    }
+
+
+def _gold_evidence_pages(gold_evidence: list[dict[str, object]]) -> set[str]:
+    pages = set(_gold_values_from_evidence(gold_evidence, "page"))
+    pages.update(_gold_values_from_evidence(gold_evidence, "page_label"))
+    for citation in _gold_values_from_evidence(gold_evidence, "citation"):
+        if "#page:" in citation:
+            pages.add(citation.rsplit("#page:", 1)[-1])
+    return {str(page).strip() for page in pages if str(page).strip()}
+
+
+def _predicted_pages_from_evidence(
+    evidence_bundle: dict[str, object],
+    retrieved_hits: list[dict[str, object]],
+) -> set[str]:
+    bundle_items = (
+        evidence_bundle.get("items") if isinstance(evidence_bundle, dict) else []
+    )
+    pages: set[str] = set()
+    for item in [
+        *(bundle_items if isinstance(bundle_items, list) else []),
+        *retrieved_hits,
+    ]:
+        if not isinstance(item, dict):
+            continue
+        page = str(item.get("page_label") or item.get("page") or "").strip()
+        if page:
+            pages.add(page)
+    return pages
 
 
 def formula_normalized_match_score(

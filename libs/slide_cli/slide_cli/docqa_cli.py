@@ -13,6 +13,15 @@ _REPL_COMMANDS = (
     "Commands: /files, /use <file>, /page <n|clear>, /selected-text [text], "
     "/history, /help, /exit"
 )
+_ROUTE_LABELS = {
+    "direct": "Direct",
+    "doc_text": "Document",
+    "doc_page_image": "Visual Page",
+    "doc_element": "Element",
+    "graph_global": "Graph",
+    "hybrid": "Hybrid",
+    "abstain": "Abstain",
+}
 
 
 def _echo_json(payload):
@@ -84,10 +93,56 @@ def _print_docqa_response(response):
         _echo_text(f"Active file: {response.active_file_name}{page_suffix}")
     _echo_text("")
     _echo_text(response.answer)
+    _print_controller_summary(response)
     if response.references_text:
         _echo_text("")
         _echo_text("Evidence:")
         _echo_text(response.references_text)
+
+
+def _print_controller_summary(response):
+    route_decision = _mapping_value(response, "route_decision")
+    retrieve_decision = _mapping_value(response, "retrieve_decision")
+    verify_decision = _mapping_value(response, "verify_decision")
+    evidence_bundle = _mapping_value(response, "evidence_bundle")
+    if not any([route_decision, retrieve_decision, verify_decision, evidence_bundle]):
+        return
+
+    _echo_text("")
+    route = str(route_decision.get("route") or "").strip()
+    if route:
+        _echo_text(f"Route: {_route_label(route)}")
+    retrieval_status = str(retrieve_decision.get("status") or "").strip()
+    if retrieval_status:
+        _echo_text(f"Retrieval: {retrieval_status}")
+    verification_status = str(verify_decision.get("status") or "").strip()
+    if verification_status:
+        action = str(verify_decision.get("action") or "").strip()
+        suffix = f" ({action})" if action else ""
+        _echo_text(f"Verification: {verification_status}{suffix}")
+    modalities = _modalities_from_bundle(evidence_bundle)
+    if modalities:
+        _echo_text(f"Modalities: {', '.join(modalities)}")
+
+
+def _mapping_value(response, key):
+    value = getattr(response, key, None)
+    return value if isinstance(value, dict) else {}
+
+
+def _route_label(route: str) -> str:
+    return _ROUTE_LABELS.get(route, route.replace("_", " ").title())
+
+
+def _modalities_from_bundle(evidence_bundle):
+    modalities = []
+    for item in evidence_bundle.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        modality = str(item.get("modality") or "").strip()
+        if modality and modality not in modalities:
+            modalities.append(modality)
+    return modalities
 
 
 def _value(item, key, default=""):
@@ -178,6 +233,7 @@ def _run_docqa_repl(
     task_type=None,
     agent_mode=None,
     artifact_type=None,
+    controller_options=None,
     llm=None,
     citation=None,
     language=None,
@@ -211,6 +267,7 @@ def _run_docqa_repl(
         "use_citation": citation,
         "language": language,
     }
+    request_overrides.update(dict(controller_options or {}))
 
     _echo_text(f"Conversation: {conversation_id}")
     _echo_text(_REPL_COMMANDS)
@@ -514,6 +571,11 @@ def docqa_ask(
     task_type,
     agent_mode,
     artifact_type,
+    controller_mode,
+    route_policy,
+    planner_model,
+    allowed_routes,
+    verification_mode,
     llm,
     citation,
     language,
@@ -555,6 +617,11 @@ def docqa_ask(
         task_type=task_type,
         agent_mode=agent_mode,
         artifact_type=artifact_type,
+        controller_mode=controller_mode,
+        route_policy=route_policy,
+        planner_model=planner_model,
+        allowed_routes=list(allowed_routes or []),
+        verification_mode=verification_mode,
         llm=llm,
         use_mindmap=mindmap,
         use_citation=citation,
@@ -582,6 +649,11 @@ def docqa_chat(
     task_type,
     agent_mode,
     artifact_type,
+    controller_mode,
+    route_policy,
+    planner_model,
+    allowed_routes,
+    verification_mode,
     llm,
     citation,
     language,
@@ -614,6 +686,13 @@ def docqa_chat(
         task_type=task_type,
         agent_mode=agent_mode,
         artifact_type=artifact_type,
+        controller_options={
+            "controller_mode": controller_mode,
+            "route_policy": route_policy,
+            "planner_model": planner_model,
+            "allowed_routes": list(allowed_routes or []),
+            "verification_mode": verification_mode,
+        },
         llm=llm,
         citation=citation,
         language=language,

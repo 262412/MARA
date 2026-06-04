@@ -10,6 +10,15 @@ _ARTIFACT_LABELS = {
     "mindmap": "Mind Map",
     "slide_outline": "Slide Outline",
 }
+_ROUTE_LABELS = {
+    "direct": "Direct",
+    "doc_text": "Document",
+    "doc_page_image": "Visual Page",
+    "doc_element": "Document Element",
+    "graph_global": "Graph",
+    "hybrid": "Hybrid",
+    "abstain": "Abstain",
+}
 
 
 def extract_mara_artifact(response: Any) -> dict[str, Any] | None:
@@ -157,3 +166,105 @@ def render_studio_trace_panel(
     artifact: dict[str, Any] | None = None,
 ) -> str:
     return str(reasoning_trace_html or "") + render_studio_artifacts_html(artifact)
+
+
+def render_controller_trace_html(
+    *,
+    route_decision: dict[str, Any] | None = None,
+    retrieve_decision: dict[str, Any] | None = None,
+    verify_decision: dict[str, Any] | None = None,
+    evidence_bundle: dict[str, Any] | None = None,
+) -> str:
+    route_decision = route_decision if isinstance(route_decision, dict) else {}
+    retrieve_decision = retrieve_decision if isinstance(retrieve_decision, dict) else {}
+    verify_decision = verify_decision if isinstance(verify_decision, dict) else {}
+    evidence_bundle = evidence_bundle if isinstance(evidence_bundle, dict) else {}
+    route = str(route_decision.get("route") or "doc_text")
+    route_label = _ROUTE_LABELS.get(route, route.replace("_", " ").title())
+    retrieval_status = str(retrieve_decision.get("status") or "pending")
+    verify_status = str(verify_decision.get("status") or "pending")
+    action = str(verify_decision.get("action") or "generate")
+    evidence_items = list(evidence_bundle.get("items") or [])
+    modality_labels = _modality_labels(evidence_items)
+    unsupported = _unsupported_claim_lines(verify_decision)
+    evidence_preview = _evidence_preview_lines(evidence_items)
+    verified_citations = _verified_citation_lines(verify_decision)
+    graph_note = (
+        "<p>Includes graph-level evidence with source backrefs.</p>"
+        if any(item.get("evidence_level") == "graph" for item in evidence_items)
+        else ""
+    )
+    return (
+        "<div class='controller-trace-card'>"
+        f"<div><strong>{html.escape(route_label)}</strong>"
+        f"<span>{html.escape(action.title())}</span></div>"
+        "<ol>"
+        f"<li><strong>Route</strong><small>{html.escape(route_label)}</small></li>"
+        f"<li><strong>Evidence</strong><small>{html.escape(retrieval_status)}"
+        f" - {html.escape(', '.join(modality_labels) or 'Waiting')}</small></li>"
+        f"<li><strong>Verification</strong><small>{html.escape(verify_status)}</small></li>"
+        "</ol>"
+        f"{unsupported}{evidence_preview}{verified_citations}{graph_note}</div>"
+    )
+
+
+def _modality_labels(evidence_items: list[dict[str, Any]]) -> list[str]:
+    labels: list[str] = []
+    for item in evidence_items:
+        modality = str(item.get("modality") or "").strip()
+        label = _ROUTE_LABELS.get(
+            "doc_page_image" if modality == "page_image" else modality,
+            modality.replace("_", " ").title(),
+        )
+        if label and label not in labels:
+            labels.append(label)
+    return labels
+
+
+def _unsupported_claim_lines(verify_decision: dict[str, Any]) -> str:
+    claims = [
+        _snippet(claim, limit=120)
+        for claim in verify_decision.get("unsupported_claims") or []
+        if str(claim or "").strip()
+    ]
+    if not claims:
+        return ""
+    items = "".join(f"<li>{claim}</li>" for claim in claims)
+    return f"<section><strong>Unsupported Claims</strong><ul>{items}</ul></section>"
+
+
+def _evidence_preview_lines(evidence_items: list[dict[str, Any]]) -> str:
+    lines = []
+    for item in evidence_items[:3]:
+        source = _evidence_source_label(item)
+        summary = _snippet(
+            item.get("caption") or item.get("text") or item.get("ocr_text"),
+            limit=120,
+        )
+        if source or summary:
+            lines.append(f"<li><small>{source}</small>{summary}</li>")
+    if not lines:
+        return ""
+    return (
+        "<section><strong>Evidence Preview</strong>"
+        f"<ul>{''.join(lines)}</ul></section>"
+    )
+
+
+def _verified_citation_lines(verify_decision: dict[str, Any]) -> str:
+    citations = [
+        _snippet(citation, limit=80)
+        for citation in verify_decision.get("verified_citations") or []
+        if str(citation or "").strip()
+    ]
+    if not citations:
+        return ""
+    items = "".join(f"<li>{citation}</li>" for citation in citations[:5])
+    return f"<section><strong>Verified Citations</strong><ul>{items}</ul></section>"
+
+
+def _evidence_source_label(item: dict[str, Any]) -> str:
+    source = str(item.get("source_name") or item.get("source_id") or "").strip()
+    page = str(item.get("page_label") or "").strip()
+    label = f"{source} p.{page}" if source and page else source
+    return html.escape(label)

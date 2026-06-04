@@ -1,4 +1,5 @@
 from ktem.reasoning.mara import MARA_ABSTAIN_MESSAGE, MaraAgentPipeline
+from ktem.reasoning.mara_controller import planner_decision
 from ktem.reasoning.simple import FullQAPipeline
 
 from kotaemon.base import Document, RetrievedDocument
@@ -42,6 +43,37 @@ def test_mara_planner_keeps_fast_mode_to_one_retrieval_step():
     ]
 
 
+def test_mara_planner_decision_routes_global_compare_to_graph():
+    decision = planner_decision(
+        {"task_type": "compare", "modalities": ["text"], "scope": "document"}
+    )
+
+    assert decision == {
+        "route": "graph_global",
+        "reason": "Global compare and study tasks use graph evidence.",
+        "evidence_types": ["graph"],
+        "verify": True,
+    }
+
+
+def test_mara_planner_decision_routes_visual_question_to_hybrid_evidence():
+    decision = planner_decision(
+        {"task_type": "qa", "modalities": ["figure"], "scope": "page"}
+    )
+
+    assert decision["route"] == "hybrid"
+    assert decision["evidence_types"] == ["text", "page_image", "element"]
+
+
+def test_mara_planner_decision_routes_table_question_to_hybrid_evidence():
+    decision = planner_decision(
+        {"task_type": "qa", "modalities": ["table"], "scope": "document"}
+    )
+
+    assert decision["route"] == "hybrid"
+    assert decision["evidence_types"] == ["text", "page_image", "element"]
+
+
 def test_mara_pipeline_reads_agent_mode_from_settings():
     pipeline = MaraAgentPipeline.prepare_pipeline_instance(
         {"reasoning.options.mara.agent_mode": "thorough"},
@@ -51,8 +83,8 @@ def test_mara_pipeline_reads_agent_mode_from_settings():
     assert pipeline.agent_mode == "thorough"
 
 
-def test_mara_evidence_metadata_tracks_modalities_sources_and_pages():
-    docs = [
+def _sample_multimodal_docs():
+    return [
         RetrievedDocument(
             text="Table evidence",
             id_="doc-1",
@@ -83,50 +115,59 @@ def test_mara_evidence_metadata_tracks_modalities_sources_and_pages():
         ),
     ]
 
+
+def _expected_table_evidence():
+    return {
+        "evidence_id": "doc-1",
+        "file_id": "file-1",
+        "file_name": "report.pdf",
+        "page_label": "3",
+        "element_type": "table",
+        "element_id": "table-7",
+        "bbox": [1, 2, 3, 4],
+        "caption": "Revenue table",
+        "text": "Table evidence",
+        "ocr_text": "Revenue FY2026",
+        "table_origin": "camelot",
+        "formula_normalized": "",
+        "slide_number": None,
+        "retrieval_path": "hybrid",
+        "source_backrefs": ["file-1#page:3"],
+    }
+
+
+def test_mara_evidence_metadata_tracks_modalities_sources_and_pages():
     metadata = MaraAgentPipeline.build_evidence_metadata(
-        docs,
+        _sample_multimodal_docs(),
         {"modalities": ["table", "figure"]},
     )
 
-    assert metadata == {
-        "requested_modalities": ["table", "figure"],
-        "modality_counts": {"table": 1, "figure": 1},
-        "page_coverage": ["3", "4"],
-        "source_ids": ["file-1"],
-        "evidence_ids": ["doc-1", "doc-2"],
-        "evidence": [
-            {
-                "evidence_id": "doc-1",
-                "file_id": "file-1",
-                "file_name": "report.pdf",
-                "page_label": "3",
-                "element_type": "table",
-                "element_id": "table-7",
-                "bbox": [1, 2, 3, 4],
-                "caption": "Revenue table",
-                "ocr_text": "Revenue FY2026",
-                "table_origin": "camelot",
-                "formula_normalized": "",
-                "slide_number": None,
-                "retrieval_path": "hybrid",
-            },
-            {
-                "evidence_id": "doc-2",
-                "file_id": "file-1",
-                "file_name": "report.pdf",
-                "page_label": "4",
-                "element_type": "figure",
-                "element_id": "",
-                "bbox": None,
-                "caption": "",
-                "ocr_text": "",
-                "table_origin": "",
-                "formula_normalized": "x^2",
-                "slide_number": 5,
-                "retrieval_path": "",
-            },
-        ],
-    }
+    assert metadata["requested_modalities"] == ["table", "figure"]
+    assert metadata["modality_counts"] == {"table": 1, "figure": 1}
+    assert metadata["page_coverage"] == ["3", "4"]
+    assert metadata["source_ids"] == ["file-1"]
+    assert metadata["evidence_ids"] == ["doc-1", "doc-2"]
+    assert metadata["evidence"][0] == _expected_table_evidence()
+    assert metadata["evidence"][1]["element_type"] == "figure"
+    assert metadata["evidence"][1]["source_backrefs"] == ["file-1#page:4"]
+    assert metadata["element_index"][0]["evidence_id"] == ("element:file-1:3:table-7")
+
+
+def test_mara_evidence_metadata_includes_text_for_verifier_support():
+    docs = [
+        RetrievedDocument(
+            text="Revenue increased in 2026.",
+            id_="doc-1",
+            metadata={"file_id": "file-1", "page_label": "3"},
+        )
+    ]
+
+    metadata = MaraAgentPipeline.build_evidence_metadata(
+        docs,
+        {"modalities": ["text"]},
+    )
+
+    assert metadata["evidence"][0]["text"] == "Revenue increased in 2026."
 
 
 def test_mara_study_guide_artifact_contains_source_grounded_sections():
@@ -332,9 +373,90 @@ def test_mara_thorough_mode_abstains_when_retry_still_has_no_evidence(monkeypatc
         if event.channel == "debug"
         and event.content.get("mara_channel") == "agent_trace"
     ]
+    assert any(
+        event.get("event") == "retrieval_evaluator" and event.get("status") == "poor"
+        for event in trace_payloads
+    )
+    assert any(
+        event.get("event") == "guardrail" and event.get("action") == "abstain"
+        for event in trace_payloads
+    )
+
+
+def test_mara_stream_emits_planner_output_for_controller_trace(monkeypatch):
+    def fake_stream(_self, _message, _conv_id, _history, **_kwargs):
+        yield Document(channel="chat", content="grounded answer")
+        return Document(channel="chat", content="grounded answer")
+
+    monkeypatch.setattr(FullQAPipeline, "stream", fake_stream)
+    pipeline = MaraAgentPipeline(retrievers=[])
+
+    events = list(pipeline.stream("Compare the source themes.", "conv-1", []))
+    trace_payloads = [
+        event.content["payload"]
+        for event in events
+        if event.channel == "debug"
+        and event.content.get("mara_channel") == "agent_trace"
+    ]
+
     assert {
-        "event": "verify",
-        "result": "insufficient",
-        "evidence_count": 0,
-        "decision": "abstain",
+        "event": "planner_output",
+        "decision": {
+            "route": "graph_global",
+            "reason": "Global compare and study tasks use graph evidence.",
+            "evidence_types": ["graph"],
+            "verify": True,
+        },
     } in trace_payloads
+
+
+def test_mara_graph_route_uses_graph_context_without_text_rag(monkeypatch):
+    def fail_if_text_rag_runs(_self, _message, _conv_id, _history, **_kwargs):
+        raise AssertionError("Graph route should not call the text RAG chain")
+        yield
+
+    monkeypatch.setattr(FullQAPipeline, "stream", fail_if_text_rag_runs)
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.graph_context = {
+        "node_id": "component::strategy",
+        "label": "Strategy",
+        "summary": "Strategy connects pricing and product roadmap themes.",
+        "support_pages": {"file-a": ["2"], "file-b": ["5"]},
+        "support_chunk_ids": {"file-a": ["chunk-a"], "file-b": ["chunk-b"]},
+    }
+
+    events = list(pipeline.stream("Compare the source themes.", "conv-1", []))
+
+    assert [event.content for event in events if event.channel == "chat"] == [
+        "Strategy connects pricing and product roadmap themes."
+    ]
+    evidence_payloads = [
+        event.content["payload"]
+        for event in events
+        if event.channel == "debug"
+        and event.content.get("mara_channel") == "evidence_metadata"
+    ]
+    assert evidence_payloads == [
+        {
+            "requested_modalities": ["text"],
+            "modality_counts": {"graph": 1},
+            "page_coverage": ["2", "5"],
+            "source_ids": ["file-a", "file-b"],
+            "evidence_ids": ["graph:component::strategy"],
+            "evidence": [],
+            "graph_evidence": [
+                {
+                    "evidence_id": "graph:component::strategy",
+                    "id": "component::strategy",
+                    "label": "Strategy",
+                    "summary": "Strategy connects pricing and product roadmap themes.",
+                    "source_ids": ["file-a", "file-b"],
+                    "support_pages": {"file-a": ["2"], "file-b": ["5"]},
+                    "support_chunk_ids": {
+                        "file-a": ["chunk-a"],
+                        "file-b": ["chunk-b"],
+                    },
+                }
+            ],
+        }
+    ]

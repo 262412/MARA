@@ -80,6 +80,43 @@ def _mara_options():
 
 def _response_options():
     return [
+        click.option(
+            "--controller",
+            "controller_mode",
+            default="off",
+            type=click.Choice(["llm", "off"]),
+            show_default=True,
+            help="Controller planner mode.",
+        ),
+        click.option(
+            "--route",
+            "route_policy",
+            default="auto",
+            type=click.Choice(
+                ["auto", "direct", "doc", "visual", "element", "graph", "hybrid"]
+            ),
+            show_default=True,
+            help="Controller route policy.",
+        ),
+        click.option(
+            "--planner-model",
+            default=None,
+            help="Structured planner model override for controller auto routing.",
+        ),
+        click.option(
+            "--allowed-route",
+            "allowed_routes",
+            multiple=True,
+            help="Restrict controller auto routing to a route id. Repeatable.",
+        ),
+        click.option(
+            "--verify",
+            "verification_mode",
+            default="off",
+            type=click.Choice(["off", "light", "strict"]),
+            show_default=True,
+            help="Answer verification mode.",
+        ),
         click.option("--llm", default=None, help="Temporary LLM override."),
         click.option(
             "--citation",

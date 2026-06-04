@@ -2,6 +2,7 @@ from ktem.db.models import Conversation, engine
 from ktem.docqa._runtime_notebook import NOTEBOOK_KEY
 from ktem.pages.chat.studio_artifacts import (
     extract_mara_artifact,
+    render_controller_trace_html,
     render_conversation_notebook_panel_html,
     render_notebook_panel_html,
     render_studio_artifacts_html,
@@ -73,6 +74,74 @@ def test_render_studio_trace_panel_keeps_trace_before_artifacts():
 
     assert html.index("reasoning-trace-card") < html.index("studio-artifacts-card")
     assert "Evidence summary" in html
+
+
+def test_render_controller_trace_html_exposes_route_verification_and_graph_evidence():
+    html = render_controller_trace_html(
+        route_decision={"route": "graph_global"},
+        retrieve_decision={"status": "good"},
+        verify_decision={
+            "status": "unsupported",
+            "action": "revise",
+            "unsupported_claims": ["Unsupported claim."],
+        },
+        evidence_bundle={
+            "items": [
+                {
+                    "modality": "graph",
+                    "evidence_level": "graph",
+                    "source_backrefs": ["file-a", "file-b"],
+                },
+                {"modality": "page_image", "evidence_level": "page"},
+            ]
+        },
+    )
+
+    assert "controller-trace-card" in html
+    assert "Graph" in html
+    assert "Verification" in html
+    assert "Unsupported claim." in html
+    assert "graph-level evidence" in html
+    assert "Visual Page" in html
+
+
+def test_render_controller_trace_html_lists_evidence_preview_and_verified_citations():
+    html = render_controller_trace_html(
+        route_decision={"route": "hybrid"},
+        retrieve_decision={"status": "good"},
+        verify_decision={
+            "status": "supported",
+            "action": "generate",
+            "verified_citations": ["text-1", "element:file-1:4:table-a"],
+        },
+        evidence_bundle={
+            "items": [
+                {
+                    "evidence_id": "text-1",
+                    "modality": "text",
+                    "source_name": "report.pdf",
+                    "page_label": "3",
+                    "text": "Revenue increased in 2026.",
+                    "source_backrefs": ["file-1#page:3"],
+                },
+                {
+                    "evidence_id": "element:file-1:4:table-a",
+                    "modality": "table",
+                    "source_name": "report.pdf",
+                    "page_label": "4",
+                    "caption": "Revenue by region",
+                    "source_backrefs": ["file-1#page:4"],
+                },
+            ]
+        },
+    )
+
+    assert "Evidence Preview" in html
+    assert "report.pdf p.3" in html
+    assert "Revenue increased in 2026." in html
+    assert "Revenue by region" in html
+    assert "Verified Citations" in html
+    assert "element:file-1:4:table-a" in html
 
 
 def test_render_notebook_panel_html_exposes_source_notes_and_artifact_access():

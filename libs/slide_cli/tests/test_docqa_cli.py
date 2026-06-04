@@ -54,6 +54,12 @@ class _DummyResponse:
         self.active_file_name = active_file_name
         self.page_number = page_number
         self.can_apply = False
+        self.route_decision = {"route": "hybrid"}
+        self.retrieve_decision = {"status": "good"}
+        self.verify_decision = {"status": "supported", "action": "generate"}
+        self.evidence_bundle = {
+            "items": [{"modality": "text"}, {"modality": "page_image"}]
+        }
 
     def as_dict(self):
         return {
@@ -62,6 +68,10 @@ class _DummyResponse:
             "references_text": self.references_text,
             "active_file_name": self.active_file_name,
             "page_number": self.page_number,
+            "route_decision": self.route_decision,
+            "retrieve_decision": self.retrieve_decision,
+            "verify_decision": self.verify_decision,
+            "evidence_bundle": self.evidence_bundle,
         }
 
 
@@ -134,6 +144,28 @@ def _extract_json_payload(raw_output: str):
     raise AssertionError(f"expected JSON payload, got:\n{raw_output}")
 
 
+def _assert_docqa_ask_request(request):
+    assert request is not None
+    assert request.prompt == "What is alpha?"
+    assert request.conversation_id == "conv-9"
+    assert request.selected_file_ids == ["file-1"]
+    assert request.active_file_id == "file-1"
+    assert request.page_number == 3
+    assert request.selected_text == "focus text"
+    assert request.graph_context == {"related_file_ids": ["file-1"]}
+    assert request.controller_mode == "llm"
+    assert request.route_policy == "hybrid"
+    assert request.verification_mode == "strict"
+    assert request.reasoning_type == "chain"
+    assert request.task_type == "study_guide"
+    assert request.agent_mode == "thorough"
+    assert request.artifact_type == "study_guide"
+    assert request.llm == "gpt-4o-mini"
+    assert request.use_citation == "inline"
+    assert request.language == "zh"
+    assert request.use_mindmap is True
+
+
 def test_docqa_ask_json(monkeypatch, tmp_path):
     runtime = _DummyRuntime()
     graph_context_path = tmp_path / "graph.json"
@@ -163,6 +195,12 @@ def test_docqa_ask_json(monkeypatch, tmp_path):
             "focus text",
             "--graph-context-file",
             str(graph_context_path),
+            "--controller",
+            "llm",
+            "--route",
+            "hybrid",
+            "--verify",
+            "strict",
             "--reasoning",
             "chain",
             "--task",
@@ -186,22 +224,70 @@ def test_docqa_ask_json(monkeypatch, tmp_path):
     payload = _extract_json_payload(result.output)
     assert payload["conversation_id"] == "conv-9"
     assert payload["answer"] == "dummy answer"
+    _assert_docqa_ask_request(runtime.last_request)
+    assert payload["route_decision"] == {"route": "hybrid"}
+    assert payload["verify_decision"] == {
+        "status": "supported",
+        "action": "generate",
+    }
+
+
+def test_docqa_ask_passes_planner_model_allowed_routes_and_element_route(monkeypatch):
+    runtime = _DummyRuntime()
+    monkeypatch.setattr("slide_cli.docqa_cli.create_docqa_runtime", lambda: runtime)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        docqa,
+        [
+            "ask",
+            "--prompt",
+            "What is alpha?",
+            "--route",
+            "element",
+            "--planner-model",
+            "fake-planner",
+            "--allowed-route",
+            "doc_element",
+            "--allowed-route",
+            "hybrid",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
     assert runtime.last_request is not None
-    assert runtime.last_request.prompt == "What is alpha?"
-    assert runtime.last_request.conversation_id == "conv-9"
-    assert runtime.last_request.selected_file_ids == ["file-1"]
-    assert runtime.last_request.active_file_id == "file-1"
-    assert runtime.last_request.page_number == 3
-    assert runtime.last_request.selected_text == "focus text"
-    assert runtime.last_request.graph_context == {"related_file_ids": ["file-1"]}
-    assert runtime.last_request.reasoning_type == "chain"
-    assert runtime.last_request.task_type == "study_guide"
-    assert runtime.last_request.agent_mode == "thorough"
-    assert runtime.last_request.artifact_type == "study_guide"
-    assert runtime.last_request.llm == "gpt-4o-mini"
-    assert runtime.last_request.use_citation == "inline"
-    assert runtime.last_request.language == "zh"
-    assert runtime.last_request.use_mindmap is True
+    assert runtime.last_request.route_policy == "element"
+    assert runtime.last_request.planner_model == "fake-planner"
+    assert runtime.last_request.allowed_routes == ["doc_element", "hybrid"]
+
+
+def test_docqa_ask_text_includes_controller_summary(monkeypatch):
+    runtime = _DummyRuntime()
+    monkeypatch.setattr("slide_cli.docqa_cli.create_docqa_runtime", lambda: runtime)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        docqa,
+        [
+            "ask",
+            "--prompt",
+            "What is alpha?",
+            "--controller",
+            "llm",
+            "--route",
+            "hybrid",
+            "--verify",
+            "strict",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "dummy answer" in result.output
+    assert "Route: Hybrid" in result.output
+    assert "Retrieval: good" in result.output
+    assert "Verification: supported (generate)" in result.output
+    assert "Modalities: text, page_image" in result.output
 
 
 def test_docqa_ask_rejects_non_object_graph_context(monkeypatch, tmp_path):
@@ -237,7 +323,17 @@ def test_docqa_chat_repl_basic_flow(monkeypatch):
     runner = CliRunner()
     result = runner.invoke(
         docqa,
-        ["chat", "--file", "alpha.pptx"],
+        [
+            "chat",
+            "--file",
+            "alpha.pptx",
+            "--controller",
+            "llm",
+            "--route",
+            "graph",
+            "--verify",
+            "light",
+        ],
         input="What is alpha?\n/exit\n",
     )
 
@@ -248,6 +344,9 @@ def test_docqa_chat_repl_basic_flow(monkeypatch):
     assert runtime.last_request.prompt == "What is alpha?"
     assert runtime.last_request.selected_file_ids == ["file-1"]
     assert runtime.last_request.page_number is None
+    assert runtime.last_request.controller_mode == "llm"
+    assert runtime.last_request.route_policy == "graph"
+    assert runtime.last_request.verification_mode == "light"
 
 
 def test_docqa_files_and_sessions_listing(monkeypatch):
@@ -428,6 +527,8 @@ def test_docqa_ask_help_lists_shared_parameters():
         "--citation",
         "--language",
         "--mindmap",
+        "--planner-model",
+        "--allowed-route",
         "--json",
     ]:
         assert token in result.output

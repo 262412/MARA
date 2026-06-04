@@ -1,15 +1,35 @@
 from __future__ import annotations
 
-from collections import Counter
+from types import SimpleNamespace
 from typing import Any, Generator
+
+from ktem.docqa.execution import RouteExecutionResult, execute_controller_turn
+from ktem.docqa.graph_index import graph_answer_from_evidence
 
 from kotaemon.base import Document, RetrievedDocument
 
+from .mara_artifacts import build_artifact_for_pipeline
+from .mara_controller import planner_trace_payload
+from .mara_evidence import build_mara_evidence_metadata
+from .mara_route_retrieval import route_retrieval_metadata
 from .simple import FullQAPipeline
 
 MARA_ABSTAIN_MESSAGE = (
     "MARA could not retrieve enough evidence to answer reliably after a retry. "
     "Select a relevant source or page, or ask with more source-specific context."
+)
+MARA_DIRECT_MESSAGE = (
+    "MARA is ready to answer questions about your selected documents. "
+    "Ask a source-specific question to retrieve evidence."
+)
+MARA_PLANNER_ABSTAIN_MESSAGE = (
+    "MARA could not identify a safe document-grounded route for this question. "
+    "Select relevant sources or ask a source-specific question."
+)
+MARA_VISUAL_EVIDENCE_ONLY_MESSAGE = (
+    "MARA found visual page evidence, but no VLM backend is configured. "
+    "Use the cited page evidence or configure a visual generator for a grounded "
+    "visual answer."
 )
 
 _TASK_KEYWORDS = {
@@ -39,38 +59,23 @@ _VALID_TASK_TYPES = {
     "mindmap",
     "slide_outline",
 }
-
-
-def _evidence_item(doc: RetrievedDocument) -> dict[str, Any]:
-    metadata = dict(getattr(doc, "metadata", {}) or {})
-    return {
-        "evidence_id": str(getattr(doc, "doc_id", "") or "").strip(),
-        "file_id": str(metadata.get("file_id") or "").strip(),
-        "file_name": str(metadata.get("file_name") or "").strip(),
-        "page_label": str(metadata.get("page_label") or "").strip(),
-        "element_type": str(
-            metadata.get("element_type")
-            or metadata.get("type")
-            or metadata.get("modality")
-            or "text"
-        ),
-        "element_id": str(metadata.get("element_id") or "").strip(),
-        "bbox": metadata.get("bbox"),
-        "caption": str(metadata.get("caption") or "").strip(),
-        "ocr_text": str(metadata.get("ocr_text") or "").strip(),
-        "table_origin": str(metadata.get("table_origin") or "").strip(),
-        "formula_normalized": str(metadata.get("formula_normalized") or "").strip(),
-        "slide_number": metadata.get("slide_number"),
-        "retrieval_path": str(metadata.get("retrieval_path") or "").strip(),
-    }
+_ROUTE_POLICY_ALIASES = {
+    "direct": "direct",
+    "doc": "doc_text",
+    "document": "doc_text",
+    "text": "doc_text",
+    "visual": "doc_page_image",
+    "page_image": "doc_page_image",
+    "page-image": "doc_page_image",
+    "element": "doc_element",
+    "graph": "graph_global",
+    "hybrid": "hybrid",
+    "abstain": "abstain",
+}
 
 
 def _should_retry_retrieval(agent_mode: str | None, docs: list[RetrievedDocument]):
     return str(agent_mode or "").strip().lower() == "thorough" and not docs
-
-
-def _is_thorough(agent_mode: str | None) -> bool:
-    return str(agent_mode or "").strip().lower() == "thorough"
 
 
 def _mara_event(mara_channel: str, payload: Any) -> Document:
@@ -80,231 +85,163 @@ def _mara_event(mara_channel: str, payload: Any) -> Document:
     )
 
 
-def _retrieval_trace(
-    docs: list[RetrievedDocument],
-    evidence_metadata: dict[str, Any],
-    attempts: list[dict[str, Any]],
+def _route_trace_payload(
+    understanding: dict[str, Any],
+    agent_mode: str | None,
+    plan: list[dict[str, str]],
 ) -> dict[str, Any]:
     return {
-        "event": "tool_call",
-        "tool": "source_retriever",
-        "evidence_ids": evidence_metadata["evidence_ids"],
-        "evidence_count": len(docs),
-        "attempts": attempts,
+        "event": "route",
+        "task_type": understanding["task_type"],
+        "modalities": understanding["modalities"],
+        "scope": understanding["scope"],
+        "agent_mode": agent_mode or "auto",
+        "plan": plan,
     }
 
 
-def _verify_evidence(docs: list[RetrievedDocument]) -> dict[str, Any]:
-    evidence_count = len(docs)
-    return {
-        "result": "supported" if evidence_count else "insufficient",
-        "evidence_count": evidence_count,
-    }
+def _planner_route(planner_payload: dict[str, Any]) -> str:
+    decision = planner_payload.get("decision")
+    if not isinstance(decision, dict):
+        return ""
+    return str(decision.get("route") or "").strip()
 
 
-def _excerpt(text: str, limit: int = 220) -> str:
-    cleaned = " ".join(str(text or "").split())
-    if len(cleaned) <= limit:
-        return cleaned
-    return cleaned[: limit - 1].rstrip() + "..."
+def _effective_route(pipeline: Any, planner_payload: dict[str, Any]) -> str:
+    policy = str(getattr(pipeline, "route_policy", "") or "").strip().lower()
+    policy = policy.replace("-", "_")
+    if policy and policy != "auto":
+        return _ROUTE_POLICY_ALIASES.get(policy, policy)
+    planner_route = _planner_route(planner_payload)
+    return _ROUTE_POLICY_ALIASES.get(planner_route, planner_route)
 
 
-def _artifact_evidence(docs: list[RetrievedDocument]) -> list[dict[str, Any]]:
-    evidence: list[dict[str, Any]] = []
-    for doc in docs:
-        item = _evidence_item(doc)
-        excerpt = _excerpt(
-            str(getattr(doc, "text", "") or getattr(doc, "content", "") or "")
-        )
-        if not excerpt:
+def _controller_execution_request(
+    pipeline: Any,
+    message: str,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        prompt=message,
+        controller_mode="llm",
+        route_policy=getattr(pipeline, "route_policy", None) or "auto",
+        allowed_routes=list(getattr(pipeline, "allowed_routes", None) or []),
+        verification_mode=getattr(pipeline, "verification_mode", None) or "light",
+        active_file_id=getattr(pipeline, "active_file_id", "") or "",
+        active_file_name=getattr(pipeline, "active_file_name", "") or "",
+        page_number=getattr(pipeline, "page_number", None),
+        selected_text=getattr(pipeline, "selected_text", "") or "",
+        selected_file_ids=list(getattr(pipeline, "selected_file_ids", None) or []),
+        graph_context=getattr(pipeline, "graph_context", None) or {},
+    )
+
+
+def _collect_text_rag_generation(
+    pipeline: Any,
+    message: str,
+    conv_id: str,
+    history: list,
+    kwargs: dict[str, Any],
+) -> tuple[str, list[Document]]:
+    events: list[Document] = []
+    answer = ""
+    stream = super(MaraAgentPipeline, pipeline).stream(
+        message, conv_id, history, **kwargs
+    )
+    while True:
+        try:
+            event = next(stream)
+        except StopIteration as stop:
+            returned = stop.value
+            break
+        events.append(event)
+        if isinstance(event, Document) and event.channel == "chat":
+            answer += "" if event.content is None else str(event.content)
+    if not answer and isinstance(returned, Document) and returned.channel == "chat":
+        answer = "" if returned.content is None else str(returned.content)
+    return answer, events
+
+
+def _execution_trace_events(
+    execution: RouteExecutionResult,
+) -> Generator[Document, None, None]:
+    for item in execution.controller_trace:
+        stage = item.get("stage")
+        if stage == "planner":
             continue
-        evidence.append(
-            {
-                "evidence_id": item["evidence_id"],
-                "file_id": item["file_id"],
-                "file_name": item["file_name"],
-                "page_label": item["page_label"],
-                "excerpt": excerpt,
-            }
-        )
-    return evidence
+        payload = dict(item)
+        payload["event"] = str(stage or "controller")
+        payload["route"] = execution.controller_decision.route
+        yield _mara_event("agent_trace", payload)
 
 
-def _evidence_label(item: dict[str, Any]) -> str:
-    label = str(item.get("file_name") or item.get("evidence_id") or "source")
-    page = str(item.get("page_label") or "").strip()
-    return f"{label} p.{page}" if page else label
+def _route_execution_events(
+    execution: RouteExecutionResult,
+    generation_events: list[Document],
+    artifact: Any,
+) -> Generator[Document, None, Document]:
+    for event in _execution_trace_events(execution):
+        yield event
+    yield _mara_event("evidence_metadata", execution.evidence_bundle.metadata)
+    visible_answer = _visible_execution_answer(execution)
+    if execution.guardrail_decision.action == "return":
+        if generation_events:
+            for event in generation_events:
+                yield event
+        else:
+            yield Document(channel="chat", content=visible_answer)
+        if artifact is not None:
+            yield _mara_event("artifact", artifact)
+        return Document(channel="chat", content=visible_answer)
+    yield Document(channel="chat", content=MARA_ABSTAIN_MESSAGE)
+    return Document(channel="chat", content=MARA_ABSTAIN_MESSAGE)
 
 
-def _source_ids(item: dict[str, Any]) -> list[str]:
-    file_id = str(item.get("file_id") or "").strip()
-    return [file_id] if file_id else []
-
-
-def _topic_from_excerpt(excerpt: str) -> str:
-    words = [word.strip(".,:;!?()[]{}\"'") for word in excerpt.split()]
-    return next((word for word in words if word), "the source")
-
-
-def _planned_artifact(artifact_type: str) -> dict[str, Any]:
-    return {
-        "type": artifact_type,
-        "status": "planned",
-        "source": "mara_reasoning",
-        "cited_evidence": [],
-    }
-
-
-def _study_guide_artifact(evidence: list[dict[str, Any]]) -> dict[str, Any]:
-    first = evidence[0]
-    concepts = [_evidence_label(item) for item in evidence[:5]]
-    return {
-        "type": "study_guide",
-        "status": "ready",
-        "source": "mara_reasoning",
-        "overview": first["excerpt"],
-        "key_concepts": concepts,
-        "glossary": [
-            {"term": _evidence_label(item), "definition": item["excerpt"]}
-            for item in evidence[:5]
-        ],
-        "key_questions": [
-            f"What does {_evidence_label(item)} show about "
-            f"{_topic_from_excerpt(item['excerpt'])}?"
-            for item in evidence[:5]
-        ],
-        "cited_evidence": evidence,
-    }
-
-
-def _quiz_artifact(evidence: list[dict[str, Any]]) -> dict[str, Any]:
-    first = evidence[0]
-    question = f"Which statement is supported by {_evidence_label(first)}?"
-    return {
-        "type": "quiz",
-        "status": "ready",
-        "source": "mara_reasoning",
-        "multiple_choice": [
-            {
-                "question": question,
-                "options": [
-                    first["excerpt"],
-                    "The selected evidence does not support this.",
-                    "More sources are required before answering.",
-                ],
-                "answer": first["excerpt"],
-                "source_ids": _source_ids(first),
-            }
-        ],
-        "short_answer": [
-            {
-                "question": f"Summarize the evidence from {_evidence_label(first)}.",
-                "answer": first["excerpt"],
-                "source_ids": _source_ids(first),
-            }
-        ],
-        "answer_key": [
-            {
-                "question": question,
-                "answer": first["excerpt"],
-                "explanation": first["excerpt"],
-                "source_ids": _source_ids(first),
-            }
-        ],
-        "cited_evidence": evidence,
-    }
-
-
-def _flashcards_artifact(evidence: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "type": "flashcards",
-        "status": "ready",
-        "source": "mara_reasoning",
-        "cards": [
-            {
-                "front": f"What is the key point from {_evidence_label(item)}?",
-                "back": item["excerpt"],
-                "source_ids": _source_ids(item),
-            }
-            for item in evidence[:10]
-        ],
-        "cited_evidence": evidence,
-    }
-
-
-def _mindmap_artifact(evidence: list[dict[str, Any]]) -> dict[str, Any]:
-    nodes = [
-        {
-            "id": item["evidence_id"] or f"source-{index}",
-            "label": _evidence_label(item),
-            "summary": item["excerpt"],
-            "source_ids": _source_ids(item),
-        }
-        for index, item in enumerate(evidence[:10], start=1)
+def _visual_evidence_only_answer(bundle: Any) -> str:
+    pages = [
+        f"{item.get('source_name') or item.get('source_id')} page {item.get('page_label')}"
+        for item in bundle.items
+        if item.get("modality") == "page_image"
     ]
-    return {
-        "type": "mindmap",
-        "status": "ready",
-        "source": "mara_reasoning",
-        "nodes": nodes,
-        "edges": [
-            {"source": nodes[0]["id"], "target": node["id"]}
-            for node in nodes[1:]
-            if nodes
-        ],
-        "cited_evidence": evidence,
-    }
+    if not pages:
+        return MARA_VISUAL_EVIDENCE_ONLY_MESSAGE
+    preview = "; ".join(str(page) for page in pages[:3])
+    return f"{MARA_VISUAL_EVIDENCE_ONLY_MESSAGE} Evidence: {preview}."
 
 
-def _slide_outline_artifact(evidence: list[dict[str, Any]]) -> dict[str, Any]:
-    slides = [
-        {
-            "title": _evidence_label(item),
-            "bullets": [item["excerpt"]],
-            "source_ids": _source_ids(item),
-        }
-        for item in evidence[:8]
-    ]
-    return {
-        "type": "slide_outline",
-        "status": "ready",
-        "source": "mara_reasoning",
-        "title": "Source-grounded MARA outline",
-        "sections": [{"title": "Evidence-backed narrative", "slides": slides}],
-        "cited_evidence": evidence,
-    }
+def _visual_generator_answer(generator: Any, request: Any, bundle: Any) -> str:
+    if hasattr(generator, "generate"):
+        return str(generator.generate(request, bundle))
+    if callable(generator):
+        return str(generator(request, bundle))
+    raise ValueError("Configured visual generator must be callable or expose generate.")
 
 
-def _build_artifact_for_pipeline(
-    pipeline: Any, understanding: dict[str, Any]
-) -> dict[str, Any] | None:
-    artifact_type = str(getattr(pipeline, "artifact_type", "") or "").strip()
-    if not artifact_type:
-        task_type = str(understanding.get("task_type") or "")
-        artifact_type = task_type if task_type != "qa" else ""
-    if artifact_type not in {
-        "study_guide",
-        "quiz",
-        "flashcards",
-        "mindmap",
-        "slide_outline",
-    }:
-        return None
-    evidence = _artifact_evidence(list(getattr(pipeline, "_mara_last_docs", [])))
-    if not evidence:
-        return _planned_artifact(artifact_type)
-    builders = {
-        "study_guide": _study_guide_artifact,
-        "quiz": _quiz_artifact,
-        "flashcards": _flashcards_artifact,
-        "mindmap": _mindmap_artifact,
-        "slide_outline": _slide_outline_artifact,
-    }
-    return builders[artifact_type](evidence)
+def _visible_execution_answer(execution: RouteExecutionResult) -> str:
+    route = execution.controller_decision.route
+    if route == "direct_answer":
+        return MARA_DIRECT_MESSAGE
+    if route == "abstain":
+        return MARA_PLANNER_ABSTAIN_MESSAGE
+    return execution.answer
+
+
+def _element_evidence_answer(bundle: Any) -> str:
+    excerpts = []
+    for item in bundle.items:
+        if str(item.get("modality") or "") in {"", "text", "page_image", "graph"}:
+            continue
+        text = str(item.get("text") or item.get("caption") or "").strip()
+        if text:
+            excerpts.append(text.rstrip(".") + ".")
+        if len(excerpts) >= 3:
+            break
+    return " ".join(excerpts)
 
 
 class MaraAgentPipeline(FullQAPipeline):
     """MARA agentic wrapper around the existing DocQA retrieval stack."""
+
+    build_evidence_metadata = staticmethod(build_mara_evidence_metadata)
 
     class Config:
         allow_extra = True
@@ -383,6 +320,7 @@ class MaraAgentPipeline(FullQAPipeline):
             scope = "document"
 
         return {
+            "question": query,
             "task_type": detected_task,
             "modalities": modalities,
             "scope": scope,
@@ -468,6 +406,78 @@ class MaraAgentPipeline(FullQAPipeline):
         self._mara_last_docs = list(docs)
         return docs, info
 
+    def execute_controller_route(
+        self,
+        message: str,
+        conv_id: str,
+        history: list,
+        understanding: dict[str, Any],
+        planner_payload: dict[str, Any],
+        kwargs: dict[str, Any],
+    ) -> tuple[RouteExecutionResult, list[Document], Any]:
+        generation_events: list[Document] = []
+        generated_answer = ""
+
+        def retrieve(_request: Any, _decision: Any) -> dict[str, Any]:
+            return route_retrieval_metadata(
+                self,
+                _decision.route,
+                message,
+                history,
+                understanding,
+                text_retrieve=lambda: self.retrieve(message, history),
+                metadata_builder=self.build_evidence_metadata,
+            )
+
+        def generate(_request: Any, _decision: Any, _bundle: Any) -> str:
+            nonlocal generated_answer
+            if _decision.route == "page_image_rag":
+                vlm_generator = getattr(self, "vlm_generator", None)
+                if vlm_generator is None:
+                    _bundle.metadata["generation_backend"] = "evidence_only_without_vlm"
+                    generated_answer = _visual_evidence_only_answer(_bundle)
+                    return generated_answer
+                _bundle.metadata["generation_backend"] = str(
+                    getattr(vlm_generator, "name", "visual_generator")
+                )
+                generated_answer = _visual_generator_answer(
+                    vlm_generator, _request, _bundle
+                )
+                return generated_answer
+            if _decision.route == "graph_rag":
+                _bundle.metadata["generation_backend"] = "local_graph_summary"
+                generated_answer = graph_answer_from_evidence(_bundle.items)
+                return generated_answer
+            if _decision.route == "element_rag":
+                _bundle.metadata["generation_backend"] = "local_element_evidence"
+                generated_answer = _element_evidence_answer(_bundle)
+                return generated_answer
+            answer, events = _collect_text_rag_generation(
+                self, message, conv_id, history, kwargs
+            )
+            generation_events.extend(events)
+            generated_answer = answer
+            return answer
+
+        rewrite_generator = getattr(self, "rewrite_generator", None)
+        rewrite = rewrite_generator if callable(rewrite_generator) else None
+
+        execution = execute_controller_turn(
+            _controller_execution_request(self, message),
+            retrieve=retrieve,
+            generate=generate,
+            rewrite=rewrite,
+            agent_trace=[planner_payload],
+        )
+        if generation_events and execution.answer != generated_answer:
+            generation_events = []
+        artifact = (
+            self.build_artifact(understanding)
+            if execution.guardrail_decision.action == "return"
+            else None
+        )
+        return execution, generation_events, artifact
+
     def stream(  # type: ignore
         self, message: str, conv_id: str, history: list, **kwargs  # type: ignore
     ) -> Generator[Document, None, Document]:
@@ -484,105 +494,47 @@ class MaraAgentPipeline(FullQAPipeline):
         )
         yield _mara_event(
             "agent_trace",
-            {
-                "event": "route",
-                "task_type": understanding["task_type"],
-                "modalities": understanding["modalities"],
-                "scope": understanding["scope"],
-                "agent_mode": getattr(self, "agent_mode", "auto") or "auto",
-                "plan": plan,
-            },
-        )
-
-        if _is_thorough(getattr(self, "agent_mode", None)):
-            docs, info = self.retrieve(message, history)
-            if not docs:
-                evidence_metadata = self.build_evidence_metadata(docs, understanding)
-                yield _mara_event(
-                    "agent_trace",
-                    _retrieval_trace(
-                        docs,
-                        evidence_metadata,
-                        getattr(self, "_mara_retrieval_attempts", []),
-                    ),
-                )
-                yield _mara_event(
-                    "agent_trace",
-                    {
-                        "event": "verify",
-                        "result": "insufficient",
-                        "evidence_count": 0,
-                        "decision": "abstain",
-                    },
-                )
-                yield _mara_event("evidence_metadata", evidence_metadata)
-                yield Document(channel="chat", content=MARA_ABSTAIN_MESSAGE)
-                return Document(channel="chat", content=MARA_ABSTAIN_MESSAGE)
-            self._mara_cached_retrieval = (message, list(history), docs, info)
-
-        answer = yield from super().stream(message, conv_id, history, **kwargs)
-        docs = list(getattr(self, "_mara_last_docs", []))
-        evidence_metadata = self.build_evidence_metadata(docs, understanding)
-        verification = _verify_evidence(docs)
-        yield _mara_event(
-            "agent_trace",
-            _retrieval_trace(
-                docs,
-                evidence_metadata,
-                getattr(self, "_mara_retrieval_attempts", []),
+            _route_trace_payload(
+                understanding,
+                getattr(self, "agent_mode", "auto"),
+                plan,
             ),
         )
-        yield _mara_event(
-            "agent_trace",
-            {
-                "event": "verify",
-                "result": verification["result"],
-                "evidence_count": verification["evidence_count"],
-            },
+        planner_payload = planner_trace_payload(
+            understanding,
+            planner=getattr(self, "planner", None),
+            planner_model=getattr(self, "planner_model", None),
+            question=message,
+            allowed_routes=getattr(self, "allowed_routes", None),
         )
-        yield _mara_event("evidence_metadata", evidence_metadata)
+        yield _mara_event("agent_trace", planner_payload)
+        effective_route = _effective_route(self, planner_payload)
+        if effective_route in {
+            "direct",
+            "doc_text",
+            "doc_page_image",
+            "doc_element",
+            "graph_global",
+            "hybrid",
+            "abstain",
+        }:
+            execution, generation_events, artifact = self.execute_controller_route(
+                message,
+                conv_id,
+                history,
+                understanding,
+                planner_payload,
+                kwargs,
+            )
+            return (
+                yield from _route_execution_events(
+                    execution,
+                    generation_events,
+                    artifact,
+                )
+            )
 
-        artifact = self.build_artifact(understanding)
-        if artifact is not None:
-            yield _mara_event("artifact", artifact)
-        return answer
-
-    @staticmethod
-    def build_evidence_metadata(
-        docs: list[RetrievedDocument], understanding: dict[str, Any]
-    ) -> dict[str, Any]:
-        modality_counts: Counter[str] = Counter()
-        page_coverage: list[str] = []
-        source_ids: list[str] = []
-        evidence_ids: list[str] = []
-        evidence = []
-
-        for doc in docs:
-            item = _evidence_item(doc)
-            evidence.append(item)
-            modality = item["element_type"]
-            modality_counts[modality] += 1
-
-            page_label = item["page_label"]
-            if page_label and page_label not in page_coverage:
-                page_coverage.append(page_label)
-
-            file_id = item["file_id"]
-            if file_id and file_id not in source_ids:
-                source_ids.append(file_id)
-
-            evidence_id = item["evidence_id"]
-            if evidence_id:
-                evidence_ids.append(evidence_id)
-
-        return {
-            "requested_modalities": list(understanding.get("modalities", [])),
-            "modality_counts": dict(modality_counts),
-            "page_coverage": page_coverage,
-            "source_ids": source_ids,
-            "evidence_ids": evidence_ids,
-            "evidence": evidence,
-        }
+        return (yield from super().stream(message, conv_id, history, **kwargs))
 
     def build_artifact(self, understanding: dict[str, Any]) -> dict[str, Any] | None:
-        return _build_artifact_for_pipeline(self, understanding)
+        return build_artifact_for_pipeline(self, understanding)

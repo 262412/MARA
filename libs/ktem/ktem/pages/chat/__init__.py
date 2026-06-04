@@ -1,4 +1,3 @@
-import asyncio
 import html
 import json
 import logging
@@ -6,13 +5,13 @@ import os
 import re
 import shutil
 from copy import deepcopy
-from typing import Optional
+from typing import Any
 
 import gradio as gr
 import markdown
 from ktem.app import BasePage
 from ktem.db.models import Conversation, engine
-from ktem.docqa import DocQARequest, DocQARuntime
+from ktem.docqa import DocQARuntime
 from ktem.index.file.ui import File
 from ktem.reasoning.prompt_optimization.mindmap import MINDMAP_HTML_EXPORT_TEMPLATE
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
@@ -26,7 +25,6 @@ from sqlmodel import Session, select
 from theflow.settings import settings as flowsettings
 from theflow.utils.modules import import_dotted_string
 
-from kotaemon.base import Document
 from kotaemon.indices.ingests.files import KH_DEFAULT_FILE_EXTRACTORS
 from kotaemon.indices.qa.utils import strip_think_tag
 
@@ -34,6 +32,11 @@ from ...utils import SUPPORTED_LANGUAGE_MAP, get_file_names_regex, get_urls
 from ...utils.commands import WEB_SEARCH_COMMAND
 from ...utils.hf_papers import get_recommended_papers
 from ...utils.rate_limit import check_rate_limit
+from .chat_docqa_runtime import (
+    build_web_docqa_request,
+    docqa_research_control_inputs,
+    render_docqa_runtime_controls,
+)
 from .chat_knowledge_graph_bindings import (
     bind_knowledge_graph_events,
     subscribe_public_knowledge_graph_events,
@@ -54,14 +57,13 @@ from .generation_store import (
     update_answer,
     update_mindmap,
     update_plot,
-    update_reasoning_state,
 )
 from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
 from .paper_list import PaperListPage
 from .report import ReportIssue
 from .studio_artifacts import (
-    extract_mara_artifact,
+    render_controller_trace_html,
     render_conversation_notebook_update,
     render_notebook_panel_html,
     render_studio_trace_panel,
@@ -480,6 +482,17 @@ function() {
 
 
 class ChatPage(BasePage):
+    chat_settings: Any
+    citation: Any
+    docqa_controller_mode: Any
+    docqa_planner_model: Any
+    docqa_route_policy: Any
+    docqa_verification_mode: Any
+    language: Any
+    model_type: Any
+    reasoning_type: Any
+    use_mindmap: Any
+
     def __init__(self, app):
         self._app = app
         self._indices_input = []
@@ -732,33 +745,11 @@ class ChatPage(BasePage):
                             elem_id="page-metadata-strip",
                         )
 
-                        with gr.Column(
-                            elem_id="reader-hidden-settings", visible=False
-                        ) as self.chat_settings:
-                            reasoning_setting = (
-                                self._app.default_settings.reasoning.settings["use"]
-                            )
-                            language_setting = (
-                                self._app.default_settings.reasoning.settings["lang"]
-                            )
-                            self.reasoning_type = gr.Dropdown(
-                                choices=reasoning_setting.choices[:REASONING_LIMITS],
-                                value=reasoning_setting.value,
-                                container=False,
-                                show_label=False,
-                                visible=False,
-                            )
-                            self.language = gr.Dropdown(
-                                choices=language_setting.choices,
-                                value=language_setting.value,
-                                container=False,
-                                show_label=False,
-                                visible=False,
-                            )
-                            # Keep advanced settings as internal defaults for pipeline compatibility.
-                            self.model_type = gr.State(value=DEFAULT_SETTING)
-                            self.citation = gr.State(value=DEFAULT_SETTING)
-                            self.use_mindmap = gr.State(value=DEFAULT_SETTING)
+                        render_docqa_runtime_controls(
+                            self,
+                            reasoning_limits=REASONING_LIMITS,
+                            default_setting=DEFAULT_SETTING,
+                        )
 
             with gr.Column(
                 scale=INFO_PANEL_SCALES[False], elem_id="chat-info-panel"
@@ -1955,7 +1946,6 @@ class ChatPage(BasePage):
                 "",
                 [],
             )
-
         rerun_history = chat_history
         if rerun_history and rerun_history[-1][0] == last_question:
             rerun_history = rerun_history[:-1] + [(last_question, None)]
@@ -1980,6 +1970,7 @@ class ChatPage(BasePage):
             page_number,
             "page",
             selected_page_text,
+            *("", "llm", "auto", "light", "", None),
             *selecteds,
         ):
             final_output = output
@@ -2324,6 +2315,7 @@ class ChatPage(BasePage):
                     self.chat_panel.qa_scope,
                     self._selected_page_text,
                     self._selected_graph_context,
+                    *docqa_research_control_inputs(self),
                     self.state_plot_panel,
                 ]
                 + self._indices_input,
@@ -3303,6 +3295,10 @@ class ChatPage(BasePage):
         qa_scope: str,
         selected_page_text: str,
         selected_graph_context: str,
+        controller_mode: str = "llm",
+        route_policy: str = "auto",
+        verification_mode: str = "light",
+        planner_model: str = "",
         *selecteds,
     ):
         """Create the pipeline from settings
@@ -3316,24 +3312,15 @@ class ChatPage(BasePage):
         Returns:
             - the pipeline objects
         """
-        try:
-            graph_context = (
-                json.loads(selected_graph_context) if selected_graph_context else {}
-            )
-            if not isinstance(graph_context, dict):
-                graph_context = {}
-        except Exception:
-            graph_context = {}
-
-        request = DocQARequest(
+        request = build_web_docqa_request(
             prompt="",
             selected_inputs=self._build_selected_input_map(*selecteds),
-            active_file_id=active_file_id or "",
-            active_file_name=active_file_name or "",
-            qa_scope=str(qa_scope or "page").replace("-", "_"),
-            page_number=max(1, int(page_number or 1)),
-            selected_text=(selected_page_text or "").strip(),
-            graph_context=graph_context,
+            active_file_id=active_file_id,
+            active_file_name=active_file_name,
+            qa_scope=qa_scope,
+            page_number=page_number,
+            selected_text=selected_page_text,
+            selected_graph_context=selected_graph_context,
             settings=deepcopy(settings),
             state=deepcopy(state),
             reasoning_type=session_reasoning_type,
@@ -3343,6 +3330,10 @@ class ChatPage(BasePage):
             language=session_language,
             command_state=command_state,
             user_id=user_id,
+            controller_mode=controller_mode,
+            route_policy=route_policy,
+            verification_mode=verification_mode,
+            planner_model=planner_model,
         )
         return self.docqa.create_pipeline(request)
 
@@ -3365,6 +3356,10 @@ class ChatPage(BasePage):
         qa_scope,
         selected_page_text,
         selected_graph_context,
+        controller_mode,
+        route_policy,
+        verification_mode,
+        planner_model,
         state_plot_panel,
         *selecteds,
         request: gr.Request | None = None,
@@ -3399,28 +3394,6 @@ class ChatPage(BasePage):
             last_question=str(chat_input or ""),
             preserved_history=preserved_history,
         )
-
-        queue: asyncio.Queue[Optional[dict]] = asyncio.Queue()
-
-        pipeline, reasoning_state = self.create_pipeline(
-            settings,
-            reasoning_type,
-            llm_type,
-            use_mind_map,
-            use_citation,
-            language,
-            chat_state,
-            command_state,
-            user_id,
-            active_file_id,
-            active_file_name,
-            page_number,
-            qa_scope,
-            selected_page_text,
-            selected_graph_context,
-            *selecteds,
-        )
-        pipeline.set_output_queue(queue)
 
         text, refs, plot = "", "", state_plot_panel
         plot_gr = self._json_to_plot(state_plot_panel)
@@ -3476,88 +3449,89 @@ class ChatPage(BasePage):
         )
 
         try:
-            for response in pipeline.stream(
-                chat_input, conversation_id, preserved_history
-            ):
-                if not isinstance(response, Document):
-                    continue
+            runtime_request = build_web_docqa_request(
+                prompt=str(chat_input or ""),
+                conversation_id=conversation_id,
+                history=preserved_history,
+                selected_inputs=self._build_selected_input_map(*selecteds),
+                settings=settings,
+                reasoning_type=reasoning_type,
+                llm=llm_type,
+                use_mindmap=use_mind_map,
+                use_citation=use_citation,
+                language=language,
+                state=chat_state,
+                command_state=command_state,
+                user_id=user_id,
+                active_file_id=active_file_id,
+                active_file_name=active_file_name,
+                page_number=page_number,
+                qa_scope=qa_scope,
+                selected_text=selected_page_text,
+                selected_graph_context=selected_graph_context,
+                controller_mode=controller_mode,
+                route_policy=route_policy,
+                verification_mode=verification_mode,
+                planner_model=planner_model,
+            )
+            response = self.docqa.run_turn(runtime_request)
+            text = response.answer or ""
+            refs = response.references_html or ""
+            mindmap_html = response.mindmap_html or ""
+            plot = response.plot if response.plot is not None else state_plot_panel
+            plot_gr = self._json_to_plot(plot)
+            artifact_payload = response.artifact
+            chat_state = response.state or chat_state
+            chat_history_full = response.messages or preserved_history + [
+                (chat_input, text or msg_placeholder)
+            ]
 
-                if response.channel is None:
-                    continue
+            answer_html = self._generate_answer_panel_html(
+                preserved_history, chat_input, text, is_thinking=False
+            )
+            update_answer(
+                request_key,
+                answer_text=text,
+                answer_html=answer_html,
+                chat_history=chat_history_full,
+            )
+            update_mindmap(request_key, mindmap_html)
+            update_plot(request_key, plot)
 
-                if response.channel == "chat":
-                    if response.content is None:
-                        text = ""
-                    else:
-                        text += response.content
+            trace_html = self._render_reasoning_trace_html(
+                chat_input,
+                refs,
+                answer_html,
+                response.active_file_id or active_file_id or "",
+                response.page_number or normalized_page_number,
+                artifact_payload,
+            ) + render_controller_trace_html(
+                route_decision=response.route_decision,
+                retrieve_decision=response.retrieve_decision,
+                verify_decision=response.verify_decision,
+                evidence_bundle=response.evidence_bundle,
+            )
 
-                if response.channel == "info":
-                    if response.content is None:
-                        refs = ""
-                        mindmap_html = ""
-                    else:
-                        refs += response.content
-                        if "markmap" in response.content:
-                            mindmap_html += response.content
-
-                if response.channel == "plot":
-                    # Keep the knowledge graph panel stable during answer streaming.
-                    plot = state_plot_panel
-                    plot_gr = self._json_to_plot(state_plot_panel)
-                artifact_payload = extract_mara_artifact(response) or artifact_payload
-
-                chat_state[pipeline.get_info()["id"]] = reasoning_state["pipeline"]
-                update_reasoning_state(request_key, reasoning_state["pipeline"])
-
-                answer_html = self._generate_answer_panel_html(
-                    preserved_history, chat_input, text, is_thinking=(not text)
-                )
-                chat_history_full = preserved_history + [
-                    (chat_input, text or msg_placeholder)
-                ]
-
-                update_answer(
-                    request_key,
-                    answer_text=text,
-                    answer_html=answer_html,
-                    chat_history=chat_history_full,
-                )
-                update_mindmap(request_key, mindmap_html)
-                update_plot(request_key, plot)
-
-                active_view = is_active_view()
-                yield (
-                    chat_history_full if active_view else gr.skip(),
-                    mindmap_html if active_view else gr.skip(),
-                    plot_gr if active_view else gr.skip(),
-                    plot,
-                    chat_state,
-                    answer_html if active_view else gr.skip(),
-                    self._render_citations_card_html(refs)
-                    if active_view
-                    else gr.skip(),
-                    self._render_reasoning_trace_html(
-                        chat_input,
-                        refs,
-                        answer_html,
-                        active_file_id or "",
-                        normalized_page_number,
-                        artifact_payload,
-                    )
-                    if active_view
-                    else gr.skip(),
-                    normalized_page_number,
-                    active_file_id or "",
-                    str(chat_input or ""),
-                    mindmap_html,
-                    answer_html,
-                    chat_history_full,
-                )
+            active_view = is_active_view()
+            yield (
+                chat_history_full if active_view else gr.skip(),
+                mindmap_html if active_view else gr.skip(),
+                plot_gr if active_view else gr.skip(),
+                plot,
+                chat_state,
+                answer_html if active_view else gr.skip(),
+                self._render_citations_card_html(refs) if active_view else gr.skip(),
+                trace_html if active_view else gr.skip(),
+                response.page_number or normalized_page_number,
+                response.active_file_id or active_file_id or "",
+                str(chat_input or ""),
+                mindmap_html,
+                answer_html,
+                chat_history_full,
+            )
         except ValueError as e:
-            logger.warning("Chat pipeline ValueError: %s", e)
+            logger.warning("Chat runtime ValueError: %s", e)
             mark_error(request_key, str(e))
-
-        if not text:
             empty_msg = getattr(
                 flowsettings,
                 "KH_CHAT_EMPTY_MSG_PLACEHOLDER",

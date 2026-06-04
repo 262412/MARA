@@ -1,6 +1,6 @@
 import json
 
-from benchmark.manifest import load_manifest
+from benchmark.manifest import DEFAULT_MARA_ROUTES, load_manifest
 from benchmark.normalizers import (
     normalize_financebench_manifest,
     normalize_format_robustness_manifest,
@@ -225,6 +225,95 @@ def test_load_v2_manifest_normalizes_route_matrix_defaults_and_aliases(tmp_path)
             "artifact_type": None,
         },
     ]
+
+
+def test_load_v2_manifest_preserves_controller_route_fields(tmp_path):
+    (tmp_path / "doc.pdf").write_text("pdf", encoding="utf-8")
+    manifest_path = tmp_path / "v2-controller-routes.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "documents": [{"document_id": "doc", "path": "doc.pdf"}],
+                "examples": [
+                    {"document_id": "doc", "question": "What is it?", "answer": "pdf"}
+                ],
+                "routes": [
+                    {
+                        "route_id": "controller_llm",
+                        "engine": "docqa_runtime",
+                        "controller_mode": "llm",
+                        "route_policy": "hybrid",
+                        "verification_mode": "strict",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    bundle = load_manifest(manifest_path)
+
+    assert bundle.routes[0]["controller_mode"] == "llm"
+    assert bundle.routes[0]["route_policy"] == "hybrid"
+    assert bundle.routes[0]["verification_mode"] == "strict"
+
+
+def test_load_v2_manifest_preserves_planner_model_and_allowed_routes(tmp_path):
+    (tmp_path / "doc.pdf").write_text("pdf", encoding="utf-8")
+    manifest_path = tmp_path / "v2-planner-routes.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "documents": [{"document_id": "doc", "path": "doc.pdf"}],
+                "examples": [
+                    {"document_id": "doc", "question": "What is it?", "answer": "pdf"}
+                ],
+                "routes": [
+                    {
+                        "route_id": "controller_llm",
+                        "engine": "docqa_runtime",
+                        "planner_model": "gpt-4o-mini",
+                        "allowed_routes": ["doc_text", "graph_global"],
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    route = load_manifest(manifest_path).routes[0]
+
+    assert route["planner_model"] == "gpt-4o-mini"
+    assert route["allowed_routes"] == ["doc_text", "graph_global"]
+
+
+def test_default_mara_routes_cover_full_route_ablation_matrix():
+    route_ids = [route["route_id"] for route in DEFAULT_MARA_ROUTES]
+
+    assert route_ids == [
+        "direct_answer",
+        "text_rag",
+        "page_image_rag_smoke",
+        "page_image_rag_vlm",
+        "element_rag",
+        "graph_rag_local",
+        "graph_rag_global",
+        "hybrid_rag",
+        "controller_auto",
+        "crag_guarded",
+    ]
+    assert DEFAULT_MARA_ROUTES[0]["route_policy"] == "direct"
+    assert DEFAULT_MARA_ROUTES[2]["allowed_routes"] == ["doc_page_image"]
+    assert DEFAULT_MARA_ROUTES[3]["generator_backend"] == "visual_generator"
+    assert DEFAULT_MARA_ROUTES[4]["allowed_routes"] == ["doc_element"]
+    assert DEFAULT_MARA_ROUTES[5]["graph_mode"] == "local"
+    assert DEFAULT_MARA_ROUTES[6]["graph_mode"] == "global"
+    assert DEFAULT_MARA_ROUTES[8]["controller_mode"] == "llm"
+    assert DEFAULT_MARA_ROUTES[9]["verification_mode"] == "strict"
 
 
 def test_load_v1_manifest_sets_v2_defaults(tmp_path):
