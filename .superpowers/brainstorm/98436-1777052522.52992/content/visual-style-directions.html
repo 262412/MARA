@@ -1,0 +1,455 @@
+<style>
+  .style-board {
+    display: grid;
+    gap: 18px;
+  }
+
+  .style-intro {
+    max-width: 860px;
+  }
+
+  .style-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .style-card {
+    border: 1px solid #d7dde6;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    cursor: pointer;
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  }
+
+  .style-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  }
+
+  .style-card.selected {
+    border-color: #0f766e;
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16), 0 14px 32px rgba(15, 23, 42, 0.12);
+  }
+
+  .mini-app {
+    height: 310px;
+    padding: 12px;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 10px;
+  }
+
+  .mini-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mini-brand {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+  }
+
+  .mini-tabs {
+    margin-left: auto;
+    display: flex;
+    gap: 5px;
+  }
+
+  .mini-tab {
+    width: 46px;
+    height: 15px;
+    border-radius: 999px;
+  }
+
+  .mini-grid {
+    display: grid;
+    grid-template-columns: 0.9fr 1.15fr 0.9fr;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .mini-panel {
+    border-radius: 7px;
+    padding: 8px;
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: 7px;
+  }
+
+  .mini-line {
+    height: 7px;
+    border-radius: 999px;
+  }
+
+  .mini-line.short {
+    width: 58%;
+  }
+
+  .mini-line.mid {
+    width: 76%;
+  }
+
+  .mini-doc {
+    height: 80px;
+    border-radius: 6px;
+    display: grid;
+    gap: 5px;
+    padding: 8px;
+  }
+
+  .mini-graph {
+    height: 110px;
+    position: relative;
+    border-radius: 7px;
+  }
+
+  .node {
+    position: absolute;
+    border-radius: 999px;
+  }
+
+  .mini-input {
+    height: 34px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 7px;
+  }
+
+  .card-copy {
+    padding: 14px 15px 16px;
+    border-top: 1px solid #e5e7eb;
+  }
+
+  .card-copy h3 {
+    margin: 0 0 7px;
+    font-size: 17px;
+  }
+
+  .card-copy p {
+    margin: 0;
+    color: #4b5563;
+    line-height: 1.5;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 11px;
+  }
+
+  .tag {
+    font-size: 12px;
+    border-radius: 999px;
+    padding: 4px 8px;
+    background: #f1f5f9;
+    color: #334155;
+  }
+
+  .option-a .mini-app {
+    background: #f7f9fb;
+    color: #172033;
+  }
+
+  .option-a .mini-brand {
+    background: linear-gradient(135deg, #0f766e, #2563eb);
+  }
+
+  .option-a .mini-tab {
+    background: #dbe3ee;
+  }
+
+  .option-a .mini-tab:first-child {
+    background: #0f766e;
+  }
+
+  .option-a .mini-panel,
+  .option-a .mini-input {
+    background: #ffffff;
+    border: 1px solid #d8e0ea;
+  }
+
+  .option-a .mini-line {
+    background: #c6d1dd;
+  }
+
+  .option-a .mini-doc {
+    background: #f8fafc;
+    border: 1px solid #d8e0ea;
+  }
+
+  .option-a .mini-graph {
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+  }
+
+  .option-a .node {
+    background: #0f766e;
+  }
+
+  .option-b .mini-app {
+    background: #10151e;
+    color: #f8fafc;
+  }
+
+  .option-b .mini-brand {
+    background: linear-gradient(135deg, #22c55e, #38bdf8);
+  }
+
+  .option-b .mini-tab {
+    background: #263244;
+  }
+
+  .option-b .mini-tab:first-child {
+    background: #22c55e;
+  }
+
+  .option-b .mini-panel,
+  .option-b .mini-input {
+    background: #171f2d;
+    border: 1px solid #334155;
+  }
+
+  .option-b .mini-line {
+    background: #48576b;
+  }
+
+  .option-b .mini-doc {
+    background: #0f172a;
+    border: 1px solid #334155;
+  }
+
+  .option-b .mini-graph {
+    background: radial-gradient(circle at 30% 30%, rgba(34, 197, 94, 0.2), transparent 40%), #0f172a;
+    border: 1px solid #2563eb;
+  }
+
+  .option-b .node {
+    background: #38bdf8;
+  }
+
+  .option-c .mini-app {
+    background: #fbfaf6;
+    color: #243126;
+  }
+
+  .option-c .mini-brand {
+    background: linear-gradient(135deg, #166534, #d97706);
+  }
+
+  .option-c .mini-tab {
+    background: #e8e0d2;
+  }
+
+  .option-c .mini-tab:first-child {
+    background: #166534;
+  }
+
+  .option-c .mini-panel,
+  .option-c .mini-input {
+    background: #fffefb;
+    border: 1px solid #ded6c7;
+  }
+
+  .option-c .mini-line {
+    background: #cfc5b2;
+  }
+
+  .option-c .mini-doc {
+    background: #fffaf0;
+    border: 1px solid #e5d3ad;
+  }
+
+  .option-c .mini-graph {
+    background: #f0fdf4;
+    border: 1px solid #bbd7bd;
+  }
+
+  .option-c .node {
+    background: #d97706;
+  }
+
+  .recommendation {
+    border: 1px solid #b7d7d2;
+    background: #f0fdfa;
+    border-radius: 8px;
+    padding: 16px 18px;
+    color: #134e4a;
+  }
+
+  @media (max-width: 980px) {
+    .style-cards {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="style-board">
+  <div class="style-intro">
+    <h2>Slides / Kotaemon UI 风格方向</h2>
+    <p class="subtitle">这是一个文档 QA、文件管理、页面预览、知识图谱和模型设置都很重的工作台。重点不是“炫”，而是让用户长时间阅读、检索、对照引用和管理配置时保持清楚、可信、低疲劳。</p>
+  </div>
+
+  <div class="style-cards">
+    <div class="style-card option-a" data-choice="a" onclick="toggleSelect(this)">
+      <div class="mini-app">
+        <div class="mini-top">
+          <div class="mini-brand"></div>
+          <strong>Slides</strong>
+          <div class="mini-tabs">
+            <div class="mini-tab"></div>
+            <div class="mini-tab"></div>
+            <div class="mini-tab"></div>
+          </div>
+        </div>
+        <div class="mini-grid">
+          <div class="mini-panel">
+            <div class="mini-line mid"></div>
+            <div class="mini-line short"></div>
+            <div class="mini-doc">
+              <div class="mini-line"></div>
+              <div class="mini-line mid"></div>
+              <div class="mini-line short"></div>
+            </div>
+          </div>
+          <div class="mini-panel">
+            <div class="mini-line"></div>
+            <div class="mini-line mid"></div>
+            <div class="mini-line"></div>
+            <div class="mini-line short"></div>
+            <div class="mini-doc"></div>
+          </div>
+          <div class="mini-panel">
+            <div class="mini-graph">
+              <span class="node" style="left: 42%; top: 14%; width: 22px; height: 22px;"></span>
+              <span class="node" style="left: 18%; top: 48%; width: 16px; height: 16px;"></span>
+              <span class="node" style="right: 20%; top: 50%; width: 16px; height: 16px;"></span>
+              <span class="node" style="left: 44%; bottom: 13%; width: 14px; height: 14px;"></span>
+            </div>
+          </div>
+        </div>
+        <div class="mini-input"><div class="mini-line mid"></div></div>
+      </div>
+      <div class="card-copy">
+        <h3>A. 精准研究工作台</h3>
+        <p>浅色中性底，深墨文字，青绿作为主操作，蓝色用于链接和引用。最适合默认方案：专业、清楚、适合长时间阅读和管理。</p>
+        <div class="tags">
+          <span class="tag">推荐默认</span>
+          <span class="tag">高可读性</span>
+          <span class="tag">低学习成本</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="style-card option-b" data-choice="b" onclick="toggleSelect(this)">
+      <div class="mini-app">
+        <div class="mini-top">
+          <div class="mini-brand"></div>
+          <strong>Slides</strong>
+          <div class="mini-tabs">
+            <div class="mini-tab"></div>
+            <div class="mini-tab"></div>
+            <div class="mini-tab"></div>
+          </div>
+        </div>
+        <div class="mini-grid">
+          <div class="mini-panel">
+            <div class="mini-line mid"></div>
+            <div class="mini-line short"></div>
+            <div class="mini-doc">
+              <div class="mini-line"></div>
+              <div class="mini-line mid"></div>
+              <div class="mini-line short"></div>
+            </div>
+          </div>
+          <div class="mini-panel">
+            <div class="mini-line"></div>
+            <div class="mini-line mid"></div>
+            <div class="mini-line"></div>
+            <div class="mini-line short"></div>
+            <div class="mini-doc"></div>
+          </div>
+          <div class="mini-panel">
+            <div class="mini-graph">
+              <span class="node" style="left: 42%; top: 14%; width: 22px; height: 22px;"></span>
+              <span class="node" style="left: 18%; top: 48%; width: 16px; height: 16px;"></span>
+              <span class="node" style="right: 20%; top: 50%; width: 16px; height: 16px;"></span>
+              <span class="node" style="left: 44%; bottom: 13%; width: 14px; height: 14px;"></span>
+            </div>
+          </div>
+        </div>
+        <div class="mini-input"><div class="mini-line mid"></div></div>
+      </div>
+      <div class="card-copy">
+        <h3>B. 深色知识图谱实验室</h3>
+        <p>深色底加荧光青绿和天蓝，知识图谱很有氛围。适合作为暗色主题，但默认使用会让文档阅读和设置页更累。</p>
+        <div class="tags">
+          <span class="tag">沉浸感强</span>
+          <span class="tag">图谱突出</span>
+          <span class="tag">默认风险较高</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="style-card option-c" data-choice="c" onclick="toggleSelect(this)">
+      <div class="mini-app">
+        <div class="mini-top">
+          <div class="mini-brand"></div>
+          <strong>Slides</strong>
+          <div class="mini-tabs">
+            <div class="mini-tab"></div>
+            <div class="mini-tab"></div>
+            <div class="mini-tab"></div>
+          </div>
+        </div>
+        <div class="mini-grid">
+          <div class="mini-panel">
+            <div class="mini-line mid"></div>
+            <div class="mini-line short"></div>
+            <div class="mini-doc">
+              <div class="mini-line"></div>
+              <div class="mini-line mid"></div>
+              <div class="mini-line short"></div>
+            </div>
+          </div>
+          <div class="mini-panel">
+            <div class="mini-line"></div>
+            <div class="mini-line mid"></div>
+            <div class="mini-line"></div>
+            <div class="mini-line short"></div>
+            <div class="mini-doc"></div>
+          </div>
+          <div class="mini-panel">
+            <div class="mini-graph">
+              <span class="node" style="left: 42%; top: 14%; width: 22px; height: 22px;"></span>
+              <span class="node" style="left: 18%; top: 48%; width: 16px; height: 16px;"></span>
+              <span class="node" style="right: 20%; top: 50%; width: 16px; height: 16px;"></span>
+              <span class="node" style="left: 44%; bottom: 13%; width: 14px; height: 14px;"></span>
+            </div>
+          </div>
+        </div>
+        <div class="mini-input"><div class="mini-line mid"></div></div>
+      </div>
+      <div class="card-copy">
+        <h3>C. 温和阅读资料库</h3>
+        <p>温暖纸张底、森林绿和琥珀强调。适合偏“个人知识库 / 阅读器”的产品气质，但对企业管理和模型设置会略显软。</p>
+        <div class="tags">
+          <span class="tag">亲和</span>
+          <span class="tag">阅读感</span>
+          <span class="tag">工程感较弱</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="recommendation">
+    <strong>我的初步建议：</strong>以 A 做默认方向，保留 B 作为暗色主题的灵感，把 C 的“阅读舒适度”借到文档预览和引用卡片里。这样不会把整个产品做成单一深色或单一蓝绿色，也更贴合你的项目：RAG 工作台、文档预览、知识图谱和 CLI/Web 共用的专业工具。
+  </div>
+</div>
