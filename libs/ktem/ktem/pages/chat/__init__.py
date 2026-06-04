@@ -2091,22 +2091,6 @@ class ChatPage(BasePage):
                 self.chat_panel.pdf_preview_notice,
             ],
             show_progress="hidden",
-        ).then(
-            fn=self.refresh_page_context_view,
-            inputs=[
-                self._active_file_id,
-                self._active_file_name,
-                self._active_file_path,
-                self.chat_panel.page_number,
-                self._active_file_total_pages,
-                self.page_strip_search,
-            ],
-            outputs=[
-                self.page_strip_file_summary,
-                self.page_thumbnail_strip,
-                self.page_metadata_strip,
-            ],
-            show_progress="hidden",
         )
 
         self.chat_panel.prev_page_btn.click(
