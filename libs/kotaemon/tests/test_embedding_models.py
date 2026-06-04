@@ -153,10 +153,19 @@ def test_lccohere_embeddings(langchain_cohere_embedding_call):
 
 
 @skip_when_fastembed_not_installed
-def test_fastembed_embeddings():
+@patch("fastembed.TextEmbedding")
+def test_fastembed_embeddings(text_embedding_cls):
+    text_embedding = text_embedding_cls.return_value
+    text_embedding.embed.return_value = [[1.0, 2.1, 3.2]]
+
     model = FastEmbedEmbeddings()
     output = model("Hello World")
+
     assert_embedding_result(output)
+    text_embedding_cls.assert_called_once_with(model_name="BAAI/bge-small-en-v1.5")
+    text_embedding.embed.assert_called_once_with(
+        ["Hello World"], batch_size=256, parallel=None
+    )
 
 
 voyage_output_mock = Mock()

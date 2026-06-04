@@ -11,8 +11,8 @@ The two source readings used for this positioning are:
 - `C:\Users\22826\Downloads\deep-research-report (1).md`
 - `C:\Users\22826\Downloads\MARA\2510.15253v3.pdf`
 
-The A1 paper is *Scaling Beyond Context: A Survey of Multimodal
-Retrieval-Augmented Generation for Document Understanding*. It frames document
+The A1 paper is _Scaling Beyond Context: A Survey of Multimodal
+Retrieval-Augmented Generation for Document Understanding_. It frames document
 RAG as a multimodal document understanding problem, not a simple text chunking
 problem. Its central message is that OCR-only pipelines lose structure, native
 multimodal LLMs struggle with very long document context, and robust document
@@ -85,14 +85,14 @@ open challenges. That taxonomy maps directly onto MARA's codebase.
 
 The research gap relevant to MARA is the integration gap:
 
-| Prior direction | What it helps with | What remains incomplete for MARA's target |
-| --- | --- | --- |
-| Text-only RAG | Simple passage retrieval and grounded generation | Loses tables, charts, formulas, layout, page images, and visual evidence |
-| Long-context MLLMs | Directly reading larger contexts | Context limits, cost, hallucination, and weak evidence localization remain |
-| Visual/page retrievers | Better retrieval for visually rich pages | Often weak on answer verification, source workflow, graph exploration, and local deployment |
-| GraphRAG | Global themes, entity relations, query-focused summarization | Often text-heavy and not always aligned with page/element-level evidence |
-| Agentic RAG | Dynamic routing, query decomposition, reflection, retry | Coordination overhead and lack of unified faithfulness/cost evaluation |
-| Citation systems | Surface-level source attribution | Citation is not the same as claim support |
+| Prior direction        | What it helps with                                           | What remains incomplete for MARA's target                                                   |
+| ---------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Text-only RAG          | Simple passage retrieval and grounded generation             | Loses tables, charts, formulas, layout, page images, and visual evidence                    |
+| Long-context MLLMs     | Directly reading larger contexts                             | Context limits, cost, hallucination, and weak evidence localization remain                  |
+| Visual/page retrievers | Better retrieval for visually rich pages                     | Often weak on answer verification, source workflow, graph exploration, and local deployment |
+| GraphRAG               | Global themes, entity relations, query-focused summarization | Often text-heavy and not always aligned with page/element-level evidence                    |
+| Agentic RAG            | Dynamic routing, query decomposition, reflection, retry      | Coordination overhead and lack of unified faithfulness/cost evaluation                      |
+| Citation systems       | Surface-level source attribution                             | Citation is not the same as claim support                                                   |
 
 Therefore the thesis gap is not "RAG does not exist." The gap is that document
 RAG systems still struggle to combine multimodal evidence retrieval, adaptive
@@ -149,15 +149,15 @@ The current repository already contains the main surfaces needed for this
 research line. The Week 1 development task is to map and freeze these surfaces,
 not to add unrelated functionality.
 
-| Area | Current code surface | Research role |
-| --- | --- | --- |
-| UI | `libs/ktem/ktem/pages/chat/__init__.py`, `chat_panel.py`, `page_preview.py`, `studio_artifacts.py`, file index UI modules | Workbench interface for chat, source selection, citations, preview, graph, and artifacts |
-| Runtime | `libs/ktem/ktem/docqa/runtime.py`, `_runtime_models.py`, `_runtime_mara.py`; `libs/slide_cli/slide_cli/docqa_cli.py` | Shared Web/CLI DocQA execution surface and persisted request/response state |
-| Index | `libs/ktem/ktem/index/file/index.py`, `pipelines.py`; `libs/kotaemon/kotaemon/indices/vectorindex.py`, `elements.py`, `formulas.py` | File records, source/index tables, chunking, vector indexing, element metadata |
-| Retriever | `DocumentRetrievalPipeline`, `VectorRetrieval`, `retrieval_quality.py`, local and LLM rerankers, `multimodal.py` | Evidence retrieval, reranking, query modality routing, optional multimodal plugin decisions |
-| Agent | `libs/ktem/ktem/reasoning/mara.py`, plus `simple.py`, `react.py`, `rewoo.py` | MARA query understanding, modality planning, fast/thorough route, retry, trace, abstention |
-| Graph | `knowledge_graph_service.py`, `knowledge_graph_builder.py`, `knowledge_graph_renderer.py`, `ktem/docqa/knowledge_graph.py`, `index/file/graph/*` | Conversation graph, mind map rendering, graph-source state, GraphRAG-style retrieval options |
-| Benchmark | `benchmark/README.md`, `schemas.py`, `manifest.py`, `runner.py`, `engines.py`, `metrics.py`, `evidence_metadata.py` | Route matrix, direct-paste/oracle/DocQA/MARA ablations, grounding and modality metrics |
+| Area      | Current code surface                                                                                                                             | Research role                                                                                |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| UI        | `libs/ktem/ktem/pages/chat/__init__.py`, `chat_panel.py`, `page_preview.py`, `studio_artifacts.py`, file index UI modules                        | Workbench interface for chat, source selection, citations, preview, graph, and artifacts     |
+| Runtime   | `libs/ktem/ktem/docqa/runtime.py`, `_runtime_models.py`, `_runtime_mara.py`; `libs/slide_cli/slide_cli/docqa_cli.py`                             | Shared Web/CLI DocQA execution surface and persisted request/response state                  |
+| Index     | `libs/ktem/ktem/index/file/index.py`, `pipelines.py`; `libs/kotaemon/kotaemon/indices/vectorindex.py`, `elements.py`, `formulas.py`              | File records, source/index tables, chunking, vector indexing, element metadata               |
+| Retriever | `DocumentRetrievalPipeline`, `VectorRetrieval`, `retrieval_quality.py`, local and LLM rerankers, `multimodal.py`                                 | Evidence retrieval, reranking, query modality routing, optional multimodal plugin decisions  |
+| Agent     | `libs/ktem/ktem/reasoning/mara.py`, plus `simple.py`, `react.py`, `rewoo.py`                                                                     | MARA query understanding, modality planning, fast/thorough route, retry, trace, abstention   |
+| Graph     | `knowledge_graph_service.py`, `knowledge_graph_builder.py`, `knowledge_graph_renderer.py`, `ktem/docqa/knowledge_graph.py`, `index/file/graph/*` | Conversation graph, mind map rendering, graph-source state, GraphRAG-style retrieval options |
+| Benchmark | `benchmark/README.md`, `schemas.py`, `manifest.py`, `runner.py`, `engines.py`, `metrics.py`, `evidence_metadata.py`                              | Route matrix, direct-paste/oracle/DocQA/MARA ablations, grounding and modality metrics       |
 
 This map shows that the project already has enough structure for a research
 prototype. The risk is not lack of features. The risk is unclear boundaries:

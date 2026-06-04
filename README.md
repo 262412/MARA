@@ -225,11 +225,11 @@ In source mode, root [flowsettings.py](flowsettings.py) is the runtime settings 
 
 The repository includes a multi-stage [Dockerfile](Dockerfile):
 
-| Target | Purpose |
-| --- | --- |
-| `lite` | Baseline Web UI / DocQA runtime |
-| `full` | Adds LibreOffice, Tesseract, `unstructured`, and other document-processing dependencies |
-| `ollama` | Extends `full` with Ollama and pulls `nomic-embed-text` |
+| Target   | Purpose                                                                                 |
+| -------- | --------------------------------------------------------------------------------------- |
+| `lite`   | Baseline Web UI / DocQA runtime                                                         |
+| `full`   | Adds LibreOffice, Tesseract, `unstructured`, and other document-processing dependencies |
+| `ollama` | Extends `full` with Ollama and pulls `nomic-embed-text`                                 |
 
 Build:
 
@@ -261,23 +261,23 @@ Optional startup modes:
 
 `MARA` and `MARA-cli` point to the same entrypoint. The current public top-level commands are:
 
-| Command | Purpose |
-| --- | --- |
-| `MARA app` | Packaged app initialization, health checks, and Web UI launch |
-| `MARA docqa` | Document QA, indexing, sessions, notes, sources, and artifacts |
-| `MARA model` | Model routing config, provider checks, and one routed run |
-| `MARA platform` | Codex / Claude Code support asset installation and validation |
-| `MARA doctor` | Top-level MARA agent runtime and provider checks |
-| `MARA inspect` | Inspect one slide deck |
-| `MARA read-slide` | Read one slide summary |
-| `MARA extract` | Extract deck or slide text |
-| `MARA search` | Search deck summaries |
-| `MARA review` | Run deterministic deck review heuristics |
-| `MARA export-pdf` | Export a deck to PDF |
-| `MARA run` | Execute one high-permission deck workflow |
-| `MARA apply` | Apply a saved session patch |
-| `MARA chat` / `sessions` / `resume` | Interactive deck-agent sessions |
-| `MARA files` / `read` / `write` / `delete` / `shell` | Explicit workspace file and shell operations |
+| Command                                              | Purpose                                                        |
+| ---------------------------------------------------- | -------------------------------------------------------------- |
+| `MARA app`                                           | Packaged app initialization, health checks, and Web UI launch  |
+| `MARA docqa`                                         | Document QA, indexing, sessions, notes, sources, and artifacts |
+| `MARA model`                                         | Model routing config, provider checks, and one routed run      |
+| `MARA platform`                                      | Codex / Claude Code support asset installation and validation  |
+| `MARA doctor`                                        | Top-level MARA agent runtime and provider checks               |
+| `MARA inspect`                                       | Inspect one slide deck                                         |
+| `MARA read-slide`                                    | Read one slide summary                                         |
+| `MARA extract`                                       | Extract deck or slide text                                     |
+| `MARA search`                                        | Search deck summaries                                          |
+| `MARA review`                                        | Run deterministic deck review heuristics                       |
+| `MARA export-pdf`                                    | Export a deck to PDF                                           |
+| `MARA run`                                           | Execute one high-permission deck workflow                      |
+| `MARA apply`                                         | Apply a saved session patch                                    |
+| `MARA chat` / `sessions` / `resume`                  | Interactive deck-agent sessions                                |
+| `MARA files` / `read` / `write` / `delete` / `shell` | Explicit workspace file and shell operations                   |
 
 #### DocQA Mainline
 
@@ -384,17 +384,17 @@ Platform assets install the repository's MARA skills, commands, and support docs
 
 ### Architecture And Layout
 
-| Path | Purpose |
-| --- | --- |
-| [app.py](app.py) | Source-mode Gradio Web UI entrypoint |
-| [sso_app.py](sso_app.py) | FastAPI + Gradio SSO entrypoint |
-| [flowsettings.py](flowsettings.py) | Source-mode runtime settings entrypoint |
-| [libs/ktem](libs/ktem) | Web UI, DocQA runtime, knowledge graph, preview, settings pages, and app-layer behavior |
-| [libs/kotaemon](libs/kotaemon) | Core RAG components, loaders, LLM/embedding/reranking integrations, platform assets, and compatibility CLI |
-| [libs/slide_cli](libs/slide_cli) | Public `MARA` / `MARA-cli` CLI, DocQA CLI, deck agent, and workspace commands |
-| [benchmark](benchmark) | Evaluation framework, manifest normalization, and route-matrix runner |
-| [docs](docs) | Usage docs, development docs, release notes, and thesis MVP notes |
-| [scripts](scripts) | Release, PDF.js download, codebase hygiene, and maintenance scripts |
+| Path                               | Purpose                                                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| [app.py](app.py)                   | Source-mode Gradio Web UI entrypoint                                                                       |
+| [sso_app.py](sso_app.py)           | FastAPI + Gradio SSO entrypoint                                                                            |
+| [flowsettings.py](flowsettings.py) | Source-mode runtime settings entrypoint                                                                    |
+| [libs/ktem](libs/ktem)             | Web UI, DocQA runtime, knowledge graph, preview, settings pages, and app-layer behavior                    |
+| [libs/kotaemon](libs/kotaemon)     | Core RAG components, loaders, LLM/embedding/reranking integrations, platform assets, and compatibility CLI |
+| [libs/slide_cli](libs/slide_cli)   | Public `MARA` / `MARA-cli` CLI, DocQA CLI, deck agent, and workspace commands                              |
+| [benchmark](benchmark)             | Evaluation framework, manifest normalization, and route-matrix runner                                      |
+| [docs](docs)                       | Usage docs, development docs, release notes, and thesis MVP notes                                          |
+| [scripts](scripts)                 | Release, PDF.js download, codebase hygiene, and maintenance scripts                                        |
 
 Core data flow:
 
@@ -709,11 +709,11 @@ python app.py
 
 仓库自带多阶段 [Dockerfile](Dockerfile)，主要目标为：
 
-| Target | 用途 |
-| --- | --- |
-| `lite` | 基础 Web UI / DocQA 运行环境 |
-| `full` | 额外包含 LibreOffice、Tesseract、`unstructured` 等文档处理依赖 |
-| `ollama` | 在 `full` 基础上安装 Ollama 并预拉取 `nomic-embed-text` |
+| Target   | 用途                                                           |
+| -------- | -------------------------------------------------------------- |
+| `lite`   | 基础 Web UI / DocQA 运行环境                                   |
+| `full`   | 额外包含 LibreOffice、Tesseract、`unstructured` 等文档处理依赖 |
+| `ollama` | 在 `full` 基础上安装 Ollama 并预拉取 `nomic-embed-text`        |
 
 构建：
 
@@ -745,23 +745,23 @@ docker run \
 
 `MARA` 和 `MARA-cli` 指向同一个入口。当前公开顶层命令为：
 
-| 命令 | 说明 |
-| --- | --- |
-| `MARA app` | 打包应用初始化、健康检查和 Web UI 启动 |
-| `MARA docqa` | 文档问答、索引、会话、笔记、资料和 artifacts |
-| `MARA model` | 模型路由配置、Provider 检查和一次性运行 |
-| `MARA platform` | Codex / Claude Code 平台资产安装与验证 |
-| `MARA doctor` | 顶层 MARA agent 运行时和 Provider 检查 |
-| `MARA inspect` | 检查一个幻灯片文件的结构摘要 |
-| `MARA read-slide` | 读取指定幻灯片页摘要 |
-| `MARA extract` | 提取整个 deck 或单页文本 |
-| `MARA search` | 在 deck 摘要中搜索文本 |
-| `MARA review` | 使用确定性启发式审阅一个 deck |
-| `MARA export-pdf` | 将 deck 导出为 PDF |
-| `MARA run` | 执行一次高权限 MARA deck 工作流 |
-| `MARA apply` | 应用已保存会话中的 patch |
-| `MARA chat` / `sessions` / `resume` | 交互式 deck-agent 会话 |
-| `MARA files` / `read` / `write` / `delete` / `shell` | 显式工作区文件与 shell 操作 |
+| 命令                                                 | 说明                                         |
+| ---------------------------------------------------- | -------------------------------------------- |
+| `MARA app`                                           | 打包应用初始化、健康检查和 Web UI 启动       |
+| `MARA docqa`                                         | 文档问答、索引、会话、笔记、资料和 artifacts |
+| `MARA model`                                         | 模型路由配置、Provider 检查和一次性运行      |
+| `MARA platform`                                      | Codex / Claude Code 平台资产安装与验证       |
+| `MARA doctor`                                        | 顶层 MARA agent 运行时和 Provider 检查       |
+| `MARA inspect`                                       | 检查一个幻灯片文件的结构摘要                 |
+| `MARA read-slide`                                    | 读取指定幻灯片页摘要                         |
+| `MARA extract`                                       | 提取整个 deck 或单页文本                     |
+| `MARA search`                                        | 在 deck 摘要中搜索文本                       |
+| `MARA review`                                        | 使用确定性启发式审阅一个 deck                |
+| `MARA export-pdf`                                    | 将 deck 导出为 PDF                           |
+| `MARA run`                                           | 执行一次高权限 MARA deck 工作流              |
+| `MARA apply`                                         | 应用已保存会话中的 patch                     |
+| `MARA chat` / `sessions` / `resume`                  | 交互式 deck-agent 会话                       |
+| `MARA files` / `read` / `write` / `delete` / `shell` | 显式工作区文件与 shell 操作                  |
 
 #### DocQA 主线
 
@@ -868,17 +868,17 @@ MARA platform validate
 
 ### 架构与目录
 
-| 路径 | 作用 |
-| --- | --- |
-| [app.py](app.py) | 源码模式 Gradio Web UI 入口 |
-| [sso_app.py](sso_app.py) | FastAPI + Gradio SSO 入口 |
-| [flowsettings.py](flowsettings.py) | 源码模式运行时设置入口 |
-| [libs/ktem](libs/ktem) | Web UI、DocQA runtime、知识图谱、预览、设置页和应用层逻辑 |
-| [libs/kotaemon](libs/kotaemon) | 核心 RAG 组件、loader、LLM/embedding/reranking、平台资产和兼容 CLI |
-| [libs/slide_cli](libs/slide_cli) | 公开 `MARA` / `MARA-cli` CLI、DocQA CLI、deck agent 和工作区命令 |
-| [benchmark](benchmark) | 评测框架、manifest 标准化和 route-matrix 运行器 |
-| [docs](docs) | 使用文档、开发文档、发布说明和 thesis MVP 说明 |
-| [scripts](scripts) | 发布、PDF.js 下载、代码库卫生检查等维护脚本 |
+| 路径                               | 作用                                                               |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| [app.py](app.py)                   | 源码模式 Gradio Web UI 入口                                        |
+| [sso_app.py](sso_app.py)           | FastAPI + Gradio SSO 入口                                          |
+| [flowsettings.py](flowsettings.py) | 源码模式运行时设置入口                                             |
+| [libs/ktem](libs/ktem)             | Web UI、DocQA runtime、知识图谱、预览、设置页和应用层逻辑          |
+| [libs/kotaemon](libs/kotaemon)     | 核心 RAG 组件、loader、LLM/embedding/reranking、平台资产和兼容 CLI |
+| [libs/slide_cli](libs/slide_cli)   | 公开 `MARA` / `MARA-cli` CLI、DocQA CLI、deck agent 和工作区命令   |
+| [benchmark](benchmark)             | 评测框架、manifest 标准化和 route-matrix 运行器                    |
+| [docs](docs)                       | 使用文档、开发文档、发布说明和 thesis MVP 说明                     |
+| [scripts](scripts)                 | 发布、PDF.js 下载、代码库卫生检查等维护脚本                        |
 
 核心数据流：
 
