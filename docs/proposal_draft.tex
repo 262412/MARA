@@ -43,7 +43,7 @@
 \maketitle
 
 \begin{abstract}
-MARA (Multimodal Agentic Retrieval and Answering) is a proposed local-first, controller-based, Self-RAG-inspired framework for multimodal document question answering. Instead of using one fixed RAG pipeline, MARA will use an agent controller to decide whether to answer directly, retrieve text, retrieve page images, retrieve document elements, use a GraphRAG route, combine several routes, verify evidence, retry, or abstain. The prototype will combine a shared Web/CLI runtime, multimodal evidence bundles, citation-aware answers, page preview, route traces, guardrails and a benchmark harness for evaluating answer quality, citation quality and hallucination risk.
+MARA (Multimodal Agentic Retrieval and Answering) is a proposed local-first, controller-based framework for multimodal document question answering, inspired by Self-RAG’s idea of deciding when to retrieve, verify, retry or abstain. Instead of using one fixed RAG pipeline, MARA will use an agent controller to decide whether to answer directly, retrieve text, retrieve page images, retrieve document elements, use a GraphRAG route, combine several routes, verify evidence, retry, or abstain. The prototype will combine a shared Web/CLI runtime, multimodal evidence bundles, citation-aware answers, page preview, route traces, guardrails and a benchmark harness for evaluating answer quality, citation quality and hallucination risk.
 \end{abstract}
 
 \section*{Statement of Ethical Compliance}
@@ -77,7 +77,7 @@ The aims of the project are:
   \item Users can ask questions over all indexed documents or selected files.
   \item Web and CLI requests pass through one shared DocQA runtime rather than duplicating route or session logic.
   \item The system defines stable \texttt{RouteDecision}, \texttt{RetrieveDecision}, \texttt{EvidenceBundle}, \texttt{VerifyDecision} and \texttt{ControllerTrace} contracts.
-  \item A route registry and executor registry support \texttt{direct\_answer}, \texttt{text\_rag}, \texttt{page\_image\_rag}, \texttt{element\_rag}, \texttt{graph\_rag}, \texttt{hybrid\_rag} and \texttt{abstain}.
+  \item A route registry and executor registry support \texttt{direct\_answer}, \texttt{text\_rag}, \texttt{page\_image\_rag}, \texttt{element\_rag}, \texttt{lightweight\_graph\_rag}, \texttt{hybrid\_rag} and \texttt{abstain}, with \texttt{text\_rag} and at least one multimodal route implemented to benchmarkable quality.
   \item The indexing layer supports text chunks, page-image records, element records and graph records with source back-references.
   \item The controller selects routes, records reasons, respects allowed routes, and handles invalid planner output through a safe fallback or abstention.
   \item A CRAG-style retrieval evaluator classifies retrieved evidence as good, ambiguous or poor before generation.
@@ -89,7 +89,7 @@ The aims of the project are:
 
 \textbf{Desirable requirements:}
 \begin{itemize}
-  \item A configurable ColPali or VLM backend for real page-image retrieval and visual answering; if unavailable, the benchmark must label the backend as local smoke or not configured.
+  \item A configurable ColPali or VLM backend for real page-image retrieval and visual answering; otherwise, page-image RAG will use local page-image records or smoke backends clearly labelled in benchmark reports.
   \item A trainable or learnable router inspired by Adaptive-RAG or MAO-ARAG after enough controller traces have been collected.
   \item Richer graph interaction, such as full-screen pan, zoom, filtering and study-guide views.
   \item Stable artifact generation beyond outlines, such as PPTX generation, only after the core controller and benchmark are reliable.
@@ -170,7 +170,7 @@ Technical testing will cover controller schema validation, route selection, rout
 
 The evaluation will use route-level ablations. The main comparison will include fixed text RAG, direct answer, text RAG, page-image RAG, element RAG, local/global GraphRAG, hybrid RAG, controller-auto routing and CRAG-guarded execution. Each benchmark item will record the expected answer, expected route or evidence type, acceptable evidence, and the page, slide, element, image region or graph community that justifies it.
 
-Metrics will combine several evaluation traditions. ALCE-style metrics will report fluency, correctness, citation precision/recall and attributable claim rate. MMDocRAG-style metrics will report page hit, element hit, image quote hit, cross-page evidence hit and multimodal answer support. RAGTruth-style metrics will report unsupported claim count, unsupported claim rate, contradiction count and abstention correctness. The benchmark will also report routing accuracy, retrieval recall@k/MRR, latency, backend type, cost where relevant, and qualitative error categories.
+Metrics will combine several evaluation traditions. ALCE-style metrics will report fluency, correctness, citation precision/recall and attributable claim rate. MMDocRAG-style metrics will report page hit, element hit, image quote hit, cross-page evidence hit and multimodal answer support. RAGTruth-style metrics will report unsupported claim count, unsupported claim rate, contradiction count and abstention correctness. The benchmark will also report routing accuracy, retrieval recall@k/MRR, latency, backend type, cost where relevant, and qualitative error categories. The benchmark will adapt ALCE-, MMDocRAG- and RAGTruth-style metrics at prototype scale rather than attempting to reproduce the full external benchmarks.
 
 \section{Project Ethics and Human Participants}
 
@@ -216,7 +216,7 @@ The interface will be a multimodal research workbench: corpus browser on the lef
 |                  |                  |                                      | Graph Context      |
 | storage/model    |                  |                                      | community summary  |
 +------------------+------------------+--------------------------------------+------------------+
-| Model: GPT-4o | Embedding: text-embedding-3-large | Tokens: 1932/2048 | Latency: 2.18s |
+| Model: configurable LLM | Embedding: configurable embedder | Backend: local/API | Latency: 2.18s |
 +----------------------------------------------------------------------------------------------------+
 \end{Verbatim}
 
