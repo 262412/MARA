@@ -1,6 +1,6 @@
 # ktem
 
-`ktem` is the application/runtime layer for the slide product.
+`ktem` is the application/runtime layer for the MARA product.
 
 It contains the shared Web UI runtime, DocQA runtime, settings bootstrap, packaged
 launch helpers, database models, indexing orchestration, page preview services,
@@ -10,15 +10,15 @@ library.
 ## Relationship to the other packages
 
 - `kotaemon`: internal core building blocks for LLMs, embeddings, retrieval, indexing, and platform assets.
-- `ktem`: application runtime and UI/service layer that assembles those building blocks into the slide app.
-- `slide-cli`: public user-facing CLI package that exposes the `slide` command.
+- `ktem`: application runtime and UI/service layer that assembles those building blocks into the MARA app.
+- `mara-research-cli`: internal implementation package that exposes the `MARA` command.
 
 ## Install
 
 For end users, prefer the public CLI package:
 
 ```bash
-pip install slide-cli
+pip install mara-research-cli
 ```
 
 For local development from source:
@@ -30,13 +30,13 @@ pip install -e "libs/ktem"
 
 ## Packaged runtime entrypoints
 
-After installing `slide-cli`, the shared CLI is available:
+After installing `mara-research-cli`, the shared CLI is available:
 
 ```bash
-slide app init
-slide app doctor
-slide app run
-slide docqa doctor
+MARA app init
+MARA app doctor
+MARA app run
+MARA docqa doctor
 ```
 
 ## Source repository

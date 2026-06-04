@@ -10,71 +10,72 @@ from slide_cli.docqa_cli import docqa
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILLS_ROOT = REPO_ROOT / ".codex" / "skills"
 TOP_LEVEL_COMMANDS = [
-    "slide app",
-    "slide doctor",
-    "slide inspect",
-    "slide read-slide",
-    "slide extract",
-    "slide search",
-    "slide apply",
-    "slide export-pdf",
-    "slide review",
-    "slide run",
-    "slide chat",
-    "slide sessions",
-    "slide resume",
-    "slide files",
-    "slide read",
-    "slide write",
-    "slide delete",
-    "slide shell",
-    "slide docqa",
-    "slide model",
-    "slide platform",
+    "MARA app",
+    "MARA doctor",
+    "MARA inspect",
+    "MARA read-slide",
+    "MARA extract",
+    "MARA search",
+    "MARA apply",
+    "MARA export-pdf",
+    "MARA review",
+    "MARA run",
+    "MARA chat",
+    "MARA sessions",
+    "MARA resume",
+    "MARA files",
+    "MARA read",
+    "MARA write",
+    "MARA delete",
+    "MARA shell",
+    "MARA docqa",
+    "MARA model",
+    "MARA platform",
 ]
 TOP_LEVEL_FOCUSED_SKILLS = [
-    "slide-app",
-    "slide-doctor",
-    "slide-inspect",
-    "slide-read-slide",
-    "slide-extract",
-    "slide-search",
-    "slide-apply",
-    "slide-export-pdf",
-    "slide-review",
-    "slide-run",
-    "slide-chat",
-    "slide-sessions",
-    "slide-resume",
-    "slide-files",
-    "slide-read",
-    "slide-write",
-    "slide-delete",
-    "slide-shell",
-    "slide-model",
-    "slide-platform",
+    "MARA-app",
+    "MARA-doctor",
+    "MARA-inspect",
+    "MARA-read-slide",
+    "MARA-extract",
+    "MARA-search",
+    "MARA-apply",
+    "MARA-export-pdf",
+    "MARA-review",
+    "MARA-run",
+    "MARA-chat",
+    "MARA-sessions",
+    "MARA-resume",
+    "MARA-files",
+    "MARA-read",
+    "MARA-write",
+    "MARA-delete",
+    "MARA-shell",
+    "MARA-model",
+    "MARA-platform",
 ]
-SLIDE_APP_SKILLS = {
-    "slide-app",
-    "slide-app-doctor",
-    "slide-app-init",
-    "slide-app-run",
+MARA_APP_SKILLS = {
+    "MARA-app",
+    "MARA-app-doctor",
+    "MARA-app-init",
+    "MARA-app-run",
 }
-SLIDE_MODEL_SKILLS = {
-    "slide-model",
-    "slide-model-init-config",
-    "slide-model-providers",
-    "slide-model-run",
+MARA_MODEL_SKILLS = {
+    "MARA-model",
+    "MARA-model-init-config",
+    "MARA-model-providers",
+    "MARA-model-run",
 }
-SLIDE_PLATFORM_SKILLS = {
-    "slide-platform",
-    "slide-platform-install",
-    "slide-platform-list",
-    "slide-platform-status",
-    "slide-platform-validate",
+MARA_PLATFORM_SKILLS = {
+    "MARA-platform",
+    "MARA-platform-install",
+    "MARA-platform-list",
+    "MARA-platform-status",
+    "MARA-platform-validate",
 }
 DOCQA_COMMANDS = {
     "acceptance",
+    "artifacts",
     "ask",
     "chat",
     "check",
@@ -82,8 +83,10 @@ DOCQA_COMMANDS = {
     "doctor",
     "files",
     "index",
+    "notes",
     "resume",
     "sessions",
+    "sources",
 }
 DOCQA_MAINLINE_COMMANDS = DOCQA_COMMANDS - {"acceptance", "check"}
 
@@ -97,19 +100,19 @@ def _command_names(group: click.Group) -> set[str]:
         return set(group.list_commands(ctx))
 
 
-def test_slide_cli_commands_match_top_level_skill_family():
+def test_mara_cli_commands_match_top_level_skill_family():
     expected_commands = {
-        command.replace("slide ", "", 1) for command in TOP_LEVEL_COMMANDS
+        command.replace("MARA ", "", 1) for command in TOP_LEVEL_COMMANDS
     }
     actual_commands = _command_names(main)
 
     assert actual_commands == expected_commands
     assert {
-        f"slide-{command}" for command in actual_commands if command != "docqa"
+        f"MARA-{command}" for command in actual_commands if command != "docqa"
     } == set(TOP_LEVEL_FOCUSED_SKILLS)
 
 
-def test_slide_support_groups_match_kotaemon_compat_surface():
+def test_mara_support_groups_match_kotaemon_compat_surface():
     with click.Context(main) as ctx:
         app_group = main.get_command(ctx, "app")
         model_group = main.get_command(ctx, "model")
@@ -123,47 +126,47 @@ def test_slide_support_groups_match_kotaemon_compat_surface():
     assert _command_names(platform_group) == {"install", "list", "status", "validate"}
 
 
-def test_slide_top_level_skill_family_matches_agent_line():
+def test_mara_top_level_skill_family_matches_agent_line():
     expected = {
-        "slide",
-        "slide-apply",
-        "slide-chat",
-        "slide-delete",
-        "slide-doctor",
-        "slide-export-pdf",
-        "slide-extract",
-        "slide-files",
-        "slide-inspect",
-        "slide-read",
-        "slide-read-slide",
-        "slide-resume",
-        "slide-review",
-        "slide-run",
-        "slide-search",
-        "slide-sessions",
-        "slide-shell",
-        "slide-write",
-        *SLIDE_APP_SKILLS,
-        *SLIDE_MODEL_SKILLS,
-        *SLIDE_PLATFORM_SKILLS,
+        "MARA",
+        "MARA-apply",
+        "MARA-chat",
+        "MARA-delete",
+        "MARA-doctor",
+        "MARA-export-pdf",
+        "MARA-extract",
+        "MARA-files",
+        "MARA-inspect",
+        "MARA-read",
+        "MARA-read-slide",
+        "MARA-resume",
+        "MARA-review",
+        "MARA-run",
+        "MARA-search",
+        "MARA-sessions",
+        "MARA-shell",
+        "MARA-write",
+        *MARA_APP_SKILLS,
+        *MARA_MODEL_SKILLS,
+        *MARA_PLATFORM_SKILLS,
     }
 
     actual = {
         path.name
         for path in SKILLS_ROOT.iterdir()
         if path.is_dir()
-        and path.name.startswith("slide")
-        and not path.name.startswith("slide-docqa")
+        and path.name.startswith("MARA")
+        and not path.name.startswith("MARA-docqa")
         and (path / "SKILL.md").is_file()
     }
 
     assert actual == expected
 
 
-def test_slide_umbrella_skill_defines_top_level_agent_line():
-    skill = _read_skill("slide")
+def test_mara_umbrella_skill_defines_top_level_agent_line():
+    skill = _read_skill("MARA")
 
-    assert "top-level slide CLI workflow" in skill
+    assert "top-level MARA CLI workflow" in skill
 
     for command in TOP_LEVEL_COMMANDS:
         assert command in skill
@@ -178,84 +181,96 @@ def test_slide_umbrella_skill_defines_top_level_agent_line():
         assert forbidden not in skill
 
 
-def test_slide_docqa_skill_family_matches_docqa_mainline_only():
+def test_mara_docqa_skill_family_matches_docqa_mainline_only():
     expected = {
-        "slide-docqa",
-        "slide-docqa-ask",
-        "slide-docqa-chat",
-        "slide-docqa-delete",
-        "slide-docqa-doctor",
-        "slide-docqa-files",
-        "slide-docqa-index",
-        "slide-docqa-resume",
-        "slide-docqa-sessions",
+        "MARA-docqa",
+        "MARA-docqa-artifacts",
+        "MARA-docqa-ask",
+        "MARA-docqa-chat",
+        "MARA-docqa-delete",
+        "MARA-docqa-doctor",
+        "MARA-docqa-files",
+        "MARA-docqa-index",
+        "MARA-docqa-notes",
+        "MARA-docqa-resume",
+        "MARA-docqa-sessions",
+        "MARA-docqa-sources",
     }
 
     actual = {
         path.name
         for path in SKILLS_ROOT.iterdir()
         if path.is_dir()
-        and path.name.startswith("slide-docqa")
+        and path.name.startswith("MARA-docqa")
         and (path / "SKILL.md").is_file()
     }
 
     assert actual == expected
 
 
-def test_slide_docqa_cli_commands_match_mainline_skill_family():
+def test_mara_docqa_cli_commands_match_mainline_skill_family():
     actual_commands = _command_names(docqa)
 
     assert actual_commands == DOCQA_COMMANDS
     assert {
-        f"slide-docqa-{command}"
+        f"MARA-docqa-{command}"
         for command in actual_commands
         if command in DOCQA_MAINLINE_COMMANDS
     } == {
-        "slide-docqa-ask",
-        "slide-docqa-chat",
-        "slide-docqa-delete",
-        "slide-docqa-doctor",
-        "slide-docqa-files",
-        "slide-docqa-index",
-        "slide-docqa-resume",
-        "slide-docqa-sessions",
+        "MARA-docqa-artifacts",
+        "MARA-docqa-ask",
+        "MARA-docqa-chat",
+        "MARA-docqa-delete",
+        "MARA-docqa-doctor",
+        "MARA-docqa-files",
+        "MARA-docqa-index",
+        "MARA-docqa-notes",
+        "MARA-docqa-resume",
+        "MARA-docqa-sessions",
+        "MARA-docqa-sources",
     }
-    assert "slide-docqa-acceptance" not in {
+    assert "MARA-docqa-acceptance" not in {
         path.name
         for path in SKILLS_ROOT.iterdir()
         if path.is_dir() and (path / "SKILL.md").is_file()
     }
-    assert "slide-docqa-check" not in {
+    assert "MARA-docqa-check" not in {
         path.name
         for path in SKILLS_ROOT.iterdir()
         if path.is_dir() and (path / "SKILL.md").is_file()
     }
 
 
-def test_slide_docqa_umbrella_skill_stays_on_docqa_mainline():
-    skill = _read_skill("slide-docqa")
+def test_mara_docqa_umbrella_skill_stays_on_docqa_mainline():
+    skill = _read_skill("MARA-docqa")
 
     for command in [
-        "slide docqa doctor",
-        "slide docqa index",
-        "slide docqa files",
-        "slide docqa delete",
-        "slide docqa sessions",
-        "slide docqa ask",
-        "slide docqa chat",
-        "slide docqa resume",
+        "MARA docqa doctor",
+        "MARA docqa index",
+        "MARA docqa files",
+        "MARA docqa delete",
+        "MARA docqa sessions",
+        "MARA docqa notes",
+        "MARA docqa sources",
+        "MARA docqa artifacts",
+        "MARA docqa ask",
+        "MARA docqa chat",
+        "MARA docqa resume",
     ]:
         assert command in skill
 
     for focused_skill in [
-        "slide-docqa-doctor",
-        "slide-docqa-index",
-        "slide-docqa-files",
-        "slide-docqa-delete",
-        "slide-docqa-sessions",
-        "slide-docqa-ask",
-        "slide-docqa-chat",
-        "slide-docqa-resume",
+        "MARA-docqa-doctor",
+        "MARA-docqa-index",
+        "MARA-docqa-files",
+        "MARA-docqa-delete",
+        "MARA-docqa-sessions",
+        "MARA-docqa-notes",
+        "MARA-docqa-sources",
+        "MARA-docqa-artifacts",
+        "MARA-docqa-ask",
+        "MARA-docqa-chat",
+        "MARA-docqa-resume",
     ]:
         assert focused_skill in skill
 

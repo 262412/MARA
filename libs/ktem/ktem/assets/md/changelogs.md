@@ -8,4 +8,4 @@
 - Files: select files as context for chatbot
 - User management: create, sign-in, sign-out, change password
 - Setting: common settings and pipeline-based settings
-- Info panel: show Slides and upstream project information
+- Info panel: show MARA and upstream project information

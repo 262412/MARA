@@ -1,5 +1,5 @@
 {
-  "customInstructions": "Prefer slide model validation before real API calls.",
+  "customInstructions": "Prefer MARA model validation before real API calls.",
   "hooks": {
     "PreToolUse": [
       {

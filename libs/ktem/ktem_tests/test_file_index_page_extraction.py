@@ -164,6 +164,7 @@ def _build_page(index_id=7, with_chat_refresh=False):
             chat_file_rows=object(),
             chat_file_list=object(),
             chat_selected_file=object(),
+            workbench_file_summary=object(),
             plot_panel=object(),
             state_plot_panel=object(),
             knowledge_graph_status=object(),
@@ -238,7 +239,8 @@ def test_page_label_sort_key_handles_mixed_page_label_types():
         SimpleNamespace(metadata={}),
     ]
 
-    sorted_docs = sorted(docs, key=file_ui_module._page_label_sort_key)
+    page_label_sort_key = getattr(file_ui_module, "_page_label_sort_key")
+    sorted_docs = sorted(docs, key=page_label_sort_key)
 
     assert [doc.metadata.get("page_label") for doc in sorted_docs] == [
         1.0,
@@ -324,6 +326,7 @@ def test_register_file_index_events_keeps_graph_refresh_tail_wired():
         page._app.chat_page.chat_file_rows,
         page._app.chat_page.chat_file_list,
         page._app.chat_page.chat_selected_file,
+        page._app.chat_page.workbench_file_summary,
     ]
     assert upload_chain[10][1]["inputs"] == [
         page._app.chat_page.chat_control.conversation_id,

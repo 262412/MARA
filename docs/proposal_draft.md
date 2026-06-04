@@ -52,7 +52,7 @@ OWASP's guidance on LLM applications highlights risks such as sensitive informat
 
 ## Development and Implementation Summary
 
-The project will be implemented mainly in Python 3.10+. The existing repository has three main layers: `kotaemon` provides LLM wrappers, document loaders, vector stores, indexing and retrieval; `ktem` provides the application runtime, Gradio UI, settings, database models, page preview and DocQA orchestration; and `slide-cli` exposes the public `slide` command line interface. This structure will be preserved because it separates core RAG logic, application services and user-facing commands.
+The project will be implemented mainly in Python 3.10+. The existing repository has three main layers: `kotaemon` provides LLM wrappers, document loaders, vector stores, indexing and retrieval; `ktem` provides the application runtime, Gradio UI, settings, database models, page preview and DocQA orchestration; and `mara-research-cli` exposes the public `MARA` command line interface. This structure will be preserved because it separates core RAG logic, application services and user-facing commands.
 
 Development will begin with background reading and a review of the current codebase. I will then stabilise the baseline application, define a small evaluation document set, and improve the workflow in increments: ingestion, retrieval, cited answers, page preview, knowledge graph interaction, and UI polish. Each change will be tested with targeted unit or integration tests before wider regression checks. Git will be used for version control and a short development log.
 

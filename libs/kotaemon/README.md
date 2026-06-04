@@ -14,17 +14,17 @@ pip install kotaemon@git+ssh://git@github.com/Cinnamon/kotaemon.git
 
 ## Shared model routing
 
-The user-facing model routing command group is exposed through `slide model`.
+The user-facing model routing command group is exposed through `MARA model`.
 
 ```shell
 # Generate a default provider config
-slide model init-config --output modelcli.yml
+MARA model init-config --output modelcli.yml
 
 # Inspect provider availability from environment variables
-slide model providers --config modelcli.yml
+MARA model providers --config modelcli.yml
 
 # Run routing/model resolution without calling provider APIs
-slide model run --prompt "hello" --model gpt-4o-mini --dry-run
+MARA model run --prompt "hello" --model gpt-4o-mini --dry-run
 ```
 
 The default config supports OpenAI, Anthropic, Gemini, and OpenRouter via provider
@@ -32,19 +32,19 @@ API keys in environment variables.
 
 ## Platform CLI support
 
-Platform support is exposed through `slide platform` to install and validate AI
+Platform support is exposed through `MARA platform` to install and validate AI
 coding assistant bundles in a single repository.
 
 ```shell
 # List supported platforms
-slide platform list
+MARA platform list
 
 # Install a minimal Codex profile to a custom target
-slide platform install --platform codex --mode minimal --target-dir ./tmp/codex --yes
+MARA platform install --platform codex --mode minimal --target-dir ./tmp/codex --yes
 
 # Validate source bundles and installed target
-slide platform validate
-slide platform validate --installed --platform codex --target-dir ./tmp/codex
+MARA platform validate
+MARA platform validate --installed --platform codex --target-dir ./tmp/codex
 ```
 
 Supported platforms: `claude-code`, `codex`.

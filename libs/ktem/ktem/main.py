@@ -1,3 +1,6 @@
+import html
+import re
+
 import gradio as gr
 from decouple import config
 from ktem.app import BaseApp
@@ -53,7 +56,7 @@ class App(BaseApp):
                     self.register_child_page("login_page", LoginPage(self))
 
             with gr.Tab(
-                "Chat",
+                "chat",
                 elem_id="chat-tab",
                 id="chat-tab",
                 visible=not self.f_user_management,
@@ -63,7 +66,7 @@ class App(BaseApp):
             if len(self.index_manager.indices) == 1:
                 for index in self.index_manager.indices:
                     with gr.Tab(
-                        f"{index.name}",
+                        "files",
                         elem_id="indices-tab",
                         elem_classes=[
                             "fill-main-area-height",
@@ -79,7 +82,7 @@ class App(BaseApp):
                         )
             elif len(self.index_manager.indices) > 1:
                 with gr.Tab(
-                    "Files",
+                    "files",
                     elem_id="indices-tab",
                     elem_classes=["fill-main-area-height", "scrollable", "indices-tab"],
                     id="indices-tab",
@@ -98,7 +101,7 @@ class App(BaseApp):
             if not KH_DEMO_MODE:
                 if not KH_SSO_ENABLED:
                     with gr.Tab(
-                        "Resources",
+                        "resources",
                         elem_id="resources-tab",
                         id="resources-tab",
                         visible=not self.f_user_management,
@@ -106,8 +109,18 @@ class App(BaseApp):
                     ) as self._tabs["resources-tab"]:
                         self.register_child_page("resources_page", ResourcesTab(self))
 
+            with gr.Tab(
+                "help",
+                elem_id="help-tab",
+                id="help-tab",
+                visible=not self.f_user_management,
+                elem_classes=["fill-main-area-height", "scrollable"],
+            ) as self._tabs["help-tab"]:
+                self.register_child_page("help_page", HelpPage(self))
+
+            if not KH_DEMO_MODE:
                 with gr.Tab(
-                    "Settings",
+                    "settings",
                     elem_id="settings-tab",
                     id="settings-tab",
                     visible=not self.f_user_management,
@@ -115,14 +128,16 @@ class App(BaseApp):
                 ) as self._tabs["settings-tab"]:
                     self.register_child_page("settings_page", SettingsPage(self))
 
-            with gr.Tab(
-                "Help",
-                elem_id="help-tab",
-                id="help-tab",
-                visible=not self.f_user_management,
-                elem_classes=["fill-main-area-height", "scrollable"],
-            ) as self._tabs["help-tab"]:
-                self.register_child_page("help_page", HelpPage(self))
+        gr.HTML(
+            self._render_status_bar_html(),
+            elem_id="mara-status-bar",
+            visible=True,
+        )
+        self.user_identity_source = gr.HTML(
+            self._render_user_identity_html(None),
+            elem_id="mara-user-identity-source",
+            visible=True,
+        )
 
         if KH_ENABLE_FIRST_SETUP:
             with gr.Column(visible=False) as self.setup_page_wrapper:
@@ -181,6 +196,15 @@ class App(BaseApp):
                     "show_progress": "hidden",
                 },
             )
+            self.subscribe_event(
+                name="onSignIn",
+                definition={
+                    "fn": self._render_user_identity_html,
+                    "inputs": [self.user_id],
+                    "outputs": [self.user_identity_source],
+                    "show_progress": "hidden",
+                },
+            )
 
             self.subscribe_event(
                 name="onSignOut",
@@ -188,6 +212,14 @@ class App(BaseApp):
                     "fn": toggle_login_visibility,
                     "inputs": [self.user_id],
                     "outputs": list(self._tabs.values()) + [self.tabs],
+                    "show_progress": "hidden",
+                },
+            )
+            self.subscribe_event(
+                name="onSignOut",
+                definition={
+                    "fn": lambda: self._render_user_identity_html(None),
+                    "outputs": [self.user_identity_source],
                     "show_progress": "hidden",
                 },
             )
@@ -212,3 +244,81 @@ class App(BaseApp):
                 inputs=[],
                 outputs=[self.setup_page_wrapper, self.tabs],
             )
+
+    def _render_status_bar_html(self) -> str:
+        model_name = self._get_default_model_name()
+        embedding_name = self._get_default_embedding_name()
+        index_count = len(getattr(self.index_manager, "indices", []) or [])
+        app_version = getattr(self, "app_version", "") or "local"
+        data_dir = str(getattr(flowsettings, "KH_RUNTIME_DATA_DIR", "") or "")
+
+        items = [
+            ("Model", model_name),
+            ("Embedding", embedding_name),
+            ("Indices", str(index_count)),
+            ("Version", app_version),
+        ]
+        if data_dir:
+            items.append(("Data", data_dir))
+
+        rendered = "".join(
+            "<span>"
+            f"<strong>{html.escape(label)}:</strong> {html.escape(value)}"
+            "</span>"
+            for label, value in items
+        )
+        return (
+            "<div class='mara-status-bar__inner'>"
+            f"{rendered}"
+            "<span class='mara-status-ok'>Config loaded</span>"
+            "</div>"
+        )
+
+    @staticmethod
+    def _initials_from_username(username: str) -> str:
+        cleaned = " ".join(str(username or "").replace("@", " ").split())
+        if not cleaned:
+            return "U"
+        parts = [part for part in re.split(r"[^A-Za-z0-9]+", cleaned) if part]
+        if len(parts) >= 2:
+            return (parts[0][0] + parts[1][0]).upper()
+        compact = parts[0] if parts else cleaned
+        return compact[:2].upper()
+
+    def _render_user_identity_html(self, user_id) -> str:
+        username = ""
+        if user_id:
+            try:
+                from ktem.db.models import User, engine
+                from sqlmodel import Session, select
+
+                with Session(engine) as session:
+                    user = session.exec(select(User).where(User.id == user_id)).first()
+                username = str(getattr(user, "username", "") or "")
+            except Exception:
+                username = ""
+        initials = self._initials_from_username(username)
+        return (
+            "<span "
+            f"data-user-name='{html.escape(username, quote=True)}' "
+            f"data-user-initials='{html.escape(initials, quote=True)}'>"
+            "</span>"
+        )
+
+    @staticmethod
+    def _get_default_model_name() -> str:
+        try:
+            from ktem.llms.manager import llms
+
+            return str(llms.get_default_name() or "not configured")
+        except Exception:
+            return "not configured"
+
+    @staticmethod
+    def _get_default_embedding_name() -> str:
+        try:
+            from ktem.embeddings.manager import embedding_models_manager
+
+            return str(embedding_models_manager.get_default_name() or "not configured")
+        except Exception:
+            return "not configured"

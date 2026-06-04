@@ -4,29 +4,33 @@ import types
 from benchmark.cli import main
 
 
+def _empty_report(config):
+    return {
+        "summary": {
+            "suite_name": config.suite_name,
+            "dataset_name": "suite",
+            "num_examples": 0,
+            "num_documents": 0,
+            "avg_em": None,
+            "avg_f1": None,
+            "avg_anls": None,
+            "avg_page_hit": None,
+            "avg_citation_recall": None,
+            "avg_retrieval_seconds": None,
+            "avg_generation_seconds": None,
+        },
+        "documents": [],
+        "predictions": [],
+    }
+
+
 def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     captured = {}
 
     def fake_run_benchmark(manifest_path, config):
         captured["manifest_path"] = manifest_path
         captured["config"] = config
-        return {
-            "summary": {
-                "suite_name": config.suite_name,
-                "dataset_name": "suite",
-                "num_examples": 0,
-                "num_documents": 0,
-                "avg_em": None,
-                "avg_f1": None,
-                "avg_anls": None,
-                "avg_page_hit": None,
-                "avg_citation_recall": None,
-                "avg_retrieval_seconds": None,
-                "avg_generation_seconds": None,
-            },
-            "documents": [],
-            "predictions": [],
-        }
+        return _empty_report(config)
 
     def fake_write_reports(report, output_dir, suite_name):
         captured["report"] = report
@@ -63,6 +67,14 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
             "Deepseek",
             "--docqa-citation-mode",
             "off",
+            "--reasoning",
+            "mara",
+            "--agent-mode",
+            "thorough",
+            "--task-type",
+            "quiz",
+            "--artifact-type",
+            "quiz",
         ]
     )
 
@@ -73,3 +85,7 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     assert captured["config"].cost_profile == "low-cost"
     assert captured["config"].llm_name == "Deepseek"
     assert captured["config"].docqa_citation_mode == "off"
+    assert captured["config"].reasoning_type == "mara"
+    assert captured["config"].agent_mode == "thorough"
+    assert captured["config"].task_type == "quiz"
+    assert captured["config"].artifact_type == "quiz"

@@ -24,7 +24,7 @@ fi
 
 VENV_PYTHON="$VENV_DIR/bin/python"
 VENV_KOTAEMON="$VENV_DIR/bin/kotaemon"
-VENV_SLIDE="$VENV_DIR/bin/slide"
+VENV_MARA="$VENV_DIR/bin/MARA"
 
 "$VENV_PYTHON" -m pip install --upgrade pip
 
@@ -39,23 +39,43 @@ else
 fi
 
 if [[ "$SKIP_INIT" != "1" ]]; then
-  "$VENV_KOTAEMON" app init
+  if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
+    "$VENV_MARA" app init
+  else
+    "$VENV_KOTAEMON" app init
+  fi
 fi
 
-"$VENV_KOTAEMON" app doctor
+if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
+  "$VENV_MARA" app doctor
+else
+  "$VENV_KOTAEMON" app doctor
+fi
 
 if [[ "$INSTALL_CODEX" == "1" ]]; then
-  "$VENV_KOTAEMON" platform install --platform codex --mode full --yes
+  if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
+    "$VENV_MARA" platform install --platform codex --mode full --yes
+  else
+    "$VENV_KOTAEMON" platform install --platform codex --mode full --yes
+  fi
 fi
 
 if [[ "$INSTALL_CLAUDE_CODE" == "1" ]]; then
-  "$VENV_KOTAEMON" platform install --platform claude-code --mode full --yes
+  if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
+    "$VENV_MARA" platform install --platform claude-code --mode full --yes
+  else
+    "$VENV_KOTAEMON" platform install --platform claude-code --mode full --yes
+  fi
 fi
 
 echo
-echo "Kotaemon is ready."
-echo "Run '$VENV_KOTAEMON app run' to launch the Web UI."
-echo "Run '$VENV_KOTAEMON docqa doctor' to validate the shared DocQA runtime."
 if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
-  echo "Run '$VENV_SLIDE doctor' to validate the slide-cli runtime."
+  echo "MARA is ready."
+  echo "Run '$VENV_MARA app run' to launch the Web UI."
+  echo "Run '$VENV_MARA docqa doctor' to validate the shared DocQA runtime."
+  echo "Run '$VENV_MARA doctor' to validate the MARA runtime."
+else
+  echo "Kotaemon is ready."
+  echo "Run '$VENV_KOTAEMON app run' to launch the Web UI."
+  echo "Run '$VENV_KOTAEMON docqa doctor' to validate the shared DocQA runtime."
 fi

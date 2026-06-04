@@ -4,9 +4,13 @@ from benchmark.metrics import (
     exact_match_score,
     false_abstention_score,
     formula_normalized_match_score,
+    hard_negative_rejection_score,
+    image_quote_hit_score,
     is_abstention_answer,
     latex_renderable_score,
     markdown_table_renderable_score,
+    modality_hit_score,
+    multimodal_support_score,
     numeric_tolerance_score,
     span_recall_score,
     token_f1_score,
@@ -38,6 +42,39 @@ def test_element_hit_matches_gold_evidence_element_ids():
     assert score == 1.0
 
 
+def test_modality_hit_uses_expected_modality_and_evidence_metadata():
+    assert (
+        modality_hit_score(
+            "table",
+            expected_modality="table",
+            evidence_metadata={"has_table_evidence": True},
+            retrieved_hits=[],
+            gold_evidence=[],
+        )
+        == 1.0
+    )
+    assert (
+        modality_hit_score(
+            "figure",
+            expected_modality="figure",
+            evidence_metadata={"has_figure_evidence": False},
+            retrieved_hits=[{"element_type": "figure_caption"}],
+            gold_evidence=[],
+        )
+        == 1.0
+    )
+    assert (
+        modality_hit_score(
+            "slide",
+            expected_modality="text",
+            evidence_metadata={"has_slide_evidence": True},
+            retrieved_hits=[],
+            gold_evidence=[],
+        )
+        is None
+    )
+
+
 def test_span_recall_matches_predicted_text_against_gold_evidence_spans():
     score = span_recall_score(
         predicted_text="The report says revenue was 20 and profit was 5.",
@@ -47,6 +84,62 @@ def test_span_recall_matches_predicted_text_against_gold_evidence_spans():
         ],
     )
     assert score == 1.0
+
+
+def test_image_quote_hit_matches_visual_gold_evidence_quotes():
+    score = image_quote_hit_score(
+        predicted_text="The visual page says revenue rose by product segment.",
+        gold_evidence=[
+            {"modality": "page_image", "image_quote": "revenue rose"},
+            {"modality": "text", "image_quote": "ignored text quote"},
+        ],
+    )
+
+    assert score == 1.0
+
+
+def test_multimodal_support_scores_gold_modalities_in_evidence_bundle():
+    score = multimodal_support_score(
+        evidence_bundle={
+            "items": [
+                {"modality": "page_image"},
+                {"modality": "table"},
+            ]
+        },
+        retrieved_hits=[],
+        gold_evidence=[
+            {"modality": "page_image"},
+            {"element_type": "table"},
+        ],
+    )
+
+    assert score == 1.0
+
+
+def test_hard_negative_rejection_scores_absent_negative_hits():
+    rejected = hard_negative_rejection_score(
+        retrieved_hits=[{"doc_id": "positive"}],
+        evidence_bundle={"items": [{"evidence_id": "page-image:positive"}]},
+        gold_evidence=[
+            {
+                "evidence_id": "positive",
+                "hard_negative_ids": ["page-image:negative"],
+            }
+        ],
+    )
+    selected = hard_negative_rejection_score(
+        retrieved_hits=[{"doc_id": "page-image:negative"}],
+        evidence_bundle={"items": [{"evidence_id": "page-image:negative"}]},
+        gold_evidence=[
+            {
+                "evidence_id": "positive",
+                "hard_negative_ids": ["page-image:negative"],
+            }
+        ],
+    )
+
+    assert rejected == 1.0
+    assert selected == 0.0
 
 
 def test_formula_normalized_match_ignores_whitespace_case_and_wrappers():

@@ -25,7 +25,6 @@ def build_kotaemon_settings(
     base_dir = Path(base_dir).resolve()
     app_data_dir = Path(app_data_dir).resolve()
     docs_dir = Path(docs_dir).resolve() if docs_dir else (base_dir / "docs").resolve()
-
     app_data_exists = app_data_dir.exists()
     app_data_dir = _ensure_dir(app_data_dir)
     user_data_dir = _ensure_dir(app_data_dir / "user_data")
@@ -53,7 +52,7 @@ def build_kotaemon_settings(
 
     settings: dict[str, Any] = {
         "KH_PACKAGE_NAME": package_name,
-        "KH_APP_NAME": "Slides",
+        "KH_APP_NAME": "MARA",
         "KH_APP_VERSION": app_version,
         "KH_GRADIO_SHARE": config("KH_GRADIO_SHARE", default=False, cast=bool),
         "KH_ENABLE_FIRST_SETUP": config(
@@ -324,6 +323,7 @@ def build_kotaemon_settings(
 
     settings["KH_REASONINGS"] = [
         "ktem.reasoning.simple.FullQAPipeline",
+        "ktem.reasoning.mara.MaraAgentPipeline",
         "ktem.reasoning.simple.FullDecomposeQAPipeline",
         "ktem.reasoning.react.ReactAgentPipeline",
         "ktem.reasoning.rewoo.RewooAgentPipeline",

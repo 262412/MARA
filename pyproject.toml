@@ -34,12 +34,12 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-slide = ["slide-cli"]
+mara = ["mara-research-cli"]
 
 [tool.uv.sources]
 kotaemon = { workspace = true }
 ktem = { workspace = true }
-"slide-cli" = { workspace = true }
+"mara-research-cli" = { workspace = true }
 
 # uv workspace configuration
 [tool.uv.workspace]

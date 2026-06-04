@@ -4,11 +4,14 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import ktem.docqa.runtime as runtime_module
-from ktem.db.models import User, engine
+from ktem.db.models import Conversation, User, engine
 from ktem.docqa import _runtime_app, _runtime_models, _runtime_utils
+from ktem.docqa._runtime_notebook import NOTEBOOK_KEY
 from ktem.docqa.knowledge_graph import GlobalKnowledgeGraphService
 from ktem.docqa.runtime import DocQARuntime
 from sqlmodel import Session, select
+
+from kotaemon.base import Document
 
 
 def _make_scope_runtime(monkeypatch):
@@ -76,6 +79,171 @@ def test_runtime_module_reexports_extracted_runtime_components():
     assert runtime_module._DocQAPreviewService is _runtime_app._DocQAPreviewService
 
 
+class _FakeMaraPipeline:
+    @staticmethod
+    def get_info():
+        return {"id": "mara"}
+
+    def stream(self, _message, _conv_id, _history):
+        yield Document(
+            channel="debug",
+            content={
+                "mara_channel": "agent_trace",
+                "payload": {"event": "route", "modality": "text"},
+            },
+        )
+        yield Document(
+            channel="debug",
+            content={
+                "mara_channel": "evidence_metadata",
+                "payload": {"modalities": {"text": 1}, "page_coverage": ["1"]},
+            },
+        )
+        yield Document(
+            channel="debug",
+            content={
+                "mara_channel": "artifact",
+                "payload": {"type": "study_guide", "sections": []},
+            },
+        )
+        yield Document(channel="chat", content="grounded answer")
+
+
+class _FakeMaraReasoning:
+    @staticmethod
+    def get_info():
+        return {"id": "mara"}
+
+    @staticmethod
+    def get_pipeline(_settings, _state, _retrievers):
+        return _FakeMaraPipeline()
+
+
+def _make_mara_runtime():
+    runtime = cast(Any, object.__new__(DocQARuntime))
+    runtime._resolve_user_id = lambda user_id=None: "user-1"
+    runtime.load_settings = lambda user_id=None: {"reasoning.use": "mara"}
+    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
+    runtime._web_search_cls = None
+    runtime.file_index = None
+    runtime.knowledge_graph = None
+
+    session_info = runtime_module.DocQASession(
+        conversation_id="conv-1",
+        name="Conversation",
+        user_id="user-1",
+        is_public=False,
+        data_source={},
+        messages=[],
+        retrieval_messages=[],
+        plot_history=[],
+        state={"app": {"regen": False}},
+        selected_mapping={},
+        graph_source_ids=[],
+        origin="cli",
+        date_created=None,
+        date_updated=None,
+    )
+    runtime.load_session = lambda _conversation_id: None
+    runtime.create_session = lambda user_id=None: session_info
+    runtime.persist_conversation_state = lambda **_kwargs: ([], [])
+    return runtime
+
+
+def test_runtime_response_preserves_mara_agent_outputs(monkeypatch):
+    monkeypatch.setattr(runtime_module, "reasonings", {"mara": _FakeMaraReasoning})
+    monkeypatch.setattr(
+        runtime_module._nb,
+        "save_captured_artifact",
+        lambda _conversation_id, _artifact: None,
+    )
+
+    runtime = _make_mara_runtime()
+    response = runtime.run_turn(
+        runtime_module.DocQARequest(prompt="Summarize this source.")
+    )
+
+    assert response.reasoning_id == "mara"
+    assert response.answer == "grounded answer"
+    assert response.agent_trace == [{"event": "route", "modality": "text"}]
+    assert response.evidence_metadata == {
+        "modalities": {"text": 1},
+        "page_coverage": ["1"],
+    }
+    assert response.artifact == {"type": "study_guide", "sections": []}
+
+
+def test_runtime_persists_mara_artifact_to_notebook(monkeypatch):
+    monkeypatch.setattr(runtime_module, "reasonings", {"mara": _FakeMaraReasoning})
+
+    conversation = Conversation(user="user-1")
+    conversation.data_source = {"origin": "cli"}
+    with Session(engine) as session:
+        session.add(conversation)
+        session.commit()
+        session.refresh(conversation)
+        conversation_id = conversation.id
+
+    runtime = cast(Any, object.__new__(DocQARuntime))
+    runtime._resolve_user_id = lambda user_id=None: "user-1"
+    runtime.load_settings = lambda user_id=None: {"reasoning.use": "mara"}
+    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
+    runtime._web_search_cls = None
+    runtime.file_index = None
+    runtime.knowledge_graph = None
+    runtime.get_conversation_graph_cache = lambda _conversation_id: {}
+    runtime.load_session = lambda _conversation_id: runtime_module.DocQASession(
+        conversation_id=conversation_id,
+        name="Conversation",
+        user_id="user-1",
+        is_public=False,
+        data_source={"origin": "cli"},
+        messages=[],
+        retrieval_messages=[],
+        plot_history=[],
+        state={"app": {"regen": False}},
+        selected_mapping={},
+        graph_source_ids=[],
+        origin="cli",
+        date_created=None,
+        date_updated=None,
+    )
+
+    try:
+        runtime.run_turn(
+            runtime_module.DocQARequest(
+                prompt="Create a study guide.",
+                conversation_id=conversation_id,
+            )
+        )
+
+        with Session(engine) as session:
+            row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one()
+
+        artifact = row.data_source[NOTEBOOK_KEY]["artifacts"][0]
+        assert artifact["type"] == "study_guide"
+        assert artifact["payload"] == {"type": "study_guide", "sections": []}
+    finally:
+        with Session(engine) as session:
+            cleanup_row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one_or_none()
+            if cleanup_row is not None:
+                session.delete(cleanup_row)
+                session.commit()
+
+
+def test_mara_request_context_preserves_settings_agent_mode():
+    pipeline = SimpleNamespace(agent_mode="thorough")
+    request = runtime_module.DocQARequest(prompt="Summarize this source.")
+
+    runtime_module._mara.apply_request_context(pipeline, request, {})
+
+    assert pipeline.agent_mode == "thorough"
+
+
 def test_extract_selected_ids_from_data_source_handles_cli_shape():
     data_source = {
         "selected": {
@@ -96,6 +264,68 @@ def test_merge_unique_file_ids_preserves_order():
         ["file-2", "file-3"],
         "file-4",
     ) == ["file-1", "file-2", "file-3", "file-4"]
+
+
+def test_persist_conversation_state_preserves_mara_notebook_data():
+    runtime = cast(Any, object.__new__(DocQARuntime))
+    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
+    runtime.file_index = None
+
+    conversation = Conversation(user="user-1")
+    conversation.data_source = {
+        "origin": "cli",
+        NOTEBOOK_KEY: {
+            "selected_source_ids": ["file-1"],
+            "notes": [
+                {
+                    "note_id": "note-1",
+                    "title": "Keep",
+                    "text": "Persist me.",
+                    "source": "manual",
+                    "citation_refs": [],
+                    "created_at": "2026-05-31T12:00:00+00:00",
+                    "updated_at": "2026-05-31T12:00:00+00:00",
+                }
+            ],
+            "artifacts": [],
+        },
+    }
+    with Session(engine) as session:
+        session.add(conversation)
+        session.commit()
+        session.refresh(conversation)
+        conversation_id = conversation.id
+
+    try:
+        runtime.persist_conversation_state(
+            conversation_id=conversation_id,
+            user_id="user-1",
+            retrieval_message="refs",
+            plot_data=None,
+            retrieval_history=[],
+            plot_history=[],
+            messages=[("question", "answer")],
+            state={"app": {"regen": False}},
+            graph_source_ids=["file-1"],
+            selected_file_ids=["file-1"],
+            origin="cli",
+        )
+
+        with Session(engine) as session:
+            row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one()
+
+        assert row.data_source[NOTEBOOK_KEY]["notes"][0]["note_id"] == "note-1"
+        assert row.data_source[NOTEBOOK_KEY]["selected_source_ids"] == ["file-1"]
+    finally:
+        with Session(engine) as session:
+            cleanup_row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one_or_none()
+            if cleanup_row is not None:
+                session.delete(cleanup_row)
+                session.commit()
 
 
 def test_normalize_page_number_supports_document_scope():

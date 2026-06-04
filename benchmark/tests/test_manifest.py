@@ -1,6 +1,6 @@
 import json
 
-from benchmark.manifest import load_manifest
+from benchmark.manifest import DEFAULT_MARA_ROUTES, load_manifest
 from benchmark.normalizers import (
     normalize_financebench_manifest,
     normalize_format_robustness_manifest,
@@ -75,12 +75,7 @@ def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evid
                 "schema_version": 2,
                 "dataset_name": "v2_suite",
                 "documents": [
-                    {
-                        "document_id": "doc-a",
-                        "path": "doc-a.pdf",
-                        "format_type": "pdf",
-                        "modality": "text",
-                    },
+                    {"document_id": "doc-a", "path": "doc-a.pdf", "format_type": "pdf"},
                     {
                         "document_id": "doc-b",
                         "path": "doc-b.xlsx",
@@ -110,16 +105,20 @@ def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evid
                                 "span": "Revenue was 20",
                                 "citation": "doc-a#page:2",
                             },
-                            {
-                                "document_id": "doc-b",
-                                "element_id": "cell-b2",
-                                "span": "Revenue was 22",
-                            },
+                            {"document_id": "doc-b", "element_id": "cell-b2"},
                         ],
                     }
                 ],
                 "routes": [
-                    {"engine": "text-rag", "scope": "multi_document", "route": "hybrid"}
+                    {
+                        "engine": "text-rag",
+                        "scope": "multi_document",
+                        "route": "hybrid",
+                        "reasoning": "mara",
+                        "agent_mode": "fast",
+                        "task_type": "qa",
+                        "artifact_type": "study_guide",
+                    }
                 ],
             },
             ensure_ascii=False,
@@ -132,19 +131,14 @@ def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evid
     assert bundle.schema_version == 2
     assert bundle.dataset_name == "v2_suite"
     assert bundle.documents["doc-b"].modality == "table"
-    assert bundle.routes == [
-        {
-            "route_id": "hybrid",
-            "route_name": "hybrid",
-            "engine": "text-rag",
-            "scope": "multi_document",
-            "reader_mode": "default",
-            "retrieval_mode": "hybrid",
-            "top_k": 5,
-            "use_generation": True,
-            "cost_profile": None,
-        }
-    ]
+    route = bundle.routes[0]
+    assert route["route_id"] == "hybrid"
+    assert route["engine"] == "text-rag"
+    assert route["scope"] == "multi_document"
+    assert route["reasoning_type"] == "mara"
+    assert route["agent_mode"] == "fast"
+    assert route["task_type"] == "qa"
+    assert route["artifact_type"] == "study_guide"
     example = bundle.examples[0]
     assert example.document_ids == ["doc-a", "doc-b"]
     assert example.scope == "multi_document"
@@ -166,18 +160,9 @@ def test_load_v2_manifest_normalizes_route_matrix_defaults_and_aliases(tmp_path)
             {
                 "schema_version": 2,
                 "dataset_name": "route_suite",
-                "documents": [
-                    {
-                        "document_id": "doc",
-                        "path": "doc.pdf",
-                    }
-                ],
+                "documents": [{"document_id": "doc", "path": "doc.pdf"}],
                 "examples": [
-                    {
-                        "document_id": "doc",
-                        "question": "What is it?",
-                        "answer": "pdf",
-                    }
+                    {"document_id": "doc", "question": "What is it?", "answer": "pdf"}
                 ],
                 "route_matrix": [
                     {
@@ -190,6 +175,10 @@ def test_load_v2_manifest_normalizes_route_matrix_defaults_and_aliases(tmp_path)
                         "top_k": 8,
                         "use_generation": False,
                         "cost_profile": "quality",
+                        "reasoning_type": "mara",
+                        "agent_mode": "thorough",
+                        "task_type": "summary",
+                        "artifact_type": "slide_outline",
                     },
                     {
                         "route": "legacy",
@@ -215,6 +204,10 @@ def test_load_v2_manifest_normalizes_route_matrix_defaults_and_aliases(tmp_path)
             "top_k": 8,
             "use_generation": False,
             "cost_profile": "quality",
+            "reasoning_type": "mara",
+            "agent_mode": "thorough",
+            "task_type": "summary",
+            "artifact_type": "slide_outline",
         },
         {
             "route_id": "legacy",
@@ -226,8 +219,116 @@ def test_load_v2_manifest_normalizes_route_matrix_defaults_and_aliases(tmp_path)
             "top_k": 5,
             "use_generation": True,
             "cost_profile": None,
+            "reasoning_type": None,
+            "agent_mode": None,
+            "task_type": None,
+            "artifact_type": None,
         },
     ]
+
+
+def test_load_v2_manifest_preserves_controller_route_fields(tmp_path):
+    (tmp_path / "doc.pdf").write_text("pdf", encoding="utf-8")
+    manifest_path = tmp_path / "v2-controller-routes.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "documents": [{"document_id": "doc", "path": "doc.pdf"}],
+                "examples": [
+                    {"document_id": "doc", "question": "What is it?", "answer": "pdf"}
+                ],
+                "routes": [
+                    {
+                        "route_id": "controller_llm",
+                        "engine": "docqa_runtime",
+                        "controller_mode": "llm",
+                        "route_policy": "hybrid",
+                        "verification_mode": "strict",
+                        "backend_status": "not_configured",
+                        "requires_backend_config": True,
+                        "missing_backends": ["visual_generator"],
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    bundle = load_manifest(manifest_path)
+
+    assert bundle.routes[0]["controller_mode"] == "llm"
+    assert bundle.routes[0]["route_policy"] == "hybrid"
+    assert bundle.routes[0]["verification_mode"] == "strict"
+    assert bundle.routes[0]["backend_status"] == "not_configured"
+    assert bundle.routes[0]["requires_backend_config"] is True
+    assert bundle.routes[0]["missing_backends"] == ["visual_generator"]
+
+
+def test_load_v2_manifest_preserves_planner_model_and_allowed_routes(tmp_path):
+    (tmp_path / "doc.pdf").write_text("pdf", encoding="utf-8")
+    manifest_path = tmp_path / "v2-planner-routes.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "documents": [{"document_id": "doc", "path": "doc.pdf"}],
+                "examples": [
+                    {"document_id": "doc", "question": "What is it?", "answer": "pdf"}
+                ],
+                "routes": [
+                    {
+                        "route_id": "controller_llm",
+                        "engine": "docqa_runtime",
+                        "planner_model": "gpt-4o-mini",
+                        "allowed_routes": ["doc_text", "graph_global"],
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    route = load_manifest(manifest_path).routes[0]
+
+    assert route["planner_model"] == "gpt-4o-mini"
+    assert route["allowed_routes"] == ["doc_text", "graph_global"]
+
+
+def test_default_mara_routes_cover_full_route_ablation_matrix():
+    route_ids = [route["route_id"] for route in DEFAULT_MARA_ROUTES]
+
+    assert route_ids == [
+        "direct_answer",
+        "text_rag",
+        "page_image_rag_smoke",
+        "page_image_rag_vlm",
+        "element_rag",
+        "graph_rag_local",
+        "graph_rag_global",
+        "hybrid_rag",
+        "controller_auto",
+        "crag_guarded",
+    ]
+    assert DEFAULT_MARA_ROUTES[0]["route_policy"] == "direct"
+    assert DEFAULT_MARA_ROUTES[2]["allowed_routes"] == ["doc_page_image"]
+    assert DEFAULT_MARA_ROUTES[3]["visual_retriever_backend"] == (
+        "local_late_interaction"
+    )
+    assert DEFAULT_MARA_ROUTES[3]["generator_backend"] == "evidence_only_without_vlm"
+    assert DEFAULT_MARA_ROUTES[3]["backend_status"] == "not_configured"
+    assert DEFAULT_MARA_ROUTES[3]["requires_backend_config"] is True
+    assert DEFAULT_MARA_ROUTES[3]["missing_backends"] == [
+        "colpali",
+        "visual_generator",
+    ]
+    assert DEFAULT_MARA_ROUTES[4]["allowed_routes"] == ["doc_element"]
+    assert DEFAULT_MARA_ROUTES[5]["graph_mode"] == "local"
+    assert DEFAULT_MARA_ROUTES[6]["graph_mode"] == "global"
+    assert DEFAULT_MARA_ROUTES[8]["controller_mode"] == "llm"
+    assert DEFAULT_MARA_ROUTES[9]["verification_mode"] == "strict"
 
 
 def test_load_v1_manifest_sets_v2_defaults(tmp_path):

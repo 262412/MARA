@@ -1,6 +1,6 @@
-# Slide Platform CLI Support
+# MARA Platform CLI Support
 
-The `slide` CLI includes a `platform` command group for installing and validating
+The `MARA` CLI includes a `platform` command group for installing and validating
 single-repo support bundles for external AI coding tools.
 
 Supported platforms:
@@ -12,22 +12,22 @@ Supported platforms:
 
 ```shell
 # Show supported platforms and default target folders
-slide platform list
+MARA platform list
 
 # Install a full Claude Code bundle to the default target (~/.claude)
-slide platform install --platform claude-code --mode full --yes
+MARA platform install --platform claude-code --mode full --yes
 
 # Install a minimal Codex bundle to a custom target
-slide platform install --platform codex --mode minimal --target-dir ./tmp/codex --yes
+MARA platform install --platform codex --mode minimal --target-dir ./tmp/codex --yes
 
 # Validate packaged bundle assets
-slide platform validate
+MARA platform validate
 
 # Validate one installed target
-slide platform validate --installed --platform codex --target-dir ./tmp/codex
+MARA platform validate --installed --platform codex --target-dir ./tmp/codex
 
 # Inspect install status
-slide platform status --platform codex --target-dir ./tmp/codex
+MARA platform status --platform codex --target-dir ./tmp/codex
 ```
 
 ## Install Modes
@@ -39,7 +39,7 @@ slide platform status --platform codex --target-dir ./tmp/codex
 Example:
 
 ```shell
-slide platform install \
+MARA platform install \
   --platform claude-code \
   --mode selective \
   --item skills \
@@ -50,12 +50,12 @@ slide platform install \
 
 ## Merge and Sidecar Rules
 
-- Existing `CLAUDE.md` and `AGENTS.md` files are preserved; slide content is written to
+- Existing `CLAUDE.md` and `AGENTS.md` files are preserved; MARA content is written to
   `CLAUDE.slide.md` or `AGENTS.slide.md`.
 - `settings.json.template` is copied to `settings.slide.template.json`, then merged into
   `settings.json` by adding missing keys only.
 - `config.toml.template` is copied to `config.slide.template.toml`, then appended to
-  `config.toml` unless the slide marker block already exists.
+  `config.toml` unless the MARA marker block already exists.
 - Existing files are backed up under `.slide-platform-backups/<timestamp>/`.
 
 ## CI Recommendation
@@ -63,5 +63,5 @@ slide platform install \
 Add this command to CI to ensure bundled assets remain complete:
 
 ```shell
-slide platform validate
+MARA platform validate
 ```

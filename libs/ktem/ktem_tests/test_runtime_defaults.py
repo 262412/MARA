@@ -18,3 +18,21 @@ def test_runtime_defaults_use_local_multilingual_reranker_by_default(tmp_path):
     )
     assert settings["KH_OFFICE_TO_PDF_INDEXING"] is True
     assert settings["KH_OFFICE_TO_PDF_INDEXING_STRICT"] is True
+
+
+def test_runtime_defaults_register_mara_reasoning_mode(tmp_path):
+    settings = build_kotaemon_settings(
+        base_dir=tmp_path,
+        app_data_dir=tmp_path / "app-data",
+    )
+
+    assert "ktem.reasoning.mara.MaraAgentPipeline" in settings["KH_REASONINGS"]
+
+
+def test_runtime_defaults_use_mara_public_app_name(tmp_path):
+    settings = build_kotaemon_settings(
+        base_dir=tmp_path,
+        app_data_dir=tmp_path / "app-data",
+    )
+
+    assert settings["KH_APP_NAME"] == "MARA"

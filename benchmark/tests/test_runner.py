@@ -37,6 +37,14 @@ class _FakeEngine:
                 "engine": self.engine_name,
                 "retrieved_elements": ["hit-1"],
             },
+            "agent_trace": [{"stage": "planner", "route": self.config.route}],
+            "controller_trace": [
+                {"stage": "planner", "route": "graph_global"},
+            ],
+            "route_decision": {"route": "graph_global"},
+            "retrieve_decision": {"status": "good"},
+            "verify_decision": {"status": "supported"},
+            "evidence_bundle": {"route": "graph_global", "items": []},
             "timings": {
                 "parse_seconds": 0.1,
                 "index_seconds": 0.2,
@@ -60,6 +68,17 @@ class _FakeEngine:
 
     def document_reports(self):
         return [{"engine": self.engine_name, "route": self.config.route}]
+
+
+def _assert_controller_trace_fields(report):
+    assert report["predictions"][0]["controller_trace"] == [
+        {"stage": "planner", "route": "graph_global"}
+    ]
+    assert report["retrieval_traces"][0]["route_decision"] == {"route": "graph_global"}
+    assert report["retrieval_traces"][0]["evidence_bundle"] == {
+        "route": "graph_global",
+        "items": [],
+    }
 
 
 def test_run_benchmark_expands_manifest_route_matrix(monkeypatch, tmp_path):
@@ -132,6 +151,10 @@ def test_run_benchmark_expands_manifest_route_matrix(monkeypatch, tmp_path):
     assert report["summary"]["embedding_cache_misses"] == 2
     assert report["summary"]["embedding_cache_hit_rate"] == 0.6667
     assert len(report["retrieval_traces"]) == 2
+    expected_agent_trace = [{"stage": "planner", "route": "page_fast"}]
+    assert report["predictions"][0]["agent_trace"] == expected_agent_trace
+    assert report["retrieval_traces"][0]["agent_trace"] == expected_agent_trace
+    _assert_controller_trace_fields(report)
     assert report["retrieval_traces"][0]["performance"]["parse_seconds"] == 0.1
     assert report["retrieval_traces"][0]["cache"]["parse"]["hits"] == 1
 
@@ -182,7 +205,7 @@ def test_run_benchmark_filters_manifest_route_by_id(monkeypatch, tmp_path):
     assert report["predictions"][0]["route"] == "keep"
 
 
-def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path):
+def _write_format_guardrail_manifest(tmp_path):
     (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text(
@@ -202,13 +225,18 @@ def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path)
                             "allow_abstention": False,
                             "rewrite_skipped": True,
                         },
+                        "modality": "figure",
+                        "gold_evidence": [{"element_type": "formula"}],
                     }
                 ],
             }
         ),
         encoding="utf-8",
     )
+    return manifest_path
 
+
+def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path):
     class _GuardrailEngine:
         def __init__(self, engine_name, config):
             self.engine_name = engine_name
@@ -236,6 +264,12 @@ def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path)
                     "abstained": False,
                     "rewrite_skipped": True,
                 },
+                "verify_decision": {
+                    "status": "unsupported",
+                    "action": "revise",
+                    "unsupported_claims": ["The model invented a citation."],
+                    "verified_citations": ["doc#page:1"],
+                },
                 "evidence_metadata": {
                     "has_formula_evidence": True,
                     "has_figure_evidence": True,
@@ -251,7 +285,7 @@ def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path)
     )
 
     report = run_benchmark(
-        manifest_path,
+        _write_format_guardrail_manifest(tmp_path),
         BenchmarkConfig(
             suite_name="format_guardrails",
             output_dir=tmp_path / "out",
@@ -263,15 +297,245 @@ def test_run_benchmark_scores_format_and_guardrail_fields(monkeypatch, tmp_path)
     assert prediction["expected_formats"] == ["markdown_table", "latex"]
     assert prediction["expected_guardrails"]["rewrite_skipped"] is True
     assert prediction["evidence_metadata"]["has_formula_evidence"] is True
+    assert prediction["metrics"]["figure_hit"] == 1.0
+    assert prediction["metrics"]["formula_hit"] == 1.0
+    assert prediction["metrics"]["table_hit"] is None
     assert prediction["metrics"]["markdown_table_renderable"] == 1.0
     assert prediction["metrics"]["latex_renderable"] == 1.0
     assert prediction["metrics"]["false_abstention"] == 0.0
     assert prediction["metrics"]["rewrite_skipped"] == 1.0
     assert prediction["metrics"]["guardrail_expectation_match"] == 1.0
+    assert prediction["metrics"]["unsupported_claim_rate"] == 1.0
+    assert prediction["metrics"]["not_enough_evidence_rate"] == 0.0
+    assert prediction["metrics"]["unsupported_claim_count"] == 1.0
+    assert prediction["metrics"]["verified_citation_count"] == 1.0
     assert report["summary"]["avg_markdown_table_renderable"] == 1.0
+    assert report["summary"]["avg_figure_hit"] == 1.0
+    assert report["summary"]["avg_formula_hit"] == 1.0
     assert report["summary"]["avg_latex_renderable"] == 1.0
     assert report["summary"]["avg_false_abstention"] == 0.0
     assert report["summary"]["avg_guardrail_expectation_match"] == 1.0
+    assert report["summary"]["avg_unsupported_claim_rate"] == 1.0
+    assert report["summary"]["avg_not_enough_evidence_rate"] == 0.0
+    assert report["summary"]["avg_unsupported_claim_count"] == 1.0
+    assert report["summary"]["avg_verified_citation_count"] == 1.0
+
+
+def test_run_benchmark_scores_mmdocrag_visual_support_fields(monkeypatch, tmp_path):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "mmdocrag",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "examples": [
+                    {
+                        "example_id": "visual-ex",
+                        "document_id": "doc",
+                        "question": "What does the chart show?",
+                        "answers": ["revenue rose"],
+                        "gold_evidence": [
+                            {
+                                "modality": "page_image",
+                                "image_quote": "revenue rose",
+                                "hard_negative_ids": ["page-image:negative"],
+                            },
+                            {"element_type": "table"},
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class _VisualEngine:
+        def __init__(self, engine_name, config):
+            self.engine_name = engine_name
+            self.config = config
+
+        def run_example(self, bundle, example):
+            return {
+                "example_id": example.example_id,
+                "document_id": example.document_id,
+                "question": example.question,
+                "gold_answers": example.answers,
+                "gold_pages": example.evidence_pages,
+                "gold_sources": example.evidence_sources,
+                "predicted_answer": "The chart shows revenue rose in 2026.",
+                "predicted_pages": [],
+                "predicted_sources": [],
+                "predicted_element_ids": [],
+                "retrieved_hits": [{"modality": "table"}],
+                "evidence_bundle": {
+                    "items": [
+                        {"modality": "page_image"},
+                        {"modality": "table"},
+                    ]
+                },
+            }
+
+        def document_reports(self):
+            return []
+
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _VisualEngine(engine_name, config),
+    )
+
+    report = run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="mmdocrag",
+            output_dir=tmp_path / "out",
+            use_generation=False,
+        ),
+    )
+
+    prediction = report["predictions"][0]
+    assert prediction["metrics"]["image_quote_hit"] == 1.0
+    assert prediction["metrics"]["multimodal_answer_support"] == 1.0
+    assert prediction["metrics"]["hard_negative_rejection"] == 1.0
+    assert report["summary"]["avg_image_quote_hit"] == 1.0
+    assert report["summary"]["avg_multimodal_answer_support"] == 1.0
+    assert report["summary"]["avg_hard_negative_rejection"] == 1.0
+
+
+def _write_research_adapter_manifest(tmp_path):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "research_adapters",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_id": "doc",
+                        "question": "What does the chart show?",
+                        "answers": ["revenue rose"],
+                        "gold_evidence": [
+                            {
+                                "modality": "page_image",
+                                "image_quote": "revenue rose",
+                                "citation": "doc#page:1",
+                            }
+                        ],
+                    }
+                ],
+                "routes": [
+                    {
+                        "route_id": "controller_auto",
+                        "engine": "docqa_runtime",
+                        "planner_backend": "heuristic_local",
+                        "generator_backend": "fixture_generator",
+                        "text_retriever_backend": "fixture_text",
+                        "visual_retriever_backend": "local_late_interaction",
+                        "visual_backend_type": "deterministic_smoke",
+                        "graph_backend": "local_graph",
+                        "backend_status": "not_configured",
+                        "requires_backend_config": True,
+                        "missing_backends": ["visual_generator"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
+class _ResearchEngine:
+    def __init__(self, engine_name, config):
+        self.engine_name = engine_name
+        self.config = config
+
+    def run_example(self, bundle, example):
+        return {
+            "example_id": example.example_id,
+            "document_id": example.document_id,
+            "question": example.question,
+            "gold_answers": example.answers,
+            "gold_pages": example.evidence_pages,
+            "gold_sources": example.evidence_sources,
+            "predicted_answer": "The chart shows revenue rose.",
+            "predicted_pages": [1],
+            "predicted_sources": ["doc#page:1"],
+            "predicted_element_ids": [],
+            "retrieved_hits": [],
+            "evidence_bundle": {"items": [{"modality": "page_image"}]},
+            "verify_decision": {
+                "status": "supported",
+                "unsupported_claims": [],
+                "contradictions": [],
+            },
+        }
+
+    def document_reports(self):
+        return []
+
+
+def test_run_benchmark_reports_named_research_adapters_and_backends(
+    monkeypatch, tmp_path
+):
+    manifest_path = _write_research_adapter_manifest(tmp_path)
+
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _ResearchEngine(engine_name, config),
+    )
+
+    report = run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="research_adapters",
+            output_dir=tmp_path / "out",
+            use_generation=False,
+        ),
+    )
+
+    adapter_metrics = report["predictions"][0]["adapter_metrics"]
+    assert set(adapter_metrics) == {"alce", "mmdocrag", "ragtruth"}
+    assert {
+        "fluency",
+        "correctness",
+        "citation_recall",
+        "citation_precision",
+        "attributable_claim_rate",
+    } <= set(adapter_metrics["alce"])
+    assert {
+        "page_hit",
+        "element_hit",
+        "image_quote_hit",
+        "cross_page_evidence_hit",
+        "multimodal_answer_support",
+    } <= set(adapter_metrics["mmdocrag"])
+    assert {
+        "unsupported_claim_count",
+        "unsupported_claim_rate",
+        "contradiction_count",
+        "abstention_correctness",
+    } <= set(adapter_metrics["ragtruth"])
+    assert adapter_metrics["alce"]["correctness"] == 1.0
+    assert adapter_metrics["alce"]["citation_recall"] == 1.0
+    assert adapter_metrics["mmdocrag"]["image_quote_hit"] == 1.0
+    assert adapter_metrics["ragtruth"]["unsupported_claim_rate"] == 0.0
+    assert adapter_metrics["ragtruth"]["contradiction_count"] == 0.0
+    assert report["summary"]["backend_metadata"]["controller_auto"] == {
+        "text_retriever": "fixture_text",
+        "visual_retriever": "local_late_interaction",
+        "visual_backend_type": "deterministic_smoke",
+        "graph_backend": "local_graph",
+        "planner_backend": "heuristic_local",
+        "generator_backend": "fixture_generator",
+        "backend_status": "not_configured",
+        "requires_backend_config": True,
+        "missing_backends": ["visual_generator"],
+    }
 
 
 def test_run_benchmark_handles_empty_manifest(tmp_path):

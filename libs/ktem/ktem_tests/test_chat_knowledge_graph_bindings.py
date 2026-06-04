@@ -69,6 +69,7 @@ def _make_page():
         chat_file_rows="chat-file-rows",
         chat_file_list="chat-file-list",
         chat_selected_file="chat-selected-file",
+        workbench_file_summary="workbench-file-summary",
         chat_file_filter=chat_file_filter,
         _chat_file_click=chat_file_click,
         first_selector_choices=selector_choices,

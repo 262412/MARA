@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import tempfile
-import zipfile
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -21,8 +19,15 @@ from sqlmodel import Session, select
 from theflow.settings import settings as flowsettings
 from theflow.utils.modules import import_dotted_string
 
-from kotaemon.base import Document
-
+from . import _runtime_doctor as _doctor
+from . import _runtime_elements
+from . import _runtime_indexing as _indexing
+from . import _runtime_mara as _mara
+from . import _runtime_notebook as _nb
+from . import _runtime_pipeline as _pipeline
+from . import _runtime_selection as _selection
+from . import _runtime_sessions as _sessions
+from . import _runtime_turn as _turn
 from ._runtime_app import _DocQAPreviewService, _RuntimeAppContext
 from ._runtime_models import (
     DocQADoctorResult,
@@ -37,9 +42,14 @@ from ._runtime_models import (
 from ._runtime_utils import _html_to_text, _serialize_value
 
 logger = logging.getLogger(__name__)
+DEFAULT_SETTING, STATE = "(default)", {"app": {"regen": False}}
 
-DEFAULT_SETTING = "(default)"
-STATE = {"app": {"regen": False}}
+
+def _preview_value(preview: Any, method_name: str, file_id: str) -> str:
+    method = getattr(preview, method_name, None)
+    if method is None:
+        return ""
+    return str(method(file_id) or "")
 
 
 class DocQARuntime:
@@ -112,86 +122,23 @@ class DocQARuntime:
 
     @staticmethod
     def _normalize_selected_file_ids(selected_file_ids) -> list[str]:
-        if selected_file_ids in (None, ""):
-            return []
-        if isinstance(selected_file_ids, list):
-            return [str(item) for item in selected_file_ids if item not in (None, "")]
-        return [str(selected_file_ids)]
+        return _selection.normalize_selected_file_ids(selected_file_ids)
 
     @staticmethod
     def _normalize_page_number(page_number: Any) -> Optional[int]:
-        if page_number in (None, ""):
-            return None
-        return max(1, int(page_number))
+        return _selection.normalize_page_number(page_number)
 
     @staticmethod
     def _normalize_qa_scope(qa_scope: Any, page_number: Any = None) -> str:
-        value = str(qa_scope or "auto").strip().lower().replace("-", "_")
-        if value in {"", "auto"}:
-            return "page" if page_number not in (None, "") else "document"
-        if value in {"doc", "whole_document", "full_document"}:
-            return "document"
-        if value in {"multi", "multi_doc", "multi_docs", "multi_document"}:
-            return "multi_document"
-        if value not in {"page", "document", "multi_document"}:
-            raise ValueError(
-                "Unknown QA scope '{}'. Expected page, document, multi-document, "
-                "or auto.".format(qa_scope)
-            )
-        return value
+        return _selection.normalize_qa_scope(qa_scope, page_number)
 
     @staticmethod
     def _merge_unique_file_ids(*groups) -> list[str]:
-        merged: list[str] = []
-        seen = set()
-        for group in groups:
-            if group in (None, ""):
-                continue
-            values = group if isinstance(group, list) else [group]
-            for value in values:
-                item = str(value or "").strip()
-                if not item or item in seen:
-                    continue
-                seen.add(item)
-                merged.append(item)
-        return merged
+        return _selection.merge_unique_file_ids(*groups)
 
     @staticmethod
     def _extract_selected_ids_from_data_source(data_source: dict | None) -> list[str]:
-        if not isinstance(data_source, dict):
-            return []
-
-        selected = data_source.get("selected", {})
-        if not isinstance(selected, dict):
-            return []
-
-        file_ids: list[str] = []
-        for value in selected.values():
-            if (
-                isinstance(value, list)
-                and len(value) >= 3
-                and str(value[0] or "").strip() in {"disabled", "select", "all"}
-            ):
-                candidates = [value[1]]
-            else:
-                candidates = value if isinstance(value, list) else [value]
-            for candidate in candidates:
-                if isinstance(candidate, list):
-                    for nested in candidate:
-                        if isinstance(nested, (dict, tuple, list)):
-                            continue
-                        item = str(nested or "").strip()
-                        if not item or item.lower() in {"select", "upload", "all"}:
-                            continue
-                        file_ids.append(item)
-                else:
-                    if isinstance(candidate, (dict, tuple)):
-                        continue
-                    item = str(candidate or "").strip()
-                    if not item or item.lower() in {"select", "upload", "all"}:
-                        continue
-                    file_ids.append(item)
-        return DocQARuntime._merge_unique_file_ids(file_ids)
+        return _selection.extract_selected_ids_from_data_source(data_source)
 
     def _get_default_file_index(self) -> Optional[FileIndex]:
         for index in getattr(self._app.index_manager, "indices", []):
@@ -339,49 +286,30 @@ class DocQARuntime:
         self, refs: list[str], user_id: Any = None
     ) -> list[DocQAFileRecord]:
         records = self.list_files(user_id=user_id)
-        if not refs:
-            return records
+        return cast(list[DocQAFileRecord], _selection.resolve_file_refs(records, refs))
 
-        by_id = {record.file_id: record for record in records}
-        by_name: dict[str, list[DocQAFileRecord]] = {}
-        for record in records:
-            by_name.setdefault(record.name.lower(), []).append(record)
-
-        resolved: list[DocQAFileRecord] = []
-        seen: set[str] = set()
-        for ref in refs:
-            key = str(ref or "").strip()
-            if not key:
-                continue
-
-            match: Optional[DocQAFileRecord] = by_id.get(key)
-            if match is None:
-                exact = by_name.get(key.lower(), [])
-                if len(exact) == 1:
-                    match = exact[0]
-                elif len(exact) > 1:
-                    raise ValueError(f"File reference '{key}' is ambiguous.")
-
-            if match is None:
-                contains = [
-                    record
-                    for record in records
-                    if key.lower() in record.name.lower()
-                    or key.lower() in record.file_id.lower()
-                ]
-                if len(contains) == 1:
-                    match = contains[0]
-                elif len(contains) > 1:
-                    raise ValueError(f"File reference '{key}' is ambiguous.")
-
-            if match is None:
-                raise ValueError(f"Unable to resolve file reference '{key}'.")
-
-            if match.file_id not in seen:
-                seen.add(match.file_id)
-                resolved.append(match)
-
-        return resolved
+    def _selected_file_records_for_retrieval(
+        self,
+        selected_file_ids: list[str],
+        active_file_id: str,
+        user_id: Any,
+    ) -> list[dict[str, Any]]:
+        file_ids = self._merge_unique_file_ids(selected_file_ids, [active_file_id])
+        if not file_ids:
+            return []
+        del user_id
+        return [
+            {
+                "file_id": file_id,
+                "file_name": _preview_value(
+                    self._preview,
+                    "resolve_file_name",
+                    file_id,
+                ),
+                "path": _preview_value(self._preview, "resolve_file_path", file_id),
+            }
+            for file_id in file_ids
+        ]
 
     def _build_selected_mapping(
         self,
@@ -437,22 +365,13 @@ class DocQARuntime:
 
         selected_file_ids = self._normalize_selected_file_ids(selected_file_ids)
         normalized_graph_ids = self._normalize_selected_file_ids(graph_source_ids)
-
-        state_to_store = deepcopy(state or STATE)
-        retrieval_history_to_store = list(retrieval_history or [])
-        plot_history_to_store = list(plot_history or [])
-
-        if not state_to_store.get("app", {}).get("regen", False):
-            retrieval_history_to_store = retrieval_history_to_store + [
-                retrieval_message
-            ]
-            plot_history_to_store = plot_history_to_store + [plot_data]
-        else:
-            if retrieval_history_to_store:
-                retrieval_history_to_store[-1] = retrieval_message
-            if plot_history_to_store:
-                plot_history_to_store[-1] = plot_data
-        state_to_store.setdefault("app", {})["regen"] = False
+        histories = _sessions.prepare_conversation_histories(
+            retrieval_message=retrieval_message,
+            plot_data=plot_data,
+            retrieval_history=retrieval_history,
+            plot_history=plot_history,
+            state=state,
+        )
 
         with Session(engine) as session:
             statement = select(Conversation).where(Conversation.id == conversation_id)
@@ -467,30 +386,23 @@ class DocQARuntime:
                 existing_mapping=data_source.get("selected", {}),
             )
 
-            updated_data_source = {
-                "selected": (
-                    selected_mapping if is_owner else data_source.get("selected", {})
-                ),
-                "messages": messages,
-                "retrieval_messages": retrieval_history_to_store,
-                "plot_history": plot_history_to_store,
-                "state": state_to_store,
-                "graph_source_ids": normalized_graph_ids,
-                "likes": deepcopy(data_source.get("likes", [])),
-            }
-            if "chat_suggestions" in data_source:
-                updated_data_source["chat_suggestions"] = deepcopy(
-                    data_source.get("chat_suggestions", [])
-                )
-            if origin or data_source.get("origin"):
-                updated_data_source["origin"] = origin or data_source.get("origin")
-
+            updated_data_source = _sessions.build_conversation_data_source(
+                data_source=data_source,
+                selected_mapping=selected_mapping,
+                is_owner=is_owner,
+                messages=messages,
+                retrieval_history=histories.retrieval_history,
+                plot_history=histories.plot_history,
+                state=histories.state,
+                graph_source_ids=normalized_graph_ids,
+                origin=origin,
+            )
             row.data_source = updated_data_source
             row.date_updated = datetime.now()
             session.add(row)
             session.commit()
 
-        return retrieval_history_to_store, plot_history_to_store
+        return histories.retrieval_history, histories.plot_history
 
     def _resolve_selected_inputs(
         self, request: DocQARequest, session_info: Optional[DocQASession]
@@ -538,21 +450,7 @@ class DocQARuntime:
         reasoning_cls = reasonings[reasoning_mode]
         reasoning_id = reasoning_cls.get_info()["id"]
 
-        llm_setting_key = f"reasoning.options.{reasoning_id}.llm"
-        if llm_setting_key in settings and request.llm not in (
-            DEFAULT_SETTING,
-            None,
-            "",
-        ):
-            settings[llm_setting_key] = request.llm
-        if request.use_mindmap not in (DEFAULT_SETTING, None):
-            settings["reasoning.options.simple.create_mindmap"] = request.use_mindmap
-        if request.use_citation not in (DEFAULT_SETTING, None):
-            settings[
-                "reasoning.options.simple.highlight_citation"
-            ] = request.use_citation
-        if request.language not in (DEFAULT_SETTING, None, ""):
-            settings["reasoning.lang"] = request.language
+        _pipeline.apply_request_setting_overrides(settings, reasoning_id, request)
 
         retrievers = []
         if request.command_state == WEB_SEARCH_COMMAND:
@@ -568,10 +466,7 @@ class DocQARuntime:
                     )
                 )
 
-        reasoning_state = {
-            "app": deepcopy((state or {}).get("app", STATE["app"])),
-            "pipeline": deepcopy((state or {}).get(reasoning_id, {})),
-        }
+        reasoning_state = _pipeline.build_reasoning_state(state, reasoning_id)
         pipeline = reasoning_cls.get_pipeline(settings, reasoning_state, retrievers)
 
         active_file_id = str(request.active_file_id or "")
@@ -624,7 +519,22 @@ class DocQARuntime:
         pipeline.qa_scope = qa_scope
         pipeline.page_number = scoped_page_number
         pipeline.selected_text = selected_text
-        pipeline.graph_context = graph_context
+        pipeline.selected_file_records = self._selected_file_records_for_retrieval(
+            selected_file_ids,
+            active_file_id or "",
+            resolved_user_id,
+        )
+        element_file_ids = self._merge_unique_file_ids(
+            selected_file_ids,
+            [active_file_id],
+        )
+        pipeline.element_index_records = (
+            _runtime_elements.element_index_records_for_selected_files(
+                self.file_index,
+                element_file_ids,
+            )
+        )
+        _mara.apply_request_context(pipeline, request, graph_context)
 
         return _PreparedPipeline(
             pipeline=pipeline,
@@ -665,112 +575,56 @@ class DocQARuntime:
             session_info = self.create_session(user_id=resolved_user_id)
 
         selected_inputs = self._resolve_selected_inputs(request, session_info)
-        selected_file_ids_from_request = None
-        if self.file_index is not None and self.file_index.id in selected_inputs:
-            selected_file_ids_from_request = self.file_index.resolve_selected_ids(
-                resolved_user_id,
-                selected_inputs[self.file_index.id],
-            )
+        request_file_ids = _mara.selected_ids(self, resolved_user_id, selected_inputs)
 
-        request_to_run = DocQARequest(
-            prompt=request.prompt,
-            conversation_id=session_info.conversation_id,
-            selected_file_ids=selected_file_ids_from_request,
+        request_to_run = _turn.build_turn_request(
+            request,
+            session_info,
+            resolved_user_id=resolved_user_id,
             selected_inputs=selected_inputs,
-            active_file_id=request.active_file_id,
-            active_file_name=request.active_file_name,
-            qa_scope=request.qa_scope,
-            page_number=request.page_number,
-            selected_text=request.selected_text,
-            graph_context=deepcopy(request.graph_context),
-            graph_source_ids=deepcopy(request.graph_source_ids),
-            settings=deepcopy(request.settings or self.load_settings(resolved_user_id)),
-            state=deepcopy(request.state or session_info.state),
-            history=list(request.history or session_info.messages),
-            reasoning_type=request.reasoning_type,
-            llm=request.llm,
-            use_mindmap=request.use_mindmap,
-            use_citation=request.use_citation,
-            language=request.language,
-            command_state=request.command_state,
-            user_id=resolved_user_id,
-            origin=request.origin,
+            request_file_ids=request_file_ids,
+            load_settings=self.load_settings,
         )
         prepared = self._prepare_pipeline(request_to_run)
-        request_state = request_to_run.state or deepcopy(STATE)
-        request_to_run.state = request_state
-
         history = list(request_to_run.history or [])
-        text = ""
-        refs = ""
-        plot = None
-        mindmap_html = ""
-        stream_events: list[dict[str, Any]] = []
-
-        for response in prepared.pipeline.stream(
-            request.prompt,
-            session_info.conversation_id,
-            history,
-        ):
-            if not isinstance(response, Document) or response.channel is None:
-                continue
-
-            event = {
-                "channel": response.channel,
-                "content": _serialize_value(response.content),
-            }
-            stream_events.append(event)
-
-            if response.channel == "chat":
-                if response.content is None:
-                    text = ""
-                else:
-                    text += str(response.content)
-            elif response.channel == "info":
-                if response.content is None:
-                    refs = ""
-                    mindmap_html = ""
-                else:
-                    refs += str(response.content)
-                    if "markmap" in str(response.content):
-                        mindmap_html += str(response.content)
-            elif response.channel == "plot":
-                plot = response.content
-
-            pipeline_id = str(prepared.pipeline.get_info()["id"])
-            request_state.setdefault(pipeline_id, {})
-            request_state[pipeline_id] = prepared.reasoning_state["pipeline"]
-
-        if not text:
-            text = getattr(
+        stream_result = _turn.collect_stream_result(
+            prepared,
+            request_to_run,
+            conversation_id=session_info.conversation_id,
+            history=history,
+            empty_message=getattr(
                 flowsettings,
                 "KH_CHAT_EMPTY_MSG_PLACEHOLDER",
                 "(Sorry, I don't know)",
-            )
+            ),
+        )
 
-        messages = history + [(request.prompt, text)]
+        messages = history + [(request.prompt, stream_result.text)]
         existing_graph_source_ids = list(session_info.graph_source_ids or [])
-        graph_source_ids = self._normalize_selected_file_ids(request.graph_source_ids)
-        if not graph_source_ids:
-            graph_source_ids = (
-                list(prepared.selected_file_ids)
-                if prepared.selected_file_ids
-                else existing_graph_source_ids
-            )
+        graph_source_ids = _turn.graph_source_ids_for_turn(
+            request.graph_source_ids,
+            prepared.selected_file_ids,
+            existing_graph_source_ids,
+            self._normalize_selected_file_ids,
+        )
 
         retrieval_history, plot_history = self.persist_conversation_state(
             conversation_id=session_info.conversation_id,
             user_id=resolved_user_id,
-            retrieval_message=refs,
-            plot_data=plot,
+            retrieval_message=stream_result.refs,
+            plot_data=stream_result.plot,
             retrieval_history=session_info.retrieval_messages,
             plot_history=session_info.plot_history,
             messages=messages,
-            state=request_state,
+            state=stream_result.state,
             graph_source_ids=graph_source_ids,
             selected_inputs=selected_inputs,
             selected_file_ids=prepared.selected_file_ids,
             origin=request.origin,
+        )
+        _nb.save_captured_artifact(
+            session_info.conversation_id,
+            stream_result.capture.artifact,
         )
 
         selected_mapping = self._build_selected_mapping(
@@ -782,15 +636,15 @@ class DocQARuntime:
 
         return DocQAResponse(
             conversation_id=session_info.conversation_id,
-            answer=text,
-            references_html=refs,
-            references_text=_html_to_text(refs),
-            mindmap_html=mindmap_html,
-            plot=_serialize_value(plot),
+            answer=stream_result.text,
+            references_html=stream_result.refs,
+            references_text=_html_to_text(stream_result.refs),
+            mindmap_html=stream_result.mindmap_html,
+            plot=_serialize_value(stream_result.plot),
             messages=messages,
             retrieval_messages=retrieval_history,
             plot_history=_serialize_value(plot_history),
-            state=_serialize_value(request_state),
+            state=_serialize_value(stream_result.state),
             selected_file_ids=prepared.selected_file_ids,
             selected_mapping=_serialize_value(selected_mapping),
             graph_source_ids=graph_source_ids,
@@ -802,87 +656,28 @@ class DocQARuntime:
             graph_context=_serialize_value(prepared.graph_context),
             reasoning_id=prepared.reasoning_id,
             settings=_serialize_value(prepared.settings),
-            stream_events=stream_events,
+            stream_events=stream_result.stream_events,
             graph_cache=_serialize_value(
                 self.get_conversation_graph_cache(session_info.conversation_id)
+            ),
+            **_serialize_value(
+                stream_result.capture.as_response_kwargs(stream_result.text)
             ),
         )
 
     def _expand_zip_inputs(self, paths: list[str]) -> list[str]:
-        if not self.file_index:
-            return paths
-
-        supported_types = {
-            item.strip().lower()
-            for item in str(
-                self.file_index.config.get("supported_file_types", "")
-            ).split(",")
-            if item.strip()
-        }
-        expanded: list[str] = []
-        for raw_path in paths:
-            if raw_path.startswith("http://") or raw_path.startswith("https://"):
-                expanded.append(raw_path)
-                continue
-
-            path = Path(raw_path)
-            if path.suffix.lower() != ".zip":
-                expanded.append(str(path))
-                continue
-
-            out_dir = Path(
-                tempfile.mkdtemp(
-                    dir=str(flowsettings.KH_ZIP_INPUT_DIR),
-                    prefix=f"{path.stem}_",
-                )
-            )
-            with zipfile.ZipFile(path, "r") as zip_ref:
-                zip_ref.extractall(out_dir)
-
-            for child in sorted(out_dir.rglob("*")):
-                if not child.is_file():
-                    continue
-                if (
-                    child.suffix.lower() in supported_types
-                    and child.suffix.lower() != ".zip"
-                ):
-                    expanded.append(str(child.resolve()))
-        return expanded
+        return _indexing.expand_zip_inputs(
+            self.file_index,
+            paths,
+            zip_input_dir=flowsettings.KH_ZIP_INPUT_DIR,
+        )
 
     def _expand_index_inputs(self, paths: list[str]) -> list[str]:
-        if not self.file_index:
-            return []
-
-        supported_types = {
-            item.strip().lower()
-            for item in str(
-                self.file_index.config.get("supported_file_types", "")
-            ).split(",")
-            if item.strip()
-        }
-        collected: list[str] = []
-        for raw_path in paths:
-            candidate = str(raw_path or "").strip()
-            if not candidate:
-                continue
-
-            if candidate.startswith("http://") or candidate.startswith("https://"):
-                collected.append(candidate)
-                continue
-
-            path = Path(candidate).expanduser()
-            if not path.exists():
-                raise FileNotFoundError(f"Path does not exist: {candidate}")
-
-            if path.is_dir():
-                for child in sorted(path.rglob("*")):
-                    if child.is_file() and child.suffix.lower() in supported_types:
-                        collected.append(str(child.resolve()))
-                continue
-
-            collected.append(str(path.resolve()))
-
-        return self._expand_zip_inputs(collected)
+        return _indexing.expand_index_inputs(
+            self.file_index,
+            paths,
+            zip_input_dir=flowsettings.KH_ZIP_INPUT_DIR,
+        )
 
     def index_paths(
         self,
@@ -891,37 +686,15 @@ class DocQARuntime:
         user_id: Any = None,
         settings: Optional[dict[str, Any]] = None,
     ) -> DocQAIndexResult:
-        if not self.file_index:
-            raise ValueError("No file index is configured.")
-
-        resolved_user_id = self._resolve_user_id(user_id)
-        runtime_settings = deepcopy(settings or self.load_settings(resolved_user_id))
-        expanded_paths = self._expand_index_inputs(paths)
-        pipeline = self.file_index.get_indexing_pipeline(
-            runtime_settings, resolved_user_id
-        )
-
-        successes: list[dict[str, Any]] = []
-        failures: list[dict[str, Any]] = []
-        debug_messages: list[str] = []
-        index_inputs = cast(list[str | Path], expanded_paths)
-        for response in pipeline.stream(index_inputs, reindex=reindex):
-            if response.channel == "debug":
-                debug_messages.append(str(response.text))
-            elif response.channel == "index":
-                content = dict(response.content or {})
-                serialized = {
-                    key: _serialize_value(value) for key, value in content.items()
-                }
-                if serialized.get("status") == "success":
-                    successes.append(serialized)
-                else:
-                    failures.append(serialized)
-
-        return DocQAIndexResult(
-            successes=successes,
-            failures=failures,
-            debug_messages=debug_messages,
+        return _indexing.index_paths(
+            self.file_index,
+            paths,
+            reindex=reindex,
+            settings=settings,
+            load_settings=self.load_settings,
+            resolve_user_id=self._resolve_user_id,
+            user_id=user_id,
+            zip_input_dir=flowsettings.KH_ZIP_INPUT_DIR,
         )
 
     def delete_files(
@@ -988,80 +761,14 @@ class DocQARuntime:
 
     def doctor(self, user_id: Any = None) -> DocQADoctorResult:
         resolved_user_id = self._resolve_user_id(user_id)
-        issues: list[str] = []
-        warnings: list[str] = []
-
-        index_name = ""
-        index_id: int | None = None
-        if self.file_index is None:
-            issues.append("No default FileIndex is available.")
-        else:
-            index_name = self.file_index.name
-            index_id = self.file_index.id
-
-        try:
-            default_llm = llms.get_default_name()
-        except Exception as exc:
-            default_llm = ""
-            if isinstance(exc, ValueError) and "No models in pool" in str(exc):
-                warnings.append(
-                    "No default LLM configured yet. "
-                    "DocQA doctor can still run before model setup."
-                )
-            else:
-                issues.append(f"Unable to load default LLM: {exc}")
-
-        try:
-            default_embedding = embedding_models_manager.get_default_name()
-        except Exception as exc:
-            default_embedding = ""
-            if isinstance(exc, ValueError) and "No models in pool" in str(exc):
-                warnings.append(
-                    "No default embedding model configured yet. "
-                    "DocQA doctor can still run before model setup."
-                )
-            else:
-                issues.append(f"Unable to load default embedding model: {exc}")
-
-        warnings.extend(
-            f"Invalid LLM configuration: {error}" for error in llms.load_errors()
-        )
-        warnings.extend(
-            f"Invalid embedding configuration: {error}"
-            for error in embedding_models_manager.load_errors()
-        )
-        warnings.extend(
-            f"Invalid reranking configuration: {error}"
-            for error in reranking_models_manager.load_errors()
-        )
-
-        try:
-            file_count = len(self.list_files(user_id=resolved_user_id))
-        except Exception as exc:
-            file_count = 0
-            issues.append(f"Unable to read indexed files: {exc}")
-
-        try:
-            session_count = len(self.list_sessions(user_id=resolved_user_id))
-        except Exception as exc:
-            session_count = 0
-            issues.append(f"Unable to read saved sessions: {exc}")
-
-        graph_cache_dir = ""
-        if self.knowledge_graph is not None:
-            graph_cache_dir = str(self.knowledge_graph._storage_dir)
-
-        return DocQADoctorResult(
-            ok=not issues,
-            app_name=getattr(self._app, "app_name", "Slides"),
-            default_user_id=resolved_user_id,
-            index_name=index_name,
-            index_id=index_id,
-            llm_default=default_llm,
-            embedding_default=default_embedding,
-            file_count=file_count,
-            session_count=session_count,
-            graph_cache_dir=graph_cache_dir,
-            issues=issues,
-            warnings=warnings,
+        return _doctor.build_doctor_result(
+            app=self._app,
+            file_index=self.file_index,
+            knowledge_graph=self.knowledge_graph,
+            resolved_user_id=resolved_user_id,
+            list_files=self.list_files,
+            list_sessions=self.list_sessions,
+            llms_manager=llms,
+            embedding_manager=embedding_models_manager,
+            reranking_manager=reranking_models_manager,
         )

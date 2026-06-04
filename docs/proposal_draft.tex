@@ -101,7 +101,7 @@ The UI matters because users must inspect sources, not just receive answers. Gra
 
 \section{Development and Implementation Summary}
 
-The project will be implemented mainly in Python 3.10+. The repository has three main layers: \texttt{kotaemon} for LLM wrappers, loaders, vector stores and retrieval; \texttt{ktem} for the Gradio app runtime, settings, preview and DocQA orchestration; and \texttt{slide-cli} for the public \texttt{slide} CLI. This separates core RAG logic, services and user-facing commands.
+The project will be implemented mainly in Python 3.10+. The repository has three main layers: \texttt{kotaemon} for LLM wrappers, loaders, vector stores and retrieval; \texttt{ktem} for the Gradio app runtime, settings, preview and DocQA orchestration; and \texttt{slide-cli} as the internal package that exposes the public \texttt{MARA} CLI. This separates core RAG logic, services and user-facing commands.
 
 \textbf{Baseline and new work:}
 \begin{center}

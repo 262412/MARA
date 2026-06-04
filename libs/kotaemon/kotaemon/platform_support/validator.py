@@ -20,93 +20,99 @@ _REQUIRED_HOOK_FILES = (
     Path("hooks/scripts/security-guard.sh"),
 )
 
-_REQUIRED_SLIDE_SKILL_FILES = (
-    Path("skills/slide/SKILL.md"),
-    Path("skills/slide-apply/SKILL.md"),
-    Path("skills/slide-app/SKILL.md"),
-    Path("skills/slide-app-doctor/SKILL.md"),
-    Path("skills/slide-app-init/SKILL.md"),
-    Path("skills/slide-app-run/SKILL.md"),
-    Path("skills/slide-chat/SKILL.md"),
-    Path("skills/slide-delete/SKILL.md"),
-    Path("skills/slide-doctor/SKILL.md"),
-    Path("skills/slide-export-pdf/SKILL.md"),
-    Path("skills/slide-extract/SKILL.md"),
-    Path("skills/slide-files/SKILL.md"),
-    Path("skills/slide-inspect/SKILL.md"),
-    Path("skills/slide-model/SKILL.md"),
-    Path("skills/slide-model-init-config/SKILL.md"),
-    Path("skills/slide-model-providers/SKILL.md"),
-    Path("skills/slide-model-run/SKILL.md"),
-    Path("skills/slide-platform/SKILL.md"),
-    Path("skills/slide-platform-install/SKILL.md"),
-    Path("skills/slide-platform-list/SKILL.md"),
-    Path("skills/slide-platform-status/SKILL.md"),
-    Path("skills/slide-platform-validate/SKILL.md"),
-    Path("skills/slide-read/SKILL.md"),
-    Path("skills/slide-read-slide/SKILL.md"),
-    Path("skills/slide-resume/SKILL.md"),
-    Path("skills/slide-review/SKILL.md"),
-    Path("skills/slide-run/SKILL.md"),
-    Path("skills/slide-search/SKILL.md"),
-    Path("skills/slide-sessions/SKILL.md"),
-    Path("skills/slide-shell/SKILL.md"),
-    Path("skills/slide-write/SKILL.md"),
+_REQUIRED_MARA_SKILL_FILES = (
+    Path("skills/MARA/SKILL.md"),
+    Path("skills/MARA-apply/SKILL.md"),
+    Path("skills/MARA-app/SKILL.md"),
+    Path("skills/MARA-app-doctor/SKILL.md"),
+    Path("skills/MARA-app-init/SKILL.md"),
+    Path("skills/MARA-app-run/SKILL.md"),
+    Path("skills/MARA-chat/SKILL.md"),
+    Path("skills/MARA-delete/SKILL.md"),
+    Path("skills/MARA-doctor/SKILL.md"),
+    Path("skills/MARA-export-pdf/SKILL.md"),
+    Path("skills/MARA-extract/SKILL.md"),
+    Path("skills/MARA-files/SKILL.md"),
+    Path("skills/MARA-inspect/SKILL.md"),
+    Path("skills/MARA-model/SKILL.md"),
+    Path("skills/MARA-model-init-config/SKILL.md"),
+    Path("skills/MARA-model-providers/SKILL.md"),
+    Path("skills/MARA-model-run/SKILL.md"),
+    Path("skills/MARA-platform/SKILL.md"),
+    Path("skills/MARA-platform-install/SKILL.md"),
+    Path("skills/MARA-platform-list/SKILL.md"),
+    Path("skills/MARA-platform-status/SKILL.md"),
+    Path("skills/MARA-platform-validate/SKILL.md"),
+    Path("skills/MARA-read/SKILL.md"),
+    Path("skills/MARA-read-slide/SKILL.md"),
+    Path("skills/MARA-resume/SKILL.md"),
+    Path("skills/MARA-review/SKILL.md"),
+    Path("skills/MARA-run/SKILL.md"),
+    Path("skills/MARA-search/SKILL.md"),
+    Path("skills/MARA-sessions/SKILL.md"),
+    Path("skills/MARA-shell/SKILL.md"),
+    Path("skills/MARA-write/SKILL.md"),
 )
 
-_REQUIRED_SLIDE_DOCQA_SKILL_FILES = (
-    Path("skills/slide-docqa/SKILL.md"),
-    Path("skills/slide-docqa-ask/SKILL.md"),
-    Path("skills/slide-docqa-chat/SKILL.md"),
-    Path("skills/slide-docqa-delete/SKILL.md"),
-    Path("skills/slide-docqa-doctor/SKILL.md"),
-    Path("skills/slide-docqa-files/SKILL.md"),
-    Path("skills/slide-docqa-index/SKILL.md"),
-    Path("skills/slide-docqa-resume/SKILL.md"),
-    Path("skills/slide-docqa-sessions/SKILL.md"),
+_REQUIRED_MARA_DOCQA_SKILL_FILES = (
+    Path("skills/MARA-docqa/SKILL.md"),
+    Path("skills/MARA-docqa-artifacts/SKILL.md"),
+    Path("skills/MARA-docqa-ask/SKILL.md"),
+    Path("skills/MARA-docqa-chat/SKILL.md"),
+    Path("skills/MARA-docqa-delete/SKILL.md"),
+    Path("skills/MARA-docqa-doctor/SKILL.md"),
+    Path("skills/MARA-docqa-files/SKILL.md"),
+    Path("skills/MARA-docqa-index/SKILL.md"),
+    Path("skills/MARA-docqa-notes/SKILL.md"),
+    Path("skills/MARA-docqa-resume/SKILL.md"),
+    Path("skills/MARA-docqa-sessions/SKILL.md"),
+    Path("skills/MARA-docqa-sources/SKILL.md"),
 )
 
-_REQUIRED_CLAUDE_SLIDE_COMMAND_FILES = (
-    Path("commands/slide.md"),
-    Path("commands/slide-apply.md"),
-    Path("commands/slide-app.md"),
-    Path("commands/slide-app-doctor.md"),
-    Path("commands/slide-app-init.md"),
-    Path("commands/slide-app-run.md"),
-    Path("commands/slide-chat.md"),
-    Path("commands/slide-delete.md"),
-    Path("commands/slide-doctor.md"),
-    Path("commands/slide-export-pdf.md"),
-    Path("commands/slide-extract.md"),
-    Path("commands/slide-files.md"),
-    Path("commands/slide-inspect.md"),
-    Path("commands/slide-model.md"),
-    Path("commands/slide-model-init-config.md"),
-    Path("commands/slide-model-providers.md"),
-    Path("commands/slide-model-run.md"),
-    Path("commands/slide-platform.md"),
-    Path("commands/slide-platform-install.md"),
-    Path("commands/slide-platform-list.md"),
-    Path("commands/slide-platform-status.md"),
-    Path("commands/slide-platform-validate.md"),
-    Path("commands/slide-read.md"),
-    Path("commands/slide-read-slide.md"),
-    Path("commands/slide-resume.md"),
-    Path("commands/slide-review.md"),
-    Path("commands/slide-run.md"),
-    Path("commands/slide-search.md"),
-    Path("commands/slide-sessions.md"),
-    Path("commands/slide-shell.md"),
-    Path("commands/slide-write.md"),
-    Path("commands/slide-docqa.md"),
-    Path("commands/slide-docqa-ask.md"),
-    Path("commands/slide-docqa-chat.md"),
-    Path("commands/slide-docqa-delete.md"),
-    Path("commands/slide-docqa-doctor.md"),
-    Path("commands/slide-docqa-files.md"),
-    Path("commands/slide-docqa-index.md"),
-    Path("commands/slide-docqa-resume.md"),
-    Path("commands/slide-docqa-sessions.md"),
+_REQUIRED_CLAUDE_MARA_COMMAND_FILES = (
+    Path("commands/MARA.md"),
+    Path("commands/MARA-apply.md"),
+    Path("commands/MARA-app.md"),
+    Path("commands/MARA-app-doctor.md"),
+    Path("commands/MARA-app-init.md"),
+    Path("commands/MARA-app-run.md"),
+    Path("commands/MARA-chat.md"),
+    Path("commands/MARA-delete.md"),
+    Path("commands/MARA-doctor.md"),
+    Path("commands/MARA-export-pdf.md"),
+    Path("commands/MARA-extract.md"),
+    Path("commands/MARA-files.md"),
+    Path("commands/MARA-inspect.md"),
+    Path("commands/MARA-model.md"),
+    Path("commands/MARA-model-init-config.md"),
+    Path("commands/MARA-model-providers.md"),
+    Path("commands/MARA-model-run.md"),
+    Path("commands/MARA-platform.md"),
+    Path("commands/MARA-platform-install.md"),
+    Path("commands/MARA-platform-list.md"),
+    Path("commands/MARA-platform-status.md"),
+    Path("commands/MARA-platform-validate.md"),
+    Path("commands/MARA-read.md"),
+    Path("commands/MARA-read-slide.md"),
+    Path("commands/MARA-resume.md"),
+    Path("commands/MARA-review.md"),
+    Path("commands/MARA-run.md"),
+    Path("commands/MARA-search.md"),
+    Path("commands/MARA-sessions.md"),
+    Path("commands/MARA-shell.md"),
+    Path("commands/MARA-write.md"),
+    Path("commands/MARA-docqa.md"),
+    Path("commands/MARA-docqa-artifacts.md"),
+    Path("commands/MARA-docqa-ask.md"),
+    Path("commands/MARA-docqa-chat.md"),
+    Path("commands/MARA-docqa-delete.md"),
+    Path("commands/MARA-docqa-doctor.md"),
+    Path("commands/MARA-docqa-files.md"),
+    Path("commands/MARA-docqa-index.md"),
+    Path("commands/MARA-docqa-notes.md"),
+    Path("commands/MARA-docqa-resume.md"),
+    Path("commands/MARA-docqa-sessions.md"),
+    Path("commands/MARA-docqa-sources.md"),
 )
 
 
@@ -129,23 +135,23 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
             if not (spec.bundle_root / component).exists():
                 errors.append(f"Missing component in bundle: {component}")
 
-        for rel in _REQUIRED_SLIDE_SKILL_FILES:
+        for rel in _REQUIRED_MARA_SKILL_FILES:
             if not (spec.bundle_root / rel).exists():
-                errors.append(f"Missing required slide skill asset: {rel.as_posix()}")
-        for rel in _REQUIRED_SLIDE_DOCQA_SKILL_FILES:
+                errors.append(f"Missing required MARA skill asset: {rel.as_posix()}")
+        for rel in _REQUIRED_MARA_DOCQA_SKILL_FILES:
             if not (spec.bundle_root / rel).exists():
                 errors.append(
-                    f"Missing required slide DocQA skill asset: {rel.as_posix()}"
+                    f"Missing required MARA DocQA skill asset: {rel.as_posix()}"
                 )
         if current == "claude-code":
             for rel in _REQUIRED_HOOK_FILES:
                 if not (spec.bundle_root / rel).exists():
                     errors.append(f"Missing required hook asset: {rel.as_posix()}")
 
-            for rel in _REQUIRED_CLAUDE_SLIDE_COMMAND_FILES:
+            for rel in _REQUIRED_CLAUDE_MARA_COMMAND_FILES:
                 if not (spec.bundle_root / rel).exists():
                     errors.append(
-                        f"Missing required slide command asset: {rel.as_posix()}"
+                        f"Missing required MARA command asset: {rel.as_posix()}"
                     )
 
             hooks_json = spec.bundle_root / "hooks" / "hooks.json"
@@ -159,9 +165,9 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
             config_template = spec.bundle_root / "config.toml.template"
             if config_template.exists():
                 text = config_template.read_text(encoding="utf-8")
-                if "BEGIN SLIDE PLATFORM BLOCK" not in text:
+                if "BEGIN MARA PLATFORM BLOCK" not in text:
                     errors.append(
-                        "config.toml.template must include BEGIN SLIDE PLATFORM BLOCK"
+                        "config.toml.template must include BEGIN MARA PLATFORM BLOCK"
                     )
 
         output.append(
@@ -189,25 +195,23 @@ def validate_installed(
     else:
         skills_dir = resolved_target / "skills"
         if skills_dir.exists():
-            for rel in _REQUIRED_SLIDE_SKILL_FILES:
+            for rel in _REQUIRED_MARA_SKILL_FILES:
                 if not (resolved_target / rel).exists():
                     errors.append(
-                        "Missing installed slide skill asset: " f"{rel.as_posix()}"
+                        "Missing installed MARA skill asset: " f"{rel.as_posix()}"
                     )
-            for rel in _REQUIRED_SLIDE_DOCQA_SKILL_FILES:
+            for rel in _REQUIRED_MARA_DOCQA_SKILL_FILES:
                 if not (resolved_target / rel).exists():
                     errors.append(
-                        "Missing installed slide DocQA skill asset: "
-                        f"{rel.as_posix()}"
+                        "Missing installed MARA DocQA skill asset: " f"{rel.as_posix()}"
                     )
         if platform_name == "claude-code":
             commands_dir = resolved_target / "commands"
             if commands_dir.exists():
-                for rel in _REQUIRED_CLAUDE_SLIDE_COMMAND_FILES:
+                for rel in _REQUIRED_CLAUDE_MARA_COMMAND_FILES:
                     if not (resolved_target / rel).exists():
                         errors.append(
-                            "Missing installed slide command asset: "
-                            f"{rel.as_posix()}"
+                            "Missing installed MARA command asset: " f"{rel.as_posix()}"
                         )
 
     return ValidationResult(platform=platform_name, valid=not errors, errors=errors)

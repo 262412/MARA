@@ -61,6 +61,7 @@ def _append_quick_upload_chat_refresh(event_chain, page):
                 page._app.chat_page.chat_file_rows,
                 page._app.chat_page.chat_file_list,
                 page._app.chat_page.chat_selected_file,
+                page._app.chat_page.workbench_file_summary,
             ],
             show_progress="hidden",
         )
@@ -146,6 +147,7 @@ def _append_uploaded_chat_graph_refresh(event_chain, page):
                 page._app.chat_page.chat_file_rows,
                 page._app.chat_page.chat_file_list,
                 page._app.chat_page.chat_selected_file,
+                page._app.chat_page.workbench_file_summary,
             ],
             show_progress="hidden",
         )

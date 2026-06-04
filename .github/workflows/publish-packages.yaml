@@ -64,7 +64,7 @@ jobs:
       - name: Publish to TestPyPI
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.repository == 'testpypi' }}
         run: |
-          # publish in dependency order: ktem -> kotaemon -> slide-cli -> kotaemon-app
+          # publish in dependency order: ktem -> kotaemon -> mara-research-cli -> kotaemon-app
           ARGS=(release --repository testpypi)
           if [ "${{ inputs.skip_existing }}" = "true" ]; then
             ARGS+=(--skip-existing)
@@ -74,7 +74,7 @@ jobs:
       - name: Publish to PyPI
         if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.repository == 'pypi') }}
         run: |
-          # publish in dependency order: ktem -> kotaemon -> slide-cli -> kotaemon-app
+          # publish in dependency order: ktem -> kotaemon -> mara-research-cli -> kotaemon-app
           ARGS=(release --repository pypi)
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             if [ "${{ inputs.skip_existing }}" = "true" ]; then

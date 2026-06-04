@@ -1,8 +1,8 @@
-# BEGIN SLIDE PLATFORM BLOCK
+# BEGIN MARA PLATFORM BLOCK
 
 sandbox_mode = "danger-full-access"
-[profiles.slide]
-default_skill = "slide"
-notes = "Use slide doctor and slide model providers before real calls."
+[profiles.MARA]
+default_skill = "MARA"
+notes = "Use MARA doctor and MARA model providers before real calls."
 
-# END SLIDE PLATFORM BLOCK
+# END MARA PLATFORM BLOCK

@@ -23,6 +23,14 @@ class DocQARequest:
     state: Optional[dict[str, Any]] = None
     history: Optional[list[tuple[str, str]]] = None
     reasoning_type: Optional[str] = None
+    task_type: Optional[str] = None
+    agent_mode: Optional[str] = None
+    artifact_type: Optional[str] = None
+    controller_mode: Optional[str] = None
+    route_policy: Optional[str] = None
+    planner_model: Optional[str] = None
+    allowed_routes: Optional[list[str]] = None
+    verification_mode: Optional[str] = None
     llm: Optional[str] = None
     use_mindmap: bool | str | None = None
     use_citation: Optional[str] = None
@@ -57,6 +65,17 @@ class DocQAResponse:
     settings: dict[str, Any]
     stream_events: list[dict[str, Any]]
     graph_cache: Optional[dict[str, Any]] = None
+    agent_trace: list[dict[str, Any]] = field(default_factory=list)
+    evidence_metadata: dict[str, Any] = field(default_factory=dict)
+    controller_decision: dict[str, Any] = field(default_factory=dict)
+    route_decision: dict[str, Any] = field(default_factory=dict)
+    retrieve_decision: dict[str, Any] = field(default_factory=dict)
+    verify_decision: dict[str, Any] = field(default_factory=dict)
+    guardrail_decision: dict[str, Any] = field(default_factory=dict)
+    controller_trace: list[dict[str, Any]] = field(default_factory=list)
+    evidence_bundle: dict[str, Any] = field(default_factory=dict)
+    backend_metadata: dict[str, Any] = field(default_factory=dict)
+    artifact: Any = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)

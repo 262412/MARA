@@ -522,7 +522,12 @@ class AcceptanceMatrix:
                 self.user_id, file_selector_state
             )
             graph_source_ids = chat_page.load_conversation_graph_state(conversation_id)
-            rows, list_html, focus_label = chat_page.refresh_chat_file_list(
+            (
+                rows,
+                list_html,
+                focus_label,
+                _summary_html,
+            ) = chat_page.refresh_chat_file_list(
                 conversation_id,
                 self.user_id,
                 selector_choices,

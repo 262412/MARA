@@ -202,27 +202,27 @@ class _LazyKotaemonGroup(click.Group):
 
 @click.group()
 def main():
-    """Unified slide product CLI.
+    """Unified MARA product CLI.
 
     Top-level agent line:
-    - `slide doctor` validates the agent runtime and provider setup.
-    - `slide inspect`, `slide read-slide`, `slide extract`, and
-      `slide search` expose read-only deck observability commands.
-    - `slide files`, `slide read`, `slide write`, `slide delete`, and
-      `slide shell` expose explicit high-permission workspace operations.
-    - `slide apply`, `slide export-pdf`, and `slide review` expose
+    - `MARA doctor` validates the agent runtime and provider setup.
+    - `MARA inspect`, `MARA read-slide`, `MARA extract`, and
+      `MARA search` expose read-only deck observability commands.
+    - `MARA files`, `MARA read`, `MARA write`, `MARA delete`, and
+      `MARA shell` expose explicit high-permission workspace operations.
+    - `MARA apply`, `MARA export-pdf`, and `MARA review` expose
       deterministic deck-output and inspection workflows.
-    - `slide run` executes one high-permission deck workflow.
-    - `slide chat`, `slide sessions`, and `slide resume` manage interactive
+    - `MARA run` executes one high-permission deck workflow.
+    - `MARA chat`, `MARA sessions`, and `MARA resume` manage interactive
       deck-agent sessions.
 
     Specialist DocQA line:
-    - `slide docqa ...` owns the document QA workflow and focused DocQA skills.
+    - `MARA docqa ...` owns the document QA workflow and focused DocQA skills.
 
     Support lines:
-    - `slide app ...` owns packaged app setup, doctor, and launch workflows.
-    - `slide model ...` owns shared model routing workflows.
-    - `slide platform ...` owns Codex and Claude Code support asset workflows.
+    - `MARA app ...` owns packaged app setup, doctor, and launch workflows.
+    - `MARA model ...` owns shared model routing workflows.
+    - `MARA platform ...` owns Codex and Claude Code support asset workflows.
     """
 
 
@@ -263,7 +263,7 @@ main.add_command(
     help="Emit structured JSON output.",
 )
 def doctor(json_output):
-    """Validate the top-level slide agent runtime and provider setup."""
+    """Validate the top-level MARA agent runtime and provider setup."""
     payload = _collect_doctor_payload()
     if json_output:
         _echo_json(payload)
@@ -589,7 +589,7 @@ def search_cmd(input_path, query, json_output):
     help="Emit structured JSON output.",
 )
 def apply_cmd(session_id, output, json_output):
-    """Apply the latest saved patch from a top-level slide session."""
+    """Apply the latest saved patch from a top-level MARA session."""
     try:
         payload = apply_session_patch(
             session_id,
@@ -670,7 +670,7 @@ def review_cmd(input_path, json_output):
 
 @main.command("run")
 @click.option("--file", "input_path", required=True, type=click.Path(exists=True))
-@click.option("--prompt", required=True, help="Instruction for the slide agent.")
+@click.option("--prompt", required=True, help="Instruction for the MARA agent.")
 @click.option(
     "--output",
     default=None,
@@ -746,7 +746,7 @@ def run_cmd(
     max_iterations,
     json_output,
 ):
-    """Run one high-permission slide agent workflow."""
+    """Run one high-permission MARA agent workflow."""
     if apply and dry_run:
         raise click.ClickException("--apply and --dry-run cannot be used together.")
 
@@ -792,7 +792,7 @@ def run_cmd(
     help="Emit structured JSON output.",
 )
 def sessions_cmd(json_output):
-    """Inspect saved top-level slide agent sessions."""
+    """Inspect saved top-level MARA agent sessions."""
     store = _slide_session_store_cls()()
     sessions = store.list_sessions()
     payload = [session.as_dict() for session in sessions]
@@ -827,7 +827,7 @@ def _run_repl(
     while True:
         try:
             user_prompt = click.prompt(
-                "slide", prompt_suffix="> ", show_default=False, default=""
+                "MARA", prompt_suffix="> ", show_default=False, default=""
             )
         except (EOFError, click.Abort):
             _echo_text("")
@@ -947,7 +947,7 @@ def chat_cmd(
     max_iterations,
     json_output,
 ):
-    """Open an interactive high-permission slide agent session."""
+    """Open an interactive high-permission MARA agent session."""
     store = _slide_session_store_cls()()
     session = store.create_session(
         mode="chat",
@@ -1042,7 +1042,7 @@ def resume_cmd(
     max_iterations,
     json_output,
 ):
-    """Resume a saved top-level slide agent session."""
+    """Resume a saved top-level MARA agent session."""
     store = _slide_session_store_cls()()
     session = store.load_session(session_id)
     if session is None:

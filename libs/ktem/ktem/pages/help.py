@@ -67,7 +67,7 @@ class HelpPage:
             with gr.Accordion("Create Your Own Space"):
                 gr.Markdown(
                     "This is a demo with limited functionality. "
-                    "Use **Create space** button to install Slides "
+                    "Use **Create space** button to install MARA "
                     "in your own space with all features "
                     "(including upload and manage your private "
                     "documents securely)."

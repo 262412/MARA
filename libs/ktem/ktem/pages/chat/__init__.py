@@ -1,17 +1,17 @@
-import asyncio
 import html
 import json
 import logging
 import os
 import re
+import shutil
 from copy import deepcopy
-from typing import Optional
+from typing import Any
 
 import gradio as gr
 import markdown
 from ktem.app import BasePage
 from ktem.db.models import Conversation, engine
-from ktem.docqa import DocQARequest, DocQARuntime
+from ktem.docqa import DocQARuntime
 from ktem.index.file.ui import File
 from ktem.reasoning.prompt_optimization.mindmap import MINDMAP_HTML_EXPORT_TEMPLATE
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
@@ -25,7 +25,6 @@ from sqlmodel import Session, select
 from theflow.settings import settings as flowsettings
 from theflow.utils.modules import import_dotted_string
 
-from kotaemon.base import Document
 from kotaemon.indices.ingests.files import KH_DEFAULT_FILE_EXTRACTORS
 from kotaemon.indices.qa.utils import strip_think_tag
 
@@ -33,6 +32,11 @@ from ...utils import SUPPORTED_LANGUAGE_MAP, get_file_names_regex, get_urls
 from ...utils.commands import WEB_SEARCH_COMMAND
 from ...utils.hf_papers import get_recommended_papers
 from ...utils.rate_limit import check_rate_limit
+from .chat_docqa_runtime import (
+    build_web_docqa_request,
+    docqa_research_control_inputs,
+    render_docqa_runtime_controls,
+)
 from .chat_knowledge_graph_bindings import (
     bind_knowledge_graph_events,
     subscribe_public_knowledge_graph_events,
@@ -53,12 +57,17 @@ from .generation_store import (
     update_answer,
     update_mindmap,
     update_plot,
-    update_reasoning_state,
 )
 from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
 from .paper_list import PaperListPage
 from .report import ReportIssue
+from .studio_artifacts import (
+    render_controller_trace_html,
+    render_conversation_notebook_update,
+    render_notebook_panel_html,
+    render_studio_trace_panel,
+)
 
 KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
@@ -473,6 +482,17 @@ function() {
 
 
 class ChatPage(BasePage):
+    chat_settings: Any
+    citation: Any
+    docqa_controller_mode: Any
+    docqa_planner_model: Any
+    docqa_route_policy: Any
+    docqa_verification_mode: Any
+    language: Any
+    model_type: Any
+    reasoning_type: Any
+    use_mindmap: Any
+
     def __init__(self, app):
         self._app = app
         self._indices_input = []
@@ -518,7 +538,7 @@ class ChatPage(BasePage):
         self._request_chat_history = gr.State(value=[])
 
     def on_building_ui(self):
-        with gr.Row():
+        with gr.Row(elem_id="page-workbench-layout"):
             # Chat history state (not used for page-level isolation)
             self.state_chat = gr.State(STATE)
             # Retrieval and plot history states
@@ -539,23 +559,54 @@ class ChatPage(BasePage):
             )
 
             with gr.Column(scale=1, elem_id="conv-settings-panel") as self.conv_column:
-                self.chat_control = ConversationControl(self._app)
-
-                self.upload_scope_hint = gr.Markdown(
+                gr.HTML(
                     (
-                        "**Upload files from the same knowledge system when "
-                        "possible.** If some sources are only weakly related, "
-                        "the knowledge graph will split them into separate maps."
-                    ),
-                    elem_id="chat-upload-hint",
+                        "<div class='corpus-pane-title'>"
+                        "<h2>Corpus</h2>"
+                        "<button type='button' id='corpus-add-trigger'>+ Add</button>"
+                        "</div>"
+                    )
                 )
+                self.upload_scope_hint = gr.Markdown("", elem_id="chat-upload-hint")
+
+                if len(self._app.index_manager.indices) > 0:
+                    with gr.Accordion(
+                        label="Add files",
+                        open=True,
+                        elem_id="corpus-add-panel",
+                    ):
+                        self.quick_file_upload_status = gr.Markdown()
+                        if not KH_DEMO_MODE:
+                            self.quick_file_upload = File(
+                                file_types=list(KH_DEFAULT_FILE_EXTRACTORS.keys()),
+                                file_count="multiple",
+                                container=True,
+                                show_label=False,
+                                elem_id="quick-file",
+                            )
+                        self.quick_urls = gr.Textbox(
+                            placeholder=(
+                                "Paste URLs"
+                                if not KH_DEMO_MODE
+                                else "Paste Arxiv URLs\n(https://arxiv.org/abs/xxx)"
+                            ),
+                            lines=1,
+                            container=False,
+                            show_label=False,
+                            elem_id=(
+                                "quick-url" if not KH_DEMO_MODE else "quick-url-demo"
+                            ),
+                        )
+
                 with gr.Column(elem_id="chat-file-browser"):
                     self.chat_file_filter = gr.Textbox(
                         value="",
-                        label="Files in this conversation",
-                        placeholder="Filter file name",
+                        label="Search files",
+                        placeholder="Search files...",
                         elem_id="chat-file-filter",
-                        visible=False,
+                        container=False,
+                        show_label=False,
+                        visible=True,
                     )
                     self.chat_file_rows = gr.State([])
                     self.chat_selected_file = gr.Markdown(
@@ -565,6 +616,10 @@ class ChatPage(BasePage):
                     self.chat_file_list = gr.HTML(
                         "<div class='chat-file-empty'>No files uploaded</div>",
                         elem_id="chat-file-list",
+                    )
+                    self.workbench_file_summary = gr.HTML(
+                        self._render_corpus_summary_html([]),
+                        elem_id="workbench-file-summary",
                     )
 
                 with gr.Accordion(
@@ -618,35 +673,6 @@ class ChatPage(BasePage):
 
                 self.chat_suggestion = ChatSuggestion(self._app, show_panel=False)
 
-                if len(self._app.index_manager.indices) > 0:
-                    quick_upload_label = (
-                        "Quick Upload" if not KH_DEMO_MODE else "Or input new paper URL"
-                    )
-
-                    with gr.Accordion(label=quick_upload_label) as _:
-                        self.quick_file_upload_status = gr.Markdown()
-                        if not KH_DEMO_MODE:
-                            self.quick_file_upload = File(
-                                file_types=list(KH_DEFAULT_FILE_EXTRACTORS.keys()),
-                                file_count="multiple",
-                                container=True,
-                                show_label=False,
-                                elem_id="quick-file",
-                            )
-                        self.quick_urls = gr.Textbox(
-                            placeholder=(
-                                "Or paste URLs"
-                                if not KH_DEMO_MODE
-                                else "Paste Arxiv URLs\n(https://arxiv.org/abs/xxx)"
-                            ),
-                            lines=1,
-                            container=False,
-                            show_label=False,
-                            elem_id=(
-                                "quick-url" if not KH_DEMO_MODE else "quick-url-demo"
-                            ),
-                        )
-
                 if not KH_DEMO_MODE:
                     self.report_issue = ReportIssue(self._app, show_panel=False)
                 else:
@@ -659,56 +685,125 @@ class ChatPage(BasePage):
                 if KH_DEMO_MODE:
                     self.paper_list = PaperListPage(self._app)
 
-                with gr.Column(elem_id="chat-preview-section"):
-                    self.chat_panel = ChatPanel(self._app)
+                with gr.Row(elem_id="reader-workbench"):
+                    with gr.Column(scale=1, elem_id="page-strip-panel"):
+                        self.page_strip_file_summary = gr.HTML(
+                            self._render_page_strip_header("", "", "", 1),
+                            elem_id="page-strip-file-summary",
+                        )
+                        self.page_strip_search = gr.Textbox(
+                            value="",
+                            placeholder="Search within file...",
+                            container=False,
+                            show_label=False,
+                            interactive=True,
+                            elem_id="page-strip-search",
+                        )
+                        self.page_thumbnail_strip = gr.HTML(
+                            self._render_page_thumbnail_strip("", "", "", 1, 1),
+                            elem_id="page-thumbnail-list",
+                        )
 
-                with gr.Column(elem_id="chat-bottom-controls"):
-                    self.chat_panel.render_notice_and_pager()
+                    with gr.Column(scale=4, elem_id="document-reader-panel"):
+                        gr.HTML(
+                            (
+                                "<div class='reader-toolbar'>"
+                                "<div class='reader-toolbar__tools'>"
+                                "<button type='button' aria-label='Pan' class='is-active' data-reader-action='pan'>"
+                                "<svg viewBox='0 0 24 24'><path d='M8 12V7a2 2 0 0 1 4 0v4-6a2 2 0 1 1 4 0v7-4a2 2 0 1 1 4 0v7a6 6 0 0 1-6 6h-2a7 7 0 0 1-7-7v-2a2 2 0 0 1 3 0Z'/></svg>"
+                                "</button>"
+                                "<button type='button' aria-label='Select' data-reader-action='select'>"
+                                "<svg viewBox='0 0 24 24'><path d='m5 3 14 9-7 2-2 7Z'/></svg>"
+                                "</button>"
+                                "<button type='button' aria-label='Area select' data-reader-action='area'>"
+                                "<svg viewBox='0 0 24 24'><path d='M4 6V4h2M18 4h2v2M20 18v2h-2M6 20H4v-2M8 8h8v8H8Z'/></svg>"
+                                "</button>"
+                                "<button type='button' aria-label='Annotate' data-reader-action='annotate'>"
+                                "<svg viewBox='0 0 24 24'><path d='m4 20 4-1 11-11a2 2 0 0 0-3-3L5 16Z'/></svg>"
+                                "</button>"
+                                "<span class='reader-toolbar__divider'></span>"
+                                "<button type='button' aria-label='Zoom out' data-reader-action='zoom-out'>-</button>"
+                                "<strong id='reader-zoom-label' class='reader-toolbar__zoom'>100%</strong>"
+                                "<button type='button' aria-label='Zoom in' data-reader-action='zoom-in'>+</button>"
+                                "</div>"
+                                "<div class='reader-toolbar__tools'>"
+                                "<button type='button' aria-label='Download preview' data-reader-action='download'>"
+                                "<svg viewBox='0 0 24 24'><path d='M12 3v12m0 0 4-4m-4 4-4-4M5 21h14'/></svg>"
+                                "</button>"
+                                "<button type='button' aria-label='More reader options' aria-expanded='false' data-reader-action='more'>...</button>"
+                                "</div>"
+                                "</div>"
+                            ),
+                            elem_id="reader-toolbar",
+                        )
+                        with gr.Column(elem_id="chat-preview-section"):
+                            self.chat_panel = ChatPanel(self._app)
 
-                    with gr.Accordion(
-                        label="Chat settings",
-                        elem_id="chat-settings-expand",
-                        open=False,
-                        visible=not KH_DEMO_MODE,
-                    ) as self.chat_settings:
-                        with gr.Row(elem_id="quick-setting-labels"):
-                            gr.HTML("Reasoning method")
-                            gr.HTML("Response language")
+                        self.chat_panel.render_notice_and_pager()
+                        self.page_metadata_strip = gr.HTML(
+                            self._render_page_metadata_strip("", "", "", 1, 1),
+                            elem_id="page-metadata-strip",
+                        )
 
-                        with gr.Row():
-                            reasoning_setting = (
-                                self._app.default_settings.reasoning.settings["use"]
-                            )
-                            language_setting = (
-                                self._app.default_settings.reasoning.settings["lang"]
-                            )
-
-                            self.reasoning_type = gr.Dropdown(
-                                choices=reasoning_setting.choices[:REASONING_LIMITS],
-                                value=reasoning_setting.value,
-                                container=False,
-                                show_label=False,
-                            )
-                            self.language = gr.Dropdown(
-                                choices=language_setting.choices,
-                                value=language_setting.value,
-                                container=False,
-                                show_label=False,
-                            )
-
-                            # Keep advanced settings as internal defaults for
-                            # pipeline compatibility.
-                            self.model_type = gr.State(value=DEFAULT_SETTING)
-                            self.citation = gr.State(value=DEFAULT_SETTING)
-                            self.use_mindmap = gr.State(value=DEFAULT_SETTING)
-
-                    self.chat_panel.render_input()
+                        render_docqa_runtime_controls(
+                            self,
+                            reasoning_limits=REASONING_LIMITS,
+                            default_setting=DEFAULT_SETTING,
+                        )
 
             with gr.Column(
                 scale=INFO_PANEL_SCALES[False], elem_id="chat-info-panel"
             ) as self.info_column:
                 with gr.Accordion(
-                    label="Knowledge Graph", open=True, elem_id="info-expand"
+                    label="Ask This Page", open=True, elem_id="answer-expand"
+                ):
+                    self.chat_panel.render_input()
+                    gr.HTML(
+                        (
+                            "<div class='suggested-question-list'>"
+                            "<strong>Suggested questions for this page</strong>"
+                            "<button type='button'>What is the main idea of this page?</button>"
+                            "<button type='button'>How does ViT convert an image to a sequence?</button>"
+                            "<button type='button'>What is the role of the [class] token?</button>"
+                            "<button type='button'>Why does ViT use a linear projection?</button>"
+                            "</div>"
+                        ),
+                        elem_id="suggested-question-list",
+                    )
+                    self.kg_answer_hint = gr.HTML(
+                        value=(
+                            "<div class='kg-answer-hint kg-answer-hint--empty'>"
+                            "Select a node in the knowledge graph mind map to pin "
+                            "context and get a suggested question."
+                            "</div>"
+                        ),
+                        elem_id="kg-answer-hint",
+                    )
+                    gr.HTML("<div class='answer-panel-label'>Answer</div>")
+                    self.answer_panel = gr.Markdown(
+                        value="",
+                        elem_id="answer-panel",
+                        latex_delimiters=[
+                            {"left": "$$", "right": "$$", "display": True},
+                            {"left": "$", "right": "$", "display": False},
+                            {"left": "\\(", "right": "\\)", "display": False},
+                            {"left": "\\[", "right": "\\]", "display": True},
+                        ],
+                    )
+                    self.citations_panel = gr.HTML(
+                        self._render_citations_card_html(),
+                        elem_id="citations-card",
+                    )
+                    self.reasoning_trace_panel = gr.HTML(
+                        self._render_reasoning_trace_html(),
+                        elem_id="reasoning-trace-card",
+                    )
+                    self.notebook_panel = gr.HTML(
+                        render_notebook_panel_html(), elem_id="notebook-panel-card"
+                    )
+
+                with gr.Accordion(
+                    label="Knowledge Map (Page-level)", open=True, elem_id="info-expand"
                 ):
                     self.modal = gr.HTML("<div id='pdf-modal'></div>")
                     self.knowledge_graph_status = gr.Markdown(
@@ -725,26 +820,10 @@ class ChatPage(BasePage):
                     )
                     self.info_panel = gr.HTML(elem_id="html-info-panel")
 
-                with gr.Accordion(label="Answer", open=True, elem_id="answer-expand"):
-                    self.kg_answer_hint = gr.HTML(
-                        value=(
-                            "<div class='kg-answer-hint kg-answer-hint--empty'>"
-                            "Select a node in the knowledge graph mind map to pin "
-                            "context and get a suggested question."
-                            "</div>"
-                        ),
-                        elem_id="kg-answer-hint",
-                    )
-                    self.answer_panel = gr.Markdown(
-                        value="",
-                        elem_id="answer-panel",
-                        latex_delimiters=[
-                            {"left": "$$", "right": "$$", "display": True},
-                            {"left": "$", "right": "$", "display": False},
-                            {"left": "\\(", "right": "\\)", "display": False},
-                            {"left": "\\[", "right": "\\]", "display": True},
-                        ],
-                    )
+                with gr.Accordion(
+                    label="Conversation", open=False, elem_id="conversation-dock"
+                ):
+                    self.chat_control = ConversationControl(self._app)
 
         self.followup_questions = self.chat_suggestion.examples
         self.followup_questions_ui = self.chat_suggestion.accordion
@@ -866,14 +945,30 @@ class ChatPage(BasePage):
             source_map[file_id] = name or file_id
         return source_map
 
-    def _load_available_source_map(self, user_id) -> dict[str, str]:
-        source_map: dict[str, str] = {}
+    def _load_available_source_records(self, user_id) -> dict[str, dict]:
+        records: dict[str, dict] = {}
         if not self.file_index:
-            return source_map
+            return records
+
+        if hasattr(self.file_index, "list_source_rows"):
+            try:
+                for row in self.file_index.list_source_rows(user_id):
+                    file_id = str(row.get("id", "") or "")
+                    if not file_id:
+                        continue
+                    records[file_id] = {
+                        "id": file_id,
+                        "name": str(row.get("name", "") or file_id),
+                        "path": str(row.get("path", "") or ""),
+                        "size": int(row.get("size", 0) or 0),
+                    }
+                return records
+            except Exception as exc:
+                logger.warning("Failed to list source rows for chat sidebar: %s", exc)
 
         Source = self.file_index._resources.get("Source")
         if Source is None:
-            return source_map
+            return records
 
         try:
             with Session(engine) as session:
@@ -883,27 +978,43 @@ class ChatPage(BasePage):
 
                 rows = session.execute(statement).all()
                 for row in rows:
-                    item = None
-                    if isinstance(row, (list, tuple)):
-                        item = row[0] if row else None
-                    elif hasattr(row, "_mapping"):
-                        mapping = getattr(row, "_mapping")
-                        if Source in mapping:
-                            item = mapping[Source]
-                        elif mapping:
-                            item = next(iter(mapping.values()))
+                    item = self._unwrap_source_row(row, Source)
                     if item is None:
-                        item = row
-
+                        continue
                     file_id = str(getattr(item, "id", "") or "")
                     if not file_id:
                         continue
-                    file_name = str(getattr(item, "name", "") or file_id)
-                    source_map[file_id] = file_name
+                    records[file_id] = {
+                        "id": file_id,
+                        "name": str(getattr(item, "name", "") or file_id),
+                        "path": str(getattr(item, "path", "") or ""),
+                        "size": int(getattr(item, "size", 0) or 0),
+                    }
         except Exception as exc:
-            logger.warning("Failed to load source map for chat sidebar: %s", exc)
+            logger.warning("Failed to load source records for chat sidebar: %s", exc)
 
-        return source_map
+        return records
+
+    @staticmethod
+    def _unwrap_source_row(row, Source):
+        item = None
+        if isinstance(row, (list, tuple)):
+            item = row[0] if row else None
+        elif hasattr(row, "_mapping"):
+            mapping = getattr(row, "_mapping")
+            if Source in mapping:
+                item = mapping[Source]
+            elif mapping:
+                item = next(iter(mapping.values()))
+        if item is None:
+            item = row
+        return item
+
+    def _load_available_source_map(self, user_id) -> dict[str, str]:
+        return {
+            file_id: str(record.get("name", "") or file_id)
+            for file_id, record in self._load_available_source_records(user_id).items()
+        }
 
     def sync_graph_source_ids_with_selector_choices(
         self,
@@ -963,11 +1074,211 @@ class ChatPage(BasePage):
 
         return normalized_ids
 
+    @staticmethod
+    def _format_corpus_file_type(file_name: str) -> str:
+        suffix = os.path.splitext(str(file_name or "").lower())[1]
+        if suffix == ".pdf":
+            return "PDF"
+        if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}:
+            return "Images"
+        if suffix in {".ppt", ".pptx"}:
+            return "Slides"
+        if suffix in {".doc", ".docx", ".txt", ".md", ".rtf"}:
+            return "Documents"
+        return "Documents"
+
+    @staticmethod
+    def _format_bytes(size_bytes: int | float | None) -> str:
+        size = float(size_bytes or 0)
+        units = ["B", "KB", "MB", "GB", "TB"]
+        for unit in units:
+            if size < 1024 or unit == units[-1]:
+                if unit == "B":
+                    return f"{int(size)} {unit}"
+                return f"{size:.1f} {unit}"
+            size /= 1024
+        return "0 B"
+
+    def _format_corpus_file_meta(self, file_name: str, page_count=None) -> str:
+        if page_count:
+            pages = max(1, int(page_count))
+            return f"{pages} page" if pages == 1 else f"{pages} pages"
+        suffix = os.path.splitext(str(file_name or "").lower())[1]
+        if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}:
+            return "1 page"
+        return "page count unavailable"
+
+    def _resolve_source_file_path(self, file_id: str) -> str:
+        if not file_id:
+            return ""
+        try:
+            return self.page_preview.resolve_file_path(file_id)
+        except Exception as exc:
+            logger.debug("Failed to resolve source file path %s: %s", file_id, exc)
+            return ""
+
+    def _count_source_pages(self, file_id: str, file_name: str, file_path: str) -> int:
+        if not file_path or not os.path.isfile(file_path):
+            return 1
+        suffix = os.path.splitext(str(file_name or file_path).lower())[1]
+        if suffix == ".pdf":
+            try:
+                return max(1, len(PdfReader(file_path).pages))
+            except Exception:
+                return 1
+        if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}:
+            return 1
+        try:
+            return max(
+                1,
+                int(self.page_preview._get_total_pages(file_id, file_name, file_path)),
+            )
+        except Exception:
+            return 1
+
+    def _source_rows_for_sidebar(
+        self, user_id, first_selector_choices, scoped_ids, conversation_id, keyword
+    ) -> list[dict]:
+        records = self._load_available_source_records(user_id)
+        source_map = {
+            file_id: str(record.get("name", "") or file_id)
+            for file_id, record in records.items()
+        }
+        if not source_map and not str(conversation_id or "").strip():
+            source_map = self._build_selector_source_map(first_selector_choices)
+            records = {
+                file_id: {"id": file_id, "name": name, "path": "", "size": 0}
+                for file_id, name in source_map.items()
+            }
+
+        if source_map and scoped_ids:
+            available_ids = set(source_map.keys())
+            scoped_ids = [file_id for file_id in scoped_ids if file_id in available_ids]
+
+        if not scoped_ids and not str(conversation_id or "").strip():
+            scoped_ids = list(source_map.keys())
+
+        rows: list[dict] = []
+        for file_id in scoped_ids:
+            record = dict(records.get(file_id, {}))
+            file_name = str(record.get("name", "") or source_map.get(file_id, file_id))
+            if keyword and keyword not in file_name.lower():
+                continue
+            file_path = self._resolve_source_file_path(file_id)
+            size = int(record.get("size", 0) or 0)
+            if not size and file_path and os.path.isfile(file_path):
+                size = os.path.getsize(file_path)
+            page_count = self._count_source_pages(file_id, file_name, file_path)
+            rows.append(
+                {
+                    "id": file_id,
+                    "name": file_name,
+                    "path": file_path,
+                    "size": size,
+                    "page_count": page_count,
+                }
+            )
+        return rows
+
+    def _render_corpus_summary_html(self, rows: list[dict]) -> str:
+        file_count = len(rows)
+        page_count = sum(max(1, int(row.get("page_count", 1) or 1)) for row in rows)
+        total_size = sum(int(row.get("size", 0) or 0) for row in rows)
+        storage_label = self._format_bytes(total_size)
+        width = 0
+        if total_size:
+            try:
+                usage = shutil.disk_usage(
+                    str(getattr(flowsettings, "KH_FILESTORAGE_PATH", os.getcwd()))
+                )
+                width = min(100, max(2, int((total_size / max(usage.total, 1)) * 100)))
+            except Exception:
+                width = 100
+
+        file_label = "file" if file_count == 1 else "files"
+        page_label = "page" if page_count == 1 else "pages"
+        return (
+            "<div class='workbench-file-summary'>"
+            "<div>"
+            f"<strong>{file_count} {file_label}</strong>"
+            f"<span>{page_count} {page_label}</span>"
+            "</div>"
+            "<div>"
+            f"<strong>{html.escape(storage_label)}</strong>"
+            "<span>stored</span>"
+            "</div>"
+            "<div class='workbench-file-summary__bar'>"
+            f"<span style='width: {width}%'></span>"
+            "</div>"
+            "</div>"
+        )
+
     def _render_chat_file_list_html(
         self, rows: list[dict], selected_ids: set[str]
     ) -> str:
         if not rows:
             return "<div class='chat-file-empty'>No files uploaded</div>"
+
+        grouped_rows: dict[str, list[dict]] = {
+            "PDF": [],
+            "Images": [],
+            "Slides": [],
+            "Documents": [],
+        }
+        for row in rows:
+            file_name = str(row.get("name", "") or row.get("id", ""))
+            grouped_rows[self._format_corpus_file_type(file_name)].append(row)
+
+        sections = []
+        for file_type, type_rows in grouped_rows.items():
+            if not type_rows:
+                continue
+
+            items = []
+            for row in type_rows:
+                file_id = str(row.get("id", "") or "")
+                file_name = str(row.get("name", "") or file_id)
+                is_selected = file_id in selected_ids
+                item_class = (
+                    "corpus-file-entry is-selected"
+                    if is_selected
+                    else "corpus-file-entry"
+                )
+                page_meta = self._format_corpus_file_meta(
+                    file_name, row.get("page_count")
+                )
+                size_meta = self._format_bytes(int(row.get("size", 0) or 0))
+                items.append(
+                    "<button type='button' "
+                    f"class='{item_class}' "
+                    f"data-chat-file-id='{html.escape(file_id, quote=True)}'>"
+                    "<span class='corpus-file-entry__icon'>"
+                    f"{html.escape(file_type[:3].upper())}"
+                    "</span>"
+                    "<span class='corpus-file-entry__body'>"
+                    "<span class='corpus-file-entry__name'>"
+                    f"{html.escape(file_name)}"
+                    "</span>"
+                    "<span class='corpus-file-entry__meta'>"
+                    f"{html.escape(page_meta)} - {html.escape(size_meta)}"
+                    "</span>"
+                    "</span>"
+                    "<span class='corpus-file-entry__status'>Indexed</span>"
+                    "</button>"
+                )
+
+            sections.append(
+                "<section class='corpus-file-section'>"
+                "<div class='corpus-file-section__header'>"
+                f"<strong>{html.escape(file_type)}</strong>"
+                f"<span>{len(type_rows)}</span>"
+                "</div>"
+                "<div class='corpus-file-section__items'>" + "".join(items) + "</div>"
+                "</section>"
+            )
+
+        if sections:
+            return "<div class='corpus-file-library'>" + "".join(sections) + "</div>"
 
         items = []
         for row in rows:
@@ -989,6 +1300,329 @@ class ChatPage(BasePage):
 
         return "<div class='chat-file-list-shell'>" + "".join(items) + "</div>"
 
+    def _render_page_strip_header(
+        self, file_id: str, file_name: str, file_path: str, total_pages
+    ) -> str:
+        del file_id
+        if not file_name:
+            return "<div class='page-strip-empty'>Select a file to preview pages.</div>"
+        file_type = self._format_corpus_file_type(file_name)
+        size = (
+            os.path.getsize(file_path) if file_path and os.path.isfile(file_path) else 0
+        )
+        pages = max(1, int(total_pages or 1))
+        page_label = "page" if pages == 1 else "pages"
+        return (
+            "<div class='page-strip-header'>"
+            f"<div class='page-strip-file-icon'>{html.escape(file_type[:3].upper())}</div>"
+            "<div>"
+            f"<strong>{html.escape(file_name)}</strong>"
+            f"<span>{pages} {page_label} - {html.escape(self._format_bytes(size))}</span>"
+            "</div>"
+            "<span class='page-strip-indexed'>Indexed</span>"
+            "</div>"
+        )
+
+    @staticmethod
+    def _is_text_thumbnail_source(file_name: str, file_path: str) -> bool:
+        suffix = os.path.splitext(str(file_name or file_path).lower())[1]
+        return suffix in {".txt", ".md", ".html", ".htm", ".mhtml", ".docx"}
+
+    @staticmethod
+    def _plain_text_from_preview_html(preview_html: str) -> str:
+        text = re.sub(r"<[^>]+>", " ", str(preview_html or ""))
+        return " ".join(html.unescape(text).split())
+
+    def _get_text_thumbnail_excerpt(
+        self,
+        file_id: str,
+        file_name: str,
+        file_path: str,
+        page: int,
+    ) -> str:
+        if not self._is_text_thumbnail_source(file_name, file_path):
+            return ""
+        text = self.page_preview._extract_text_from_file(file_path, file_name)
+        pages = self.page_preview._paginate_plain_text(text, max_chars_per_page=1200)
+        page_idx = max(0, min(len(pages) - 1, int(page or 1) - 1))
+        return self._plain_text_from_preview_html(pages[page_idx])[:260]
+
+    def _render_text_thumbnail_preview(
+        self,
+        file_id: str,
+        file_name: str,
+        file_path: str,
+        page: int,
+        query: str,
+    ) -> str:
+        excerpt = self._get_text_thumbnail_excerpt(file_id, file_name, file_path, page)
+        if not excerpt:
+            excerpt = "No text preview available."
+        if query:
+            pattern = re.compile(re.escape(query), flags=re.IGNORECASE)
+            excerpt = pattern.sub(
+                lambda match: f"<mark>{html.escape(match.group(0))}</mark>",
+                html.escape(excerpt),
+            )
+        else:
+            excerpt = html.escape(excerpt)
+        return f"<span class='page-thumbnail-card__text'>{excerpt}</span>"
+
+    def _render_page_thumbnail_strip(
+        self,
+        file_id: str,
+        file_name: str,
+        file_path: str,
+        page_number,
+        total_pages,
+        filter_text: str = "",
+    ) -> str:
+        if not file_id or not file_name:
+            return "<div class='page-thumbnail-empty'>No file selected.</div>"
+
+        current_page = max(1, int(page_number or 1))
+        total = max(1, int(total_pages or 1))
+        query = str(filter_text or "").strip()
+        page_numbers = list(range(1, min(total, 12) + 1))
+        if total > 12 and current_page not in page_numbers:
+            start = max(1, current_page - 5)
+            end = min(total, start + 11)
+            start = max(1, end - 11)
+            page_numbers = list(range(start, end + 1))
+
+        if query and self._is_text_thumbnail_source(file_name, file_path):
+            matched_pages = [
+                page
+                for page in range(1, total + 1)
+                if query.lower()
+                in self._get_text_thumbnail_excerpt(
+                    file_id, file_name, file_path, page
+                ).lower()
+            ]
+            if not matched_pages:
+                return (
+                    "<div class='page-thumbnail-empty'>"
+                    f"No pages match '{html.escape(query)}'."
+                    "</div>"
+                )
+            page_numbers = matched_pages[:12]
+
+        cards = []
+        for page in page_numbers:
+            classes = ["page-thumbnail-card"]
+            if page == current_page:
+                classes.append("is-active")
+            if self._is_text_thumbnail_source(file_name, file_path):
+                preview = self._render_text_thumbnail_preview(
+                    file_id, file_name, file_path, page, query
+                )
+            else:
+                preview_src = self.page_preview._get_page_preview_image(
+                    file_id, file_path, page
+                )
+                if preview_src:
+                    preview = (
+                        "<img class='page-thumbnail-card__image' "
+                        f"src='{html.escape(preview_src, quote=True)}' "
+                        f"alt='Page {page} preview' />"
+                    )
+                else:
+                    preview = "<span class='page-thumbnail-card__page'></span>"
+            cards.append(
+                "<button type='button' "
+                f"class='{' '.join(classes)}' "
+                f"data-page-number='{page}'>"
+                f"<span class='page-thumbnail-card__num'>{page}</span>"
+                f"{preview}"
+                f"<strong>Page {page}</strong>"
+                "</button>"
+            )
+
+        return "<div class='page-thumbnail-list'>" + "".join(cards) + "</div>"
+
+    def _render_page_metadata_strip(
+        self,
+        file_id: str,
+        file_name: str,
+        file_path: str,
+        page_number,
+        total_pages,
+    ) -> str:
+        del file_id
+        file_type = self._format_corpus_file_type(file_name) if file_name else "None"
+        current_page = max(1, int(page_number or 1))
+        total = max(1, int(total_pages or 1))
+        extracted = (
+            "Available" if file_path and os.path.isfile(file_path) else "Unavailable"
+        )
+        suffix = os.path.splitext(str(file_name or file_path).lower())[1]
+        ocr_state = (
+            "Needed for scanned pages"
+            if suffix in {".png", ".jpg", ".jpeg"}
+            else "Not needed"
+        )
+        language_setting = self._app.default_settings.reasoning.settings.get("lang")
+        language = getattr(language_setting, "value", "") or "default"
+        summary = (
+            f"Previewing {html.escape(file_name)}" if file_name else "No page selected"
+        )
+        return (
+            "<div class='page-metadata-strip'>"
+            f"<div><span>Modality</span><strong>{html.escape(file_type)}</strong></div>"
+            f"<div><span>Page</span><strong>{current_page} / {total}</strong></div>"
+            f"<div><span>Page Summary</span><strong>{summary}</strong></div>"
+            f"<div><span>Extracted Text</span><strong>{html.escape(extracted)}</strong></div>"
+            f"<div><span>OCR</span><strong>{html.escape(ocr_state)}</strong></div>"
+            f"<div><span>Language</span><strong>{html.escape(str(language))}</strong></div>"
+            "</div>"
+        )
+
+    @staticmethod
+    def _strip_html_text(value: str) -> str:
+        text = re.sub(r"<[^>]+>", " ", str(value or ""))
+        return " ".join(html.unescape(text).split())
+
+    @staticmethod
+    def _count_evidence_items(retrieval_html: str) -> int:
+        return len(
+            re.findall(
+                r"<details\s+class=['\"]evidence",
+                str(retrieval_html or ""),
+                flags=re.IGNORECASE,
+            )
+        )
+
+    def _render_reasoning_trace_html(
+        self,
+        question: str = "",
+        retrieval_html: str = "",
+        answer_html: str = "",
+        active_file_id: str = "",
+        page_number=None,
+        artifact_payload=None,
+    ) -> str:
+        question_text = self._strip_html_text(question)
+        retrieval_text = self._strip_html_text(retrieval_html)
+        answer_text = self._strip_html_text(answer_html)
+        if not question_text and not retrieval_text and not answer_text:
+            return render_studio_trace_panel(
+                "<div class='reasoning-trace-card reasoning-trace-card--empty'>"
+                "<div><strong>Reasoning Trace</strong><span>Waiting</span></div>"
+                "<p>Run a page question to see actual retrieval / answer steps.</p>"
+                "</div>",
+                artifact_payload,
+            )
+
+        evidence_count = self._count_evidence_items(retrieval_html)
+        retrieval_done = bool(retrieval_text or answer_text)
+        answer_done = bool(answer_text)
+        try:
+            current_page = max(1, int(page_number or 1))
+        except (TypeError, ValueError):
+            current_page = 1
+        scope_detail = (
+            f"File {active_file_id}, page {current_page}"
+            if active_file_id
+            else "Current corpus selection"
+        )
+        retrieval_detail = (
+            f"{evidence_count} evidence panel{'s' if evidence_count != 1 else ''} returned"
+            if evidence_count
+            else (
+                "No evidence panel returned"
+                if retrieval_done
+                else "Waiting for retrieval output"
+            )
+        )
+        answer_detail = (
+            f"{len(answer_text)} answer characters generated"
+            if answer_done
+            else "Waiting for answer synthesis"
+        )
+        safe_question = html.escape(question_text[:140] or "Submitted question")
+
+        steps = [
+            ("Question", safe_question, "done"),
+            ("Scope", html.escape(scope_detail), "done"),
+            (
+                "Evidence retrieval",
+                html.escape(retrieval_detail),
+                "done" if retrieval_done else "pending",
+            ),
+            (
+                "Answer synthesis",
+                html.escape(answer_detail),
+                "done" if answer_done else "pending",
+            ),
+        ]
+        items = "".join(
+            "<li>"
+            f"<div><strong>{title}</strong><small>{detail}</small></div>"
+            f"<span class='is-{status}'>{status}</span>"
+            "</li>"
+            for title, detail, status in steps
+        )
+        done_count = sum(1 for _, _, status in steps if status == "done")
+        return render_studio_trace_panel(
+            "<div class='reasoning-trace-card'>"
+            f"<div><strong>Reasoning Trace</strong><span>Real steps {done_count}/{len(steps)}</span></div>"
+            f"<ol>{items}</ol></div>",
+            artifact_payload,
+        )
+
+    def _render_citations_card_html(self, retrieval_html: str = "") -> str:
+        evidence_count = self._count_evidence_items(retrieval_html)
+        summaries = re.findall(
+            r"<summary>(.*?)</summary>",
+            str(retrieval_html or ""),
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        labels = [
+            html.escape(self._strip_html_text(summary)[:80])
+            for summary in summaries[:3]
+            if self._strip_html_text(summary)
+        ]
+        if not evidence_count:
+            return (
+                "<div class='citations-card citations-card--empty'>"
+                "<strong>Citations</strong>"
+                "<p>No cited evidence returned yet.</p>"
+                "</div>"
+            )
+
+        chips = "".join(f"<span>{label}</span>" for label in labels)
+        return (
+            "<div class='citations-card'>"
+            f"<strong>Citations ({evidence_count})</strong>"
+            f"<div>{chips}</div>"
+            "</div>"
+        )
+
+    def refresh_page_context_view(
+        self, file_id, file_name, file_path, page_number, total_pages, filter_text=""
+    ):
+        return (
+            self._render_page_strip_header(file_id, file_name, file_path, total_pages),
+            self._render_page_thumbnail_strip(
+                file_id, file_name, file_path, page_number, total_pages, filter_text
+            ),
+            self._render_page_metadata_strip(
+                file_id, file_name, file_path, page_number, total_pages
+            ),
+        )
+
+    def refresh_page_thumbnail_search(
+        self, file_id, file_name, file_path, page_number, total_pages, filter_text
+    ):
+        return self._render_page_thumbnail_strip(
+            file_id,
+            file_name,
+            file_path,
+            page_number,
+            total_pages,
+            filter_text,
+        )
+
     def refresh_chat_file_list(
         self,
         conversation_id,
@@ -1001,29 +1635,18 @@ class ChatPage(BasePage):
         selected_ids = self._normalize_selected_file_ids(selected_file_ids)
         selected_set = set(selected_ids)
         keyword = str(filter_text or "").strip().lower()
-        source_map = self._load_available_source_map(user_id)
-        if not source_map and not str(conversation_id or "").strip():
-            source_map = self._build_selector_source_map(first_selector_choices)
-
         scoped_ids = self._normalize_selected_file_ids(graph_source_ids)
         if not scoped_ids:
             # Backward-compatible fallback for older conversations.
             scoped_ids = selected_ids
 
-        if source_map and scoped_ids:
-            available_ids = set(source_map.keys())
-            scoped_ids = [file_id for file_id in scoped_ids if file_id in available_ids]
-
-        if not scoped_ids and not str(conversation_id or "").strip():
-            # No active conversation yet: show all available files in collection.
-            scoped_ids = list(source_map.keys())
-
-        rows: list[dict] = []
-        for file_id in scoped_ids:
-            name = source_map.get(file_id, file_id)
-            if keyword and keyword not in name.lower():
-                continue
-            rows.append({"id": file_id, "name": name})
+        rows = self._source_rows_for_sidebar(
+            user_id,
+            first_selector_choices,
+            scoped_ids,
+            conversation_id,
+            keyword,
+        )
 
         selected_name = "all files in conversation"
         if selected_ids:
@@ -1033,12 +1656,18 @@ class ChatPage(BasePage):
                     selected_name = row["name"]
                     break
             if selected_name == "all files in conversation":
+                source_map = self._load_available_source_map(user_id)
                 selected_name = source_map.get(first_selected, first_selected)
         elif not str(conversation_id or "").strip():
             selected_name = "all files in collection"
 
         list_html = self._render_chat_file_list_html(rows, selected_set)
-        return rows, list_html, f"Focus: {selected_name}"
+        return (
+            rows,
+            list_html,
+            f"Focus: {selected_name}",
+            self._render_corpus_summary_html(rows),
+        )
 
     def select_chat_file(self, file_id):
         target_id = str(file_id or "").strip()
@@ -1317,7 +1946,6 @@ class ChatPage(BasePage):
                 "",
                 [],
             )
-
         rerun_history = chat_history
         if rerun_history and rerun_history[-1][0] == last_question:
             rerun_history = rerun_history[:-1] + [(last_question, None)]
@@ -1342,6 +1970,7 @@ class ChatPage(BasePage):
             page_number,
             "page",
             selected_page_text,
+            *("", "llm", "auto", "light", "", None),
             *selecteds,
         ):
             final_output = output
@@ -1408,11 +2037,41 @@ class ChatPage(BasePage):
                 outputs=[self._selected_page_text],
                 show_progress="hidden",
             ).then(
+                fn=self.refresh_page_context_view,
+                inputs=[
+                    self._active_file_id,
+                    self._active_file_name,
+                    self._active_file_path,
+                    self.chat_panel.page_number,
+                    self._active_file_total_pages,
+                    self.page_strip_search,
+                ],
+                outputs=[
+                    self.page_strip_file_summary,
+                    self.page_thumbnail_strip,
+                    self.page_metadata_strip,
+                ],
+                show_progress="hidden",
+            ).then(
                 fn=lambda: True,
                 inputs=None,
                 outputs=[self._preview_links],
                 js=pdfview_js,
             )
+
+        self.page_strip_search.input(
+            fn=self.refresh_page_thumbnail_search,
+            inputs=[
+                self._active_file_id,
+                self._active_file_name,
+                self._active_file_path,
+                self.chat_panel.page_number,
+                self._active_file_total_pages,
+                self.page_strip_search,
+            ],
+            outputs=[self.page_thumbnail_strip],
+            show_progress="hidden",
+        )
 
         self.chat_panel.preview_refresh_timer.tick(
             fn=self.page_preview.on_preview_tick,
@@ -1430,6 +2089,22 @@ class ChatPage(BasePage):
                 self._active_file_total_pages,
                 self.chat_panel.pdf_preview_src,
                 self.chat_panel.pdf_preview_notice,
+            ],
+            show_progress="hidden",
+        ).then(
+            fn=self.refresh_page_context_view,
+            inputs=[
+                self._active_file_id,
+                self._active_file_name,
+                self._active_file_path,
+                self.chat_panel.page_number,
+                self._active_file_total_pages,
+                self.page_strip_search,
+            ],
+            outputs=[
+                self.page_strip_file_summary,
+                self.page_thumbnail_strip,
+                self.page_metadata_strip,
             ],
             show_progress="hidden",
         )
@@ -1459,6 +2134,22 @@ class ChatPage(BasePage):
         ).then(
             fn=lambda: "",
             outputs=[self._selected_page_text],
+            show_progress="hidden",
+        ).then(
+            fn=self.refresh_page_context_view,
+            inputs=[
+                self._active_file_id,
+                self._active_file_name,
+                self._active_file_path,
+                self.chat_panel.page_number,
+                self._active_file_total_pages,
+                self.page_strip_search,
+            ],
+            outputs=[
+                self.page_strip_file_summary,
+                self.page_thumbnail_strip,
+                self.page_metadata_strip,
+            ],
             show_progress="hidden",
         ).then(
             fn=lambda: True,
@@ -1494,6 +2185,22 @@ class ChatPage(BasePage):
             outputs=[self._selected_page_text],
             show_progress="hidden",
         ).then(
+            fn=self.refresh_page_context_view,
+            inputs=[
+                self._active_file_id,
+                self._active_file_name,
+                self._active_file_path,
+                self.chat_panel.page_number,
+                self._active_file_total_pages,
+                self.page_strip_search,
+            ],
+            outputs=[
+                self.page_strip_file_summary,
+                self.page_thumbnail_strip,
+                self.page_metadata_strip,
+            ],
+            show_progress="hidden",
+        ).then(
             fn=lambda: True,
             inputs=None,
             outputs=[self._preview_links],
@@ -1525,6 +2232,22 @@ class ChatPage(BasePage):
         ).then(
             fn=lambda: "",
             outputs=[self._selected_page_text],
+            show_progress="hidden",
+        ).then(
+            fn=self.refresh_page_context_view,
+            inputs=[
+                self._active_file_id,
+                self._active_file_name,
+                self._active_file_path,
+                self.chat_panel.page_number,
+                self._active_file_total_pages,
+                self.page_strip_search,
+            ],
+            outputs=[
+                self.page_strip_file_summary,
+                self.page_thumbnail_strip,
+                self.page_metadata_strip,
+            ],
             show_progress="hidden",
         ).then(
             fn=lambda: True,
@@ -1592,6 +2315,7 @@ class ChatPage(BasePage):
                     self.chat_panel.qa_scope,
                     self._selected_page_text,
                     self._selected_graph_context,
+                    *docqa_research_control_inputs(self),
                     self.state_plot_panel,
                 ]
                 + self._indices_input,
@@ -1602,6 +2326,8 @@ class ChatPage(BasePage):
                     self.state_plot_panel,
                     self.state_chat,
                     self.answer_panel,
+                    self.citations_panel,
+                    self.reasoning_trace_panel,
                     self._request_page_number,
                     self._request_file_id,
                     self._request_last_question,
@@ -1682,9 +2408,6 @@ class ChatPage(BasePage):
             ],
             "show_progress": "hidden",
         }
-        # chat_event = chat_event.success(**onSuggestChatEvent)
-
-        # final data persist
         if not KH_DEMO_MODE:
             chat_event = chat_event.then(
                 fn=self.persist_data_source,
@@ -1747,6 +2470,14 @@ class ChatPage(BasePage):
                 fn=lambda: "",
                 outputs=[self.answer_panel],
             ).then(
+                fn=self.render_latest_citations_card,
+                inputs=[self.state_retrieval_history],
+                outputs=[self.citations_panel],
+            ).then(
+                fn=self.render_latest_reasoning_trace,
+                inputs=[self.chat_panel.chatbot, self.state_retrieval_history],
+                outputs=[self.reasoning_trace_panel],
+            ).then(
                 fn=lambda: "",
                 outputs=[self._last_question],
             ).then(
@@ -1801,6 +2532,14 @@ class ChatPage(BasePage):
             ).then(
                 fn=lambda: "",
                 outputs=[self.answer_panel],
+            ).then(
+                fn=self.render_latest_citations_card,
+                inputs=[self.state_retrieval_history],
+                outputs=[self.citations_panel],
+            ).then(
+                fn=self.render_latest_reasoning_trace,
+                inputs=[self.chat_panel.chatbot, self.state_retrieval_history],
+                outputs=[self.reasoning_trace_panel],
             ).then(
                 fn=lambda: "",
                 outputs=[self._last_question],
@@ -1860,6 +2599,14 @@ class ChatPage(BasePage):
                 fn=self._json_to_plot,
                 inputs=self.state_plot_panel,
                 outputs=self.plot_panel,
+            ).then(
+                fn=self.render_latest_citations_card,
+                inputs=[self.state_retrieval_history],
+                outputs=[self.citations_panel],
+            ).then(
+                fn=self.render_latest_reasoning_trace,
+                inputs=[self.chat_panel.chatbot, self.state_retrieval_history],
+                outputs=[self.reasoning_trace_panel],
             ).then(
                 lambda: self.toggle_delete(""),
                 outputs=[
@@ -1970,6 +2717,23 @@ class ChatPage(BasePage):
                 show_progress="hidden",
             )
             .then(
+                fn=self.refresh_page_context_view,
+                inputs=[
+                    self._active_file_id,
+                    self._active_file_name,
+                    self._active_file_path,
+                    self.chat_panel.page_number,
+                    self._active_file_total_pages,
+                    self.page_strip_search,
+                ],
+                outputs=[
+                    self.page_strip_file_summary,
+                    self.page_thumbnail_strip,
+                    self.page_metadata_strip,
+                ],
+                show_progress="hidden",
+            )
+            .then(
                 fn=lambda: True,
                 js=clear_bot_message_selection_js,
             )
@@ -1996,6 +2760,18 @@ class ChatPage(BasePage):
                 outputs=[self._last_question],
                 show_progress="hidden",
             )
+            .then(
+                fn=self.render_latest_citations_card,
+                inputs=[self.state_retrieval_history],
+                outputs=[self.citations_panel],
+                show_progress="hidden",
+            )
+            .then(
+                fn=self.render_latest_reasoning_trace,
+                inputs=[self.chat_panel.chatbot, self.state_retrieval_history],
+                outputs=[self.reasoning_trace_panel],
+                show_progress="hidden",
+            )
             .then(fn=None, inputs=None, outputs=None, js=chat_input_focus_js)
         )
 
@@ -2010,6 +2786,8 @@ class ChatPage(BasePage):
                 outputs=[
                     self.info_panel,
                     self.state_plot_panel,
+                    self.citations_panel,
+                    self.reasoning_trace_panel,
                 ],
             ).then(
                 fn=self._json_to_plot,
@@ -2079,8 +2857,9 @@ class ChatPage(BasePage):
             **onSuggestChatEvent
         )
         self.chat_control.conversation_id.change(
-            lambda: gr.update(visible=False),
-            outputs=self.plot_panel,
+            render_conversation_notebook_update,
+            [self.chat_control.conversation_id],
+            [self.plot_panel, self.notebook_panel],
         )
 
         self.followup_questions.select(
@@ -2423,9 +3202,47 @@ class ChatPage(BasePage):
                 plot_history[index],
             )
         except IndexError:
-            retrieval_content, plot_content = gr.update(), None
+            return gr.update(), None, gr.update(), gr.update()
 
-        return retrieval_content, plot_content
+        citations_content = (
+            self._render_citations_card_html(retrieval_content)
+            if isinstance(retrieval_content, str)
+            else gr.update()
+        )
+        trace_content = (
+            self._render_reasoning_trace_html(
+                question=f"Conversation turn {index + 1}",
+                retrieval_html=retrieval_content,
+            )
+            if isinstance(retrieval_content, str)
+            else gr.update()
+        )
+        return retrieval_content, plot_content, citations_content, trace_content
+
+    def render_latest_reasoning_trace(self, chat_history, retrieval_history):
+        question, answer = "", ""
+        if chat_history:
+            latest = chat_history[-1]
+            if isinstance(latest, (list, tuple)) and len(latest) >= 2:
+                question, answer = latest[0], latest[1]
+            elif isinstance(latest, dict):
+                question = latest.get("content", "")
+
+        retrieval_html = ""
+        if retrieval_history:
+            retrieval_html = retrieval_history[-1] or ""
+
+        return self._render_reasoning_trace_html(
+            question=question,
+            retrieval_html=retrieval_html,
+            answer_html=answer,
+        )
+
+    def render_latest_citations_card(self, retrieval_history):
+        retrieval_html = ""
+        if retrieval_history:
+            retrieval_html = retrieval_history[-1] or ""
+        return self._render_citations_card_html(retrieval_html)
 
     @staticmethod
     def _extract_pdf_page_text(
@@ -2478,6 +3295,10 @@ class ChatPage(BasePage):
         qa_scope: str,
         selected_page_text: str,
         selected_graph_context: str,
+        controller_mode: str = "llm",
+        route_policy: str = "auto",
+        verification_mode: str = "light",
+        planner_model: str = "",
         *selecteds,
     ):
         """Create the pipeline from settings
@@ -2491,24 +3312,15 @@ class ChatPage(BasePage):
         Returns:
             - the pipeline objects
         """
-        try:
-            graph_context = (
-                json.loads(selected_graph_context) if selected_graph_context else {}
-            )
-            if not isinstance(graph_context, dict):
-                graph_context = {}
-        except Exception:
-            graph_context = {}
-
-        request = DocQARequest(
+        request = build_web_docqa_request(
             prompt="",
             selected_inputs=self._build_selected_input_map(*selecteds),
-            active_file_id=active_file_id or "",
-            active_file_name=active_file_name or "",
-            qa_scope=str(qa_scope or "page").replace("-", "_"),
-            page_number=max(1, int(page_number or 1)),
-            selected_text=(selected_page_text or "").strip(),
-            graph_context=graph_context,
+            active_file_id=active_file_id,
+            active_file_name=active_file_name,
+            qa_scope=qa_scope,
+            page_number=page_number,
+            selected_text=selected_page_text,
+            selected_graph_context=selected_graph_context,
             settings=deepcopy(settings),
             state=deepcopy(state),
             reasoning_type=session_reasoning_type,
@@ -2518,6 +3330,10 @@ class ChatPage(BasePage):
             language=session_language,
             command_state=command_state,
             user_id=user_id,
+            controller_mode=controller_mode,
+            route_policy=route_policy,
+            verification_mode=verification_mode,
+            planner_model=planner_model,
         )
         return self.docqa.create_pipeline(request)
 
@@ -2540,16 +3356,15 @@ class ChatPage(BasePage):
         qa_scope,
         selected_page_text,
         selected_graph_context,
+        controller_mode,
+        route_policy,
+        verification_mode,
+        planner_model,
         state_plot_panel,
         *selecteds,
         request: gr.Request | None = None,
     ):
-        """Chat function"""
-        # Extract the latest user input and any existing output
         chat_input, chat_output = chat_history[-1] if chat_history else ("", None)
-
-        # Preserve the chat history excluding the latest entry which has the
-        # user input and None output.
         preserved_history = chat_history[:-1] if chat_history else []
 
         selection_marker = "[Selected text from current page]"
@@ -2580,32 +3395,10 @@ class ChatPage(BasePage):
             preserved_history=preserved_history,
         )
 
-        queue: asyncio.Queue[Optional[dict]] = asyncio.Queue()
-
-        # construct the pipeline
-        pipeline, reasoning_state = self.create_pipeline(
-            settings,
-            reasoning_type,
-            llm_type,
-            use_mind_map,
-            use_citation,
-            language,
-            chat_state,
-            command_state,
-            user_id,
-            active_file_id,
-            active_file_name,
-            page_number,
-            qa_scope,
-            selected_page_text,
-            selected_graph_context,
-            *selecteds,
-        )
-        pipeline.set_output_queue(queue)
-
         text, refs, plot = "", "", state_plot_panel
         plot_gr = self._json_to_plot(state_plot_panel)
         mindmap_html = ""
+        artifact_payload = None
         msg_placeholder = getattr(
             flowsettings, "KH_CHAT_MSG_PLACEHOLDER", "Thinking ..."
         )
@@ -2614,7 +3407,6 @@ class ChatPage(BasePage):
             current_view = get_current_view(session_key) if session_key else None
             return (current_view is None) or (current_view == page_key)
 
-        # Generate answer panel HTML with chat bubbles and thinking indicator
         answer_html = self._generate_answer_panel_html(
             preserved_history, chat_input, "", is_thinking=True
         )
@@ -2629,7 +3421,6 @@ class ChatPage(BasePage):
         update_mindmap(request_key, mindmap_html)
         update_plot(request_key, plot)
 
-        # Initially show the user's question with a placeholder for AI response
         active_view = is_active_view()
         yield (
             chat_history_full if active_view else gr.skip(),
@@ -2638,6 +3429,17 @@ class ChatPage(BasePage):
             plot,
             chat_state,
             answer_html if active_view else gr.skip(),
+            self._render_citations_card_html(refs) if active_view else gr.skip(),
+            self._render_reasoning_trace_html(
+                chat_input,
+                refs,
+                answer_html,
+                active_file_id or "",
+                normalized_page_number,
+                artifact_payload,
+            )
+            if active_view
+            else gr.skip(),
             normalized_page_number,
             active_file_id or "",
             str(chat_input or ""),
@@ -2647,83 +3449,94 @@ class ChatPage(BasePage):
         )
 
         try:
-            for response in pipeline.stream(
-                chat_input, conversation_id, preserved_history
-            ):
+            runtime_request = build_web_docqa_request(
+                prompt=str(chat_input or ""),
+                conversation_id=conversation_id,
+                history=preserved_history,
+                selected_inputs=self._build_selected_input_map(*selecteds),
+                settings=settings,
+                reasoning_type=reasoning_type,
+                llm=llm_type,
+                use_mindmap=use_mind_map,
+                use_citation=use_citation,
+                language=language,
+                state=chat_state,
+                command_state=command_state,
+                user_id=user_id,
+                active_file_id=active_file_id,
+                active_file_name=active_file_name,
+                page_number=page_number,
+                qa_scope=qa_scope,
+                selected_text=selected_page_text,
+                selected_graph_context=selected_graph_context,
+                controller_mode=controller_mode,
+                route_policy=route_policy,
+                verification_mode=verification_mode,
+                planner_model=planner_model,
+            )
+            response = self.docqa.run_turn(runtime_request)
+            text = response.answer or ""
+            refs = response.references_html or ""
+            mindmap_html = response.mindmap_html or ""
+            plot = response.plot if response.plot is not None else state_plot_panel
+            plot_gr = self._json_to_plot(plot)
+            artifact_payload = response.artifact
+            chat_state = response.state or chat_state
+            chat_history_full = response.messages or preserved_history + [
+                (chat_input, text or msg_placeholder)
+            ]
 
-                if not isinstance(response, Document):
-                    continue
+            answer_html = self._generate_answer_panel_html(
+                preserved_history, chat_input, text, is_thinking=False
+            )
+            update_answer(
+                request_key,
+                answer_text=text,
+                answer_html=answer_html,
+                chat_history=chat_history_full,
+            )
+            update_mindmap(request_key, mindmap_html)
+            update_plot(request_key, plot)
 
-                if response.channel is None:
-                    continue
+            trace_html = self._render_reasoning_trace_html(
+                chat_input,
+                refs,
+                answer_html,
+                response.active_file_id or active_file_id or "",
+                response.page_number or normalized_page_number,
+                artifact_payload,
+            ) + render_controller_trace_html(
+                route_decision=response.route_decision,
+                retrieve_decision=response.retrieve_decision,
+                verify_decision=response.verify_decision,
+                evidence_bundle=response.evidence_bundle,
+            )
 
-                if response.channel == "chat":
-                    if response.content is None:
-                        text = ""
-                    else:
-                        text += response.content
-
-                if response.channel == "info":
-                    if response.content is None:
-                        refs = ""
-                        mindmap_html = ""
-                    else:
-                        refs += response.content
-                        if "markmap" in response.content:
-                            mindmap_html += response.content
-
-                if response.channel == "plot":
-                    # Keep the knowledge graph panel stable during answer streaming.
-                    plot = state_plot_panel
-                    plot_gr = self._json_to_plot(state_plot_panel)
-
-                chat_state[pipeline.get_info()["id"]] = reasoning_state["pipeline"]
-                update_reasoning_state(request_key, reasoning_state["pipeline"])
-
-                # Generate answer panel HTML with chat bubbles
-                answer_html = self._generate_answer_panel_html(
-                    preserved_history, chat_input, text, is_thinking=(not text)
-                )
-                chat_history_full = preserved_history + [
-                    (chat_input, text or msg_placeholder)
-                ]
-
-                update_answer(
-                    request_key,
-                    answer_text=text,
-                    answer_html=answer_html,
-                    chat_history=chat_history_full,
-                )
-                update_mindmap(request_key, mindmap_html)
-                update_plot(request_key, plot)
-
-                # Update the chat history with the latest response
-                active_view = is_active_view()
-                yield (
-                    chat_history_full if active_view else gr.skip(),
-                    mindmap_html if active_view else gr.skip(),
-                    plot_gr if active_view else gr.skip(),
-                    plot,
-                    chat_state,
-                    answer_html if active_view else gr.skip(),
-                    normalized_page_number,
-                    active_file_id or "",
-                    str(chat_input or ""),
-                    mindmap_html,
-                    answer_html,
-                    chat_history_full,
-                )
+            active_view = is_active_view()
+            yield (
+                chat_history_full if active_view else gr.skip(),
+                mindmap_html if active_view else gr.skip(),
+                plot_gr if active_view else gr.skip(),
+                plot,
+                chat_state,
+                answer_html if active_view else gr.skip(),
+                self._render_citations_card_html(refs) if active_view else gr.skip(),
+                trace_html if active_view else gr.skip(),
+                response.page_number or normalized_page_number,
+                response.active_file_id or active_file_id or "",
+                str(chat_input or ""),
+                mindmap_html,
+                answer_html,
+                chat_history_full,
+            )
         except ValueError as e:
-            logger.warning("Chat pipeline ValueError: %s", e)
+            logger.warning("Chat runtime ValueError: %s", e)
             mark_error(request_key, str(e))
-
-        if not text:
             empty_msg = getattr(
                 flowsettings,
                 "KH_CHAT_EMPTY_MSG_PLACEHOLDER",
                 "(Sorry, I don't know)",
             )
-            # Generate answer panel HTML with chat bubbles
             answer_html = self._generate_answer_panel_html(
                 preserved_history, chat_input, text or empty_msg, is_thinking=False
             )
@@ -2746,6 +3559,17 @@ class ChatPage(BasePage):
                 plot,
                 chat_state,
                 answer_html if active_view else gr.skip(),
+                self._render_citations_card_html(refs) if active_view else gr.skip(),
+                self._render_reasoning_trace_html(
+                    chat_input,
+                    refs,
+                    answer_html,
+                    active_file_id or "",
+                    normalized_page_number,
+                    artifact_payload,
+                )
+                if active_view
+                else gr.skip(),
                 normalized_page_number,
                 active_file_id or "",
                 str(chat_input or ""),

@@ -12,6 +12,62 @@ from benchmark.engines import (
 from benchmark.schemas import BenchmarkConfig, BenchmarkDocument, BenchmarkExample
 
 
+def _install_fake_docqa_runtime(monkeypatch, doc_path):
+    class FakeRequest:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    class FakeResponse:
+        answer = "runtime answer"
+        references_text = "doc.txt#page:1"
+        agent_trace = [{"stage": "planner", "decision": "retrieve"}]
+        evidence_metadata = {"has_formula_evidence": True}
+        claim_verification = {"rewrite_skipped": True}
+        presentation = {"markdown_normalized": True}
+        controller_trace = [{"stage": "planner", "route": "graph_global"}]
+        controller_decision = {"route": "graph_rag"}
+        route_decision = {"route": "graph_global"}
+        retrieve_decision = {"status": "good"}
+        verify_decision = {"status": "supported"}
+        guardrail_decision = {"status": "ok", "action": "return"}
+        evidence_bundle = {"route": "graph_global", "items": []}
+
+    class FakeRecord:
+        file_id = "file-1"
+        name = "doc.txt"
+
+    class FakeRuntime:
+        def __init__(self):
+            self.indexed = []
+            self.requests = []
+            self.file_ids_by_ref = {}
+
+        def index_paths(self, paths, reindex=False):
+            self.indexed.append((paths, reindex))
+            self.file_ids_by_ref[str(doc_path)] = FakeRecord()
+            self.file_ids_by_ref[doc_path.name] = FakeRecord()
+
+        def resolve_file_refs(self, refs):
+            return [
+                self.file_ids_by_ref[ref] for ref in refs if ref in self.file_ids_by_ref
+            ]
+
+        def run_turn(self, request):
+            self.requests.append(request)
+            return FakeResponse()
+
+    fake_runtime = FakeRuntime()
+    monkeypatch.setitem(
+        sys.modules,
+        "ktem.docqa",
+        types.SimpleNamespace(
+            DocQARuntime=lambda: fake_runtime,
+            DocQARequest=FakeRequest,
+        ),
+    )
+    return fake_runtime
+
+
 def test_engine_run_result_exposes_phase_two_fields():
     result = EngineRunResult(answer="answer")
 
@@ -23,7 +79,15 @@ def test_engine_run_result_exposes_phase_two_fields():
     assert result.timings == {}
     assert result.context_preview == ""
     assert result.retrieval_trace == []
+    assert result.agent_trace == []
     assert result.evidence_metadata == {}
+    assert result.controller_trace == []
+    assert result.controller_decision == {}
+    assert result.route_decision == {}
+    assert result.retrieve_decision == {}
+    assert result.verify_decision == {}
+    assert result.guardrail_decision == {}
+    assert result.evidence_bundle == {}
     assert result.claim_verification == {}
     assert result.presentation == {}
 
@@ -109,52 +173,9 @@ def test_oracle_page_context_falls_back_to_full_text_when_no_pages_match():
 
 
 def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_path):
-    class FakeRequest:
-        def __init__(self, **kwargs):
-            self.__dict__.update(kwargs)
-
-    class FakeResponse:
-        answer = "runtime answer"
-        references_text = "doc.txt#page:1"
-        evidence_metadata = {"has_formula_evidence": True}
-        claim_verification = {"rewrite_skipped": True}
-        presentation = {"markdown_normalized": True}
-
-    class FakeRecord:
-        file_id = "file-1"
-        name = "doc.txt"
-
-    class FakeRuntime:
-        def __init__(self):
-            self.indexed = []
-            self.requests = []
-            self.file_ids_by_ref = {}
-
-        def index_paths(self, paths, reindex=False):
-            self.indexed.append((paths, reindex))
-            self.file_ids_by_ref[str(doc_path)] = FakeRecord()
-            self.file_ids_by_ref[doc_path.name] = FakeRecord()
-
-        def resolve_file_refs(self, refs):
-            return [
-                self.file_ids_by_ref[ref] for ref in refs if ref in self.file_ids_by_ref
-            ]
-
-        def run_turn(self, request):
-            self.requests.append(request)
-            return FakeResponse()
-
-    fake_runtime = FakeRuntime()
-    monkeypatch.setitem(
-        sys.modules,
-        "ktem.docqa",
-        types.SimpleNamespace(
-            DocQARuntime=lambda: fake_runtime,
-            DocQARequest=FakeRequest,
-        ),
-    )
     doc_path = tmp_path / "doc.txt"
     doc_path.write_text("runtime text", encoding="utf-8")
+    fake_runtime = _install_fake_docqa_runtime(monkeypatch, doc_path)
     engine = get_engine(
         "docqa_runtime",
         BenchmarkConfig(
@@ -163,6 +184,15 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
             scope="document",
             llm_name="Deepseek",
             docqa_citation_mode="off",
+            reasoning_type="mara",
+            agent_mode="thorough",
+            task_type="quiz",
+            artifact_type="quiz",
+            controller_mode="llm",
+            route_policy="graph",
+            planner_model="gpt-4o-mini",
+            allowed_routes=["doc_text", "graph_global"],
+            verification_mode="strict",
         ),
     )
 
@@ -184,10 +214,27 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert fake_runtime.requests[0].qa_scope == "document"
     assert fake_runtime.requests[0].llm == "Deepseek"
     assert fake_runtime.requests[0].use_citation == "off"
+    assert fake_runtime.requests[0].reasoning_type == "mara"
+    assert fake_runtime.requests[0].agent_mode == "thorough"
+    assert fake_runtime.requests[0].task_type == "quiz"
+    assert fake_runtime.requests[0].artifact_type == "quiz"
+    assert fake_runtime.requests[0].controller_mode == "llm"
+    assert fake_runtime.requests[0].route_policy == "graph"
+    assert fake_runtime.requests[0].planner_model == "gpt-4o-mini"
+    assert fake_runtime.requests[0].allowed_routes == ["doc_text", "graph_global"]
+    assert fake_runtime.requests[0].verification_mode == "strict"
     assert result.answer == "runtime answer"
     assert result.predicted_pages == ["1"]
     assert result.predicted_sources == ["doc.txt#page:1"]
+    assert result.agent_trace == [{"stage": "planner", "decision": "retrieve"}]
     assert result.evidence_metadata == {"has_formula_evidence": True}
+    assert result.controller_trace == [{"stage": "planner", "route": "graph_global"}]
+    assert result.controller_decision == {"route": "graph_rag"}
+    assert result.route_decision == {"route": "graph_global"}
+    assert result.retrieve_decision == {"status": "good"}
+    assert result.verify_decision == {"status": "supported"}
+    assert result.guardrail_decision == {"status": "ok", "action": "return"}
+    assert result.evidence_bundle == {"route": "graph_global", "items": []}
     assert result.claim_verification == {"rewrite_skipped": True}
     assert result.presentation == {"markdown_normalized": True}
 

@@ -1,6 +1,7 @@
 import json
 import sys
 import types
+from pathlib import Path
 
 from click.testing import CliRunner
 from slide_cli.cli import main
@@ -38,13 +39,41 @@ def _install_trogon_stub(monkeypatch):
     monkeypatch.delitem(sys.modules, "kotaemon.cli", raising=False)
 
 
-def test_public_slide_help_keeps_canonical_command_surface():
+def test_public_entry_points_expose_only_mara_commands():
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+
+    assert 'name = "mara-research-cli"' in text
+    assert 'name = "slide-cli"' not in text
+    assert 'MARA = "slide_cli.cli:main"' in text
+    assert 'MARA-cli = "slide_cli.cli:main"' in text
+    assert 'slide = "slide_cli.cli:main"' not in text
+    assert 'slide-cli = "slide_cli.cli:main"' not in text
+
+
+def test_public_runtime_paths_use_mara_app_name():
+    paths_module = Path(__file__).resolve().parents[1] / "slide_cli" / "paths.py"
+    text = paths_module.read_text(encoding="utf-8")
+
+    assert 'DEFAULT_APP_NAME = "MARA"' in text
+    assert 'DEFAULT_APP_NAME = "mara-research-cli"' not in text
+
+
+def test_public_agent_prompt_uses_mara_brand():
+    agent_module = Path(__file__).resolve().parents[1] / "slide_cli" / "agent.py"
+    text = agent_module.read_text(encoding="utf-8")
+
+    assert "You are MARA's top-level agent line." in text
+    assert "You are Slide CLI" not in text
+
+
+def test_public_mara_help_keeps_canonical_command_surface():
     runner = CliRunner()
 
-    result = runner.invoke(main, ["--help"], terminal_width=300)
+    result = runner.invoke(main, ["--help"], prog_name="MARA", terminal_width=300)
 
     assert result.exit_code == 0, result.output
-    assert "Unified slide product CLI." in result.output
+    assert "Unified MARA product CLI." in result.output
     assert _listed_commands(result.output) == {
         "app",
         "apply",
@@ -85,7 +114,7 @@ def test_public_doctor_help_and_json_contract(monkeypatch):
     json_result = runner.invoke(main, ["doctor", "--json"])
 
     assert help_result.exit_code == 0, help_result.output
-    assert "Validate the top-level slide agent runtime" in help_result.output
+    assert "Validate the top-level MARA agent runtime" in help_result.output
     assert "--json" in help_result.output
     assert "Emit structured JSON output." in help_result.output
 
@@ -94,10 +123,12 @@ def test_public_doctor_help_and_json_contract(monkeypatch):
     assert decoded == payload
 
 
-def test_public_docqa_group_help_is_available_from_slide_entry():
+def test_public_docqa_group_help_is_available_from_mara_entry():
     runner = CliRunner()
 
-    result = runner.invoke(main, ["docqa", "--help"], terminal_width=300)
+    result = runner.invoke(
+        main, ["docqa", "--help"], prog_name="MARA", terminal_width=300
+    )
 
     assert result.exit_code == 0, result.output
     assert (
@@ -107,6 +138,7 @@ def test_public_docqa_group_help_is_available_from_slide_entry():
     assert "Action guide:" in result.output
     assert _listed_commands(result.output) == {
         "acceptance",
+        "artifacts",
         "ask",
         "chat",
         "check",
@@ -114,15 +146,22 @@ def test_public_docqa_group_help_is_available_from_slide_entry():
         "doctor",
         "files",
         "index",
+        "notes",
         "resume",
         "sessions",
+        "sources",
     }
 
 
-def test_public_docqa_ask_help_is_available_from_slide_entry():
+def test_public_docqa_ask_help_is_available_from_mara_entry():
     runner = CliRunner()
 
-    result = runner.invoke(main, ["docqa", "ask", "--help"], terminal_width=300)
+    result = runner.invoke(
+        main,
+        ["docqa", "ask", "--help"],
+        prog_name="MARA",
+        terminal_width=300,
+    )
 
     assert result.exit_code == 0, result.output
     for token in [
@@ -134,15 +173,21 @@ def test_public_docqa_ask_help_is_available_from_slide_entry():
         "--scope",
         "--selected-text",
         "--graph-context-file",
+        "--controller",
+        "--route",
+        "--verify",
         "--reasoning",
         "--llm",
         "--citation",
         "--language",
         "--mindmap",
         "--json",
-        "Whole-document QA:",
-        "Page-level QA:",
-        "Text-focused QA:",
+        'MARA docqa ask --file report.pdf --prompt "Summarize this document"',
+        'MARA docqa ask --file report.pdf --page 12 --prompt "What does this page say?"',
+        (
+            "MARA docqa ask --file report.pdf --selected-text "
+            '"contract termination clause" --prompt "Explain this section"'
+        ),
     ]:
         assert token in result.output
 

@@ -1,7 +1,7 @@
-# BEGIN SLIDE PLATFORM BLOCK
+# BEGIN MARA PLATFORM BLOCK
 
-[profiles.slide]
-default_skill = "slide"
-notes = "Use slide doctor, slide model providers, and dry-run checks before real calls."
+[profiles.MARA]
+default_skill = "MARA"
+notes = "Use MARA doctor, MARA model providers, and dry-run checks before real calls."
 
 # END SLIDE PLATFORM BLOCK

@@ -28,6 +28,7 @@ from kotaemon.indices.splitters import TokenSplitter
 from kotaemon.llms import PromptTemplate
 from kotaemon.storages import InMemoryDocumentStore, InMemoryVectorStore
 
+from .evidence_metadata import _evidence_metadata
 from .schemas import BenchmarkConfig, BenchmarkDocument, BenchmarkExample
 
 TOKEN_RE = re.compile(r"[\w\u4e00-\u9fff]+", flags=re.UNICODE)
@@ -48,79 +49,6 @@ def _sum_cache_stats(items: list[dict[str, int]]) -> dict[str, int]:
         for key in total:
             total[key] += int(item.get(key, 0) or 0)
     return total
-
-
-def _metadata_kind(metadata: dict[str, Any]) -> str:
-    for key in ("element_type", "type", "kind", "category", "content_type"):
-        value = str(metadata.get(key) or "").strip().lower()
-        if value:
-            return value
-    return ""
-
-
-def _evidence_metadata(
-    evidence_mode: str,
-    images: list[Any] | tuple[Any, ...] | None,
-    hits: list[RetrievedDocument],
-) -> dict[str, Any]:
-    image_items = [image for image in images or [] if image is not None]
-    kinds = sorted(
-        {
-            kind
-            for hit in hits
-            for kind in [_metadata_kind(dict(getattr(hit, "metadata", {}) or {}))]
-            if kind
-        }
-    )
-    figure_markers = {
-        "chart",
-        "diagram",
-        "drawing",
-        "figure",
-        "image",
-        "page_image",
-        "picture",
-        "shape",
-        "table_image",
-        "thumbnail",
-        "visual",
-    }
-    formula_markers = {"equation", "formula", "formula_image", "latex", "math"}
-    visual_keys = {
-        "image_path",
-        "image_origin",
-        "page_image",
-        "page_image_path",
-        "thumbnail",
-        "thumbnail_path",
-        "visual_path",
-    }
-    formula_keys = {"formula", "formula_text", "latex", "math_text", "tex"}
-
-    has_figure = bool(image_items) or any(
-        any(marker in kind for marker in figure_markers) for kind in kinds
-    )
-    has_formula = any(
-        any(marker in kind for marker in formula_markers) for kind in kinds
-    )
-    has_page_visual = bool(image_items)
-    for hit in hits:
-        metadata = dict(getattr(hit, "metadata", {}) or {})
-        if any(metadata.get(key) for key in visual_keys):
-            has_figure = True
-            has_page_visual = True
-        if any(metadata.get(key) for key in formula_keys):
-            has_formula = True
-
-    return {
-        "evidence_mode": evidence_mode,
-        "image_count": len(image_items),
-        "has_images": bool(image_items),
-        "has_figure_evidence": has_figure,
-        "has_formula_evidence": has_formula,
-        "has_page_visual_context": has_page_visual,
-        "source_kinds": kinds,
-    }
 
 
 @dataclass(slots=True)

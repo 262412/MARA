@@ -133,7 +133,7 @@ def _collect_raw_responses(
 
 SLIDE_REACT_PROMPT = PromptTemplate(
     template=(
-        "You are Slide CLI's top-level agent line.\n"
+        "You are MARA's top-level agent line.\n"
         "This is a high-permission workflow for deck work plus workspace-side file changes.\n"
         "Use the available tools deliberately and keep your reasoning concise.\n"
         "You must follow this exact format:\n\n"
@@ -287,7 +287,7 @@ class SlideAgentRunner:
         history_text: str,
     ) -> str:
         return (
-            "You are working inside the top-level Slide CLI agent line.\n"
+            "You are working inside the top-level MARA CLI agent line.\n"
             "This is the high-permission workflow for deck work plus workspace-side file changes.\n"
             "Inspect the deck, inspect the workspace when needed, and produce a structured slide patch when deck changes are required.\n\n"
             f"Working directory: {self.workspace_root}\n"
