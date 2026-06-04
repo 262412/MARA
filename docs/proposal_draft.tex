@@ -56,7 +56,7 @@ MARA will help users search, compare and understand mixed document collections t
 
 The phrase ``Self-RAG-inspired'' is used deliberately. MARA will not train a new language model with Self-RAG reflection tokens. Instead, the control semantics of Self-RAG will be externalised into program-level decisions: route selection, retrieval decisions, evidence evaluation, claim verification, retry, rewrite and abstention. This keeps the thesis feasible while preserving the central research question: can an agent controller improve document QA by choosing the right RAG route and refusing weak evidence?
 
-The main routes will be \texttt{direct\_answer}, \texttt{text\_rag}, \texttt{page\_image\_rag}, \texttt{element\_rag}, \texttt{graph\_rag}, \texttt{hybrid\_rag} and \texttt{abstain}. Text RAG will use existing chunk and vector retrieval. Page-image RAG will add a ColPali-style visual page retrieval interface. Element RAG will retrieve tables, figures, formulas and slide/page elements. GraphRAG will be a specialist route for global summaries, cross-document comparison and ``connect the dots'' questions, not the default factual QA path.
+The main routes will be \texttt{direct\_answer}, \texttt{text\_rag}, \texttt{page\_image\_rag}, \texttt{element\_rag}, \texttt{lightweight\_graph\_rag}, \texttt{hybrid\_rag} and \texttt{abstain}. Text RAG will use existing chunk and vector retrieval. Page-image RAG will provide a ColPali-style route interface using page-image records, with real ColPali or VLM backends treated as configurable extensions if available. Element RAG will retrieve tables, figures, formulas and slide/page elements. GraphRAG will be a specialist route for global summaries, cross-document comparison and ``connect the dots'' questions, not the default factual QA path.
 
 The first engineering priority is to control system debt. The existing code already has Web and CLI entry points, local state, preview, knowledge map, artifact and benchmark scaffolding. These are useful, but they also create boundary risk: a large chat page, UI/runtime coupling, Web/CLI drift, thick dependencies and immature notebook/PPTX workflows. The proposal therefore prioritises a smaller researchable system: shared runtime contracts, route/executor registries, evidence schema, controller trace, benchmark harness and a thin UI adapter.
 
@@ -71,19 +71,19 @@ The aims of the project are:
   \item To evaluate the system with route-level ablations and ALCE/MMDocRAG/RAGTruth-style metrics for answer quality, citation quality, multimodal evidence support and hallucination risk.
 \end{itemize}
 
+\textbf{Scope note:} in this proposal, ``essential'' means a stable controller interface, simplified but working route implementations, and a benchmark harness that can compare those routes. It does not mean a production-level reproduction of Self-RAG, CRAG, ColPali, GraphRAG or MMDocRAG. Full visual-language backends, full GraphRAG engineering and trainable routing are configurable or scoped extensions.
+
 \textbf{Essential requirements:}
 \begin{itemize}
-  \item Users can upload and index PDF, Word, PowerPoint, Excel/CSV, Markdown and plain-text files.
-  \item Users can ask questions over all indexed documents or selected files.
-  \item Web and CLI requests pass through one shared DocQA runtime rather than duplicating route or session logic.
+  \item Users can upload, index and query PDF, Word, PowerPoint, Excel/CSV, Markdown and plain-text files through the shared Web/CLI DocQA runtime.
   \item The system defines stable \texttt{RouteDecision}, \texttt{RetrieveDecision}, \texttt{EvidenceBundle}, \texttt{VerifyDecision} and \texttt{ControllerTrace} contracts.
-  \item A route registry and executor registry support \texttt{direct\_answer}, \texttt{text\_rag}, \texttt{page\_image\_rag}, \texttt{element\_rag}, \texttt{lightweight\_graph\_rag}, \texttt{hybrid\_rag} and \texttt{abstain}, with \texttt{text\_rag} and at least one multimodal route implemented to benchmarkable quality.
-  \item The indexing layer supports text chunks, page-image records, element records and graph records with source back-references.
+  \item A route and executor registry supports \texttt{direct\_answer}, \texttt{text\_rag}, \texttt{page\_image\_rag}, \texttt{element\_rag}, \texttt{lightweight\_graph\_rag}, \texttt{hybrid\_rag} and \texttt{abstain}.
+  \item The prototype implements simplified, benchmarkable versions of \texttt{text\_rag}, controller-auto routing and at least one multimodal route, while clearly labelling any smoke or unavailable backend.
+  \item The indexing layer stores text chunks, page-image records, element records and lightweight graph records with source back-references.
   \item The controller selects routes, records reasons, respects allowed routes, and handles invalid planner output through a safe fallback or abstention.
-  \item A CRAG-style retrieval evaluator classifies retrieved evidence as good, ambiguous or poor before generation.
-  \item The claim verifier labels generated claims as supported, unsupported or not enough evidence, then triggers revise, retry or abstain when needed.
-  \item Answers include page-level, slide-level, element-level or graph-level citations and expose a compact execution trace.
-  \item The benchmark compares fixed text RAG, individual routes, controller-auto routing, hybrid retrieval and CRAG-guarded execution.
+  \item Lightweight CRAG-style retrieval evaluation and claim verification decide whether to generate, retry, revise or abstain.
+  \item Answers include citations, evidence metadata and a compact execution trace that can be inspected in the UI and benchmark output.
+  \item The benchmark harness compares fixed text RAG, selected route executors, controller-auto routing, hybrid retrieval and guarded execution.
   \item Automated tests cover controller decisions, route executors, evidence schemas, Web/CLI contracts, benchmark metrics and important UI services.
 \end{itemize}
 
@@ -97,23 +97,25 @@ The aims of the project are:
 
 \section{Key Literature and Background Reading}
 
-RAG grounds language models in external evidence, but a fixed retrieve-then-generate pipeline is not always appropriate \cite{lewis2020rag, gao2023rag}. Some questions can be answered directly, some need text chunks, some need visual page evidence, some need table or figure elements, and some require global graph summaries. Self-RAG shows that retrieval and critique can be made adaptive through reflection tokens \cite{asai2023selfrag}. MARA will not train such tokens; it will implement their control meaning as explicit controller fields and guardrail states.
+The main background idea is RAG: instead of asking a language model to answer only from memory, the system first retrieves relevant source material and then asks the model to answer using that evidence \cite{lewis2020rag}. Dense Passage Retrieval is one influential way to find relevant passages by embedding questions and passages into a shared vector space \cite{karpukhin2020dpr}. Recent surveys show that this evidence-grounded pattern is useful but still difficult to evaluate and control \cite{gao2023rag}. This matters for document QA because the answer can be linked back to pages, slides, tables or other sources. A simple RAG system usually follows one fixed path: retrieve text chunks, generate an answer, then show citations. MARA starts from this idea but asks whether the system can choose a better path for different types of question.
 
-Adaptive-RAG and MAO-ARAG support the routing part of the design. Adaptive-RAG selects strategies according to query complexity using a trained classifier \cite{jeong2024adaptiverag}. MAO-ARAG uses a planner agent to select executor agents and optimise answer quality under cost constraints \cite{chen2025maoarag}. These works motivate a future learnable router, but MARA's first version will use a local heuristic or LLM planner with structured JSON output and trace logging.
+Self-RAG is important because it treats retrieval as a decision rather than a fixed step \cite{asai2023selfrag}. In plain terms, Self-RAG asks: should the system retrieve anything, is the retrieved evidence relevant, does the answer really follow from it, and is the final answer useful? The original paper trains a model to make these decisions with special reflection tokens. MARA will not train that kind of model. It will use Self-RAG as design inspiration and implement the same decisions as explicit controller fields, logs and guardrail states.
 
-CRAG is relevant because it treats retrieval quality as a first-class problem. Its retrieval evaluator judges retrieved documents and triggers corrective actions when evidence is weak \cite{yan2024crag}. MARA will adapt this idea as a controller guardrail: evidence is evaluated before generation, and poor or ambiguous evidence can cause retry, route switch or abstention.
+Adaptive-RAG and MAO-ARAG help explain the routing problem \cite{jeong2024adaptiverag, chen2025maoarag}. Some questions are easy and only need a direct answer; others need document retrieval, visual evidence, graph summaries or several routes together. These papers motivate routing as a research problem in its own right. In this project, the first router will be a heuristic or structured LLM planner. A trainable router is treated as future work after enough route traces have been collected.
 
-For multimodal and multi-page documents, M3DocRAG shows that document QA benefits from multimodal retrieval across pages and documents rather than relying only on OCR text \cite{cho2024m3docrag}. ColPali further motivates direct page-image retrieval using visual document embeddings and late interaction \cite{faysse2024colpali}. MARA will therefore use a hybrid index: text chunks, page-image records and element records, instead of replacing text extraction with a purely visual route.
+CRAG focuses on a practical failure mode: if the retrieval step finds weak or irrelevant evidence, the generated answer is likely to be wrong \cite{yan2024crag}. CRAG therefore uses a retrieval evaluator before generation. MARA will use a simplified version of this idea. Retrieved evidence will be labelled good, ambiguous or poor. Good evidence can be used for generation; ambiguous evidence can trigger retry or hybrid fallback; poor evidence can trigger route switching or abstention.
 
-GraphRAG addresses a different class of question: global sensemaking over a corpus. It builds an entity graph and community summaries to answer query-focused summarisation questions that conventional top-k RAG handles poorly \cite{edge2024graphrag}. MARA will use GraphRAG as a specialist route for summaries, comparisons, study guides and relationship exploration, while preserving page or element citations whenever possible.
+M3DocRAG and ColPali motivate the multimodal document side of the project \cite{cho2024m3docrag, faysse2024colpali}. Many documents are not just plain text: answers may depend on page layout, a figure, a table, a formula, or content spread across several pages. M3DocRAG supports multi-page and multi-document retrieval, while ColPali shows that directly retrieving page images can preserve visual details that OCR text may lose. MARA will use these ideas at prototype scale through a hybrid index of text chunks, page-image records and element records. It will not claim production-level ColPali or VLM performance unless those backends are configured and evaluated.
 
-Evaluation will be based on systems that make citation and multimodal grounding measurable. ALCE evaluates end-to-end cited generation using fluency, correctness and citation quality \cite{gao2023alce}. MMDocRAG provides a multimodal document QA benchmark focused on evidence selection across text, images and tables \cite{dong2025mmdocrag}. RAGTruth provides hallucination annotations for RAG outputs and is useful for unsupported-claim detection \cite{niu2024ragtruth}. MARA's benchmark will combine these ideas into route-level ablations and reliability metrics.
+GraphRAG is useful for questions about the whole collection rather than one page \cite{edge2024graphrag}. For example, a user might ask for the main themes across a set of papers or how several concepts are connected. GraphRAG builds an entity graph and community summaries for this kind of global question. MARA will implement a lightweight graph route for summaries, comparisons and ``connect the dots'' tasks. It will not make GraphRAG the default path for ordinary page-specific questions.
+
+The evaluation literature explains how the project will measure success. ALCE evaluates whether cited generated answers are fluent, correct and well supported by citations \cite{gao2023alce}. MMDocRAG focuses on multimodal document QA and evidence selection across text, images and tables \cite{dong2025mmdocrag}. RAGTruth provides labels for hallucination and unsupported claims in RAG outputs \cite{niu2024ragtruth}. MARA will adapt these ideas into a smaller thesis benchmark, using route-level ablations and metrics such as citation quality, multimodal evidence support and unsupported claim rate, rather than trying to reproduce the full external benchmarks.
 
 The user interface remains important because the system must expose evidence rather than hide it. Gradio supports a Python-first workbench with upload, chat, preview and settings components \cite{gradioDocs}. OWASP guidance highlights LLM risks such as prompt injection and sensitive information disclosure \cite{owaspLLM}; MARA will mitigate these through local-first storage, clear backend metadata, no hidden web access and benchmark-visible trace records.
 
 \section{Development and Implementation Summary}
 
-The project will be implemented mainly in Python 3.10+. The repository has three main layers: \texttt{kotaemon} for LLM wrappers, loaders, vector stores and retrieval; \texttt{ktem} for the Gradio app runtime, settings, preview and DocQA orchestration; and \texttt{slide-cli} as the internal package exposing the public \texttt{MARA} CLI. The new architecture will keep this separation but move controller logic into shared runtime/services so that Web and CLI cannot drift.
+The project will be implemented mainly in Python 3.10+. It builds on a Kotaemon-style document QA baseline \cite{kotaemon}. The repository has three main layers: \texttt{kotaemon} for LLM wrappers, loaders, vector stores and retrieval; \texttt{ktem} for the Gradio app runtime, settings, preview and DocQA orchestration; and \texttt{slide-cli} as the internal package exposing the public \texttt{MARA} CLI. The new architecture will keep this separation but move controller logic into shared runtime/services so that Web and CLI cannot drift.
 
 \textbf{Baseline and new work:}
 \begin{center}
@@ -122,7 +124,7 @@ The project will be implemented mainly in Python 3.10+. The repository has three
 \toprule
 Inherited baseline & Existing loaders, vector store integration, Gradio runtime, settings, preview services, basic DocQA flow, local state, knowledge-map scaffolding, artifact outline support and benchmark skeleton. \\
 \midrule
-New or extended work & Controller contracts, route/executor registry, evidence bundle schema, page-image and element indexing, GraphRAG route, CRAG-style evaluator, claim verifier, route-level benchmark adapters, shared Web/CLI runtime and inspectable controller trace. \\
+New or extended work & Controller contracts, route/executor registry, evidence bundle schema, scoped page-image and element indexing, lightweight GraphRAG route, CRAG-style evaluator, claim verifier, route-level benchmark adapters, shared Web/CLI runtime and inspectable controller trace. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -149,11 +151,11 @@ Route & Evidence source & Output & Purpose in MARA \\
 \midrule
 Direct answer & No document retrieval & Short answer or abstention & Only for system, capability or non-document questions. \\
 Text RAG & Existing chunks and vector index & Text evidence and citations & Baseline document QA and text-heavy questions. \\
-Page-image RAG & Page images and visual embeddings & Page evidence, optional VLM answer & Visual layout, figure and scanned-page questions. \\
+Page-image RAG & Page records, images or visual embeddings & Page evidence, backend-labelled answer & Visual layout, figure and scanned-page questions at prototype scale. \\
 Element RAG & Tables, figures, formulas, slide/page elements & Element evidence with IDs and boxes & Structured or layout-specific evidence. \\
-GraphRAG & Entities, relations, claims and community summaries & Graph evidence and global answer trace & Corpus-level summaries, comparison and connect-the-dots tasks. \\
+GraphRAG & Entities, relations, claims and summaries & Graph evidence and global answer trace & Lightweight global summaries, comparison and connect-the-dots tasks. \\
 Hybrid RAG & Text, page image, element and graph evidence & De-duplicated evidence bundle & Multi-page, multi-document and multi-modal questions. \\
-CRAG guarded & Any retrieved evidence & Good/ambiguous/poor decision & Guardrail before generation and retry/abstain trigger. \\
+CRAG guarded & Any retrieved evidence & Good/ambiguous/poor decision & Lightweight guardrail before generation and retry/abstain trigger. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -168,7 +170,7 @@ The benchmark will contain public or synthetic multimodal documents and manually
 
 Technical testing will cover controller schema validation, route selection, route executors, evidence bundle construction, retrieval evaluation, claim verification, citation construction, CLI commands, Web/CLI contract behaviour, knowledge graph services and benchmark metrics. Integration tests will check that a document or slide deck can be indexed, routed, retrieved, answered, verified and cited through the same runtime used by both Web and CLI.
 
-The evaluation will use route-level ablations. The main comparison will include fixed text RAG, direct answer, text RAG, page-image RAG, element RAG, local/global GraphRAG, hybrid RAG, controller-auto routing and CRAG-guarded execution. Each benchmark item will record the expected answer, expected route or evidence type, acceptable evidence, and the page, slide, element, image region or graph community that justifies it.
+The evaluation will use route-level ablations. The main comparison will include fixed text RAG, text RAG, at least one multimodal route, controller-auto routing, hybrid retrieval and CRAG-guarded execution. Other configured routes, such as page-image, element or graph-inspired routes, will be reported where their backends are available.
 
 Metrics will combine several evaluation traditions. ALCE-style metrics will report fluency, correctness, citation precision/recall and attributable claim rate. MMDocRAG-style metrics will report page hit, element hit, image quote hit, cross-page evidence hit and multimodal answer support. RAGTruth-style metrics will report unsupported claim count, unsupported claim rate, contradiction count and abstention correctness. The benchmark will also report routing accuracy, retrieval recall@k/MRR, latency, backend type, cost where relevant, and qualitative error categories. The benchmark will adapt ALCE-, MMDocRAG- and RAGTruth-style metrics at prototype scale rather than attempting to reproduce the full external benchmarks.
 
@@ -207,8 +209,8 @@ The interface will be a multimodal research workbench: corpus browser on the lef
 |  Attention...    | Search in file   | Page 2: Vision Transformer (ViT)     | text page element  |
 | >Transformers... |                  | highlighted evidence spans 2.1-2.3   | graph hybrid       |
 |  CLIP.pdf        | [thumb p1]       |                                      | Answer             |
-| Images (8)       | [thumb p2] *     |      figure / architecture diagram   | cited summary      |
-|  Diagram.png     | [thumb p3]       |                                      | Citations          |
+|                  | [thumb p2] *     |      figure / architecture diagram   | cited summary      |
+|                  | [thumb p3]       |                                      | Citations          |
 | Slides (6)       | [thumb p4]       | selected text + figure grounding     | [2.1][2.2][2.3]    |
 |  ViT deck.pptx   |                  |                                      | Controller Trace   |
 | Documents (5)    |                  | Metadata: modality, page, OCR, lang  | route/evaluate     |
