@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from ktem.docqa.element_retriever import rank_element_records
 from ktem.docqa.graph_index import (
     graph_context_evidence_metadata,
     select_graph_index_evidence,
@@ -85,6 +86,7 @@ def _page_image_metadata(
     ranked, scores = rank_page_image_records(
         str(understanding.get("question") or ""),
         records,
+        retriever=getattr(pipeline, "visual_retriever", None),
     )
     return {
         "requested_modalities": list(understanding.get("modalities", [])),
@@ -143,14 +145,20 @@ def _element_metadata(
             "evidence_ids": [],
             "evidence": [],
         }
+    ranked, scores = rank_element_records(
+        str(understanding.get("question") or ""),
+        records,
+        retriever=getattr(pipeline, "element_retriever", None),
+    )
     return {
         "requested_modalities": list(understanding.get("modalities", [])),
-        "modality_counts": _element_modality_counts(records),
-        "page_coverage": _unique(item.get("page_label") for item in records),
-        "source_ids": _unique(item.get("file_id") for item in records),
-        "evidence_ids": _unique(item.get("evidence_id") for item in records),
+        "modality_counts": _element_modality_counts(ranked),
+        "page_coverage": _unique(item.get("page_label") for item in ranked),
+        "source_ids": _unique(item.get("file_id") for item in ranked),
+        "evidence_ids": _unique(item.get("evidence_id") for item in ranked),
         "evidence": [],
-        "element_index": records,
+        "element_index": ranked,
+        "element_retriever_scores": scores,
     }
 
 
@@ -201,6 +209,9 @@ def _merge_element_metadata(
     if not element_metadata.get("element_index"):
         return
     metadata["element_index"] = list(element_metadata.get("element_index") or [])
+    metadata["element_retriever_scores"] = dict(
+        element_metadata.get("element_retriever_scores") or {}
+    )
     metadata["page_coverage"] = _unique(
         list(metadata.get("page_coverage") or [])
         + list(element_metadata.get("page_coverage") or [])
@@ -222,6 +233,7 @@ def _graph_metadata(pipeline: Any, understanding: dict[str, Any]) -> dict[str, A
     indexed_metadata = select_graph_index_evidence(
         str(understanding.get("question") or ""),
         graph_context,
+        graph_mode=getattr(pipeline, "graph_mode", None),
     )
     if indexed_metadata:
         return indexed_metadata

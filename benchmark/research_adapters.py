@@ -13,6 +13,36 @@ _BACKEND_FIELDS = {
     "generator_backend": ("generator_backend", "llm_name"),
 }
 
+_ADAPTER_METRIC_METADATA: dict[str, dict[str, Any]] = {
+    "alce": {
+        "metric_scope": "proxy",
+        "paper_grade": False,
+        "implementation": "local_answer_and_citation_proxy",
+        "requires_external_resources": [
+            "ALCE dataset",
+            "paper-grade citation evaluator or judge",
+        ],
+    },
+    "mmdocrag": {
+        "metric_scope": "proxy",
+        "paper_grade": False,
+        "implementation": "local_multimodal_evidence_proxy",
+        "requires_external_resources": [
+            "MMDocRAG dataset",
+            "paper-grade multimodal evaluator",
+        ],
+    },
+    "ragtruth": {
+        "metric_scope": "proxy",
+        "paper_grade": False,
+        "implementation": "local_verification_proxy",
+        "requires_external_resources": [
+            "RAGTruth dataset",
+            "paper-grade hallucination annotation or judge",
+        ],
+    },
+}
+
 
 def research_adapter_metrics(prediction: dict[str, Any]) -> dict[str, dict[str, Any]]:
     metrics = dict(prediction.get("metrics") or {})
@@ -21,6 +51,10 @@ def research_adapter_metrics(prediction: dict[str, Any]) -> dict[str, dict[str, 
         "mmdocrag": _mmdocrag_metrics(metrics),
         "ragtruth": _ragtruth_metrics(prediction, metrics),
     }
+
+
+def research_adapter_metric_metadata() -> dict[str, dict[str, Any]]:
+    return {key: dict(value) for key, value in _ADAPTER_METRIC_METADATA.items()}
 
 
 def route_backend_metadata(
@@ -34,7 +68,12 @@ def route_backend_metadata(
     graph_mode = _backend_value(route, config, ("graph_mode",), "graph_mode")
     if graph_mode:
         metadata["graph_mode"] = graph_mode
-    for key in ("backend_status", "requires_backend_config", "missing_backends"):
+    for key in (
+        "backend_status",
+        "requires_backend_config",
+        "missing_backends",
+        "implementation_stage",
+    ):
         value = route.get(key)
         if value not in (None, "", []):
             metadata[key] = value

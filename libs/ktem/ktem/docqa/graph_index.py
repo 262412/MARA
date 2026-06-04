@@ -24,6 +24,7 @@ def select_graph_index_evidence(
     graph_context: dict[str, Any],
     *,
     max_items: int = 4,
+    graph_mode: str | None = None,
 ) -> dict[str, Any]:
     graph_index = graph_context.get("graph_index")
     if not isinstance(graph_index, dict):
@@ -34,8 +35,20 @@ def select_graph_index_evidence(
         return {}
 
     query_tokens = _tokens(query)
-    global_query = bool(query_tokens & GLOBAL_QUERY_TERMS)
-    ranked = _rank_candidates(candidates, query_tokens, global_query)
+    forced_mode = _forced_graph_mode(graph_mode)
+    global_query = (
+        forced_mode == "global"
+        if forced_mode
+        else bool(query_tokens & GLOBAL_QUERY_TERMS)
+    )
+    query_pipeline = (
+        "global_community_summary" if global_query else "local_entity_relation"
+    )
+    ranked = _rank_candidates(
+        _pipeline_candidates(candidates, global_query),
+        query_tokens,
+        global_query,
+    )
     selected = [item for _score, _index, item in ranked[:max_items]]
     if not selected:
         return {}
@@ -49,6 +62,7 @@ def select_graph_index_evidence(
     return {
         "graph_backend": "local_graph_index",
         "graph_mode": "global" if global_query else "local",
+        "graph_query_pipeline": query_pipeline,
         "graph_evidence": selected,
         "evidence_ids": [item["evidence_id"] for item in selected],
         "source_ids": source_ids,
@@ -218,6 +232,21 @@ def _rank_candidates(
     return ranked
 
 
+def _pipeline_candidates(
+    candidates: list[dict[str, Any]],
+    global_query: bool,
+) -> list[dict[str, Any]]:
+    if global_query:
+        communities = [item for item in candidates if item.get("kind") == "community"]
+        return communities or candidates
+    local_items = [
+        item
+        for item in candidates
+        if item.get("kind") in {"entity", "relation", "claim"}
+    ]
+    return local_items or candidates
+
+
 def _score_candidate(
     item: dict[str, Any], query_tokens: set[str], global_query: bool
 ) -> int:
@@ -227,6 +256,11 @@ def _score_candidate(
     if item.get("kind") in {"entity", "relation", "claim"} and not global_query:
         score += 2
     return score
+
+
+def _forced_graph_mode(graph_mode: str | None) -> str:
+    mode = str(graph_mode or "").strip().lower()
+    return mode if mode in {"global", "local"} else ""
 
 
 def _page_coverage(items: list[dict[str, Any]]) -> list[str]:

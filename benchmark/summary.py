@@ -13,15 +13,21 @@ def build_benchmark_summary(
     active_routes: list[dict[str, Any]],
     predictions: list[dict[str, Any]],
     backend_metadata: dict[str, dict[str, Any]],
+    skipped_routes: list[dict[str, Any]] | None = None,
+    adapter_metric_metadata: dict[str, dict[str, Any]] | None = None,
+    external_adapter_metric_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    skipped_routes = skipped_routes or []
     return {
-        **_identity_summary(bundle, config, active_routes, predictions),
+        **_identity_summary(bundle, config, active_routes, predictions, skipped_routes),
         **_quality_summary(predictions),
         **_format_guardrail_summary(predictions),
         **verification_summary(predictions),
         **_timing_summary(predictions),
         **_cache_summary(predictions, config.cache_mode),
         "backend_metadata": backend_metadata,
+        "adapter_metric_metadata": adapter_metric_metadata or {},
+        "external_adapter_metric_metadata": external_adapter_metric_metadata or {},
     }
 
 
@@ -30,7 +36,9 @@ def _identity_summary(
     config: Any,
     active_routes: list[dict[str, Any]],
     predictions: list[dict[str, Any]],
+    skipped_routes: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    num_skipped_routes = len(skipped_routes)
     return {
         "dataset_name": bundle.dataset_name,
         "manifest_path": str(bundle.manifest_path),
@@ -41,6 +49,14 @@ def _identity_summary(
         "num_documents": len(bundle.documents),
         "num_examples": len(bundle.examples),
         "num_routes": len(active_routes),
+        "num_executed_routes": len(active_routes) - num_skipped_routes,
+        "num_skipped_routes": num_skipped_routes,
+        "skipped_routes": skipped_routes,
+        "not_configured_routes": [
+            item
+            for item in skipped_routes
+            if item.get("backend_status") == "not_configured"
+        ],
         "num_predictions": len(predictions),
     }
 

@@ -248,6 +248,7 @@ def test_load_v2_manifest_preserves_controller_route_fields(tmp_path):
                         "backend_status": "not_configured",
                         "requires_backend_config": True,
                         "missing_backends": ["visual_generator"],
+                        "implementation_stage": "prototype_visual_route",
                     }
                 ],
             },
@@ -264,6 +265,7 @@ def test_load_v2_manifest_preserves_controller_route_fields(tmp_path):
     assert bundle.routes[0]["backend_status"] == "not_configured"
     assert bundle.routes[0]["requires_backend_config"] is True
     assert bundle.routes[0]["missing_backends"] == ["visual_generator"]
+    assert bundle.routes[0]["implementation_stage"] == "prototype_visual_route"
 
 
 def test_load_v2_manifest_preserves_planner_model_and_allowed_routes(tmp_path):
@@ -325,8 +327,17 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
         "visual_generator",
     ]
     assert DEFAULT_MARA_ROUTES[4]["allowed_routes"] == ["doc_element"]
+    assert DEFAULT_MARA_ROUTES[4]["implementation_stage"] == (
+        "prototype_element_metadata_index"
+    )
     assert DEFAULT_MARA_ROUTES[5]["graph_mode"] == "local"
+    assert DEFAULT_MARA_ROUTES[5]["implementation_stage"] == (
+        "prototype_lightweight_graph_selector"
+    )
     assert DEFAULT_MARA_ROUTES[6]["graph_mode"] == "global"
+    assert DEFAULT_MARA_ROUTES[6]["implementation_stage"] == (
+        "prototype_lightweight_graph_selector"
+    )
     assert DEFAULT_MARA_ROUTES[8]["controller_mode"] == "llm"
     assert DEFAULT_MARA_ROUTES[9]["verification_mode"] == "strict"
 

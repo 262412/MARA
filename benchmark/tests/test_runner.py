@@ -437,9 +437,7 @@ def _write_research_adapter_manifest(tmp_path):
                         "visual_retriever_backend": "local_late_interaction",
                         "visual_backend_type": "deterministic_smoke",
                         "graph_backend": "local_graph",
-                        "backend_status": "not_configured",
-                        "requires_backend_config": True,
-                        "missing_backends": ["visual_generator"],
+                        "implementation_stage": "proxy_evaluator_fixture",
                     }
                 ],
             }
@@ -499,7 +497,13 @@ def test_run_benchmark_reports_named_research_adapters_and_backends(
     )
 
     adapter_metrics = report["predictions"][0]["adapter_metrics"]
+    adapter_metadata = report["predictions"][0]["adapter_metric_metadata"]
     assert set(adapter_metrics) == {"alce", "mmdocrag", "ragtruth"}
+    assert adapter_metadata["alce"]["metric_scope"] == "proxy"
+    assert adapter_metadata["alce"]["paper_grade"] is False
+    assert adapter_metadata["mmdocrag"]["metric_scope"] == "proxy"
+    assert adapter_metadata["ragtruth"]["metric_scope"] == "proxy"
+    assert report["summary"]["adapter_metric_metadata"] == adapter_metadata
     assert {
         "fluency",
         "correctness",
@@ -532,9 +536,7 @@ def test_run_benchmark_reports_named_research_adapters_and_backends(
         "graph_backend": "local_graph",
         "planner_backend": "heuristic_local",
         "generator_backend": "fixture_generator",
-        "backend_status": "not_configured",
-        "requires_backend_config": True,
-        "missing_backends": ["visual_generator"],
+        "implementation_stage": "proxy_evaluator_fixture",
     }
 
 

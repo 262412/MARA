@@ -54,6 +54,7 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "visual_backend_type": "deterministic_smoke",
         "planner_backend": "heuristic_local",
         "generator_backend": "evidence_only_without_vlm",
+        "implementation_stage": "deterministic_page_image_smoke",
     },
     {
         "route_id": "page_image_rag_vlm",
@@ -72,6 +73,7 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "backend_status": "not_configured",
         "requires_backend_config": True,
         "missing_backends": ["colpali", "visual_generator"],
+        "implementation_stage": "requires_configured_visual_backends",
     },
     {
         "route_id": "element_rag",
@@ -86,6 +88,7 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "text_retriever_backend": "docqa_element_metadata",
         "planner_backend": "heuristic_local",
         "generator_backend": "local_docqa_generator",
+        "implementation_stage": "prototype_element_metadata_index",
     },
     {
         "route_id": "graph_rag_local",
@@ -101,6 +104,7 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "graph_mode": "local",
         "planner_backend": "heuristic_local",
         "generator_backend": "local_graph_summary",
+        "implementation_stage": "prototype_lightweight_graph_selector",
     },
     {
         "route_id": "graph_rag_global",
@@ -117,6 +121,7 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "graph_mode": "global",
         "planner_backend": "heuristic_local",
         "generator_backend": "local_graph_summary",
+        "implementation_stage": "prototype_lightweight_graph_selector",
     },
     {
         "route_id": "hybrid_rag",
@@ -311,6 +316,7 @@ def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
         "verification_mode",
         "text_retriever_backend",
         "visual_retriever_backend",
+        "visual_generator_backend",
         "visual_backend_type",
         "graph_backend",
         "planner_backend",
@@ -318,6 +324,13 @@ def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
         "backend_status",
         "requires_backend_config",
         "missing_backends",
+        "implementation_stage",
+        "external_evaluators",
+        "research_evaluators",
+        "evaluator_backends",
+        "alce_evaluator",
+        "mmdocrag_evaluator",
+        "ragtruth_evaluator",
     ):
         if key in record:
             route[key] = record.get(key)

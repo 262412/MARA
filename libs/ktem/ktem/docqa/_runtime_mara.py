@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 from .controller import build_controller_outputs
+from .visual_retriever import LocalLateInteractionVisualRetriever
 
 
 class ResponseCapture:
@@ -64,7 +66,53 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
     pipeline.planner_model = request.planner_model or ""
     pipeline.allowed_routes = list(request.allowed_routes or [])
     pipeline.verification_mode = request.verification_mode or "off"
+    pipeline.graph_mode = str(getattr(request, "graph_mode", "") or "").strip()
+    _apply_visual_backends(pipeline, request)
     pipeline.docqa_request = request
+
+
+def build_visual_retriever_backend(backend_name: str):
+    backend = str(backend_name or "").strip()
+    if not backend:
+        return None
+    if backend == "local_late_interaction":
+        return LocalLateInteractionVisualRetriever()
+    return _instantiate_dotted_backend(backend, "visual retriever")
+
+
+def build_visual_generator_backend(backend_name: str):
+    backend = str(backend_name or "").strip()
+    if not backend or backend == "evidence_only_without_vlm":
+        return None
+    return _instantiate_dotted_backend(backend, "visual generator")
+
+
+def _apply_visual_backends(pipeline: Any, request: Any) -> None:
+    retriever_backend = str(
+        getattr(request, "visual_retriever_backend", "") or ""
+    ).strip()
+    generator_backend = str(
+        getattr(request, "visual_generator_backend", "") or ""
+    ).strip()
+    pipeline.visual_retriever_backend = retriever_backend
+    pipeline.visual_generator_backend = generator_backend
+    retriever = build_visual_retriever_backend(retriever_backend)
+    generator = build_visual_generator_backend(generator_backend)
+    if retriever is not None:
+        pipeline.visual_retriever = retriever
+    if generator is not None:
+        pipeline.vlm_generator = generator
+
+
+def _instantiate_dotted_backend(backend: str, label: str):
+    module_name, _, attr_name = backend.rpartition(".")
+    if not module_name or not attr_name:
+        raise ValueError(
+            f"Configured {label} backend must be a dotted import path: {backend}"
+        )
+    module = importlib.import_module(module_name)
+    target = getattr(module, attr_name)
+    return target() if isinstance(target, type) else target
 
 
 def _backend_metadata(
@@ -92,6 +140,16 @@ def _backend_metadata(
     planner_model = str(getattr(request, "planner_model", "") or "").strip()
     if planner_model:
         metadata["planner_backend"] = planner_model
+    visual_retriever = str(
+        getattr(request, "visual_retriever_backend", "") or ""
+    ).strip()
+    if visual_retriever:
+        metadata["visual_retriever"] = visual_retriever
+    visual_generator = str(
+        getattr(request, "visual_generator_backend", "") or ""
+    ).strip()
+    if visual_generator:
+        metadata["visual_generator"] = visual_generator
     return metadata
 
 
@@ -104,6 +162,9 @@ def copy_request_fields(target: Any, source: Any) -> None:
     target.planner_model = source.planner_model
     target.allowed_routes = source.allowed_routes
     target.verification_mode = source.verification_mode
+    target.graph_mode = source.graph_mode
+    target.visual_retriever_backend = source.visual_retriever_backend
+    target.visual_generator_backend = source.visual_generator_backend
 
 
 def selected_ids(runtime: Any, user_id: Any, selected_inputs: dict[int, Any]):

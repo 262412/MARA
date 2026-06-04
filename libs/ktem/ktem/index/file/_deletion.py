@@ -5,6 +5,8 @@ from ktem.db.engine import engine
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .element_index import is_docstore_relation_type
+
 
 class FileIndexDeletionController:
     def __init__(self, index, selected_panel_false: str) -> None:
@@ -33,7 +35,7 @@ class FileIndexDeletionController:
             for each in index_rows:
                 if each[0].relation_type == "vector":
                     vs_ids.append(each[0].target_id)
-                elif each[0].relation_type == "document":
+                elif is_docstore_relation_type(each[0].relation_type):
                     ds_ids.append(each[0].target_id)
                 session.delete(each[0])
             session.commit()

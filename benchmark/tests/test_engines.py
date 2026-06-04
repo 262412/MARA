@@ -193,6 +193,7 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
             planner_model="gpt-4o-mini",
             allowed_routes=["doc_text", "graph_global"],
             verification_mode="strict",
+            graph_mode="global",
         ),
     )
 
@@ -223,6 +224,7 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert fake_runtime.requests[0].planner_model == "gpt-4o-mini"
     assert fake_runtime.requests[0].allowed_routes == ["doc_text", "graph_global"]
     assert fake_runtime.requests[0].verification_mode == "strict"
+    assert fake_runtime.requests[0].graph_mode == "global"
     assert result.answer == "runtime answer"
     assert result.predicted_pages == ["1"]
     assert result.predicted_sources == ["doc.txt#page:1"]
@@ -237,6 +239,39 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert result.evidence_bundle == {"route": "graph_global", "items": []}
     assert result.claim_verification == {"rewrite_skipped": True}
     assert result.presentation == {"markdown_normalized": True}
+
+
+def test_docqa_runtime_engine_passes_visual_backend_config(monkeypatch, tmp_path):
+    doc_path = tmp_path / "doc.txt"
+    doc_path.write_text("runtime text", encoding="utf-8")
+    fake_runtime = _install_fake_docqa_runtime(monkeypatch, doc_path)
+    config = BenchmarkConfig(
+        suite_name="runtime",
+        output_dir=tmp_path / "out",
+        scope="document",
+        route_policy="visual",
+    )
+    config.visual_retriever_backend = "local_late_interaction"
+    config.visual_generator_backend = "tests.fake_vlm"
+    engine = get_engine("docqa_runtime", config)
+
+    engine.run(
+        example=BenchmarkExample(
+            example_id="ex",
+            document_id="doc",
+            document_ids=["doc"],
+            question="Question?",
+            answers=["runtime answer"],
+        ),
+        documents=[
+            BenchmarkDocument(document_id="doc", path=doc_path, format_type="txt")
+        ],
+    )
+
+    assert fake_runtime.requests[0].visual_retriever_backend == (
+        "local_late_interaction"
+    )
+    assert fake_runtime.requests[0].visual_generator_backend == "tests.fake_vlm"
 
 
 def test_docqa_runtime_engine_reuses_already_indexed_documents(monkeypatch, tmp_path):

@@ -87,6 +87,8 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         f"- Cache Mode: `{summary.get('cache_mode')}`",
         f"- Parse Cache Hit Rate: `{summary.get('parse_cache_hit_rate')}`",
         f"- Embedding Cache Hit Rate: `{summary.get('embedding_cache_hit_rate')}`",
+        f"- Executed Routes: `{summary.get('num_executed_routes')}`",
+        f"- Skipped Routes: `{summary.get('num_skipped_routes')}`",
     ]
 
 
@@ -137,5 +139,47 @@ def write_reports(
         "- Documents: `documents.json`",
         "- Retrieval Traces: `retrieval_traces.jsonl`",
     ]
+    skipped_route_lines = _skipped_route_markdown(summary)
+    if skipped_route_lines:
+        markdown += ["", "## Skipped Routes", "", *skipped_route_lines]
+    evaluator_lines = _external_evaluator_markdown(summary)
+    if evaluator_lines:
+        markdown += ["", "## External Research Evaluators", "", *evaluator_lines]
     markdown_path.write_text("\n".join(markdown), encoding="utf-8")
     return run_dir
+
+
+def _skipped_route_markdown(summary: dict[str, Any]) -> list[str]:
+    lines = []
+    for route in summary.get("skipped_routes") or []:
+        if not isinstance(route, dict):
+            continue
+        route_id = str(route.get("route_id") or "").strip()
+        reason = str(route.get("skip_reason") or "not_configured").strip()
+        if route_id:
+            lines.append(f"- `{route_id}`: {reason}")
+    return lines
+
+
+def _external_evaluator_markdown(summary: dict[str, Any]) -> list[str]:
+    metadata = summary.get("external_adapter_metric_metadata") or {}
+    if not isinstance(metadata, dict):
+        return []
+    lines = []
+    for adapter_name, item in metadata.items():
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status") or "not_configured")
+        backend = str(item.get("backend") or "").strip()
+        paper_grade = item.get("paper_grade")
+        if status == "configured":
+            lines.append(
+                f"- `{adapter_name}`: configured via `{backend}`, "
+                f"paper_grade=`{paper_grade}`"
+            )
+        else:
+            excluded = item.get("excluded_from_summary")
+            lines.append(
+                f"- `{adapter_name}`: {status}, " f"excluded_from_summary=`{excluded}`"
+            )
+    return lines
