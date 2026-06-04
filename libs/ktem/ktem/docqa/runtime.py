@@ -20,6 +20,7 @@ from theflow.settings import settings as flowsettings
 from theflow.utils.modules import import_dotted_string
 
 from . import _runtime_doctor as _doctor
+from . import _runtime_elements
 from . import _runtime_indexing as _indexing
 from . import _runtime_mara as _mara
 from . import _runtime_notebook as _nb
@@ -522,6 +523,16 @@ class DocQARuntime:
             selected_file_ids,
             active_file_id or "",
             resolved_user_id,
+        )
+        element_file_ids = self._merge_unique_file_ids(
+            selected_file_ids,
+            [active_file_id],
+        )
+        pipeline.element_index_records = (
+            _runtime_elements.element_index_records_for_selected_files(
+                self.file_index,
+                element_file_ids,
+            )
         )
         _mara.apply_request_context(pipeline, request, graph_context)
 

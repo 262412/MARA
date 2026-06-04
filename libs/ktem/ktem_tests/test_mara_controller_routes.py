@@ -1,5 +1,6 @@
 import json
 
+import ktem.reasoning.mara as mara_module
 import ktem.reasoning.mara_route_retrieval as route_retrieval
 from ktem.reasoning.mara import (
     MARA_ABSTAIN_MESSAGE,
@@ -286,6 +287,49 @@ def test_mara_route_policy_direct_overrides_planner_before_text_rag(monkeypatch)
     assert [event.content for event in events if event.channel == "chat"] == [
         MARA_DIRECT_MESSAGE
     ]
+
+
+def test_mara_controller_off_ignores_planner_and_uses_route_policy(monkeypatch):
+    monkeypatch.setattr(FullQAPipeline, "stream", _fake_answer_stream)
+    captured = {}
+    original_execute = mara_module.execute_controller_turn
+
+    def capture_execute(request, **kwargs):
+        result = original_execute(request, **kwargs)
+        captured["request"] = request
+        captured["result"] = result
+        return result
+
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.controller_mode = "off"
+    pipeline.route_policy = "auto"
+    pipeline.verification_mode = "off"
+    pipeline.planner = lambda _payload: json.dumps(
+        {"route": "direct", "reason": "Planner would skip retrieval."}
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "retrieve",
+        lambda _message, _history: (
+            [
+                RetrievedDocument(
+                    text="Document evidence.",
+                    id_="doc-1",
+                    metadata={"file_id": "file-1", "page_label": "1"},
+                )
+            ],
+            [],
+        ),
+    )
+    monkeypatch.setattr(mara_module, "execute_controller_turn", capture_execute)
+
+    events = list(pipeline.stream("What changed?", "conv-1", []))
+
+    assert [event.content for event in events if event.channel == "chat"] == [
+        "grounded answer"
+    ]
+    assert captured["request"].controller_mode == "off"
+    assert captured["result"].controller_decision.legacy_route == "doc_text"
 
 
 def test_mara_abstain_route_returns_without_text_rag(monkeypatch):

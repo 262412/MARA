@@ -120,9 +120,10 @@ def _controller_execution_request(
     pipeline: Any,
     message: str,
 ) -> SimpleNamespace:
+    controller_mode = str(getattr(pipeline, "controller_mode", "") or "").strip()
     return SimpleNamespace(
         prompt=message,
-        controller_mode="llm",
+        controller_mode=controller_mode or "llm",
         route_policy=getattr(pipeline, "route_policy", None) or "auto",
         allowed_routes=list(getattr(pipeline, "allowed_routes", None) or []),
         verification_mode=getattr(pipeline, "verification_mode", None) or "light",

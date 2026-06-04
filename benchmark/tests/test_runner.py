@@ -437,6 +437,9 @@ def _write_research_adapter_manifest(tmp_path):
                         "visual_retriever_backend": "local_late_interaction",
                         "visual_backend_type": "deterministic_smoke",
                         "graph_backend": "local_graph",
+                        "backend_status": "not_configured",
+                        "requires_backend_config": True,
+                        "missing_backends": ["visual_generator"],
                     }
                 ],
             }
@@ -529,6 +532,9 @@ def test_run_benchmark_reports_named_research_adapters_and_backends(
         "graph_backend": "local_graph",
         "planner_backend": "heuristic_local",
         "generator_backend": "fixture_generator",
+        "backend_status": "not_configured",
+        "requires_backend_config": True,
+        "missing_backends": ["visual_generator"],
     }
 
 

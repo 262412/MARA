@@ -65,10 +65,13 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "route_policy": "visual",
         "allowed_routes": ["doc_page_image"],
         "verification_mode": "light",
-        "visual_retriever_backend": "colpali",
-        "visual_backend_type": "vlm_configured",
+        "visual_retriever_backend": "local_late_interaction",
+        "visual_backend_type": "deterministic_smoke",
         "planner_backend": "heuristic_local",
-        "generator_backend": "visual_generator",
+        "generator_backend": "evidence_only_without_vlm",
+        "backend_status": "not_configured",
+        "requires_backend_config": True,
+        "missing_backends": ["colpali", "visual_generator"],
     },
     {
         "route_id": "element_rag",
@@ -312,6 +315,9 @@ def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
         "graph_backend",
         "planner_backend",
         "generator_backend",
+        "backend_status",
+        "requires_backend_config",
+        "missing_backends",
     ):
         if key in record:
             route[key] = record.get(key)

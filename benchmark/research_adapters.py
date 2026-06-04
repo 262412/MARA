@@ -26,14 +26,18 @@ def research_adapter_metrics(prediction: dict[str, Any]) -> dict[str, dict[str, 
 def route_backend_metadata(
     route: dict[str, Any],
     config: Any,
-) -> dict[str, str]:
-    metadata = {
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
         output_key: _backend_value(route, config, candidates, output_key)
         for output_key, candidates in _BACKEND_FIELDS.items()
     }
     graph_mode = _backend_value(route, config, ("graph_mode",), "graph_mode")
     if graph_mode:
         metadata["graph_mode"] = graph_mode
+    for key in ("backend_status", "requires_backend_config", "missing_backends"):
+        value = route.get(key)
+        if value not in (None, "", []):
+            metadata[key] = value
     return metadata
 
 

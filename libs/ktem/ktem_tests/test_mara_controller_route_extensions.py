@@ -2,7 +2,7 @@ import json
 
 import ktem.reasoning.mara_controller as mara_controller
 import ktem.reasoning.mara_route_retrieval as route_retrieval
-from ktem.reasoning.mara import MaraAgentPipeline
+from ktem.reasoning.mara import MARA_PLANNER_ABSTAIN_MESSAGE, MaraAgentPipeline
 from ktem.reasoning.simple import FullQAPipeline
 
 from kotaemon.base import Document, RetrievedDocument
@@ -98,6 +98,30 @@ def test_mara_stream_uses_planner_model_when_no_planner_callable(monkeypatch):
     assert _planner_events(events)[0]["decision"]["route"] == "doc_page_image"
 
 
+def test_mara_planner_model_backend_failure_abstains_with_trace(monkeypatch):
+    def unavailable_planner(_payload, _planner_model):
+        raise RuntimeError("modelcli backend is not configured")
+
+    monkeypatch.setattr(
+        mara_controller,
+        "_run_planner_model",
+        unavailable_planner,
+        raising=False,
+    )
+    monkeypatch.setattr(FullQAPipeline, "stream", _fail_if_text_rag_runs("Planner"))
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.planner_model = "fake-planner"
+
+    events = list(pipeline.stream("What changed?", "conv-1", []))
+
+    assert [event.content for event in events if event.channel == "chat"] == [
+        MARA_PLANNER_ABSTAIN_MESSAGE
+    ]
+    decision = _planner_events(events)[0]["decision"]
+    assert decision["route"] == "abstain"
+    assert decision["planner_error"] == "modelcli backend is not configured"
+
+
 def test_mara_element_route_uses_element_index_without_text_retrieval():
     pipeline = MaraAgentPipeline(retrievers=[])
     pipeline.element_index_records = [_element_record()]
@@ -151,6 +175,31 @@ def test_mara_graph_route_retrieval_uses_graph_index_without_text_retrieval():
     assert metadata["graph_evidence"][0]["evidence_id"] == (
         "graph-community:community-1"
     )
+
+
+def test_mara_graph_route_retrieval_uses_node_context_without_text_retrieval():
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.graph_context = {
+        "node_id": "component::strategy",
+        "label": "Strategy",
+        "summary": "Strategy connects pricing and roadmap themes.",
+        "support_pages": {"file-a": ["2"]},
+    }
+
+    metadata = route_retrieval.route_retrieval_metadata(
+        pipeline,
+        "graph_rag",
+        "Compare strategy themes.",
+        [],
+        {"question": "Compare strategy themes.", "modalities": ["text"]},
+        text_retrieve=lambda: (_ for _ in ()).throw(
+            AssertionError("graph route must not use text retrieval")
+        ),
+        metadata_builder=lambda _docs, _understanding: {},
+    )
+
+    assert metadata["graph_evidence"][0]["evidence_id"] == ("graph:component::strategy")
+    assert metadata["graph_backend"] == "node_graph_context"
 
 
 def test_mara_page_image_route_uses_configured_vlm_generator(monkeypatch):

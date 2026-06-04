@@ -245,6 +245,9 @@ def test_load_v2_manifest_preserves_controller_route_fields(tmp_path):
                         "controller_mode": "llm",
                         "route_policy": "hybrid",
                         "verification_mode": "strict",
+                        "backend_status": "not_configured",
+                        "requires_backend_config": True,
+                        "missing_backends": ["visual_generator"],
                     }
                 ],
             },
@@ -258,6 +261,9 @@ def test_load_v2_manifest_preserves_controller_route_fields(tmp_path):
     assert bundle.routes[0]["controller_mode"] == "llm"
     assert bundle.routes[0]["route_policy"] == "hybrid"
     assert bundle.routes[0]["verification_mode"] == "strict"
+    assert bundle.routes[0]["backend_status"] == "not_configured"
+    assert bundle.routes[0]["requires_backend_config"] is True
+    assert bundle.routes[0]["missing_backends"] == ["visual_generator"]
 
 
 def test_load_v2_manifest_preserves_planner_model_and_allowed_routes(tmp_path):
@@ -308,7 +314,16 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
     ]
     assert DEFAULT_MARA_ROUTES[0]["route_policy"] == "direct"
     assert DEFAULT_MARA_ROUTES[2]["allowed_routes"] == ["doc_page_image"]
-    assert DEFAULT_MARA_ROUTES[3]["generator_backend"] == "visual_generator"
+    assert DEFAULT_MARA_ROUTES[3]["visual_retriever_backend"] == (
+        "local_late_interaction"
+    )
+    assert DEFAULT_MARA_ROUTES[3]["generator_backend"] == "evidence_only_without_vlm"
+    assert DEFAULT_MARA_ROUTES[3]["backend_status"] == "not_configured"
+    assert DEFAULT_MARA_ROUTES[3]["requires_backend_config"] is True
+    assert DEFAULT_MARA_ROUTES[3]["missing_backends"] == [
+        "colpali",
+        "visual_generator",
+    ]
     assert DEFAULT_MARA_ROUTES[4]["allowed_routes"] == ["doc_element"]
     assert DEFAULT_MARA_ROUTES[5]["graph_mode"] == "local"
     assert DEFAULT_MARA_ROUTES[6]["graph_mode"] == "global"

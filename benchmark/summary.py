@@ -12,7 +12,7 @@ def build_benchmark_summary(
     config: Any,
     active_routes: list[dict[str, Any]],
     predictions: list[dict[str, Any]],
-    backend_metadata: dict[str, dict[str, str]],
+    backend_metadata: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     return {
         **_identity_summary(bundle, config, active_routes, predictions),

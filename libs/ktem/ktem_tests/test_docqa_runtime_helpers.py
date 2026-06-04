@@ -6,6 +6,7 @@ from typing import Any, cast
 import ktem.docqa.runtime as runtime_module
 from ktem.docqa import (
     _runtime_doctor,
+    _runtime_elements,
     _runtime_indexing,
     _runtime_pipeline,
     _runtime_selection,
@@ -16,7 +17,7 @@ from ktem.docqa._runtime_models import DocQAFileRecord, DocQASession, _PreparedP
 from ktem.docqa._runtime_notebook import NOTEBOOK_KEY
 from ktem.docqa.runtime import DocQARuntime
 
-from kotaemon.base import Document
+from kotaemon.base import Document, RetrievedDocument
 
 
 def test_runtime_selection_module_preserves_boundary_helpers():
@@ -215,6 +216,92 @@ def test_runtime_builds_local_file_records_for_route_retrieval():
     ]
 
 
+def test_runtime_elements_builds_records_from_selected_file_documents(monkeypatch):
+    docs = [
+        RetrievedDocument(
+            text="Revenue grew by region.",
+            id_="table-doc",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "report.pdf",
+                "page_label": "4",
+                "element_id": "table-4",
+                "element_type": "table",
+                "caption": "Regional revenue",
+            },
+        )
+    ]
+
+    monkeypatch.setattr(
+        _runtime_elements,
+        "documents_for_selected_files",
+        lambda _file_index, selected_ids: docs if selected_ids == ["file-1"] else [],
+    )
+
+    records = _runtime_elements.element_index_records_for_selected_files(
+        object(),
+        ["file-1"],
+    )
+
+    assert records[0]["evidence_id"] == "element:file-1:4:table-4"
+    assert records[0]["text"] == "Revenue grew by region."
+
+
+def test_runtime_prepare_pipeline_sets_element_index_records(monkeypatch):
+    file_index = _PreparePipelineFileIndex()
+    pipeline = SimpleNamespace()
+
+    class _Reasoning:
+        @staticmethod
+        def get_info():
+            return {"id": "mara"}
+
+        @staticmethod
+        def get_pipeline(_settings, _reasoning_state, _retrievers):
+            return pipeline
+
+    runtime = cast(Any, object.__new__(DocQARuntime))
+    runtime._app = SimpleNamespace(
+        index_manager=SimpleNamespace(indices=[file_index]),
+    )
+    runtime.file_index = file_index
+    runtime._preview = cast(Any, _PreviewForFileRecords())
+    runtime._web_search_cls = None
+    runtime._resolve_user_id = lambda _user_id=None: "user-1"
+    monkeypatch.setitem(runtime_module.reasonings, "mara", _Reasoning)
+    monkeypatch.setattr(
+        runtime_module._runtime_elements,
+        "element_index_records_for_selected_files",
+        lambda selected_index, selected_ids: [
+            {
+                "evidence_id": "element:file-1:4:table-4",
+                "file_id": "file-1",
+                "page_label": "4",
+                "element_id": "table-4",
+                "modality": "table",
+                "text": "Revenue grew by region.",
+            }
+        ]
+        if selected_index is file_index and selected_ids == ["file-1"]
+        else [],
+        raising=False,
+    )
+
+    prepared = runtime._prepare_pipeline(
+        runtime_module.DocQARequest(
+            prompt="Which table shows revenue?",
+            selected_inputs={file_index.id: ["file-1"]},
+            reasoning_type="mara",
+            settings={"reasoning.use": "mara"},
+            route_policy="element",
+        )
+    )
+
+    assert prepared.pipeline.element_index_records[0]["evidence_id"] == (
+        "element:file-1:4:table-4"
+    )
+
+
 class _PreviewForFileRecords:
     @staticmethod
     def resolve_file_path(file_id: str) -> str:
@@ -223,6 +310,25 @@ class _PreviewForFileRecords:
     @staticmethod
     def resolve_file_name(file_id: str) -> str:
         return f"{file_id}.pdf"
+
+    @staticmethod
+    def resolve_selected_file(file_ids: list[str]):
+        file_id = file_ids[0] if file_ids else ""
+        return file_id, f"{file_id}.pdf" if file_id else "", ""
+
+    @staticmethod
+    def get_page_context_text(_file_id: str, _file_name: str, _page_number: int) -> str:
+        return ""
+
+
+class _PreparePipelineFileIndex:
+    id = 9
+
+    def resolve_selected_ids(self, _user_id, selected_input):
+        return list(selected_input or [])
+
+    def get_retriever_pipelines(self, _settings, _user_id, _selected_input):
+        return []
 
 
 class _RuntimeForFileRecords(DocQARuntime):

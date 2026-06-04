@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ktem.docqa.graph_index import select_graph_index_evidence
+from ktem.docqa.graph_index import (
+    graph_context_evidence_metadata,
+    select_graph_index_evidence,
+)
 from ktem.docqa.multimodal_index import build_local_page_image_records
 from ktem.docqa.visual_retriever import rank_page_image_records
 
@@ -216,9 +219,15 @@ def _graph_metadata(pipeline: Any, understanding: dict[str, Any]) -> dict[str, A
     graph_context = getattr(pipeline, "graph_context", None)
     if not isinstance(graph_context, dict):
         return {}
-    return select_graph_index_evidence(
+    indexed_metadata = select_graph_index_evidence(
         str(understanding.get("question") or ""),
         graph_context,
+    )
+    if indexed_metadata:
+        return indexed_metadata
+    return graph_context_evidence_metadata(
+        graph_context,
+        list(understanding.get("modalities", [])),
     )
 
 

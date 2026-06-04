@@ -57,6 +57,27 @@ def select_graph_index_evidence(
     }
 
 
+def graph_context_evidence_metadata(
+    graph_context: dict[str, Any],
+    requested_modalities: list[Any] | None = None,
+) -> dict[str, Any]:
+    evidence = _node_graph_context_evidence(graph_context)
+    if not evidence:
+        return {}
+    item = evidence["item"]
+    return {
+        "requested_modalities": list(requested_modalities or []),
+        "modality_counts": {"graph": 1},
+        "page_coverage": evidence["page_coverage"],
+        "source_ids": evidence["source_ids"],
+        "evidence_ids": [item["evidence_id"]],
+        "evidence": [],
+        "graph_backend": "node_graph_context",
+        "graph_mode": "local",
+        "graph_evidence": [item],
+    }
+
+
 def graph_answer_from_evidence(items: list[dict[str, Any]]) -> str:
     summaries = _unique(
         str(item.get("summary") or item.get("text") or "").strip() for item in items
@@ -215,6 +236,52 @@ def _page_coverage(items: list[dict[str, Any]]) -> list[str]:
             if "#page:" not in str(ref):
                 continue
             page = str(ref).rsplit("#page:", 1)[-1]
+            if page and page not in pages:
+                pages.append(page)
+    return pages
+
+
+def _node_graph_context_evidence(graph_context: dict[str, Any]) -> dict[str, Any]:
+    node_id = str(graph_context.get("node_id") or graph_context.get("id") or "root")
+    label = str(graph_context.get("label") or graph_context.get("title") or node_id)
+    summary = str(
+        graph_context.get("summary") or graph_context.get("description") or ""
+    )
+    if not summary.strip():
+        return {}
+    source_ids = _graph_source_ids(graph_context)
+    item = {
+        "evidence_id": f"graph:{node_id}",
+        "id": node_id,
+        "label": label,
+        "summary": summary,
+        "source_ids": source_ids,
+        "support_pages": dict(graph_context.get("support_pages") or {}),
+        "support_chunk_ids": dict(graph_context.get("support_chunk_ids") or {}),
+    }
+    return {
+        "item": item,
+        "source_ids": source_ids,
+        "page_coverage": _graph_page_coverage(graph_context),
+    }
+
+
+def _graph_source_ids(graph_context: dict[str, Any]) -> list[str]:
+    support_pages = graph_context.get("support_pages")
+    if isinstance(support_pages, dict):
+        return [str(file_id) for file_id in support_pages if str(file_id or "").strip()]
+    focus_file_id = str(graph_context.get("focus_file_id") or "").strip()
+    return [focus_file_id] if focus_file_id else []
+
+
+def _graph_page_coverage(graph_context: dict[str, Any]) -> list[str]:
+    support_pages = graph_context.get("support_pages")
+    if not isinstance(support_pages, dict):
+        return []
+    pages: list[str] = []
+    for values in support_pages.values():
+        for value in values or []:
+            page = str(value or "").strip()
             if page and page not in pages:
                 pages.append(page)
     return pages

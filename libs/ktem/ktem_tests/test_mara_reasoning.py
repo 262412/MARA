@@ -436,27 +436,25 @@ def test_mara_graph_route_uses_graph_context_without_text_rag(monkeypatch):
         if event.channel == "debug"
         and event.content.get("mara_channel") == "evidence_metadata"
     ]
-    assert evidence_payloads == [
+    assert len(evidence_payloads) == 1
+    metadata = evidence_payloads[0]
+    assert metadata["requested_modalities"] == ["text"]
+    assert metadata["modality_counts"] == {"graph": 1}
+    assert metadata["page_coverage"] == ["2", "5"]
+    assert metadata["source_ids"] == ["file-a", "file-b"]
+    assert metadata["evidence_ids"] == ["graph:component::strategy"]
+    assert metadata["graph_evidence"] == [
         {
-            "requested_modalities": ["text"],
-            "modality_counts": {"graph": 1},
-            "page_coverage": ["2", "5"],
+            "evidence_id": "graph:component::strategy",
+            "id": "component::strategy",
+            "label": "Strategy",
+            "summary": "Strategy connects pricing and product roadmap themes.",
             "source_ids": ["file-a", "file-b"],
-            "evidence_ids": ["graph:component::strategy"],
-            "evidence": [],
-            "graph_evidence": [
-                {
-                    "evidence_id": "graph:component::strategy",
-                    "id": "component::strategy",
-                    "label": "Strategy",
-                    "summary": "Strategy connects pricing and product roadmap themes.",
-                    "source_ids": ["file-a", "file-b"],
-                    "support_pages": {"file-a": ["2"], "file-b": ["5"]},
-                    "support_chunk_ids": {
-                        "file-a": ["chunk-a"],
-                        "file-b": ["chunk-b"],
-                    },
-                }
-            ],
+            "support_pages": {"file-a": ["2"], "file-b": ["5"]},
+            "support_chunk_ids": {
+                "file-a": ["chunk-a"],
+                "file-b": ["chunk-b"],
+            },
         }
     ]
+    assert metadata["evidence"][0]["evidence_id"] == "graph:component::strategy"

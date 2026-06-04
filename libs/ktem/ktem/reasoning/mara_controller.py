@@ -114,12 +114,13 @@ def _call_structured_planner(
     try:
         raw_decision = planner(payload)
     except (ImportError, RuntimeError, ValueError) as exc:
-        raw_decision = json.dumps(
-            {
-                "route": "doc",
-                "reason": f"Planner model failed; using document text route: {exc}",
-            }
-        )
+        return {
+            "route": "abstain",
+            "reason": f"Planner model failed; backend unavailable: {exc}",
+            "planner_error": str(exc),
+            "evidence_types": [],
+            "verify": False,
+        }
     decision = parse_planner_decision(raw_decision, allowed_routes=allowed_routes)
     return {
         "route": decision.route,
