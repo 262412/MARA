@@ -87,6 +87,8 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         f"- Cache Mode: `{summary.get('cache_mode')}`",
         f"- Parse Cache Hit Rate: `{summary.get('parse_cache_hit_rate')}`",
         f"- Embedding Cache Hit Rate: `{summary.get('embedding_cache_hit_rate')}`",
+        f"- Executed Routes: `{summary.get('num_executed_routes')}`",
+        f"- Skipped Routes: `{summary.get('num_skipped_routes')}`",
     ]
 
 
@@ -137,5 +139,128 @@ def write_reports(
         "- Documents: `documents.json`",
         "- Retrieval Traces: `retrieval_traces.jsonl`",
     ]
+    skipped_route_lines = _skipped_route_markdown(summary)
+    if skipped_route_lines:
+        markdown += ["", "## Skipped Routes", "", *skipped_route_lines]
+    backend_lines = _backend_metadata_markdown(summary)
+    if backend_lines:
+        markdown += ["", "## Backend Status By Route", "", *backend_lines]
+    evaluator_lines = _external_evaluator_markdown(summary)
+    if evaluator_lines:
+        markdown += ["", "## External Research Evaluators", "", *evaluator_lines]
+    route_evaluator_lines = _external_evaluator_by_route_markdown(summary)
+    if route_evaluator_lines:
+        markdown += [
+            "",
+            "## External Research Evaluators By Route",
+            "",
+            *route_evaluator_lines,
+        ]
     markdown_path.write_text("\n".join(markdown), encoding="utf-8")
     return run_dir
+
+
+def _skipped_route_markdown(summary: dict[str, Any]) -> list[str]:
+    lines = []
+    for route in summary.get("skipped_routes") or []:
+        if not isinstance(route, dict):
+            continue
+        route_id = str(route.get("route_id") or "").strip()
+        reason = str(route.get("skip_reason") or "not_configured").strip()
+        if route_id:
+            lines.append(f"- `{route_id}`: {reason}")
+    return lines
+
+
+def _backend_metadata_markdown(summary: dict[str, Any]) -> list[str]:
+    metadata = summary.get("backend_metadata") or {}
+    if not isinstance(metadata, dict):
+        return []
+    lines = []
+    for route_id, item in metadata.items():
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("backend_status") or "configured")
+        details = _backend_detail_text(item)
+        suffix = f"; {details}" if details else ""
+        lines.append(f"- `{route_id}`: {status}{suffix}")
+    return lines
+
+
+def _backend_detail_text(item: dict[str, Any]) -> str:
+    ignored = {"backend_status", "missing_backends", "requires_backend_config"}
+    pairs = [
+        f"{key}=`{value}`"
+        for key, value in sorted(item.items())
+        if key not in ignored and value not in (None, "", [], {})
+    ]
+    return ", ".join(pairs)
+
+
+def _external_evaluator_markdown(summary: dict[str, Any]) -> list[str]:
+    metadata = summary.get("external_adapter_metric_metadata") or {}
+    if not isinstance(metadata, dict):
+        return []
+    lines = []
+    for adapter_name, item in metadata.items():
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status") or "not_configured")
+        backend = str(item.get("backend") or "").strip()
+        paper_grade = item.get("paper_grade")
+        metric_category = str(item.get("metric_category") or "external_metric")
+        if status == "configured":
+            lines.append(
+                f"- `{adapter_name}`: configured via `{backend}`, "
+                f"paper_grade=`{paper_grade}`, "
+                f"metric_category=`{metric_category}`"
+            )
+        else:
+            excluded = item.get("excluded_from_summary")
+            lines.append(
+                f"- `{adapter_name}`: {status}, " f"excluded_from_summary=`{excluded}`"
+            )
+    return lines
+
+
+def _external_evaluator_by_route_markdown(summary: dict[str, Any]) -> list[str]:
+    metadata_by_route = summary.get("external_adapter_metric_metadata_by_route") or {}
+    if not isinstance(metadata_by_route, dict):
+        return []
+    lines = []
+    for route_id, metadata in metadata_by_route.items():
+        if not isinstance(metadata, dict):
+            continue
+        for adapter_name, item in metadata.items():
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                _external_evaluator_route_line(
+                    str(route_id),
+                    str(adapter_name),
+                    item,
+                )
+            )
+    return lines
+
+
+def _external_evaluator_route_line(
+    route_id: str,
+    adapter_name: str,
+    item: dict[str, Any],
+) -> str:
+    status = str(item.get("status") or "not_configured")
+    if status == "configured":
+        backend = str(item.get("backend") or "").strip()
+        paper_grade = item.get("paper_grade")
+        metric_category = str(item.get("metric_category") or "external_metric")
+        return (
+            f"- `{route_id}` / `{adapter_name}`: configured via `{backend}`, "
+            f"paper_grade=`{paper_grade}`, "
+            f"metric_category=`{metric_category}`"
+        )
+    excluded = item.get("excluded_from_summary")
+    return (
+        f"- `{route_id}` / `{adapter_name}`: {status}, "
+        f"excluded_from_summary=`{excluded}`"
+    )

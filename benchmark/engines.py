@@ -90,6 +90,10 @@ class BaseBenchmarkEngine:
                 "agent_mode": None,
                 "task_type": None,
                 "artifact_type": None,
+                "graph_mode": None,
+                "visual_retriever_backend": None,
+                "visual_generator_backend": None,
+                "generator_backend": None,
                 "use_generation": True,
                 "prompt_template": None,
             }
@@ -253,6 +257,17 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             "agent_mode": _config_value(self.config, "agent_mode", None),
             "task_type": _config_value(self.config, "task_type", None),
             "artifact_type": _config_value(self.config, "artifact_type", None),
+            "graph_mode": _config_value(self.config, "graph_mode", None),
+            "visual_retriever_backend": _config_value(
+                self.config,
+                "visual_retriever_backend",
+                None,
+            ),
+            "visual_generator_backend": _config_value(
+                self.config,
+                "visual_generator_backend",
+                None,
+            ),
             **cf.controller_config_kwargs(
                 lambda key: _config_value(self.config, key, None)
             ),

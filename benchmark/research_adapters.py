@@ -13,6 +13,50 @@ _BACKEND_FIELDS = {
     "generator_backend": ("generator_backend", "llm_name"),
 }
 
+_ADAPTER_METRIC_METADATA: dict[str, dict[str, Any]] = {
+    "alce": {
+        "metric_scope": "proxy",
+        "paper_grade": False,
+        "implementation": "local_answer_and_citation_proxy",
+        "requires_external_resources": [
+            "ALCE dataset",
+            "paper-grade citation evaluator or judge",
+        ],
+    },
+    "mmdocrag": {
+        "metric_scope": "proxy",
+        "paper_grade": False,
+        "implementation": "local_multimodal_evidence_proxy",
+        "requires_external_resources": [
+            "MMDocRAG dataset",
+            "paper-grade multimodal evaluator",
+        ],
+    },
+    "ragtruth": {
+        "metric_scope": "proxy",
+        "metric_category": "proxy_metric",
+        "paper_grade": False,
+        "implementation": "local_verification_proxy",
+        "requires_external_resources": [
+            "RAGTruth dataset",
+            "paper-grade hallucination annotation or judge",
+        ],
+    },
+    "ragas": {
+        "metric_scope": "proxy",
+        "metric_category": "proxy_metric",
+        "paper_grade": False,
+        "implementation": "local_ragas_proxy",
+        "requires_external_resources": [
+            "Ragas evaluator configuration",
+            "LLM judge or embeddings for paper-grade runs",
+        ],
+    },
+}
+
+for _metadata in _ADAPTER_METRIC_METADATA.values():
+    _metadata.setdefault("metric_category", "proxy_metric")
+
 
 def research_adapter_metrics(prediction: dict[str, Any]) -> dict[str, dict[str, Any]]:
     metrics = dict(prediction.get("metrics") or {})
@@ -20,7 +64,12 @@ def research_adapter_metrics(prediction: dict[str, Any]) -> dict[str, dict[str, 
         "alce": _alce_metrics(prediction, metrics),
         "mmdocrag": _mmdocrag_metrics(metrics),
         "ragtruth": _ragtruth_metrics(prediction, metrics),
+        "ragas": _ragas_metrics(metrics),
     }
+
+
+def research_adapter_metric_metadata() -> dict[str, dict[str, Any]]:
+    return {key: dict(value) for key, value in _ADAPTER_METRIC_METADATA.items()}
 
 
 def route_backend_metadata(
@@ -34,7 +83,12 @@ def route_backend_metadata(
     graph_mode = _backend_value(route, config, ("graph_mode",), "graph_mode")
     if graph_mode:
         metadata["graph_mode"] = graph_mode
-    for key in ("backend_status", "requires_backend_config", "missing_backends"):
+    for key in (
+        "backend_status",
+        "requires_backend_config",
+        "missing_backends",
+        "implementation_stage",
+    ):
         value = route.get(key)
         if value not in (None, "", []):
             metadata[key] = value
@@ -80,6 +134,17 @@ def _ragtruth_metrics(
         "abstention_correctness": metrics.get("abstention_correctness"),
         "claim_hallucination_rate": metrics.get("unsupported_claim_rate"),
         "unsupported_span_count": metrics.get("unsupported_claim_count"),
+    }
+
+
+def _ragas_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+    unsupported_rate = float(metrics.get("unsupported_claim_rate") or 0.0)
+    return {
+        "context_precision": metrics.get("citation_precision"),
+        "context_recall": metrics.get("citation_recall"),
+        "faithfulness": max(0.0, 1.0 - unsupported_rate),
+        "response_relevancy": metrics.get("f1"),
+        "multimodal_faithfulness": metrics.get("multimodal_answer_support"),
     }
 
 

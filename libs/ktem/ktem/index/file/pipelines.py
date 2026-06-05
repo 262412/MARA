@@ -57,6 +57,7 @@ from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
 from kotaemon.loaders import MathpixPDFReader
 
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
+from .element_index import docstore_batches_and_index_rows, is_docstore_relation_type
 
 logger = logging.getLogger(__name__)
 _office_pdf_converter: OfficeToPdfConversionService | None = None
@@ -512,19 +513,12 @@ class IndexPipeline(BaseComponent):
     def handle_chunks_docstore(self, chunks, file_id):
         """Run chunks"""
         # run embedding, add to both vector store and doc store
-        self.vector_indexing.add_to_docstore(chunks)
+        batches, nodes = docstore_batches_and_index_rows(self.Index, file_id, chunks)
+        for batch in batches:
+            self.vector_indexing.add_to_docstore(batch)
 
         # record in the index
         with Session(engine) as session:
-            nodes = []
-            for chunk in chunks:
-                nodes.append(
-                    self.Index(
-                        source_id=file_id,
-                        target_id=chunk.doc_id,
-                        relation_type="document",
-                    )
-                )
             session.add_all(nodes)
             session.commit()
 
@@ -672,7 +666,7 @@ class IndexPipeline(BaseComponent):
             for each in index:
                 if each[0].relation_type == "vector":
                     vs_ids.append(each[0].target_id)
-                elif each[0].relation_type == "document":
+                elif is_docstore_relation_type(each[0].relation_type):
                     ds_ids.append(each[0].target_id)
                 session.delete(each[0])
             session.commit()

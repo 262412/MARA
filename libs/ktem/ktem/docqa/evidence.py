@@ -5,6 +5,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
 
 
@@ -57,8 +58,10 @@ def build_evidence_bundle(
             page_items.append(page_item)
         items.extend(_rank_route_items(page_items, request, "doc_page_image"))
     if route in {"doc_element", "hybrid"}:
+        element_scores = dict(evidence_metadata.get("element_retriever_scores") or {})
         element_items = [
-            _coerce_item(item) for item in evidence_metadata.get("element_index") or []
+            _coerce_item(_with_element_retriever_score(item, element_scores))
+            for item in evidence_metadata.get("element_index") or []
         ]
         element_items.extend(
             _coerce_item(item) for item in evidence_metadata.get("elements") or []
@@ -69,7 +72,14 @@ def build_evidence_bundle(
 
     deduped = _dedupe_items(items)
     m3docrag_trace: dict[str, Any] | None = None
+    hybrid_fusion_trace: dict[str, Any] | None = None
     if route == "hybrid":
+        deduped, hybrid_fusion_trace = fuse_hybrid_evidence(
+            str(getattr(request, "prompt", "") or ""),
+            deduped,
+            strategy=str(evidence_metadata.get("hybrid_fusion_strategy") or ""),
+            learned_ranker=evidence_metadata.get("hybrid_fusion_ranker"),
+        )
         deduped, m3docrag_trace = select_page_first_evidence(
             str(getattr(request, "prompt", "") or ""),
             deduped,
@@ -79,6 +89,8 @@ def build_evidence_bundle(
     metadata["evidence"] = deduped
     if m3docrag_trace is not None:
         metadata["m3docrag_trace"] = m3docrag_trace
+    if hybrid_fusion_trace is not None:
+        metadata["hybrid_fusion_trace"] = hybrid_fusion_trace
     return EvidenceBundle(route=route, items=deduped, metadata=metadata)
 
 
@@ -99,6 +111,19 @@ def _with_visual_retriever_score(
     scored = dict(item)
     metadata = dict(scored.get("metadata") or {})
     metadata["visual_retriever_score"] = float(scores[evidence_id])
+    scored["metadata"] = metadata
+    return scored
+
+
+def _with_element_retriever_score(
+    item: dict[str, Any], scores: dict[str, Any]
+) -> dict[str, Any]:
+    evidence_id = str(item.get("evidence_id") or "").strip()
+    if evidence_id not in scores:
+        return item
+    scored = dict(item)
+    metadata = dict(scored.get("metadata") or {})
+    metadata["element_retriever_score"] = float(scores[evidence_id])
     scored["metadata"] = metadata
     return scored
 

@@ -38,6 +38,7 @@ def _page_scores(query: str, items: list[dict[str, Any]]) -> dict[tuple[str, str
         if not all(page):
             continue
         score = len(query_tokens & _item_tokens(item))
+        score += _hybrid_fusion_score(item)
         if item.get("modality") == "page_image":
             score += 2
         if item.get("modality") not in {"page_image", "text"}:
@@ -63,8 +64,30 @@ def _page_key(item: dict[str, Any]) -> tuple[str, str]:
 
 def _modality_order(item: dict[str, Any]) -> tuple[int, str]:
     order = {"text": 0, "page_image": 1}
+    fusion_score = _hybrid_fusion_sort_score(item)
+    if fusion_score:
+        return (-fusion_score, str(item.get("evidence_id") or ""))
     modality = str(item.get("modality") or "")
     return (order.get(modality, 2), str(item.get("evidence_id") or ""))
+
+
+def _hybrid_fusion_sort_score(item: dict[str, Any]) -> int:
+    metadata = dict(item.get("metadata") or {})
+    components = metadata.get("hybrid_fusion_components")
+    if not isinstance(components, dict):
+        return 0
+    has_rank_signal = (
+        float(components.get("retriever_score") or 0.0) > 0
+        or float(components.get("learned_score") or 0.0) > 0
+    )
+    if not has_rank_signal:
+        return 0
+    return _hybrid_fusion_score(item)
+
+
+def _hybrid_fusion_score(item: dict[str, Any]) -> int:
+    metadata = dict(item.get("metadata") or {})
+    return int(float(metadata.get("hybrid_fusion_score") or 0.0) * 1000)
 
 
 def _item_tokens(item: dict[str, Any]) -> set[str]:

@@ -144,6 +144,98 @@ def test_mara_element_route_uses_element_index_without_text_retrieval():
     assert metadata["modality_counts"] == {"table": 1}
 
 
+def test_mara_page_image_route_uses_configured_visual_retriever():
+    class FakeVisualRetriever:
+        name = "fake_visual_retriever"
+        backend_type = "unit_test"
+
+        def score(self, _query, record):
+            if record["evidence_id"] == "page-image:file-b:6":
+                return 42.0
+            return 0.1
+
+    pipeline = MaraAgentPipeline(retrievers=[])
+    records = _visual_page_records()
+    records.append(
+        {
+            "evidence_id": "page-image:file-b:6",
+            "file_id": "file-b",
+            "file_name": "visual.pdf",
+            "page_label": "6",
+            "page_number": 6,
+            "page_image_path": "/tmp/other.png",
+            "page_visual_embedding": [1.0, 0.0],
+            "late_interaction_tokens": ["inventory"],
+            "modality": "page_image",
+            "text": "Inventory diagram.",
+            "ocr_text": "Inventory diagram.",
+            "source_backrefs": ["file-b#page:6"],
+            "metadata": {"visual_backend_type": "local_smoke"},
+        }
+    )
+    pipeline.page_image_index_records = records
+    pipeline.visual_retriever = FakeVisualRetriever()
+
+    metadata = route_retrieval.route_retrieval_metadata(
+        pipeline,
+        "page_image_rag",
+        "What does the revenue chart show?",
+        [],
+        {"question": "What does the revenue chart show?", "modalities": ["figure"]},
+        text_retrieve=lambda: (_ for _ in ()).throw(
+            AssertionError("visual route must not use text retrieval")
+        ),
+        metadata_builder=lambda _docs, _understanding: {},
+    )
+
+    top_record = metadata["page_image_index"][0]
+    assert top_record["evidence_id"] == "page-image:file-b:6"
+    assert metadata["visual_retriever_scores"]["page-image:file-b:6"] == 42.0
+    assert top_record["metadata"]["visual_retriever"] == "fake_visual_retriever"
+    assert top_record["metadata"]["visual_retriever_backend_type"] == "unit_test"
+
+
+def test_mara_element_route_ranks_element_index_by_query():
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.element_index_records = [
+        {
+            "evidence_id": "element:file-b:5:figure-1",
+            "file_id": "file-b",
+            "file_name": "tables.pdf",
+            "page_label": "5",
+            "element_id": "figure-1",
+            "element_type": "figure",
+            "modality": "figure",
+            "caption": "Inventory diagram",
+            "text": "Inventory was flat.",
+            "source_backrefs": ["file-b#page:5"],
+        },
+        _element_record(),
+    ]
+
+    metadata = route_retrieval.route_retrieval_metadata(
+        pipeline,
+        "element_rag",
+        "What does the revenue table show?",
+        [],
+        {"question": "What does the revenue table show?", "modalities": ["table"]},
+        text_retrieve=lambda: (_ for _ in ()).throw(
+            AssertionError("element route must not use text retrieval")
+        ),
+        metadata_builder=lambda _docs, _understanding: {},
+    )
+
+    assert (
+        metadata["element_index"][0]["evidence_id"] == _element_record()["evidence_id"]
+    )
+    assert metadata["element_retriever_scores"][_element_record()["evidence_id"]] > (
+        metadata["element_retriever_scores"]["element:file-b:5:figure-1"]
+    )
+    assert metadata["element_index"][0]["metadata"]["element_retriever"] == (
+        "local_element_retriever"
+    )
+
+
 def test_mara_graph_route_retrieval_uses_graph_index_without_text_retrieval():
     pipeline = MaraAgentPipeline(retrievers=[])
     pipeline.graph_context = {

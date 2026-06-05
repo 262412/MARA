@@ -80,6 +80,73 @@ def test_write_reports_emits_required_artifacts_with_jsonl_and_route_metadata(tm
     assert "- Guardrail Expectation Match: `1.0`" in markdown
 
 
+def test_write_reports_lists_skipped_routes(tmp_path):
+    report = {
+        "summary": {
+            "suite_name": "Skip Suite",
+            "dataset_name": "sample",
+            "num_examples": 1,
+            "num_documents": 1,
+            "num_executed_routes": 1,
+            "num_skipped_routes": 1,
+            "skipped_routes": [
+                {
+                    "route_id": "page_image_rag_vlm",
+                    "skip_reason": "not_configured: colpali, visual_generator",
+                }
+            ],
+        },
+        "predictions": [],
+        "documents": [],
+    }
+
+    run_dir = write_reports(report, tmp_path, "Skip Suite")
+    markdown = (run_dir / "report.md").read_text(encoding="utf-8")
+
+    assert "- Executed Routes: `1`" in markdown
+    assert "- Skipped Routes: `1`" in markdown
+    assert (
+        "- `page_image_rag_vlm`: not_configured: colpali, visual_generator" in markdown
+    )
+
+
+def test_write_reports_lists_backend_status_by_route(tmp_path):
+    report = {
+        "summary": {
+            "suite_name": "Backend Suite",
+            "dataset_name": "sample",
+            "num_examples": 1,
+            "num_documents": 1,
+            "backend_metadata": {
+                "text_rag": {
+                    "text_retriever": "docqa_text",
+                    "generator_backend": "local_docqa_generator",
+                },
+                "page_image_rag_vlm": {
+                    "backend_status": "not_configured",
+                    "visual_retriever": "local_late_interaction",
+                    "visual_generator": "evidence_only_without_vlm",
+                },
+            },
+        },
+        "predictions": [],
+        "documents": [],
+    }
+
+    run_dir = write_reports(report, tmp_path, "Backend Suite")
+    markdown = (run_dir / "report.md").read_text(encoding="utf-8")
+
+    assert "## Backend Status By Route" in markdown
+    assert (
+        "- `text_rag`: configured; generator_backend=`local_docqa_generator`, text_retriever=`docqa_text`"
+        in markdown
+    )
+    assert (
+        "- `page_image_rag_vlm`: not_configured; visual_generator=`evidence_only_without_vlm`, visual_retriever=`local_late_interaction`"
+        in markdown
+    )
+
+
 def test_write_reports_derives_minimal_traces_from_predictions_when_missing(tmp_path):
     report = {
         "summary": {

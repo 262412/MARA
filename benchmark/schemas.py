@@ -101,6 +101,10 @@ class BenchmarkConfig:
     planner_model: str | None = None
     allowed_routes: list[str] | None = None
     verification_mode: str | None = None
+    graph_mode: str | None = None
+    visual_retriever_backend: str | None = None
+    visual_generator_backend: str | None = None
+    generator_backend: str | None = None
     use_generation: bool = True
     prompt_template: str | None = None
 

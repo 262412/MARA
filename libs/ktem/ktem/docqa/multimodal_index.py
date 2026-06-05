@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
+from kotaemon.base import Document
+
+from .element_parser import parse_element_index_record
+
 logger = logging.getLogger(__name__)
+ELEMENT_INDEX_DOC_TYPE = "mara_element_index"
+ELEMENT_INDEX_RELATION_TYPE = "element_index"
+ELEMENT_INDEX_SCHEMA_VERSION = "1.0"
 
 
 def page_image_records_from_documents(documents: Iterable[Any]) -> list[dict[str, Any]]:
@@ -30,7 +38,10 @@ def page_image_records_from_documents(documents: Iterable[Any]) -> list[dict[str
                     "page_label": page_label,
                     "thumbnail_doc_id": _doc_id(doc),
                     "image_ref": str(
-                        metadata.get("image_origin") or metadata.get("image_ref") or ""
+                        metadata.get("rendered_page_image")
+                        or metadata.get("image_origin")
+                        or metadata.get("image_ref")
+                        or ""
                     ),
                     "visual_metadata": _visual_metadata(metadata),
                 }
@@ -51,14 +62,82 @@ def element_records_from_documents(documents: Iterable[Any]) -> list[dict[str, A
         if metadata.get("type") == "thumbnail":
             continue
         element_id = str(metadata.get("element_id") or "").strip()
-        if not element_id:
-            continue
         file_id = _file_id(metadata)
         page_label = _page_label(metadata)
         if not file_id or not page_label:
             continue
-        records.append(_element_record(doc, metadata, file_id, page_label, element_id))
+        if element_id:
+            records.append(
+                _element_record(doc, metadata, file_id, page_label, element_id)
+            )
+            continue
+        record = parse_element_index_record(
+            doc_id=_doc_id(doc),
+            file_id=file_id,
+            file_name=_file_name(metadata),
+            page_label=page_label,
+            text=_text(doc, metadata),
+            metadata=metadata,
+        )
+        if record is not None:
+            records.append(record)
     return records
+
+
+def element_records_from_index_documents(
+    documents: Iterable[Any],
+) -> list[dict[str, Any]]:
+    """Read persisted layout-element records from element-index documents."""
+    records = []
+    seen: set[str] = set()
+    for doc in documents:
+        metadata = _metadata(doc)
+        if metadata.get("type") != ELEMENT_INDEX_DOC_TYPE:
+            continue
+        record = _persisted_element_record(metadata.get("element_index_record"))
+        if record is None or record["evidence_id"] in seen:
+            continue
+        seen.add(record["evidence_id"])
+        records.append(record)
+    return records
+
+
+def element_index_documents_from_documents(
+    file_id: str,
+    documents: Iterable[Any],
+) -> list[Document]:
+    """Build DocStore documents for a persisted layout-element index."""
+    return element_index_documents_from_records(
+        file_id,
+        element_records_from_documents(documents),
+    )
+
+
+def element_index_documents_from_records(
+    file_id: str,
+    records: Iterable[dict[str, Any]],
+) -> list[Document]:
+    source_id = str(file_id or "").strip()
+    documents = []
+    for record in _unique_element_records(records):
+        metadata = {
+            "type": ELEMENT_INDEX_DOC_TYPE,
+            "source_id": source_id,
+            "file_id": record["file_id"],
+            "file_name": record["file_name"],
+            "page_label": record["page_label"],
+            "element_index_relation_type": ELEMENT_INDEX_RELATION_TYPE,
+            "element_index_schema_version": ELEMENT_INDEX_SCHEMA_VERSION,
+            "element_index_record": record,
+        }
+        documents.append(
+            Document(
+                text=_element_index_text(record),
+                id_=_element_index_doc_id(source_id, record),
+                metadata=metadata,
+            )
+        )
+    return documents
 
 
 def _page_record(
@@ -72,11 +151,21 @@ def _page_record(
     image_ref = thumbnail["image_ref"]
     text = "\n".join(page_text.get((file_id, page_label), []))
     metadata = dict(thumbnail["visual_metadata"])
+    source_backrefs = [f"{file_id}#page:{page_label}"]
+    late_tokens = list(metadata.get("late_interaction_tokens") or [])
+    multi_vector = metadata.get("multi_vector_representation") or late_tokens
+    retrieved_page_evidence = {
+        "text": text,
+        "source_backrefs": source_backrefs,
+    }
     if image_ref:
         metadata["image_ref"] = image_ref
     if thumbnail_doc_id:
         metadata["thumbnail_doc_id"] = thumbnail_doc_id
+    metadata["multi_vector_representation"] = multi_vector
+    metadata["retrieved_page_evidence"] = retrieved_page_evidence
     metadata.setdefault("visual_backend_type", "local_smoke")
+    visual_embedding = metadata.get("visual_embedding")
     return {
         "evidence_id": f"page-image:{file_id}:{page_label}",
         "file_id": file_id,
@@ -84,12 +173,17 @@ def _page_record(
         "page_label": page_label,
         "page_number": _page_number(page_label),
         "page_image_path": image_ref,
-        "page_visual_embedding": metadata.get("visual_embedding"),
-        "late_interaction_tokens": list(metadata.get("late_interaction_tokens") or []),
+        "rendered_page_image": image_ref,
+        "page_visual_embedding": visual_embedding,
+        "visual_embedding": visual_embedding,
+        "late_interaction_tokens": late_tokens,
+        "multi_vector_representation": multi_vector,
+        "page_level_score": metadata.get("page_level_score"),
+        "retrieved_page_evidence": retrieved_page_evidence,
         "modality": "page_image",
         "text": text,
         "ocr_text": text,
-        "source_backrefs": [f"{file_id}#page:{page_label}"],
+        "source_backrefs": source_backrefs,
         "metadata": metadata,
     }
 
@@ -147,6 +241,65 @@ def _element_record(
     }
 
 
+def _persisted_element_record(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    evidence_id = str(value.get("evidence_id") or "").strip()
+    file_id = str(value.get("file_id") or value.get("source_id") or "").strip()
+    page_label = str(value.get("page_label") or value.get("page") or "").strip()
+    element_id = str(value.get("element_id") or "").strip()
+    if not evidence_id or not file_id or not page_label or not element_id:
+        return None
+    raw_metadata = value.get("metadata")
+    metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
+    return {
+        "evidence_id": evidence_id,
+        "file_id": file_id,
+        "file_name": str(value.get("file_name") or value.get("source_name") or ""),
+        "page_label": page_label,
+        "element_id": element_id,
+        "modality": str(
+            value.get("modality") or value.get("element_type") or "element"
+        ),
+        "bbox": value.get("bbox"),
+        "caption": str(value.get("caption") or ""),
+        "text": str(value.get("text") or ""),
+        "source_backrefs": _source_backrefs(value, file_id, page_label),
+        "metadata": dict(metadata),
+    }
+
+
+def _unique_element_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    unique = []
+    seen: set[str] = set()
+    for record in records:
+        normalized = _persisted_element_record(record)
+        if normalized is None or normalized["evidence_id"] in seen:
+            continue
+        seen.add(normalized["evidence_id"])
+        unique.append(normalized)
+    return unique
+
+
+def _source_backrefs(value: dict[str, Any], file_id: str, page_label: str) -> list[str]:
+    backrefs = [
+        str(item).strip()
+        for item in value.get("source_backrefs") or []
+        if str(item).strip()
+    ]
+    return backrefs or [f"{file_id}#page:{page_label}"]
+
+
+def _element_index_text(record: dict[str, Any]) -> str:
+    return str(record.get("text") or record.get("caption") or "").strip()
+
+
+def _element_index_doc_id(file_id: str, record: dict[str, Any]) -> str:
+    payload = json.dumps(record, sort_keys=True, default=str)
+    digest = hashlib.sha256(f"{file_id}\n{payload}".encode("utf-8")).hexdigest()
+    return f"element-index:{file_id}:{digest[:16]}"
+
+
 def _metadata(doc: Any) -> dict[str, Any]:
     metadata = getattr(doc, "metadata", None)
     return metadata if isinstance(metadata, dict) else {}
@@ -189,10 +342,14 @@ def _visual_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     return {
         key: metadata[key]
         for key in (
+            "rendered_page_image",
             "visual_embedding",
             "visual_embedding_model",
             "late_interaction_tokens",
+            "multi_vector_representation",
+            "page_level_score",
             "visual_retriever",
+            "visual_backend_type",
         )
         if key in metadata
     }
@@ -256,11 +413,19 @@ def _local_page_record(
     page_label = str(page_number)
     page_text = _extract_page_text(file_path, page_number, text_extractor)
     tokens = _late_interaction_tokens(page_text)
+    embedding = _deterministic_embedding(tokens)
+    source_backrefs = [f"{file_id}#page:{page_label}"]
+    retrieved_page_evidence = {
+        "text": page_text,
+        "source_backrefs": source_backrefs,
+    }
     metadata = {
         "image_ref": image_ref,
         "visual_backend_type": "local_smoke",
         "visual_embedding_model": "deterministic_token_hash_v1",
         "late_interaction_tokens": tokens,
+        "multi_vector_representation": tokens,
+        "retrieved_page_evidence": retrieved_page_evidence,
     }
     return {
         "evidence_id": f"page-image:{file_id}:{page_label}",
@@ -269,12 +434,17 @@ def _local_page_record(
         "page_label": page_label,
         "page_number": page_number,
         "page_image_path": image_ref,
-        "page_visual_embedding": _deterministic_embedding(tokens),
+        "rendered_page_image": image_ref,
+        "page_visual_embedding": embedding,
+        "visual_embedding": embedding,
         "late_interaction_tokens": tokens,
+        "multi_vector_representation": tokens,
+        "page_level_score": None,
+        "retrieved_page_evidence": retrieved_page_evidence,
         "modality": "page_image",
         "text": page_text,
         "ocr_text": page_text,
-        "source_backrefs": [f"{file_id}#page:{page_label}"],
+        "source_backrefs": source_backrefs,
         "metadata": metadata,
     }
 

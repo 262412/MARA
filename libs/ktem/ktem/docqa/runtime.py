@@ -20,7 +20,7 @@ from theflow.settings import settings as flowsettings
 from theflow.utils.modules import import_dotted_string
 
 from . import _runtime_doctor as _doctor
-from . import _runtime_elements
+from . import _runtime_elements, _runtime_graph
 from . import _runtime_indexing as _indexing
 from . import _runtime_mara as _mara
 from . import _runtime_notebook as _nb
@@ -50,6 +50,41 @@ def _preview_value(preview: Any, method_name: str, file_id: str) -> str:
     if method is None:
         return ""
     return str(method(file_id) or "")
+
+
+def _graph_context_with_local_index(
+    graph_context: dict[str, Any],
+    file_index: Any,
+    selected_file_ids: list[str],
+) -> dict[str, Any]:
+    if isinstance(graph_context.get("graph_index"), dict):
+        return graph_context
+    local_context = _runtime_graph.graph_context_for_selected_files(
+        file_index,
+        selected_file_ids,
+    )
+    if not local_context:
+        return graph_context
+    return {**graph_context, **local_context}
+
+
+def _apply_multimodal_runtime_indexes(
+    pipeline: Any,
+    file_index: Any,
+    selected_file_ids: list[str],
+    active_file_id: str,
+    graph_source_ids: list[str],
+    graph_context: dict[str, Any],
+) -> dict[str, Any]:
+    file_ids = _selection.merge_unique_file_ids(selected_file_ids, [active_file_id])
+    graph_file_ids = graph_source_ids or file_ids
+    pipeline.element_index_records = (
+        _runtime_elements.element_index_records_for_selected_files(
+            file_index,
+            file_ids,
+        )
+    )
+    return _graph_context_with_local_index(graph_context, file_index, graph_file_ids)
 
 
 class DocQARuntime:
@@ -524,15 +559,14 @@ class DocQARuntime:
             active_file_id or "",
             resolved_user_id,
         )
-        element_file_ids = self._merge_unique_file_ids(
+        graph_source_ids = self._normalize_selected_file_ids(request.graph_source_ids)
+        graph_context = _apply_multimodal_runtime_indexes(
+            pipeline,
+            self.file_index,
             selected_file_ids,
-            [active_file_id],
-        )
-        pipeline.element_index_records = (
-            _runtime_elements.element_index_records_for_selected_files(
-                self.file_index,
-                element_file_ids,
-            )
+            active_file_id,
+            graph_source_ids,
+            graph_context,
         )
         _mara.apply_request_context(pipeline, request, graph_context)
 

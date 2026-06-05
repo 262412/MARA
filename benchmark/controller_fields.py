@@ -22,6 +22,7 @@ def controller_response_kwargs(response: Any) -> dict[str, Any]:
         "verify_decision": dict(getattr(response, "verify_decision", {}) or {}),
         "guardrail_decision": dict(getattr(response, "guardrail_decision", {}) or {}),
         "evidence_bundle": dict(getattr(response, "evidence_bundle", {}) or {}),
+        "workflow_plan": dict(getattr(response, "workflow_plan", {}) or {}),
     }
 
 
@@ -34,4 +35,5 @@ def controller_prediction_kwargs(prediction: dict[str, Any]) -> dict[str, Any]:
         "verify_decision": dict(prediction.get("verify_decision") or {}),
         "guardrail_decision": dict(prediction.get("guardrail_decision") or {}),
         "evidence_bundle": dict(prediction.get("evidence_bundle") or {}),
+        "workflow_plan": dict(prediction.get("workflow_plan") or {}),
     }

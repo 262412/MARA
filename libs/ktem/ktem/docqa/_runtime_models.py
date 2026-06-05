@@ -31,6 +31,9 @@ class DocQARequest:
     planner_model: Optional[str] = None
     allowed_routes: Optional[list[str]] = None
     verification_mode: Optional[str] = None
+    graph_mode: Optional[str] = None
+    visual_retriever_backend: Optional[str] = None
+    visual_generator_backend: Optional[str] = None
     llm: Optional[str] = None
     use_mindmap: bool | str | None = None
     use_citation: Optional[str] = None
@@ -74,6 +77,7 @@ class DocQAResponse:
     guardrail_decision: dict[str, Any] = field(default_factory=dict)
     controller_trace: list[dict[str, Any]] = field(default_factory=list)
     evidence_bundle: dict[str, Any] = field(default_factory=dict)
+    workflow_plan: dict[str, Any] = field(default_factory=dict)
     backend_metadata: dict[str, Any] = field(default_factory=dict)
     artifact: Any = None
 

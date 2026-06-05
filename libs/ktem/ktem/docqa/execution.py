@@ -12,6 +12,7 @@ from .controller import (
     evaluate_retrieval_quality,
 )
 from .evidence import EvidenceBundle, build_evidence_bundle
+from .workflow import build_workflow_plan, planner_payload_from_trace
 
 DIRECT_ANSWER_MESSAGE = (
     "MARA can answer general questions, but document-specific answers require "
@@ -67,6 +68,7 @@ class RouteExecutionResult:
     verify_decision: VerifyDecision
     guardrail_decision: GuardrailDecision
     evidence_bundle: EvidenceBundle
+    workflow_plan: dict[str, Any] = field(default_factory=dict)
     answer: str = ""
     controller_trace: list[dict[str, Any]] = field(default_factory=list)
 
@@ -77,6 +79,7 @@ class RouteExecutionResult:
             "verify_decision": self.verify_decision.as_dict(),
             "guardrail_decision": self.guardrail_decision.as_dict(),
             "evidence_bundle": self.evidence_bundle.as_dict(),
+            "workflow_plan": dict(self.workflow_plan),
             "answer": self.answer,
             "controller_trace": list(self.controller_trace),
         }
@@ -90,22 +93,60 @@ def execute_controller_turn(
     rewrite: RewriteFn | None = None,
     agent_trace: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
-    controller_decision = _controller_decision(
-        _route_decision(request, agent_trace or [])
+    route_decision = _route_decision(request, agent_trace or [])
+    controller_decision = _controller_decision(route_decision)
+    workflow_plan = _build_execution_workflow_plan(
+        request,
+        route_decision.route,
+        route_decision.policy,
+        route_decision.controller_mode,
+        agent_trace or [],
     )
     if controller_decision.route == "direct_answer":
-        return _static_result(request, controller_decision, DIRECT_ANSWER_MESSAGE)
+        return _static_result(
+            request, controller_decision, DIRECT_ANSWER_MESSAGE, workflow_plan
+        )
     if controller_decision.route == "abstain":
-        return _static_result(request, controller_decision, ABSTAIN_MESSAGE)
+        return _static_result(
+            request, controller_decision, ABSTAIN_MESSAGE, workflow_plan
+        )
 
     evidence_bundle, retrieve_decision = _retrieve_and_evaluate(
         request,
         controller_decision,
         retrieve,
     )
+    route_switch_trace: list[dict[str, Any]] = []
+    if retrieve_decision.status != "good":
+        switched = _switch_after_failed_retrieval(
+            request,
+            controller_decision,
+            retrieve_decision,
+            retrieve,
+        )
+        if switched is not None:
+            (
+                controller_decision,
+                evidence_bundle,
+                retrieve_decision,
+                switch_event,
+            ) = switched
+            workflow_plan = _build_execution_workflow_plan(
+                request,
+                controller_decision.legacy_route,
+                controller_decision.policy,
+                controller_decision.controller_mode,
+                [],
+            )
+            route_switch_trace.append(switch_event)
     if retrieve_decision.status != "good":
         return _guarded_result(
-            request, controller_decision, retrieve_decision, evidence_bundle
+            request,
+            controller_decision,
+            retrieve_decision,
+            evidence_bundle,
+            workflow_plan,
+            route_switch_trace,
         )
 
     answer = generate(request, controller_decision, evidence_bundle)
@@ -116,7 +157,25 @@ def execute_controller_turn(
         evidence_bundle,
         answer,
         rewrite,
+        workflow_plan,
+        route_switch_trace,
     )
+
+
+def _build_execution_workflow_plan(
+    request: Any,
+    route: str,
+    policy: str,
+    controller_mode: str,
+    agent_trace: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return build_workflow_plan(
+        route=route,
+        request=request,
+        planner_payload=planner_payload_from_trace(agent_trace),
+        policy=policy,
+        controller_mode=controller_mode,
+    ).as_dict()
 
 
 def _retrieve_and_evaluate(
@@ -157,10 +216,55 @@ def _controller_decision(route_decision: RouteDecision) -> ControllerDecision:
     )
 
 
+def _switch_after_failed_retrieval(
+    request: Any,
+    decision: ControllerDecision,
+    failed_decision: RetrieveDecision,
+    retrieve: RetrieveFn,
+) -> tuple[ControllerDecision, EvidenceBundle, RetrieveDecision, dict[str, Any]] | None:
+    for route in _route_switch_candidates(request, decision.legacy_route):
+        switched_decision = _controller_decision(
+            RouteDecision(
+                route=route,
+                policy="route_switch",
+                controller_mode=decision.controller_mode,
+                requires_retrieval=True,
+                reason=(
+                    f"Switched from {decision.legacy_route} after "
+                    f"{failed_decision.status} retrieval."
+                ),
+            )
+        )
+        bundle, retrieve_decision = _retrieve_and_evaluate(
+            request,
+            switched_decision,
+            retrieve,
+        )
+        switch_event = {
+            "stage": "route_switch",
+            "from_route": decision.legacy_route,
+            "to_route": route,
+            "reason": failed_decision.reason,
+        }
+        if retrieve_decision.status == "good":
+            return switched_decision, bundle, retrieve_decision, switch_event
+    return None
+
+
+def _route_switch_candidates(request: Any, current_route: str) -> list[str]:
+    return [
+        route
+        for route in getattr(request, "allowed_routes", []) or []
+        if route in _CANONICAL_ROUTES
+        and route not in {current_route, "direct", "abstain"}
+    ]
+
+
 def _static_result(
     request: Any,
     decision: ControllerDecision,
     answer: str,
+    workflow_plan: dict[str, Any],
 ) -> RouteExecutionResult:
     bundle = build_evidence_bundle(decision.legacy_route, request, {})
     retrieve_decision = evaluate_retrieval_quality(decision.legacy_route, {})
@@ -171,6 +275,7 @@ def _static_result(
         verify_decision,
         GuardrailDecision("ok", "return", decision.reason),
         bundle,
+        workflow_plan,
         answer,
     )
 
@@ -180,6 +285,8 @@ def _guarded_result(
     decision: ControllerDecision,
     retrieve_decision: RetrieveDecision,
     bundle: EvidenceBundle,
+    workflow_plan: dict[str, Any],
+    trace_prefix: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
     verify_decision = _verify_decision(request, retrieve_decision, bundle, "")
     guardrail = GuardrailDecision(
@@ -188,7 +295,14 @@ def _guarded_result(
         reason=retrieve_decision.reason,
     )
     return _result(
-        decision, retrieve_decision, verify_decision, guardrail, bundle, ABSTAIN_MESSAGE
+        decision,
+        retrieve_decision,
+        verify_decision,
+        guardrail,
+        bundle,
+        workflow_plan,
+        ABSTAIN_MESSAGE,
+        trace_prefix,
     )
 
 
@@ -199,12 +313,21 @@ def _verified_result(
     bundle: EvidenceBundle,
     answer: str,
     rewrite: RewriteFn | None,
+    workflow_plan: dict[str, Any],
+    trace_prefix: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
     if bundle.metadata.get("generation_backend") == "evidence_only_without_vlm":
         verify_decision = _evidence_only_verify_decision(request, bundle)
         guardrail = _verification_guardrail(verify_decision)
         return _result(
-            decision, retrieve_decision, verify_decision, guardrail, bundle, answer
+            decision,
+            retrieve_decision,
+            verify_decision,
+            guardrail,
+            bundle,
+            workflow_plan,
+            answer,
+            trace_prefix,
         )
     verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
     if verify_decision.action == "revise" and rewrite is not None:
@@ -214,7 +337,14 @@ def _verified_result(
     if guardrail.action == "abstain":
         answer = ABSTAIN_MESSAGE
     return _result(
-        decision, retrieve_decision, verify_decision, guardrail, bundle, answer
+        decision,
+        retrieve_decision,
+        verify_decision,
+        guardrail,
+        bundle,
+        workflow_plan,
+        answer,
+        trace_prefix,
     )
 
 
@@ -253,7 +383,9 @@ def _result(
     verify_decision: VerifyDecision,
     guardrail_decision: GuardrailDecision,
     bundle: EvidenceBundle,
+    workflow_plan: dict[str, Any],
     answer: str,
+    trace_prefix: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
     return RouteExecutionResult(
         controller_decision=decision,
@@ -261,21 +393,34 @@ def _result(
         verify_decision=verify_decision,
         guardrail_decision=guardrail_decision,
         evidence_bundle=bundle,
+        workflow_plan=workflow_plan,
         answer=answer,
-        controller_trace=_trace(
-            decision, retrieve_decision, guardrail_decision, verify_decision
+        controller_trace=list(trace_prefix or [])
+        + _trace(
+            decision,
+            workflow_plan,
+            retrieve_decision,
+            guardrail_decision,
+            verify_decision,
         ),
     )
 
 
 def _trace(
     decision: ControllerDecision,
+    workflow_plan: dict[str, Any],
     retrieve_decision: RetrieveDecision,
     guardrail_decision: GuardrailDecision,
     verify_decision: VerifyDecision,
 ) -> list[dict[str, Any]]:
     return [
         {"stage": "planner", **decision.as_dict()},
+        {
+            "stage": "workflow_plan",
+            "strategy": workflow_plan.get("strategy", ""),
+            "step_count": len(workflow_plan.get("steps") or []),
+            "total_cost_units": workflow_plan.get("total_cost_units", 0),
+        },
         {"stage": "retrieval_evaluator", **retrieve_decision.as_dict()},
         {"stage": "guardrail", **guardrail_decision.as_dict()},
         {"stage": "verifier", **verify_decision.as_dict()},

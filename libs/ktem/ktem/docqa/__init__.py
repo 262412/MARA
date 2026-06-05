@@ -37,6 +37,7 @@ from .runtime import (
     DocQASession,
     DocQASessionSummary,
 )
+from .workflow import WorkflowPlan, WorkflowStep, build_workflow_plan
 
 __all__ = [
     "DocQADoctorResult",
@@ -56,10 +57,13 @@ __all__ = [
     "ControllerDecision",
     "GuardrailDecision",
     "RouteExecutionResult",
+    "WorkflowPlan",
+    "WorkflowStep",
     "route_registry",
     "executor_registry",
     "parse_planner_decision",
     "evaluate_retrieval_quality",
+    "build_workflow_plan",
     "build_evidence_bundle",
     "execute_controller_turn",
     "page_image_records_from_documents",

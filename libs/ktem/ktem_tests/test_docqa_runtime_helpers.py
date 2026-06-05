@@ -193,6 +193,25 @@ def test_runtime_turn_request_preserves_controller_fields():
     assert turn_request.verification_mode == "strict"
 
 
+def test_runtime_turn_request_preserves_visual_backend_fields():
+    request = runtime_module.DocQARequest(prompt="Question")
+    request.visual_retriever_backend = "local_late_interaction"
+    request.visual_generator_backend = "tests.fake_vlm"
+    session = _session()
+
+    turn_request = _runtime_turn.build_turn_request(
+        request,
+        session,
+        resolved_user_id="user-1",
+        selected_inputs={},
+        request_file_ids=[],
+        load_settings=lambda _user_id: {"reasoning.use": "mara"},
+    )
+
+    assert turn_request.visual_retriever_backend == "local_late_interaction"
+    assert turn_request.visual_generator_backend == "tests.fake_vlm"
+
+
 def test_runtime_builds_local_file_records_for_route_retrieval():
     runtime = _RuntimeForFileRecords()
 
@@ -300,6 +319,71 @@ def test_runtime_prepare_pipeline_sets_element_index_records(monkeypatch):
     assert prepared.pipeline.element_index_records[0]["evidence_id"] == (
         "element:file-1:4:table-4"
     )
+
+
+def test_runtime_prepare_pipeline_sets_configured_visual_backends(monkeypatch):
+    file_index = _PreparePipelineFileIndex()
+    pipeline = SimpleNamespace()
+    fake_retriever = SimpleNamespace(name="fake_visual_retriever")
+    fake_generator = SimpleNamespace(name="fake_visual_generator")
+
+    class _Reasoning:
+        @staticmethod
+        def get_info():
+            return {"id": "mara"}
+
+        @staticmethod
+        def get_pipeline(_settings, _reasoning_state, _retrievers):
+            return pipeline
+
+    runtime = cast(Any, object.__new__(DocQARuntime))
+    runtime._app = SimpleNamespace(
+        index_manager=SimpleNamespace(indices=[file_index]),
+    )
+    runtime.file_index = file_index
+    runtime._preview = cast(Any, _PreviewForFileRecords())
+    runtime._web_search_cls = None
+    runtime._resolve_user_id = lambda _user_id=None: "user-1"
+    monkeypatch.setitem(runtime_module.reasonings, "mara", _Reasoning)
+    monkeypatch.setattr(
+        runtime_module._runtime_elements,
+        "element_index_records_for_selected_files",
+        lambda _selected_index, _selected_ids: [],
+        raising=False,
+    )
+    monkeypatch.setattr(
+        runtime_module._mara,
+        "build_visual_retriever_backend",
+        lambda backend_name: fake_retriever
+        if backend_name == "local_late_interaction"
+        else None,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        runtime_module._mara,
+        "build_visual_generator_backend",
+        lambda backend_name: fake_generator
+        if backend_name == "tests.fake_vlm"
+        else None,
+        raising=False,
+    )
+
+    runtime._prepare_pipeline(
+        runtime_module.DocQARequest(
+            prompt="What does the chart show?",
+            selected_inputs={file_index.id: ["file-1"]},
+            reasoning_type="mara",
+            settings={"reasoning.use": "mara"},
+            route_policy="visual",
+            visual_retriever_backend="local_late_interaction",
+            visual_generator_backend="tests.fake_vlm",
+        )
+    )
+
+    assert pipeline.visual_retriever is fake_retriever
+    assert pipeline.vlm_generator is fake_generator
+    assert pipeline.visual_retriever_backend == "local_late_interaction"
+    assert pipeline.visual_generator_backend == "tests.fake_vlm"
 
 
 class _PreviewForFileRecords:
