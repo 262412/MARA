@@ -38,7 +38,10 @@ def page_image_records_from_documents(documents: Iterable[Any]) -> list[dict[str
                     "page_label": page_label,
                     "thumbnail_doc_id": _doc_id(doc),
                     "image_ref": str(
-                        metadata.get("image_origin") or metadata.get("image_ref") or ""
+                        metadata.get("rendered_page_image")
+                        or metadata.get("image_origin")
+                        or metadata.get("image_ref")
+                        or ""
                     ),
                     "visual_metadata": _visual_metadata(metadata),
                 }
@@ -148,11 +151,21 @@ def _page_record(
     image_ref = thumbnail["image_ref"]
     text = "\n".join(page_text.get((file_id, page_label), []))
     metadata = dict(thumbnail["visual_metadata"])
+    source_backrefs = [f"{file_id}#page:{page_label}"]
+    late_tokens = list(metadata.get("late_interaction_tokens") or [])
+    multi_vector = metadata.get("multi_vector_representation") or late_tokens
+    retrieved_page_evidence = {
+        "text": text,
+        "source_backrefs": source_backrefs,
+    }
     if image_ref:
         metadata["image_ref"] = image_ref
     if thumbnail_doc_id:
         metadata["thumbnail_doc_id"] = thumbnail_doc_id
+    metadata["multi_vector_representation"] = multi_vector
+    metadata["retrieved_page_evidence"] = retrieved_page_evidence
     metadata.setdefault("visual_backend_type", "local_smoke")
+    visual_embedding = metadata.get("visual_embedding")
     return {
         "evidence_id": f"page-image:{file_id}:{page_label}",
         "file_id": file_id,
@@ -160,12 +173,17 @@ def _page_record(
         "page_label": page_label,
         "page_number": _page_number(page_label),
         "page_image_path": image_ref,
-        "page_visual_embedding": metadata.get("visual_embedding"),
-        "late_interaction_tokens": list(metadata.get("late_interaction_tokens") or []),
+        "rendered_page_image": image_ref,
+        "page_visual_embedding": visual_embedding,
+        "visual_embedding": visual_embedding,
+        "late_interaction_tokens": late_tokens,
+        "multi_vector_representation": multi_vector,
+        "page_level_score": metadata.get("page_level_score"),
+        "retrieved_page_evidence": retrieved_page_evidence,
         "modality": "page_image",
         "text": text,
         "ocr_text": text,
-        "source_backrefs": [f"{file_id}#page:{page_label}"],
+        "source_backrefs": source_backrefs,
         "metadata": metadata,
     }
 
@@ -324,10 +342,14 @@ def _visual_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     return {
         key: metadata[key]
         for key in (
+            "rendered_page_image",
             "visual_embedding",
             "visual_embedding_model",
             "late_interaction_tokens",
+            "multi_vector_representation",
+            "page_level_score",
             "visual_retriever",
+            "visual_backend_type",
         )
         if key in metadata
     }
@@ -391,11 +413,19 @@ def _local_page_record(
     page_label = str(page_number)
     page_text = _extract_page_text(file_path, page_number, text_extractor)
     tokens = _late_interaction_tokens(page_text)
+    embedding = _deterministic_embedding(tokens)
+    source_backrefs = [f"{file_id}#page:{page_label}"]
+    retrieved_page_evidence = {
+        "text": page_text,
+        "source_backrefs": source_backrefs,
+    }
     metadata = {
         "image_ref": image_ref,
         "visual_backend_type": "local_smoke",
         "visual_embedding_model": "deterministic_token_hash_v1",
         "late_interaction_tokens": tokens,
+        "multi_vector_representation": tokens,
+        "retrieved_page_evidence": retrieved_page_evidence,
     }
     return {
         "evidence_id": f"page-image:{file_id}:{page_label}",
@@ -404,12 +434,17 @@ def _local_page_record(
         "page_label": page_label,
         "page_number": page_number,
         "page_image_path": image_ref,
-        "page_visual_embedding": _deterministic_embedding(tokens),
+        "rendered_page_image": image_ref,
+        "page_visual_embedding": embedding,
+        "visual_embedding": embedding,
         "late_interaction_tokens": tokens,
+        "multi_vector_representation": tokens,
+        "page_level_score": None,
+        "retrieved_page_evidence": retrieved_page_evidence,
         "modality": "page_image",
         "text": page_text,
         "ocr_text": page_text,
-        "source_backrefs": [f"{file_id}#page:{page_label}"],
+        "source_backrefs": source_backrefs,
         "metadata": metadata,
     }
 

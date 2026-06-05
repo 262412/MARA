@@ -73,16 +73,18 @@ def _apply_multimodal_runtime_indexes(
     file_index: Any,
     selected_file_ids: list[str],
     active_file_id: str,
+    graph_source_ids: list[str],
     graph_context: dict[str, Any],
 ) -> dict[str, Any]:
     file_ids = _selection.merge_unique_file_ids(selected_file_ids, [active_file_id])
+    graph_file_ids = graph_source_ids or file_ids
     pipeline.element_index_records = (
         _runtime_elements.element_index_records_for_selected_files(
             file_index,
             file_ids,
         )
     )
-    return _graph_context_with_local_index(graph_context, file_index, file_ids)
+    return _graph_context_with_local_index(graph_context, file_index, graph_file_ids)
 
 
 class DocQARuntime:
@@ -557,11 +559,13 @@ class DocQARuntime:
             active_file_id or "",
             resolved_user_id,
         )
+        graph_source_ids = self._normalize_selected_file_ids(request.graph_source_ids)
         graph_context = _apply_multimodal_runtime_indexes(
             pipeline,
             self.file_index,
             selected_file_ids,
             active_file_id,
+            graph_source_ids,
             graph_context,
         )
         _mara.apply_request_context(pipeline, request, graph_context)

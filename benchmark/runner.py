@@ -307,6 +307,7 @@ def _engine_result_to_prediction(
         "verify_decision": result.verify_decision,
         "guardrail_decision": result.guardrail_decision,
         "evidence_bundle": result.evidence_bundle,
+        "workflow_plan": result.workflow_plan,
         "claim_verification": result.claim_verification,
         "presentation": result.presentation,
         "timings": {
@@ -425,6 +426,7 @@ def _prepare_prediction_defaults(
     prediction.setdefault("verify_decision", {})
     prediction.setdefault("guardrail_decision", {})
     prediction.setdefault("evidence_bundle", {})
+    prediction.setdefault("workflow_plan", {})
     prediction.setdefault("claim_verification", {})
     prediction.setdefault("presentation", {})
 
@@ -447,6 +449,7 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
         "verify_decision": item.get("verify_decision", {}),
         "guardrail_decision": item.get("guardrail_decision", {}),
         "evidence_bundle": item.get("evidence_bundle", {}),
+        "workflow_plan": item.get("workflow_plan", {}),
         "claim_verification": item.get("claim_verification", {}),
         "presentation": item.get("presentation", {}),
         "timings": item.get("timings", {}),
@@ -530,6 +533,9 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
             predictions,
             active_routes,
         ),
+        external_adapter_metric_metadata_by_route=(
+            _external_adapter_summary_metadata_by_route(predictions, active_routes)
+        ),
     )
 
     return {
@@ -556,3 +562,30 @@ def _external_adapter_summary_metadata(
             return metadata
     route = active_routes[0] if active_routes else {}
     return external_research_adapter_metric_metadata(route)
+
+
+def _external_adapter_summary_metadata_by_route(
+    predictions: list[dict[str, Any]],
+    active_routes: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    metadata_by_route: dict[str, dict[str, Any]] = {}
+    prediction_metadata = _prediction_external_metadata_by_route(predictions)
+    for index, route in enumerate(active_routes, start=1):
+        route_id = _route_id(route, f"route_{index}")
+        metadata_by_route[route_id] = prediction_metadata.get(
+            route_id,
+            external_research_adapter_metric_metadata(route),
+        )
+    return metadata_by_route
+
+
+def _prediction_external_metadata_by_route(
+    predictions: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    metadata_by_route: dict[str, dict[str, Any]] = {}
+    for prediction in predictions:
+        route = str(prediction.get("route") or "").strip()
+        metadata = prediction.get("external_adapter_metric_metadata")
+        if route and isinstance(metadata, dict) and route not in metadata_by_route:
+            metadata_by_route[route] = metadata
+    return metadata_by_route

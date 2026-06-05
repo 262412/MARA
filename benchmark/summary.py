@@ -16,6 +16,7 @@ def build_benchmark_summary(
     skipped_routes: list[dict[str, Any]] | None = None,
     adapter_metric_metadata: dict[str, dict[str, Any]] | None = None,
     external_adapter_metric_metadata: dict[str, Any] | None = None,
+    external_adapter_metric_metadata_by_route: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     skipped_routes = skipped_routes or []
     return {
@@ -28,6 +29,9 @@ def build_benchmark_summary(
         "backend_metadata": backend_metadata,
         "adapter_metric_metadata": adapter_metric_metadata or {},
         "external_adapter_metric_metadata": external_adapter_metric_metadata or {},
+        "external_adapter_metric_metadata_by_route": (
+            external_adapter_metric_metadata_by_route or {}
+        ),
     }
 
 

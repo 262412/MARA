@@ -26,5 +26,6 @@ class EngineRunResult:
     verify_decision: dict[str, Any] = field(default_factory=dict)
     guardrail_decision: dict[str, Any] = field(default_factory=dict)
     evidence_bundle: dict[str, Any] = field(default_factory=dict)
+    workflow_plan: dict[str, Any] = field(default_factory=dict)
     claim_verification: dict[str, Any] = field(default_factory=dict)
     presentation: dict[str, Any] = field(default_factory=dict)

@@ -342,6 +342,40 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
     assert DEFAULT_MARA_ROUTES[9]["verification_mode"] == "strict"
 
 
+def test_load_v2_manifest_preserves_top_level_ragas_evaluator(tmp_path):
+    (tmp_path / "doc.txt").write_text("doc", encoding="utf-8")
+    manifest_path = tmp_path / "ragas.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "ragas",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "routes": [
+                    {
+                        "route_id": "paper",
+                        "engine": "direct_paste",
+                        "ragas_evaluator": "tests.fixture_ragas",
+                    }
+                ],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_id": "doc",
+                        "question": "What?",
+                        "answers": ["doc"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    bundle = load_manifest(manifest_path)
+
+    assert bundle.routes[0]["ragas_evaluator"] == "tests.fixture_ragas"
+
+
 def test_load_v1_manifest_sets_v2_defaults(tmp_path):
     (tmp_path / "doc.pdf").write_text("pdf", encoding="utf-8")
     manifest_path = tmp_path / "v1.json"

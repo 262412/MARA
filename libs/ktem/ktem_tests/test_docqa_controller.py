@@ -131,6 +131,7 @@ def test_response_capture_builds_controller_contract_fields():
         "route": "graph_global",
         "policy": "graph",
     }
+    assert payload["workflow_plan"]["steps"][0]["executor"] == "retrieve_graph"
     bundle = payload["evidence_bundle"]
     assert bundle["route"] == "graph_global"
     assert bundle["metadata"]["modality_counts"] == {"graph": 1}
@@ -222,6 +223,7 @@ def test_response_capture_uses_planner_output_trace_for_llm_auto_route():
         "route": "graph_global",
         "policy": "auto",
     }
+    assert payload["workflow_plan"]["route"] == "graph_global"
 
 
 def test_retrieval_evaluator_reports_good_ambiguous_and_poor():
@@ -323,6 +325,51 @@ def test_execute_controller_turn_poor_retrieval_abstains_before_generation():
     assert result.retrieve_decision.status == "poor"
     assert result.guardrail_decision.action == "abstain"
     assert "not retrieve enough evidence" in result.answer
+
+
+def test_execute_controller_turn_switches_route_after_poor_retrieval():
+    calls = []
+
+    def retrieve(_request, decision):
+        calls.append(decision.legacy_route)
+        if decision.legacy_route == "doc_text":
+            return {}
+        return {
+            "evidence": [
+                {
+                    "evidence_id": "hybrid-1",
+                    "file_id": "file-1",
+                    "page_label": "3",
+                    "text": "Revenue increased in 2026.",
+                }
+            ]
+        }
+
+    def generate(_request, decision, bundle):
+        assert decision.legacy_route == "hybrid"
+        assert bundle.items[0]["evidence_id"] == "hybrid-1"
+        return "Revenue increased in 2026."
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt="What happened to revenue?",
+            route_policy="doc",
+            allowed_routes=["doc_text", "hybrid"],
+        ),
+        retrieve=retrieve,
+        generate=generate,
+    )
+
+    assert calls == ["doc_text", "hybrid"]
+    assert result.controller_decision.legacy_route == "hybrid"
+    assert result.retrieve_decision.status == "good"
+    assert result.answer == "Revenue increased in 2026."
+    assert result.controller_trace[0] == {
+        "stage": "route_switch",
+        "from_route": "doc_text",
+        "to_route": "hybrid",
+        "reason": "No retrieved evidence was captured for this turn.",
+    }
 
 
 def test_execute_controller_turn_retries_ambiguous_retrieval_before_generation():

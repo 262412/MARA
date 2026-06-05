@@ -6,6 +6,9 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .evidence import EvidenceBundle, build_evidence_bundle
+from .workflow import build_workflow_plan
+from .workflow import executor_registry as workflow_executor_registry
+from .workflow import planner_payload_from_trace
 
 ROUTE_IDS = (
     "direct",
@@ -149,7 +152,7 @@ def route_registry() -> dict[str, dict[str, Any]]:
 
 
 def executor_registry() -> dict[str, dict[str, Any]]:
-    return {
+    registry = {
         route: {
             "route": route,
             "status": "registered",
@@ -157,6 +160,8 @@ def executor_registry() -> dict[str, dict[str, Any]]:
         }
         for route in ROUTE_IDS
     }
+    registry.update(workflow_executor_registry())
+    return registry
 
 
 def build_controller_outputs(
@@ -166,6 +171,13 @@ def build_controller_outputs(
     answer: str = "",
 ) -> dict[str, Any]:
     route_decision = _route_decision(request, agent_trace)
+    workflow_plan = build_workflow_plan(
+        route=route_decision.route,
+        request=request,
+        planner_payload=planner_payload_from_trace(agent_trace or []),
+        policy=route_decision.policy,
+        controller_mode=route_decision.controller_mode,
+    ).as_dict()
     evidence_bundle = build_evidence_bundle(
         route_decision.route,
         request,
@@ -187,6 +199,12 @@ def build_controller_outputs(
                 "controller_mode": route_decision.controller_mode,
                 "route": route_decision.route,
                 "policy": route_decision.policy,
+            },
+            {
+                "stage": "workflow_plan",
+                "strategy": workflow_plan["strategy"],
+                "step_count": len(workflow_plan["steps"]),
+                "total_cost_units": workflow_plan["total_cost_units"],
             },
             {
                 "stage": "retrieval_evaluator",
@@ -211,6 +229,7 @@ def build_controller_outputs(
         ),
         "controller_trace": controller_trace.as_list(),
         "evidence_bundle": evidence_bundle.as_dict(),
+        "workflow_plan": workflow_plan,
     }
 
 

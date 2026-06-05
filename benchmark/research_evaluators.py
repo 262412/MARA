@@ -4,9 +4,60 @@ import importlib
 import logging
 from typing import Any, Callable
 
-from .research_adapters import research_adapter_metric_metadata
+from .research_adapters import (
+    research_adapter_metric_metadata,
+    research_adapter_metrics,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class _ResearchEvaluatorAdapter:
+    adapter_name = ""
+
+    def __init__(
+        self,
+        backend: Callable[[dict[str, Any]], Any] | None = None,
+        *,
+        paper_grade: bool = False,
+    ) -> None:
+        self.backend = backend
+        self.paper_grade = paper_grade
+
+    def __call__(self, prediction: dict[str, Any]) -> dict[str, Any]:
+        if self.backend is None:
+            metrics = dict(
+                research_adapter_metrics(prediction).get(self.adapter_name) or {}
+            )
+            metadata: dict[str, Any] = {}
+        else:
+            metrics, metadata = _coerce_evaluator_result(self.backend(prediction))
+        paper_grade = bool(metadata.get("paper_grade", self.paper_grade))
+        return {
+            "metrics": metrics,
+            "metadata": {
+                "implementation": self.__class__.__name__,
+                "metric_category": _metric_category(paper_grade),
+                "paper_grade": paper_grade,
+                **metadata,
+            },
+        }
+
+
+class ALCEEvaluator(_ResearchEvaluatorAdapter):
+    adapter_name = "alce"
+
+
+class MMDocRAGEvaluator(_ResearchEvaluatorAdapter):
+    adapter_name = "mmdocrag"
+
+
+class RAGTruthEvaluator(_ResearchEvaluatorAdapter):
+    adapter_name = "ragtruth"
+
+
+class RagasEvaluator(_ResearchEvaluatorAdapter):
+    adapter_name = "ragas"
 
 
 def external_research_adapter_metrics(
@@ -53,6 +104,7 @@ def _not_configured_metadata(proxy_metadata: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "not_configured",
         "metric_scope": "external",
+        "metric_category": "external_metric",
         "paper_grade": False,
         "excluded_from_summary": True,
         "requires_external_resources": list(
@@ -75,13 +127,17 @@ def _run_external_evaluator(
         return {}, _failed_metadata(backend_label, exc)
 
     metrics, metadata = _coerce_evaluator_result(result)
+    paper_grade = bool(metadata.get("paper_grade"))
     return metrics, {
         "backend": backend_label,
         "implementation": str(
             metadata.get("implementation") or f"{adapter_name}_external_evaluator"
         ),
         "metric_scope": "external",
-        "paper_grade": bool(metadata.get("paper_grade")),
+        "metric_category": str(
+            metadata.get("metric_category") or _metric_category(paper_grade)
+        ),
+        "paper_grade": paper_grade,
         "status": "configured",
     }
 
@@ -90,6 +146,7 @@ def _failed_metadata(backend_label: str, exc: Exception) -> dict[str, Any]:
     return {
         "backend": backend_label,
         "metric_scope": "external",
+        "metric_category": "external_metric",
         "paper_grade": False,
         "status": "failed",
         "error": str(exc),
@@ -118,6 +175,8 @@ def _load_evaluator(backend: Any) -> Callable[[dict[str, Any]], Any]:
         raise ValueError(f"Invalid evaluator backend: {ref}")
     module = importlib.import_module(module_name)
     evaluator = getattr(module, attr_name)
+    if isinstance(evaluator, type):
+        evaluator = evaluator()
     if not callable(evaluator):
         raise TypeError(f"Evaluator backend is not callable: {ref}")
     return evaluator
@@ -129,3 +188,7 @@ def _backend_label(backend: Any) -> str:
     module = getattr(backend, "__module__", "")
     name = getattr(backend, "__qualname__", getattr(backend, "__name__", ""))
     return ".".join(item for item in (module, name) if item) or str(backend)
+
+
+def _metric_category(paper_grade: bool) -> str:
+    return "paper_grade_metric" if paper_grade else "external_metric"

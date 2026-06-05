@@ -1,5 +1,6 @@
 import json
 
+from benchmark.route_execution import route_skip_record
 from benchmark.runner import run_benchmark
 from benchmark.schemas import BenchmarkConfig
 
@@ -76,6 +77,28 @@ def test_run_benchmark_propagates_visual_backend_route_fields(monkeypatch, tmp_p
     assert captured_configs[0].visual_retriever_backend == "local_late_interaction"
     assert captured_configs[0].visual_generator_backend == "tests.fake_vlm"
     assert captured_configs[0].generator_backend == "tests.fake_vlm"
+
+
+def test_route_skip_record_uses_visual_backend_readiness_for_required_vlm():
+    record = route_skip_record(
+        {
+            "route_policy": "visual",
+            "visual_retriever_backend": "local_late_interaction",
+            "generator_backend": "evidence_only_without_vlm",
+            "requires_backend_config": True,
+        },
+        route_id="page_image_rag_vlm",
+        engine="docqa_runtime",
+    )
+
+    assert record == {
+        "route_id": "page_image_rag_vlm",
+        "engine": "docqa_runtime",
+        "backend_status": "not_configured",
+        "requires_backend_config": True,
+        "missing_backends": ["visual_generator"],
+        "skip_reason": "not_configured: visual_generator",
+    }
 
 
 def _write_skip_manifest(tmp_path):

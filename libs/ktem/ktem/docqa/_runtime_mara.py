@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-import importlib
 from typing import Any
 
 from .controller import build_controller_outputs
-from .visual_retriever import LocalLateInteractionVisualRetriever
+from .visual_backends import (
+    build_visual_generator_backend as _build_visual_generator_backend,
+)
+from .visual_backends import (
+    build_visual_retriever_backend as _build_visual_retriever_backend,
+)
 
 
 class ResponseCapture:
@@ -72,19 +76,11 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
 
 
 def build_visual_retriever_backend(backend_name: str):
-    backend = str(backend_name or "").strip()
-    if not backend:
-        return None
-    if backend == "local_late_interaction":
-        return LocalLateInteractionVisualRetriever()
-    return _instantiate_dotted_backend(backend, "visual retriever")
+    return _build_visual_retriever_backend(backend_name)
 
 
 def build_visual_generator_backend(backend_name: str):
-    backend = str(backend_name or "").strip()
-    if not backend or backend == "evidence_only_without_vlm":
-        return None
-    return _instantiate_dotted_backend(backend, "visual generator")
+    return _build_visual_generator_backend(backend_name)
 
 
 def _apply_visual_backends(pipeline: Any, request: Any) -> None:
@@ -102,17 +98,6 @@ def _apply_visual_backends(pipeline: Any, request: Any) -> None:
         pipeline.visual_retriever = retriever
     if generator is not None:
         pipeline.vlm_generator = generator
-
-
-def _instantiate_dotted_backend(backend: str, label: str):
-    module_name, _, attr_name = backend.rpartition(".")
-    if not module_name or not attr_name:
-        raise ValueError(
-            f"Configured {label} backend must be a dotted import path: {backend}"
-        )
-    module = importlib.import_module(module_name)
-    target = getattr(module, attr_name)
-    return target() if isinstance(target, type) else target
 
 
 def _backend_metadata(

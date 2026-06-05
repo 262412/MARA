@@ -31,6 +31,10 @@ def _install_fake_docqa_runtime(monkeypatch, doc_path):
         verify_decision = {"status": "supported"}
         guardrail_decision = {"status": "ok", "action": "return"}
         evidence_bundle = {"route": "graph_global", "items": []}
+        workflow_plan = {
+            "route": "graph_global",
+            "steps": [{"executor": "retrieve_graph"}],
+        }
 
     class FakeRecord:
         file_id = "file-1"
@@ -88,6 +92,7 @@ def test_engine_run_result_exposes_phase_two_fields():
     assert result.verify_decision == {}
     assert result.guardrail_decision == {}
     assert result.evidence_bundle == {}
+    assert result.workflow_plan == {}
     assert result.claim_verification == {}
     assert result.presentation == {}
 
@@ -237,6 +242,10 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert result.verify_decision == {"status": "supported"}
     assert result.guardrail_decision == {"status": "ok", "action": "return"}
     assert result.evidence_bundle == {"route": "graph_global", "items": []}
+    assert result.workflow_plan == {
+        "route": "graph_global",
+        "steps": [{"executor": "retrieve_graph"}],
+    }
     assert result.claim_verification == {"rewrite_skipped": True}
     assert result.presentation == {"markdown_normalized": True}
 

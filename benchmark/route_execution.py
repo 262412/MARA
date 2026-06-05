@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.visual_backends import visual_backend_health
+
 
 def route_skip_record(
     route: dict[str, Any],
@@ -16,6 +18,11 @@ def route_skip_record(
         if str(item).strip()
     ]
     requires_backend_config = _bool_value(route.get("requires_backend_config"))
+    if requires_backend_config and not missing_backends:
+        health = visual_backend_health(route)
+        missing_backends = list(health.get("missing_backends") or [])
+        if missing_backends:
+            backend_status = str(health.get("backend_status") or "not_configured")
     if backend_status != "not_configured" and not (
         requires_backend_config and missing_backends
     ):

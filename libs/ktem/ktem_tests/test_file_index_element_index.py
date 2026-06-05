@@ -103,7 +103,7 @@ class _DeleteStore:
         self.deleted.append(list(ids))
 
 
-def test_index_pipeline_persists_element_index_docs(monkeypatch, tmp_path):
+def test_index_pipeline_persists_element_and_graph_index_docs(monkeypatch, tmp_path):
     session = _IndexingSession()
     docstore = _DocStoreWriter()
     pipeline = file_pipelines_module.IndexPipeline(
@@ -137,13 +137,17 @@ def test_index_pipeline_persists_element_index_docs(monkeypatch, tmp_path):
 
     pipeline.handle_chunks_docstore([chunk], "file-1")
 
-    assert len(docstore.batches) == 2
+    assert len(docstore.batches) == 3
     element_docs = docstore.batches[1]
+    graph_docs = docstore.batches[2]
     assert element_docs[0].metadata["type"] == "mara_element_index"
     assert element_docs[0].metadata["source_id"] == "file-1"
+    assert graph_docs[0].metadata["type"] == "mara_graph_index"
+    assert graph_docs[0].metadata["source_id"] == "file-1"
     assert [row.relation_type for row in session.added_rows] == [
         "document",
         "element_index",
+        "graph_index",
     ]
 
 
@@ -152,6 +156,7 @@ def test_delete_event_removes_element_index_docs_from_docstore(monkeypatch):
     rows = [
         SimpleNamespace(relation_type="document", target_id="doc-1"),
         SimpleNamespace(relation_type="element_index", target_id="element-1"),
+        SimpleNamespace(relation_type="graph_index", target_id="graph-1"),
         SimpleNamespace(relation_type="vector", target_id="vector-1"),
     ]
     session = _DeleteSession(source_row, rows)
@@ -173,4 +178,4 @@ def test_delete_event_removes_element_index_docs_from_docstore(monkeypatch):
 
     assert result == (None, "Selected")
     assert vector_store.deleted == [["vector-1"]]
-    assert docstore.deleted == [["doc-1", "element-1"]]
+    assert docstore.deleted == [["doc-1", "element-1", "graph-1"]]

@@ -498,10 +498,12 @@ def test_run_benchmark_reports_named_research_adapters_and_backends(
 
     adapter_metrics = report["predictions"][0]["adapter_metrics"]
     adapter_metadata = report["predictions"][0]["adapter_metric_metadata"]
-    assert set(adapter_metrics) == {"alce", "mmdocrag", "ragtruth"}
+    assert set(adapter_metrics) == {"alce", "mmdocrag", "ragas", "ragtruth"}
     assert adapter_metadata["alce"]["metric_scope"] == "proxy"
+    assert adapter_metadata["alce"]["metric_category"] == "proxy_metric"
     assert adapter_metadata["alce"]["paper_grade"] is False
     assert adapter_metadata["mmdocrag"]["metric_scope"] == "proxy"
+    assert adapter_metadata["ragas"]["metric_scope"] == "proxy"
     assert adapter_metadata["ragtruth"]["metric_scope"] == "proxy"
     assert report["summary"]["adapter_metric_metadata"] == adapter_metadata
     assert {
@@ -524,10 +526,17 @@ def test_run_benchmark_reports_named_research_adapters_and_backends(
         "contradiction_count",
         "abstention_correctness",
     } <= set(adapter_metrics["ragtruth"])
+    assert {
+        "context_precision",
+        "context_recall",
+        "faithfulness",
+        "response_relevancy",
+    } <= set(adapter_metrics["ragas"])
     assert adapter_metrics["alce"]["correctness"] == 1.0
     assert adapter_metrics["alce"]["citation_recall"] == 1.0
     assert adapter_metrics["mmdocrag"]["image_quote_hit"] == 1.0
     assert adapter_metrics["ragtruth"]["unsupported_claim_rate"] == 0.0
+    assert adapter_metrics["ragas"]["faithfulness"] == 1.0
     assert adapter_metrics["ragtruth"]["contradiction_count"] == 0.0
     assert report["summary"]["backend_metadata"]["controller_auto"] == {
         "text_retriever": "fixture_text",

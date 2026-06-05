@@ -1,13 +1,98 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections import defaultdict
 from typing import Any, Iterable
 
+from kotaemon.base import Document
+
 GRAPH_BUILDER = "local_graph_builder_v1"
+GRAPH_INDEX_DOC_TYPE = "mara_graph_index"
+GRAPH_INDEX_RELATION_TYPE = "graph_index"
+GRAPH_INDEX_SCHEMA_VERSION = "1.0"
 
 
-def local_graph_index_from_documents(documents: Iterable[Any]) -> dict[str, Any]:
+def local_graph_index_from_documents(
+    documents: Iterable[Any],
+    *,
+    entity_extractor: Any = None,
+    relation_extractor: Any = None,
+    community_detector: Any = None,
+    community_summarizer: Any = None,
+) -> dict[str, Any]:
+    docs = list(documents)
+    entities, relations, claims = _local_graph_rows(docs)
+    entity_rows = _backend_entities(docs, entity_extractor, entities)
+    relation_rows = _backend_relations(
+        docs,
+        relation_extractor,
+        entity_rows,
+        relations,
+    )
+    community_rows = _backend_community_summaries(
+        entity_rows,
+        relation_rows,
+        community_detector,
+        community_summarizer,
+    )
+    metadata = {"graph_builder": GRAPH_BUILDER}
+    metadata.update(
+        _backend_metadata(
+            entity_extractor,
+            relation_extractor,
+            community_detector,
+            community_summarizer,
+        )
+    )
+    return {
+        "entities": entity_rows,
+        "relations": relation_rows,
+        "claims": claims,
+        "community_summaries": community_rows,
+        "metadata": metadata,
+    }
+
+
+def update_graph_index_incrementally(
+    existing_graph_index: dict[str, Any],
+    documents: Iterable[Any],
+    *,
+    entity_extractor: Any = None,
+    relation_extractor: Any = None,
+    community_detector: Any = None,
+    community_summarizer: Any = None,
+) -> dict[str, Any]:
+    existing = existing_graph_index if isinstance(existing_graph_index, dict) else {}
+    new_index = local_graph_index_from_documents(
+        documents,
+        entity_extractor=entity_extractor,
+        relation_extractor=relation_extractor,
+        community_detector=community_detector,
+        community_summarizer=community_summarizer,
+    )
+    merged = _merge_graph_indexes([existing, new_index])
+    entities = list(merged.get("entities") or [])
+    relations = list(merged.get("relations") or [])
+    merged["community_summaries"] = _backend_community_summaries(
+        entities,
+        relations,
+        community_detector,
+        community_summarizer,
+    )
+    merged["metadata"] = {
+        "graph_builder": "incremental_graph_index_v1",
+        "previous_entity_count": len(existing.get("entities") or []),
+        "new_entity_count": len(new_index.get("entities") or []),
+        "new_relation_count": len(new_index.get("relations") or []),
+    }
+    return merged
+
+
+def _local_graph_rows(
+    documents: list[Any],
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     entities: dict[str, dict[str, Any]] = {}
     relations: list[dict[str, Any]] = []
     claims: list[dict[str, Any]] = []
@@ -25,15 +110,244 @@ def local_graph_index_from_documents(documents: Iterable[Any]) -> dict[str, Any]
             for entity in _entities(sentence):
                 _upsert_entity(entities, entity, sentence, source_backrefs)
             claims.append(_claim(sentence, source_backrefs))
+    return entities, relations, claims
 
-    entity_rows = list(entities.values())
+
+def _backend_entities(
+    documents: list[Any],
+    entity_extractor: Any,
+    local_entities: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if entity_extractor is None:
+        return list(local_entities.values())
+    return _dict_rows(entity_extractor.extract(documents))
+
+
+def _backend_relations(
+    documents: list[Any],
+    relation_extractor: Any,
+    entities: list[dict[str, Any]],
+    local_relations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if relation_extractor is None:
+        return local_relations
+    return _dict_rows(relation_extractor.extract(documents, entities))
+
+
+def _backend_community_summaries(
+    entities: list[dict[str, Any]],
+    relations: list[dict[str, Any]],
+    community_detector: Any,
+    community_summarizer: Any,
+) -> list[dict[str, Any]]:
+    if community_detector is None and community_summarizer is None:
+        return _community_summaries(entities, relations)
+    descriptors = (
+        _dict_rows(community_detector.detect(entities, relations))
+        if community_detector is not None
+        else _community_descriptors(entities, relations)
+    )
+    return [
+        _community_summary_from_descriptor(
+            descriptor,
+            entities,
+            relations,
+            community_summarizer,
+        )
+        for descriptor in descriptors
+    ]
+
+
+def _community_summary_from_descriptor(
+    descriptor: dict[str, Any],
+    entities: list[dict[str, Any]],
+    relations: list[dict[str, Any]],
+    community_summarizer: Any,
+) -> dict[str, Any]:
+    entity_rows = _community_entities(descriptor, entities)
+    relation_rows = _community_relations(descriptor, relations)
+    if community_summarizer is not None:
+        return dict(
+            community_summarizer.summarize(descriptor, entity_rows, relation_rows)
+        )
+    local = _community_summaries(entity_rows, relation_rows)
+    if local:
+        row = dict(local[0])
+        row["id"] = str(descriptor.get("id") or row.get("id") or "")
+        return row
     return {
-        "entities": entity_rows,
-        "relations": relations,
-        "claims": claims,
-        "community_summaries": _community_summaries(entity_rows, relations),
-        "metadata": {"graph_builder": GRAPH_BUILDER},
+        "id": str(descriptor.get("id") or "community"),
+        "label": "",
+        "summary": "",
+        "entity_ids": list(descriptor.get("entity_ids") or []),
+        "source_backrefs": [],
     }
+
+
+def _community_descriptors(
+    entities: list[dict[str, Any]],
+    relations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": item["id"],
+            "entity_ids": list(item.get("entity_ids") or []),
+            "relation_ids": _relation_ids_for_entities(
+                relations,
+                list(item.get("entity_ids") or []),
+            ),
+        }
+        for item in _community_summaries(entities, relations)
+    ]
+
+
+def _community_entities(
+    descriptor: dict[str, Any],
+    entities: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    entity_ids = {str(item) for item in descriptor.get("entity_ids") or []}
+    return [item for item in entities if str(item.get("id") or "") in entity_ids]
+
+
+def _community_relations(
+    descriptor: dict[str, Any],
+    relations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    relation_ids = {str(item) for item in descriptor.get("relation_ids") or []}
+    if relation_ids:
+        return [item for item in relations if str(item.get("id") or "") in relation_ids]
+    entity_ids = {str(item) for item in descriptor.get("entity_ids") or []}
+    return [
+        item
+        for item in relations
+        if _slug(str(item.get("source") or "")) in entity_ids
+        or _slug(str(item.get("target") or "")) in entity_ids
+    ]
+
+
+def _relation_ids_for_entities(
+    relations: list[dict[str, Any]],
+    entity_ids: list[str],
+) -> list[str]:
+    entity_set = set(entity_ids)
+    return [
+        str(item.get("id") or "")
+        for item in relations
+        if _slug(str(item.get("source") or "")) in entity_set
+        or _slug(str(item.get("target") or "")) in entity_set
+    ]
+
+
+def _dict_rows(rows: Any) -> list[dict[str, Any]]:
+    return [dict(item) for item in rows or [] if isinstance(item, dict)]
+
+
+def _backend_metadata(*backends: Any) -> dict[str, str]:
+    keys = (
+        "entity_extraction_backend",
+        "relation_extraction_backend",
+        "community_detection_backend",
+        "community_summary_backend",
+    )
+    return {
+        key: _backend_name(backend)
+        for key, backend in zip(keys, backends)
+        if backend is not None
+    }
+
+
+def _backend_name(backend: Any) -> str:
+    return str(getattr(backend, "name", None) or backend.__class__.__name__)
+
+
+def graph_index_documents_from_documents(
+    file_id: str,
+    documents: Iterable[Any],
+) -> list[Document]:
+    source_id = str(file_id or "").strip()
+    graph_index = local_graph_index_from_documents(documents)
+    if not graph_index.get("entities") and not graph_index.get("relations"):
+        return []
+    metadata = {
+        "type": GRAPH_INDEX_DOC_TYPE,
+        "source_id": source_id,
+        "file_id": source_id,
+        "graph_index_relation_type": GRAPH_INDEX_RELATION_TYPE,
+        "graph_index_schema_version": GRAPH_INDEX_SCHEMA_VERSION,
+        "graph_index": graph_index,
+    }
+    return [
+        Document(
+            text=_graph_index_text(graph_index),
+            id_=_graph_index_doc_id(source_id, graph_index),
+            metadata=metadata,
+        )
+    ]
+
+
+def graph_index_from_index_documents(documents: Iterable[Any]) -> dict[str, Any]:
+    graph_indexes = []
+    for doc in documents:
+        metadata = _metadata(doc)
+        if metadata.get("type") != GRAPH_INDEX_DOC_TYPE:
+            continue
+        graph_index = metadata.get("graph_index")
+        if isinstance(graph_index, dict):
+            graph_indexes.append(graph_index)
+    if not graph_indexes:
+        return {}
+    if len(graph_indexes) == 1:
+        return dict(graph_indexes[0])
+    return _merge_graph_indexes(graph_indexes)
+
+
+def _merge_graph_indexes(graph_indexes: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "entities": _dedupe_graph_rows(graph_indexes, "entities"),
+        "relations": _dedupe_graph_rows(graph_indexes, "relations"),
+        "claims": _dedupe_graph_rows(graph_indexes, "claims"),
+        "community_summaries": _dedupe_graph_rows(
+            graph_indexes,
+            "community_summaries",
+        ),
+        "metadata": {
+            "graph_builder": "merged_persisted_graph_index_v1",
+            "source_index_count": len(graph_indexes),
+        },
+    }
+
+
+def _dedupe_graph_rows(
+    graph_indexes: list[dict[str, Any]],
+    key: str,
+) -> list[dict[str, Any]]:
+    rows = []
+    seen: set[str] = set()
+    for graph_index in graph_indexes:
+        for item in graph_index.get(key) or []:
+            if not isinstance(item, dict):
+                continue
+            row_id = str(item.get("id") or item.get("text") or item).strip()
+            if row_id in seen:
+                continue
+            seen.add(row_id)
+            rows.append(dict(item))
+    return rows
+
+
+def _graph_index_text(graph_index: dict[str, Any]) -> str:
+    return "\n".join(
+        str(item.get("summary") or item.get("description") or item.get("text") or "")
+        for section in ("community_summaries", "relations", "claims", "entities")
+        for item in graph_index.get(section) or []
+        if isinstance(item, dict)
+    ).strip()
+
+
+def _graph_index_doc_id(file_id: str, graph_index: dict[str, Any]) -> str:
+    payload = json.dumps(graph_index, sort_keys=True, default=str)
+    digest = hashlib.sha256(f"{file_id}\n{payload}".encode("utf-8")).hexdigest()
+    return f"graph-index:{file_id}:{digest[:16]}"
 
 
 def _relation_from_sentence(

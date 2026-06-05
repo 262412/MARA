@@ -77,6 +77,7 @@ class DocQAResponse:
     guardrail_decision: dict[str, Any] = field(default_factory=dict)
     controller_trace: list[dict[str, Any]] = field(default_factory=list)
     evidence_bundle: dict[str, Any] = field(default_factory=dict)
+    workflow_plan: dict[str, Any] = field(default_factory=dict)
     backend_metadata: dict[str, Any] = field(default_factory=dict)
     artifact: Any = None
 
