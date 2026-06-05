@@ -110,7 +110,7 @@ def test_chat_page_uses_page_centric_workbench_layout():
     chat_page = _read_chat_page()
     chat_panel = _read_chat_panel()
 
-    ask_panel_label = 'label="Ask This Page"'
+    ask_panel_label = "right-ask-tabs"
     assert ask_panel_label in chat_page
     assert 'elem_id="answer-expand"' in chat_page
     assert 'with gr.Row(elem_id="page-workbench-layout"):' in chat_page
@@ -155,14 +155,14 @@ def test_workbench_matches_reference_prototype_structure():
         'elem_id="reasoning-trace-card"',
         'elem_id="notebook-panel-card"',
         'elem_id="conversation-dock"',
-        'elem_id="reader-hidden-settings"',
+        'elem_id="answer-expand"',
     ]
     for token in expected_chat_tokens:
         assert token in chat_page
 
     assert "render_preview_frame()" in chat_panel
     assert 'placeholder="Search files..."' in chat_page
-    assert 'label="Ask This Page"' in chat_page
+    assert "right-ask-tabs" in chat_page
     assert 'label="Chat settings"' not in chat_page
     assert "refresh_page_context_view" in chat_page
     assert "_render_page_thumbnail_strip" in chat_page
@@ -170,7 +170,7 @@ def test_workbench_matches_reference_prototype_structure():
     assert "interactive=True" in chat_page
     assert "refresh_page_thumbnail_search" in chat_page
     assert "_render_text_thumbnail_preview" in chat_page
-    assert chat_page.index('label="Ask This Page"') < chat_page.index(
+    assert chat_page.index("right-ask-tabs") < chat_page.index(
         'label="Knowledge Map (Page-level)"'
     )
 
@@ -203,7 +203,7 @@ def test_workbench_matches_reference_prototype_structure():
     assert "self._render_reasoning_trace_html()" in chat_page
     assert "self._render_citations_card_html()" in chat_page
     assert "render_studio_trace_panel" in chat_page
-    assert "extract_mara_artifact" in chat_page
+    assert "response.artifact" in chat_page
     assert "render_conversation_notebook_update" in chat_page
     assert "render_latest_reasoning_trace" in chat_page
     assert "render_latest_citations_card" in chat_page
@@ -301,7 +301,7 @@ def test_css_declares_page_workbench_layout_tokens():
         "--workbench-right-width: 430px;",
         "--workbench-column-gap-budget: 40px;",
         "--mara-topbar-height: 64px;",
-        "--mara-statusbar-height: 44px;",
+        "--workbench-viewport-height:",
         "#mara-brand-lockup",
         "#page-workbench-layout",
         "#reader-workbench",

@@ -2258,21 +2258,6 @@ function run() {
     }
   }
 
-  function setReaderMode(toolbar, mode) {
-    const readerPanel = document.getElementById("document-reader-panel");
-    if (readerPanel) {
-      readerPanel.dataset.readerMode = mode;
-    }
-    toolbar
-      .querySelectorAll("[data-reader-action='pan'], [data-reader-action='select'], [data-reader-action='area'], [data-reader-action='annotate']")
-      .forEach((button) => {
-        button.classList.toggle(
-          "is-active",
-          button.getAttribute("data-reader-action") === mode
-        );
-      });
-  }
-
   function getReaderPreviewSrc() {
     const field = findLastActiveField(
       "#main-pdf-preview-src textarea, #main-pdf-preview-src input"
@@ -2312,7 +2297,6 @@ function run() {
     }
     toolbar.dataset.readerToolbarBound = "true";
     applyReaderZoom();
-    setReaderMode(toolbar, "pan");
 
     toolbar.addEventListener("click", (event) => {
       const trigger = event.target.closest("[data-reader-action]");
@@ -2320,10 +2304,6 @@ function run() {
         return;
       }
       const action = trigger.getAttribute("data-reader-action");
-      if (["pan", "select", "area", "annotate"].includes(action)) {
-        setReaderMode(toolbar, action);
-        return;
-      }
       if (action === "zoom-out") {
         readerZoom -= 10;
         applyReaderZoom();

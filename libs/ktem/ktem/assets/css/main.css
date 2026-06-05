@@ -616,7 +616,7 @@ mark {
 
 #info-expand-button {
   position: static;
-  display: inline-flex !important;
+  display: none !important;
   align-items: center;
   justify-content: center;
   width: 30px;
@@ -2397,6 +2397,7 @@ body.kg-viewer-open {
   --workbench-column-gap-budget: 40px;
   --mara-topbar-height: 64px;
   --mara-statusbar-height: 44px;
+  --workbench-viewport-height: calc(100vh - var(--mara-topbar-height) - var(--mara-statusbar-height));
   --management-frame-max-height: clamp(320px, 52vh, 560px);
   --management-field-max-height: clamp(240px, 42vh, 460px);
   --management-detail-max-height: clamp(260px, calc(100vh - 430px), 520px);
@@ -3279,19 +3280,28 @@ body.ktem-dark-mode .gradio-container {
 }
 
 #chat-tab {
-  height: calc(100vh - var(--mara-topbar-height) - var(--mara-statusbar-height)) !important;
+  min-height: var(--workbench-viewport-height) !important;
+  height: auto !important;
   padding: 0 !important;
+  padding-bottom: var(--mara-statusbar-height) !important;
   margin: 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: var(--app-surface) !important;
   box-shadow: none !important;
+  overflow-y: auto !important;
 }
 
 #page-workbench-layout {
+  display: grid !important;
+  grid-template-columns:
+    var(--workbench-left-width)
+    minmax(0, 1fr)
+    var(--workbench-right-width);
   gap: 0 !important;
-  height: 100% !important;
-  min-height: 0 !important;
+  align-items: stretch !important;
+  min-height: var(--workbench-viewport-height) !important;
+  height: auto !important;
   border-top: 1px solid #eef2f7;
   border-bottom: 1px solid #eef2f7;
 }
@@ -3300,13 +3310,17 @@ body.ktem-dark-mode .gradio-container {
   flex: 0 0 var(--workbench-left-width) !important;
   width: var(--workbench-left-width) !important;
   max-width: var(--workbench-left-width) !important;
-  height: 100% !important;
+  align-self: stretch !important;
+  min-height: var(--workbench-viewport-height) !important;
+  max-height: none !important;
+  height: auto !important;
+  position: static !important;
   padding: 16px 14px !important;
   background: var(--app-surface) !important;
   border-right: 1px solid #e5e7eb !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  overflow-y: auto !important;
+  overflow: visible !important;
 }
 
 #conv-settings-panel h2 {
@@ -3547,19 +3561,27 @@ body.ktem-dark-mode .gradio-container {
   flex: 1 1 auto !important;
   width: auto !important;
   max-width: none !important;
-  height: 100% !important;
+  min-width: 0 !important;
+  align-self: stretch !important;
+  min-height: var(--workbench-viewport-height) !important;
+  max-height: none !important;
+  height: auto !important;
   padding: 0 !important;
   background: var(--app-surface) !important;
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+  overflow: visible !important;
 }
 
 #reader-workbench {
+  display: grid !important;
+  grid-template-columns: var(--page-rail-width) minmax(0, 1fr);
+  flex: 1 1 auto !important;
+  align-self: stretch !important;
+  align-items: stretch !important;
+  min-height: 100% !important;
   height: 100% !important;
-  min-height: 0 !important;
-  display: flex !important;
-  flex-wrap: nowrap !important;
   gap: 0 !important;
 }
 
@@ -3567,11 +3589,14 @@ body.ktem-dark-mode .gradio-container {
   flex: 0 0 var(--page-rail-width) !important;
   width: var(--page-rail-width) !important;
   max-width: var(--page-rail-width) !important;
-  height: 100% !important;
+  align-self: stretch !important;
+  min-height: var(--workbench-viewport-height) !important;
+  max-height: none !important;
+  height: auto !important;
   padding: 16px 18px !important;
   background: var(--app-surface) !important;
   border-right: 1px solid #e5e7eb !important;
-  overflow-y: auto !important;
+  overflow: visible !important;
 }
 
 .page-strip-header {
@@ -3723,14 +3748,16 @@ body.ktem-dark-mode .gradio-container {
 #document-reader-panel {
   flex: 1 1 auto !important;
   min-width: 0 !important;
-  height: 100% !important;
+  align-self: stretch !important;
+  min-height: var(--workbench-viewport-height) !important;
+  max-height: none !important;
+  height: auto !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 0 !important;
   padding: 18px !important;
   background: var(--app-surface) !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
+  overflow: visible !important;
 }
 
 #reader-toolbar {
@@ -3828,18 +3855,6 @@ body.ktem-dark-mode .gradio-container {
   transform: scale(var(--reader-preview-zoom, 1));
   transform-origin: center top;
   transition: transform 160ms ease;
-}
-
-#document-reader-panel[data-reader-mode="select"] .pdf-preview-shell {
-  cursor: text;
-}
-
-#document-reader-panel[data-reader-mode="area"] .pdf-preview-shell {
-  cursor: crosshair;
-}
-
-#document-reader-panel[data-reader-mode="annotate"] .pdf-preview-shell {
-  cursor: copy;
 }
 
 .prototype-page {
@@ -4004,13 +4019,16 @@ body.ktem-dark-mode .gradio-container {
   flex: 0 0 var(--workbench-right-width) !important;
   width: var(--workbench-right-width) !important;
   max-width: var(--workbench-right-width) !important;
-  height: 100% !important;
+  align-self: stretch !important;
+  min-height: var(--workbench-viewport-height) !important;
+  max-height: none !important;
+  height: auto !important;
   padding: 16px 18px !important;
   background: var(--app-surface) !important;
   border-left: 1px solid #e5e7eb !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  overflow-y: auto !important;
+  overflow: visible !important;
 }
 
 #answer-expand,
