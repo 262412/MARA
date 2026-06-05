@@ -2234,11 +2234,15 @@ function run() {
     }
 
     const corpusAddTrigger = document.getElementById("corpus-add-trigger");
-    const corpusAddPanel = document.getElementById("corpus-add-panel");
-    if (corpusAddTrigger && corpusAddPanel && corpusAddTrigger.dataset.corpusAddBound !== "true") {
+    if (corpusAddTrigger && corpusAddTrigger.dataset.corpusAddBound !== "true") {
       corpusAddTrigger.dataset.corpusAddBound = "true";
       corpusAddTrigger.addEventListener("click", () => {
-        corpusAddPanel.classList.toggle("is-open");
+        const fileInput = document.querySelector(
+          "#quick-file input[type='file'], #quick-file input[data-testid='file-upload'], #corpus-add-panel input[type='file']"
+        );
+        if (fileInput instanceof HTMLElement) {
+          fileInput.click();
+        }
       });
     }
   }
@@ -2256,21 +2260,6 @@ function run() {
     if (zoomLabel) {
       zoomLabel.textContent = `${boundedZoom}%`;
     }
-  }
-
-  function setReaderMode(toolbar, mode) {
-    const readerPanel = document.getElementById("document-reader-panel");
-    if (readerPanel) {
-      readerPanel.dataset.readerMode = mode;
-    }
-    toolbar
-      .querySelectorAll("[data-reader-action='pan'], [data-reader-action='select'], [data-reader-action='area'], [data-reader-action='annotate']")
-      .forEach((button) => {
-        button.classList.toggle(
-          "is-active",
-          button.getAttribute("data-reader-action") === mode
-        );
-      });
   }
 
   function getReaderPreviewSrc() {
@@ -2312,7 +2301,6 @@ function run() {
     }
     toolbar.dataset.readerToolbarBound = "true";
     applyReaderZoom();
-    setReaderMode(toolbar, "pan");
 
     toolbar.addEventListener("click", (event) => {
       const trigger = event.target.closest("[data-reader-action]");
@@ -2320,10 +2308,6 @@ function run() {
         return;
       }
       const action = trigger.getAttribute("data-reader-action");
-      if (["pan", "select", "area", "annotate"].includes(action)) {
-        setReaderMode(toolbar, action);
-        return;
-      }
       if (action === "zoom-out") {
         readerZoom -= 10;
         applyReaderZoom();

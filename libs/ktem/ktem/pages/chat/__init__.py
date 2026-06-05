@@ -570,12 +570,10 @@ class ChatPage(BasePage):
                 self.upload_scope_hint = gr.Markdown("", elem_id="chat-upload-hint")
 
                 if len(self._app.index_manager.indices) > 0:
-                    with gr.Accordion(
-                        label="Add files",
-                        open=True,
-                        elem_id="corpus-add-panel",
-                    ):
-                        self.quick_file_upload_status = gr.Markdown()
+                    self.quick_file_upload_status = gr.Markdown(
+                        elem_id="quick-file-upload-status"
+                    )
+                    with gr.Column(elem_id="corpus-add-panel"):
                         if not KH_DEMO_MODE:
                             self.quick_file_upload = File(
                                 file_types=list(KH_DEFAULT_FILE_EXTRACTORS.keys()),
@@ -691,14 +689,7 @@ class ChatPage(BasePage):
                             self._render_page_strip_header("", "", "", 1),
                             elem_id="page-strip-file-summary",
                         )
-                        self.page_strip_search = gr.Textbox(
-                            value="",
-                            placeholder="Search within file...",
-                            container=False,
-                            show_label=False,
-                            interactive=True,
-                            elem_id="page-strip-search",
-                        )
+                        self.page_strip_search = gr.State(value="")
                         self.page_thumbnail_strip = gr.HTML(
                             self._render_page_thumbnail_strip("", "", "", 1, 1),
                             elem_id="page-thumbnail-list",
@@ -709,19 +700,6 @@ class ChatPage(BasePage):
                             (
                                 "<div class='reader-toolbar'>"
                                 "<div class='reader-toolbar__tools'>"
-                                "<button type='button' aria-label='Pan' class='is-active' data-reader-action='pan'>"
-                                "<svg viewBox='0 0 24 24'><path d='M8 12V7a2 2 0 0 1 4 0v4-6a2 2 0 1 1 4 0v7-4a2 2 0 1 1 4 0v7a6 6 0 0 1-6 6h-2a7 7 0 0 1-7-7v-2a2 2 0 0 1 3 0Z'/></svg>"
-                                "</button>"
-                                "<button type='button' aria-label='Select' data-reader-action='select'>"
-                                "<svg viewBox='0 0 24 24'><path d='m5 3 14 9-7 2-2 7Z'/></svg>"
-                                "</button>"
-                                "<button type='button' aria-label='Area select' data-reader-action='area'>"
-                                "<svg viewBox='0 0 24 24'><path d='M4 6V4h2M18 4h2v2M20 18v2h-2M6 20H4v-2M8 8h8v8H8Z'/></svg>"
-                                "</button>"
-                                "<button type='button' aria-label='Annotate' data-reader-action='annotate'>"
-                                "<svg viewBox='0 0 24 24'><path d='m4 20 4-1 11-11a2 2 0 0 0-3-3L5 16Z'/></svg>"
-                                "</button>"
-                                "<span class='reader-toolbar__divider'></span>"
                                 "<button type='button' aria-label='Zoom out' data-reader-action='zoom-out'>-</button>"
                                 "<strong id='reader-zoom-label' class='reader-toolbar__zoom'>100%</strong>"
                                 "<button type='button' aria-label='Zoom in' data-reader-action='zoom-in'>+</button>"
@@ -754,22 +732,16 @@ class ChatPage(BasePage):
             with gr.Column(
                 scale=INFO_PANEL_SCALES[False], elem_id="chat-info-panel"
             ) as self.info_column:
-                with gr.Accordion(
-                    label="Ask This Page", open=True, elem_id="answer-expand"
-                ):
-                    self.chat_panel.render_input()
+                with gr.Column(elem_id="answer-expand"):
                     gr.HTML(
                         (
-                            "<div class='suggested-question-list'>"
-                            "<strong>Suggested questions for this page</strong>"
-                            "<button type='button'>What is the main idea of this page?</button>"
-                            "<button type='button'>How does ViT convert an image to a sequence?</button>"
-                            "<button type='button'>What is the role of the [class] token?</button>"
-                            "<button type='button'>Why does ViT use a linear projection?</button>"
+                            "<div class='right-ask-tabs'>"
+                            "<button type='button' class='is-active'>Ask this page</button>"
+                            "<button type='button'>Notes</button>"
                             "</div>"
-                        ),
-                        elem_id="suggested-question-list",
+                        )
                     )
+                    self.chat_panel.render_input()
                     self.kg_answer_hint = gr.HTML(
                         value=(
                             "<div class='kg-answer-hint kg-answer-hint--empty'>"
@@ -802,9 +774,10 @@ class ChatPage(BasePage):
                         render_notebook_panel_html(), elem_id="notebook-panel-card"
                     )
 
-                with gr.Accordion(
-                    label="Knowledge Map (Page-level)", open=True, elem_id="info-expand"
-                ):
+                with gr.Column(elem_id="info-expand"):
+                    gr.HTML(
+                        "<div class='knowledge-map-title'>Knowledge Map (Page-level)</div>"
+                    )
                     self.modal = gr.HTML("<div id='pdf-modal'></div>")
                     self.knowledge_graph_status = gr.Markdown(
                         "Status: no graph generated yet.",
@@ -1139,27 +1112,21 @@ class ChatPage(BasePage):
     def _source_rows_for_sidebar(
         self, user_id, first_selector_choices, scoped_ids, conversation_id, keyword
     ) -> list[dict]:
+        del scoped_ids, conversation_id
         records = self._load_available_source_records(user_id)
         source_map = {
             file_id: str(record.get("name", "") or file_id)
             for file_id, record in records.items()
         }
-        if not source_map and not str(conversation_id or "").strip():
+        if not source_map:
             source_map = self._build_selector_source_map(first_selector_choices)
             records = {
                 file_id: {"id": file_id, "name": name, "path": "", "size": 0}
                 for file_id, name in source_map.items()
             }
 
-        if source_map and scoped_ids:
-            available_ids = set(source_map.keys())
-            scoped_ids = [file_id for file_id in scoped_ids if file_id in available_ids]
-
-        if not scoped_ids and not str(conversation_id or "").strip():
-            scoped_ids = list(source_map.keys())
-
         rows: list[dict] = []
-        for file_id in scoped_ids:
+        for file_id in source_map:
             record = dict(records.get(file_id, {}))
             file_name = str(record.get("name", "") or source_map.get(file_id, file_id))
             if keyword and keyword not in file_name.lower():
@@ -1383,12 +1350,7 @@ class ChatPage(BasePage):
         current_page = max(1, int(page_number or 1))
         total = max(1, int(total_pages or 1))
         query = str(filter_text or "").strip()
-        page_numbers = list(range(1, min(total, 12) + 1))
-        if total > 12 and current_page not in page_numbers:
-            start = max(1, current_page - 5)
-            end = min(total, start + 11)
-            start = max(1, end - 11)
-            page_numbers = list(range(start, end + 1))
+        page_numbers = list(range(1, total + 1))
 
         if query and self._is_text_thumbnail_source(file_name, file_path):
             matched_pages = [
@@ -1405,7 +1367,7 @@ class ChatPage(BasePage):
                     f"No pages match '{html.escape(query)}'."
                     "</div>"
                 )
-            page_numbers = matched_pages[:12]
+            page_numbers = matched_pages
 
         cards = []
         for page in page_numbers:
@@ -1417,12 +1379,22 @@ class ChatPage(BasePage):
                     file_id, file_name, file_path, page, query
                 )
             else:
-                preview_src = self.page_preview._get_page_preview_image(
-                    file_id, file_path, page
+                thumbnail_getter = getattr(
+                    self.page_preview, "_get_page_thumbnail", None
                 )
+                preview_src = (
+                    thumbnail_getter(file_id, page)
+                    if callable(thumbnail_getter)
+                    else ""
+                )
+                if not preview_src:
+                    preview_src = self.page_preview._get_page_preview_image(
+                        file_id, file_path, page
+                    )
                 if preview_src:
                     preview = (
                         "<img class='page-thumbnail-card__image' "
+                        "loading='lazy' "
                         f"src='{html.escape(preview_src, quote=True)}' "
                         f"alt='Page {page} preview' />"
                     )
@@ -1611,18 +1583,6 @@ class ChatPage(BasePage):
             ),
         )
 
-    def refresh_page_thumbnail_search(
-        self, file_id, file_name, file_path, page_number, total_pages, filter_text
-    ):
-        return self._render_page_thumbnail_strip(
-            file_id,
-            file_name,
-            file_path,
-            page_number,
-            total_pages,
-            filter_text,
-        )
-
     def refresh_chat_file_list(
         self,
         conversation_id,
@@ -1635,15 +1595,11 @@ class ChatPage(BasePage):
         selected_ids = self._normalize_selected_file_ids(selected_file_ids)
         selected_set = set(selected_ids)
         keyword = str(filter_text or "").strip().lower()
-        scoped_ids = self._normalize_selected_file_ids(graph_source_ids)
-        if not scoped_ids:
-            # Backward-compatible fallback for older conversations.
-            scoped_ids = selected_ids
 
         rows = self._source_rows_for_sidebar(
             user_id,
             first_selector_choices,
-            scoped_ids,
+            [],
             conversation_id,
             keyword,
         )
@@ -2058,20 +2014,6 @@ class ChatPage(BasePage):
                 outputs=[self._preview_links],
                 js=pdfview_js,
             )
-
-        self.page_strip_search.input(
-            fn=self.refresh_page_thumbnail_search,
-            inputs=[
-                self._active_file_id,
-                self._active_file_name,
-                self._active_file_path,
-                self.chat_panel.page_number,
-                self._active_file_total_pages,
-                self.page_strip_search,
-            ],
-            outputs=[self.page_thumbnail_strip],
-            show_progress="hidden",
-        )
 
         self.chat_panel.preview_refresh_timer.tick(
             fn=self.page_preview.on_preview_tick,

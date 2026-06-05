@@ -616,7 +616,7 @@ mark {
 
 #info-expand-button {
   position: static;
-  display: inline-flex !important;
+  display: none !important;
   align-items: center;
   justify-content: center;
   width: 30px;
@@ -2397,6 +2397,7 @@ body.kg-viewer-open {
   --workbench-column-gap-budget: 40px;
   --mara-topbar-height: 64px;
   --mara-statusbar-height: 44px;
+  --workbench-viewport-height: calc(100vh - var(--mara-topbar-height) - var(--mara-statusbar-height) - 16px);
   --management-frame-max-height: clamp(320px, 52vh, 560px);
   --management-field-max-height: clamp(240px, 42vh, 460px);
   --management-detail-max-height: clamp(260px, calc(100vh - 430px), 520px);
@@ -3279,34 +3280,73 @@ body.ktem-dark-mode .gradio-container {
 }
 
 #chat-tab {
-  height: calc(100vh - var(--mara-topbar-height) - var(--mara-statusbar-height)) !important;
+  min-height: var(--workbench-viewport-height) !important;
+  height: auto !important;
   padding: 0 !important;
+  padding-bottom: var(--mara-statusbar-height) !important;
   margin: 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: var(--app-surface) !important;
   box-shadow: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+#chat-tab:has(#conv-settings-panel):has(#chat-area):has(#chat-info-panel) > div,
+  #chat-tab .gap:has(> #conv-settings-panel):has(> #chat-area):has(> #chat-info-panel),
+  #chat-tab .gradio-row:has(> #conv-settings-panel):has(> #chat-area):has(> #chat-info-panel) {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
 
 #page-workbench-layout {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns:
+    var(--workbench-left-width)
+    minmax(0, 1fr)
+    var(--workbench-right-width);
   gap: 0 !important;
-  height: 100% !important;
-  min-height: 0 !important;
+  align-items: start !important;
+  min-height: var(--workbench-viewport-height) !important;
+  height: auto !important;
   border-top: 1px solid #eef2f7;
   border-bottom: 1px solid #eef2f7;
+}
+
+#page-workbench-layout::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--app-border, #e5e7eb), var(--app-border, #e5e7eb))
+      var(--workbench-left-width) 0 / 1px 100% no-repeat,
+    linear-gradient(var(--app-border, #e5e7eb), var(--app-border, #e5e7eb))
+      calc(100% - var(--workbench-right-width)) 0 / 1px 100% no-repeat;
 }
 
 #conv-settings-panel {
   flex: 0 0 var(--workbench-left-width) !important;
   width: var(--workbench-left-width) !important;
   max-width: var(--workbench-left-width) !important;
-  height: 100% !important;
+  align-self: start !important;
+  min-height: 0 !important;
+  max-height: var(--workbench-viewport-height) !important;
+  height: var(--workbench-viewport-height) !important;
+  position: static !important;
+  display: flex !important;
+  flex-direction: column !important;
   padding: 16px 14px !important;
   background: var(--app-surface) !important;
   border-right: 1px solid #e5e7eb !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  overflow-y: auto !important;
+  overflow: hidden !important;
 }
 
 #conv-settings-panel h2 {
@@ -3343,17 +3383,20 @@ body.ktem-dark-mode .gradio-container {
 }
 
 #corpus-add-panel {
-  display: none !important;
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  clip-path: inset(50%) !important;
   margin: 0 !important;
+  padding: 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-}
-
-#corpus-add-panel.is-open {
-  display: block !important;
-  margin: 0 0 12px !important;
 }
 
 #corpus-add-panel > div:first-child {
@@ -3364,36 +3407,36 @@ body.ktem-dark-mode .gradio-container {
   display: none !important;
 }
 
+#quick-file-upload-status {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  margin: 0 0 8px !important;
+  color: var(--app-text-muted) !important;
+  font-size: 12px !important;
+}
+
 #conversation-dropdown {
   height: 42px !important;
   min-height: 42px !important;
 }
 
-#chat-file-filter,
-#page-strip-search {
+#chat-file-filter {
   height: 48px !important;
   min-height: 48px !important;
   overflow: visible !important;
 }
 
 #chat-file-filter,
-#page-strip-search,
 #chat-file-filter > label,
-#page-strip-search > label,
 #chat-file-filter .wrap,
-#page-strip-search .wrap,
 #chat-file-filter .wrap-inner,
-#page-strip-search .wrap-inner,
-#chat-file-filter [data-testid="textbox"],
-#page-strip-search [data-testid="textbox"] {
+#chat-file-filter [data-testid="textbox"] {
   box-sizing: border-box !important;
   overflow: visible !important;
 }
 
 #chat-file-filter textarea,
-#chat-file-filter input,
-#page-strip-search textarea,
-#page-strip-search input {
+#chat-file-filter input {
   height: 40px !important;
   min-height: 40px !important;
   line-height: 20px !important;
@@ -3402,6 +3445,10 @@ body.ktem-dark-mode .gradio-container {
 }
 
 #chat-file-browser {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
   border: 0 !important;
   box-shadow: none !important;
   padding: 0 !important;
@@ -3409,9 +3456,17 @@ body.ktem-dark-mode .gradio-container {
 }
 
 #chat-selected-file {
+  flex: 0 0 auto !important;
   margin: 8px 0 10px !important;
   color: var(--app-text-muted) !important;
   font-size: 12px !important;
+}
+
+#chat-file-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding-right: 3px !important;
 }
 
 .corpus-file-library {
@@ -3512,7 +3567,8 @@ body.ktem-dark-mode .gradio-container {
 }
 
 #workbench-file-summary {
-  margin-top: 14px;
+  flex: 0 0 auto !important;
+  margin-top: auto;
   padding-top: 14px;
   border-top: 1px solid #eef2f7;
 }
@@ -3547,31 +3603,58 @@ body.ktem-dark-mode .gradio-container {
   flex: 1 1 auto !important;
   width: auto !important;
   max-width: none !important;
-  height: 100% !important;
+  min-width: 0 !important;
+  align-self: start !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  height: auto !important;
   padding: 0 !important;
   background: var(--app-surface) !important;
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+  overflow: visible !important;
 }
 
 #reader-workbench {
-  height: 100% !important;
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: var(--page-rail-width) minmax(0, 1fr);
+  flex: 1 1 auto !important;
+  align-self: start !important;
+  align-items: start !important;
   min-height: 0 !important;
-  display: flex !important;
-  flex-wrap: nowrap !important;
+  height: auto !important;
   gap: 0 !important;
+}
+
+#reader-workbench::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--page-rail-width);
+  z-index: 2;
+  width: 1px;
+  pointer-events: none;
+  background: var(--app-border, #e5e7eb);
 }
 
 #page-strip-panel {
   flex: 0 0 var(--page-rail-width) !important;
   width: var(--page-rail-width) !important;
   max-width: var(--page-rail-width) !important;
-  height: 100% !important;
+  align-self: start !important;
+  min-height: 0 !important;
+  max-height: var(--workbench-viewport-height) !important;
+  height: var(--workbench-viewport-height) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
   padding: 16px 18px !important;
   background: var(--app-surface) !important;
   border-right: 1px solid #e5e7eb !important;
-  overflow-y: auto !important;
+  overflow: hidden !important;
 }
 
 .page-strip-header {
@@ -3619,6 +3702,18 @@ body.ktem-dark-mode .gradio-container {
   display: grid;
   gap: 14px;
   padding: 12px 0 28px;
+}
+
+#page-thumbnail-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-right: 3px !important;
+}
+
+#page-thumbnail-list .page-thumbnail-list {
+  overflow: visible;
 }
 
 .page-thumbnail-card {
@@ -3723,14 +3818,17 @@ body.ktem-dark-mode .gradio-container {
 #document-reader-panel {
   flex: 1 1 auto !important;
   min-width: 0 !important;
-  height: 100% !important;
+  align-self: start !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  height: auto !important;
   display: flex !important;
   flex-direction: column !important;
+  flex-wrap: nowrap !important;
   gap: 0 !important;
   padding: 18px !important;
   background: var(--app-surface) !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
+  overflow: visible !important;
 }
 
 #reader-toolbar {
@@ -3828,18 +3926,6 @@ body.ktem-dark-mode .gradio-container {
   transform: scale(var(--reader-preview-zoom, 1));
   transform-origin: center top;
   transition: transform 160ms ease;
-}
-
-#document-reader-panel[data-reader-mode="select"] .pdf-preview-shell {
-  cursor: text;
-}
-
-#document-reader-panel[data-reader-mode="area"] .pdf-preview-shell {
-  cursor: crosshair;
-}
-
-#document-reader-panel[data-reader-mode="annotate"] .pdf-preview-shell {
-  cursor: copy;
 }
 
 .prototype-page {
@@ -4004,13 +4090,20 @@ body.ktem-dark-mode .gradio-container {
   flex: 0 0 var(--workbench-right-width) !important;
   width: var(--workbench-right-width) !important;
   max-width: var(--workbench-right-width) !important;
-  height: 100% !important;
+  align-self: start !important;
+  min-height: 0 !important;
+  max-height: var(--workbench-viewport-height) !important;
+  height: var(--workbench-viewport-height) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
   padding: 16px 18px !important;
   background: var(--app-surface) !important;
   border-left: 1px solid #e5e7eb !important;
   border-radius: 0 !important;
   box-shadow: none !important;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
 #answer-expand,
@@ -4106,7 +4199,6 @@ body.ktem-dark-mode .gradio-container {
   box-shadow: none !important;
 }
 
-.suggested-question-list,
 .citations-card,
 .reasoning-trace-card,
 .studio-artifacts-card,
@@ -4117,24 +4209,13 @@ body.ktem-dark-mode .gradio-container {
   font-size: 12px;
 }
 
-.suggested-question-list button {
-  min-height: 30px !important;
-  justify-content: space-between !important;
-  padding: 0 10px !important;
-  border: 1px solid #e5e7eb !important;
-  border-radius: 0 !important;
-  background: var(--app-surface) !important;
-  color: var(--app-text) !important;
-  box-shadow: none !important;
-  text-align: left !important;
-}
-
-.suggested-question-list button::after {
-  content: ">";
-  margin-left: auto;
-}
-
 .answer-panel-label {
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.knowledge-map-title {
   color: var(--app-text);
   font-size: 13px;
   font-weight: 800;
@@ -4378,7 +4459,7 @@ body.ktem-dark-mode .corpus-file-entry__name,
 body.ktem-dark-mode .reader-toolbar button,
 body.ktem-dark-mode .page-metadata-strip strong,
 body.ktem-dark-mode .answer-panel-label,
-body.ktem-dark-mode .suggested-question-list,
+body.ktem-dark-mode .knowledge-map-title,
 body.ktem-dark-mode .citations-card,
 body.ktem-dark-mode .reasoning-trace-card,
 body.ktem-dark-mode .studio-artifacts-card,
@@ -4444,7 +4525,7 @@ html.ktem-dark-mode .corpus-file-entry__name,
 html.ktem-dark-mode .reader-toolbar button,
 html.ktem-dark-mode .page-metadata-strip strong,
 html.ktem-dark-mode .answer-panel-label,
-html.ktem-dark-mode .suggested-question-list,
+html.ktem-dark-mode .knowledge-map-title,
 html.ktem-dark-mode .citations-card,
 html.ktem-dark-mode .reasoning-trace-card,
 html.ktem-dark-mode .studio-artifacts-card,
@@ -4460,7 +4541,7 @@ body.dark .corpus-file-entry__name,
 body.dark .reader-toolbar button,
 body.dark .page-metadata-strip strong,
 body.dark .answer-panel-label,
-body.dark .suggested-question-list,
+body.dark .knowledge-map-title,
 body.dark .citations-card,
 body.dark .reasoning-trace-card,
 body.dark .studio-artifacts-card,
