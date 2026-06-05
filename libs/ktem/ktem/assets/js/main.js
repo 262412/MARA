@@ -2234,11 +2234,15 @@ function run() {
     }
 
     const corpusAddTrigger = document.getElementById("corpus-add-trigger");
-    const corpusAddPanel = document.getElementById("corpus-add-panel");
-    if (corpusAddTrigger && corpusAddPanel && corpusAddTrigger.dataset.corpusAddBound !== "true") {
+    if (corpusAddTrigger && corpusAddTrigger.dataset.corpusAddBound !== "true") {
       corpusAddTrigger.dataset.corpusAddBound = "true";
       corpusAddTrigger.addEventListener("click", () => {
-        corpusAddPanel.classList.toggle("is-open");
+        const fileInput = document.querySelector(
+          "#quick-file input[type='file'], #quick-file input[data-testid='file-upload'], #corpus-add-panel input[type='file']"
+        );
+        if (fileInput instanceof HTMLElement) {
+          fileInput.click();
+        }
       });
     }
   }

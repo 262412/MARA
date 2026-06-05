@@ -570,12 +570,10 @@ class ChatPage(BasePage):
                 self.upload_scope_hint = gr.Markdown("", elem_id="chat-upload-hint")
 
                 if len(self._app.index_manager.indices) > 0:
-                    with gr.Accordion(
-                        label="Add files",
-                        open=True,
-                        elem_id="corpus-add-panel",
-                    ):
-                        self.quick_file_upload_status = gr.Markdown()
+                    self.quick_file_upload_status = gr.Markdown(
+                        elem_id="quick-file-upload-status"
+                    )
+                    with gr.Column(elem_id="corpus-add-panel"):
                         if not KH_DEMO_MODE:
                             self.quick_file_upload = File(
                                 file_types=list(KH_DEFAULT_FILE_EXTRACTORS.keys()),
@@ -691,14 +689,7 @@ class ChatPage(BasePage):
                             self._render_page_strip_header("", "", "", 1),
                             elem_id="page-strip-file-summary",
                         )
-                        self.page_strip_search = gr.Textbox(
-                            value="",
-                            placeholder="Search within file...",
-                            container=False,
-                            show_label=False,
-                            interactive=True,
-                            elem_id="page-strip-search",
-                        )
+                        self.page_strip_search = gr.State(value="")
                         self.page_thumbnail_strip = gr.HTML(
                             self._render_page_thumbnail_strip("", "", "", 1, 1),
                             elem_id="page-thumbnail-list",
@@ -751,18 +742,6 @@ class ChatPage(BasePage):
                         )
                     )
                     self.chat_panel.render_input()
-                    gr.HTML(
-                        (
-                            "<div class='suggested-question-list'>"
-                            "<strong>Suggested questions for this page</strong>"
-                            "<button type='button'>What is the main idea of this page?</button>"
-                            "<button type='button'>How does ViT convert an image to a sequence?</button>"
-                            "<button type='button'>What is the role of the [class] token?</button>"
-                            "<button type='button'>Why does ViT use a linear projection?</button>"
-                            "</div>"
-                        ),
-                        elem_id="suggested-question-list",
-                    )
                     self.kg_answer_hint = gr.HTML(
                         value=(
                             "<div class='kg-answer-hint kg-answer-hint--empty'>"
@@ -795,9 +774,10 @@ class ChatPage(BasePage):
                         render_notebook_panel_html(), elem_id="notebook-panel-card"
                     )
 
-                with gr.Accordion(
-                    label="Knowledge Map (Page-level)", open=True, elem_id="info-expand"
-                ):
+                with gr.Column(elem_id="info-expand"):
+                    gr.HTML(
+                        "<div class='knowledge-map-title'>Knowledge Map (Page-level)</div>"
+                    )
                     self.modal = gr.HTML("<div id='pdf-modal'></div>")
                     self.knowledge_graph_status = gr.Markdown(
                         "Status: no graph generated yet.",
@@ -1132,6 +1112,7 @@ class ChatPage(BasePage):
     def _source_rows_for_sidebar(
         self, user_id, first_selector_choices, scoped_ids, conversation_id, keyword
     ) -> list[dict]:
+        del scoped_ids, conversation_id
         records = self._load_available_source_records(user_id)
         source_map = {
             file_id: str(record.get("name", "") or file_id)
@@ -1144,15 +1125,8 @@ class ChatPage(BasePage):
                 for file_id, name in source_map.items()
             }
 
-        if source_map and scoped_ids:
-            available_ids = set(source_map.keys())
-            scoped_ids = [file_id for file_id in scoped_ids if file_id in available_ids]
-
-        if not scoped_ids:
-            scoped_ids = list(source_map.keys())
-
         rows: list[dict] = []
-        for file_id in scoped_ids:
+        for file_id in source_map:
             record = dict(records.get(file_id, {}))
             file_name = str(record.get("name", "") or source_map.get(file_id, file_id))
             if keyword and keyword not in file_name.lower():
@@ -1609,18 +1583,6 @@ class ChatPage(BasePage):
             ),
         )
 
-    def refresh_page_thumbnail_search(
-        self, file_id, file_name, file_path, page_number, total_pages, filter_text
-    ):
-        return self._render_page_thumbnail_strip(
-            file_id,
-            file_name,
-            file_path,
-            page_number,
-            total_pages,
-            filter_text,
-        )
-
     def refresh_chat_file_list(
         self,
         conversation_id,
@@ -1633,12 +1595,11 @@ class ChatPage(BasePage):
         selected_ids = self._normalize_selected_file_ids(selected_file_ids)
         selected_set = set(selected_ids)
         keyword = str(filter_text or "").strip().lower()
-        scoped_ids = self._normalize_selected_file_ids(graph_source_ids)
 
         rows = self._source_rows_for_sidebar(
             user_id,
             first_selector_choices,
-            scoped_ids,
+            [],
             conversation_id,
             keyword,
         )
@@ -2053,20 +2014,6 @@ class ChatPage(BasePage):
                 outputs=[self._preview_links],
                 js=pdfview_js,
             )
-
-        self.page_strip_search.input(
-            fn=self.refresh_page_thumbnail_search,
-            inputs=[
-                self._active_file_id,
-                self._active_file_name,
-                self._active_file_path,
-                self.chat_panel.page_number,
-                self._active_file_total_pages,
-                self.page_strip_search,
-            ],
-            outputs=[self.page_thumbnail_strip],
-            show_progress="hidden",
-        )
 
         self.chat_panel.preview_refresh_timer.tick(
             fn=self.page_preview.on_preview_tick,

@@ -114,10 +114,8 @@ def test_chat_page_uses_page_centric_workbench_layout():
     assert ask_panel_label in chat_page
     assert 'elem_id="answer-expand"' in chat_page
     assert 'with gr.Row(elem_id="page-workbench-layout"):' in chat_page
-    assert (
-        'label="Knowledge Map (Page-level)", open=True, elem_id="info-expand"'
-        in chat_page
-    )
+    assert 'with gr.Column(elem_id="info-expand"):' in chat_page
+    assert "knowledge-map-title" in chat_page
     assert (
         "value=\"<div class='pdf-preview-notice'>Selected page preview.</div>\""
         in chat_panel
@@ -150,7 +148,6 @@ def test_workbench_matches_reference_prototype_structure():
         'elem_id="document-reader-panel"',
         'elem_id="reader-toolbar"',
         'elem_id="page-metadata-strip"',
-        'elem_id="suggested-question-list"',
         'elem_id="citations-card"',
         'elem_id="reasoning-trace-card"',
         'elem_id="notebook-panel-card"',
@@ -166,13 +163,12 @@ def test_workbench_matches_reference_prototype_structure():
     assert 'label="Chat settings"' not in chat_page
     assert "refresh_page_context_view" in chat_page
     assert "_render_page_thumbnail_strip" in chat_page
-    assert "self.page_strip_search = gr.Textbox" in chat_page
-    assert "interactive=True" in chat_page
-    assert "refresh_page_thumbnail_search" in chat_page
+    assert "self.page_strip_search = gr.State" in chat_page
+    assert 'placeholder="Search within file..."' not in chat_page
+    assert "refresh_page_thumbnail_search" not in chat_page
+    assert "Suggested questions for this page" not in chat_page
     assert "_render_text_thumbnail_preview" in chat_page
-    assert chat_page.index("right-ask-tabs") < chat_page.index(
-        'label="Knowledge Map (Page-level)"'
-    )
+    assert chat_page.index("right-ask-tabs") < chat_page.index("knowledge-map-title")
 
     for label in [
         '"chat"',
