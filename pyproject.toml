@@ -66,10 +66,9 @@ Upstream = "https://github.com/Cinnamon/kotaemon/"
 [tool.codespell]
 skip = "*.js,*.css,*.map"
 # `llm` abbreviation for large language models
-ignore-words-list = "llm,fo,multline"
+ignore-words-list = "llm,fo,multline,asai"
 quiet-level = 3
 check-filenames = ""
-ignore-words-list = "asai"
 
 [tool.isort]
 known_first_party = ["kotaemon"]
