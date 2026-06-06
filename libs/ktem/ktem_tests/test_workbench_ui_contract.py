@@ -180,3 +180,30 @@ def test_workbench_css_keeps_long_lists_inside_scrollable_columns():
     assert any("flex-wrap: nowrap !important;" in block for block in chat_info_blocks)
     assert "overflow-y: auto !important;" in css[css.index("#chat-file-list {") :]
     assert "overflow-y: auto !important;" in css[css.index("#page-thumbnail-list {") :]
+
+
+def test_answer_panel_renders_rich_markdown_and_math():
+    from pathlib import Path
+
+    package_root = Path(__file__).resolve().parents[1] / "ktem"
+    css = (package_root / "assets" / "css" / "main.css").read_text(encoding="utf-8")
+    main_js = (package_root / "assets" / "js" / "main.js").read_text(encoding="utf-8")
+
+    assert "renderAnswerPanelMath" in main_js
+    assert "katex.renderToString" in main_js
+    assert ".ktem-math-source" in main_js
+    assert 'self.answer_panel = gr.HTML(value="", elem_id="answer-panel")' in (
+        package_root / "pages" / "chat" / "__init__.py"
+    ).read_text(encoding="utf-8")
+    for token in [
+        "#answer-panel .chat-message-content p",
+        "#answer-panel .chat-message-content ul",
+        "#answer-panel .chat-message-content table",
+        "#answer-panel .chat-message-content th",
+        "#answer-panel .chat-message-content pre",
+        "#answer-panel .ktem-math--display",
+        "max-width: none;",
+        "margin: 12px 8px;",
+        "overflow-wrap: anywhere;",
+    ]:
+        assert token in css

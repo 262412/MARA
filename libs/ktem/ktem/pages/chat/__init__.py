@@ -8,7 +8,6 @@ from copy import deepcopy
 from typing import Any
 
 import gradio as gr
-import markdown
 from ktem.app import BasePage
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARuntime
@@ -32,6 +31,7 @@ from ...utils import SUPPORTED_LANGUAGE_MAP, get_file_names_regex, get_urls
 from ...utils.commands import WEB_SEARCH_COMMAND
 from ...utils.hf_papers import get_recommended_papers
 from ...utils.rate_limit import check_rate_limit
+from .answer_rendering import format_chat_message_html
 from .chat_docqa_runtime import (
     build_web_docqa_request,
     docqa_research_control_inputs,
@@ -752,16 +752,7 @@ class ChatPage(BasePage):
                         elem_id="kg-answer-hint",
                     )
                     gr.HTML("<div class='answer-panel-label'>Answer</div>")
-                    self.answer_panel = gr.Markdown(
-                        value="",
-                        elem_id="answer-panel",
-                        latex_delimiters=[
-                            {"left": "$$", "right": "$$", "display": True},
-                            {"left": "$", "right": "$", "display": False},
-                            {"left": "\\(", "right": "\\)", "display": False},
-                            {"left": "\\[", "right": "\\]", "display": True},
-                        ],
-                    )
+                    self.answer_panel = gr.HTML(value="", elem_id="answer-panel")
                     self.citations_panel = gr.HTML(
                         self._render_citations_card_html(),
                         elem_id="citations-card",
@@ -1808,26 +1799,7 @@ class ChatPage(BasePage):
 
     def _format_chat_message(self, content: str, role: str) -> str:
         """Format a chat message as a bubble"""
-        import html
-
-        escaped_content = html.escape(content)
-        if role == "assistant":
-            formatted_content = markdown.markdown(
-                escaped_content,
-                extensions=[
-                    "markdown.extensions.tables",
-                    "markdown.extensions.fenced_code",
-                    "markdown.extensions.nl2br",
-                ],
-            )
-        else:
-            # User messages are rendered as plain text inside the bubble.
-            formatted_content = escaped_content.replace("\n", "<br>")
-        return (
-            f'<div class="chat-message {role}">'
-            f'<div class="chat-message-content">{formatted_content}</div>'
-            "</div>"
-        )
+        return format_chat_message_html(content, role)
 
     def _generate_answer_panel_html(
         self,
@@ -3356,16 +3328,18 @@ class ChatPage(BasePage):
             chat_state,
             answer_html if active_view else gr.skip(),
             self._render_citations_card_html(refs) if active_view else gr.skip(),
-            self._render_reasoning_trace_html(
-                chat_input,
-                refs,
-                answer_html,
-                active_file_id or "",
-                normalized_page_number,
-                artifact_payload,
-            )
-            if active_view
-            else gr.skip(),
+            (
+                self._render_reasoning_trace_html(
+                    chat_input,
+                    refs,
+                    answer_html,
+                    active_file_id or "",
+                    normalized_page_number,
+                    artifact_payload,
+                )
+                if active_view
+                else gr.skip()
+            ),
             normalized_page_number,
             active_file_id or "",
             str(chat_input or ""),
@@ -3486,16 +3460,18 @@ class ChatPage(BasePage):
                 chat_state,
                 answer_html if active_view else gr.skip(),
                 self._render_citations_card_html(refs) if active_view else gr.skip(),
-                self._render_reasoning_trace_html(
-                    chat_input,
-                    refs,
-                    answer_html,
-                    active_file_id or "",
-                    normalized_page_number,
-                    artifact_payload,
-                )
-                if active_view
-                else gr.skip(),
+                (
+                    self._render_reasoning_trace_html(
+                        chat_input,
+                        refs,
+                        answer_html,
+                        active_file_id or "",
+                        normalized_page_number,
+                        artifact_payload,
+                    )
+                    if active_view
+                    else gr.skip()
+                ),
                 normalized_page_number,
                 active_file_id or "",
                 str(chat_input or ""),

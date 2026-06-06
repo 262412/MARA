@@ -400,28 +400,130 @@ button.selected {
 #answer-panel .chat-message.assistant {
   background-color: var(--background-fill-secondary);
   color: var(--body-text-color);
-  margin-right: auto;
+  width: auto;
+  max-width: none;
+  margin: 12px 8px;
   border-bottom-left-radius: 4px;
 }
 
 #answer-panel .chat-message-content {
+  width: 100%;
   line-height: 1.6;
   white-space: normal;
   overflow-x: auto;
   overflow-wrap: break-word;
 }
 
+#answer-panel .chat-message-content p {
+  margin: 0 0 0.85rem;
+}
+
+#answer-panel .chat-message-content p:last-child,
+#answer-panel .chat-message-content ul:last-child,
+#answer-panel .chat-message-content ol:last-child,
+#answer-panel .chat-message-content pre:last-child,
+#answer-panel .chat-message-content table:last-child {
+  margin-bottom: 0;
+}
+
+#answer-panel .chat-message-content ul,
+#answer-panel .chat-message-content ol {
+  margin: 0.55rem 0 0.85rem;
+  padding-left: 1.35rem;
+}
+
+#answer-panel .chat-message-content li {
+  margin: 0.25rem 0;
+}
+
 #answer-panel .chat-message-content table {
-  width: max-content;
+  width: 100%;
+  min-width: min(100%, 520px);
   max-width: 100%;
-  border-collapse: collapse;
+  margin: 0.8rem 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.94rem;
+  table-layout: auto;
 }
 
 #answer-panel .chat-message-content th,
 #answer-panel .chat-message-content td {
-  padding: 6px 8px;
-  border: 1px solid var(--border-color-primary);
+  padding: 8px 10px;
+  border-right: 1px solid var(--app-border);
+  border-bottom: 1px solid var(--app-border);
   vertical-align: top;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+#answer-panel .chat-message-content th {
+  background: var(--app-surface-muted);
+  color: var(--app-text);
+  font-weight: 700;
+}
+
+#answer-panel .chat-message-content td:last-child,
+#answer-panel .chat-message-content th:last-child {
+  border-right: 0;
+}
+
+#answer-panel .chat-message-content tr:last-child td {
+  border-bottom: 0;
+}
+
+#answer-panel .chat-message-content tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--app-surface-muted) 36%, transparent);
+}
+
+#answer-panel .chat-message-content code {
+  padding: 0.12rem 0.32rem;
+  border: 1px solid var(--app-border);
+  border-radius: 5px;
+  background: var(--app-surface-muted);
+  font-size: 0.92em;
+}
+
+#answer-panel .chat-message-content pre {
+  margin: 0.8rem 0;
+  padding: 12px 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface-muted);
+  overflow-x: auto;
+}
+
+#answer-panel .chat-message-content pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+#answer-panel .chat-message-content blockquote {
+  margin: 0.8rem 0;
+  padding: 0.2rem 0 0.2rem 0.85rem;
+  border-left: 3px solid var(--app-border-strong);
+  color: var(--app-text-muted);
+}
+
+#answer-panel .ktem-math {
+  color: var(--app-text);
+}
+
+#answer-panel .ktem-math--display {
+  display: block;
+  margin: 0.9rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+}
+
+#answer-panel .ktem-math-source {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  color: var(--app-text-muted);
 }
 
 #answer-panel .typing-indicator {

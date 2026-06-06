@@ -1,5 +1,7 @@
 function run() {
   let answerPanelObserver = globalThis._ktemAnswerPanelObserver || null;
+  let answerMathRetry = globalThis._ktemAnswerMathRetry || null;
+  let answerMathRetryCount = Number(globalThis._ktemAnswerMathRetryCount || 0);
   let previewSrcPoller = globalThis._ktemPreviewSrcPoller || null;
   let knowledgeGraphObserver = globalThis._ktemKnowledgeGraphObserver || null;
   let lastPreviewSrc = globalThis._ktemLastPreviewSrc || null;
@@ -308,6 +310,54 @@ function run() {
     answerPanel.style.maxHeight = "100%";
     answerPanel.style.overflowX = "hidden";
     answerPanel.style.overflowY = "auto";
+  }
+
+  function renderAnswerPanelMath() {
+    const answerPanel = document.getElementById("answer-panel");
+    const katex = globalThis.katex;
+    if (!answerPanel || !katex || typeof katex.renderToString !== "function") {
+      if (answerPanel && !answerMathRetry && answerMathRetryCount < 20) {
+        answerMathRetryCount += 1;
+        globalThis._ktemAnswerMathRetryCount = answerMathRetryCount;
+        answerMathRetry = window.setTimeout(() => {
+          answerMathRetry = null;
+          globalThis._ktemAnswerMathRetry = answerMathRetry;
+          renderAnswerPanelMath();
+        }, 300);
+        globalThis._ktemAnswerMathRetry = answerMathRetry;
+      }
+      return;
+    }
+    if (answerMathRetry) {
+      window.clearTimeout(answerMathRetry);
+      answerMathRetry = null;
+      globalThis._ktemAnswerMathRetry = answerMathRetry;
+    }
+    answerMathRetryCount = 0;
+    globalThis._ktemAnswerMathRetryCount = answerMathRetryCount;
+
+    answerPanel.querySelectorAll(".ktem-math-source").forEach((source) => {
+      if (source.dataset.ktemMathRendered === "true") {
+        return;
+      }
+      const latex = source.dataset.ktemLatex || source.textContent || "";
+      const displayMode = source.dataset.ktemDisplay === "true";
+      const rendered = document.createElement("span");
+      rendered.className = displayMode
+        ? "ktem-math ktem-math--display"
+        : "ktem-math ktem-math--inline";
+      try {
+        rendered.innerHTML = katex.renderToString(latex, {
+          displayMode,
+          throwOnError: false,
+          strict: "ignore",
+          trust: false,
+        });
+        source.replaceWith(rendered);
+      } catch (error) {
+        source.dataset.ktemMathRendered = "true";
+      }
+    });
   }
 
   function syncMainPdfPreview() {
@@ -2629,6 +2679,7 @@ function run() {
 
   bindKnowledgeGraphInteractions();
   enforceAnswerPanelScroll();
+  renderAnswerPanelMath();
   if (!globalThis._ktemSelectionBridgeRegistered) {
     window.addEventListener("message", (event) => {
       if (event.origin !== window.location.origin) {
@@ -2700,6 +2751,7 @@ function run() {
     answerPanelObserver = new MutationObserver(() => {
       enforceAnswerPanelScroll();
       bindKnowledgeGraphInteractions();
+      renderAnswerPanelMath();
     });
 
     answerPanelObserver.observe(document.body, {
