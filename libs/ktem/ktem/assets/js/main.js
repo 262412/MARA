@@ -287,27 +287,32 @@ function run() {
   }
 
   function enforceAnswerPanelScroll() {
-    let answerPanel = document.getElementById("answer-panel");
-    let answerExpand = document.getElementById("answer-expand");
-    if (!answerPanel || !answerExpand) {
+    const answerPanel = document.getElementById("answer-panel");
+    const answerExpand = document.getElementById("answer-expand");
+    const infoPanel = document.getElementById("chat-info-panel");
+    if (!answerPanel || !answerExpand || !infoPanel) {
       return;
     }
 
-    answerExpand.style.overflow = "hidden";
     answerExpand.style.minHeight = "0";
+    answerExpand.style.overflow = "visible";
 
     let node = answerPanel.parentElement;
     while (node && node !== answerExpand) {
       node.style.minHeight = "0";
-      node.style.height = "100%";
-      node.style.maxHeight = "100%";
-      node.style.overflow = "hidden";
+      node.style.height = "auto";
+      node.style.maxHeight = "none";
+      node.style.overflow = "visible";
       node = node.parentElement;
     }
 
-    answerPanel.style.minHeight = "0";
-    answerPanel.style.height = "100%";
-    answerPanel.style.maxHeight = "100%";
+    const answerRect = answerPanel.getBoundingClientRect();
+    const infoRect = infoPanel.getBoundingClientRect();
+    const availableHeight = Math.floor(infoRect.bottom - answerRect.top - 14);
+    const maxHeight = Math.max(132, availableHeight);
+
+    answerPanel.style.height = "auto";
+    answerPanel.style.maxHeight = `${maxHeight}px`;
     answerPanel.style.overflowX = "hidden";
     answerPanel.style.overflowY = "auto";
   }
@@ -2680,6 +2685,10 @@ function run() {
   bindKnowledgeGraphInteractions();
   enforceAnswerPanelScroll();
   renderAnswerPanelMath();
+  if (!globalThis._ktemAnswerPanelResizeBound) {
+    window.addEventListener("resize", enforceAnswerPanelScroll);
+    globalThis._ktemAnswerPanelResizeBound = true;
+  }
   if (!globalThis._ktemSelectionBridgeRegistered) {
     window.addEventListener("message", (event) => {
       if (event.origin !== window.location.origin) {

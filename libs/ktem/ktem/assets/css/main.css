@@ -345,10 +345,14 @@ button.selected {
   overflow-x: hidden !important;
 }
 
-#html-info-panel,
-#answer-panel {
+#html-info-panel {
   height: 100% !important;
   max-height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+#answer-panel {
   min-height: 0 !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
@@ -2500,6 +2504,7 @@ body.kg-viewer-open {
   --mara-topbar-height: 64px;
   --mara-statusbar-height: 44px;
   --workbench-viewport-height: calc(100vh - var(--mara-topbar-height) - var(--mara-statusbar-height) - 16px);
+  --answer-panel-max-height: clamp(132px, calc(var(--workbench-viewport-height) - 220px), 640px);
   --management-frame-max-height: clamp(320px, 52vh, 560px);
   --management-field-max-height: clamp(240px, 42vh, 460px);
   --management-detail-max-height: clamp(260px, calc(100vh - 430px), 520px);
@@ -3444,7 +3449,8 @@ body.ktem-dark-mode .gradio-container {
   min-height: 0 !important;
   max-height: var(--workbench-viewport-height) !important;
   height: var(--workbench-viewport-height) !important;
-  position: static !important;
+  position: sticky !important;
+  top: 0 !important;
   display: flex !important;
   flex-direction: column !important;
   padding: 16px 14px !important;
@@ -3754,6 +3760,8 @@ body.ktem-dark-mode .gradio-container {
   min-height: 0 !important;
   max-height: var(--workbench-viewport-height) !important;
   height: var(--workbench-viewport-height) !important;
+  position: sticky !important;
+  top: 0 !important;
   display: flex !important;
   flex-direction: column !important;
   flex-wrap: nowrap !important;
@@ -4200,6 +4208,8 @@ body.ktem-dark-mode .gradio-container {
   min-height: 0 !important;
   max-height: var(--workbench-viewport-height) !important;
   height: var(--workbench-viewport-height) !important;
+  position: sticky !important;
+  top: 0 !important;
   display: flex !important;
   flex-direction: column !important;
   flex-wrap: nowrap !important;
@@ -4225,6 +4235,8 @@ body.ktem-dark-mode .gradio-container {
 
 #answer-expand {
   order: 1;
+  min-height: 0 !important;
+  overflow: visible !important;
 }
 
 #info-expand {
@@ -4253,6 +4265,10 @@ body.ktem-dark-mode .gradio-container {
 #conversation-dock > div:last-child {
   gap: 12px !important;
   overflow: visible !important;
+}
+
+#answer-expand > div:last-child {
+  min-height: 0 !important;
 }
 
 .right-ask-tabs {
@@ -4330,10 +4346,14 @@ body.ktem-dark-mode .gradio-container {
 #answer-panel {
   min-height: 104px !important;
   height: auto !important;
+  max-height: var(--answer-panel-max-height);
   padding: 10px 12px !important;
   border: 1px solid #e5e7eb !important;
   border-radius: 8px !important;
   background: var(--app-surface) !important;
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 }
 
 #answer-expand #answer-panel {
