@@ -34,7 +34,9 @@ def format_chat_message_html(content: str, role: str) -> str:
 def _render_assistant_markdown(content: str) -> str:
     content = _normalize_model_line_breaks(content)
     protected_content, math_spans = _extract_math_spans(content)
-    normalized_content = _normalize_markdown_tables(protected_content)
+    sectioned_content = _normalize_inline_markdown_sections(protected_content)
+    tabled_content = _normalize_inline_pipe_tables(sectioned_content)
+    normalized_content = _normalize_markdown_tables(tabled_content)
     rendered = markdown.markdown(
         html.escape(normalized_content),
         extensions=[
@@ -94,6 +96,44 @@ def _normalize_model_line_breaks(content: str) -> str:
     normalized = re.sub(r"(?i)<br\s*/?>", "\n", normalized)
     normalized = re.sub(r"(?i)&lt;br\s*/?&gt;", "\n", normalized)
     return normalized
+
+
+def _normalize_inline_markdown_sections(content: str) -> str:
+    lines = []
+    section_pattern = re.compile(r"(?<!^)(?<!\n)\s+(\*\*[^*\n]{3,96}:\*\*)")
+    for line in content.splitlines():
+        if _is_table_row(line) or line.lstrip().startswith("```"):
+            lines.append(line)
+            continue
+        lines.append(section_pattern.sub(r"\n\n\1", line))
+    return "\n".join(lines)
+
+
+def _normalize_inline_pipe_tables(content: str) -> str:
+    output: list[str] = []
+    for line in content.splitlines():
+        output.extend(_inline_pipe_table_lines(line))
+    return "\n".join(output)
+
+
+def _inline_pipe_table_lines(line: str) -> list[str]:
+    if line.lstrip().startswith("```") or line.count("|") < 4:
+        return [line]
+
+    pipe_start = 0 if line.lstrip().startswith("|") else line.find(" | ")
+    if pipe_start < 0:
+        return [line]
+
+    prefix = line[:pipe_start].strip()
+    table_text = line[pipe_start:].strip()
+    cells = [cell.strip() for cell in table_text.strip("|").split("|")]
+    if len(cells) < 4 or len(cells) % 2 or any(not cell for cell in cells):
+        return [line]
+
+    rows = list(zip(cells[0::2], cells[1::2]))
+    table_lines = ["| Item | Summary |", "| --- | --- |"]
+    table_lines.extend(f"| {label} | {summary} |" for label, summary in rows)
+    return ([prefix, ""] if prefix else []) + table_lines
 
 
 def _normalize_latex(latex: str, display: bool) -> str:

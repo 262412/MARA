@@ -64,6 +64,38 @@ def test_assistant_answer_panel_normalizes_multiline_display_latex():
     assert "c &amp;= d" in html
 
 
+def test_assistant_answer_panel_breaks_inline_bold_sections_into_paragraphs():
+    content = (
+        "Based on the provided context, the slide introduces transformers. "
+        "**What is a Transformer:** A deep learning architecture based on attention. "
+        "**Part 1 - Attention:** Each token constructs Query, Key, and Value vectors."
+    )
+
+    html = _chat_page()._format_chat_message(content, "assistant")
+
+    assert html.count("<p>") >= 3
+    assert "<strong>What is a Transformer:</strong>" in html
+    assert "<strong>Part 1 - Attention:</strong>" in html
+
+
+def test_assistant_answer_panel_converts_inline_pipe_pairs_to_table():
+    content = (
+        'This slide is titled "Deep Dive to Attention". '
+        "| What it is | Scaled dot-product attention computes attention weights. "
+        "| Formula | $A = \\operatorname{softmax}(QK^T / \\sqrt{d_k})V$. "
+        "| Multi-head extension | Multiple $Q, K, V$ sets are computed in parallel."
+    )
+
+    html = _chat_page()._format_chat_message(content, "assistant")
+
+    assert "<table>" in html
+    assert ">Item</th>" in html
+    assert ">Summary</th>" in html
+    assert "<td>Formula</td>" in html
+    assert 'data-ktem-latex="A = \\operatorname{softmax}(QK^T / \\sqrt{d_k})V"' in html
+    assert "| What it is |" not in html
+
+
 def test_user_answer_panel_escapes_html_without_markdown_rendering():
     content = "<script>alert('x')</script>\n| not | a table |"
 
