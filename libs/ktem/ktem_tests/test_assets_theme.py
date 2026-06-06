@@ -80,17 +80,21 @@ def test_css_declares_semantic_research_palette():
 def test_light_palette_is_soft_gray_not_plain_white():
     css = _read_css()
 
-    assert "--app-bg: #edf2f7;" in css
-    assert "--app-surface: #f8fafc;" in css
-    assert "--app-surface-raised: #f3f6fa;" in css
-    assert "Theme Override: match provided dark-indigo gradient reference UI" not in css
-    assert "--theme-panel-glass" not in css
-    assert ".gradio-container label" in css
+    assert "--app-bg: #d2dde8;" in css
+    assert "--app-surface: #e0e8f0;" in css
+    assert "--app-surface-raised: #d9e3ed;" in css
+    assert "--app-text-muted: #475569;" in css
+    assert "--reading-surface: #f4efe3;" in css
+    assert "--reading-border: #d7c9ad;" in css
+    assert "--reading-muted: #51483b;" in css
+    assert "--app-text-muted: #cbd5e1;" in css
+    assert "gradio-app {\n  background: var(--app-bg) !important;" in css
+    assert "background: var(--reading-surface);" in css
+    assert "dark-indigo gradient" not in css and "--theme-panel-glass" not in css
+    assert ".gradio-container label" in css and '[data-testid="block-info"]' in css
     assert "--block-border-color: var(--app-border);" in css
-    assert '[data-testid="block-info"]' in css
     assert ".gradio-container .form" in css
-    assert "#ktem-theme-toggle" in css
-    assert "#mara-shell-actions" in css
+    assert "#ktem-theme-toggle" in css and "#mara-shell-actions" in css
     assert "position: static;" in css
     assert "background: var(--app-surface-raised)" in css
     assert "#app-version-badge" in css
