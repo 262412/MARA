@@ -147,6 +147,7 @@ def run_studio_artifact_regenerate_turn(
     artifact_type = _artifact_type(artifact)
     source_scope = _source_scope(artifact)
     source_ids = _source_ids(source_scope, fallback_source_ids)
+    note_ids = _split_note_ids(source_scope.get("note_ids", []))
     if not source_ids:
         raise ValueError("Latest artifact does not have source scope.")
 
@@ -174,6 +175,7 @@ def run_studio_artifact_regenerate_turn(
         task_type=artifact_type,
         agent_mode="auto",
         artifact_type=artifact_type,
+        note_ids=note_ids,
         controller_mode=controller_mode,
         route_policy=route_policy,
         verification_mode=verification_mode,

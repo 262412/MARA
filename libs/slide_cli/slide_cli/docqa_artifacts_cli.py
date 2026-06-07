@@ -5,6 +5,7 @@ from typing import Any
 import click
 
 from . import docqa_notebook_cli as notebook_cli
+from .docqa_artifact_evaluate_cli import register_artifact_evaluate_command
 from .docqa_options import ARTIFACT_TYPES
 
 
@@ -33,7 +34,7 @@ def register_artifact_commands(docqa: click.Group) -> None:
     _register_artifact_show_command(artifacts_group)
     _register_artifact_generate_command(artifacts_group)
     _register_artifact_export_command(artifacts_group)
-    _register_artifact_evaluate_command(artifacts_group)
+    register_artifact_evaluate_command(artifacts_group)
     _register_artifact_delete_command(artifacts_group)
     _register_artifact_save_note_command(artifacts_group)
     _register_artifact_regenerate_command(artifacts_group)
@@ -153,14 +154,15 @@ def _run_artifact_generate(
         count=count,
         note_records=note_records,
     )
-    source_scope = {
+    source_scope_input = {
         "mode": str(qa_scope or "document"),
         "source_ids": list(source_ids),
     }
     if page_number is not None:
-        source_scope["page"] = page_number
+        source_scope_input["page"] = page_number
     if note_records:
-        source_scope["note_ids"] = [str(item["note_id"]) for item in note_records]
+        source_scope_input["note_ids"] = [str(item["note_id"]) for item in note_records]
+    source_scope = _normalize_source_scope(source_scope_input)
     before_count = len(_notebook_artifacts(notebook))
     response = notebook_cli._run_docqa_turn(
         runtime,
@@ -340,45 +342,6 @@ def _register_artifact_delete_command(artifacts_group: click.Group) -> None:
         notebook_cli._echo_text(f"Deleted artifact: {artifact_id}")
 
 
-def _register_artifact_evaluate_command(artifacts_group: click.Group) -> None:
-    @artifacts_group.command("evaluate")
-    @click.argument("conversation_id", required=True)
-    @click.option("--artifact", "artifact_id", default="")
-    @click.option("--output", "output_path", default="", help="JSON report path.")
-    @notebook_cli._json_option
-    def artifacts_evaluate(
-        conversation_id,
-        artifact_id,
-        output_path,
-        json_output,
-    ):
-        runtime = notebook_cli._create_runtime()
-        notebook_cli._require_session(runtime, conversation_id)
-        service = notebook_cli._notebook_service()
-        notebook = service.get_notebook(conversation_id)
-        artifact = _notebook_artifact(notebook, artifact_id) if artifact_id else None
-        if artifact_id and artifact is None:
-            raise click.ClickException(f"Artifact '{artifact_id}' does not exist.")
-        report = (
-            _evaluate_artifact(artifact)
-            if artifact_id and artifact is not None
-            else _evaluate_artifact_collection(_notebook_artifacts(notebook))
-        )
-        payload = {
-            "conversation_id": conversation_id,
-            "artifact_id": str(artifact_id or ""),
-            "report": report,
-        }
-        if output_path:
-            payload["output_path"] = str(
-                _write_artifact_evaluation_report(report, output_path)
-            )
-        if json_output:
-            notebook_cli._echo_json(payload)
-            return
-        _print_artifact_evaluation_summary(payload)
-
-
 def _register_artifact_save_note_command(artifacts_group: click.Group) -> None:
     @artifacts_group.command("save-note")
     @click.argument("conversation_id", required=True)
@@ -419,7 +382,7 @@ def _register_artifact_regenerate_command(artifacts_group: click.Group) -> None:
         notebook = service.get_notebook(conversation_id)
         artifact = _required_artifact(service, conversation_id, artifact_id)
         artifact_type = str(artifact.get("type") or "").strip()
-        source_scope = dict(artifact.get("source_scope") or {})
+        source_scope = _normalize_source_scope(artifact.get("source_scope") or {})
         source_ids = list(source_scope.get("source_ids") or [])
         if not source_ids:
             source_ids = list(notebook.get("selected_source_ids") or [])
@@ -428,18 +391,20 @@ def _register_artifact_regenerate_command(artifacts_group: click.Group) -> None:
 
         before_count = len(_notebook_artifacts(notebook))
         prompt = str(artifact.get("prompt") or "").strip()
+        note_ids = list(source_scope.get("note_ids") or [])
         response = notebook_cli._run_docqa_turn(
             runtime,
             prompt=prompt
             or f"Regenerate a source-grounded {artifact_type.replace('_', ' ')}.",
             conversation_id=conversation_id,
             selected_file_ids=source_ids,
-            qa_scope=str(source_scope.get("mode") or "document").replace("_", "-"),
+            qa_scope=str(source_scope.get("mode") or "document"),
             page_number=source_scope.get("page"),
             reasoning_type="mara",
             task_type=artifact_type,
             agent_mode="auto",
             artifact_type=artifact_type,
+            note_ids=note_ids,
         )
         regenerated = _new_or_captured_artifact(
             service,
@@ -505,6 +470,12 @@ def _new_or_captured_artifact(
     )
 
 
+def _normalize_source_scope(value: Any) -> dict[str, Any]:
+    from ktem.docqa.artifact_models import normalize_source_scope
+
+    return normalize_source_scope(value)
+
+
 def _required_artifact(
     service, conversation_id: str, artifact_id: str
 ) -> dict[str, Any]:
@@ -529,37 +500,6 @@ def _build_artifact_note_fields(artifact):
     from ktem.docqa.artifact_service import build_artifact_note_fields
 
     return build_artifact_note_fields(artifact)
-
-
-def _evaluate_artifact(artifact):
-    from ktem.docqa.artifact_evaluation import evaluate_artifact
-
-    return evaluate_artifact(artifact)
-
-
-def _evaluate_artifact_collection(artifacts):
-    from ktem.docqa.artifact_evaluation import evaluate_artifact_collection
-
-    return evaluate_artifact_collection(artifacts)
-
-
-def _write_artifact_evaluation_report(report, output_path):
-    from ktem.docqa.artifact_evaluation import write_artifact_evaluation_report
-
-    return write_artifact_evaluation_report(report, output_path)
-
-
-def _print_artifact_evaluation_summary(payload: dict[str, Any]) -> None:
-    report = payload.get("report", {})
-    tiers = report.get("metric_tiers", {}) if isinstance(report, dict) else {}
-    proxy = tiers.get("proxy_metric", {}) if isinstance(tiers, dict) else {}
-    metric = "mean_citation_coverage"
-    if "citation_coverage" in proxy:
-        metric = "citation_coverage"
-    notebook_cli._echo_text(f"proxy_metric.{metric}={proxy.get(metric, 0.0)}")
-    output_path = payload.get("output_path")
-    if output_path:
-        notebook_cli._echo_text(str(output_path))
 
 
 def _artifact_prompt(

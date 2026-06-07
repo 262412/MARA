@@ -65,7 +65,7 @@ def artifact_label(artifact_type: Any) -> str:
 def normalize_source_scope(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return deepcopy(_DEFAULT_SCOPE)
-    mode = str(value.get("mode") or "document").strip() or "document"
+    mode = _normalize_scope_mode(value.get("mode"))
     source_ids = _unique_text(value.get("source_ids", []))
     scope: dict[str, Any] = {"mode": mode, "source_ids": source_ids}
     page = value.get("page")
@@ -75,6 +75,17 @@ def normalize_source_scope(value: Any) -> dict[str, Any]:
     if note_ids:
         scope["note_ids"] = note_ids
     return scope
+
+
+def _normalize_scope_mode(value: Any) -> str:
+    mode = str(value or "document").strip().lower().replace("-", "_")
+    if not mode:
+        return "document"
+    if mode in {"doc", "whole_document", "full_document"}:
+        return "document"
+    if mode in {"multi", "multi_doc", "multi_docs", "multi_document"}:
+        return "multi_document"
+    return mode
 
 
 def build_artifact_record(

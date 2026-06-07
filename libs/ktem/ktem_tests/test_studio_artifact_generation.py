@@ -231,6 +231,7 @@ def test_run_studio_artifact_regenerate_turn_uses_saved_scope_and_prompt():
             "source_scope": {
                 "mode": "document",
                 "source_ids": ["file-1", "file-2"],
+                "note_ids": ["note-1"],
             },
         },
         fallback_source_ids=[],
@@ -261,6 +262,7 @@ def test_run_studio_artifact_regenerate_turn_uses_saved_scope_and_prompt():
     assert request.prompt == "Original quiz prompt."
     assert request.artifact_type == "quiz"
     assert request.selected_file_ids == ["file-1", "file-2"]
+    assert request.note_ids == ["note-1"]
     assert request.qa_scope == "document"
     assert request.page_number == 1
 

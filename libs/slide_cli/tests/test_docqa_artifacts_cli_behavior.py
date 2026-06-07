@@ -474,6 +474,43 @@ def test_docqa_artifacts_save_note_creates_notebook_note(monkeypatch):
     assert "launch.pdf p.3" in note["text"]
 
 
+def test_docqa_artifacts_generate_canonicalizes_multi_document_source_scope(
+    monkeypatch,
+):
+    runtime = _DummyRuntime()
+    service = _ArtifactNotebookService()
+    monkeypatch.setattr("slide_cli.docqa_cli.create_docqa_runtime", lambda: runtime)
+    monkeypatch.setattr(
+        "slide_cli.docqa_notebook_cli._notebook_service",
+        lambda: service,
+    )
+
+    result = CliRunner().invoke(
+        docqa,
+        [
+            "artifacts",
+            "generate",
+            "conv-1",
+            "--type",
+            "quiz",
+            "--scope",
+            "multi-document",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    artifact = _extract_json_payload(result.output)
+    assert artifact["source_scope"] == {
+        "mode": "multi_document",
+        "source_ids": ["file-1"],
+    }
+    assert service.notebooks["conv-1"]["artifacts"][0]["source_scope"] == {
+        "mode": "multi_document",
+        "source_ids": ["file-1"],
+    }
+
+
 def test_docqa_artifacts_regenerate_uses_saved_scope_and_prompt(monkeypatch):
     runtime = _DummyRuntime()
     service = _ArtifactNotebookService()
@@ -482,7 +519,11 @@ def test_docqa_artifacts_regenerate_uses_saved_scope_and_prompt(monkeypatch):
             "artifact_id": "artifact-1",
             "type": "quiz",
             "prompt": "Original quiz prompt.",
-            "source_scope": {"mode": "document", "source_ids": ["file-1"]},
+            "source_scope": {
+                "mode": "document",
+                "source_ids": ["file-1"],
+                "note_ids": ["note-1"],
+            },
             "payload": {"multiple_choice": []},
         }
     )
@@ -508,5 +549,8 @@ def test_docqa_artifacts_regenerate_uses_saved_scope_and_prompt(monkeypatch):
     request = runtime.requests[0]
     assert request.prompt == "Original quiz prompt."
     assert request.selected_file_ids == ["file-1"]
+    assert request.note_ids == ["note-1"]
     assert request.artifact_type == "quiz"
-    assert _extract_json_payload(result.output)["type"] == "quiz"
+    regenerated = _extract_json_payload(result.output)["regenerated"]
+    assert regenerated["type"] == "quiz"
+    assert regenerated["source_scope"]["note_ids"] == ["note-1"]

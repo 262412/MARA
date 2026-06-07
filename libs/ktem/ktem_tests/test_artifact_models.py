@@ -3,6 +3,7 @@ from ktem.docqa.artifact_models import (
     SUPPORTED_ARTIFACT_TYPES,
     build_artifact_record,
     normalize_artifact,
+    normalize_source_scope,
 )
 
 
@@ -80,3 +81,19 @@ def test_build_artifact_record_creates_source_grounded_metadata():
     }
     assert artifact["created_at"] == "2026-06-07T09:05:00+00:00"
     assert artifact["updated_at"] == "2026-06-07T09:05:00+00:00"
+
+
+def test_normalize_source_scope_canonicalizes_multi_document_aliases():
+    scope = normalize_source_scope(
+        {
+            "mode": "multi-document",
+            "source_ids": ["file-1", "file-1", "file-2"],
+            "note_ids": ["note-1", "note-1"],
+        }
+    )
+
+    assert scope == {
+        "mode": "multi_document",
+        "source_ids": ["file-1", "file-2"],
+        "note_ids": ["note-1"],
+    }
