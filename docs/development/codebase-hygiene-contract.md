@@ -98,8 +98,14 @@ Use this workflow for every non-trivial change.
 
 ## Complexity Budgets
 
-These budgets are soft limits. Crossing them is allowed only with a short
-explanation and follow-up task.
+These budgets are review triggers, not hard line-count targets. They must never
+be used as justification to remove behavior, reduce test coverage, degrade
+performance, hide data in dense literals, or make code harder to read. Prefer
+clear, complete code over compact code that exists only to satisfy a number.
+
+Crossing a budget is allowed when the larger shape is the clearest correct
+implementation. Record a short explanation and a follow-up task when the size
+creates real maintenance risk.
 
 - New function: target under 80 lines.
 - New class: target under 300 lines.
@@ -112,6 +118,40 @@ explanation and follow-up task.
 
 If a touched function is already above budget, do not make it larger unless the
 change is a pure bug fix and a follow-up cleanup is recorded.
+
+## Legitimate Large Code
+
+Some code is legitimately long. Size alone is not a "big ball of mud" signal
+when the code remains cohesive, readable, and well covered.
+
+Acceptable large-code cases include:
+
+- Generated code, protocol schemas, migration definitions, or static lookup
+  tables.
+- Test fixtures, expected dictionaries, golden payloads, and characterization
+  data where expanded formatting is clearer than compact formatting.
+- Declarative UI or configuration blocks that would become less readable if
+  split mechanically.
+- Performance-sensitive code where splitting creates measurable overhead or
+  obscures the algorithm.
+- Compatibility adapters that must preserve several external shapes in one
+  audited place.
+
+For legitimate large code:
+
+- Keep behavior complete. Do not remove features, edge cases, validation,
+  diagnostics, or tests to satisfy a line budget.
+- Keep readable formatting. Do not compress dictionaries, expected payloads,
+  prompts, schemas, or assertions into dense forms only to reduce line count.
+- Split only at real responsibility boundaries such as parser, service,
+  renderer, controller, adapter, or data definition.
+- Add or preserve characterization coverage before changing behavior.
+- If the budget is crossed intentionally, document why the larger shape is
+  clearer or safer and record any useful follow-up cleanup.
+
+Mechanical compliance is forbidden. Do not merge statements, hide logic in
+clever comprehensions, shorten names, remove comments that explain non-obvious
+behavior, or degrade performance merely to stay under a numeric budget.
 
 ## Debt Baseline And Ratchet
 
@@ -262,6 +302,8 @@ Before merging, answer these questions:
 - Did every moved behavior have characterization coverage?
 - Did the change avoid adding new eager imports?
 - Did the change avoid growing existing large functions or classes?
+- Did the change avoid mechanical line-count compliance that harms behavior,
+  readability, test clarity, diagnostics, or performance?
 - Did the hygiene ratchet pass, or is any baseline update justified and
   documented?
 - Did broad exception handling remain user-actionable?
@@ -284,6 +326,8 @@ Stop and reassess before continuing if any of these happen:
 - A `MARA` or `MARA-cli` contract test fails.
 - A Gradio event chain changes order without an intentional behavior note.
 - A CLI option, JSON key, DB schema, or persisted session shape changes.
+- A change removes behavior, compresses readable data, weakens tests, or
+  degrades performance only to satisfy a line-count budget.
 - A refactor requires deleting dynamic/public-looking methods without call-site
   proof.
 - The hygiene ratchet fails without an intentional risk note and follow-up.
