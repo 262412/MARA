@@ -126,6 +126,10 @@ def _make_mara_runtime():
     runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
     runtime._web_search_cls = None
     runtime.file_index = None
+    runtime._preview = SimpleNamespace(
+        resolve_file_name=lambda _file_id: "alpha.pdf",
+        resolve_file_path=lambda _file_id: "",
+    )
     runtime.knowledge_graph = None
 
     session_info = runtime_module.DocQASession(
@@ -155,7 +159,7 @@ def test_runtime_response_preserves_mara_agent_outputs(monkeypatch):
     monkeypatch.setattr(
         runtime_module._nb,
         "save_captured_artifact",
-        lambda _conversation_id, _artifact: None,
+        lambda _conversation_id, _artifact, **_metadata: None,
     )
 
     runtime = _make_mara_runtime()
@@ -190,6 +194,10 @@ def test_runtime_persists_mara_artifact_to_notebook(monkeypatch):
     runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
     runtime._web_search_cls = None
     runtime.file_index = None
+    runtime._preview = SimpleNamespace(
+        resolve_file_name=lambda _file_id: "alpha.pdf",
+        resolve_file_path=lambda _file_id: "",
+    )
     runtime.knowledge_graph = None
     runtime.get_conversation_graph_cache = lambda _conversation_id: {}
     runtime.load_session = lambda _conversation_id: runtime_module.DocQASession(
@@ -214,6 +222,15 @@ def test_runtime_persists_mara_artifact_to_notebook(monkeypatch):
             runtime_module.DocQARequest(
                 prompt="Create a study guide.",
                 conversation_id=conversation_id,
+                artifact_type="study_guide",
+                task_type="study_guide",
+                active_file_id="file-1",
+                active_file_name="alpha.pdf",
+                page_number=2,
+                qa_scope="page",
+                selected_text="Page evidence.",
+                graph_source_ids=["file-1", "file-2"],
+                note_ids=["note-1"],
             )
         )
 
@@ -224,6 +241,10 @@ def test_runtime_persists_mara_artifact_to_notebook(monkeypatch):
 
         artifact = row.data_source[NOTEBOOK_KEY]["artifacts"][0]
         assert artifact["type"] == "study_guide"
+        assert artifact["prompt"] == "Create a study guide."
+        expected_scope = {"mode": "page", "source_ids": ["file-1", "file-2"], "page": 2}
+        expected_scope["note_ids"] = ["note-1"]
+        assert artifact["source_scope"] == expected_scope
         assert artifact["payload"] == {"type": "study_guide", "sections": []}
     finally:
         with Session(engine) as session:

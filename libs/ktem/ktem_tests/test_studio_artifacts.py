@@ -1,6 +1,8 @@
 from ktem.db.models import Conversation, engine
 from ktem.docqa._runtime_notebook import NOTEBOOK_KEY
 from ktem.pages.chat.studio_artifacts import (
+    delete_latest_artifact_update,
+    export_latest_artifact_update,
     extract_mara_artifact,
     render_controller_trace_html,
     render_conversation_notebook_panel_html,
@@ -64,6 +66,75 @@ def test_render_studio_artifacts_html_summarizes_generated_artifact():
     assert "Source-grounded MARA outline" in html
     assert "paper.pdf p.3" in html
     assert "Grounded bullet" in html
+
+
+def test_render_studio_artifacts_html_shows_saved_artifact_detail_actions():
+    html = render_studio_artifacts_html(
+        {
+            "artifact_id": "artifact-1",
+            "type": "briefing_doc",
+            "title": "Launch briefing",
+            "status": "ready",
+            "prompt": "Create an executive briefing.",
+            "source_scope": {
+                "mode": "document",
+                "source_ids": ["file-1"],
+                "page": 3,
+            },
+            "payload": {
+                "sections": [
+                    {
+                        "title": "Finding",
+                        "summary": "Source-grounded launch evidence.",
+                    }
+                ],
+                "audit_note": "Full content audit trail.",
+            },
+            "citations": [
+                {
+                    "citation_id": "c1",
+                    "source_name": "launch.pdf",
+                    "page_label": "3",
+                }
+            ],
+            "exports": [{"format": "md", "path": "launch.md"}],
+        }
+    )
+
+    assert "studio-artifacts-card--ready" in html
+    assert "Launch briefing" in html
+    assert "Create an executive briefing." in html
+    assert "document" in html
+    assert "file-1" in html
+    assert "launch.pdf p.3" in html
+    assert "launch.md" in html
+    assert "Full Content" in html
+    assert "Full content audit trail." in html
+    assert "data-copy-text" in html
+    assert "navigator.clipboard.writeText" in html
+    for action in ["Copy", "Save as Note", "Export", "Delete", "Regenerate"]:
+        assert action in html
+
+
+def test_render_studio_artifacts_html_shows_running_and_failed_states():
+    running = render_studio_artifacts_html(
+        {"type": "audio_overview", "status": "running", "title": "Audio overview"}
+    )
+    failed = render_studio_artifacts_html(
+        {
+            "type": "video_overview",
+            "status": "failed",
+            "title": "Video overview",
+            "generation": {"error": "adapter unavailable"},
+        }
+    )
+
+    assert "studio-artifacts-card--running" in running
+    assert "Running" in running
+    assert "Audio Overview" in running
+    assert "studio-artifacts-card--failed" in failed
+    assert "Failed" in failed
+    assert "adapter unavailable" in failed
 
 
 def test_render_studio_trace_panel_keeps_trace_before_artifacts():
@@ -183,6 +254,217 @@ def test_render_conversation_notebook_panel_html_reads_saved_notebook_state():
         assert "1 selected" in html
         assert "Saved answer" in html
         assert "Study Guide" in html
+    finally:
+        with Session(engine) as session:
+            cleanup_row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one_or_none()
+            if cleanup_row is not None:
+                session.delete(cleanup_row)
+                session.commit()
+
+
+def test_delete_latest_artifact_update_removes_latest_artifact_and_refreshes_panel():
+    conversation = Conversation(user="user-1")
+    conversation.data_source = {
+        NOTEBOOK_KEY: {
+            "selected_source_ids": ["file-1"],
+            "notes": [],
+            "artifacts": [
+                {
+                    "artifact_id": "artifact-1",
+                    "type": "study_guide",
+                    "title": "Older guide",
+                    "payload": {"overview": "Older."},
+                },
+                {
+                    "artifact_id": "artifact-2",
+                    "type": "briefing_doc",
+                    "title": "Launch briefing",
+                    "payload": {"sections": []},
+                },
+            ],
+        }
+    }
+    with Session(engine) as session:
+        session.add(conversation)
+        session.commit()
+        session.refresh(conversation)
+        conversation_id = conversation.id
+
+    try:
+        html = delete_latest_artifact_update(conversation_id)
+
+        assert "1 saved" in html
+        assert "Study Guide" in html
+        with Session(engine) as session:
+            row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one()
+        artifacts = row.data_source[NOTEBOOK_KEY]["artifacts"]
+        assert [item["artifact_id"] for item in artifacts] == ["artifact-1"]
+    finally:
+        with Session(engine) as session:
+            cleanup_row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one_or_none()
+            if cleanup_row is not None:
+                session.delete(cleanup_row)
+                session.commit()
+
+
+def test_export_latest_artifact_update_writes_markdown_and_records_export(tmp_path):
+    conversation = Conversation(user="user-1")
+    conversation.data_source = {
+        NOTEBOOK_KEY: {
+            "selected_source_ids": ["file-1"],
+            "notes": [],
+            "artifacts": [
+                {
+                    "artifact_id": "artifact-1",
+                    "type": "briefing_doc",
+                    "title": "Launch briefing",
+                    "payload": {"sections": [{"summary": "Grounded export."}]},
+                    "exports": [],
+                }
+            ],
+        }
+    }
+    with Session(engine) as session:
+        session.add(conversation)
+        session.commit()
+        session.refresh(conversation)
+        conversation_id = conversation.id
+
+    try:
+        html = export_latest_artifact_update(conversation_id, root_dir=tmp_path)
+
+        exported_path = tmp_path / conversation_id / "artifact-1.md"
+        assert exported_path.exists()
+        assert "Grounded export." in exported_path.read_text(encoding="utf-8")
+        assert "artifact-1.md" in html
+        with Session(engine) as session:
+            row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one()
+        exports = row.data_source[NOTEBOOK_KEY]["artifacts"][0]["exports"]
+        assert exports[0]["format"] == "md"
+        assert exports[0]["path"] == str(exported_path)
+    finally:
+        with Session(engine) as session:
+            cleanup_row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one_or_none()
+            if cleanup_row is not None:
+                session.delete(cleanup_row)
+                session.commit()
+
+
+def test_export_latest_artifact_update_writes_selected_format_and_records_export(
+    tmp_path,
+):
+    conversation = Conversation(user="user-1")
+    conversation.data_source = {
+        NOTEBOOK_KEY: {
+            "selected_source_ids": ["file-1"],
+            "notes": [],
+            "artifacts": [
+                {
+                    "artifact_id": "artifact-1",
+                    "type": "briefing_doc",
+                    "title": "Launch briefing",
+                    "payload": {"sections": [{"summary": "Grounded export."}]},
+                    "exports": [],
+                }
+            ],
+        }
+    }
+    with Session(engine) as session:
+        session.add(conversation)
+        session.commit()
+        session.refresh(conversation)
+        conversation_id = conversation.id
+
+    try:
+        html = export_latest_artifact_update(
+            conversation_id,
+            export_format="html",
+            root_dir=tmp_path,
+        )
+
+        exported_path = tmp_path / conversation_id / "artifact-1.html"
+        assert exported_path.exists()
+        assert "<!doctype html>" in exported_path.read_text(encoding="utf-8")
+        assert "artifact-1.html" in html
+        with Session(engine) as session:
+            row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one()
+        exports = row.data_source[NOTEBOOK_KEY]["artifacts"][0]["exports"]
+        assert exports[0]["format"] == "html"
+        assert exports[0]["path"] == str(exported_path)
+    finally:
+        with Session(engine) as session:
+            cleanup_row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one_or_none()
+            if cleanup_row is not None:
+                session.delete(cleanup_row)
+                session.commit()
+
+
+def test_export_latest_artifact_update_uses_configured_media_adapter(
+    monkeypatch,
+    tmp_path,
+):
+    conversation = Conversation(user="user-1")
+    conversation.data_source = {
+        NOTEBOOK_KEY: {
+            "selected_source_ids": ["file-1"],
+            "notes": [],
+            "artifacts": [
+                {
+                    "artifact_id": "artifact-1",
+                    "type": "audio_overview",
+                    "title": "Audio",
+                    "payload": {"media_status": "script_only", "script": []},
+                    "exports": [],
+                }
+            ],
+        }
+    }
+
+    def media_adapter(_artifact, _export_format, output_path):
+        output_path.write_bytes(b"configured-audio")
+        return output_path
+
+    monkeypatch.setattr(
+        "ktem.docqa.artifact_exports.configured_media_export_adapter",
+        lambda: media_adapter,
+    )
+    with Session(engine) as session:
+        session.add(conversation)
+        session.commit()
+        session.refresh(conversation)
+        conversation_id = conversation.id
+
+    try:
+        html = export_latest_artifact_update(
+            conversation_id,
+            export_format="mp3",
+            root_dir=tmp_path,
+        )
+
+        exported_path = tmp_path / conversation_id / "artifact-1.mp3"
+        assert exported_path.read_bytes() == b"configured-audio"
+        assert "artifact-1.mp3" in html
+        with Session(engine) as session:
+            row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one()
+        exports = row.data_source[NOTEBOOK_KEY]["artifacts"][0]["exports"]
+        assert exports[0]["format"] == "mp3"
+        assert exports[0]["path"] == str(exported_path)
     finally:
         with Session(engine) as session:
             cleanup_row = session.exec(

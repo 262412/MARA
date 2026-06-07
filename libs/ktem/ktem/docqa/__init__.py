@@ -6,6 +6,12 @@ from . import (
     _runtime_sessions,
     _runtime_turn,
 )
+from .artifact_models import (
+    ARTIFACT_LABELS,
+    ARTIFACT_STATUSES,
+    SUPPORTED_ARTIFACT_TYPES,
+    normalize_artifact,
+)
 from .controller import (
     ControllerTrace,
     RetrieveDecision,
@@ -66,6 +72,10 @@ __all__ = [
     "build_workflow_plan",
     "build_evidence_bundle",
     "execute_controller_turn",
+    "ARTIFACT_LABELS",
+    "ARTIFACT_STATUSES",
+    "SUPPORTED_ARTIFACT_TYPES",
+    "normalize_artifact",
     "page_image_records_from_documents",
     "element_records_from_documents",
     "_runtime_selection",

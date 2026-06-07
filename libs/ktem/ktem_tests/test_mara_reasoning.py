@@ -312,6 +312,54 @@ def test_mara_slide_outline_artifact_builds_evidence_backed_slides():
     ]
 
 
+def test_mara_new_studio_artifact_types_are_generated_from_evidence():
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.artifact_type = "data_table"
+    pipeline._mara_last_docs = [
+        RetrievedDocument(
+            text="Evaluation compares MARA fast and thorough modes.",
+            id_="table-evidence",
+            metadata={
+                "file_id": "deck-1",
+                "file_name": "thesis.pptx",
+                "page_label": "7",
+            },
+        )
+    ]
+
+    artifact = pipeline.build_artifact({"task_type": "qa", "modalities": ["text"]})
+
+    assert artifact is not None
+    assert artifact["type"] == "data_table"
+    assert artifact["rows"] == [
+        ["thesis.pptx", "7", "Evaluation compares MARA fast and thorough modes."]
+    ]
+    assert artifact["row_citations"] == [
+        {"row": 0, "citation_refs": ["table-evidence"], "source_ids": ["deck-1"]}
+    ]
+
+
+def test_mara_media_artifact_generates_script_plan_without_adapter():
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.artifact_type = "audio_overview"
+    pipeline._mara_last_docs = [
+        RetrievedDocument(
+            text="Verifier checks answer support before final response.",
+            id_="audio-evidence",
+            metadata={"file_id": "file-2", "file_name": "agent.md"},
+        )
+    ]
+
+    artifact = pipeline.build_artifact({"task_type": "qa", "modalities": ["text"]})
+
+    assert artifact is not None
+    assert artifact["type"] == "audio_overview"
+    assert artifact["media_status"] == "script_only"
+    assert artifact["script"][0]["text"] == (
+        "Verifier checks answer support before final response."
+    )
+
+
 def test_mara_thorough_mode_retries_once_when_first_retrieval_has_no_evidence(
     monkeypatch,
 ):

@@ -24,6 +24,7 @@ class DocQARequest:
     task_type: str | None = None
     agent_mode: str | None = None
     artifact_type: str | None = None
+    note_ids: list[str] | None = None
     controller_mode: str | None = None
     route_policy: str | None = None
     planner_model: str | None = None

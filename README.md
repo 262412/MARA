@@ -115,6 +115,15 @@ The default runtime registers these reasoning pipelines:
 - `flashcards`
 - `mindmap`
 - `slide_outline`
+- `briefing_doc`
+- `faq`
+- `timeline`
+- `custom_report`
+- `data_table`
+- `infographic`
+- `slide_deck`
+- `audio_overview`
+- `video_overview`
 
 Saved artifact types include:
 
@@ -123,6 +132,15 @@ Saved artifact types include:
 - `flashcards`
 - `mindmap`
 - `slide_outline`
+- `briefing_doc`
+- `faq`
+- `timeline`
+- `custom_report`
+- `data_table`
+- `infographic`
+- `slide_deck`
+- `audio_overview`
+- `video_overview`
 
 #### Document Formats And Indexing
 
@@ -360,6 +378,12 @@ MARA docqa notes convert-source <conversation-id> --note <note-id>
 MARA docqa artifacts generate <conversation-id> --type quiz
 MARA docqa artifacts list <conversation-id>
 MARA docqa artifacts show <conversation-id> --artifact <artifact-id>
+MARA docqa artifacts export <conversation-id> --artifact <artifact-id> --format md
+MARA docqa artifacts evaluate <conversation-id> --artifact <artifact-id> --json
+MARA docqa artifacts evaluate <conversation-id> --json
+MARA docqa artifacts save-note <conversation-id> --artifact <artifact-id>
+MARA docqa artifacts regenerate <conversation-id> --artifact <artifact-id>
+MARA docqa artifacts delete <conversation-id> --artifact <artifact-id>
 ```
 
 #### Model Routing
@@ -509,9 +533,11 @@ uv run --python 3.10 python -m pytest -q
 ### Current Boundaries
 
 - Legacy GraphRAG variables and compatibility hooks remain, but the default single-page QA path does not depend on Nano / Light / MS GraphRAG.
-- NotebookLM-style notes, sources, and artifacts are present in the CLI; richer Web UI notebook panels remain future work.
-- Audio, video, public sharing, cloud sync, and mobile clients are outside the current v1 scope.
-- Full PPTX generation remains an extension path; the stable artifact is source-grounded `slide_outline`, alongside existing deck inspection, review, export, and patch-apply capabilities.
+- NotebookLM-style notes, sources, and artifacts are present in the CLI and right-side Studio panel.
+- Audio and video overview artifacts generate source-grounded scripts or scene plans by default; `mp3` and `mp4` export require `KH_MARA_ARTIFACT_MEDIA_EXPORT_ADAPTER`.
+- Data table, infographic, slide outline, and slide deck artifacts support local export paths such as CSV, SVG, Markdown, HTML, JSON, and PPTX.
+- Artifact evaluation reports local `proxy_metric` values and labels `external_metric` / `paper_grade_metric` as not configured or not claimed unless external benchmark adapters are run. Passing `--artifact` evaluates one artifact; omitting it summarizes all notebook artifacts, including source-format coverage across PDF, PPTX, DOCX, and image evidence.
+- Public sharing, cloud sync, and mobile clients are outside the current v1 scope.
 
 ### License
 

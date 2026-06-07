@@ -5,8 +5,6 @@ from typing import Any
 
 import click
 
-from .docqa_options import ARTIFACT_TYPES
-
 
 def _notebook_service():
     from ktem.docqa import _runtime_notebook
@@ -327,116 +325,6 @@ def _register_source_guide_command(sources_group: click.Group) -> None:
 
 
 def _register_artifact_commands(docqa: click.Group) -> None:
-    @docqa.group("artifacts", short_help="Manage generated artifacts")
-    def artifacts_group():
-        """Manage saved MARA study artifacts for a DocQA conversation."""
+    from .docqa_artifacts_cli import register_artifact_commands
 
-    @artifacts_group.command("list")
-    @click.argument("conversation_id", required=True)
-    @_json_option
-    def artifacts_list(conversation_id, json_output):
-        runtime = _create_runtime()
-        _require_session(runtime, conversation_id)
-        notebook = _notebook_service().get_notebook(conversation_id)
-        artifacts = _notebook_artifacts(notebook)
-        if json_output:
-            _echo_json(artifacts)
-            return
-        if not artifacts:
-            _echo_text("No artifacts.")
-            return
-        for artifact in artifacts:
-            _print_artifact(artifact)
-
-    _register_artifact_show_command(artifacts_group)
-    _register_artifact_generate_command(artifacts_group)
-
-
-def _register_artifact_show_command(artifacts_group: click.Group) -> None:
-    @artifacts_group.command("show")
-    @click.argument("conversation_id", required=True)
-    @click.option("--artifact", "artifact_id", required=True)
-    @_json_option
-    def artifacts_show(conversation_id, artifact_id, json_output):
-        runtime = _create_runtime()
-        _require_session(runtime, conversation_id)
-        notebook = _notebook_service().get_notebook(conversation_id)
-        artifact = _notebook_artifact(notebook, artifact_id)
-        if artifact is None:
-            raise click.ClickException(f"Artifact '{artifact_id}' does not exist.")
-        if json_output:
-            _echo_json(artifact)
-            return
-        _print_artifact(artifact)
-        _echo_json(artifact.get("payload", {}))
-
-
-def _register_artifact_generate_command(artifacts_group: click.Group) -> None:
-    @artifacts_group.command("generate")
-    @click.argument("conversation_id", required=True)
-    @click.option(
-        "--type",
-        "artifact_type",
-        required=True,
-        type=click.Choice(ARTIFACT_TYPES),
-        help="MARA Studio artifact type to generate.",
-    )
-    @click.option("--prompt", default="", help="Generation instruction.")
-    @click.option("--file", "file_refs", multiple=True)
-    @click.option(
-        "--agent-mode",
-        default="auto",
-        type=click.Choice(("auto", "fast", "thorough")),
-        show_default=True,
-    )
-    @_json_option
-    def artifacts_generate(
-        conversation_id,
-        artifact_type,
-        prompt,
-        file_refs,
-        agent_mode,
-        json_output,
-    ):
-        runtime = _create_runtime()
-        _require_session(runtime, conversation_id)
-        service = _notebook_service()
-        notebook = service.get_notebook(conversation_id)
-        source_ids = list(notebook.get("selected_source_ids", []))
-        if file_refs:
-            source_ids = [
-                record.file_id for record in runtime.resolve_file_refs(list(file_refs))
-            ]
-        if not source_ids:
-            raise click.ClickException(
-                "Select sources or pass --file before generating."
-            )
-
-        before_count = len(_notebook_artifacts(notebook))
-        response = _run_docqa_turn(
-            runtime,
-            prompt=prompt
-            or f"Generate a source-grounded {artifact_type.replace('_', ' ')}.",
-            conversation_id=conversation_id,
-            selected_file_ids=source_ids,
-            qa_scope="document",
-            reasoning_type="mara",
-            task_type=artifact_type,
-            agent_mode=agent_mode,
-            artifact_type=artifact_type,
-        )
-        artifacts = _notebook_artifacts(service.get_notebook(conversation_id))
-        artifact = artifacts[-1] if len(artifacts) > before_count else None
-        if artifact is None:
-            payload = getattr(response, "artifact", None)
-            if payload is None:
-                raise click.ClickException("MARA did not return an artifact.")
-            artifact = service.save_artifact_to_conversation(
-                conversation_id,
-                artifact_type=artifact_type,
-                payload=payload,
-            )
-        if json_output:
-            _echo_json(artifact)
-            return
-        _print_artifact(artifact)
+    register_artifact_commands(docqa)

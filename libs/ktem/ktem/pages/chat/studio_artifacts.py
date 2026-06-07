@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import html
+import json
+from pathlib import Path
 from typing import Any
 
-_ARTIFACT_LABELS = {
-    "study_guide": "Study Guide",
-    "quiz": "Quiz",
-    "flashcards": "Flashcards",
-    "mindmap": "Mind Map",
-    "slide_outline": "Slide Outline",
-}
+from ktem.docqa.artifact_models import ARTIFACT_LABELS
+
+_ARTIFACT_LABELS = ARTIFACT_LABELS
+_ARTIFACT_GROUPS = (
+    ("Quick Generate", ("study_guide", "quiz", "flashcards", "mindmap")),
+    ("Reports", ("briefing_doc", "faq", "timeline", "custom_report")),
+    ("Visual / Export", ("data_table", "infographic", "slide_outline", "slide_deck")),
+    ("Media", ("audio_overview", "video_overview")),
+)
 _ROUTE_LABELS = {
     "direct": "Direct",
     "doc_text": "Document",
@@ -58,6 +62,10 @@ def _artifact_lines(artifact: dict[str, Any]) -> list[str]:
         return [_snippet(node.get("label")) for node in artifact["nodes"][:5]]
     lines: list[str] = []
     for section in artifact.get("sections", [])[:3]:
+        title = _snippet(section.get("title"))
+        summary = _snippet(section.get("summary"))
+        if title or summary:
+            lines.append(" - ".join(item for item in [title, summary] if item))
         for slide in section.get("slides", [])[:3]:
             title = _snippet(slide.get("title"))
             bullets = [_snippet(item) for item in slide.get("bullets", [])[:2]]
@@ -67,27 +75,159 @@ def _artifact_lines(artifact: dict[str, Any]) -> list[str]:
 
 def render_studio_artifacts_html(artifact: dict[str, Any] | None = None) -> str:
     if not artifact:
-        labels = "".join(
-            f"<span>{html.escape(label)}</span>" for label in _ARTIFACT_LABELS.values()
+        groups = "".join(
+            "<section>"
+            f"<strong>{html.escape(group)}</strong>"
+            + "".join(
+                f"<span>{html.escape(_label(item))}</span>" for item in artifact_types
+            )
+            + "</section>"
+            for group, artifact_types in _ARTIFACT_GROUPS
         )
         return (
             "<div class='studio-artifacts-card studio-artifacts-card--empty'>"
             "<div><strong>Studio Artifacts</strong><span>Waiting</span></div>"
-            f"<p>{labels}</p>"
+            f"{groups}"
             "</div>"
         )
     artifact_type = _label(artifact.get("type"))
+    payload = _artifact_payload(artifact)
+    status = str(artifact.get("status") or payload.get("status") or "ready")
+    status_label = status.replace("_", " ").title()
     title = str(artifact.get("title") or artifact_type)
-    lines = "".join(f"<li>{line}</li>" for line in _artifact_lines(artifact) if line)
-    evidence_count = len(artifact.get("cited_evidence", []) or [])
+    lines = "".join(f"<li>{line}</li>" for line in _artifact_lines(payload) if line)
+    evidence_count = _artifact_evidence_count(artifact, payload)
+    detail_sections = _artifact_detail_sections(artifact)
     return (
-        "<div class='studio-artifacts-card studio-artifacts-card--ready'>"
+        f"<div class='studio-artifacts-card studio-artifacts-card--{status}'>"
         f"<div><strong>{html.escape(artifact_type)}</strong>"
-        f"<span>{evidence_count} cited evidence</span></div>"
+        f"<span>{html.escape(status_label)} - {evidence_count} cited evidence</span></div>"
         f"<h4>{html.escape(title)}</h4>"
         f"<ul>{lines}</ul>"
+        f"{detail_sections}"
         "</div>"
     )
+
+
+def _artifact_payload(artifact: dict[str, Any]) -> dict[str, Any]:
+    payload = artifact.get("payload")
+    return dict(payload) if isinstance(payload, dict) else artifact
+
+
+def _artifact_evidence_count(
+    artifact: dict[str, Any],
+    payload: dict[str, Any],
+) -> int:
+    cited_evidence = artifact.get("cited_evidence") or payload.get("cited_evidence")
+    citations = artifact.get("citations")
+    if isinstance(cited_evidence, list):
+        return len(cited_evidence)
+    return len(citations) if isinstance(citations, list) else 0
+
+
+def _artifact_detail_sections(artifact: dict[str, Any]) -> str:
+    sections = [
+        _artifact_content_section(artifact),
+        _artifact_prompt_section(artifact),
+        _artifact_scope_section(artifact),
+        _artifact_citation_section(artifact),
+        _artifact_export_section(artifact),
+        _artifact_generation_section(artifact),
+        _artifact_action_section(artifact),
+    ]
+    return "".join(section for section in sections if section)
+
+
+def _artifact_content_section(artifact: dict[str, Any]) -> str:
+    payload = _artifact_payload(artifact)
+    if not payload:
+        return ""
+    content = html.escape(json.dumps(payload, ensure_ascii=False, indent=2))
+    return f"<section><strong>Full Content</strong><pre>{content}</pre></section>"
+
+
+def _artifact_prompt_section(artifact: dict[str, Any]) -> str:
+    prompt = _snippet(artifact.get("prompt"), limit=180)
+    return (
+        f"<section><strong>Prompt</strong><p>{prompt}</p></section>" if prompt else ""
+    )
+
+
+def _artifact_scope_section(artifact: dict[str, Any]) -> str:
+    scope = artifact.get("source_scope")
+    if not isinstance(scope, dict):
+        return ""
+    parts = [
+        str(scope.get("mode") or "").strip(),
+        f"page {scope.get('page')}" if scope.get("page") else "",
+        ", ".join(str(item) for item in scope.get("source_ids", []) if item),
+    ]
+    text = _snippet(" - ".join(item for item in parts if item), limit=180)
+    return (
+        f"<section><strong>Source Scope</strong><p>{text}</p></section>" if text else ""
+    )
+
+
+def _artifact_citation_section(artifact: dict[str, Any]) -> str:
+    citations = artifact.get("citations")
+    if not isinstance(citations, list) or not citations:
+        return ""
+    items = "".join(f"<li>{_citation_label(item)}</li>" for item in citations[:5])
+    return f"<section><strong>Citations</strong><ul>{items}</ul></section>"
+
+
+def _citation_label(citation: Any) -> str:
+    if not isinstance(citation, dict):
+        return _snippet(citation, limit=120)
+    source = str(
+        citation.get("source_name")
+        or citation.get("source_id")
+        or citation.get("citation_id")
+        or ""
+    ).strip()
+    page = str(citation.get("page_label") or "").strip()
+    return html.escape(f"{source} p.{page}" if source and page else source)
+
+
+def _artifact_export_section(artifact: dict[str, Any]) -> str:
+    exports = artifact.get("exports")
+    if not isinstance(exports, list) or not exports:
+        return ""
+    items = "".join(f"<li>{_export_label(item)}</li>" for item in exports[:5])
+    return f"<section><strong>Exports</strong><ul>{items}</ul></section>"
+
+
+def _export_label(export: Any) -> str:
+    if not isinstance(export, dict):
+        return _snippet(export, limit=120)
+    export_format = str(export.get("format") or "").strip()
+    path = str(export.get("path") or "").strip()
+    return html.escape(" - ".join(item for item in [export_format, path] if item))
+
+
+def _artifact_generation_section(artifact: dict[str, Any]) -> str:
+    generation = artifact.get("generation")
+    if not isinstance(generation, dict):
+        return ""
+    error = _snippet(generation.get("error"), limit=180)
+    return (
+        f"<section><strong>Generation</strong><p>{error}</p></section>" if error else ""
+    )
+
+
+def _artifact_action_section(artifact: dict[str, Any]) -> str:
+    copy_text = html.escape(
+        json.dumps(_artifact_payload(artifact), ensure_ascii=False),
+        quote=True,
+    )
+    buttons = (
+        "<button type='button' data-copy-text='"
+        f"{copy_text}' onclick='navigator.clipboard.writeText(this.dataset.copyText)'>"
+        "Copy</button>"
+    )
+    actions = ["Save as Note", "Export", "Delete", "Regenerate"]
+    buttons += "".join(f"<button>{html.escape(action)}</button>" for action in actions)
+    return f"<section class='studio-artifacts-actions'>{buttons}</section>"
 
 
 def _notebook_entries(values: Any, key: str) -> list[str]:
@@ -107,9 +247,7 @@ def render_notebook_panel_html(notebook: dict[str, Any] | None = None) -> str:
     notebook = notebook if isinstance(notebook, dict) else {}
     source_ids = _notebook_entries(notebook.get("selected_source_ids"), "")
     notes = _notebook_entries(notebook.get("notes"), "title")
-    artifacts = [
-        _label(item) for item in _notebook_entries(notebook.get("artifacts"), "type")
-    ]
+    artifacts = _artifact_panel_entries(notebook.get("artifacts"))
     source_label = f"{len(source_ids)} selected" if source_ids else "No selection"
     note_label = f"{len(notes)} saved" if notes else "No notes"
     artifact_label = f"{len(artifacts)} saved" if artifacts else "No artifacts"
@@ -152,12 +290,99 @@ def render_conversation_notebook_panel_html(conversation_id: str | None) -> str:
     return render_notebook_panel_html(notebook if isinstance(notebook, dict) else {})
 
 
+def _artifact_panel_entries(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    entries: list[str] = []
+    for artifact in values[:3]:
+        if not isinstance(artifact, dict):
+            continue
+        label = _label(artifact.get("type"))
+        exports = artifact.get("exports")
+        latest_export = exports[-1] if isinstance(exports, list) and exports else {}
+        path = latest_export.get("path") if isinstance(latest_export, dict) else ""
+        suffix = Path(str(path)).name if path else ""
+        entries.append(" - ".join(item for item in [label, suffix] if item))
+    return entries
+
+
 def render_conversation_notebook_update(conversation_id: str | None):
     import gradio as gr
 
     return (
         gr.update(visible=False),
         render_conversation_notebook_panel_html(conversation_id),
+    )
+
+
+def delete_latest_artifact_update(conversation_id: str | None) -> str:
+    conversation_id = str(conversation_id or "").strip()
+    if not conversation_id:
+        return render_notebook_panel_html()
+
+    from ktem.docqa import _runtime_notebook as notebook_service
+
+    notebook = notebook_service.get_notebook(conversation_id)
+    artifacts = [
+        item for item in notebook.get("artifacts", []) if isinstance(item, dict)
+    ]
+    if not artifacts:
+        return render_notebook_panel_html(notebook)
+
+    artifact_id = str(artifacts[-1].get("artifact_id") or "").strip()
+    if artifact_id:
+        notebook_service.delete_artifact_from_conversation(conversation_id, artifact_id)
+    return render_conversation_notebook_panel_html(conversation_id)
+
+
+def export_latest_artifact_update(
+    conversation_id: str | None,
+    export_format: str = "md",
+    root_dir: str | Path | None = None,
+) -> str:
+    conversation_id = str(conversation_id or "").strip()
+    if not conversation_id:
+        return render_notebook_panel_html()
+
+    from ktem.docqa import _runtime_notebook as notebook_service
+    from ktem.docqa.artifact_exports import export_artifact_to_path
+
+    notebook = notebook_service.get_notebook(conversation_id)
+    artifacts = [
+        item for item in notebook.get("artifacts", []) if isinstance(item, dict)
+    ]
+    if not artifacts:
+        return render_notebook_panel_html(notebook)
+
+    artifact = artifacts[-1]
+    artifact_id = str(artifact.get("artifact_id") or "artifact").strip()
+    normalized_format = _export_format(export_format)
+    export_root = Path(root_dir) if root_dir is not None else _default_export_root()
+    output_path = export_root / conversation_id / f"{artifact_id}.{normalized_format}"
+    exported_path = export_artifact_to_path(
+        artifact,
+        export_format=normalized_format,
+        output_path=output_path,
+    )
+    notebook_service.record_artifact_export_to_conversation(
+        conversation_id,
+        artifact_id,
+        export_format=normalized_format,
+        path=str(exported_path),
+    )
+    return render_conversation_notebook_panel_html(conversation_id)
+
+
+def _export_format(value: str | None) -> str:
+    normalized = str(value or "md").lower().strip()
+    return "md" if normalized == "markdown" else normalized
+
+
+def _default_export_root() -> Path:
+    from theflow.settings import settings as flowsettings
+
+    return Path(getattr(flowsettings, "KH_APP_DATA_DIR", Path.cwd())) / (
+        "mara_artifact_exports"
     )
 
 

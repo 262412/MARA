@@ -132,6 +132,9 @@ Required reporting fields:
    MARA docqa artifacts generate <conversation-id> --type study_guide
    MARA docqa artifacts generate <conversation-id> --type quiz
    MARA docqa artifacts list <conversation-id>
+   MARA docqa artifacts export <conversation-id> --artifact <artifact-id> --format md
+   MARA docqa artifacts evaluate <conversation-id> --artifact <artifact-id> --json
+   MARA docqa artifacts evaluate <conversation-id> --json
    ```
 
 8. Run a small benchmark route matrix and inspect `report.md`,
@@ -149,6 +152,13 @@ Required reporting fields:
 - Source selection persists in the conversation notebook state.
 - Notes and generated artifacts survive session reload through conversation
   `data_source`.
+- Studio artifact reports clearly separate local `proxy_metric`,
+  `external_metric`, and `paper_grade_metric` fields.
+- Conversation-level artifact reports summarize source-format evidence across
+  PDF, PPTX, DOCX, and image-backed artifacts without claiming paper-grade
+  evaluation.
+- Audio/video overview artifacts stay script-first unless a media export adapter
+  is configured.
 - Benchmark outputs include MARA trace fields and multimodal hit summaries.
 - Hygiene ratchet and changed-file pre-commit gates pass without updating
   `scripts/codebase_hygiene_baseline.json`.
@@ -158,8 +168,8 @@ Required reporting fields:
 - The Chat Page remains a high-risk UI module because construction, event
   binding, preview, DocQA state, and graph behavior are still concentrated in
   `libs/ktem/ktem/pages/chat/__init__.py`.
-- The Web UI has citation and reasoning trace surfaces, but richer notebook
-  panels for notes and artifacts should be added behind explicit Gradio
-  contract tests.
-- Full PPTX/PDF slide deck generation is still stretch scope; the stable v1
-  artifact is the grounded slide outline.
+- External paper-grade artifact evaluators are not bundled into the Studio
+  artifact report; the built-in report is a local proxy metric report.
+- Real audio/video media generation depends on a configured media export
+  adapter; without one, audio and video artifacts remain grounded scripts or
+  scene plans.

@@ -62,6 +62,10 @@ from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
 from .paper_list import PaperListPage
 from .report import ReportIssue
+from .studio_artifact_controls import (
+    bind_studio_artifact_events,
+    render_studio_artifact_controls,
+)
 from .studio_artifacts import (
     render_controller_trace_html,
     render_conversation_notebook_update,
@@ -764,6 +768,7 @@ class ChatPage(BasePage):
                     self.notebook_panel = gr.HTML(
                         render_notebook_panel_html(), elem_id="notebook-panel-card"
                     )
+                    render_studio_artifact_controls(self)
 
                 with gr.Column(elem_id="info-expand"):
                     gr.HTML(
@@ -2759,6 +2764,7 @@ class ChatPage(BasePage):
             [self.chat_control.conversation_id],
             [self.plot_panel, self.notebook_panel],
         )
+        bind_studio_artifact_events(self)
 
         self.followup_questions.select(
             self.chat_suggestion.select_example,
