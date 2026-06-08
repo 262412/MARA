@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+import gradio as gr
+
 from .studio_artifact_generation import build_studio_artifact_prompt
 from .studio_artifacts import (
     render_controller_trace_html,
     render_conversation_notebook_panel_html,
+    render_conversation_studio_results_html,
+    render_studio_artifact_viewer_html,
 )
 
 
@@ -54,7 +58,8 @@ def generate_studio_mindmap_outputs(
         answer_html=answer_html,
         artifact=artifact,
     )
-    html = str(graph_view.get("html") or "")
+    plot_html = render_conversation_studio_results_html(conversation_id, artifact)
+    viewer_html = render_studio_artifact_viewer_html(artifact)
     return (
         conversation_id,
         messages,
@@ -66,8 +71,8 @@ def generate_studio_mindmap_outputs(
         trace_html,
         render_conversation_notebook_panel_html(conversation_id),
         graph_source_ids,
-        page._json_to_plot(graph_view),
-        {"html": html},
+        gr.update(visible=True, value=plot_html),
+        {"html": viewer_html},
     )
 
 
@@ -203,6 +208,7 @@ def _mindmap_payload(
         "status": graph_view.get("status") or "ready",
         "status_message": graph_view.get("status_message") or "ready",
         "graph_source_ids": list(source_ids),
+        "html": str(graph_view.get("html") or ""),
         "graph": graph_view.get("graph") or {},
         "support_pages": graph_view.get("support_pages") or {},
         "support_chunk_ids": graph_view.get("support_chunk_ids") or {},

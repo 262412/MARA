@@ -108,17 +108,25 @@ def test_render_studio_artifacts_html_shows_saved_artifact_detail_actions():
     assert "file-1" in html
     assert "launch.pdf p.3" in html
     assert "launch.md" in html
-    assert "Full Content" in html
-    assert "Full content audit trail." in html
+    assert "Full Content" not in html
+    assert "Full content audit trail." not in html
+    assert "<pre>" not in html
+    assert "studio-artifact-result-list" in html
+    assert "studio-artifact-result-row" in html
     assert "data-copy-text" in html
     assert "navigator.clipboard.writeText" in html
-    for action in ["Copy", "Save as Note", "Export", "Delete", "Regenerate"]:
+    for action in ["Copy", "Rename", "Share", "View Prompt and Sources", "Delete"]:
         assert action in html
 
 
 def test_render_studio_artifacts_html_shows_running_and_failed_states():
     running = render_studio_artifacts_html(
-        {"type": "audio_overview", "status": "running", "title": "Audio overview"}
+        {
+            "type": "audio_overview",
+            "status": "running",
+            "title": "Audio overview",
+            "source_count": 27,
+        }
     )
     failed = render_studio_artifacts_html(
         {
@@ -130,7 +138,8 @@ def test_render_studio_artifacts_html_shows_running_and_failed_states():
     )
 
     assert "studio-artifacts-card--running" in running
-    assert "Running" in running
+    assert "Generating Audio Overview" in running
+    assert "Based on 27 sources" in running
     assert "Audio Overview" in running
     assert "studio-artifacts-card--failed" in failed
     assert "Failed" in failed

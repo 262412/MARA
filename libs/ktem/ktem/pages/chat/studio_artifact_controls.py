@@ -159,8 +159,13 @@ def bind_studio_artifact_events(page: Any) -> None:
     bind_studio_artifact_picker_events(page)
     page.studio_generate_artifact_button.click(
         render_studio_artifact_running_update,
-        inputs=[page.studio_artifact_type],
-        outputs=[page.plot_panel],
+        inputs=[page.studio_artifact_type, page._graph_source_ids],
+        outputs=[
+            page.plot_panel,
+            page.studio_artifact_selector_panel,
+            page.studio_artifact_overlay_backdrop,
+            page.studio_artifact_detail_panel,
+        ],
         show_progress="hidden",
     ).then(
         partial(generate_studio_artifact_panel_update, page),
@@ -295,10 +300,16 @@ def generate_studio_artifact_panel_update(
     note_ids: str = "",
     *selecteds: Any,
 ):
-    if not str(conversation_id or "").strip():
-        raise ValueError("Select or start a conversation before generating artifacts.")
-
     values = locals()
+    if not str(conversation_id or "").strip():
+        return failed_generation_studio_artifact_outputs(
+            page,
+            **_generation_failure_kwargs(
+                values,
+                "Select or start a conversation before generating artifacts.",
+            ),
+        )
+
     if str(artifact_type or "").strip() == "mindmap":
         try:
             return generate_studio_mindmap_outputs(

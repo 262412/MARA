@@ -89,7 +89,15 @@ def test_chat_page_binds_studio_generate_after_notebook_refresh():
     assert "page.studio_artifact_detail_back_button.click" in controls
     assert "page.studio_generate_artifact_button.click" in controls
     assert "render_studio_artifact_running_update" in controls
-    assert "outputs=[page.plot_panel]" in controls
+    assert (
+        "outputs=[\n"
+        "            page.plot_panel,\n"
+        "            page.studio_artifact_selector_panel,\n"
+        "            page.studio_artifact_overlay_backdrop,\n"
+        "            page.studio_artifact_detail_panel,\n"
+        "        ]" in controls
+    )
+    assert "inputs=[page.studio_artifact_type, page._graph_source_ids]" in controls
     assert ".then(\n        partial(generate_studio_artifact_panel_update" in controls
     assert "generate_studio_artifact_panel_update" in controls
     assert "inputs=studio_generate_inputs(page)" in controls

@@ -4650,6 +4650,125 @@ body.ktem-dark-mode .gradio-container {
   line-height: 1.4;
 }
 
+.studio-artifact-running-row,
+.studio-artifact-result-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.studio-artifact-spinner {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 3px solid color-mix(in srgb, var(--color-accent, #2563eb) 28%, transparent);
+  border-top-color: var(--color-accent, #2563eb);
+  border-radius: 999px;
+  animation: studio-artifact-spin 0.9s linear infinite;
+}
+
+@keyframes studio-artifact-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.studio-artifact-result-row {
+  position: relative;
+  cursor: pointer;
+  padding: 10px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border-color-primary, #e5e7eb) 86%, transparent);
+}
+
+.studio-artifact-result-icon {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--color-accent, #2563eb);
+  color: var(--color-accent, #2563eb);
+  font-weight: 800;
+}
+
+.studio-artifact-result-row small {
+  display: block;
+  color: var(--app-text-muted);
+  font-size: 11px;
+}
+
+.studio-artifact-result-type {
+  display: none;
+}
+
+.studio-artifact-result-menu {
+  min-width: 48px !important;
+  padding: 4px 8px !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.studio-artifact-result-actions {
+  position: absolute;
+  right: 0;
+  top: 38px;
+  z-index: 10;
+  display: grid;
+  min-width: 190px;
+  padding: 8px;
+  border: 1px solid var(--border-color-primary, #e5e7eb);
+  border-radius: 8px;
+  background: var(--app-surface-raised, #fff);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+}
+
+.studio-artifact-result-actions[hidden] {
+  display: none !important;
+}
+
+.studio-artifact-result-actions button {
+  justify-content: flex-start !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.studio-artifact-viewer[hidden] {
+  display: none !important;
+}
+
+.studio-artifact-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1410;
+  padding: 22px;
+  background: rgba(3, 6, 14, 0.82);
+  backdrop-filter: blur(8px);
+}
+
+.studio-artifact-viewer__dialog {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 30%, #334155);
+  border-radius: 16px;
+  background: #081423;
+  color: #f8fafc;
+  padding: 14px;
+}
+
+.studio-artifact-viewer__toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.studio-artifact-viewer__body {
+  overflow: auto;
+}
+
 .notebook-panel-card {
   margin-top: 10px;
 }

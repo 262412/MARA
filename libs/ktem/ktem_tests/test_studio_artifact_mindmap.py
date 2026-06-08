@@ -114,10 +114,12 @@ def test_generate_studio_mindmap_uses_interactive_knowledge_graph(monkeypatch):
     assert result[0] == "conv-graph"
     assert result[1][-1][1] == "Interactive mind map generated."
     assert result[9] == ["file-1", "file-2"]
-    assert result[10] == "plot:<div id='knowledge-graph-panel'>interactive graph</div>"
-    assert (
-        result[11]["html"] == "<div id='knowledge-graph-panel'>interactive graph</div>"
-    )
+    assert "studio-artifact-result-list" in result[10]["value"]
+    assert "Interactive Mind Map" in result[10]["value"]
+    assert "Full Content" not in result[10]["value"]
+    assert "graph_source_ids" not in result[10]["value"]
+    assert result[11]["html"].startswith("<div class='studio-artifact-viewer'")
+    assert "interactive graph" in result[11]["html"]
     assert len(result) == 12
 
 

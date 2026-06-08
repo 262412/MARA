@@ -7,7 +7,8 @@ import gradio as gr
 from .studio_artifacts import (
     render_controller_trace_html,
     render_conversation_notebook_panel_html,
-    render_studio_artifacts_html,
+    render_conversation_studio_results_html,
+    render_studio_artifact_viewer_html,
 )
 
 
@@ -43,7 +44,9 @@ def generation_panel_outputs(
         evidence_bundle=getattr(response, "evidence_bundle", {}),
     )
     conversation_id = getattr(response, "conversation_id", fallback_conversation_id)
-    plot_html = render_studio_artifacts_html(getattr(response, "artifact", None))
+    artifact = getattr(response, "artifact", None)
+    plot_html = render_conversation_studio_results_html(conversation_id, artifact)
+    viewer_html = render_studio_artifact_viewer_html(artifact)
     return (
         conversation_id,
         messages,
@@ -56,7 +59,7 @@ def generation_panel_outputs(
         render_conversation_notebook_panel_html(conversation_id),
         list(getattr(response, "graph_source_ids", []) or []),
         gr.update(visible=True, value=plot_html),
-        {"html": plot_html},
+        {"html": viewer_html},
     )
 
 

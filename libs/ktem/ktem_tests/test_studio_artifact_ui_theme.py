@@ -65,6 +65,13 @@ def test_studio_artifact_detail_form_controls_are_labeled_and_aligned():
     assert "min-height: 44px !important;" in count_input_css
 
 
+def test_studio_artifact_result_action_menu_stays_closed_by_default():
+    css = CSS_FILE.read_text(encoding="utf-8")
+    hidden_actions_css = _css_block(css, ".studio-artifact-result-actions[hidden]")
+
+    assert "display: none !important;" in hidden_actions_css
+
+
 def _css_block(css: str, selector: str) -> str:
     start = css.index(selector)
     open_brace = css.index("{", start)

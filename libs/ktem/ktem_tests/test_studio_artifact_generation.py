@@ -13,7 +13,10 @@ from ktem.pages.chat.studio_artifact_generation import (
     run_studio_artifact_regenerate_turn,
     run_studio_artifact_turn,
 )
-from ktem.pages.chat.studio_artifact_status import save_failed_studio_artifact
+from ktem.pages.chat.studio_artifact_status import (
+    render_studio_artifact_running_update,
+    save_failed_studio_artifact,
+)
 from sqlmodel import Session, select
 
 
@@ -115,6 +118,22 @@ def test_regenerating_update_without_conversation_uses_running_placeholder(
 
     assert "studio-artifacts-card--running" in html
     assert "Study Guide" in html
+
+
+def test_running_update_closes_center_detail_overlay():
+    (
+        html,
+        selector_update,
+        backdrop_update,
+        detail_update,
+    ) = render_studio_artifact_running_update("quiz", ["file-1", "file-2"])
+
+    assert "studio-artifacts-card--running" in html
+    assert "Quiz" in html
+    assert "Based on 2 sources" in html
+    assert selector_update["visible"] is True
+    assert backdrop_update["visible"] is False
+    assert detail_update["visible"] is False
 
 
 def test_run_studio_artifact_turn_sets_artifact_request_fields():
@@ -314,11 +333,60 @@ def test_generate_studio_artifact_panel_update_returns_right_panel_outputs():
     assert "trace:file-1:2:Focus on e" in result[7]
     assert "notebook-panel-card" in result[8]
     assert result[9] == ["file-1"]
-    assert "studio-artifacts-card--ready" in result[10]["value"]
-    assert result[11]["html"].startswith("<div class='studio-artifacts-card")
+    assert "studio-artifact-result-list" in result[10]["value"]
+    assert "studio-artifact-result-row" in result[10]["value"]
+    assert result[11]["html"].startswith("<div class='studio-artifact-viewer")
+    assert "Full Content" not in result[10]["value"]
     assert len(result) == 12
     assert page.docqa.request is not None
     assert page.docqa.request.selected_inputs == {7: ["selected-source"]}
+
+
+def test_generate_studio_artifact_without_conversation_returns_ui_notice():
+    page = _PanelPage()
+
+    result = generate_studio_artifact_panel_update(
+        page,
+        "quiz",
+        "Focus on exam prep.",
+        "page",
+        "markdown",
+        "medium",
+        5,
+        "",
+        [("previous", "answer")],
+        {},
+        "mara",
+        "gpt-test",
+        "default",
+        "default",
+        "English",
+        {"state": "old"},
+        None,
+        "user-1",
+        "file-1",
+        "paper.pdf",
+        2,
+        "Selected page evidence.",
+        "{}",
+        "llm",
+        "auto",
+        "light",
+        "",
+        "",
+        "selected-source",
+    )
+
+    assert page.docqa.request is None
+    assert result[0] == ""
+    assert result[1] == [("previous", "answer")]
+    assert "studio-artifacts-card--failed" in result[7]
+    assert "Select or start a conversation before generating artifacts." in result[7]
+    assert (
+        "Select or start a conversation before generating artifacts."
+        in result[10]["value"]
+    )
+    assert len(result) == 12
 
 
 def test_generate_studio_artifact_panel_update_records_failed_artifact(monkeypatch):

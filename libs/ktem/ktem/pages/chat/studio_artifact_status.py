@@ -7,16 +7,29 @@ from ktem.docqa.artifact_models import ARTIFACT_LABELS
 
 from .studio_artifacts import (
     render_conversation_notebook_panel_html,
+    render_conversation_studio_results_html,
+    render_studio_artifact_viewer_html,
     render_studio_artifacts_html,
 )
 
 
-def render_studio_artifact_running_update(artifact_type: str) -> str:
-    return render_studio_artifacts_html(
+def render_studio_artifact_running_update(
+    artifact_type: str,
+    graph_source_ids: Any = None,
+) -> tuple[Any, Any, Any, Any]:
+    source_count = len(list(graph_source_ids or [])) if graph_source_ids else 0
+    html = render_studio_artifacts_html(
         {
             "type": str(artifact_type or "study_guide"),
             "status": "running",
+            "source_count": source_count,
         }
+    )
+    return (
+        html,
+        gr.update(visible=True),
+        gr.update(visible=False),
+        gr.update(visible=False),
     )
 
 
@@ -85,7 +98,10 @@ def failed_studio_artifact_panel_outputs(
     chat_history: list,
     chat_state: dict,
 ) -> tuple[Any, ...]:
-    plot_html = render_studio_artifacts_html(failed_artifact)
+    plot_html = render_conversation_studio_results_html(
+        conversation_id, failed_artifact
+    )
+    viewer_html = render_studio_artifact_viewer_html(failed_artifact)
     return (
         conversation_id,
         list(chat_history or []),
@@ -98,7 +114,7 @@ def failed_studio_artifact_panel_outputs(
         render_conversation_notebook_panel_html(conversation_id),
         [],
         gr.update(visible=True, value=plot_html),
-        {"html": plot_html},
+        {"html": viewer_html},
     )
 
 
