@@ -91,13 +91,21 @@ def test_chat_page_binds_studio_generate_after_notebook_refresh():
     assert "render_studio_artifact_running_update" in controls
     assert (
         "outputs=[\n"
+        "            page.reasoning_trace_panel,\n"
         "            page.plot_panel,\n"
         "            page.studio_artifact_selector_panel,\n"
         "            page.studio_artifact_overlay_backdrop,\n"
         "            page.studio_artifact_detail_panel,\n"
         "        ]" in controls
     )
-    assert "inputs=[page.studio_artifact_type, page._graph_source_ids]" in controls
+    assert (
+        "inputs=[\n"
+        "            page.studio_artifact_type,\n"
+        "            page._graph_source_ids,\n"
+        "            page._active_file_id,\n"
+        "            *page._indices_input,\n"
+        "        ]" in controls
+    )
     assert ".then(\n        partial(generate_studio_artifact_panel_update" in controls
     assert "generate_studio_artifact_panel_update" in controls
     assert "inputs=studio_generate_inputs(page)" in controls

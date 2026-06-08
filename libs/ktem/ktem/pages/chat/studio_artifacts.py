@@ -168,7 +168,7 @@ def render_studio_trace_panel(
     reasoning_trace_html: str,
     artifact: dict[str, Any] | None = None,
 ) -> str:
-    return str(reasoning_trace_html or "") + render_studio_artifacts_html(artifact)
+    return render_studio_artifacts_html(artifact)
 
 
 def render_controller_trace_html(

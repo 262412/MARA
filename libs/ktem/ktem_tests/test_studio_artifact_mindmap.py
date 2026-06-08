@@ -3,6 +3,7 @@ from typing import Any
 from ktem.pages.chat.studio_artifact_controls import (
     generate_studio_artifact_panel_update,
 )
+from ktem.pages.chat.studio_artifacts import render_studio_trace_panel
 
 
 class _MindmapRuntime:
@@ -68,7 +69,10 @@ class _MindmapPage:
         artifact_payload=None,
     ):
         self.trace_artifact = artifact_payload
-        return f"trace:{active_file_id}:{page_number}:{question[:10]}"
+        return render_studio_trace_panel(
+            f"trace:{active_file_id}:{page_number}:{question[:10]}",
+            artifact_payload,
+        )
 
     def _render_citations_card_html(self, retrieval_html=""):
         return f"citations:{retrieval_html}"
@@ -113,12 +117,18 @@ def test_generate_studio_mindmap_uses_interactive_knowledge_graph(monkeypatch):
     }
     assert result[0] == "conv-graph"
     assert result[1][-1][1] == "Interactive mind map generated."
+    assert "controller-trace-card" not in result[7]
+    assert "studio-artifact-result-list" in result[7]
+    assert "Interactive Mind Map" in result[7]
     assert result[9] == ["file-1", "file-2"]
-    assert "studio-artifact-result-list" in result[10]["value"]
-    assert "Interactive Mind Map" in result[10]["value"]
+    assert "studio-artifact-result-list" not in result[10]["value"]
+    assert "Interactive Mind Map" not in result[10]["value"]
+    assert result[10]["visible"] is False
     assert "Full Content" not in result[10]["value"]
     assert "graph_source_ids" not in result[10]["value"]
-    assert result[11]["html"].startswith("<div class='studio-artifact-viewer'")
+    assert result[11]["html"].startswith("<div class='studio-artifact-viewer")
+    assert "studio-artifact-viewer--mindmap" in result[11]["html"]
+    assert "studio-kg-viewer-scope" in result[11]["html"]
     assert "interactive graph" in result[11]["html"]
     assert len(result) == 12
 

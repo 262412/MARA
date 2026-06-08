@@ -134,7 +134,10 @@ def test_workbench_removes_static_search_and_accordion_controls():
     assert 'id="pdf-modal"' not in chat_page
     assert 'elem_id="info-expand-button"' not in chat_control
     assert "self.knowledge_graph_refresh = gr.Button" not in chat_page
-    assert 'elem_id="knowledge-graph-plot"' in chat_page
+    assert 'elem_id="knowledge-graph-plot"' not in chat_page
+    assert 'self.plot_panel = gr.HTML("", visible=False)' in chat_page
+    assert 'document.querySelector("#knowledge-graph-plot")' not in main_js
+    assert 'document.querySelectorAll(".knowledge-graph-shell")' in main_js
     assert 'with gr.Column(elem_id="info-expand"):' in chat_page
     assert 'modal = document.createElement("div")' in pdf_viewer_js
     assert "document.body.appendChild(modal)" in pdf_viewer_js

@@ -100,6 +100,10 @@ def run_studio_artifact_turn(
         state=chat_state,
         command_state=command_state,
         user_id=user_id,
+        selected_file_ids=selected_source_ids_for_studio_artifact(
+            active_file_id,
+            selected_inputs,
+        ),
         active_file_id=active_file_id,
         active_file_name=active_file_name,
         page_number=page_number,
@@ -191,6 +195,46 @@ def _positive_int(value: Any) -> int | None:
     return count if count > 0 else None
 
 
+def selected_source_ids_for_studio_artifact(
+    active_file_id: Any,
+    selected_inputs: dict[int, Any] | None,
+) -> list[str]:
+    values: list[str] = []
+    active_id = str(active_file_id or "").strip()
+    if active_id:
+        values.append(active_id)
+    for selected_input in dict(selected_inputs or {}).values():
+        values.extend(_selected_source_values(selected_input))
+    return _unique_text(values)
+
+
+def _selected_source_values(value: Any) -> list[str]:
+    if isinstance(value, (list, tuple)):
+        if value and _selector_mode(value[0]):
+            return _selected_source_values(value[1]) if len(value) > 1 else []
+        values: list[str] = []
+        for item in value:
+            values.extend(_selected_source_values(item))
+        return values
+    if isinstance(value, dict):
+        for key in ("file_id", "source_id", "id"):
+            if key in value:
+                return _selected_source_values(value.get(key))
+        return []
+    text = str(value or "").strip()
+    if (
+        not text
+        or _selector_mode(text)
+        or (text.startswith("[") and text.endswith("]"))
+    ):
+        return []
+    return [text]
+
+
+def _selector_mode(value: Any) -> bool:
+    return str(value or "").strip().lower() in {"select", "upload", "all"}
+
+
 def _split_note_ids(value: Any) -> list[str]:
     values = value if isinstance(value, list) else str(value or "").split(",")
     output: list[str] = []
@@ -242,8 +286,12 @@ def _source_scope(artifact: dict[str, Any]) -> dict[str, Any]:
 
 def _source_ids(scope: dict[str, Any], fallback_source_ids: list[str]) -> list[str]:
     values = scope.get("source_ids") or fallback_source_ids
+    return _unique_text(values)
+
+
+def _unique_text(values: Any) -> list[str]:
     output: list[str] = []
-    for value in values:
+    for value in values or []:
         item = str(value or "").strip()
         if item and item not in output:
             output.append(item)

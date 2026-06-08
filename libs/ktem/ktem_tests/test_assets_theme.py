@@ -347,7 +347,7 @@ def test_css_preserves_graph_lab_dark_theme_hooks():
     assert "body.dark .gradio-container" in css
     assert "body.ktem-dark-mode .gradio-container" in css
     assert "--graph-dark-surface" in css
-    assert "#knowledge-graph-plot .kg-preview-card" in css
+    assert ".studio-kg-viewer-scope .kg-preview-card" in css
     assert "var(--graph-dark-surface)" in css
 
 

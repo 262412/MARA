@@ -12,6 +12,7 @@ from .studio_artifact_generation import (
     STUDIO_ARTIFACT_TYPE_CHOICES,
     run_studio_artifact_regenerate_turn,
     run_studio_artifact_turn,
+    selected_source_ids_for_studio_artifact,
 )
 from .studio_artifact_mindmap import (
     generate_studio_mindmap_outputs,
@@ -159,8 +160,14 @@ def bind_studio_artifact_events(page: Any) -> None:
     bind_studio_artifact_picker_events(page)
     page.studio_generate_artifact_button.click(
         render_studio_artifact_running_update,
-        inputs=[page.studio_artifact_type, page._graph_source_ids],
+        inputs=[
+            page.studio_artifact_type,
+            page._graph_source_ids,
+            page._active_file_id,
+            *page._indices_input,
+        ],
         outputs=[
+            page.reasoning_trace_panel,
             page.plot_panel,
             page.studio_artifact_selector_panel,
             page.studio_artifact_overlay_backdrop,
@@ -189,7 +196,7 @@ def bind_studio_artifact_events(page: Any) -> None:
     page.studio_regenerate_artifact_button.click(
         render_studio_artifact_regenerating_update,
         inputs=[page.chat_control.conversation_id],
-        outputs=[page.plot_panel],
+        outputs=[page.reasoning_trace_panel, page.plot_panel],
         show_progress="hidden",
     ).then(
         partial(regenerate_latest_studio_artifact_panel_update, page),
@@ -386,6 +393,13 @@ def _generation_failure_kwargs(values: dict[str, Any], error: str) -> dict[str, 
         "chat_state",
     ]
     output = {key: values[key] for key in keys}
+    selected_inputs = values["page"]._build_selected_input_map(
+        *values.get("selecteds", ())
+    )
+    output["source_ids"] = selected_source_ids_for_studio_artifact(
+        values["active_file_id"],
+        selected_inputs,
+    )
     output["error"] = error
     return output
 

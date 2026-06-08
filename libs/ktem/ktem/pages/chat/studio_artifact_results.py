@@ -63,12 +63,19 @@ def render_studio_artifact_viewer_html(artifact: dict[str, Any] | None) -> str:
     artifact_type = _label(artifact.get("type"))
     payload = _artifact_payload(artifact)
     title = str(artifact.get("title") or artifact_type)
+    graph_html = str(payload.get("html") or payload.get("viewer_html") or "").strip()
+    if str(artifact.get("type") or "") == "mindmap" and graph_html:
+        return (
+            "<div class='studio-artifact-viewer studio-artifact-viewer--mindmap' hidden>"
+            f"{_open_graph_viewer_html(graph_html)}"
+            "</div>"
+        )
     body = _artifact_viewer_body(artifact, payload)
     return (
         "<div class='studio-artifact-viewer' hidden>"
         "<div class='studio-artifact-viewer__dialog'>"
         "<div class='studio-artifact-viewer__toolbar'>"
-        f"<strong>{html.escape(title)}</strong>"
+        f"<strong data-studio-artifact-title='true'>{html.escape(title)}</strong>"
         "<button type='button' "
         "onclick=\"this.closest('.studio-artifact-viewer').hidden = true\">"
         "Close</button>"
@@ -159,24 +166,89 @@ def _artifact_result_row(
 ) -> str:
     source_count = _artifact_source_count(artifact, _artifact_payload(artifact))
     meta = _artifact_result_meta(source_count, status, evidence_count)
+    share_text = html.escape(_artifact_copy_text(artifact), quote=True)
     return (
         "<div class='studio-artifact-result-row' "
         'onclick="this.nextElementSibling.hidden = false">'
-        "<span class='studio-artifact-result-icon'>?</span>"
+        f"{_artifact_result_icon(artifact_type)}"
         "<div>"
-        f"<strong>{html.escape(title)}</strong>"
+        f"<strong data-studio-artifact-title='true'>{html.escape(title)}</strong>"
         f"<small>{html.escape(meta)}</small>"
         "</div>"
         "<button type='button' class='studio-artifact-result-menu' "
         'onclick="event.stopPropagation(); '
         'this.nextElementSibling.hidden = !this.nextElementSibling.hidden">'
         "More</button>"
-        "<div class='studio-artifact-result-actions' hidden>"
-        "<button>Rename</button><button>Share</button>"
-        "<button>View Prompt and Sources</button><button>Delete</button>"
+        "<div class='studio-artifact-result-actions' hidden "
+        "onclick='event.stopPropagation()'>"
+        f"{_row_action_button('rename', 'Rename')}"
+        f"{_row_action_button('share', 'Share', share_text)}"
+        f"{_row_action_button('prompt-sources', 'View Prompt and Sources')}"
+        f"{_row_action_button('delete', 'Delete')}"
         "</div>"
         f"<span class='studio-artifact-result-type'>{html.escape(artifact_type)}</span>"
         "</div>"
+    )
+
+
+def _artifact_result_icon(artifact_type: str) -> str:
+    return (
+        "<span class='studio-artifact-result-icon' "
+        f"data-artifact-type='{html.escape(artifact_type, quote=True)}' "
+        "aria-hidden='true'>"
+        "<svg class='studio-artifact-result-icon__svg' viewBox='0 0 24 24'>"
+        "<path d='M5 4.5h10l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 19V6a1.5 1.5 0 0 1 1.5-1.5Z'/>"
+        "<path d='M15 4.5V9h4'/>"
+        "<path d='M8 13h8M8 16h5'/>"
+        "</svg></span>"
+    )
+
+
+def _row_action_button(
+    action: str,
+    label: str,
+    share_text: str = "",
+) -> str:
+    data_share = f" data-share-text='{share_text}'" if share_text else ""
+    return (
+        "<button type='button' "
+        f"data-studio-action='{html.escape(action, quote=True)}'{data_share} "
+        f'onclick="{_row_action_js(action)}">'
+        f"{html.escape(label)}</button>"
+    )
+
+
+def _row_action_js(action: str) -> str:
+    if action == "rename":
+        return (
+            "event.stopPropagation(); "
+            "const row=this.closest('.studio-artifact-result-row'); "
+            "const title=row.querySelector('[data-studio-artifact-title]'); "
+            "const next=window.prompt('Rename artifact', title ? title.textContent.trim() : ''); "
+            "if(next){ title.textContent=next; "
+            "const viewer=row.nextElementSibling; "
+            "const viewerTitle=viewer ? viewer.querySelector('[data-studio-artifact-title]') : null; "
+            "if(viewerTitle) viewerTitle.textContent=next; }"
+        )
+    if action == "share":
+        return (
+            "event.stopPropagation(); "
+            "navigator.clipboard.writeText(this.dataset.shareText || window.location.href);"
+        )
+    if action == "prompt-sources":
+        return (
+            "event.stopPropagation(); "
+            "const row=this.closest('.studio-artifact-result-row'); "
+            "const viewer=row.nextElementSibling; "
+            "if(viewer){ viewer.hidden=false; "
+            "const target=viewer.querySelector('[data-studio-prompt-sources]') || viewer.querySelector('section'); "
+            "if(target) target.scrollIntoView({block:'start'}); }"
+        )
+    return (
+        "event.stopPropagation(); "
+        "const row=this.closest('.studio-artifact-result-row'); "
+        "const viewer=row.nextElementSibling; "
+        "if(viewer) viewer.remove(); row.remove();"
     )
 
 
@@ -298,7 +370,9 @@ def _artifact_detail_sections(artifact: dict[str, Any]) -> str:
 def _artifact_prompt_section(artifact: dict[str, Any]) -> str:
     prompt = _snippet(artifact.get("prompt"), limit=180)
     return (
-        f"<section><strong>Prompt</strong><p>{prompt}</p></section>" if prompt else ""
+        f"<section data-studio-prompt-sources='true'><strong>Prompt</strong><p>{prompt}</p></section>"
+        if prompt
+        else ""
     )
 
 
@@ -313,7 +387,9 @@ def _artifact_scope_section(artifact: dict[str, Any]) -> str:
     ]
     text = _snippet(" - ".join(item for item in parts if item), limit=180)
     return (
-        f"<section><strong>Source Scope</strong><p>{text}</p></section>" if text else ""
+        f"<section data-studio-prompt-sources='true'><strong>Source Scope</strong><p>{text}</p></section>"
+        if text
+        else ""
     )
 
 
@@ -366,14 +442,63 @@ def _artifact_generation_section(artifact: dict[str, Any]) -> str:
 
 def _artifact_action_section(artifact: dict[str, Any]) -> str:
     copy_text = html.escape(_artifact_copy_text(artifact), quote=True)
-    buttons = (
-        "<button type='button' data-copy-text='"
-        f"{copy_text}' onclick='navigator.clipboard.writeText(this.dataset.copyText)'>"
-        "Copy</button>"
-    )
-    actions = ["Rename", "Share", "View Prompt and Sources", "Delete"]
-    buttons += "".join(f"<button>{html.escape(action)}</button>" for action in actions)
+    buttons = _viewer_action_button("copy", "Copy", copy_text)
+    buttons += _viewer_action_button("rename", "Rename")
+    buttons += _viewer_action_button("share", "Share", copy_text)
+    buttons += _viewer_action_button("prompt-sources", "View Prompt and Sources")
+    buttons += _viewer_action_button("delete", "Delete")
     return f"<section class='studio-artifacts-actions'>{buttons}</section>"
+
+
+def _viewer_action_button(
+    action: str,
+    label: str,
+    copy_text: str = "",
+) -> str:
+    data_copy = f" data-copy-text='{copy_text}'" if copy_text else ""
+    return (
+        "<button type='button' "
+        f"data-studio-action='{html.escape(action, quote=True)}'{data_copy} "
+        f'onclick="{_viewer_action_js(action)}">'
+        f"{html.escape(label)}</button>"
+    )
+
+
+def _viewer_action_js(action: str) -> str:
+    if action == "copy":
+        return (
+            "event.stopPropagation(); "
+            "navigator.clipboard.writeText(this.dataset.copyText || '');"
+        )
+    if action == "rename":
+        return (
+            "event.stopPropagation(); "
+            "const viewer=this.closest('.studio-artifact-viewer'); "
+            "const title=viewer.querySelector('[data-studio-artifact-title]'); "
+            "const next=window.prompt('Rename artifact', title ? title.textContent.trim() : ''); "
+            "if(next){ title.textContent=next; "
+            "const row=viewer.previousElementSibling; "
+            "const rowTitle=row ? row.querySelector('[data-studio-artifact-title]') : null; "
+            "if(rowTitle) rowTitle.textContent=next; }"
+        )
+    if action == "share":
+        return (
+            "event.stopPropagation(); "
+            "navigator.clipboard.writeText(this.dataset.copyText || window.location.href);"
+        )
+    if action == "prompt-sources":
+        return (
+            "event.stopPropagation(); "
+            "const viewer=this.closest('.studio-artifact-viewer'); "
+            "const target=viewer.querySelector('[data-studio-prompt-sources]') || viewer.querySelector('section'); "
+            "if(target) target.scrollIntoView({block:'start'});"
+        )
+    return (
+        "event.stopPropagation(); "
+        "const viewer=this.closest('.studio-artifact-viewer'); "
+        "const row=viewer.previousElementSibling; "
+        "if(row) row.remove(); viewer.remove();"
+    )
 
 
 def _artifact_copy_text(artifact: dict[str, Any]) -> str:
@@ -383,10 +508,11 @@ def _artifact_copy_text(artifact: dict[str, Any]) -> str:
 
 
 def _open_graph_viewer_html(graph_html: str) -> str:
-    return graph_html.replace(
+    visible_graph = graph_html.replace(
         " data-kg-viewer-overlay='true' hidden",
         " data-kg-viewer-overlay='true'",
     )
+    return f"<div class='studio-kg-viewer-scope'>{visible_graph}</div>"
 
 
 def _conversation_artifacts(conversation_id: str | None) -> list[dict[str, Any]]:

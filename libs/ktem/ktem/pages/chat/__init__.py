@@ -67,7 +67,6 @@ from .studio_artifact_controls import (
     render_studio_artifact_controls,
 )
 from .studio_artifacts import (
-    render_controller_trace_html,
     render_conversation_notebook_update,
     render_notebook_panel_html,
     render_studio_trace_panel,
@@ -771,9 +770,7 @@ class ChatPage(BasePage):
                     render_studio_artifact_controls(self)
 
                 with gr.Column(elem_id="info-expand"):
-                    self.plot_panel = gr.HTML(
-                        "", visible=True, elem_id="knowledge-graph-plot"
-                    )
+                    self.plot_panel = gr.HTML("", visible=False)
                     self.info_panel = gr.HTML(elem_id="html-info-panel")
 
                 with gr.Accordion(
@@ -3390,11 +3387,6 @@ class ChatPage(BasePage):
                 response.active_file_id or active_file_id or "",
                 response.page_number or normalized_page_number,
                 artifact_payload,
-            ) + render_controller_trace_html(
-                route_decision=response.route_decision,
-                retrieve_decision=response.retrieve_decision,
-                verify_decision=response.verify_decision,
-                evidence_bundle=response.evidence_bundle,
             )
 
             active_view = is_active_view()

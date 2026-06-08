@@ -17,6 +17,7 @@ from ktem.pages.chat.studio_artifact_status import (
     render_studio_artifact_running_update,
     save_failed_studio_artifact,
 )
+from ktem.pages.chat.studio_artifacts import render_studio_trace_panel
 from sqlmodel import Session, select
 
 
@@ -61,7 +62,7 @@ class _PanelPage:
     def __init__(self):
         self.docqa: Any = _PanelRuntime()
         self.knowledge_graph: Any = None
-        self.expected_artifact_payload = {"type": "quiz"}
+        self.expected_artifact_payload = None
 
     def _build_selected_input_map(self, *selecteds):
         return {7: list(selecteds)}
@@ -83,7 +84,10 @@ class _PanelPage:
         artifact_payload=None,
     ):
         assert artifact_payload == self.expected_artifact_payload
-        return f"trace:{active_file_id}:{page_number}:{question[:10]}"
+        return render_studio_trace_panel(
+            f"trace:{active_file_id}:{page_number}:{question[:10]}",
+            artifact_payload,
+        )
 
     def _render_citations_card_html(self, retrieval_html=""):
         return f"citations:{retrieval_html}"
@@ -114,15 +118,17 @@ def test_regenerating_update_without_conversation_uses_running_placeholder(
         lambda _conversation_id: (_ for _ in ()).throw(AssertionError()),
     )
 
-    html = render_studio_artifact_regenerating_update("")
+    html, plot_update = render_studio_artifact_regenerating_update("")
 
     assert "studio-artifacts-card--running" in html
     assert "Study Guide" in html
+    assert plot_update["visible"] is False
 
 
 def test_running_update_closes_center_detail_overlay():
     (
         html,
+        plot_update,
         selector_update,
         backdrop_update,
         detail_update,
@@ -131,9 +137,22 @@ def test_running_update_closes_center_detail_overlay():
     assert "studio-artifacts-card--running" in html
     assert "Quiz" in html
     assert "Based on 2 sources" in html
+    assert plot_update["visible"] is False
     assert selector_update["visible"] is True
     assert backdrop_update["visible"] is False
     assert detail_update["visible"] is False
+
+
+def test_running_update_counts_selected_sources_when_graph_scope_is_empty():
+    html, *_ = render_studio_artifact_running_update(
+        "quiz",
+        [],
+        "",
+        "select",
+        ["selected-source"],
+    )
+
+    assert "Based on 1 source" in html
 
 
 def test_run_studio_artifact_turn_sets_artifact_request_fields():
@@ -177,6 +196,7 @@ def test_run_studio_artifact_turn_sets_artifact_request_fields():
     assert request.agent_mode == "auto"
     assert request.prompt.startswith("Focus on exam prep.")
     assert request.conversation_id == "conv-1"
+    assert request.selected_file_ids == ["file-1"]
     assert request.selected_inputs == {7: ["select", ["file-1"], "user-1"]}
     assert request.active_file_id == "file-1"
     assert request.page_number == 3
@@ -290,6 +310,7 @@ def test_run_studio_artifact_regenerate_turn_uses_saved_scope_and_prompt():
 
 def test_generate_studio_artifact_panel_update_returns_right_panel_outputs():
     page = _PanelPage()
+    page.expected_artifact_payload = {"type": "quiz"}
 
     result = generate_studio_artifact_panel_update(
         page,
@@ -330,11 +351,14 @@ def test_generate_studio_artifact_panel_update_returns_right_panel_outputs():
     assert result[4] == {"state": "updated"}
     assert result[5].startswith("answer:Focus on e")
     assert result[6] == "citations:<details class='evidence'>e</details>"
-    assert "trace:file-1:2:Focus on e" in result[7]
+    assert "trace:file-1:2:Focus on e" not in result[7]
+    assert "controller-trace-card" not in result[7]
+    assert "studio-artifact-result-list" in result[7]
     assert "notebook-panel-card" in result[8]
     assert result[9] == ["file-1"]
-    assert "studio-artifact-result-list" in result[10]["value"]
-    assert "studio-artifact-result-row" in result[10]["value"]
+    assert "studio-artifact-result-list" not in result[10]["value"]
+    assert "studio-artifact-result-row" not in result[10]["value"]
+    assert result[10]["visible"] is False
     assert result[11]["html"].startswith("<div class='studio-artifact-viewer")
     assert "Full Content" not in result[10]["value"]
     assert len(result) == 12
@@ -382,9 +406,10 @@ def test_generate_studio_artifact_without_conversation_returns_ui_notice():
     assert result[1] == [("previous", "answer")]
     assert "studio-artifacts-card--failed" in result[7]
     assert "Select or start a conversation before generating artifacts." in result[7]
+    assert result[10]["visible"] is False
     assert (
         "Select or start a conversation before generating artifacts."
-        in result[10]["value"]
+        not in result[10]["value"]
     )
     assert len(result) == 12
 
@@ -442,8 +467,10 @@ def test_generate_studio_artifact_panel_update_records_failed_artifact(monkeypat
     assert result[0] == "conv-1"
     assert result[1] == [("previous", "answer")]
     assert "studio-artifacts-card--failed" in result[7]
+    assert result[10]["visible"] is False
     assert saved[0]["artifact_type"] == "quiz"
     assert saved[0]["active_file_id"] == "file-1"
+    assert saved[0]["source_ids"] == ["file-1", "selected-source"]
     assert saved[0]["error"] == "artifact adapter down"
 
 
@@ -490,6 +517,7 @@ def test_regenerate_latest_studio_artifact_panel_update_uses_latest_artifact(
     monkeypatch,
 ):
     page = _PanelPage()
+    page.expected_artifact_payload = {"type": "quiz"}
     monkeypatch.setattr(
         "ktem.pages.chat.studio_artifact_controls._latest_notebook_artifact",
         lambda _conversation_id: {

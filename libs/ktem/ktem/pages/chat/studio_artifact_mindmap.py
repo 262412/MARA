@@ -6,9 +6,7 @@ import gradio as gr
 
 from .studio_artifact_generation import build_studio_artifact_prompt
 from .studio_artifacts import (
-    render_controller_trace_html,
     render_conversation_notebook_panel_html,
-    render_conversation_studio_results_html,
     render_studio_artifact_viewer_html,
 )
 
@@ -58,7 +56,6 @@ def generate_studio_mindmap_outputs(
         answer_html=answer_html,
         artifact=artifact,
     )
-    plot_html = render_conversation_studio_results_html(conversation_id, artifact)
     viewer_html = render_studio_artifact_viewer_html(artifact)
     return (
         conversation_id,
@@ -71,7 +68,7 @@ def generate_studio_mindmap_outputs(
         trace_html,
         render_conversation_notebook_panel_html(conversation_id),
         graph_source_ids,
-        gr.update(visible=True, value=plot_html),
+        gr.update(visible=False, value=""),
         {"html": viewer_html},
     )
 
@@ -143,11 +140,6 @@ def _mindmap_trace_html(
         values["active_file_id"],
         values["page_number"],
         artifact,
-    ) + render_controller_trace_html(
-        route_decision={"route": "graph_global"},
-        retrieve_decision={"status": graph_view.get("status") or "ready"},
-        verify_decision={"status": "supported", "action": "generate"},
-        evidence_bundle={"items": [{"evidence_level": "graph", "modality": "graph"}]},
     )
 
 
