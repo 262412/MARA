@@ -117,12 +117,27 @@ def test_workbench_removes_static_search_and_accordion_controls():
     chat_page = (package_root / "pages" / "chat" / "__init__.py").read_text(
         encoding="utf-8"
     )
+    chat_control = (package_root / "pages" / "chat" / "control.py").read_text(
+        encoding="utf-8"
+    )
     main_js = (package_root / "assets" / "js" / "main.js").read_text(encoding="utf-8")
+    pdf_viewer_js = (package_root / "assets" / "js" / "pdf_viewer.js").read_text(
+        encoding="utf-8"
+    )
 
     assert 'placeholder="Search within file..."' not in chat_page
     assert 'self.page_strip_search = gr.State(value="")' in chat_page
     assert 'label="Knowledge Map (Page-level)"' not in chat_page
+    assert "Knowledge Map (Page-level)" not in chat_page
+    assert 'elem_id="knowledge-graph-refresh"' not in chat_page
+    assert 'elem_id="knowledge-graph-status"' not in chat_page
+    assert 'id="pdf-modal"' not in chat_page
+    assert 'elem_id="info-expand-button"' not in chat_control
+    assert "self.knowledge_graph_refresh = gr.Button" not in chat_page
+    assert 'elem_id="knowledge-graph-plot"' in chat_page
     assert 'with gr.Column(elem_id="info-expand"):' in chat_page
+    assert 'modal = document.createElement("div")' in pdf_viewer_js
+    assert "document.body.appendChild(modal)" in pdf_viewer_js
     assert "corpusAddPanel.classList.toggle" not in main_js
     assert "fileInput.click()" in main_js
 

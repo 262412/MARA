@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
+import gradio as gr
+
 from .studio_artifacts import (
     render_controller_trace_html,
     render_conversation_notebook_panel_html,
+    render_studio_artifacts_html,
 )
 
 
@@ -40,6 +43,7 @@ def generation_panel_outputs(
         evidence_bundle=getattr(response, "evidence_bundle", {}),
     )
     conversation_id = getattr(response, "conversation_id", fallback_conversation_id)
+    plot_html = render_studio_artifacts_html(getattr(response, "artifact", None))
     return (
         conversation_id,
         messages,
@@ -51,6 +55,8 @@ def generation_panel_outputs(
         trace_html,
         render_conversation_notebook_panel_html(conversation_id),
         list(getattr(response, "graph_source_ids", []) or []),
+        gr.update(visible=True, value=plot_html),
+        {"html": plot_html},
     )
 
 

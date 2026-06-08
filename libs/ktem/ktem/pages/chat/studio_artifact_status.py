@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import gradio as gr
 from ktem.docqa.artifact_models import ARTIFACT_LABELS
 
 from .studio_artifacts import (
@@ -84,6 +85,7 @@ def failed_studio_artifact_panel_outputs(
     chat_history: list,
     chat_state: dict,
 ) -> tuple[Any, ...]:
+    plot_html = render_studio_artifacts_html(failed_artifact)
     return (
         conversation_id,
         list(chat_history or []),
@@ -92,9 +94,11 @@ def failed_studio_artifact_panel_outputs(
         chat_state,
         "",
         page._render_citations_card_html(""),
-        render_studio_artifacts_html(failed_artifact),
+        plot_html,
         render_conversation_notebook_panel_html(conversation_id),
         [],
+        gr.update(visible=True, value=plot_html),
+        {"html": plot_html},
     )
 
 

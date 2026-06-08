@@ -119,7 +119,7 @@ def test_chat_page_uses_page_centric_workbench_layout():
     assert 'elem_id="answer-expand"' in chat_page
     assert 'with gr.Row(elem_id="page-workbench-layout"):' in chat_page
     assert 'with gr.Column(elem_id="info-expand"):' in chat_page
-    assert "knowledge-map-title" in chat_page
+    assert "knowledge-map-title" not in chat_page
     assert (
         "value=\"<div class='pdf-preview-notice'>Selected page preview.</div>\""
         in chat_panel
@@ -172,7 +172,7 @@ def test_workbench_matches_reference_prototype_structure():
     assert "refresh_page_thumbnail_search" not in chat_page
     assert "Suggested questions for this page" not in chat_page
     assert "_render_text_thumbnail_preview" in chat_page
-    assert chat_page.index("right-ask-tabs") < chat_page.index("knowledge-map-title")
+    assert chat_page.index("right-ask-tabs") < chat_page.index("info-expand")
 
     for label in [
         '"chat"',

@@ -13,6 +13,10 @@ from .studio_artifact_generation import (
     run_studio_artifact_regenerate_turn,
     run_studio_artifact_turn,
 )
+from .studio_artifact_mindmap import (
+    generate_studio_mindmap_outputs,
+    save_studio_mindmap_artifact,
+)
 from .studio_artifact_outputs import generation_panel_outputs
 from .studio_artifact_outputs import (
     latest_notebook_artifact as _latest_notebook_artifact,
@@ -232,6 +236,8 @@ def studio_generate_outputs(page: Any) -> list[Any]:
         page.reasoning_trace_panel,
         page.notebook_panel,
         page._graph_source_ids,
+        page.plot_panel,
+        page.state_plot_panel,
     ]
 
 
@@ -293,6 +299,18 @@ def generate_studio_artifact_panel_update(
         raise ValueError("Select or start a conversation before generating artifacts.")
 
     values = locals()
+    if str(artifact_type or "").strip() == "mindmap":
+        try:
+            return generate_studio_mindmap_outputs(
+                page,
+                values,
+                save_artifact=save_studio_mindmap_artifact,
+            )
+        except Exception as exc:
+            LOGGER.exception("Studio mind map generation failed")
+            return failed_generation_studio_artifact_outputs(
+                page, **_generation_failure_kwargs(values, str(exc))
+            )
     try:
         response = _run_generation_turn(page, **_generation_turn_kwargs(values))
     except Exception as exc:

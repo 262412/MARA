@@ -771,19 +771,6 @@ class ChatPage(BasePage):
                     render_studio_artifact_controls(self)
 
                 with gr.Column(elem_id="info-expand"):
-                    gr.HTML(
-                        "<div class='knowledge-map-title'>Knowledge Map (Page-level)</div>"
-                    )
-                    self.modal = gr.HTML("<div id='pdf-modal'></div>")
-                    self.knowledge_graph_status = gr.Markdown(
-                        "Status: no graph generated yet.",
-                        elem_id="knowledge-graph-status",
-                    )
-                    self.knowledge_graph_refresh = gr.Button(
-                        "Generate / Refresh Knowledge Graph",
-                        variant="secondary",
-                        elem_id="knowledge-graph-refresh",
-                    )
                     self.plot_panel = gr.HTML(
                         "", visible=True, elem_id="knowledge-graph-plot"
                     )
@@ -2333,14 +2320,6 @@ class ChatPage(BasePage):
                 concurrency_limit=20,
             )
 
-        self.chat_control.btn_info_expand.click(
-            fn=lambda is_expanded: (
-                gr.update(scale=INFO_PANEL_SCALES[is_expanded]),
-                not is_expanded,
-            ),
-            inputs=self._info_panel_expanded,
-            outputs=[self.info_column, self._info_panel_expanded],
-        )
         self.chat_control.btn_chat_expand.click(
             fn=None, inputs=None, js="function() {toggleChatColumn();}"
         )

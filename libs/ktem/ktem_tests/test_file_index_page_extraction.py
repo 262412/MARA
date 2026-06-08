@@ -167,7 +167,6 @@ def _build_page(index_id=7, with_chat_refresh=False):
             workbench_file_summary=object(),
             plot_panel=object(),
             state_plot_panel=object(),
-            knowledge_graph_status=object(),
             knowledge_graph=object(),
             _active_file_id=object(),
             chat_control=SimpleNamespace(conversation_id=object()),
@@ -297,7 +296,7 @@ def test_register_file_index_events_wires_delete_chat_and_upload_flows():
     assert upload_chain[6] == ("then", {"fn": "public-event"})
 
 
-def test_register_file_index_events_keeps_graph_refresh_tail_wired():
+def test_register_file_index_events_keeps_graph_scope_tail_wired():
     page = _build_page(index_id=1, with_chat_refresh=True)
 
     register_file_index_events(
@@ -307,11 +306,10 @@ def test_register_file_index_events_keeps_graph_refresh_tail_wired():
     )
 
     upload_chain = page.upload_button.calls
-    assert [entry[1]["fn"] for entry in upload_chain[7:11]] == [
+    assert [entry[1]["fn"] for entry in upload_chain[7:10]] == [
         page._app.chat_page.merge_graph_source_ids,
         page._app.chat_page.persist_conversation_source_scope,
         page._app.chat_page.refresh_chat_file_list,
-        page._app.chat_page.refresh_knowledge_graph,
     ]
     assert upload_chain[7][1]["inputs"] == [
         page._app.chat_page._graph_source_ids,
@@ -328,11 +326,8 @@ def test_register_file_index_events_keeps_graph_refresh_tail_wired():
         page._app.chat_page.chat_selected_file,
         page._app.chat_page.workbench_file_summary,
     ]
-    assert upload_chain[10][1]["inputs"] == [
-        page._app.chat_page.chat_control.conversation_id,
-        page._app.chat_page._graph_source_ids,
-        page._app.chat_page._active_file_id,
-        page._app.chat_page._indices_input[1],
+    assert page._app.chat_page.refresh_knowledge_graph not in [
+        entry[1]["fn"] for entry in upload_chain[10:]
     ]
 
 
@@ -349,6 +344,11 @@ def test_register_quick_upload_events_wires_file_and_url_uploads():
     assert file_upload_chain[0][0] == "upload"
     assert file_upload_chain[1][1]["fn"] == page.index_fn_file_with_default_loaders
     assert file_upload_chain[3] == ("then", {"fn": "public-event"})
+    assert page._app.chat_page.refresh_knowledge_graph not in [
+        entry[1]["fn"]
+        for entry in file_upload_chain
+        if isinstance(entry[1], dict) and "fn" in entry[1]
+    ]
     assert (
         page._app.chat_page.quick_urls.calls[1][1]["fn"]
         == page.index_fn_url_with_default_loaders

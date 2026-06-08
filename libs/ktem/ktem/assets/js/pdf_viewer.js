@@ -39,6 +39,10 @@ function onBlockLoad() {
   globalThis.createModal = () => {
     // Create modal for the 1st time if it does not exist
     var modal = document.getElementById("pdf-modal");
+    if (!modal) {
+      modal = document.createElement("div");
+      document.body.appendChild(modal);
+    }
     var old_position = null;
     var old_width = null;
     var old_left = null;

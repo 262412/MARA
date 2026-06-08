@@ -57,6 +57,8 @@ class _FailingPanelRuntime(_Runtime):
 class _PanelPage:
     def __init__(self):
         self.docqa: Any = _PanelRuntime()
+        self.knowledge_graph: Any = None
+        self.expected_artifact_payload = {"type": "quiz"}
 
     def _build_selected_input_map(self, *selecteds):
         return {7: list(selecteds)}
@@ -77,7 +79,7 @@ class _PanelPage:
         page_number=None,
         artifact_payload=None,
     ):
-        assert artifact_payload == {"type": "quiz"}
+        assert artifact_payload == self.expected_artifact_payload
         return f"trace:{active_file_id}:{page_number}:{question[:10]}"
 
     def _render_citations_card_html(self, retrieval_html=""):
@@ -312,6 +314,9 @@ def test_generate_studio_artifact_panel_update_returns_right_panel_outputs():
     assert "trace:file-1:2:Focus on e" in result[7]
     assert "notebook-panel-card" in result[8]
     assert result[9] == ["file-1"]
+    assert "studio-artifacts-card--ready" in result[10]["value"]
+    assert result[11]["html"].startswith("<div class='studio-artifacts-card")
+    assert len(result) == 12
     assert page.docqa.request is not None
     assert page.docqa.request.selected_inputs == {7: ["selected-source"]}
 
