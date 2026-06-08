@@ -17,6 +17,13 @@ STUDIO_NOTE_CONTROLS_FILE = (
     / "chat"
     / "studio_note_controls.py"
 )
+STUDIO_PICKER_FILE = (
+    Path(__file__).resolve().parents[1]
+    / "ktem"
+    / "pages"
+    / "chat"
+    / "studio_artifact_picker.py"
+)
 
 
 def _read_chat_page() -> str:
@@ -29,6 +36,8 @@ def _read_studio_controls() -> str:
 
 def _read_studio_control_sources() -> str:
     sources = [_read_studio_controls()]
+    if STUDIO_PICKER_FILE.exists():
+        sources.append(STUDIO_PICKER_FILE.read_text(encoding="utf-8"))
     if STUDIO_NOTE_CONTROLS_FILE.exists():
         sources.append(STUDIO_NOTE_CONTROLS_FILE.read_text(encoding="utf-8"))
     return "\n".join(sources)
@@ -39,11 +48,31 @@ def test_chat_page_exposes_studio_generate_controls():
     controls = _read_studio_control_sources()
 
     assert "render_studio_artifact_controls(self)" in chat_page
+    assert 'elem_id="studio-artifact-selector-panel"' in controls
+    assert 'elem_id="studio-artifact-overlay-backdrop"' in controls
+    assert 'elem_id="studio-artifact-detail-panel"' in controls
+    assert "studio-artifact-card-" in controls
+    assert "_artifact_slug(artifact_type)" in controls
+    assert 'elem_id="studio-artifact-detail-back"' in controls
     assert 'elem_id="studio-artifact-type"' in controls
     assert 'elem_id="studio-artifact-scope"' in controls
     assert 'elem_id="studio-artifact-prompt"' in controls
     assert 'elem_id="studio-artifact-note-ids"' in controls
     assert 'elem_id="studio-generate-artifact"' in controls
+
+
+def test_chat_page_exposes_labeled_studio_artifact_detail_fields():
+    controls = _read_studio_controls()
+
+    assert 'label="Source scope"' in controls
+    assert 'label="User prompt"' in controls
+    assert 'label="Note IDs"' in controls
+    assert 'label="Output format"' in controls
+    assert 'label="Difficulty"' in controls
+    assert 'label="Item count"' in controls
+    assert 'elem_id="studio-artifact-parameter-row"' in controls
+    assert 'elem_classes=["studio-artifact-field"]' in controls
+    assert "container=True" in controls
 
 
 def test_chat_page_binds_studio_generate_after_notebook_refresh():
@@ -53,6 +82,11 @@ def test_chat_page_binds_studio_generate_after_notebook_refresh():
     assert chat_page.index(
         "self.chat_control.conversation_id.change"
     ) < chat_page.index("bind_studio_artifact_events(self)")
+    assert "bind_studio_artifact_picker_events(page)" in controls
+    assert "select_studio_artifact_type_update" in controls
+    assert "studio_artifact_selection_outputs(page)" in controls
+    assert "page.studio_artifact_overlay_backdrop" in controls
+    assert "page.studio_artifact_detail_back_button.click" in controls
     assert "page.studio_generate_artifact_button.click" in controls
     assert "render_studio_artifact_running_update" in controls
     assert "outputs=[page.plot_panel]" in controls

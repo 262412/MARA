@@ -18,6 +18,11 @@ from .studio_artifact_outputs import (
     latest_notebook_artifact as _latest_notebook_artifact,
 )
 from .studio_artifact_outputs import unique_text as _unique_text
+from .studio_artifact_picker import (
+    bind_studio_artifact_picker_events,
+    render_studio_artifact_detail_header,
+    render_studio_artifact_picker,
+)
 from .studio_artifact_status import (
     failed_generation_studio_artifact_outputs,
     failed_regeneration_studio_artifact_outputs,
@@ -44,60 +49,71 @@ STUDIO_EXPORT_FORMAT_CHOICES = (
 
 
 def render_studio_artifact_controls(page: Any) -> None:
-    with gr.Accordion(
-        label="Studio Generate",
-        open=True,
-        elem_id="studio-artifact-generate-panel",
-    ):
-        with gr.Row():
-            page.studio_artifact_type = gr.Dropdown(
-                choices=list(STUDIO_ARTIFACT_TYPE_CHOICES),
-                value="study_guide",
-                label="Artifact",
-                container=False,
-                elem_id="studio-artifact-type",
-            )
-            page.studio_artifact_scope = gr.Dropdown(
-                choices=["page", "document", "multi-document"],
-                value="page",
-                label="Scope",
-                container=False,
-                elem_id="studio-artifact-scope",
-            )
+    render_studio_artifact_picker(page)
+    with gr.Column(
+        visible=False,
+        elem_id="studio-artifact-detail-panel",
+        elem_classes=["studio-artifact-detail-panel"],
+    ) as page.studio_artifact_detail_panel:
+        render_studio_artifact_detail_header(page)
+        page.studio_artifact_type = gr.Dropdown(
+            choices=list(STUDIO_ARTIFACT_TYPE_CHOICES),
+            value="study_guide",
+            label="Artifact",
+            visible=False,
+            container=False,
+            elem_id="studio-artifact-type",
+        )
+        page.studio_artifact_scope = gr.Dropdown(
+            choices=["page", "document", "multi-document"],
+            value="page",
+            label="Source scope",
+            container=True,
+            elem_id="studio-artifact-scope",
+            elem_classes=["studio-artifact-field"],
+        )
         page.studio_artifact_prompt = gr.Textbox(
             value="",
             lines=3,
-            label="Prompt",
-            container=False,
+            label="User prompt",
+            container=True,
             elem_id="studio-artifact-prompt",
+            elem_classes=["studio-artifact-field"],
         )
         page.studio_artifact_note_ids = gr.Textbox(
             value="",
             label="Note IDs",
-            container=False,
+            container=True,
             elem_id="studio-artifact-note-ids",
+            elem_classes=["studio-artifact-field"],
         )
-        with gr.Row():
+        with gr.Row(
+            elem_id="studio-artifact-parameter-row",
+            elem_classes=["studio-artifact-parameter-row"],
+        ):
             page.studio_artifact_format = gr.Dropdown(
                 choices=list(STUDIO_ARTIFACT_FORMAT_CHOICES),
                 value="markdown",
-                label="Format",
-                container=False,
+                label="Output format",
+                container=True,
                 elem_id="studio-artifact-format",
+                elem_classes=["studio-artifact-field"],
             )
             page.studio_artifact_difficulty = gr.Dropdown(
                 choices=["", "easy", "medium", "hard"],
                 value="",
                 label="Difficulty",
-                container=False,
+                container=True,
                 elem_id="studio-artifact-difficulty",
+                elem_classes=["studio-artifact-field"],
             )
             page.studio_artifact_count = gr.Number(
                 value=0,
                 precision=0,
-                label="Count",
-                container=False,
+                label="Item count",
+                container=True,
                 elem_id="studio-artifact-count",
+                elem_classes=["studio-artifact-field"],
             )
         page.studio_generate_artifact_button = gr.Button(
             "Generate Artifact",
@@ -136,6 +152,7 @@ def _render_studio_artifact_actions(page: Any) -> None:
 
 
 def bind_studio_artifact_events(page: Any) -> None:
+    bind_studio_artifact_picker_events(page)
     page.studio_generate_artifact_button.click(
         render_studio_artifact_running_update,
         inputs=[page.studio_artifact_type],

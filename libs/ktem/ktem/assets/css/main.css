@@ -290,6 +290,7 @@ button.selected {
   height: var(--main-area-height) !important;
   max-height: var(--main-area-height) !important;
   min-height: 0;
+  z-index: 20 !important;
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
@@ -4445,6 +4446,178 @@ body.ktem-dark-mode .gradio-container {
 .reasoning-trace-card--empty p {
   margin: 0;
   color: var(--app-text-muted);
+}
+
+.studio-artifact-selector-panel {
+  display: grid;
+  gap: 12px;
+}
+
+#studio-artifact-selector-header,
+#studio-artifact-detail-title {
+  margin-bottom: 8px;
+}
+
+.studio-artifact-selector-title,
+.studio-artifact-detail-title {
+  display: grid;
+  gap: 4px;
+}
+
+.studio-artifact-selector-title strong,
+.studio-artifact-detail-title strong {
+  color: var(--app-text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.studio-artifact-selector-title span,
+.studio-artifact-detail-title span {
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.studio-artifact-card-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.studio-artifact-card-row {
+  gap: 12px;
+}
+
+.studio-artifact-card-button {
+  min-width: 0 !important;
+}
+
+#studio-artifact-card-grid button {
+  width: 100% !important;
+  min-height: 76px !important;
+  justify-content: space-between !important;
+  padding: 14px 16px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: var(--app-surface-raised) !important;
+  color: var(--app-text) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  text-align: left !important;
+  white-space: pre-line !important;
+  box-shadow: none !important;
+}
+
+#studio-artifact-card-grid button:hover {
+  border-color: var(--app-accent) !important;
+  background: var(--app-surface) !important;
+}
+
+#studio-artifact-overlay-backdrop,
+.studio-artifact-overlay-backdrop__veil {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1590 !important;
+  background: rgb(8 17 31 / 72%) !important;
+  backdrop-filter: blur(16px) saturate(70%) brightness(70%);
+  -webkit-backdrop-filter: blur(16px) saturate(70%) brightness(70%);
+  box-shadow: inset 0 0 0 9999px rgb(8 17 31 / 18%) !important;
+}
+
+#studio-artifact-overlay-backdrop .prose,
+#studio-artifact-overlay-backdrop .html-container {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#studio-artifact-detail-panel {
+  position: fixed !important;
+  top: clamp(48px, calc(50vh - 310px), 120px) !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 1600 !important;
+  width: min(980px, calc(100vw - 64px)) !important;
+  max-height: calc(100vh - 96px) !important;
+  margin: 0 auto !important;
+  overflow: visible !important;
+  padding: 24px !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: 12px !important;
+  background: var(--app-surface) !important;
+  box-shadow: 0 24px 80px rgb(15 23 42 / 28%) !important;
+  isolation: isolate !important;
+  gap: 12px;
+}
+
+#studio-artifact-detail-panel .studio-artifact-field,
+#studio-artifact-detail-panel .studio-artifact-field > label,
+#studio-artifact-detail-panel .studio-artifact-field .wrap {
+  overflow: visible !important;
+}
+
+#studio-artifact-detail-panel .studio-artifact-field > label {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+#studio-artifact-detail-panel .block-label {
+  background: transparent !important;
+  border: 0 !important;
+  color: var(--app-text-muted) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 0 0 6px !important;
+}
+
+#studio-artifact-parameter-row {
+  align-items: end !important;
+  gap: 12px !important;
+  overflow: visible !important;
+}
+
+#studio-artifact-detail-panel .options {
+  z-index: 1705 !important;
+  border: 1px solid var(--app-border) !important;
+  background: var(--app-surface) !important;
+  color: var(--app-text) !important;
+  box-shadow: 0 18px 46px rgb(15 23 42 / 28%) !important;
+}
+
+#studio-artifact-scope .wrap,
+#studio-artifact-format .wrap,
+#studio-artifact-difficulty .wrap,
+#studio-artifact-count .wrap,
+#studio-artifact-scope .wrap-inner,
+#studio-artifact-format .wrap-inner,
+#studio-artifact-difficulty .wrap-inner,
+#studio-artifact-count .wrap-inner {
+  height: 44px !important;
+  min-height: 44px !important;
+}
+
+#studio-artifact-count input {
+  height: 44px !important;
+  min-height: 44px !important;
+  padding: 9px 12px !important;
+  line-height: 22px !important;
+  box-sizing: border-box !important;
+}
+
+#studio-artifact-prompt textarea {
+  min-height: 96px !important;
+}
+
+#studio-artifact-note-ids textarea {
+  min-height: 44px !important;
+}
+
+#studio-artifact-detail-header {
+  align-items: start;
+  gap: 12px;
+}
+
+#studio-artifact-detail-back {
+  max-width: 96px !important;
 }
 
 .studio-artifacts-card {
