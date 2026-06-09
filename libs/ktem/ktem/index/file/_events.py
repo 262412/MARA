@@ -65,31 +65,6 @@ def _append_quick_upload_chat_refresh(event_chain, page):
             ],
             show_progress="hidden",
         )
-        .then(
-            fn=page._app.chat_page.show_knowledge_graph_loading,
-            inputs=[page._app.chat_page.chat_control.conversation_id],
-            outputs=[
-                page._app.chat_page.plot_panel,
-                page._app.chat_page.knowledge_graph_status,
-            ],
-            show_progress="hidden",
-        )
-        .then(
-            fn=page._app.chat_page.refresh_knowledge_graph,
-            inputs=[
-                page._app.chat_page.chat_control.conversation_id,
-                page._app.chat_page._graph_source_ids,
-                page._app.chat_page._active_file_id,
-                page._app.chat_page._indices_input[1],
-            ],
-            outputs=[
-                page._app.chat_page.plot_panel,
-                page._app.chat_page.state_plot_panel,
-                page._app.chat_page.knowledge_graph_status,
-                page._app.chat_page._graph_source_ids,
-            ],
-            show_progress="hidden",
-        )
         .success(
             fn=lambda x: x,
             inputs=page.quick_upload_state,
@@ -148,22 +123,6 @@ def _append_uploaded_chat_graph_refresh(event_chain, page):
                 page._app.chat_page.chat_file_list,
                 page._app.chat_page.chat_selected_file,
                 page._app.chat_page.workbench_file_summary,
-            ],
-            show_progress="hidden",
-        )
-        .then(
-            fn=page._app.chat_page.refresh_knowledge_graph,
-            inputs=[
-                page._app.chat_page.chat_control.conversation_id,
-                page._app.chat_page._graph_source_ids,
-                page._app.chat_page._active_file_id,
-                page._app.chat_page._indices_input[1],
-            ],
-            outputs=[
-                page._app.chat_page.plot_panel,
-                page._app.chat_page.state_plot_panel,
-                page._app.chat_page.knowledge_graph_status,
-                page._app.chat_page._graph_source_ids,
             ],
             show_progress="hidden",
         )

@@ -10,6 +10,13 @@ from typing import Any
 from ktem.db.models import Conversation, engine
 from sqlmodel import Session, select
 
+from . import artifact_service as artifact_records
+from .artifact_models import (
+    ARTIFACT_STATUS_READY,
+    build_artifact_record,
+    normalize_artifact,
+)
+
 NOTEBOOK_KEY = "mara_notebook"
 _SAFE_PATH_PART_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -100,13 +107,17 @@ def _notebook(data_source: dict[str, Any] | None) -> dict[str, Any]:
         for note in (_normalize_note(item) for item in raw.get("notes", []))
         if note is not None
     ]
-    artifacts = raw.get("artifacts", [])
+    artifacts = [
+        artifact
+        for artifact in (normalize_artifact(item) for item in raw.get("artifacts", []))
+        if artifact is not None
+    ]
     return {
         "selected_source_ids": _unique_text(
             raw.get("selected_source_ids", source.get("graph_source_ids", []))
         ),
         "notes": notes,
-        "artifacts": deepcopy(artifacts if isinstance(artifacts, list) else []),
+        "artifacts": artifacts,
     }
 
 
@@ -298,32 +309,79 @@ def save_artifact(
     artifact_type: str,
     payload: Any,
     artifact_id: str | None = None,
+    title: str = "",
+    status: str = ARTIFACT_STATUS_READY,
+    prompt: str = "",
+    source_scope: dict[str, Any] | None = None,
+    citations: list[dict[str, Any]] | None = None,
+    exports: list[dict[str, Any]] | None = None,
+    generation: dict[str, Any] | None = None,
     timestamp: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    artifact = {
-        "artifact_id": artifact_id or uuid.uuid4().hex,
-        "type": str(artifact_type or "").strip(),
-        "payload": deepcopy(payload),
-        "created_at": _timestamp(timestamp),
-    }
+    artifact = build_artifact_record(
+        artifact_type=artifact_type,
+        payload=payload,
+        artifact_id=artifact_id,
+        title=title,
+        status=status,
+        prompt=prompt,
+        source_scope=source_scope,
+        citations=citations,
+        exports=exports,
+        generation=generation,
+        timestamp=timestamp,
+    )
     notebook = _notebook(data_source)
-    notebook["artifacts"] = [*notebook["artifacts"], artifact]
-    return _with_notebook(data_source, notebook), artifact
+    records = notebook["artifacts"]
+    notebook["artifacts"], saved_artifact = artifact_records.append_artifact_record(
+        records, artifact
+    )
+    return _with_notebook(data_source, notebook), saved_artifact
 
 
 def list_artifacts(data_source: dict[str, Any] | None) -> list[dict[str, Any]]:
-    return deepcopy(_notebook(data_source)["artifacts"])
+    return artifact_records.list_artifact_records(_notebook(data_source)["artifacts"])
 
 
 def get_artifact(
     data_source: dict[str, Any] | None,
     artifact_id: str,
 ) -> dict[str, Any] | None:
-    lookup = str(artifact_id or "").strip()
-    for artifact in _notebook(data_source)["artifacts"]:
-        if str(artifact.get("artifact_id") or "") == lookup:
-            return deepcopy(artifact)
-    return None
+    records = _notebook(data_source)["artifacts"]
+    return artifact_records.get_artifact_record(records, artifact_id)
+
+
+def delete_artifact(
+    data_source: dict[str, Any] | None,
+    artifact_id: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    notebook = _notebook(data_source)
+    records = notebook["artifacts"]
+    kept, deleted = artifact_records.delete_artifact_record(records, artifact_id)
+    notebook["artifacts"] = kept
+    return _with_notebook(data_source, notebook), deleted
+
+
+def record_artifact_export(
+    data_source: dict[str, Any] | None,
+    artifact_id: str,
+    *,
+    export_format: str,
+    path: str,
+    timestamp: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    notebook = _notebook(data_source)
+    export_record = {
+        "format": str(export_format or "").strip(),
+        "path": str(path or "").strip(),
+        "created_at": _timestamp(timestamp),
+    }
+    records = notebook["artifacts"]
+    artifacts, updated_artifact = artifact_records.record_artifact_export_record(
+        records, artifact_id, export_record
+    )
+    notebook["artifacts"] = artifacts
+    return _with_notebook(data_source, notebook), updated_artifact
 
 
 def save_artifact_to_conversation(
@@ -332,6 +390,13 @@ def save_artifact_to_conversation(
     artifact_type: str,
     payload: Any,
     artifact_id: str | None = None,
+    title: str = "",
+    status: str = ARTIFACT_STATUS_READY,
+    prompt: str = "",
+    source_scope: dict[str, Any] | None = None,
+    citations: list[dict[str, Any]] | None = None,
+    exports: list[dict[str, Any]] | None = None,
+    generation: dict[str, Any] | None = None,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
     with Session(engine) as session:
@@ -341,6 +406,51 @@ def save_artifact_to_conversation(
             artifact_type=artifact_type,
             payload=payload,
             artifact_id=artifact_id,
+            title=title,
+            status=status,
+            prompt=prompt,
+            source_scope=source_scope,
+            citations=citations,
+            exports=exports,
+            generation=generation,
+            timestamp=timestamp,
+        )
+        row.data_source = updated
+        row.date_updated = datetime.now()
+        session.add(row)
+        session.commit()
+        return artifact
+
+
+def delete_artifact_from_conversation(
+    conversation_id: str,
+    artifact_id: str,
+) -> dict[str, Any]:
+    with Session(engine) as session:
+        row = _load_conversation(session, conversation_id)
+        updated, artifact = delete_artifact(dict(row.data_source or {}), artifact_id)
+        row.data_source = updated
+        row.date_updated = datetime.now()
+        session.add(row)
+        session.commit()
+        return artifact
+
+
+def record_artifact_export_to_conversation(
+    conversation_id: str,
+    artifact_id: str,
+    *,
+    export_format: str,
+    path: str,
+    timestamp: str | None = None,
+) -> dict[str, Any]:
+    with Session(engine) as session:
+        row = _load_conversation(session, conversation_id)
+        updated, artifact = record_artifact_export(
+            dict(row.data_source or {}),
+            artifact_id,
+            export_format=export_format,
+            path=path,
             timestamp=timestamp,
         )
         row.data_source = updated
@@ -353,16 +463,20 @@ def save_artifact_to_conversation(
 def save_captured_artifact(
     conversation_id: str,
     artifact: Any,
+    **metadata: Any,
 ) -> dict[str, Any] | None:
     if artifact is None:
         return None
-    artifact_type = "artifact"
+    artifact_type = str(metadata.pop("artifact_type", "") or "artifact")
     if isinstance(artifact, dict):
         artifact_type = str(artifact.get("type") or artifact_type)
+        if isinstance(artifact.get("citations"), list):
+            metadata.setdefault("citations", artifact.get("citations"))
     return save_artifact_to_conversation(
         conversation_id,
         artifact_type=artifact_type,
         payload=artifact,
+        **metadata,
     )
 
 

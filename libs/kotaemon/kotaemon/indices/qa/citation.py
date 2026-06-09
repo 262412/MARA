@@ -10,6 +10,13 @@ from kotaemon.llms import BaseLLM
 logger = logging.getLogger(__name__)
 
 
+def _should_disable_deepseek_v4_thinking(llm: BaseLLM) -> bool:
+    source_llm = getattr(llm, "ff_original_obj", llm)
+    model = str(getattr(source_llm, "model", "") or "").lower()
+    base_url = str(getattr(source_llm, "base_url", "") or "").lower()
+    return "deepseek-v4" in model and "api.deepseek.com" in base_url
+
+
 class CiteEvidence(BaseModel):
     """List of evidences (maximum 5) to support the answer."""
 
@@ -38,11 +45,13 @@ class CitationPipeline(BaseComponent):
             "description": schema["description"],
             "parameters": schema,
         }
-        llm_kwargs = {
+        llm_kwargs: dict[str, object] = {
             "tools": [{"type": "function", "function": function}],
             "tool_choice": "required",
             "tools_pydantic": [CiteEvidence],
         }
+        if _should_disable_deepseek_v4_thinking(self.get_from_path("llm")):
+            llm_kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
         messages = [
             SystemMessage(
                 content=(

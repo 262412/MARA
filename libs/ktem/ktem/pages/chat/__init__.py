@@ -8,7 +8,6 @@ from copy import deepcopy
 from typing import Any
 
 import gradio as gr
-import markdown
 from ktem.app import BasePage
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARuntime
@@ -32,6 +31,7 @@ from ...utils import SUPPORTED_LANGUAGE_MAP, get_file_names_regex, get_urls
 from ...utils.commands import WEB_SEARCH_COMMAND
 from ...utils.hf_papers import get_recommended_papers
 from ...utils.rate_limit import check_rate_limit
+from .answer_rendering import format_chat_message_html
 from .chat_docqa_runtime import (
     build_web_docqa_request,
     docqa_research_control_inputs,
@@ -62,8 +62,11 @@ from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
 from .paper_list import PaperListPage
 from .report import ReportIssue
+from .studio_artifact_controls import (
+    bind_studio_artifact_events,
+    render_studio_artifact_controls,
+)
 from .studio_artifacts import (
-    render_controller_trace_html,
     render_conversation_notebook_update,
     render_notebook_panel_html,
     render_studio_trace_panel,
@@ -752,16 +755,7 @@ class ChatPage(BasePage):
                         elem_id="kg-answer-hint",
                     )
                     gr.HTML("<div class='answer-panel-label'>Answer</div>")
-                    self.answer_panel = gr.Markdown(
-                        value="",
-                        elem_id="answer-panel",
-                        latex_delimiters=[
-                            {"left": "$$", "right": "$$", "display": True},
-                            {"left": "$", "right": "$", "display": False},
-                            {"left": "\\(", "right": "\\)", "display": False},
-                            {"left": "\\[", "right": "\\]", "display": True},
-                        ],
-                    )
+                    self.answer_panel = gr.HTML(value="", elem_id="answer-panel")
                     self.citations_panel = gr.HTML(
                         self._render_citations_card_html(),
                         elem_id="citations-card",
@@ -773,24 +767,10 @@ class ChatPage(BasePage):
                     self.notebook_panel = gr.HTML(
                         render_notebook_panel_html(), elem_id="notebook-panel-card"
                     )
+                    render_studio_artifact_controls(self)
 
                 with gr.Column(elem_id="info-expand"):
-                    gr.HTML(
-                        "<div class='knowledge-map-title'>Knowledge Map (Page-level)</div>"
-                    )
-                    self.modal = gr.HTML("<div id='pdf-modal'></div>")
-                    self.knowledge_graph_status = gr.Markdown(
-                        "Status: no graph generated yet.",
-                        elem_id="knowledge-graph-status",
-                    )
-                    self.knowledge_graph_refresh = gr.Button(
-                        "Generate / Refresh Knowledge Graph",
-                        variant="secondary",
-                        elem_id="knowledge-graph-refresh",
-                    )
-                    self.plot_panel = gr.HTML(
-                        "", visible=True, elem_id="knowledge-graph-plot"
-                    )
+                    self.plot_panel = gr.HTML("", visible=False)
                     self.info_panel = gr.HTML(elem_id="html-info-panel")
 
                 with gr.Accordion(
@@ -1808,26 +1788,7 @@ class ChatPage(BasePage):
 
     def _format_chat_message(self, content: str, role: str) -> str:
         """Format a chat message as a bubble"""
-        import html
-
-        escaped_content = html.escape(content)
-        if role == "assistant":
-            formatted_content = markdown.markdown(
-                escaped_content,
-                extensions=[
-                    "markdown.extensions.tables",
-                    "markdown.extensions.fenced_code",
-                    "markdown.extensions.nl2br",
-                ],
-            )
-        else:
-            # User messages are rendered as plain text inside the bubble.
-            formatted_content = escaped_content.replace("\n", "<br>")
-        return (
-            f'<div class="chat-message {role}">'
-            f'<div class="chat-message-content">{formatted_content}</div>'
-            "</div>"
-        )
+        return format_chat_message_html(content, role)
 
     def _generate_answer_panel_html(
         self,
@@ -2356,14 +2317,6 @@ class ChatPage(BasePage):
                 concurrency_limit=20,
             )
 
-        self.chat_control.btn_info_expand.click(
-            fn=lambda is_expanded: (
-                gr.update(scale=INFO_PANEL_SCALES[is_expanded]),
-                not is_expanded,
-            ),
-            inputs=self._info_panel_expanded,
-            outputs=[self.info_column, self._info_panel_expanded],
-        )
         self.chat_control.btn_chat_expand.click(
             fn=None, inputs=None, js="function() {toggleChatColumn();}"
         )
@@ -2787,6 +2740,7 @@ class ChatPage(BasePage):
             [self.chat_control.conversation_id],
             [self.plot_panel, self.notebook_panel],
         )
+        bind_studio_artifact_events(self)
 
         self.followup_questions.select(
             self.chat_suggestion.select_example,
@@ -3356,16 +3310,18 @@ class ChatPage(BasePage):
             chat_state,
             answer_html if active_view else gr.skip(),
             self._render_citations_card_html(refs) if active_view else gr.skip(),
-            self._render_reasoning_trace_html(
-                chat_input,
-                refs,
-                answer_html,
-                active_file_id or "",
-                normalized_page_number,
-                artifact_payload,
-            )
-            if active_view
-            else gr.skip(),
+            (
+                self._render_reasoning_trace_html(
+                    chat_input,
+                    refs,
+                    answer_html,
+                    active_file_id or "",
+                    normalized_page_number,
+                    artifact_payload,
+                )
+                if active_view
+                else gr.skip()
+            ),
             normalized_page_number,
             active_file_id or "",
             str(chat_input or ""),
@@ -3431,11 +3387,6 @@ class ChatPage(BasePage):
                 response.active_file_id or active_file_id or "",
                 response.page_number or normalized_page_number,
                 artifact_payload,
-            ) + render_controller_trace_html(
-                route_decision=response.route_decision,
-                retrieve_decision=response.retrieve_decision,
-                verify_decision=response.verify_decision,
-                evidence_bundle=response.evidence_bundle,
             )
 
             active_view = is_active_view()
@@ -3486,16 +3437,18 @@ class ChatPage(BasePage):
                 chat_state,
                 answer_html if active_view else gr.skip(),
                 self._render_citations_card_html(refs) if active_view else gr.skip(),
-                self._render_reasoning_trace_html(
-                    chat_input,
-                    refs,
-                    answer_html,
-                    active_file_id or "",
-                    normalized_page_number,
-                    artifact_payload,
-                )
-                if active_view
-                else gr.skip(),
+                (
+                    self._render_reasoning_trace_html(
+                        chat_input,
+                        refs,
+                        answer_html,
+                        active_file_id or "",
+                        normalized_page_number,
+                        artifact_payload,
+                    )
+                    if active_view
+                    else gr.skip()
+                ),
                 normalized_page_number,
                 active_file_id or "",
                 str(chat_input or ""),

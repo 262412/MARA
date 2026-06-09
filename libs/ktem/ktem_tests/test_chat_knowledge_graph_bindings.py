@@ -54,7 +54,6 @@ def _make_page():
     chat_file_click = _FakeTrigger("chat_file_click")
     selector_choices = _FakeTrigger("selector_choices")
     conversation_id = _FakeTrigger("conversation_id")
-    refresh_button = _FakeTrigger("knowledge_graph_refresh")
 
     page = SimpleNamespace(
         _app=app,
@@ -65,7 +64,6 @@ def _make_page():
         _active_file_id="active-file-id",
         state_plot_panel="state-plot-panel",
         plot_panel="plot-panel",
-        knowledge_graph_status="knowledge-graph-status",
         chat_file_rows="chat-file-rows",
         chat_file_list="chat-file-list",
         chat_selected_file="chat-selected-file",
@@ -73,7 +71,6 @@ def _make_page():
         chat_file_filter=chat_file_filter,
         _chat_file_click=chat_file_click,
         first_selector_choices=selector_choices,
-        knowledge_graph_refresh=refresh_button,
         refresh_chat_file_list=object(),
         show_knowledge_graph_loading=object(),
         refresh_knowledge_graph=object(),
@@ -87,7 +84,7 @@ def _make_page():
     return page
 
 
-def test_bind_knowledge_graph_events_wires_refresh_chains():
+def test_bind_knowledge_graph_events_wires_source_scope_chains():
     page = _make_page()
 
     bind_knowledge_graph_events(page)
@@ -95,18 +92,13 @@ def test_bind_knowledge_graph_events_wires_refresh_chains():
     selector_change_chain = page._indices_input[1].calls[0]
     assert selector_change_chain.trigger_name == "change"
     assert selector_change_chain.steps[0][1]["fn"] is page.refresh_chat_file_list
-    assert [step[1]["fn"] for step in selector_change_chain.steps[1:]] == [
-        page.show_knowledge_graph_loading,
-        page.refresh_knowledge_graph,
-    ]
+    assert len(selector_change_chain.steps) == 1
 
     selector_scope_chain = page.first_selector_choices.calls[0]
     assert [step[1]["fn"] for step in selector_scope_chain.steps] == [
         page.sync_graph_source_ids_with_selector_choices,
         page.persist_conversation_source_scope,
         page.refresh_chat_file_list,
-        page.show_knowledge_graph_loading,
-        page.refresh_knowledge_graph,
     ]
 
     conversation_chain = page.chat_control.conversation_id.calls[0]
@@ -115,43 +107,22 @@ def test_bind_knowledge_graph_events_wires_refresh_chains():
         page.sync_graph_source_ids_with_selector_choices,
         page.persist_conversation_source_scope,
         page.refresh_chat_file_list,
-        page.show_knowledge_graph_loading,
-        page.refresh_knowledge_graph,
     ]
 
-    refresh_click_chain = page.knowledge_graph_refresh.calls[0]
-    assert refresh_click_chain.steps[0][0] == "click"
-    assert refresh_click_chain.steps[0][1]["inputs"] == [
-        page.chat_control.conversation_id
-    ]
-    assert refresh_click_chain.steps[0][1]["outputs"] == [
-        page.plot_panel,
-        page.knowledge_graph_status,
-    ]
-    assert refresh_click_chain.steps[0][1]["show_progress"] == "hidden"
-    assert refresh_click_chain.steps[1][1]["fn"] is page.generate_knowledge_graph
-    assert refresh_click_chain.steps[1][1]["inputs"] == [
-        page.chat_control.conversation_id,
-        page._graph_source_ids,
-        page._active_file_id,
-        page._indices_input[1],
-    ]
-    assert refresh_click_chain.steps[1][1]["show_progress"] == "minimal"
+    assert not hasattr(page, "knowledge_graph_refresh")
 
 
-def test_subscribe_public_knowledge_graph_events_registers_refresh_pipeline():
+def test_subscribe_public_knowledge_graph_events_registers_source_scope_pipeline():
     page = _make_page()
     page.generate_knowledge_graph = object()
 
     subscribe_public_knowledge_graph_events(page)
 
-    assert len(page._app.subscriptions) == 5
+    assert len(page._app.subscriptions) == 3
     names = {name for name, _ in page._app.subscriptions}
     assert names == {"onFileIndexindex-1Changed"}
     assert [definition["fn"] for _, definition in page._app.subscriptions] == [
         page.sync_graph_source_ids_with_selector_choices,
         page.persist_conversation_source_scope,
         page.refresh_chat_file_list,
-        page.show_knowledge_graph_loading,
-        page.refresh_knowledge_graph,
     ]

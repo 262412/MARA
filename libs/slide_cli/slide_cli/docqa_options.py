@@ -12,8 +12,32 @@ TASK_TYPES = (
     "flashcards",
     "mindmap",
     "slide_outline",
+    "briefing_doc",
+    "faq",
+    "timeline",
+    "custom_report",
+    "data_table",
+    "infographic",
+    "slide_deck",
+    "audio_overview",
+    "video_overview",
 )
-ARTIFACT_TYPES = ("study_guide", "quiz", "flashcards", "mindmap", "slide_outline")
+ARTIFACT_TYPES = (
+    "study_guide",
+    "quiz",
+    "flashcards",
+    "mindmap",
+    "slide_outline",
+    "briefing_doc",
+    "faq",
+    "timeline",
+    "custom_report",
+    "data_table",
+    "infographic",
+    "slide_deck",
+    "audio_overview",
+    "video_overview",
+)
 
 
 def _source_options():

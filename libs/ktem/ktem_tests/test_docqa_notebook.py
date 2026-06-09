@@ -16,6 +16,7 @@ from ktem.docqa._runtime_notebook import (
     select_conversation_sources,
     set_selected_sources,
 )
+from ktem.docqa.artifact_evaluation import evaluate_artifact_collection
 from sqlmodel import Session, select
 
 
@@ -84,12 +85,14 @@ def test_notebook_artifacts_are_saved_without_losing_notes():
     )
 
     assert list_notes(updated) == [note]
-    assert artifact == {
-        "artifact_id": "artifact-1",
-        "type": "quiz",
-        "payload": {"questions": []},
-        "created_at": "2026-05-31T12:02:00+00:00",
-    }
+    assert artifact["artifact_id"] == "artifact-1"
+    assert artifact["type"] == "quiz"
+    assert artifact["payload"] == {"questions": []}
+    assert artifact["status"] == "ready"
+    assert artifact["title"] == "Quiz"
+    assert artifact["source_scope"] == {"mode": "document", "source_ids": []}
+    assert artifact["created_at"] == "2026-05-31T12:02:00+00:00"
+    assert artifact["updated_at"] == "2026-05-31T12:02:00+00:00"
     assert updated[NOTEBOOK_KEY]["artifacts"] == [artifact]
 
 
@@ -245,12 +248,13 @@ def test_conversation_artifact_is_persisted_to_notebook():
             timestamp="2026-05-31T12:06:00+00:00",
         )
 
-        assert artifact == {
-            "artifact_id": "artifact-1",
-            "type": "study_guide",
-            "payload": {"sections": []},
-            "created_at": "2026-05-31T12:06:00+00:00",
-        }
+        assert artifact["artifact_id"] == "artifact-1"
+        assert artifact["type"] == "study_guide"
+        assert artifact["payload"] == {"sections": []}
+        assert artifact["status"] == "ready"
+        assert artifact["title"] == "Study Guide"
+        assert artifact["created_at"] == "2026-05-31T12:06:00+00:00"
+        assert artifact["updated_at"] == "2026-05-31T12:06:00+00:00"
         assert get_notebook(conversation_id)["artifacts"] == [artifact]
         assert list_artifacts({NOTEBOOK_KEY: get_notebook(conversation_id)}) == [
             artifact
@@ -259,6 +263,55 @@ def test_conversation_artifact_is_persisted_to_notebook():
             get_artifact({NOTEBOOK_KEY: get_notebook(conversation_id)}, "artifact-1")
             == artifact
         )
+    finally:
+        with Session(engine) as session:
+            cleanup_row = session.exec(
+                select(Conversation).where(Conversation.id == conversation_id)
+            ).one_or_none()
+            if cleanup_row is not None:
+                session.delete(cleanup_row)
+                session.commit()
+
+
+def test_cross_format_artifacts_survive_reload_for_collection_evaluation():
+    conversation = Conversation(user="user-1")
+    conversation.data_source = {"origin": "cli"}
+    with Session(engine) as session:
+        session.add(conversation)
+        session.commit()
+        session.refresh(conversation)
+        conversation_id = conversation.id
+
+    try:
+        save_artifact_to_conversation(
+            conversation_id,
+            artifact_type="study_guide",
+            payload={"overview": "Grounded overview."},
+            artifact_id="artifact-1",
+            source_scope={"mode": "multi-document", "source_ids": ["pdf", "pptx"]},
+            citations=[
+                {"citation_id": "c1", "source_id": "pdf", "source_name": "a.pdf"},
+                {"citation_id": "c2", "source_id": "pptx", "source_name": "b.pptx"},
+            ],
+        )
+        save_artifact_to_conversation(
+            conversation_id,
+            artifact_type="quiz",
+            payload={"multiple_choice": []},
+            artifact_id="artifact-2",
+            source_scope={"mode": "multi-document", "source_ids": ["docx", "image"]},
+            citations=[
+                {"citation_id": "c3", "source_id": "docx", "source_name": "c.docx"},
+                {"citation_id": "c4", "source_id": "image", "source_name": "d.png"},
+            ],
+        )
+
+        report = evaluate_artifact_collection(
+            get_notebook(conversation_id)["artifacts"]
+        )
+
+        assert report["artifact_count"] == 2
+        assert set(report["source_format_summary"]) == {"docx", "image", "pdf", "pptx"}
     finally:
         with Session(engine) as session:
             cleanup_row = session.exec(

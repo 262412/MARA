@@ -19,7 +19,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_QA_CITATION_PROMPT = """
 Use the following pieces of context to answer the question at the end.
 Provide DETAILED ansswer with clear explanation.
-Format answer with easy to follow bullets / paragraphs.
+Return the FINAL ANSWER as Markdown, not raw HTML. Do not return one unbroken paragraph; put a blank line between paragraphs, headings, lists, formulas, and tables.
+If the user asks for a table, comparison, matrix, or summary table, you MUST include a Markdown table with a header and separator row, e.g. | Aspect | Summary | and | --- | --- |.
+Put a blank line before and after each table; never write pipe-delimited table rows inline inside a paragraph.
+For mathematical formulas and equations, use LaTeX with $...$ for inline math and $$...$$ for display math. Do not use backticks for mathematical variables or equations.
+For code, use fenced Markdown code blocks with triple backticks such as ```python when a language tag is clear.
 If you don't know the answer, just say that you don't know, don't try to make up an answer.
 Use the same language as the question to response.
 

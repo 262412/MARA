@@ -80,17 +80,21 @@ def test_css_declares_semantic_research_palette():
 def test_light_palette_is_soft_gray_not_plain_white():
     css = _read_css()
 
-    assert "--app-bg: #edf2f7;" in css
-    assert "--app-surface: #f8fafc;" in css
-    assert "--app-surface-raised: #f3f6fa;" in css
-    assert "Theme Override: match provided dark-indigo gradient reference UI" not in css
-    assert "--theme-panel-glass" not in css
-    assert ".gradio-container label" in css
+    assert "--app-bg: #d2dde8;" in css
+    assert "--app-surface: #e0e8f0;" in css
+    assert "--app-surface-raised: #d9e3ed;" in css
+    assert "--app-text-muted: #475569;" in css
+    assert "--reading-surface: #f4efe3;" in css
+    assert "--reading-border: #d7c9ad;" in css
+    assert "--reading-muted: #51483b;" in css
+    assert "--app-text-muted: #cbd5e1;" in css
+    assert "gradio-app {\n  background: var(--app-bg) !important;" in css
+    assert "background: var(--reading-surface);" in css
+    assert "dark-indigo gradient" not in css and "--theme-panel-glass" not in css
+    assert ".gradio-container label" in css and '[data-testid="block-info"]' in css
     assert "--block-border-color: var(--app-border);" in css
-    assert '[data-testid="block-info"]' in css
     assert ".gradio-container .form" in css
-    assert "#ktem-theme-toggle" in css
-    assert "#mara-shell-actions" in css
+    assert "#ktem-theme-toggle" in css and "#mara-shell-actions" in css
     assert "position: static;" in css
     assert "background: var(--app-surface-raised)" in css
     assert "#app-version-badge" in css
@@ -115,7 +119,7 @@ def test_chat_page_uses_page_centric_workbench_layout():
     assert 'elem_id="answer-expand"' in chat_page
     assert 'with gr.Row(elem_id="page-workbench-layout"):' in chat_page
     assert 'with gr.Column(elem_id="info-expand"):' in chat_page
-    assert "knowledge-map-title" in chat_page
+    assert "knowledge-map-title" not in chat_page
     assert (
         "value=\"<div class='pdf-preview-notice'>Selected page preview.</div>\""
         in chat_panel
@@ -168,7 +172,7 @@ def test_workbench_matches_reference_prototype_structure():
     assert "refresh_page_thumbnail_search" not in chat_page
     assert "Suggested questions for this page" not in chat_page
     assert "_render_text_thumbnail_preview" in chat_page
-    assert chat_page.index("right-ask-tabs") < chat_page.index("knowledge-map-title")
+    assert chat_page.index("right-ask-tabs") < chat_page.index("info-expand")
 
     for label in [
         '"chat"',
@@ -343,7 +347,7 @@ def test_css_preserves_graph_lab_dark_theme_hooks():
     assert "body.dark .gradio-container" in css
     assert "body.ktem-dark-mode .gradio-container" in css
     assert "--graph-dark-surface" in css
-    assert "#knowledge-graph-plot .kg-preview-card" in css
+    assert ".studio-kg-viewer-scope .kg-preview-card" in css
     assert "var(--graph-dark-surface)" in css
 
 

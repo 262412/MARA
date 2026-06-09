@@ -332,6 +332,49 @@ def test_mara_controller_off_ignores_planner_and_uses_route_policy(monkeypatch):
     assert captured["result"].controller_decision.legacy_route == "doc_text"
 
 
+def test_mara_text_route_adds_answer_format_requirements(monkeypatch):
+    captured = {}
+
+    def capture_stream(_self, message, _conv_id, _history, **_kwargs):
+        captured["message"] = message
+        yield Document(channel="chat", content="grounded answer")
+        return Document(channel="chat", content="grounded answer")
+
+    monkeypatch.setattr(FullQAPipeline, "stream", capture_stream)
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.route_policy = "doc"
+    pipeline.verification_mode = "off"
+    monkeypatch.setattr(
+        pipeline,
+        "retrieve",
+        lambda _message, _history: (
+            [
+                RetrievedDocument(
+                    text="Attention uses Q, K, V matrices.",
+                    id_="doc-1",
+                    metadata={"file_id": "file-1", "page_label": "7"},
+                )
+            ],
+            [],
+        ),
+    )
+
+    list(
+        pipeline.stream(
+            "Tell me what formulas are on this page and summarize with a table.",
+            "conv-1",
+            [],
+        )
+    )
+
+    assert captured["message"].startswith("Tell me what formulas")
+    assert "Return the final answer as Markdown" in captured["message"]
+    assert "Put a blank line between paragraphs" in captured["message"]
+    assert "Markdown table" in captured["message"]
+    assert "$...$" in captured["message"]
+    assert "```" in captured["message"]
+
+
 def test_mara_abstain_route_returns_without_text_rag(monkeypatch):
     monkeypatch.setattr(FullQAPipeline, "stream", _fail_if_text_rag_runs("Abstain"))
     pipeline = MaraAgentPipeline(retrievers=[])

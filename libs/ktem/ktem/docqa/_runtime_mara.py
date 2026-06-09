@@ -142,6 +142,7 @@ def copy_request_fields(target: Any, source: Any) -> None:
     target.task_type = source.task_type
     target.agent_mode = source.agent_mode
     target.artifact_type = source.artifact_type
+    target.note_ids = source.note_ids
     target.controller_mode = source.controller_mode
     target.route_policy = source.route_policy
     target.planner_model = source.planner_model

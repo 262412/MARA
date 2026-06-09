@@ -59,15 +59,6 @@ class ConversationControl(BasePage):
                 elem_id="chat-expand-button",
                 visible=False,
             )
-            self.btn_info_expand = gr.Button(
-                value="",
-                icon=f"{ASSETS_DIR}/expand.svg",
-                min_width=2,
-                scale=1,
-                size="sm",
-                elem_classes=["no-background", "body-text-color"],
-                elem_id="info-expand-button",
-            )
         self.conversation_id = gr.State(value="")
         self.conversation = gr.Dropdown(
             label="Chat sessions",

@@ -31,6 +31,21 @@ MARA_VISUAL_EVIDENCE_ONLY_MESSAGE = (
     "Use the cited page evidence or configure a visual generator for a grounded "
     "visual answer."
 )
+ANSWER_FORMAT_REQUIREMENTS = (
+    "\n\nAnswer formatting requirements:\n"
+    "- Return the final answer as Markdown, not raw HTML.\n"
+    "- Put a blank line between paragraphs, headings, lists, formulas, tables, "
+    "and code blocks.\n"
+    "- Render mathematical formulas as LaTeX: use $...$ for inline formulas "
+    "and $$...$$ on separate lines for display formulas. Do not use backticks "
+    "for mathematical variables or equations.\n"
+    "- Render requested summaries, comparisons, and tabular answers as Markdown "
+    "tables with a header row and separator row. Put a blank line before and "
+    "after each table, and never write pipe-delimited table rows inline inside "
+    "a paragraph.\n"
+    "- Render code as fenced Markdown code blocks with triple backticks, such "
+    "as ```python, when a language tag is clear.\n"
+)
 
 _TASK_KEYWORDS = {
     "study_guide": ("study guide", "study-guide"),
@@ -145,8 +160,9 @@ def _collect_text_rag_generation(
 ) -> tuple[str, list[Document]]:
     events: list[Document] = []
     answer = ""
+    generation_message = _message_with_answer_format_requirements(message)
     stream = super(MaraAgentPipeline, pipeline).stream(
-        message, conv_id, history, **kwargs
+        generation_message, conv_id, history, **kwargs
     )
     while True:
         try:
@@ -160,6 +176,13 @@ def _collect_text_rag_generation(
     if not answer and isinstance(returned, Document) and returned.channel == "chat":
         answer = "" if returned.content is None else str(returned.content)
     return answer, events
+
+
+def _message_with_answer_format_requirements(message: str) -> str:
+    prompt = str(message or "").rstrip()
+    if "Return the final answer as Markdown" in prompt:
+        return prompt
+    return prompt + ANSWER_FORMAT_REQUIREMENTS
 
 
 def _execution_trace_events(

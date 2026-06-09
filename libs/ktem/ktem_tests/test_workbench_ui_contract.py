@@ -117,12 +117,30 @@ def test_workbench_removes_static_search_and_accordion_controls():
     chat_page = (package_root / "pages" / "chat" / "__init__.py").read_text(
         encoding="utf-8"
     )
+    chat_control = (package_root / "pages" / "chat" / "control.py").read_text(
+        encoding="utf-8"
+    )
     main_js = (package_root / "assets" / "js" / "main.js").read_text(encoding="utf-8")
+    pdf_viewer_js = (package_root / "assets" / "js" / "pdf_viewer.js").read_text(
+        encoding="utf-8"
+    )
 
     assert 'placeholder="Search within file..."' not in chat_page
     assert 'self.page_strip_search = gr.State(value="")' in chat_page
     assert 'label="Knowledge Map (Page-level)"' not in chat_page
+    assert "Knowledge Map (Page-level)" not in chat_page
+    assert 'elem_id="knowledge-graph-refresh"' not in chat_page
+    assert 'elem_id="knowledge-graph-status"' not in chat_page
+    assert 'id="pdf-modal"' not in chat_page
+    assert 'elem_id="info-expand-button"' not in chat_control
+    assert "self.knowledge_graph_refresh = gr.Button" not in chat_page
+    assert 'elem_id="knowledge-graph-plot"' not in chat_page
+    assert 'self.plot_panel = gr.HTML("", visible=False)' in chat_page
+    assert 'document.querySelector("#knowledge-graph-plot")' not in main_js
+    assert 'document.querySelectorAll(".knowledge-graph-shell")' in main_js
     assert 'with gr.Column(elem_id="info-expand"):' in chat_page
+    assert 'modal = document.createElement("div")' in pdf_viewer_js
+    assert "document.body.appendChild(modal)" in pdf_viewer_js
     assert "corpusAddPanel.classList.toggle" not in main_js
     assert "fileInput.click()" in main_js
 
@@ -166,6 +184,8 @@ def test_workbench_css_keeps_long_lists_inside_scrollable_columns():
             "height: var(--workbench-viewport-height) !important;" in block
             for block in blocks
         )
+        assert any("position: sticky !important;" in block for block in blocks)
+        assert any("top: 0 !important;" in block for block in blocks)
     for selector in ["#chat-area", "#document-reader-panel"]:
         blocks = [
             css[match.start() : css.index("}", match.start())]
@@ -180,3 +200,39 @@ def test_workbench_css_keeps_long_lists_inside_scrollable_columns():
     assert any("flex-wrap: nowrap !important;" in block for block in chat_info_blocks)
     assert "overflow-y: auto !important;" in css[css.index("#chat-file-list {") :]
     assert "overflow-y: auto !important;" in css[css.index("#page-thumbnail-list {") :]
+
+
+def test_answer_panel_renders_rich_markdown_and_math():
+    from pathlib import Path
+
+    package_root = Path(__file__).resolve().parents[1] / "ktem"
+    css = (package_root / "assets" / "css" / "main.css").read_text(encoding="utf-8")
+    main_js = (package_root / "assets" / "js" / "main.js").read_text(encoding="utf-8")
+
+    assert "function enforceAnswerPanelScroll()" in main_js
+    assert 'const infoPanel = document.getElementById("chat-info-panel")' in main_js
+    assert "answerPanel.style.maxHeight =" in main_js
+    assert 'answerPanel.style.overflowY = "auto";' in main_js
+    assert 'window.addEventListener("resize", enforceAnswerPanelScroll);' in main_js
+    assert "renderAnswerPanelMath" in main_js
+    assert "katex.renderToString" in main_js
+    assert ".ktem-math-source" in main_js
+    assert 'self.answer_panel = gr.HTML(value="", elem_id="answer-panel")' in (
+        package_root / "pages" / "chat" / "__init__.py"
+    ).read_text(encoding="utf-8")
+    assert "#html-info-panel,\n#answer-panel {\n  height: 100% !important;" not in css
+    for token in [
+        "#answer-panel .chat-message-content p",
+        "#answer-panel .chat-message-content ul",
+        "#answer-panel .chat-message-content table",
+        "#answer-panel .chat-message-content th",
+        "#answer-panel .chat-message-content pre",
+        "#answer-panel .ktem-math--display",
+        "--answer-panel-max-height:",
+        "max-height: var(--answer-panel-max-height);",
+        "overflow-y: auto !important;",
+        "max-width: none;",
+        "margin: 12px 8px;",
+        "overflow-wrap: anywhere;",
+    ]:
+        assert token in css

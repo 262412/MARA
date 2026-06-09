@@ -219,12 +219,26 @@ class _DummyNotebookService:
         *,
         artifact_type: str,
         payload: Any,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         artifact = {
-            "artifact_id": "artifact-1",
+            "artifact_id": kwargs.get("artifact_id")
+            or f"artifact-{len(self.notebooks[conversation_id]['artifacts']) + 1}",
             "type": artifact_type,
+            "title": kwargs.get("title") or artifact_type.replace("_", " ").title(),
+            "status": kwargs.get("status") or "ready",
+            "prompt": kwargs.get("prompt", ""),
+            "source_scope": kwargs.get(
+                "source_scope", {"mode": "document", "source_ids": []}
+            ),
             "payload": payload,
+            "citations": kwargs.get("citations", []),
+            "exports": kwargs.get("exports", []),
+            "generation": kwargs.get(
+                "generation", {"adapter": "fixture", "parameters": {}}
+            ),
             "created_at": "2026-05-31T12:06:00+00:00",
+            "updated_at": "2026-05-31T12:06:00+00:00",
         }
         artifacts = cast(
             list[dict[str, Any]],
@@ -466,10 +480,78 @@ def test_docqa_artifacts_generate_uses_selected_sources_and_saves_artifact(
     assert request.task_type == "quiz"
     assert request.artifact_type == "quiz"
     assert request.agent_mode == "thorough"
-    assert _extract_json_payload(result.output) == {
-        "artifact_id": "artifact-1",
-        "type": "quiz",
-        "payload": {"type": "quiz", "multiple_choice": []},
-        "created_at": "2026-05-31T12:06:00+00:00",
-    }
+    payload = _extract_json_payload(result.output)
+    assert payload["artifact_id"] == "artifact-1"
+    assert payload["type"] == "quiz"
+    assert payload["status"] == "ready"
+    assert payload["title"] == "Quiz"
+    assert payload["payload"] == {"type": "quiz", "multiple_choice": []}
+    assert payload["created_at"] == "2026-05-31T12:06:00+00:00"
     assert service.notebooks["conv-1"]["artifacts"][0]["type"] == "quiz"
+
+
+def test_docqa_artifacts_generate_uses_notebook_note_content(monkeypatch):
+    runtime = _DummyRuntime()
+    service = _DummyNotebookService()
+    service.notebooks["conv-1"]["notes"].append(
+        {
+            "note_id": "note-1",
+            "title": "Grounding note",
+            "text": "Use this note as study guide evidence.",
+        }
+    )
+    monkeypatch.setattr("slide_cli.docqa_cli.create_docqa_runtime", lambda: runtime)
+    monkeypatch.setattr(
+        "slide_cli.docqa_notebook_cli._notebook_service",
+        lambda: service,
+    )
+
+    result = CliRunner().invoke(
+        docqa,
+        [
+            "artifacts",
+            "generate",
+            "conv-1",
+            "--type",
+            "study_guide",
+            "--note",
+            "note-1",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    request = runtime.requests[0]
+    assert request.note_ids == ["note-1"]
+    assert "Notebook notes:" in request.prompt
+    assert "Grounding note" in request.prompt
+    assert "Use this note as study guide evidence." in request.prompt
+    artifact = _extract_json_payload(result.output)
+    assert artifact["source_scope"]["note_ids"] == ["note-1"]
+
+
+def test_docqa_artifacts_generate_rejects_missing_note(monkeypatch):
+    runtime = _DummyRuntime()
+    service = _DummyNotebookService()
+    monkeypatch.setattr("slide_cli.docqa_cli.create_docqa_runtime", lambda: runtime)
+    monkeypatch.setattr(
+        "slide_cli.docqa_notebook_cli._notebook_service",
+        lambda: service,
+    )
+
+    result = CliRunner().invoke(
+        docqa,
+        [
+            "artifacts",
+            "generate",
+            "conv-1",
+            "--type",
+            "study_guide",
+            "--note",
+            "missing-note",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Notebook note does not exist: missing-note" in result.output
+    assert runtime.requests == []

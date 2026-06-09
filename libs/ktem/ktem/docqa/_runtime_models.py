@@ -26,6 +26,7 @@ class DocQARequest:
     task_type: Optional[str] = None
     agent_mode: Optional[str] = None
     artifact_type: Optional[str] = None
+    note_ids: Optional[list[str]] = None
     controller_mode: Optional[str] = None
     route_policy: Optional[str] = None
     planner_model: Optional[str] = None

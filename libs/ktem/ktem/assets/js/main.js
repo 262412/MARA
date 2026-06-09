@@ -1,5 +1,7 @@
 function run() {
   let answerPanelObserver = globalThis._ktemAnswerPanelObserver || null;
+  let answerMathRetry = globalThis._ktemAnswerMathRetry || null;
+  let answerMathRetryCount = Number(globalThis._ktemAnswerMathRetryCount || 0);
   let previewSrcPoller = globalThis._ktemPreviewSrcPoller || null;
   let knowledgeGraphObserver = globalThis._ktemKnowledgeGraphObserver || null;
   let lastPreviewSrc = globalThis._ktemLastPreviewSrc || null;
@@ -285,29 +287,82 @@ function run() {
   }
 
   function enforceAnswerPanelScroll() {
-    let answerPanel = document.getElementById("answer-panel");
-    let answerExpand = document.getElementById("answer-expand");
-    if (!answerPanel || !answerExpand) {
+    const answerPanel = document.getElementById("answer-panel");
+    const answerExpand = document.getElementById("answer-expand");
+    const infoPanel = document.getElementById("chat-info-panel");
+    if (!answerPanel || !answerExpand || !infoPanel) {
       return;
     }
 
-    answerExpand.style.overflow = "hidden";
     answerExpand.style.minHeight = "0";
+    answerExpand.style.overflow = "visible";
 
     let node = answerPanel.parentElement;
     while (node && node !== answerExpand) {
       node.style.minHeight = "0";
-      node.style.height = "100%";
-      node.style.maxHeight = "100%";
-      node.style.overflow = "hidden";
+      node.style.height = "auto";
+      node.style.maxHeight = "none";
+      node.style.overflow = "visible";
       node = node.parentElement;
     }
 
-    answerPanel.style.minHeight = "0";
-    answerPanel.style.height = "100%";
-    answerPanel.style.maxHeight = "100%";
+    const answerRect = answerPanel.getBoundingClientRect();
+    const infoRect = infoPanel.getBoundingClientRect();
+    const availableHeight = Math.floor(infoRect.bottom - answerRect.top - 14);
+    const maxHeight = Math.max(132, availableHeight);
+
+    answerPanel.style.height = "auto";
+    answerPanel.style.maxHeight = `${maxHeight}px`;
     answerPanel.style.overflowX = "hidden";
     answerPanel.style.overflowY = "auto";
+  }
+
+  function renderAnswerPanelMath() {
+    const answerPanel = document.getElementById("answer-panel");
+    const katex = globalThis.katex;
+    if (!answerPanel || !katex || typeof katex.renderToString !== "function") {
+      if (answerPanel && !answerMathRetry && answerMathRetryCount < 20) {
+        answerMathRetryCount += 1;
+        globalThis._ktemAnswerMathRetryCount = answerMathRetryCount;
+        answerMathRetry = window.setTimeout(() => {
+          answerMathRetry = null;
+          globalThis._ktemAnswerMathRetry = answerMathRetry;
+          renderAnswerPanelMath();
+        }, 300);
+        globalThis._ktemAnswerMathRetry = answerMathRetry;
+      }
+      return;
+    }
+    if (answerMathRetry) {
+      window.clearTimeout(answerMathRetry);
+      answerMathRetry = null;
+      globalThis._ktemAnswerMathRetry = answerMathRetry;
+    }
+    answerMathRetryCount = 0;
+    globalThis._ktemAnswerMathRetryCount = answerMathRetryCount;
+
+    answerPanel.querySelectorAll(".ktem-math-source").forEach((source) => {
+      if (source.dataset.ktemMathRendered === "true") {
+        return;
+      }
+      const latex = source.dataset.ktemLatex || source.textContent || "";
+      const displayMode = source.dataset.ktemDisplay === "true";
+      const rendered = document.createElement("span");
+      rendered.className = displayMode
+        ? "ktem-math ktem-math--display"
+        : "ktem-math ktem-math--inline";
+      try {
+        rendered.innerHTML = katex.renderToString(latex, {
+          displayMode,
+          throwOnError: false,
+          strict: "ignore",
+          trust: false,
+        });
+        source.replaceWith(rendered);
+      } catch (error) {
+        source.dataset.ktemMathRendered = "true";
+      }
+    });
   }
 
   function syncMainPdfPreview() {
@@ -1054,46 +1109,48 @@ function run() {
   }
 
   function syncKnowledgeGraphFocus() {
-    const graphPanel = document.querySelector("#knowledge-graph-plot");
-    if (!graphPanel) {
+    const graphShells = document.querySelectorAll(".knowledge-graph-shell");
+    if (!graphShells.length) {
       return;
     }
-    const focusedCard = graphPanel.querySelector(
-      ".kg-file-card.is-focused, .kg-tree-item--file.is-focused"
-    );
-    if (!focusedCard || focusedCard.dataset.kgFocused === "true") {
-      return;
-    }
-    focusedCard.dataset.kgFocused = "true";
-    window.setTimeout(() => {
-      focusedCard.scrollIntoView({
-        block: "nearest",
-        inline: "nearest",
-        behavior: "smooth",
-      });
-    }, 40);
+    graphShells.forEach((shell) => {
+      const focusedCard = shell.querySelector(
+        ".kg-file-card.is-focused, .kg-tree-item--file.is-focused"
+      );
+      if (!focusedCard || focusedCard.dataset.kgFocused === "true") {
+        return;
+      }
+      focusedCard.dataset.kgFocused = "true";
+      window.setTimeout(() => {
+        focusedCard.scrollIntoView({
+          block: "nearest",
+          inline: "nearest",
+          behavior: "smooth",
+        });
+      }, 40);
+    });
   }
 
   function bindKnowledgeGraphPan() {
-    const graphPanel = document.querySelector("#knowledge-graph-plot");
-    if (!graphPanel) {
+    const graphShells = document.querySelectorAll(".knowledge-graph-shell");
+    if (!graphShells.length) {
       return;
     }
 
-    const shell = graphPanel.querySelector(".knowledge-graph-shell");
-    if (!shell || shell.dataset.kgDragBound === "true") {
-      return;
-    }
-    shell.dataset.kgDragBound = "true";
+    graphShells.forEach((shell) => {
+      if (shell.dataset.kgDragBound === "true") {
+        return;
+      }
+      shell.dataset.kgDragBound = "true";
 
-    let isPointerDown = false;
-    let isDragging = false;
-    let startX = 0;
-    let startY = 0;
-    let startScrollLeft = 0;
-    let startScrollTop = 0;
-    let suppressClick = false;
-    const DRAG_THRESHOLD = 8;
+      let isPointerDown = false;
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let startScrollLeft = 0;
+      let startScrollTop = 0;
+      let suppressClick = false;
+      const DRAG_THRESHOLD = 8;
 
     const clearDragState = () => {
       isPointerDown = false;
@@ -1193,30 +1250,32 @@ function run() {
       }
       stopTracking();
     });
+    });
   }
 
   function bindKnowledgeGraphViewer() {
-    const graphPanel = document.querySelector("#knowledge-graph-plot");
-    const shell = graphPanel?.querySelector(".knowledge-graph-shell");
-    const overlay = shell?.querySelector("[data-kg-viewer-overlay='true']");
-    const dialog = overlay?.querySelector(".kg-viewer-dialog");
-    const viewport = overlay?.querySelector("[data-kg-viewer-viewport='true']");
-    const stage = overlay?.querySelector("[data-kg-viewer-stage='true']");
     const utils = globalThis.KnowledgeGraphViewerUtils;
 
-    if (
-      !graphPanel ||
-      !shell ||
-      !overlay ||
-      !dialog ||
-      !viewport ||
-      !stage ||
-      !utils ||
-      shell.dataset.kgViewerBound === "true"
-    ) {
+    if (!utils) {
       return;
     }
-    shell.dataset.kgViewerBound = "true";
+
+    document.querySelectorAll(".knowledge-graph-shell").forEach((shell) => {
+      const overlay = shell.querySelector("[data-kg-viewer-overlay='true']");
+      const dialog = overlay?.querySelector(".kg-viewer-dialog");
+      const viewport = overlay?.querySelector("[data-kg-viewer-viewport='true']");
+      const stage = overlay?.querySelector("[data-kg-viewer-stage='true']");
+
+      if (
+        !overlay ||
+        !dialog ||
+        !viewport ||
+        !stage ||
+        shell.dataset.kgViewerBound === "true"
+      ) {
+        return;
+      }
+      shell.dataset.kgViewerBound = "true";
 
     let viewState = { scale: 1, translateX: 0, translateY: 0 };
     let pointerState = null;
@@ -1274,6 +1333,10 @@ function run() {
 
     const closeViewer = () => {
       overlay.hidden = true;
+      const studioViewer = overlay.closest(".studio-artifact-viewer");
+      if (studioViewer) {
+        studioViewer.hidden = true;
+      }
       shell.classList.remove("is-viewer-open");
       document.body.classList.remove("kg-viewer-open");
       pointerState = null;
@@ -1540,6 +1603,10 @@ function run() {
               return;
             }
             node.hidden = true;
+            const studioViewer = node.closest(".studio-artifact-viewer");
+            if (studioViewer) {
+              studioViewer.hidden = true;
+            }
           });
         document
           .querySelectorAll(".knowledge-graph-shell.is-viewer-open")
@@ -1548,6 +1615,7 @@ function run() {
       });
       globalThis._ktemKnowledgeGraphEscapeBound = true;
     }
+    });
   }
 
   function applyIconOnlyButtonTooltips() {
@@ -1634,19 +1702,21 @@ function run() {
   }
 
   function cleanupKnowledgeGraphOverlayNodes() {
-    const graphPanel = document.querySelector("#knowledge-graph-plot");
-    if (!graphPanel) {
+    const graphPanels = document.querySelectorAll(".studio-kg-viewer-scope");
+    if (!graphPanels.length) {
       return;
     }
 
-    const proseNodes = graphPanel.querySelectorAll(".prose");
-    proseNodes.forEach((node) => {
-      const hasGraphShell = !!node.querySelector(".knowledge-graph-shell");
-      const textContent = (node.textContent || "").trim();
-      const shouldMask = !hasGraphShell && !textContent;
+    graphPanels.forEach((graphPanel) => {
+      const proseNodes = graphPanel.querySelectorAll(".prose");
+      proseNodes.forEach((node) => {
+        const hasGraphShell = !!node.querySelector(".knowledge-graph-shell");
+        const textContent = (node.textContent || "").trim();
+        const shouldMask = !hasGraphShell && !textContent;
 
-      // Do not remove Gradio-managed wrappers; only hide truly empty overlays.
-      node.classList.toggle("kg-prose-empty", shouldMask);
+        // Do not remove Gradio-managed wrappers; only hide truly empty overlays.
+        node.classList.toggle("kg-prose-empty", shouldMask);
+      });
     });
   }
 
@@ -1685,8 +1755,10 @@ function run() {
     cleanupHtmlInfoPanelOverlay();
     bindKnowledgeGraphViewer();
 
-    const graphPanel = document.querySelector("#knowledge-graph-plot");
-    if (graphPanel && graphPanel.dataset.kgBound !== "true") {
+    document.querySelectorAll(".knowledge-graph-shell").forEach((graphPanel) => {
+      if (graphPanel.dataset.kgBound === "true") {
+        return;
+      }
       graphPanel.dataset.kgBound = "true";
       graphPanel.addEventListener("click", (event) => {
         const branchToggle = event.target.closest("[data-kg-branch-toggle='true']");
@@ -1764,7 +1836,7 @@ function run() {
           }
         }
       });
-    }
+    });
 
     const answerHint = document.querySelector("#kg-answer-hint");
     if (answerHint && answerHint.dataset.kgHintBound !== "true") {
@@ -2629,6 +2701,11 @@ function run() {
 
   bindKnowledgeGraphInteractions();
   enforceAnswerPanelScroll();
+  renderAnswerPanelMath();
+  if (!globalThis._ktemAnswerPanelResizeBound) {
+    window.addEventListener("resize", enforceAnswerPanelScroll);
+    globalThis._ktemAnswerPanelResizeBound = true;
+  }
   if (!globalThis._ktemSelectionBridgeRegistered) {
     window.addEventListener("message", (event) => {
       if (event.origin !== window.location.origin) {
@@ -2700,6 +2777,7 @@ function run() {
     answerPanelObserver = new MutationObserver(() => {
       enforceAnswerPanelScroll();
       bindKnowledgeGraphInteractions();
+      renderAnswerPanelMath();
     });
 
     answerPanelObserver.observe(document.body, {

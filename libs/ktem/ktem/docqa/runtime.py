@@ -87,6 +87,28 @@ def _apply_multimodal_runtime_indexes(
     return _graph_context_with_local_index(graph_context, file_index, graph_file_ids)
 
 
+def _artifact_source_scope(
+    request: DocQARequest,
+    prepared: _PreparedPipeline,
+    graph_source_ids: list[str],
+) -> dict[str, Any]:
+    source_ids = _selection.merge_unique_file_ids(
+        graph_source_ids,
+        prepared.selected_file_ids,
+        [prepared.active_file_id] if prepared.active_file_id else [],
+    )
+    scope: dict[str, Any] = {
+        "mode": prepared.qa_scope or request.qa_scope or "document",
+        "source_ids": source_ids,
+    }
+    if prepared.page_number is not None:
+        scope["page"] = prepared.page_number
+    note_ids = _selection.merge_unique_file_ids(request.note_ids or [])
+    if note_ids:
+        scope["note_ids"] = note_ids
+    return scope
+
+
 class DocQARuntime:
     def __init__(self, app=None, user_id: Any = None):
         self._app = app or _RuntimeAppContext()
@@ -659,6 +681,13 @@ class DocQARuntime:
         _nb.save_captured_artifact(
             session_info.conversation_id,
             stream_result.capture.artifact,
+            artifact_type=request_to_run.artifact_type or request_to_run.task_type,
+            prompt=request_to_run.prompt,
+            source_scope=_artifact_source_scope(
+                request_to_run,
+                prepared,
+                graph_source_ids,
+            ),
         )
 
         selected_mapping = self._build_selected_mapping(
