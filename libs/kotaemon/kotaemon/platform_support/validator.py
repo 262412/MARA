@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -115,6 +116,11 @@ _REQUIRED_CLAUDE_MARA_COMMAND_FILES = (
     Path("commands/MARA-docqa-sources.md"),
 )
 
+_SKILL_DIR_SUPPORT_REF_RE = re.compile(
+    r"(?:\$SKILL_DIR|\$\{SKILL_DIR\})[\\/]"
+    r"(?P<path>(?:scripts|references|assets)[\\/][A-Za-z0-9_.\\/:-]+)"
+)
+
 
 def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
     platforms = [platform_name] if platform_name else list_platform_names()
@@ -143,6 +149,12 @@ def validate_bundle(platform_name: str | None = None) -> list[ValidationResult]:
                 errors.append(
                     f"Missing required MARA DocQA skill asset: {rel.as_posix()}"
                 )
+        errors.extend(
+            _missing_skill_support_file_errors(
+                spec.bundle_root,
+                prefix="Missing skill support file referenced by",
+            )
+        )
         if current == "claude-code":
             for rel in _REQUIRED_HOOK_FILES:
                 if not (spec.bundle_root / rel).exists():
@@ -213,5 +225,42 @@ def validate_installed(
                         errors.append(
                             "Missing installed MARA command asset: " f"{rel.as_posix()}"
                         )
+        errors.extend(
+            _missing_skill_support_file_errors(
+                resolved_target,
+                prefix="Missing installed skill support file referenced by",
+            )
+        )
 
     return ValidationResult(platform=platform_name, valid=not errors, errors=errors)
+
+
+def _missing_skill_support_file_errors(root: Path, prefix: str) -> list[str]:
+    skills_dir = root / "skills"
+    if not skills_dir.exists():
+        return []
+
+    errors: list[str] = []
+    for skill_file in sorted(skills_dir.glob("*/SKILL.md")):
+        text = skill_file.read_text(encoding="utf-8")
+        skill_rel = skill_file.relative_to(root).as_posix()
+        for ref_rel in _iter_skill_dir_support_refs(root, skill_file, text):
+            if not (root / ref_rel).exists():
+                errors.append(f"{prefix} {skill_rel}: {ref_rel.as_posix()}")
+    return errors
+
+
+def _iter_skill_dir_support_refs(
+    root: Path,
+    skill_file: Path,
+    text: str,
+) -> list[Path]:
+    refs: list[Path] = []
+    for match in _SKILL_DIR_SUPPORT_REF_RE.finditer(text):
+        support_path = match.group("path").replace("\\", "/")
+        candidate = skill_file.parent / Path(support_path)
+        try:
+            refs.append(candidate.relative_to(root))
+        except ValueError:
+            continue
+    return refs
