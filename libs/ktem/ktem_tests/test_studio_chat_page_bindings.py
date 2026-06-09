@@ -17,6 +17,13 @@ STUDIO_NOTE_CONTROLS_FILE = (
     / "chat"
     / "studio_note_controls.py"
 )
+STUDIO_RENDERING_FILE = (
+    Path(__file__).resolve().parents[1]
+    / "ktem"
+    / "pages"
+    / "chat"
+    / "studio_artifact_control_rendering.py"
+)
 STUDIO_PICKER_FILE = (
     Path(__file__).resolve().parents[1]
     / "ktem"
@@ -34,8 +41,12 @@ def _read_studio_controls() -> str:
     return STUDIO_CONTROLS_FILE.read_text(encoding="utf-8")
 
 
+def _read_studio_rendering() -> str:
+    return STUDIO_RENDERING_FILE.read_text(encoding="utf-8")
+
+
 def _read_studio_control_sources() -> str:
-    sources = [_read_studio_controls()]
+    sources = [_read_studio_controls(), _read_studio_rendering()]
     if STUDIO_PICKER_FILE.exists():
         sources.append(STUDIO_PICKER_FILE.read_text(encoding="utf-8"))
     if STUDIO_NOTE_CONTROLS_FILE.exists():
@@ -62,14 +73,17 @@ def test_chat_page_exposes_studio_generate_controls():
 
 
 def test_chat_page_exposes_labeled_studio_artifact_detail_fields():
-    controls = _read_studio_controls()
+    controls = _read_studio_rendering()
 
     assert 'label="Source scope"' in controls
-    assert 'label="User prompt"' in controls
-    assert 'label="Note IDs"' in controls
-    assert 'label="Output format"' in controls
-    assert 'label="Difficulty"' in controls
-    assert 'label="Item count"' in controls
+    assert 'label=initial_parameters["prompt"]["label"]' in controls
+    assert 'label=field["label"]' in controls
+    assert 'choices=list(field["choices"])' in controls
+    assert 'visible=field["visible"]' in controls
+    assert 'elem_id="studio-artifact-format-explanation"' in controls
+    assert '_render_dropdown(page, "count", initial_parameters["count"])' in controls
+    assert "page.studio_artifact_count = gr.Number" not in controls
+    assert 'label="Item count"' not in controls
     assert 'elem_id="studio-artifact-parameter-row"' in controls
     assert 'elem_classes=["studio-artifact-field"]' in controls
     assert "container=True" in controls
@@ -87,6 +101,8 @@ def test_chat_page_binds_studio_generate_after_notebook_refresh():
     assert "studio_artifact_selection_outputs(page)" in controls
     assert "page.studio_artifact_overlay_backdrop" in controls
     assert "page.studio_artifact_detail_back_button.click" in controls
+    assert "page.studio_artifact_format.change" in controls
+    assert "update_studio_artifact_dependent_parameters" in controls
     assert "page.studio_generate_artifact_button.click" in controls
     assert "render_studio_artifact_running_update" in controls
     assert (

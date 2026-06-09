@@ -62,10 +62,8 @@ from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
 from .paper_list import PaperListPage
 from .report import ReportIssue
-from .studio_artifact_controls import (
-    bind_studio_artifact_events,
-    render_studio_artifact_controls,
-)
+from .studio_artifact_control_rendering import render_studio_artifact_controls
+from .studio_artifact_controls import bind_studio_artifact_events
 from .studio_artifacts import (
     render_conversation_notebook_update,
     render_notebook_panel_html,
