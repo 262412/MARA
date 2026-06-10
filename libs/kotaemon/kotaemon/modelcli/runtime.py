@@ -218,6 +218,9 @@ def build_registry() -> ProviderRegistry:
         OpenAICompatibleProvider(
             name="openrouter", default_base_url="https://openrouter.ai/api/v1"
         ),
+        OpenAICompatibleProvider(
+            name="local-vllm", default_base_url="http://localhost:8000/v1"
+        ),
     ]
     return ProviderRegistry(adapters)
 

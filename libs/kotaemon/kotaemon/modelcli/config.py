@@ -7,7 +7,13 @@ from typing import Any
 
 import yaml
 
-DEFAULT_PROVIDER_ORDER = ["openai", "anthropic", "gemini", "openrouter"]
+DEFAULT_PROVIDER_ORDER = [
+    "openai",
+    "anthropic",
+    "gemini",
+    "openrouter",
+    "local-vllm",
+]
 
 
 @dataclass(slots=True)
@@ -50,6 +56,10 @@ def default_config_dict() -> dict[str, Any]:
             "openrouter": {
                 "api_key_env": "OPENROUTER_API_KEY",
                 "base_url": "https://openrouter.ai/api/v1",
+            },
+            "local-vllm": {
+                "api_key_env": "LOCAL_VLLM_API_KEY",
+                "base_url": "http://localhost:8000/v1",
             },
         },
         "model_aliases": {},

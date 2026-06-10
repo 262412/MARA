@@ -161,6 +161,8 @@ def _assert_docqa_ask_request(request):
     assert request.agent_mode == "thorough"
     assert request.artifact_type == "study_guide"
     assert request.llm == "gpt-4o-mini"
+    assert request.visual_retriever_backend == "local_late_interaction"
+    assert request.visual_generator_backend == "local_qwen3_vl"
     assert request.use_citation == "inline"
     assert request.language == "zh"
     assert request.use_mindmap is True
@@ -211,6 +213,10 @@ def test_docqa_ask_json(monkeypatch, tmp_path):
             "study_guide",
             "--llm",
             "gpt-4o-mini",
+            "--visual-retriever",
+            "local_late_interaction",
+            "--visual-generator",
+            "local_qwen3_vl",
             "--citation",
             "inline",
             "--language",
@@ -251,6 +257,10 @@ def test_docqa_ask_passes_planner_model_allowed_routes_and_element_route(monkeyp
             "doc_element",
             "--allowed-route",
             "hybrid",
+            "--visual-retriever",
+            "local_late_interaction",
+            "--visual-generator",
+            "local_qwen3_vl",
             "--json",
         ],
     )
@@ -260,6 +270,8 @@ def test_docqa_ask_passes_planner_model_allowed_routes_and_element_route(monkeyp
     assert runtime.last_request.route_policy == "element"
     assert runtime.last_request.planner_model == "fake-planner"
     assert runtime.last_request.allowed_routes == ["doc_element", "hybrid"]
+    assert runtime.last_request.visual_retriever_backend == "local_late_interaction"
+    assert runtime.last_request.visual_generator_backend == "local_qwen3_vl"
 
 
 def test_docqa_ask_text_includes_controller_summary(monkeypatch):
@@ -333,14 +345,20 @@ def test_docqa_chat_repl_basic_flow(monkeypatch):
             "graph",
             "--verify",
             "light",
+            "--visual-retriever",
+            "local_late_interaction",
+            "--visual-generator",
+            "local_qwen3_vl",
         ],
         input="What is alpha?\n/exit\n",
     )
 
     assert result.exit_code == 0, result.output
+    assert runtime.last_request is not None
+    assert runtime.last_request.visual_retriever_backend == "local_late_interaction"
+    assert runtime.last_request.visual_generator_backend == "local_qwen3_vl"
     assert "Conversation:" in result.output
     assert "dummy answer" in result.output
-    assert runtime.last_request is not None
     assert runtime.last_request.prompt == "What is alpha?"
     assert runtime.last_request.selected_file_ids == ["file-1"]
     assert runtime.last_request.page_number is None
@@ -529,6 +547,8 @@ def test_docqa_ask_help_lists_shared_parameters():
         "--mindmap",
         "--planner-model",
         "--allowed-route",
+        "--visual-retriever",
+        "--visual-generator",
         "--json",
     ]:
         assert token in result.output

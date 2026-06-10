@@ -7,21 +7,13 @@ import click
 
 from .docqa_notebook_cli import register_docqa_notebook_commands
 from .docqa_options import docqa_shared_options as _docqa_shared_options
+from .docqa_output import print_docqa_response as _print_docqa_response
 from .docqa_request import DocQARequest
 
 _REPL_COMMANDS = (
     "Commands: /files, /use <file>, /page <n|clear>, /selected-text [text], "
     "/history, /help, /exit"
 )
-_ROUTE_LABELS = {
-    "direct": "Direct",
-    "doc_text": "Document",
-    "doc_page_image": "Visual Page",
-    "doc_element": "Element",
-    "graph_global": "Graph",
-    "hybrid": "Hybrid",
-    "abstain": "Abstain",
-}
 
 
 def _echo_json(payload):
@@ -84,65 +76,6 @@ def run_docqa_acceptance_matrix(**kwargs):
 
 def _create_docqa_request(**kwargs):
     return DocQARequest(**kwargs)
-
-
-def _print_docqa_response(response):
-    _echo_text(f"Conversation: {response.conversation_id}")
-    if response.active_file_name:
-        page_suffix = f" | page {response.page_number}" if response.page_number else ""
-        _echo_text(f"Active file: {response.active_file_name}{page_suffix}")
-    _echo_text("")
-    _echo_text(response.answer)
-    _print_controller_summary(response)
-    if response.references_text:
-        _echo_text("")
-        _echo_text("Evidence:")
-        _echo_text(response.references_text)
-
-
-def _print_controller_summary(response):
-    route_decision = _mapping_value(response, "route_decision")
-    retrieve_decision = _mapping_value(response, "retrieve_decision")
-    verify_decision = _mapping_value(response, "verify_decision")
-    evidence_bundle = _mapping_value(response, "evidence_bundle")
-    if not any([route_decision, retrieve_decision, verify_decision, evidence_bundle]):
-        return
-
-    _echo_text("")
-    route = str(route_decision.get("route") or "").strip()
-    if route:
-        _echo_text(f"Route: {_route_label(route)}")
-    retrieval_status = str(retrieve_decision.get("status") or "").strip()
-    if retrieval_status:
-        _echo_text(f"Retrieval: {retrieval_status}")
-    verification_status = str(verify_decision.get("status") or "").strip()
-    if verification_status:
-        action = str(verify_decision.get("action") or "").strip()
-        suffix = f" ({action})" if action else ""
-        _echo_text(f"Verification: {verification_status}{suffix}")
-    modalities = _modalities_from_bundle(evidence_bundle)
-    if modalities:
-        _echo_text(f"Modalities: {', '.join(modalities)}")
-
-
-def _mapping_value(response, key):
-    value = getattr(response, key, None)
-    return value if isinstance(value, dict) else {}
-
-
-def _route_label(route: str) -> str:
-    return _ROUTE_LABELS.get(route, route.replace("_", " ").title())
-
-
-def _modalities_from_bundle(evidence_bundle):
-    modalities = []
-    for item in evidence_bundle.get("items") or []:
-        if not isinstance(item, dict):
-            continue
-        modality = str(item.get("modality") or "").strip()
-        if modality and modality not in modalities:
-            modalities.append(modality)
-    return modalities
 
 
 def _value(item, key, default=""):
@@ -352,7 +285,7 @@ def _run_docqa_repl(
             _echo_payload_json(response.as_dict())
         else:
             _echo_text("")
-            _print_docqa_response(response)
+            _print_docqa_response(response, _echo_text)
             _echo_text("")
 
 
@@ -577,6 +510,8 @@ def docqa_ask(
     allowed_routes,
     verification_mode,
     llm,
+    visual_retriever_backend,
+    visual_generator_backend,
     citation,
     language,
     mindmap,
@@ -623,6 +558,8 @@ def docqa_ask(
         allowed_routes=list(allowed_routes or []),
         verification_mode=verification_mode,
         llm=llm,
+        visual_retriever_backend=visual_retriever_backend,
+        visual_generator_backend=visual_generator_backend,
         use_mindmap=mindmap,
         use_citation=citation,
         language=language,
@@ -632,7 +569,7 @@ def docqa_ask(
         _echo_payload_json(response.as_dict())
         return
 
-    _print_docqa_response(response)
+    _print_docqa_response(response, _echo_text)
 
 
 @docqa.command("chat", short_help="Interactive chat")
@@ -655,6 +592,8 @@ def docqa_chat(
     allowed_routes,
     verification_mode,
     llm,
+    visual_retriever_backend,
+    visual_generator_backend,
     citation,
     language,
     mindmap,
@@ -692,6 +631,8 @@ def docqa_chat(
             "planner_model": planner_model,
             "allowed_routes": list(allowed_routes or []),
             "verification_mode": verification_mode,
+            "visual_retriever_backend": visual_retriever_backend,
+            "visual_generator_backend": visual_generator_backend,
         },
         llm=llm,
         citation=citation,

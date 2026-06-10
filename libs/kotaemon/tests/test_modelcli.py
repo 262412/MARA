@@ -18,6 +18,10 @@ def test_modelcli_init_config(tmp_path):
     content = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     assert content["default_provider"] == "openai"
     assert "openrouter" in content["providers"]
+    assert content["providers"]["local-vllm"] == {
+        "api_key_env": "LOCAL_VLLM_API_KEY",
+        "base_url": "http://localhost:8000/v1",
+    }
 
 
 def test_modelcli_providers_with_default_config_when_file_missing():
@@ -28,6 +32,48 @@ def test_modelcli_providers_with_default_config_when_file_missing():
     assert "Provider\tAvailable\tReason" in result.output
     assert "openai" in result.output
     assert "anthropic" in result.output
+    assert "local-vllm" in result.output
+
+
+def test_modelcli_run_dry_run_resolves_local_vllm_provider(tmp_path):
+    runner = CliRunner()
+    config_path = tmp_path / "modelcli.yml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "providers": {
+                    "local-vllm": {
+                        "api_key": "local",
+                        "base_url": "http://localhost:8000/v1",
+                    }
+                },
+                "model_aliases": {"qwen3": "Qwen/Qwen3-8B"},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    run_result = runner.invoke(
+        main,
+        [
+            "modelcli",
+            "run",
+            "--prompt",
+            "hello",
+            "--model",
+            "qwen3",
+            "--provider",
+            "local-vllm",
+            "--config",
+            str(config_path),
+            "--dry-run",
+        ],
+    )
+
+    assert run_result.exit_code == 0, run_result.output
+    assert "provider: local-vllm" in run_result.output
+    assert "model: Qwen/Qwen3-8B" in run_result.output
 
 
 def test_modelcli_run_dry_run_resolves_provider(tmp_path):
