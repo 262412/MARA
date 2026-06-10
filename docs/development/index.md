@@ -13,3 +13,9 @@ For the single-repo Claude Code and Codex support workflow, see
 
 For the default rules that keep future development from turning into a big ball
 of mud, see [Codebase Hygiene Contract](codebase-hygiene-contract.md).
+
+## Storage Layout
+
+For the required local layout that keeps environments, caches, Codex state, and
+MARA runtime data off `scratch`, see
+[Storage Layout Contract](storage-layout-contract.md).
