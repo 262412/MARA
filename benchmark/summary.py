@@ -17,15 +17,19 @@ def build_benchmark_summary(
     adapter_metric_metadata: dict[str, dict[str, Any]] | None = None,
     external_adapter_metric_metadata: dict[str, Any] | None = None,
     external_adapter_metric_metadata_by_route: dict[str, Any] | None = None,
+    selection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     skipped_routes = skipped_routes or []
     return {
         **_identity_summary(bundle, config, active_routes, predictions, skipped_routes),
+        **(selection or {}),
         **_quality_summary(predictions),
         **_format_guardrail_summary(predictions),
         **verification_summary(predictions),
         **_timing_summary(predictions),
         **_cache_summary(predictions, config.cache_mode),
+        "route_metric_table": _route_metric_table(bundle.dataset_name, predictions),
+        "route_rankings": _route_rankings(bundle.dataset_name, predictions),
         "backend_metadata": backend_metadata,
         "adapter_metric_metadata": adapter_metric_metadata or {},
         "external_adapter_metric_metadata": external_adapter_metric_metadata or {},
@@ -166,3 +170,83 @@ def _multimodal_hit_summary(
         f"avg_{modality}_hit": _avg_metric(predictions, f"{modality}_hit")
         for modality in ("table", "figure", "formula", "slide")
     }
+
+
+def _route_metric_table(
+    dataset_name: str,
+    predictions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for route in _ordered_routes(predictions):
+        route_predictions = [
+            prediction
+            for prediction in predictions
+            if str(prediction.get("route") or "") == route
+        ]
+        rows.append(
+            {
+                "dataset_name": dataset_name,
+                "route": route,
+                "num_predictions": len(route_predictions),
+                "avg_em": _avg_metric(route_predictions, "em"),
+                "avg_f1": _avg_metric(route_predictions, "f1"),
+                "avg_anls": _avg_metric(route_predictions, "anls"),
+                "avg_page_hit": _avg_metric(route_predictions, "page_hit"),
+                "avg_citation_recall": _avg_metric(
+                    route_predictions, "citation_recall"
+                ),
+                "avg_citation_precision": _avg_metric(
+                    route_predictions, "citation_precision"
+                ),
+                "avg_unsupported_claim_rate": _avg_metric(
+                    route_predictions, "unsupported_claim_rate"
+                ),
+                "avg_abstention_rate": _avg_metric(route_predictions, "abstained"),
+                "avg_multimodal_answer_support": _avg_metric(
+                    route_predictions, "multimodal_answer_support"
+                ),
+                "avg_total_seconds": round_metric(
+                    safe_mean(
+                        [
+                            (prediction.get("performance") or {}).get("total_seconds")
+                            for prediction in route_predictions
+                        ]
+                    )
+                ),
+            }
+        )
+    return rows
+
+
+def _route_rankings(
+    dataset_name: str,
+    predictions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows = _route_metric_table(dataset_name, predictions)
+    ranked = [
+        (row["route"], row["avg_f1"]) for row in rows if row.get("avg_f1") is not None
+    ]
+    ranked.sort(key=lambda item: (-float(item[1]), item[0]))
+    return (
+        [
+            {
+                "dataset_name": dataset_name,
+                "rank_metric": "avg_f1",
+                "routes": [
+                    {"rank": index, "route": route, "score": score}
+                    for index, (route, score) in enumerate(ranked, start=1)
+                ],
+            }
+        ]
+        if ranked
+        else []
+    )
+
+
+def _ordered_routes(predictions: list[dict[str, Any]]) -> list[str]:
+    routes: list[str] = []
+    for prediction in predictions:
+        route = str(prediction.get("route") or "").strip()
+        if route and route not in routes:
+            routes.append(route)
+    return routes

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from datetime import datetime
 from pathlib import Path
@@ -105,6 +106,7 @@ def write_reports(
     documents_path = run_dir / "documents.json"
     retrieval_traces_path = run_dir / "retrieval_traces.jsonl"
     markdown_path = run_dir / "report.md"
+    route_metrics_path = run_dir / "route_metrics.csv"
 
     summary = report.get("summary", {})
     config = report.get("config", {})
@@ -124,6 +126,9 @@ def write_reports(
         encoding="utf-8",
     )
     _write_jsonl(retrieval_traces_path, retrieval_traces)
+    route_metric_table = _route_metric_table(summary)
+    if route_metric_table:
+        _write_csv(route_metrics_path, route_metric_table)
 
     markdown = _summary_markdown_lines(summary, suite_name)
     for label, key in (("Engine", "engine"), ("Route", "route"), ("Scope", "scope")):
@@ -139,25 +144,87 @@ def write_reports(
         "- Documents: `documents.json`",
         "- Retrieval Traces: `retrieval_traces.jsonl`",
     ]
-    skipped_route_lines = _skipped_route_markdown(summary)
-    if skipped_route_lines:
-        markdown += ["", "## Skipped Routes", "", *skipped_route_lines]
-    backend_lines = _backend_metadata_markdown(summary)
-    if backend_lines:
-        markdown += ["", "## Backend Status By Route", "", *backend_lines]
-    evaluator_lines = _external_evaluator_markdown(summary)
-    if evaluator_lines:
-        markdown += ["", "## External Research Evaluators", "", *evaluator_lines]
-    route_evaluator_lines = _external_evaluator_by_route_markdown(summary)
-    if route_evaluator_lines:
-        markdown += [
-            "",
-            "## External Research Evaluators By Route",
-            "",
-            *route_evaluator_lines,
-        ]
+    if route_metric_table:
+        markdown.append("- Route Metrics: `route_metrics.csv`")
+    markdown += _report_markdown_sections(summary, route_metric_table)
     markdown_path.write_text("\n".join(markdown), encoding="utf-8")
     return run_dir
+
+
+def _report_markdown_sections(
+    summary: dict[str, Any],
+    route_metric_table: list[dict[str, Any]],
+) -> list[str]:
+    sections: list[str] = []
+    if route_metric_table:
+        sections += [
+            "",
+            "## Route Metrics",
+            "",
+            *_route_metrics_markdown(route_metric_table),
+        ]
+    for title, lines in (
+        ("Route Ranking", _route_ranking_markdown(summary)),
+        ("Skipped Routes", _skipped_route_markdown(summary)),
+        ("Backend Status By Route", _backend_metadata_markdown(summary)),
+        ("External Research Evaluators", _external_evaluator_markdown(summary)),
+        (
+            "External Research Evaluators By Route",
+            _external_evaluator_by_route_markdown(summary),
+        ),
+    ):
+        if lines:
+            sections += ["", f"## {title}", "", *lines]
+    return sections
+
+
+def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    fieldnames = list(rows[0])
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _route_metric_table(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = summary.get("route_metric_table") or []
+    return [dict(row) for row in rows if isinstance(row, dict)]
+
+
+def _route_metrics_markdown(rows: list[dict[str, Any]]) -> list[str]:
+    lines = [
+        "| Dataset | Route | N | F1 | Page Hit | Unsupported Claim Rate | Total Seconds |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| "
+            f"{row.get('dataset_name')} | "
+            f"{row.get('route')} | "
+            f"{row.get('num_predictions')} | "
+            f"{row.get('avg_f1')} | "
+            f"{row.get('avg_page_hit')} | "
+            f"{row.get('avg_unsupported_claim_rate')} | "
+            f"{row.get('avg_total_seconds')} |"
+        )
+    return lines
+
+
+def _route_ranking_markdown(summary: dict[str, Any]) -> list[str]:
+    rankings = summary.get("route_rankings") or []
+    lines: list[str] = []
+    for ranking in rankings:
+        if not isinstance(ranking, dict):
+            continue
+        rank_metric = str(ranking.get("rank_metric") or "score")
+        for route in ranking.get("routes") or []:
+            if not isinstance(route, dict):
+                continue
+            lines.append(
+                f"{route.get('rank')}. `{route.get('route')}` "
+                f"{rank_metric}=`{route.get('score')}`"
+            )
+    return lines
 
 
 def _skipped_route_markdown(summary: dict[str, Any]) -> list[str]:

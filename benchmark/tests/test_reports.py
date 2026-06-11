@@ -228,3 +228,58 @@ def test_write_reports_includes_multimodal_summary_metrics(tmp_path):
     assert "- Figure Hit: `0.5`" in markdown
     assert "- Formula Hit: `1.0`" in markdown
     assert "- Slide Hit: `0.0`" in markdown
+
+
+def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
+    report = {
+        "summary": {
+            "suite_name": "Route Suite",
+            "dataset_name": "sample",
+            "num_examples": 2,
+            "num_documents": 1,
+            "route_metric_table": [
+                {
+                    "dataset_name": "sample",
+                    "route": "text_rag",
+                    "num_predictions": 1,
+                    "avg_f1": 0.6,
+                    "avg_page_hit": 1.0,
+                    "avg_unsupported_claim_rate": 0.2,
+                    "avg_total_seconds": 0.4,
+                },
+                {
+                    "dataset_name": "sample",
+                    "route": "controller_auto",
+                    "num_predictions": 1,
+                    "avg_f1": 0.8,
+                    "avg_page_hit": 1.0,
+                    "avg_unsupported_claim_rate": 0.0,
+                    "avg_total_seconds": 0.5,
+                },
+            ],
+            "route_rankings": [
+                {
+                    "dataset_name": "sample",
+                    "rank_metric": "avg_f1",
+                    "routes": [
+                        {"rank": 1, "route": "controller_auto", "score": 0.8},
+                        {"rank": 2, "route": "text_rag", "score": 0.6},
+                    ],
+                }
+            ],
+        },
+        "predictions": [],
+        "documents": [],
+    }
+
+    run_dir = write_reports(report, tmp_path, "Route Suite")
+
+    route_metrics = (run_dir / "route_metrics.csv").read_text(encoding="utf-8")
+    markdown = (run_dir / "report.md").read_text(encoding="utf-8")
+    assert "route_metrics.csv" in {path.name for path in run_dir.iterdir()}
+    assert "dataset_name,route,num_predictions,avg_f1" in route_metrics
+    assert "sample,controller_auto,1,0.8" in route_metrics
+    assert "## Route Metrics" in markdown
+    assert "| sample | controller_auto | 1 | 0.8 | 1.0 | 0.0 | 0.5 |" in markdown
+    assert "## Route Ranking" in markdown
+    assert "1. `controller_auto` avg_f1=`0.8`" in markdown

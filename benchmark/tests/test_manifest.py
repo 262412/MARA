@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from benchmark.manifest import DEFAULT_MARA_ROUTES, load_manifest
 from benchmark.normalizers import (
@@ -340,6 +341,40 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
     )
     assert DEFAULT_MARA_ROUTES[8]["controller_mode"] == "llm"
     assert DEFAULT_MARA_ROUTES[9]["verification_mode"] == "strict"
+
+
+def test_manifest_templates_load_expected_mara_route_sets():
+    template_dir = Path("benchmark/manifests/templates")
+    all_routes = load_manifest(template_dir / "mara_all_routes.local.json")
+    text_only = load_manifest(template_dir / "mara_text_only.json")
+    multimodal = load_manifest(template_dir / "mara_multimodal.json")
+
+    assert [route["route_id"] for route in all_routes.routes] == [
+        "direct_answer",
+        "text_rag",
+        "page_image_rag_vlm",
+        "element_rag",
+        "graph_rag_local",
+        "hybrid_rag",
+        "controller_auto",
+        "crag_guarded",
+    ]
+    assert [route["route_id"] for route in text_only.routes] == [
+        "direct_answer",
+        "text_rag",
+        "controller_auto",
+        "crag_guarded",
+    ]
+    assert [route["route_id"] for route in multimodal.routes] == [
+        "text_rag",
+        "page_image_rag_vlm",
+        "element_rag",
+        "hybrid_rag",
+        "controller_auto",
+    ]
+    assert all_routes.routes[2]["visual_retriever_backend"] == "colqwen"
+    assert all_routes.routes[2]["visual_generator_backend"] == "local_qwen3_vl"
+    assert all_routes.routes[2]["generator_backend"] == "local_qwen3_vl"
 
 
 def test_load_v2_manifest_preserves_top_level_ragas_evaluator(tmp_path):

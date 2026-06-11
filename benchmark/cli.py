@@ -35,10 +35,7 @@ def _add_docqa_runtime_options(run_parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Kotaemon benchmark toolkit")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
+def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
     run_parser = subparsers.add_parser("run", help="Run a benchmark suite")
     run_parser.add_argument(
         "--manifest", required=True, help="Normalized manifest path"
@@ -87,6 +84,26 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--embedding-name")
     run_parser.add_argument("--reranker-name")
     run_parser.add_argument("--llm-name")
+    run_parser.add_argument(
+        "--limit",
+        type=int,
+        help="Run at most this many selected examples after sampling and sharding.",
+    )
+    run_parser.add_argument(
+        "--sample-seed",
+        type=int,
+        help="Deterministically shuffle examples before sharding/limiting.",
+    )
+    run_parser.add_argument(
+        "--shard-index",
+        type=int,
+        help="Zero-based shard index to run.",
+    )
+    run_parser.add_argument(
+        "--num-shards",
+        type=int,
+        help="Total number of shards for distributed benchmark runs.",
+    )
     _add_docqa_runtime_options(run_parser)
     run_parser.add_argument(
         "--no-generate",
@@ -94,6 +111,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip answer generation and return the top retrieved chunk text.",
     )
 
+
+def _add_existing_normalizer_commands(
+    subparsers: argparse._SubParsersAction,
+) -> None:
     local_parser = subparsers.add_parser(
         "normalize-format-robustness",
         help="Convert a local PDF/DOCX/PPTX QA folder into a normalized manifest",
@@ -117,13 +138,59 @@ def _build_parser() -> argparse.ArgumentParser:
     slide_parser.add_argument("--documents-root", required=True)
     slide_parser.add_argument("--output", required=True)
 
+
+def _add_thesis_converter_commands(
+    subparsers: argparse._SubParsersAction,
+) -> None:
+    qasper_parser = subparsers.add_parser(
+        "normalize-qasper",
+        help="Convert QASPER raw JSON into a normalized manifest",
+    )
+    qasper_parser.add_argument("--source", required=True)
+    qasper_parser.add_argument("--output", required=True)
+
+    mmdocrag_parser = subparsers.add_parser(
+        "normalize-mmdocrag",
+        help="Convert MMDocRAG JSONL into a normalized manifest",
+    )
+    mmdocrag_parser.add_argument("--source", required=True)
+    mmdocrag_parser.add_argument("--output", required=True)
+    mmdocrag_parser.add_argument("--documents-root")
+
+    vidore_parser = subparsers.add_parser(
+        "normalize-vidore",
+        help="Convert ViDoRe JSON/JSONL/parquet rows into a normalized manifest",
+    )
+    vidore_parser.add_argument("--source", required=True)
+    vidore_parser.add_argument("--output", required=True)
+    vidore_parser.add_argument("--documents-root")
+
+    ragtruth_parser = subparsers.add_parser(
+        "normalize-ragtruth",
+        help="Convert RAGTruth source_info/response JSONL files into a manifest",
+    )
+    ragtruth_parser.add_argument("--source-info", required=True)
+    ragtruth_parser.add_argument("--responses", required=True)
+    ragtruth_parser.add_argument("--output", required=True)
+
+    alce_parser = subparsers.add_parser(
+        "normalize-alce",
+        help="Convert ALCE ASQA/ELI5/Qampari JSON into a normalized manifest",
+    )
+    alce_parser.add_argument("--source", required=True)
+    alce_parser.add_argument("--output", required=True)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Kotaemon benchmark toolkit")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    _add_run_command(subparsers)
+    _add_existing_normalizer_commands(subparsers)
+    _add_thesis_converter_commands(subparsers)
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = _build_parser()
-    args = parser.parse_args(argv)
-
+def _handle_normalizer_command(args: argparse.Namespace) -> int | None:
     if args.command == "normalize-format-robustness":
         from .normalizers import normalize_format_robustness_manifest
 
@@ -149,6 +216,51 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Manifest written to {output_path}")
         return 0
 
+    if args.command == "normalize-qasper":
+        from .converters.qasper import normalize_qasper_manifest
+
+        output_path = normalize_qasper_manifest(args.source, args.output)
+        print(f"Manifest written to {output_path}")
+        return 0
+
+    if args.command == "normalize-mmdocrag":
+        from .converters.mmdocrag import normalize_mmdocrag_manifest
+
+        output_path = normalize_mmdocrag_manifest(
+            args.source, args.output, args.documents_root
+        )
+        print(f"Manifest written to {output_path}")
+        return 0
+
+    if args.command == "normalize-vidore":
+        from .converters.vidore import normalize_vidore_manifest
+
+        output_path = normalize_vidore_manifest(
+            args.source, args.output, args.documents_root
+        )
+        print(f"Manifest written to {output_path}")
+        return 0
+
+    if args.command == "normalize-ragtruth":
+        from .converters.ragtruth import normalize_ragtruth_manifest
+
+        output_path = normalize_ragtruth_manifest(
+            args.source_info, args.responses, args.output
+        )
+        print(f"Manifest written to {output_path}")
+        return 0
+
+    if args.command == "normalize-alce":
+        from .converters.alce import normalize_alce_manifest
+
+        output_path = normalize_alce_manifest(args.source, args.output)
+        print(f"Manifest written to {output_path}")
+        return 0
+
+    return None
+
+
+def _run_benchmark_command(args: argparse.Namespace) -> int:
     from .reports import write_reports
     from .runner import run_benchmark
     from .schemas import BenchmarkConfig
@@ -170,6 +282,10 @@ def main(argv: list[str] | None = None) -> int:
         embedding_name=args.embedding_name,
         reranker_name=args.reranker_name,
         llm_name=args.llm_name,
+        limit=args.limit,
+        sample_seed=args.sample_seed,
+        shard_index=args.shard_index,
+        num_shards=args.num_shards,
         docqa_citation_mode=args.docqa_citation_mode,
         reasoning_type=args.reasoning_type,
         agent_mode=args.agent_mode,
@@ -181,3 +297,12 @@ def main(argv: list[str] | None = None) -> int:
     run_dir = write_reports(report, config.output_dir, config.suite_name)
     print(f"Benchmark complete. Outputs written to {run_dir}")
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    normalizer_result = _handle_normalizer_command(args)
+    if normalizer_result is not None:
+        return normalizer_result
+    return _run_benchmark_command(args)

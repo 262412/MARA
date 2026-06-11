@@ -105,6 +105,10 @@ class BenchmarkConfig:
     visual_retriever_backend: str | None = None
     visual_generator_backend: str | None = None
     generator_backend: str | None = None
+    limit: int | None = None
+    sample_seed: int | None = None
+    shard_index: int | None = None
+    num_shards: int | None = None
     use_generation: bool = True
     prompt_template: str | None = None
 
@@ -112,6 +116,13 @@ class BenchmarkConfig:
         self.engine = normalize_engine_name(self.engine)
         self.scope = normalize_scope(self.scope)
         self.cache_mode = normalize_cache_mode(self.cache_mode)
+        from .sampling import validate_sampling_options
+
+        validate_sampling_options(
+            limit=self.limit,
+            shard_index=self.shard_index,
+            num_shards=self.num_shards,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
