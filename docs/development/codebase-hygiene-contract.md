@@ -66,11 +66,16 @@ Use this workflow for every non-trivial change.
 0. Verify the storage layout.
 
    Follow `docs/development/storage-layout-contract.md` before running `uv`,
-   `pip`, tests, `MARA app init`, DocQA indexing, model downloads, or any task
-   that may create many files. `~/scratch/projects/MARA/.venv` must be a
-   symlink to `~/fastscratch/envs/mara`; caches, Codex state, and MARA runtime
-   data must stay on `fastscratch`. If the layout is wrong or fastscratch file
-   quota is above the soft limit, stop and repair the layout before continuing.
+   `pip`, tests, `MARA app init`, DocQA indexing, dataset syncs, Slurm jobs,
+   model downloads, or any task that may create many files.
+   `~/scratch/projects/MARA/.venv` must be a symlink to
+   `~/fastscratch/envs/mara`; caches, Codex state, and MARA runtime data must
+   stay on `fastscratch`. Important source datasets must stay in
+   `~/data/datasets/MARA`, and compute-time dataset copies or outputs must stay
+   in `~/scratch/datasets/MARA`, `~/scratch/outputs/MARA`, or
+   `~/fastscratch/datasets/MARA` for high-I/O small-file workloads. If the
+   layout is wrong or fastscratch file quota is above the soft limit, stop and
+   repair the layout before continuing.
 
 1. Identify the public surface.
 
@@ -247,7 +252,7 @@ follow-up. P2 issues should be tracked, but do not block unrelated product work.
 Run the gates that match the changed files.
 
 Always before large installs, model downloads, app initialization, DocQA
-indexing, or long development sessions:
+indexing, dataset syncs, Slurm jobs, or long development sessions:
 
 ```powershell
 cd ~/scratch/projects/MARA
@@ -255,7 +260,12 @@ source ~/.bashrc
 readlink -f .venv
 readlink -f .venv/bin/python
 df -h .venv ktem_app_data
+printf 'PRE_COMMIT_HOME=%s\n' "$PRE_COMMIT_HOME"
 lfs quota -h -u tbczhang /mnt/fastscratch
+quota -s
+test ! -e data
+test ! -e datasets
+test ! -e outputs
 ```
 
 Always before changing or committing Python files:

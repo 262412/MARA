@@ -1,8 +1,9 @@
 # Storage Layout Contract
 
 This contract keeps MARA development from exhausting `scratch` or
-`fastscratch` file quotas. It is mandatory for local development, model
-serving, DocQA work, and any task that may create many files.
+`fastscratch` file quotas and keeps datasets out of the Git repository. It is
+mandatory for local development, model serving, DocQA work, dataset work, and
+any task that may create many files.
 
 ## Required Layout
 
@@ -24,15 +25,74 @@ must be a symlink to ~/fastscratch/envs/mara
 Caches:
 ~/fastscratch/cache
 
+High-file-count disposable pre-commit hook cache:
+~/scratch/pre-commit-cache
+
 Codex state:
 ~/fastscratch/.codex
 
 MARA runtime data:
 ~/fastscratch/mara_runtime
+
+Original or important datasets:
+~/data/datasets/MARA
+= /mnt/data2/users/tbczhang/datasets/MARA
+
+Compute-time dataset copies:
+~/scratch/datasets/MARA
+or, for high-I/O small-file workloads, ~/fastscratch/datasets/MARA
+
+Compute-time outputs:
+~/scratch/outputs/MARA
 ```
 
 Do not create real virtual environments, package caches, model caches, app data,
-logs, or large generated working directories directly under `scratch`.
+logs, datasets, outputs, or large generated working directories directly under
+the Git repository.
+
+## Dataset Layout
+
+Datasets are split by purpose.
+
+- Put original or important datasets in `~/data/datasets/MARA`. `data` has a
+  larger quota and backup, so it is the right place for medium-term source data.
+- Treat `data` as read-only from compute jobs. Do not submit Slurm jobs from
+  `data`, and do not write job outputs into `data`.
+- Put the copy used by training, indexing, experiments, or Slurm jobs in
+  `~/scratch/datasets/MARA` for large files or moderate file counts.
+- Use `~/fastscratch/datasets/MARA` only for high-I/O small-file workloads such
+  as image shards, small JSON files, token caches, or embedding shards.
+- Write active experiment outputs to `~/scratch/outputs/MARA`. Copy important
+  final outputs back to `data` or another backup location after the run.
+- Do not use `~/scratch/projects/MARA/data`, `~/scratch/projects/MARA/datasets`,
+  `~/scratch/projects/MARA/outputs`, `~/fastscratch` as the only copy,
+  `~/localscratch`, `/tmp`, or home for long-lived datasets.
+
+Recommended setup for large files or moderate file counts:
+
+```bash
+mkdir -p ~/data/datasets/MARA
+mkdir -p ~/scratch/datasets/MARA
+mkdir -p ~/scratch/outputs/MARA
+rsync -avP ~/data/datasets/MARA/ ~/scratch/datasets/MARA/
+```
+
+Recommended Slurm paths:
+
+```bash
+DATA_DIR=$HOME/scratch/datasets/MARA
+OUT_DIR=$HOME/scratch/outputs/MARA
+```
+
+If the active dataset has many small files:
+
+```bash
+mkdir -p ~/fastscratch/datasets/MARA
+rsync -avP ~/data/datasets/MARA/ ~/fastscratch/datasets/MARA/
+DATA_DIR=$HOME/fastscratch/datasets/MARA
+```
+
+Important original data must still have a copy in `data` or an external backup.
 
 ## Required Environment Variables
 
@@ -45,6 +105,7 @@ export XDG_DATA_HOME=$HOME/fastscratch/cache/xdg-data
 export PIP_CACHE_DIR=$HOME/fastscratch/cache/pip
 export UV_CACHE_DIR=$HOME/fastscratch/cache/uv
 export UV_PYTHON_INSTALL_DIR=$HOME/fastscratch/cache/uv/python
+export PRE_COMMIT_HOME=$HOME/scratch/pre-commit-cache
 export HF_HOME=$HOME/fastscratch/cache/huggingface
 export HF_HUB_CACHE=$HF_HOME/hub
 export HF_XET_CACHE=$HF_HOME/xet
@@ -68,7 +129,8 @@ DocQA indexing, graph caches, uploaded files, and SQLite state stay in
 ## Preflight Check
 
 Run this check before large development sessions, dependency installs, model
-downloads, `MARA app init`, DocQA indexing, or model-serving work:
+downloads, `MARA app init`, DocQA indexing, dataset syncs, Slurm jobs, or
+model-serving work:
 
 ```bash
 cd ~/scratch/projects/MARA
@@ -81,12 +143,18 @@ df -h .venv ktem_app_data
 
 printf 'UV_CACHE_DIR=%s\n' "$UV_CACHE_DIR"
 printf 'UV_PYTHON_INSTALL_DIR=%s\n' "$UV_PYTHON_INSTALL_DIR"
+printf 'PRE_COMMIT_HOME=%s\n' "$PRE_COMMIT_HOME"
 printf 'HF_HOME=%s\n' "$HF_HOME"
 printf 'TIKTOKEN_CACHE_DIR=%s\n' "$TIKTOKEN_CACHE_DIR"
 printf 'CODEX_HOME=%s\n' "$CODEX_HOME"
 printf 'KH_APP_DATA_DIR=%s\n' "$KH_APP_DATA_DIR"
 
 lfs quota -h -u tbczhang /mnt/fastscratch
+quota -s
+
+test ! -e data
+test ! -e datasets
+test ! -e outputs
 ```
 
 The correct `.venv` result is a symlink that resolves to:
@@ -95,11 +163,19 @@ The correct `.venv` result is a symlink that resolves to:
 /mnt/fastscratch/users/tbczhang/envs/mara
 ```
 
-Stop before running `uv`, `pip`, tests, `MARA app init`, or model setup if:
+Stop before running `uv`, `pip`, tests, `MARA app init`, dataset syncs, Slurm
+jobs, or model setup if:
 
 - `.venv` is a real directory instead of a symlink.
-- Any cache or runtime environment variable points to `scratch` or home.
+- Any cache or runtime environment variable except `PRE_COMMIT_HOME` points to
+  `scratch` or home.
 - `lfs quota` shows `fastscratch` file usage above the soft quota.
+- `PRE_COMMIT_HOME` is unset when running pre-commit; without it, hook
+  environments can consume tens of thousands of files under `fastscratch`.
+- Dataset source paths point into the Git repository.
+- A Slurm job would read or write directly under `~/data`.
+- Experiment outputs would be written to `data`, home, `/tmp`, or
+  `~/localscratch` as their only copy.
 
 ## Repair Procedure
 
@@ -140,6 +216,12 @@ logs/
 .theflow/
 ktem_app_data
 ktem_app_data/
+data
+data/
+datasets
+datasets/
+outputs
+outputs/
 .mypy_cache/
 .pytest_cache/
 __pycache__/

@@ -474,6 +474,12 @@ zip_cache_dir_in/
 results/
 figures/
 benchmark/artifacts/
+/data
+/data/
+/datasets
+/datasets/
+/outputs
+/outputs/
 data/benchmarks/
 data/test_documents/
 
@@ -494,6 +500,8 @@ logs/
 .env
 .envrc
 .env.local
+pre-commit-cache
+pre-commit-cache/
 
 # IDE
 .idea/
