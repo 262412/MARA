@@ -196,6 +196,89 @@ python -m benchmark normalize-slidevqa `
   --output benchmark/manifests/slidevqa.json
 ```
 
+## Thesis Route Templates
+
+Route templates for the local-first thesis benchmark live under
+`benchmark/manifests/templates/`:
+
+- `mara_all_routes.local.json`: direct, text, page-image VLM, element, graph,
+  hybrid, controller-auto, and CRAG-guarded routes.
+- `mara_text_only.json`: text-focused ablations for FinanceBench, QASPER, ALCE,
+  and RAGTruth style runs.
+- `mara_multimodal.json`: text, page-image, element, hybrid, and controller
+  routes for SlideVQA, MMDocRAG, and ViDoRe-style runs.
+
+Copy one of these templates into a dataset manifest, then replace `documents`
+and `examples` with the converter output or your curated manifest rows. The
+local route templates use Qwen/BGE/ColQwen/Qwen-VL names as benchmark metadata;
+actual runtime availability is still checked by the configured DocQA visual
+backend health path.
+
+## Dataset Converters
+
+Additional converters target the thesis-scale benchmark datasets:
+
+```powershell
+python -m benchmark normalize-qasper `
+  --source ~/scratch/datasets/MARA/qasper/raw/qasper-dev-v0.3.json `
+  --output ~/scratch/outputs/MARA/manifests/qasper-dev.json
+
+python -m benchmark normalize-mmdocrag `
+  --source ~/scratch/datasets/MARA/mmdocrag/dev_20.jsonl `
+  --documents-root ~/scratch/datasets/MARA/mmdocrag `
+  --output ~/scratch/outputs/MARA/manifests/mmdocrag-dev20.json
+
+python -m benchmark normalize-vidore `
+  --source ~/scratch/datasets/MARA/vidore/docvqa_test_subsampled `
+  --documents-root ~/scratch/datasets/MARA/vidore/docvqa_test_subsampled `
+  --output ~/scratch/outputs/MARA/manifests/vidore-docvqa.json
+
+python -m benchmark normalize-ragtruth `
+  --source-info ~/scratch/datasets/MARA/ragtruth/dataset/source_info.jsonl `
+  --responses ~/scratch/datasets/MARA/ragtruth/dataset/response.jsonl `
+  --output ~/scratch/outputs/MARA/manifests/ragtruth.json
+
+python -m benchmark normalize-alce `
+  --source ~/data/datasets/MARA/alce/data/asqa_eval_gtr_top100.json `
+  --output ~/scratch/outputs/MARA/manifests/alce-asqa.json
+```
+
+Converters write derived manifests and any materialized text documents to the
+chosen output location. Keep those outputs under `~/scratch/outputs/MARA` or
+another non-repository working area.
+
+## Sampling And Sharding
+
+Use sampling controls for smoke, small ablation, and sharded thesis runs:
+
+```powershell
+python -m benchmark run `
+  --manifest ~/scratch/outputs/MARA/manifests/qasper-dev.json `
+  --suite-name qasper-small-ablation `
+  --route all `
+  --limit 50 `
+  --sample-seed 2026
+```
+
+For distributed runs, `--sample-seed` shuffles once, then
+`--shard-index/--num-shards` selects a deterministic shard, then `--limit`
+caps that shard:
+
+```powershell
+python -m benchmark run `
+  --manifest ~/scratch/outputs/MARA/manifests/mmdocrag-dev20.json `
+  --suite-name mmdocrag-shard-0 `
+  --route all `
+  --sample-seed 2026 `
+  --shard-index 0 `
+  --num-shards 4 `
+  --limit 75
+```
+
+Reports include `route_metrics.csv`, route-level Markdown tables, backend
+metadata, skipped routes, and evaluator status when route-matrix results are
+available.
+
 ## Notes
 
 - The benchmark now tracks visual and formula evidence metadata, but the score depends on the active reader/indexing pipeline surfacing those fields. If an engine cannot expose image/formula context, `evidence_metadata` makes that gap visible instead of hiding it inside answer text.

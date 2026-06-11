@@ -7,6 +7,7 @@ import gradio as gr
 from ktem.docqa.artifact_models import ARTIFACT_LABELS
 
 from .studio_artifact_generation import STUDIO_ARTIFACT_TYPE_CHOICES
+from .studio_artifact_parameters import artifact_parameter_state
 
 _CARD_DESCRIPTIONS = {
     "audio_overview": "Narrated source overview",
@@ -21,7 +22,6 @@ _CARD_DESCRIPTIONS = {
     "study_guide": "Guided notes",
     "faq": "Question set",
     "timeline": "Chronology",
-    "custom_report": "Source-grounded report",
     "slide_deck": "Deck plan",
 }
 
@@ -90,6 +90,12 @@ def studio_artifact_selection_outputs(page: Any) -> list[Any]:
         page.studio_artifact_overlay_backdrop,
         page.studio_artifact_detail_panel,
         page.studio_artifact_detail_title,
+        page.studio_artifact_prompt,
+        page.studio_artifact_format,
+        page.studio_artifact_difficulty,
+        page.studio_artifact_count,
+        page.studio_artifact_format_explanation,
+        page.studio_artifact_note_ids,
     ]
 
 
@@ -103,12 +109,19 @@ def studio_artifact_visibility_outputs(page: Any) -> list[Any]:
 
 def select_studio_artifact_type_update(artifact_type: str) -> tuple[Any, ...]:
     selected = str(artifact_type or "study_guide").strip() or "study_guide"
+    parameters = artifact_parameter_state(selected)
     return (
         selected,
         gr.update(visible=True),
         gr.update(visible=True),
         gr.update(visible=True),
         _detail_title_html(selected),
+        _field_update(parameters["prompt"]),
+        _field_update(parameters["format"]),
+        _field_update(parameters["difficulty"]),
+        _field_update(parameters["count"]),
+        _field_update(parameters["format_explanation"]),
+        gr.update(visible=False, value=""),
     )
 
 
@@ -134,9 +147,13 @@ def _detail_title_html(artifact_type: str) -> str:
     return (
         "<div class='studio-artifact-detail-title'>"
         f"<strong>{label}</strong>"
-        "<span>Configure prompt, scope, notes, and output parameters.</span>"
+        "<span>Configure scope and artifact-specific parameters.</span>"
         "</div>"
     )
+
+
+def _field_update(state: dict[str, Any]) -> Any:
+    return gr.update(**dict(state))
 
 
 def _selector_header_html() -> str:

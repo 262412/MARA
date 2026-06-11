@@ -159,6 +159,42 @@ def test_local_page_image_index_renders_pages_and_smoke_embeddings(tmp_path):
     )
 
 
+def test_local_page_image_index_renders_pdf_from_hash_storage_path(
+    monkeypatch, tmp_path
+):
+    stored_path = tmp_path / "a1b2c3d4"
+    stored_path.write_bytes(b"%PDF-1.4\n% smoke fixture\n")
+    rendered_paths = []
+
+    def fake_get_page_thumbnails(path, pages, dpi):
+        rendered_paths.append(path)
+        assert path.suffix == ".pdf"
+        assert pages == [0]
+        assert dpi == 120
+        return ["data:image/png;base64,page-0"]
+
+    monkeypatch.setattr(
+        "kotaemon.loaders.pdf_loader.get_page_thumbnails",
+        fake_get_page_thumbnails,
+    )
+
+    records = build_local_page_image_records(
+        [
+            {
+                "file_id": "file-1",
+                "file_name": "deck.pdf",
+                "path": str(stored_path),
+            }
+        ],
+        page_numbers=[1],
+        text_extractor=lambda _path, page: f"Deck title page {page}.",
+    )
+
+    assert rendered_paths
+    assert records[0]["page_image_path"] == "data:image/png;base64,page-0"
+    assert records[0]["text"] == "Deck title page 1."
+
+
 def test_visual_route_ranks_query_matching_page_images_across_documents():
     request = DocQARequest(
         prompt="What does the revenue chart show?",

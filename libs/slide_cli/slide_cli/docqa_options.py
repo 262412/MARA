@@ -143,6 +143,18 @@ def _response_options():
         ),
         click.option("--llm", default=None, help="Temporary LLM override."),
         click.option(
+            "--visual-retriever",
+            "visual_retriever_backend",
+            default=None,
+            help="Visual retriever backend for visual or hybrid routes.",
+        ),
+        click.option(
+            "--visual-generator",
+            "visual_generator_backend",
+            default=None,
+            help="Visual generator backend for visual routes.",
+        ),
+        click.option(
             "--citation",
             default=None,
             type=click.Choice(["highlight", "inline", "off"]),

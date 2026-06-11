@@ -253,7 +253,7 @@ def _apply_codex_config_template(
     else:
         existing_text = ""
 
-    marker = "BEGIN SLIDE PLATFORM BLOCK"
+    marker = "BEGIN MARA PLATFORM BLOCK"
     if marker in existing_text:
         merged_text = existing_text
         changed = False

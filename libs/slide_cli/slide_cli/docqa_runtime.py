@@ -190,6 +190,61 @@ def _pick_default_model_name(
     return selected_name
 
 
+def _pick_persisted_default_model_name(
+    engine,
+    table_name: str,
+    configs: Any,
+    *,
+    label: str,
+    issues: list[str],
+    warnings: list[str],
+) -> str:
+    from sqlalchemy import inspect, text
+    from sqlalchemy.exc import SQLAlchemyError
+
+    try:
+        if inspect(engine).has_table(table_name):
+            query = text(f'SELECT name, spec FROM "{table_name}" WHERE "default" = 1')
+            with engine.connect() as connection:
+                row = connection.execute(query).first()
+            if row is not None:
+                selected_name = str(row[0])
+                selected_spec = _load_json_dict(row[1])
+                _warn_placeholder_credentials(
+                    selected_name,
+                    selected_spec,
+                    label=label,
+                    warnings=warnings,
+                )
+                return selected_name
+    except SQLAlchemyError as exc:
+        warnings.append(f"Unable to read persisted default {label}: {exc}")
+
+    return _pick_default_model_name(
+        configs,
+        label=label,
+        issues=issues,
+        warnings=warnings,
+    )
+
+
+def _warn_placeholder_credentials(
+    selected_name: str,
+    selected_spec: dict[str, Any],
+    *,
+    label: str,
+    warnings: list[str],
+) -> None:
+    for key, value in selected_spec.items():
+        if "key" not in str(key).lower():
+            continue
+        if str(value or "").strip() in _PLACEHOLDER_CREDENTIALS:
+            warnings.append(
+                f"Default {label} '{selected_name}' appears to use placeholder credentials."
+            )
+            break
+
+
 def _resolve_file_index_definition(
     flowsettings, engine
 ) -> tuple[str, int | None, bool, list[str]]:
@@ -386,13 +441,17 @@ def collect_docqa_doctor_payload() -> dict[str, Any]:
     )
     issues.extend(index_issues)
 
-    llm_default = _pick_default_model_name(
+    llm_default = _pick_persisted_default_model_name(
+        engine,
+        "llm_table",
         getattr(flowsettings, "KH_LLMS", {}),
         label="LLM",
         issues=issues,
         warnings=warnings,
     )
-    embedding_default = _pick_default_model_name(
+    embedding_default = _pick_persisted_default_model_name(
+        engine,
+        "embedding",
         getattr(flowsettings, "KH_EMBEDDINGS", {}),
         label="embedding model",
         issues=issues,

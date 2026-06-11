@@ -75,6 +75,14 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
             "quiz",
             "--artifact-type",
             "quiz",
+            "--limit",
+            "25",
+            "--sample-seed",
+            "1234",
+            "--shard-index",
+            "1",
+            "--num-shards",
+            "4",
         ]
     )
 
@@ -89,3 +97,7 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     assert captured["config"].agent_mode == "thorough"
     assert captured["config"].task_type == "quiz"
     assert captured["config"].artifact_type == "quiz"
+    assert captured["config"].limit == 25
+    assert captured["config"].sample_seed == 1234
+    assert captured["config"].shard_index == 1
+    assert captured["config"].num_shards == 4

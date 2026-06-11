@@ -30,6 +30,9 @@ class DocQARequest:
     planner_model: str | None = None
     allowed_routes: list[str] | None = None
     verification_mode: str | None = None
+    graph_mode: str | None = None
+    visual_retriever_backend: str | None = None
+    visual_generator_backend: str | None = None
     llm: str | None = None
     use_mindmap: bool | str | None = None
     use_citation: str | None = None

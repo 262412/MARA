@@ -4,4 +4,4 @@
 default_skill = "MARA"
 notes = "Use MARA doctor, MARA model providers, and dry-run checks before real calls."
 
-# END SLIDE PLATFORM BLOCK
+# END MARA PLATFORM BLOCK

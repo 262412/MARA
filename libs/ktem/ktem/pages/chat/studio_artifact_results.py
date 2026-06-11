@@ -8,7 +8,7 @@ from ktem.docqa.artifact_models import ARTIFACT_LABELS
 _ARTIFACT_LABELS = ARTIFACT_LABELS
 _ARTIFACT_GROUPS = (
     ("Quick Generate", ("study_guide", "quiz", "flashcards", "mindmap")),
-    ("Reports", ("briefing_doc", "faq", "timeline", "custom_report")),
+    ("Reports", ("briefing_doc", "faq", "timeline")),
     ("Visual / Export", ("data_table", "infographic", "slide_outline", "slide_deck")),
     ("Media", ("audio_overview", "video_overview")),
 )
@@ -169,7 +169,7 @@ def _artifact_result_row(
     share_text = html.escape(_artifact_copy_text(artifact), quote=True)
     return (
         "<div class='studio-artifact-result-row' "
-        'onclick="this.nextElementSibling.hidden = false">'
+        'onclick="openStudioArtifactViewer(this.nextElementSibling)">'
         f"{_artifact_result_icon(artifact_type)}"
         "<div>"
         f"<strong data-studio-artifact-title='true'>{html.escape(title)}</strong>"
@@ -240,7 +240,7 @@ def _row_action_js(action: str) -> str:
             "event.stopPropagation(); "
             "const row=this.closest('.studio-artifact-result-row'); "
             "const viewer=row.nextElementSibling; "
-            "if(viewer){ viewer.hidden=false; "
+            "if(viewer){ openStudioArtifactViewer(viewer); "
             "const target=viewer.querySelector('[data-studio-prompt-sources]') || viewer.querySelector('section'); "
             "if(target) target.scrollIntoView({block:'start'}); }"
         )
@@ -508,11 +508,7 @@ def _artifact_copy_text(artifact: dict[str, Any]) -> str:
 
 
 def _open_graph_viewer_html(graph_html: str) -> str:
-    visible_graph = graph_html.replace(
-        " data-kg-viewer-overlay='true' hidden",
-        " data-kg-viewer-overlay='true'",
-    )
-    return f"<div class='studio-kg-viewer-scope'>{visible_graph}</div>"
+    return f"<div class='studio-kg-viewer-scope'>{graph_html}</div>"
 
 
 def _conversation_artifacts(conversation_id: str | None) -> list[dict[str, Any]]:

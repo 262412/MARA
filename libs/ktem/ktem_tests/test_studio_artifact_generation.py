@@ -104,9 +104,10 @@ def test_build_studio_artifact_prompt_includes_user_options():
     )
 
     assert "Focus on exam prep." in prompt
-    assert "Preferred format: markdown." in prompt
-    assert "Difficulty: hard." in prompt
-    assert "Requested item count: 8." in prompt
+    assert "Question count: 8." in prompt
+    assert "Preferred format:" not in prompt
+    assert "Difficulty:" not in prompt
+    assert "Requested item count:" not in prompt
     assert "Language: English." in prompt
 
 

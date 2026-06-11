@@ -39,6 +39,7 @@ def test_render_studio_artifacts_html_lists_supported_empty_state():
     assert "Flashcards" in html
     assert "Mind Map" in html
     assert "Slide Outline" in html
+    assert "Custom Report" not in html
 
 
 def test_render_studio_artifacts_html_summarizes_generated_artifact():
@@ -192,7 +193,10 @@ def test_render_studio_artifacts_html_uses_full_mindmap_viewer_surface():
 
     assert "studio-artifact-viewer--mindmap" in html
     assert "studio-kg-viewer-scope" in html
-    assert " data-kg-viewer-overlay='true' hidden" not in html
+    assert "data-kg-open-viewer='true'" in html
+    assert "data-kg-viewer-overlay='true' hidden" in html
+    assert "openStudioArtifactViewer" in html
+    assert "this.nextElementSibling.hidden = false" not in html
     assert "studio-artifact-viewer__dialog" not in html
 
 

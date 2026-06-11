@@ -1,0 +1,70 @@
+{
+  "schema_version": 2,
+  "dataset_name": "mara_multimodal_template",
+  "documents": [],
+  "examples": [],
+  "routes": [
+    {
+      "route_id": "text_rag",
+      "route_name": "Text RAG",
+      "engine": "docqa_runtime",
+      "scope": "multi_document",
+      "reasoning_type": "mara",
+      "route_policy": "doc",
+      "allowed_routes": ["doc_text"],
+      "text_retriever_backend": "BAAI/bge-m3",
+      "generator_backend": "Qwen/Qwen3-8B"
+    },
+    {
+      "route_id": "page_image_rag_vlm",
+      "route_name": "Page-image RAG VLM",
+      "engine": "docqa_runtime",
+      "scope": "multi_document",
+      "reasoning_type": "mara",
+      "route_policy": "visual",
+      "allowed_routes": ["doc_page_image"],
+      "visual_retriever_backend": "colqwen",
+      "visual_generator_backend": "local_qwen3_vl",
+      "generator_backend": "local_qwen3_vl"
+    },
+    {
+      "route_id": "element_rag",
+      "route_name": "Element RAG",
+      "engine": "docqa_runtime",
+      "scope": "multi_document",
+      "reasoning_type": "mara",
+      "route_policy": "element",
+      "allowed_routes": ["doc_element"],
+      "text_retriever_backend": "docqa_element_metadata",
+      "generator_backend": "Qwen/Qwen3-8B"
+    },
+    {
+      "route_id": "hybrid_rag",
+      "route_name": "Hybrid RAG",
+      "engine": "docqa_runtime",
+      "scope": "multi_document",
+      "reasoning_type": "mara",
+      "route_policy": "hybrid",
+      "allowed_routes": ["hybrid"],
+      "text_retriever_backend": "BAAI/bge-m3",
+      "visual_retriever_backend": "colqwen",
+      "visual_generator_backend": "local_qwen3_vl",
+      "graph_backend": "local_graph_index",
+      "generator_backend": "Qwen/Qwen3-8B"
+    },
+    {
+      "route_id": "controller_auto",
+      "route_name": "Controller auto",
+      "engine": "docqa_runtime",
+      "scope": "multi_document",
+      "reasoning_type": "mara",
+      "route_policy": "auto",
+      "text_retriever_backend": "BAAI/bge-m3",
+      "visual_retriever_backend": "colqwen",
+      "visual_generator_backend": "local_qwen3_vl",
+      "graph_backend": "local_graph_index",
+      "planner_model": "Qwen/Qwen3-8B",
+      "generator_backend": "Qwen/Qwen3-8B"
+    }
+  ]
+}

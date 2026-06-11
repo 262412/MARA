@@ -37,6 +37,7 @@ from .research_evaluators import (
     external_research_adapter_metrics,
 )
 from .route_execution import route_skip_record
+from .sampling import select_examples_for_config, selection_summary
 from .schemas import BenchmarkConfig, ManifestBundle
 from .summary import build_benchmark_summary
 from .verification_metrics import verification_metrics
@@ -462,6 +463,8 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
 
 def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]:
     bundle = load_manifest(manifest_path)
+    selected_examples = select_examples_for_config(bundle.examples, config)
+    selected_bundle = replace(bundle, examples=selected_examples)
     predictions: list[dict[str, Any]] = []
     engines: dict[tuple[str, str], Any] = {}
     active_routes = _active_routes(bundle, config)
@@ -482,10 +485,10 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
             engines[engine_key] = get_engine(route_config.engine, route_config)
         engine = engines[engine_key]
 
-        for example in bundle.examples:
-            document = bundle.documents[example.document_id]
+        for example in selected_bundle.examples:
+            document = selected_bundle.documents[example.document_id]
             try:
-                prediction = _run_engine_example(engine, bundle, example)
+                prediction = _run_engine_example(engine, selected_bundle, example)
                 prediction["error"] = None
             except Exception as exc:
                 prediction = _error_prediction(
@@ -522,7 +525,7 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         for index, route in enumerate(active_routes, start=1)
     }
     summary = build_benchmark_summary(
-        bundle=bundle,
+        bundle=selected_bundle,
         config=config,
         active_routes=active_routes,
         predictions=predictions,
@@ -536,6 +539,7 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         external_adapter_metric_metadata_by_route=(
             _external_adapter_summary_metadata_by_route(predictions, active_routes)
         ),
+        selection=selection_summary(config, len(bundle.examples)),
     )
 
     return {

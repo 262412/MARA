@@ -5,9 +5,13 @@ from typing import Any
 from ktem.docqa.artifact_models import ARTIFACT_LABELS
 
 from .chat_docqa_runtime import build_web_docqa_request
+from .studio_artifact_parameters import build_parameterized_artifact_prompt
 
-STUDIO_ARTIFACT_TYPE_CHOICES = tuple(ARTIFACT_LABELS)
-STUDIO_ARTIFACT_FORMAT_CHOICES = ("markdown", "json", "html", "csv", "pptx")
+STUDIO_ARTIFACT_TYPE_CHOICES = tuple(
+    artifact_type
+    for artifact_type in ARTIFACT_LABELS
+    if artifact_type != "custom_report"
+)
 
 
 def build_studio_artifact_prompt(
@@ -20,24 +24,15 @@ def build_studio_artifact_prompt(
     language: str | None = None,
     note_records: list[dict[str, Any]] | None = None,
 ) -> str:
-    label = ARTIFACT_LABELS.get(artifact_type, artifact_type.replace("_", " "))
-    parts = [
-        str(prompt or "").strip() or f"Generate a source-grounded {label}.",
-        f"Preferred format: {str(output_format or 'markdown').strip()}.",
-    ]
-    language_text = str(language or "").strip()
-    difficulty_text = str(difficulty or "").strip()
-    count_value = _positive_int(count)
-    if language_text:
-        parts.append(f"Language: {language_text}.")
-    if difficulty_text:
-        parts.append(f"Difficulty: {difficulty_text}.")
-    if count_value is not None:
-        parts.append(f"Requested item count: {count_value}.")
-    if note_records:
-        parts.append("Notebook notes:")
-        parts.extend(_note_prompt_lines(note_records))
-    return "\n".join(parts)
+    return build_parameterized_artifact_prompt(
+        artifact_type,
+        prompt=prompt,
+        output_format=output_format,
+        difficulty=difficulty,
+        count=count,
+        language=language,
+        note_records=note_records,
+    )
 
 
 def run_studio_artifact_turn(
@@ -188,13 +183,6 @@ def run_studio_artifact_regenerate_turn(
     return docqa_runtime.run_turn(request)
 
 
-def _positive_int(value: Any) -> int | None:
-    if value in (None, ""):
-        return None
-    count = int(value)
-    return count if count > 0 else None
-
-
 def selected_source_ids_for_studio_artifact(
     active_file_id: Any,
     selected_inputs: dict[int, Any] | None,
@@ -260,16 +248,6 @@ def _notebook_note_records(
     if missing:
         raise ValueError("Notebook note does not exist: " + ", ".join(missing))
     return [dict(by_id[note_id]) for note_id in note_ids]
-
-
-def _note_prompt_lines(note_records: list[dict[str, Any]]) -> list[str]:
-    lines: list[str] = []
-    for note in note_records:
-        note_id = str(note.get("note_id") or "").strip()
-        title = str(note.get("title") or "Notebook note").strip()
-        text = str(note.get("text") or "").strip()
-        lines.append(f"- {title} ({note_id}): {text}")
-    return lines
 
 
 def _artifact_type(artifact: dict[str, Any]) -> str:

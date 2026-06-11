@@ -165,6 +165,29 @@ def test_install_codex_agents_uses_sidecar_when_existing_file_present(tmp_path):
     assert str(sidecar) in result.sidecar_paths
 
 
+def test_install_codex_config_template_respects_existing_mara_block(tmp_path):
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "# BEGIN MARA PLATFORM BLOCK\n"
+        "[profiles.MARA]\n"
+        'default_skill = "MARA"\n'
+        "# END MARA PLATFORM BLOCK\n",
+        encoding="utf-8",
+    )
+
+    result = install_platform(
+        platform_name="codex",
+        mode="selective",
+        items=["config.toml.template"],
+        target_dir=tmp_path,
+    )
+
+    text = config_path.read_text(encoding="utf-8")
+    assert text.count("[profiles.MARA]") == 1
+    assert result.merged_paths == []
+    assert (tmp_path / "config.slide.template.toml").exists()
+
+
 def test_install_uses_existing_platform_sidecars_and_metadata(tmp_path):
     install_platform(
         platform_name="codex",
@@ -206,6 +229,20 @@ def test_validate_bundle_passes_for_packaged_assets():
     assert all(item.valid for item in results), [
         (item.platform, item.errors) for item in results
     ]
+
+
+def test_codex_config_templates_use_matching_mara_block_markers():
+    repo_root = Path(__file__).resolve().parents[3]
+    paths = [
+        repo_root / ".codex" / "config.slide.template.toml",
+        _platform_assets_root("codex") / "config.toml.template",
+    ]
+
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        assert "# BEGIN MARA PLATFORM BLOCK" in text
+        assert "# END MARA PLATFORM BLOCK" in text
+        assert "SLIDE PLATFORM BLOCK" not in text
 
 
 def test_platform_skill_surfaces_are_exactly_mara_only():
@@ -278,6 +315,28 @@ def test_validate_installed_reports_missing_minimal_components(tmp_path):
     assert any(
         message.startswith("Missing minimal component") for message in result.errors
     )
+
+
+def test_validate_installed_reports_missing_skill_support_files(tmp_path):
+    install_platform(
+        platform_name="codex",
+        mode="minimal",
+        target_dir=tmp_path,
+    )
+    skill_file = tmp_path / "skills" / "MARA" / "SKILL.md"
+    skill_file.write_text(
+        skill_file.read_text(encoding="utf-8")
+        + '\nRun `python "$SKILL_DIR/scripts/missing.py"` for diagnostics.\n',
+        encoding="utf-8",
+    )
+
+    result = validate_installed("codex", target_dir=tmp_path)
+
+    assert result.valid is False
+    assert (
+        "Missing installed skill support file referenced by "
+        "skills/MARA/SKILL.md: skills/MARA/scripts/missing.py"
+    ) in result.errors
 
 
 def test_validate_installed_passes_after_minimal_install(tmp_path):

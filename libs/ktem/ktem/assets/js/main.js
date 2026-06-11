@@ -1351,6 +1351,7 @@ function run() {
       stage.removeAttribute("data-kg-recentering");
     };
 
+    overlay._ktemOpenViewer = openViewer;
     overlay._ktemCloseViewer = closeViewer;
     overlay._ktemAdjustForBranchToggle = (branchAnchor, beforeRect) => {
       if (
@@ -1617,6 +1618,33 @@ function run() {
     }
     });
   }
+
+  function openStudioArtifactViewer(viewer) {
+    if (!(viewer instanceof HTMLElement)) {
+      return;
+    }
+
+    viewer.hidden = false;
+    bindKnowledgeGraphViewer();
+
+    const overlay = viewer.querySelector("[data-kg-viewer-overlay='true']");
+    if (overlay && typeof overlay._ktemOpenViewer === "function") {
+      overlay._ktemOpenViewer();
+      return;
+    }
+
+    const graphTrigger = viewer.querySelector("[data-kg-open-viewer='true']");
+    if (graphTrigger instanceof HTMLElement) {
+      graphTrigger.click();
+      return;
+    }
+
+    if (overlay instanceof HTMLElement) {
+      overlay.hidden = false;
+    }
+  }
+
+  globalThis.openStudioArtifactViewer = openStudioArtifactViewer;
 
   function applyIconOnlyButtonTooltips() {
     const iconButtonHints = {

@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import base64
 import importlib
+import json
+import mimetypes
+import os
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 from .visual_retriever import LocalLateInteractionVisualRetriever
@@ -34,25 +41,91 @@ class VisualBackendSpec:
         }
 
 
-class ColVisionVisualRetriever:
+class ColVisionHTTPVisualRetriever:
     backend_type = "colvision_multi_vector"
 
-    def __init__(self, name: str, model_family: str, model_name: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        model_family: str,
+        *,
+        endpoint: str | None = None,
+        timeout: float | None = None,
+    ) -> None:
         self.name = name
         self.model_family = model_family
-        self.model_name = model_name
+        self.endpoint = endpoint or _colvision_endpoint(model_family)
+        self.timeout = timeout or float(os.getenv("MARA_COLVISION_TIMEOUT", "60"))
 
     def score(self, query: str, record: dict[str, Any]) -> float:
-        del query
-        metadata = dict(record.get("metadata") or {})
-        page_score = (
-            metadata.get("page_level_score")
-            or metadata.get("colvision_score")
-            or record.get("page_level_score")
+        image_url = _image_url(record)
+        if not image_url:
+            return 0.0
+        payload = {
+            "query": str(query or ""),
+            "images": [image_url],
+            "model_family": self.model_family,
+        }
+        response = self._post_json(payload)
+        scores = response.get("scores") if isinstance(response, dict) else None
+        if not isinstance(scores, list) or not scores:
+            return 0.0
+        return float(scores[0])
+
+    def _post_json(self, payload: dict[str, Any]) -> dict[str, Any]:
+        body = json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            self.endpoint,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
         )
-        if page_score is not None:
-            return float(page_score)
-        return 0.0
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+
+class QwenVLVisualGenerator:
+    name = "local_qwen3_vl"
+    backend_type = "openai_compatible_vlm"
+
+    def __init__(
+        self,
+        *,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        timeout: float | None = None,
+        max_images: int = 2,
+    ) -> None:
+        self.base_url = base_url or os.getenv(
+            "MARA_VLM_BASE_URL", "http://localhost:8001/v1"
+        )
+        self.api_key = api_key or os.getenv("MARA_VLM_API_KEY", "local")
+        self.model = model or os.getenv("MARA_VLM_MODEL", "Qwen/Qwen3-VL-8B-Instruct")
+        self.timeout = timeout or float(os.getenv("MARA_VLM_TIMEOUT", "60"))
+        self.max_images = max_images
+
+    def generate(self, request: Any, bundle: Any) -> str:
+        items = [
+            item for item in getattr(bundle, "items", []) if isinstance(item, dict)
+        ]
+        content = [{"type": "text", "text": _visual_prompt(request, items)}]
+        content.extend(_image_parts(items, limit=self.max_images))
+        response = self._client().chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": content}],
+            temperature=0,
+        )
+        return str(response.choices[0].message.content or "").strip()
+
+    def _client(self):
+        from openai import OpenAI
+
+        return OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            timeout=self.timeout,
+        )
 
 
 _RETRIEVERS: dict[str, VisualBackendSpec] = {
@@ -70,13 +143,14 @@ _RETRIEVERS: dict[str, VisualBackendSpec] = {
         status="not_configured",
         backend_type="colvision_multi_vector",
         benchmark_ready=True,
-        builder=lambda: ColVisionVisualRetriever(
+        builder=lambda: ColVisionHTTPVisualRetriever(
             "colpali",
             "colpali",
-            "vidore/colpali-v1.2",
         ),
-        available=lambda: False,
-        readiness_reason="requires_real_colvision_inference_backend",
+        available=lambda: _colvision_http_available(
+            _colvision_endpoint("colpali"), "colpali"
+        ),
+        readiness_reason="requires_local_colvision_http_server",
     ),
     "colqwen": VisualBackendSpec(
         name="colqwen",
@@ -84,13 +158,14 @@ _RETRIEVERS: dict[str, VisualBackendSpec] = {
         status="not_configured",
         backend_type="colvision_multi_vector",
         benchmark_ready=True,
-        builder=lambda: ColVisionVisualRetriever(
+        builder=lambda: ColVisionHTTPVisualRetriever(
             "colqwen",
             "colqwen",
-            "vidore/colqwen2-v1.0",
         ),
-        available=lambda: False,
-        readiness_reason="requires_real_colvision_inference_backend",
+        available=lambda: _colvision_http_available(
+            _colvision_endpoint("colqwen"), "colqwen"
+        ),
+        readiness_reason="requires_local_colvision_http_server",
     ),
 }
 _GENERATORS: dict[str, VisualBackendSpec] = {
@@ -101,7 +176,15 @@ _GENERATORS: dict[str, VisualBackendSpec] = {
         backend_type="none",
         benchmark_ready=True,
         builder=None,
-    )
+    ),
+    "local_qwen3_vl": VisualBackendSpec(
+        name="local_qwen3_vl",
+        role="visual_generator",
+        status="configured",
+        backend_type="openai_compatible_vlm",
+        benchmark_ready=True,
+        builder=QwenVLVisualGenerator,
+    ),
 }
 
 
@@ -244,8 +327,83 @@ def _dotted_backend_available(backend: str) -> bool:
     return hasattr(module, attr_name)
 
 
-def _colpali_available() -> bool:
-    return importlib.util.find_spec("colpali_engine") is not None
+def _visual_prompt(request: Any, items: list[dict[str, Any]]) -> str:
+    prompt = str(getattr(request, "prompt", "") or "").strip()
+    evidence = []
+    for item in items[:4]:
+        page = str(item.get("page_label") or item.get("page_number") or "").strip()
+        source = str(item.get("file_name") or item.get("source_name") or "").strip()
+        text = str(item.get("text") or item.get("ocr_text") or "").strip()
+        label = " ".join(
+            part for part in [source, f"page {page}" if page else ""] if part
+        )
+        if text:
+            evidence.append(f"- {label}: {text}" if label else f"- {text}")
+        elif label:
+            evidence.append(f"- {label}")
+    evidence_text = "\n".join(evidence) if evidence else "- No text evidence provided."
+    return (
+        "Answer the user's question using the provided page image evidence. "
+        "If the image evidence is insufficient, say so.\n\n"
+        f"Question: {prompt}\n\nEvidence:\n{evidence_text}"
+    )
+
+
+def _image_parts(items: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
+    parts: list[dict[str, Any]] = []
+    for item in items:
+        if str(item.get("modality") or "") != "page_image":
+            continue
+        image_url = _image_url(item)
+        if not image_url:
+            continue
+        parts.append({"type": "image_url", "image_url": {"url": image_url}})
+        if len(parts) >= limit:
+            break
+    return parts
+
+
+def _image_url(item: dict[str, Any]) -> str:
+    image_ref = str(
+        item.get("page_image_path")
+        or item.get("rendered_page_image")
+        or item.get("image_ref")
+        or dict(item.get("metadata") or {}).get("image_ref")
+        or ""
+    ).strip()
+    if image_ref.startswith(("data:", "http://", "https://")):
+        return image_ref
+    if not image_ref:
+        return ""
+    path = Path(image_ref)
+    if not path.is_file():
+        return ""
+    mime_type = mimetypes.guess_type(path.name)[0] or "image/png"
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def _colvision_endpoint(model_family: str) -> str:
+    family = str(model_family or "").strip().lower()
+    family_env = f"MARA_{family.upper()}_ENDPOINT" if family else ""
+    if family_env:
+        endpoint = os.getenv(family_env)
+        if endpoint:
+            return endpoint
+    return os.getenv("MARA_COLVISION_ENDPOINT", "http://127.0.0.1:8003/visual-score")
+
+
+def _colvision_http_available(endpoint: str, model_family: str) -> bool:
+    health_endpoint = endpoint.rsplit("/", 1)[0] + "/health"
+    try:
+        with urllib.request.urlopen(health_endpoint, timeout=0.5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, urllib.error.URLError, json.JSONDecodeError):
+        return False
+    if not payload.get("ok"):
+        return False
+    served_family = str(payload.get("model_family") or "").strip()
+    return not served_family or served_family == model_family
 
 
 def _bool_value(value: Any) -> bool:

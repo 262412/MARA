@@ -347,6 +347,7 @@ celerybeat.pid
 
 # Environments
 .venv
+.venv/
 env/
 venv/
 ENV/
@@ -461,6 +462,7 @@ $RECYCLE.BIN/
 
 ### Project-specific ###
 # Application data (large files, caches, temp data)
+ktem_app_data
 ktem_app_data/
 gradio_tmp/
 chunks_cache_dir/
@@ -472,6 +474,12 @@ zip_cache_dir_in/
 results/
 figures/
 benchmark/artifacts/
+/data
+/data/
+/datasets
+/datasets/
+/outputs
+/outputs/
 data/benchmarks/
 data/test_documents/
 
@@ -484,6 +492,7 @@ models/
 embeddings/
 
 # Logs
+logs
 logs/
 *.log
 
@@ -491,6 +500,8 @@ logs/
 .env
 .envrc
 .env.local
+pre-commit-cache
+pre-commit-cache/
 
 # IDE
 .idea/
@@ -516,6 +527,7 @@ desktop.ini
 !libs/kotaemon/tests/resources/*.pdf
 
 # Flow cache
+.theflow
 .theflow/
 
 # GPG

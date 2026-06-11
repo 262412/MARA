@@ -4,6 +4,8 @@ import hashlib
 import json
 import logging
 import re
+import shutil
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -397,7 +399,16 @@ def _render_pages(
 def _default_page_renderer(file_path: Path, pages: list[int], dpi: int) -> list[str]:
     from kotaemon.loaders.pdf_loader import get_page_thumbnails
 
-    return list(get_page_thumbnails(file_path, pages, dpi=dpi))
+    if file_path.suffix.lower() == ".pdf":
+        return list(get_page_thumbnails(file_path, pages, dpi=dpi))
+
+    with tempfile.TemporaryDirectory(prefix="mara-pdf-render-") as tmp_dir:
+        render_path = Path(tmp_dir) / f"{file_path.name}.pdf"
+        try:
+            render_path.symlink_to(file_path.resolve())
+        except OSError:
+            shutil.copyfile(file_path, render_path)
+        return list(get_page_thumbnails(render_path, pages, dpi=dpi))
 
 
 def _local_page_record(

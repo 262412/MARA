@@ -3,6 +3,6 @@
 sandbox_mode = "danger-full-access"
 [profiles.MARA]
 default_skill = "MARA"
-notes = "Use MARA doctor and MARA model providers before real calls."
+notes = "Use MARA doctor, MARA model providers, and dry-run checks before real calls."
 
 # END MARA PLATFORM BLOCK
