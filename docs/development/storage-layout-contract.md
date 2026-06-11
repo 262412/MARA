@@ -94,6 +94,46 @@ DATA_DIR=$HOME/fastscratch/datasets/MARA
 
 Important original data must still have a copy in `data` or an external backup.
 
+## IDE Source Control Scanning
+
+`pre-commit` hook caches and some downloaded datasets contain their own `.git`
+directories. They are not MARA source repositories and must not be treated as
+project changes.
+
+If the IDE workspace is opened at `~/scratch` instead of directly at
+`~/scratch/projects/MARA`, configure the local workspace settings to avoid
+scanning generated/cache/data repositories:
+
+```json
+{
+  "git.autoRepositoryDetection": "openEditors",
+  "git.ignoredRepositories": [
+    "/users/tbczhang/scratch/pre-commit-cache",
+    "/mnt/scratch/users/tbczhang/pre-commit-cache",
+    "/users/tbczhang/scratch/datasets",
+    "/mnt/scratch/users/tbczhang/datasets"
+  ],
+  "files.watcherExclude": {
+    "**/pre-commit-cache/**": true,
+    "**/datasets/**/.git/**": true
+  },
+  "search.exclude": {
+    "**/pre-commit-cache": true,
+    "**/datasets/**/.git": true
+  }
+}
+```
+
+For this workspace, open:
+
+```text
+~/scratch/mara-dev.code-workspace
+```
+
+That multi-root workspace exposes `scratch`, `MARA`, `fastscratch`, and `data`
+in the VS Code Explorer while keeping generated hook caches and dataset
+repositories out of Source Control auto-discovery.
+
 ## Required Environment Variables
 
 Interactive shells and automation must keep these variables on `fastscratch`:
