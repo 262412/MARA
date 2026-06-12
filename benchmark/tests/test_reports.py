@@ -9,6 +9,43 @@ def _read_jsonl(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+def test_write_reports_does_not_leave_summary_when_raw_artifact_write_fails(
+    tmp_path, monkeypatch
+):
+    from benchmark import reports
+
+    report = {
+        "summary": {
+            "suite_name": "Interrupted Suite",
+            "dataset_name": "sample",
+            "num_examples": 1,
+            "num_documents": 1,
+        },
+        "predictions": [{"example_id": "ex-1", "prediction": "42"}],
+        "documents": [{"document_id": "doc-1", "path": "doc.pdf"}],
+    }
+
+    original_write_jsonl = reports._write_jsonl
+
+    def fail_prediction_write(path, rows):
+        if path.name == "predictions.jsonl":
+            raise RuntimeError("simulated interrupted write")
+        original_write_jsonl(path, rows)
+
+    monkeypatch.setattr(reports, "_write_jsonl", fail_prediction_write)
+
+    try:
+        reports.write_reports(report, tmp_path, "Interrupted Suite")
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("write_reports unexpectedly succeeded")
+
+    run_dirs = list(tmp_path.iterdir())
+    assert len(run_dirs) == 1
+    assert not (run_dirs[0] / "summary.json").exists()
+
+
 def test_write_reports_emits_required_artifacts_with_jsonl_and_route_metadata(tmp_path):
     report = {
         "summary": {

@@ -116,10 +116,6 @@ def write_reports(
     if retrieval_traces is None:
         retrieval_traces = _derive_retrieval_traces(predictions)
 
-    summary_path.write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
     _write_jsonl(predictions_path, predictions)
     documents_path.write_text(
         json.dumps(documents, ensure_ascii=False, indent=2),
@@ -148,6 +144,10 @@ def write_reports(
         markdown.append("- Route Metrics: `route_metrics.csv`")
     markdown += _report_markdown_sections(summary, route_metric_table)
     markdown_path.write_text("\n".join(markdown), encoding="utf-8")
+    summary_path.write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return run_dir
 
 
