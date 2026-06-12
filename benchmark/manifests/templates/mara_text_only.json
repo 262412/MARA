@@ -12,7 +12,9 @@
       "reasoning_type": "mara",
       "route_policy": "direct",
       "allowed_routes": ["direct"],
-      "generator_backend": "Qwen/Qwen3-8B"
+      "generator_backend": "Qwen/Qwen3-8B",
+      "benchmark_role": "diagnostic",
+      "docqa_citation_mode": "inline"
     },
     {
       "route_id": "text_rag",
@@ -24,7 +26,9 @@
       "allowed_routes": ["doc_text"],
       "text_retriever_backend": "BAAI/bge-m3",
       "reranker_backend": "BAAI/bge-reranker-v2-m3",
-      "generator_backend": "Qwen/Qwen3-8B"
+      "generator_backend": "Qwen/Qwen3-8B",
+      "benchmark_role": "qa_quality",
+      "docqa_citation_mode": "inline"
     },
     {
       "route_id": "controller_auto",
@@ -35,7 +39,9 @@
       "route_policy": "auto",
       "text_retriever_backend": "BAAI/bge-m3",
       "planner_model": "Qwen/Qwen3-8B",
-      "generator_backend": "Qwen/Qwen3-8B"
+      "generator_backend": "Qwen/Qwen3-8B",
+      "benchmark_role": "qa_quality",
+      "docqa_citation_mode": "inline"
     },
     {
       "route_id": "crag_guarded",
@@ -49,7 +55,9 @@
       "text_retriever_backend": "BAAI/bge-m3",
       "planner_model": "Qwen/Qwen3-8B",
       "generator_backend": "Qwen/Qwen3-8B",
-      "ragtruth_evaluator": "local_backends.mara_evaluators.RAGTruthLocalEvaluator"
+      "ragtruth_evaluator": "local_backends.mara_evaluators.RAGTruthLocalEvaluator",
+      "benchmark_role": "qa_quality",
+      "docqa_citation_mode": "inline"
     }
   ]
 }

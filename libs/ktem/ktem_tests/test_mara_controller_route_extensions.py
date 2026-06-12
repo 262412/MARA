@@ -144,6 +144,37 @@ def test_mara_element_route_uses_element_index_without_text_retrieval():
     assert metadata["modality_counts"] == {"table": 1}
 
 
+def test_mara_text_route_records_bounded_retrieval_attempt_diagnostics():
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline._mara_retrieval_attempts = [
+        {"attempt": 1, "evidence_count": 1, "retry_reason": ""}
+    ]
+    docs = [
+        RetrievedDocument(
+            text="Revenue increased.",
+            id_="doc-1",
+            metadata={"file_id": "file-1", "page_label": "2"},
+        )
+    ]
+    info = [Document(channel="info", content="<large rendered evidence>")]
+
+    metadata = route_retrieval.route_retrieval_metadata(
+        pipeline,
+        "text_rag",
+        "What happened to revenue?",
+        [],
+        {"question": "What happened to revenue?", "modalities": ["text"]},
+        text_retrieve=lambda: (docs, info),
+        metadata_builder=pipeline.build_evidence_metadata,
+    )
+
+    assert metadata["retrieval_attempts"] == [
+        {"attempt": 1, "evidence_count": 1, "retry_reason": ""}
+    ]
+    assert metadata["retrieval_info_count"] == 1
+    assert "<large rendered evidence>" not in json.dumps(metadata)
+
+
 def test_mara_page_image_route_uses_configured_visual_retriever():
     class FakeVisualRetriever:
         name = "fake_visual_retriever"

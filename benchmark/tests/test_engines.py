@@ -359,3 +359,150 @@ def test_docqa_runtime_engine_reuses_already_indexed_documents(monkeypatch, tmp_
     assert fake_runtime.indexed == []
     assert fake_runtime.requests[0].selected_file_ids == ["file-existing"]
     assert result.answer == "runtime answer"
+
+
+def _install_docqa_runtime_with_response(monkeypatch, tmp_path, response):
+    class FakeRequest:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    class FakeRecord:
+        file_id = "file-1"
+        name = "doc.txt"
+        path = str(tmp_path / "doc.txt")
+
+    class FakeRuntime:
+        def index_paths(self, paths, reindex=False):
+            del paths, reindex
+
+        def resolve_file_refs(self, refs):
+            if refs and refs[0] in {"doc", "doc.txt", str(tmp_path / "doc.txt")}:
+                return [FakeRecord()]
+            if refs and refs[0] == "file-1":
+                return [FakeRecord()]
+            return []
+
+        def list_files(self, user_id=None):
+            del user_id
+            return [FakeRecord()]
+
+        def run_turn(self, request):
+            del request
+            return response
+
+    monkeypatch.setitem(
+        sys.modules,
+        "ktem.docqa",
+        types.SimpleNamespace(
+            DocQARuntime=FakeRuntime,
+            DocQARequest=FakeRequest,
+        ),
+    )
+    doc_path = tmp_path / "doc.txt"
+    doc_path.write_text("runtime text", encoding="utf-8")
+    return doc_path
+
+
+def test_docqa_runtime_engine_derives_hits_pages_sources_and_elements(
+    monkeypatch, tmp_path
+):
+    response = types.SimpleNamespace(
+        answer="runtime answer",
+        references_text="",
+        evidence_metadata={},
+        evidence_bundle={
+            "route": "doc_text",
+            "items": [
+                {
+                    "evidence_id": "hit-1",
+                    "source_id": "file-1",
+                    "source_name": "doc.txt",
+                    "page_label": "2",
+                    "modality": "text",
+                    "element_id": "chunk-1",
+                    "score": 0.91,
+                    "text": "Revenue increased.",
+                    "source_backrefs": ["file-1#page:2"],
+                }
+            ],
+        },
+    )
+    doc_path = _install_docqa_runtime_with_response(monkeypatch, tmp_path, response)
+    engine = get_engine(
+        "docqa_runtime",
+        BenchmarkConfig(suite_name="runtime", output_dir=tmp_path / "out"),
+    )
+
+    result = engine.run(
+        example=BenchmarkExample(
+            example_id="ex",
+            document_id="doc",
+            question="Question?",
+            answers=["runtime answer"],
+        ),
+        documents=[
+            BenchmarkDocument(document_id="doc", path=doc_path, format_type="txt")
+        ],
+    )
+
+    assert result.retrieved_hits == [
+        {
+            "evidence_id": "hit-1",
+            "document_id": "file-1",
+            "source_id": "file-1",
+            "source_name": "doc.txt",
+            "page_label": "2",
+            "modality": "text",
+            "element_id": "chunk-1",
+            "score": 0.91,
+            "text": "Revenue increased.",
+            "source_backrefs": ["file-1#page:2"],
+        }
+    ]
+    assert result.predicted_pages == ["2"]
+    assert result.predicted_sources == ["file-1#page:2"]
+    assert result.predicted_element_ids == ["chunk-1"]
+
+
+def test_docqa_runtime_engine_falls_back_to_evidence_metadata_when_bundle_empty(
+    monkeypatch, tmp_path
+):
+    response = types.SimpleNamespace(
+        answer="runtime answer",
+        references_text="",
+        evidence_bundle={"route": "doc_text", "items": []},
+        evidence_metadata={
+            "evidence": [
+                {
+                    "evidence_id": "metadata-hit",
+                    "file_id": "file-1",
+                    "file_name": "doc.txt",
+                    "page_label": "4",
+                    "element_type": "text",
+                    "text": "Metadata fallback evidence.",
+                    "source_backrefs": ["file-1#page:4"],
+                }
+            ]
+        },
+    )
+    doc_path = _install_docqa_runtime_with_response(monkeypatch, tmp_path, response)
+    engine = get_engine(
+        "docqa_runtime",
+        BenchmarkConfig(suite_name="runtime", output_dir=tmp_path / "out"),
+    )
+
+    result = engine.run(
+        example=BenchmarkExample(
+            example_id="ex",
+            document_id="doc",
+            question="Question?",
+            answers=["runtime answer"],
+        ),
+        documents=[
+            BenchmarkDocument(document_id="doc", path=doc_path, format_type="txt")
+        ],
+    )
+
+    assert result.retrieved_hits[0]["evidence_id"] == "metadata-hit"
+    assert result.predicted_pages == ["4"]
+    assert result.predicted_sources == ["file-1#page:4"]

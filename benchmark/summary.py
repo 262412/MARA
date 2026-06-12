@@ -29,6 +29,15 @@ def build_benchmark_summary(
         **_timing_summary(predictions),
         **_cache_summary(predictions, config.cache_mode),
         "route_metric_table": _route_metric_table(bundle.dataset_name, predictions),
+        "quality_route_metric_table": _route_metric_table(
+            bundle.dataset_name,
+            _role_predictions(predictions, {"qa_quality"}),
+        ),
+        "diagnostic_route_metric_table": _route_metric_table(
+            bundle.dataset_name,
+            _role_predictions(predictions, {"diagnostic", "prototype"}),
+        ),
+        **_quality_route_summary(predictions),
         "route_rankings": _route_rankings(bundle.dataset_name, predictions),
         "backend_metadata": backend_metadata,
         "adapter_metric_metadata": adapter_metric_metadata or {},
@@ -94,6 +103,15 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_numeric_match": _avg_metric(predictions, "numeric_match"),
         "avg_abstention_rate": _avg_metric(predictions, "abstained"),
         "avg_false_abstention": _avg_metric(predictions, "false_abstention"),
+    }
+
+
+def _quality_route_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
+    quality_predictions = _role_predictions(predictions, {"qa_quality"})
+    return {
+        "quality_avg_em": _avg_metric(quality_predictions, "em"),
+        "quality_avg_f1": _avg_metric(quality_predictions, "f1"),
+        "quality_avg_numeric_match": _avg_metric(quality_predictions, "numeric_match"),
     }
 
 
@@ -164,7 +182,7 @@ def _cache_hit_rate(predictions: list[dict[str, Any]], section: str) -> float | 
 
 
 def _multimodal_hit_summary(
-    predictions: list[dict[str, Any]]
+    predictions: list[dict[str, Any]],
 ) -> dict[str, float | None]:
     return {
         f"avg_{modality}_hit": _avg_metric(predictions, f"{modality}_hit")
@@ -213,6 +231,7 @@ def _route_metric_table(
                         ]
                     )
                 ),
+                "benchmark_role": _route_role(route_predictions),
             }
         )
     return rows
@@ -250,3 +269,22 @@ def _ordered_routes(predictions: list[dict[str, Any]]) -> list[str]:
         if route and route not in routes:
             routes.append(route)
     return routes
+
+
+def _role_predictions(
+    predictions: list[dict[str, Any]],
+    roles: set[str],
+) -> list[dict[str, Any]]:
+    return [
+        prediction
+        for prediction in predictions
+        if str(prediction.get("benchmark_role") or "qa_quality") in roles
+    ]
+
+
+def _route_role(predictions: list[dict[str, Any]]) -> str:
+    for prediction in predictions:
+        role = str(prediction.get("benchmark_role") or "").strip()
+        if role:
+            return role
+    return "qa_quality"

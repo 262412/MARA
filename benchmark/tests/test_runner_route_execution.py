@@ -79,6 +79,38 @@ def test_run_benchmark_propagates_visual_backend_route_fields(monkeypatch, tmp_p
     assert captured_configs[0].generator_backend == "tests.fake_vlm"
 
 
+def test_run_benchmark_allows_citation_mode_override(monkeypatch, tmp_path):
+    manifest_path = _write_citation_manifest(tmp_path)
+    captured_configs = []
+
+    def fake_get_engine(engine_name, config):
+        captured_configs.append(config)
+        return _FakeEngine(engine_name, config, [])
+
+    monkeypatch.setattr("benchmark.runner.get_engine", fake_get_engine)
+
+    run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="citation_default",
+            output_dir=tmp_path / "out-default",
+            use_generation=False,
+        ),
+    )
+    run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="citation_override",
+            output_dir=tmp_path / "out-override",
+            docqa_citation_mode="off",
+            use_generation=False,
+        ),
+    )
+
+    assert captured_configs[0].docqa_citation_mode == "inline"
+    assert captured_configs[1].docqa_citation_mode == "off"
+
+
 def test_route_skip_record_uses_visual_backend_readiness_for_required_vlm():
     record = route_skip_record(
         {
@@ -124,6 +156,37 @@ def _write_visual_backend_manifest(tmp_path):
                         "route_policy": "visual",
                         "visual_retriever_backend": "local_late_interaction",
                         "generator_backend": "tests.fake_vlm",
+                    }
+                ],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_id": "doc",
+                        "question": "What is alpha?",
+                        "answers": ["alpha"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
+def _write_citation_manifest(tmp_path):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "citation.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "citation",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "routes": [
+                    {
+                        "route_id": "text",
+                        "engine": "docqa_runtime",
+                        "docqa_citation_mode": "inline",
                     }
                 ],
                 "examples": [

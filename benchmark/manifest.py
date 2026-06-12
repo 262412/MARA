@@ -25,6 +25,8 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "verification_mode": "light",
         "planner_backend": "heuristic_local",
         "generator_backend": "local_direct",
+        "benchmark_role": "diagnostic",
+        "docqa_citation_mode": "inline",
     },
     {
         "route_id": "text_rag",
@@ -39,6 +41,8 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "text_retriever_backend": "docqa_text",
         "planner_backend": "heuristic_local",
         "generator_backend": "local_docqa_generator",
+        "benchmark_role": "qa_quality",
+        "docqa_citation_mode": "inline",
     },
     {
         "route_id": "page_image_rag_smoke",
@@ -55,6 +59,8 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "planner_backend": "heuristic_local",
         "generator_backend": "evidence_only_without_vlm",
         "implementation_stage": "deterministic_page_image_smoke",
+        "benchmark_role": "diagnostic",
+        "docqa_citation_mode": "inline",
     },
     {
         "route_id": "page_image_rag_vlm",
@@ -74,6 +80,8 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "requires_backend_config": True,
         "missing_backends": ["colpali", "visual_generator"],
         "implementation_stage": "requires_configured_visual_backends",
+        "benchmark_role": "diagnostic",
+        "docqa_citation_mode": "inline",
     },
     {
         "route_id": "element_rag",
@@ -89,6 +97,8 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "planner_backend": "heuristic_local",
         "generator_backend": "local_docqa_generator",
         "implementation_stage": "prototype_element_metadata_index",
+        "benchmark_role": "prototype",
+        "docqa_citation_mode": "inline",
     },
     {
         "route_id": "graph_rag_local",
@@ -105,6 +115,8 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "planner_backend": "heuristic_local",
         "generator_backend": "local_graph_summary",
         "implementation_stage": "prototype_lightweight_graph_selector",
+        "benchmark_role": "prototype",
+        "docqa_citation_mode": "inline",
     },
     {
         "route_id": "graph_rag_global",
@@ -122,6 +134,8 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "planner_backend": "heuristic_local",
         "generator_backend": "local_graph_summary",
         "implementation_stage": "prototype_lightweight_graph_selector",
+        "benchmark_role": "prototype",
+        "docqa_citation_mode": "inline",
     },
     {
         "route_id": "hybrid_rag",
@@ -138,6 +152,8 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "visual_backend_type": "deterministic_smoke",
         "planner_backend": "heuristic_local",
         "generator_backend": "local_docqa_generator",
+        "benchmark_role": "qa_quality",
+        "docqa_citation_mode": "inline",
     },
     {
         "route_id": "controller_auto",
@@ -154,6 +170,8 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "graph_backend": "local_global_graph",
         "planner_backend": "heuristic_local",
         "generator_backend": "local_docqa_generator",
+        "benchmark_role": "qa_quality",
+        "docqa_citation_mode": "inline",
     },
     {
         "route_id": "crag_guarded",
@@ -171,6 +189,8 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "graph_backend": "local_global_graph",
         "planner_backend": "heuristic_local",
         "generator_backend": "local_docqa_generator",
+        "benchmark_role": "qa_quality",
+        "docqa_citation_mode": "inline",
     },
 ]
 
@@ -310,10 +330,12 @@ def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
     }
     for key in (
         "controller_mode",
+        "docqa_citation_mode",
         "route_policy",
         "planner_model",
         "allowed_routes",
         "verification_mode",
+        "graph_mode",
         "text_retriever_backend",
         "visual_retriever_backend",
         "visual_generator_backend",
@@ -332,6 +354,7 @@ def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
         "mmdocrag_evaluator",
         "ragtruth_evaluator",
         "ragas_evaluator",
+        "benchmark_role",
     ):
         if key in record:
             route[key] = record.get(key)

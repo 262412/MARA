@@ -284,8 +284,10 @@ def test_load_v2_manifest_preserves_planner_model_and_allowed_routes(tmp_path):
                     {
                         "route_id": "controller_llm",
                         "engine": "docqa_runtime",
+                        "docqa_citation_mode": "inline",
                         "planner_model": "gpt-4o-mini",
                         "allowed_routes": ["doc_text", "graph_global"],
+                        "graph_mode": "local",
                     }
                 ],
             },
@@ -298,6 +300,8 @@ def test_load_v2_manifest_preserves_planner_model_and_allowed_routes(tmp_path):
 
     assert route["planner_model"] == "gpt-4o-mini"
     assert route["allowed_routes"] == ["doc_text", "graph_global"]
+    assert route["docqa_citation_mode"] == "inline"
+    assert route["graph_mode"] == "local"
 
 
 def test_default_mara_routes_cover_full_route_ablation_matrix():
@@ -316,6 +320,11 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
         "crag_guarded",
     ]
     assert DEFAULT_MARA_ROUTES[0]["route_policy"] == "direct"
+    assert DEFAULT_MARA_ROUTES[0]["benchmark_role"] == "diagnostic"
+    assert DEFAULT_MARA_ROUTES[1]["benchmark_role"] == "qa_quality"
+    assert all(
+        route["docqa_citation_mode"] == "inline" for route in DEFAULT_MARA_ROUTES
+    )
     assert DEFAULT_MARA_ROUTES[2]["allowed_routes"] == ["doc_page_image"]
     assert DEFAULT_MARA_ROUTES[3]["visual_retriever_backend"] == (
         "local_late_interaction"
@@ -332,6 +341,7 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
         "prototype_element_metadata_index"
     )
     assert DEFAULT_MARA_ROUTES[5]["graph_mode"] == "local"
+    assert DEFAULT_MARA_ROUTES[5]["benchmark_role"] == "prototype"
     assert DEFAULT_MARA_ROUTES[5]["implementation_stage"] == (
         "prototype_lightweight_graph_selector"
     )
@@ -340,7 +350,9 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
         "prototype_lightweight_graph_selector"
     )
     assert DEFAULT_MARA_ROUTES[8]["controller_mode"] == "llm"
+    assert DEFAULT_MARA_ROUTES[8]["benchmark_role"] == "qa_quality"
     assert DEFAULT_MARA_ROUTES[9]["verification_mode"] == "strict"
+    assert DEFAULT_MARA_ROUTES[9]["benchmark_role"] == "qa_quality"
 
 
 def test_manifest_templates_load_expected_mara_route_sets():
@@ -375,6 +387,26 @@ def test_manifest_templates_load_expected_mara_route_sets():
     assert all_routes.routes[2]["visual_retriever_backend"] == "colqwen"
     assert all_routes.routes[2]["visual_generator_backend"] == "local_qwen3_vl"
     assert all_routes.routes[2]["generator_backend"] == "local_qwen3_vl"
+    assert {
+        route["route_id"]: route["benchmark_role"] for route in text_only.routes
+    } == {
+        "direct_answer": "diagnostic",
+        "text_rag": "qa_quality",
+        "controller_auto": "qa_quality",
+        "crag_guarded": "qa_quality",
+    }
+    assert {
+        route["route_id"]: route["docqa_citation_mode"] for route in text_only.routes
+    } == {
+        "direct_answer": "inline",
+        "text_rag": "inline",
+        "controller_auto": "inline",
+        "crag_guarded": "inline",
+    }
+    assert all_routes.routes[4]["route_id"] == "graph_rag_local"
+    assert all_routes.routes[4]["benchmark_role"] == "prototype"
+    assert all_routes.routes[5]["route_id"] == "hybrid_rag"
+    assert all_routes.routes[5]["benchmark_role"] == "qa_quality"
 
 
 def test_load_v2_manifest_preserves_top_level_ragas_evaluator(tmp_path):

@@ -66,7 +66,29 @@ def _text_metadata(
 ) -> dict[str, Any]:
     docs, info = text_retrieve()
     pipeline._mara_cached_retrieval = (message, list(history), docs, info)
-    return metadata_builder(docs, understanding)
+    metadata = metadata_builder(docs, understanding)
+    attempts = _bounded_retrieval_attempts(
+        getattr(pipeline, "_mara_retrieval_attempts", [])
+    )
+    if attempts:
+        metadata["retrieval_attempts"] = attempts
+    metadata["retrieval_info_count"] = len(info)
+    return metadata
+
+
+def _bounded_retrieval_attempts(attempts: Any) -> list[dict[str, Any]]:
+    bounded: list[dict[str, Any]] = []
+    for attempt in attempts or []:
+        if not isinstance(attempt, dict):
+            continue
+        bounded.append(
+            {
+                "attempt": int(attempt.get("attempt") or 0),
+                "evidence_count": int(attempt.get("evidence_count") or 0),
+                "retry_reason": str(attempt.get("retry_reason") or ""),
+            }
+        )
+    return bounded
 
 
 def _page_image_metadata(

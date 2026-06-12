@@ -9,8 +9,15 @@ from typing import Any, Protocol, cast, runtime_checkable
 from kotaemon.base import RetrievedDocument
 
 from . import controller_fields as cf
+from .docqa_evidence_projection import (
+    evidence_element_ids,
+    evidence_pages,
+    evidence_sources,
+    retrieved_hits_from_docqa_evidence,
+)
 from .engine_helpers import _parsed_indexes_cache, _performance_from_timings
 from .engine_result import EngineRunResult
+from .engine_result_adapters import prediction_to_result
 from .schemas import BenchmarkConfig, BenchmarkDocument
 from .system import KotaemonTextRAGSystem
 
@@ -94,6 +101,7 @@ class BaseBenchmarkEngine:
                 "visual_retriever_backend": None,
                 "visual_generator_backend": None,
                 "generator_backend": None,
+                "artifact_detail": "compact",
                 "use_generation": True,
                 "prompt_template": None,
             }
@@ -134,7 +142,7 @@ class LegacyTextRAGEngine(BaseBenchmarkEngine):
         documents: list[BenchmarkDocument],
     ) -> EngineRunResult:
         prediction = self._get_system().run_example_documents(documents, example)
-        return _prediction_to_result(prediction)
+        return prediction_to_result(prediction)
 
 
 class KotaemonTextRAGEngine(BaseBenchmarkEngine):
@@ -147,7 +155,7 @@ class KotaemonTextRAGEngine(BaseBenchmarkEngine):
         documents: list[BenchmarkDocument],
     ) -> EngineRunResult:
         prediction = self._get_system().run_example_documents(documents, example)
-        return _prediction_to_result(prediction)
+        return prediction_to_result(prediction)
 
 
 class DocQARuntimeEngine(BaseBenchmarkEngine):
@@ -305,21 +313,38 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             )
         )
         generation_seconds = time.perf_counter() - generation_start
-        predicted_sources = _extract_citations(response.references_text)
-        predicted_pages = self._PAGE_RE.findall(response.references_text or "")
+        evidence_bundle = dict(getattr(response, "evidence_bundle", {}) or {})
+        evidence_metadata = dict(getattr(response, "evidence_metadata", {}) or {})
+        retrieved_hits = retrieved_hits_from_docqa_evidence(
+            evidence_bundle,
+            evidence_metadata,
+        )
+        predicted_sources = evidence_sources(retrieved_hits)
+        predicted_sources.extend(
+            source
+            for source in _extract_citations(response.references_text)
+            if source not in predicted_sources
+        )
+        predicted_pages: list[int | str] = list(evidence_pages(retrieved_hits))
+        predicted_pages.extend(
+            page
+            for page in self._PAGE_RE.findall(response.references_text or "")
+            if page not in predicted_pages
+        )
 
         return EngineRunResult(
             answer=response.answer,
             predicted_pages=predicted_pages,
             predicted_sources=predicted_sources,
-            retrieved_hits=[],
+            predicted_element_ids=evidence_element_ids(retrieved_hits),
+            retrieved_hits=retrieved_hits,
             timings={
                 "index_seconds": index_seconds,
                 "generation_seconds": generation_seconds,
             },
             context_preview=response.references_text[: self.max_context_length],
             agent_trace=list(getattr(response, "agent_trace", []) or []),
-            evidence_metadata=dict(getattr(response, "evidence_metadata", {}) or {}),
+            evidence_metadata=evidence_metadata,
             **cf.controller_response_kwargs(response),
             claim_verification=dict(getattr(response, "claim_verification", {}) or {}),
             presentation=dict(getattr(response, "presentation", {}) or {}),
@@ -534,27 +559,6 @@ def _document_pages(document: Any) -> list[Any]:
 def _join_document_texts(documents: list[Any]) -> str:
     texts = [_extract_text(document) for document in documents]
     return "\n\n".join(text for text in texts if text)
-
-
-def _prediction_to_result(prediction: dict[str, Any]) -> EngineRunResult:
-    return EngineRunResult(
-        answer=str(prediction.get("predicted_answer") or ""),
-        predicted_pages=list(prediction.get("predicted_pages") or []),
-        predicted_sources=list(prediction.get("predicted_sources") or []),
-        predicted_element_ids=list(prediction.get("predicted_element_ids") or []),
-        retrieved_hits=list(prediction.get("retrieved_hits") or []),
-        timings=dict(prediction.get("timings") or {}),
-        performance=dict(prediction.get("performance") or {}),
-        cache=dict(prediction.get("cache") or {}),
-        cost=dict(prediction.get("cost") or {}),
-        context_preview=str(prediction.get("context_preview") or ""),
-        retrieval_trace=list(prediction.get("retrieval_trace") or []),
-        agent_trace=list(prediction.get("agent_trace") or []),
-        evidence_metadata=dict(prediction.get("evidence_metadata") or {}),
-        **cf.controller_prediction_kwargs(prediction),
-        claim_verification=dict(prediction.get("claim_verification") or {}),
-        presentation=dict(prediction.get("presentation") or {}),
-    )
 
 
 def _parsed_indexes_to_context(parsed_indexes: list[Any], wanted_pages=None) -> str:

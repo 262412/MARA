@@ -4,6 +4,12 @@ import json
 
 from benchmark.reports import write_reports
 
+EXPECTED_COMPACT_LIMITS = {
+    "max_evidence_text_chars": 2000,
+    "max_prediction_evidence_items": 10,
+    "max_trace_events": 20,
+}
+
 
 def _read_jsonl(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
@@ -93,9 +99,16 @@ def test_write_reports_emits_required_artifacts_with_jsonl_and_route_metadata(tm
         "retrieval_traces.jsonl",
         "summary.json",
     ]
+    summary = report["summary"]
+    assert isinstance(summary, dict)
+    expected_summary = {
+        **summary,
+        "artifact_detail": "compact",
+        "artifact_limits": EXPECTED_COMPACT_LIMITS,
+    }
     assert (
         json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
-        == report["summary"]
+        == expected_summary
     )
     assert _read_jsonl(run_dir / "predictions.jsonl") == report["predictions"]
     assert (
@@ -115,6 +128,97 @@ def test_write_reports_emits_required_artifacts_with_jsonl_and_route_metadata(tm
     assert "- Markdown Table Renderable: `1.0`" in markdown
     assert "- LaTeX Renderable: `1.0`" in markdown
     assert "- Guardrail Expectation Match: `1.0`" in markdown
+
+
+def test_write_reports_defaults_to_compact_artifacts(tmp_path):
+    large_text = "x" * 1_000_000
+    report = {
+        "summary": {
+            "suite_name": "Compact Suite",
+            "dataset_name": "sample",
+            "num_examples": 1,
+            "num_documents": 1,
+        },
+        "predictions": [
+            {
+                "example_id": "ex-1",
+                "evidence_bundle": {
+                    "items": [
+                        {
+                            "evidence_id": f"hit-{index}",
+                            "text": large_text,
+                            "snippet": large_text,
+                        }
+                        for index in range(12)
+                    ]
+                },
+                "retrieval_trace": [
+                    {"event": f"trace-{index}", "text": large_text}
+                    for index in range(25)
+                ],
+                "agent_trace": [
+                    {"event": f"agent-{index}", "text": large_text}
+                    for index in range(25)
+                ],
+            }
+        ],
+        "documents": [],
+    }
+
+    run_dir = write_reports(report, tmp_path, "Compact Suite")
+    prediction = _read_jsonl(run_dir / "predictions.jsonl")[0]
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+
+    assert summary["artifact_detail"] == "compact"
+    assert summary["artifact_limits"] == EXPECTED_COMPACT_LIMITS
+    assert len(prediction["evidence_bundle"]["items"]) == 10
+    assert len(prediction["evidence_bundle"]["items"][0]["text"]) <= 2000
+    assert len(prediction["evidence_bundle"]["items"][0]["snippet"]) <= 2000
+    assert len(prediction["retrieval_trace"]) == 20
+    assert len(prediction["agent_trace"]) == 20
+
+
+def test_write_reports_full_artifacts_preserve_large_fields(tmp_path):
+    large_text = "x" * 1_000_000
+    report = {
+        "summary": {
+            "suite_name": "Full Suite",
+            "dataset_name": "sample",
+            "num_examples": 1,
+            "num_documents": 1,
+        },
+        "predictions": [
+            {
+                "example_id": "ex-1",
+                "evidence_bundle": {
+                    "items": [
+                        {
+                            "evidence_id": "hit-1",
+                            "text": large_text,
+                            "snippet": large_text,
+                        }
+                    ]
+                },
+                "agent_trace": [{"event": "agent", "text": large_text}],
+            }
+        ],
+        "documents": [],
+    }
+
+    run_dir = write_reports(
+        report,
+        tmp_path,
+        "Full Suite",
+        artifact_detail="full",
+    )
+    prediction = _read_jsonl(run_dir / "predictions.jsonl")[0]
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+
+    assert summary["artifact_detail"] == "full"
+    assert summary["artifact_limits"] == EXPECTED_COMPACT_LIMITS
+    assert prediction["evidence_bundle"]["items"][0]["text"] == large_text
+    assert prediction["evidence_bundle"]["items"][0]["snippet"] == large_text
+    assert prediction["agent_trace"][0]["text"] == large_text
 
 
 def test_write_reports_lists_skipped_routes(tmp_path):
@@ -267,8 +371,8 @@ def test_write_reports_includes_multimodal_summary_metrics(tmp_path):
     assert "- Slide Hit: `0.0`" in markdown
 
 
-def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
-    report = {
+def _route_metric_report():
+    return {
         "summary": {
             "suite_name": "Route Suite",
             "dataset_name": "sample",
@@ -278,6 +382,7 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
                 {
                     "dataset_name": "sample",
                     "route": "text_rag",
+                    "benchmark_role": "qa_quality",
                     "num_predictions": 1,
                     "avg_f1": 0.6,
                     "avg_page_hit": 1.0,
@@ -287,6 +392,7 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
                 {
                     "dataset_name": "sample",
                     "route": "controller_auto",
+                    "benchmark_role": "qa_quality",
                     "num_predictions": 1,
                     "avg_f1": 0.8,
                     "avg_page_hit": 1.0,
@@ -294,6 +400,31 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
                     "avg_total_seconds": 0.5,
                 },
             ],
+            "quality_route_metric_table": [
+                {
+                    "dataset_name": "sample",
+                    "route": "controller_auto",
+                    "benchmark_role": "qa_quality",
+                    "num_predictions": 1,
+                    "avg_f1": 0.8,
+                    "avg_page_hit": 1.0,
+                    "avg_unsupported_claim_rate": 0.0,
+                    "avg_total_seconds": 0.5,
+                }
+            ],
+            "diagnostic_route_metric_table": [
+                {
+                    "dataset_name": "sample",
+                    "route": "direct_answer",
+                    "benchmark_role": "diagnostic",
+                    "num_predictions": 1,
+                    "avg_f1": 0.1,
+                    "avg_page_hit": 0.0,
+                    "avg_unsupported_claim_rate": 0.0,
+                    "avg_total_seconds": 0.1,
+                }
+            ],
+            "quality_avg_f1": 0.8,
             "route_rankings": [
                 {
                     "dataset_name": "sample",
@@ -309,6 +440,10 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
         "documents": [],
     }
 
+
+def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
+    report = _route_metric_report()
+
     run_dir = write_reports(report, tmp_path, "Route Suite")
 
     route_metrics = (run_dir / "route_metrics.csv").read_text(encoding="utf-8")
@@ -317,6 +452,10 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
     assert "dataset_name,route,num_predictions,avg_f1" in route_metrics
     assert "sample,controller_auto,1,0.8" in route_metrics
     assert "## Route Metrics" in markdown
+    assert "- Quality F1: `0.8`" in markdown
+    assert "## Quality Route Metrics" in markdown
+    assert "## Diagnostic Route Metrics" in markdown
     assert "| sample | controller_auto | 1 | 0.8 | 1.0 | 0.0 | 0.5 |" in markdown
+    assert "| sample | direct_answer | 1 | 0.1 | 0.0 | 0.0 | 0.1 |" in markdown
     assert "## Route Ranking" in markdown
     assert "1. `controller_auto` avg_f1=`0.8`" in markdown

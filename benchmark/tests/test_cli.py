@@ -24,6 +24,44 @@ def _empty_report(config):
     }
 
 
+def _run_args(manifest_path):
+    return [
+        "run",
+        "--manifest",
+        str(manifest_path),
+        "--engine",
+        "direct_paste",
+        "--scope",
+        "multi-document",
+        "--route",
+        "table",
+        "--cost-profile",
+        "low-cost",
+        "--llm-name",
+        "Deepseek",
+        "--docqa-citation-mode",
+        "off",
+        "--reasoning",
+        "mara",
+        "--agent-mode",
+        "thorough",
+        "--task-type",
+        "quiz",
+        "--artifact-type",
+        "quiz",
+        "--artifact-detail",
+        "full",
+        "--limit",
+        "25",
+        "--sample-seed",
+        "1234",
+        "--shard-index",
+        "1",
+        "--num-shards",
+        "4",
+    ]
+
+
 def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     captured = {}
 
@@ -32,8 +70,9 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
         captured["config"] = config
         return _empty_report(config)
 
-    def fake_write_reports(report, output_dir, suite_name):
+    def fake_write_reports(report, output_dir, suite_name, *, artifact_detail):
         captured["report"] = report
+        captured["artifact_detail"] = artifact_detail
         return tmp_path / "run"
 
     monkeypatch.setitem(
@@ -50,41 +89,7 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text('{"examples": []}', encoding="utf-8")
 
-    exit_code = main(
-        [
-            "run",
-            "--manifest",
-            str(manifest_path),
-            "--engine",
-            "direct_paste",
-            "--scope",
-            "multi-document",
-            "--route",
-            "table",
-            "--cost-profile",
-            "low-cost",
-            "--llm-name",
-            "Deepseek",
-            "--docqa-citation-mode",
-            "off",
-            "--reasoning",
-            "mara",
-            "--agent-mode",
-            "thorough",
-            "--task-type",
-            "quiz",
-            "--artifact-type",
-            "quiz",
-            "--limit",
-            "25",
-            "--sample-seed",
-            "1234",
-            "--shard-index",
-            "1",
-            "--num-shards",
-            "4",
-        ]
-    )
+    exit_code = main(_run_args(manifest_path))
 
     assert exit_code == 0
     assert captured["config"].engine == "direct_paste"
@@ -97,6 +102,8 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     assert captured["config"].agent_mode == "thorough"
     assert captured["config"].task_type == "quiz"
     assert captured["config"].artifact_type == "quiz"
+    assert captured["config"].artifact_detail == "full"
+    assert captured["artifact_detail"] == "full"
     assert captured["config"].limit == 25
     assert captured["config"].sample_seed == 1234
     assert captured["config"].shard_index == 1

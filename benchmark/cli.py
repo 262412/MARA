@@ -35,6 +35,15 @@ def _add_docqa_runtime_options(run_parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_artifact_detail_option(run_parser: argparse.ArgumentParser) -> None:
+    run_parser.add_argument(
+        "--artifact-detail",
+        default="compact",
+        choices=["compact", "full"],
+        help="Write compact artifacts by default; use full for small debug runs.",
+    )
+
+
 def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
     run_parser = subparsers.add_parser("run", help="Run a benchmark suite")
     run_parser.add_argument(
@@ -67,6 +76,7 @@ def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
         default="benchmark/artifacts",
         help="Directory for benchmark outputs",
     )
+    _add_artifact_detail_option(run_parser)
     run_parser.add_argument(
         "--reader-mode",
         default="default",
@@ -282,6 +292,7 @@ def _run_benchmark_command(args: argparse.Namespace) -> int:
         embedding_name=args.embedding_name,
         reranker_name=args.reranker_name,
         llm_name=args.llm_name,
+        artifact_detail=args.artifact_detail,
         limit=args.limit,
         sample_seed=args.sample_seed,
         shard_index=args.shard_index,
@@ -294,7 +305,12 @@ def _run_benchmark_command(args: argparse.Namespace) -> int:
         use_generation=not args.no_generate,
     )
     report = run_benchmark(args.manifest, config)
-    run_dir = write_reports(report, config.output_dir, config.suite_name)
+    run_dir = write_reports(
+        report,
+        config.output_dir,
+        config.suite_name,
+        artifact_detail=config.artifact_detail,
+    )
     print(f"Benchmark complete. Outputs written to {run_dir}")
     return 0
 

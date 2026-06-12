@@ -105,6 +105,7 @@ class BenchmarkConfig:
     visual_retriever_backend: str | None = None
     visual_generator_backend: str | None = None
     generator_backend: str | None = None
+    artifact_detail: str = "compact"
     limit: int | None = None
     sample_seed: int | None = None
     shard_index: int | None = None
@@ -116,6 +117,7 @@ class BenchmarkConfig:
         self.engine = normalize_engine_name(self.engine)
         self.scope = normalize_scope(self.scope)
         self.cache_mode = normalize_cache_mode(self.cache_mode)
+        self.artifact_detail = normalize_artifact_detail(self.artifact_detail)
         from .sampling import validate_sampling_options
 
         validate_sampling_options(
@@ -144,4 +146,11 @@ def normalize_cache_mode(cache_mode: str | None) -> str:
     value = aliases.get(value, value)
     if value not in {"warm", "cold", "bypass"}:
         raise ValueError("cache_mode must be one of 'warm', 'cold', or 'bypass'.")
+    return value
+
+
+def normalize_artifact_detail(artifact_detail: str | None) -> str:
+    value = str(artifact_detail or "compact").strip().lower()
+    if value not in {"compact", "full"}:
+        raise ValueError("artifact_detail must be one of 'compact' or 'full'.")
     return value

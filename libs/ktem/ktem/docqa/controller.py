@@ -485,7 +485,11 @@ def _evidence_count(evidence_metadata: dict[str, Any]) -> int:
 
 
 def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
-    ignored_keys = {"requested_modalities"}
+    ignored_keys = {
+        "requested_modalities",
+        "retrieval_attempts",
+        "retrieval_info_count",
+    }
     ignored_empty_keys = {"evidence", "evidence_ids", "modality_counts"}
     for key, value in evidence_metadata.items():
         if key in ignored_keys:
