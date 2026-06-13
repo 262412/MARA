@@ -22,6 +22,7 @@ class DocQARequest:
     settings: Optional[dict[str, Any]] = None
     state: Optional[dict[str, Any]] = None
     history: Optional[list[tuple[str, str]]] = None
+    max_context_length: Optional[int] = None
     reasoning_type: Optional[str] = None
     task_type: Optional[str] = None
     agent_mode: Optional[str] = None

@@ -5,7 +5,9 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .claim_filtering import answer_claims
 from .evidence import EvidenceBundle, build_evidence_bundle
+from .retrieval_adequacy import retrieval_adequacy_issue
 from .workflow import build_workflow_plan
 from .workflow import executor_registry as workflow_executor_registry
 from .workflow import planner_payload_from_trace
@@ -184,7 +186,9 @@ def build_controller_outputs(
         evidence_metadata,
     )
     retrieve_decision = evaluate_retrieval_quality(
-        route_decision.route, evidence_bundle.metadata
+        route_decision.route,
+        evidence_bundle.metadata,
+        prompt=str(getattr(request, "prompt", "") or ""),
     )
     verify_decision = _verify_decision(
         request,
@@ -265,6 +269,8 @@ def evaluate_retrieval_quality(
     route: str,
     evidence_metadata: dict[str, Any],
     attempted_retry: bool = False,
+    *,
+    prompt: str = "",
 ) -> RetrieveDecision:
     if route == "direct":
         return RetrieveDecision(
@@ -278,6 +284,13 @@ def evaluate_retrieval_quality(
             retry=False,
         )
     if _evidence_count(evidence_metadata) > 0:
+        adequacy_issue = retrieval_adequacy_issue(prompt, evidence_metadata)
+        if adequacy_issue:
+            return RetrieveDecision(
+                status="ambiguous",
+                reason=adequacy_issue,
+                retry=not attempted_retry,
+            )
         return RetrieveDecision(
             status="good",
             reason="Retrieved evidence is sufficient for generation.",
@@ -348,7 +361,7 @@ def _verify_decision(
             action=action,
         )
 
-    claims = _answer_claims(answer)
+    claims = answer_claims(answer)
     unsupported = [
         claim for claim in claims if not _claim_supported(claim, evidence_bundle.items)
     ]
@@ -389,16 +402,6 @@ def _verified_citations(evidence_bundle: EvidenceBundle) -> list[str]:
         if evidence_id and evidence_id not in citations:
             citations.append(evidence_id)
     return citations
-
-
-def _answer_claims(answer: str) -> list[str]:
-    cleaned = re.sub(r"<[^>]+>", " ", str(answer or ""))
-    claims = []
-    for chunk in re.split(r"(?<=[.!?])\s+", cleaned):
-        claim = " ".join(chunk.split())
-        if claim:
-            claims.append(claim)
-    return claims
 
 
 def _claim_supported(claim: str, evidence_items: list[dict[str, Any]]) -> bool:

@@ -11,7 +11,7 @@ ARTIFACT_LIMITS = {
     "max_prediction_evidence_items": 10,
     "max_trace_events": 20,
 }
-_TEXT_FIELDS = {"text", "snippet"}
+_TEXT_FIELDS = {"caption", "ocr_text", "snippet", "text", "vlm_text"}
 _TRACE_FIELDS = {
     "agent_trace",
     "controller_trace",
@@ -19,7 +19,31 @@ _TRACE_FIELDS = {
     "trace",
     "events",
 }
-_EVIDENCE_LIST_FIELDS = {"evidence", "items"}
+_EVIDENCE_LIST_FIELDS = {
+    "element_index",
+    "evidence",
+    "graph_evidence",
+    "items",
+    "page_image_index",
+    "retrieved_hits",
+}
+_SCORE_MAP_FIELDS = {
+    "element_retriever_scores",
+    "item_scores",
+    "visual_retriever_scores",
+}
+_REFERENCE_LIST_FIELDS = {
+    "source_backrefs",
+}
+_COMPACT_DROP_FIELDS = {
+    "image_ref",
+    "late_interaction_tokens",
+    "multi_vector_representation",
+    "page_image_path",
+    "page_visual_embedding",
+    "rendered_page_image",
+    "visual_embedding",
+}
 _CSV_FIELD_ORDER = [
     "dataset_name",
     "route",
@@ -223,9 +247,12 @@ def _artifact_rows(rows: Any, artifact_detail: str) -> list[dict[str, Any]]:
 
 def _compact_value(value: Any, key: str = "") -> Any:
     if isinstance(value, dict):
+        if key in _SCORE_MAP_FIELDS:
+            return _compact_score_map(value)
         return {
             item_key: _compact_value(item_value, item_key)
             for item_key, item_value in value.items()
+            if item_key not in _COMPACT_DROP_FIELDS
         }
     if isinstance(value, list):
         return [_compact_value(item) for item in _compact_list(value, key)]
@@ -239,7 +266,17 @@ def _compact_list(values: list[Any], key: str) -> list[Any]:
         return values[: ARTIFACT_LIMITS["max_trace_events"]]
     if key in _EVIDENCE_LIST_FIELDS and _looks_like_evidence_list(values):
         return values[: ARTIFACT_LIMITS["max_prediction_evidence_items"]]
+    if key in _REFERENCE_LIST_FIELDS:
+        return values[: ARTIFACT_LIMITS["max_prediction_evidence_items"]]
     return values
+
+
+def _compact_score_map(values: dict[str, Any]) -> dict[str, Any]:
+    limit = ARTIFACT_LIMITS["max_prediction_evidence_items"]
+    return {
+        str(key): _compact_value(value, str(key))
+        for key, value in list(values.items())[:limit]
+    }
 
 
 def _looks_like_evidence_list(values: list[Any]) -> bool:

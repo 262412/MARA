@@ -46,6 +46,7 @@ def build_turn_request(
         settings=deepcopy(request.settings or load_settings(resolved_user_id)),
         state=deepcopy(request.state or session_info.state),
         history=list(request.history or session_info.messages),
+        max_context_length=request.max_context_length,
         reasoning_type=request.reasoning_type,
         llm=request.llm,
         use_mindmap=request.use_mindmap,

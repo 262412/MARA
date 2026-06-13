@@ -46,7 +46,7 @@ def build_mara_evidence_metadata(
 
 
 def _evidence_item(doc: RetrievedDocument) -> dict[str, Any]:
-    metadata = dict(getattr(doc, "metadata", {}) or {})
+    metadata = _merged_doc_metadata(doc)
     file_id = str(metadata.get("file_id") or "").strip()
     file_name = str(metadata.get("file_name") or "").strip()
     return {
@@ -85,6 +85,16 @@ def _source_backrefs(metadata: dict[str, Any]) -> list[str]:
     file_id = str(metadata.get("file_id") or "").strip()
     page_label = str(metadata.get("page_label") or "").strip()
     return [f"{file_id}#page:{page_label}"] if file_id and page_label else []
+
+
+def _merged_doc_metadata(doc: RetrievedDocument) -> dict[str, Any]:
+    metadata = dict(getattr(doc, "metadata", {}) or {})
+    nested = metadata.get("metadata")
+    if isinstance(nested, dict):
+        merged = dict(nested)
+        merged.update(metadata)
+        return merged
+    return metadata
 
 
 def _append_unique(target: list[str], value: str) -> None:

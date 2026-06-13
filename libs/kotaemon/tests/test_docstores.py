@@ -8,6 +8,7 @@ from kotaemon.base import Document
 from kotaemon.storages import (
     ElasticsearchDocumentStore,
     InMemoryDocumentStore,
+    LanceDBDocumentStore,
     SimpleFileDocumentStore,
 )
 
@@ -320,6 +321,111 @@ def test_simplefile_document_store_base_interfaces(tmp_path):
     assert len(store2.get_all()) == 17, "Laded document store should have 17 documents"
 
     os.remove(tmp_path / "default.json")
+
+
+def test_lancedb_scoped_fts_uses_postfilter():
+    class FakeLanceSearch:
+        def __init__(self):
+            self.docs = [
+                {
+                    "id": "chunk-1",
+                    "text": "Quick ratio increased in the quarter.",
+                    "attributes": "{}",
+                }
+            ]
+            self.where_calls = []
+
+        def where(self, query_filter, prefilter=True):
+            self.where_calls.append((query_filter, prefilter))
+            if prefilter:
+                self.docs = []
+            return self
+
+        def limit(self, top_k):
+            self.docs = self.docs[:top_k]
+            return self
+
+        def to_list(self):
+            return self.docs
+
+    class FakeLanceCollection:
+        def __init__(self):
+            self.search_result = FakeLanceSearch()
+
+        def search(self, query, query_type):
+            assert query == "quick ratio"
+            assert query_type == "fts"
+            return self.search_result
+
+    class FakeLanceConnection:
+        def __init__(self):
+            self.collection = FakeLanceCollection()
+
+        def open_table(self, collection_name):
+            assert collection_name == "docstore"
+            return self.collection
+
+    store = LanceDBDocumentStore.__new__(LanceDBDocumentStore)
+    store.collection_name = "docstore"
+    store.db_connection = FakeLanceConnection()
+
+    docs = store.query("quick ratio", doc_ids=["chunk-1"])
+
+    assert [doc.doc_id for doc in docs] == ["chunk-1"]
+    assert store.db_connection.collection.search_result.where_calls == [
+        ("id in ('chunk-1')", False)
+    ]
+
+
+def test_lancedb_scoped_fts_falls_back_to_local_lexical_ranking():
+    class FakeLanceSearch:
+        def __init__(self, docs):
+            self.docs = docs
+
+        def where(self, query_filter, prefilter=True):
+            return self
+
+        def limit(self, top_k):
+            self.docs = self.docs[:top_k]
+            return self
+
+        def to_list(self):
+            return self.docs
+
+    class FakeLanceCollection:
+        def search(self, query=None, query_type=None):
+            if query_type == "fts":
+                return FakeLanceSearch([])
+            return FakeLanceSearch(
+                [
+                    {
+                        "id": "chunk-1",
+                        "text": "FINANCIAL CONDITION AND LIQUIDITY remained stable.",
+                        "attributes": "{}",
+                    },
+                    {
+                        "id": "chunk-2",
+                        "text": "Environmental regulations are discussed elsewhere.",
+                        "attributes": "{}",
+                    },
+                ]
+            )
+
+    class FakeLanceConnection:
+        def open_table(self, collection_name):
+            assert collection_name == "docstore"
+            return FakeLanceCollection()
+
+    store = LanceDBDocumentStore.__new__(LanceDBDocumentStore)
+    store.collection_name = "docstore"
+    store.db_connection = FakeLanceConnection()
+
+    docs = store.query(
+        "Does the company have a healthy liquidity profile?",
+        doc_ids=["chunk-1", "chunk-2"],
+    )
+
+    assert [doc.doc_id for doc in docs] == ["chunk-1"]
 
 
 @patch(

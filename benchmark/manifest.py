@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 from typing import Any, Iterable
@@ -203,6 +204,121 @@ def _ensure_list(value: Any) -> list[Any]:
     return [value]
 
 
+def _normalize_page_value(value: Any) -> int | str | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return text
+
+
+def _append_unique(target: list[Any], value: Any) -> None:
+    if value not in (None, "") and value not in target:
+        target.append(value)
+
+
+def _legacy_financebench_evidence_from_source(
+    value: str,
+    *,
+    document_id: str,
+) -> dict[str, Any] | None:
+    text = str(value or "").strip()
+    if not (text.startswith("{") and "evidence_" in text):
+        return None
+    try:
+        payload = ast.literal_eval(text)
+    except (SyntaxError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    page = _normalize_page_value(
+        payload.get("evidence_page_num")
+        or payload.get("page")
+        or payload.get("page_number")
+    )
+    span = str(
+        payload.get("evidence_text") or payload.get("text") or payload.get("span") or ""
+    ).strip()
+    citation = f"{document_id}#page:{page}" if page is not None else ""
+    evidence: dict[str, Any] = {"document_id": document_id}
+    if page is not None:
+        evidence["page"] = page
+    if citation:
+        evidence["citation"] = citation
+    if span:
+        evidence["span"] = span
+    return evidence if len(evidence) > 1 else None
+
+
+def _coerce_evidence_fields(
+    record: dict[str, Any],
+    *,
+    document_id: str,
+) -> tuple[list[Any], list[str], list[dict[str, Any]]]:
+    gold_evidence = [
+        dict(item)
+        for item in _ensure_list(record.get("gold_evidence"))
+        if isinstance(item, dict)
+    ]
+    raw_sources = [
+        str(item).strip()
+        for item in _ensure_list(record.get("evidence_sources"))
+        if str(item).strip()
+    ]
+    legacy_evidence = [
+        item
+        for source in raw_sources
+        for item in [
+            _legacy_financebench_evidence_from_source(
+                source,
+                document_id=document_id,
+            )
+        ]
+        if item is not None
+    ]
+    if legacy_evidence and not gold_evidence:
+        gold_evidence = legacy_evidence
+
+    evidence_pages = list(_ensure_list(record.get("evidence_pages")))
+    if not evidence_pages:
+        for item in gold_evidence:
+            page = item.get("page")
+            if page is None:
+                page = item.get("page_number")
+            if page is not None:
+                _append_unique(evidence_pages, _normalize_page_value(page))
+
+    if legacy_evidence:
+        evidence_sources: list[str] = []
+        for item in gold_evidence:
+            citation = str(item.get("citation") or "").strip()
+            if citation:
+                _append_unique(evidence_sources, citation)
+        for source in raw_sources:
+            if (
+                _legacy_financebench_evidence_from_source(
+                    source,
+                    document_id=document_id,
+                )
+                is None
+            ):
+                _append_unique(evidence_sources, source)
+    else:
+        evidence_sources = list(raw_sources)
+
+    if not evidence_sources:
+        for item in gold_evidence:
+            citation = str(item.get("citation") or "").strip()
+            if citation:
+                _append_unique(evidence_sources, citation)
+
+    return evidence_pages, evidence_sources, gold_evidence
+
+
 def _resolve_path(manifest_path: Path, document_path: str) -> Path:
     path = Path(document_path)
     if path.is_absolute():
@@ -259,6 +375,11 @@ def _coerce_examples(
             if answer:
                 answers = [answer]
 
+        evidence_pages, evidence_sources, gold_evidence = _coerce_evidence_fields(
+            record,
+            document_id=document_id,
+        )
+
         examples.append(
             BenchmarkExample(
                 example_id=str(record.get("example_id") or f"{document_id}_{index}"),
@@ -269,17 +390,9 @@ def _coerce_examples(
                 answer_type=str(record.get("answer_type") or "extractive"),
                 question=str(record["question"]).strip(),
                 answers=answers,
-                evidence_pages=_ensure_list(record.get("evidence_pages")),
-                evidence_sources=[
-                    str(item).strip()
-                    for item in _ensure_list(record.get("evidence_sources"))
-                    if str(item).strip()
-                ],
-                gold_evidence=[
-                    dict(item)
-                    for item in _ensure_list(record.get("gold_evidence"))
-                    if isinstance(item, dict)
-                ],
+                evidence_pages=evidence_pages,
+                evidence_sources=evidence_sources,
+                gold_evidence=gold_evidence,
                 expected_formats=_coerce_expected_formats(record),
                 expected_guardrails=_coerce_expected_guardrails(record),
                 metadata=dict(record.get("metadata") or {}),
@@ -396,27 +509,10 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
             if answer:
                 answers = [answer]
 
-        gold_evidence = [
-            dict(item)
-            for item in _ensure_list(record.get("gold_evidence"))
-            if isinstance(item, dict)
-        ]
-        evidence_pages = _ensure_list(record.get("evidence_pages"))
-        evidence_sources = [
-            str(item).strip()
-            for item in _ensure_list(record.get("evidence_sources"))
-            if str(item).strip()
-        ]
-        if not evidence_pages:
-            evidence_pages = [
-                item["page"] for item in gold_evidence if item.get("page") is not None
-            ]
-        if not evidence_sources:
-            evidence_sources = [
-                str(item["citation"]).strip()
-                for item in gold_evidence
-                if str(item.get("citation") or "").strip()
-            ]
+        evidence_pages, evidence_sources, gold_evidence = _coerce_evidence_fields(
+            record,
+            document_id=document_ids[0],
+        )
 
         examples.append(
             BenchmarkExample(

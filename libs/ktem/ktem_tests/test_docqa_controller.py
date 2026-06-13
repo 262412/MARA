@@ -241,6 +241,31 @@ def test_retrieval_evaluator_reports_good_ambiguous_and_poor():
     assert poor.retry is True
 
 
+def test_retrieval_evaluator_marks_formula_evidence_without_page_as_ambiguous():
+    decision = evaluate_retrieval_quality(
+        "doc_text",
+        {
+            "evidence": [
+                {
+                    "evidence_id": "liquidity-mdna",
+                    "text": (
+                        "Financial condition and liquidity remained supported by "
+                        "strong free cash flow and capital markets access."
+                    ),
+                }
+            ],
+            "modality_counts": {"text": 1},
+        },
+        prompt=(
+            "Does 3M have a reasonably healthy liquidity profile based on its "
+            "quick ratio for Q2 of FY2023?"
+        ),
+    )
+
+    assert decision.status == "ambiguous"
+    assert decision.retry is True
+
+
 def test_strict_verifier_marks_unsupported_claims_and_abstain_action():
     payload = build_controller_outputs(
         DocQARequest(prompt="Question", verification_mode="strict"),
@@ -263,6 +288,31 @@ def test_strict_verifier_marks_unsupported_claims_and_abstain_action():
         "Profit declined sharply."
     ]
     assert payload["verify_decision"]["verified_citations"] == ["doc-1"]
+
+
+def test_light_verifier_ignores_reasoning_scaffolding_and_inner_abstain_text():
+    payload = build_controller_outputs(
+        DocQARequest(prompt="Question", verification_mode="light"),
+        [],
+        {
+            "evidence": [
+                {
+                    "evidence_id": "doc-1",
+                    "file_id": "file-1",
+                    "page_label": "2",
+                    "text": "Revenue increased in 2026.",
+                }
+            ]
+        },
+        answer=(
+            "Okay, let's tackle this question. First, I need to recall the "
+            "context. Revenue increased in 2026. 文档证据无法支持该回答。"
+        ),
+    )
+
+    assert payload["verify_decision"]["status"] == "supported"
+    assert payload["verify_decision"]["claims"] == ["Revenue increased in 2026."]
+    assert payload["guardrail_decision"]["action"] == "return"
 
 
 def test_direct_route_verification_is_not_required():

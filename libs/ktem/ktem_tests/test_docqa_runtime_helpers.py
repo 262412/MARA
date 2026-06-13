@@ -170,6 +170,7 @@ def test_runtime_turn_request_preserves_controller_fields():
         planner_model="fake-planner",
         allowed_routes=["hybrid"],
         verification_mode="strict",
+        max_context_length=3000,
         origin="web",
     )
     session = _session(messages=[("Earlier", "Answer")])
@@ -191,6 +192,7 @@ def test_runtime_turn_request_preserves_controller_fields():
     assert turn_request.planner_model == "fake-planner"
     assert turn_request.allowed_routes == ["hybrid"]
     assert turn_request.verification_mode == "strict"
+    assert turn_request.max_context_length == 3000
 
 
 def test_runtime_turn_request_preserves_visual_backend_fields():

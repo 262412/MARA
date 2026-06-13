@@ -188,7 +188,9 @@ def _retrieve_and_evaluate(
         decision.legacy_route, request, evidence_metadata
     )
     retrieve_decision = evaluate_retrieval_quality(
-        decision.legacy_route, evidence_bundle.metadata
+        decision.legacy_route,
+        evidence_bundle.metadata,
+        prompt=str(getattr(request, "prompt", "") or ""),
     )
     if retrieve_decision.status != "ambiguous" or not retrieve_decision.retry:
         return evidence_bundle, retrieve_decision
@@ -201,6 +203,7 @@ def _retrieve_and_evaluate(
         decision.legacy_route,
         evidence_bundle.metadata,
         attempted_retry=True,
+        prompt=str(getattr(request, "prompt", "") or ""),
     )
     return evidence_bundle, retrieve_decision
 

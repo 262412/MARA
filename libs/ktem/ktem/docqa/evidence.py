@@ -129,19 +129,43 @@ def _with_element_retriever_score(
 
 
 def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
-    metadata = dict(item.get("metadata") or {})
-    file_id = str(item.get("file_id") or item.get("source_id") or "").strip()
-    page_label = str(item.get("page_label") or item.get("page") or "").strip()
-    modality = str(
-        item.get("modality") or item.get("element_type") or item.get("type") or "text"
+    metadata = _merged_item_metadata(item)
+    file_id = str(
+        item.get("file_id")
+        or item.get("source_id")
+        or metadata.get("file_id")
+        or metadata.get("source_id")
+        or ""
     ).strip()
-    backrefs = list(item.get("source_backrefs") or [])
+    page_label = str(
+        item.get("page_label")
+        or item.get("page")
+        or metadata.get("page_label")
+        or metadata.get("page_number")
+        or metadata.get("page")
+        or ""
+    ).strip()
+    modality = str(
+        item.get("modality")
+        or item.get("element_type")
+        or item.get("type")
+        or metadata.get("element_type")
+        or metadata.get("type")
+        or "text"
+    ).strip()
+    backrefs = _source_backrefs_from_item(item, metadata)
     if not backrefs and file_id and page_label:
         backrefs = [f"{file_id}#page:{page_label}"]
     return EvidenceElement(
         evidence_id=str(item.get("evidence_id") or item.get("doc_id") or "").strip(),
         source_id=file_id,
-        source_name=str(item.get("file_name") or item.get("source_name") or "").strip(),
+        source_name=str(
+            item.get("file_name")
+            or item.get("source_name")
+            or metadata.get("file_name")
+            or metadata.get("source_name")
+            or ""
+        ).strip(),
         page_label=page_label,
         modality=modality or "text",
         element_id=str(item.get("element_id") or "").strip(),
@@ -154,6 +178,25 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         evidence_level=str(item.get("evidence_level") or "page").strip(),
         metadata=metadata,
     ).as_dict()
+
+
+def _merged_item_metadata(item: dict[str, Any]) -> dict[str, Any]:
+    metadata = dict(item.get("metadata") or {})
+    nested = metadata.get("metadata")
+    if isinstance(nested, dict):
+        merged = dict(nested)
+        merged.update(metadata)
+        return merged
+    return metadata
+
+
+def _source_backrefs_from_item(
+    item: dict[str, Any], metadata: dict[str, Any]
+) -> list[str]:
+    source = item.get("source_backrefs") or metadata.get("source_backrefs") or []
+    if isinstance(source, str):
+        return [source] if source else []
+    return list(source)
 
 
 def _page_image_item(request: Any, route: str) -> dict[str, Any] | None:

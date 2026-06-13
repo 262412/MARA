@@ -7,6 +7,8 @@ from typing import Any
 import gradio as gr
 from ktem.docqa import DocQARequest
 
+from .studio_artifacts import render_controller_trace_html
+
 
 def build_web_docqa_request(
     *,
@@ -80,6 +82,47 @@ def _parse_graph_context(value: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def runtime_trace_references(response: Any, references_html: str) -> str:
+    if not any(
+        getattr(response, field, None)
+        for field in (
+            "route_decision",
+            "controller_decision",
+            "retrieve_decision",
+            "verify_decision",
+            "evidence_bundle",
+        )
+    ):
+        return references_html
+    route_decision = getattr(response, "route_decision", None) or _route_decision(
+        getattr(response, "controller_decision", None)
+    )
+    controller_html = render_controller_trace_html(
+        route_decision=route_decision,
+        retrieve_decision=getattr(response, "retrieve_decision", None),
+        verify_decision=getattr(response, "verify_decision", None),
+        evidence_bundle=getattr(response, "evidence_bundle", None),
+    )
+    return references_html + controller_html
+
+
+def _route_decision(controller_decision: Any) -> dict[str, Any]:
+    if not isinstance(controller_decision, dict):
+        return {}
+    route = str(
+        controller_decision.get("legacy_route")
+        or controller_decision.get("route")
+        or ""
+    ).strip()
+    if not route:
+        return {}
+    return {
+        "route": route,
+        "policy": controller_decision.get("policy"),
+        "controller_mode": controller_decision.get("controller_mode"),
+    }
 
 
 def render_docqa_runtime_controls(

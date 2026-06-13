@@ -34,6 +34,68 @@ def _ensure_list(value: Any) -> list[Any]:
     return [value]
 
 
+def _normalize_page_value(value: Any) -> int | str | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return text
+
+
+def _append_unique(target: list[Any], value: Any) -> None:
+    if value not in (None, "") and value not in target:
+        target.append(value)
+
+
+def _financebench_evidence_fields(
+    record: dict[str, Any],
+    *,
+    document_id: str,
+) -> tuple[list[int | str], list[str], list[dict[str, Any]]]:
+    pages: list[int | str] = []
+    sources: list[str] = []
+    gold_evidence: list[dict[str, Any]] = []
+
+    for item in _ensure_list(_pick(record, "evidence", default=[])):
+        if isinstance(item, dict):
+            page = _normalize_page_value(
+                _pick(item, "evidence_page_num", "page", "page_number")
+            )
+            span = str(_pick(item, "evidence_text", "text", "span", default="")).strip()
+            citation = f"{document_id}#page:{page}" if page is not None else ""
+            if page is not None:
+                _append_unique(pages, page)
+            if citation:
+                _append_unique(sources, citation)
+            evidence_item: dict[str, Any] = {"document_id": document_id}
+            if page is not None:
+                evidence_item["page"] = page
+            if citation:
+                evidence_item["citation"] = citation
+            if span:
+                evidence_item["span"] = span
+            if len(evidence_item) > 1:
+                gold_evidence.append(evidence_item)
+            continue
+
+        source = str(item or "").strip()
+        if source:
+            _append_unique(sources, source)
+
+    for item in _ensure_list(
+        _pick(record, "evidence_text", "evidence_strings", default=[])
+    ):
+        source = str(item or "").strip()
+        if source:
+            _append_unique(sources, source)
+
+    return pages, sources, gold_evidence
+
+
 def _find_document(prefix: str, directory: Path, suffixes: set[str]) -> Path | None:
     for candidate in sorted(directory.glob(f"{prefix}_*")):
         if candidate.suffix.lower() in suffixes:
@@ -108,32 +170,39 @@ def normalize_financebench_manifest(
             for item in _ensure_list(_pick(record, "answers", "answer", default=[]))
             if str(item).strip()
         ]
-        evidence = [
-            str(item).strip()
-            for item in _ensure_list(
-                _pick(
-                    record,
-                    "evidence",
-                    "evidence_text",
-                    "evidence_strings",
-                    default=[],
-                )
-            )
-            if str(item).strip()
-        ]
+        document_id = document_path.stem
+        evidence_pages, evidence_sources, gold_evidence = _financebench_evidence_fields(
+            record,
+            document_id=document_id,
+        )
 
         records.append(
             {
                 "dataset_name": "financebench",
-                "example_id": str(_pick(record, "id", "question_id", default=index)),
-                "document_id": document_path.stem,
+                "example_id": str(
+                    _pick(
+                        record,
+                        "id",
+                        "question_id",
+                        "financebench_id",
+                        default=index,
+                    )
+                ),
+                "document_id": document_id,
                 "document_path": str(document_path),
                 "format_type": "pdf",
                 "question": str(_pick(record, "question", default="")).strip(),
                 "answers": answers,
-                "evidence_sources": evidence,
+                "evidence_pages": evidence_pages,
+                "evidence_sources": evidence_sources,
+                "gold_evidence": gold_evidence,
                 "metadata": {
                     "doc_name": document_name,
+                    "company": record.get("company"),
+                    "doc_type": record.get("doc_type"),
+                    "doc_period": record.get("doc_period"),
+                    "question_type": record.get("question_type"),
+                    "question_reasoning": record.get("question_reasoning"),
                 },
             }
         )

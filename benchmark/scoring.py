@@ -42,9 +42,7 @@ def score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
     predicted_answer = prediction["predicted_answer"]
     expected_formats = _normalized_expected_formats(prediction)
     claim_verification = dict(prediction.get("claim_verification") or {})
-    abstained = bool(claim_verification.get("abstained")) or is_abstention_answer(
-        predicted_answer
-    )
+    abstained = _prediction_abstained(prediction, predicted_answer, claim_verification)
     markdown_table_score = markdown_table_renderable_score(predicted_answer)
     latex_score = latex_renderable_score(predicted_answer)
     if expected_formats & _TABLE_FORMATS and markdown_table_score is None:
@@ -137,6 +135,25 @@ def _normalized_expected_formats(prediction: dict[str, Any]) -> set[str]:
         for item in prediction.get("expected_formats", [])
         if str(item).strip()
     }
+
+
+def _guardrail_abstained(prediction: dict[str, Any]) -> bool:
+    guardrail = dict(prediction.get("guardrail_decision") or {})
+    action = str(guardrail.get("action") or "").strip().lower()
+    status = str(guardrail.get("status") or "").strip().lower()
+    return action == "abstain" or status in {"not_enough_evidence", "unsupported"}
+
+
+def _prediction_abstained(
+    prediction: dict[str, Any],
+    predicted_answer: str,
+    claim_verification: dict[str, Any],
+) -> bool:
+    return (
+        bool(claim_verification.get("abstained"))
+        or _guardrail_abstained(prediction)
+        or is_abstention_answer(predicted_answer)
+    )
 
 
 def _guardrail_expectation_match(

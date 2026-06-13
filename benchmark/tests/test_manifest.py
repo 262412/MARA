@@ -43,11 +43,20 @@ def test_normalize_financebench_manifest(tmp_path):
     (data_dir / "financebench_open_source.jsonl").write_text(
         json.dumps(
             {
-                "id": "1",
+                "financebench_id": "financebench_id_1",
                 "doc_name": "company_a.pdf",
                 "question": "What is revenue?",
                 "answer": "10",
-                "evidence_strings": ["Revenue was 10."],
+                "company": "Company A",
+                "doc_type": "10k",
+                "doc_period": 2024,
+                "evidence": [
+                    {
+                        "evidence_text": "Revenue was 10.",
+                        "evidence_page_num": 12,
+                        "evidence_text_full_page": "Full page text should not be gold.",
+                    }
+                ],
             },
             ensure_ascii=False,
         )
@@ -61,7 +70,73 @@ def test_normalize_financebench_manifest(tmp_path):
 
     assert bundle.dataset_name == "financebench"
     assert len(bundle.examples) == 1
-    assert bundle.examples[0].evidence_sources == ["Revenue was 10."]
+    assert bundle.examples[0].example_id == "financebench_id_1"
+    assert bundle.examples[0].evidence_pages == [12]
+    assert bundle.examples[0].evidence_sources == ["company_a#page:12"]
+    assert bundle.examples[0].gold_evidence == [
+        {
+            "document_id": "company_a",
+            "page": 12,
+            "citation": "company_a#page:12",
+            "span": "Revenue was 10.",
+        }
+    ]
+    assert bundle.examples[0].metadata == {
+        "doc_name": "company_a.pdf",
+        "company": "Company A",
+        "doc_type": "10k",
+        "doc_period": 2024,
+        "question_type": None,
+        "question_reasoning": None,
+    }
+
+
+def test_load_manifest_recovers_legacy_financebench_stringified_evidence(tmp_path):
+    (tmp_path / "legacy.pdf").write_text("pdf", encoding="utf-8")
+    manifest_path = tmp_path / "legacy-financebench.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "financebench_main",
+                "documents": [
+                    {
+                        "document_id": "legacy",
+                        "path": "legacy.pdf",
+                        "format_type": "pdf",
+                    }
+                ],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_ids": ["legacy"],
+                        "question": "What is capex?",
+                        "answers": ["42"],
+                        "evidence_sources": [
+                            "{'evidence_text': 'Capex was 42.', "
+                            "'evidence_page_num': 7, "
+                            "'evidence_text_full_page': 'Long page text.'}"
+                        ],
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    example = load_manifest(manifest_path).examples[0]
+
+    assert example.evidence_pages == [7]
+    assert example.evidence_sources == ["legacy#page:7"]
+    assert example.gold_evidence == [
+        {
+            "document_id": "legacy",
+            "page": 7,
+            "citation": "legacy#page:7",
+            "span": "Capex was 42.",
+        }
+    ]
 
 
 def test_load_v2_manifest_supports_documents_scope_modality_answer_type_and_evidence(

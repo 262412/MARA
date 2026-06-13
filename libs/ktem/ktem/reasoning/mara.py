@@ -11,6 +11,9 @@ from kotaemon.base import Document, RetrievedDocument
 from .mara_artifacts import build_artifact_for_pipeline
 from .mara_controller import planner_trace_payload
 from .mara_evidence import build_mara_evidence_metadata
+from .mara_query_planning import plan_steps as build_mara_plan_steps
+from .mara_query_planning import understand_query as understand_mara_query
+from .mara_retrieval_query import messages_share_retrieval_cache_key, retrieval_query
 from .mara_route_retrieval import route_retrieval_metadata
 from .simple import FullQAPipeline
 
@@ -47,33 +50,6 @@ ANSWER_FORMAT_REQUIREMENTS = (
     "as ```python, when a language tag is clear.\n"
 )
 
-_TASK_KEYWORDS = {
-    "study_guide": ("study guide", "study-guide"),
-    "flashcards": ("flashcard", "flash card"),
-    "slide_outline": ("slide outline", "deck outline", "presentation outline"),
-    "mindmap": ("mind map", "mindmap"),
-    "quiz": ("quiz", "questions"),
-    "summary": ("summary", "summarize", "summarise", "overview"),
-    "compare": ("compare", "contrast", "difference", "differences"),
-    "explain": ("explain", "why", "how does"),
-}
-_MODALITY_KEYWORDS = {
-    "table": ("table", "row", "column", "spreadsheet", "csv"),
-    "figure": ("figure", "image", "diagram", "chart", "plot"),
-    "formula": ("formula", "equation", "math", "latex"),
-    "slide": ("slide", "deck", "presentation", "ppt", "pptx"),
-}
-_VALID_TASK_TYPES = {
-    "qa",
-    "summary",
-    "compare",
-    "explain",
-    "study_guide",
-    "quiz",
-    "flashcards",
-    "mindmap",
-    "slide_outline",
-}
 _ROUTE_POLICY_ALIASES = {
     "direct": "direct",
     "doc": "doc_text",
@@ -161,8 +137,10 @@ def _collect_text_rag_generation(
     events: list[Document] = []
     answer = ""
     generation_message = _message_with_answer_format_requirements(message)
+    generation_kwargs = dict(kwargs)
+    generation_kwargs["enable_claim_verification"] = False
     stream = super(MaraAgentPipeline, pipeline).stream(
-        generation_message, conv_id, history, **kwargs
+        generation_message, conv_id, history, **generation_kwargs
     )
     while True:
         try:
@@ -205,6 +183,7 @@ def _route_execution_events(
 ) -> Generator[Document, None, Document]:
     for event in _execution_trace_events(execution):
         yield event
+    yield _mara_event("execution", execution.as_dict())
     yield _mara_event("evidence_metadata", execution.evidence_bundle.metadata)
     visible_answer = _visible_execution_answer(execution)
     if execution.guardrail_decision.action == "return":
@@ -314,111 +293,38 @@ class MaraAgentPipeline(FullQAPipeline):
         active_file_id: str | None = None,
         page_number: int | None = None,
     ) -> dict[str, Any]:
-        normalized = str(query or "").lower()
-        normalized_task = str(task_type or "").strip().lower()
-        if normalized_task in _VALID_TASK_TYPES:
-            detected_task = normalized_task
-        else:
-            detected_task = "qa"
-            for candidate, keywords in _TASK_KEYWORDS.items():
-                if any(keyword in normalized for keyword in keywords):
-                    detected_task = candidate
-                    break
-
-        modalities = [
-            modality
-            for modality, keywords in _MODALITY_KEYWORDS.items()
-            if any(keyword in normalized for keyword in keywords)
-        ]
-        if not modalities:
-            modalities = ["text"]
-
-        explicit_scope = str(qa_scope or "").strip().lower().replace("-", "_")
-        if explicit_scope in {"page", "document", "multi_document"}:
-            scope = explicit_scope
-        elif page_number is not None or "page " in normalized:
-            scope = "page"
-        elif active_file_id:
-            scope = "document"
-        else:
-            scope = "document"
-
-        return {
-            "question": query,
-            "task_type": detected_task,
-            "modalities": modalities,
-            "scope": scope,
-        }
+        return understand_mara_query(
+            query,
+            task_type=task_type,
+            qa_scope=qa_scope,
+            active_file_id=active_file_id,
+            page_number=page_number,
+        )
 
     @classmethod
     def plan_steps(
         cls, understanding: dict[str, Any], *, agent_mode: str | None = None
     ) -> list[dict[str, str]]:
-        mode = str(agent_mode or "auto").strip().lower()
-        task_type = str(understanding.get("task_type") or "qa")
-        scope = str(understanding.get("scope") or "document").replace("_", "-")
-        modalities = [
-            str(modality)
-            for modality in understanding.get("modalities", ["text"])
-            if modality
-        ]
-        if not modalities:
-            modalities = ["text"]
-
-        modality_text = ", ".join(modalities)
-        plan = [
-            {
-                "tool": "source_retriever",
-                "purpose": (
-                    f"Retrieve {modality_text} evidence for "
-                    f"{scope}-scoped {task_type}."
-                ),
-            }
-        ]
-        if mode == "fast":
-            return plan
-
-        for modality in modalities:
-            if modality == "text":
-                continue
-            plan.append(
-                {
-                    "tool": f"{modality}_inspector",
-                    "purpose": (
-                        f"Inspect retrieved {modality} evidence before composing "
-                        "the answer."
-                    ),
-                }
-            )
-            if len(plan) >= 3:
-                break
-
-        if mode == "thorough":
-            plan.append(
-                {
-                    "tool": "claim_verifier",
-                    "purpose": (
-                        "Check whether the answer is supported by retrieved evidence."
-                    ),
-                }
-            )
-
-        return plan[:4]
+        return build_mara_plan_steps(understanding, agent_mode=agent_mode)
 
     def retrieve(
         self, message: str, history: list
     ) -> tuple[list[RetrievedDocument], list[Document]]:
         cached = getattr(self, "_mara_cached_retrieval", None)
-        if cached and cached[0] == message and cached[1] == list(history):
+        if (
+            cached
+            and messages_share_retrieval_cache_key(cached[0], message)
+            and cached[1] == list(history)
+        ):
             delattr(self, "_mara_cached_retrieval")
             docs, info = cached[2], cached[3]
             self._mara_last_docs = list(docs)
             return docs, info
 
-        docs, info = super().retrieve(message, history)
+        docs, info = super().retrieve(retrieval_query(message), history)
         attempts = [{"attempt": 1, "evidence_count": len(docs), "retry_reason": ""}]
         if _should_retry_retrieval(getattr(self, "agent_mode", None), docs):
-            docs, info = super().retrieve(message, history)
+            docs, info = super().retrieve(retrieval_query(message), history)
             attempts.append(
                 {
                     "attempt": 2,
