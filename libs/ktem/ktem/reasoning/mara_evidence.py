@@ -11,6 +11,15 @@ from ktem.docqa.visual_retriever import rank_page_image_records
 
 from kotaemon.base import RetrievedDocument
 
+_LARGE_IMAGE_METADATA_KEYS = {
+    "image_origin",
+    "image_ref",
+    "page_image_path",
+    "page_visual_embedding",
+    "rendered_page_image",
+    "visual_embedding",
+}
+
 
 def build_mara_evidence_metadata(
     docs: list[RetrievedDocument], understanding: dict[str, Any]
@@ -93,8 +102,16 @@ def _merged_doc_metadata(doc: RetrievedDocument) -> dict[str, Any]:
     if isinstance(nested, dict):
         merged = dict(nested)
         merged.update(metadata)
-        return merged
-    return metadata
+        return _without_large_image_payloads(merged)
+    return _without_large_image_payloads(metadata)
+
+
+def _without_large_image_payloads(metadata: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in metadata.items()
+        if key not in _LARGE_IMAGE_METADATA_KEYS
+    }
 
 
 def _append_unique(target: list[str], value: str) -> None:

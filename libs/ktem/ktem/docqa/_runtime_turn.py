@@ -9,6 +9,7 @@ from kotaemon.base import Document
 from . import _runtime_mara as _mara
 from ._runtime_models import DocQARequest, _PreparedPipeline
 from ._runtime_utils import _serialize_value
+from .claim_filtering import clean_answer_text
 
 
 @dataclass
@@ -84,6 +85,7 @@ def collect_stream_result(
     for response in prepared.pipeline.stream(request.prompt, conversation_id, history):
         _ingest_stream_response(response, prepared, result)
 
+    result.text = clean_answer_text(result.text)
     if not result.text:
         result.text = empty_message
     return result

@@ -67,6 +67,7 @@
       "scope": "multi_document",
       "reasoning_type": "mara",
       "route_policy": "auto",
+      "allowed_routes": ["doc_text", "hybrid", "doc_page_image", "doc_element", "graph_global"],
       "text_retriever_backend": "BAAI/bge-m3",
       "visual_retriever_backend": "colqwen",
       "visual_generator_backend": "local_qwen3_vl",

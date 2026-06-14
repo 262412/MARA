@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .financebench_pages import align_financebench_page
 from .manifest import write_manifest
 
 
@@ -55,6 +56,7 @@ def _financebench_evidence_fields(
     record: dict[str, Any],
     *,
     document_id: str,
+    document_path: Path | None = None,
 ) -> tuple[list[int | str], list[str], list[dict[str, Any]]]:
     pages: list[int | str] = []
     sources: list[str] = []
@@ -66,6 +68,8 @@ def _financebench_evidence_fields(
                 _pick(item, "evidence_page_num", "page", "page_number")
             )
             span = str(_pick(item, "evidence_text", "text", "span", default="")).strip()
+            dataset_page = page
+            page, alignment = align_financebench_page(document_path, page, span)
             citation = f"{document_id}#page:{page}" if page is not None else ""
             if page is not None:
                 _append_unique(pages, page)
@@ -74,10 +78,14 @@ def _financebench_evidence_fields(
             evidence_item: dict[str, Any] = {"document_id": document_id}
             if page is not None:
                 evidence_item["page"] = page
+            if alignment and dataset_page is not None:
+                evidence_item["dataset_page"] = dataset_page
             if citation:
                 evidence_item["citation"] = citation
             if span:
                 evidence_item["span"] = span
+            if alignment:
+                evidence_item["page_alignment"] = alignment
             if len(evidence_item) > 1:
                 gold_evidence.append(evidence_item)
             continue
@@ -174,6 +182,7 @@ def normalize_financebench_manifest(
         evidence_pages, evidence_sources, gold_evidence = _financebench_evidence_fields(
             record,
             document_id=document_id,
+            document_path=document_path,
         )
 
         records.append(

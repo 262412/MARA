@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
+from .claim_filtering import clean_answer_text
 from .controller import (
     RetrieveDecision,
     RouteDecision,
@@ -332,6 +333,19 @@ def _verified_result(
             answer,
             trace_prefix,
         )
+    if not clean_answer_text(answer).strip():
+        verify_decision = _empty_answer_verify_decision(request, bundle)
+        guardrail = _verification_guardrail(verify_decision)
+        return _result(
+            decision,
+            retrieve_decision,
+            verify_decision,
+            guardrail,
+            bundle,
+            workflow_plan,
+            ABSTAIN_MESSAGE,
+            trace_prefix,
+        )
     verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
     if verify_decision.action == "revise" and rewrite is not None:
         answer = rewrite(request, decision, bundle, answer)
@@ -378,6 +392,31 @@ def _evidence_only_verify_decision(
             if str(item.get("evidence_id") or "")
         ],
     )
+
+
+def _empty_answer_verify_decision(
+    request: Any,
+    bundle: EvidenceBundle,
+) -> VerifyDecision:
+    mode = str(getattr(request, "verification_mode", None) or "off").strip().lower()
+    if mode not in {"off", "light", "strict"}:
+        mode = "off"
+    return VerifyDecision(
+        mode=mode,
+        status="not_enough_evidence",
+        reason=f"{mode.title()} verification found no final answer to verify.",
+        action="abstain",
+        verified_citations=_bundle_citation_ids(bundle),
+    )
+
+
+def _bundle_citation_ids(bundle: EvidenceBundle) -> list[str]:
+    citations: list[str] = []
+    for item in bundle.items:
+        evidence_id = str(item.get("evidence_id") or "").strip()
+        if evidence_id and evidence_id not in citations:
+            citations.append(evidence_id)
+    return citations
 
 
 def _result(

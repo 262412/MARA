@@ -5,6 +5,13 @@ from typing import Any
 
 from ktem.docqa.controller import ROUTE_EVIDENCE_TYPES, parse_planner_decision
 
+_FINANCE_STATEMENT_CALCULATION_TERMS = (
+    "quick ratio",
+    "current ratio",
+    "working capital",
+    "inventory turnover",
+)
+
 
 class LLMPlanner:
     def __init__(self, planner_model: str) -> None:
@@ -38,7 +45,7 @@ def planner_decision(
             question=question,
             allowed_routes=allowed_routes,
         )
-    return _heuristic_planner_decision(understanding)
+    return _heuristic_planner_decision(understanding, question=question)
 
 
 def planner_trace_payload(
@@ -64,7 +71,11 @@ def planner_trace_payload(
     return payload
 
 
-def _heuristic_planner_decision(understanding: dict[str, Any]) -> dict[str, Any]:
+def _heuristic_planner_decision(
+    understanding: dict[str, Any],
+    *,
+    question: str = "",
+) -> dict[str, Any]:
     task_type = str(understanding.get("task_type") or "qa")
     modalities = [
         str(modality)
@@ -72,6 +83,14 @@ def _heuristic_planner_decision(understanding: dict[str, Any]) -> dict[str, Any]
         if modality
     ]
     scope = str(understanding.get("scope") or "document")
+    question_text = " ".join(
+        str(value or "")
+        for value in (
+            question,
+            understanding.get("question"),
+            understanding.get("query"),
+        )
+    ).lower()
 
     if task_type in {"compare", "study_guide", "summary"} and scope != "page":
         return {
@@ -79,6 +98,17 @@ def _heuristic_planner_decision(understanding: dict[str, Any]) -> dict[str, Any]
             "reason": "Global compare and study tasks use graph evidence.",
             "evidence_types": ["graph"],
             "verify": True,
+        }
+    if any(term in question_text for term in _FINANCE_STATEMENT_CALCULATION_TERMS):
+        return {
+            "route": "hybrid",
+            "reason": (
+                "Finance-specific statement calculation uses hybrid evidence so "
+                "text, page-image, and element routes can recover source tables."
+            ),
+            "evidence_types": ["text", "page_image", "element"],
+            "verify": True,
+            "compatibility_scope": "finance_statement_calculation",
         }
     if any(
         modality in {"figure", "slide", "table", "formula"} for modality in modalities

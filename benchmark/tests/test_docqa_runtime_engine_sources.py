@@ -1,6 +1,7 @@
 import sys
 import types
 
+from benchmark.docqa_runtime_sources import has_search_index
 from benchmark.engines import get_engine
 from benchmark.schemas import BenchmarkConfig, BenchmarkDocument, BenchmarkExample
 
@@ -17,6 +18,107 @@ def test_docqa_runtime_engine_reindexes_existing_file_without_search_index(
     assert fake_runtime.indexed == [([str(doc_path)], True)]
     assert fake_runtime.requests[0].selected_file_ids == ["file-existing"]
     assert result.answer == "runtime answer"
+
+
+def test_docqa_runtime_engine_reindexes_existing_pdf_with_stale_text_metadata(
+    monkeypatch, tmp_path
+):
+    doc_path = tmp_path / "doc.pdf"
+    doc_path.write_text("runtime pdf", encoding="utf-8")
+    fake_runtime = _install_reindex_runtime(monkeypatch, doc_path)
+    fake_runtime.search_ready = True
+    fake_runtime.file_index = _FakeFileIndex(
+        [
+            _FakeIndexRow("document", "text-stale"),
+            _FakeIndexRow("document", "thumb-1"),
+            _FakeIndexRow("vector", "text-stale"),
+        ],
+        {
+            "text-stale": _FakeDoc(
+                "Balance Sheet Current assets ...",
+                {
+                    "file_id": "file-existing",
+                    "file_name": "doc.pdf",
+                },
+            ),
+            "thumb-1": _FakeDoc(
+                "Page thumbnail",
+                {
+                    "file_id": "file-existing",
+                    "file_name": "doc.pdf",
+                    "page_label": "4",
+                    "type": "thumbnail",
+                },
+            ),
+        },
+    )
+
+    result = _run_docqa_runtime(doc_path, tmp_path)
+
+    assert fake_runtime.indexed == [([str(doc_path)], True)]
+    assert result.answer == "runtime answer"
+
+
+def test_has_search_index_rejects_pdf_index_with_text_chunks_missing_page_metadata():
+    runtime = types.SimpleNamespace(
+        file_index=_FakeFileIndex(
+            [
+                _FakeIndexRow("document", "text-stale"),
+                _FakeIndexRow("document", "thumb-1"),
+                _FakeIndexRow("vector", "text-stale"),
+            ],
+            {
+                "text-stale": _FakeDoc(
+                    "Balance Sheet Current assets ...",
+                    {"file_id": "file-1", "file_name": "doc.pdf"},
+                ),
+                "thumb-1": _FakeDoc(
+                    "Page thumbnail",
+                    {
+                        "file_id": "file-1",
+                        "file_name": "doc.pdf",
+                        "page_label": "4",
+                        "type": "thumbnail",
+                    },
+                ),
+            },
+        )
+    )
+
+    assert has_search_index(runtime, "file-1") is False
+
+
+def test_has_search_index_accepts_pdf_index_with_page_scoped_text_chunks():
+    runtime = types.SimpleNamespace(
+        file_index=_FakeFileIndex(
+            [
+                _FakeIndexRow("document", "text-healthy"),
+                _FakeIndexRow("document", "thumb-1"),
+                _FakeIndexRow("vector", "text-healthy"),
+            ],
+            {
+                "text-healthy": _FakeDoc(
+                    "Balance Sheet Current assets Inventories Current liabilities.",
+                    {
+                        "file_id": "file-1",
+                        "file_name": "doc.pdf",
+                        "page_label": "4",
+                    },
+                ),
+                "thumb-1": _FakeDoc(
+                    "Page thumbnail",
+                    {
+                        "file_id": "file-1",
+                        "file_name": "doc.pdf",
+                        "page_label": "4",
+                        "type": "thumbnail",
+                    },
+                ),
+            },
+        )
+    )
+
+    assert has_search_index(runtime, "file-1") is True
 
 
 def test_docqa_runtime_engine_derives_hits_pages_sources_and_elements(
@@ -168,16 +270,50 @@ class _Record:
         self.date_created = None
 
 
+class _FakeIndexRow:
+    def __init__(self, relation_type, target_id):
+        self.relation_type = relation_type
+        self.target_id = target_id
+
+
+class _FakeDoc:
+    def __init__(self, text, metadata):
+        self.text = text
+        self.metadata = metadata
+
+
+class _FakeDocStore:
+    def __init__(self, docs):
+        self.docs = docs
+
+    def get(self, ids):
+        return [self.docs[item] for item in ids if item in self.docs]
+
+
+class _FakeFileIndex:
+    def __init__(self, rows, docs):
+        self._resources = {
+            "Index": rows,
+            "DocStore": _FakeDocStore(docs),
+            "VectorStore": object(),
+        }
+
+
 class _ReindexRuntime:
     def __init__(self, doc_path):
         self.doc_path = doc_path
         self.indexed = []
         self.requests = []
         self.search_ready = False
+        self.file_index = None
 
     def has_search_index(self, file_id):
         assert file_id == "file-existing"
-        return self.search_ready
+        if self.file_index is None:
+            return self.search_ready
+        return has_search_index(
+            types.SimpleNamespace(file_index=self.file_index), file_id
+        )
 
     def index_paths(self, paths, reindex=False):
         self.indexed.append((paths, reindex))

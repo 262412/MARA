@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .retrieval_adequacy import financial_statement_match_count
+
 FUSION_RANKER = "weighted_cross_modal_v1"
 RRF_RANKER = "reciprocal_rank_fusion_v1"
 MODALITY_WEIGHTS = {
@@ -120,12 +122,24 @@ def _fusion_score(query: str, item: dict[str, Any]) -> tuple[float, dict[str, fl
     modality_weight = float(MODALITY_WEIGHTS.get(modality, 1.0))
     modality_intent = _modality_intent_score(query, modality)
     retriever_score = _retriever_score(item)
-    score = round(modality_weight + lexical + modality_intent + retriever_score, 4)
+    finance_statement_match = float(
+        financial_statement_match_count(query, _item_text(item))
+    )
+    finance_statement_score = finance_statement_match * 6.0
+    score = round(
+        modality_weight
+        + lexical
+        + modality_intent
+        + retriever_score
+        + finance_statement_score,
+        4,
+    )
     return score, {
         "lexical_overlap": lexical,
         "modality_weight": modality_weight,
         "modality_intent": modality_intent,
         "retriever_score": retriever_score,
+        "finance_statement_match": finance_statement_match,
     }
 
 
@@ -184,13 +198,17 @@ def _retriever_score(item: dict[str, Any]) -> float:
 
 
 def _item_tokens(item: dict[str, Any]) -> set[str]:
+    return _tokens(_item_text(item))
+
+
+def _item_text(item: dict[str, Any]) -> str:
     metadata = dict(item.get("metadata") or {})
     metadata_text = " ".join(
         str(part)
         for value in metadata.values()
         for part in (value if isinstance(value, list) else [value])
     )
-    return _tokens(
+    return (
         " ".join(
             str(item.get(key) or "")
             for key in (

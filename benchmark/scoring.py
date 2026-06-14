@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .metrics import (
@@ -35,12 +36,24 @@ _TIMING_KEYS = (
     "generation_seconds",
 )
 _CACHE_KEYS = ("hits", "misses", "writes")
+_FINAL_ANSWER_MARKER_RE = re.compile(
+    r"(?:\*{0,2}\s*)?(?:final\s+answer|answer|最终答案|最终回答)(?:\s*\*{0,2})?\s*[:：]\s*",
+    re.IGNORECASE,
+)
+_THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>.*?</think>", re.IGNORECASE | re.DOTALL)
+_THOUGHT_DETAILS_RE = re.compile(
+    r"<details\b[^>]*>\s*<summary\b[^>]*>.*?thought.*?</summary>.*?</details>",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
     gold_answers = prediction["gold_answers"]
-    predicted_answer = prediction["predicted_answer"]
     expected_formats = _normalized_expected_formats(prediction)
+    predicted_answer = _answer_text_for_scoring(
+        prediction["predicted_answer"],
+        expected_formats=expected_formats,
+    )
     claim_verification = dict(prediction.get("claim_verification") or {})
     abstained = _prediction_abstained(prediction, predicted_answer, claim_verification)
     markdown_table_score = markdown_table_renderable_score(predicted_answer)
@@ -74,47 +87,39 @@ def score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
             prediction, abstained
         ),
     }
-    for modality in ("table", "figure", "formula", "slide"):
-        metrics[f"{modality}_hit"] = modality_hit_score(
-            modality,
-            expected_modality=str(prediction.get("modality") or ""),
-            evidence_metadata=dict(prediction.get("evidence_metadata") or {}),
-            retrieved_hits=list(prediction.get("retrieved_hits") or []),
-            gold_evidence=list(prediction.get("gold_evidence") or []),
-        )
+    _add_modality_metrics(metrics, prediction)
     metrics.update(verification_metrics(prediction))
-    gold_evidence = prediction.get("gold_evidence", [])
-    if gold_evidence:
-        metrics["element_hit"] = element_hit_score(
-            prediction.get("predicted_element_ids", []), gold_evidence
-        )
-        metrics["span_recall"] = span_recall_score(predicted_answer, gold_evidence)
-        metrics["image_quote_hit"] = image_quote_hit_score(
-            predicted_answer, gold_evidence
-        )
-        metrics["multimodal_answer_support"] = multimodal_support_score(
-            evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
-            retrieved_hits=list(prediction.get("retrieved_hits") or []),
-            gold_evidence=gold_evidence,
-        )
-        metrics["hard_negative_rejection"] = hard_negative_rejection_score(
-            evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
-            retrieved_hits=list(prediction.get("retrieved_hits") or []),
-            gold_evidence=gold_evidence,
-        )
-        metrics["citation_recall"] = citation_recall_score(
-            prediction["predicted_sources"], gold_evidence
-        )
-        metrics["citation_precision"] = citation_precision_score(
-            prediction["predicted_sources"], gold_evidence
-        )
-        metrics["cross_page_evidence_hit"] = cross_page_evidence_hit_score(
-            prediction["predicted_pages"],
-            evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
-            retrieved_hits=list(prediction.get("retrieved_hits") or []),
-            gold_evidence=gold_evidence,
-        )
+    _add_gold_evidence_metrics(metrics, prediction, predicted_answer)
     return metrics
+
+
+def _answer_text_for_scoring(answer: Any, *, expected_formats: set[str]) -> str:
+    text = _THINK_BLOCK_RE.sub(" ", str(answer or ""))
+    text = _THOUGHT_DETAILS_RE.sub(" ", text)
+    markers = list(_FINAL_ANSWER_MARKER_RE.finditer(text))
+    if markers:
+        text = text[markers[-1].end() :]
+    if not expected_formats & _TABLE_FORMATS:
+        without_tables = _remove_markdown_table_lines(text)
+        if without_tables.strip():
+            text = without_tables
+    return " ".join(text.replace("**", "").split())
+
+
+def _remove_markdown_table_lines(text: str) -> str:
+    return "\n".join(
+        line
+        for line in str(text or "").splitlines()
+        if not _is_markdown_table_line(line)
+    )
+
+
+def _is_markdown_table_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|"):
+        return False
+    cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+    return len(cells) > 1
 
 
 def normalize_operational_fields(prediction: dict[str, Any]) -> None:
@@ -176,6 +181,57 @@ def _guardrail_expectation_match(
     if not checks:
         return None
     return sum(1 for item in checks if item) / len(checks)
+
+
+def _add_modality_metrics(
+    metrics: dict[str, float | None],
+    prediction: dict[str, Any],
+) -> None:
+    for modality in ("table", "figure", "formula", "slide"):
+        metrics[f"{modality}_hit"] = modality_hit_score(
+            modality,
+            expected_modality=str(prediction.get("modality") or ""),
+            evidence_metadata=dict(prediction.get("evidence_metadata") or {}),
+            retrieved_hits=list(prediction.get("retrieved_hits") or []),
+            gold_evidence=list(prediction.get("gold_evidence") or []),
+        )
+
+
+def _add_gold_evidence_metrics(
+    metrics: dict[str, float | None],
+    prediction: dict[str, Any],
+    predicted_answer: str,
+) -> None:
+    gold_evidence = prediction.get("gold_evidence", [])
+    if not gold_evidence:
+        return
+    metrics["element_hit"] = element_hit_score(
+        prediction.get("predicted_element_ids", []), gold_evidence
+    )
+    metrics["span_recall"] = span_recall_score(predicted_answer, gold_evidence)
+    metrics["image_quote_hit"] = image_quote_hit_score(predicted_answer, gold_evidence)
+    metrics["multimodal_answer_support"] = multimodal_support_score(
+        evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
+        retrieved_hits=list(prediction.get("retrieved_hits") or []),
+        gold_evidence=gold_evidence,
+    )
+    metrics["hard_negative_rejection"] = hard_negative_rejection_score(
+        evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
+        retrieved_hits=list(prediction.get("retrieved_hits") or []),
+        gold_evidence=gold_evidence,
+    )
+    metrics["citation_recall"] = citation_recall_score(
+        prediction["predicted_sources"], gold_evidence
+    )
+    metrics["citation_precision"] = citation_precision_score(
+        prediction["predicted_sources"], gold_evidence
+    )
+    metrics["cross_page_evidence_hit"] = cross_page_evidence_hit_score(
+        prediction["predicted_pages"],
+        evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
+        retrieved_hits=list(prediction.get("retrieved_hits") or []),
+        gold_evidence=gold_evidence,
+    )
 
 
 def _normalize_timings(timings: dict[str, Any] | None) -> dict[str, float]:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any, Generator
 
+from ktem.docqa.claim_filtering import clean_answer_text
 from ktem.docqa.execution import RouteExecutionResult, execute_controller_turn
 from ktem.docqa.graph_index import graph_answer_from_evidence
 
@@ -36,6 +38,11 @@ MARA_VISUAL_EVIDENCE_ONLY_MESSAGE = (
 )
 ANSWER_FORMAT_REQUIREMENTS = (
     "\n\nAnswer formatting requirements:\n"
+    "- Start with the direct final answer in the first sentence, then add "
+    "supporting calculation or evidence only if needed.\n"
+    "- For financial calculation questions, state the final numeric result or "
+    "yes/no conclusion first, include the formula inputs, and avoid extra "
+    "tables unless the question asks for a table.\n"
     "- Return the final answer as Markdown, not raw HTML.\n"
     "- Put a blank line between paragraphs, headings, lists, formulas, tables, "
     "and code blocks.\n"
@@ -127,6 +134,31 @@ def _controller_execution_request(
     )
 
 
+@contextmanager
+def _text_only_answering_pipeline(pipeline: Any) -> Generator[None, None, None]:
+    answering_pipeline = getattr(pipeline, "answering_pipeline", None)
+    target = _answering_pipeline_multimodal_target(answering_pipeline)
+    if target is None:
+        yield
+        return
+
+    original_use_multimodal = target.use_multimodal
+    target.use_multimodal = False
+    try:
+        yield
+    finally:
+        target.use_multimodal = original_use_multimodal
+
+
+def _answering_pipeline_multimodal_target(answering_pipeline: Any) -> Any | None:
+    original_obj = getattr(answering_pipeline, "ff_original_obj", None)
+    if original_obj is not None and hasattr(original_obj, "use_multimodal"):
+        return original_obj
+    if hasattr(answering_pipeline, "use_multimodal"):
+        return answering_pipeline
+    return None
+
+
 def _collect_text_rag_generation(
     pipeline: Any,
     message: str,
@@ -139,21 +171,25 @@ def _collect_text_rag_generation(
     generation_message = _message_with_answer_format_requirements(message)
     generation_kwargs = dict(kwargs)
     generation_kwargs["enable_claim_verification"] = False
-    stream = super(MaraAgentPipeline, pipeline).stream(
-        generation_message, conv_id, history, **generation_kwargs
-    )
-    while True:
-        try:
-            event = next(stream)
-        except StopIteration as stop:
-            returned = stop.value
-            break
-        events.append(event)
-        if isinstance(event, Document) and event.channel == "chat":
-            answer += "" if event.content is None else str(event.content)
+    with _text_only_answering_pipeline(pipeline):
+        stream = super(MaraAgentPipeline, pipeline).stream(
+            generation_message, conv_id, history, **generation_kwargs
+        )
+        while True:
+            try:
+                event = next(stream)
+            except StopIteration as stop:
+                returned = stop.value
+                break
+            events.append(event)
+            if isinstance(event, Document) and event.channel == "chat":
+                if event.content is None:
+                    answer = ""
+                else:
+                    answer += str(event.content)
     if not answer and isinstance(returned, Document) and returned.channel == "chat":
         answer = "" if returned.content is None else str(returned.content)
-    return answer, events
+    return clean_answer_text(answer), events
 
 
 def _message_with_answer_format_requirements(message: str) -> str:

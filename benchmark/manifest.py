@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import ast
 import json
 from pathlib import Path
 from typing import Any, Iterable
 
+from .financebench_evidence import legacy_financebench_evidence_from_source
 from .schemas import (
     BenchmarkDocument,
     BenchmarkExample,
@@ -12,6 +12,9 @@ from .schemas import (
     normalize_engine_name,
     normalize_scope,
 )
+
+_AUTO_ROUTE_NAMES = "doc_text hybrid doc_page_image doc_element graph_global"
+CONTROLLER_AUTO_ALLOWED_ROUTES = _AUTO_ROUTE_NAMES.split()
 
 DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
     {
@@ -164,6 +167,7 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "reasoning_type": "mara",
         "controller_mode": "llm",
         "route_policy": "auto",
+        "allowed_routes": list(CONTROLLER_AUTO_ALLOWED_ROUTES),
         "verification_mode": "light",
         "text_retriever_backend": "docqa_text",
         "visual_retriever_backend": "local_late_interaction",
@@ -183,6 +187,7 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
         "agent_mode": "thorough",
         "controller_mode": "llm",
         "route_policy": "auto",
+        "allowed_routes": list(CONTROLLER_AUTO_ALLOWED_ROUTES),
         "verification_mode": "strict",
         "text_retriever_backend": "docqa_text",
         "visual_retriever_backend": "local_late_interaction",
@@ -221,43 +226,11 @@ def _append_unique(target: list[Any], value: Any) -> None:
         target.append(value)
 
 
-def _legacy_financebench_evidence_from_source(
-    value: str,
-    *,
-    document_id: str,
-) -> dict[str, Any] | None:
-    text = str(value or "").strip()
-    if not (text.startswith("{") and "evidence_" in text):
-        return None
-    try:
-        payload = ast.literal_eval(text)
-    except (SyntaxError, ValueError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    page = _normalize_page_value(
-        payload.get("evidence_page_num")
-        or payload.get("page")
-        or payload.get("page_number")
-    )
-    span = str(
-        payload.get("evidence_text") or payload.get("text") or payload.get("span") or ""
-    ).strip()
-    citation = f"{document_id}#page:{page}" if page is not None else ""
-    evidence: dict[str, Any] = {"document_id": document_id}
-    if page is not None:
-        evidence["page"] = page
-    if citation:
-        evidence["citation"] = citation
-    if span:
-        evidence["span"] = span
-    return evidence if len(evidence) > 1 else None
-
-
 def _coerce_evidence_fields(
     record: dict[str, Any],
     *,
     document_id: str,
+    document_path: Path | None = None,
 ) -> tuple[list[Any], list[str], list[dict[str, Any]]]:
     gold_evidence = [
         dict(item)
@@ -269,17 +242,18 @@ def _coerce_evidence_fields(
         for item in _ensure_list(record.get("evidence_sources"))
         if str(item).strip()
     ]
-    legacy_evidence = [
-        item
-        for source in raw_sources
-        for item in [
-            _legacy_financebench_evidence_from_source(
+    legacy_items = [
+        (
+            source,
+            legacy_financebench_evidence_from_source(
                 source,
                 document_id=document_id,
-            )
-        ]
-        if item is not None
+                document_path=document_path,
+            ),
+        )
+        for source in raw_sources
     ]
+    legacy_evidence = [item for _source, item in legacy_items if item is not None]
     if legacy_evidence and not gold_evidence:
         gold_evidence = legacy_evidence
 
@@ -298,14 +272,8 @@ def _coerce_evidence_fields(
             citation = str(item.get("citation") or "").strip()
             if citation:
                 _append_unique(evidence_sources, citation)
-        for source in raw_sources:
-            if (
-                _legacy_financebench_evidence_from_source(
-                    source,
-                    document_id=document_id,
-                )
-                is None
-            ):
+        for source, legacy_item in legacy_items:
+            if legacy_item is None:
                 _append_unique(evidence_sources, source)
     else:
         evidence_sources = list(raw_sources)
@@ -378,6 +346,7 @@ def _coerce_examples(
         evidence_pages, evidence_sources, gold_evidence = _coerce_evidence_fields(
             record,
             document_id=document_id,
+            document_path=document_path,
         )
 
         examples.append(
@@ -512,6 +481,7 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
         evidence_pages, evidence_sources, gold_evidence = _coerce_evidence_fields(
             record,
             document_id=document_ids[0],
+            document_path=documents[document_ids[0]].path,
         )
 
         examples.append(

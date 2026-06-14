@@ -182,10 +182,12 @@ def test_write_reports_compacts_nested_runtime_indexes(tmp_path):
     large_text = "x" * 1_000_000
     heavy_record = {
         "evidence_id": "page-image:file-1:1",
+        "image_origin": large_text,
         "page_image_path": large_text,
         "rendered_page_image": large_text,
         "text": large_text,
         "metadata": {
+            "image_origin": large_text,
             "image_ref": large_text,
             "multi_vector_representation": [float(index) for index in range(256)],
             "visual_embedding": [float(index) for index in range(256)],
@@ -245,8 +247,10 @@ def test_write_reports_compacts_nested_runtime_indexes(tmp_path):
     assert len(prediction["evidence_bundle"]["metadata"]["page_image_index"]) == 10
     first_record = prediction["evidence_metadata"]["page_image_index"][0]
     assert len(first_record["text"]) <= 2000
+    assert "image_origin" not in first_record
     assert "page_image_path" not in first_record
     assert "rendered_page_image" not in first_record
+    assert "image_origin" not in first_record["metadata"]
     assert "image_ref" not in first_record["metadata"]
     assert "multi_vector_representation" not in first_record["metadata"]
     assert "visual_embedding" not in first_record["metadata"]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from .schemas import BenchmarkDocument
 
@@ -24,29 +24,41 @@ def unindexed_document_paths(
 
 
 def has_search_index(runtime: Any, file_id: str) -> bool:
+    checker_ready: bool | None = None
     checker = getattr(runtime, "has_search_index", None)
     if callable(checker):
         try:
-            return bool(checker(file_id))
+            checker_ready = bool(checker(file_id))
         except (AttributeError, RuntimeError, TypeError, ValueError):
-            return True
+            checker_ready = None
+        if checker_ready is False:
+            return False
 
     file_index = getattr(runtime, "file_index", None)
     if file_index is None:
-        return True
+        return True if checker_ready is None else checker_ready
 
+    index_ready = _file_index_search_ready(file_index, file_id)
+    if index_ready is None:
+        return True if checker_ready is None else checker_ready
+    return index_ready
+
+
+def _file_index_search_ready(file_index: Any, file_id: str) -> bool | None:
     try:
         resources = getattr(file_index, "_resources")
         index_table = resources["Index"]
         rows = _index_relation_rows(index_table, file_id)
     except (AttributeError, ImportError, KeyError, RuntimeError, TypeError, ValueError):
-        return True
+        return None
 
     relation_types = {str(getattr(row, "relation_type", "") or "") for row in rows}
     if "document" not in relation_types:
         return False
     vector_store = getattr(file_index, "_vs", None) or resources.get("VectorStore")
-    return not vector_store or "vector" in relation_types
+    if vector_store and "vector" not in relation_types:
+        return False
+    return _page_scoped_pdf_text_chunks_ready(rows, resources.get("DocStore"))
 
 
 def canonicalize_docqa_hits(
@@ -59,15 +71,84 @@ def canonicalize_docqa_hits(
 
 
 def _index_relation_rows(index_table: Any, file_id: str) -> list[Any]:
-    from ktem import db as ktem_db
+    if isinstance(index_table, Sequence):
+        return [
+            row
+            for row in index_table
+            if str(getattr(row, "source_id", file_id) or file_id) == file_id
+        ]
+
+    from ktem.db.engine import engine
     from sqlmodel import Session, select
 
-    with Session(getattr(ktem_db, "engine")) as session:
+    with Session(engine) as session:
         return list(
             session.exec(
                 select(index_table).where(index_table.source_id == file_id)
             ).all()
         )
+
+
+def _page_scoped_pdf_text_chunks_ready(rows: list[Any], docstore: Any) -> bool:
+    if docstore is None:
+        return True
+
+    doc_ids = [
+        str(getattr(row, "target_id", "") or "")
+        for row in rows
+        if str(getattr(row, "relation_type", "") or "") == "document"
+    ]
+    doc_ids = [doc_id for doc_id in doc_ids if doc_id]
+    if not doc_ids:
+        return True
+
+    try:
+        docs = list(docstore.get(doc_ids))
+    except (AttributeError, KeyError, RuntimeError, TypeError, ValueError):
+        return True
+    if not docs or not any(_doc_is_pdf(doc) for doc in docs):
+        return True
+
+    return all(_doc_has_page_metadata(doc) for doc in docs if _is_text_chunk(doc))
+
+
+def _is_text_chunk(doc: Any) -> bool:
+    metadata = _doc_metadata(doc)
+    doc_type = str(_metadata_value(metadata, "type") or "").strip().lower()
+    if doc_type in {"thumbnail", "page_image", "image"}:
+        return False
+    return bool(str(getattr(doc, "text", "") or getattr(doc, "content", "") or ""))
+
+
+def _doc_has_page_metadata(doc: Any) -> bool:
+    metadata = _doc_metadata(doc)
+    return any(
+        _metadata_value(metadata, key) not in (None, "")
+        for key in ("page_label", "page", "page_number", "page_num")
+    )
+
+
+def _doc_is_pdf(doc: Any) -> bool:
+    metadata = _doc_metadata(doc)
+    for key in ("file_name", "source_name", "path", "file_type"):
+        value = str(_metadata_value(metadata, key) or "").strip().lower()
+        if value.endswith(".pdf") or value == "pdf":
+            return True
+    return False
+
+
+def _doc_metadata(doc: Any) -> dict[str, Any]:
+    metadata = getattr(doc, "metadata", None)
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _metadata_value(metadata: dict[str, Any], key: str) -> Any:
+    if key in metadata:
+        return metadata[key]
+    nested = metadata.get("metadata")
+    if isinstance(nested, dict):
+        return nested.get(key)
+    return None
 
 
 def _docqa_source_aliases(

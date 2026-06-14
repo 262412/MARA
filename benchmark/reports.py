@@ -36,6 +36,7 @@ _REFERENCE_LIST_FIELDS = {
     "source_backrefs",
 }
 _COMPACT_DROP_FIELDS = {
+    "image_origin",
     "image_ref",
     "late_interaction_tokens",
     "multi_vector_representation",

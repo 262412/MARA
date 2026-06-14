@@ -425,6 +425,13 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
         "prototype_lightweight_graph_selector"
     )
     assert DEFAULT_MARA_ROUTES[8]["controller_mode"] == "llm"
+    assert DEFAULT_MARA_ROUTES[8]["allowed_routes"] == [
+        "doc_text",
+        "hybrid",
+        "doc_page_image",
+        "doc_element",
+        "graph_global",
+    ]
     assert DEFAULT_MARA_ROUTES[8]["benchmark_role"] == "qa_quality"
     assert DEFAULT_MARA_ROUTES[9]["verification_mode"] == "strict"
     assert DEFAULT_MARA_ROUTES[9]["benchmark_role"] == "qa_quality"
@@ -482,6 +489,20 @@ def test_manifest_templates_load_expected_mara_route_sets():
     assert all_routes.routes[4]["benchmark_role"] == "prototype"
     assert all_routes.routes[5]["route_id"] == "hybrid_rag"
     assert all_routes.routes[5]["benchmark_role"] == "qa_quality"
+    assert all_routes.routes[6]["allowed_routes"] == [
+        "doc_text",
+        "hybrid",
+        "doc_page_image",
+        "doc_element",
+        "graph_global",
+    ]
+    assert text_only.routes[2]["allowed_routes"] == [
+        "doc_text",
+        "hybrid",
+        "doc_page_image",
+        "doc_element",
+        "graph_global",
+    ]
 
 
 def test_load_v2_manifest_preserves_top_level_ragas_evaluator(tmp_path):
