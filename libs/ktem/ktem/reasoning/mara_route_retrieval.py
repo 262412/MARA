@@ -39,9 +39,10 @@ def route_retrieval_metadata(
             text_retrieve=text_retrieve,
             metadata_builder=metadata_builder,
         )
-        _merge_page_image_metadata(
-            metadata, _page_image_metadata(pipeline, understanding)
-        )
+        if _page_image_metadata_enabled(pipeline):
+            _merge_page_image_metadata(
+                metadata, _page_image_metadata(pipeline, understanding)
+            )
         _merge_element_metadata(metadata, _element_metadata(pipeline, understanding))
         _merge_graph_metadata(metadata, _graph_metadata(pipeline, understanding))
         return metadata
@@ -121,6 +122,32 @@ def _page_image_metadata(
         "visual_retriever_scores": scores,
         "visual_backend_type": _visual_backend_type(ranked),
     }
+
+
+def _page_image_metadata_enabled(pipeline: Any) -> bool:
+    visual_retriever = getattr(pipeline, "visual_retriever", None)
+    visual_backend = getattr(pipeline, "visual_retriever_backend", None)
+    allowed_routes = {
+        str(route).strip()
+        for route in getattr(pipeline, "allowed_routes", None) or []
+        if str(route).strip()
+    }
+    if allowed_routes and "doc_page_image" not in allowed_routes:
+        route_policy = (
+            str(getattr(pipeline, "route_policy", "") or "")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+        if route_policy not in {"hybrid", "visual", "page_image"}:
+            return False
+        if not (visual_retriever or visual_backend):
+            return False
+    return bool(
+        getattr(pipeline, "page_image_index_records", None)
+        or visual_retriever
+        or visual_backend
+    )
 
 
 def _page_image_records_for_pipeline(pipeline: Any) -> list[dict[str, Any]]:

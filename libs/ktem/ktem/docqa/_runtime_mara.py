@@ -149,9 +149,15 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
     pipeline.artifact_type = request.artifact_type or ""
     pipeline.controller_mode = request.controller_mode or "off"
     pipeline.route_policy = request.route_policy or "auto"
-    pipeline.planner_model = request.planner_model or ""
+    pipeline.planner_backend = request.planner_backend or ""
+    pipeline.planner_model = (
+        ""
+        if pipeline.planner_backend == "heuristic_local"
+        else request.planner_model or ""
+    )
     pipeline.allowed_routes = list(request.allowed_routes or [])
     pipeline.verification_mode = request.verification_mode or "off"
+    pipeline.verification_domain = request.verification_domain or ""
     pipeline.graph_mode = str(getattr(request, "graph_mode", "") or "").strip()
     _apply_visual_backends(pipeline, request)
     pipeline.docqa_request = request
@@ -204,8 +210,11 @@ def _backend_metadata(
         if value:
             metadata[output_key] = value
 
+    planner_backend = str(getattr(request, "planner_backend", "") or "").strip()
     planner_model = str(getattr(request, "planner_model", "") or "").strip()
-    if planner_model:
+    if planner_backend:
+        metadata["planner_backend"] = planner_backend
+    elif planner_model:
         metadata["planner_backend"] = planner_model
     visual_retriever = str(
         getattr(request, "visual_retriever_backend", "") or ""
@@ -227,12 +236,15 @@ def copy_request_fields(target: Any, source: Any) -> None:
     target.note_ids = source.note_ids
     target.controller_mode = source.controller_mode
     target.route_policy = source.route_policy
+    target.planner_backend = source.planner_backend
     target.planner_model = source.planner_model
     target.allowed_routes = source.allowed_routes
     target.verification_mode = source.verification_mode
+    target.verification_domain = source.verification_domain
     target.graph_mode = source.graph_mode
     target.visual_retriever_backend = source.visual_retriever_backend
     target.visual_generator_backend = source.visual_generator_backend
+    target.page_image_records = source.page_image_records
     target.max_context_length = source.max_context_length
 
 

@@ -87,6 +87,14 @@ def _apply_multimodal_runtime_indexes(
     return _graph_context_with_local_index(graph_context, file_index, graph_file_ids)
 
 
+def _apply_request_page_image_records(pipeline: Any, request: DocQARequest) -> None:
+    if not request.page_image_records:
+        return
+    pipeline.page_image_index_records = [
+        dict(item) for item in request.page_image_records if isinstance(item, dict)
+    ]
+
+
 def _artifact_source_scope(
     request: DocQARequest,
     prepared: _PreparedPipeline,
@@ -581,6 +589,7 @@ class DocQARuntime:
             active_file_id or "",
             resolved_user_id,
         )
+        _apply_request_page_image_records(pipeline, request)
         graph_source_ids = self._normalize_selected_file_ids(request.graph_source_ids)
         graph_context = _apply_multimodal_runtime_indexes(
             pipeline,

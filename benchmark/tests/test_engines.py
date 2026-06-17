@@ -196,9 +196,11 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
             artifact_type="quiz",
             controller_mode="llm",
             route_policy="graph",
+            planner_backend="heuristic_local",
             planner_model="gpt-4o-mini",
             allowed_routes=["doc_text", "graph_global"],
             verification_mode="strict",
+            verification_domain="finance",
             graph_mode="global",
         ),
     )
@@ -228,9 +230,11 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert fake_runtime.requests[0].artifact_type == "quiz"
     assert fake_runtime.requests[0].controller_mode == "llm"
     assert fake_runtime.requests[0].route_policy == "graph"
+    assert fake_runtime.requests[0].planner_backend == "heuristic_local"
     assert fake_runtime.requests[0].planner_model == "gpt-4o-mini"
     assert fake_runtime.requests[0].allowed_routes == ["doc_text", "graph_global"]
     assert fake_runtime.requests[0].verification_mode == "strict"
+    assert fake_runtime.requests[0].verification_domain == "finance"
     assert fake_runtime.requests[0].graph_mode == "global"
     assert result.answer == "runtime answer"
     assert result.predicted_pages == ["1"]

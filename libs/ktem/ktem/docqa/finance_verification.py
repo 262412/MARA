@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .evidence_text import evidence_text
+
 
 def finance_numeric_claim_supported(
     claim: str,
@@ -113,11 +115,3 @@ def _decimal_numbers(value: str) -> list[float]:
         except ValueError:
             continue
     return numbers
-
-
-def evidence_text(evidence_items: list[dict[str, Any]]) -> str:
-    return " ".join(
-        str(item.get(key) or "")
-        for item in evidence_items
-        for key in ("text", "caption", "ocr_text", "vlm_text", "source_name")
-    )

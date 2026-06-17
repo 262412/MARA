@@ -321,33 +321,6 @@ def hard_negative_rejection_score(
     return float(not (predicted_ids & hard_negative_ids))
 
 
-def citation_recall_score(
-    predicted_citations: list[str],
-    gold_evidence: list[dict[str, object]],
-) -> float | None:
-    return recall_score(
-        predicted_citations,
-        _gold_values_from_evidence(gold_evidence, "citation"),
-    )
-
-
-def citation_precision_score(
-    predicted_citations: list[str],
-    gold_evidence: list[dict[str, object]],
-) -> float | None:
-    gold = {
-        str(item).strip()
-        for item in _gold_values_from_evidence(gold_evidence, "citation")
-        if str(item).strip()
-    }
-    if not gold:
-        return None
-    predicted = {str(item).strip() for item in predicted_citations if str(item).strip()}
-    if not predicted:
-        return 0.0
-    return len(predicted & gold) / len(predicted)
-
-
 def cross_page_evidence_hit_score(
     predicted_pages: list[int | str],
     *,

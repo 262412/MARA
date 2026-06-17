@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from .diagnostics import (
+    dataset_route_diagnostics,
+    diagnostic_failure_counts,
+    route_confusion_table,
+)
 from .metrics import round_metric, safe_mean
 from .verification_metrics import verification_summary
 
@@ -29,6 +34,18 @@ def build_benchmark_summary(
         **_timing_summary(predictions),
         **_cache_summary(predictions, config.cache_mode),
         "route_metric_table": _route_metric_table(bundle.dataset_name, predictions),
+        "dataset_route_diagnostics": dataset_route_diagnostics(
+            bundle.dataset_name,
+            predictions,
+        ),
+        "diagnostic_failure_counts": diagnostic_failure_counts(
+            bundle.dataset_name,
+            predictions,
+        ),
+        "route_confusion_table": route_confusion_table(
+            bundle.dataset_name,
+            predictions,
+        ),
         "quality_route_metric_table": _route_metric_table(
             bundle.dataset_name,
             _role_predictions(predictions, {"qa_quality"}),
@@ -86,6 +103,7 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_page_hit": _avg_metric(predictions, "page_hit"),
         "avg_citation_recall": _avg_metric(predictions, "citation_recall"),
         "avg_citation_precision": _avg_metric(predictions, "citation_precision"),
+        **_citation_locator_summary(predictions),
         "avg_element_hit": _avg_metric(predictions, "element_hit"),
         **_multimodal_hit_summary(predictions),
         "avg_span_recall": _avg_metric(predictions, "span_recall"),
@@ -190,6 +208,18 @@ def _multimodal_hit_summary(
     }
 
 
+def _citation_locator_summary(
+    predictions: list[dict[str, Any]],
+) -> dict[str, float | None]:
+    return {
+        f"avg_citation_{metric}_{locator}": _avg_metric(
+            predictions, f"citation_{metric}_{locator}"
+        )
+        for metric in ("recall", "precision")
+        for locator in ("source", "page", "span")
+    }
+
+
 def _route_metric_table(
     dataset_name: str,
     predictions: list[dict[str, Any]],
@@ -216,6 +246,7 @@ def _route_metric_table(
                 "avg_citation_precision": _avg_metric(
                     route_predictions, "citation_precision"
                 ),
+                **_citation_locator_summary(route_predictions),
                 "avg_unsupported_claim_rate": _avg_metric(
                     route_predictions, "unsupported_claim_rate"
                 ),

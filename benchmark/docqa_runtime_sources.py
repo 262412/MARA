@@ -5,6 +5,9 @@ from typing import Any, Sequence
 
 from .schemas import BenchmarkDocument
 
+SHORT_SOURCE_TEXT_MAX_CHARS = 4096
+TEXT_FORMAT_TYPES = {"txt", "text", "md", "markdown", "json", "jsonl", "csv"}
+
 
 def document_paths(documents: list[BenchmarkDocument]) -> list[str]:
     paths: list[str] = []
@@ -68,6 +71,54 @@ def canonicalize_docqa_hits(
 ) -> list[dict[str, Any]]:
     aliases = _docqa_source_aliases(documents, selected_file_ids)
     return [_canonicalize_docqa_hit(hit, aliases) for hit in retrieved_hits]
+
+
+def canonicalize_docqa_citations(
+    citations: list[str],
+    documents: list[BenchmarkDocument],
+    selected_file_ids: list[str],
+) -> list[str]:
+    aliases = _docqa_source_aliases(documents, selected_file_ids)
+    canonical: list[str] = []
+    for citation in citations:
+        ref = _canonical_source_ref(citation, aliases)
+        if ref and ref not in canonical:
+            canonical.append(ref)
+    return canonical
+
+
+def selected_source_fallback_hits(
+    documents: list[BenchmarkDocument],
+    selected_file_ids: list[str],
+) -> list[dict[str, Any]]:
+    if len(documents) != 1 or len(selected_file_ids) != 1:
+        return []
+
+    document = documents[0]
+    text = _short_text_document_content(document)
+    if not text:
+        return []
+
+    source_id = selected_file_ids[0]
+    return [
+        {
+            "evidence_id": f"{document.document_id}#source",
+            "document_id": source_id,
+            "source_id": source_id,
+            "source_name": Path(document.path).name,
+            "modality": "text",
+            "text": text,
+            "source_backrefs": [f"{source_id}#source"],
+        }
+    ]
+
+
+def selected_source_fallback_text(
+    documents: list[BenchmarkDocument],
+    selected_file_ids: list[str],
+) -> str:
+    hits = selected_source_fallback_hits(documents, selected_file_ids)
+    return str(hits[0].get("text") or "") if hits else ""
 
 
 def _index_relation_rows(index_table: Any, file_id: str) -> list[Any]:
@@ -237,8 +288,8 @@ def _canonical_source_backrefs(
         if canonical_ref and canonical_ref not in refs:
             refs.append(canonical_ref)
     page = str(hit.get("page_label") or "").strip()
-    fallback_ref = f"{canonical_id}#page:{page}" if page else ""
-    if fallback_ref and not refs:
+    fallback_ref = f"{canonical_id}#page:{page}" if page else f"{canonical_id}#source"
+    if not refs:
         refs.append(fallback_ref)
     return refs
 
@@ -264,3 +315,21 @@ def normalized_path(path: str) -> str:
         return str(Path(path).resolve()).lower()
     except (OSError, RuntimeError, TypeError, ValueError):
         return str(path or "").strip().lower()
+
+
+def _short_text_document_content(document: BenchmarkDocument) -> str:
+    format_type = str(document.format_type or "").strip().lower()
+    path = Path(document.path)
+    if format_type and format_type not in TEXT_FORMAT_TYPES:
+        return ""
+    if not format_type and path.suffix.lower().lstrip(".") not in TEXT_FORMAT_TYPES:
+        return ""
+    try:
+        if path.stat().st_size > SHORT_SOURCE_TEXT_MAX_CHARS * 4:
+            return ""
+        text = path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        return ""
+    if len(text) > SHORT_SOURCE_TEXT_MAX_CHARS:
+        return ""
+    return text

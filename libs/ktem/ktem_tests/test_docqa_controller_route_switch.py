@@ -42,6 +42,7 @@ def test_execute_controller_turn_switches_route_after_ambiguous_finance_retrieva
             prompt="Calculate AES Corporation inventory turnover ratio for FY2022.",
             route_policy="hybrid",
             allowed_routes=["hybrid", "doc_text"],
+            verification_domain="finance",
         ),
         retrieve=retrieve,
         generate=generate,

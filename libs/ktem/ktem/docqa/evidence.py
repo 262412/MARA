@@ -8,6 +8,8 @@ from typing import Any
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
 
+MAX_PAGE_IMAGE_EVIDENCE_ITEMS = 10
+
 
 @dataclass(frozen=True)
 class EvidenceElement:
@@ -51,6 +53,10 @@ def build_evidence_bundle(
     items = (
         [] if route in {"doc_page_image", "doc_element", "graph_global"} else base_items
     )
+    if route in {"doc", "hybrid"} and not base_items:
+        selected_text_item = _selected_text_item(request, route)
+        if selected_text_item is not None:
+            items.append(selected_text_item)
     if route in {"doc_page_image", "hybrid"}:
         page_items = _page_image_items(evidence_metadata)
         page_item = _page_image_item(request, route)
@@ -73,18 +79,22 @@ def build_evidence_bundle(
     deduped = _dedupe_items(items)
     m3docrag_trace: dict[str, Any] | None = None
     hybrid_fusion_trace: dict[str, Any] | None = None
+    if route == "doc_page_image":
+        deduped = _limit_page_image_evidence(deduped)
     if route == "hybrid":
         deduped, hybrid_fusion_trace = fuse_hybrid_evidence(
             str(getattr(request, "prompt", "") or ""),
             deduped,
             strategy=str(evidence_metadata.get("hybrid_fusion_strategy") or ""),
             learned_ranker=evidence_metadata.get("hybrid_fusion_ranker"),
+            domain=getattr(request, "verification_domain", None),
         )
         deduped, m3docrag_trace = select_page_first_evidence(
             str(getattr(request, "prompt", "") or ""),
             deduped,
         )
     metadata = dict(evidence_metadata)
+    metadata.update(_merged_locator_metadata(metadata, deduped))
     metadata["modality_counts"] = dict(Counter(item["modality"] for item in deduped))
     metadata["evidence"] = deduped
     if m3docrag_trace is not None:
@@ -100,6 +110,88 @@ def _page_image_items(evidence_metadata: dict[str, Any]) -> list[dict[str, Any]]
         _coerce_item(_with_visual_retriever_score(item, scores))
         for item in evidence_metadata.get("page_image_index") or []
     ]
+
+
+def _limit_page_image_evidence(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    page_image_count = 0
+    for item in items:
+        if str(item.get("modality") or "") != "page_image":
+            selected.append(item)
+            continue
+        if page_image_count >= MAX_PAGE_IMAGE_EVIDENCE_ITEMS:
+            continue
+        selected.append(item)
+        page_image_count += 1
+    return selected
+
+
+def _selected_locator_metadata(items: list[dict[str, Any]]) -> dict[str, list[str]]:
+    return {
+        "page_coverage": _unique_selected(_item_page_labels(item) for item in items),
+        "source_ids": _unique_selected(_item_source_ids(item) for item in items),
+        "evidence_ids": _unique_selected(
+            [[str(item.get("evidence_id") or "").strip()] for item in items]
+        ),
+    }
+
+
+def _merged_locator_metadata(
+    evidence_metadata: dict[str, Any], items: list[dict[str, Any]]
+) -> dict[str, list[str]]:
+    derived = _selected_locator_metadata(items)
+    return {
+        key: values or _coerce_locator_values(evidence_metadata.get(key))
+        for key, values in derived.items()
+    }
+
+
+def _coerce_locator_values(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if not isinstance(value, (list, tuple, set)):
+        return []
+    return _unique_selected([value])
+
+
+def _unique_selected(values: Any) -> list[str]:
+    output: list[str] = []
+    for group in values:
+        for value in group:
+            item = str(value or "").strip()
+            if item and item not in output:
+                output.append(item)
+    return output
+
+
+def _item_page_labels(item: dict[str, Any]) -> list[str]:
+    labels = [str(item.get("page_label") or "").strip()]
+    labels.extend(
+        _page_label_from_backref(ref) for ref in item.get("source_backrefs") or []
+    )
+    return labels
+
+
+def _item_source_ids(item: dict[str, Any]) -> list[str]:
+    source_ids = [str(item.get("source_id") or "").strip()]
+    source_ids.extend(
+        _source_id_from_backref(ref) for ref in item.get("source_backrefs") or []
+    )
+    return source_ids
+
+
+def _page_label_from_backref(ref: Any) -> str:
+    value = str(ref or "")
+    if "#page:" not in value:
+        return ""
+    return value.split("#page:", 1)[1].split("#", 1)[0].strip()
+
+
+def _source_id_from_backref(ref: Any) -> str:
+    value = str(ref or "")
+    if "#" not in value:
+        return ""
+    return value.split("#", 1)[0].strip()
 
 
 def _with_visual_retriever_score(
@@ -216,6 +308,33 @@ def _page_image_item(request: Any, route: str) -> dict[str, Any] | None:
         text=text,
         ocr_text=text,
         source_backrefs=[f"{file_id}#page:{page_label}"],
+        metadata={"route": route},
+    ).as_dict()
+
+
+def _selected_text_item(request: Any, route: str) -> dict[str, Any] | None:
+    text = str(getattr(request, "selected_text", "") or "").strip()
+    if not text:
+        return None
+    source_id = str(getattr(request, "active_file_id", "") or "").strip()
+    if not source_id:
+        selected_ids = [
+            str(item).strip()
+            for item in getattr(request, "selected_file_ids", None) or []
+            if str(item).strip()
+        ]
+        source_id = selected_ids[0] if len(selected_ids) == 1 else ""
+    if not source_id:
+        return None
+    source_name = str(getattr(request, "active_file_name", "") or "").strip()
+    return EvidenceElement(
+        evidence_id=f"selected-text:{source_id}",
+        source_id=source_id,
+        source_name=source_name,
+        modality="text",
+        text=text,
+        source_backrefs=[f"{source_id}#source"],
+        evidence_level="source",
         metadata={"route": route},
     ).as_dict()
 

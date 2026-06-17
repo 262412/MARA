@@ -1,6 +1,8 @@
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.claim_filtering import answer_claims, clean_answer_text
 from ktem.docqa.controller import build_controller_outputs
+from ktem.docqa.domain_verifiers import DomainVerifierRegistry
+from ktem.docqa.evidence_text import extract_final_answer_text
 from ktem.docqa.execution import execute_controller_turn
 
 
@@ -29,6 +31,12 @@ def test_light_verifier_checks_final_answer_after_think_block_only():
     assert payload["guardrail_decision"]["action"] == "return"
 
 
+def test_extract_final_answer_text_removes_think_block_before_verification():
+    answer = "<think>compute silently</think>\nFinal answer: Revenue was $10 million."
+
+    assert extract_final_answer_text(answer) == "Revenue was $10 million."
+
+
 def test_clean_answer_text_keeps_markdown_final_answer_after_untagged_thought():
     answer = (
         "Thought Okay, I should inspect irrelevant scratch work first. "
@@ -38,6 +46,17 @@ def test_clean_answer_text_keeps_markdown_final_answer_after_untagged_thought():
 
     assert clean_answer_text(answer) == "Revenue increased in 2026."
     assert answer_claims(answer) == ["Revenue increased in 2026."]
+
+
+def test_clean_answer_text_uses_last_answer_marker_after_analysis_prefix():
+    answer = (
+        "analysis: first inspect unrelated scratch reasoning. "
+        "Profit declined sharply.\n\n"
+        "answer: The paper proposes a retrieval reranker."
+    )
+
+    assert clean_answer_text(answer) == "The paper proposes a retrieval reranker."
+    assert answer_claims(answer) == ["The paper proposes a retrieval reranker."]
 
 
 def test_clean_answer_text_drops_untagged_thought_without_final_answer():
@@ -166,6 +185,7 @@ def test_verifier_rejects_unsupported_quick_ratio_numeric_result():
         DocQARequest(
             prompt=_quick_ratio_prompt(),
             verification_mode="strict",
+            verification_domain="finance",
         ),
         [],
         _quick_ratio_evidence_metadata(),
@@ -191,6 +211,7 @@ def test_verifier_supports_quick_ratio_result_matching_evidence_numbers():
         DocQARequest(
             prompt=_quick_ratio_prompt(),
             verification_mode="strict",
+            verification_domain="finance",
         ),
         [],
         _quick_ratio_evidence_metadata(),
@@ -209,6 +230,7 @@ def test_verifier_focuses_finance_questions_on_final_numeric_conclusion():
         DocQARequest(
             prompt=_quick_ratio_prompt(),
             verification_mode="light",
+            verification_domain="finance",
         ),
         [],
         _quick_ratio_evidence_metadata(),
@@ -233,6 +255,206 @@ def test_verifier_focuses_finance_questions_on_final_numeric_conclusion():
     assert payload["guardrail_decision"]["action"] == "return"
 
 
+def test_default_verifier_does_not_apply_finance_numeric_adapter():
+    payload = build_controller_outputs(
+        DocQARequest(
+            prompt=_quick_ratio_prompt(),
+            verification_mode="strict",
+        ),
+        [],
+        _quick_ratio_evidence_metadata(),
+        answer=(
+            "Based on current assets, inventories, and current liabilities, "
+            "3M's quick ratio was 1.20."
+        ),
+    )
+
+    assert payload["verify_decision"]["status"] == "supported"
+    assert payload["verify_decision"]["unsupported_claims"] == []
+    assert payload["guardrail_decision"]["action"] == "return"
+
+
+def test_default_verifier_supports_short_source_level_evidence():
+    payload = build_controller_outputs(
+        DocQARequest(prompt="Question", verification_mode="strict"),
+        [],
+        {
+            "evidence": [
+                {
+                    "evidence_id": "14864#source",
+                    "file_id": "14864",
+                    "text": "Yelp",
+                    "source_backrefs": ["14864#source"],
+                }
+            ]
+        },
+        answer="Final answer: The source is Yelp.",
+    )
+
+    assert payload["verify_decision"]["status"] == "supported"
+    assert payload["verify_decision"]["unsupported_claims"] == []
+    assert payload["guardrail_decision"]["action"] == "return"
+
+
+def test_summary_verifier_supports_source_paraphrase_with_salient_anchor():
+    payload = build_controller_outputs(
+        DocQARequest(
+            prompt="Summarize the selected source.",
+            verification_mode="strict",
+        ),
+        [],
+        {
+            "evidence": [
+                {
+                    "evidence_id": "source-1",
+                    "file_id": "source-1",
+                    "text": (
+                        "Marvel Comics superhero Hawkeye is a master with the "
+                        "bow and arrow. He also has a secret super-talent at "
+                        "singing Ed Sheeran parodies. Jeremy Renner was a "
+                        "guest on The Tonight Show, where he got behind the "
+                        "piano to showcase some of his other skills. Those "
+                        "talents include scarves, berets, trombone, and "
+                        "opening a pickle jar. Renner has proved he is more "
+                        "than a one-hit wonder by starring in Avengers films, "
+                        "The Hurt Locker, Bourne, and Mission Impossible."
+                    ),
+                }
+            ]
+        },
+        answer=(
+            "Final answer: His versatility extends beyond acting, including "
+            "musical and quirky talents."
+        ),
+    )
+
+    assert payload["verify_decision"]["status"] == "supported"
+    assert payload["verify_decision"]["unsupported_claims"] == []
+    assert payload["guardrail_decision"]["action"] == "return"
+
+
+def test_summary_verifier_supports_structured_source_field_synthesis():
+    payload = build_controller_outputs(
+        DocQARequest(
+            prompt="Write an objective overview based only on the structured data.",
+            verification_mode="strict",
+        ),
+        [],
+        {
+            "evidence": [
+                {
+                    "evidence_id": "source-1",
+                    "file_id": "source-1",
+                    "text": (
+                        "{'hours': {'Monday': '8:0-17:0', "
+                        "'Tuesday': '8:0-17:0', 'Wednesday': '8:0-17:0', "
+                        "'Thursday': '8:0-17:0', 'Friday': '8:0-17:0', "
+                        "'Saturday': '8:0-17:0', 'Sunday': '8:0-17:0'}, "
+                        "'attributes': {'OutdoorSeating': True, "
+                        "'RestaurantsTakeOut': True, "
+                        "'RestaurantsGoodForGroups': True, 'WiFi': 'no'}}"
+                    ),
+                }
+            ]
+        },
+        answer=(
+            "Final answer: Open daily from 8:00 AM to 5:00 PM, it provides "
+            "outdoor seating, take-out options, and is suitable for groups."
+        ),
+    )
+
+    assert payload["verify_decision"]["status"] == "supported"
+    assert payload["verify_decision"]["unsupported_claims"] == []
+    assert payload["guardrail_decision"]["action"] == "return"
+
+
+def test_summary_verifier_rejects_unanchored_structured_source_claim():
+    payload = build_controller_outputs(
+        DocQARequest(
+            prompt="Write an objective overview based only on the structured data.",
+            verification_mode="strict",
+        ),
+        [],
+        {
+            "evidence": [
+                {
+                    "evidence_id": "source-1",
+                    "file_id": "source-1",
+                    "text": (
+                        "{'name': 'Backyard Bowls', 'attributes': "
+                        "{'OutdoorSeating': True, 'WiFi': 'no'}}"
+                    ),
+                }
+            ]
+        },
+        answer="Final answer: The restaurant offers valet parking and live jazz.",
+    )
+
+    assert payload["verify_decision"]["status"] == "unsupported"
+    assert payload["verify_decision"]["unsupported_claims"] == [
+        "The restaurant offers valet parking and live jazz."
+    ]
+    assert payload["guardrail_decision"]["action"] == "revise"
+
+
+def test_answer_claims_drop_evidence_commentary_after_answer_claim():
+    answer = (
+        "The Svalbard Global Seed Vault opened on February 26, 2008. "
+        "This date is directly provided in the text, confirming the opening "
+        "year and month. No additional calculations or interpretations are "
+        "required."
+    )
+
+    assert answer_claims(answer) == [
+        "The Svalbard Global Seed Vault opened on February 26, 2008."
+    ]
+
+
+def test_strict_verifier_ignores_evidence_commentary_after_supported_answer():
+    payload = build_controller_outputs(
+        DocQARequest(
+            prompt="When did the Svalbard Global Seed Vault open?",
+            verification_mode="strict",
+        ),
+        [],
+        {
+            "evidence": [
+                {
+                    "evidence_id": "source-1",
+                    "file_id": "source-1",
+                    "text": (
+                        "Construction began on the Svalbard Global Seed Vault "
+                        "on June 19, 2006, and the facility was opened on "
+                        "February 26, 2008."
+                    ),
+                }
+            ]
+        },
+        answer=(
+            "Final answer: The Svalbard Global Seed Vault opened on "
+            "February 26, 2008. This date is directly provided in the text, "
+            "confirming the opening year and month. No additional "
+            "calculations or interpretations are required."
+        ),
+    )
+
+    assert payload["verify_decision"]["status"] == "supported"
+    assert payload["verify_decision"]["claims"] == [
+        "The Svalbard Global Seed Vault opened on February 26, 2008."
+    ]
+    assert payload["verify_decision"]["unsupported_claims"] == []
+    assert payload["guardrail_decision"]["action"] == "return"
+
+
+def test_domain_verifier_requires_explicit_profile_flag():
+    registry = DomainVerifierRegistry()
+
+    assert registry.select(profile_flags={}) is registry.generic
+    assert registry.select(profile_flags={"domain_verifier": "finance"}) is (
+        registry.finance
+    )
+
+
 def test_execute_controller_turn_abstains_on_unsupported_quick_ratio_result():
     def retrieve(_request, _decision):
         return _quick_ratio_evidence_metadata()
@@ -248,6 +470,7 @@ def test_execute_controller_turn_abstains_on_unsupported_quick_ratio_result():
             prompt=_quick_ratio_prompt(),
             route_policy="doc",
             verification_mode="strict",
+            verification_domain="finance",
         ),
         retrieve=retrieve,
         generate=generate,

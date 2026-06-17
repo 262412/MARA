@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.evidence_text import extract_final_answer_text
+
 from .metrics import is_abstention_answer, round_metric, safe_mean
 
 
@@ -47,5 +49,7 @@ def _abstention_correctness(prediction: dict[str, Any]) -> float | None:
     expected = dict(prediction.get("expected_guardrails") or {})
     if "allow_abstention" not in expected:
         return None
-    abstained = is_abstention_answer(str(prediction.get("predicted_answer") or ""))
+    abstained = is_abstention_answer(
+        extract_final_answer_text(str(prediction.get("predicted_answer") or ""))
+    )
     return float(abstained == bool(expected["allow_abstention"]))

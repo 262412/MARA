@@ -71,6 +71,7 @@ class ManifestBundle:
     examples: list[BenchmarkExample]
     schema_version: int = 1
     routes: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -98,9 +99,11 @@ class BenchmarkConfig:
     artifact_type: str | None = None
     controller_mode: str | None = None
     route_policy: str | None = None
+    planner_backend: str | None = None
     planner_model: str | None = None
     allowed_routes: list[str] | None = None
     verification_mode: str | None = None
+    verification_domain: str | None = None
     graph_mode: str | None = None
     visual_retriever_backend: str | None = None
     visual_generator_backend: str | None = None

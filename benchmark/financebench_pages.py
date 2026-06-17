@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
+
+from .page_alignment import align_span_to_parser_page
 
 _PAGE_TEXT_CACHE: dict[tuple[Path, tuple[int, ...]], list[tuple[int, str]]] = {}
 
@@ -11,26 +12,21 @@ def align_financebench_page(
     page: int | str | None,
     span: str,
 ) -> tuple[int | str | None, str]:
-    if document_path is None or page is None or not span:
-        return page, ""
-
-    needle = _normalize_financebench_span(span)
-    if not needle:
-        return page, ""
-
-    for parser_page, text in _cached_candidate_pdf_pages(document_path, page):
-        if needle in _normalize_financebench_span(text):
-            if parser_page == page:
-                return page, ""
-            return parser_page, "financebench_span_to_parser_page"
-    return page, ""
+    aligned_page, alignment = align_span_to_parser_page(
+        document_path,
+        page,
+        span,
+        extract_pages=_cached_candidate_pdf_pages,
+    )
+    if alignment == "span_to_parser_page":
+        return aligned_page, "financebench_span_to_parser_page"
+    return aligned_page, alignment
 
 
 def _cached_candidate_pdf_pages(
     path: Path,
-    page: int | str,
+    page_numbers: tuple[int, ...],
 ) -> list[tuple[int, str]]:
-    page_numbers = _parser_page_candidates(page)
     if not page_numbers:
         return []
     cache_key = (path.resolve(), page_numbers)
@@ -40,16 +36,6 @@ def _cached_candidate_pdf_pages(
             page_numbers=page_numbers,
         )
     return _PAGE_TEXT_CACHE[cache_key]
-
-
-def _parser_page_candidates(page: int | str) -> tuple[int, ...]:
-    try:
-        center = int(str(page).strip())
-    except ValueError:
-        return ()
-    start = max(1, center - 2)
-    end = max(start, center + 2)
-    return tuple(range(start, end + 1))
 
 
 def extract_pdf_pages(
@@ -73,7 +59,3 @@ def extract_pdf_pages(
         ]
     except (OSError, RuntimeError, ValueError, PdfReadError):
         return []
-
-
-def _normalize_financebench_span(value: str) -> str:
-    return " ".join(re.findall(r"[a-zA-Z0-9]+", str(value or "").lower()))

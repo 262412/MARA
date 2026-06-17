@@ -3,7 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 
-def retrieval_adequacy_issue(prompt: str, evidence_metadata: dict[str, Any]) -> str:
+def retrieval_adequacy_issue(
+    prompt: str,
+    evidence_metadata: dict[str, Any],
+    *,
+    domain: str | None = None,
+) -> str:
+    if not _finance_domain_enabled(domain):
+        return ""
     requirements = _financial_statement_requirements(prompt)
     if not requirements:
         return ""
@@ -23,12 +30,23 @@ def retrieval_adequacy_issue(prompt: str, evidence_metadata: dict[str, Any]) -> 
     return ""
 
 
-def financial_statement_match_count(prompt: str, evidence_text: str) -> int:
+def financial_statement_match_count(
+    prompt: str,
+    evidence_text: str,
+    *,
+    domain: str | None = None,
+) -> int:
+    if not _finance_domain_enabled(domain):
+        return 0
     requirements = _financial_statement_requirements(prompt)
     if not requirements:
         return 0
     lowered = str(evidence_text or "").lower()
     return sum(1 for _label, aliases in requirements if _has_any(lowered, aliases))
+
+
+def _finance_domain_enabled(domain: str | None) -> bool:
+    return str(domain or "").strip().lower() in {"finance", "financial"}
 
 
 def _financial_statement_requirements(

@@ -174,6 +174,7 @@ def build_controller_outputs(
         route_decision.route,
         evidence_bundle.metadata,
         prompt=str(getattr(request, "prompt", "") or ""),
+        verification_domain=getattr(request, "verification_domain", None),
     )
     verify_decision = _verify_decision(
         request,
@@ -256,6 +257,7 @@ def evaluate_retrieval_quality(
     attempted_retry: bool = False,
     *,
     prompt: str = "",
+    verification_domain: str | None = None,
 ) -> RetrieveDecision:
     if route == "direct":
         return RetrieveDecision(
@@ -269,7 +271,11 @@ def evaluate_retrieval_quality(
             retry=False,
         )
     if _evidence_count(evidence_metadata) > 0:
-        adequacy_issue = retrieval_adequacy_issue(prompt, evidence_metadata)
+        adequacy_issue = retrieval_adequacy_issue(
+            prompt,
+            evidence_metadata,
+            domain=verification_domain,
+        )
         if adequacy_issue:
             return RetrieveDecision(
                 status="ambiguous",

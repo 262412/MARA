@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import fields, replace
 from typing import Any
 
+from .diagnostics import prediction_diagnostics
 from .engines import EngineRunResult, get_engine
 from .manifest import load_manifest
 from .research_adapters import (
@@ -114,6 +115,7 @@ def _engine_result_to_prediction(
         "predicted_answer": result.answer,
         "predicted_pages": result.predicted_pages,
         "predicted_sources": result.predicted_sources,
+        "predicted_citations": result.predicted_citations,
         "predicted_element_ids": result.predicted_element_ids,
         "retrieved_hits": result.retrieved_hits,
         "retrieval_trace": result.retrieval_trace,
@@ -180,6 +182,7 @@ def _error_prediction(
         "predicted_answer": "",
         "predicted_pages": [],
         "predicted_sources": [],
+        "predicted_citations": [],
         "predicted_element_ids": [],
         "retrieved_hits": [],
         "retrieval_trace": [],
@@ -238,6 +241,7 @@ def _prepare_prediction_defaults(
     prediction["benchmark_role"] = _benchmark_role(route, route_config.route)
     prediction.setdefault("expected_formats", example.expected_formats)
     prediction.setdefault("expected_guardrails", example.expected_guardrails)
+    prediction.setdefault("predicted_citations", [])
     prediction.setdefault("evidence_metadata", {})
     prediction.setdefault("agent_trace", [])
     prediction.setdefault("controller_trace", [])
@@ -330,6 +334,7 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
             prediction["answer_type"] = example.answer_type
             prediction["gold_evidence"] = example.gold_evidence
             prediction["metrics"] = score_prediction(prediction)
+            prediction["diagnostics"] = prediction_diagnostics(prediction)
             prediction["adapter_metrics"] = research_adapter_metrics(prediction)
             prediction["adapter_metric_metadata"] = research_adapter_metric_metadata()
             (

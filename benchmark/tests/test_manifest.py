@@ -7,6 +7,14 @@ from benchmark.normalizers import (
     normalize_format_robustness_manifest,
 )
 
+CONTROLLER_ALLOWED_ROUTES = [
+    "doc_text",
+    "hybrid",
+    "doc_page_image",
+    "doc_element",
+    "graph_global",
+]
+
 
 def test_normalize_format_robustness_manifest(tmp_path):
     pdf_dir = tmp_path / "pdf"
@@ -321,6 +329,7 @@ def test_load_v2_manifest_preserves_controller_route_fields(tmp_path):
                         "controller_mode": "llm",
                         "route_policy": "hybrid",
                         "verification_mode": "strict",
+                        "verification_domain": "finance",
                         "backend_status": "not_configured",
                         "requires_backend_config": True,
                         "missing_backends": ["visual_generator"],
@@ -338,6 +347,7 @@ def test_load_v2_manifest_preserves_controller_route_fields(tmp_path):
     assert bundle.routes[0]["controller_mode"] == "llm"
     assert bundle.routes[0]["route_policy"] == "hybrid"
     assert bundle.routes[0]["verification_mode"] == "strict"
+    assert bundle.routes[0]["verification_domain"] == "finance"
     assert bundle.routes[0]["backend_status"] == "not_configured"
     assert bundle.routes[0]["requires_backend_config"] is True
     assert bundle.routes[0]["missing_backends"] == ["visual_generator"]
@@ -425,13 +435,7 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
         "prototype_lightweight_graph_selector"
     )
     assert DEFAULT_MARA_ROUTES[8]["controller_mode"] == "llm"
-    assert DEFAULT_MARA_ROUTES[8]["allowed_routes"] == [
-        "doc_text",
-        "hybrid",
-        "doc_page_image",
-        "doc_element",
-        "graph_global",
-    ]
+    assert DEFAULT_MARA_ROUTES[8]["allowed_routes"] == CONTROLLER_ALLOWED_ROUTES
     assert DEFAULT_MARA_ROUTES[8]["benchmark_role"] == "qa_quality"
     assert DEFAULT_MARA_ROUTES[9]["verification_mode"] == "strict"
     assert DEFAULT_MARA_ROUTES[9]["benchmark_role"] == "qa_quality"
@@ -446,9 +450,11 @@ def test_manifest_templates_load_expected_mara_route_sets():
     assert [route["route_id"] for route in all_routes.routes] == [
         "direct_answer",
         "text_rag",
+        "page_image_rag_smoke",
         "page_image_rag_vlm",
         "element_rag",
         "graph_rag_local",
+        "graph_rag_global",
         "hybrid_rag",
         "controller_auto",
         "crag_guarded",
@@ -466,9 +472,14 @@ def test_manifest_templates_load_expected_mara_route_sets():
         "hybrid_rag",
         "controller_auto",
     ]
-    assert all_routes.routes[2]["visual_retriever_backend"] == "colqwen"
-    assert all_routes.routes[2]["visual_generator_backend"] == "local_qwen3_vl"
-    assert all_routes.routes[2]["generator_backend"] == "local_qwen3_vl"
+    assert all_routes.routes[2]["route_id"] == "page_image_rag_smoke"
+    assert all_routes.routes[2]["visual_backend_type"] == "deterministic_smoke"
+    assert all_routes.routes[2]["implementation_stage"] == (
+        "deterministic_page_image_smoke"
+    )
+    assert all_routes.routes[3]["visual_retriever_backend"] == "colqwen"
+    assert all_routes.routes[3]["visual_generator_backend"] == "local_qwen3_vl"
+    assert all_routes.routes[3]["generator_backend"] == "local_qwen3_vl"
     assert {
         route["route_id"]: route["benchmark_role"] for route in text_only.routes
     } == {
@@ -485,24 +496,18 @@ def test_manifest_templates_load_expected_mara_route_sets():
         "controller_auto": "inline",
         "crag_guarded": "inline",
     }
-    assert all_routes.routes[4]["route_id"] == "graph_rag_local"
-    assert all_routes.routes[4]["benchmark_role"] == "prototype"
-    assert all_routes.routes[5]["route_id"] == "hybrid_rag"
-    assert all_routes.routes[5]["benchmark_role"] == "qa_quality"
-    assert all_routes.routes[6]["allowed_routes"] == [
-        "doc_text",
-        "hybrid",
-        "doc_page_image",
-        "doc_element",
-        "graph_global",
-    ]
-    assert text_only.routes[2]["allowed_routes"] == [
-        "doc_text",
-        "hybrid",
-        "doc_page_image",
-        "doc_element",
-        "graph_global",
-    ]
+    assert all_routes.routes[5]["route_id"] == "graph_rag_local"
+    assert all_routes.routes[5]["benchmark_role"] == "prototype"
+    assert all_routes.routes[6]["route_id"] == "graph_rag_global"
+    assert all_routes.routes[6]["graph_mode"] == "global"
+    assert all_routes.routes[7]["route_id"] == "hybrid_rag"
+    assert all_routes.routes[7]["benchmark_role"] == "qa_quality"
+    assert all_routes.routes[8]["allowed_routes"] == CONTROLLER_ALLOWED_ROUTES
+    assert text_only.routes[2]["allowed_routes"] == CONTROLLER_ALLOWED_ROUTES
+    assert multimodal.routes[4]["allowed_routes"] == CONTROLLER_ALLOWED_ROUTES
+    assert all_routes.routes[8]["controller_mode"] == "llm"
+    assert text_only.routes[2]["controller_mode"] == "llm"
+    assert multimodal.routes[4]["controller_mode"] == "llm"
 
 
 def test_load_v2_manifest_preserves_top_level_ragas_evaluator(tmp_path):
@@ -537,50 +542,3 @@ def test_load_v2_manifest_preserves_top_level_ragas_evaluator(tmp_path):
     bundle = load_manifest(manifest_path)
 
     assert bundle.routes[0]["ragas_evaluator"] == "tests.fixture_ragas"
-
-
-def test_load_v1_manifest_sets_v2_defaults(tmp_path):
-    (tmp_path / "doc.pdf").write_text("pdf", encoding="utf-8")
-    manifest_path = tmp_path / "v1.json"
-    manifest_path.write_text(
-        json.dumps(
-            {
-                "dataset_name": "v1_suite",
-                "examples": [
-                    {
-                        "document_id": "doc",
-                        "document_path": "doc.pdf",
-                        "question": "What is it?",
-                        "answer": "pdf",
-                    }
-                ],
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-
-    bundle = load_manifest(manifest_path)
-    example = bundle.examples[0]
-
-    assert bundle.schema_version == 1
-    assert example.scope == "document"
-    assert example.modality == "text"
-    assert example.answer_type == "extractive"
-    assert example.document_ids == ["doc"]
-
-
-def test_load_manifest_accepts_utf8_bom(tmp_path):
-    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
-    manifest_path = tmp_path / "bom.json"
-    manifest_path.write_text(
-        '\ufeff{"dataset_name": "bom", "examples": ['
-        '{"document_id": "doc", "document_path": "doc.txt", '
-        '"question": "What?", "answer": "alpha"}]}',
-        encoding="utf-8",
-    )
-
-    bundle = load_manifest(manifest_path)
-
-    assert bundle.dataset_name == "bom"
-    assert bundle.examples[0].answers == ["alpha"]

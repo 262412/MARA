@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
-from .claim_filtering import clean_answer_text
 from .controller import (
     RetrieveDecision,
     RouteDecision,
@@ -13,6 +12,7 @@ from .controller import (
     evaluate_retrieval_quality,
 )
 from .evidence import EvidenceBundle, build_evidence_bundle
+from .evidence_text import extract_final_answer_text
 from .workflow import build_workflow_plan, planner_payload_from_trace
 
 DIRECT_ANSWER_MESSAGE = (
@@ -192,6 +192,7 @@ def _retrieve_and_evaluate(
         decision.legacy_route,
         evidence_bundle.metadata,
         prompt=str(getattr(request, "prompt", "") or ""),
+        verification_domain=getattr(request, "verification_domain", None),
     )
     if retrieve_decision.status != "ambiguous" or not retrieve_decision.retry:
         return evidence_bundle, retrieve_decision
@@ -205,6 +206,7 @@ def _retrieve_and_evaluate(
         evidence_bundle.metadata,
         attempted_retry=True,
         prompt=str(getattr(request, "prompt", "") or ""),
+        verification_domain=getattr(request, "verification_domain", None),
     )
     return evidence_bundle, retrieve_decision
 
@@ -333,7 +335,7 @@ def _verified_result(
             answer,
             trace_prefix,
         )
-    if not clean_answer_text(answer).strip():
+    if not extract_final_answer_text(answer).strip():
         verify_decision = _empty_answer_verify_decision(request, bundle)
         guardrail = _verification_guardrail(verify_decision)
         return _result(

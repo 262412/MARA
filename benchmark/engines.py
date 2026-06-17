@@ -13,13 +13,22 @@ from .docqa_evidence_projection import (
     evidence_element_ids,
     evidence_pages,
     evidence_sources,
+    metadata_page_coverage,
+    metadata_page_coverage_sources,
     retrieved_hits_from_docqa_evidence,
 )
+from .docqa_image_documents import (
+    is_image_only_document,
+    page_image_records_from_documents,
+)
 from .docqa_runtime_sources import (
+    canonicalize_docqa_citations,
     canonicalize_docqa_hits,
     document_paths,
     has_search_index,
     normalized_path,
+    selected_source_fallback_hits,
+    selected_source_fallback_text,
     unindexed_document_paths,
 )
 from .engine_context import (
@@ -115,6 +124,7 @@ class BaseBenchmarkEngine:
                 "agent_mode": None,
                 "task_type": None,
                 "artifact_type": None,
+                "planner_backend": None,
                 "graph_mode": None,
                 "visual_retriever_backend": None,
                 "visual_generator_backend": None,
@@ -235,6 +245,8 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         reindex_documents: list[BenchmarkDocument] = []
 
         for document in documents:
+            if is_image_only_document(document):
+                continue
             file_id = self._resolve_indexed_file_id(runtime, document)
             if file_id:
                 if has_search_index(runtime, file_id):
@@ -269,12 +281,14 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         self,
         *,
         example: Any,
+        documents: list[BenchmarkDocument],
         selected_file_ids: list[str],
         active_record: Any,
     ) -> dict[str, Any]:
         return {
             "prompt": _field_value(example, "question", ""),
-            "selected_file_ids": selected_file_ids or None,
+            "selected_file_ids": selected_file_ids,
+            "page_image_records": page_image_records_from_documents(documents),
             "qa_scope": str(
                 _config_value(self.config, "scope", None)
                 or _field_value(example, "scope", "document")
@@ -282,6 +296,10 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             "active_file_id": getattr(active_record, "file_id", ""),
             "active_file_name": getattr(active_record, "name", ""),
             "page_number": first_evidence_page(example),
+            "selected_text": selected_source_fallback_text(
+                documents,
+                selected_file_ids,
+            ),
             "llm": _config_value(self.config, "llm_name", None),
             "use_citation": _config_value(self.config, "docqa_citation_mode", None),
             "max_context_length": self.max_context_length,
@@ -306,6 +324,79 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             "origin": "benchmark",
         }
 
+    def _response_evidence_outputs(
+        self,
+        *,
+        response: Any,
+        documents: list[BenchmarkDocument],
+        selected_file_ids: list[str],
+    ) -> tuple[
+        dict[str, Any],
+        list[dict[str, Any]],
+        list[str],
+        list[str],
+        list[int | str],
+    ]:
+        evidence_bundle = dict(getattr(response, "evidence_bundle", {}) or {})
+        evidence_metadata = dict(getattr(response, "evidence_metadata", {}) or {})
+        retrieved_hits = retrieved_hits_from_docqa_evidence(
+            evidence_bundle,
+            evidence_metadata,
+        )
+        reference_citations = canonicalize_docqa_citations(
+            extract_citations(response.references_text),
+            documents,
+            selected_file_ids,
+        )
+        answer_citations = canonicalize_docqa_citations(
+            extract_citations(getattr(response, "answer", "")),
+            documents,
+            selected_file_ids,
+        )
+        predicted_citations = list(answer_citations)
+        predicted_citations.extend(
+            citation
+            for citation in reference_citations
+            if citation not in predicted_citations
+        )
+        reference_pages = self._PAGE_RE.findall(response.references_text or "")
+        if not retrieved_hits and not reference_citations and not reference_pages:
+            retrieved_hits = selected_source_fallback_hits(documents, selected_file_ids)
+        retrieved_hits = canonicalize_docqa_hits(
+            retrieved_hits,
+            documents,
+            selected_file_ids,
+        )
+        predicted_sources = evidence_sources(retrieved_hits)
+        predicted_sources.extend(
+            source for source in reference_citations if source not in predicted_sources
+        )
+        predicted_sources.extend(
+            source
+            for source in metadata_page_coverage_sources(
+                evidence_metadata,
+                documents,
+                selected_file_ids,
+            )
+            if source not in predicted_sources
+        )
+        predicted_pages: list[int | str] = list(evidence_pages(retrieved_hits))
+        predicted_pages.extend(
+            page for page in reference_pages if page not in predicted_pages
+        )
+        predicted_pages.extend(
+            page
+            for page in metadata_page_coverage(evidence_metadata)
+            if page not in predicted_pages
+        )
+        return (
+            evidence_metadata,
+            retrieved_hits,
+            predicted_sources,
+            predicted_citations,
+            predicted_pages,
+        )
+
     def run(
         self,
         *,
@@ -325,40 +416,30 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             DocQARequest(
                 **self._docqa_request_kwargs(
                     example=example,
+                    documents=documents,
                     selected_file_ids=selected_file_ids,
                     active_record=active_record,
                 )
             )
         )
         generation_seconds = time.perf_counter() - generation_start
-        evidence_bundle = dict(getattr(response, "evidence_bundle", {}) or {})
-        evidence_metadata = dict(getattr(response, "evidence_metadata", {}) or {})
-        retrieved_hits = retrieved_hits_from_docqa_evidence(
-            evidence_bundle,
+        (
             evidence_metadata,
-        )
-        retrieved_hits = canonicalize_docqa_hits(
             retrieved_hits,
-            documents,
-            selected_file_ids,
-        )
-        predicted_sources = evidence_sources(retrieved_hits)
-        predicted_sources.extend(
-            source
-            for source in extract_citations(response.references_text)
-            if source not in predicted_sources
-        )
-        predicted_pages: list[int | str] = list(evidence_pages(retrieved_hits))
-        predicted_pages.extend(
-            page
-            for page in self._PAGE_RE.findall(response.references_text or "")
-            if page not in predicted_pages
+            predicted_sources,
+            predicted_citations,
+            predicted_pages,
+        ) = self._response_evidence_outputs(
+            response=response,
+            documents=documents,
+            selected_file_ids=selected_file_ids,
         )
 
         return EngineRunResult(
             answer=response.answer,
             predicted_pages=predicted_pages,
             predicted_sources=predicted_sources,
+            predicted_citations=predicted_citations,
             predicted_element_ids=evidence_element_ids(retrieved_hits),
             retrieved_hits=retrieved_hits,
             timings={

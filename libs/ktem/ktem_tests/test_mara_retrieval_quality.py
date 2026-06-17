@@ -20,6 +20,7 @@ def test_mara_retrieve_expands_quick_ratio_queries(monkeypatch):
 
     monkeypatch.setattr(FullQAPipeline, "retrieve", fake_retrieve)
     pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.verification_domain = "finance"
 
     pipeline.retrieve(
         "Does 3M have a healthy liquidity profile based on quick ratio?",
@@ -31,10 +32,65 @@ def test_mara_retrieve_expands_quick_ratio_queries(monkeypatch):
     assert "Inventories" in calls[0][0]
 
 
+def test_mara_retrieve_uses_generic_focus_without_finance_domain(monkeypatch):
+    calls = []
+
+    def fake_retrieve(_self, message, history):
+        calls.append((message, history))
+        return [], []
+
+    monkeypatch.setattr(FullQAPipeline, "retrieve", fake_retrieve)
+    pipeline = MaraAgentPipeline(retrievers=[])
+
+    pipeline.retrieve(
+        "Does 3M have a healthy liquidity profile based on quick ratio?",
+        [],
+    )
+
+    assert "formula inputs" in calls[0][0]
+    assert "Total current assets" not in calls[0][0]
+    assert "Inventories" not in calls[0][0]
+
+
+def test_mara_retrieve_retry_preserves_explicit_retrieval_domain(monkeypatch):
+    calls = []
+
+    def fake_retrieve(_self, message, history):
+        calls.append((message, history))
+        return [], []
+
+    monkeypatch.setattr(FullQAPipeline, "retrieve", fake_retrieve)
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.agent_mode = "thorough"
+    pipeline.verification_domain = "finance"
+
+    pipeline.retrieve(
+        "Does 3M have a healthy liquidity profile based on quick ratio?",
+        [],
+    )
+
+    assert len(calls) == 2
+    assert all("Total current assets" in call[0] for call in calls)
+    assert all("Inventories" in call[0] for call in calls)
+
+
+def test_retrieval_query_expands_generic_structured_calculation_questions():
+    query = retrieval_query(
+        "What is the defect rate based on passed and failed counts in the "
+        "inspection table?"
+    )
+
+    assert "formula inputs" in query
+    assert "source table" in query
+    assert "row labels" in query
+    assert "column labels" in query
+
+
 def test_finance_retrieval_query_expands_capex_cash_flow_questions():
     query = retrieval_query(
         "What is the FY2018 capital expenditure amount for 3M? "
-        "Use the cash flow statement."
+        "Use the cash flow statement.",
+        domain="finance",
     )
 
     assert "Consolidated Statement of Cash Flows" in query
@@ -45,7 +101,8 @@ def test_finance_retrieval_query_expands_capex_cash_flow_questions():
 def test_finance_retrieval_query_expands_ppne_balance_sheet_questions():
     query = retrieval_query(
         "What is the year end FY2018 net PPNE for 3M? "
-        "Use information shown in the balance sheet."
+        "Use information shown in the balance sheet.",
+        domain="finance",
     )
 
     assert "Consolidated Balance Sheet" in query
@@ -56,7 +113,8 @@ def test_finance_retrieval_query_expands_ppne_balance_sheet_questions():
 def test_finance_retrieval_query_expands_segment_growth_questions():
     query = retrieval_query(
         "If we exclude the impact of M&A, which segment dragged down "
-        "3M's overall growth in 2022?"
+        "3M's overall growth in 2022?",
+        domain="finance",
     )
 
     assert "Worldwide Sales Change" in query
@@ -66,7 +124,10 @@ def test_finance_retrieval_query_expands_segment_growth_questions():
 
 
 def test_finance_retrieval_query_expands_capital_intensity_questions():
-    query = retrieval_query("Is 3M a capital-intensive business based on FY2022 data?")
+    query = retrieval_query(
+        "Is 3M a capital-intensive business based on FY2022 data?",
+        domain="finance",
+    )
 
     assert "Consolidated Statement of Income" in query
     assert "Consolidated Balance Sheet" in query
@@ -77,7 +138,8 @@ def test_finance_retrieval_query_expands_capital_intensity_questions():
 def test_finance_retrieval_query_expands_net_ar_balance_sheet_questions():
     query = retrieval_query(
         "What is Amcor's year end FY2020 net AR (in USD millions)? "
-        "Use the details shown within the balance sheet."
+        "Use the details shown within the balance sheet.",
+        domain="finance",
     )
 
     assert "Consolidated Balance Sheet" in query
@@ -88,10 +150,12 @@ def test_finance_retrieval_query_expands_net_ar_balance_sheet_questions():
 
 def test_finance_retrieval_query_expands_customer_and_geography_questions():
     customer_query = retrieval_query(
-        "Who are the primary customers of Boeing as of FY2022?"
+        "Who are the primary customers of Boeing as of FY2022?",
+        domain="finance",
     )
     geography_query = retrieval_query(
-        "What are the geographies that American Express primarily operates in as of 2022?"
+        "What are the geographies that American Express primarily operates in as of 2022?",
+        domain="finance",
     )
 
     assert "commercial airlines" in customer_query
@@ -106,11 +170,13 @@ def test_finance_retrieval_query_expands_dpo_and_restructuring_questions():
     dpo_query = retrieval_query(
         "What is FY2018 days payable outstanding (DPO) for Walmart? "
         "Please base your judgments on the statement of financial position "
-        "and the P&L statement."
+        "and the P&L statement.",
+        domain="finance",
     )
     restructuring_query = retrieval_query(
         "What is the quantity of restructuring costs directly outlined in "
-        "AES Corporation's income statements for FY2022?"
+        "AES Corporation's income statements for FY2022?",
+        domain="finance",
     )
 
     assert "Consolidated Statements of Income" in dpo_query
@@ -123,7 +189,8 @@ def test_finance_retrieval_query_expands_dpo_and_restructuring_questions():
 
 def test_finance_retrieval_query_expands_major_acquisition_questions():
     query = retrieval_query(
-        "What are major acquisitions that AMCOR has done in FY2023, FY2022 and FY2021?"
+        "What are major acquisitions that AMCOR has done in FY2023, FY2022 and FY2021?",
+        domain="finance",
     )
 
     assert "acquisition" in query

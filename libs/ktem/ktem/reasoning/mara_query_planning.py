@@ -51,6 +51,24 @@ def understand_query(
     }
 
 
+def with_selected_source_context(
+    understanding: dict[str, Any],
+    source: Any,
+) -> dict[str, Any]:
+    selected_text = str(getattr(source, "selected_text", "") or "").strip()
+    active_file_id = str(getattr(source, "active_file_id", "") or "").strip()
+    selected_file_ids = [
+        str(file_id).strip()
+        for file_id in getattr(source, "selected_file_ids", None) or []
+        if str(file_id).strip()
+    ]
+    if not (selected_text or active_file_id or len(selected_file_ids) == 1):
+        return understanding
+    updated = dict(understanding)
+    updated["selected_source_context"] = True
+    return updated
+
+
 def plan_steps(
     understanding: dict[str, Any], *, agent_mode: str | None = None
 ) -> list[dict[str, str]]:

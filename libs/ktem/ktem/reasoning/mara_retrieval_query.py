@@ -1,6 +1,34 @@
 from __future__ import annotations
 
 ANSWER_FORMAT_MARKER = "\n\nAnswer formatting requirements:"
+_GENERIC_STRUCTURED_CALCULATION_TERMS = (
+    "average",
+    "calculate",
+    "calculation",
+    "change",
+    "count",
+    "difference",
+    "margin",
+    "percentage",
+    "rate",
+    "ratio",
+    "sum",
+    "total",
+)
+_GENERIC_STRUCTURED_CALCULATION_CONTEXT_TERMS = (
+    "based on",
+    "from the table",
+    "in the table",
+    "using the",
+)
+_GENERIC_STRUCTURED_CALCULATION_FOCUS = (
+    "source table",
+    "formula inputs",
+    "row labels",
+    "column labels",
+    "component values",
+    "totals",
+)
 _FINANCE_FOCUS_RULES: tuple[
     tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]],
     ...,
@@ -206,12 +234,32 @@ def messages_share_retrieval_cache_key(cached_message: str, message: str) -> boo
     )
 
 
-def retrieval_query(message: str) -> str:
+def retrieval_query(message: str, *, domain: str | None = None) -> str:
     question = str(message or "").split(ANSWER_FORMAT_MARKER, 1)[0]
-    focus_terms = _finance_retrieval_focus_terms(question)
+    focus_terms = _retrieval_focus_terms(question, domain=domain)
     if not focus_terms:
         return question
     return f"{question}\n\nRetrieval focus: {'; '.join(focus_terms)}."
+
+
+def _retrieval_focus_terms(question: str, *, domain: str | None) -> list[str]:
+    if str(domain or "").strip().lower() == "finance":
+        return _finance_retrieval_focus_terms(question)
+    return _generic_retrieval_focus_terms(question)
+
+
+def _generic_retrieval_focus_terms(question: str) -> list[str]:
+    normalized = str(question or "").lower()
+    if not _is_structured_calculation_question(normalized):
+        return []
+    return list(_GENERIC_STRUCTURED_CALCULATION_FOCUS)
+
+
+def _is_structured_calculation_question(question: str) -> bool:
+    return _has_any(question, _GENERIC_STRUCTURED_CALCULATION_TERMS) and _has_any(
+        question,
+        _GENERIC_STRUCTURED_CALCULATION_CONTEXT_TERMS,
+    )
 
 
 def _finance_retrieval_focus_terms(question: str) -> list[str]:

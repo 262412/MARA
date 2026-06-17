@@ -5,11 +5,25 @@ from typing import Any
 
 from ktem.docqa.controller import ROUTE_EVIDENCE_TYPES, parse_planner_decision
 
-_FINANCE_STATEMENT_CALCULATION_TERMS = (
-    "quick ratio",
-    "current ratio",
-    "working capital",
-    "inventory turnover",
+_STRUCTURED_CALCULATION_TERMS = (
+    "average",
+    "calculate",
+    "calculation",
+    "change",
+    "count",
+    "difference",
+    "margin",
+    "percentage",
+    "rate",
+    "ratio",
+    "sum",
+    "total",
+)
+_STRUCTURED_CALCULATION_CONTEXT_TERMS = (
+    "based on",
+    "from the table",
+    "in the table",
+    "using the",
 )
 
 
@@ -45,7 +59,14 @@ def planner_decision(
             question=question,
             allowed_routes=allowed_routes,
         )
-    return _heuristic_planner_decision(understanding, question=question)
+    return _constrain_heuristic_decision(
+        _heuristic_planner_decision(
+            understanding,
+            question=question,
+            allowed_routes=allowed_routes,
+        ),
+        allowed_routes=allowed_routes,
+    )
 
 
 def planner_trace_payload(
@@ -75,11 +96,17 @@ def _heuristic_planner_decision(
     understanding: dict[str, Any],
     *,
     question: str = "",
+    allowed_routes: Any = None,
 ) -> dict[str, Any]:
     task_type = str(understanding.get("task_type") or "qa")
     modalities = [
         str(modality)
         for modality in understanding.get("modalities", ["text"])
+        if modality
+    ]
+    available_modalities = [
+        str(modality)
+        for modality in understanding.get("available_modalities", [])
         if modality
     ]
     scope = str(understanding.get("scope") or "document")
@@ -92,6 +119,8 @@ def _heuristic_planner_decision(
         )
     ).lower()
 
+    if task_type == "summary" and _has_selected_source_context(understanding):
+        return _source_summary_decision()
     if task_type in {"compare", "study_guide", "summary"} and scope != "page":
         return {
             "route": "graph_global",
@@ -99,16 +128,16 @@ def _heuristic_planner_decision(
             "evidence_types": ["graph"],
             "verify": True,
         }
-    if any(term in question_text for term in _FINANCE_STATEMENT_CALCULATION_TERMS):
+    if _is_structured_calculation_question(question_text):
         return {
             "route": "hybrid",
             "reason": (
-                "Finance-specific statement calculation uses hybrid evidence so "
-                "text, page-image, and element routes can recover source tables."
+                "Structured calculation questions use hybrid evidence so text, "
+                "page-image, and element routes can recover source values."
             ),
             "evidence_types": ["text", "page_image", "element"],
             "verify": True,
-            "compatibility_scope": "finance_statement_calculation",
+            "calculation_scope": "structured_document_calculation",
         }
     if any(
         modality in {"figure", "slide", "table", "formula"} for modality in modalities
@@ -119,12 +148,81 @@ def _heuristic_planner_decision(
             "evidence_types": ["text", "page_image", "element"],
             "verify": True,
         }
+    if "page_image" in available_modalities:
+        if _route_is_allowed("hybrid", allowed_routes):
+            return {
+                "route": "hybrid",
+                "reason": (
+                    "Page-image evidence is available, so hybrid evidence can "
+                    "combine text, visual, and element signals."
+                ),
+                "evidence_types": ["text", "page_image", "element"],
+                "verify": True,
+            }
+        if _route_is_allowed("doc_page_image", allowed_routes):
+            return {
+                "route": "doc_page_image",
+                "reason": "Page-image evidence is available for this question.",
+                "evidence_types": ["page_image"],
+                "verify": True,
+            }
     return {
         "route": "doc",
         "reason": "Document text evidence is the default retrieval route.",
         "evidence_types": ["text"],
         "verify": True,
     }
+
+
+def _is_structured_calculation_question(question_text: str) -> bool:
+    has_calculation_term = any(
+        term in question_text for term in _STRUCTURED_CALCULATION_TERMS
+    )
+    if not has_calculation_term:
+        return False
+    return any(term in question_text for term in _STRUCTURED_CALCULATION_CONTEXT_TERMS)
+
+
+def _has_selected_source_context(understanding: dict[str, Any]) -> bool:
+    return bool(understanding.get("selected_source_context"))
+
+
+def _source_summary_decision() -> dict[str, Any]:
+    return {
+        "route": "doc",
+        "reason": "Selected source summaries use document text evidence.",
+        "evidence_types": ["text"],
+        "verify": True,
+    }
+
+
+def _constrain_heuristic_decision(
+    decision: dict[str, Any],
+    *,
+    allowed_routes: Any,
+) -> dict[str, Any]:
+    if not allowed_routes:
+        return decision
+    unconstrained_decision = parse_planner_decision(decision)
+    route_decision = parse_planner_decision(decision, allowed_routes=allowed_routes)
+    if route_decision.route == unconstrained_decision.route:
+        normalized = dict(decision)
+        normalized["route"] = route_decision.route
+        return normalized
+    return {
+        "route": route_decision.route,
+        "reason": (
+            f"{decision.get('reason') or route_decision.reason} "
+            f"Constrained to {route_decision.route} by allowed routes."
+        ),
+        "evidence_types": _evidence_types_for_route(route_decision.route),
+        "verify": route_decision.route not in {"direct", "abstain"},
+    }
+
+
+def _route_is_allowed(route: str, allowed_routes: Any) -> bool:
+    allowed = [str(item).strip() for item in allowed_routes or [] if str(item).strip()]
+    return not allowed or route in allowed
 
 
 def _call_structured_planner(

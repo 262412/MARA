@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
+from ktem.docqa.evidence_text import extract_final_answer_text
+
+from .citation_metrics import citation_precision_score, citation_recall_score
 from .metrics import (
     anls_score,
-    citation_precision_score,
-    citation_recall_score,
     cross_page_evidence_hit_score,
     element_hit_score,
     exact_match_score,
@@ -25,6 +25,7 @@ from .metrics import (
     span_recall_score,
     token_f1_score,
 )
+from .page_alignment import evidence_aligned_page_hit_score
 from .verification_metrics import verification_metrics
 
 _TABLE_FORMATS = {"markdown_table", "markdown-table", "table"}
@@ -36,28 +37,20 @@ _TIMING_KEYS = (
     "generation_seconds",
 )
 _CACHE_KEYS = ("hits", "misses", "writes")
-_FINAL_ANSWER_MARKER_RE = re.compile(
-    r"(?:\*{0,2}\s*)?(?:final\s+answer|answer|最终答案|最终回答)(?:\s*\*{0,2})?\s*[:：]\s*",
-    re.IGNORECASE,
-)
-_THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>.*?</think>", re.IGNORECASE | re.DOTALL)
-_THOUGHT_DETAILS_RE = re.compile(
-    r"<details\b[^>]*>\s*<summary\b[^>]*>.*?thought.*?</summary>.*?</details>",
-    re.IGNORECASE | re.DOTALL,
-)
 
 
 def score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
     gold_answers = prediction["gold_answers"]
     expected_formats = _normalized_expected_formats(prediction)
-    predicted_answer = _answer_text_for_scoring(
+    formatted_answer = _answer_text_for_scoring(
         prediction["predicted_answer"],
         expected_formats=expected_formats,
     )
+    predicted_answer = _collapse_scoring_text(formatted_answer)
     claim_verification = dict(prediction.get("claim_verification") or {})
     abstained = _prediction_abstained(prediction, predicted_answer, claim_verification)
-    markdown_table_score = markdown_table_renderable_score(predicted_answer)
-    latex_score = latex_renderable_score(predicted_answer)
+    markdown_table_score = markdown_table_renderable_score(formatted_answer)
+    latex_score = latex_renderable_score(formatted_answer)
     if expected_formats & _TABLE_FORMATS and markdown_table_score is None:
         markdown_table_score = 0.0
     if expected_formats & _LATEX_FORMATS and latex_score is None:
@@ -66,15 +59,23 @@ def score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
     if abstained and any(str(answer or "").strip() for answer in gold_answers):
         false_abstention = 1.0
 
+    page_hit = page_hit_score(prediction["predicted_pages"], prediction["gold_pages"])
+    if page_hit == 0.0:
+        page_hit = evidence_aligned_page_hit_score(
+            prediction["predicted_pages"],
+            prediction["gold_pages"],
+            gold_evidence=list(prediction.get("gold_evidence") or []),
+            evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
+            retrieved_hits=list(prediction.get("retrieved_hits") or []),
+        )
+
     metrics = {
         "em": exact_match_score(predicted_answer, gold_answers),
         "f1": token_f1_score(predicted_answer, gold_answers),
         "anls": anls_score(predicted_answer, gold_answers),
         "formula_match": formula_normalized_match_score(predicted_answer, gold_answers),
         "numeric_match": numeric_tolerance_score(predicted_answer, gold_answers),
-        "page_hit": page_hit_score(
-            prediction["predicted_pages"], prediction["gold_pages"]
-        ),
+        "page_hit": page_hit,
         "citation_recall": recall_score(
             prediction["predicted_sources"], prediction["gold_sources"]
         ),
@@ -94,16 +95,25 @@ def score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
 
 
 def _answer_text_for_scoring(answer: Any, *, expected_formats: set[str]) -> str:
-    text = _THINK_BLOCK_RE.sub(" ", str(answer or ""))
-    text = _THOUGHT_DETAILS_RE.sub(" ", text)
-    markers = list(_FINAL_ANSWER_MARKER_RE.finditer(text))
-    if markers:
-        text = text[markers[-1].end() :]
+    text = extract_final_answer_text(str(answer or "")).replace("**", "")
     if not expected_formats & _TABLE_FORMATS:
         without_tables = _remove_markdown_table_lines(text)
         if without_tables.strip():
             text = without_tables
-    return " ".join(text.replace("**", "").split())
+    return _clean_scoring_lines(text)
+
+
+def _clean_scoring_lines(text: str) -> str:
+    lines = [line.strip() for line in str(text or "").splitlines()]
+    while lines and not lines[0]:
+        lines.pop(0)
+    while lines and not lines[-1]:
+        lines.pop()
+    return "\n".join(lines)
+
+
+def _collapse_scoring_text(text: str) -> str:
+    return " ".join(str(text or "").split())
 
 
 def _remove_markdown_table_lines(text: str) -> str:
@@ -205,6 +215,7 @@ def _add_gold_evidence_metrics(
     gold_evidence = prediction.get("gold_evidence", [])
     if not gold_evidence:
         return
+    predicted_citations = _predicted_citations_for_scoring(prediction)
     metrics["element_hit"] = element_hit_score(
         prediction.get("predicted_element_ids", []), gold_evidence
     )
@@ -221,10 +232,19 @@ def _add_gold_evidence_metrics(
         gold_evidence=gold_evidence,
     )
     metrics["citation_recall"] = citation_recall_score(
-        prediction["predicted_sources"], gold_evidence
+        predicted_citations,
+        gold_evidence,
+        evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
+        retrieved_hits=list(prediction.get("retrieved_hits") or []),
     )
     metrics["citation_precision"] = citation_precision_score(
-        prediction["predicted_sources"], gold_evidence
+        predicted_citations,
+        gold_evidence,
+        evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
+        retrieved_hits=list(prediction.get("retrieved_hits") or []),
+    )
+    _add_citation_locator_metrics(
+        metrics, prediction, gold_evidence, predicted_citations
     )
     metrics["cross_page_evidence_hit"] = cross_page_evidence_hit_score(
         prediction["predicted_pages"],
@@ -232,6 +252,67 @@ def _add_gold_evidence_metrics(
         retrieved_hits=list(prediction.get("retrieved_hits") or []),
         gold_evidence=gold_evidence,
     )
+
+
+def _add_citation_locator_metrics(
+    metrics: dict[str, float | None],
+    prediction: dict[str, Any],
+    gold_evidence: list[dict[str, Any]],
+    predicted_citations: list[str],
+) -> None:
+    evidence_bundle = dict(prediction.get("evidence_bundle") or {})
+    retrieved_hits = list(prediction.get("retrieved_hits") or [])
+    for locator_kind in ("source", "page", "span"):
+        locator_gold = [
+            item
+            for item in gold_evidence
+            if _gold_evidence_has_locator(item, locator_kind)
+        ]
+        metrics[f"citation_recall_{locator_kind}"] = citation_recall_score(
+            predicted_citations,
+            locator_gold,
+            evidence_bundle=evidence_bundle,
+            retrieved_hits=retrieved_hits,
+        )
+        metrics[f"citation_precision_{locator_kind}"] = citation_precision_score(
+            predicted_citations,
+            locator_gold,
+            evidence_bundle=evidence_bundle,
+            retrieved_hits=retrieved_hits,
+        )
+
+
+def _predicted_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
+    predicted_citations = list(prediction.get("predicted_citations") or [])
+    if predicted_citations:
+        return predicted_citations
+    return list(prediction["predicted_sources"])
+
+
+def _gold_evidence_has_locator(item: dict[str, Any], locator_kind: str) -> bool:
+    if locator_kind == "page":
+        return _gold_evidence_has_page_locator(item)
+    if locator_kind == "source":
+        return not _gold_evidence_has_page_locator(item) and any(
+            _has_value(item.get(key))
+            for key in ("document_id", "source_id", "citation", "source")
+        )
+    if locator_kind == "span":
+        return any(
+            _has_value(item.get(key)) for key in ("span", "text", "quote", "evidence")
+        )
+    return False
+
+
+def _gold_evidence_has_page_locator(item: dict[str, Any]) -> bool:
+    if _has_value(item.get("page")) or _has_value(item.get("page_label")):
+        return True
+    citation = str(item.get("citation") or item.get("source") or "")
+    return "#page" in citation.lower()
+
+
+def _has_value(value: Any) -> bool:
+    return value not in (None, "", [])
 
 
 def _normalize_timings(timings: dict[str, Any] | None) -> dict[str, float]:

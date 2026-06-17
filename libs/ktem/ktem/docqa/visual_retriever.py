@@ -49,8 +49,10 @@ def rank_page_image_records(
 ) -> tuple[list[dict[str, Any]], dict[str, float]]:
     backend = retriever or LocalLateInteractionVisualRetriever()
     scored = [
-        (_score_record(backend, query, record), index, record)
-        for index, record in enumerate(records)
+        (score, index, record)
+        for index, (score, record) in enumerate(
+            zip(_score_records(backend, query, records), records)
+        )
     ]
     scored.sort(key=lambda item: (-item[0], item[1]))
     scores = {
@@ -68,6 +70,20 @@ def rank_page_image_records(
         for score, _, record in scored
     ]
     return ranked, scores
+
+
+def _score_records(
+    backend: VisualRetrieverBackend,
+    query: str,
+    records: list[dict[str, Any]],
+) -> list[float]:
+    score_many = getattr(backend, "score_many", None)
+    if callable(score_many):
+        scores = [round(float(score or 0.0), 4) for score in score_many(query, records)]
+        if len(scores) != len(records):
+            raise ValueError("Visual retriever score_many returned wrong score count.")
+        return scores
+    return [_score_record(backend, query, record) for record in records]
 
 
 def _score_record(

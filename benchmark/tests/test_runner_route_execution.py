@@ -133,6 +133,28 @@ def test_route_skip_record_uses_visual_backend_readiness_for_required_vlm():
     }
 
 
+def test_route_skip_record_allows_retriever_only_visual_diagnostics(monkeypatch):
+    monkeypatch.setattr(
+        "ktem.docqa.visual_backends._colvision_http_available",
+        lambda _endpoint, model_family: model_family == "colqwen",
+    )
+
+    record = route_skip_record(
+        {
+            "route_policy": "visual",
+            "visual_retriever_backend": "colqwen",
+            "generator_backend": "evidence_only_without_vlm",
+            "use_generation": False,
+            "requires_backend_config": True,
+            "benchmark_role": "retrieval_diagnostic",
+        },
+        route_id="colqwen_retriever_only",
+        engine="docqa_runtime",
+    )
+
+    assert record is None
+
+
 def _write_skip_manifest(tmp_path):
     (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
     manifest_path = tmp_path / "manifest.json"

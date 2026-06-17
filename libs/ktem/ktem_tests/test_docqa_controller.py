@@ -157,6 +157,21 @@ def test_apply_request_context_copies_planner_contract_fields():
     assert pipeline.graph_context == {"related_file_ids": ["file-1"]}
 
 
+def test_apply_request_context_uses_heuristic_planner_backend_without_model():
+    pipeline = SimpleNamespace(agent_mode="auto")
+    request = DocQARequest(
+        prompt="Question",
+        planner_backend="heuristic_local",
+        planner_model="fake-planner",
+        allowed_routes=["hybrid"],
+    )
+
+    apply_request_context(pipeline, request, {})
+
+    assert pipeline.planner_backend == "heuristic_local"
+    assert pipeline.planner_model == ""
+
+
 @pytest.mark.parametrize(
     ("raw_output", "expected_route", "requires_retrieval"),
     [
@@ -260,6 +275,7 @@ def test_retrieval_evaluator_marks_formula_evidence_without_page_as_ambiguous():
             "Does 3M have a reasonably healthy liquidity profile based on its "
             "quick ratio for Q2 of FY2023?"
         ),
+        verification_domain="finance",
     )
 
     assert decision.status == "ambiguous"

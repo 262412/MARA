@@ -154,6 +154,200 @@ def test_docqa_runtime_engine_derives_hits_pages_sources_and_elements(
     assert result.predicted_element_ids == ["chunk-1"]
 
 
+def test_docqa_runtime_engine_uses_source_ref_for_text_evidence_without_page(
+    monkeypatch,
+    tmp_path,
+):
+    response = types.SimpleNamespace(
+        answer="runtime answer",
+        references_text="",
+        evidence_metadata={},
+        evidence_bundle={
+            "route": "doc_text",
+            "items": [
+                {
+                    "evidence_id": "hit-1",
+                    "source_id": "file-1",
+                    "source_name": "doc.txt",
+                    "modality": "text",
+                    "text": "Whole-document text evidence.",
+                    "source_backrefs": [],
+                }
+            ],
+        },
+    )
+    doc_path = _install_docqa_runtime_with_response(monkeypatch, tmp_path, response)
+
+    result = _run_docqa_runtime(doc_path, tmp_path)
+
+    assert result.retrieved_hits[0]["source_backrefs"] == ["doc#source"]
+    assert result.predicted_sources == ["doc#source"]
+    assert result.predicted_pages == []
+
+
+def test_docqa_runtime_engine_falls_back_to_selected_short_text_source(
+    monkeypatch,
+    tmp_path,
+):
+    response = types.SimpleNamespace(
+        answer="runtime answer",
+        references_text="",
+        evidence_metadata={},
+        evidence_bundle={"route": "doc_text", "items": []},
+    )
+    doc_path = _install_docqa_runtime_with_response(monkeypatch, tmp_path, response)
+    doc_path.write_text("Yelp", encoding="utf-8")
+
+    result = _run_docqa_runtime(doc_path, tmp_path)
+
+    assert result.retrieved_hits == [
+        {
+            "evidence_id": "doc#source",
+            "document_id": "doc",
+            "source_id": "doc",
+            "runtime_source_id": "file-1",
+            "source_name": "doc.txt",
+            "modality": "text",
+            "text": "Yelp",
+            "source_backrefs": ["doc#source"],
+        }
+    ]
+    assert result.predicted_sources == ["doc#source"]
+    assert result.predicted_pages == []
+
+
+def test_docqa_runtime_engine_passes_image_documents_as_page_image_records(
+    monkeypatch,
+    tmp_path,
+):
+    image_path = tmp_path / "slide_page_7.jpg"
+    image_path.write_bytes(b"\xff\xd8\xff\xe0jpeg")
+    fake_runtime = _install_response_runtime_for_path(
+        monkeypatch,
+        image_path,
+        types.SimpleNamespace(
+            answer="visual answer",
+            references_text="",
+            evidence_metadata={},
+            evidence_bundle={
+                "route": "doc_page_image",
+                "items": [
+                    {
+                        "evidence_id": "page-image:slide_page_7:7",
+                        "source_id": "slide_page_7",
+                        "source_name": "slide_page_7.jpg",
+                        "page_label": "7",
+                        "modality": "page_image",
+                        "page_image_path": str(image_path),
+                        "source_backrefs": ["slide_page_7#page:7"],
+                    }
+                ],
+            },
+        ),
+    )
+    engine = get_engine(
+        "docqa_runtime",
+        BenchmarkConfig(
+            suite_name="runtime",
+            output_dir=tmp_path / "out",
+            route_policy="visual",
+        ),
+    )
+
+    result = engine.run(
+        example=BenchmarkExample(
+            example_id="ex",
+            document_id="slide_page_7",
+            question="What does the slide show?",
+            answers=["visual answer"],
+            evidence_pages=[7],
+        ),
+        documents=[
+            BenchmarkDocument(
+                document_id="slide_page_7",
+                path=image_path,
+                format_type="jpg",
+                modality="page_image",
+                metadata={"page": 7},
+            )
+        ],
+    )
+
+    assert fake_runtime.indexed == []
+    assert fake_runtime.requests[0].selected_file_ids == []
+    assert fake_runtime.requests[0].page_image_records == [
+        {
+            "evidence_id": "page-image:slide_page_7:7",
+            "file_id": "slide_page_7",
+            "file_name": "slide_page_7.jpg",
+            "page_label": "7",
+            "page_number": 7,
+            "page_image_path": str(image_path),
+            "rendered_page_image": str(image_path),
+            "modality": "page_image",
+            "text": "",
+            "ocr_text": "",
+            "source_backrefs": ["slide_page_7#page:7"],
+            "metadata": {
+                "image_ref": str(image_path),
+                "visual_backend_type": "provided_image",
+            },
+        }
+    ]
+    assert result.predicted_pages == ["7"]
+    assert result.predicted_sources == ["slide_page_7#page:7"]
+
+
+def test_docqa_runtime_engine_drops_image_payload_from_text_retrieved_hits(
+    monkeypatch,
+    tmp_path,
+):
+    response = types.SimpleNamespace(
+        answer="runtime answer",
+        references_text="",
+        evidence_metadata={},
+        evidence_bundle={
+            "route": "doc_text",
+            "items": [
+                {
+                    "evidence_id": "hit-1",
+                    "source_id": "file-1",
+                    "source_name": "doc.txt",
+                    "text": "Text evidence.",
+                    "image": "base64-image",
+                    "page_image_path": "data:image/png;base64,abc",
+                }
+            ],
+        },
+    )
+    doc_path = _install_docqa_runtime_with_response(monkeypatch, tmp_path, response)
+
+    result = _run_docqa_runtime(doc_path, tmp_path)
+
+    assert result.retrieved_hits[0]["text"] == "Text evidence."
+    assert "image" not in result.retrieved_hits[0]
+    assert "page_image_path" not in result.retrieved_hits[0]
+
+
+def test_docqa_runtime_engine_adds_metadata_page_coverage_to_predicted_citations(
+    monkeypatch,
+    tmp_path,
+):
+    response = types.SimpleNamespace(
+        answer="runtime answer",
+        references_text="",
+        evidence_metadata={"page_coverage": ["2", "5", 8, "", None]},
+        evidence_bundle={"route": "hybrid", "items": [_runtime_hit()]},
+    )
+    doc_path = _install_docqa_runtime_with_response(monkeypatch, tmp_path, response)
+
+    result = _run_docqa_runtime(doc_path, tmp_path)
+
+    assert result.retrieved_hits[0]["source_backrefs"] == ["doc#page:2"]
+    assert result.predicted_pages == ["2", "5", "8"]
+    assert result.predicted_sources == ["doc#page:2", "doc#page:5", "doc#page:8"]
+
+
 def test_docqa_runtime_engine_falls_back_to_evidence_metadata_when_bundle_empty(
     monkeypatch, tmp_path
 ):
@@ -243,15 +437,21 @@ def _install_reindex_runtime(monkeypatch, doc_path):
 def _install_docqa_runtime_with_response(monkeypatch, tmp_path, response):
     doc_path = tmp_path / "doc.txt"
     doc_path.write_text("runtime text", encoding="utf-8")
+    _install_response_runtime_for_path(monkeypatch, doc_path, response)
+    return doc_path
+
+
+def _install_response_runtime_for_path(monkeypatch, doc_path, response):
+    runtime = _ResponseRuntime(doc_path, response)
     monkeypatch.setitem(
         sys.modules,
         "ktem.docqa",
         types.SimpleNamespace(
-            DocQARuntime=lambda: _ResponseRuntime(doc_path, response),
+            DocQARuntime=lambda: runtime,
             DocQARequest=_FakeRequest,
         ),
     )
-    return doc_path
+    return runtime
 
 
 class _FakeRequest:
@@ -341,9 +541,11 @@ class _ResponseRuntime:
     def __init__(self, doc_path, response):
         self.doc_path = doc_path
         self.response = response
+        self.indexed = []
+        self.requests = []
 
     def index_paths(self, paths, reindex=False):
-        del paths, reindex
+        self.indexed.append((paths, reindex))
 
     def resolve_file_refs(self, refs):
         if refs and refs[0] in {"doc", "doc.txt", str(self.doc_path)}:
@@ -357,7 +559,7 @@ class _ResponseRuntime:
         return [_Record("file-1", self.doc_path)]
 
     def run_turn(self, request):
-        del request
+        self.requests.append(request)
         return self.response
 
 

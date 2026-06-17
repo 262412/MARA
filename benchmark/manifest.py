@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable
 
-from .financebench_evidence import legacy_financebench_evidence_from_source
+from .dataset_profiles import profile_for_manifest
+from .manifest_legacy_adapters import legacy_evidence_from_source
 from .schemas import (
     BenchmarkDocument,
     BenchmarkExample,
@@ -201,6 +203,17 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
 ]
 
 
+def _attach_dataset_profile(bundle: ManifestBundle) -> ManifestBundle:
+    profile = profile_for_manifest(
+        bundle.dataset_name,
+        examples=bundle.examples,
+    )
+    bundle.metadata["dataset_profile"] = profile
+    bundle.metadata["capabilities"] = asdict(profile.capabilities)
+    bundle.metadata["allowed_routes"] = list(profile.allowed_routes)
+    return bundle
+
+
 def _ensure_list(value: Any) -> list[Any]:
     if value is None:
         return []
@@ -229,6 +242,7 @@ def _append_unique(target: list[Any], value: Any) -> None:
 def _coerce_evidence_fields(
     record: dict[str, Any],
     *,
+    dataset_name: str,
     document_id: str,
     document_path: Path | None = None,
 ) -> tuple[list[Any], list[str], list[dict[str, Any]]]:
@@ -245,8 +259,10 @@ def _coerce_evidence_fields(
     legacy_items = [
         (
             source,
-            legacy_financebench_evidence_from_source(
+            legacy_evidence_from_source(
                 source,
+                dataset_name=dataset_name,
+                record=record,
                 document_id=document_id,
                 document_path=document_path,
             ),
@@ -314,9 +330,11 @@ def _coerce_expected_guardrails(record: dict[str, Any]) -> dict[str, Any]:
 def _coerce_examples(
     records: Iterable[dict[str, Any]],
     manifest_path: Path,
+    *,
+    dataset_name_hint: str = "custom_manifest",
 ) -> ManifestBundle:
     records = list(records)
-    dataset_name = "custom_manifest"
+    dataset_name = dataset_name_hint or "custom_manifest"
     documents: dict[str, BenchmarkDocument] = {}
     examples: list[BenchmarkExample] = []
 
@@ -326,7 +344,8 @@ def _coerce_examples(
         format_type = str(
             record.get("format_type") or document_path.suffix.lower().lstrip(".")
         ).lower()
-        dataset_name = str(record.get("dataset_name") or dataset_name)
+        record_dataset_name = str(record.get("dataset_name") or dataset_name)
+        dataset_name = record_dataset_name
 
         if document_id not in documents:
             documents[document_id] = BenchmarkDocument(
@@ -345,6 +364,7 @@ def _coerce_examples(
 
         evidence_pages, evidence_sources, gold_evidence = _coerce_evidence_fields(
             record,
+            dataset_name=record_dataset_name,
             document_id=document_id,
             document_path=document_path,
         )
@@ -368,11 +388,13 @@ def _coerce_examples(
             )
         )
 
-    return ManifestBundle(
-        dataset_name=dataset_name,
-        manifest_path=manifest_path,
-        documents=documents,
-        examples=examples,
+    return _attach_dataset_profile(
+        ManifestBundle(
+            dataset_name=dataset_name,
+            manifest_path=manifest_path,
+            documents=documents,
+            examples=examples,
+        )
     )
 
 
@@ -410,6 +432,8 @@ def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
         "task_type": record.get("task_type"),
         "artifact_type": record.get("artifact_type"),
     }
+    if "max_context_length" in record:
+        route["max_context_length"] = int(record["max_context_length"])
     for key in (
         "controller_mode",
         "docqa_citation_mode",
@@ -417,6 +441,7 @@ def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
         "planner_model",
         "allowed_routes",
         "verification_mode",
+        "verification_domain",
         "graph_mode",
         "text_retriever_backend",
         "visual_retriever_backend",
@@ -444,6 +469,7 @@ def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> ManifestBundle:
+    dataset_name = str(payload.get("dataset_name") or "custom_manifest")
     documents: dict[str, BenchmarkDocument] = {}
     for record in payload.get("documents", []):
         document_id = str(record["document_id"])
@@ -480,6 +506,7 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
 
         evidence_pages, evidence_sources, gold_evidence = _coerce_evidence_fields(
             record,
+            dataset_name=dataset_name,
             document_id=document_ids[0],
             document_path=documents[document_ids[0]].path,
         )
@@ -505,19 +532,21 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
             )
         )
 
-    return ManifestBundle(
-        dataset_name=str(payload.get("dataset_name") or "custom_manifest"),
-        manifest_path=manifest_path,
-        documents=documents,
-        examples=examples,
-        schema_version=2,
-        routes=[
-            _coerce_route(item)
-            for item in _ensure_list(
-                payload.get("routes") or payload.get("route_matrix")
-            )
-            if isinstance(item, dict)
-        ],
+    return _attach_dataset_profile(
+        ManifestBundle(
+            dataset_name=dataset_name,
+            manifest_path=manifest_path,
+            documents=documents,
+            examples=examples,
+            schema_version=2,
+            routes=[
+                _coerce_route(item)
+                for item in _ensure_list(
+                    payload.get("routes") or payload.get("route_matrix")
+                )
+                if isinstance(item, dict)
+            ],
+        )
     )
 
 
@@ -542,9 +571,13 @@ def load_manifest(manifest_path: str | Path) -> ManifestBundle:
 
     dataset_name = str(payload.get("dataset_name") or "custom_manifest")
     examples_payload = payload.get("examples", [])
-    bundle = _coerce_examples(examples_payload, manifest_path)
+    bundle = _coerce_examples(
+        examples_payload,
+        manifest_path,
+        dataset_name_hint=dataset_name,
+    )
     bundle.dataset_name = dataset_name
-    return bundle
+    return _attach_dataset_profile(bundle)
 
 
 def write_manifest(

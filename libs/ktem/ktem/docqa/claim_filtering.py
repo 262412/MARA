@@ -123,4 +123,38 @@ def _is_non_factual_claim(claim: str) -> bool:
         "excludes inventory",
         "measures a company's ability",
     )
-    return any(phrase in lowered for phrase in general_explanations)
+    return any(phrase in lowered for phrase in general_explanations) or (
+        _is_evidence_commentary_claim(lowered)
+    )
+
+
+def _is_evidence_commentary_claim(lowered: str) -> bool:
+    if lowered.startswith(
+        (
+            "no additional calculation",
+            "no additional calculations",
+            "no further calculation",
+            "no further calculations",
+            "no additional interpretation",
+            "no additional interpretations",
+            "no further interpretation",
+            "no further interpretations",
+        )
+    ):
+        return True
+
+    if not re.match(
+        r"^this (?:answer|date|figure|information|number|result|value)\b",
+        lowered,
+    ):
+        return False
+    commentary_markers = (
+        "directly provided",
+        "derived from",
+        "explicitly stated",
+        "provided in the text",
+        "provided context",
+        "repeated across",
+        "confirming",
+    )
+    return any(marker in lowered for marker in commentary_markers)

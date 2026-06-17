@@ -165,6 +165,7 @@ def test_runtime_turn_request_preserves_controller_fields():
         graph_context={"related_file_ids": ["file-1"]},
         controller_mode="llm",
         route_policy="hybrid",
+        planner_backend="heuristic_local",
         planner_model="fake-planner",
         allowed_routes=["hybrid"],
         verification_mode="strict",
@@ -187,6 +188,7 @@ def test_runtime_turn_request_preserves_controller_fields():
     assert turn_request.settings == {"reasoning.use": "mara"}
     assert turn_request.controller_mode == "llm"
     assert turn_request.route_policy == "hybrid"
+    assert turn_request.planner_backend == "heuristic_local"
     assert turn_request.planner_model == "fake-planner"
     assert turn_request.allowed_routes == ["hybrid"]
     assert turn_request.verification_mode == "strict"

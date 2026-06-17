@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import re
 from typing import Any
+
+_CITATION_RE = re.compile(
+    r"(?<![\\w/-])([A-Za-z0-9_.:/-]+#(?:page:[A-Za-z0-9_.-]+|source|evidence:[A-Za-z0-9_.:-]+))"
+)
 
 
 def extract_text(item: Any) -> str:
@@ -100,10 +105,10 @@ def normalize_page(page: Any) -> str:
 
 def extract_citations(text: str) -> list[str]:
     citations: list[str] = []
-    for line in str(text or "").splitlines():
-        stripped = line.strip()
-        if "#page:" in stripped and stripped not in citations:
-            citations.append(stripped)
+    for match in _CITATION_RE.finditer(str(text or "")):
+        citation = match.group(1).strip().rstrip(".,;:)]}")
+        if citation and citation not in citations:
+            citations.append(citation)
     return citations
 
 

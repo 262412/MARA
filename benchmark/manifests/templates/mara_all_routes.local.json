@@ -16,6 +16,7 @@
       "verification_mode": "light",
       "planner_backend": "heuristic_local",
       "generator_backend": "Qwen/Qwen3-8B",
+      "max_context_length": 2000,
       "benchmark_role": "diagnostic",
       "docqa_citation_mode": "inline"
     },
@@ -33,7 +34,27 @@
       "reranker_backend": "BAAI/bge-reranker-v2-m3",
       "planner_backend": "heuristic_local",
       "generator_backend": "Qwen/Qwen3-8B",
+      "max_context_length": 2000,
       "benchmark_role": "qa_quality",
+      "docqa_citation_mode": "inline"
+    },
+    {
+      "route_id": "page_image_rag_smoke",
+      "route_name": "Page-image RAG smoke",
+      "engine": "docqa_runtime",
+      "scope": "multi_document",
+      "reasoning_type": "mara",
+      "controller_mode": "llm",
+      "route_policy": "visual",
+      "allowed_routes": ["doc_page_image"],
+      "verification_mode": "light",
+      "visual_retriever_backend": "local_late_interaction",
+      "visual_generator_backend": "evidence_only_without_vlm",
+      "visual_backend_type": "deterministic_smoke",
+      "planner_backend": "heuristic_local",
+      "generator_backend": "evidence_only_without_vlm",
+      "implementation_stage": "deterministic_page_image_smoke",
+      "benchmark_role": "diagnostic",
       "docqa_citation_mode": "inline"
     },
     {
@@ -51,6 +72,7 @@
       "visual_backend_type": "colvision_multi_vector",
       "planner_backend": "heuristic_local",
       "generator_backend": "local_qwen3_vl",
+      "requires_backend_config": true,
       "benchmark_role": "diagnostic",
       "docqa_citation_mode": "inline"
     },
@@ -67,6 +89,7 @@
       "text_retriever_backend": "docqa_element_metadata",
       "planner_backend": "heuristic_local",
       "generator_backend": "Qwen/Qwen3-8B",
+      "max_context_length": 2000,
       "implementation_stage": "prototype_element_metadata_index",
       "benchmark_role": "prototype",
       "docqa_citation_mode": "inline"
@@ -85,6 +108,26 @@
       "graph_mode": "local",
       "planner_backend": "heuristic_local",
       "generator_backend": "Qwen/Qwen3-8B",
+      "max_context_length": 2000,
+      "benchmark_role": "prototype",
+      "docqa_citation_mode": "inline"
+    },
+    {
+      "route_id": "graph_rag_global",
+      "route_name": "GraphRAG global",
+      "engine": "docqa_runtime",
+      "scope": "multi_document",
+      "reasoning_type": "mara",
+      "controller_mode": "llm",
+      "task_type": "summary",
+      "route_policy": "graph",
+      "allowed_routes": ["graph_global"],
+      "verification_mode": "light",
+      "graph_backend": "local_graph_index",
+      "graph_mode": "global",
+      "planner_backend": "heuristic_local",
+      "generator_backend": "Qwen/Qwen3-8B",
+      "max_context_length": 2000,
       "benchmark_role": "prototype",
       "docqa_citation_mode": "inline"
     },
@@ -105,6 +148,7 @@
       "graph_backend": "local_graph_index",
       "planner_backend": "heuristic_local",
       "generator_backend": "Qwen/Qwen3-8B",
+      "max_context_length": 2000,
       "benchmark_role": "qa_quality",
       "docqa_citation_mode": "inline"
     },
@@ -126,6 +170,7 @@
       "planner_backend": "heuristic_local",
       "planner_model": "Qwen/Qwen3-8B",
       "generator_backend": "Qwen/Qwen3-8B",
+      "max_context_length": 2000,
       "benchmark_role": "qa_quality",
       "docqa_citation_mode": "inline"
     },
@@ -148,6 +193,7 @@
       "planner_backend": "heuristic_local",
       "planner_model": "Qwen/Qwen3-8B",
       "generator_backend": "Qwen/Qwen3-8B",
+      "max_context_length": 2000,
       "ragtruth_evaluator": "local_backends.mara_evaluators.RAGTruthLocalEvaluator",
       "benchmark_role": "qa_quality",
       "docqa_citation_mode": "inline"

@@ -148,6 +148,13 @@ def _add_existing_normalizer_commands(
     slide_parser.add_argument("--documents-root", required=True)
     slide_parser.add_argument("--output", required=True)
 
+    slide_parquet_parser = subparsers.add_parser(
+        "normalize-slidevqa-parquet",
+        help="Convert Hugging Face SlideVQA parquet rows into a normalized manifest",
+    )
+    slide_parquet_parser.add_argument("--source", required=True)
+    slide_parquet_parser.add_argument("--output", required=True)
+
 
 def _add_thesis_converter_commands(
     subparsers: argparse._SubParsersAction,
@@ -191,13 +198,43 @@ def _add_thesis_converter_commands(
     alce_parser.add_argument("--output", required=True)
 
 
+def _add_manifest_template_commands(
+    subparsers: argparse._SubParsersAction,
+) -> None:
+    template_parser = subparsers.add_parser(
+        "apply-route-template",
+        help="Combine a dataset manifest with a route template manifest",
+    )
+    template_parser.add_argument("--manifest", required=True)
+    template_parser.add_argument("--template", required=True)
+    template_parser.add_argument("--output", required=True)
+    template_parser.add_argument("--dataset-name")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Kotaemon benchmark toolkit")
     subparsers = parser.add_subparsers(dest="command", required=True)
     _add_run_command(subparsers)
     _add_existing_normalizer_commands(subparsers)
     _add_thesis_converter_commands(subparsers)
+    _add_manifest_template_commands(subparsers)
     return parser
+
+
+def _handle_manifest_template_command(args: argparse.Namespace) -> int | None:
+    if args.command != "apply-route-template":
+        return None
+
+    from .manifest_templates import apply_route_template
+
+    output_path = apply_route_template(
+        args.manifest,
+        args.template,
+        args.output,
+        dataset_name=args.dataset_name,
+    )
+    print(f"Manifest written to {output_path}")
+    return 0
 
 
 def _handle_normalizer_command(args: argparse.Namespace) -> int | None:
@@ -223,6 +260,13 @@ def _handle_normalizer_command(args: argparse.Namespace) -> int | None:
         output_path = normalize_slidevqa_manifest(
             args.annotations, args.documents_root, args.output
         )
+        print(f"Manifest written to {output_path}")
+        return 0
+
+    if args.command == "normalize-slidevqa-parquet":
+        from .converters.slidevqa import normalize_slidevqa_parquet_manifest
+
+        output_path = normalize_slidevqa_parquet_manifest(args.source, args.output)
         print(f"Manifest written to {output_path}")
         return 0
 
@@ -318,6 +362,9 @@ def _run_benchmark_command(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    template_result = _handle_manifest_template_command(args)
+    if template_result is not None:
+        return template_result
     normalizer_result = _handle_normalizer_command(args)
     if normalizer_result is not None:
         return normalizer_result

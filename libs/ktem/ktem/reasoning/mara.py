@@ -15,6 +15,7 @@ from .mara_controller import planner_trace_payload
 from .mara_evidence import build_mara_evidence_metadata
 from .mara_query_planning import plan_steps as build_mara_plan_steps
 from .mara_query_planning import understand_query as understand_mara_query
+from .mara_query_planning import with_selected_source_context
 from .mara_retrieval_query import messages_share_retrieval_cache_key, retrieval_query
 from .mara_route_retrieval import route_retrieval_metadata
 from .simple import FullQAPipeline
@@ -125,12 +126,51 @@ def _controller_execution_request(
         route_policy=getattr(pipeline, "route_policy", None) or "auto",
         allowed_routes=list(getattr(pipeline, "allowed_routes", None) or []),
         verification_mode=getattr(pipeline, "verification_mode", None) or "light",
+        verification_domain=getattr(pipeline, "verification_domain", None) or "",
         active_file_id=getattr(pipeline, "active_file_id", "") or "",
         active_file_name=getattr(pipeline, "active_file_name", "") or "",
         page_number=getattr(pipeline, "page_number", None),
         selected_text=getattr(pipeline, "selected_text", "") or "",
         selected_file_ids=list(getattr(pipeline, "selected_file_ids", None) or []),
         graph_context=getattr(pipeline, "graph_context", None) or {},
+    )
+
+
+def _with_available_modalities(
+    understanding: dict[str, Any],
+    pipeline: Any,
+) -> dict[str, Any]:
+    available_modalities = [
+        str(modality)
+        for modality in understanding.get("available_modalities", [])
+        if modality
+    ]
+    if (
+        _page_image_route_available(pipeline)
+        and "page_image" not in available_modalities
+    ):
+        available_modalities.append("page_image")
+    if not available_modalities:
+        return understanding
+    updated = dict(understanding)
+    updated["available_modalities"] = available_modalities
+    return updated
+
+
+def _page_image_route_available(pipeline: Any) -> bool:
+    allowed_routes = [
+        str(route).strip()
+        for route in getattr(pipeline, "allowed_routes", None) or []
+        if str(route).strip()
+    ]
+    if allowed_routes and not any(
+        route in {"doc_page_image", "hybrid"} for route in allowed_routes
+    ):
+        return False
+    return bool(
+        getattr(pipeline, "visual_retriever_backend", None)
+        or getattr(pipeline, "visual_retriever", None)
+        or getattr(pipeline, "page_image_index_records", None)
     )
 
 
@@ -255,6 +295,32 @@ def _visual_generator_answer(generator: Any, request: Any, bundle: Any) -> str:
     raise ValueError("Configured visual generator must be callable or expose generate.")
 
 
+def _bundle_has_page_image_evidence(bundle: Any) -> bool:
+    return any(
+        isinstance(item, dict) and str(item.get("modality") or "") == "page_image"
+        for item in getattr(bundle, "items", []) or []
+    )
+
+
+def _route_visual_answer(
+    pipeline: Any,
+    request: Any,
+    bundle: Any,
+    *,
+    evidence_only_fallback: bool,
+) -> str | None:
+    vlm_generator = getattr(pipeline, "vlm_generator", None)
+    if vlm_generator is None:
+        if not evidence_only_fallback:
+            return None
+        bundle.metadata["generation_backend"] = "evidence_only_without_vlm"
+        return _visual_evidence_only_answer(bundle)
+    bundle.metadata["generation_backend"] = str(
+        getattr(vlm_generator, "name", "visual_generator")
+    )
+    return _visual_generator_answer(vlm_generator, request, bundle)
+
+
 def _visible_execution_answer(execution: RouteExecutionResult) -> str:
     route = execution.controller_decision.route
     if route == "direct_answer":
@@ -357,10 +423,16 @@ class MaraAgentPipeline(FullQAPipeline):
             self._mara_last_docs = list(docs)
             return docs, info
 
-        docs, info = super().retrieve(retrieval_query(message), history)
+        docs, info = super().retrieve(
+            retrieval_query(message, domain=_retrieval_domain(self)),
+            history,
+        )
         attempts = [{"attempt": 1, "evidence_count": len(docs), "retry_reason": ""}]
         if _should_retry_retrieval(getattr(self, "agent_mode", None), docs):
-            docs, info = super().retrieve(retrieval_query(message), history)
+            docs, info = super().retrieve(
+                retrieval_query(message, domain=_retrieval_domain(self)),
+                history,
+            )
             attempts.append(
                 {
                     "attempt": 2,
@@ -398,18 +470,27 @@ class MaraAgentPipeline(FullQAPipeline):
         def generate(_request: Any, _decision: Any, _bundle: Any) -> str:
             nonlocal generated_answer
             if _decision.route == "page_image_rag":
-                vlm_generator = getattr(self, "vlm_generator", None)
-                if vlm_generator is None:
-                    _bundle.metadata["generation_backend"] = "evidence_only_without_vlm"
-                    generated_answer = _visual_evidence_only_answer(_bundle)
-                    return generated_answer
-                _bundle.metadata["generation_backend"] = str(
-                    getattr(vlm_generator, "name", "visual_generator")
+                visual_answer = _route_visual_answer(
+                    self,
+                    _request,
+                    _bundle,
+                    evidence_only_fallback=True,
                 )
-                generated_answer = _visual_generator_answer(
-                    vlm_generator, _request, _bundle
-                )
+                assert visual_answer is not None
+                generated_answer = visual_answer
                 return generated_answer
+            if _decision.route == "hybrid_rag" and _bundle_has_page_image_evidence(
+                _bundle
+            ):
+                visual_answer = _route_visual_answer(
+                    self,
+                    _request,
+                    _bundle,
+                    evidence_only_fallback=False,
+                )
+                if visual_answer is not None:
+                    generated_answer = visual_answer
+                    return generated_answer
             if _decision.route == "graph_rag":
                 _bundle.metadata["generation_backend"] = "local_graph_summary"
                 generated_answer = graph_answer_from_evidence(_bundle.items)
@@ -454,6 +535,8 @@ class MaraAgentPipeline(FullQAPipeline):
             active_file_id=getattr(self, "active_file_id", None),
             page_number=getattr(self, "page_number", None),
         )
+        understanding = _with_available_modalities(understanding, self)
+        understanding = with_selected_source_context(understanding, self)
         plan = self.plan_steps(
             understanding,
             agent_mode=getattr(self, "agent_mode", "auto"),
@@ -504,3 +587,11 @@ class MaraAgentPipeline(FullQAPipeline):
 
     def build_artifact(self, understanding: dict[str, Any]) -> dict[str, Any] | None:
         return build_artifact_for_pipeline(self, understanding)
+
+
+def _retrieval_domain(pipeline: Any) -> str:
+    return str(
+        getattr(pipeline, "retrieval_domain", None)
+        or getattr(pipeline, "verification_domain", None)
+        or ""
+    ).strip()

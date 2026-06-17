@@ -34,10 +34,11 @@ def _document_record(
     source_id: str,
     source: dict[str, Any],
 ) -> dict[str, Any]:
+    source_text = _source_text(source)
     document_path = materialize_text_document(
         output_path,
         source_id,
-        str(source.get("source") or source.get("source_info") or ""),
+        source_text,
     )
     return {
         "document_id": source_id,
@@ -47,6 +48,7 @@ def _document_record(
         "metadata": {
             "dataset_family": "hallucination_verification",
             "task_type": source.get("task_type"),
+            "source_label": str(source.get("source") or "").strip(),
         },
     }
 
@@ -58,6 +60,7 @@ def _example(
 ) -> dict[str, Any]:
     source_id = str(response["source_id"])
     labels = list(response.get("labels") or [])
+    source_text = _source_text(source)
     return {
         "example_id": str(response.get("id") or f"{source_id}_{index}"),
         "document_ids": [source_id],
@@ -69,7 +72,7 @@ def _example(
         "gold_evidence": [
             {
                 "document_id": source_id,
-                "span": str(source.get("source") or source.get("source_info") or ""),
+                "span": source_text,
                 "citation": f"{source_id}#source",
             }
         ],
@@ -83,5 +86,10 @@ def _example(
             "quality": response.get("quality"),
             "label_count": len(labels),
             "labels": labels,
+            "source_label": str(source.get("source") or "").strip(),
         },
     }
+
+
+def _source_text(source: dict[str, Any]) -> str:
+    return str(source.get("source_info") or source.get("source") or "").strip()

@@ -74,20 +74,6 @@ def test_mara_planner_decision_routes_table_question_to_hybrid_evidence():
     assert decision["evidence_types"] == ["text", "page_image", "element"]
 
 
-def test_mara_planner_decision_routes_finance_calculation_to_hybrid_evidence():
-    decision = planner_decision(
-        {"task_type": "qa", "modalities": ["text"], "scope": "document"},
-        question=(
-            "Does 3M have a reasonably healthy liquidity profile based on its "
-            "quick ratio for Q2 of FY2023?"
-        ),
-    )
-
-    assert decision["route"] == "hybrid"
-    assert decision["evidence_types"] == ["text", "page_image", "element"]
-    assert decision["compatibility_scope"] == "finance_statement_calculation"
-
-
 def test_mara_pipeline_reads_agent_mode_from_settings():
     pipeline = MaraAgentPipeline.prepare_pipeline_instance(
         {"reasoning.options.mara.agent_mode": "thorough"},

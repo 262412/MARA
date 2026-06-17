@@ -7,9 +7,11 @@ def controller_config_kwargs(config_getter) -> dict[str, Any]:
     return {
         "controller_mode": config_getter("controller_mode"),
         "route_policy": config_getter("route_policy"),
+        "planner_backend": config_getter("planner_backend"),
         "planner_model": config_getter("planner_model"),
         "allowed_routes": config_getter("allowed_routes"),
         "verification_mode": config_getter("verification_mode"),
+        "verification_domain": config_getter("verification_domain"),
     }
 
 

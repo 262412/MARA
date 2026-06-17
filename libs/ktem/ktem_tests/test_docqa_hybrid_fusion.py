@@ -183,9 +183,71 @@ def test_hybrid_fusion_prioritizes_financial_statement_text_over_irrelevant_visu
                 ),
             },
         ],
+        domain="finance",
     )
 
     assert fused[0]["evidence_id"] == "text-income-balance-page"
     components = fused[0]["metadata"]["hybrid_fusion_components"]
     assert components["finance_statement_match"] > 0
     assert trace["ranker"] == "weighted_cross_modal_v1"
+
+
+def test_hybrid_fusion_does_not_apply_finance_statement_boost_by_default():
+    fused, _trace = fuse_hybrid_evidence(
+        "Calculate inventory turnover using cost of sales and inventories.",
+        [
+            {
+                "evidence_id": "visual-derivative-page",
+                "source_id": "paper",
+                "page_label": "152",
+                "modality": "page_image",
+                "text": "Derivative credit ratings and counterparty exposure.",
+                "metadata": {"visual_retriever_score": 0.95},
+            },
+            {
+                "evidence_id": "text-income-balance-page",
+                "source_id": "paper",
+                "page_label": "132",
+                "modality": "text",
+                "text": (
+                    "Consolidated Statements of Operations. Cost of sales "
+                    "$10,230. Consolidated Balance Sheets. Inventories $1,077."
+                ),
+            },
+        ],
+    )
+
+    assert fused[0]["evidence_id"] == "visual-derivative-page"
+    components = fused[1]["metadata"]["hybrid_fusion_components"]
+    assert components["finance_statement_match"] == 0.0
+
+
+def test_hybrid_fusion_applies_finance_statement_boost_when_opted_in():
+    fused, _trace = fuse_hybrid_evidence(
+        "Calculate inventory turnover using cost of sales and inventories.",
+        [
+            {
+                "evidence_id": "visual-derivative-page",
+                "source_id": "aes-2022",
+                "page_label": "152",
+                "modality": "page_image",
+                "text": "Derivative credit ratings and counterparty exposure.",
+                "metadata": {"visual_retriever_score": 0.95},
+            },
+            {
+                "evidence_id": "text-income-balance-page",
+                "source_id": "aes-2022",
+                "page_label": "132",
+                "modality": "text",
+                "text": (
+                    "Consolidated Statements of Operations. Cost of sales "
+                    "$10,230. Consolidated Balance Sheets. Inventories $1,077."
+                ),
+            },
+        ],
+        domain="finance",
+    )
+
+    assert fused[0]["evidence_id"] == "text-income-balance-page"
+    components = fused[0]["metadata"]["hybrid_fusion_components"]
+    assert components["finance_statement_match"] > 0
