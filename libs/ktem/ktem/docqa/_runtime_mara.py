@@ -16,6 +16,7 @@ class ResponseCapture:
         self.request = request
         self.agent_trace: list[dict[str, Any]] = []
         self.evidence_metadata: dict[str, Any] = {}
+        self.execution: dict[str, Any] | None = None
         self.artifact: Any = None
 
     def ingest(self, channel: str | None, content: Any) -> None:
@@ -23,7 +24,12 @@ class ResponseCapture:
         mara_content = content
         if channel == "debug" and isinstance(content, dict):
             candidate = content.get("mara_channel")
-            if candidate in {"agent_trace", "evidence_metadata", "artifact"}:
+            if candidate in {
+                "agent_trace",
+                "evidence_metadata",
+                "execution",
+                "artifact",
+            }:
                 mara_channel = candidate
                 mara_content = content.get("payload")
 
@@ -39,10 +45,21 @@ class ResponseCapture:
                 self.evidence_metadata.update(mara_content)
             else:
                 self.evidence_metadata["value"] = mara_content
+        elif channel == "execution" or mara_channel == "execution":
+            if isinstance(mara_content, dict):
+                self.execution = dict(mara_content)
         elif channel == "artifact" or mara_channel == "artifact":
             self.artifact = mara_content
 
     def as_response_kwargs(self, answer: str = "") -> dict[str, Any]:
+        if self.execution is not None:
+            return _execution_response_kwargs(
+                self.request,
+                self.agent_trace,
+                self.evidence_metadata,
+                self.execution,
+                self.artifact,
+            )
         payload = {
             "agent_trace": self.agent_trace,
             "evidence_metadata": self.evidence_metadata,
@@ -60,6 +77,71 @@ class ResponseCapture:
         return payload
 
 
+def _execution_response_kwargs(
+    request: Any | None,
+    agent_trace: list[dict[str, Any]],
+    captured_evidence_metadata: dict[str, Any],
+    execution: dict[str, Any],
+    artifact: Any,
+) -> dict[str, Any]:
+    evidence_bundle = _dict_field(execution, "evidence_bundle")
+    evidence_metadata = dict(captured_evidence_metadata)
+    bundle_metadata = evidence_bundle.get("metadata")
+    if isinstance(bundle_metadata, dict):
+        evidence_metadata.update(bundle_metadata)
+
+    payload = {
+        "agent_trace": agent_trace,
+        "evidence_metadata": evidence_metadata,
+        "backend_metadata": _backend_metadata(request, evidence_metadata),
+        "artifact": artifact,
+        "controller_trace": _list_field(execution, "controller_trace"),
+        "controller_decision": _dict_field(execution, "controller_decision"),
+        "route_decision": _dict_field(execution, "route_decision"),
+        "retrieve_decision": _dict_field(execution, "retrieve_decision"),
+        "verify_decision": _dict_field(execution, "verify_decision"),
+        "guardrail_decision": _dict_field(execution, "guardrail_decision"),
+        "evidence_bundle": evidence_bundle,
+        "workflow_plan": _dict_field(execution, "workflow_plan"),
+    }
+    if not payload["route_decision"]:
+        payload["route_decision"] = _route_decision_from_controller(
+            payload["controller_decision"]
+        )
+    return payload
+
+
+def _dict_field(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    value = payload.get(key)
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _list_field(payload: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    value = payload.get(key)
+    if not isinstance(value, list):
+        return []
+    return [dict(item) for item in value if isinstance(item, dict)]
+
+
+def _route_decision_from_controller(
+    controller_decision: dict[str, Any],
+) -> dict[str, Any]:
+    legacy_route = str(
+        controller_decision.get("legacy_route")
+        or controller_decision.get("route")
+        or ""
+    ).strip()
+    if not legacy_route:
+        return {}
+    return {
+        "route": legacy_route,
+        "policy": controller_decision.get("policy"),
+        "controller_mode": controller_decision.get("controller_mode"),
+        "requires_retrieval": controller_decision.get("requires_retrieval"),
+        "reason": controller_decision.get("reason"),
+    }
+
+
 def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> None:
     pipeline.graph_context = graph_context
     pipeline.task_type = request.task_type or ""
@@ -67,9 +149,15 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
     pipeline.artifact_type = request.artifact_type or ""
     pipeline.controller_mode = request.controller_mode or "off"
     pipeline.route_policy = request.route_policy or "auto"
-    pipeline.planner_model = request.planner_model or ""
+    pipeline.planner_backend = request.planner_backend or ""
+    pipeline.planner_model = (
+        ""
+        if pipeline.planner_backend == "heuristic_local"
+        else request.planner_model or ""
+    )
     pipeline.allowed_routes = list(request.allowed_routes or [])
     pipeline.verification_mode = request.verification_mode or "off"
+    pipeline.verification_domain = request.verification_domain or ""
     pipeline.graph_mode = str(getattr(request, "graph_mode", "") or "").strip()
     _apply_visual_backends(pipeline, request)
     pipeline.docqa_request = request
@@ -122,8 +210,11 @@ def _backend_metadata(
         if value:
             metadata[output_key] = value
 
+    planner_backend = str(getattr(request, "planner_backend", "") or "").strip()
     planner_model = str(getattr(request, "planner_model", "") or "").strip()
-    if planner_model:
+    if planner_backend:
+        metadata["planner_backend"] = planner_backend
+    elif planner_model:
         metadata["planner_backend"] = planner_model
     visual_retriever = str(
         getattr(request, "visual_retriever_backend", "") or ""
@@ -145,12 +236,16 @@ def copy_request_fields(target: Any, source: Any) -> None:
     target.note_ids = source.note_ids
     target.controller_mode = source.controller_mode
     target.route_policy = source.route_policy
+    target.planner_backend = source.planner_backend
     target.planner_model = source.planner_model
     target.allowed_routes = source.allowed_routes
     target.verification_mode = source.verification_mode
+    target.verification_domain = source.verification_domain
     target.graph_mode = source.graph_mode
     target.visual_retriever_backend = source.visual_retriever_backend
     target.visual_generator_backend = source.visual_generator_backend
+    target.page_image_records = source.page_image_records
+    target.max_context_length = source.max_context_length
 
 
 def selected_ids(runtime: Any, user_id: Any, selected_inputs: dict[int, Any]):

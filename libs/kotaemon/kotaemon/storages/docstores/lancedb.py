@@ -1,11 +1,125 @@
 import json
-from typing import List, Optional, Union
+import re
+from collections import Counter
+from typing import List, Optional, Union, cast
 
 from kotaemon.base import Document
 
 from .base import BaseDocumentStore
 
 MAX_DOCS_TO_GET = 10**4
+TOKEN_PATTERN = re.compile(r"[a-zA-Z0-9]+")
+LEXICAL_FALLBACK_STOPWORDS = frozenset(
+    {
+        "about",
+        "above",
+        "after",
+        "again",
+        "against",
+        "also",
+        "based",
+        "because",
+        "been",
+        "before",
+        "being",
+        "below",
+        "between",
+        "both",
+        "could",
+        "does",
+        "doing",
+        "down",
+        "during",
+        "each",
+        "explain",
+        "from",
+        "further",
+        "have",
+        "having",
+        "here",
+        "into",
+        "itself",
+        "measure",
+        "more",
+        "most",
+        "only",
+        "other",
+        "over",
+        "please",
+        "profile",
+        "reasonably",
+        "relevant",
+        "same",
+        "should",
+        "some",
+        "state",
+        "such",
+        "than",
+        "that",
+        "their",
+        "then",
+        "there",
+        "these",
+        "they",
+        "this",
+        "those",
+        "through",
+        "under",
+        "until",
+        "very",
+        "what",
+        "when",
+        "where",
+        "which",
+        "while",
+        "with",
+        "would",
+        "your",
+    }
+)
+
+
+def _document_from_lancedb_row(row: dict) -> Document:
+    return Document(
+        id_=row["id"],
+        text=row["text"] if row["text"] else "<empty>",
+        metadata=json.loads(row["attributes"]),
+    )
+
+
+def _lexical_query_tokens(query: str) -> list[str]:
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for token in TOKEN_PATTERN.findall(query.lower()):
+        if len(token) < 4 or token in LEXICAL_FALLBACK_STOPWORDS or token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+    return tokens
+
+
+def _rank_docs_by_query_tokens(
+    query: str, docs: list[Document], top_k: int
+) -> list[Document]:
+    query_tokens = _lexical_query_tokens(query)
+    if not query_tokens:
+        return []
+
+    ranked: list[tuple[int, int, int, Document]] = []
+    for order, doc in enumerate(docs):
+        doc_tokens = Counter(TOKEN_PATTERN.findall(doc.text.lower()))
+        unique_matches = 0
+        total_matches = 0
+        for token in query_tokens:
+            count = doc_tokens[token]
+            if count:
+                unique_matches += 1
+                total_matches += count
+        if unique_matches:
+            ranked.append((unique_matches, total_matches, -order, doc))
+
+    ranked.sort(reverse=True, key=lambda item: (item[0], item[1], item[2]))
+    return [doc for *_, doc in ranked[:top_k]]
 
 
 class LanceDBDocumentStore(BaseDocumentStore):
@@ -72,7 +186,7 @@ class LanceDBDocumentStore(BaseDocumentStore):
             if query_filter:
                 docs = (
                     document_collection.search(query, query_type="fts")
-                    .where(query_filter, prefilter=True)
+                    .where(query_filter, prefilter=False)
                     .limit(top_k)
                     .to_list()
                 )
@@ -84,14 +198,10 @@ class LanceDBDocumentStore(BaseDocumentStore):
                 )
         except (ValueError, FileNotFoundError):
             docs = []
-        return [
-            Document(
-                id_=doc["id"],
-                text=doc["text"] if doc["text"] else "<empty>",
-                metadata=json.loads(doc["attributes"]),
-            )
-            for doc in docs
-        ]
+        if query_filter and not docs:
+            scoped_doc_ids = cast(list[str], doc_ids)
+            return _rank_docs_by_query_tokens(query, self.get(scoped_doc_ids), top_k)
+        return [_document_from_lancedb_row(doc) for doc in docs]
 
     def get(self, ids: Union[List[str], str]) -> List[Document]:
         """Get document by id"""
@@ -116,14 +226,7 @@ class LanceDBDocumentStore(BaseDocumentStore):
 
         # return the documents using the order of original
         # ids (which were ordered by score)
-        doc_dict = {
-            doc["id"]: Document(
-                id_=doc["id"],
-                text=doc["text"] if doc["text"] else "<empty>",
-                metadata=json.loads(doc["attributes"]),
-            )
-            for doc in docs
-        }
+        doc_dict = {doc["id"]: _document_from_lancedb_row(doc) for doc in docs}
         return [doc_dict[_id] for _id in ids if _id in doc_dict]
 
     def delete(self, ids: Union[List[str], str], refresh_indices: bool = True):

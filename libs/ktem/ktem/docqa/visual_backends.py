@@ -51,26 +51,38 @@ class ColVisionHTTPVisualRetriever:
         *,
         endpoint: str | None = None,
         timeout: float | None = None,
+        batch_size: int | None = None,
     ) -> None:
         self.name = name
         self.model_family = model_family
         self.endpoint = endpoint or _colvision_endpoint(model_family)
         self.timeout = timeout or float(os.getenv("MARA_COLVISION_TIMEOUT", "60"))
+        self.batch_size = batch_size or _colvision_batch_size()
 
     def score(self, query: str, record: dict[str, Any]) -> float:
-        image_url = _image_url(record)
-        if not image_url:
-            return 0.0
-        payload = {
-            "query": str(query or ""),
-            "images": [image_url],
-            "model_family": self.model_family,
-        }
-        response = self._post_json(payload)
-        scores = response.get("scores") if isinstance(response, dict) else None
-        if not isinstance(scores, list) or not scores:
-            return 0.0
-        return float(scores[0])
+        return self.score_many(query, [record])[0]
+
+    def score_many(self, query: str, records: list[dict[str, Any]]) -> list[float]:
+        scores = [0.0 for _ in records]
+        pending = [
+            (index, image_url)
+            for index, record in enumerate(records)
+            if (image_url := _image_url(record))
+        ]
+        for chunk in _chunks(pending, self.batch_size):
+            response = self._post_json(
+                {
+                    "query": str(query or ""),
+                    "images": [image_url for _, image_url in chunk],
+                    "model_family": self.model_family,
+                }
+            )
+            raw_scores = response.get("scores") if isinstance(response, dict) else None
+            if not isinstance(raw_scores, list):
+                continue
+            for (index, _), score in zip(chunk, raw_scores):
+                scores[index] = round(float(score), 4)
+        return scores
 
     def _post_json(self, payload: dict[str, Any]) -> dict[str, Any]:
         body = json.dumps(payload).encode("utf-8")
@@ -95,7 +107,9 @@ class QwenVLVisualGenerator:
         api_key: str | None = None,
         model: str | None = None,
         timeout: float | None = None,
-        max_images: int = 2,
+        max_images: int | None = None,
+        max_output_tokens: int | None = None,
+        max_evidence_text_chars: int | None = None,
     ) -> None:
         self.base_url = base_url or os.getenv(
             "MARA_VLM_BASE_URL", "http://localhost:8001/v1"
@@ -103,18 +117,30 @@ class QwenVLVisualGenerator:
         self.api_key = api_key or os.getenv("MARA_VLM_API_KEY", "local")
         self.model = model or os.getenv("MARA_VLM_MODEL", "Qwen/Qwen3-VL-8B-Instruct")
         self.timeout = timeout or float(os.getenv("MARA_VLM_TIMEOUT", "60"))
-        self.max_images = max_images
+        self.max_images = _max_images(max_images)
+        self.max_output_tokens = _max_output_tokens(max_output_tokens)
+        self.max_evidence_text_chars = _max_evidence_text_chars(max_evidence_text_chars)
 
     def generate(self, request: Any, bundle: Any) -> str:
         items = [
             item for item in getattr(bundle, "items", []) if isinstance(item, dict)
         ]
-        content = [{"type": "text", "text": _visual_prompt(request, items)}]
+        content = [
+            {
+                "type": "text",
+                "text": _visual_prompt(
+                    request,
+                    items,
+                    max_text_chars=self.max_evidence_text_chars,
+                ),
+            }
+        ]
         content.extend(_image_parts(items, limit=self.max_images))
         response = self._client().chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": content}],
             temperature=0,
+            max_tokens=self.max_output_tokens,
         )
         return str(response.choices[0].message.content or "").strip()
 
@@ -219,7 +245,11 @@ def visual_backend_health(config: dict[str, Any]) -> dict[str, Any]:
             "visual_generator",
         ),
     }
-    missing = _missing_backends(backends, requires_config)
+    missing = _missing_backends(
+        backends,
+        requires_config,
+        allow_evidence_only_generator=_allow_evidence_only_generator(config),
+    )
     return {
         "backend_status": "not_configured" if missing else "configured",
         "requires_backend_config": requires_config,
@@ -292,6 +322,8 @@ def _readiness_reason(status: str, reason: str) -> dict[str, str]:
 def _missing_backends(
     backends: dict[str, dict[str, Any]],
     requires_config: bool,
+    *,
+    allow_evidence_only_generator: bool = False,
 ) -> list[str]:
     missing = []
     for role, health in backends.items():
@@ -301,8 +333,49 @@ def _missing_backends(
         elif (
             requires_config and role == "visual_generator" and status == "evidence_only"
         ):
-            missing.append(role)
+            if not allow_evidence_only_generator:
+                missing.append(role)
     return missing
+
+
+def _allow_evidence_only_generator(config: dict[str, Any]) -> bool:
+    if (
+        "use_generation" in config
+        and _bool_value(config.get("use_generation")) is False
+    ):
+        return True
+    benchmark_role = str(config.get("benchmark_role") or "").strip().lower()
+    return benchmark_role in {"retrieval_diagnostic", "retriever_diagnostic"}
+
+
+def _max_images(explicit: int | None) -> int:
+    raw_value: Any = explicit
+    if raw_value is None:
+        raw_value = os.getenv("MARA_VLM_MAX_IMAGES", "1")
+    return max(1, int(raw_value))
+
+
+def _max_output_tokens(explicit: int | None) -> int:
+    raw_value: Any = explicit
+    if raw_value is None:
+        raw_value = os.getenv("MARA_VLM_MAX_OUTPUT_TOKENS", "256")
+    return max(1, int(raw_value))
+
+
+def _max_evidence_text_chars(explicit: int | None) -> int:
+    raw_value: Any = explicit
+    if raw_value is None:
+        raw_value = os.getenv("MARA_VLM_EVIDENCE_TEXT_CHARS", "600")
+    return max(0, int(raw_value))
+
+
+def _colvision_batch_size() -> int:
+    return max(1, int(os.getenv("MARA_COLVISION_BATCH_SIZE", "8")))
+
+
+def _chunks(items: list[Any], size: int):
+    for index in range(0, len(items), size):
+        yield items[index : index + size]
 
 
 def _instantiate_dotted_backend(backend: str, label: str):
@@ -327,13 +400,21 @@ def _dotted_backend_available(backend: str) -> bool:
     return hasattr(module, attr_name)
 
 
-def _visual_prompt(request: Any, items: list[dict[str, Any]]) -> str:
+def _visual_prompt(
+    request: Any,
+    items: list[dict[str, Any]],
+    *,
+    max_text_chars: int,
+) -> str:
     prompt = str(getattr(request, "prompt", "") or "").strip()
     evidence = []
     for item in items[:4]:
         page = str(item.get("page_label") or item.get("page_number") or "").strip()
         source = str(item.get("file_name") or item.get("source_name") or "").strip()
-        text = str(item.get("text") or item.get("ocr_text") or "").strip()
+        text = _truncate_text(
+            str(item.get("text") or item.get("ocr_text") or "").strip(),
+            max_text_chars,
+        )
         label = " ".join(
             part for part in [source, f"page {page}" if page else ""] if part
         )
@@ -347,6 +428,12 @@ def _visual_prompt(request: Any, items: list[dict[str, Any]]) -> str:
         "If the image evidence is insufficient, say so.\n\n"
         f"Question: {prompt}\n\nEvidence:\n{evidence_text}"
     )
+
+
+def _truncate_text(text: str, limit: int) -> str:
+    if limit <= 0 or len(text) <= limit:
+        return text
+    return f"{text[:limit].rstrip()} [truncated]"
 
 
 def _image_parts(items: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:

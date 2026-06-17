@@ -11,6 +11,15 @@ from ktem.docqa.visual_retriever import rank_page_image_records
 
 from kotaemon.base import RetrievedDocument
 
+_LARGE_IMAGE_METADATA_KEYS = {
+    "image_origin",
+    "image_ref",
+    "page_image_path",
+    "page_visual_embedding",
+    "rendered_page_image",
+    "visual_embedding",
+}
+
 
 def build_mara_evidence_metadata(
     docs: list[RetrievedDocument], understanding: dict[str, Any]
@@ -46,11 +55,15 @@ def build_mara_evidence_metadata(
 
 
 def _evidence_item(doc: RetrievedDocument) -> dict[str, Any]:
-    metadata = dict(getattr(doc, "metadata", {}) or {})
+    metadata = _merged_doc_metadata(doc)
+    file_id = str(metadata.get("file_id") or "").strip()
+    file_name = str(metadata.get("file_name") or "").strip()
     return {
         "evidence_id": str(getattr(doc, "doc_id", "") or "").strip(),
-        "file_id": str(metadata.get("file_id") or "").strip(),
-        "file_name": str(metadata.get("file_name") or "").strip(),
+        "file_id": file_id,
+        "source_id": file_id,
+        "file_name": file_name,
+        "source_name": file_name,
         "page_label": str(metadata.get("page_label") or "").strip(),
         "element_type": str(
             metadata.get("element_type")
@@ -64,9 +77,15 @@ def _evidence_item(doc: RetrievedDocument) -> dict[str, Any]:
         "text": str(getattr(doc, "text", "") or getattr(doc, "content", "") or ""),
         "ocr_text": str(metadata.get("ocr_text") or "").strip(),
         "table_origin": str(metadata.get("table_origin") or "").strip(),
-        "formula_normalized": str(metadata.get("formula_normalized") or "").strip(),
+        "formula_normalized": str(
+            metadata.get("formula_normalized")
+            or metadata.get("normalized_formula")
+            or ""
+        ).strip(),
         "slide_number": metadata.get("slide_number"),
         "retrieval_path": str(metadata.get("retrieval_path") or "").strip(),
+        "score": getattr(doc, "score", None),
+        "metadata": metadata,
         "source_backrefs": _source_backrefs(metadata),
     }
 
@@ -75,6 +94,24 @@ def _source_backrefs(metadata: dict[str, Any]) -> list[str]:
     file_id = str(metadata.get("file_id") or "").strip()
     page_label = str(metadata.get("page_label") or "").strip()
     return [f"{file_id}#page:{page_label}"] if file_id and page_label else []
+
+
+def _merged_doc_metadata(doc: RetrievedDocument) -> dict[str, Any]:
+    metadata = dict(getattr(doc, "metadata", {}) or {})
+    nested = metadata.get("metadata")
+    if isinstance(nested, dict):
+        merged = dict(nested)
+        merged.update(metadata)
+        return _without_large_image_payloads(merged)
+    return _without_large_image_payloads(metadata)
+
+
+def _without_large_image_payloads(metadata: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in metadata.items()
+        if key not in _LARGE_IMAGE_METADATA_KEYS
+    }
 
 
 def _append_unique(target: list[str], value: str) -> None:

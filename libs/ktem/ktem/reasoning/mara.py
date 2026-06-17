@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any, Generator
 
+from ktem.docqa.claim_filtering import clean_answer_text
 from ktem.docqa.execution import RouteExecutionResult, execute_controller_turn
 from ktem.docqa.graph_index import graph_answer_from_evidence
 
@@ -11,6 +13,10 @@ from kotaemon.base import Document, RetrievedDocument
 from .mara_artifacts import build_artifact_for_pipeline
 from .mara_controller import planner_trace_payload
 from .mara_evidence import build_mara_evidence_metadata
+from .mara_query_planning import plan_steps as build_mara_plan_steps
+from .mara_query_planning import understand_query as understand_mara_query
+from .mara_query_planning import with_selected_source_context
+from .mara_retrieval_query import messages_share_retrieval_cache_key, retrieval_query
 from .mara_route_retrieval import route_retrieval_metadata
 from .simple import FullQAPipeline
 
@@ -33,6 +39,11 @@ MARA_VISUAL_EVIDENCE_ONLY_MESSAGE = (
 )
 ANSWER_FORMAT_REQUIREMENTS = (
     "\n\nAnswer formatting requirements:\n"
+    "- Start with the direct final answer in the first sentence, then add "
+    "supporting calculation or evidence only if needed.\n"
+    "- For financial calculation questions, state the final numeric result or "
+    "yes/no conclusion first, include the formula inputs, and avoid extra "
+    "tables unless the question asks for a table.\n"
     "- Return the final answer as Markdown, not raw HTML.\n"
     "- Put a blank line between paragraphs, headings, lists, formulas, tables, "
     "and code blocks.\n"
@@ -47,33 +58,6 @@ ANSWER_FORMAT_REQUIREMENTS = (
     "as ```python, when a language tag is clear.\n"
 )
 
-_TASK_KEYWORDS = {
-    "study_guide": ("study guide", "study-guide"),
-    "flashcards": ("flashcard", "flash card"),
-    "slide_outline": ("slide outline", "deck outline", "presentation outline"),
-    "mindmap": ("mind map", "mindmap"),
-    "quiz": ("quiz", "questions"),
-    "summary": ("summary", "summarize", "summarise", "overview"),
-    "compare": ("compare", "contrast", "difference", "differences"),
-    "explain": ("explain", "why", "how does"),
-}
-_MODALITY_KEYWORDS = {
-    "table": ("table", "row", "column", "spreadsheet", "csv"),
-    "figure": ("figure", "image", "diagram", "chart", "plot"),
-    "formula": ("formula", "equation", "math", "latex"),
-    "slide": ("slide", "deck", "presentation", "ppt", "pptx"),
-}
-_VALID_TASK_TYPES = {
-    "qa",
-    "summary",
-    "compare",
-    "explain",
-    "study_guide",
-    "quiz",
-    "flashcards",
-    "mindmap",
-    "slide_outline",
-}
 _ROUTE_POLICY_ALIASES = {
     "direct": "direct",
     "doc": "doc_text",
@@ -142,6 +126,7 @@ def _controller_execution_request(
         route_policy=getattr(pipeline, "route_policy", None) or "auto",
         allowed_routes=list(getattr(pipeline, "allowed_routes", None) or []),
         verification_mode=getattr(pipeline, "verification_mode", None) or "light",
+        verification_domain=getattr(pipeline, "verification_domain", None) or "",
         active_file_id=getattr(pipeline, "active_file_id", "") or "",
         active_file_name=getattr(pipeline, "active_file_name", "") or "",
         page_number=getattr(pipeline, "page_number", None),
@@ -149,6 +134,69 @@ def _controller_execution_request(
         selected_file_ids=list(getattr(pipeline, "selected_file_ids", None) or []),
         graph_context=getattr(pipeline, "graph_context", None) or {},
     )
+
+
+def _with_available_modalities(
+    understanding: dict[str, Any],
+    pipeline: Any,
+) -> dict[str, Any]:
+    available_modalities = [
+        str(modality)
+        for modality in understanding.get("available_modalities", [])
+        if modality
+    ]
+    if (
+        _page_image_route_available(pipeline)
+        and "page_image" not in available_modalities
+    ):
+        available_modalities.append("page_image")
+    if not available_modalities:
+        return understanding
+    updated = dict(understanding)
+    updated["available_modalities"] = available_modalities
+    return updated
+
+
+def _page_image_route_available(pipeline: Any) -> bool:
+    allowed_routes = [
+        str(route).strip()
+        for route in getattr(pipeline, "allowed_routes", None) or []
+        if str(route).strip()
+    ]
+    if allowed_routes and not any(
+        route in {"doc_page_image", "hybrid"} for route in allowed_routes
+    ):
+        return False
+    return bool(
+        getattr(pipeline, "visual_retriever_backend", None)
+        or getattr(pipeline, "visual_retriever", None)
+        or getattr(pipeline, "page_image_index_records", None)
+    )
+
+
+@contextmanager
+def _text_only_answering_pipeline(pipeline: Any) -> Generator[None, None, None]:
+    answering_pipeline = getattr(pipeline, "answering_pipeline", None)
+    target = _answering_pipeline_multimodal_target(answering_pipeline)
+    if target is None:
+        yield
+        return
+
+    original_use_multimodal = target.use_multimodal
+    target.use_multimodal = False
+    try:
+        yield
+    finally:
+        target.use_multimodal = original_use_multimodal
+
+
+def _answering_pipeline_multimodal_target(answering_pipeline: Any) -> Any | None:
+    original_obj = getattr(answering_pipeline, "ff_original_obj", None)
+    if original_obj is not None and hasattr(original_obj, "use_multimodal"):
+        return original_obj
+    if hasattr(answering_pipeline, "use_multimodal"):
+        return answering_pipeline
+    return None
 
 
 def _collect_text_rag_generation(
@@ -161,21 +209,27 @@ def _collect_text_rag_generation(
     events: list[Document] = []
     answer = ""
     generation_message = _message_with_answer_format_requirements(message)
-    stream = super(MaraAgentPipeline, pipeline).stream(
-        generation_message, conv_id, history, **kwargs
-    )
-    while True:
-        try:
-            event = next(stream)
-        except StopIteration as stop:
-            returned = stop.value
-            break
-        events.append(event)
-        if isinstance(event, Document) and event.channel == "chat":
-            answer += "" if event.content is None else str(event.content)
+    generation_kwargs = dict(kwargs)
+    generation_kwargs["enable_claim_verification"] = False
+    with _text_only_answering_pipeline(pipeline):
+        stream = super(MaraAgentPipeline, pipeline).stream(
+            generation_message, conv_id, history, **generation_kwargs
+        )
+        while True:
+            try:
+                event = next(stream)
+            except StopIteration as stop:
+                returned = stop.value
+                break
+            events.append(event)
+            if isinstance(event, Document) and event.channel == "chat":
+                if event.content is None:
+                    answer = ""
+                else:
+                    answer += str(event.content)
     if not answer and isinstance(returned, Document) and returned.channel == "chat":
         answer = "" if returned.content is None else str(returned.content)
-    return answer, events
+    return clean_answer_text(answer), events
 
 
 def _message_with_answer_format_requirements(message: str) -> str:
@@ -205,6 +259,7 @@ def _route_execution_events(
 ) -> Generator[Document, None, Document]:
     for event in _execution_trace_events(execution):
         yield event
+    yield _mara_event("execution", execution.as_dict())
     yield _mara_event("evidence_metadata", execution.evidence_bundle.metadata)
     visible_answer = _visible_execution_answer(execution)
     if execution.guardrail_decision.action == "return":
@@ -238,6 +293,32 @@ def _visual_generator_answer(generator: Any, request: Any, bundle: Any) -> str:
     if callable(generator):
         return str(generator(request, bundle))
     raise ValueError("Configured visual generator must be callable or expose generate.")
+
+
+def _bundle_has_page_image_evidence(bundle: Any) -> bool:
+    return any(
+        isinstance(item, dict) and str(item.get("modality") or "") == "page_image"
+        for item in getattr(bundle, "items", []) or []
+    )
+
+
+def _route_visual_answer(
+    pipeline: Any,
+    request: Any,
+    bundle: Any,
+    *,
+    evidence_only_fallback: bool,
+) -> str | None:
+    vlm_generator = getattr(pipeline, "vlm_generator", None)
+    if vlm_generator is None:
+        if not evidence_only_fallback:
+            return None
+        bundle.metadata["generation_backend"] = "evidence_only_without_vlm"
+        return _visual_evidence_only_answer(bundle)
+    bundle.metadata["generation_backend"] = str(
+        getattr(vlm_generator, "name", "visual_generator")
+    )
+    return _visual_generator_answer(vlm_generator, request, bundle)
 
 
 def _visible_execution_answer(execution: RouteExecutionResult) -> str:
@@ -314,111 +395,44 @@ class MaraAgentPipeline(FullQAPipeline):
         active_file_id: str | None = None,
         page_number: int | None = None,
     ) -> dict[str, Any]:
-        normalized = str(query or "").lower()
-        normalized_task = str(task_type or "").strip().lower()
-        if normalized_task in _VALID_TASK_TYPES:
-            detected_task = normalized_task
-        else:
-            detected_task = "qa"
-            for candidate, keywords in _TASK_KEYWORDS.items():
-                if any(keyword in normalized for keyword in keywords):
-                    detected_task = candidate
-                    break
-
-        modalities = [
-            modality
-            for modality, keywords in _MODALITY_KEYWORDS.items()
-            if any(keyword in normalized for keyword in keywords)
-        ]
-        if not modalities:
-            modalities = ["text"]
-
-        explicit_scope = str(qa_scope or "").strip().lower().replace("-", "_")
-        if explicit_scope in {"page", "document", "multi_document"}:
-            scope = explicit_scope
-        elif page_number is not None or "page " in normalized:
-            scope = "page"
-        elif active_file_id:
-            scope = "document"
-        else:
-            scope = "document"
-
-        return {
-            "question": query,
-            "task_type": detected_task,
-            "modalities": modalities,
-            "scope": scope,
-        }
+        return understand_mara_query(
+            query,
+            task_type=task_type,
+            qa_scope=qa_scope,
+            active_file_id=active_file_id,
+            page_number=page_number,
+        )
 
     @classmethod
     def plan_steps(
         cls, understanding: dict[str, Any], *, agent_mode: str | None = None
     ) -> list[dict[str, str]]:
-        mode = str(agent_mode or "auto").strip().lower()
-        task_type = str(understanding.get("task_type") or "qa")
-        scope = str(understanding.get("scope") or "document").replace("_", "-")
-        modalities = [
-            str(modality)
-            for modality in understanding.get("modalities", ["text"])
-            if modality
-        ]
-        if not modalities:
-            modalities = ["text"]
-
-        modality_text = ", ".join(modalities)
-        plan = [
-            {
-                "tool": "source_retriever",
-                "purpose": (
-                    f"Retrieve {modality_text} evidence for "
-                    f"{scope}-scoped {task_type}."
-                ),
-            }
-        ]
-        if mode == "fast":
-            return plan
-
-        for modality in modalities:
-            if modality == "text":
-                continue
-            plan.append(
-                {
-                    "tool": f"{modality}_inspector",
-                    "purpose": (
-                        f"Inspect retrieved {modality} evidence before composing "
-                        "the answer."
-                    ),
-                }
-            )
-            if len(plan) >= 3:
-                break
-
-        if mode == "thorough":
-            plan.append(
-                {
-                    "tool": "claim_verifier",
-                    "purpose": (
-                        "Check whether the answer is supported by retrieved evidence."
-                    ),
-                }
-            )
-
-        return plan[:4]
+        return build_mara_plan_steps(understanding, agent_mode=agent_mode)
 
     def retrieve(
         self, message: str, history: list
     ) -> tuple[list[RetrievedDocument], list[Document]]:
         cached = getattr(self, "_mara_cached_retrieval", None)
-        if cached and cached[0] == message and cached[1] == list(history):
+        if (
+            cached
+            and messages_share_retrieval_cache_key(cached[0], message)
+            and cached[1] == list(history)
+        ):
             delattr(self, "_mara_cached_retrieval")
             docs, info = cached[2], cached[3]
             self._mara_last_docs = list(docs)
             return docs, info
 
-        docs, info = super().retrieve(message, history)
+        docs, info = super().retrieve(
+            retrieval_query(message, domain=_retrieval_domain(self)),
+            history,
+        )
         attempts = [{"attempt": 1, "evidence_count": len(docs), "retry_reason": ""}]
         if _should_retry_retrieval(getattr(self, "agent_mode", None), docs):
-            docs, info = super().retrieve(message, history)
+            docs, info = super().retrieve(
+                retrieval_query(message, domain=_retrieval_domain(self)),
+                history,
+            )
             attempts.append(
                 {
                     "attempt": 2,
@@ -456,18 +470,27 @@ class MaraAgentPipeline(FullQAPipeline):
         def generate(_request: Any, _decision: Any, _bundle: Any) -> str:
             nonlocal generated_answer
             if _decision.route == "page_image_rag":
-                vlm_generator = getattr(self, "vlm_generator", None)
-                if vlm_generator is None:
-                    _bundle.metadata["generation_backend"] = "evidence_only_without_vlm"
-                    generated_answer = _visual_evidence_only_answer(_bundle)
-                    return generated_answer
-                _bundle.metadata["generation_backend"] = str(
-                    getattr(vlm_generator, "name", "visual_generator")
+                visual_answer = _route_visual_answer(
+                    self,
+                    _request,
+                    _bundle,
+                    evidence_only_fallback=True,
                 )
-                generated_answer = _visual_generator_answer(
-                    vlm_generator, _request, _bundle
-                )
+                assert visual_answer is not None
+                generated_answer = visual_answer
                 return generated_answer
+            if _decision.route == "hybrid_rag" and _bundle_has_page_image_evidence(
+                _bundle
+            ):
+                visual_answer = _route_visual_answer(
+                    self,
+                    _request,
+                    _bundle,
+                    evidence_only_fallback=False,
+                )
+                if visual_answer is not None:
+                    generated_answer = visual_answer
+                    return generated_answer
             if _decision.route == "graph_rag":
                 _bundle.metadata["generation_backend"] = "local_graph_summary"
                 generated_answer = graph_answer_from_evidence(_bundle.items)
@@ -512,6 +535,8 @@ class MaraAgentPipeline(FullQAPipeline):
             active_file_id=getattr(self, "active_file_id", None),
             page_number=getattr(self, "page_number", None),
         )
+        understanding = _with_available_modalities(understanding, self)
+        understanding = with_selected_source_context(understanding, self)
         plan = self.plan_steps(
             understanding,
             agent_mode=getattr(self, "agent_mode", "auto"),
@@ -562,3 +587,11 @@ class MaraAgentPipeline(FullQAPipeline):
 
     def build_artifact(self, understanding: dict[str, Any]) -> dict[str, Any] | None:
         return build_artifact_for_pipeline(self, understanding)
+
+
+def _retrieval_domain(pipeline: Any) -> str:
+    return str(
+        getattr(pipeline, "retrieval_domain", None)
+        or getattr(pipeline, "verification_domain", None)
+        or ""
+    ).strip()

@@ -120,7 +120,9 @@ def _expected_table_evidence():
     return {
         "evidence_id": "doc-1",
         "file_id": "file-1",
+        "source_id": "file-1",
         "file_name": "report.pdf",
+        "source_name": "report.pdf",
         "page_label": "3",
         "element_type": "table",
         "element_id": "table-7",
@@ -132,6 +134,19 @@ def _expected_table_evidence():
         "formula_normalized": "",
         "slide_number": None,
         "retrieval_path": "hybrid",
+        "score": 0.0,
+        "metadata": {
+            "element_type": "table",
+            "element_id": "table-7",
+            "file_id": "file-1",
+            "file_name": "report.pdf",
+            "page_label": "3",
+            "bbox": [1, 2, 3, 4],
+            "caption": "Revenue table",
+            "ocr_text": "Revenue FY2026",
+            "table_origin": "camelot",
+            "retrieval_path": "hybrid",
+        },
         "source_backrefs": ["file-1#page:3"],
     }
 
@@ -168,6 +183,59 @@ def test_mara_evidence_metadata_includes_text_for_verifier_support():
     )
 
     assert metadata["evidence"][0]["text"] == "Revenue increased in 2026."
+
+
+def test_mara_text_evidence_metadata_exposes_standard_source_fields():
+    docs = [
+        RetrievedDocument(
+            text="Net sales were $10 million.",
+            id_="doc-1",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "annual-report.pdf",
+                "page_label": "7",
+                "retrieval_path": "doc_text",
+                "custom": "kept",
+            },
+            score=0.87,
+        )
+    ]
+
+    metadata = MaraAgentPipeline.build_evidence_metadata(
+        docs,
+        {"modalities": ["text"]},
+    )
+
+    assert metadata["modality_counts"] == {"text": 1}
+    assert metadata["page_coverage"] == ["7"]
+    assert metadata["source_ids"] == ["file-1"]
+    assert metadata["evidence"][0] == {
+        "evidence_id": "doc-1",
+        "file_id": "file-1",
+        "source_id": "file-1",
+        "file_name": "annual-report.pdf",
+        "source_name": "annual-report.pdf",
+        "page_label": "7",
+        "element_type": "text",
+        "element_id": "",
+        "bbox": None,
+        "caption": "",
+        "text": "Net sales were $10 million.",
+        "ocr_text": "",
+        "table_origin": "",
+        "formula_normalized": "",
+        "slide_number": None,
+        "retrieval_path": "doc_text",
+        "score": 0.87,
+        "metadata": {
+            "file_id": "file-1",
+            "file_name": "annual-report.pdf",
+            "page_label": "7",
+            "retrieval_path": "doc_text",
+            "custom": "kept",
+        },
+        "source_backrefs": ["file-1#page:7"],
+    }
 
 
 def test_mara_study_guide_artifact_contains_source_grounded_sections():

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.evidence_text import extract_final_answer_text
+
 from .metrics import normalize_text
 
 _BACKEND_FIELDS = {
@@ -149,14 +151,16 @@ def _ragas_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fluency_score(answer: str) -> float:
-    return float(bool(normalize_text(answer)))
+    return float(bool(normalize_text(extract_final_answer_text(answer))))
 
 
 def _correctness_score(
     prediction: dict[str, Any],
     metrics: dict[str, Any],
 ) -> float:
-    normalized_answer = normalize_text(str(prediction.get("predicted_answer") or ""))
+    normalized_answer = normalize_text(
+        extract_final_answer_text(str(prediction.get("predicted_answer") or ""))
+    )
     gold_answers = [
         normalize_text(str(item or ""))
         for item in prediction.get("gold_answers", [])

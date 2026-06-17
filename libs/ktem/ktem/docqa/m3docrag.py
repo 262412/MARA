@@ -10,6 +10,7 @@ def select_page_first_evidence(
     items: list[dict[str, Any]],
     *,
     max_pages: int = 3,
+    max_unpaged_items: int = 2,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     page_scores = _page_scores(query, items)
     selected_pages = [
@@ -19,14 +20,30 @@ def select_page_first_evidence(
             key=lambda item: (-item[1], item[0][0], item[0][1]),
         )[:max_pages]
     ]
+    if not selected_pages:
+        return items, _trace(items, selected_pages, pruned_item_count=0)
     selected = [item for page in selected_pages for item in _page_items(items, page)]
-    selected.extend(item for item in items if _page_key(item) not in selected_pages)
-    return selected, {
+    selected.extend(_unpaged_items(query, items, max_unpaged_items))
+    return selected, _trace(
+        selected,
+        selected_pages,
+        pruned_item_count=max(0, len(items) - len(selected)),
+    )
+
+
+def _trace(
+    selected: list[dict[str, Any]],
+    selected_pages: list[tuple[str, str]],
+    *,
+    pruned_item_count: int,
+) -> dict[str, Any]:
+    return {
         "selected_pages": [
             {"source_id": source_id, "page_label": page_label}
             for source_id, page_label in selected_pages
         ],
         "modality_counts": dict(Counter(item["modality"] for item in selected)),
+        "pruned_item_count": pruned_item_count,
     }
 
 
@@ -53,6 +70,31 @@ def _page_items(
 ) -> list[dict[str, Any]]:
     grouped = [item for item in items if _page_key(item) == page]
     return sorted(grouped, key=_modality_order)
+
+
+def _unpaged_items(
+    query: str,
+    items: list[dict[str, Any]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+    query_tokens = _tokens(query)
+    ranked = [
+        (_unpaged_item_score(query_tokens, item), index, item)
+        for index, item in enumerate(items)
+        if not all(_page_key(item))
+    ]
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    return [item for _, _, item in ranked[:limit]]
+
+
+def _unpaged_item_score(query_tokens: set[str], item: dict[str, Any]) -> int:
+    score = len(query_tokens & _item_tokens(item))
+    score += _hybrid_fusion_score(item)
+    if item.get("modality") == "graph":
+        score += 2
+    return score
 
 
 def _page_key(item: dict[str, Any]) -> tuple[str, str]:

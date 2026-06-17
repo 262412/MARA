@@ -6,6 +6,7 @@ from ktem.docqa.visual_backends import (
     build_visual_retriever_backend,
     visual_backend_health,
 )
+from ktem.docqa.visual_retriever import rank_page_image_records
 
 
 def test_visual_backend_health_reports_required_vlm_readiness():
@@ -75,6 +76,93 @@ def test_colqwen_retriever_backend_calls_local_colvision_endpoint(
     }
 
 
+def test_colqwen_retriever_backend_batches_visual_score_requests(monkeypatch):
+    payloads = []
+
+    def fake_post_json(self, payload):
+        payloads.append(payload)
+        return {
+            "scores": [0.8 - index * 0.1 for index, _ in enumerate(payload["images"])]
+        }
+
+    monkeypatch.setattr(
+        ColVisionHTTPVisualRetriever,
+        "_post_json",
+        fake_post_json,
+    )
+    backend = ColVisionHTTPVisualRetriever("colqwen", "colqwen", batch_size=2)
+
+    scores = backend.score_many(
+        "find the revenue chart",
+        [
+            {"page_image_path": "data:image/png;base64,page1"},
+            {"page_image_path": "data:image/png;base64,page2"},
+            {"page_image_path": "data:image/png;base64,page3"},
+            {"text": "no image"},
+        ],
+    )
+
+    assert scores == [0.8, 0.7, 0.8, 0.0]
+    assert payloads == [
+        {
+            "query": "find the revenue chart",
+            "images": [
+                "data:image/png;base64,page1",
+                "data:image/png;base64,page2",
+            ],
+            "model_family": "colqwen",
+        },
+        {
+            "query": "find the revenue chart",
+            "images": ["data:image/png;base64,page3"],
+            "model_family": "colqwen",
+        },
+    ]
+
+
+def test_page_image_ranker_uses_backend_batch_scoring():
+    class BatchRetriever:
+        name = "batch"
+        backend_type = "test_multi_vector"
+
+        def __init__(self):
+            self.batch_calls = []
+            self.score_calls = []
+
+        def score_many(self, query, records):
+            self.batch_calls.append(
+                (query, [record["evidence_id"] for record in records])
+            )
+            return [0.2, 0.9, 0.1]
+
+        def score(self, query, record):
+            self.score_calls.append((query, record["evidence_id"]))
+            return 0.0
+
+    retriever = BatchRetriever()
+
+    ranked, scores = rank_page_image_records(
+        "which page shows the answer",
+        [
+            {"evidence_id": "page-1"},
+            {"evidence_id": "page-2"},
+            {"evidence_id": "page-3"},
+        ],
+        retriever=retriever,
+    )
+
+    assert retriever.batch_calls == [
+        ("which page shows the answer", ["page-1", "page-2", "page-3"])
+    ]
+    assert retriever.score_calls == []
+    assert [record["evidence_id"] for record in ranked] == [
+        "page-2",
+        "page-1",
+        "page-3",
+    ]
+    assert scores == {"page-2": 0.9, "page-1": 0.2, "page-3": 0.1}
+
+
 def test_local_qwen3_vl_generator_calls_openai_compatible_endpoint(monkeypatch):
     captured = {}
 
@@ -122,6 +210,107 @@ def test_local_qwen3_vl_generator_calls_openai_compatible_endpoint(monkeypatch):
         "type": "image_url",
         "image_url": {"url": "data:image/png;base64,abc"},
     }
+
+
+def test_local_qwen3_vl_generator_defaults_to_one_image_per_prompt(monkeypatch):
+    captured = {}
+
+    class _Message:
+        content = "The first page answers the question."
+
+    class _Choice:
+        message = _Message()
+
+    class _Completions:
+        @staticmethod
+        def create(**kwargs):
+            captured.update(kwargs)
+            return type("Response", (), {"choices": [_Choice()]})()
+
+    class _Client:
+        chat = type("Chat", (), {"completions": _Completions()})()
+
+    monkeypatch.delenv("MARA_VLM_MAX_IMAGES", raising=False)
+    monkeypatch.setattr(QwenVLVisualGenerator, "_client", lambda _self: _Client())
+    generator = QwenVLVisualGenerator()
+    request = type("Request", (), {"prompt": "Which page has the answer?"})()
+    bundle = type(
+        "Bundle",
+        (),
+        {
+            "items": [
+                {
+                    "modality": "page_image",
+                    "page_image_path": "data:image/png;base64,first",
+                },
+                {
+                    "modality": "page_image",
+                    "page_image_path": "data:image/png;base64,second",
+                },
+            ]
+        },
+    )()
+
+    assert generator.generate(request, bundle) == "The first page answers the question."
+
+    content = captured["messages"][0]["content"]
+    image_parts = [part for part in content if part["type"] == "image_url"]
+    assert image_parts == [
+        {
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64,first"},
+        }
+    ]
+
+
+def test_local_qwen3_vl_generator_budgets_output_and_evidence_text(monkeypatch):
+    captured = {}
+
+    class _Message:
+        content = "The image contains the needed evidence."
+
+    class _Choice:
+        message = _Message()
+
+    class _Completions:
+        @staticmethod
+        def create(**kwargs):
+            captured.update(kwargs)
+            return type("Response", (), {"choices": [_Choice()]})()
+
+    class _Client:
+        chat = type("Chat", (), {"completions": _Completions()})()
+
+    monkeypatch.delenv("MARA_VLM_MAX_OUTPUT_TOKENS", raising=False)
+    monkeypatch.setenv("MARA_VLM_EVIDENCE_TEXT_CHARS", "64")
+    monkeypatch.setattr(QwenVLVisualGenerator, "_client", lambda _self: _Client())
+    generator = QwenVLVisualGenerator()
+    request = type("Request", (), {"prompt": "What is shown?"})()
+    bundle = type(
+        "Bundle",
+        (),
+        {
+            "items": [
+                {
+                    "modality": "page_image",
+                    "file_name": "deck.pdf",
+                    "page_label": "8",
+                    "text": "A" * 120,
+                    "page_image_path": "data:image/png;base64,first",
+                }
+            ]
+        },
+    )()
+
+    assert (
+        generator.generate(request, bundle) == "The image contains the needed evidence."
+    )
+
+    assert captured["max_tokens"] == 256
+    prompt_text = captured["messages"][0]["content"][0]["text"]
+    assert "A" * 64 in prompt_text
+    assert "A" * 65 not in prompt_text
+    assert "[truncated]" in prompt_text
 
 
 def test_visual_backend_health_reports_local_qwen3_vl_generator(monkeypatch):

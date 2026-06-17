@@ -10,9 +10,13 @@
       "engine": "docqa_runtime",
       "scope": "multi_document",
       "reasoning_type": "mara",
+      "controller_mode": "llm",
       "route_policy": "direct",
       "allowed_routes": ["direct"],
-      "generator_backend": "Qwen/Qwen3-8B"
+      "generator_backend": "Qwen/Qwen3-8B",
+      "max_context_length": 2000,
+      "benchmark_role": "diagnostic",
+      "docqa_citation_mode": "inline"
     },
     {
       "route_id": "text_rag",
@@ -20,11 +24,15 @@
       "engine": "docqa_runtime",
       "scope": "multi_document",
       "reasoning_type": "mara",
+      "controller_mode": "llm",
       "route_policy": "doc",
       "allowed_routes": ["doc_text"],
       "text_retriever_backend": "BAAI/bge-m3",
       "reranker_backend": "BAAI/bge-reranker-v2-m3",
-      "generator_backend": "Qwen/Qwen3-8B"
+      "generator_backend": "Qwen/Qwen3-8B",
+      "max_context_length": 2000,
+      "benchmark_role": "qa_quality",
+      "docqa_citation_mode": "inline"
     },
     {
       "route_id": "controller_auto",
@@ -32,10 +40,22 @@
       "engine": "docqa_runtime",
       "scope": "multi_document",
       "reasoning_type": "mara",
+      "controller_mode": "llm",
       "route_policy": "auto",
+      "allowed_routes": [
+        "doc_text",
+        "hybrid",
+        "doc_page_image",
+        "doc_element",
+        "graph_global"
+      ],
       "text_retriever_backend": "BAAI/bge-m3",
+      "planner_backend": "heuristic_local",
       "planner_model": "Qwen/Qwen3-8B",
-      "generator_backend": "Qwen/Qwen3-8B"
+      "generator_backend": "Qwen/Qwen3-8B",
+      "max_context_length": 2000,
+      "benchmark_role": "qa_quality",
+      "docqa_citation_mode": "inline"
     },
     {
       "route_id": "crag_guarded",
@@ -44,12 +64,24 @@
       "scope": "multi_document",
       "reasoning_type": "mara",
       "agent_mode": "thorough",
+      "controller_mode": "llm",
       "route_policy": "auto",
+      "allowed_routes": [
+        "doc_text",
+        "hybrid",
+        "doc_page_image",
+        "doc_element",
+        "graph_global"
+      ],
       "verification_mode": "strict",
       "text_retriever_backend": "BAAI/bge-m3",
+      "planner_backend": "heuristic_local",
       "planner_model": "Qwen/Qwen3-8B",
       "generator_backend": "Qwen/Qwen3-8B",
-      "ragtruth_evaluator": "local_backends.mara_evaluators.RAGTruthLocalEvaluator"
+      "ragtruth_evaluator": "local_backends.mara_evaluators.RAGTruthLocalEvaluator",
+      "max_context_length": 2000,
+      "benchmark_role": "qa_quality",
+      "docqa_citation_mode": "inline"
     }
   ]
 }

@@ -40,6 +40,12 @@ def apply_request_setting_overrides(
         settings["reasoning.options.simple.highlight_citation"] = request.use_citation
     if request.language not in (DEFAULT_SETTING, None, ""):
         settings["reasoning.lang"] = request.language
+    max_context_length = getattr(request, "max_context_length", None)
+    if max_context_length is not None and max_context_length not in (
+        DEFAULT_SETTING,
+        "",
+    ):
+        settings["reasoning.max_context_length"] = int(max_context_length)
 
 
 def _ensure_structured_qa_prompt(settings: dict[str, Any], reasoning_id: str) -> None:

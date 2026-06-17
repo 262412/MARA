@@ -4,7 +4,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .common import load_json, load_jsonl, pick, write_v2_manifest
+from .common import (
+    load_json,
+    load_jsonl,
+    materialize_binary_document,
+    pick,
+    write_v2_manifest,
+)
 
 
 def normalize_vidore_manifest(
@@ -13,6 +19,7 @@ def normalize_vidore_manifest(
     documents_root: str | Path | None = None,
 ) -> Path:
     source_path = Path(source_path).resolve()
+    output_path = Path(output_path).resolve()
     documents_root = (
         Path(documents_root).resolve() if documents_root else source_path.parent
     )
@@ -23,7 +30,8 @@ def normalize_vidore_manifest(
     for index, row in enumerate(rows):
         document_id = _document_id(row, index)
         documents.setdefault(
-            document_id, _document_record(row, document_id, documents_root)
+            document_id,
+            _document_record(row, document_id, documents_root, output_path),
         )
         examples.append(_example(row, document_id, index))
 
@@ -73,17 +81,33 @@ def _document_record(
     row: dict[str, Any],
     document_id: str,
     documents_root: Path,
+    output_path: Path,
 ) -> dict[str, Any]:
+    image_path = _image_path(row, document_id, documents_root, output_path)
     return {
         "document_id": document_id,
-        "path": str(_image_path(row, document_id, documents_root)),
-        "format_type": "png",
+        "path": str(image_path),
+        "format_type": image_path.suffix.lower().lstrip(".") or "png",
         "modality": "page_image",
         "metadata": {"dataset_family": "visual_retrieval"},
     }
 
 
-def _image_path(row: dict[str, Any], document_id: str, documents_root: Path) -> Path:
+def _image_path(
+    row: dict[str, Any],
+    document_id: str,
+    documents_root: Path,
+    output_path: Path,
+) -> Path:
+    image_bytes = _embedded_image_bytes(row)
+    if image_bytes is not None:
+        return materialize_binary_document(
+            output_path,
+            document_id,
+            image_bytes,
+            suffix=_image_filename_suffix(row),
+        )
+
     value = pick(
         row, "image_filename", "image_path", "path", default=f"{document_id}.png"
     )
@@ -94,7 +118,7 @@ def _image_path(row: dict[str, Any], document_id: str, documents_root: Path) -> 
 
 
 def _example(row: dict[str, Any], document_id: str, index: int) -> dict[str, Any]:
-    page = pick(row, "page", "page_number", "page_idx")
+    page = _page_value(pick(row, "page", "page_number", "page_idx"))
     return {
         "example_id": str(pick(row, "query_id", "id", default=f"vidore_{index}")),
         "document_ids": [document_id],
@@ -131,3 +155,31 @@ def _answer_values(row: dict[str, Any]) -> list[Any]:
             return [value]
         return decoded if isinstance(decoded, list) else [decoded]
     return [value]
+
+
+def _embedded_image_bytes(row: dict[str, Any]) -> bytes | None:
+    image = row.get("image")
+    if not isinstance(image, dict):
+        return None
+    content = image.get("bytes")
+    return content if isinstance(content, bytes) else None
+
+
+def _image_filename_suffix(row: dict[str, Any]) -> str | None:
+    value = pick(row, "image_filename", "image_path", "path")
+    if value is None:
+        return None
+    suffix = Path(str(value)).suffix
+    return suffix or None
+
+
+def _page_value(value: Any) -> int | str | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return text

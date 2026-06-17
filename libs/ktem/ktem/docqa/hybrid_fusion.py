@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .retrieval_adequacy import financial_statement_match_count
+
 FUSION_RANKER = "weighted_cross_modal_v1"
 RRF_RANKER = "reciprocal_rank_fusion_v1"
 MODALITY_WEIGHTS = {
@@ -29,22 +31,25 @@ def fuse_hybrid_evidence(
     *,
     strategy: str = "",
     learned_ranker: Any = None,
+    domain: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if learned_ranker is not None:
-        return _fuse_with_learned_ranker(query, items, learned_ranker)
+        return _fuse_with_learned_ranker(query, items, learned_ranker, domain=domain)
     if str(strategy or "").strip().lower() == "rrf":
-        return _fuse_with_rrf(query, items)
-    return _fuse_with_weighted_scores(query, items)
+        return _fuse_with_rrf(query, items, domain=domain)
+    return _fuse_with_weighted_scores(query, items, domain=domain)
 
 
 def _fuse_with_weighted_scores(
     query: str,
     items: list[dict[str, Any]],
+    *,
+    domain: str | None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     scored_items = []
     item_scores: dict[str, float] = {}
     for index, item in enumerate(items):
-        score, components = _fusion_score(query, item)
+        score, components = _fusion_score(query, item, domain=domain)
         scored = _with_fusion_metadata(item, score, components)
         item_scores[str(scored.get("evidence_id") or f"item-{index}")] = score
         scored_items.append((score, index, scored))
@@ -60,10 +65,12 @@ def _fuse_with_weighted_scores(
 def _fuse_with_rrf(
     query: str,
     items: list[dict[str, Any]],
+    *,
+    domain: str | None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     weighted_rows = []
     for index, item in enumerate(items):
-        score, components = _fusion_score(query, item)
+        score, components = _fusion_score(query, item, domain=domain)
         weighted_rows.append((score, index, item, components))
 
     rrf_scores = _rrf_scores_by_item(weighted_rows)
@@ -91,12 +98,14 @@ def _fuse_with_learned_ranker(
     query: str,
     items: list[dict[str, Any]],
     ranker: Any,
+    *,
+    domain: str | None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     ranker_name = str(getattr(ranker, "name", None) or ranker.__class__.__name__)
     scored_items = []
     item_scores: dict[str, float] = {}
     for index, item in enumerate(items):
-        weighted_score, components = _fusion_score(query, item)
+        weighted_score, components = _fusion_score(query, item, domain=domain)
         learned_score = round(float(ranker.score(query, item) or 0.0), 4)
         components = dict(components)
         components["learned_score"] = learned_score
@@ -114,18 +123,35 @@ def _fuse_with_learned_ranker(
     }
 
 
-def _fusion_score(query: str, item: dict[str, Any]) -> tuple[float, dict[str, float]]:
+def _fusion_score(
+    query: str,
+    item: dict[str, Any],
+    *,
+    domain: str | None,
+) -> tuple[float, dict[str, float]]:
     modality = str(item.get("modality") or "text").strip() or "text"
     lexical = float(len(_tokens(query) & _item_tokens(item)))
     modality_weight = float(MODALITY_WEIGHTS.get(modality, 1.0))
     modality_intent = _modality_intent_score(query, modality)
     retriever_score = _retriever_score(item)
-    score = round(modality_weight + lexical + modality_intent + retriever_score, 4)
+    finance_statement_match = float(
+        financial_statement_match_count(query, _item_text(item), domain=domain)
+    )
+    finance_statement_score = finance_statement_match * 6.0
+    score = round(
+        modality_weight
+        + lexical
+        + modality_intent
+        + retriever_score
+        + finance_statement_score,
+        4,
+    )
     return score, {
         "lexical_overlap": lexical,
         "modality_weight": modality_weight,
         "modality_intent": modality_intent,
         "retriever_score": retriever_score,
+        "finance_statement_match": finance_statement_match,
     }
 
 
@@ -184,13 +210,17 @@ def _retriever_score(item: dict[str, Any]) -> float:
 
 
 def _item_tokens(item: dict[str, Any]) -> set[str]:
+    return _tokens(_item_text(item))
+
+
+def _item_text(item: dict[str, Any]) -> str:
     metadata = dict(item.get("metadata") or {})
     metadata_text = " ".join(
         str(part)
         for value in metadata.values()
         for part in (value if isinstance(value, list) else [value])
     )
-    return _tokens(
+    return (
         " ".join(
             str(item.get(key) or "")
             for key in (

@@ -35,6 +35,15 @@ def _add_docqa_runtime_options(run_parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_artifact_detail_option(run_parser: argparse.ArgumentParser) -> None:
+    run_parser.add_argument(
+        "--artifact-detail",
+        default="compact",
+        choices=["compact", "full"],
+        help="Write compact artifacts by default; use full for small debug runs.",
+    )
+
+
 def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
     run_parser = subparsers.add_parser("run", help="Run a benchmark suite")
     run_parser.add_argument(
@@ -67,6 +76,7 @@ def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
         default="benchmark/artifacts",
         help="Directory for benchmark outputs",
     )
+    _add_artifact_detail_option(run_parser)
     run_parser.add_argument(
         "--reader-mode",
         default="default",
@@ -112,6 +122,17 @@ def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_rescore_command(subparsers: argparse._SubParsersAction) -> None:
+    rescore_parser = subparsers.add_parser(
+        "rescore-artifact",
+        help="Add MARA-oriented scores to an existing benchmark artifact run",
+    )
+    rescore_parser.add_argument("--run-dir", required=True)
+    rescore_parser.add_argument("--output-dir", required=True)
+    rescore_parser.add_argument("--suite-name")
+    _add_artifact_detail_option(rescore_parser)
+
+
 def _add_existing_normalizer_commands(
     subparsers: argparse._SubParsersAction,
 ) -> None:
@@ -137,6 +158,13 @@ def _add_existing_normalizer_commands(
     slide_parser.add_argument("--annotations", required=True)
     slide_parser.add_argument("--documents-root", required=True)
     slide_parser.add_argument("--output", required=True)
+
+    slide_parquet_parser = subparsers.add_parser(
+        "normalize-slidevqa-parquet",
+        help="Convert Hugging Face SlideVQA parquet rows into a normalized manifest",
+    )
+    slide_parquet_parser.add_argument("--source", required=True)
+    slide_parquet_parser.add_argument("--output", required=True)
 
 
 def _add_thesis_converter_commands(
@@ -181,13 +209,60 @@ def _add_thesis_converter_commands(
     alce_parser.add_argument("--output", required=True)
 
 
+def _add_manifest_template_commands(
+    subparsers: argparse._SubParsersAction,
+) -> None:
+    template_parser = subparsers.add_parser(
+        "apply-route-template",
+        help="Combine a dataset manifest with a route template manifest",
+    )
+    template_parser.add_argument("--manifest", required=True)
+    template_parser.add_argument("--template", required=True)
+    template_parser.add_argument("--output", required=True)
+    template_parser.add_argument("--dataset-name")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Kotaemon benchmark toolkit")
     subparsers = parser.add_subparsers(dest="command", required=True)
     _add_run_command(subparsers)
+    _add_rescore_command(subparsers)
     _add_existing_normalizer_commands(subparsers)
     _add_thesis_converter_commands(subparsers)
+    _add_manifest_template_commands(subparsers)
     return parser
+
+
+def _handle_rescore_command(args: argparse.Namespace) -> int | None:
+    if args.command != "rescore-artifact":
+        return None
+
+    from .artifact_rescoring import rescore_artifact_run
+
+    run_dir = rescore_artifact_run(
+        args.run_dir,
+        args.output_dir,
+        suite_name=args.suite_name,
+        artifact_detail=args.artifact_detail,
+    )
+    print(f"Rescored artifact written to {run_dir}")
+    return 0
+
+
+def _handle_manifest_template_command(args: argparse.Namespace) -> int | None:
+    if args.command != "apply-route-template":
+        return None
+
+    from .manifest_templates import apply_route_template
+
+    output_path = apply_route_template(
+        args.manifest,
+        args.template,
+        args.output,
+        dataset_name=args.dataset_name,
+    )
+    print(f"Manifest written to {output_path}")
+    return 0
 
 
 def _handle_normalizer_command(args: argparse.Namespace) -> int | None:
@@ -213,6 +288,13 @@ def _handle_normalizer_command(args: argparse.Namespace) -> int | None:
         output_path = normalize_slidevqa_manifest(
             args.annotations, args.documents_root, args.output
         )
+        print(f"Manifest written to {output_path}")
+        return 0
+
+    if args.command == "normalize-slidevqa-parquet":
+        from .converters.slidevqa import normalize_slidevqa_parquet_manifest
+
+        output_path = normalize_slidevqa_parquet_manifest(args.source, args.output)
         print(f"Manifest written to {output_path}")
         return 0
 
@@ -282,6 +364,7 @@ def _run_benchmark_command(args: argparse.Namespace) -> int:
         embedding_name=args.embedding_name,
         reranker_name=args.reranker_name,
         llm_name=args.llm_name,
+        artifact_detail=args.artifact_detail,
         limit=args.limit,
         sample_seed=args.sample_seed,
         shard_index=args.shard_index,
@@ -294,7 +377,12 @@ def _run_benchmark_command(args: argparse.Namespace) -> int:
         use_generation=not args.no_generate,
     )
     report = run_benchmark(args.manifest, config)
-    run_dir = write_reports(report, config.output_dir, config.suite_name)
+    run_dir = write_reports(
+        report,
+        config.output_dir,
+        config.suite_name,
+        artifact_detail=config.artifact_detail,
+    )
     print(f"Benchmark complete. Outputs written to {run_dir}")
     return 0
 
@@ -302,6 +390,12 @@ def _run_benchmark_command(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    template_result = _handle_manifest_template_command(args)
+    if template_result is not None:
+        return template_result
+    rescore_result = _handle_rescore_command(args)
+    if rescore_result is not None:
+        return rescore_result
     normalizer_result = _handle_normalizer_command(args)
     if normalizer_result is not None:
         return normalizer_result

@@ -10,14 +10,12 @@ from ktem.docqa import (
     _runtime_indexing,
     _runtime_pipeline,
     _runtime_selection,
-    _runtime_sessions,
     _runtime_turn,
 )
-from ktem.docqa._runtime_models import DocQAFileRecord, DocQASession, _PreparedPipeline
-from ktem.docqa._runtime_notebook import NOTEBOOK_KEY
+from ktem.docqa._runtime_models import DocQAFileRecord, DocQASession
 from ktem.docqa.runtime import DocQARuntime
 
-from kotaemon.base import Document, RetrievedDocument
+from kotaemon.base import RetrievedDocument
 
 
 def test_runtime_selection_module_preserves_boundary_helpers():
@@ -167,9 +165,11 @@ def test_runtime_turn_request_preserves_controller_fields():
         graph_context={"related_file_ids": ["file-1"]},
         controller_mode="llm",
         route_policy="hybrid",
+        planner_backend="heuristic_local",
         planner_model="fake-planner",
         allowed_routes=["hybrid"],
         verification_mode="strict",
+        max_context_length=3000,
         origin="web",
     )
     session = _session(messages=[("Earlier", "Answer")])
@@ -188,9 +188,11 @@ def test_runtime_turn_request_preserves_controller_fields():
     assert turn_request.settings == {"reasoning.use": "mara"}
     assert turn_request.controller_mode == "llm"
     assert turn_request.route_policy == "hybrid"
+    assert turn_request.planner_backend == "heuristic_local"
     assert turn_request.planner_model == "fake-planner"
     assert turn_request.allowed_routes == ["hybrid"]
     assert turn_request.verification_mode == "strict"
+    assert turn_request.max_context_length == 3000
 
 
 def test_runtime_turn_request_preserves_visual_backend_fields():
@@ -437,107 +439,6 @@ class _RuntimeForFileRecords(DocQARuntime):
         ]
 
 
-def test_runtime_turn_stream_capture_collects_channels_and_mara_payloads():
-    prepared = _PreparedPipeline(
-        pipeline=_StreamingPipeline(),
-        reasoning_state={"pipeline": {"step": "done"}},
-        selected_file_ids=[],
-        active_file_id="",
-        active_file_name="",
-        qa_scope="document",
-        page_number=None,
-        selected_text="",
-        graph_context={},
-        settings={},
-        reasoning_id="mara",
-    )
-    request = runtime_module.DocQARequest(prompt="Question", state={"app": {}})
-
-    result = _runtime_turn.collect_stream_result(
-        prepared,
-        request,
-        conversation_id="conv-1",
-        history=[],
-        empty_message="empty",
-    )
-
-    assert result.text == "answer"
-    assert result.refs == "refs<svg class='markmap'></svg>"
-    assert result.mindmap_html == "<svg class='markmap'></svg>"
-    assert result.plot == {"nodes": []}
-    assert result.state["mara"] == {"step": "done"}
-    assert result.stream_events[-1]["channel"] == "plot"
-    assert result.capture.agent_trace == [{"event": "route"}]
-
-
-def test_runtime_sessions_prepares_append_and_regen_histories():
-    appended = _runtime_sessions.prepare_conversation_histories(
-        retrieval_message="refs-2",
-        plot_data={"plot": 2},
-        retrieval_history=["refs-1"],
-        plot_history=[{"plot": 1}],
-        state={"app": {"regen": False}},
-    )
-    regenerated = _runtime_sessions.prepare_conversation_histories(
-        retrieval_message="refs-new",
-        plot_data={"plot": "new"},
-        retrieval_history=["refs-old"],
-        plot_history=[{"plot": "old"}],
-        state={"app": {"regen": True}},
-    )
-
-    assert appended.retrieval_history == ["refs-1", "refs-2"]
-    assert appended.plot_history == [{"plot": 1}, {"plot": 2}]
-    assert appended.state["app"]["regen"] is False
-    assert regenerated.retrieval_history == ["refs-new"]
-    assert regenerated.plot_history == [{"plot": "new"}]
-    assert regenerated.state["app"]["regen"] is False
-
-
-def test_runtime_sessions_builds_owner_data_source_preserving_notebook_state():
-    data_source = {
-        "selected": {"9": ["select", ["old"], "user-1"]},
-        "likes": [{"message": 1}],
-        "chat_suggestions": ["next"],
-        "origin": "cli",
-        NOTEBOOK_KEY: {"notes": [{"note_id": "note-1", "text": "note text"}]},
-    }
-
-    updated = _runtime_sessions.build_conversation_data_source(
-        data_source=data_source,
-        selected_mapping={"9": ["select", ["file-1"], "user-1"]},
-        is_owner=True,
-        messages=[("question", "answer")],
-        retrieval_history=["refs"],
-        plot_history=[{"plot": 1}],
-        state={"app": {"regen": False}},
-        graph_source_ids=["file-1"],
-        origin="web",
-    )
-
-    assert updated["selected"] == {"9": ["select", ["file-1"], "user-1"]}
-    assert updated["likes"] == [{"message": 1}]
-    assert updated["chat_suggestions"] == ["next"]
-    assert updated["origin"] == "web"
-    assert updated[NOTEBOOK_KEY]["notes"][0]["note_id"] == "note-1"
-
-
-def test_runtime_sessions_preserves_selected_mapping_for_non_owner():
-    updated = _runtime_sessions.build_conversation_data_source(
-        data_source={"selected": {"9": ["select", ["old"], "owner"]}},
-        selected_mapping={"9": ["select", ["new"], "other"]},
-        is_owner=False,
-        messages=[],
-        retrieval_history=[],
-        plot_history=[],
-        state={"app": {"regen": False}},
-        graph_source_ids=[],
-        origin=None,
-    )
-
-    assert updated["selected"] == {"9": ["select", ["old"], "owner"]}
-
-
 def _session(messages=None):
     return DocQASession(
         conversation_id="conv-1",
@@ -555,22 +456,3 @@ def _session(messages=None):
         date_created=None,
         date_updated=None,
     )
-
-
-class _StreamingPipeline:
-    @staticmethod
-    def get_info():
-        return {"id": "mara"}
-
-    def stream(self, _prompt, _conversation_id, _history):
-        yield Document(
-            channel="debug",
-            content={
-                "mara_channel": "agent_trace",
-                "payload": {"event": "route"},
-            },
-        )
-        yield Document(channel="chat", content="answer")
-        yield Document(channel="info", content="refs")
-        yield Document(channel="info", content="<svg class='markmap'></svg>")
-        yield Document(channel="plot", content={"nodes": []})

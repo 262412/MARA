@@ -9,6 +9,7 @@ class EngineRunResult:
     answer: str
     predicted_pages: list[int | str] = field(default_factory=list)
     predicted_sources: list[str] = field(default_factory=list)
+    predicted_citations: list[str] = field(default_factory=list)
     predicted_element_ids: list[str] = field(default_factory=list)
     retrieved_hits: list[dict[str, Any]] = field(default_factory=list)
     timings: dict[str, float] = field(default_factory=dict)

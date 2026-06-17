@@ -9,8 +9,42 @@ from typing import Any, Protocol, cast, runtime_checkable
 from kotaemon.base import RetrievedDocument
 
 from . import controller_fields as cf
+from .docqa_evidence_projection import (
+    evidence_element_ids,
+    evidence_pages,
+    evidence_sources,
+    metadata_page_coverage,
+    metadata_page_coverage_sources,
+    retrieved_hits_from_docqa_evidence,
+)
+from .docqa_image_documents import (
+    is_image_only_document,
+    page_image_records_from_documents,
+)
+from .docqa_runtime_sources import (
+    canonicalize_docqa_citations,
+    canonicalize_docqa_hits,
+    document_paths,
+    has_search_index,
+    normalized_path,
+    selected_source_fallback_hits,
+    selected_source_fallback_text,
+    unindexed_document_paths,
+)
+from .engine_context import (
+    all_context_pages,
+    document_pages,
+    evidence_page_set,
+    extract_citations,
+    extract_text,
+    first_evidence_page,
+    join_document_texts,
+    normalize_page,
+    parsed_indexes_to_context,
+)
 from .engine_helpers import _parsed_indexes_cache, _performance_from_timings
 from .engine_result import EngineRunResult
+from .engine_result_adapters import prediction_to_result
 from .schemas import BenchmarkConfig, BenchmarkDocument
 from .system import KotaemonTextRAGSystem
 
@@ -90,10 +124,12 @@ class BaseBenchmarkEngine:
                 "agent_mode": None,
                 "task_type": None,
                 "artifact_type": None,
+                "planner_backend": None,
                 "graph_mode": None,
                 "visual_retriever_backend": None,
                 "visual_generator_backend": None,
                 "generator_backend": None,
+                "artifact_detail": "compact",
                 "use_generation": True,
                 "prompt_template": None,
             }
@@ -134,7 +170,7 @@ class LegacyTextRAGEngine(BaseBenchmarkEngine):
         documents: list[BenchmarkDocument],
     ) -> EngineRunResult:
         prediction = self._get_system().run_example_documents(documents, example)
-        return _prediction_to_result(prediction)
+        return prediction_to_result(prediction)
 
 
 class KotaemonTextRAGEngine(BaseBenchmarkEngine):
@@ -147,7 +183,7 @@ class KotaemonTextRAGEngine(BaseBenchmarkEngine):
         documents: list[BenchmarkDocument],
     ) -> EngineRunResult:
         prediction = self._get_system().run_example_documents(documents, example)
-        return _prediction_to_result(prediction)
+        return prediction_to_result(prediction)
 
 
 class DocQARuntimeEngine(BaseBenchmarkEngine):
@@ -171,7 +207,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
     ) -> str:
         document_path = Path(document.path)
         document_path_text = str(document_path)
-        normalized_document_path = _normalized_path(document_path_text)
+        normalized_document_path = normalized_path(document_path_text)
 
         try:
             records = list(runtime.list_files())
@@ -180,10 +216,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
 
         for record in records:
             record_path = str(getattr(record, "path", "") or "")
-            if (
-                record_path
-                and _normalized_path(record_path) == normalized_document_path
-            ):
+            if record_path and normalized_path(record_path) == normalized_document_path:
                 return str(getattr(record, "file_id", "") or "")
 
         exact_name_matches = [
@@ -209,26 +242,36 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         runtime = self._get_runtime()
         selected_ids: list[str] = []
         missing_documents: list[BenchmarkDocument] = []
+        reindex_documents: list[BenchmarkDocument] = []
 
         for document in documents:
+            if is_image_only_document(document):
+                continue
             file_id = self._resolve_indexed_file_id(runtime, document)
             if file_id:
-                if file_id not in selected_ids:
-                    selected_ids.append(file_id)
-                self._indexed_paths.add(str(document.path))
+                if has_search_index(runtime, file_id):
+                    if file_id not in selected_ids:
+                        selected_ids.append(file_id)
+                    self._indexed_paths.add(str(document.path))
+                else:
+                    reindex_documents.append(document)
             else:
                 missing_documents.append(document)
 
-        missing_paths = [
-            str(document.path)
-            for document in missing_documents
-            if str(document.path) not in self._indexed_paths
-        ]
+        missing_paths = unindexed_document_paths(
+            missing_documents,
+            indexed_paths=self._indexed_paths,
+        )
         if missing_paths:
             runtime.index_paths(missing_paths, reindex=False)
             self._indexed_paths.update(missing_paths)
 
-        for document in missing_documents:
+        reindex_paths = document_paths(reindex_documents)
+        if reindex_paths:
+            runtime.index_paths(reindex_paths, reindex=True)
+            self._indexed_paths.update(reindex_paths)
+
+        for document in missing_documents + reindex_documents:
             file_id = self._resolve_indexed_file_id(runtime, document)
             if file_id and file_id not in selected_ids:
                 selected_ids.append(file_id)
@@ -238,21 +281,28 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         self,
         *,
         example: Any,
+        documents: list[BenchmarkDocument],
         selected_file_ids: list[str],
         active_record: Any,
     ) -> dict[str, Any]:
         return {
             "prompt": _field_value(example, "question", ""),
-            "selected_file_ids": selected_file_ids or None,
+            "selected_file_ids": selected_file_ids,
+            "page_image_records": page_image_records_from_documents(documents),
             "qa_scope": str(
                 _config_value(self.config, "scope", None)
                 or _field_value(example, "scope", "document")
             ).replace("-", "_"),
             "active_file_id": getattr(active_record, "file_id", ""),
             "active_file_name": getattr(active_record, "name", ""),
-            "page_number": _first_evidence_page(example),
+            "page_number": first_evidence_page(example),
+            "selected_text": selected_source_fallback_text(
+                documents,
+                selected_file_ids,
+            ),
             "llm": _config_value(self.config, "llm_name", None),
             "use_citation": _config_value(self.config, "docqa_citation_mode", None),
+            "max_context_length": self.max_context_length,
             "reasoning_type": _config_value(self.config, "reasoning_type", None),
             "agent_mode": _config_value(self.config, "agent_mode", None),
             "task_type": _config_value(self.config, "task_type", None),
@@ -274,6 +324,79 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             "origin": "benchmark",
         }
 
+    def _response_evidence_outputs(
+        self,
+        *,
+        response: Any,
+        documents: list[BenchmarkDocument],
+        selected_file_ids: list[str],
+    ) -> tuple[
+        dict[str, Any],
+        list[dict[str, Any]],
+        list[str],
+        list[str],
+        list[int | str],
+    ]:
+        evidence_bundle = dict(getattr(response, "evidence_bundle", {}) or {})
+        evidence_metadata = dict(getattr(response, "evidence_metadata", {}) or {})
+        retrieved_hits = retrieved_hits_from_docqa_evidence(
+            evidence_bundle,
+            evidence_metadata,
+        )
+        reference_citations = canonicalize_docqa_citations(
+            extract_citations(response.references_text),
+            documents,
+            selected_file_ids,
+        )
+        answer_citations = canonicalize_docqa_citations(
+            extract_citations(getattr(response, "answer", "")),
+            documents,
+            selected_file_ids,
+        )
+        predicted_citations = list(answer_citations)
+        predicted_citations.extend(
+            citation
+            for citation in reference_citations
+            if citation not in predicted_citations
+        )
+        reference_pages = self._PAGE_RE.findall(response.references_text or "")
+        if not retrieved_hits and not reference_citations and not reference_pages:
+            retrieved_hits = selected_source_fallback_hits(documents, selected_file_ids)
+        retrieved_hits = canonicalize_docqa_hits(
+            retrieved_hits,
+            documents,
+            selected_file_ids,
+        )
+        predicted_sources = evidence_sources(retrieved_hits)
+        predicted_sources.extend(
+            source for source in reference_citations if source not in predicted_sources
+        )
+        predicted_sources.extend(
+            source
+            for source in metadata_page_coverage_sources(
+                evidence_metadata,
+                documents,
+                selected_file_ids,
+            )
+            if source not in predicted_sources
+        )
+        predicted_pages: list[int | str] = list(evidence_pages(retrieved_hits))
+        predicted_pages.extend(
+            page for page in reference_pages if page not in predicted_pages
+        )
+        predicted_pages.extend(
+            page
+            for page in metadata_page_coverage(evidence_metadata)
+            if page not in predicted_pages
+        )
+        return (
+            evidence_metadata,
+            retrieved_hits,
+            predicted_sources,
+            predicted_citations,
+            predicted_pages,
+        )
+
     def run(
         self,
         *,
@@ -286,40 +409,46 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         start = time.perf_counter()
         selected_file_ids = self._index_documents(documents)
         index_seconds = time.perf_counter() - start
-        active_record = None
-        if selected_file_ids:
-            try:
-                records = runtime.resolve_file_refs([selected_file_ids[0]])
-                active_record = records[0] if records else None
-            except Exception:
-                active_record = None
+        active_record = _active_runtime_record(runtime, selected_file_ids)
 
         generation_start = time.perf_counter()
         response = runtime.run_turn(
             DocQARequest(
                 **self._docqa_request_kwargs(
                     example=example,
+                    documents=documents,
                     selected_file_ids=selected_file_ids,
                     active_record=active_record,
                 )
             )
         )
         generation_seconds = time.perf_counter() - generation_start
-        predicted_sources = _extract_citations(response.references_text)
-        predicted_pages = self._PAGE_RE.findall(response.references_text or "")
+        (
+            evidence_metadata,
+            retrieved_hits,
+            predicted_sources,
+            predicted_citations,
+            predicted_pages,
+        ) = self._response_evidence_outputs(
+            response=response,
+            documents=documents,
+            selected_file_ids=selected_file_ids,
+        )
 
         return EngineRunResult(
             answer=response.answer,
             predicted_pages=predicted_pages,
             predicted_sources=predicted_sources,
-            retrieved_hits=[],
+            predicted_citations=predicted_citations,
+            predicted_element_ids=evidence_element_ids(retrieved_hits),
+            retrieved_hits=retrieved_hits,
             timings={
                 "index_seconds": index_seconds,
                 "generation_seconds": generation_seconds,
             },
             context_preview=response.references_text[: self.max_context_length],
             agent_trace=list(getattr(response, "agent_trace", []) or []),
-            evidence_metadata=dict(getattr(response, "evidence_metadata", {}) or {}),
+            evidence_metadata=evidence_metadata,
             **cf.controller_response_kwargs(response),
             claim_verification=dict(getattr(response, "claim_verification", {}) or {}),
             presentation=dict(getattr(response, "presentation", {}) or {}),
@@ -342,7 +471,7 @@ class DirectPasteEngine(BaseBenchmarkEngine):
 
     def select_context(self, *, documents: list[Any], example: Any) -> str:
         del example
-        return self._truncate_context(_join_document_texts(documents))
+        return self._truncate_context(join_document_texts(documents))
 
     def run(
         self,
@@ -352,7 +481,7 @@ class DirectPasteEngine(BaseBenchmarkEngine):
     ) -> EngineRunResult:
         system = self._get_text_system()
         parsed_indexes = [system._build_index(document) for document in documents]
-        context = self._truncate_context(_parsed_indexes_to_context(parsed_indexes))
+        context = self._truncate_context(parsed_indexes_to_context(parsed_indexes))
         (
             answer,
             _evidence,
@@ -366,7 +495,7 @@ class DirectPasteEngine(BaseBenchmarkEngine):
         }
         return EngineRunResult(
             answer=answer,
-            predicted_pages=cast(list[int | str], _all_context_pages(parsed_indexes)),
+            predicted_pages=cast(list[int | str], all_context_pages(parsed_indexes)),
             predicted_sources=[
                 f"{parsed_index.document.document_id}#full"
                 for parsed_index in parsed_indexes
@@ -399,24 +528,24 @@ class OraclePageEngine(BaseBenchmarkEngine):
     name = "oracle_page"
 
     def select_context(self, *, documents: list[Any], example: Any) -> str:
-        wanted_pages = _evidence_page_set(example)
+        wanted_pages = evidence_page_set(example)
         selected_texts: list[str] = []
 
         if wanted_pages:
             for document in documents:
-                for page in _document_pages(document):
+                for page in document_pages(document):
                     page_number = _field_value(page, "page", None)
                     if page_number is None:
                         page_number = _field_value(page, "page_number", None)
-                    if _normalize_page(page_number) in wanted_pages:
-                        text = _extract_text(page)
+                    if normalize_page(page_number) in wanted_pages:
+                        text = extract_text(page)
                         if text:
                             selected_texts.append(text)
 
         context = (
             "\n\n".join(selected_texts)
             if selected_texts
-            else _join_document_texts(documents)
+            else join_document_texts(documents)
         )
         return self._truncate_context(context)
 
@@ -428,10 +557,10 @@ class OraclePageEngine(BaseBenchmarkEngine):
     ) -> EngineRunResult:
         system = self._get_text_system()
         parsed_indexes = [system._build_index(document) for document in documents]
-        wanted_pages = _evidence_page_set(example)
+        wanted_pages = evidence_page_set(example)
         context = self._truncate_context(
-            _parsed_indexes_to_context(parsed_indexes, wanted_pages=wanted_pages)
-            or _parsed_indexes_to_context(parsed_indexes)
+            parsed_indexes_to_context(parsed_indexes, wanted_pages=wanted_pages)
+            or parsed_indexes_to_context(parsed_indexes)
         )
         (
             answer,
@@ -446,7 +575,7 @@ class OraclePageEngine(BaseBenchmarkEngine):
         }
         return EngineRunResult(
             answer=answer,
-            predicted_pages=sorted(_evidence_page_set(example), key=str),
+            predicted_pages=sorted(evidence_page_set(example), key=str),
             predicted_sources=[
                 f"{parsed_index.document.document_id}#page:{page}"
                 for parsed_index in parsed_indexes
@@ -510,137 +639,11 @@ def _field_value(item: Any, key: str, default: Any) -> Any:
     return getattr(item, key, default)
 
 
-def _extract_text(item: Any) -> str:
-    for key in ("text", "content", "page_text", "full_text"):
-        value = _field_value(item, key, None)
-        if value:
-            return str(value)
-
-    pages = _document_pages(item)
-    if pages:
-        page_texts = [_extract_text(page) for page in pages]
-        return "\n\n".join(text for text in page_texts if text)
-
-    return ""
-
-
-def _document_pages(document: Any) -> list[Any]:
-    pages = _field_value(document, "pages", None)
-    if pages is None:
-        return []
-    return list(pages)
-
-
-def _join_document_texts(documents: list[Any]) -> str:
-    texts = [_extract_text(document) for document in documents]
-    return "\n\n".join(text for text in texts if text)
-
-
-def _prediction_to_result(prediction: dict[str, Any]) -> EngineRunResult:
-    return EngineRunResult(
-        answer=str(prediction.get("predicted_answer") or ""),
-        predicted_pages=list(prediction.get("predicted_pages") or []),
-        predicted_sources=list(prediction.get("predicted_sources") or []),
-        predicted_element_ids=list(prediction.get("predicted_element_ids") or []),
-        retrieved_hits=list(prediction.get("retrieved_hits") or []),
-        timings=dict(prediction.get("timings") or {}),
-        performance=dict(prediction.get("performance") or {}),
-        cache=dict(prediction.get("cache") or {}),
-        cost=dict(prediction.get("cost") or {}),
-        context_preview=str(prediction.get("context_preview") or ""),
-        retrieval_trace=list(prediction.get("retrieval_trace") or []),
-        agent_trace=list(prediction.get("agent_trace") or []),
-        evidence_metadata=dict(prediction.get("evidence_metadata") or {}),
-        **cf.controller_prediction_kwargs(prediction),
-        claim_verification=dict(prediction.get("claim_verification") or {}),
-        presentation=dict(prediction.get("presentation") or {}),
-    )
-
-
-def _parsed_indexes_to_context(parsed_indexes: list[Any], wanted_pages=None) -> str:
-    wanted_pages = {
-        str(page).strip() for page in wanted_pages or [] if str(page).strip()
-    }
-    chunks: list[str] = []
-    for parsed_index in parsed_indexes:
-        for document in parsed_index.parsed_documents:
-            page = _normalize_page(
-                document.metadata.get("page_label")
-                or document.metadata.get("page_number")
-                or document.metadata.get("page")
-            )
-            if wanted_pages and page not in wanted_pages:
-                continue
-            text = str(getattr(document, "text", "") or "").strip()
-            if not text:
-                continue
-            label = f"[{parsed_index.document.document_id}"
-            if page:
-                label += f" page {page}"
-            label += "]"
-            chunks.append(f"{label}\n{text}")
-    return "\n\n".join(chunks)
-
-
-def _all_context_pages(parsed_indexes: list[Any]) -> list[str]:
-    pages: list[str] = []
-    for parsed_index in parsed_indexes:
-        for document in parsed_index.parsed_documents:
-            page = _normalize_page(
-                document.metadata.get("page_label")
-                or document.metadata.get("page_number")
-                or document.metadata.get("page")
-            )
-            if page and page not in pages:
-                pages.append(page)
-    return pages
-
-
-def _evidence_page_set(example: Any) -> set[str]:
-    pages = {
-        _normalize_page(page) for page in _field_value(example, "evidence_pages", [])
-    }
-    for evidence in _field_value(example, "gold_evidence", []):
-        page = _field_value(evidence, "page", None)
-        if page is None:
-            page = _field_value(evidence, "page_number", None)
-        if page is not None:
-            pages.add(_normalize_page(page))
-    return {page for page in pages if page}
-
-
-def _first_evidence_page(example: Any) -> int | None:
-    for page in _field_value(example, "evidence_pages", []):
-        try:
-            return int(str(page).strip())
-        except (TypeError, ValueError):
-            continue
-    for evidence in _field_value(example, "gold_evidence", []):
-        page = _field_value(evidence, "page", None)
-        if page is None:
-            page = _field_value(evidence, "page_number", None)
-        try:
-            return int(str(page).strip())
-        except (TypeError, ValueError):
-            continue
-    return None
-
-
-def _normalize_page(page: Any) -> str:
-    return str(page).strip()
-
-
-def _normalized_path(path: str) -> str:
+def _active_runtime_record(runtime: Any, selected_file_ids: list[str]) -> Any | None:
+    if not selected_file_ids:
+        return None
     try:
-        return str(Path(path).resolve()).lower()
-    except Exception:
-        return str(path or "").strip().lower()
-
-
-def _extract_citations(text: str) -> list[str]:
-    citations: list[str] = []
-    for line in str(text or "").splitlines():
-        stripped = line.strip()
-        if "#page:" in stripped and stripped not in citations:
-            citations.append(stripped)
-    return citations
+        records = runtime.resolve_file_refs([selected_file_ids[0]])
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        return None
+    return records[0] if records else None

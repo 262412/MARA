@@ -53,6 +53,38 @@ def materialize_text_document(
     return document_path
 
 
+def materialize_binary_document(
+    output_path: str | Path,
+    document_id: str,
+    content: bytes,
+    *,
+    suffix: str | None = None,
+) -> Path:
+    output_path = Path(output_path).resolve()
+    document_dir = output_path.parent / "documents"
+    document_dir.mkdir(parents=True, exist_ok=True)
+    document_path = (
+        document_dir / f"{safe_stem(document_id)}{_binary_suffix(content, suffix)}"
+    )
+    document_path.write_bytes(content)
+    return document_path
+
+
+def _binary_suffix(content: bytes, suffix: str | None) -> str:
+    if suffix:
+        value = suffix if suffix.startswith(".") else f".{suffix}"
+        return value.lower()
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if content.startswith(b"\xff\xd8"):
+        return ".jpg"
+    if content.startswith(b"GIF87a") or content.startswith(b"GIF89a"):
+        return ".gif"
+    if content.startswith(b"%PDF"):
+        return ".pdf"
+    return ".bin"
+
+
 def write_v2_manifest(
     output_path: str | Path,
     *,

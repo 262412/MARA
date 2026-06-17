@@ -6,6 +6,76 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+ARTIFACT_LIMITS = {
+    "max_evidence_text_chars": 2000,
+    "max_prediction_evidence_items": 10,
+    "max_trace_events": 20,
+}
+_TEXT_FIELDS = {"caption", "ocr_text", "snippet", "text", "vlm_text"}
+_TRACE_FIELDS = {
+    "agent_trace",
+    "controller_trace",
+    "retrieval_trace",
+    "trace",
+    "events",
+}
+_EVIDENCE_LIST_FIELDS = {
+    "element_index",
+    "evidence",
+    "graph_evidence",
+    "items",
+    "page_image_index",
+    "retrieved_hits",
+}
+_SCORE_MAP_FIELDS = {
+    "element_retriever_scores",
+    "item_scores",
+    "visual_retriever_scores",
+}
+_REFERENCE_LIST_FIELDS = {
+    "source_backrefs",
+}
+_COMPACT_DROP_FIELDS = {
+    "image_origin",
+    "image_ref",
+    "late_interaction_tokens",
+    "multi_vector_representation",
+    "page_image_path",
+    "page_visual_embedding",
+    "rendered_page_image",
+    "visual_embedding",
+}
+_CSV_FIELD_ORDER = [
+    "dataset_name",
+    "route",
+    "num_predictions",
+    "avg_em",
+    "avg_f1",
+    "avg_mara_score",
+    "avg_mara_answer_score",
+    "avg_mara_evidence_score",
+    "avg_mara_citation_score",
+    "avg_mara_groundedness_score",
+    "avg_mara_abstention_score",
+    "avg_mara_controller_score",
+    "avg_mara_format_score",
+    "avg_anls",
+    "avg_page_hit",
+    "avg_citation_recall",
+    "avg_citation_precision",
+    "avg_citation_recall_source",
+    "avg_citation_precision_source",
+    "avg_citation_recall_page",
+    "avg_citation_precision_page",
+    "avg_citation_recall_span",
+    "avg_citation_precision_span",
+    "avg_unsupported_claim_rate",
+    "avg_abstention_rate",
+    "avg_multimodal_answer_support",
+    "avg_total_seconds",
+    "benchmark_role",
+]
+
 
 def _to_slug(text: str) -> str:
     safe = "".join(char.lower() if char.isalnum() else "-" for char in text.strip())
@@ -56,7 +126,7 @@ def _first_present(*sources: dict[str, Any], key: str) -> Any:
 
 
 def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[str]:
-    return [
+    lines = [
         f"# {summary.get('suite_name', suite_name)}",
         "",
         f"- Dataset: `{summary.get('dataset_name')}`",
@@ -64,38 +134,63 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         f"- Documents: `{summary.get('num_documents')}`",
         f"- EM: `{summary.get('avg_em')}`",
         f"- F1: `{summary.get('avg_f1')}`",
-        f"- ANLS: `{summary.get('avg_anls')}`",
-        f"- Page Hit: `{summary.get('avg_page_hit')}`",
-        f"- Citation Recall: `{summary.get('avg_citation_recall')}`",
-        f"- Element Hit: `{summary.get('avg_element_hit')}`",
-        f"- Table Hit: `{summary.get('avg_table_hit')}`",
-        f"- Figure Hit: `{summary.get('avg_figure_hit')}`",
-        f"- Formula Hit: `{summary.get('avg_formula_hit')}`",
-        f"- Slide Hit: `{summary.get('avg_slide_hit')}`",
-        f"- Span Recall: `{summary.get('avg_span_recall')}`",
-        f"- Formula Match: `{summary.get('avg_formula_match')}`",
-        f"- Numeric Match: `{summary.get('avg_numeric_match')}`",
-        f"- Abstention Rate: `{summary.get('avg_abstention_rate')}`",
-        f"- False Abstention: `{summary.get('avg_false_abstention')}`",
-        f"- Markdown Table Renderable: `{summary.get('avg_markdown_table_renderable')}`",
-        f"- LaTeX Renderable: `{summary.get('avg_latex_renderable')}`",
-        f"- Rewrite Skipped: `{summary.get('avg_rewrite_skipped')}`",
-        f"- Guardrail Expectation Match: `{summary.get('avg_guardrail_expectation_match')}`",
-        f"- Avg Parse Seconds: `{summary.get('avg_parse_seconds')}`",
-        f"- Avg Index Seconds: `{summary.get('avg_index_seconds')}`",
-        f"- Avg Retrieval Seconds: `{summary.get('avg_retrieval_seconds')}`",
-        f"- Avg Generation Seconds: `{summary.get('avg_generation_seconds')}`",
-        f"- Cache Mode: `{summary.get('cache_mode')}`",
-        f"- Parse Cache Hit Rate: `{summary.get('parse_cache_hit_rate')}`",
-        f"- Embedding Cache Hit Rate: `{summary.get('embedding_cache_hit_rate')}`",
-        f"- Executed Routes: `{summary.get('num_executed_routes')}`",
-        f"- Skipped Routes: `{summary.get('num_skipped_routes')}`",
     ]
+    if "avg_mara_score" in summary:
+        lines.append(f"- MARA-Oriented Score: `{summary.get('avg_mara_score')}`")
+    if "quality_avg_f1" in summary:
+        lines.append(f"- Quality EM: `{summary.get('quality_avg_em')}`")
+        lines.append(f"- Quality F1: `{summary.get('quality_avg_f1')}`")
+        if "quality_avg_mara_score" in summary:
+            lines.append(
+                "- Quality MARA-Oriented Score: "
+                f"`{summary.get('quality_avg_mara_score')}`"
+            )
+        lines.append(
+            f"- Quality Numeric Match: `{summary.get('quality_avg_numeric_match')}`"
+        )
+    lines.extend(
+        [
+            f"- ANLS: `{summary.get('avg_anls')}`",
+            f"- Page Hit: `{summary.get('avg_page_hit')}`",
+            f"- Citation Recall: `{summary.get('avg_citation_recall')}`",
+            f"- Element Hit: `{summary.get('avg_element_hit')}`",
+            f"- Table Hit: `{summary.get('avg_table_hit')}`",
+            f"- Figure Hit: `{summary.get('avg_figure_hit')}`",
+            f"- Formula Hit: `{summary.get('avg_formula_hit')}`",
+            f"- Slide Hit: `{summary.get('avg_slide_hit')}`",
+            f"- Span Recall: `{summary.get('avg_span_recall')}`",
+            f"- Formula Match: `{summary.get('avg_formula_match')}`",
+            f"- Numeric Match: `{summary.get('avg_numeric_match')}`",
+            f"- Abstention Rate: `{summary.get('avg_abstention_rate')}`",
+            f"- False Abstention: `{summary.get('avg_false_abstention')}`",
+            "- Markdown Table Renderable: "
+            f"`{summary.get('avg_markdown_table_renderable')}`",
+            f"- LaTeX Renderable: `{summary.get('avg_latex_renderable')}`",
+            f"- Rewrite Skipped: `{summary.get('avg_rewrite_skipped')}`",
+            "- Guardrail Expectation Match: "
+            f"`{summary.get('avg_guardrail_expectation_match')}`",
+            f"- Avg Parse Seconds: `{summary.get('avg_parse_seconds')}`",
+            f"- Avg Index Seconds: `{summary.get('avg_index_seconds')}`",
+            f"- Avg Retrieval Seconds: `{summary.get('avg_retrieval_seconds')}`",
+            f"- Avg Generation Seconds: `{summary.get('avg_generation_seconds')}`",
+            f"- Cache Mode: `{summary.get('cache_mode')}`",
+            f"- Parse Cache Hit Rate: `{summary.get('parse_cache_hit_rate')}`",
+            f"- Embedding Cache Hit Rate: `{summary.get('embedding_cache_hit_rate')}`",
+            f"- Executed Routes: `{summary.get('num_executed_routes')}`",
+            f"- Skipped Routes: `{summary.get('num_skipped_routes')}`",
+        ]
+    )
+    return lines
 
 
 def write_reports(
-    report: dict[str, Any], output_dir: str | Path, suite_name: str
+    report: dict[str, Any],
+    output_dir: str | Path,
+    suite_name: str,
+    *,
+    artifact_detail: str = "compact",
 ) -> Path:
+    artifact_detail = _normalize_artifact_detail(artifact_detail)
     output_dir = Path(output_dir).resolve()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = output_dir / f"{timestamp}_{_to_slug(suite_name)}"
@@ -108,18 +203,20 @@ def write_reports(
     markdown_path = run_dir / "report.md"
     route_metrics_path = run_dir / "route_metrics.csv"
 
-    summary = report.get("summary", {})
+    summary = {
+        **dict(report.get("summary", {}) or {}),
+        "artifact_detail": artifact_detail,
+        "artifact_limits": dict(ARTIFACT_LIMITS),
+    }
     config = report.get("config", {})
-    predictions = report.get("predictions", [])
-    documents = report.get("documents", [])
+    predictions = _artifact_rows(report.get("predictions", []), artifact_detail)
+    documents = _artifact_rows(report.get("documents", []), artifact_detail)
     retrieval_traces = report.get("retrieval_traces")
     if retrieval_traces is None:
         retrieval_traces = _derive_retrieval_traces(predictions)
+    else:
+        retrieval_traces = _artifact_rows(retrieval_traces, artifact_detail)
 
-    summary_path.write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
     _write_jsonl(predictions_path, predictions)
     documents_path.write_text(
         json.dumps(documents, ensure_ascii=False, indent=2),
@@ -148,7 +245,67 @@ def write_reports(
         markdown.append("- Route Metrics: `route_metrics.csv`")
     markdown += _report_markdown_sections(summary, route_metric_table)
     markdown_path.write_text("\n".join(markdown), encoding="utf-8")
+    summary_path.write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return run_dir
+
+
+def _normalize_artifact_detail(artifact_detail: str) -> str:
+    value = str(artifact_detail or "compact").strip().lower()
+    if value not in {"compact", "full"}:
+        raise ValueError("artifact_detail must be one of 'compact' or 'full'.")
+    return value
+
+
+def _artifact_rows(rows: Any, artifact_detail: str) -> list[dict[str, Any]]:
+    source_rows = [dict(row) for row in rows or [] if isinstance(row, dict)]
+    if artifact_detail == "full":
+        return source_rows
+    return [_compact_value(row) for row in source_rows]
+
+
+def _compact_value(value: Any, key: str = "") -> Any:
+    if isinstance(value, dict):
+        if key in _SCORE_MAP_FIELDS:
+            return _compact_score_map(value)
+        return {
+            item_key: _compact_value(item_value, item_key)
+            for item_key, item_value in value.items()
+            if item_key not in _COMPACT_DROP_FIELDS
+        }
+    if isinstance(value, list):
+        return [_compact_value(item) for item in _compact_list(value, key)]
+    if key in _TEXT_FIELDS and isinstance(value, str):
+        return value[: ARTIFACT_LIMITS["max_evidence_text_chars"]]
+    return value
+
+
+def _compact_list(values: list[Any], key: str) -> list[Any]:
+    if key in _TRACE_FIELDS:
+        return values[: ARTIFACT_LIMITS["max_trace_events"]]
+    if key in _EVIDENCE_LIST_FIELDS and _looks_like_evidence_list(values):
+        return values[: ARTIFACT_LIMITS["max_prediction_evidence_items"]]
+    if key in _REFERENCE_LIST_FIELDS:
+        return values[: ARTIFACT_LIMITS["max_prediction_evidence_items"]]
+    return values
+
+
+def _compact_score_map(values: dict[str, Any]) -> dict[str, Any]:
+    limit = ARTIFACT_LIMITS["max_prediction_evidence_items"]
+    return {
+        str(key): _compact_value(value, str(key))
+        for key, value in list(values.items())[:limit]
+    }
+
+
+def _looks_like_evidence_list(values: list[Any]) -> bool:
+    return any(
+        isinstance(item, dict)
+        and any(field in item for field in ("evidence_id", "source_id", "file_id"))
+        for item in values
+    )
 
 
 def _report_markdown_sections(
@@ -156,6 +313,22 @@ def _report_markdown_sections(
     route_metric_table: list[dict[str, Any]],
 ) -> list[str]:
     sections: list[str] = []
+    quality_rows = _quality_route_metric_table(summary)
+    if quality_rows:
+        sections += [
+            "",
+            "## Quality Route Metrics",
+            "",
+            *_route_metrics_markdown(quality_rows),
+        ]
+    diagnostic_rows = _diagnostic_route_metric_table(summary)
+    if diagnostic_rows:
+        sections += [
+            "",
+            "## Diagnostic Route Metrics",
+            "",
+            *_route_metrics_markdown(diagnostic_rows),
+        ]
     if route_metric_table:
         sections += [
             "",
@@ -167,6 +340,9 @@ def _report_markdown_sections(
         ("Route Ranking", _route_ranking_markdown(summary)),
         ("Skipped Routes", _skipped_route_markdown(summary)),
         ("Backend Status By Route", _backend_metadata_markdown(summary)),
+        ("Generic Route Diagnostics", _route_diagnostics_markdown(summary)),
+        ("Route Confusion", _route_confusion_markdown(summary)),
+        ("Diagnostic Failure Counts", _diagnostic_failure_counts_markdown(summary)),
         ("External Research Evaluators", _external_evaluator_markdown(summary)),
         (
             "External Research Evaluators By Route",
@@ -178,12 +354,88 @@ def _report_markdown_sections(
     return sections
 
 
+def _route_diagnostics_markdown(summary: dict[str, Any]) -> list[str]:
+    rows = summary.get("dataset_route_diagnostics") or []
+    rows = [dict(row) for row in rows if isinstance(row, dict)]
+    if not rows:
+        return []
+    lines = [
+        "| Dataset | Route | N | Retrieved | Evidence Items | Gold Doc Hit | "
+        "Gold Page Hit | Gold Span Hit | Answer Nonempty |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| "
+            f"{row.get('dataset_name')} | "
+            f"{row.get('route')} | "
+            f"{row.get('num_predictions')} | "
+            f"{row.get('avg_retrieved_count')} | "
+            f"{row.get('avg_evidence_item_count')} | "
+            f"{row.get('avg_gold_document_hit')} | "
+            f"{row.get('avg_gold_page_hit')} | "
+            f"{row.get('avg_gold_span_hit')} | "
+            f"{row.get('avg_answer_nonempty_after_cleaning')} |"
+        )
+    return lines
+
+
+def _route_confusion_markdown(summary: dict[str, Any]) -> list[str]:
+    rows = summary.get("route_confusion_table") or []
+    rows = [dict(row) for row in rows if isinstance(row, dict)]
+    if not rows:
+        return []
+    lines = [
+        "| Dataset | Route | Recommended | Selected | Count |",
+        "| --- | --- | --- | --- | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| "
+            f"{row.get('dataset_name')} | "
+            f"{row.get('route')} | "
+            f"{row.get('recommended_route')} | "
+            f"{row.get('selected_route')} | "
+            f"{row.get('count')} |"
+        )
+    return lines
+
+
+def _diagnostic_failure_counts_markdown(summary: dict[str, Any]) -> list[str]:
+    rows = summary.get("diagnostic_failure_counts") or []
+    rows = [dict(row) for row in rows if isinstance(row, dict)]
+    if not rows:
+        return []
+    lines = [
+        "| Dataset | Route | Failure Class | Retrieval Failure | Citation Failure | Count |",
+        "| --- | --- | --- | --- | --- | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| "
+            f"{row.get('dataset_name')} | "
+            f"{row.get('route')} | "
+            f"{row.get('failure_class')} | "
+            f"{row.get('retrieval_failure_type')} | "
+            f"{row.get('citation_failure_type')} | "
+            f"{row.get('count')} |"
+        )
+    return lines
+
+
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    fieldnames = list(rows[0])
+    fieldnames = _csv_fieldnames(rows)
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
+
+
+def _csv_fieldnames(rows: list[dict[str, Any]]) -> list[str]:
+    keys = list(rows[0])
+    fieldnames = [key for key in _CSV_FIELD_ORDER if key in keys]
+    fieldnames.extend(key for key in keys if key not in fieldnames)
+    return fieldnames
 
 
 def _route_metric_table(summary: dict[str, Any]) -> list[dict[str, Any]]:
@@ -191,10 +443,21 @@ def _route_metric_table(summary: dict[str, Any]) -> list[dict[str, Any]]:
     return [dict(row) for row in rows if isinstance(row, dict)]
 
 
+def _quality_route_metric_table(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = summary.get("quality_route_metric_table") or []
+    return [dict(row) for row in rows if isinstance(row, dict)]
+
+
+def _diagnostic_route_metric_table(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = summary.get("diagnostic_route_metric_table") or []
+    return [dict(row) for row in rows if isinstance(row, dict)]
+
+
 def _route_metrics_markdown(rows: list[dict[str, Any]]) -> list[str]:
     lines = [
-        "| Dataset | Route | N | F1 | Page Hit | Unsupported Claim Rate | Total Seconds |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+        "| Dataset | Route | N | F1 | MARA Score | Page Hit | Unsupported Claim Rate | "
+        "Total Seconds |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
         lines.append(
@@ -203,6 +466,7 @@ def _route_metrics_markdown(rows: list[dict[str, Any]]) -> list[str]:
             f"{row.get('route')} | "
             f"{row.get('num_predictions')} | "
             f"{row.get('avg_f1')} | "
+            f"{row.get('avg_mara_score')} | "
             f"{row.get('avg_page_hit')} | "
             f"{row.get('avg_unsupported_claim_rate')} | "
             f"{row.get('avg_total_seconds')} |"

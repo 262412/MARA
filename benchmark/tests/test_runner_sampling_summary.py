@@ -64,6 +64,15 @@ def test_run_benchmark_applies_seeded_limit_and_sharding(monkeypatch, tmp_path):
         "shard_index": 1,
         "num_shards": 2,
     }
+    assert report["documents"] == [
+        {
+            "document_id": "doc",
+            "path": str((tmp_path / "doc.txt").resolve()),
+            "format_type": "txt",
+            "modality": "text",
+            "metadata": {},
+        }
+    ]
 
 
 def test_run_benchmark_summarizes_metrics_by_route(monkeypatch, tmp_path):
@@ -89,12 +98,28 @@ def test_run_benchmark_summarizes_metrics_by_route(monkeypatch, tmp_path):
     assert metric_rows[0]["avg_em"] == 0.0
     assert metric_rows[1]["avg_em"] == 1.0
     assert metric_rows[1]["avg_f1"] > metric_rows[0]["avg_f1"]
+    assert metric_rows[0]["avg_mara_score"] is not None
+    assert metric_rows[1]["avg_mara_score"] is not None
     assert metric_rows[0]["avg_total_seconds"] == 0.33
     assert metric_rows[1]["avg_total_seconds"] == 0.33
     assert {
+        "avg_mara_score",
+        "avg_mara_answer_score",
+        "avg_mara_evidence_score",
+        "avg_mara_citation_score",
+        "avg_mara_groundedness_score",
+        "avg_mara_abstention_score",
+        "avg_mara_controller_score",
+        "avg_mara_format_score",
         "avg_page_hit",
         "avg_citation_recall",
         "avg_citation_precision",
+        "avg_citation_recall_source",
+        "avg_citation_precision_source",
+        "avg_citation_recall_page",
+        "avg_citation_precision_page",
+        "avg_citation_recall_span",
+        "avg_citation_precision_span",
         "avg_unsupported_claim_rate",
         "avg_abstention_rate",
         "avg_multimodal_answer_support",
@@ -110,6 +135,47 @@ def test_run_benchmark_summarizes_metrics_by_route(monkeypatch, tmp_path):
     assert ranking["routes"][1]["rank"] == 2
     assert ranking["routes"][1]["route"] == "text_rag"
     assert ranking["routes"][1]["score"] == metric_rows[0]["avg_f1"]
+    mara_ranking = report["summary"]["route_rankings"][1]
+    assert mara_ranking["dataset_name"] == "routes"
+    assert mara_ranking["rank_metric"] == "avg_mara_score"
+
+
+def test_run_benchmark_splits_quality_and_diagnostic_route_summaries(
+    monkeypatch, tmp_path
+):
+    manifest_path = _write_route_role_manifest(tmp_path)
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _FakeEngine(engine_name, config, []),
+    )
+
+    report = run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="route_roles",
+            output_dir=tmp_path / "out",
+            use_generation=False,
+        ),
+    )
+
+    predictions = report["predictions"]
+    assert [item["benchmark_role"] for item in predictions] == [
+        "qa_quality",
+        "diagnostic",
+    ]
+    assert [row["route"] for row in report["summary"]["route_metric_table"]] == [
+        "text_rag",
+        "direct_answer",
+    ]
+    assert [
+        row["route"] for row in report["summary"]["quality_route_metric_table"]
+    ] == ["text_rag"]
+    assert [
+        row["route"] for row in report["summary"]["diagnostic_route_metric_table"]
+    ] == ["direct_answer"]
+    assert report["summary"]["quality_avg_em"] == 1.0
+    assert report["summary"]["quality_avg_f1"] == 1.0
+    assert report["summary"]["quality_avg_numeric_match"] == 0.0
 
 
 def _write_sampling_manifest(tmp_path):
@@ -157,6 +223,42 @@ def _write_route_summary_manifest(tmp_path):
                         "document_id": "doc",
                         "question": "What is alpha?",
                         "answers": ["legacy_text_rag:controller_auto"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
+def _write_route_role_manifest(tmp_path):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "route-roles.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "route_roles",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "routes": [
+                    {
+                        "route_id": "text_rag",
+                        "engine": "legacy_text_rag",
+                        "benchmark_role": "qa_quality",
+                    },
+                    {
+                        "route_id": "direct_answer",
+                        "engine": "legacy_text_rag",
+                        "benchmark_role": "diagnostic",
+                    },
+                ],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_id": "doc",
+                        "question": "What is alpha?",
+                        "answers": ["legacy_text_rag:text_rag"],
                     }
                 ],
             }

@@ -187,6 +187,7 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
             suite_name="runtime",
             output_dir=tmp_path / "out",
             scope="document",
+            max_context_length=3000,
             llm_name="Deepseek",
             docqa_citation_mode="off",
             reasoning_type="mara",
@@ -195,9 +196,11 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
             artifact_type="quiz",
             controller_mode="llm",
             route_policy="graph",
+            planner_backend="heuristic_local",
             planner_model="gpt-4o-mini",
             allowed_routes=["doc_text", "graph_global"],
             verification_mode="strict",
+            verification_domain="finance",
             graph_mode="global",
         ),
     )
@@ -218,6 +221,7 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert fake_runtime.indexed == [([str(doc_path)], False)]
     assert fake_runtime.requests[0].selected_file_ids == ["file-1"]
     assert fake_runtime.requests[0].qa_scope == "document"
+    assert fake_runtime.requests[0].max_context_length == 3000
     assert fake_runtime.requests[0].llm == "Deepseek"
     assert fake_runtime.requests[0].use_citation == "off"
     assert fake_runtime.requests[0].reasoning_type == "mara"
@@ -226,9 +230,11 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert fake_runtime.requests[0].artifact_type == "quiz"
     assert fake_runtime.requests[0].controller_mode == "llm"
     assert fake_runtime.requests[0].route_policy == "graph"
+    assert fake_runtime.requests[0].planner_backend == "heuristic_local"
     assert fake_runtime.requests[0].planner_model == "gpt-4o-mini"
     assert fake_runtime.requests[0].allowed_routes == ["doc_text", "graph_global"]
     assert fake_runtime.requests[0].verification_mode == "strict"
+    assert fake_runtime.requests[0].verification_domain == "finance"
     assert fake_runtime.requests[0].graph_mode == "global"
     assert result.answer == "runtime answer"
     assert result.predicted_pages == ["1"]

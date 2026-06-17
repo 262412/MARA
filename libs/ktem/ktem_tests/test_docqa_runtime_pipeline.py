@@ -12,6 +12,7 @@ def _default_request():
         use_mindmap=DEFAULT_SETTING,
         use_citation=DEFAULT_SETTING,
         language=DEFAULT_SETTING,
+        max_context_length=DEFAULT_SETTING,
     )
 
 
@@ -46,3 +47,23 @@ def test_runtime_does_not_duplicate_structured_markdown_guard():
 
     prompt = settings["reasoning.options.simple.qa_prompt"]
     assert prompt.count("Return the final answer as Markdown") == 1
+
+
+def test_runtime_applies_request_max_context_length_override():
+    settings = {
+        "reasoning.options.simple.qa_prompt": (
+            "Use context to answer.\n{context}\nQuestion: {question}\nAnswer:"
+        ),
+        "reasoning.max_context_length": 32000,
+    }
+    request = SimpleNamespace(
+        llm=DEFAULT_SETTING,
+        use_mindmap=DEFAULT_SETTING,
+        use_citation=DEFAULT_SETTING,
+        language=DEFAULT_SETTING,
+        max_context_length=3000,
+    )
+
+    apply_request_setting_overrides(settings, "simple", request)
+
+    assert settings["reasoning.max_context_length"] == 3000

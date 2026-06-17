@@ -36,6 +36,7 @@ from .chat_docqa_runtime import (
     build_web_docqa_request,
     docqa_research_control_inputs,
     render_docqa_runtime_controls,
+    runtime_trace_references,
 )
 from .chat_knowledge_graph_bindings import (
     bind_knowledge_graph_events,
@@ -3357,6 +3358,7 @@ class ChatPage(BasePage):
             response = self.docqa.run_turn(runtime_request)
             text = response.answer or ""
             refs = response.references_html or ""
+            trace_refs = runtime_trace_references(response, refs)
             mindmap_html = response.mindmap_html or ""
             plot = response.plot if response.plot is not None else state_plot_panel
             plot_gr = self._json_to_plot(plot)
@@ -3380,7 +3382,7 @@ class ChatPage(BasePage):
 
             trace_html = self._render_reasoning_trace_html(
                 chat_input,
-                refs,
+                trace_refs,
                 answer_html,
                 response.active_file_id or active_file_id or "",
                 response.page_number or normalized_page_number,

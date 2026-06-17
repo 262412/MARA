@@ -1,11 +1,18 @@
 import json
 
+import pyarrow as pa
+import pyarrow.parquet as pq
+
 from benchmark.converters.alce import normalize_alce_manifest
 from benchmark.converters.mmdocrag import normalize_mmdocrag_manifest
 from benchmark.converters.qasper import normalize_qasper_manifest
 from benchmark.converters.ragtruth import normalize_ragtruth_manifest
+from benchmark.converters.slidevqa import normalize_slidevqa_parquet_manifest
 from benchmark.converters.vidore import normalize_vidore_manifest
 from benchmark.manifest import load_manifest
+
+_JPEG_BYTES = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\xff\xd9"
+_PNG_BYTES = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
 
 
 def test_normalize_qasper_manifest_materializes_paper_text(tmp_path):
@@ -129,7 +136,8 @@ def test_normalize_ragtruth_manifest_joins_sources_and_responses(tmp_path):
             {
                 "source_id": "s1",
                 "task_type": "Summary",
-                "source": "The source says revenue rose.",
+                "source": "CNN/DM",
+                "source_info": "The source says revenue rose.",
                 "prompt": "Summarize the source.",
             }
         )
@@ -153,14 +161,28 @@ def test_normalize_ragtruth_manifest_joins_sources_and_responses(tmp_path):
     manifest_path = tmp_path / "ragtruth_manifest.json"
     normalize_ragtruth_manifest(source_info, responses, manifest_path)
 
-    example = load_manifest(manifest_path).examples[0]
+    manifest = load_manifest(manifest_path)
+    document = manifest.documents["s1"]
+    example = manifest.examples[0]
+
+    assert document.path.read_text(encoding="utf-8").strip() == (
+        "The source says revenue rose."
+    )
     assert example.question == "Summarize the source."
     assert example.answers == ["Revenue rose and profit doubled."]
+    assert example.gold_evidence == [
+        {
+            "document_id": "s1",
+            "span": "The source says revenue rose.",
+            "citation": "s1#source",
+        }
+    ]
     assert example.expected_guardrails == {
         "allow_abstention": True,
         "unsupported_claims_expected": True,
     }
     assert example.metadata["label_count"] == 1
+    assert example.metadata["source_label"] == "CNN/DM"
 
 
 def test_normalize_alce_manifest_flattens_qa_pairs(tmp_path):
@@ -223,5 +245,86 @@ def test_normalize_vidore_manifest_accepts_jsonl_retrieval_rows(tmp_path):
             "page": 2,
             "modality": "page_image",
             "citation": "doc-1_page_2#page:2",
+        }
+    ]
+
+
+def test_normalize_vidore_manifest_materializes_embedded_image_bytes(tmp_path):
+    source_path = tmp_path / "vidore.parquet"
+    image_type = pa.struct([("bytes", pa.binary()), ("path", pa.string())])
+    table = pa.table(
+        {
+            "query": ["Find the chart"],
+            "doc_id": ["doc-1"],
+            "page": ["7"],
+            "image_filename": ["doc-1-page-7"],
+            "image": pa.array(
+                [{"bytes": _PNG_BYTES, "path": None}],
+                type=image_type,
+            ),
+            "answer": ["chart"],
+        }
+    )
+    pq.write_table(table, source_path)
+
+    manifest_path = tmp_path / "vidore_manifest.json"
+    normalize_vidore_manifest(source_path, manifest_path)
+
+    bundle = load_manifest(manifest_path)
+    document = bundle.documents["doc-1_page_7"]
+    assert document.path == (tmp_path / "documents" / "doc-1_page_7.png").resolve()
+    assert document.path.read_bytes() == _PNG_BYTES
+    assert bundle.examples[0].evidence_pages == [7]
+
+
+def test_normalize_slidevqa_parquet_manifest_materializes_page_images(tmp_path):
+    source_path = tmp_path / "slidevqa.parquet"
+    image_type = pa.struct([("bytes", pa.binary()), ("path", pa.string())])
+    table = pa.table(
+        {
+            "deck_name": ["deck A"],
+            "deck_url": ["https://example.test/deck-a"],
+            "page_1": pa.array(
+                [{"bytes": _JPEG_BYTES, "path": None}],
+                type=image_type,
+            ),
+            "page_2": pa.array(
+                [{"bytes": _PNG_BYTES, "path": None}],
+                type=image_type,
+            ),
+            "qa_id": pa.array([123], type=pa.int64()),
+            "question": ["Which page contains the chart?"],
+            "answer": ["page two"],
+            "evidence_pages": pa.array([[2]], type=pa.list_(pa.int64())),
+        }
+    )
+    pq.write_table(table, source_path)
+
+    manifest_path = tmp_path / "slidevqa_manifest.json"
+    normalize_slidevqa_parquet_manifest(source_path, manifest_path)
+
+    bundle = load_manifest(manifest_path)
+    assert bundle.dataset_name == "slidevqa"
+    assert sorted(bundle.documents) == ["deck_A_page_1", "deck_A_page_2"]
+    assert (
+        bundle.documents["deck_A_page_1"].path
+        == (tmp_path / "documents" / "deck_A_page_1.jpg").resolve()
+    )
+    assert (
+        bundle.documents["deck_A_page_2"].path
+        == (tmp_path / "documents" / "deck_A_page_2.png").resolve()
+    )
+    assert bundle.documents["deck_A_page_1"].path.read_bytes() == _JPEG_BYTES
+    assert bundle.documents["deck_A_page_2"].path.read_bytes() == _PNG_BYTES
+    example = bundle.examples[0]
+    assert example.example_id == "123"
+    assert example.document_ids == ["deck_A_page_1", "deck_A_page_2"]
+    assert example.evidence_pages == [2]
+    assert example.gold_evidence == [
+        {
+            "document_id": "deck_A_page_2",
+            "page": 2,
+            "modality": "page_image",
+            "citation": "deck_A_page_2#page:2",
         }
     ]

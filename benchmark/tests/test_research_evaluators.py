@@ -57,6 +57,28 @@ def test_builtin_external_evaluator_adapters_mark_metric_categories():
     assert results[3]["metrics"]["faithfulness"] == 0.75
 
 
+def test_proxy_research_adapters_score_clean_final_answer_only():
+    prediction = {
+        "predicted_answer": (
+            "<think>The answer might be profit declined.</think>\n\n"
+            "Final answer: Revenue rose."
+        ),
+        "gold_answers": ["revenue rose"],
+        "metrics": {
+            "citation_precision": 1.0,
+            "citation_recall": 1.0,
+            "f1": 1.0,
+            "unsupported_claim_rate": 0.0,
+        },
+        "verify_decision": {"unsupported_claims": []},
+    }
+
+    result = ALCEEvaluator()(prediction)
+
+    assert result["metrics"]["fluency"] == 1.0
+    assert result["metrics"]["correctness"] == 1.0
+
+
 class _ExternalEvaluatorEngine:
     def __init__(self, engine_name, config):
         self.engine_name = engine_name

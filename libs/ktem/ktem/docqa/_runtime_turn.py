@@ -9,6 +9,7 @@ from kotaemon.base import Document
 from . import _runtime_mara as _mara
 from ._runtime_models import DocQARequest, _PreparedPipeline
 from ._runtime_utils import _serialize_value
+from .evidence_text import extract_final_answer_text
 
 
 @dataclass
@@ -46,6 +47,7 @@ def build_turn_request(
         settings=deepcopy(request.settings or load_settings(resolved_user_id)),
         state=deepcopy(request.state or session_info.state),
         history=list(request.history or session_info.messages),
+        max_context_length=request.max_context_length,
         reasoning_type=request.reasoning_type,
         llm=request.llm,
         use_mindmap=request.use_mindmap,
@@ -83,6 +85,7 @@ def collect_stream_result(
     for response in prepared.pipeline.stream(request.prompt, conversation_id, history):
         _ingest_stream_response(response, prepared, result)
 
+    result.text = extract_final_answer_text(result.text)
     if not result.text:
         result.text = empty_message
     return result

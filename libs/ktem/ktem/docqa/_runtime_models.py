@@ -22,6 +22,7 @@ class DocQARequest:
     settings: Optional[dict[str, Any]] = None
     state: Optional[dict[str, Any]] = None
     history: Optional[list[tuple[str, str]]] = None
+    max_context_length: Optional[int] = None
     reasoning_type: Optional[str] = None
     task_type: Optional[str] = None
     agent_mode: Optional[str] = None
@@ -29,12 +30,15 @@ class DocQARequest:
     note_ids: Optional[list[str]] = None
     controller_mode: Optional[str] = None
     route_policy: Optional[str] = None
+    planner_backend: Optional[str] = None
     planner_model: Optional[str] = None
     allowed_routes: Optional[list[str]] = None
     verification_mode: Optional[str] = None
+    verification_domain: Optional[str] = None
     graph_mode: Optional[str] = None
     visual_retriever_backend: Optional[str] = None
     visual_generator_backend: Optional[str] = None
+    page_image_records: Optional[list[dict[str, Any]]] = None
     llm: Optional[str] = None
     use_mindmap: bool | str | None = None
     use_citation: Optional[str] = None
