@@ -11,6 +11,10 @@ from benchmark.manifest import load_manifest
 _JPEG_BYTES = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\xff\xd9"
 
 
+def _read_jsonl(path):
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
 def _empty_report(config):
     return {
         "summary": {
@@ -115,6 +119,73 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     assert captured["config"].sample_seed == 1234
     assert captured["config"].shard_index == 1
     assert captured["config"].num_shards == 4
+
+
+def test_rescore_artifact_cli_writes_mara_scores_without_mutating_source(tmp_path):
+    source_run = tmp_path / "source-run"
+    source_run.mkdir()
+    source_summary = {
+        "suite_name": "Original Suite",
+        "dataset_name": "qasper-formal",
+        "num_examples": 1,
+        "num_documents": 1,
+        "avg_f1": 0.05,
+    }
+    (source_run / "summary.json").write_text(
+        json.dumps(source_summary),
+        encoding="utf-8",
+    )
+    (source_run / "predictions.jsonl").write_text(
+        json.dumps(
+            {
+                "example_id": "ex-1",
+                "route": "controller_auto",
+                "benchmark_role": "qa_quality",
+                "metrics": {
+                    "em": 0.0,
+                    "f1": 0.05,
+                    "anls": 0.0,
+                    "page_hit": 1.0,
+                    "span_recall": 1.0,
+                    "citation_recall": 1.0,
+                    "citation_precision": 1.0,
+                    "unsupported_claim_rate": 0.0,
+                    "contradiction_count": 0.0,
+                    "false_abstention": 0.0,
+                },
+                "diagnostics": {"controller_route_match": 1.0},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (source_run / "documents.json").write_text("[]", encoding="utf-8")
+
+    output_dir = tmp_path / "rescored"
+    exit_code = main(
+        [
+            "rescore-artifact",
+            "--run-dir",
+            str(source_run),
+            "--output-dir",
+            str(output_dir),
+            "--suite-name",
+            "Rescored Suite",
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads((source_run / "summary.json").read_text(encoding="utf-8")) == (
+        source_summary
+    )
+    [rescored_run] = list(output_dir.iterdir())
+    summary = json.loads((rescored_run / "summary.json").read_text(encoding="utf-8"))
+    predictions = _read_jsonl(rescored_run / "predictions.jsonl")
+    assert summary["avg_f1"] == 0.05
+    assert summary["avg_mara_score"] == 0.85
+    assert summary["mara_rescore_source_run_dir"] == str(source_run.resolve())
+    assert predictions[0]["metrics"]["f1"] == 0.05
+    assert predictions[0]["metrics"]["mara_score"] == 0.85
 
 
 def test_apply_route_template_cli_writes_runnable_manifest(tmp_path):

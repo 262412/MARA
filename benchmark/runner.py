@@ -6,6 +6,7 @@ from typing import Any
 from .diagnostics import prediction_diagnostics
 from .engines import EngineRunResult, get_engine
 from .manifest import load_manifest
+from .mara_oriented_scores import add_mara_oriented_metrics
 from .research_adapters import (
     research_adapter_metric_metadata,
     research_adapter_metrics,
@@ -335,6 +336,7 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
             prediction["gold_evidence"] = example.gold_evidence
             prediction["metrics"] = score_prediction(prediction)
             prediction["diagnostics"] = prediction_diagnostics(prediction)
+            add_mara_oriented_metrics(prediction, dataset_name=bundle.dataset_name)
             prediction["adapter_metrics"] = research_adapter_metrics(prediction)
             prediction["adapter_metric_metadata"] = research_adapter_metric_metadata()
             (

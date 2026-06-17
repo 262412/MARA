@@ -98,9 +98,19 @@ def test_run_benchmark_summarizes_metrics_by_route(monkeypatch, tmp_path):
     assert metric_rows[0]["avg_em"] == 0.0
     assert metric_rows[1]["avg_em"] == 1.0
     assert metric_rows[1]["avg_f1"] > metric_rows[0]["avg_f1"]
+    assert metric_rows[0]["avg_mara_score"] is not None
+    assert metric_rows[1]["avg_mara_score"] is not None
     assert metric_rows[0]["avg_total_seconds"] == 0.33
     assert metric_rows[1]["avg_total_seconds"] == 0.33
     assert {
+        "avg_mara_score",
+        "avg_mara_answer_score",
+        "avg_mara_evidence_score",
+        "avg_mara_citation_score",
+        "avg_mara_groundedness_score",
+        "avg_mara_abstention_score",
+        "avg_mara_controller_score",
+        "avg_mara_format_score",
         "avg_page_hit",
         "avg_citation_recall",
         "avg_citation_precision",
@@ -125,6 +135,9 @@ def test_run_benchmark_summarizes_metrics_by_route(monkeypatch, tmp_path):
     assert ranking["routes"][1]["rank"] == 2
     assert ranking["routes"][1]["route"] == "text_rag"
     assert ranking["routes"][1]["score"] == metric_rows[0]["avg_f1"]
+    mara_ranking = report["summary"]["route_rankings"][1]
+    assert mara_ranking["dataset_name"] == "routes"
+    assert mara_ranking["rank_metric"] == "avg_mara_score"
 
 
 def test_run_benchmark_splits_quality_and_diagnostic_route_summaries(

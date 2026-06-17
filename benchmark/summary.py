@@ -7,6 +7,7 @@ from .diagnostics import (
     diagnostic_failure_counts,
     route_confusion_table,
 )
+from .mara_oriented_scores import MARA_METRIC_KEYS, mara_score_metadata
 from .metrics import round_metric, safe_mean
 from .verification_metrics import verification_summary
 
@@ -56,12 +57,36 @@ def build_benchmark_summary(
         ),
         **_quality_route_summary(predictions),
         "route_rankings": _route_rankings(bundle.dataset_name, predictions),
+        "mara_score_metadata": mara_score_metadata(bundle.dataset_name),
         "backend_metadata": backend_metadata,
         "adapter_metric_metadata": adapter_metric_metadata or {},
         "external_adapter_metric_metadata": external_adapter_metric_metadata or {},
         "external_adapter_metric_metadata_by_route": (
             external_adapter_metric_metadata_by_route or {}
         ),
+    }
+
+
+def add_mara_summary_fields(
+    summary: dict[str, Any],
+    predictions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    dataset_name = str(summary.get("dataset_name") or "unknown")
+    return {
+        **dict(summary),
+        **_mara_metric_summary(predictions),
+        "route_metric_table": _route_metric_table(dataset_name, predictions),
+        "quality_route_metric_table": _route_metric_table(
+            dataset_name,
+            _role_predictions(predictions, {"qa_quality"}),
+        ),
+        "diagnostic_route_metric_table": _route_metric_table(
+            dataset_name,
+            _role_predictions(predictions, {"diagnostic", "prototype"}),
+        ),
+        **_quality_route_summary(predictions),
+        "route_rankings": _route_rankings(dataset_name, predictions),
+        "mara_score_metadata": mara_score_metadata(dataset_name),
     }
 
 
@@ -121,6 +146,7 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_numeric_match": _avg_metric(predictions, "numeric_match"),
         "avg_abstention_rate": _avg_metric(predictions, "abstained"),
         "avg_false_abstention": _avg_metric(predictions, "false_abstention"),
+        **_mara_metric_summary(predictions),
     }
 
 
@@ -129,7 +155,14 @@ def _quality_route_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "quality_avg_em": _avg_metric(quality_predictions, "em"),
         "quality_avg_f1": _avg_metric(quality_predictions, "f1"),
+        "quality_avg_mara_score": _avg_metric(quality_predictions, "mara_score"),
         "quality_avg_numeric_match": _avg_metric(quality_predictions, "numeric_match"),
+    }
+
+
+def _mara_metric_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        f"avg_{metric}": _avg_metric(predictions, metric) for metric in MARA_METRIC_KEYS
     }
 
 
@@ -238,6 +271,7 @@ def _route_metric_table(
                 "num_predictions": len(route_predictions),
                 "avg_em": _avg_metric(route_predictions, "em"),
                 "avg_f1": _avg_metric(route_predictions, "f1"),
+                **_mara_metric_summary(route_predictions),
                 "avg_anls": _avg_metric(route_predictions, "anls"),
                 "avg_page_hit": _avg_metric(route_predictions, "page_hit"),
                 "avg_citation_recall": _avg_metric(
@@ -273,24 +307,33 @@ def _route_rankings(
     predictions: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     rows = _route_metric_table(dataset_name, predictions)
+    return [
+        ranking
+        for metric in ("avg_f1", "avg_mara_score")
+        for ranking in [_route_ranking(dataset_name, rows, metric)]
+        if ranking is not None
+    ]
+
+
+def _route_ranking(
+    dataset_name: str,
+    rows: list[dict[str, Any]],
+    metric: str,
+) -> dict[str, Any] | None:
     ranked = [
-        (row["route"], row["avg_f1"]) for row in rows if row.get("avg_f1") is not None
+        (row["route"], row[metric]) for row in rows if row.get(metric) is not None
     ]
     ranked.sort(key=lambda item: (-float(item[1]), item[0]))
-    return (
-        [
-            {
-                "dataset_name": dataset_name,
-                "rank_metric": "avg_f1",
-                "routes": [
-                    {"rank": index, "route": route, "score": score}
-                    for index, (route, score) in enumerate(ranked, start=1)
-                ],
-            }
-        ]
-        if ranked
-        else []
-    )
+    if not ranked:
+        return None
+    return {
+        "dataset_name": dataset_name,
+        "rank_metric": metric,
+        "routes": [
+            {"rank": index, "route": route, "score": score}
+            for index, (route, score) in enumerate(ranked, start=1)
+        ],
+    }
 
 
 def _ordered_routes(predictions: list[dict[str, Any]]) -> list[str]:

@@ -122,6 +122,17 @@ def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_rescore_command(subparsers: argparse._SubParsersAction) -> None:
+    rescore_parser = subparsers.add_parser(
+        "rescore-artifact",
+        help="Add MARA-oriented scores to an existing benchmark artifact run",
+    )
+    rescore_parser.add_argument("--run-dir", required=True)
+    rescore_parser.add_argument("--output-dir", required=True)
+    rescore_parser.add_argument("--suite-name")
+    _add_artifact_detail_option(rescore_parser)
+
+
 def _add_existing_normalizer_commands(
     subparsers: argparse._SubParsersAction,
 ) -> None:
@@ -215,10 +226,27 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Kotaemon benchmark toolkit")
     subparsers = parser.add_subparsers(dest="command", required=True)
     _add_run_command(subparsers)
+    _add_rescore_command(subparsers)
     _add_existing_normalizer_commands(subparsers)
     _add_thesis_converter_commands(subparsers)
     _add_manifest_template_commands(subparsers)
     return parser
+
+
+def _handle_rescore_command(args: argparse.Namespace) -> int | None:
+    if args.command != "rescore-artifact":
+        return None
+
+    from .artifact_rescoring import rescore_artifact_run
+
+    run_dir = rescore_artifact_run(
+        args.run_dir,
+        args.output_dir,
+        suite_name=args.suite_name,
+        artifact_detail=args.artifact_detail,
+    )
+    print(f"Rescored artifact written to {run_dir}")
+    return 0
 
 
 def _handle_manifest_template_command(args: argparse.Namespace) -> int | None:
@@ -365,6 +393,9 @@ def main(argv: list[str] | None = None) -> int:
     template_result = _handle_manifest_template_command(args)
     if template_result is not None:
         return template_result
+    rescore_result = _handle_rescore_command(args)
+    if rescore_result is not None:
+        return rescore_result
     normalizer_result = _handle_normalizer_command(args)
     if normalizer_result is not None:
         return normalizer_result

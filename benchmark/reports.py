@@ -51,6 +51,14 @@ _CSV_FIELD_ORDER = [
     "num_predictions",
     "avg_em",
     "avg_f1",
+    "avg_mara_score",
+    "avg_mara_answer_score",
+    "avg_mara_evidence_score",
+    "avg_mara_citation_score",
+    "avg_mara_groundedness_score",
+    "avg_mara_abstention_score",
+    "avg_mara_controller_score",
+    "avg_mara_format_score",
     "avg_anls",
     "avg_page_hit",
     "avg_citation_recall",
@@ -127,14 +135,18 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         f"- EM: `{summary.get('avg_em')}`",
         f"- F1: `{summary.get('avg_f1')}`",
     ]
+    if "avg_mara_score" in summary:
+        lines.append(f"- MARA-Oriented Score: `{summary.get('avg_mara_score')}`")
     if "quality_avg_f1" in summary:
-        lines.extend(
-            [
-                f"- Quality EM: `{summary.get('quality_avg_em')}`",
-                f"- Quality F1: `{summary.get('quality_avg_f1')}`",
-                "- Quality Numeric Match: "
-                f"`{summary.get('quality_avg_numeric_match')}`",
-            ]
+        lines.append(f"- Quality EM: `{summary.get('quality_avg_em')}`")
+        lines.append(f"- Quality F1: `{summary.get('quality_avg_f1')}`")
+        if "quality_avg_mara_score" in summary:
+            lines.append(
+                "- Quality MARA-Oriented Score: "
+                f"`{summary.get('quality_avg_mara_score')}`"
+            )
+        lines.append(
+            f"- Quality Numeric Match: `{summary.get('quality_avg_numeric_match')}`"
         )
     lines.extend(
         [
@@ -443,9 +455,9 @@ def _diagnostic_route_metric_table(summary: dict[str, Any]) -> list[dict[str, An
 
 def _route_metrics_markdown(rows: list[dict[str, Any]]) -> list[str]:
     lines = [
-        "| Dataset | Route | N | F1 | Page Hit | Unsupported Claim Rate | "
+        "| Dataset | Route | N | F1 | MARA Score | Page Hit | Unsupported Claim Rate | "
         "Total Seconds |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
         lines.append(
@@ -454,6 +466,7 @@ def _route_metrics_markdown(rows: list[dict[str, Any]]) -> list[str]:
             f"{row.get('route')} | "
             f"{row.get('num_predictions')} | "
             f"{row.get('avg_f1')} | "
+            f"{row.get('avg_mara_score')} | "
             f"{row.get('avg_page_hit')} | "
             f"{row.get('avg_unsupported_claim_rate')} | "
             f"{row.get('avg_total_seconds')} |"
