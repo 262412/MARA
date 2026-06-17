@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Any, cast
 
 from ktem.reasoning.mara import (
     MaraAgentPipeline,
@@ -251,7 +252,7 @@ def test_mara_text_generation_disables_multimodal_payloads(monkeypatch):
 
     monkeypatch.setattr(FullQAPipeline, "stream", fake_stream)
     pipeline = MaraAgentPipeline(retrievers=[])
-    pipeline.answering_pipeline = SimpleNamespace(use_multimodal=True)
+    cast(Any, pipeline).answering_pipeline = SimpleNamespace(use_multimodal=True)
 
     answer, _events = _collect_text_rag_generation(
         pipeline,
