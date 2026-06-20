@@ -30,7 +30,8 @@ def apply_request_setting_overrides(
     reasoning_id: str,
     request: Any,
 ) -> None:
-    _ensure_structured_qa_prompt(settings, reasoning_id)
+    if str(getattr(request, "origin", "") or "").strip().lower() != "benchmark":
+        _ensure_structured_qa_prompt(settings, reasoning_id)
     llm_setting_key = f"reasoning.options.{reasoning_id}.llm"
     if llm_setting_key in settings and request.llm not in (DEFAULT_SETTING, None, ""):
         settings[llm_setting_key] = request.llm

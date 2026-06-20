@@ -304,6 +304,51 @@ def test_score_prediction_uses_emitted_citations_not_retrieved_source_coverage()
     assert metrics["citation_precision_page"] == 1.0
 
 
+def test_score_prediction_reports_inline_and_metadata_citation_metrics_separately():
+    metrics = score_prediction(
+        {
+            "gold_answers": ["42"],
+            "predicted_answer": "42 [doc#page:5]",
+            "predicted_pages": [5, 99],
+            "gold_pages": [5],
+            "predicted_sources": ["doc#page:5", "doc#page:99"],
+            "predicted_citations": [],
+            "gold_sources": ["doc#page:5"],
+            "gold_evidence": [
+                {"document_id": "doc", "citation": "doc#page:5", "page": 5}
+            ],
+            "expected_formats": [],
+            "expected_guardrails": {},
+            "claim_verification": {},
+            "verify_decision": {"status": "supported"},
+            "guardrail_decision": {"status": "supported", "action": "return"},
+            "evidence_metadata": {},
+            "evidence_bundle": {},
+            "retrieved_hits": [
+                {
+                    "document_id": "doc",
+                    "source_id": "doc",
+                    "page_label": "5",
+                    "source_backrefs": ["doc#page:5"],
+                },
+                {
+                    "document_id": "doc",
+                    "source_id": "doc",
+                    "page_label": "99",
+                    "source_backrefs": ["doc#page:99"],
+                },
+            ],
+        }
+    )
+
+    assert metrics["citation_inline_recall"] == 1.0
+    assert metrics["citation_inline_precision"] == 1.0
+    assert metrics["citation_metadata_recall"] == 1.0
+    assert metrics["citation_metadata_precision"] == 0.5
+    assert metrics["citation_recall"] == 1.0
+    assert metrics["citation_precision"] == 1.0
+
+
 def test_score_prediction_falls_back_to_sources_when_emitted_citations_are_empty():
     metrics = score_prediction(
         {

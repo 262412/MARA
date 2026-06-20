@@ -14,6 +14,12 @@ It is built around one normalized manifest format so we can compare:
 - answer `EM`
 - answer `F1`
 - answer `ANLS`
+- MARA native score, where `mara_score` follows the dataset family contract:
+  FinanceBench answer correctness, QASPER answer F1 with native evidence F1
+  reported separately, ALCE correctness plus citation quality, RAGTruth
+  hallucination-span F1, or a generic fallback for unsupported families
+- MARA proxy score, preserved as `mara_proxy_score` for diagnostics when the
+  older weighted evidence/citation/groundedness summary is still useful
 - page hit rate when gold pages exist
 - citation recall when gold evidence strings exist
 - element hit and span recall when gold evidence carries element ids or spans
@@ -146,6 +152,23 @@ python -m benchmark run `
 
 Outputs are written under `benchmark/artifacts/`.
 
+Benchmark runs use their own prompt contract by default. `benchmark_v1` keeps
+the raw dataset question in artifacts, but sends a benchmark-specific runtime
+prompt that asks for a concise, grounded answer and keeps formatting/citation
+requirements separate from the retrieval query. Use `raw` only for historical
+A/B comparisons:
+
+```powershell
+python -m benchmark run `
+  --manifest benchmark/manifests/format_robustness.json `
+  --suite-name format-robustness-raw-ablation `
+  --benchmark-prompt-policy raw
+```
+
+`--benchmark-prompt-profile` accepts `auto`, `concise_grounded_qa`,
+`citation_grounded_qa`, `guardrail_grounded_qa`, and `visual_grounded_qa`.
+Manifest routes may override both prompt options for route-specific ablations.
+
 When benchmarking `docqa_runtime` with an LLM that does not support
 OpenAI-compatible tool calling, disable citation highlighting for the run:
 
@@ -166,11 +189,15 @@ finishes.
 
 Each prediction row now includes:
 
+- `benchmark_prompt_policy`, `benchmark_prompt_profile`,
+  `benchmark_question`, `benchmark_retrieval_query`, and
+  `benchmark_runtime_prompt`: the benchmark prompt contract used for the run
 - `evidence_metadata`: whether figure/image/formula/page visual context reached the generation path
 - `agent_trace`: MARA planning, retrieval, verification, and final-decision events when the engine exposes them
 - `claim_verification`: abstention and rewrite-skip behavior when the engine exposes it
 - `presentation`: renderer or answer-format metadata when the engine exposes it
-- `metrics`: text accuracy, retrieval grounding, false abstention, Markdown table, LaTeX, and guardrail scores
+- `metrics`: dataset-native score fields, text accuracy, retrieval grounding,
+  false abstention, Markdown table, LaTeX, and guardrail scores
 
 ## FinanceBench
 
@@ -278,6 +305,38 @@ python -m benchmark run `
 Reports include `route_metrics.csv`, route-level Markdown tables, backend
 metadata, skipped routes, and evaluator status when route-matrix results are
 available.
+
+`avg_mara_score` is the benchmark-native primary score for the dataset family,
+and `avg_native_score` is emitted as the same value for explicit downstream
+consumers. `avg_mara_proxy_score` preserves the older weighted diagnostic score
+so evidence, citation, grounding, controller, and format regressions remain
+visible without replacing the dataset-native headline score. Local native
+contracts compute their own answer/citation fields from the stored prediction
+payload and are marked `paper_grade=false`; route-level external evaluators can
+still report paper-grade metrics separately when configured. If an old artifact
+lacks the answer, gold answer, or label fields needed by the dataset-native
+contract, the headline score is left empty rather than being filled from
+`mara_proxy_score`.
+
+External evaluators can be configured in a manifest route or from the CLI:
+
+```powershell
+python -m benchmark run `
+  --manifest ~/scratch/outputs/MARA/manifests/alce-asqa.json `
+  --suite-name alce-paper-grade `
+  --external-evaluator alce=my_package.evaluators.alce_judge
+```
+
+Repeat `--external-evaluator` to configure multiple adapters. Manifest route
+settings override CLI defaults for that route, which keeps route-specific
+paper-grade ablations isolated.
+
+Local proxy evaluator aliases are also available for route plumbing checks:
+`builtin:alce_proxy`, `builtin:mmdocrag_proxy`, `builtin:ragtruth_proxy`, and
+`builtin:ragas_proxy`. These aliases are marked `paper_grade=false`; they are
+recorded as external diagnostics but do not replace the dataset-native headline
+score. Only an evaluator backend that explicitly returns `paper_grade=true` and
+a `primary_metric` can promote its score to the `avg_mara_score` headline.
 
 ## Notes
 

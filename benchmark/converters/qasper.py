@@ -58,7 +58,7 @@ def _paper_text(paper: dict[str, Any]) -> str:
 
 
 def _example(document_id: str, qa: dict[str, Any], index: int) -> dict[str, Any]:
-    answers, evidence = _answers_and_evidence(qa)
+    answers, evidence, answer_annotations = _answers_evidence_and_annotations(qa)
     return {
         "example_id": str(qa.get("question_id") or f"{document_id}_{index}"),
         "document_ids": [document_id],
@@ -80,13 +80,17 @@ def _example(document_id: str, qa: dict[str, Any], index: int) -> dict[str, Any]
             "dataset_family": "scientific_qa",
             "nlp_background": qa.get("nlp_background"),
             "topic_background": qa.get("topic_background"),
+            "qasper_answer_annotations": answer_annotations,
         },
     }
 
 
-def _answers_and_evidence(qa: dict[str, Any]) -> tuple[list[str], list[str]]:
+def _answers_evidence_and_annotations(
+    qa: dict[str, Any],
+) -> tuple[list[str], list[str], list[dict[str, Any]]]:
     answers: list[str] = []
     evidence: list[str] = []
+    answer_annotations: list[dict[str, Any]] = []
     for annotation in ensure_list(qa.get("answers")):
         if not isinstance(annotation, dict):
             continue
@@ -94,11 +98,30 @@ def _answers_and_evidence(qa: dict[str, Any]) -> tuple[list[str], list[str]]:
         if not isinstance(answer, dict):
             continue
         answers.extend(_answer_texts(answer))
+        answer_annotations.append(_answer_annotation(answer))
         for item in ensure_list(answer.get("evidence")):
             text = str(item).strip()
             if text:
                 evidence.append(text)
-    return _dedupe(answers), _dedupe(evidence)
+    return _dedupe(answers), _dedupe(evidence), answer_annotations
+
+
+def _answer_annotation(answer: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "extractive_spans": [
+            str(item).strip()
+            for item in ensure_list(answer.get("extractive_spans"))
+            if str(item).strip()
+        ],
+        "free_form_answer": str(answer.get("free_form_answer") or "").strip(),
+        "yes_no": answer.get("yes_no"),
+        "unanswerable": answer.get("unanswerable"),
+        "evidence": [
+            str(item).strip()
+            for item in ensure_list(answer.get("evidence"))
+            if str(item).strip()
+        ],
+    }
 
 
 def _answer_texts(answer: dict[str, Any]) -> list[str]:

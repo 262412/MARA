@@ -49,6 +49,22 @@ def test_runtime_does_not_duplicate_structured_markdown_guard():
     assert prompt.count("Return the final answer as Markdown") == 1
 
 
+def test_runtime_does_not_add_structured_guard_for_benchmark_origin():
+    settings = {
+        "reasoning.options.simple.qa_prompt": (
+            "Use context to answer.\n{context}\nQuestion: {question}\nAnswer:"
+        )
+    }
+    request = _default_request()
+    request.origin = "benchmark"
+
+    apply_request_setting_overrides(settings, "simple", request)
+
+    prompt = settings["reasoning.options.simple.qa_prompt"]
+    assert prompt == "Use context to answer.\n{context}\nQuestion: {question}\nAnswer:"
+    assert "Answer formatting requirements:" not in prompt
+
+
 def test_runtime_applies_request_max_context_length_override():
     settings = {
         "reasoning.options.simple.qa_prompt": (

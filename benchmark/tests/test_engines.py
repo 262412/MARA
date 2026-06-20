@@ -220,6 +220,9 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
 
     assert fake_runtime.indexed == [([str(doc_path)], False)]
     assert fake_runtime.requests[0].selected_file_ids == ["file-1"]
+    assert "Benchmark prompt contract:" in fake_runtime.requests[0].prompt
+    assert "Answer formatting requirements:" not in fake_runtime.requests[0].prompt
+    assert "Return the final answer as Markdown" not in fake_runtime.requests[0].prompt
     assert fake_runtime.requests[0].qa_scope == "document"
     assert fake_runtime.requests[0].max_context_length == 3000
     assert fake_runtime.requests[0].llm == "Deepseek"
@@ -238,7 +241,7 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert fake_runtime.requests[0].graph_mode == "global"
     assert result.answer == "runtime answer"
     assert result.predicted_pages == ["1"]
-    assert result.predicted_sources == ["doc.txt#page:1"]
+    assert result.predicted_sources == ["doc#page:1"]
     assert result.agent_trace == [{"stage": "planner", "decision": "retrieve"}]
     assert result.evidence_metadata == {"has_formula_evidence": True}
     assert result.controller_trace == [{"stage": "planner", "route": "graph_global"}]

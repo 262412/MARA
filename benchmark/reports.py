@@ -6,12 +6,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .report_compaction_fields import TEXT_FIELDS
+from .report_headline import headline_score_lines
+from .report_route_metrics import route_metrics_markdown
+from .report_route_rankings import route_ranking_markdown
+
 ARTIFACT_LIMITS = {
     "max_evidence_text_chars": 2000,
     "max_prediction_evidence_items": 10,
     "max_trace_events": 20,
 }
-_TEXT_FIELDS = {"caption", "ocr_text", "snippet", "text", "vlm_text"}
 _TRACE_FIELDS = {
     "agent_trace",
     "controller_trace",
@@ -49,9 +53,11 @@ _CSV_FIELD_ORDER = [
     "dataset_name",
     "route",
     "num_predictions",
+    "avg_mara_score",
+    "avg_native_score",
+    "avg_mara_proxy_score",
     "avg_em",
     "avg_f1",
-    "avg_mara_score",
     "avg_mara_answer_score",
     "avg_mara_evidence_score",
     "avg_mara_citation_score",
@@ -63,6 +69,10 @@ _CSV_FIELD_ORDER = [
     "avg_page_hit",
     "avg_citation_recall",
     "avg_citation_precision",
+    "avg_citation_metadata_recall",
+    "avg_citation_metadata_precision",
+    "avg_citation_inline_recall",
+    "avg_citation_inline_precision",
     "avg_citation_recall_source",
     "avg_citation_precision_source",
     "avg_citation_recall_page",
@@ -132,19 +142,27 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         f"- Dataset: `{summary.get('dataset_name')}`",
         f"- Examples: `{summary.get('num_examples')}`",
         f"- Documents: `{summary.get('num_documents')}`",
-        f"- EM: `{summary.get('avg_em')}`",
-        f"- F1: `{summary.get('avg_f1')}`",
     ]
-    if "avg_mara_score" in summary:
-        lines.append(f"- MARA-Oriented Score: `{summary.get('avg_mara_score')}`")
+    lines.extend(headline_score_lines(summary))
+    lines.extend(
+        [
+            f"- Diagnostic EM: `{summary.get('avg_em')}`",
+            f"- Diagnostic F1: `{summary.get('avg_f1')}`",
+        ]
+    )
     if "quality_avg_f1" in summary:
-        lines.append(f"- Quality EM: `{summary.get('quality_avg_em')}`")
-        lines.append(f"- Quality F1: `{summary.get('quality_avg_f1')}`")
         if "quality_avg_mara_score" in summary:
             lines.append(
-                "- Quality MARA-Oriented Score: "
+                "- Quality MARA Native Score: "
                 f"`{summary.get('quality_avg_mara_score')}`"
             )
+        if "quality_avg_mara_proxy_score" in summary:
+            lines.append(
+                "- Quality MARA Proxy Score: "
+                f"`{summary.get('quality_avg_mara_proxy_score')}`"
+            )
+        lines.append(f"- Quality Diagnostic EM: `{summary.get('quality_avg_em')}`")
+        lines.append(f"- Quality Diagnostic F1: `{summary.get('quality_avg_f1')}`")
         lines.append(
             f"- Quality Numeric Match: `{summary.get('quality_avg_numeric_match')}`"
         )
@@ -153,6 +171,14 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
             f"- ANLS: `{summary.get('avg_anls')}`",
             f"- Page Hit: `{summary.get('avg_page_hit')}`",
             f"- Citation Recall: `{summary.get('avg_citation_recall')}`",
+            "- Citation Metadata Recall: "
+            f"`{summary.get('avg_citation_metadata_recall')}`",
+            "- Citation Metadata Precision: "
+            f"`{summary.get('avg_citation_metadata_precision')}`",
+            "- Citation Inline Recall: "
+            f"`{summary.get('avg_citation_inline_recall')}`",
+            "- Citation Inline Precision: "
+            f"`{summary.get('avg_citation_inline_precision')}`",
             f"- Element Hit: `{summary.get('avg_element_hit')}`",
             f"- Table Hit: `{summary.get('avg_table_hit')}`",
             f"- Figure Hit: `{summary.get('avg_figure_hit')}`",
@@ -277,7 +303,7 @@ def _compact_value(value: Any, key: str = "") -> Any:
         }
     if isinstance(value, list):
         return [_compact_value(item) for item in _compact_list(value, key)]
-    if key in _TEXT_FIELDS and isinstance(value, str):
+    if key in TEXT_FIELDS and isinstance(value, str):
         return value[: ARTIFACT_LIMITS["max_evidence_text_chars"]]
     return value
 
@@ -319,7 +345,7 @@ def _report_markdown_sections(
             "",
             "## Quality Route Metrics",
             "",
-            *_route_metrics_markdown(quality_rows),
+            *route_metrics_markdown(quality_rows),
         ]
     diagnostic_rows = _diagnostic_route_metric_table(summary)
     if diagnostic_rows:
@@ -327,17 +353,17 @@ def _report_markdown_sections(
             "",
             "## Diagnostic Route Metrics",
             "",
-            *_route_metrics_markdown(diagnostic_rows),
+            *route_metrics_markdown(diagnostic_rows),
         ]
     if route_metric_table:
         sections += [
             "",
             "## Route Metrics",
             "",
-            *_route_metrics_markdown(route_metric_table),
+            *route_metrics_markdown(route_metric_table),
         ]
     for title, lines in (
-        ("Route Ranking", _route_ranking_markdown(summary)),
+        ("Route Ranking", route_ranking_markdown(summary)),
         ("Skipped Routes", _skipped_route_markdown(summary)),
         ("Backend Status By Route", _backend_metadata_markdown(summary)),
         ("Generic Route Diagnostics", _route_diagnostics_markdown(summary)),
@@ -451,44 +477,6 @@ def _quality_route_metric_table(summary: dict[str, Any]) -> list[dict[str, Any]]
 def _diagnostic_route_metric_table(summary: dict[str, Any]) -> list[dict[str, Any]]:
     rows = summary.get("diagnostic_route_metric_table") or []
     return [dict(row) for row in rows if isinstance(row, dict)]
-
-
-def _route_metrics_markdown(rows: list[dict[str, Any]]) -> list[str]:
-    lines = [
-        "| Dataset | Route | N | F1 | MARA Score | Page Hit | Unsupported Claim Rate | "
-        "Total Seconds |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
-    ]
-    for row in rows:
-        lines.append(
-            "| "
-            f"{row.get('dataset_name')} | "
-            f"{row.get('route')} | "
-            f"{row.get('num_predictions')} | "
-            f"{row.get('avg_f1')} | "
-            f"{row.get('avg_mara_score')} | "
-            f"{row.get('avg_page_hit')} | "
-            f"{row.get('avg_unsupported_claim_rate')} | "
-            f"{row.get('avg_total_seconds')} |"
-        )
-    return lines
-
-
-def _route_ranking_markdown(summary: dict[str, Any]) -> list[str]:
-    rankings = summary.get("route_rankings") or []
-    lines: list[str] = []
-    for ranking in rankings:
-        if not isinstance(ranking, dict):
-            continue
-        rank_metric = str(ranking.get("rank_metric") or "score")
-        for route in ranking.get("routes") or []:
-            if not isinstance(route, dict):
-                continue
-            lines.append(
-                f"{route.get('rank')}. `{route.get('route')}` "
-                f"{rank_metric}=`{route.get('score')}`"
-            )
-    return lines
 
 
 def _skipped_route_markdown(summary: dict[str, Any]) -> list[str]:

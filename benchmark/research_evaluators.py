@@ -60,6 +60,14 @@ class RagasEvaluator(_ResearchEvaluatorAdapter):
     adapter_name = "ragas"
 
 
+_BUILTIN_EVALUATOR_ALIASES: dict[str, type[_ResearchEvaluatorAdapter]] = {
+    "builtin:alce_proxy": ALCEEvaluator,
+    "builtin:mmdocrag_proxy": MMDocRAGEvaluator,
+    "builtin:ragtruth_proxy": RAGTruthEvaluator,
+    "builtin:ragas_proxy": RagasEvaluator,
+}
+
+
 def external_research_adapter_metrics(
     prediction: dict[str, Any],
     route: dict[str, Any],
@@ -139,6 +147,7 @@ def _run_external_evaluator(
         ),
         "paper_grade": paper_grade,
         "status": "configured",
+        **_external_scoring_metadata(metadata),
     }
 
 
@@ -166,10 +175,23 @@ def _coerce_evaluator_result(result: Any) -> tuple[dict[str, Any], dict[str, Any
     return dict(result), {}
 
 
+def _external_scoring_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: metadata[key]
+        for key in ("contract_id", "primary_metric", "scoring_mode")
+        if key in metadata
+    }
+
+
 def _load_evaluator(backend: Any) -> Callable[[dict[str, Any]], Any]:
     if callable(backend):
         return backend
     ref = str(backend or "").strip()
+    if ref.startswith("builtin:"):
+        evaluator_class = _BUILTIN_EVALUATOR_ALIASES.get(ref)
+        if evaluator_class is None:
+            raise ValueError(f"Unknown builtin evaluator backend: {ref}")
+        return evaluator_class()
     module_name, _, attr_name = ref.rpartition(".")
     if not module_name or not attr_name:
         raise ValueError(f"Invalid evaluator backend: {ref}")

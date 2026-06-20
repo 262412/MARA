@@ -7,9 +7,23 @@ from .diagnostics import (
     diagnostic_failure_counts,
     route_confusion_table,
 )
-from .mara_oriented_scores import MARA_METRIC_KEYS, mara_score_metadata
+from .mara_oriented_scores import (
+    MARA_METRIC_KEYS,
+    mara_proxy_score_metadata,
+    mara_score_metadata,
+)
 from .metrics import round_metric, safe_mean
 from .verification_metrics import verification_summary
+
+_CITATION_GROUP_METRICS = (
+    "citation_inline_recall",
+    "citation_inline_precision",
+    "citation_metadata_recall",
+    "citation_metadata_precision",
+)
+_PRIMARY_SCORE_METRIC = "quality_avg_mara_score"
+_PRIMARY_SCORE_FALLBACK_METRIC = "avg_mara_score"
+_DIAGNOSTIC_SCORE_METRICS = ("avg_em", "avg_f1", "avg_anls")
 
 
 def build_benchmark_summary(
@@ -29,7 +43,10 @@ def build_benchmark_summary(
     return {
         **_identity_summary(bundle, config, active_routes, predictions, skipped_routes),
         **(selection or {}),
+        **_primary_score_summary(predictions),
         **_quality_summary(predictions),
+        **_native_detail_metric_summary(predictions),
+        **_benchmark_prompt_summary(predictions),
         **_format_guardrail_summary(predictions),
         **verification_summary(predictions),
         **_timing_summary(predictions),
@@ -57,7 +74,11 @@ def build_benchmark_summary(
         ),
         **_quality_route_summary(predictions),
         "route_rankings": _route_rankings(bundle.dataset_name, predictions),
-        "mara_score_metadata": mara_score_metadata(bundle.dataset_name),
+        "mara_score_metadata": _headline_score_metadata(
+            bundle.dataset_name,
+            predictions,
+        ),
+        "mara_proxy_score_metadata": mara_proxy_score_metadata(bundle.dataset_name),
         "backend_metadata": backend_metadata,
         "adapter_metric_metadata": adapter_metric_metadata or {},
         "external_adapter_metric_metadata": external_adapter_metric_metadata or {},
@@ -74,7 +95,10 @@ def add_mara_summary_fields(
     dataset_name = str(summary.get("dataset_name") or "unknown")
     return {
         **dict(summary),
+        **_primary_score_summary(predictions),
         **_mara_metric_summary(predictions),
+        **_native_detail_metric_summary(predictions),
+        **_citation_group_summary(predictions),
         "route_metric_table": _route_metric_table(dataset_name, predictions),
         "quality_route_metric_table": _route_metric_table(
             dataset_name,
@@ -86,7 +110,8 @@ def add_mara_summary_fields(
         ),
         **_quality_route_summary(predictions),
         "route_rankings": _route_rankings(dataset_name, predictions),
-        "mara_score_metadata": mara_score_metadata(dataset_name),
+        "mara_score_metadata": _headline_score_metadata(dataset_name, predictions),
+        "mara_proxy_score_metadata": mara_proxy_score_metadata(dataset_name),
     }
 
 
@@ -128,6 +153,7 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_page_hit": _avg_metric(predictions, "page_hit"),
         "avg_citation_recall": _avg_metric(predictions, "citation_recall"),
         "avg_citation_precision": _avg_metric(predictions, "citation_precision"),
+        **_citation_group_summary(predictions),
         **_citation_locator_summary(predictions),
         "avg_element_hit": _avg_metric(predictions, "element_hit"),
         **_multimodal_hit_summary(predictions),
@@ -150,19 +176,174 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _primary_score_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
+    primary_predictions = _role_predictions(predictions, {"qa_quality"})
+    if primary_predictions:
+        return {
+            "primary_score_metric": _PRIMARY_SCORE_METRIC,
+            "primary_score": _avg_metric(primary_predictions, "mara_score"),
+            "primary_score_label": "MARA Score",
+            "primary_score_scope": "qa_quality",
+            "diagnostic_score_metrics": list(_DIAGNOSTIC_SCORE_METRICS),
+        }
+    return {
+        "primary_score_metric": _PRIMARY_SCORE_FALLBACK_METRIC,
+        "primary_score": _avg_metric(predictions, "mara_score"),
+        "primary_score_label": "MARA Score",
+        "primary_score_scope": "all_routes_fallback",
+        "diagnostic_score_metrics": list(_DIAGNOSTIC_SCORE_METRICS),
+    }
+
+
+def _benchmark_prompt_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
+    policies = [
+        str(item.get("benchmark_prompt_policy") or "").strip()
+        for item in predictions
+        if str(item.get("benchmark_prompt_policy") or "").strip()
+    ]
+    profiles = [
+        str(item.get("benchmark_prompt_profile") or "").strip()
+        for item in predictions
+        if str(item.get("benchmark_prompt_profile") or "").strip()
+    ]
+    sources = [
+        str(item.get("benchmark_prompt_source") or "").strip()
+        for item in predictions
+        if str(item.get("benchmark_prompt_source") or "").strip()
+    ]
+    return {
+        "benchmark_prompt_policy": _single_or_mixed(policies),
+        "benchmark_prompt_profiles": _count_values(profiles),
+        "benchmark_prompt_sources": _count_values(sources),
+    }
+
+
+def _single_or_mixed(values: list[str]) -> str | None:
+    if not values:
+        return None
+    unique = sorted(set(values))
+    if len(unique) == 1:
+        return unique[0]
+    return "mixed"
+
+
+def _count_values(values: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
 def _quality_route_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     quality_predictions = _role_predictions(predictions, {"qa_quality"})
     return {
         "quality_avg_em": _avg_metric(quality_predictions, "em"),
         "quality_avg_f1": _avg_metric(quality_predictions, "f1"),
         "quality_avg_mara_score": _avg_metric(quality_predictions, "mara_score"),
+        "quality_avg_native_score": _avg_metric(quality_predictions, "native_score"),
+        "quality_avg_mara_proxy_score": _avg_metric(
+            quality_predictions,
+            "mara_proxy_score",
+        ),
         "quality_avg_numeric_match": _avg_metric(quality_predictions, "numeric_match"),
+        "quality_avg_citation_inline_recall": _avg_metric(
+            quality_predictions,
+            "citation_inline_recall",
+        ),
+        "quality_avg_citation_metadata_recall": _avg_metric(
+            quality_predictions,
+            "citation_metadata_recall",
+        ),
     }
 
 
 def _mara_metric_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         f"avg_{metric}": _avg_metric(predictions, metric) for metric in MARA_METRIC_KEYS
+    }
+
+
+def _native_detail_metric_summary(
+    predictions: list[dict[str, Any]],
+) -> dict[str, float | None]:
+    return {
+        f"avg_{metric}": _avg_metric(predictions, metric)
+        for metric in _native_detail_metric_keys(predictions)
+    }
+
+
+def _native_detail_metric_keys(predictions: list[dict[str, Any]]) -> list[str]:
+    keys: list[str] = []
+    for prediction in predictions:
+        metrics = dict(prediction.get("metrics") or {})
+        for metric in prediction.get("mara_native_metrics") or ():
+            metric_name = str(metric).strip()
+            if metric_name and metric_name in metrics and metric_name not in keys:
+                keys.append(metric_name)
+    return keys
+
+
+def _headline_score_metadata(
+    dataset_name: str,
+    predictions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    external_predictions = [
+        prediction
+        for prediction in predictions
+        if prediction.get("mara_scoring_source") == "external_paper_grade"
+    ]
+    if not external_predictions:
+        return _local_headline_score_metadata(dataset_name, predictions)
+    return {
+        "scoring_mode": "paper_grade_external_v1",
+        "paper_grade": True,
+        "contracts": _count_values(
+            [
+                str(prediction.get("mara_scoring_contract") or "").strip()
+                for prediction in external_predictions
+                if str(prediction.get("mara_scoring_contract") or "").strip()
+            ]
+        ),
+        "primary_metrics": _count_values(
+            [
+                str(prediction.get("mara_primary_metric") or "").strip()
+                for prediction in external_predictions
+                if str(prediction.get("mara_primary_metric") or "").strip()
+            ]
+        ),
+        "local_fallback_metadata": mara_score_metadata(dataset_name),
+    }
+
+
+def _local_headline_score_metadata(
+    dataset_name: str,
+    predictions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    fallback = mara_score_metadata(dataset_name)
+    contracts = _count_values(
+        [
+            str(prediction.get("mara_scoring_contract") or "").strip()
+            for prediction in predictions
+            if str(prediction.get("mara_scoring_contract") or "").strip()
+        ]
+    )
+    primary_metrics = _count_values(
+        [
+            str(prediction.get("mara_primary_metric") or "").strip()
+            for prediction in predictions
+            if str(prediction.get("mara_primary_metric") or "").strip()
+        ]
+    )
+    if not contracts:
+        return fallback
+    if contracts == {fallback["contract_id"]: len(predictions)}:
+        return fallback
+    return {
+        "scoring_mode": "dataset_native_v1",
+        "paper_grade": False,
+        "contracts": contracts,
+        "primary_metrics": primary_metrics,
+        "local_fallback_metadata": fallback,
     }
 
 
@@ -253,6 +434,15 @@ def _citation_locator_summary(
     }
 
 
+def _citation_group_summary(
+    predictions: list[dict[str, Any]],
+) -> dict[str, float | None]:
+    return {
+        f"avg_{metric}": _avg_metric(predictions, metric)
+        for metric in _CITATION_GROUP_METRICS
+    }
+
+
 def _route_metric_table(
     dataset_name: str,
     predictions: list[dict[str, Any]],
@@ -272,6 +462,7 @@ def _route_metric_table(
                 "avg_em": _avg_metric(route_predictions, "em"),
                 "avg_f1": _avg_metric(route_predictions, "f1"),
                 **_mara_metric_summary(route_predictions),
+                **_native_detail_metric_summary(route_predictions),
                 "avg_anls": _avg_metric(route_predictions, "anls"),
                 "avg_page_hit": _avg_metric(route_predictions, "page_hit"),
                 "avg_citation_recall": _avg_metric(
@@ -280,6 +471,7 @@ def _route_metric_table(
                 "avg_citation_precision": _avg_metric(
                     route_predictions, "citation_precision"
                 ),
+                **_citation_group_summary(route_predictions),
                 **_citation_locator_summary(route_predictions),
                 "avg_unsupported_claim_rate": _avg_metric(
                     route_predictions, "unsupported_claim_rate"
@@ -309,7 +501,12 @@ def _route_rankings(
     rows = _route_metric_table(dataset_name, predictions)
     return [
         ranking
-        for metric in ("avg_f1", "avg_mara_score")
+        for metric in (
+            "avg_mara_score",
+            "avg_native_score",
+            "avg_mara_proxy_score",
+            "avg_f1",
+        )
         for ranking in [_route_ranking(dataset_name, rows, metric)]
         if ranking is not None
     ]

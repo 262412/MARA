@@ -298,6 +298,16 @@ def test_mara_answer_format_requirements_prioritize_direct_final_answer():
     assert "avoid extra tables" in prompt
 
 
+def test_mara_answer_format_requirements_skip_benchmark_prompt_contract():
+    prompt = (
+        "Benchmark prompt contract:\n"
+        "Question: Which city hosted the event?\n"
+        "Answer:"
+    )
+
+    assert _message_with_answer_format_requirements(prompt) == prompt
+
+
 def test_mara_text_generation_returns_final_answer_without_rendered_thought(
     monkeypatch,
 ):

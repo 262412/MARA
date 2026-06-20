@@ -126,18 +126,23 @@ def test_run_benchmark_summarizes_metrics_by_route(monkeypatch, tmp_path):
     } <= set(metric_rows[0])
     ranking = report["summary"]["route_rankings"][0]
     assert ranking["dataset_name"] == "routes"
-    assert ranking["rank_metric"] == "avg_f1"
-    assert ranking["routes"][0] == {
+    assert ranking["rank_metric"] == "avg_mara_score"
+    assert ranking["routes"][0]["route"] == "controller_auto"
+    assert ranking["routes"][0]["score"] == metric_rows[1]["avg_mara_score"]
+    assert ranking["routes"][1]["rank"] == 2
+    assert ranking["routes"][1]["route"] == "text_rag"
+    assert ranking["routes"][1]["score"] == metric_rows[0]["avg_mara_score"]
+    f1_ranking = report["summary"]["route_rankings"][3]
+    assert f1_ranking["dataset_name"] == "routes"
+    assert f1_ranking["rank_metric"] == "avg_f1"
+    assert f1_ranking["routes"][0] == {
         "rank": 1,
         "route": "controller_auto",
         "score": 1.0,
     }
-    assert ranking["routes"][1]["rank"] == 2
-    assert ranking["routes"][1]["route"] == "text_rag"
-    assert ranking["routes"][1]["score"] == metric_rows[0]["avg_f1"]
-    mara_ranking = report["summary"]["route_rankings"][1]
-    assert mara_ranking["dataset_name"] == "routes"
-    assert mara_ranking["rank_metric"] == "avg_mara_score"
+    assert f1_ranking["routes"][1]["rank"] == 2
+    assert f1_ranking["routes"][1]["route"] == "text_rag"
+    assert f1_ranking["routes"][1]["score"] == metric_rows[0]["avg_f1"]
 
 
 def test_run_benchmark_splits_quality_and_diagnostic_route_summaries(

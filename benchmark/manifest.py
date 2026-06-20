@@ -462,6 +462,8 @@ def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
         "ragtruth_evaluator",
         "ragas_evaluator",
         "benchmark_role",
+        "benchmark_prompt_policy",
+        "benchmark_prompt_profile",
     ):
         if key in record:
             route[key] = record.get(key)
