@@ -4,12 +4,15 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .diagnostics import prediction_diagnostics
+from .indexed_citations import indexed_inline_citations
 from .mara_oriented_scores import (
     add_mara_oriented_metrics,
     promote_external_primary_score,
 )
 from .reports import write_reports
 from .research_evaluators import external_research_adapter_metrics
+from .scoring import normalize_operational_fields, score_prediction
 from .summary import add_mara_summary_fields
 
 
@@ -27,6 +30,7 @@ def rescore_artifact_run(
     predictions = _read_jsonl(source_dir / "predictions.jsonl")
     evaluator_route = _external_evaluator_route(external_evaluators)
     for prediction in predictions:
+        _rescore_prediction_base_metrics(prediction)
         add_mara_oriented_metrics(prediction, dataset_name=dataset_name)
         if evaluator_route:
             (
@@ -54,6 +58,45 @@ def rescore_artifact_run(
         suite_name or str(summary.get("suite_name") or "rescored-artifact"),
         artifact_detail=artifact_detail,
     )
+
+
+def _rescore_prediction_base_metrics(prediction: dict[str, Any]) -> None:
+    _prepare_prediction_defaults(prediction)
+    _refresh_indexed_inline_citations(prediction)
+    normalize_operational_fields(prediction)
+    prediction["metrics"] = score_prediction(prediction)
+    prediction["diagnostics"] = prediction_diagnostics(prediction)
+
+
+def _prepare_prediction_defaults(prediction: dict[str, Any]) -> None:
+    prediction.setdefault("gold_answers", [])
+    prediction.setdefault("predicted_answer", "")
+    prediction.setdefault("gold_pages", [])
+    prediction.setdefault("predicted_pages", [])
+    prediction.setdefault("gold_sources", [])
+    prediction.setdefault("predicted_sources", [])
+    prediction.setdefault("predicted_citations", [])
+    prediction.setdefault("scored_predicted_sources", [])
+    prediction.setdefault("gold_evidence", [])
+    prediction.setdefault("expected_formats", [])
+    prediction.setdefault("expected_guardrails", {})
+    prediction.setdefault("claim_verification", {})
+    prediction.setdefault("verify_decision", {})
+    prediction.setdefault("guardrail_decision", {})
+    prediction.setdefault("evidence_metadata", {})
+    prediction.setdefault("evidence_bundle", {})
+    prediction.setdefault("retrieved_hits", [])
+
+
+def _refresh_indexed_inline_citations(prediction: dict[str, Any]) -> None:
+    if prediction.get("predicted_citations"):
+        return
+    citations = indexed_inline_citations(
+        str(prediction.get("predicted_answer") or ""),
+        list(prediction.get("retrieved_hits") or []),
+    )
+    if citations:
+        prediction["predicted_citations"] = citations
 
 
 def rescore_artifact_runs(

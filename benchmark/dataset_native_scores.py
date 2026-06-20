@@ -9,6 +9,7 @@ from ktem.docqa.evidence_text import extract_final_answer_text
 
 from .dataset_profiles import profile_for_dataset
 from .metrics import normalize_text, round_metric, token_f1_score
+from .qasper_evidence import qasper_paragraph_f1
 
 _INLINE_CITATION_RE = re.compile(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]")
 _ARTICLE_RE = re.compile(r"\b(a|an|the)\b")
@@ -462,7 +463,7 @@ def _qasper_evidence_f1(prediction: dict[str, Any]) -> float | None:
     predicted_evidence = _qasper_predicted_evidence(prediction)
     return round_metric(
         max(
-            _qasper_paragraph_f1(predicted_evidence, reference)
+            qasper_paragraph_f1(predicted_evidence, reference)
             for reference in gold_references
         )
     )
@@ -522,24 +523,6 @@ def _qasper_predicted_evidence(prediction: dict[str, Any]) -> list[str]:
                     )
                 )
     return evidence
-
-
-def _qasper_paragraph_f1(
-    predicted_evidence: list[str],
-    gold_evidence: list[str],
-) -> float:
-    if not gold_evidence and not predicted_evidence:
-        return 1.0
-    if not gold_evidence or not predicted_evidence:
-        return 0.0
-    predicted_set = set(predicted_evidence)
-    gold_set = set(gold_evidence)
-    matches = len(predicted_set.intersection(gold_set))
-    if matches == 0:
-        return 0.0
-    precision = matches / len(predicted_set)
-    recall = matches / len(gold_set)
-    return 2 * precision * recall / (precision + recall)
 
 
 def _nonempty_strings(value: Any) -> list[str]:

@@ -346,6 +346,9 @@ def _inline_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
 
 
 def _metadata_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
+    scored_sources = list(prediction.get("scored_predicted_sources") or [])
+    if scored_sources:
+        return scored_sources
     return list(prediction["predicted_sources"])
 
 

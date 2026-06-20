@@ -211,21 +211,21 @@ def test_rescore_artifact_cli_writes_mara_scores_without_mutating_source(tmp_pat
     [rescored_run] = list(output_dir.iterdir())
     summary = json.loads((rescored_run / "summary.json").read_text(encoding="utf-8"))
     predictions = _read_jsonl(rescored_run / "predictions.jsonl")
-    assert summary["avg_f1"] == 0.05
+    assert summary["avg_f1"] == 0.5
     assert summary["suite_name"] == "Rescored Suite"
     assert summary["avg_mara_score"] == 0.5
     assert summary["avg_native_score"] == 0.5
-    assert summary["avg_mara_proxy_score"] == 0.85
+    assert summary["avg_mara_proxy_score"] == 0.7438
     assert summary["primary_score_metric"] == "quality_avg_mara_score"
     assert summary["primary_score_scope"] == "qa_quality"
     assert summary["primary_score"] == 0.5
     assert summary["diagnostic_score_metrics"] == ["avg_em", "avg_f1", "avg_anls"]
     assert summary["mara_rescore_source_run_dir"] == str(source_run.resolve())
     assert summary["mara_rescore_mode"] == "dataset_native_v1"
-    assert predictions[0]["metrics"]["f1"] == 0.05
+    assert predictions[0]["metrics"]["f1"] == 0.5
     assert predictions[0]["metrics"]["mara_score"] == 0.5
     assert predictions[0]["metrics"]["native_score"] == 0.5
-    assert predictions[0]["metrics"]["mara_proxy_score"] == 0.85
+    assert predictions[0]["metrics"]["mara_proxy_score"] == 0.7438
 
 
 def test_rescore_artifacts_cli_rescores_direct_child_runs_and_skips_rescores(

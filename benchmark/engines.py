@@ -47,6 +47,7 @@ from .engine_context import (
 from .engine_helpers import _parsed_indexes_cache, _performance_from_timings
 from .engine_result import EngineRunResult
 from .engine_result_adapters import prediction_to_result
+from .indexed_citations import indexed_inline_citations
 from .schemas import BenchmarkConfig, BenchmarkDocument
 from .system import KotaemonTextRAGSystem
 
@@ -360,12 +361,6 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             documents,
             selected_file_ids,
         )
-        predicted_citations = list(answer_citations)
-        predicted_citations.extend(
-            citation
-            for citation in reference_citations
-            if citation not in predicted_citations
-        )
         reference_pages = self._PAGE_RE.findall(response.references_text or "")
         if not retrieved_hits and not reference_citations and not reference_pages:
             retrieved_hits = selected_source_fallback_hits(documents, selected_file_ids)
@@ -373,6 +368,12 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             retrieved_hits,
             documents,
             selected_file_ids,
+        )
+        predicted_citations = list(answer_citations)
+        predicted_citations.extend(
+            citation
+            for citation in indexed_inline_citations(response.answer, retrieved_hits)
+            if citation not in predicted_citations
         )
         predicted_sources = evidence_sources(retrieved_hits)
         predicted_sources.extend(

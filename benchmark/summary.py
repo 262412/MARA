@@ -96,9 +96,8 @@ def add_mara_summary_fields(
     return {
         **dict(summary),
         **_primary_score_summary(predictions),
-        **_mara_metric_summary(predictions),
+        **_quality_summary(predictions),
         **_native_detail_metric_summary(predictions),
-        **_citation_group_summary(predictions),
         "route_metric_table": _route_metric_table(dataset_name, predictions),
         "quality_route_metric_table": _route_metric_table(
             dataset_name,

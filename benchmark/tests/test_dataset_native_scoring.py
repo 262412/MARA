@@ -159,6 +159,40 @@ def test_qasper_native_score_reports_official_paragraph_evidence_f1():
     assert metrics["native_score"] == 1.0
 
 
+def test_qasper_native_score_matches_gold_paragraph_inside_retrieved_chunk():
+    prediction: dict[str, Any] = {
+        "predicted_answer": "Final answer: retrieval",
+        "gold_answers": ["retrieval"],
+        "metrics": {},
+        "retrieved_hits": [
+            {
+                "text": (
+                    "The paper introduces the system. The method uses retrieval. "
+                    "The following sentence is neighboring chunk context."
+                )
+            }
+        ],
+        "example_metadata": {
+            "qasper_answer_annotations": [
+                {
+                    "extractive_spans": ["retrieval"],
+                    "free_form_answer": "",
+                    "yes_no": None,
+                    "unanswerable": None,
+                    "evidence": ["The method uses retrieval."],
+                }
+            ]
+        },
+    }
+
+    metrics, _metadata = native_metrics_for_prediction(
+        prediction,
+        dataset_name="qasper-dev",
+    )
+
+    assert metrics["qasper_evidence_f1"] == 1.0
+
+
 def test_qasper_native_score_uses_answer_annotations_when_gold_answers_are_missing():
     prediction: dict[str, Any] = {
         "predicted_answer": "Final answer: document retrieval",

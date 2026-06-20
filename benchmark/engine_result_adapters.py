@@ -12,6 +12,7 @@ def prediction_to_result(prediction: dict[str, Any]) -> EngineRunResult:
         predicted_pages=list(prediction.get("predicted_pages") or []),
         predicted_sources=list(prediction.get("predicted_sources") or []),
         predicted_citations=list(prediction.get("predicted_citations") or []),
+        scored_predicted_sources=list(prediction.get("scored_predicted_sources") or []),
         predicted_element_ids=list(prediction.get("predicted_element_ids") or []),
         retrieved_hits=list(prediction.get("retrieved_hits") or []),
         timings=dict(prediction.get("timings") or {}),

@@ -143,6 +143,7 @@ def _engine_result_to_prediction(
         "predicted_pages": result.predicted_pages,
         "predicted_sources": result.predicted_sources,
         "predicted_citations": result.predicted_citations,
+        "scored_predicted_sources": result.scored_predicted_sources,
         "predicted_element_ids": result.predicted_element_ids,
         "retrieved_hits": result.retrieved_hits,
         "retrieval_trace": result.retrieval_trace,
@@ -210,6 +211,7 @@ def _error_prediction(
         "predicted_pages": [],
         "predicted_sources": [],
         "predicted_citations": [],
+        "scored_predicted_sources": [],
         "predicted_element_ids": [],
         "retrieved_hits": [],
         "retrieval_trace": [],
@@ -278,6 +280,7 @@ def _prepare_prediction_defaults(
     prediction.setdefault("expected_formats", example.expected_formats)
     prediction.setdefault("expected_guardrails", example.expected_guardrails)
     prediction.setdefault("predicted_citations", [])
+    prediction.setdefault("scored_predicted_sources", [])
     prediction.setdefault("evidence_metadata", {})
     prediction.setdefault("agent_trace", [])
     prediction.setdefault("controller_trace", [])
