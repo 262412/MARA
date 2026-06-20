@@ -341,7 +341,11 @@ def _parse_json_answer(answer: str) -> Any:
 
 
 def _final_answer_text(prediction: dict[str, Any]) -> str:
-    answer = extract_final_answer_text(str(prediction.get("predicted_answer") or ""))
+    if "answer_for_scoring" in prediction:
+        raw_answer = prediction.get("answer_for_scoring")
+    else:
+        raw_answer = prediction.get("predicted_answer")
+    answer = extract_final_answer_text(str(raw_answer or ""))
     return _INLINE_CITATION_RE.sub(" ", answer).strip()
 
 

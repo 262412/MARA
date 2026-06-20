@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .answer_modes import normalize_benchmark_answer_mode
+
 STANDARD_BENCHMARK_ENGINES = (
     "legacy_text_rag",
     "docqa_runtime",
@@ -140,6 +142,7 @@ class BenchmarkConfig:
     use_generation: bool = True
     benchmark_prompt_policy: str = "benchmark_v1"
     benchmark_prompt_profile: str = "auto"
+    benchmark_answer_mode: str = "scoring_adapter_v1"
     prompt_template: str | None = None
     external_evaluators: dict[str, str] = field(default_factory=dict)
 
@@ -153,6 +156,9 @@ class BenchmarkConfig:
         )
         self.benchmark_prompt_profile = normalize_benchmark_prompt_profile(
             self.benchmark_prompt_profile
+        )
+        self.benchmark_answer_mode = normalize_benchmark_answer_mode(
+            self.benchmark_answer_mode
         )
         from .sampling import validate_sampling_options
 

@@ -80,6 +80,8 @@ def _run_args(manifest_path):
         "raw",
         "--benchmark-prompt-profile",
         "concise_grounded_qa",
+        "--benchmark-answer-mode",
+        "product",
         "--external-evaluator",
         "alce=benchmark.tests.test_cli.fixture_alce_evaluator",
         "--external-evaluator",
@@ -138,6 +140,7 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     assert captured["config"].artifact_detail == "full"
     assert captured["config"].benchmark_prompt_policy == "raw"
     assert captured["config"].benchmark_prompt_profile == "concise_grounded_qa"
+    assert captured["config"].benchmark_answer_mode == "product"
     assert captured["config"].external_evaluators == {
         "alce": "benchmark.tests.test_cli.fixture_alce_evaluator",
         "ragtruth": "benchmark.tests.test_cli.fixture_ragtruth_evaluator",
@@ -150,46 +153,9 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
 
 
 def test_rescore_artifact_cli_writes_mara_scores_without_mutating_source(tmp_path):
-    source_run = tmp_path / "source-run"
-    source_run.mkdir()
-    source_summary = {
-        "suite_name": "Original Suite",
-        "dataset_name": "qasper-formal",
-        "num_examples": 1,
-        "num_documents": 1,
-        "avg_f1": 0.05,
-    }
-    (source_run / "summary.json").write_text(
-        json.dumps(source_summary),
-        encoding="utf-8",
+    source_run, source_summary = _write_long_answer_rescore_source_run(
+        tmp_path / "source-run"
     )
-    (source_run / "predictions.jsonl").write_text(
-        json.dumps(
-            {
-                "example_id": "ex-1",
-                "route": "controller_auto",
-                "benchmark_role": "qa_quality",
-                "predicted_answer": "transformer baseline",
-                "gold_answers": ["transformer evidence"],
-                "metrics": {
-                    "em": 0.0,
-                    "f1": 0.05,
-                    "anls": 0.0,
-                    "page_hit": 1.0,
-                    "span_recall": 1.0,
-                    "citation_recall": 1.0,
-                    "citation_precision": 1.0,
-                    "unsupported_claim_rate": 0.0,
-                    "contradiction_count": 0.0,
-                    "false_abstention": 0.0,
-                },
-                "diagnostics": {"controller_route_match": 1.0},
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    (source_run / "documents.json").write_text("[]", encoding="utf-8")
 
     output_dir = tmp_path / "rescored"
     exit_code = main(
@@ -211,21 +177,25 @@ def test_rescore_artifact_cli_writes_mara_scores_without_mutating_source(tmp_pat
     [rescored_run] = list(output_dir.iterdir())
     summary = json.loads((rescored_run / "summary.json").read_text(encoding="utf-8"))
     predictions = _read_jsonl(rescored_run / "predictions.jsonl")
-    assert summary["avg_f1"] == 0.5
+    assert summary["avg_f1"] == 1.0
+    assert summary["product_avg_f1"] == 0.6667
     assert summary["suite_name"] == "Rescored Suite"
-    assert summary["avg_mara_score"] == 0.5
-    assert summary["avg_native_score"] == 0.5
-    assert summary["avg_mara_proxy_score"] == 0.7438
+    assert summary["avg_mara_score"] == 1.0
+    assert summary["avg_native_score"] == 1.0
+    assert summary["avg_mara_proxy_score"] == 0.875
     assert summary["primary_score_metric"] == "quality_avg_mara_score"
     assert summary["primary_score_scope"] == "qa_quality"
-    assert summary["primary_score"] == 0.5
+    assert summary["primary_score"] == 1.0
     assert summary["diagnostic_score_metrics"] == ["avg_em", "avg_f1", "avg_anls"]
     assert summary["mara_rescore_source_run_dir"] == str(source_run.resolve())
     assert summary["mara_rescore_mode"] == "dataset_native_v1"
-    assert predictions[0]["metrics"]["f1"] == 0.5
-    assert predictions[0]["metrics"]["mara_score"] == 0.5
-    assert predictions[0]["metrics"]["native_score"] == 0.5
-    assert predictions[0]["metrics"]["mara_proxy_score"] == 0.7438
+    assert predictions[0]["answer_for_user"] == predictions[0]["predicted_answer"]
+    assert predictions[0]["answer_for_scoring"] == "transformer evidence"
+    assert predictions[0]["metrics"]["f1"] == 1.0
+    assert round(predictions[0]["product_metrics"]["f1"], 4) == 0.6667
+    assert predictions[0]["metrics"]["mara_score"] == 1.0
+    assert predictions[0]["metrics"]["native_score"] == 1.0
+    assert predictions[0]["metrics"]["mara_proxy_score"] == 0.875
 
 
 def test_rescore_artifacts_cli_rescores_direct_child_runs_and_skips_rescores(
@@ -406,6 +376,47 @@ def _write_rescore_source_run(path, *, suite_name):
     )
     (path / "documents.json").write_text("[]", encoding="utf-8")
     return path
+
+
+def _write_long_answer_rescore_source_run(path):
+    path.mkdir()
+    summary = {
+        "suite_name": "Original Suite",
+        "dataset_name": "qasper-formal",
+        "num_examples": 1,
+        "num_documents": 1,
+        "avg_f1": 0.05,
+    }
+    (path / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    (path / "predictions.jsonl").write_text(
+        json.dumps(_long_answer_rescore_prediction()) + "\n",
+        encoding="utf-8",
+    )
+    (path / "documents.json").write_text("[]", encoding="utf-8")
+    return path, summary
+
+
+def _long_answer_rescore_prediction():
+    return {
+        "example_id": "ex-1",
+        "route": "controller_auto",
+        "benchmark_role": "qa_quality",
+        "predicted_answer": "transformer evidence.\n\nextra words.",
+        "gold_answers": ["transformer evidence"],
+        "metrics": {
+            "em": 0.0,
+            "f1": 0.05,
+            "anls": 0.0,
+            "page_hit": 1.0,
+            "span_recall": 1.0,
+            "citation_recall": 1.0,
+            "citation_precision": 1.0,
+            "unsupported_claim_rate": 0.0,
+            "contradiction_count": 0.0,
+            "false_abstention": 0.0,
+        },
+        "diagnostics": {"controller_route_match": 1.0},
+    }
 
 
 def test_apply_route_template_cli_writes_runnable_manifest(tmp_path):

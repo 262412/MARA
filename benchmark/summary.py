@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from .answer_summary import (
+    answer_finalization_summary,
+    avg_answer_tokens,
+    avg_product_metric,
+)
 from .diagnostics import (
     dataset_route_diagnostics,
     diagnostic_failure_counts,
@@ -47,6 +52,7 @@ def build_benchmark_summary(
         **_quality_summary(predictions),
         **_native_detail_metric_summary(predictions),
         **_benchmark_prompt_summary(predictions),
+        **answer_finalization_summary(predictions),
         **_format_guardrail_summary(predictions),
         **verification_summary(predictions),
         **_timing_summary(predictions),
@@ -98,6 +104,7 @@ def add_mara_summary_fields(
         **_primary_score_summary(predictions),
         **_quality_summary(predictions),
         **_native_detail_metric_summary(predictions),
+        **answer_finalization_summary(predictions),
         "route_metric_table": _route_metric_table(dataset_name, predictions),
         "quality_route_metric_table": _route_metric_table(
             dataset_name,
@@ -148,6 +155,8 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "avg_em": _avg_metric(predictions, "em"),
         "avg_f1": _avg_metric(predictions, "f1"),
+        "product_avg_em": avg_product_metric(predictions, "em"),
+        "product_avg_f1": avg_product_metric(predictions, "f1"),
         "avg_anls": _avg_metric(predictions, "anls"),
         "avg_page_hit": _avg_metric(predictions, "page_hit"),
         "avg_citation_recall": _avg_metric(predictions, "citation_recall"),
@@ -238,6 +247,8 @@ def _quality_route_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "quality_avg_em": _avg_metric(quality_predictions, "em"),
         "quality_avg_f1": _avg_metric(quality_predictions, "f1"),
+        "quality_product_avg_em": avg_product_metric(quality_predictions, "em"),
+        "quality_product_avg_f1": avg_product_metric(quality_predictions, "f1"),
         "quality_avg_mara_score": _avg_metric(quality_predictions, "mara_score"),
         "quality_avg_native_score": _avg_metric(quality_predictions, "native_score"),
         "quality_avg_mara_proxy_score": _avg_metric(
@@ -460,6 +471,16 @@ def _route_metric_table(
                 "num_predictions": len(route_predictions),
                 "avg_em": _avg_metric(route_predictions, "em"),
                 "avg_f1": _avg_metric(route_predictions, "f1"),
+                "product_avg_em": avg_product_metric(route_predictions, "em"),
+                "product_avg_f1": avg_product_metric(route_predictions, "f1"),
+                "avg_answer_for_user_tokens": avg_answer_tokens(
+                    route_predictions,
+                    "answer_for_user",
+                ),
+                "avg_answer_for_scoring_tokens": avg_answer_tokens(
+                    route_predictions,
+                    "answer_for_scoring",
+                ),
                 **_mara_metric_summary(route_predictions),
                 **_native_detail_metric_summary(route_predictions),
                 "avg_anls": _avg_metric(route_predictions, "anls"),

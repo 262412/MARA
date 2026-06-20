@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .answer_finalizer import finalize_prediction_answer
 from .diagnostics import prediction_diagnostics
 from .indexed_citations import indexed_inline_citations
 from .mara_oriented_scores import (
@@ -22,6 +23,7 @@ def rescore_artifact_run(
     *,
     suite_name: str | None = None,
     artifact_detail: str = "compact",
+    benchmark_answer_mode: str = "scoring_adapter_v1",
     external_evaluators: dict[str, str] | None = None,
 ) -> Path:
     source_dir = Path(run_dir).resolve()
@@ -30,7 +32,11 @@ def rescore_artifact_run(
     predictions = _read_jsonl(source_dir / "predictions.jsonl")
     evaluator_route = _external_evaluator_route(external_evaluators)
     for prediction in predictions:
-        _rescore_prediction_base_metrics(prediction)
+        _rescore_prediction_base_metrics(
+            prediction,
+            dataset_name=dataset_name,
+            benchmark_answer_mode=benchmark_answer_mode,
+        )
         add_mara_oriented_metrics(prediction, dataset_name=dataset_name)
         if evaluator_route:
             (
@@ -44,6 +50,7 @@ def rescore_artifact_run(
         rescored_summary["suite_name"] = suite_name
     rescored_summary["mara_rescore_source_run_dir"] = str(source_dir)
     rescored_summary["mara_rescore_mode"] = "dataset_native_v1"
+    rescored_summary["benchmark_answer_mode"] = benchmark_answer_mode
     report = {
         "summary": rescored_summary,
         "predictions": predictions,
@@ -60,10 +67,25 @@ def rescore_artifact_run(
     )
 
 
-def _rescore_prediction_base_metrics(prediction: dict[str, Any]) -> None:
+def _rescore_prediction_base_metrics(
+    prediction: dict[str, Any],
+    *,
+    dataset_name: str,
+    benchmark_answer_mode: str,
+) -> None:
     _prepare_prediction_defaults(prediction)
     _refresh_indexed_inline_citations(prediction)
     normalize_operational_fields(prediction)
+    prediction["benchmark_answer_mode"] = benchmark_answer_mode
+    finalize_prediction_answer(
+        prediction,
+        dataset_name=dataset_name,
+        mode=benchmark_answer_mode,
+    )
+    prediction["product_metrics"] = score_prediction(
+        prediction,
+        answer_key="predicted_answer",
+    )
     prediction["metrics"] = score_prediction(prediction)
     prediction["diagnostics"] = prediction_diagnostics(prediction)
 
@@ -105,6 +127,7 @@ def rescore_artifact_runs(
     *,
     suite_prefix: str = "rescored",
     artifact_detail: str = "compact",
+    benchmark_answer_mode: str = "scoring_adapter_v1",
     external_evaluators: dict[str, str] | None = None,
 ) -> list[Path]:
     runs = _discover_rescorable_runs(Path(input_dir))
@@ -114,6 +137,7 @@ def rescore_artifact_runs(
             output_dir,
             suite_name=f"{suite_prefix}-{run_dir.name}",
             artifact_detail=artifact_detail,
+            benchmark_answer_mode=benchmark_answer_mode,
             external_evaluators=external_evaluators,
         )
         for run_dir in runs

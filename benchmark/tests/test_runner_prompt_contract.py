@@ -17,7 +17,10 @@ class _FakeEngine:
             "gold_answers": example.answers,
             "gold_pages": example.evidence_pages,
             "gold_sources": example.evidence_sources,
-            "predicted_answer": f"{self.engine_name}:{self.config.route}",
+            "predicted_answer": (
+                f"{self.engine_name}:{self.config.route}.\n\n"
+                "This is the full user-facing explanation with evidence."
+            ),
             "predicted_pages": [1],
             "predicted_sources": ["doc#page:1"],
             "predicted_element_ids": [],
@@ -82,6 +85,13 @@ def test_run_benchmark_records_benchmark_prompt_contract(monkeypatch, tmp_path):
     assert (
         prediction["benchmark_prompt_source"]
         == "princeton-nlp/ALCE prompts/asqa_default.json"
+    )
+    assert prediction["answer_for_user"] == prediction["predicted_answer"]
+    assert prediction["answer_for_scoring"] == "legacy_text_rag:all"
+    assert prediction["answer_finalization"]["mode"] == "scoring_adapter_v1"
+    assert report["summary"]["benchmark_answer_mode"] == "scoring_adapter_v1"
+    assert report["summary"]["avg_answer_for_user_tokens"] > (
+        report["summary"]["avg_answer_for_scoring_tokens"]
     )
     assert report["summary"]["benchmark_prompt_policy"] == "benchmark_v1"
     assert report["summary"]["benchmark_prompt_profiles"] == {"citation_grounded_qa": 1}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .answer_modes import BENCHMARK_ANSWER_MODES
 from .schemas import (
     BENCHMARK_PROMPT_POLICIES,
     BENCHMARK_PROMPT_PROFILES,
@@ -61,6 +62,16 @@ def _add_benchmark_prompt_options(run_parser: argparse.ArgumentParser) -> None:
         default="auto",
         choices=BENCHMARK_PROMPT_PROFILES,
         help="Benchmark answer-style profile; auto selects from dataset/modality metadata.",
+    )
+    run_parser.add_argument(
+        "--benchmark-answer-mode",
+        default="scoring_adapter_v1",
+        choices=BENCHMARK_ANSWER_MODES,
+        help=(
+            "Answer used by benchmark scoring. scoring_adapter_v1 keeps the "
+            "user-facing answer and derives a short scoring answer; product "
+            "scores the user-facing answer directly."
+        ),
     )
 
 
@@ -183,6 +194,12 @@ def _add_rescore_command(subparsers: argparse._SubParsersAction) -> None:
     rescore_parser.add_argument("--output-dir", required=True)
     rescore_parser.add_argument("--suite-name")
     _add_artifact_detail_option(rescore_parser)
+    rescore_parser.add_argument(
+        "--benchmark-answer-mode",
+        default="scoring_adapter_v1",
+        choices=BENCHMARK_ANSWER_MODES,
+        help="Answer finalization mode to apply while rescoring artifacts.",
+    )
     _add_external_evaluator_options(rescore_parser)
 
     batch_parser = subparsers.add_parser(
@@ -193,6 +210,12 @@ def _add_rescore_command(subparsers: argparse._SubParsersAction) -> None:
     batch_parser.add_argument("--output-dir", required=True)
     batch_parser.add_argument("--suite-prefix", default="rescored")
     _add_artifact_detail_option(batch_parser)
+    batch_parser.add_argument(
+        "--benchmark-answer-mode",
+        default="scoring_adapter_v1",
+        choices=BENCHMARK_ANSWER_MODES,
+        help="Answer finalization mode to apply while rescoring artifacts.",
+    )
     _add_external_evaluator_options(batch_parser)
 
 
@@ -308,6 +331,7 @@ def _handle_rescore_command(args: argparse.Namespace) -> int | None:
             args.output_dir,
             suite_prefix=args.suite_prefix,
             artifact_detail=args.artifact_detail,
+            benchmark_answer_mode=args.benchmark_answer_mode,
             external_evaluators=_external_evaluator_map(args.external_evaluator),
         )
         print(f"Rescored {len(run_dirs)} artifact runs into {args.output_dir}")
@@ -318,6 +342,7 @@ def _handle_rescore_command(args: argparse.Namespace) -> int | None:
         args.output_dir,
         suite_name=args.suite_name,
         artifact_detail=args.artifact_detail,
+        benchmark_answer_mode=args.benchmark_answer_mode,
         external_evaluators=_external_evaluator_map(args.external_evaluator),
     )
     print(f"Rescored artifact written to {run_dir}")
@@ -442,6 +467,7 @@ def _run_benchmark_command(args: argparse.Namespace) -> int:
         artifact_detail=args.artifact_detail,
         benchmark_prompt_policy=args.benchmark_prompt_policy,
         benchmark_prompt_profile=args.benchmark_prompt_profile,
+        benchmark_answer_mode=args.benchmark_answer_mode,
         external_evaluators=_external_evaluator_map(args.external_evaluator),
         limit=args.limit,
         sample_seed=args.sample_seed,

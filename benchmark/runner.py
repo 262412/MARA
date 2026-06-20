@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import fields, replace
 from typing import Any
 
+from .answer_finalizer import finalize_prediction_answer
 from .benchmark_prompts import build_benchmark_prompt
 from .diagnostics import prediction_diagnostics
 from .engines import EngineRunResult, get_engine
@@ -273,6 +274,7 @@ def _prepare_prediction_defaults(
     prediction.setdefault("benchmark_prompt_policy", prompt.policy)
     prediction.setdefault("benchmark_prompt_profile", prompt.profile)
     prediction.setdefault("benchmark_prompt_source", prompt.prompt_source)
+    prediction.setdefault("benchmark_answer_mode", route_config.benchmark_answer_mode)
     prediction.setdefault("benchmark_question", prompt.benchmark_question)
     prediction.setdefault("benchmark_retrieval_query", prompt.retrieval_query)
     prediction.setdefault("benchmark_runtime_prompt", prompt.runtime_prompt)
@@ -378,6 +380,15 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
             prediction["modality"] = example.modality
             prediction["answer_type"] = example.answer_type
             prediction["gold_evidence"] = example.gold_evidence
+            finalize_prediction_answer(
+                prediction,
+                dataset_name=bundle.dataset_name,
+                mode=route_config.benchmark_answer_mode,
+            )
+            prediction["product_metrics"] = score_prediction(
+                prediction,
+                answer_key="predicted_answer",
+            )
             prediction["metrics"] = score_prediction(prediction)
             prediction["diagnostics"] = prediction_diagnostics(prediction)
             add_mara_oriented_metrics(prediction, dataset_name=bundle.dataset_name)

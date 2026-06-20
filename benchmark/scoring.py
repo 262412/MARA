@@ -40,18 +40,29 @@ _TIMING_KEYS = (
 _CACHE_KEYS = ("hits", "misses", "writes")
 
 
-def score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
+def score_prediction(
+    prediction: dict[str, Any],
+    *,
+    answer_key: str | None = None,
+) -> dict[str, float | None]:
     gold_answers = prediction["gold_answers"]
     expected_formats = _normalized_expected_formats(prediction)
     formatted_answer = _answer_text_for_scoring(
-        prediction["predicted_answer"],
+        _prediction_answer_text(prediction, answer_key=answer_key),
+        expected_formats=expected_formats,
+    )
+    presentation_answer = _answer_text_for_scoring(
+        _prediction_answer_text(
+            prediction,
+            answer_key=answer_key or "predicted_answer",
+        ),
         expected_formats=expected_formats,
     )
     predicted_answer = _collapse_scoring_text(formatted_answer)
     claim_verification = dict(prediction.get("claim_verification") or {})
     abstained = _prediction_abstained(prediction, predicted_answer, claim_verification)
-    markdown_table_score = markdown_table_renderable_score(formatted_answer)
-    latex_score = latex_renderable_score(formatted_answer)
+    markdown_table_score = markdown_table_renderable_score(presentation_answer)
+    latex_score = latex_renderable_score(presentation_answer)
     if expected_formats & _TABLE_FORMATS and markdown_table_score is None:
         markdown_table_score = 0.0
     if expected_formats & _LATEX_FORMATS and latex_score is None:
@@ -93,6 +104,18 @@ def score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
     metrics.update(verification_metrics(prediction))
     _add_gold_evidence_metrics(metrics, prediction, predicted_answer)
     return metrics
+
+
+def _prediction_answer_text(
+    prediction: dict[str, Any],
+    *,
+    answer_key: str | None,
+) -> str:
+    if answer_key:
+        return str(prediction.get(answer_key) or "")
+    if "answer_for_scoring" in prediction:
+        return str(prediction.get("answer_for_scoring") or "")
+    return str(prediction.get("predicted_answer") or "")
 
 
 def _answer_text_for_scoring(answer: Any, *, expected_formats: set[str]) -> str:

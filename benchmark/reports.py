@@ -58,6 +58,10 @@ _CSV_FIELD_ORDER = [
     "avg_mara_proxy_score",
     "avg_em",
     "avg_f1",
+    "product_avg_em",
+    "product_avg_f1",
+    "avg_answer_for_user_tokens",
+    "avg_answer_for_scoring_tokens",
     "avg_mara_answer_score",
     "avg_mara_evidence_score",
     "avg_mara_citation_score",
@@ -148,6 +152,11 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         [
             f"- Diagnostic EM: `{summary.get('avg_em')}`",
             f"- Diagnostic F1: `{summary.get('avg_f1')}`",
+            f"- Product Diagnostic EM: `{summary.get('product_avg_em')}`",
+            f"- Product Diagnostic F1: `{summary.get('product_avg_f1')}`",
+            "- Avg Answer Tokens User/Scoring: "
+            f"`{summary.get('avg_answer_for_user_tokens')}` / "
+            f"`{summary.get('avg_answer_for_scoring_tokens')}`",
         ]
     )
     if "quality_avg_f1" in summary:

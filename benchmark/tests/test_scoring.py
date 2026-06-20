@@ -1,6 +1,36 @@
 from benchmark.scoring import score_prediction
 
 
+def test_score_prediction_prefers_answer_for_scoring_over_user_answer():
+    metrics = score_prediction(
+        {
+            "gold_answers": ["Richard A. Johnson"],
+            "predicted_answer": (
+                "Richard A. Johnson.\n\n"
+                "He received the highest number of votes against according "
+                "to the proxy statement."
+            ),
+            "answer_for_scoring": "Richard A. Johnson",
+            "predicted_pages": [2],
+            "gold_pages": [2],
+            "predicted_sources": ["doc#page:2"],
+            "gold_sources": ["doc#page:2"],
+            "gold_evidence": [{"citation": "doc#page:2", "page": 2}],
+            "expected_formats": [],
+            "expected_guardrails": {},
+            "claim_verification": {},
+            "verify_decision": {"status": "supported"},
+            "guardrail_decision": {"status": "supported", "action": "return"},
+            "evidence_metadata": {},
+            "evidence_bundle": {},
+            "retrieved_hits": [],
+        }
+    )
+
+    assert metrics["em"] == 1.0
+    assert metrics["f1"] == 1.0
+
+
 def test_score_prediction_counts_guardrail_abstain_as_abstention():
     metrics = score_prediction(
         {
