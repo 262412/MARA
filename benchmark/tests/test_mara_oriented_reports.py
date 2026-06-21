@@ -19,17 +19,21 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
     )
     assert "sample,controller_auto,1,0.9,0.9,0.72,0.8,0.8" in route_metrics
     assert "## Route Metrics" in markdown
-    assert "- Primary Score: `0.9`" in markdown
-    assert "- Primary Score Metric: `quality_avg_mara_score`" in markdown
+    assert "- Primary Score (Dataset-Native Local Score): `0.9`" in markdown
+    assert "- Primary Score Metric: `quality_avg_native_score`" in markdown
     assert "- Primary Score Scope: `qa_quality`" in markdown
-    assert "- MARA Native Score: `0.9`" in markdown
-    assert "- MARA Proxy Score: `0.72`" in markdown
+    assert "- Score Authority Level: `local_dataset_native`" in markdown
+    assert "- Paper-Grade External Score Available: `False`" in markdown
+    assert "- Dataset-Native Local Score: `0.9`" in markdown
+    assert "- MARA Diagnostic Proxy Score: `0.72`" in markdown
     assert "- Diagnostic F1: `None`" in markdown
     assert "- Quality Diagnostic F1: `0.8`" in markdown
     assert "- Citation Metadata Recall: `0.8`" in markdown
     assert "- Citation Inline Recall: `0.4`" in markdown
     assert "## Quality Route Metrics" in markdown
     assert "## Diagnostic Route Metrics" in markdown
+    assert "Dataset-Native Local Score" in markdown
+    assert "MARA Native Score" not in markdown
     assert (
         "| sample | controller_auto | 1 | 0.9 | 0.72 | 0.8 | 1.0 | 0.8 / 0.7 | "
         "0.4 / 0.3 | 0.0 | 0.5 |"
@@ -39,9 +43,9 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
         "0.4 / 0.3 | 0.0 | 0.1 |"
     ) in markdown
     assert "## Route Ranking" in markdown
-    assert "1. `controller_auto` avg_mara_score=`0.9`" in markdown
+    assert "1. `controller_auto` avg_native_score=`0.9`" in markdown
     assert "1. `controller_auto` avg_f1=`0.8`" in markdown
-    assert markdown.index("avg_mara_score=`0.9`") < markdown.index("avg_f1=`0.8`")
+    assert markdown.index("avg_native_score=`0.9`") < markdown.index("avg_f1=`0.8`")
 
 
 def test_add_mara_summary_fields_preserves_citation_split_summaries():
@@ -140,8 +144,12 @@ def test_primary_score_uses_quality_routes_not_diagnostic_routes():
 
     assert rescored["avg_mara_score"] == 0.5
     assert rescored["quality_avg_mara_score"] == 0.9
-    assert rescored["primary_score_metric"] == "quality_avg_mara_score"
+    assert rescored["quality_avg_native_score"] == 0.9
+    assert rescored["primary_score_metric"] == "quality_avg_native_score"
+    assert rescored["primary_score_label"] == "Dataset-Native Local Score"
     assert rescored["primary_score_scope"] == "qa_quality"
+    assert rescored["score_authority_level"] == "local_dataset_native"
+    assert rescored["paper_grade_score_available"] is False
     assert rescored["primary_score"] == 0.9
 
 
@@ -174,15 +182,18 @@ def _route_metric_report():
             "avg_native_score": 0.9,
             "avg_mara_proxy_score": 0.72,
             "primary_score": 0.9,
-            "primary_score_metric": "quality_avg_mara_score",
+            "primary_score_metric": "quality_avg_native_score",
+            "primary_score_label": "Dataset-Native Local Score",
             "primary_score_scope": "qa_quality",
+            "score_authority_level": "local_dataset_native",
+            "paper_grade_score_available": False,
             "quality_avg_f1": 0.8,
             "quality_avg_mara_score": 0.9,
             "quality_avg_native_score": 0.9,
             "quality_avg_mara_proxy_score": 0.72,
             "avg_citation_metadata_recall": 0.8,
             "avg_citation_inline_recall": 0.4,
-            "route_rankings": [_f1_ranking(), _mara_ranking()],
+            "route_rankings": [_f1_ranking(), _native_ranking(), _mara_ranking()],
         },
         "predictions": [],
         "documents": [],
@@ -225,6 +236,17 @@ def _mara_ranking():
     return {
         "dataset_name": "sample",
         "rank_metric": "avg_mara_score",
+        "routes": [
+            {"rank": 1, "route": "controller_auto", "score": 0.9},
+            {"rank": 2, "route": "text_rag", "score": 0.7},
+        ],
+    }
+
+
+def _native_ranking():
+    return {
+        "dataset_name": "sample",
+        "rank_metric": "avg_native_score",
         "routes": [
             {"rank": 1, "route": "controller_auto", "score": 0.9},
             {"rank": 2, "route": "text_rag", "score": 0.7},

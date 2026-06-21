@@ -14,12 +14,14 @@ It is built around one normalized manifest format so we can compare:
 - answer `EM`
 - answer `F1`
 - answer `ANLS`
-- MARA native score, where `mara_score` follows the dataset family contract:
-  FinanceBench answer correctness, QASPER answer F1 with native evidence F1
-  reported separately, ALCE correctness plus citation quality, RAGTruth
-  hallucination-span F1, or a generic fallback for unsupported families
-- MARA proxy score, preserved as `mara_proxy_score` for diagnostics when the
-  older weighted evidence/citation/groundedness summary is still useful
+- dataset-native local score, exposed as `native_score`, where the metric follows
+  the dataset family contract: FinanceBench answer correctness, QASPER answer F1
+  with native evidence F1 reported separately, ALCE correctness plus citation
+  quality, RAGTruth hallucination-span F1, or a generic fallback for unsupported
+  families
+- MARA diagnostic proxy score, preserved as `mara_proxy_score` for internal
+  system diagnosis when the weighted evidence/citation/groundedness summary is
+  still useful; this is not the final benchmark conclusion
 - page hit rate when gold pages exist
 - citation recall when gold evidence strings exist
 - element hit and span recall when gold evidence carries element ids or spans
@@ -199,6 +201,16 @@ Each prediction row now includes:
 - `metrics`: dataset-native score fields, text accuracy, retrieval grounding,
   false abstention, Markdown table, LaTeX, and guardrail scores
 
+Reports separate score authority into three layers:
+
+- Paper-grade external score: only available when an external evaluator returns
+  `paper_grade=true` and a valid `primary_metric`.
+- Dataset-native local score: the default headline for local runs and rescoring.
+  It is useful for internal comparisons but should not be reported as an
+  official leaderboard score.
+- MARA diagnostic proxy score: an internal system diagnostic for controller,
+  evidence, citation, groundedness, abstention, and format behavior.
+
 ## FinanceBench
 
 Normalize the official open-source release:
@@ -336,7 +348,7 @@ Local proxy evaluator aliases are also available for route plumbing checks:
 `builtin:ragas_proxy`. These aliases are marked `paper_grade=false`; they are
 recorded as external diagnostics but do not replace the dataset-native headline
 score. Only an evaluator backend that explicitly returns `paper_grade=true` and
-a `primary_metric` can promote its score to the `avg_mara_score` headline.
+a `primary_metric` can promote its score to the paper-grade external headline.
 
 ## Notes
 

@@ -3,6 +3,7 @@ import types
 
 import pytest
 
+from benchmark.benchmark_direct_answer import BenchmarkDirectAnswerEngine
 from benchmark.engines import (
     DirectPasteEngine,
     EngineRunResult,
@@ -101,6 +102,7 @@ def test_engine_run_result_exposes_phase_two_fields():
     ("name", "expected_type"),
     [
         ("legacy_text_rag", "LegacyTextRAGEngine"),
+        ("benchmark_direct_answer", "BenchmarkDirectAnswerEngine"),
         ("kotaemon-text-rag", "KotaemonTextRAGEngine"),
         ("docqa_runtime", "DocQARuntimeEngine"),
         ("direct_paste", "DirectPasteEngine"),
@@ -121,6 +123,53 @@ def test_get_engine_rejects_unknown_name_with_supported_names():
     assert "Unknown benchmark engine 'missing'" in message
     assert "direct_paste" in message
     assert "oracle_page" in message
+
+
+def test_benchmark_direct_answer_engine_generates_without_retrieval(
+    monkeypatch, tmp_path
+):
+    calls = []
+
+    def fake_generate(self, example, context):
+        calls.append((example.example_id, context))
+        return "baseline answer", "", 0.04, {}
+
+    monkeypatch.setattr(
+        BenchmarkDirectAnswerEngine,
+        "_generate_from_context",
+        fake_generate,
+    )
+    engine = BenchmarkDirectAnswerEngine(
+        BenchmarkConfig(suite_name="direct", output_dir=tmp_path / "out")
+    )
+    document = BenchmarkDocument(
+        document_id="doc",
+        path=tmp_path / "doc.txt",
+        format_type="txt",
+    )
+    example = BenchmarkExample(
+        example_id="ex",
+        document_id="doc",
+        question="Who signed the letter?",
+        answers=["Ada Lovelace"],
+    )
+
+    result = engine.run(example=example, documents=[document])
+
+    assert calls == [("ex", "")]
+    assert result.answer == "baseline answer"
+    assert result.predicted_pages == []
+    assert result.predicted_sources == []
+    assert result.retrieved_hits == []
+    assert result.context_preview == ""
+    assert result.timings == {"generation_seconds": 0.04}
+    assert result.retrieval_trace == [
+        {
+            "engine": "benchmark_direct_answer",
+            "selection": "no_retrieval",
+            "context_characters": 0,
+        }
+    ]
 
 
 def test_direct_paste_context_concatenates_document_text_and_truncates():

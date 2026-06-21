@@ -5,7 +5,8 @@ from typing import Any
 
 def route_metrics_markdown(rows: list[dict[str, Any]]) -> list[str]:
     lines = [
-        "| Dataset | Route | N | MARA Native Score | MARA Proxy Score | "
+        "| Dataset | Route | N | Dataset-Native Local Score | "
+        "MARA Diagnostic Proxy Score | "
         "Diagnostic F1 | Page Hit | Metadata Citation R/P | Inline Citation R/P | "
         "Unsupported Claim Rate | Total Seconds |",
         "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -16,7 +17,7 @@ def route_metrics_markdown(rows: list[dict[str, Any]]) -> list[str]:
             f"{row.get('dataset_name')} | "
             f"{row.get('route')} | "
             f"{row.get('num_predictions')} | "
-            f"{row.get('avg_mara_score')} | "
+            f"{row.get('avg_native_score')} | "
             f"{row.get('avg_mara_proxy_score')} | "
             f"{row.get('avg_f1')} | "
             f"{row.get('avg_page_hit')} | "

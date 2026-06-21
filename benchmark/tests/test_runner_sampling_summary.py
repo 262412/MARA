@@ -126,12 +126,12 @@ def test_run_benchmark_summarizes_metrics_by_route(monkeypatch, tmp_path):
     } <= set(metric_rows[0])
     ranking = report["summary"]["route_rankings"][0]
     assert ranking["dataset_name"] == "routes"
-    assert ranking["rank_metric"] == "avg_mara_score"
+    assert ranking["rank_metric"] == "avg_native_score"
     assert ranking["routes"][0]["route"] == "controller_auto"
-    assert ranking["routes"][0]["score"] == metric_rows[1]["avg_mara_score"]
+    assert ranking["routes"][0]["score"] == metric_rows[1]["avg_native_score"]
     assert ranking["routes"][1]["rank"] == 2
     assert ranking["routes"][1]["route"] == "text_rag"
-    assert ranking["routes"][1]["score"] == metric_rows[0]["avg_mara_score"]
+    assert ranking["routes"][1]["score"] == metric_rows[0]["avg_native_score"]
     f1_ranking = report["summary"]["route_rankings"][3]
     assert f1_ranking["dataset_name"] == "routes"
     assert f1_ranking["rank_metric"] == "avg_f1"

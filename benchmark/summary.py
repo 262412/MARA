@@ -18,6 +18,11 @@ from .mara_oriented_scores import (
     mara_score_metadata,
 )
 from .metrics import round_metric, safe_mean
+from .score_authority import (
+    paper_grade_score_available,
+    primary_score_label,
+    score_authority_level,
+)
 from .verification_metrics import verification_summary
 
 _CITATION_GROUP_METRICS = (
@@ -26,8 +31,8 @@ _CITATION_GROUP_METRICS = (
     "citation_metadata_recall",
     "citation_metadata_precision",
 )
-_PRIMARY_SCORE_METRIC = "quality_avg_mara_score"
-_PRIMARY_SCORE_FALLBACK_METRIC = "avg_mara_score"
+_PRIMARY_SCORE_METRIC = "quality_avg_native_score"
+_PRIMARY_SCORE_FALLBACK_METRIC = "avg_native_score"
 _DIAGNOSTIC_SCORE_METRICS = ("avg_em", "avg_f1", "avg_anls")
 
 
@@ -187,18 +192,24 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
 def _primary_score_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     primary_predictions = _role_predictions(predictions, {"qa_quality"})
     if primary_predictions:
+        paper_grade = paper_grade_score_available(primary_predictions)
         return {
             "primary_score_metric": _PRIMARY_SCORE_METRIC,
-            "primary_score": _avg_metric(primary_predictions, "mara_score"),
-            "primary_score_label": "MARA Score",
+            "primary_score": _avg_metric(primary_predictions, "native_score"),
+            "primary_score_label": primary_score_label(paper_grade),
             "primary_score_scope": "qa_quality",
+            "score_authority_level": score_authority_level(paper_grade),
+            "paper_grade_score_available": paper_grade,
             "diagnostic_score_metrics": list(_DIAGNOSTIC_SCORE_METRICS),
         }
+    paper_grade = paper_grade_score_available(predictions)
     return {
         "primary_score_metric": _PRIMARY_SCORE_FALLBACK_METRIC,
-        "primary_score": _avg_metric(predictions, "mara_score"),
-        "primary_score_label": "MARA Score",
+        "primary_score": _avg_metric(predictions, "native_score"),
+        "primary_score_label": primary_score_label(paper_grade),
         "primary_score_scope": "all_routes_fallback",
+        "score_authority_level": score_authority_level(paper_grade),
+        "paper_grade_score_available": paper_grade,
         "diagnostic_score_metrics": list(_DIAGNOSTIC_SCORE_METRICS),
     }
 
@@ -522,9 +533,9 @@ def _route_rankings(
     return [
         ranking
         for metric in (
-            "avg_mara_score",
             "avg_native_score",
             "avg_mara_proxy_score",
+            "avg_mara_score",
             "avg_f1",
         )
         for ranking in [_route_ranking(dataset_name, rows, metric)]

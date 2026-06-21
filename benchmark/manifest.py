@@ -22,7 +22,7 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
     {
         "route_id": "direct_answer",
         "route_name": "Direct answer",
-        "engine": "docqa_runtime",
+        "engine": "benchmark_direct_answer",
         "scope": "multi_document",
         "reasoning_type": "mara",
         "controller_mode": "llm",

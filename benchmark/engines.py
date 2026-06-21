@@ -623,10 +623,14 @@ _ENGINE_TYPES: dict[str, type[BaseBenchmarkEngine]] = {
 
 
 def get_engine(name: str, config: Any) -> BenchmarkEngine:
+    if name == "benchmark_direct_answer":
+        from .benchmark_direct_answer import BenchmarkDirectAnswerEngine
+
+        return BenchmarkDirectAnswerEngine(config)
     try:
         engine_type = _ENGINE_TYPES[name]
     except KeyError as exc:
-        supported = ", ".join(sorted(_ENGINE_TYPES))
+        supported = ", ".join(sorted([*_ENGINE_TYPES, "benchmark_direct_answer"]))
         raise ValueError(
             f"Unknown benchmark engine {name!r}. Supported engines: {supported}."
         ) from exc

@@ -21,6 +21,8 @@ _ANSWER_PRESENTATION_PREFIX_RE = re.compile(
     re.IGNORECASE,
 )
 _LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*]|\d+[.)])\s+")
+_YES_NO_RATIONALE_RE = re.compile(r"^\s*(yes|no)[.!?]\s+(.+)", re.IGNORECASE)
+_YES_NO_ONLY_RE = re.compile(r"^\s*(yes|no)[.!?]?\s*$", re.IGNORECASE)
 _INITIAL_PERIOD_TOKEN = "__MARA_INITIAL_PERIOD__"
 _INITIAL_PERIOD_RE = re.compile(r"\b([A-Z])\.")
 
@@ -116,9 +118,35 @@ def _short_answer(answer: str) -> str:
     first_line = _first_nonempty_line(answer)
     if not first_line:
         return ""
+    yes_no_rationale = _yes_no_rationale_answer(answer)
+    if yes_no_rationale:
+        return yes_no_rationale
     if _looks_like_direct_answer(first_line):
         return _strip_terminal_period(first_line)
     return _strip_terminal_period(_first_sentence(first_line))
+
+
+def _yes_no_rationale_answer(answer: str) -> str:
+    lines = [line.strip() for line in str(answer or "").splitlines() if line.strip()]
+    if not lines:
+        return ""
+
+    same_line = _YES_NO_RATIONALE_RE.match(lines[0])
+    if same_line:
+        return _format_yes_no_rationale(same_line.group(1), same_line.group(2))
+
+    first_line = _YES_NO_ONLY_RE.fullmatch(lines[0])
+    if first_line and len(lines) > 1:
+        return _format_yes_no_rationale(first_line.group(1), lines[1])
+
+    return ""
+
+
+def _format_yes_no_rationale(polarity: str, rationale: str) -> str:
+    sentence = _first_sentence(str(rationale or "").strip())
+    if not sentence:
+        return ""
+    return _strip_terminal_period(f"{polarity.capitalize()}. {sentence}")
 
 
 def _first_nonempty_line(text: str) -> str:

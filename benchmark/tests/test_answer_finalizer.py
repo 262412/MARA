@@ -79,6 +79,49 @@ def test_finalizer_removes_common_answer_presentation_prefixes():
     assert prediction["answer_for_scoring"] == "Richard A. Johnson"
 
 
+def test_finalizer_keeps_yes_no_rationale_for_scoring():
+    prediction: dict[str, Any] = {
+        "question": "Are JnJ's FY2022 financials typical of a high growth company?",
+        "predicted_answer": (
+            "No. JnJ's FY2022 financials do not indicate high growth. "
+            "Sales grew by only 1.3% in FY2022."
+        ),
+        "answer_type": "boolean",
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="financebench_plan5_text_main_current",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_scoring"] == (
+        "No. JnJ's FY2022 financials do not indicate high growth"
+    )
+
+
+def test_finalizer_keeps_yes_no_rationale_when_reason_starts_next_line():
+    prediction: dict[str, Any] = {
+        "question": "Are JnJ's FY2022 financials typical of a high growth company?",
+        "predicted_answer": (
+            "No.\n\n"
+            "JnJ's FY2022 financials do not indicate high growth. "
+            "Sales grew by only 1.3% in FY2022."
+        ),
+        "answer_type": "boolean",
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="financebench_plan5_text_main_current",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_scoring"] == (
+        "No. JnJ's FY2022 financials do not indicate high growth"
+    )
+
+
 def test_finalizer_extracts_ragtruth_json_from_markdown_answer():
     prediction: dict[str, Any] = {
         "predicted_answer": (

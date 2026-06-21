@@ -160,14 +160,14 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         ]
     )
     if "quality_avg_f1" in summary:
-        if "quality_avg_mara_score" in summary:
+        if "quality_avg_native_score" in summary:
             lines.append(
-                "- Quality MARA Native Score: "
-                f"`{summary.get('quality_avg_mara_score')}`"
+                "- Quality Dataset-Native Local Score: "
+                f"`{summary.get('quality_avg_native_score')}`"
             )
         if "quality_avg_mara_proxy_score" in summary:
             lines.append(
-                "- Quality MARA Proxy Score: "
+                "- Quality MARA Diagnostic Proxy Score: "
                 f"`{summary.get('quality_avg_mara_proxy_score')}`"
             )
         lines.append(f"- Quality Diagnostic EM: `{summary.get('quality_avg_em')}`")

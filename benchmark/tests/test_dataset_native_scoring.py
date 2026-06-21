@@ -466,9 +466,12 @@ def test_runner_promotes_native_score_and_records_scoring_contract(
     )
     assert report["summary"]["avg_native_score"] == 1.0
     assert report["summary"]["quality_avg_native_score"] == 1.0
-    assert report["summary"]["route_rankings"][0]["rank_metric"] == "avg_mara_score"
-    assert report["summary"]["primary_score_metric"] == "quality_avg_mara_score"
+    assert report["summary"]["route_rankings"][0]["rank_metric"] == "avg_native_score"
+    assert report["summary"]["primary_score_metric"] == "quality_avg_native_score"
+    assert report["summary"]["primary_score_label"] == "Dataset-Native Local Score"
     assert report["summary"]["primary_score_scope"] == "qa_quality"
+    assert report["summary"]["score_authority_level"] == "local_dataset_native"
+    assert report["summary"]["paper_grade_score_available"] is False
     assert report["summary"]["primary_score"] == 1.0
     assert report["summary"]["diagnostic_score_metrics"] == [
         "avg_em",

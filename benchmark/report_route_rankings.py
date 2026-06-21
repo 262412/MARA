@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 _RANKING_METRIC_ORDER = {
-    "avg_mara_score": 0,
-    "avg_native_score": 1,
-    "avg_mara_proxy_score": 2,
+    "avg_native_score": 0,
+    "avg_mara_proxy_score": 1,
+    "avg_mara_score": 2,
     "avg_f1": 3,
 }
 

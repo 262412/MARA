@@ -8,6 +8,7 @@ from .answer_modes import normalize_benchmark_answer_mode
 
 STANDARD_BENCHMARK_ENGINES = (
     "legacy_text_rag",
+    "benchmark_direct_answer",
     "docqa_runtime",
     "direct_paste",
     "oracle_page",
