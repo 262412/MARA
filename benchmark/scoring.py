@@ -5,6 +5,7 @@ from typing import Any
 from ktem.docqa.evidence_text import extract_final_answer_text
 
 from .citation_metrics import citation_precision_score, citation_recall_score
+from .engine_context import extract_citations
 from .metrics import (
     anls_score,
     cross_page_evidence_hit_score,
@@ -39,18 +40,29 @@ _TIMING_KEYS = (
 _CACHE_KEYS = ("hits", "misses", "writes")
 
 
-def score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
+def score_prediction(
+    prediction: dict[str, Any],
+    *,
+    answer_key: str | None = None,
+) -> dict[str, float | None]:
     gold_answers = prediction["gold_answers"]
     expected_formats = _normalized_expected_formats(prediction)
     formatted_answer = _answer_text_for_scoring(
-        prediction["predicted_answer"],
+        _prediction_answer_text(prediction, answer_key=answer_key),
+        expected_formats=expected_formats,
+    )
+    presentation_answer = _answer_text_for_scoring(
+        _prediction_answer_text(
+            prediction,
+            answer_key=answer_key or "predicted_answer",
+        ),
         expected_formats=expected_formats,
     )
     predicted_answer = _collapse_scoring_text(formatted_answer)
     claim_verification = dict(prediction.get("claim_verification") or {})
     abstained = _prediction_abstained(prediction, predicted_answer, claim_verification)
-    markdown_table_score = markdown_table_renderable_score(formatted_answer)
-    latex_score = latex_renderable_score(formatted_answer)
+    markdown_table_score = markdown_table_renderable_score(presentation_answer)
+    latex_score = latex_renderable_score(presentation_answer)
     if expected_formats & _TABLE_FORMATS and markdown_table_score is None:
         markdown_table_score = 0.0
     if expected_formats & _LATEX_FORMATS and latex_score is None:
@@ -92,6 +104,18 @@ def score_prediction(prediction: dict[str, Any]) -> dict[str, float | None]:
     metrics.update(verification_metrics(prediction))
     _add_gold_evidence_metrics(metrics, prediction, predicted_answer)
     return metrics
+
+
+def _prediction_answer_text(
+    prediction: dict[str, Any],
+    *,
+    answer_key: str | None,
+) -> str:
+    if answer_key:
+        return str(prediction.get(answer_key) or "")
+    if "answer_for_scoring" in prediction:
+        return str(prediction.get("answer_for_scoring") or "")
+    return str(prediction.get("predicted_answer") or "")
 
 
 def _answer_text_for_scoring(answer: Any, *, expected_formats: set[str]) -> str:
@@ -215,7 +239,9 @@ def _add_gold_evidence_metrics(
     gold_evidence = prediction.get("gold_evidence", [])
     if not gold_evidence:
         return
-    predicted_citations = _predicted_citations_for_scoring(prediction)
+    inline_citations = _inline_citations_for_scoring(prediction)
+    metadata_citations = _metadata_citations_for_scoring(prediction)
+    predicted_citations = inline_citations or metadata_citations
     metrics["element_hit"] = element_hit_score(
         prediction.get("predicted_element_ids", []), gold_evidence
     )
@@ -243,8 +269,36 @@ def _add_gold_evidence_metrics(
         evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
         retrieved_hits=list(prediction.get("retrieved_hits") or []),
     )
+    _add_citation_group_metrics(
+        metrics,
+        "citation_inline",
+        inline_citations,
+        gold_evidence,
+        prediction,
+    )
+    _add_citation_group_metrics(
+        metrics,
+        "citation_metadata",
+        metadata_citations,
+        gold_evidence,
+        prediction,
+    )
     _add_citation_locator_metrics(
         metrics, prediction, gold_evidence, predicted_citations
+    )
+    _add_citation_locator_metrics(
+        metrics,
+        prediction,
+        gold_evidence,
+        inline_citations,
+        metric_prefix="citation_inline",
+    )
+    _add_citation_locator_metrics(
+        metrics,
+        prediction,
+        gold_evidence,
+        metadata_citations,
+        metric_prefix="citation_metadata",
     )
     metrics["cross_page_evidence_hit"] = cross_page_evidence_hit_score(
         prediction["predicted_pages"],
@@ -259,6 +313,8 @@ def _add_citation_locator_metrics(
     prediction: dict[str, Any],
     gold_evidence: list[dict[str, Any]],
     predicted_citations: list[str],
+    *,
+    metric_prefix: str = "citation",
 ) -> None:
     evidence_bundle = dict(prediction.get("evidence_bundle") or {})
     retrieved_hits = list(prediction.get("retrieved_hits") or [])
@@ -268,13 +324,13 @@ def _add_citation_locator_metrics(
             for item in gold_evidence
             if _gold_evidence_has_locator(item, locator_kind)
         ]
-        metrics[f"citation_recall_{locator_kind}"] = citation_recall_score(
+        metrics[f"{metric_prefix}_recall_{locator_kind}"] = citation_recall_score(
             predicted_citations,
             locator_gold,
             evidence_bundle=evidence_bundle,
             retrieved_hits=retrieved_hits,
         )
-        metrics[f"citation_precision_{locator_kind}"] = citation_precision_score(
+        metrics[f"{metric_prefix}_precision_{locator_kind}"] = citation_precision_score(
             predicted_citations,
             locator_gold,
             evidence_bundle=evidence_bundle,
@@ -282,10 +338,40 @@ def _add_citation_locator_metrics(
         )
 
 
-def _predicted_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
+def _add_citation_group_metrics(
+    metrics: dict[str, float | None],
+    metric_prefix: str,
+    predicted_citations: list[str],
+    gold_evidence: list[dict[str, Any]],
+    prediction: dict[str, Any],
+) -> None:
+    evidence_bundle = dict(prediction.get("evidence_bundle") or {})
+    retrieved_hits = list(prediction.get("retrieved_hits") or [])
+    metrics[f"{metric_prefix}_recall"] = citation_recall_score(
+        predicted_citations,
+        gold_evidence,
+        evidence_bundle=evidence_bundle,
+        retrieved_hits=retrieved_hits,
+    )
+    metrics[f"{metric_prefix}_precision"] = citation_precision_score(
+        predicted_citations,
+        gold_evidence,
+        evidence_bundle=evidence_bundle,
+        retrieved_hits=retrieved_hits,
+    )
+
+
+def _inline_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
     predicted_citations = list(prediction.get("predicted_citations") or [])
     if predicted_citations:
         return predicted_citations
+    return extract_citations(str(prediction.get("predicted_answer") or ""))
+
+
+def _metadata_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
+    scored_sources = list(prediction.get("scored_predicted_sources") or [])
+    if scored_sources:
+        return scored_sources
     return list(prediction["predicted_sources"])
 
 

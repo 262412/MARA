@@ -3,10 +3,15 @@ from __future__ import annotations
 from dataclasses import fields, replace
 from typing import Any
 
+from .answer_finalizer import finalize_prediction_answer
+from .benchmark_prompts import build_benchmark_prompt
 from .diagnostics import prediction_diagnostics
 from .engines import EngineRunResult, get_engine
 from .manifest import load_manifest
-from .mara_oriented_scores import add_mara_oriented_metrics
+from .mara_oriented_scores import (
+    add_mara_oriented_metrics,
+    promote_external_primary_score,
+)
 from .research_adapters import (
     research_adapter_metric_metadata,
     research_adapter_metrics,
@@ -40,31 +45,53 @@ def _active_routes(
 ) -> list[dict[str, Any]]:
     routes = list(bundle.routes or [])
     if not routes:
-        return [
-            {
-                "route_id": config.route,
-                "engine": config.engine,
-                "scope": config.scope,
-            }
-        ]
+        return _routes_with_config_evaluators(
+            [
+                {
+                    "route_id": config.route,
+                    "engine": config.engine,
+                    "scope": config.scope,
+                }
+            ],
+            config,
+        )
 
     if config.route in {"all", "*", ""}:
-        return routes
+        return _routes_with_config_evaluators(routes, config)
 
     selected = []
     for index, route in enumerate(routes, start=1):
         if _route_id(route, f"route_{index}") == config.route:
             selected.append(route)
     if selected:
-        return selected
+        return _routes_with_config_evaluators(selected, config)
 
-    return [
-        {
-            "route_id": config.route,
-            "engine": config.engine,
-            "scope": config.scope,
-        }
-    ]
+    return _routes_with_config_evaluators(
+        [
+            {
+                "route_id": config.route,
+                "engine": config.engine,
+                "scope": config.scope,
+            }
+        ],
+        config,
+    )
+
+
+def _routes_with_config_evaluators(
+    routes: list[dict[str, Any]],
+    config: BenchmarkConfig,
+) -> list[dict[str, Any]]:
+    configured = dict(config.external_evaluators or {})
+    if not configured:
+        return routes
+    merged_routes: list[dict[str, Any]] = []
+    for route in routes:
+        merged_route = dict(route)
+        route_evaluators = dict(merged_route.get("external_evaluators") or {})
+        merged_route["external_evaluators"] = {**configured, **route_evaluators}
+        merged_routes.append(merged_route)
+    return merged_routes
 
 
 def _config_for_route(
@@ -117,6 +144,7 @@ def _engine_result_to_prediction(
         "predicted_pages": result.predicted_pages,
         "predicted_sources": result.predicted_sources,
         "predicted_citations": result.predicted_citations,
+        "scored_predicted_sources": result.scored_predicted_sources,
         "predicted_element_ids": result.predicted_element_ids,
         "retrieved_hits": result.retrieved_hits,
         "retrieval_trace": result.retrieval_trace,
@@ -184,6 +212,7 @@ def _error_prediction(
         "predicted_pages": [],
         "predicted_sources": [],
         "predicted_citations": [],
+        "scored_predicted_sources": [],
         "predicted_element_ids": [],
         "retrieved_hits": [],
         "retrieval_trace": [],
@@ -233,16 +262,27 @@ def _prepare_prediction_defaults(
     document,
     route_config: BenchmarkConfig,
     route: dict[str, Any],
+    dataset_name: str,
 ) -> None:
+    prompt = build_benchmark_prompt(example, route_config, dataset_name=dataset_name)
     prediction["document_path"] = str(document.path)
     prediction["document_ids"] = example.document_ids or [example.document_id]
     prediction["engine"] = route_config.engine
     prediction["route"] = route_config.route
     prediction["scope"] = route_config.scope or example.scope
     prediction["benchmark_role"] = _benchmark_role(route, route_config.route)
+    prediction.setdefault("benchmark_prompt_policy", prompt.policy)
+    prediction.setdefault("benchmark_prompt_profile", prompt.profile)
+    prediction.setdefault("benchmark_prompt_source", prompt.prompt_source)
+    prediction.setdefault("benchmark_answer_mode", route_config.benchmark_answer_mode)
+    prediction.setdefault("benchmark_question", prompt.benchmark_question)
+    prediction.setdefault("benchmark_retrieval_query", prompt.retrieval_query)
+    prediction.setdefault("benchmark_runtime_prompt", prompt.runtime_prompt)
+    prediction.setdefault("example_metadata", dict(example.metadata or {}))
     prediction.setdefault("expected_formats", example.expected_formats)
     prediction.setdefault("expected_guardrails", example.expected_guardrails)
     prediction.setdefault("predicted_citations", [])
+    prediction.setdefault("scored_predicted_sources", [])
     prediction.setdefault("evidence_metadata", {})
     prediction.setdefault("agent_trace", [])
     prediction.setdefault("controller_trace", [])
@@ -264,6 +304,11 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
         "route": item["route"],
         "scope": item["scope"],
         "benchmark_role": item.get("benchmark_role", "qa_quality"),
+        "benchmark_prompt_policy": item.get("benchmark_prompt_policy"),
+        "benchmark_prompt_profile": item.get("benchmark_prompt_profile"),
+        "benchmark_prompt_source": item.get("benchmark_prompt_source"),
+        "benchmark_question": item.get("benchmark_question"),
+        "benchmark_retrieval_query": item.get("benchmark_retrieval_query"),
         "document_ids": item["document_ids"],
         "retrieved_hits": item.get("retrieved_hits", []),
         "retrieval_trace": item.get("retrieval_trace", []),
@@ -329,11 +374,21 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                 document=document,
                 route_config=route_config,
                 route=route,
+                dataset_name=bundle.dataset_name,
             )
             normalize_operational_fields(prediction)
             prediction["modality"] = example.modality
             prediction["answer_type"] = example.answer_type
             prediction["gold_evidence"] = example.gold_evidence
+            finalize_prediction_answer(
+                prediction,
+                dataset_name=bundle.dataset_name,
+                mode=route_config.benchmark_answer_mode,
+            )
+            prediction["product_metrics"] = score_prediction(
+                prediction,
+                answer_key="predicted_answer",
+            )
             prediction["metrics"] = score_prediction(prediction)
             prediction["diagnostics"] = prediction_diagnostics(prediction)
             add_mara_oriented_metrics(prediction, dataset_name=bundle.dataset_name)
@@ -343,6 +398,10 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                 prediction["external_adapter_metrics"],
                 prediction["external_adapter_metric_metadata"],
             ) = external_research_adapter_metrics(prediction, route)
+            promote_external_primary_score(
+                prediction,
+                dataset_name=bundle.dataset_name,
+            )
             prediction["backend_metadata"] = route_backend_metadata(route, route_config)
             predictions.append(prediction)
 

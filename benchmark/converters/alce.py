@@ -47,6 +47,9 @@ def _record_text(record: dict[str, Any]) -> str:
     for qa in ensure_list(record.get("qa_pairs")):
         if isinstance(qa, dict):
             parts.append(str(qa.get("context") or ""))
+    for doc in ensure_list(record.get("docs")):
+        if isinstance(doc, dict):
+            parts.append(_doc_text(doc))
     for annotation in ensure_list(record.get("annotations")):
         if isinstance(annotation, dict):
             parts.append(str(annotation.get("long_answer") or ""))
@@ -59,6 +62,8 @@ def _examples(
     record_index: int,
 ) -> list[dict[str, Any]]:
     examples: list[dict[str, Any]] = []
+    if _is_qampari_record(record):
+        return [_qampari_example(record, document_id, record_index)]
     for qa_index, qa in enumerate(ensure_list(record.get("qa_pairs"))):
         if not isinstance(qa, dict):
             continue
@@ -85,6 +90,73 @@ def _examples(
             }
         )
     return examples
+
+
+def _qampari_example(
+    record: dict[str, Any],
+    document_id: str,
+    record_index: int,
+) -> dict[str, Any]:
+    evidence_sources = [
+        text
+        for text in (_doc_text(doc) for doc in ensure_list(record.get("docs")))
+        if text
+    ]
+    answers = _qampari_answer_groups(record)
+    return {
+        "example_id": str(record.get("id") or f"{document_id}_qampari"),
+        "document_ids": [document_id],
+        "scope": "document",
+        "modality": "text",
+        "answer_type": "list_qa",
+        "question": str(record.get("question") or "").strip(),
+        "answers": _flat_qampari_answer(record),
+        "evidence_sources": evidence_sources[:5],
+        "gold_evidence": _gold_evidence(document_id, evidence_sources[0])
+        if evidence_sources
+        else [],
+        "metadata": {
+            "dataset_family": "citation_quality",
+            "record_index": record_index,
+            "alce_task": "qampari",
+            "alce_answers": answers,
+        },
+    }
+
+
+def _is_qampari_record(record: dict[str, Any]) -> bool:
+    return (
+        bool(str(record.get("question") or "").strip())
+        and bool(_qampari_answer_groups(record))
+        and not ensure_list(record.get("qa_pairs"))
+    )
+
+
+def _qampari_answer_groups(record: dict[str, Any]) -> list[list[str]]:
+    groups: list[list[str]] = []
+    for group in ensure_list(record.get("answers")):
+        aliases = [
+            str(item).strip() for item in ensure_list(group) if str(item).strip()
+        ]
+        if aliases:
+            groups.append(aliases)
+    return groups
+
+
+def _flat_qampari_answer(record: dict[str, Any]) -> list[str]:
+    answer = str(record.get("answer") or "").strip()
+    if answer:
+        return [answer]
+    answers = [group[0] for group in _qampari_answer_groups(record) if group]
+    return [", ".join(answers)] if answers else []
+
+
+def _doc_text(doc: Any) -> str:
+    if not isinstance(doc, dict):
+        return ""
+    return str(
+        doc.get("text") or doc.get("summary") or doc.get("extraction") or ""
+    ).strip()
 
 
 def _gold_evidence(document_id: str, context: str) -> list[dict[str, Any]]:

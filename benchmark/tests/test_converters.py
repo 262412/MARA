@@ -41,7 +41,15 @@ def test_normalize_qasper_manifest_materializes_paper_text(tmp_path):
                                         "yes_no": None,
                                         "evidence": ["The method uses retrieval."],
                                     }
-                                }
+                                },
+                                {
+                                    "answer": {
+                                        "extractive_spans": [],
+                                        "free_form_answer": "document retrieval",
+                                        "yes_no": None,
+                                        "evidence": ["The method uses retrieval."],
+                                    }
+                                },
                             ],
                         }
                     ],
@@ -61,9 +69,25 @@ def test_normalize_qasper_manifest_materializes_paper_text(tmp_path):
         .path.read_text(encoding="utf-8")
         .startswith("# Paper title")
     )
-    assert bundle.examples[0].answers == ["retrieval"]
+    assert bundle.examples[0].answers == ["retrieval", "document retrieval"]
     assert bundle.examples[0].evidence_sources == ["The method uses retrieval."]
     assert bundle.examples[0].metadata["dataset_family"] == "scientific_qa"
+    assert bundle.examples[0].metadata["qasper_answer_annotations"] == [
+        {
+            "extractive_spans": ["retrieval"],
+            "free_form_answer": "",
+            "yes_no": None,
+            "unanswerable": None,
+            "evidence": ["The method uses retrieval."],
+        },
+        {
+            "extractive_spans": [],
+            "free_form_answer": "document retrieval",
+            "yes_no": None,
+            "unanswerable": None,
+            "evidence": ["The method uses retrieval."],
+        },
+    ]
 
 
 def test_normalize_mmdocrag_manifest_preserves_multimodal_gold_quotes(tmp_path):
@@ -182,6 +206,9 @@ def test_normalize_ragtruth_manifest_joins_sources_and_responses(tmp_path):
         "unsupported_claims_expected": True,
     }
     assert example.metadata["label_count"] == 1
+    assert example.metadata["task_type"] == "Summary"
+    assert example.metadata["source_info"] == "The source says revenue rose."
+    assert example.metadata["response"] == "Revenue rose and profit doubled."
     assert example.metadata["source_label"] == "CNN/DM"
 
 
@@ -213,6 +240,63 @@ def test_normalize_alce_manifest_flattens_qa_pairs(tmp_path):
     assert bundle.examples[0].answers == ["Ali"]
     assert bundle.examples[0].evidence_sources == ["Ali scored most."]
     assert bundle.examples[0].metadata["dataset_family"] == "citation_quality"
+
+
+def test_normalize_alce_manifest_preserves_qampari_answer_groups(tmp_path):
+    source_path = tmp_path / "qampari_eval.json"
+    source_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "799__wikidata_simple__dev",
+                    "question": "What manga was drawn by Ryoichi Ikegami?",
+                    "answer": (
+                        "Heat, Mai, the Psychic Girl, Wounded Man, Sanctuary, "
+                        "Crying Freeman, Strain."
+                    ),
+                    "answers": [
+                        ["Heat"],
+                        ["Mai, the Psychic Girl"],
+                        ["Wounded Man"],
+                        ["Sanctuary"],
+                        ["Crying Freeman"],
+                        ["Strain"],
+                    ],
+                    "docs": [
+                        {
+                            "title": "Ryoichi Ikegami",
+                            "text": "Ryoichi Ikegami drew Heat and Sanctuary.",
+                            "id": "doc-1",
+                        }
+                    ],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    manifest_path = tmp_path / "alce_qampari_manifest.json"
+    normalize_alce_manifest(source_path, manifest_path)
+
+    bundle = load_manifest(manifest_path)
+    assert bundle.dataset_name == "alce"
+    example = bundle.examples[0]
+    assert example.example_id == "799__wikidata_simple__dev"
+    assert example.answer_type == "list_qa"
+    assert example.answers == [
+        "Heat, Mai, the Psychic Girl, Wounded Man, Sanctuary, "
+        "Crying Freeman, Strain."
+    ]
+    assert example.evidence_sources == ["Ryoichi Ikegami drew Heat and Sanctuary."]
+    assert example.metadata["alce_task"] == "qampari"
+    assert example.metadata["alce_answers"] == [
+        ["Heat"],
+        ["Mai, the Psychic Girl"],
+        ["Wounded Man"],
+        ["Sanctuary"],
+        ["Crying Freeman"],
+        ["Strain"],
+    ]
 
 
 def test_normalize_vidore_manifest_accepts_jsonl_retrieval_rows(tmp_path):

@@ -86,6 +86,9 @@ def _example(
             "quality": response.get("quality"),
             "label_count": len(labels),
             "labels": labels,
+            "task_type": source.get("task_type"),
+            "source_info": source_text,
+            "response": str(response.get("response") or "").strip(),
             "source_label": str(source.get("source") or "").strip(),
         },
     }

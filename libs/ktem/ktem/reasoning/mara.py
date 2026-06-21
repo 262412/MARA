@@ -234,6 +234,8 @@ def _collect_text_rag_generation(
 
 def _message_with_answer_format_requirements(message: str) -> str:
     prompt = str(message or "").rstrip()
+    if "Benchmark prompt contract:" in prompt:
+        return prompt
     if "Return the final answer as Markdown" in prompt:
         return prompt
     return prompt + ANSWER_FORMAT_REQUIREMENTS

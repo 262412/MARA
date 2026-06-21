@@ -404,6 +404,7 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
         "controller_auto",
         "crag_guarded",
     ]
+    assert DEFAULT_MARA_ROUTES[0]["engine"] == "benchmark_direct_answer"
     assert DEFAULT_MARA_ROUTES[0]["route_policy"] == "direct"
     assert DEFAULT_MARA_ROUTES[0]["benchmark_role"] == "diagnostic"
     assert DEFAULT_MARA_ROUTES[1]["benchmark_role"] == "qa_quality"

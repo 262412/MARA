@@ -9,6 +9,7 @@ from typing import Any, Protocol, cast, runtime_checkable
 from kotaemon.base import RetrievedDocument
 
 from . import controller_fields as cf
+from .benchmark_prompts import runtime_prompt_for
 from .docqa_evidence_projection import (
     evidence_element_ids,
     evidence_pages,
@@ -31,6 +32,7 @@ from .docqa_runtime_sources import (
     selected_source_fallback_text,
     unindexed_document_paths,
 )
+from .engine_accessors import active_runtime_record, config_value, field_value
 from .engine_context import (
     all_context_pages,
     document_pages,
@@ -45,6 +47,7 @@ from .engine_context import (
 from .engine_helpers import _parsed_indexes_cache, _performance_from_timings
 from .engine_result import EngineRunResult
 from .engine_result_adapters import prediction_to_result
+from .indexed_citations import indexed_inline_citations
 from .schemas import BenchmarkConfig, BenchmarkDocument
 from .system import KotaemonTextRAGSystem
 
@@ -72,7 +75,7 @@ class BaseBenchmarkEngine:
 
     @property
     def max_context_length(self) -> int:
-        value = _config_value(self.config, "max_context_length", 16000)
+        value = config_value(self.config, "max_context_length", 16000)
         return int(value) if value is not None else 16000
 
     def run(
@@ -131,6 +134,9 @@ class BaseBenchmarkEngine:
                 "generator_backend": None,
                 "artifact_detail": "compact",
                 "use_generation": True,
+                "benchmark_prompt_policy": "benchmark_v1",
+                "benchmark_prompt_profile": "auto",
+                "benchmark_answer_mode": "scoring_adapter_v1",
                 "prompt_template": None,
             }
             payload.update(self.config)
@@ -285,13 +291,16 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         selected_file_ids: list[str],
         active_record: Any,
     ) -> dict[str, Any]:
+        config = self._benchmark_config()
         return {
-            "prompt": _field_value(example, "question", ""),
+            "prompt": runtime_prompt_for(
+                example, config, dataset_name=config.suite_name
+            ),
             "selected_file_ids": selected_file_ids,
             "page_image_records": page_image_records_from_documents(documents),
             "qa_scope": str(
-                _config_value(self.config, "scope", None)
-                or _field_value(example, "scope", "document")
+                config_value(self.config, "scope", None)
+                or field_value(example, "scope", "document")
             ).replace("-", "_"),
             "active_file_id": getattr(active_record, "file_id", ""),
             "active_file_name": getattr(active_record, "name", ""),
@@ -300,26 +309,26 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 documents,
                 selected_file_ids,
             ),
-            "llm": _config_value(self.config, "llm_name", None),
-            "use_citation": _config_value(self.config, "docqa_citation_mode", None),
+            "llm": config_value(self.config, "llm_name", None),
+            "use_citation": config_value(self.config, "docqa_citation_mode", None),
             "max_context_length": self.max_context_length,
-            "reasoning_type": _config_value(self.config, "reasoning_type", None),
-            "agent_mode": _config_value(self.config, "agent_mode", None),
-            "task_type": _config_value(self.config, "task_type", None),
-            "artifact_type": _config_value(self.config, "artifact_type", None),
-            "graph_mode": _config_value(self.config, "graph_mode", None),
-            "visual_retriever_backend": _config_value(
+            "reasoning_type": config_value(self.config, "reasoning_type", None),
+            "agent_mode": config_value(self.config, "agent_mode", None),
+            "task_type": config_value(self.config, "task_type", None),
+            "artifact_type": config_value(self.config, "artifact_type", None),
+            "graph_mode": config_value(self.config, "graph_mode", None),
+            "visual_retriever_backend": config_value(
                 self.config,
                 "visual_retriever_backend",
                 None,
             ),
-            "visual_generator_backend": _config_value(
+            "visual_generator_backend": config_value(
                 self.config,
                 "visual_generator_backend",
                 None,
             ),
             **cf.controller_config_kwargs(
-                lambda key: _config_value(self.config, key, None)
+                lambda key: config_value(self.config, key, None)
             ),
             "origin": "benchmark",
         }
@@ -353,12 +362,6 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             documents,
             selected_file_ids,
         )
-        predicted_citations = list(answer_citations)
-        predicted_citations.extend(
-            citation
-            for citation in reference_citations
-            if citation not in predicted_citations
-        )
         reference_pages = self._PAGE_RE.findall(response.references_text or "")
         if not retrieved_hits and not reference_citations and not reference_pages:
             retrieved_hits = selected_source_fallback_hits(documents, selected_file_ids)
@@ -366,6 +369,12 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             retrieved_hits,
             documents,
             selected_file_ids,
+        )
+        predicted_citations = list(answer_citations)
+        predicted_citations.extend(
+            citation
+            for citation in indexed_inline_citations(response.answer, retrieved_hits)
+            if citation not in predicted_citations
         )
         predicted_sources = evidence_sources(retrieved_hits)
         predicted_sources.extend(
@@ -409,7 +418,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         start = time.perf_counter()
         selected_file_ids = self._index_documents(documents)
         index_seconds = time.perf_counter() - start
-        active_record = _active_runtime_record(runtime, selected_file_ids)
+        active_record = active_runtime_record(runtime, selected_file_ids)
 
         generation_start = time.perf_counter()
         response = runtime.run_turn(
@@ -434,7 +443,6 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             documents=documents,
             selected_file_ids=selected_file_ids,
         )
-
         return EngineRunResult(
             answer=response.answer,
             predicted_pages=predicted_pages,
@@ -456,10 +464,8 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 {
                     "engine": self.name,
                     "selected_file_ids": selected_file_ids,
-                    "reasoning_type": _config_value(
-                        self.config, "reasoning_type", None
-                    ),
-                    "agent_mode": _config_value(self.config, "agent_mode", None),
+                    "reasoning_type": config_value(self.config, "reasoning_type", None),
+                    "agent_mode": config_value(self.config, "agent_mode", None),
                     "references_text": response.references_text[:2000],
                 }
             ],
@@ -534,9 +540,9 @@ class OraclePageEngine(BaseBenchmarkEngine):
         if wanted_pages:
             for document in documents:
                 for page in document_pages(document):
-                    page_number = _field_value(page, "page", None)
+                    page_number = field_value(page, "page", None)
                     if page_number is None:
-                        page_number = _field_value(page, "page_number", None)
+                        page_number = field_value(page, "page_number", None)
                     if normalize_page(page_number) in wanted_pages:
                         text = extract_text(page)
                         if text:
@@ -617,33 +623,15 @@ _ENGINE_TYPES: dict[str, type[BaseBenchmarkEngine]] = {
 
 
 def get_engine(name: str, config: Any) -> BenchmarkEngine:
+    if name == "benchmark_direct_answer":
+        from .benchmark_direct_answer import BenchmarkDirectAnswerEngine
+
+        return BenchmarkDirectAnswerEngine(config)
     try:
         engine_type = _ENGINE_TYPES[name]
     except KeyError as exc:
-        supported = ", ".join(sorted(_ENGINE_TYPES))
+        supported = ", ".join(sorted([*_ENGINE_TYPES, "benchmark_direct_answer"]))
         raise ValueError(
             f"Unknown benchmark engine {name!r}. Supported engines: {supported}."
         ) from exc
     return engine_type(config)
-
-
-def _config_value(config: Any, key: str, default: Any) -> Any:
-    if isinstance(config, dict):
-        return config.get(key, default)
-    return getattr(config, key, default)
-
-
-def _field_value(item: Any, key: str, default: Any) -> Any:
-    if isinstance(item, dict):
-        return item.get(key, default)
-    return getattr(item, key, default)
-
-
-def _active_runtime_record(runtime: Any, selected_file_ids: list[str]) -> Any | None:
-    if not selected_file_ids:
-        return None
-    try:
-        records = runtime.resolve_file_refs([selected_file_ids[0]])
-    except (AttributeError, RuntimeError, TypeError, ValueError):
-        return None
-    return records[0] if records else None

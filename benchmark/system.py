@@ -22,16 +22,19 @@ from kotaemon.indices.ingests.files import (
     unstructured,
 )
 from kotaemon.indices.parse_cache import load_data_with_parse_cache
-from kotaemon.indices.qa.citation_qa import DEFAULT_QA_TEXT_PROMPT
 from kotaemon.indices.qa.format_context import PrepareEvidencePipeline
 from kotaemon.indices.splitters import TokenSplitter
-from kotaemon.llms import PromptTemplate
 from kotaemon.storages import InMemoryDocumentStore, InMemoryVectorStore
 
+from .benchmark_prompts import generation_prompt_for, retrieval_query_for
 from .evidence_metadata import _evidence_metadata
 from .schemas import BenchmarkConfig, BenchmarkDocument, BenchmarkExample
 
 TOKEN_RE = re.compile(r"[\w\u4e00-\u9fff]+", flags=re.UNICODE)
+
+
+def _retrieval_query(config: BenchmarkConfig, example: BenchmarkExample) -> str:
+    return retrieval_query_for(example, config, dataset_name=config.suite_name)
 
 
 def _empty_cache_stats() -> dict[str, int]:
@@ -102,9 +105,6 @@ class KotaemonTextRAGSystem:
         self.reranker = self._resolve_reranker(config.reranker_name)
         self.evidence_pipeline = PrepareEvidencePipeline(
             max_context_length=config.max_context_length
-        )
-        self.prompt_template = PromptTemplate(
-            config.prompt_template or DEFAULT_QA_TEXT_PROMPT
         )
         self._cache: dict[str, ParsedIndex] = {}
         self._cold_cache_token = str(time.time_ns())
@@ -412,10 +412,11 @@ class KotaemonTextRAGSystem:
                 "Generation is enabled but no benchmark LLM is configured."
             )
 
-        prompt = self.prompt_template.populate(
+        prompt = generation_prompt_for(
+            example,
+            self.config,
             context=evidence,
-            question=example.question,
-            lang="English",
+            dataset_name=self.config.suite_name,
         )
         response = self.llm(prompt)
         answer = getattr(response, "text", "") or str(response)
@@ -437,8 +438,9 @@ class KotaemonTextRAGSystem:
         retrieval_hits: list[RetrievedDocument] = []
         retrieval_seconds = 0.0
         retrieval_trace: list[dict[str, Any]] = []
+        query = _retrieval_query(self.config, example)
         for parsed_index in parsed_indexes:
-            hits, seconds, trace = self._retrieve(example.question, parsed_index)
+            hits, seconds, trace = self._retrieve(query, parsed_index)
             retrieval_hits.extend(hits)
             retrieval_seconds += seconds
             retrieval_trace.append(
@@ -461,7 +463,6 @@ class KotaemonTextRAGSystem:
             reverse=True,
         )
         retrieval_hits = retrieval_hits[: self.config.top_k]
-
         answer, evidence, generation_seconds, evidence_metadata = self._generate_answer(
             example, retrieval_hits
         )

@@ -22,7 +22,7 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
     {
         "route_id": "direct_answer",
         "route_name": "Direct answer",
-        "engine": "docqa_runtime",
+        "engine": "benchmark_direct_answer",
         "scope": "multi_document",
         "reasoning_type": "mara",
         "controller_mode": "llm",
@@ -462,6 +462,8 @@ def _coerce_route(record: dict[str, Any]) -> dict[str, Any]:
         "ragtruth_evaluator",
         "ragas_evaluator",
         "benchmark_role",
+        "benchmark_prompt_policy",
+        "benchmark_prompt_profile",
     ):
         if key in record:
             route[key] = record.get(key)

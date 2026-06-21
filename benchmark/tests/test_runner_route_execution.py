@@ -111,6 +111,35 @@ def test_run_benchmark_allows_citation_mode_override(monkeypatch, tmp_path):
     assert captured_configs[1].docqa_citation_mode == "off"
 
 
+def test_run_benchmark_allows_route_prompt_contract_override(monkeypatch, tmp_path):
+    manifest_path = _write_prompt_contract_manifest(tmp_path)
+    captured_configs = []
+
+    def fake_get_engine(engine_name, config):
+        captured_configs.append(config)
+        return _FakeEngine(engine_name, config, [])
+
+    monkeypatch.setattr("benchmark.runner.get_engine", fake_get_engine)
+
+    report = run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="prompt_override",
+            output_dir=tmp_path / "out",
+            benchmark_prompt_policy="raw",
+            benchmark_prompt_profile="concise_grounded_qa",
+            use_generation=False,
+        ),
+    )
+
+    assert captured_configs[0].benchmark_prompt_policy == "benchmark_v1"
+    assert captured_configs[0].benchmark_prompt_profile == "citation_grounded_qa"
+    assert report["predictions"][0]["benchmark_prompt_policy"] == "benchmark_v1"
+    assert report["predictions"][0]["benchmark_prompt_profile"] == (
+        "citation_grounded_qa"
+    )
+
+
 def test_route_skip_record_uses_visual_backend_readiness_for_required_vlm():
     record = route_skip_record(
         {
@@ -209,6 +238,38 @@ def _write_citation_manifest(tmp_path):
                         "route_id": "text",
                         "engine": "docqa_runtime",
                         "docqa_citation_mode": "inline",
+                    }
+                ],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_id": "doc",
+                        "question": "What is alpha?",
+                        "answers": ["alpha"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
+def _write_prompt_contract_manifest(tmp_path):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "prompt_contract.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "alce",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "routes": [
+                    {
+                        "route_id": "text",
+                        "engine": "legacy_text_rag",
+                        "benchmark_prompt_policy": "benchmark_v1",
+                        "benchmark_prompt_profile": "citation_grounded_qa",
                     }
                 ],
                 "examples": [

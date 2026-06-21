@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from benchmark.manifest import load_manifest
 from benchmark.manifest_templates import apply_route_template
@@ -38,6 +39,20 @@ def test_apply_route_template_materializes_dataset_manifest_routes(tmp_path):
         "doc_element",
         "graph_global",
     ]
+
+
+def test_bundled_text_templates_use_benchmark_direct_answer_engine():
+    template_dir = Path(__file__).parents[1] / "manifests" / "templates"
+
+    for filename in ("mara_text_only.json", "mara_all_routes.local.json"):
+        payload = json.loads((template_dir / filename).read_text(encoding="utf-8"))
+        direct_route = next(
+            route
+            for route in payload["routes"]
+            if route.get("route_id") == "direct_answer"
+        )
+
+        assert direct_route["engine"] == "benchmark_direct_answer"
 
 
 def _write_json(path, payload):

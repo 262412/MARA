@@ -4,8 +4,11 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .answer_modes import normalize_benchmark_answer_mode
+
 STANDARD_BENCHMARK_ENGINES = (
     "legacy_text_rag",
+    "benchmark_direct_answer",
     "docqa_runtime",
     "direct_paste",
     "oracle_page",
@@ -14,6 +17,14 @@ LEGACY_ENGINE_ALIASES = {
     "kotaemon-text-rag": "legacy_text_rag",
 }
 CLI_ENGINE_CHOICES = (*STANDARD_BENCHMARK_ENGINES, *LEGACY_ENGINE_ALIASES)
+BENCHMARK_PROMPT_POLICIES = ("benchmark_v1", "raw")
+BENCHMARK_PROMPT_PROFILES = (
+    "auto",
+    "concise_grounded_qa",
+    "citation_grounded_qa",
+    "guardrail_grounded_qa",
+    "visual_grounded_qa",
+)
 
 
 def normalize_engine_name(engine: str | None) -> str:
@@ -25,6 +36,22 @@ def normalize_scope(scope: str | None) -> str:
     value = str(scope or "document").strip()
     if value == "multi-document":
         return "multi_document"
+    return value
+
+
+def normalize_benchmark_prompt_policy(policy: str | None) -> str:
+    value = str(policy or "benchmark_v1").strip().lower()
+    if value not in BENCHMARK_PROMPT_POLICIES:
+        choices = "', '".join(BENCHMARK_PROMPT_POLICIES)
+        raise ValueError(f"benchmark_prompt_policy must be one of '{choices}'.")
+    return value
+
+
+def normalize_benchmark_prompt_profile(profile: str | None) -> str:
+    value = str(profile or "auto").strip().lower()
+    if value not in BENCHMARK_PROMPT_PROFILES:
+        choices = "', '".join(BENCHMARK_PROMPT_PROFILES)
+        raise ValueError(f"benchmark_prompt_profile must be one of '{choices}'.")
     return value
 
 
@@ -114,13 +141,26 @@ class BenchmarkConfig:
     shard_index: int | None = None
     num_shards: int | None = None
     use_generation: bool = True
+    benchmark_prompt_policy: str = "benchmark_v1"
+    benchmark_prompt_profile: str = "auto"
+    benchmark_answer_mode: str = "scoring_adapter_v1"
     prompt_template: str | None = None
+    external_evaluators: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.engine = normalize_engine_name(self.engine)
         self.scope = normalize_scope(self.scope)
         self.cache_mode = normalize_cache_mode(self.cache_mode)
         self.artifact_detail = normalize_artifact_detail(self.artifact_detail)
+        self.benchmark_prompt_policy = normalize_benchmark_prompt_policy(
+            self.benchmark_prompt_policy
+        )
+        self.benchmark_prompt_profile = normalize_benchmark_prompt_profile(
+            self.benchmark_prompt_profile
+        )
+        self.benchmark_answer_mode = normalize_benchmark_answer_mode(
+            self.benchmark_answer_mode
+        )
         from .sampling import validate_sampling_options
 
         validate_sampling_options(

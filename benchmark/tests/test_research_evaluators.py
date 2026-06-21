@@ -5,6 +5,7 @@ from benchmark.research_evaluators import (
     MMDocRAGEvaluator,
     RagasEvaluator,
     RAGTruthEvaluator,
+    external_research_adapter_metrics,
 )
 from benchmark.runner import run_benchmark
 from benchmark.schemas import BenchmarkConfig
@@ -20,6 +21,33 @@ def fixture_alce_evaluator(prediction):
         "metadata": {
             "paper_grade": True,
             "implementation": "fixture_alce_external",
+        },
+    }
+
+
+def fixture_alce_primary_evaluator(prediction):
+    return {
+        "metrics": {
+            "official_answer_score": 0.42,
+            "official_citation_score": 0.75,
+        },
+        "metadata": {
+            "paper_grade": True,
+            "primary_metric": "official_answer_score",
+            "contract_id": "alce_official_judge_v1",
+            "implementation": "fixture_alce_primary_external",
+        },
+    }
+
+
+def fixture_alce_override_evaluator(prediction):
+    return {
+        "metrics": {"official_answer_score": 0.84},
+        "metadata": {
+            "paper_grade": True,
+            "primary_metric": "official_answer_score",
+            "contract_id": "alce_route_override_judge_v1",
+            "implementation": "fixture_alce_override_external",
         },
     }
 
@@ -77,6 +105,30 @@ def test_proxy_research_adapters_score_clean_final_answer_only():
 
     assert result["metrics"]["fluency"] == 1.0
     assert result["metrics"]["correctness"] == 1.0
+
+
+def test_builtin_proxy_evaluator_alias_is_configured_but_not_paper_grade():
+    prediction = {
+        "predicted_answer": "Revenue rose.",
+        "gold_answers": ["revenue rose"],
+        "metrics": {
+            "citation_precision": 1.0,
+            "citation_recall": 0.5,
+            "f1": 0.75,
+            "unsupported_claim_rate": 0.25,
+        },
+    }
+
+    metrics, metadata = external_research_adapter_metrics(
+        prediction,
+        {"external_evaluators": {"alce": "builtin:alce_proxy"}},
+    )
+
+    assert metadata["alce"]["status"] == "configured"
+    assert metadata["alce"]["backend"] == "builtin:alce_proxy"
+    assert metadata["alce"]["paper_grade"] is False
+    assert metadata["alce"]["metric_category"] == "external_metric"
+    assert metrics["alce"]["correctness"] == 1.0
 
 
 class _ExternalEvaluatorEngine:
@@ -180,6 +232,234 @@ def test_run_benchmark_reports_external_research_evaluator_status(
     assert report["summary"]["external_adapter_metric_metadata"] == (
         prediction["external_adapter_metric_metadata"]
     )
+
+
+def test_run_benchmark_promotes_paper_grade_external_metric_to_headline_score(
+    monkeypatch, tmp_path
+):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "alce_asqa",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_id": "doc",
+                        "question": "What happened?",
+                        "answers": ["correct answer"],
+                    }
+                ],
+                "routes": [
+                    {
+                        "route_id": "paper",
+                        "engine": "direct_paste",
+                        "external_evaluators": {
+                            "alce": (
+                                "benchmark.tests.test_research_evaluators."
+                                "fixture_alce_primary_evaluator"
+                            )
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _ExternalEvaluatorEngine(engine_name, config),
+    )
+
+    report = run_benchmark(
+        str(manifest_path),
+        BenchmarkConfig(
+            suite_name="research_external_primary",
+            output_dir=tmp_path / "out",
+            use_generation=False,
+        ),
+    )
+
+    prediction = report["predictions"][0]
+    assert prediction["metrics"]["local_native_score"] == 0.0
+    assert prediction["metrics"]["paper_grade_score"] == 0.42
+    assert prediction["metrics"]["native_score"] == 0.42
+    assert prediction["metrics"]["mara_score"] == 0.42
+    assert prediction["mara_scoring_source"] == "external_paper_grade"
+    assert prediction["mara_scoring_contract"] == "alce_official_judge_v1"
+    assert prediction["mara_primary_metric"] == "official_answer_score"
+    assert report["summary"]["avg_mara_score"] == 0.42
+    assert report["summary"]["mara_score_metadata"]["scoring_mode"] == (
+        "paper_grade_external_v1"
+    )
+
+
+def test_run_benchmark_uses_configured_external_evaluator_for_single_route(
+    monkeypatch, tmp_path
+):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "alce_asqa",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_id": "doc",
+                        "question": "What happened?",
+                        "answers": ["correct answer"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _ExternalEvaluatorEngine(engine_name, config),
+    )
+
+    report = run_benchmark(
+        str(manifest_path),
+        BenchmarkConfig(
+            suite_name="research_external_primary_config",
+            output_dir=tmp_path / "out",
+            engine="direct_paste",
+            route="paper",
+            external_evaluators={
+                "alce": (
+                    "benchmark.tests.test_research_evaluators."
+                    "fixture_alce_primary_evaluator"
+                )
+            },
+            use_generation=False,
+        ),
+    )
+
+    prediction = report["predictions"][0]
+    assert prediction["external_adapter_metric_metadata"]["alce"]["status"] == (
+        "configured"
+    )
+    assert prediction["metrics"]["paper_grade_score"] == 0.42
+    assert prediction["metrics"]["mara_score"] == 0.42
+
+
+def test_manifest_route_external_evaluator_overrides_config_default(
+    monkeypatch, tmp_path
+):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "alce_asqa",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_id": "doc",
+                        "question": "What happened?",
+                        "answers": ["correct answer"],
+                    }
+                ],
+                "routes": [
+                    {
+                        "route_id": "paper",
+                        "engine": "direct_paste",
+                        "external_evaluators": {
+                            "alce": (
+                                "benchmark.tests.test_research_evaluators."
+                                "fixture_alce_override_evaluator"
+                            )
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _ExternalEvaluatorEngine(engine_name, config),
+    )
+
+    report = run_benchmark(
+        str(manifest_path),
+        BenchmarkConfig(
+            suite_name="research_external_primary_override",
+            output_dir=tmp_path / "out",
+            external_evaluators={
+                "alce": (
+                    "benchmark.tests.test_research_evaluators."
+                    "fixture_alce_primary_evaluator"
+                )
+            },
+            use_generation=False,
+        ),
+    )
+
+    prediction = report["predictions"][0]
+    assert prediction["metrics"]["paper_grade_score"] == 0.84
+    assert prediction["mara_scoring_contract"] == "alce_route_override_judge_v1"
+
+
+def test_run_benchmark_does_not_promote_builtin_proxy_external_evaluator(
+    monkeypatch, tmp_path
+):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "alce_asqa",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_id": "doc",
+                        "question": "What happened?",
+                        "answers": ["correct answer"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _ExternalEvaluatorEngine(engine_name, config),
+    )
+
+    report = run_benchmark(
+        str(manifest_path),
+        BenchmarkConfig(
+            suite_name="research_external_builtin_proxy",
+            output_dir=tmp_path / "out",
+            engine="direct_paste",
+            route="paper",
+            external_evaluators={"alce": "builtin:alce_proxy"},
+            use_generation=False,
+        ),
+    )
+
+    prediction = report["predictions"][0]
+    assert prediction["external_adapter_metric_metadata"]["alce"]["status"] == (
+        "configured"
+    )
+    assert prediction["external_adapter_metric_metadata"]["alce"]["paper_grade"] is (
+        False
+    )
+    assert "paper_grade_score" not in prediction["metrics"]
+    assert prediction["metrics"]["mara_score"] == prediction["metrics"]["native_score"]
+    assert report["summary"]["mara_score_metadata"]["paper_grade"] is False
 
 
 def test_run_benchmark_summarizes_external_evaluator_status_by_route(

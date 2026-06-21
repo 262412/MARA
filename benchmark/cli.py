@@ -3,7 +3,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .schemas import CLI_ENGINE_CHOICES, normalize_scope
+from .answer_modes import BENCHMARK_ANSWER_MODES
+from .schemas import (
+    BENCHMARK_PROMPT_POLICIES,
+    BENCHMARK_PROMPT_PROFILES,
+    CLI_ENGINE_CHOICES,
+    normalize_scope,
+)
 
 
 def _add_docqa_runtime_options(run_parser: argparse.ArgumentParser) -> None:
@@ -44,6 +50,61 @@ def _add_artifact_detail_option(run_parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_benchmark_prompt_options(run_parser: argparse.ArgumentParser) -> None:
+    run_parser.add_argument(
+        "--benchmark-prompt-policy",
+        default="benchmark_v1",
+        choices=BENCHMARK_PROMPT_POLICIES,
+        help="Benchmark prompt contract policy; raw preserves historical direct prompt forwarding.",
+    )
+    run_parser.add_argument(
+        "--benchmark-prompt-profile",
+        default="auto",
+        choices=BENCHMARK_PROMPT_PROFILES,
+        help="Benchmark answer-style profile; auto selects from dataset/modality metadata.",
+    )
+    run_parser.add_argument(
+        "--benchmark-answer-mode",
+        default="scoring_adapter_v1",
+        choices=BENCHMARK_ANSWER_MODES,
+        help=(
+            "Answer used by benchmark scoring. scoring_adapter_v1 keeps the "
+            "user-facing answer and derives a short scoring answer; product "
+            "scores the user-facing answer directly."
+        ),
+    )
+
+
+def _external_evaluator_arg(value: str) -> tuple[str, str]:
+    adapter_name, separator, backend = str(value or "").partition("=")
+    adapter_name = adapter_name.strip()
+    backend = backend.strip()
+    if not separator or not adapter_name or not backend:
+        raise argparse.ArgumentTypeError(
+            "--external-evaluator must use ADAPTER=PYTHON_PATH_OR_BUILTIN_ALIAS"
+        )
+    return adapter_name, backend
+
+
+def _external_evaluator_map(values: list[tuple[str, str]] | None) -> dict[str, str]:
+    return {adapter_name: backend for adapter_name, backend in values or []}
+
+
+def _add_external_evaluator_options(run_parser: argparse.ArgumentParser) -> None:
+    run_parser.add_argument(
+        "--external-evaluator",
+        action="append",
+        default=[],
+        type=_external_evaluator_arg,
+        metavar="ADAPTER=BACKEND",
+        help=(
+            "Configure an external research evaluator backend for this run. "
+            "May be repeated, for example alce=package.module.evaluator or "
+            "alce=builtin:alce_proxy."
+        ),
+    )
+
+
 def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
     run_parser = subparsers.add_parser("run", help="Run a benchmark suite")
     run_parser.add_argument(
@@ -77,6 +138,8 @@ def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
         help="Directory for benchmark outputs",
     )
     _add_artifact_detail_option(run_parser)
+    _add_benchmark_prompt_options(run_parser)
+    _add_external_evaluator_options(run_parser)
     run_parser.add_argument(
         "--reader-mode",
         default="default",
@@ -131,6 +194,29 @@ def _add_rescore_command(subparsers: argparse._SubParsersAction) -> None:
     rescore_parser.add_argument("--output-dir", required=True)
     rescore_parser.add_argument("--suite-name")
     _add_artifact_detail_option(rescore_parser)
+    rescore_parser.add_argument(
+        "--benchmark-answer-mode",
+        default="scoring_adapter_v1",
+        choices=BENCHMARK_ANSWER_MODES,
+        help="Answer finalization mode to apply while rescoring artifacts.",
+    )
+    _add_external_evaluator_options(rescore_parser)
+
+    batch_parser = subparsers.add_parser(
+        "rescore-artifacts",
+        help="Add MARA-oriented scores to direct child artifact runs",
+    )
+    batch_parser.add_argument("--input-dir", required=True)
+    batch_parser.add_argument("--output-dir", required=True)
+    batch_parser.add_argument("--suite-prefix", default="rescored")
+    _add_artifact_detail_option(batch_parser)
+    batch_parser.add_argument(
+        "--benchmark-answer-mode",
+        default="scoring_adapter_v1",
+        choices=BENCHMARK_ANSWER_MODES,
+        help="Answer finalization mode to apply while rescoring artifacts.",
+    )
+    _add_external_evaluator_options(batch_parser)
 
 
 def _add_existing_normalizer_commands(
@@ -234,16 +320,30 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _handle_rescore_command(args: argparse.Namespace) -> int | None:
-    if args.command != "rescore-artifact":
+    if args.command not in {"rescore-artifact", "rescore-artifacts"}:
         return None
 
-    from .artifact_rescoring import rescore_artifact_run
+    from .artifact_rescoring import rescore_artifact_run, rescore_artifact_runs
+
+    if args.command == "rescore-artifacts":
+        run_dirs = rescore_artifact_runs(
+            args.input_dir,
+            args.output_dir,
+            suite_prefix=args.suite_prefix,
+            artifact_detail=args.artifact_detail,
+            benchmark_answer_mode=args.benchmark_answer_mode,
+            external_evaluators=_external_evaluator_map(args.external_evaluator),
+        )
+        print(f"Rescored {len(run_dirs)} artifact runs into {args.output_dir}")
+        return 0
 
     run_dir = rescore_artifact_run(
         args.run_dir,
         args.output_dir,
         suite_name=args.suite_name,
         artifact_detail=args.artifact_detail,
+        benchmark_answer_mode=args.benchmark_answer_mode,
+        external_evaluators=_external_evaluator_map(args.external_evaluator),
     )
     print(f"Rescored artifact written to {run_dir}")
     return 0
@@ -365,6 +465,10 @@ def _run_benchmark_command(args: argparse.Namespace) -> int:
         reranker_name=args.reranker_name,
         llm_name=args.llm_name,
         artifact_detail=args.artifact_detail,
+        benchmark_prompt_policy=args.benchmark_prompt_policy,
+        benchmark_prompt_profile=args.benchmark_prompt_profile,
+        benchmark_answer_mode=args.benchmark_answer_mode,
+        external_evaluators=_external_evaluator_map(args.external_evaluator),
         limit=args.limit,
         sample_seed=args.sample_seed,
         shard_index=args.shard_index,
@@ -400,3 +504,7 @@ def main(argv: list[str] | None = None) -> int:
     if normalizer_result is not None:
         return normalizer_result
     return _run_benchmark_command(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

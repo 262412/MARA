@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from .dataset_native_scores import (
+    dataset_native_score_metadata,
+    native_metrics_for_prediction,
+    native_score_metadata_for_prediction,
+)
 from .dataset_profiles import profile_for_dataset
 from .metrics import round_metric, safe_mean
 
@@ -14,7 +19,12 @@ MARA_COMPONENT_KEYS = (
     "mara_controller_score",
     "mara_format_score",
 )
-MARA_METRIC_KEYS = ("mara_score", *MARA_COMPONENT_KEYS)
+MARA_METRIC_KEYS = (
+    "mara_score",
+    "native_score",
+    "mara_proxy_score",
+    *MARA_COMPONENT_KEYS,
+)
 
 _ANSWER_KEYS = ("em", "numeric_match", "formula_match", "anls", "f1")
 _EVIDENCE_KEYS = (
@@ -87,6 +97,13 @@ _PROFILE_WEIGHTS = {
         "mara_format_score": 0.05,
     },
 }
+_PAPER_GRADE_ADAPTERS_BY_FAMILY = {
+    "alce": ("alce",),
+    "ragtruth": ("ragtruth",),
+    "mmdocrag": ("mmdocrag",),
+    "slidevqa": ("mmdocrag",),
+    "vidore": ("mmdocrag",),
+}
 
 
 def mara_oriented_metrics(
@@ -105,7 +122,18 @@ def mara_oriented_metrics(
         "mara_controller_score": _controller_score(prediction),
         "mara_format_score": _format_score(prediction),
     }
-    return {"mara_score": _weighted_score(components, weights), **components}
+    proxy_score = _weighted_score(components, weights)
+    native_metrics, _metadata = native_metrics_for_prediction(
+        prediction,
+        dataset_name=dataset_name,
+    )
+    native_score = native_metrics.get("native_score")
+    return {
+        **native_metrics,
+        "mara_score": native_score,
+        "mara_proxy_score": proxy_score,
+        **components,
+    }
 
 
 def add_mara_oriented_metrics(
@@ -113,6 +141,9 @@ def add_mara_oriented_metrics(
     *,
     dataset_name: str,
 ) -> None:
+    metadata = native_score_metadata_for_prediction(
+        prediction, dataset_name=dataset_name
+    )
     prediction["metrics"] = {
         **dict(prediction.get("metrics") or {}),
         **mara_oriented_metrics(prediction, dataset_name=dataset_name),
@@ -121,6 +152,74 @@ def add_mara_oriented_metrics(
         prediction,
         dataset_name=dataset_name,
     )
+    prediction["mara_scoring_contract"] = metadata["contract_id"]
+    prediction["mara_primary_metric"] = metadata["primary_metric"]
+    prediction["mara_native_metrics"] = list(metadata["native_metrics"])
+
+
+def promote_external_primary_score(
+    prediction: dict[str, Any],
+    *,
+    dataset_name: str,
+) -> None:
+    candidate = _external_primary_score_candidate(
+        prediction,
+        dataset_name=dataset_name,
+    )
+    if candidate is None:
+        return
+    adapter_name, primary_metric, score, metadata = candidate
+    metrics = dict(prediction.get("metrics") or {})
+    metrics.setdefault("local_native_score", metrics.get("native_score"))
+    metrics.setdefault("local_mara_score", metrics.get("mara_score"))
+    metrics["paper_grade_score"] = round_metric(score)
+    metrics["native_score"] = metrics["paper_grade_score"]
+    metrics["mara_score"] = metrics["paper_grade_score"]
+    prediction["metrics"] = metrics
+    prediction["mara_scoring_source"] = "external_paper_grade"
+    prediction["mara_scoring_contract"] = str(
+        metadata.get("contract_id") or f"{adapter_name}_{primary_metric}_paper_grade"
+    )
+    prediction["mara_primary_metric"] = primary_metric
+
+
+def _external_primary_score_candidate(
+    prediction: dict[str, Any],
+    *,
+    dataset_name: str,
+) -> tuple[str, str, float, dict[str, Any]] | None:
+    external_metrics = prediction.get("external_adapter_metrics")
+    external_metadata = prediction.get("external_adapter_metric_metadata")
+    if not isinstance(external_metrics, dict) or not isinstance(
+        external_metadata, dict
+    ):
+        return None
+
+    family = profile_for_dataset(dataset_name).dataset_family
+    preferred_adapters = _PAPER_GRADE_ADAPTERS_BY_FAMILY.get(family, ())
+    adapter_names = [
+        *preferred_adapters,
+        *(
+            adapter_name
+            for adapter_name in external_metrics
+            if adapter_name not in preferred_adapters
+        ),
+    ]
+    for adapter_name in adapter_names:
+        metrics = external_metrics.get(adapter_name)
+        metadata = external_metadata.get(adapter_name)
+        if not isinstance(metrics, dict) or not isinstance(metadata, dict):
+            continue
+        if not bool(metadata.get("paper_grade")):
+            continue
+        primary_metric = str(metadata.get("primary_metric") or "").strip()
+        if not primary_metric or primary_metric not in metrics:
+            continue
+        score = _coerce_score(metrics.get(primary_metric))
+        if score is None:
+            continue
+        return adapter_name, primary_metric, score, metadata
+    return None
 
 
 def mara_profile_for_prediction(
@@ -142,11 +241,16 @@ def mara_profile_for_prediction(
 
 
 def mara_score_metadata(dataset_name: str) -> dict[str, Any]:
+    return dataset_native_score_metadata(dataset_name)
+
+
+def mara_proxy_score_metadata(dataset_name: str) -> dict[str, Any]:
     profile_name = mara_profile_for_prediction({}, dataset_name=dataset_name)
     return {
-        "scoring_mode": "deterministic_v1",
+        "scoring_mode": "diagnostic_proxy_v1",
         "default_profile": profile_name,
         "profile_weights": _PROFILE_WEIGHTS[profile_name],
+        "excluded_from_headline": True,
     }
 
 
