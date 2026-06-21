@@ -27,8 +27,7 @@ from theflow.utils.modules import import_dotted_string
 from kotaemon.indices.ingests.files import KH_DEFAULT_FILE_EXTRACTORS
 from kotaemon.indices.qa.utils import strip_think_tag
 
-from ...utils import SUPPORTED_LANGUAGE_MAP, get_file_names_regex, get_urls
-from ...utils.commands import WEB_SEARCH_COMMAND
+from ...utils import SUPPORTED_LANGUAGE_MAP
 from ...utils.hf_papers import get_recommended_papers
 from ...utils.rate_limit import check_rate_limit
 from .answer_rendering import format_chat_message_html
@@ -43,6 +42,7 @@ from .chat_knowledge_graph_bindings import (
     subscribe_public_knowledge_graph_events,
 )
 from .chat_panel import ChatPanel
+from .chat_submit_sources import resolve_chat_submit_sources
 from .chat_suggestion import ChatSuggestion
 from .common import STATE
 from .control import ConversationControl
@@ -653,6 +653,7 @@ class ChatPage(BasePage):
                             # get the file selector choices for the first index
                             if index_id == 0:
                                 self.first_selector_choices = index_ui.selector_choices
+                                self.first_indexing_file_fn = None
                                 self.first_indexing_url_fn = None
 
                             if gr_index:
@@ -2794,40 +2795,23 @@ class ChatPage(BasePage):
             raise ValueError("Input is empty")
 
         chat_input_text = chat_input.get("text", "")
-        file_ids = []
-        used_command = None
-
-        first_selector_choices_map = {
-            item[0]: item[1] for item in first_selector_choices
-        }
-
-        # get all file names with pattern @"filename" in input_str
-        file_names, chat_input_text = get_file_names_regex(chat_input_text)
-
-        # check if web search command is in file_names
-        if WEB_SEARCH_COMMAND in file_names:
-            used_command = WEB_SEARCH_COMMAND
-
-        # get all urls in input_str
-        urls, chat_input_text = get_urls(chat_input_text)
-
-        if urls and self.first_indexing_url_fn:
-            logger.debug("Detected URLs: %s", urls)
-            file_ids = self.first_indexing_url_fn(
-                "\n".join(urls),
-                True,
-                settings,
-                user_id,
-                request=None,
-            )
-        elif file_names:
-            for file_name in file_names:
-                file_id = first_selector_choices_map.get(file_name)
-                if file_id:
-                    file_ids.append(file_id)
+        (
+            chat_input_text,
+            file_ids,
+            selector_choices_to_add,
+            used_command,
+        ) = resolve_chat_submit_sources(
+            chat_input=chat_input,
+            chat_input_text=chat_input_text,
+            first_selector_choices=first_selector_choices,
+            settings=settings,
+            user_id=user_id,
+            first_indexing_file_fn=getattr(self, "first_indexing_file_fn", None),
+            first_indexing_url_fn=getattr(self, "first_indexing_url_fn", None),
+        )
 
         # add new file ids to the first selector choices
-        first_selector_choices.extend(zip(urls, file_ids))
+        first_selector_choices.extend(selector_choices_to_add)
         merged_graph_source_ids = self.merge_graph_source_ids(
             graph_source_ids, file_ids
         )

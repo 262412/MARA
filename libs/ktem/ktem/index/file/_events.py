@@ -129,6 +129,11 @@ def _append_uploaded_chat_graph_refresh(event_chain, page):
     )
 
 
+def _set_chat_page_indexing_functions(page) -> None:
+    page._app.chat_page.first_indexing_url_fn = page.index_fn_url_with_default_loaders
+    page._app.chat_page.first_indexing_file_fn = page.index_fn_file_with_default_loaders
+
+
 def register_quick_upload_events(
     page,
     *,
@@ -142,9 +147,7 @@ def register_quick_upload_events(
         page.quick_upload_state = gr.State(value=[])
         logger.debug("Setting up quick upload event")
 
-        page._app.chat_page.first_indexing_url_fn = (
-            page.index_fn_url_with_default_loaders
-        )
+        _set_chat_page_indexing_functions(page)
 
         if not demo_mode:
             quick_uploaded_event = (

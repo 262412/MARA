@@ -73,6 +73,38 @@ def test_chat_create_pipeline_builds_controller_enabled_docqa_request():
     assert request.selected_inputs == {9: ["file-1"]}
 
 
+def test_submit_msg_indexes_attached_files_into_selected_scope():
+    page = cast(Any, object.__new__(ChatPage))
+    indexed_calls = []
+
+    def index_files(files, reindex, settings, user_id):
+        indexed_calls.append((files, reindex, settings, user_id))
+        return ["file-1"]
+
+    page.first_indexing_file_fn = index_files
+
+    result = page.submit_msg(
+        {"text": "Summarize this document", "files": ["/tmp/alpha.pdf"]},
+        [],
+        1,
+        {"reasoning.use": "mara"},
+        "conv-1",
+        "Conversation",
+        [],
+        [],
+        "",
+        "",
+        request=SimpleNamespace(),
+    )
+
+    assert indexed_calls == [(["/tmp/alpha.pdf"], True, {"reasoning.use": "mara"}, 1)]
+    assert result[1] == [("Summarize this document", None)]
+    assert result[5] == "select"
+    assert result[6]["value"] == ["file-1"]
+    assert result[6]["choices"] == [("alpha.pdf", "file-1")]
+    assert result[-1] == ["file-1"]
+
+
 class _FakeRuntimeDocQA:
     def __init__(self):
         self.request = None
