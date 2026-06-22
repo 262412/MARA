@@ -145,7 +145,7 @@ def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch)
     assert (
         final.response.references_html == "Grounded answer evidence: grounded answer."
     )
-    expected_reference_evidence = {
+    expected_reference_evidence: dict[str, Any] = {
         "evidence_id": "citation-refs",
         "source_id": "refs",
         "source_name": "Generated citations",

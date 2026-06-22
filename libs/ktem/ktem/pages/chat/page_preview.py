@@ -8,14 +8,8 @@ from sqlmodel import Session, select
 from kotaemon.loaders.pdf_loader import get_page_thumbnails
 
 from ...db.models import engine
-
-# Generation store for streaming outputs across page switches
-from .generation_store import (
-    has_in_progress,
-    make_page_key,
-    set_current_view,
-)
 from . import page_preview_cache
+from .generation_store import has_in_progress, make_page_key, set_current_view
 
 # Import preview handlers for different file types
 from .page_preview_document import (

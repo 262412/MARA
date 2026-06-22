@@ -2742,7 +2742,9 @@ class ChatPage(BasePage):
             fn=raise_error_on_state,
             inputs=[self._use_suggestion],
             show_progress="hidden",
-        ).success(**onSuggestChatEvent)
+        ).success(
+            **onSuggestChatEvent
+        )
         self.chat_control.conversation_id.change(
             render_conversation_notebook_update,
             [self.chat_control.conversation_id],
