@@ -12,6 +12,7 @@ from typing import Any
 
 _DEBUG_VALUES = {"1", "true", "yes", "on"}
 _EVENT_COUNTER = count(1)
+_FILE_WRITE_LOCK = threading.Lock()
 
 
 def enabled() -> bool:
@@ -23,6 +24,32 @@ def stack_enabled() -> bool:
     if value is None:
         return True
     return str(value).lower() in _DEBUG_VALUES
+
+
+def console_enabled() -> bool:
+    value = os.environ.get("MARA_CHAT_STREAM_DEBUG_CONSOLE")
+    if value is None:
+        return True
+    return str(value).lower() in _DEBUG_VALUES
+
+
+def _debug_file_path() -> str:
+    return os.environ.get("MARA_CHAT_STREAM_DEBUG_FILE", "")
+
+
+def _emit_line(line: str) -> None:
+    debug_file = _debug_file_path()
+    if debug_file:
+        parent = os.path.dirname(os.path.abspath(debug_file))
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with _FILE_WRITE_LOCK:
+            with open(debug_file, "a", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+                handle.flush()
+
+    if console_enabled():
+        print(line, flush=True)
 
 
 def summarize_text(value: Any, *, limit: int = 220) -> dict[str, Any]:
@@ -87,10 +114,9 @@ def log_event(
         payload["stack"] = [
             frame.strip() for frame in traceback.format_stack(limit=10)[:-1]
         ]
-    print(
+    _emit_line(
         "[MARA_CHAT_STREAM_DEBUG] "
         + json.dumps(payload, ensure_ascii=False, default=str),
-        flush=True,
     )
 
 
