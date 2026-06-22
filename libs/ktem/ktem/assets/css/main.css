@@ -427,7 +427,9 @@ button.selected {
 #answer-panel .chat-message-content ul:last-child,
 #answer-panel .chat-message-content ol:last-child,
 #answer-panel .chat-message-content pre:last-child,
-#answer-panel .chat-message-content table:last-child {
+#answer-panel .chat-message-content table:last-child,
+#answer-panel .ktem-answer-table-scroll:last-child,
+#answer-panel .ktem-answer-chart-scroll:last-child {
   margin-bottom: 0;
 }
 
@@ -441,16 +443,45 @@ button.selected {
   margin: 0.25rem 0;
 }
 
-#answer-panel .chat-message-content table {
-  width: 100%;
-  min-width: min(100%, 520px);
+#answer-panel .ktem-answer-table-scroll,
+#answer-panel .ktem-answer-chart-scroll {
   max-width: 100%;
   margin: 0.8rem 0;
-  border-collapse: separate;
-  border-spacing: 0;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-color: var(--app-border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+#answer-panel .ktem-answer-table-scroll:focus,
+#answer-panel .ktem-answer-chart-scroll:focus {
+  outline: 2px solid color-mix(in srgb, var(--app-accent) 50%, transparent);
+  outline-offset: 2px;
+}
+
+#answer-panel .ktem-answer-table-scroll::-webkit-scrollbar,
+#answer-panel .ktem-answer-chart-scroll::-webkit-scrollbar {
+  height: 10px;
+}
+
+#answer-panel .ktem-answer-table-scroll::-webkit-scrollbar-thumb,
+#answer-panel .ktem-answer-chart-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--app-border-strong);
+  background-clip: padding-box;
+}
+
+#answer-panel .chat-message-content table {
+  width: max-content;
+  min-width: max(100%, 520px);
+  max-width: none;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.94rem;
   table-layout: auto;
 }
@@ -462,7 +493,19 @@ button.selected {
   border-bottom: 1px solid var(--app-border);
   vertical-align: top;
   text-align: left;
-  overflow-wrap: anywhere;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+#answer-panel .chat-message-content th:first-child,
+#answer-panel .chat-message-content td:first-child {
+  min-width: 180px;
+}
+
+#answer-panel .chat-message-content th:not(:first-child),
+#answer-panel .chat-message-content td:not(:first-child) {
+  min-width: 360px;
 }
 
 #answer-panel .chat-message-content th {
@@ -482,6 +525,15 @@ button.selected {
 
 #answer-panel .chat-message-content tbody tr:nth-child(even) td {
   background: color-mix(in srgb, var(--app-surface-muted) 36%, transparent);
+}
+
+#answer-panel .ktem-answer-chart-scroll p {
+  margin: 0;
+}
+
+#answer-panel .ktem-answer-chart-scroll img {
+  display: block;
+  max-width: none;
 }
 
 #answer-panel .chat-message-content code {

@@ -23,6 +23,35 @@ def test_assistant_answer_panel_renders_markdown_tables():
     assert "| Component |" not in html
 
 
+def test_assistant_answer_panel_wraps_tables_in_horizontal_scroll_region():
+    content = (
+        "| Item | Summary |\n"
+        "| --- | --- |\n"
+        "| Self-RAG-style controller | "
+        "A program component that dynamically selects the answer route. |\n"
+    )
+
+    html = _chat_page()._format_chat_message(content, "assistant")
+
+    assert 'class="ktem-answer-table-scroll"' in html
+    assert 'role="region"' in html
+    assert 'aria-label="Scrollable table"' in html
+    assert 'tabindex="0"' in html
+    assert html.index('class="ktem-answer-table-scroll"') < html.index("<table>")
+
+
+def test_assistant_answer_panel_wraps_chart_images_in_horizontal_scroll_region():
+    content = "![Route comparison chart](route-comparison.png)"
+
+    html = _chat_page()._format_chat_message(content, "assistant")
+
+    assert 'class="ktem-answer-chart-scroll"' in html
+    assert 'role="region"' in html
+    assert 'aria-label="Scrollable chart"' in html
+    assert 'tabindex="0"' in html
+    assert html.index('class="ktem-answer-chart-scroll"') < html.index("<img")
+
+
 def test_assistant_answer_panel_treats_br_tags_as_line_breaks():
     content = "Summary:<br>| Metric | Value |<br>|---|---|<br>| Loss | $L(w)$ |"
 
