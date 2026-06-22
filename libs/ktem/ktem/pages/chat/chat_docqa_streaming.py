@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import math
+import time
+from types import SimpleNamespace
 from typing import Any
 
 import gradio as gr
@@ -7,6 +10,9 @@ import gradio as gr
 from .answer_reasoning import render_answer_reasoning_block
 from .chat_docqa_runtime import build_web_docqa_request, runtime_trace_references
 from .generation_store import update_answer, update_mindmap, update_plot
+
+_MAX_TYPEWRITER_FRAMES = 240
+_MAX_TYPEWRITER_DELTA_SECONDS = 0.8
 
 
 def build_chat_runtime_request(
@@ -83,24 +89,31 @@ def run_docqa_turn_with_live_updates(
         return page.docqa.run_turn(runtime_request)
 
     response = None
+    displayed_answer = ""
     for turn_update in stream_turn(runtime_request):
         if turn_update.is_final:
             response = turn_update.response
             continue
-        yield live_docqa_update_output(
-            page,
-            turn_update=turn_update,
-            preserved_history=preserved_history,
-            chat_input=chat_input,
-            msg_placeholder=msg_placeholder,
-            request_key=request_key,
-            fallback_plot=fallback_plot,
-            fallback_chat_state=fallback_chat_state,
-            active_view=is_active_view(),
-            active_file_id=active_file_id or "",
-            normalized_page_number=normalized_page_number,
-            artifact_payload=artifact_payload,
-        )
+        for display_answer in _typewriter_answer_frames(
+            displayed_answer,
+            turn_update.answer,
+        ):
+            displayed_answer = display_answer
+            yield live_docqa_update_output(
+                page,
+                turn_update=_with_answer(turn_update, display_answer),
+                preserved_history=preserved_history,
+                chat_input=chat_input,
+                msg_placeholder=msg_placeholder,
+                request_key=request_key,
+                fallback_plot=fallback_plot,
+                fallback_chat_state=fallback_chat_state,
+                active_view=is_active_view(),
+                active_file_id=active_file_id or "",
+                normalized_page_number=normalized_page_number,
+                artifact_payload=artifact_payload,
+            )
+            _sleep_for_typewriter_frame(displayed_answer, turn_update.answer)
     if response is None:
         raise ValueError("DocQA stream did not return a final response")
     return response
@@ -174,6 +187,48 @@ def live_docqa_update_output(
         answer_html,
         chat_history_full,
     )
+
+
+def _typewriter_answer_frames(previous_answer: str, current_answer: str):
+    previous = str(previous_answer or "")
+    current = str(current_answer or "")
+    if current == previous:
+        yield current
+        return
+    if not current.startswith(previous):
+        yield current
+        return
+
+    delta = current[len(previous) :]
+    step = max(1, math.ceil(len(delta) / _MAX_TYPEWRITER_FRAMES))
+    emitted = previous
+    for index in range(step, len(delta) + 1, step):
+        emitted = previous + delta[:index]
+        yield emitted
+    if emitted != current:
+        yield current
+
+
+def _with_answer(turn_update: Any, answer: str) -> Any:
+    return SimpleNamespace(
+        event=turn_update.event,
+        answer=answer,
+        references_html=turn_update.references_html,
+        mindmap_html=turn_update.mindmap_html,
+        plot=turn_update.plot,
+        state=turn_update.state,
+        stream_events=turn_update.stream_events,
+        response=turn_update.response,
+        is_final=turn_update.is_final,
+    )
+
+
+def _sleep_for_typewriter_frame(displayed_answer: str, target_answer: str) -> None:
+    remaining = max(0, len(str(target_answer or "")) - len(str(displayed_answer or "")))
+    if remaining <= 0:
+        return
+    delay = _MAX_TYPEWRITER_DELTA_SECONDS / max(len(str(target_answer or "")), 1)
+    time.sleep(min(0.012, delay))
 
 
 def final_docqa_response_output(

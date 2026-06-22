@@ -362,9 +362,12 @@ def test_chat_fn_streams_docqa_events_into_answer_panel():
         )
     )
 
-    assert len(outputs) == 5
-    assert "answer:runtime" in outputs[1][5]
-    assert "answer:runtime answer" in outputs[3][5]
+    assert len(outputs) > 5
+    assert "live events" not in "".join(str(output[5]) for output in outputs)
+    assert any("answer:r" in output[5] for output in outputs)
+    assert any("answer:runtime" in output[5] for output in outputs)
+    assert any("answer:runtime a" in output[5] for output in outputs)
+    assert any("answer:runtime answer" in output[5] for output in outputs)
     assert "answer-reasoning-block--streaming" in outputs[1][5]
     assert "answer-reasoning-block--streaming" in outputs[2][5]
     assert "answer-reasoning-block--streaming" not in outputs[-1][5]

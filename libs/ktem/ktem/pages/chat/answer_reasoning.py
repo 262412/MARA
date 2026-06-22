@@ -103,7 +103,7 @@ def _render_streaming_block(stream_events: list[dict[str, Any]]) -> str:
             "active" if has_answer else "pending",
         ),
     ]
-    summary = f"{event_count} live events" if event_count else "Working through sources"
+    summary = _streaming_summary(has_route, has_evidence, has_answer)
     return (
         "<details class='answer-reasoning-block "
         "answer-reasoning-block--streaming' open aria-busy='true'>"
@@ -216,6 +216,16 @@ def _agent_event_count(stream_events: list[dict[str, Any]]) -> int:
         if isinstance(content, dict) and str(content.get("mara_channel") or ""):
             count += 1
     return count
+
+
+def _streaming_summary(has_route: bool, has_evidence: bool, has_answer: bool) -> str:
+    if has_answer:
+        return "Writing answer"
+    if has_evidence:
+        return "Reviewing sources"
+    if has_route:
+        return "Retrieving evidence"
+    return "Working through sources"
 
 
 def _has_channel(stream_events: list[dict[str, Any]], channel: str) -> bool:

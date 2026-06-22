@@ -38,7 +38,8 @@ def test_streaming_reasoning_block_reflects_live_events():
         ],
     )
 
-    assert "3 live events" in html
+    assert "live events" not in html
+    assert "Writing answer" in html
     assert "Retrieval metadata received" in html
     assert "Streaming answer text" in html
     assert "is-done" in html

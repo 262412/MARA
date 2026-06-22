@@ -238,6 +238,10 @@ def test_answer_panel_renders_rich_markdown_and_math():
         ".answer-reasoning-block--streaming",
         ".answer-reasoning-shimmer",
         "@keyframes answer-reasoning-shimmer",
+        "@keyframes answer-reasoning-flow",
+        "@keyframes answer-reasoning-pulse",
+        ".answer-reasoning-block--streaming::before",
+        "animation: answer-reasoning-flow",
         "@media (prefers-reduced-motion: reduce)",
     ]:
         assert token in css

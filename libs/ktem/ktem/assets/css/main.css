@@ -556,21 +556,59 @@ button.selected {
 }
 
 #answer-panel .answer-reasoning-block {
+  position: relative;
   margin: 10px 8px 8px;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--app-accent) 28%, var(--app-border));
   border-radius: 8px;
-  background: color-mix(in srgb, var(--app-surface-raised) 82%, transparent);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--app-surface-raised) 92%, transparent),
+      color-mix(in srgb, var(--app-surface-raised) 76%, var(--app-accent) 7%)
+    );
   color: var(--app-text);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
   overflow: hidden;
+  isolation: isolate;
 }
 
 #answer-panel .answer-reasoning-block--streaming {
   border-color: color-mix(in srgb, var(--app-accent) 48%, var(--app-border));
+  box-shadow:
+    0 14px 34px rgba(15, 23, 42, 0.12),
+    0 0 0 1px color-mix(in srgb, var(--app-accent) 16%, transparent);
+}
+
+#answer-panel .answer-reasoning-block--streaming::before {
+  position: absolute;
+  z-index: 0;
+  inset: -1px;
+  content: "";
+  background:
+    radial-gradient(
+      circle at 18% 20%,
+      color-mix(in srgb, var(--app-accent) 18%, transparent),
+      transparent 30%
+    ),
+    linear-gradient(
+      115deg,
+      transparent 0%,
+      color-mix(in srgb, var(--app-accent) 16%, transparent) 24%,
+      color-mix(in srgb, var(--app-accent-secondary) 18%, transparent) 48%,
+      transparent 72%
+    );
+  background-size:
+    180% 180%,
+    240% 100%;
+  animation: answer-reasoning-flow 3.6s ease-in-out infinite;
+  opacity: 0.9;
+  pointer-events: none;
 }
 
 #answer-panel .answer-reasoning-block summary {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -591,6 +629,10 @@ button.selected {
   border-radius: 999px;
   background: var(--app-accent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-accent) 16%, transparent);
+}
+
+#answer-panel .answer-reasoning-block--streaming .answer-reasoning-icon {
+  animation: answer-reasoning-pulse 1.8s ease-in-out infinite;
 }
 
 #answer-panel .answer-reasoning-title {
@@ -625,10 +667,14 @@ button.selected {
 }
 
 #answer-panel .answer-reasoning-content {
+  position: relative;
+  z-index: 1;
   border-top: 1px solid color-mix(in srgb, var(--app-border) 75%, transparent);
 }
 
 #answer-panel .answer-reasoning-steps {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 0;
   margin: 0;
@@ -690,6 +736,7 @@ button.selected {
   border-color: var(--app-accent);
   background: var(--app-accent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-accent) 14%, transparent);
+  animation: answer-reasoning-pulse 1.8s ease-in-out infinite;
 }
 
 #answer-panel .answer-reasoning-dot.is-pending {
@@ -708,9 +755,47 @@ button.selected {
   }
 }
 
+@keyframes answer-reasoning-flow {
+  0% {
+    background-position:
+      0% 20%,
+      140% 0;
+  }
+  50% {
+    background-position:
+      80% 60%,
+      20% 0;
+  }
+  100% {
+    background-position:
+      0% 20%,
+      -100% 0;
+  }
+}
+
+@keyframes answer-reasoning-pulse {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(0.92);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-accent) 12%, transparent);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--app-accent) 24%, transparent);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  #answer-panel .answer-reasoning-shimmer {
+  #answer-panel .answer-reasoning-shimmer,
+  #answer-panel .answer-reasoning-block--streaming::before,
+  #answer-panel .answer-reasoning-block--streaming .answer-reasoning-icon,
+  #answer-panel .answer-reasoning-dot.is-active {
     animation: none;
+  }
+
+  #answer-panel .answer-reasoning-shimmer {
     color: var(--app-accent);
     background: none;
   }
