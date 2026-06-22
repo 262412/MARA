@@ -160,7 +160,14 @@ def _tracked_python_files() -> list[Path]:
         check=False,
     )
     if result.returncode == 0:
-        return [ROOT / line for line in result.stdout.splitlines() if line]
+        paths = []
+        for line in result.stdout.splitlines():
+            if not line:
+                continue
+            path = ROOT / line
+            if path.exists():
+                paths.append(path)
+        return paths
     return sorted(path for path in ROOT.rglob("*.py") if _is_python_file(path))
 
 

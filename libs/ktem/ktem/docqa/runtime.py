@@ -28,7 +28,6 @@ from . import _runtime_pipeline as _pipeline
 from . import _runtime_selection as _selection
 from . import _runtime_sessions as _sessions
 from . import _runtime_turn as _turn
-from . import debug_trace
 from ._runtime_app import _DocQAPreviewService, _RuntimeAppContext
 from ._runtime_models import (
     DocQADoctorResult,
@@ -45,26 +44,6 @@ from ._runtime_utils import _html_to_text, _serialize_value
 
 logger = logging.getLogger(__name__)
 DEFAULT_SETTING, STATE = "(default)", {"app": {"regen": False}}
-
-
-def _log_stream_turn_text(event: str, session_info: Any, stream_result: Any) -> None:
-    debug_trace.log_event(
-        f"docqa_runtime.stream_turn.{event}",
-        conversation_id=session_info.conversation_id,
-        stream_text=debug_trace.summarize_text(stream_result.text),
-        stream_event_count=len(stream_result.stream_events),
-        include_stack=True,
-    )
-
-
-def _log_stream_turn_final_update(session_info: Any, response: Any) -> None:
-    debug_trace.log_event(
-        "docqa_runtime.stream_turn.final_update",
-        conversation_id=session_info.conversation_id,
-        response_answer=debug_trace.summarize_text(response.answer),
-        response_messages=debug_trace.summarize_messages(response.messages),
-        include_stack=True,
-    )
 
 
 def _build_turn_response(
@@ -492,16 +471,6 @@ class DocQARuntime:
         if not conversation_id:
             raise ValueError("No conversation selected")
 
-        debug_trace.log_persist_state(
-            "docqa_runtime.persist_conversation_state.start",
-            conversation_id=conversation_id,
-            user_id=user_id,
-            messages=messages,
-            retrieval_message=retrieval_message,
-            graph_source_ids=graph_source_ids,
-            selected_file_ids=selected_file_ids,
-            origin=origin,
-        )
         selected_file_ids = self._normalize_selected_file_ids(selected_file_ids)
         normalized_graph_ids = self._normalize_selected_file_ids(graph_source_ids)
         histories = _sessions.prepare_conversation_histories(
@@ -540,13 +509,6 @@ class DocQARuntime:
             row.date_updated = datetime.now()
             session.add(row)
             session.commit()
-            debug_trace.log_persist_state(
-                "docqa_runtime.persist_conversation_state.committed",
-                conversation_id=conversation_id,
-                committed_messages=updated_data_source.get("messages", []),
-                selected_mapping=selected_mapping,
-                normalized_graph_ids=normalized_graph_ids,
-            )
 
         return histories.retrieval_history, histories.plot_history
 
@@ -738,7 +700,6 @@ class DocQARuntime:
         )
 
     def stream_turn(self, request: DocQARequest) -> Iterator[DocQATurnUpdate]:
-        debug_trace.log_runtime_stream_start(request)
         (
             resolved_user_id,
             session_info,
@@ -757,15 +718,6 @@ class DocQARuntime:
             result=stream_result,
         ):
             partial_answer = _turn.partial_answer_text(stream_result.text)
-            debug_trace.log_event(
-                "docqa_runtime.stream_turn.event",
-                conversation_id=session_info.conversation_id,
-                stream_event=dict(event),
-                raw_stream_text=debug_trace.summarize_text(stream_result.text),
-                partial_answer=debug_trace.summarize_text(partial_answer),
-                refs=debug_trace.summarize_html(stream_result.refs),
-                stream_event_count=len(stream_result.stream_events),
-            )
             yield DocQATurnUpdate(
                 event=dict(event),
                 answer=partial_answer,
@@ -776,13 +728,7 @@ class DocQARuntime:
                 stream_events=list(stream_result.stream_events),
             )
 
-        _log_stream_turn_text(
-            "before_finalize_stream_result", session_info, stream_result
-        )
         _turn.finalize_stream_result(stream_result, self._empty_chat_message())
-        _log_stream_turn_text(
-            "after_finalize_stream_result", session_info, stream_result
-        )
         response = self._finalize_turn_response(
             original_request=request,
             request_to_run=request_to_run,
@@ -793,7 +739,6 @@ class DocQARuntime:
             history=history,
             stream_result=stream_result,
         )
-        _log_stream_turn_final_update(session_info, response)
         yield DocQATurnUpdate(
             answer=response.answer,
             references_html=response.references_html,
@@ -854,13 +799,6 @@ class DocQARuntime:
         stream_result: _turn.TurnStreamResult,
     ) -> DocQAResponse:
         messages = history + [(original_request.prompt, stream_result.text)]
-        debug_trace.log_runtime_finalize_response(
-            "docqa_runtime.finalize_turn_response.start",
-            conversation_id=session_info.conversation_id,
-            stream_text=stream_result.text,
-            messages=messages,
-            refs=stream_result.refs,
-        )
         existing_graph_source_ids = list(session_info.graph_source_ids or [])
         graph_source_ids = _turn.graph_source_ids_for_turn(
             original_request.graph_source_ids,
@@ -908,11 +846,6 @@ class DocQARuntime:
             plot_history=plot_history,
             selected_mapping=selected_mapping,
             graph_source_ids=graph_source_ids,
-        )
-        debug_trace.log_runtime_finalize_response(
-            "docqa_runtime.finalize_turn_response.return",
-            conversation_id=session_info.conversation_id,
-            response=response,
         )
         return response
 

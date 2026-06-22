@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import gradio as gr
-from ktem.docqa import debug_trace
 
 from .answer_reasoning import render_answer_reasoning_block
 from .chat_docqa_runtime import build_web_docqa_request, runtime_trace_references
@@ -85,45 +84,19 @@ def run_docqa_turn_with_live_updates(
 ):
     stream_turn = getattr(page.docqa, "stream_turn", None)
     if not callable(stream_turn):
-        debug_trace.log_event(
-            "chat_docqa_streaming.run_turn_fallback",
-            request_key=request_key,
-            chat_input=debug_trace.summarize_text(chat_input),
-            include_stack=True,
-        )
         return page.docqa.run_turn(runtime_request)
 
     response = None
     displayed_answer = ""
-    debug_trace.log_stream_start(
-        request_key=request_key,
-        chat_input=chat_input,
-        active_file_id=active_file_id,
-        page_number=normalized_page_number,
-        preserved_history=preserved_history,
-    )
     for turn_update in stream_turn(runtime_request):
         if turn_update.is_final:
             response = turn_update.response
-            debug_trace.log_stream_final_received(
-                request_key=request_key,
-                displayed_answer=displayed_answer,
-                turn_update=turn_update,
-                response=response,
-            )
             continue
-        frame_index = 0
         for display_answer in _typewriter_answer_frames(
             displayed_answer,
             turn_update.answer,
         ):
             displayed_answer = display_answer
-            frame_index += 1
-            debug_trace.log_typewriter_frame(
-                request_key=request_key,
-                frame_index=frame_index,
-                display_answer=display_answer,
-            )
             yield live_docqa_update_output(
                 page,
                 turn_update=_with_answer(turn_update, display_answer),
@@ -181,14 +154,6 @@ def live_docqa_update_output(
         text,
         is_thinking=True,
         reasoning_html=reasoning_html,
-    )
-    debug_trace.log_live_output(
-        "chat_docqa_streaming.live_output",
-        request_key=request_key,
-        active_view=active_view,
-        answer_text=text,
-        answer_html=answer_html,
-        chat_history=chat_history_full,
     )
     update_answer(
         request_key,
@@ -269,20 +234,8 @@ def _with_displayed_final_answer(
     chat_input: Any,
 ) -> Any:
     if not displayed_answer:
-        debug_trace.log_event(
-            "chat_docqa_streaming.with_displayed_final_answer.skip_empty",
-            response_answer=debug_trace.summarize_text(getattr(response, "answer", "")),
-            include_stack=True,
-        )
         return response
 
-    debug_trace.log_response_override(
-        previous_response_answer=getattr(response, "answer", ""),
-        displayed_answer=displayed_answer,
-        previous_response_messages=getattr(response, "messages", []),
-        next_response_messages=list(preserved_history)
-        + [(chat_input, displayed_answer)],
-    )
     response.answer = displayed_answer
     response.messages = list(preserved_history) + [(chat_input, displayed_answer)]
     return response
@@ -326,14 +279,6 @@ def final_docqa_response_output(
         text,
         is_thinking=False,
         reasoning_html=reasoning_html,
-    )
-    debug_trace.log_final_docqa_output(
-        request_key=request_key,
-        active_view=active_view,
-        response=response,
-        answer_text=text,
-        answer_html=answer_html,
-        chat_history=chat_history_full,
     )
     update_answer(
         request_key,
