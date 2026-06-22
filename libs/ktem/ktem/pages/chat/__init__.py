@@ -30,12 +30,17 @@ from kotaemon.indices.qa.utils import strip_think_tag
 from ...utils import SUPPORTED_LANGUAGE_MAP
 from ...utils.hf_papers import get_recommended_papers
 from ...utils.rate_limit import check_rate_limit
+from .answer_reasoning import render_answer_reasoning_block
 from .answer_rendering import format_chat_message_html
 from .chat_docqa_runtime import (
     build_web_docqa_request,
     docqa_research_control_inputs,
     render_docqa_runtime_controls,
-    runtime_trace_references,
+)
+from .chat_docqa_streaming import (
+    build_chat_runtime_request,
+    final_docqa_response_output,
+    run_docqa_turn_with_live_updates,
 )
 from .chat_knowledge_graph_bindings import (
     bind_knowledge_graph_events,
@@ -1796,6 +1801,7 @@ class ChatPage(BasePage):
         user_input: str,
         ai_response: str,
         is_thinking: bool = False,
+        reasoning_html: str = "",
     ) -> str:
         """Generate HTML for answer panel with chat bubbles"""
         messages_html = ""
@@ -1814,6 +1820,8 @@ class ChatPage(BasePage):
         # Add current exchange
         if user_input:
             messages_html += self._format_chat_message(user_input, "user")
+
+        messages_html += reasoning_html
 
         if is_thinking:
             messages_html += (
@@ -3270,8 +3278,13 @@ class ChatPage(BasePage):
             current_view = get_current_view(session_key) if session_key else None
             return (current_view is None) or (current_view == page_key)
 
+        streaming_reasoning_html = render_answer_reasoning_block(is_streaming=True)
         answer_html = self._generate_answer_panel_html(
-            preserved_history, chat_input, "", is_thinking=True
+            preserved_history,
+            chat_input,
+            "",
+            is_thinking=True,
+            reasoning_html=streaming_reasoning_html,
         )
         chat_history_full = preserved_history + [(chat_input, text or msg_placeholder)]
 
@@ -3314,81 +3327,58 @@ class ChatPage(BasePage):
         )
 
         try:
-            runtime_request = build_web_docqa_request(
-                prompt=str(chat_input or ""),
+            runtime_request = build_chat_runtime_request(
+                self,
+                chat_input=chat_input,
                 conversation_id=conversation_id,
-                history=preserved_history,
-                selected_inputs=self._build_selected_input_map(*selecteds),
+                preserved_history=preserved_history,
+                selecteds=selecteds,
                 settings=settings,
                 reasoning_type=reasoning_type,
-                llm=llm_type,
-                use_mindmap=use_mind_map,
+                llm_type=llm_type,
+                use_mind_map=use_mind_map,
                 use_citation=use_citation,
                 language=language,
-                state=chat_state,
+                chat_state=chat_state,
                 command_state=command_state,
                 user_id=user_id,
                 active_file_id=active_file_id,
                 active_file_name=active_file_name,
                 page_number=page_number,
                 qa_scope=qa_scope,
-                selected_text=selected_page_text,
+                selected_page_text=selected_page_text,
                 selected_graph_context=selected_graph_context,
                 controller_mode=controller_mode,
                 route_policy=route_policy,
                 verification_mode=verification_mode,
                 planner_model=planner_model,
             )
-            response = self.docqa.run_turn(runtime_request)
-            text = response.answer or ""
-            refs = response.references_html or ""
-            trace_refs = runtime_trace_references(response, refs)
-            mindmap_html = response.mindmap_html or ""
-            plot = response.plot if response.plot is not None else state_plot_panel
-            plot_gr = self._json_to_plot(plot)
-            artifact_payload = response.artifact
-            chat_state = response.state or chat_state
-            chat_history_full = response.messages or preserved_history + [
-                (chat_input, text or msg_placeholder)
-            ]
-
-            answer_html = self._generate_answer_panel_html(
-                preserved_history, chat_input, text, is_thinking=False
+            response = yield from run_docqa_turn_with_live_updates(
+                self,
+                runtime_request=runtime_request,
+                preserved_history=preserved_history,
+                chat_input=chat_input,
+                msg_placeholder=msg_placeholder,
+                request_key=request_key,
+                fallback_plot=plot,
+                fallback_chat_state=chat_state,
+                is_active_view=is_active_view,
+                active_file_id=active_file_id or "",
+                normalized_page_number=normalized_page_number,
+                artifact_payload=artifact_payload,
             )
-            update_answer(
-                request_key,
-                answer_text=text,
-                answer_html=answer_html,
-                chat_history=chat_history_full,
-            )
-            update_mindmap(request_key, mindmap_html)
-            update_plot(request_key, plot)
-
-            trace_html = self._render_reasoning_trace_html(
-                chat_input,
-                trace_refs,
-                answer_html,
-                response.active_file_id or active_file_id or "",
-                response.page_number or normalized_page_number,
-                artifact_payload,
-            )
-
-            active_view = is_active_view()
-            yield (
-                chat_history_full if active_view else gr.skip(),
-                mindmap_html if active_view else gr.skip(),
-                plot_gr if active_view else gr.skip(),
-                plot,
-                chat_state,
-                answer_html if active_view else gr.skip(),
-                self._render_citations_card_html(refs) if active_view else gr.skip(),
-                trace_html if active_view else gr.skip(),
-                response.page_number or normalized_page_number,
-                response.active_file_id or active_file_id or "",
-                str(chat_input or ""),
-                mindmap_html,
-                answer_html,
-                chat_history_full,
+            yield final_docqa_response_output(
+                self,
+                response=response,
+                preserved_history=preserved_history,
+                chat_input=chat_input,
+                msg_placeholder=msg_placeholder,
+                request_key=request_key,
+                state_plot_panel=state_plot_panel,
+                fallback_chat_state=chat_state,
+                active_view=is_active_view(),
+                active_file_id=active_file_id or "",
+                normalized_page_number=normalized_page_number,
             )
         except ValueError as e:
             logger.warning("Chat runtime ValueError: %s", e)

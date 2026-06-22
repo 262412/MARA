@@ -133,13 +133,113 @@ class _FakeRuntimeDocQA:
             graph_context={"related_file_ids": ["file-1"]},
             reasoning_id="mara",
             settings={"reasoning.use": "mara"},
-            stream_events=[],
+            stream_events=[
+                {
+                    "channel": "debug",
+                    "content": {
+                        "mara_channel": "agent_trace",
+                        "payload": {"event": "route"},
+                    },
+                }
+            ],
             route_decision={"route": "doc_text"},
             retrieve_decision={"status": "good"},
             verify_decision={"status": "supported", "action": "generate"},
             evidence_bundle={"items": [{"modality": "text"}]},
             artifact={"type": "study_guide", "overview": "Evidence summary"},
         )
+
+
+class _FakeStreamingRuntimeDocQA:
+    def __init__(self):
+        self.request = None
+
+    def stream_turn(self, request):
+        self.request = request
+        stream_events = [
+            {
+                "channel": "debug",
+                "content": {
+                    "mara_channel": "agent_trace",
+                    "payload": {"event": "route"},
+                },
+            }
+        ]
+        yield SimpleNamespace(
+            is_final=False,
+            event={"channel": "chat", "content": "runtime "},
+            answer="runtime",
+            references_html="",
+            mindmap_html="",
+            plot=None,
+            state={"app": {"regen": False}},
+            stream_events=[],
+            response=None,
+        )
+        yield SimpleNamespace(
+            is_final=False,
+            event=stream_events[0],
+            answer="runtime",
+            references_html="",
+            mindmap_html="",
+            plot=None,
+            state={"app": {"regen": False}},
+            stream_events=stream_events,
+            response=None,
+        )
+        yield SimpleNamespace(
+            is_final=False,
+            event={"channel": "chat", "content": "answer"},
+            answer="runtime answer",
+            references_html="",
+            mindmap_html="",
+            plot=None,
+            state={"app": {"regen": False}},
+            stream_events=stream_events + [{"channel": "chat", "content": "answer"}],
+            response=None,
+        )
+        yield SimpleNamespace(
+            is_final=True,
+            event={},
+            answer="runtime answer",
+            references_html="<details class='evidence'><summary>Source</summary></details>",
+            mindmap_html="",
+            plot={"graph": "runtime"},
+            state={"app": {"regen": False}, "mara": {"state": "ok"}},
+            stream_events=stream_events,
+            response=_streaming_docqa_response(stream_events),
+        )
+
+
+def _streaming_docqa_response(stream_events):
+    return DocQAResponse(
+        conversation_id="conv-1",
+        answer="runtime answer",
+        references_html="<details class='evidence'><summary>Source</summary></details>",
+        references_text="Source",
+        mindmap_html="",
+        plot={"graph": "runtime"},
+        messages=[("What changed?", "runtime answer")],
+        retrieval_messages=["refs"],
+        plot_history=[],
+        state={"app": {"regen": False}, "mara": {"state": "ok"}},
+        selected_file_ids=["file-1"],
+        selected_mapping={},
+        graph_source_ids=["file-1"],
+        active_file_id="file-1",
+        active_file_name="alpha.pdf",
+        qa_scope="page",
+        page_number=3,
+        selected_text="selected text",
+        graph_context={"related_file_ids": ["file-1"]},
+        reasoning_id="mara",
+        settings={"reasoning.use": "mara"},
+        stream_events=stream_events,
+        route_decision={"route": "doc_text"},
+        retrieve_decision={"status": "good"},
+        verify_decision={"status": "supported", "action": "generate"},
+        evidence_bundle={"items": [{"modality": "text"}]},
+    )
 
 
 def test_chat_fn_runs_web_turn_through_docqa_runtime():
@@ -149,8 +249,8 @@ def test_chat_fn_runs_web_turn_through_docqa_runtime():
     page._build_selected_input_map = lambda *selecteds: {9: ["select", ["file-1"], 1]}
     page._json_to_plot = lambda value: {"plot": value}
     page._generate_answer_panel_html = (
-        lambda _history, _question, answer, is_thinking=False: (
-            f"thinking:{is_thinking};answer:{answer}"
+        lambda _history, _question, answer, is_thinking=False, reasoning_html="": (
+            f"thinking:{is_thinking};answer:{answer};reasoning:{reasoning_html}"
         )
     )
     page._render_citations_card_html = lambda refs="": f"citations:{refs}"
@@ -190,6 +290,7 @@ def test_chat_fn_runs_web_turn_through_docqa_runtime():
     )
 
     assert len(outputs) == 2
+    assert "answer-reasoning-block--streaming" in outputs[0][5]
     request = fake_docqa.request
     assert request is not None
     assert request.prompt == "What changed?"
@@ -207,6 +308,65 @@ def test_chat_fn_runs_web_turn_through_docqa_runtime():
     assert final[3] == {"graph": "runtime"}
     assert final[4] == {"app": {"regen": False}, "mara": {"state": "ok"}}
     assert "runtime answer" in final[5]
+    assert "answer-reasoning-block" in final[5]
+    assert "answer-reasoning-block--streaming" not in final[5]
     assert "citations:" in final[6]
     assert "Document" in final[7]
     assert "supported" in final[7]
+
+
+def test_chat_fn_streams_docqa_events_into_answer_panel():
+    page = cast(Any, object.__new__(ChatPage))
+    fake_docqa = _FakeStreamingRuntimeDocQA()
+    page.docqa = fake_docqa
+    page._build_selected_input_map = lambda *selecteds: {9: ["select", ["file-1"], 1]}
+    page._json_to_plot = lambda value: {"plot": value}
+    page._generate_answer_panel_html = (
+        lambda _history, _question, answer, is_thinking=False, reasoning_html="": (
+            f"thinking:{is_thinking};answer:{answer};reasoning:{reasoning_html}"
+        )
+    )
+    page._render_citations_card_html = lambda refs="": f"citations:{refs}"
+    page._render_reasoning_trace_html = (
+        lambda question, refs, answer_html, file_id, page_number, artifact=None: (
+            f"trace:{question}:{refs}:{file_id}:{page_number}:{artifact}"
+        )
+    )
+
+    outputs = list(
+        page.chat_fn(
+            "conv-1",
+            [("What changed?", None)],
+            {"reasoning.use": "mara"},
+            "mara",
+            "gpt-4o-mini",
+            True,
+            "inline",
+            "en",
+            {"app": {"regen": False}},
+            None,
+            1,
+            "file-1",
+            "alpha.pdf",
+            3,
+            "page",
+            "selected text",
+            '{"related_file_ids": ["file-1"]}',
+            "off",
+            "element",
+            "strict",
+            "fake-planner",
+            {"graph": "state"},
+            SimpleNamespace(),
+            request=SimpleNamespace(session_hash="session-1"),
+        )
+    )
+
+    assert len(outputs) == 5
+    assert "answer:runtime" in outputs[1][5]
+    assert "answer:runtime answer" in outputs[3][5]
+    assert "answer-reasoning-block--streaming" in outputs[1][5]
+    assert "answer-reasoning-block--streaming" in outputs[2][5]
+    assert "answer-reasoning-block--streaming" not in outputs[-1][5]
+    assert fake_docqa.request is not None
+    assert fake_docqa.request.prompt == "What changed?"

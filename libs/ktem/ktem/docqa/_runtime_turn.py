@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterator
 
 from kotaemon.base import Document
 
@@ -69,10 +69,24 @@ def collect_stream_result(
     history: list,
     empty_message: str,
 ) -> TurnStreamResult:
+    result = create_stream_result(request)
+    for _event in consume_stream_result(
+        prepared,
+        request,
+        conversation_id=conversation_id,
+        history=history,
+        result=result,
+    ):
+        pass
+    finalize_stream_result(result, empty_message)
+    return result
+
+
+def create_stream_result(request: DocQARequest) -> TurnStreamResult:
     state = request.state or {"app": {"regen": False}}
     request.state = state
     capture = _mara.ResponseCapture(request)
-    result = TurnStreamResult(
+    return TurnStreamResult(
         text="",
         refs="",
         plot=None,
@@ -82,13 +96,30 @@ def collect_stream_result(
         capture=capture,
     )
 
-    for response in prepared.pipeline.stream(request.prompt, conversation_id, history):
-        _ingest_stream_response(response, prepared, result)
 
+def consume_stream_result(
+    prepared: _PreparedPipeline,
+    request: DocQARequest,
+    *,
+    conversation_id: str,
+    history: list,
+    result: TurnStreamResult,
+) -> Iterator[dict[str, Any]]:
+    for response in prepared.pipeline.stream(request.prompt, conversation_id, history):
+        previous_event_count = len(result.stream_events)
+        _ingest_stream_response(response, prepared, result)
+        if len(result.stream_events) > previous_event_count:
+            yield result.stream_events[-1]
+
+
+def finalize_stream_result(result: TurnStreamResult, empty_message: str) -> None:
     result.text = extract_final_answer_text(result.text)
     if not result.text:
         result.text = empty_message
-    return result
+
+
+def partial_answer_text(answer: str) -> str:
+    return extract_final_answer_text(_hide_unclosed_think_block(answer)).strip()
 
 
 def graph_source_ids_for_turn(
@@ -142,3 +173,13 @@ def _update_pipeline_state(prepared: _PreparedPipeline, state: dict[str, Any]) -
     pipeline_id = str(prepared.pipeline.get_info()["id"])
     state.setdefault(pipeline_id, {})
     state[pipeline_id] = prepared.reasoning_state["pipeline"]
+
+
+def _hide_unclosed_think_block(answer: str) -> str:
+    text = str(answer or "")
+    lowered = text.lower()
+    last_open = lowered.rfind("<think")
+    last_close = lowered.rfind("</think>")
+    if last_open > last_close:
+        return text[:last_open]
+    return text

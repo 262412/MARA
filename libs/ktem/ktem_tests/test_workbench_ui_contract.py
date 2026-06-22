@@ -234,5 +234,10 @@ def test_answer_panel_renders_rich_markdown_and_math():
         "max-width: none;",
         "margin: 12px 8px;",
         "overflow-wrap: anywhere;",
+        ".answer-reasoning-block",
+        ".answer-reasoning-block--streaming",
+        ".answer-reasoning-shimmer",
+        "@keyframes answer-reasoning-shimmer",
+        "@media (prefers-reduced-motion: reduce)",
     ]:
         assert token in css

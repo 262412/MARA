@@ -5,7 +5,7 @@ import logging
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Iterator, Optional, cast
 
 from ktem.components import reasonings
 from ktem.db.models import Conversation, Settings, User, engine
@@ -37,6 +37,7 @@ from ._runtime_models import (
     DocQAResponse,
     DocQASession,
     DocQASessionSummary,
+    DocQATurnUpdate,
     _PreparedPipeline,
 )
 from ._runtime_utils import _html_to_text, _serialize_value
@@ -630,6 +631,87 @@ class DocQARuntime:
             return None
 
     def run_turn(self, request: DocQARequest) -> DocQAResponse:
+        (
+            resolved_user_id,
+            session_info,
+            selected_inputs,
+            request_to_run,
+            prepared,
+            history,
+        ) = self._prepare_turn_execution(request)
+        stream_result = _turn.collect_stream_result(
+            prepared,
+            request_to_run,
+            conversation_id=session_info.conversation_id,
+            history=history,
+            empty_message=self._empty_chat_message(),
+        )
+        return self._finalize_turn_response(
+            original_request=request,
+            request_to_run=request_to_run,
+            resolved_user_id=resolved_user_id,
+            session_info=session_info,
+            selected_inputs=selected_inputs,
+            prepared=prepared,
+            history=history,
+            stream_result=stream_result,
+        )
+
+    def stream_turn(self, request: DocQARequest) -> Iterator[DocQATurnUpdate]:
+        (
+            resolved_user_id,
+            session_info,
+            selected_inputs,
+            request_to_run,
+            prepared,
+            history,
+        ) = self._prepare_turn_execution(request)
+        stream_result = _turn.create_stream_result(request_to_run)
+
+        for event in _turn.consume_stream_result(
+            prepared,
+            request_to_run,
+            conversation_id=session_info.conversation_id,
+            history=history,
+            result=stream_result,
+        ):
+            yield DocQATurnUpdate(
+                event=dict(event),
+                answer=_turn.partial_answer_text(stream_result.text),
+                references_html=stream_result.refs,
+                mindmap_html=stream_result.mindmap_html,
+                plot=_serialize_value(stream_result.plot),
+                state=_serialize_value(stream_result.state),
+                stream_events=list(stream_result.stream_events),
+            )
+
+        _turn.finalize_stream_result(stream_result, self._empty_chat_message())
+        response = self._finalize_turn_response(
+            original_request=request,
+            request_to_run=request_to_run,
+            resolved_user_id=resolved_user_id,
+            session_info=session_info,
+            selected_inputs=selected_inputs,
+            prepared=prepared,
+            history=history,
+            stream_result=stream_result,
+        )
+        yield DocQATurnUpdate(
+            answer=response.answer,
+            references_html=response.references_html,
+            mindmap_html=response.mindmap_html,
+            plot=response.plot,
+            state=response.state,
+            stream_events=response.stream_events,
+            response=response,
+        )
+
+    def _prepare_turn_execution(
+        self,
+        request: DocQARequest,
+    ) -> tuple[
+        Any, DocQASession, dict[int, Any], DocQARequest, _PreparedPipeline, list
+    ]:
         resolved_user_id = self._resolve_user_id(request.user_id)
         session_info = (
             self.load_session(request.conversation_id)
@@ -652,22 +734,31 @@ class DocQARuntime:
         )
         prepared = self._prepare_pipeline(request_to_run)
         history = list(request_to_run.history or [])
-        stream_result = _turn.collect_stream_result(
-            prepared,
+        return (
+            resolved_user_id,
+            session_info,
+            selected_inputs,
             request_to_run,
-            conversation_id=session_info.conversation_id,
-            history=history,
-            empty_message=getattr(
-                flowsettings,
-                "KH_CHAT_EMPTY_MSG_PLACEHOLDER",
-                "(Sorry, I don't know)",
-            ),
+            prepared,
+            history,
         )
 
-        messages = history + [(request.prompt, stream_result.text)]
+    def _finalize_turn_response(
+        self,
+        *,
+        original_request: DocQARequest,
+        request_to_run: DocQARequest,
+        resolved_user_id: Any,
+        session_info: DocQASession,
+        selected_inputs: dict[int, Any],
+        prepared: _PreparedPipeline,
+        history: list,
+        stream_result: _turn.TurnStreamResult,
+    ) -> DocQAResponse:
+        messages = history + [(original_request.prompt, stream_result.text)]
         existing_graph_source_ids = list(session_info.graph_source_ids or [])
         graph_source_ids = _turn.graph_source_ids_for_turn(
-            request.graph_source_ids,
+            original_request.graph_source_ids,
             prepared.selected_file_ids,
             existing_graph_source_ids,
             self._normalize_selected_file_ids,
@@ -685,18 +776,14 @@ class DocQARuntime:
             graph_source_ids=graph_source_ids,
             selected_inputs=selected_inputs,
             selected_file_ids=prepared.selected_file_ids,
-            origin=request.origin,
+            origin=original_request.origin,
         )
-        _nb.save_captured_artifact(
+        self._save_turn_artifact(
             session_info.conversation_id,
-            stream_result.capture.artifact,
-            artifact_type=request_to_run.artifact_type or request_to_run.task_type,
-            prompt=request_to_run.prompt,
-            source_scope=_artifact_source_scope(
-                request_to_run,
-                prepared,
-                graph_source_ids,
-            ),
+            request_to_run,
+            prepared,
+            graph_source_ids,
+            stream_result,
         )
 
         selected_mapping = self._build_selected_mapping(
@@ -735,6 +822,30 @@ class DocQARuntime:
             **_serialize_value(
                 stream_result.capture.as_response_kwargs(stream_result.text)
             ),
+        )
+
+    @staticmethod
+    def _save_turn_artifact(
+        conversation_id: str,
+        request: DocQARequest,
+        prepared: _PreparedPipeline,
+        graph_source_ids: list[str],
+        stream_result: _turn.TurnStreamResult,
+    ) -> None:
+        _nb.save_captured_artifact(
+            conversation_id,
+            stream_result.capture.artifact,
+            artifact_type=request.artifact_type or request.task_type,
+            prompt=request.prompt,
+            source_scope=_artifact_source_scope(request, prepared, graph_source_ids),
+        )
+
+    @staticmethod
+    def _empty_chat_message() -> str:
+        return getattr(
+            flowsettings,
+            "KH_CHAT_EMPTY_MSG_PLACEHOLDER",
+            "(Sorry, I don't know)",
         )
 
     def _expand_zip_inputs(self, paths: list[str]) -> list[str]:
