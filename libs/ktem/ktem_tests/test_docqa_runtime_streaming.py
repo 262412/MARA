@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import ktem.docqa.runtime as runtime_module
+from ktem.docqa import _runtime_turn as turn_module
 from ktem.docqa.runtime import DocQARuntime
 
 from kotaemon.base import Document
@@ -109,3 +110,23 @@ def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch)
     assert final.response.references_html == "refs"
     assert final.response.evidence_metadata == {"modalities": {"text": 1}}
     assert final.stream_events[-1]["channel"] == "info"
+
+
+def test_finalize_stream_result_ignores_trailing_unclosed_think_block():
+    result = turn_module.create_stream_result(
+        runtime_module.DocQARequest(prompt="Summarize this source.")
+    )
+    result.text = (
+        "**Answer:**\n"
+        "- The document proposes MARA as a local-first document QA workbench.\n"
+        "- It combines retrieval, evidence tracking, and answer generation.\n"
+        "<think>internal scratch answer: short malformed"
+    )
+
+    turn_module.finalize_stream_result(result, "empty")
+
+    assert "short malformed" not in result.text
+    assert result.text == (
+        "- The document proposes MARA as a local-first document QA workbench.\n"
+        "- It combines retrieval, evidence tracking, and answer generation."
+    )

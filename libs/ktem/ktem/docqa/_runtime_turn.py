@@ -113,7 +113,7 @@ def consume_stream_result(
 
 
 def finalize_stream_result(result: TurnStreamResult, empty_message: str) -> None:
-    result.text = extract_final_answer_text(result.text)
+    result.text = extract_final_answer_text(_hide_unclosed_think_block(result.text))
     if not result.text:
         result.text = empty_message
 

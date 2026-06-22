@@ -10,7 +10,7 @@ from .answer_reasoning import render_answer_reasoning_block
 from .chat_docqa_runtime import build_web_docqa_request, runtime_trace_references
 from .generation_store import update_answer, update_mindmap, update_plot
 
-_MAX_TYPEWRITER_FRAMES = 64
+_MAX_TYPEWRITER_FRAMES = 128
 
 
 def build_chat_runtime_request(

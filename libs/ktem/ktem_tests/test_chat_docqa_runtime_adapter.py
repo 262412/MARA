@@ -382,4 +382,4 @@ def test_typewriter_display_frames_are_bounded_for_large_answer_delta():
     frames = list(_typewriter_answer_frames("", answer))
 
     assert frames[-1] == answer
-    assert len(frames) <= 80
+    assert len(frames) <= 128

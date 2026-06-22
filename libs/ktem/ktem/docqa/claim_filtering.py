@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 
 _FINAL_ANSWER_MARKER_RE = re.compile(
-    r"(?:\*{0,2}\s*)?(?:final\s+answer|answer|最终答案|最终回答)(?:\s*\*{0,2})?\s*[:：]\s*",
+    r"(?:\*{0,2}\s*)?(?:final\s+answer|answer|最终答案|最终回答)"
+    r"(?:[:：]\s*\*{0,2}|\s*\*{1,2}\s*[:：]|\s*[:：])\s*",
     re.IGNORECASE,
 )
 _THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>.*?</think>", re.IGNORECASE | re.DOTALL)
