@@ -68,6 +68,37 @@ def test_runtime_turn_response_text_excludes_rendered_thought_details():
     assert "Thought" not in result.text
 
 
+def test_runtime_turn_collects_generator_returned_chat_document():
+    prepared = _PreparedPipeline(
+        pipeline=_ReturnedChatPipeline(),
+        reasoning_state={"pipeline": {"step": "done"}},
+        selected_file_ids=[],
+        active_file_id="",
+        active_file_name="",
+        qa_scope="document",
+        page_number=None,
+        selected_text="",
+        graph_context={},
+        settings={},
+        reasoning_id="mara",
+    )
+    request = DocQARequest(prompt="Question", state={"app": {}})
+
+    result = _runtime_turn.collect_stream_result(
+        prepared,
+        request,
+        conversation_id="conv-1",
+        history=[],
+        empty_message="empty",
+    )
+
+    assert result.text == "returned final answer"
+    assert result.stream_events[-1] == {
+        "channel": "chat",
+        "content": "returned final answer",
+    }
+
+
 def test_runtime_sessions_prepares_append_and_regen_histories():
     appended = _runtime_sessions.prepare_conversation_histories(
         retrieval_message="refs-2",
@@ -171,3 +202,19 @@ class _RenderedThoughtPipeline:
                 "Final answer: Revenue increased in 2026."
             ),
         )
+
+
+class _ReturnedChatPipeline:
+    @staticmethod
+    def get_info():
+        return {"id": "mara"}
+
+    def stream(self, _prompt, _conversation_id, _history):
+        yield Document(
+            channel="debug",
+            content={
+                "mara_channel": "agent_trace",
+                "payload": {"event": "route"},
+            },
+        )
+        return Document(channel="chat", content="returned final answer")

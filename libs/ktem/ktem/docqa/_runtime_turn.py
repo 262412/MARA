@@ -106,11 +106,27 @@ def consume_stream_result(
     history: list,
     result: TurnStreamResult,
 ) -> Iterator[dict[str, Any]]:
-    for response in prepared.pipeline.stream(request.prompt, conversation_id, history):
-        previous_event_count = len(result.stream_events)
-        _ingest_stream_response(response, prepared, result)
-        if len(result.stream_events) > previous_event_count:
-            yield result.stream_events[-1]
+    stream = iter(prepared.pipeline.stream(request.prompt, conversation_id, history))
+    while True:
+        try:
+            response = next(stream)
+        except StopIteration as stop:
+            response = stop.value
+            if response is not None:
+                yield from _ingest_response_event(response, prepared, result)
+            break
+        yield from _ingest_response_event(response, prepared, result)
+
+
+def _ingest_response_event(
+    response: Any,
+    prepared: _PreparedPipeline,
+    result: TurnStreamResult,
+) -> Iterator[dict[str, Any]]:
+    previous_event_count = len(result.stream_events)
+    _ingest_stream_response(response, prepared, result)
+    if len(result.stream_events) > previous_event_count:
+        yield result.stream_events[-1]
 
 
 def finalize_stream_result(result: TurnStreamResult, empty_message: str) -> None:
