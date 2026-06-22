@@ -113,7 +113,12 @@ def run_docqa_turn_with_live_updates(
             )
     if response is None:
         raise ValueError("DocQA stream did not return a final response")
-    return response
+    return _with_displayed_final_answer(
+        response,
+        displayed_answer,
+        preserved_history=preserved_history,
+        chat_input=chat_input,
+    )
 
 
 def live_docqa_update_output(
@@ -218,6 +223,21 @@ def _with_answer(turn_update: Any, answer: str) -> Any:
         response=turn_update.response,
         is_final=turn_update.is_final,
     )
+
+
+def _with_displayed_final_answer(
+    response: Any,
+    displayed_answer: str,
+    *,
+    preserved_history: list,
+    chat_input: Any,
+) -> Any:
+    if not displayed_answer:
+        return response
+
+    response.answer = displayed_answer
+    response.messages = list(preserved_history) + [(chat_input, displayed_answer)]
+    return response
 
 
 def final_docqa_response_output(

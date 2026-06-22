@@ -152,6 +152,8 @@ class _FakeRuntimeDocQA:
 
 
 class _FakeStreamingRuntimeDocQA:
+    final_answer = "runtime answer"
+
     def __init__(self):
         self.request = None
 
@@ -202,25 +204,29 @@ class _FakeStreamingRuntimeDocQA:
         yield SimpleNamespace(
             is_final=True,
             event={},
-            answer="runtime answer",
+            answer=self.final_answer,
             references_html="<details class='evidence'><summary>Source</summary></details>",
             mindmap_html="",
             plot={"graph": "runtime"},
             state={"app": {"regen": False}, "mara": {"state": "ok"}},
             stream_events=stream_events,
-            response=_streaming_docqa_response(stream_events),
+            response=_streaming_docqa_response(stream_events, answer=self.final_answer),
         )
 
 
-def _streaming_docqa_response(stream_events):
+class _FakeStreamingRuntimeDocQAWithFinalRewrite(_FakeStreamingRuntimeDocQA):
+    final_answer = "short final answer"
+
+
+def _streaming_docqa_response(stream_events, answer="runtime answer"):
     return DocQAResponse(
         conversation_id="conv-1",
-        answer="runtime answer",
+        answer=answer,
         references_html="<details class='evidence'><summary>Source</summary></details>",
         references_text="Source",
         mindmap_html="",
         plot={"graph": "runtime"},
-        messages=[("What changed?", "runtime answer")],
+        messages=[("What changed?", answer)],
         retrieval_messages=["refs"],
         plot_history=[],
         state={"app": {"regen": False}, "mara": {"state": "ok"}},
@@ -374,6 +380,61 @@ def test_chat_fn_streams_docqa_events_into_answer_panel():
     assert "answer-reasoning-block--streaming" not in outputs[-1][5]
     assert fake_docqa.request is not None
     assert fake_docqa.request.prompt == "What changed?"
+
+
+def test_chat_fn_final_output_preserves_last_streamed_answer_frame():
+    page = cast(Any, object.__new__(ChatPage))
+    fake_docqa = _FakeStreamingRuntimeDocQAWithFinalRewrite()
+    page.docqa = fake_docqa
+    page._build_selected_input_map = lambda *selecteds: {9: ["select", ["file-1"], 1]}
+    page._json_to_plot = lambda value: {"plot": value}
+    page._generate_answer_panel_html = (
+        lambda _history, _question, answer, is_thinking=False, reasoning_html="": (
+            f"thinking:{is_thinking};answer:{answer};reasoning:{reasoning_html}"
+        )
+    )
+    page._render_citations_card_html = lambda refs="": f"citations:{refs}"
+    page._render_reasoning_trace_html = (
+        lambda question, refs, answer_html, file_id, page_number, artifact=None: (
+            f"trace:{question}:{refs}:{file_id}:{page_number}:{artifact}"
+        )
+    )
+
+    outputs = list(
+        page.chat_fn(
+            "conv-1",
+            [("What changed?", None)],
+            {"reasoning.use": "mara"},
+            "mara",
+            "gpt-4o-mini",
+            True,
+            "inline",
+            "en",
+            {"app": {"regen": False}},
+            None,
+            1,
+            "file-1",
+            "alpha.pdf",
+            3,
+            "page",
+            "selected text",
+            '{"related_file_ids": ["file-1"]}',
+            "off",
+            "element",
+            "strict",
+            "fake-planner",
+            {"graph": "state"},
+            SimpleNamespace(),
+            request=SimpleNamespace(session_hash="session-1"),
+        )
+    )
+
+    final = outputs[-1]
+    assert any("answer:runtime answer" in str(output[5]) for output in outputs[:-1])
+    assert "runtime answer" in final[5]
+    assert "short final answer" not in final[5]
+    assert final[0] == [("What changed?", "runtime answer")]
+    assert final[-1] == [("What changed?", "runtime answer")]
 
 
 def test_typewriter_display_frames_are_bounded_for_large_answer_delta():
