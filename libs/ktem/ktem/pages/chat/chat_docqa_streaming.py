@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import time
 from types import SimpleNamespace
 from typing import Any
 
@@ -11,8 +10,7 @@ from .answer_reasoning import render_answer_reasoning_block
 from .chat_docqa_runtime import build_web_docqa_request, runtime_trace_references
 from .generation_store import update_answer, update_mindmap, update_plot
 
-_MAX_TYPEWRITER_FRAMES = 240
-_MAX_TYPEWRITER_DELTA_SECONDS = 0.8
+_MAX_TYPEWRITER_FRAMES = 64
 
 
 def build_chat_runtime_request(
@@ -113,7 +111,6 @@ def run_docqa_turn_with_live_updates(
                 normalized_page_number=normalized_page_number,
                 artifact_payload=artifact_payload,
             )
-            _sleep_for_typewriter_frame(displayed_answer, turn_update.answer)
     if response is None:
         raise ValueError("DocQA stream did not return a final response")
     return response
@@ -221,14 +218,6 @@ def _with_answer(turn_update: Any, answer: str) -> Any:
         response=turn_update.response,
         is_final=turn_update.is_final,
     )
-
-
-def _sleep_for_typewriter_frame(displayed_answer: str, target_answer: str) -> None:
-    remaining = max(0, len(str(target_answer or "")) - len(str(displayed_answer or "")))
-    if remaining <= 0:
-        return
-    delay = _MAX_TYPEWRITER_DELTA_SECONDS / max(len(str(target_answer or "")), 1)
-    time.sleep(min(0.012, delay))
 
 
 def final_docqa_response_output(

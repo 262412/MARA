@@ -82,3 +82,18 @@ def test_answer_panel_places_reasoning_inside_current_exchange():
     reasoning_index = html.index("answer-reasoning-block")
     answer_index = html.index("The answer.")
     assert question_index < reasoning_index < answer_index
+
+
+def test_answer_panel_streaming_partial_answer_replaces_typing_indicator():
+    page = cast(Any, ChatPage.__new__(ChatPage))
+
+    html = page._generate_answer_panel_html(
+        [],
+        "What changed?",
+        "Partial answer",
+        is_thinking=True,
+        reasoning_html="<details class='answer-reasoning-block'></details>",
+    )
+
+    assert "Partial answer" in html
+    assert "typing-indicator" not in html

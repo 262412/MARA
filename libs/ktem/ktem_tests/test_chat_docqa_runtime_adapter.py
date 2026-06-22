@@ -4,6 +4,7 @@ from typing import Any, cast
 from ktem.docqa import DocQAResponse
 from ktem.pages.chat import ChatPage
 from ktem.pages.chat.chat_docqa_runtime import build_web_docqa_request
+from ktem.pages.chat.chat_docqa_streaming import _typewriter_answer_frames
 
 
 def test_web_docqa_request_preserves_research_controls():
@@ -373,3 +374,12 @@ def test_chat_fn_streams_docqa_events_into_answer_panel():
     assert "answer-reasoning-block--streaming" not in outputs[-1][5]
     assert fake_docqa.request is not None
     assert fake_docqa.request.prompt == "What changed?"
+
+
+def test_typewriter_display_frames_are_bounded_for_large_answer_delta():
+    answer = "x" * 1000
+
+    frames = list(_typewriter_answer_frames("", answer))
+
+    assert frames[-1] == answer
+    assert len(frames) <= 80

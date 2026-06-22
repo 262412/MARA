@@ -1823,7 +1823,9 @@ class ChatPage(BasePage):
 
         messages_html += reasoning_html
 
-        if is_thinking:
+        if is_thinking and ai_response:
+            messages_html += self._format_chat_message(ai_response, "assistant")
+        elif is_thinking:
             messages_html += (
                 '<div class="chat-message assistant">'
                 '<div class="chat-message-content">'
