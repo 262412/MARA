@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from . import debug_trace
+
 _FINAL_ANSWER_MARKER_RE = re.compile(
     r"(?:\*{0,2}\s*)?(?:final\s+answer|answer|最终答案|最终回答)"
     r"(?:[:：]\s*\*{0,2}|\s*\*{1,2}\s*[:：]|\s*[:：])\s*",
@@ -31,7 +33,15 @@ def answer_claims(answer: str) -> list[str]:
 
 
 def clean_answer_text(answer: str) -> str:
-    return _clean_display_text(_answer_text(answer))
+    result = _clean_display_text(_answer_text(answer))
+    debug_trace.log_event(
+        "claim_filtering.clean_answer_text",
+        input_text=debug_trace.summarize_text(answer),
+        output_text=debug_trace.summarize_text(result),
+        changed=str(answer or "") != result,
+        include_stack=True,
+    )
+    return result
 
 
 def _answer_text(answer: str) -> str:
@@ -39,8 +49,21 @@ def _answer_text(answer: str) -> str:
     text = _THOUGHT_DETAILS_RE.sub(" ", text)
     marker = _last_discardable_answer_marker(text)
     if marker:
+        debug_trace.log_event(
+            "claim_filtering.answer_text.discard_prefix_marker",
+            marker_start=marker.start(),
+            marker_end=marker.end(),
+            before=debug_trace.summarize_text(text[: marker.start()]),
+            after=debug_trace.summarize_text(text[marker.end() :]),
+            include_stack=True,
+        )
         text = text[marker.end() :]
     elif _UNTAGGED_THOUGHT_PREFIX_RE.search(text):
+        debug_trace.log_event(
+            "claim_filtering.answer_text.drop_untagged_thought_prefix",
+            input_text=debug_trace.summarize_text(answer),
+            include_stack=True,
+        )
         return ""
     text = _drop_late_answer_marker_rewrite(text)
     text = re.sub(r"<[^>]+>", " ", text)
@@ -68,6 +91,14 @@ def _drop_late_answer_marker_rewrite(text: str) -> str:
     for marker in _FINAL_ANSWER_MARKER_RE.finditer(text):
         prefix = text[: marker.start()]
         if _has_substantial_answer_prefix(prefix):
+            debug_trace.log_event(
+                "claim_filtering.answer_text.drop_late_marker_rewrite",
+                marker_start=marker.start(),
+                marker_end=marker.end(),
+                kept_prefix=debug_trace.summarize_text(prefix),
+                dropped_suffix=debug_trace.summarize_text(text[marker.start() :]),
+                include_stack=True,
+            )
             return prefix
     return text
 

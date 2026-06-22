@@ -7,6 +7,7 @@ from typing import Any, Iterator
 from kotaemon.base import Document
 
 from . import _runtime_mara as _mara
+from . import debug_trace
 from ._runtime_models import DocQARequest, _PreparedPipeline
 from ._runtime_utils import _serialize_value
 from .evidence_text import extract_final_answer_text
@@ -113,13 +114,27 @@ def consume_stream_result(
 
 
 def finalize_stream_result(result: TurnStreamResult, empty_message: str) -> None:
+    previous_text = result.text
     result.text = extract_final_answer_text(_hide_unclosed_think_block(result.text))
     if not result.text:
         result.text = empty_message
+    debug_trace.log_event(
+        "runtime_turn.finalize_stream_result",
+        previous_text=debug_trace.summarize_text(previous_text),
+        next_text=debug_trace.summarize_text(result.text),
+        empty_message_used=result.text == empty_message,
+        include_stack=True,
+    )
 
 
 def partial_answer_text(answer: str) -> str:
-    return extract_final_answer_text(_hide_unclosed_think_block(answer)).strip()
+    result = extract_final_answer_text(_hide_unclosed_think_block(answer)).strip()
+    debug_trace.log_event(
+        "runtime_turn.partial_answer_text",
+        input_text=debug_trace.summarize_text(answer),
+        output_text=debug_trace.summarize_text(result),
+    )
+    return result
 
 
 def graph_source_ids_for_turn(

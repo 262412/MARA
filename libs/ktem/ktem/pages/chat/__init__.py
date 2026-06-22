@@ -10,7 +10,7 @@ from typing import Any
 import gradio as gr
 from ktem.app import BasePage
 from ktem.db.models import Conversation, engine
-from ktem.docqa import DocQARuntime
+from ktem.docqa import DocQARuntime, debug_trace
 from ktem.index.file.ui import File
 from ktem.reasoning.prompt_optimization.mindmap import MINDMAP_HTML_EXPORT_TEMPLATE
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
@@ -382,6 +382,75 @@ function() {
         }
     }, 30);
 }
+"""
+
+answer_panel_debug_observer_js = f"""
+function() {{
+    const serverDebugEnabled = {str(debug_trace.enabled()).lower()};
+    const localDebugEnabled = (
+        window.MARA_CHAT_STREAM_DEBUG === true ||
+        window.localStorage?.getItem("MARA_CHAT_STREAM_DEBUG") === "1"
+    );
+    if (!serverDebugEnabled && !localDebugEnabled) {{
+        return;
+    }}
+    if (window.__maraAnswerPanelDebugObserverInstalled) {{
+        return;
+    }}
+    window.__maraAnswerPanelDebugObserverInstalled = true;
+
+    function summarizeText(value) {{
+        const text = String(value || "");
+        const compact = text.replace(/\\s+/g, " ").trim();
+        let hash = 0;
+        for (let i = 0; i < text.length; i++) {{
+            hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+        }}
+        return {{
+            len: text.length,
+            hash: String(hash),
+            head: compact.slice(0, 220),
+            tail: compact.length > 220 ? compact.slice(-220) : ""
+        }};
+    }}
+
+    function installObserver() {{
+        const panel = document.querySelector("#answer-panel");
+        if (!panel) {{
+            return false;
+        }}
+        console.debug("[MARA_CHAT_DOM_DEBUG]", {{
+            event: "observer_installed",
+            text: summarizeText(panel.innerText || ""),
+            html: summarizeText(panel.innerHTML || ""),
+            stack: new Error().stack,
+        }});
+        const observer = new MutationObserver((mutations) => {{
+            console.debug("[MARA_CHAT_DOM_DEBUG]", {{
+                event: "answer_panel_mutation",
+                mutationCount: mutations.length,
+                text: summarizeText(panel.innerText || ""),
+                html: summarizeText(panel.innerHTML || ""),
+                stack: new Error().stack,
+            }});
+        }});
+        observer.observe(panel, {{
+            childList: true,
+            subtree: true,
+            characterData: true,
+        }});
+        return true;
+    }}
+
+    if (!installObserver()) {{
+        const timer = setInterval(() => {{
+            if (installObserver()) {{
+                clearInterval(timer);
+            }}
+        }}, 500);
+        setTimeout(() => clearInterval(timer), 15000);
+    }}
+}}
 """
 
 # Enable drag-to-pan for all file previews
@@ -1804,6 +1873,14 @@ class ChatPage(BasePage):
         reasoning_html: str = "",
     ) -> str:
         """Generate HTML for answer panel with chat bubbles"""
+        debug_trace.log_answer_panel_render(
+            "chat_page.generate_answer_panel_html.start",
+            is_thinking=is_thinking,
+            user_input=user_input,
+            ai_response=ai_response,
+            preserved_history=preserved_history,
+            reasoning_html=reasoning_html,
+        )
         messages_html = ""
 
         # Add preserved history (previous Q&A on the same page)
@@ -1836,6 +1913,12 @@ class ChatPage(BasePage):
         elif ai_response:
             messages_html += self._format_chat_message(ai_response, "assistant")
 
+        debug_trace.log_answer_panel_render(
+            "chat_page.generate_answer_panel_html.return",
+            is_thinking=is_thinking,
+            ai_response=ai_response,
+            messages_html=messages_html,
+        )
         return messages_html
 
     def rerun_page_answer(
@@ -2742,9 +2825,7 @@ class ChatPage(BasePage):
             fn=raise_error_on_state,
             inputs=[self._use_suggestion],
             show_progress="hidden",
-        ).success(
-            **onSuggestChatEvent
-        )
+        ).success(**onSuggestChatEvent)
         self.chat_control.conversation_id.change(
             render_conversation_notebook_update,
             [self.chat_control.conversation_id],
@@ -2842,7 +2923,7 @@ class ChatPage(BasePage):
                 pass
             elif chat_input_text:
                 chat_input_text = (
-                    f"{chat_input_text}\n\n" f"{selection_marker}\n{selected_page_text}"
+                    f"{chat_input_text}\n\n{selection_marker}\n{selected_page_text}"
                 )
             else:
                 chat_input_text = (
@@ -2975,6 +3056,12 @@ class ChatPage(BasePage):
             )
 
     def _on_app_created(self):
+        self._app.app.load(
+            fn=None,
+            inputs=None,
+            outputs=None,
+            js=answer_panel_debug_observer_js,
+        )
         if KH_DEMO_MODE:
             self._app.app.load(
                 fn=lambda x: x,
@@ -3022,8 +3109,22 @@ class ChatPage(BasePage):
         *selecteds,
     ):
         """Update the data source"""
+        debug_trace.log_persist_state(
+            "chat_page.persist_data_source.start",
+            conversation_id=convo_id,
+            user_id=user_id,
+            retrieval_message=retrieval_msg,
+            messages=messages,
+            state_keys=sorted((state or {}).keys()) if isinstance(state, dict) else [],
+            graph_source_ids=graph_source_ids,
+        )
         if not convo_id:
             gr.Warning("No conversation selected")
+            debug_trace.log_event(
+                "chat_page.persist_data_source.no_conversation",
+                messages=debug_trace.summarize_messages(messages),
+                include_stack=True,
+            )
             return
         selected_inputs = self._build_selected_input_map(*selecteds)
         selected_file_ids = []
@@ -3033,7 +3134,7 @@ class ChatPage(BasePage):
                 user_id, selected_input
             )
 
-        return self.docqa.persist_conversation_state(
+        result = self.docqa.persist_conversation_state(
             conversation_id=convo_id,
             user_id=user_id,
             retrieval_message=retrieval_msg,
@@ -3046,6 +3147,14 @@ class ChatPage(BasePage):
             selected_inputs=selected_inputs,
             selected_file_ids=selected_file_ids,
         )
+        debug_trace.log_persist_state(
+            "chat_page.persist_data_source.return",
+            conversation_id=convo_id,
+            messages=messages,
+            selected_inputs=selected_inputs,
+            selected_file_ids=selected_file_ids,
+        )
+        return result
 
     def reasoning_changed(self, reasoning_type):
         if reasoning_type != DEFAULT_SETTING:
@@ -3239,6 +3348,19 @@ class ChatPage(BasePage):
     ):
         chat_input, chat_output = chat_history[-1] if chat_history else ("", None)
         preserved_history = chat_history[:-1] if chat_history else []
+        debug_trace.log_chat_fn_start(
+            conversation_id=conversation_id,
+            chat_input=chat_input,
+            chat_output=chat_output,
+            chat_history=chat_history,
+            active_file_id=active_file_id,
+            active_file_name=active_file_name,
+            page_number=page_number,
+            qa_scope=qa_scope,
+            controller_mode=controller_mode,
+            route_policy=route_policy,
+            verification_mode=verification_mode,
+        )
 
         selection_marker = "[Selected text from current page]"
         if (not selected_page_text) and isinstance(chat_input, str):
@@ -3300,6 +3422,14 @@ class ChatPage(BasePage):
         update_plot(request_key, plot)
 
         active_view = is_active_view()
+        debug_trace.log_event(
+            "chat_page.chat_fn.initial_yield",
+            request_key=request_key,
+            active_view=active_view,
+            answer_html=debug_trace.summarize_html(answer_html),
+            chat_history=debug_trace.summarize_messages(chat_history_full),
+            include_stack=True,
+        )
         yield (
             chat_history_full if active_view else gr.skip(),
             mindmap_html if active_view else gr.skip(),
@@ -3369,6 +3499,7 @@ class ChatPage(BasePage):
                 normalized_page_number=normalized_page_number,
                 artifact_payload=artifact_payload,
             )
+            debug_trace.log_chat_fn_runtime_response(request_key, response)
             yield final_docqa_response_output(
                 self,
                 response=response,
@@ -3384,6 +3515,12 @@ class ChatPage(BasePage):
             )
         except ValueError as e:
             logger.warning("Chat runtime ValueError: %s", e)
+            debug_trace.log_event(
+                "chat_page.chat_fn.value_error",
+                request_key=request_key,
+                error=debug_trace.summarize_text(str(e)),
+                include_stack=True,
+            )
             mark_error(request_key, str(e))
             empty_msg = getattr(
                 flowsettings,
@@ -3433,7 +3570,17 @@ class ChatPage(BasePage):
                 chat_history_full,
             )
 
+        debug_trace.log_event(
+            "chat_page.chat_fn.before_mark_done",
+            request_key=request_key,
+            include_stack=True,
+        )
         mark_done(request_key)
+        debug_trace.log_event(
+            "chat_page.chat_fn.after_mark_done",
+            request_key=request_key,
+            include_stack=True,
+        )
 
     def check_and_suggest_name_conv(self, chat_history):
         suggest_pipeline = SuggestConvNamePipeline()
