@@ -22,6 +22,7 @@ class TurnStreamResult:
     stream_events: list[dict[str, Any]]
     state: dict[str, Any]
     capture: _mara.ResponseCapture
+    preserve_text_after_chat_clear: bool = False
 
 
 def build_turn_request(
@@ -188,9 +189,19 @@ def _ingest_stream_response(
 
 def _collect_channel_content(response: Document, result: TurnStreamResult) -> None:
     if response.channel == "chat":
-        result.text = (
-            "" if response.content is None else result.text + str(response.content)
-        )
+        if response.content is None:
+            if _has_substantial_visible_answer(result.text):
+                result.preserve_text_after_chat_clear = True
+                debug_trace.log_event(
+                    "runtime_turn.preserve_text_after_chat_clear",
+                    preserved_text=debug_trace.summarize_text(result.text),
+                )
+            else:
+                result.text = ""
+                result.preserve_text_after_chat_clear = False
+            return
+        if not result.preserve_text_after_chat_clear:
+            result.text += str(response.content)
     elif response.channel == "info":
         content = "" if response.content is None else str(response.content)
         result.refs = "" if response.content is None else result.refs + content
@@ -204,6 +215,11 @@ def _update_pipeline_state(prepared: _PreparedPipeline, state: dict[str, Any]) -
     pipeline_id = str(prepared.pipeline.get_info()["id"])
     state.setdefault(pipeline_id, {})
     state[pipeline_id] = prepared.reasoning_state["pipeline"]
+
+
+def _has_substantial_visible_answer(answer: str) -> bool:
+    cleaned = extract_final_answer_text(_hide_unclosed_think_block(answer)).strip()
+    return len(cleaned) >= 160
 
 
 def _hide_unclosed_think_block(answer: str) -> str:
