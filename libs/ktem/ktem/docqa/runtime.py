@@ -85,7 +85,10 @@ def _build_turn_response(
             runtime.get_conversation_graph_cache(session_info.conversation_id)
         ),
         **_serialize_value(
-            stream_result.capture.as_response_kwargs(stream_result.text)
+            stream_result.capture.as_response_kwargs(
+                stream_result.text,
+                references_text=_html_to_text(stream_result.refs),
+            )
         ),
     )
 

@@ -30,7 +30,10 @@ class _StreamingMaraPipeline:
             },
         )
         yield Document(channel="chat", content="answer")
-        yield Document(channel="info", content="refs")
+        yield Document(
+            channel="info",
+            content="Grounded answer evidence: grounded answer.",
+        )
 
 
 class _StreamingMaraReasoning:
@@ -117,7 +120,10 @@ def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch)
     runtime = _make_runtime()
     updates = list(
         runtime.stream_turn(
-            runtime_module.DocQARequest(prompt="Summarize this source.")
+            runtime_module.DocQARequest(
+                prompt="Summarize this source.",
+                verification_mode="light",
+            )
         )
     )
 
@@ -136,8 +142,32 @@ def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch)
     assert final.is_final is True
     assert final.response is not None
     assert final.response.answer == "grounded answer"
-    assert final.response.references_html == "refs"
-    assert final.response.evidence_metadata == {"modalities": {"text": 1}}
+    assert (
+        final.response.references_html == "Grounded answer evidence: grounded answer."
+    )
+    expected_reference_evidence = {
+        "evidence_id": "citation-refs",
+        "source_id": "refs",
+        "source_name": "Generated citations",
+        "page_label": "",
+        "modality": "text",
+        "element_id": "",
+        "bbox": None,
+        "caption": "",
+        "text": "Grounded answer evidence: grounded answer.",
+        "ocr_text": "",
+        "vlm_text": "",
+        "source_backrefs": [],
+        "evidence_level": "citation",
+        "metadata": {"source": "references_html"},
+    }
+    assert final.response.evidence_metadata == {
+        "modalities": {"text": 1},
+        "evidence": [expected_reference_evidence],
+    }
+    assert final.response.retrieve_decision["status"] == "good"
+    assert final.response.verify_decision["status"] == "supported"
+    assert final.response.evidence_bundle["items"] == [expected_reference_evidence]
     assert final.stream_events[-1]["channel"] == "info"
 
 
