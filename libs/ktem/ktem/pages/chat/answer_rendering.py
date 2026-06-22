@@ -17,6 +17,13 @@ class _MathSpan:
     display: bool
 
 
+_TABLE_HTML_RE = re.compile(r"(<table\b.*?</table>)", re.IGNORECASE | re.DOTALL)
+_IMAGE_PARAGRAPH_HTML_RE = re.compile(
+    r"(<p>\s*<img\b.*?>\s*</p>)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 def format_chat_message_html(content: str, role: str) -> str:
     """Format one answer-panel chat message as safe HTML."""
     if role == "assistant":
@@ -47,7 +54,28 @@ def _render_assistant_markdown(content: str) -> str:
     )
     for span in math_spans:
         rendered = rendered.replace(span.placeholder, _render_math_source(span))
-    return rendered
+    return _wrap_wide_answer_blocks(rendered)
+
+
+def _wrap_wide_answer_blocks(rendered: str) -> str:
+    rendered = _TABLE_HTML_RE.sub(_scrollable_table_region, rendered)
+    return _IMAGE_PARAGRAPH_HTML_RE.sub(_scrollable_chart_region, rendered)
+
+
+def _scrollable_table_region(match: re.Match[str]) -> str:
+    return (
+        '<div class="ktem-answer-table-scroll" role="region" '
+        'aria-label="Scrollable table" tabindex="0">'
+        f"{match.group(1)}</div>"
+    )
+
+
+def _scrollable_chart_region(match: re.Match[str]) -> str:
+    return (
+        '<div class="ktem-answer-chart-scroll" role="region" '
+        'aria-label="Scrollable chart" tabindex="0">'
+        f"{match.group(1)}</div>"
+    )
 
 
 def _render_math_source(span: _MathSpan) -> str:

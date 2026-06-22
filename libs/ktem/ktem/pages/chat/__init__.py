@@ -27,22 +27,27 @@ from theflow.utils.modules import import_dotted_string
 from kotaemon.indices.ingests.files import KH_DEFAULT_FILE_EXTRACTORS
 from kotaemon.indices.qa.utils import strip_think_tag
 
-from ...utils import SUPPORTED_LANGUAGE_MAP, get_file_names_regex, get_urls
-from ...utils.commands import WEB_SEARCH_COMMAND
+from ...utils import SUPPORTED_LANGUAGE_MAP
 from ...utils.hf_papers import get_recommended_papers
 from ...utils.rate_limit import check_rate_limit
+from .answer_reasoning import render_answer_reasoning_block
 from .answer_rendering import format_chat_message_html
 from .chat_docqa_runtime import (
     build_web_docqa_request,
     docqa_research_control_inputs,
     render_docqa_runtime_controls,
-    runtime_trace_references,
+)
+from .chat_docqa_streaming import (
+    build_chat_runtime_request,
+    final_docqa_response_output,
+    run_docqa_turn_with_live_updates,
 )
 from .chat_knowledge_graph_bindings import (
     bind_knowledge_graph_events,
     subscribe_public_knowledge_graph_events,
 )
 from .chat_panel import ChatPanel
+from .chat_submit_sources import resolve_chat_submit_sources
 from .chat_suggestion import ChatSuggestion
 from .common import STATE
 from .control import ConversationControl
@@ -653,6 +658,7 @@ class ChatPage(BasePage):
                             # get the file selector choices for the first index
                             if index_id == 0:
                                 self.first_selector_choices = index_ui.selector_choices
+                                self.first_indexing_file_fn = None
                                 self.first_indexing_url_fn = None
 
                             if gr_index:
@@ -1795,6 +1801,7 @@ class ChatPage(BasePage):
         user_input: str,
         ai_response: str,
         is_thinking: bool = False,
+        reasoning_html: str = "",
     ) -> str:
         """Generate HTML for answer panel with chat bubbles"""
         messages_html = ""
@@ -1814,7 +1821,11 @@ class ChatPage(BasePage):
         if user_input:
             messages_html += self._format_chat_message(user_input, "user")
 
-        if is_thinking:
+        messages_html += reasoning_html
+
+        if is_thinking and ai_response:
+            messages_html += self._format_chat_message(ai_response, "assistant")
+        elif is_thinking:
             messages_html += (
                 '<div class="chat-message assistant">'
                 '<div class="chat-message-content">'
@@ -2794,40 +2805,23 @@ class ChatPage(BasePage):
             raise ValueError("Input is empty")
 
         chat_input_text = chat_input.get("text", "")
-        file_ids = []
-        used_command = None
-
-        first_selector_choices_map = {
-            item[0]: item[1] for item in first_selector_choices
-        }
-
-        # get all file names with pattern @"filename" in input_str
-        file_names, chat_input_text = get_file_names_regex(chat_input_text)
-
-        # check if web search command is in file_names
-        if WEB_SEARCH_COMMAND in file_names:
-            used_command = WEB_SEARCH_COMMAND
-
-        # get all urls in input_str
-        urls, chat_input_text = get_urls(chat_input_text)
-
-        if urls and self.first_indexing_url_fn:
-            logger.debug("Detected URLs: %s", urls)
-            file_ids = self.first_indexing_url_fn(
-                "\n".join(urls),
-                True,
-                settings,
-                user_id,
-                request=None,
-            )
-        elif file_names:
-            for file_name in file_names:
-                file_id = first_selector_choices_map.get(file_name)
-                if file_id:
-                    file_ids.append(file_id)
+        (
+            chat_input_text,
+            file_ids,
+            selector_choices_to_add,
+            used_command,
+        ) = resolve_chat_submit_sources(
+            chat_input=chat_input,
+            chat_input_text=chat_input_text,
+            first_selector_choices=first_selector_choices,
+            settings=settings,
+            user_id=user_id,
+            first_indexing_file_fn=getattr(self, "first_indexing_file_fn", None),
+            first_indexing_url_fn=getattr(self, "first_indexing_url_fn", None),
+        )
 
         # add new file ids to the first selector choices
-        first_selector_choices.extend(zip(urls, file_ids))
+        first_selector_choices.extend(selector_choices_to_add)
         merged_graph_source_ids = self.merge_graph_source_ids(
             graph_source_ids, file_ids
         )
@@ -2848,7 +2842,7 @@ class ChatPage(BasePage):
                 pass
             elif chat_input_text:
                 chat_input_text = (
-                    f"{chat_input_text}\n\n" f"{selection_marker}\n{selected_page_text}"
+                    f"{chat_input_text}\n\n{selection_marker}\n{selected_page_text}"
                 )
             else:
                 chat_input_text = (
@@ -3039,7 +3033,7 @@ class ChatPage(BasePage):
                 user_id, selected_input
             )
 
-        return self.docqa.persist_conversation_state(
+        result = self.docqa.persist_conversation_state(
             conversation_id=convo_id,
             user_id=user_id,
             retrieval_message=retrieval_msg,
@@ -3052,6 +3046,7 @@ class ChatPage(BasePage):
             selected_inputs=selected_inputs,
             selected_file_ids=selected_file_ids,
         )
+        return result
 
     def reasoning_changed(self, reasoning_type):
         if reasoning_type != DEFAULT_SETTING:
@@ -3286,8 +3281,13 @@ class ChatPage(BasePage):
             current_view = get_current_view(session_key) if session_key else None
             return (current_view is None) or (current_view == page_key)
 
+        streaming_reasoning_html = render_answer_reasoning_block(is_streaming=True)
         answer_html = self._generate_answer_panel_html(
-            preserved_history, chat_input, "", is_thinking=True
+            preserved_history,
+            chat_input,
+            "",
+            is_thinking=True,
+            reasoning_html=streaming_reasoning_html,
         )
         chat_history_full = preserved_history + [(chat_input, text or msg_placeholder)]
 
@@ -3330,81 +3330,58 @@ class ChatPage(BasePage):
         )
 
         try:
-            runtime_request = build_web_docqa_request(
-                prompt=str(chat_input or ""),
+            runtime_request = build_chat_runtime_request(
+                self,
+                chat_input=chat_input,
                 conversation_id=conversation_id,
-                history=preserved_history,
-                selected_inputs=self._build_selected_input_map(*selecteds),
+                preserved_history=preserved_history,
+                selecteds=selecteds,
                 settings=settings,
                 reasoning_type=reasoning_type,
-                llm=llm_type,
-                use_mindmap=use_mind_map,
+                llm_type=llm_type,
+                use_mind_map=use_mind_map,
                 use_citation=use_citation,
                 language=language,
-                state=chat_state,
+                chat_state=chat_state,
                 command_state=command_state,
                 user_id=user_id,
                 active_file_id=active_file_id,
                 active_file_name=active_file_name,
                 page_number=page_number,
                 qa_scope=qa_scope,
-                selected_text=selected_page_text,
+                selected_page_text=selected_page_text,
                 selected_graph_context=selected_graph_context,
                 controller_mode=controller_mode,
                 route_policy=route_policy,
                 verification_mode=verification_mode,
                 planner_model=planner_model,
             )
-            response = self.docqa.run_turn(runtime_request)
-            text = response.answer or ""
-            refs = response.references_html or ""
-            trace_refs = runtime_trace_references(response, refs)
-            mindmap_html = response.mindmap_html or ""
-            plot = response.plot if response.plot is not None else state_plot_panel
-            plot_gr = self._json_to_plot(plot)
-            artifact_payload = response.artifact
-            chat_state = response.state or chat_state
-            chat_history_full = response.messages or preserved_history + [
-                (chat_input, text or msg_placeholder)
-            ]
-
-            answer_html = self._generate_answer_panel_html(
-                preserved_history, chat_input, text, is_thinking=False
+            response = yield from run_docqa_turn_with_live_updates(
+                self,
+                runtime_request=runtime_request,
+                preserved_history=preserved_history,
+                chat_input=chat_input,
+                msg_placeholder=msg_placeholder,
+                request_key=request_key,
+                fallback_plot=plot,
+                fallback_chat_state=chat_state,
+                is_active_view=is_active_view,
+                active_file_id=active_file_id or "",
+                normalized_page_number=normalized_page_number,
+                artifact_payload=artifact_payload,
             )
-            update_answer(
-                request_key,
-                answer_text=text,
-                answer_html=answer_html,
-                chat_history=chat_history_full,
-            )
-            update_mindmap(request_key, mindmap_html)
-            update_plot(request_key, plot)
-
-            trace_html = self._render_reasoning_trace_html(
-                chat_input,
-                trace_refs,
-                answer_html,
-                response.active_file_id or active_file_id or "",
-                response.page_number or normalized_page_number,
-                artifact_payload,
-            )
-
-            active_view = is_active_view()
-            yield (
-                chat_history_full if active_view else gr.skip(),
-                mindmap_html if active_view else gr.skip(),
-                plot_gr if active_view else gr.skip(),
-                plot,
-                chat_state,
-                answer_html if active_view else gr.skip(),
-                self._render_citations_card_html(refs) if active_view else gr.skip(),
-                trace_html if active_view else gr.skip(),
-                response.page_number or normalized_page_number,
-                response.active_file_id or active_file_id or "",
-                str(chat_input or ""),
-                mindmap_html,
-                answer_html,
-                chat_history_full,
+            yield final_docqa_response_output(
+                self,
+                response=response,
+                preserved_history=preserved_history,
+                chat_input=chat_input,
+                msg_placeholder=msg_placeholder,
+                request_key=request_key,
+                state_plot_panel=state_plot_panel,
+                fallback_chat_state=chat_state,
+                active_view=is_active_view(),
+                active_file_id=active_file_id or "",
+                normalized_page_number=normalized_page_number,
             )
         except ValueError as e:
             logger.warning("Chat runtime ValueError: %s", e)

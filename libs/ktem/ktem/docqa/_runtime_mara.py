@@ -51,7 +51,9 @@ class ResponseCapture:
         elif channel == "artifact" or mara_channel == "artifact":
             self.artifact = mara_content
 
-    def as_response_kwargs(self, answer: str = "") -> dict[str, Any]:
+    def as_response_kwargs(
+        self, answer: str = "", references_text: str = ""
+    ) -> dict[str, Any]:
         if self.execution is not None:
             return _execution_response_kwargs(
                 self.request,
@@ -59,18 +61,25 @@ class ResponseCapture:
                 self.evidence_metadata,
                 self.execution,
                 self.artifact,
+                answer,
+                references_text,
             )
+        evidence_metadata = _metadata_with_reference_evidence(
+            self.request,
+            self.evidence_metadata,
+            references_text,
+        )
         payload = {
             "agent_trace": self.agent_trace,
-            "evidence_metadata": self.evidence_metadata,
-            "backend_metadata": _backend_metadata(self.request, self.evidence_metadata),
+            "evidence_metadata": evidence_metadata,
+            "backend_metadata": _backend_metadata(self.request, evidence_metadata),
             "artifact": self.artifact,
         }
         payload.update(
             build_controller_outputs(
                 self.request,
                 self.agent_trace,
-                self.evidence_metadata,
+                evidence_metadata,
                 answer,
             )
         )
@@ -83,17 +92,34 @@ def _execution_response_kwargs(
     captured_evidence_metadata: dict[str, Any],
     execution: dict[str, Any],
     artifact: Any,
+    answer: str = "",
+    references_text: str = "",
 ) -> dict[str, Any]:
     evidence_bundle = _dict_field(execution, "evidence_bundle")
     evidence_metadata = dict(captured_evidence_metadata)
     bundle_metadata = evidence_bundle.get("metadata")
     if isinstance(bundle_metadata, dict):
         evidence_metadata.update(bundle_metadata)
+    aligned_metadata = _metadata_with_reference_evidence(
+        request,
+        evidence_metadata,
+        references_text,
+    )
+    rebuilt_outputs = {}
+    if not _evidence_bundle_has_items(evidence_bundle) and _has_concrete_evidence(
+        aligned_metadata
+    ):
+        rebuilt_outputs = build_controller_outputs(
+            request,
+            agent_trace,
+            aligned_metadata,
+            answer,
+        )
 
     payload = {
         "agent_trace": agent_trace,
-        "evidence_metadata": evidence_metadata,
-        "backend_metadata": _backend_metadata(request, evidence_metadata),
+        "evidence_metadata": aligned_metadata,
+        "backend_metadata": _backend_metadata(request, aligned_metadata),
         "artifact": artifact,
         "controller_trace": _list_field(execution, "controller_trace"),
         "controller_decision": _dict_field(execution, "controller_decision"),
@@ -104,6 +130,7 @@ def _execution_response_kwargs(
         "evidence_bundle": evidence_bundle,
         "workflow_plan": _dict_field(execution, "workflow_plan"),
     }
+    payload.update(rebuilt_outputs)
     if not payload["route_decision"]:
         payload["route_decision"] = _route_decision_from_controller(
             payload["controller_decision"]
@@ -121,6 +148,67 @@ def _list_field(payload: dict[str, Any], key: str) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [dict(item) for item in value if isinstance(item, dict)]
+
+
+def _evidence_bundle_has_items(evidence_bundle: dict[str, Any]) -> bool:
+    items = evidence_bundle.get("items")
+    return isinstance(items, list) and bool(items)
+
+
+def _metadata_with_reference_evidence(
+    request: Any | None,
+    evidence_metadata: dict[str, Any],
+    references_text: str,
+) -> dict[str, Any]:
+    if _has_concrete_evidence(evidence_metadata):
+        return evidence_metadata
+
+    text = str(references_text or "").strip()
+    if not text:
+        return evidence_metadata
+
+    bridged = dict(evidence_metadata)
+    bridged["evidence"] = [_reference_evidence_item(request, text)]
+    return bridged
+
+
+def _has_concrete_evidence(evidence_metadata: dict[str, Any]) -> bool:
+    for key in (
+        "evidence",
+        "graph_evidence",
+        "page_image_index",
+        "element_index",
+        "elements",
+    ):
+        value = evidence_metadata.get(key)
+        if isinstance(value, list) and value:
+            return True
+    return False
+
+
+def _reference_evidence_item(request: Any | None, text: str) -> dict[str, Any]:
+    source_id = str(getattr(request, "active_file_id", "") or "").strip()
+    source_name = str(getattr(request, "active_file_name", "") or "").strip()
+    page_number = getattr(request, "page_number", None)
+    page_label = str(page_number or "").strip()
+    return {
+        "evidence_id": "citation-refs",
+        "source_id": source_id or "refs",
+        "source_name": source_name or "Generated citations",
+        "page_label": page_label,
+        "modality": "text",
+        "element_id": "",
+        "bbox": None,
+        "caption": "",
+        "text": text,
+        "ocr_text": "",
+        "vlm_text": "",
+        "source_backrefs": (
+            [f"{source_id}#page:{page_label}"] if source_id and page_label else []
+        ),
+        "evidence_level": "citation",
+        "metadata": {"source": "references_html"},
+    }
 
 
 def _route_decision_from_controller(

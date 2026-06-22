@@ -8,14 +8,8 @@ from sqlmodel import Session, select
 from kotaemon.loaders.pdf_loader import get_page_thumbnails
 
 from ...db.models import engine
-
-# Generation store for streaming outputs across page switches
-from .generation_store import (
-    get_snapshot_by_page,
-    has_in_progress,
-    make_page_key,
-    set_current_view,
-)
+from . import page_preview_cache
+from .generation_store import has_in_progress, make_page_key, set_current_view
 
 # Import preview handlers for different file types
 from .page_preview_document import (
@@ -374,58 +368,14 @@ class ChatPagePreviewController:
         file_id: str = "",
         session_key: str | None = None,
     ):
-        page_key = make_page_key(file_id, page_number)
-
-        # Prefer in-progress generation snapshot if available (for live sync)
-        if session_key:
-            snapshot = get_snapshot_by_page(session_key, page_key)
-            if snapshot:
-                last_question = snapshot.get("last_question", "") or ""
-                mindmap_html = snapshot.get("mindmap_html", "") or ""
-                answer_html = snapshot.get("answer_html", "") or ""
-                chat_history = snapshot.get("chat_history", []) or []
-
-                if not mindmap_html:
-                    mindmap_html = MINDMAP_PLACEHOLDER_HTML
-                if not answer_html:
-                    answer_html = ANSWER_PLACEHOLDER_TEXT
-
-                return (
-                    last_question,
-                    mindmap_html,
-                    gr.skip(),
-                    gr.skip(),
-                    answer_html,
-                    chat_history,
-                )
-
-        if not isinstance(page_outputs_cache, dict):
-            return self.clear_page_outputs()
-
-        page_output = page_outputs_cache.get(page_key, {})
-        if not isinstance(page_output, dict):
-            return self.clear_page_outputs()
-
-        last_question = page_output.get("last_question", "") or ""
-        mindmap_html = page_output.get("mindmap_html", "") or ""
-        answer_text = page_output.get("answer_text", "") or ""
-        chat_history = page_output.get("chat_history", []) or []
-
-        if not (last_question or mindmap_html or answer_text or chat_history):
-            return self.clear_page_outputs()
-
-        if not mindmap_html:
-            mindmap_html = MINDMAP_PLACEHOLDER_HTML
-        if not answer_text:
-            answer_text = ANSWER_PLACEHOLDER_TEXT
-
-        return (
-            last_question,
-            mindmap_html,
-            gr.skip(),
-            gr.skip(),
-            answer_text,
-            chat_history,  # Return chat history for the chatbot component
+        return page_preview_cache.get_cached_page_outputs(
+            page_outputs_cache,
+            page_number,
+            file_id,
+            session_key=session_key,
+            clear_page_outputs=self.clear_page_outputs,
+            mindmap_placeholder=MINDMAP_PLACEHOLDER_HTML,
+            answer_placeholder=ANSWER_PLACEHOLDER_TEXT,
         )
 
     def cache_page_outputs(
@@ -438,18 +388,15 @@ class ChatPagePreviewController:
         file_id: str = "",
         chat_history: list | None = None,
     ):
-        if not isinstance(page_outputs_cache, dict):
-            page_outputs_cache = {}
-
-        page_key = f"{file_id or 'default'}_{max(1, int(page_number or 1))}"
-        updated_cache = dict(page_outputs_cache)
-        updated_cache[page_key] = {
-            "last_question": last_question or "",
-            "mindmap_html": mindmap_html or "",
-            "answer_text": answer_text or "",
-            "chat_history": chat_history or [],  # Save chat history for this page
-        }
-        return updated_cache
+        return page_preview_cache.cache_page_outputs(
+            page_outputs_cache,
+            page_number=page_number,
+            last_question=last_question,
+            mindmap_html=mindmap_html,
+            answer_text=answer_text,
+            file_id=file_id,
+            chat_history=chat_history or [],
+        )
 
     def on_selected_file_change(
         self,

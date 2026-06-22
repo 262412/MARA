@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 
 _FINAL_ANSWER_MARKER_RE = re.compile(
-    r"(?:\*{0,2}\s*)?(?:final\s+answer|answer|最终答案|最终回答)(?:\s*\*{0,2})?\s*[:：]\s*",
+    r"(?:\*{0,2}\s*)?(?:final\s+answer|answer|最终答案|最终回答)"
+    r"(?:[:：]\s*\*{0,2}|\s*\*{1,2}\s*[:：]|\s*[:：])\s*",
     re.IGNORECASE,
 )
 _THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>.*?</think>", re.IGNORECASE | re.DOTALL)
@@ -36,13 +37,48 @@ def clean_answer_text(answer: str) -> str:
 def _answer_text(answer: str) -> str:
     text = _THINK_BLOCK_RE.sub(" ", str(answer or ""))
     text = _THOUGHT_DETAILS_RE.sub(" ", text)
-    markers = list(_FINAL_ANSWER_MARKER_RE.finditer(text))
-    if markers:
-        text = text[markers[-1].end() :]
+    marker = _last_discardable_answer_marker(text)
+    if marker:
+        text = text[marker.end() :]
     elif _UNTAGGED_THOUGHT_PREFIX_RE.search(text):
         return ""
+    text = _drop_late_answer_marker_rewrite(text)
     text = re.sub(r"<[^>]+>", " ", text)
     return _remove_inner_abstain_text(text)
+
+
+def _last_discardable_answer_marker(text: str) -> re.Match[str] | None:
+    selected = None
+    for marker in _FINAL_ANSWER_MARKER_RE.finditer(text):
+        if _is_discardable_answer_prefix(text[: marker.start()]):
+            selected = marker
+    return selected
+
+
+def _is_discardable_answer_prefix(prefix: str) -> bool:
+    stripped = str(prefix or "").strip()
+    if not stripped:
+        return True
+    return bool(
+        re.match(r"^(?:thought|analysis|reasoning|scratchpad)\b", stripped, re.I)
+    )
+
+
+def _drop_late_answer_marker_rewrite(text: str) -> str:
+    for marker in _FINAL_ANSWER_MARKER_RE.finditer(text):
+        prefix = text[: marker.start()]
+        if _has_substantial_answer_prefix(prefix):
+            return prefix
+    return text
+
+
+def _has_substantial_answer_prefix(prefix: str) -> bool:
+    cleaned = _clean_display_text(re.sub(r"<[^>]+>", " ", str(prefix or "")))
+    if len(cleaned) >= 160:
+        return True
+    if any(_is_markdown_table_line(line) for line in str(prefix or "").splitlines()):
+        return True
+    return len([line for line in cleaned.splitlines() if line.strip()]) >= 4
 
 
 def _clean_text(text: str) -> str:

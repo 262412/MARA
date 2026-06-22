@@ -42,6 +42,7 @@ from .runtime import (
     DocQARuntime,
     DocQASession,
     DocQASessionSummary,
+    DocQATurnUpdate,
 )
 from .workflow import WorkflowPlan, WorkflowStep, build_workflow_plan
 
@@ -54,6 +55,7 @@ __all__ = [
     "DocQARuntime",
     "DocQASession",
     "DocQASessionSummary",
+    "DocQATurnUpdate",
     "RouteDecision",
     "RetrieveDecision",
     "EvidenceBundle",

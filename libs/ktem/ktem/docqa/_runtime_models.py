@@ -91,6 +91,22 @@ class DocQAResponse:
 
 
 @dataclass
+class DocQATurnUpdate:
+    event: dict[str, Any] = field(default_factory=dict)
+    answer: str = ""
+    references_html: str = ""
+    mindmap_html: str = ""
+    plot: Any = None
+    state: dict[str, Any] = field(default_factory=dict)
+    stream_events: list[dict[str, Any]] = field(default_factory=list)
+    response: Optional[DocQAResponse] = None
+
+    @property
+    def is_final(self) -> bool:
+        return self.response is not None
+
+
+@dataclass
 class DocQASession:
     conversation_id: str
     name: str

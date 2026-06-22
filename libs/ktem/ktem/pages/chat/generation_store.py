@@ -1,4 +1,5 @@
 """Generation store for background/streaming chat updates per page."""
+
 from __future__ import annotations
 
 import threading
