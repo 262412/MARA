@@ -59,6 +59,16 @@ def test_clean_answer_text_uses_last_answer_marker_after_analysis_prefix():
     assert answer_claims(answer) == ["The paper proposes a retrieval reranker."]
 
 
+def test_clean_answer_text_uses_last_answer_marker_inside_analysis_prefix():
+    answer = (
+        "analysis: answer: Bad draft from scratch reasoning.\n\n"
+        "Final answer: The paper proposes a retrieval reranker."
+    )
+
+    assert clean_answer_text(answer) == "The paper proposes a retrieval reranker."
+    assert answer_claims(answer) == ["The paper proposes a retrieval reranker."]
+
+
 def test_clean_answer_text_drops_untagged_thought_without_final_answer():
     answer = (
         "Thought Okay, let's inspect the filings. "
@@ -136,8 +146,27 @@ def test_clean_answer_text_preserves_final_answer_markdown_table_lines():
     )
 
     assert clean_answer_text(answer) == (
-        "| Metric | Value |\n" "| --- | ---: |\n" "| Revenue | 42 |"
+        "| Metric | Value |\n| --- | ---: |\n| Revenue | 42 |"
     )
+
+
+def test_clean_answer_text_preserves_substantial_answer_before_late_answer_label():
+    answer = (
+        "The document is a project proposal for MARA, a local-first document "
+        "question-answering workbench designed for mixed academic and technical "
+        "documents.\n\n"
+        "| Item | Summary |\n"
+        "| --- | --- |\n"
+        "| Self-RAG-style controller | Selects the answer route based on the query. |\n"
+        "| Verification layer | Checks generated claims against retrieved evidence. |\n\n"
+        "Answer: It is a project proposal."
+    )
+
+    cleaned = clean_answer_text(answer)
+
+    assert "local-first document question-answering workbench" in cleaned
+    assert "| Self-RAG-style controller |" in cleaned
+    assert "Answer: It is a project proposal." not in cleaned
 
 
 def test_light_verifier_ignores_rendered_thought_details_without_final_marker():

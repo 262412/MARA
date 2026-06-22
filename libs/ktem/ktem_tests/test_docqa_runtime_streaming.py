@@ -43,6 +43,35 @@ class _StreamingMaraReasoning:
         return _StreamingMaraPipeline()
 
 
+class _LateAnswerLabelPipeline:
+    @staticmethod
+    def get_info():
+        return {"id": "mara"}
+
+    def stream(self, _message, _conv_id, _history):
+        yield Document(
+            channel="chat",
+            content=(
+                "The document is a project proposal for MARA, a local-first "
+                "document question-answering workbench.\n\n"
+                "| Item | Summary |\n"
+                "| --- | --- |\n"
+                "| Controller | Selects the answer route based on the query. |"
+            ),
+        )
+        yield Document(channel="chat", content="\n\nAnswer: Short answer.")
+
+
+class _LateAnswerLabelReasoning:
+    @staticmethod
+    def get_info():
+        return {"id": "mara"}
+
+    @staticmethod
+    def get_pipeline(_settings, _state, _retrievers):
+        return _LateAnswerLabelPipeline()
+
+
 def _make_runtime():
     runtime = cast(Any, object.__new__(DocQARuntime))
     runtime._resolve_user_id = lambda user_id=None: "user-1"
@@ -110,6 +139,37 @@ def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch)
     assert final.response.references_html == "refs"
     assert final.response.evidence_metadata == {"modalities": {"text": 1}}
     assert final.stream_events[-1]["channel"] == "info"
+
+
+def test_runtime_stream_turn_does_not_replace_substantial_answer_with_late_label(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        runtime_module, "reasonings", {"mara": _LateAnswerLabelReasoning}
+    )
+    monkeypatch.setattr(
+        runtime_module._nb,
+        "save_captured_artifact",
+        lambda _conversation_id, _artifact, **_metadata: None,
+    )
+
+    runtime = _make_runtime()
+    updates = list(
+        runtime.stream_turn(
+            runtime_module.DocQARequest(prompt="Summarize this source.")
+        )
+    )
+
+    event_updates = [update for update in updates if not update.is_final]
+    final = updates[-1]
+
+    assert (
+        "local-first document question-answering workbench" in event_updates[-1].answer
+    )
+    assert "Short answer." not in event_updates[-1].answer
+    assert final.response is not None
+    assert "local-first document question-answering workbench" in final.response.answer
+    assert "Short answer." not in final.response.answer
 
 
 def test_finalize_stream_result_ignores_trailing_unclosed_think_block():
