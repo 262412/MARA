@@ -653,7 +653,7 @@ button.selected {
   background-size:
     180% 180%,
     240% 100%;
-  animation: answer-reasoning-flow 3.6s ease-in-out infinite;
+  animation: answer-reasoning-flow var(--app-flow-duration) var(--motion-ease) infinite;
   opacity: 0.9;
   pointer-events: none;
 }
@@ -706,16 +706,11 @@ button.selected {
 
 #answer-panel .answer-reasoning-shimmer {
   color: transparent;
-  background: linear-gradient(
-    90deg,
-    var(--app-accent),
-    var(--app-accent-secondary),
-    var(--app-accent)
-  );
-  background-size: 220% 100%;
+  background: var(--app-gradient-thinking);
+  background-size: 260% 100%;
   background-clip: text;
   -webkit-background-clip: text;
-  animation: answer-reasoning-shimmer 2.4s ease-in-out infinite;
+  animation: answer-reasoning-shimmer var(--app-shimmer-duration) var(--motion-ease) infinite;
 }
 
 #answer-panel .answer-reasoning-content {
@@ -795,6 +790,44 @@ button.selected {
   border-color: color-mix(in srgb, var(--app-text-muted) 58%, transparent);
 }
 
+@keyframes app-page-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes app-ambient-flow {
+  0% {
+    background-position:
+      8% 20%,
+      84% 10%,
+      50% 0%;
+  }
+  100% {
+    background-position:
+      72% 36%,
+      18% 64%,
+      50% 100%;
+  }
+}
+
+@keyframes app-shimmer-sweep {
+  0% {
+    background-position: 160% 0;
+  }
+  50% {
+    background-position: 20% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
 @keyframes answer-reasoning-shimmer {
   0% {
     background-position: 160% 0;
@@ -840,16 +873,29 @@ button.selected {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .gradio-container *,
+  .gradio-container *::before,
+  .gradio-container *::after {
+    transition-duration: 1ms !important;
+  }
+
+  .app-shimmer-text,
+  .gradio-container::before,
   #answer-panel .answer-reasoning-shimmer,
   #answer-panel .answer-reasoning-block--streaming::before,
   #answer-panel .answer-reasoning-block--streaming .answer-reasoning-icon,
   #answer-panel .answer-reasoning-dot.is-active {
-    animation: none;
+    animation: none !important;
   }
 
+  .app-shimmer-text,
   #answer-panel .answer-reasoning-shimmer {
     color: var(--app-accent);
     background: none;
+  }
+
+  .gradio-container::before {
+    opacity: 0.24;
   }
 }
 
@@ -2771,20 +2817,57 @@ body.kg-viewer-open {
 /* UI Refresh: precise research workbench default with graph-lab dark surfaces */
 /* -------------------------------------------------------------------------- */
 :root {
+  --motion-fast: 140ms;
+  --motion-base: 220ms;
+  --motion-slow: 360ms;
+  --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
   --app-bg: #d2dde8;
   --app-surface: #e0e8f0;
-  --app-surface-raised: #d9e3ed;
-  --app-surface-muted: #c7d5e3;
-  --app-border: #b8c7d5;
-  --app-border-strong: #8aa0b4;
+  --app-surface-raised: #f3f8fc;
+  --app-surface-muted: #ccdcea;
+  --app-border: #afc2d3;
+  --app-border-strong: #7d96a9;
   --app-accent: #0f766e;
-  --app-accent-strong: #0f5f59;
+  --app-accent-strong: #0b635d;
   --app-accent-soft: #ccfbf1;
   --app-accent-secondary: #2563eb;
+  --app-accent-tertiary: #7c3aed;
   --app-focus-ring: rgba(15, 118, 110, 0.22);
-  --app-text: #172033;
+  --app-text: #142033;
   --app-text-muted: #475569;
   --app-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+  --app-gradient-thinking: linear-gradient(
+    90deg,
+    var(--app-accent),
+    var(--app-accent-secondary),
+    var(--app-accent-tertiary),
+    var(--app-accent)
+  );
+  --app-gradient-surface: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--app-surface-raised) 92%, transparent),
+    color-mix(in srgb, var(--app-accent) 7%, var(--app-surface) 93%)
+  );
+  --app-gradient-ambient: linear-gradient(
+      115deg,
+      transparent 0%,
+      color-mix(in srgb, var(--app-accent) 12%, transparent) 26%,
+      transparent 50%
+    ),
+    linear-gradient(
+      245deg,
+      transparent 8%,
+      color-mix(in srgb, var(--app-accent-secondary) 10%, transparent) 48%,
+      transparent 76%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--app-accent-tertiary) 5%, transparent),
+      transparent 42%
+    );
+  --app-ambient-opacity: 0.58;
+  --app-shimmer-duration: 2.4s;
+  --app-flow-duration: 3.8s;
   --reading-surface: #f4efe3;
   --reading-border: #d7c9ad;
   --reading-muted: #51483b;
@@ -2819,6 +2902,7 @@ gradio-app {
 }
 
 .gradio-container {
+  position: relative;
   --color-accent: var(--app-accent);
   --color-accent-soft: var(--app-accent-soft);
   --border-color-primary: var(--app-border);
@@ -2843,22 +2927,95 @@ gradio-app {
   color: var(--app-text) !important;
 }
 
+.gradio-container::before {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  content: "";
+  background: var(--app-gradient-ambient);
+  background-size: 220% 220%;
+  opacity: var(--app-ambient-opacity);
+  pointer-events: none;
+  animation: app-ambient-flow 16s var(--motion-ease) infinite alternate;
+}
+
+.gradio-container > * {
+  position: relative;
+  z-index: 1;
+}
+
+.gradio-container button,
+.gradio-container input,
+.gradio-container textarea,
+.gradio-container select,
+.gradio-container label,
+.gradio-container .tab-nav button,
+.gradio-container .tabs button,
+.gradio-container .wrap {
+  transition-property: background, border-color, box-shadow, color, opacity, transform;
+  transition-duration: var(--motion-base) !important;
+  transition-timing-function: var(--motion-ease) !important;
+}
+
+.app-shimmer-text,
+#answer-panel .answer-reasoning-shimmer,
+.gradio-container [aria-busy="true"] label,
+.gradio-container [aria-busy="true"] span {
+  color: transparent !important;
+  background: var(--app-gradient-thinking);
+  background-size: 260% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: app-shimmer-sweep var(--app-shimmer-duration) var(--motion-ease) infinite;
+}
+
+.motion-reduce .app-shimmer-text {
+  color: var(--app-accent) !important;
+  background: none !important;
+  animation: none !important;
+}
+
+.gradio-container button:not(:disabled):hover,
+.gradio-container button:not(:disabled):focus-visible,
+.gradio-container label:has(input:checked),
+.gradio-container .tab-nav button.selected,
+.gradio-container .tab-nav button[aria-selected="true"] {
+  background: var(--app-gradient-surface) !important;
+  border-color: color-mix(in srgb, var(--app-accent) 58%, var(--app-border)) !important;
+  box-shadow: 0 0 0 3px var(--app-focus-ring), var(--app-shadow) !important;
+  color: var(--app-accent-strong) !important;
+}
+
+.gradio-container button:not(:disabled):active {
+  transform: scale(0.985);
+}
+
+.gradio-container input:focus,
+.gradio-container textarea:focus,
+.gradio-container select:focus {
+  border-color: var(--app-accent) !important;
+  box-shadow: 0 0 0 3px var(--app-focus-ring) !important;
+  outline: 0 !important;
+}
+
 body.dark,
 body.dark .gradio-container {
   --app-bg: #d2dde8;
   --app-surface: #e0e8f0;
-  --app-surface-raised: #d9e3ed;
-  --app-surface-muted: #c7d5e3;
-  --app-border: #b8c7d5;
-  --app-border-strong: #8aa0b4;
+  --app-surface-raised: #f3f8fc;
+  --app-surface-muted: #ccdcea;
+  --app-border: #afc2d3;
+  --app-border-strong: #7d96a9;
   --app-accent: #0f766e;
-  --app-accent-strong: #0f5f59;
+  --app-accent-strong: #0b635d;
   --app-accent-soft: #ccfbf1;
   --app-accent-secondary: #2563eb;
+  --app-accent-tertiary: #7c3aed;
   --app-focus-ring: rgba(15, 118, 110, 0.22);
-  --app-text: #172033;
+  --app-text: #142033;
   --app-text-muted: #475569;
   --app-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+  --app-ambient-opacity: 0.58;
   --reading-surface: #f4efe3;
   --reading-border: #d7c9ad;
   --reading-muted: #51483b;
@@ -2880,10 +3037,12 @@ body.ktem-dark-mode .gradio-container {
   --app-accent-strong: #5eead4;
   --app-accent-soft: rgba(45, 212, 191, 0.16);
   --app-accent-secondary: #38bdf8;
+  --app-accent-tertiary: #a78bfa;
   --app-focus-ring: rgba(45, 212, 191, 0.26);
   --app-text: #f8fafc;
   --app-text-muted: #cbd5e1;
   --app-shadow: 0 14px 30px rgba(2, 6, 23, 0.36);
+  --app-ambient-opacity: 0.42;
   --reading-surface: #141b28;
   --reading-border: #334155;
   --reading-muted: #cbd5e1;
@@ -2899,11 +3058,20 @@ body.ktem-dark-mode .gradio-container {
 #help-tab,
 #resources-tab,
 #login-tab {
-  background: var(--app-surface) !important;
+  background: var(--app-gradient-surface) !important;
   border: 1px solid var(--app-border) !important;
   border-radius: var(--app-radius) !important;
   box-shadow: var(--app-shadow) !important;
   overflow: hidden;
+}
+
+#chat-tab.tabitem,
+#indices-tab.tabitem,
+#settings-tab.tabitem,
+#help-tab.tabitem,
+#resources-tab.tabitem,
+#login-tab.tabitem {
+  animation: app-page-enter var(--motion-slow) var(--motion-ease) both;
 }
 
 #indices-tab,
@@ -2925,13 +3093,13 @@ body.ktem-dark-mode .gradio-container {
 }
 
 .header-bar button.selected {
-  background: color-mix(in srgb, var(--app-accent-soft) 62%, var(--app-surface)) !important;
+  background: var(--app-gradient-surface) !important;
   border-color: var(--app-accent) !important;
   color: var(--app-accent-strong) !important;
 }
 
 #chat-area {
-  background: var(--app-surface-raised) !important;
+  background: var(--app-gradient-surface) !important;
   border: 1px solid var(--app-border) !important;
   border-radius: var(--app-radius) !important;
   box-shadow: none !important;
