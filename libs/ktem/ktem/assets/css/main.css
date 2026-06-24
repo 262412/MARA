@@ -3600,6 +3600,49 @@ body.ktem-dark-mode .gradio-container {
   line-height: 1 !important;
 }
 
+/* Markdown code copy controls: keep Gradio's generated SVG icon visible. */
+.gradio-container .code_wrap .copy_code_button {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: color-mix(in srgb, var(--app-surface-raised) 90%, transparent) !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: 8px !important;
+  color: var(--app-text) !important;
+  box-shadow: none !important;
+}
+
+.gradio-container .code_wrap .copy_code_button .copy-text,
+.gradio-container .code_wrap .copy_code_button .check {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.gradio-container .code_wrap .copy_code_button svg {
+  width: 18px !important;
+  height: 18px !important;
+  display: block !important;
+  color: currentColor !important;
+}
+
+.gradio-container .code_wrap .copy_code_button .copy-text path {
+  fill: currentColor !important;
+}
+
+.gradio-container .code_wrap .copy_code_button .check svg,
+.gradio-container .code_wrap .copy_code_button .check polyline {
+  fill: none !important;
+  stroke: currentColor !important;
+}
+
 .gradio-container label,
 .gradio-container .label-wrap,
 .gradio-container .block-label,
