@@ -702,11 +702,28 @@ button.selected {
 }
 
 #answer-panel .answer-reasoning-shimmer {
-  color: transparent;
-  background: var(--app-gradient-thinking);
+  position: relative;
+  display: inline-block;
+  margin-left: -4px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  color: var(--app-accent-strong) !important;
+  background: none !important;
+  animation: none !important;
+  isolation: isolate;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--app-accent) 28%, transparent);
+}
+
+#answer-panel .answer-reasoning-shimmer::after {
+  position: absolute;
+  z-index: -1;
+  inset: -2px -4px;
+  content: "";
+  border-radius: inherit;
+  background-image: var(--app-gradient-thinking);
   background-size: 260% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
+  opacity: 0.22;
+  pointer-events: none;
   animation: answer-reasoning-shimmer var(--app-shimmer-duration) var(--motion-ease) infinite;
 }
 
@@ -901,17 +918,20 @@ button.selected {
   #help-tab::before,
   #resources-tab::before,
   #login-tab::before,
-  #answer-panel .answer-reasoning-shimmer,
+  #answer-panel .answer-reasoning-shimmer::after,
   #answer-panel .answer-reasoning-block--streaming::before,
   #answer-panel .answer-reasoning-block--streaming .answer-reasoning-icon,
   #answer-panel .answer-reasoning-dot.is-active {
     animation: none !important;
   }
 
-  .app-shimmer-text,
-  #answer-panel .answer-reasoning-shimmer {
+  .app-shimmer-text {
     color: var(--app-accent);
     background: none;
+  }
+
+  #answer-panel .answer-reasoning-shimmer::after {
+    opacity: 0.14;
   }
 
   .gradio-container::before {
@@ -3012,10 +3032,7 @@ gradio-app {
   transition-timing-function: var(--motion-ease) !important;
 }
 
-.app-shimmer-text,
-#answer-panel .answer-reasoning-shimmer,
-.gradio-container [aria-busy="true"] label,
-.gradio-container [aria-busy="true"] span {
+.app-shimmer-text {
   color: transparent !important;
   background: var(--app-gradient-thinking);
   background-size: 260% 100%;
@@ -5951,12 +5968,9 @@ html.ktem-dark-mode #answer-panel .answer-reasoning-title.answer-reasoning-shimm
 body.ktem-dark-mode #answer-panel .answer-reasoning-title.answer-reasoning-shimmer,
 body.dark #answer-panel .answer-reasoning-title.answer-reasoning-shimmer {
   display: inline-block;
-  color: transparent;
-  background: var(--app-gradient-thinking);
-  background-size: 260% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  animation: answer-reasoning-shimmer var(--app-shimmer-duration) var(--motion-ease) infinite;
+  color: var(--app-accent-strong) !important;
+  background: none !important;
+  animation: none !important;
 }
 
 html.ktem-dark-mode #answer-panel .answer-reasoning-block summary small,

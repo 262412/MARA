@@ -58,8 +58,17 @@ def test_global_ui_uses_quiet_aurora_motion_tokens_without_layout_changes():
         assert token in reduced_motion_css
 
 
-def test_streaming_reasoning_shimmer_survives_dark_mode_title_color():
+def test_streaming_reasoning_shimmer_keeps_readable_text_with_animated_glow():
     css = _main_css()
+
+    old_global_shimmer_selector = "\n".join(
+        [
+            ".app-shimmer-text,",
+            "#answer-panel .answer-reasoning-shimmer,",
+        ]
+    )
+    assert old_global_shimmer_selector not in css
+    assert '.gradio-container [aria-busy="true"] span' not in css
 
     solid_title_start = css.index(
         "html.ktem-dark-mode #answer-panel .answer-reasoning-title,"
@@ -74,15 +83,23 @@ def test_streaming_reasoning_shimmer_survives_dark_mode_title_color():
     shimmer_block = _block_after(css, shimmer_selector)
     for token in [
         "display: inline-block;",
-        "color: transparent;",
-        "background: var(--app-gradient-thinking);",
-        "background-size: 260% 100%;",
-        "background-clip: text;",
-        "-webkit-background-clip: text;",
-        "animation: answer-reasoning-shimmer var(--app-shimmer-duration) var(--motion-ease) infinite;",
+        "color: var(--app-accent-strong) !important;",
+        "background: none !important;",
+        "animation: none !important;",
     ]:
         assert token in shimmer_block
-    assert "#f8fafc" not in shimmer_block
+    assert "color: transparent" not in shimmer_block
+
+    shimmer_glow_block = _block_after(
+        css, "#answer-panel .answer-reasoning-shimmer::after"
+    )
+    for token in [
+        'content: "";',
+        "background-image: var(--app-gradient-thinking);",
+        "background-size: 260% 100%;",
+        "animation: answer-reasoning-shimmer var(--app-shimmer-duration) var(--motion-ease) infinite;",
+    ]:
+        assert token in shimmer_glow_block
 
 
 def test_workbench_surfaces_carry_visible_aurora_above_base_background():
