@@ -12,6 +12,7 @@ KH_FILESTORAGE_PATH = getattr(
     "KH_FILESTORAGE_PATH",
     os.path.join(KH_APP_DATA_DIR, "user_data", "files"),
 )
+KH_DOC_DIR = str(Path(getattr(flowsettings, "KH_DOC_DIR", "docs")).resolve())
 GRADIO_TEMP_DIR = os.getenv("GRADIO_TEMP_DIR", None)
 # override GRADIO_TEMP_DIR if it's not set
 if GRADIO_TEMP_DIR is None:
@@ -29,6 +30,7 @@ demo.queue().launch(
     inbrowser=True,
     allowed_paths=[
         str(ASSETS_DIR),
+        KH_DOC_DIR,
         GRADIO_TEMP_DIR,
         KH_FILESTORAGE_PATH,
     ],
