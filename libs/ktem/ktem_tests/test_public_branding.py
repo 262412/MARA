@@ -1,5 +1,5 @@
-from pathlib import Path
 import re
+from pathlib import Path
 
 from ktem.pages.help import _rewrite_local_image_links
 
@@ -39,8 +39,7 @@ def test_help_markdown_rewrites_local_images_to_gradio_file_routes(tmp_path):
     rewritten = _rewrite_local_image_links(markdown, doc_dir)
 
     assert (
-        f"![MARA resources tab](/file={local_image.resolve().as_posix()})"
-        in rewritten
+        f"![MARA resources tab](/file={local_image.resolve().as_posix()})" in rewritten
     )
     assert "![Remote image](https://example.com/remote.png)" in rewritten
     assert "![Missing image](images/missing.png)" in rewritten
