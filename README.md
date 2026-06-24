@@ -4,9 +4,9 @@
 
 # MARA
 
-Local-first document QA, knowledge graph exploration, study artifact generation, and multi-model routing.
+Local-first document QA, inspectable evidence, knowledge graph exploration, study artifact generation, and route-aware model workflows.
 
-本地优先的文档问答、知识图谱探索、学习资料生成与多模型路由应用。
+本地优先的文档问答、可检查证据、知识图谱探索、学习资料生成与 route-aware 模型工作流。
 
 MARA is a branded fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon). The fork keeps the upstream Apache License 2.0 attribution while presenting the user-facing product as `MARA`. Internal Python package names such as `kotaemon`, `ktem`, and `slide_cli` remain for compatibility, but the public product commands are `MARA` and `MARA-cli`.
 
@@ -16,7 +16,7 @@ MARA 是基于 [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon) 的品�
 
 English:
 [Overview](#overview) |
-[Screenshots](#screenshot-placeholders) |
+[Screenshots](#screenshots) |
 [Features](#core-capabilities) |
 [Quick Start](#quick-start) |
 [CLI](#cli-usage) |
@@ -27,7 +27,7 @@ English:
 
 中文:
 [项目定位](#项目定位) |
-[截图占位](#截图占位) |
+[截图](#截图) |
 [核心能力](#核心能力) |
 [快速开始](#快速开始) |
 [CLI 使用](#cli-使用) |
@@ -44,32 +44,32 @@ English:
 
 ### Overview
 
-MARA is not a single demo page. It is a runnable local RAG application, a CLI automation surface, and a development base for document-intelligence workflows. The repository is built around one shared runtime:
+MARA (Multimodal Agentic Retrieval and Answering) is a local-first document research workbench for mixed academic, technical, financial, and slide-based documents. It is not a single demo page: the repository contains a runnable Gradio application, a command-line automation surface, and a benchmark framework for document-intelligence workflows.
 
-- A Gradio Web UI for document upload, page preview, grounded chat, citation review, knowledge graph exploration, and Mind Map browsing.
-- `MARA docqa`, a document-QA CLI that reuses the same runtime settings, file index, saved conversations, and graph cache as the Web UI.
+The current implementation is built around one shared runtime:
+
+- A Gradio Web UI for document upload, source selection, page preview, grounded chat, citation review, route-aware reasoning summaries, knowledge graph exploration, Mind Map browsing, research notes, and Studio artifact generation.
+- `MARA docqa`, a document-QA CLI that reuses the same runtime settings, file index, saved conversations, selected sources, notes, artifacts, and graph cache as the Web UI.
+- A Self-RAG-inspired application controller for MARA reasoning. It does not train a new Self-RAG model; it exposes explicit route, retrieval, evidence, verification, retry, and abstention decisions in ordinary runtime metadata.
 - The top-level `MARA` CLI for deck workflows, workspace file operations, model routing, platform support assets, and application lifecycle commands.
 - `app.py` and `sso_app.py` for source-mode startup and Google / Keycloak SSO startup.
-- `benchmark/`, a route-matrix evaluation framework for document format robustness, DocQA routes, MARA agentic reasoning routes, and multimodal evidence tracking.
+- `benchmark/`, a route-matrix evaluation framework for document format robustness, DocQA routes, MARA agentic reasoning routes, multimodal evidence tracking, dataset-native scoring, and diagnostic proxy metrics.
 
-The main design goal is to let one configuration, one local index, and one conversation store support both browser workflows and terminal workflows. MARA can be used as a ready-to-run local document QA app, or as a foundation for a custom RAG / document intelligence system.
+The main design goal is to let one configuration, one local index, and one conversation store support both browser workflows and terminal workflows. MARA can be used as a ready-to-run local document QA app, or as a foundation for a custom RAG / document intelligence system that needs inspectable evidence rather than opaque answers.
 
-### Screenshot Placeholders
+### Screenshots
 
-> **Screenshot placeholder: project overview**
-> Recommended: show the Web UI with the file area, chat area, document preview, and knowledge graph panel.
+![MARA workbench overview](docs/images/mara-workbench-overview.png)
 
-> **Screenshot placeholder: document preview and page-level QA**
-> Recommended: show a PDF or Office document preview with a question answered against the current page.
+The main workbench combines a source browser, page preview, scoped QA controls, citations, Studio artifacts, research notebook state, and runtime status in one local interface.
 
-> **Screenshot placeholder: knowledge graph / Mind Map**
-> Recommended: show the preview card and fullscreen Mind Map viewer after `Generate / Refresh Knowledge Graph`.
+| File indexing | Grounded chat | Evidence review |
+| --- | --- | --- |
+| ![MARA file index](docs/images/file-index-tab.png) | ![MARA chat workbench](docs/images/chat-tab.png) | ![MARA evidence panel](docs/images/info-panel-scores.png) |
 
-> **Screenshot placeholder: MARA DocQA CLI**
-> Recommended: show terminal output from `MARA docqa index`, `MARA docqa ask --reasoning mara`, or `MARA docqa artifacts generate`.
-
-> **Screenshot placeholder: benchmark report**
-> Recommended: show a generated `report.md`, metrics table, or benchmark output directory.
+| Knowledge graph | Studio artifacts | Model resources |
+| --- | --- | --- |
+| ![MARA knowledge graph](docs/images/preview-graph.png) | ![MARA Studio artifacts](docs/images/mara-studio-artifacts.png) | ![MARA resources](docs/images/resources-tab.png) |
 
 ### Core Capabilities
 
@@ -79,15 +79,17 @@ The main design goal is to let one configuration, one local index, and one conve
 - PDF.js page preview, with Office preview available through LibreOffice-to-PDF conversion.
 - Document-level, page-level, multi-document, and selected-text-focused QA.
 - Citation-aware answers that can be inspected against the document preview.
+- Route-aware answer panel that can summarize scope, retrieval route, evidence modalities, verification status, and controller trace events when MARA reasoning metadata is available.
 - Right-side knowledge graph workflow with generation, refresh, node selection, suggested question loading, and fullscreen Mind Map viewing.
+- Research notebook and Studio panels for selected sources, saved notes, saved answers, generated artifacts, artifact export, regeneration, and deletion.
 - Optional SSO wrapper in [sso_app.py](sso_app.py) for Google and Keycloak.
 
 #### CLI And Automation
 
 - The `mara-research-cli` package installs the public `MARA` and `MARA-cli` commands.
 - Use `MARA ...` for the high-permission product shell and `MARA docqa ...` for the specialist document-QA line.
-- `MARA docqa` reuses the application runtime, file index, conversation state, and graph cache.
-- Common DocQA commands include `MARA docqa index`, `MARA docqa files`, `MARA docqa delete`, `MARA docqa ask`, `MARA docqa chat`, and `MARA docqa resume`.
+- `MARA docqa` reuses the application runtime, file index, conversation state, source selection, notes, artifacts, and graph cache.
+- Common DocQA commands include `MARA docqa index`, `MARA docqa files`, `MARA docqa delete`, `MARA docqa ask`, `MARA docqa chat`, `MARA docqa sessions`, `MARA docqa resume`, `MARA docqa notes`, `MARA docqa sources`, and `MARA docqa artifacts`.
 - Focused DocQA platform skills include `MARA-docqa-delete` for source removal.
 - `MARA app` initializes, checks, and launches the packaged Web UI runtime.
 - `MARA model` generates model routing config, checks provider availability, and runs one routed model call.
@@ -141,6 +143,16 @@ Saved artifact types include:
 - `slide_deck`
 - `audio_overview`
 - `video_overview`
+
+Route-aware MARA runs can expose controller metadata for:
+
+- Direct answer or abstention.
+- Document text evidence.
+- Page-image evidence when a visual backend or page-image records are available.
+- Element evidence for table, figure, formula, slide, or page-element records.
+- Knowledge graph evidence for global summaries, comparison, and "connect the dots" tasks.
+- Hybrid evidence that combines text, page-image, element, and graph signals.
+- Light or strict answer verification modes, depending on CLI/runtime configuration.
 
 #### Document Formats And Indexing
 
@@ -482,6 +494,8 @@ Start here when changing the local data directory, development mode, document di
 
 The evaluation framework lives in [benchmark](benchmark). It supports normalized manifests, route matrices, DocQA runtime routes, MARA fast / thorough ablations, and metrics for answer quality, citation recall, page hits, multimodal evidence, claim verification, latency, and cache behavior.
 
+Reports separate score authority into three layers: paper-grade external metrics when an evaluator explicitly claims them, dataset-native local scores for local comparison, and MARA diagnostic proxy scores for controller, evidence, citation, groundedness, abstention, and format behavior.
+
 Example:
 
 ```powershell
@@ -555,32 +569,32 @@ Upstream project:
 
 ### 项目定位
 
-MARA 不是单页演示应用，而是一套可以本地运行、可以通过 CLI 自动化、也可以继续二次开发的 RAG 应用仓库。它围绕一个共享运行时展开：
+MARA（Multimodal Agentic Retrieval and Answering）是面向学术、技术、财务和幻灯片类混合文档的本地优先文档研究工作台。它不是单页演示应用，而是一套可以本地运行、可以通过 CLI 自动化、也可以继续二次开发的文档智能仓库。
 
-- Gradio Web UI：文档上传、页面预览、问答、引用查看、知识图谱与 Mind Map 浏览。
-- `MARA docqa`：复用 Web UI 的配置、索引、会话与知识图谱缓存的文档问答 CLI。
+当前实现围绕一个共享运行时展开：
+
+- Gradio Web UI：文档上传、来源选择、页面预览、grounded chat、引用查看、route-aware reasoning 摘要、知识图谱、Mind Map 浏览、研究笔记和 Studio artifact 生成。
+- `MARA docqa`：复用 Web UI 的配置、索引、会话、来源选择、笔记、artifacts 与知识图谱缓存的文档问答 CLI。
+- Self-RAG-inspired 应用层 controller：不会训练新的 Self-RAG 模型，而是在普通运行时元数据中显式记录 route、retrieval、evidence、verification、retry 和 abstention 决策。
 - `MARA` 顶层命令：面向演示文稿、工作区文件、模型路由、平台资产安装和应用生命周期的产品 CLI。
 - `app.py` / `sso_app.py`：源码模式 Web UI 入口，以及 Google / Keycloak SSO 包装入口。
-- `benchmark/`：用于文档格式鲁棒性、DocQA 路由、MARA agentic reasoning 路由与多模态证据的评测框架。
+- `benchmark/`：用于文档格式鲁棒性、DocQA 路由、MARA agentic reasoning 路由、多模态证据、dataset-native scoring 和 diagnostic proxy metrics 的评测框架。
 
-项目当前的设计目标是让同一份配置、同一个文件索引、同一套会话数据同时服务浏览器体验和终端工作流。你可以把它作为一个可运行的本地文档 QA 应用，也可以把它作为自己的 RAG / 文档智能系统基础。
+项目当前的设计目标是让同一份配置、同一个文件索引、同一套会话数据同时服务浏览器体验和终端工作流。你可以把它作为一个可运行的本地文档 QA 应用，也可以把它作为需要可检查证据而不是黑盒回答的 RAG / 文档智能系统基础。
 
-### 截图占位
+### 截图
 
-> **截图占位：项目总览**
-> 建议展示 Web UI 主界面，包括左侧文件区域、中间对话区域、右侧文档预览和知识图谱区域。
+![MARA workbench overview](docs/images/mara-workbench-overview.png)
 
-> **截图占位：文档预览与页面级问答**
-> 建议展示 PDF 或 Office 文档的页级预览，并保留一次针对当前页面的问答结果。
+主工作台把 source browser、页面预览、scoped QA、引用、Studio artifacts、研究笔记和运行时状态放在同一个本地界面中。
 
-> **截图占位：知识图谱 / Mind Map**
-> 建议展示 `Generate / Refresh Knowledge Graph` 后的预览卡片和全屏 Mind Map 查看器。
+| 文件索引 | Grounded chat | 证据检查 |
+| --- | --- | --- |
+| ![MARA file index](docs/images/file-index-tab.png) | ![MARA chat workbench](docs/images/chat-tab.png) | ![MARA evidence panel](docs/images/info-panel-scores.png) |
 
-> **截图占位：MARA DocQA CLI**
-> 建议展示 `MARA docqa index`、`MARA docqa ask --reasoning mara` 或 `MARA docqa artifacts generate` 的终端输出。
-
-> **截图占位：Benchmark 报告**
-> 建议展示一次 `benchmark run` 生成的 `report.md`、指标表或输出目录。
+| 知识图谱 | Studio artifacts | 模型资源 |
+| --- | --- | --- |
+| ![MARA knowledge graph](docs/images/preview-graph.png) | ![MARA Studio artifacts](docs/images/mara-studio-artifacts.png) | ![MARA resources](docs/images/resources-tab.png) |
 
 ### 核心能力
 
@@ -590,13 +604,16 @@ MARA 不是单页演示应用，而是一套可以本地运行、可以通过 CL
 - 支持 PDF.js 页面预览；Office 文件可通过 LibreOffice 转换为 PDF 后预览。
 - 支持文档级、页级、多文档和选中文本聚焦问答。
 - 答案可携带引用信息，便于回到预览区检查证据。
+- 当 MARA reasoning 元数据可用时，答案区域可以展示 scope、retrieval route、evidence modalities、verification 状态和 controller trace 摘要。
 - 右侧知识图谱区域支持生成、刷新、节点选择、建议问题加载和全屏 Mind Map 浏览。
+- Research notebook 和 Studio 面板支持来源选择、笔记、保存答案、生成资料、artifact 导出、重新生成和删除。
 - SSO 入口 [sso_app.py](sso_app.py) 支持 Google 与 Keycloak 配置。
 
 #### CLI 与自动化
 
 - `mara-research-cli` 包安装公开命令 `MARA` 和 `MARA-cli`。
-- `MARA docqa` 复用应用运行时、文件索引、会话状态和图谱缓存。
+- `MARA docqa` 复用应用运行时、文件索引、会话状态、来源选择、笔记、artifacts 和图谱缓存。
+- 常用 DocQA 命令包括 `MARA docqa index`、`MARA docqa files`、`MARA docqa delete`、`MARA docqa ask`、`MARA docqa chat`、`MARA docqa sessions`、`MARA docqa resume`、`MARA docqa notes`、`MARA docqa sources` 和 `MARA docqa artifacts`。
 - `MARA app` 管理打包运行时的初始化、健康检查和 Web UI 启动。
 - `MARA model` 提供模型路由配置生成、Provider 可用性检查和一次性模型调用。
 - `MARA platform` 安装和验证 Codex / Claude Code 平台支持资产。
@@ -623,6 +640,15 @@ MARA 不是单页演示应用，而是一套可以本地运行、可以通过 CL
 - `flashcards`
 - `mindmap`
 - `slide_outline`
+- `briefing_doc`
+- `faq`
+- `timeline`
+- `custom_report`
+- `data_table`
+- `infographic`
+- `slide_deck`
+- `audio_overview`
+- `video_overview`
 
 可保存的学习资料类型包括：
 
@@ -631,6 +657,25 @@ MARA 不是单页演示应用，而是一套可以本地运行、可以通过 CL
 - `flashcards`
 - `mindmap`
 - `slide_outline`
+- `briefing_doc`
+- `faq`
+- `timeline`
+- `custom_report`
+- `data_table`
+- `infographic`
+- `slide_deck`
+- `audio_overview`
+- `video_overview`
+
+Route-aware MARA 运行可以暴露以下 controller 元数据：
+
+- Direct answer 或 abstention。
+- 文档文本证据。
+- 当 visual backend 或 page-image records 可用时的页面图像证据。
+- 表格、图像、公式、幻灯片或页面元素记录对应的 element evidence。
+- 面向全局总结、比较和“connect the dots”问题的知识图谱证据。
+- 组合 text、page-image、element 和 graph signals 的 hybrid evidence。
+- 取决于 CLI/runtime 配置的 light 或 strict answer verification。
 
 #### 文档格式与索引
 
@@ -870,6 +915,12 @@ MARA docqa notes convert-source <conversation-id> --note <note-id>
 MARA docqa artifacts generate <conversation-id> --type quiz
 MARA docqa artifacts list <conversation-id>
 MARA docqa artifacts show <conversation-id> --artifact <artifact-id>
+MARA docqa artifacts export <conversation-id> --artifact <artifact-id> --format md
+MARA docqa artifacts evaluate <conversation-id> --artifact <artifact-id> --json
+MARA docqa artifacts evaluate <conversation-id> --json
+MARA docqa artifacts save-note <conversation-id> --artifact <artifact-id>
+MARA docqa artifacts regenerate <conversation-id> --artifact <artifact-id>
+MARA docqa artifacts delete <conversation-id> --artifact <artifact-id>
 ```
 
 #### 模型路由
@@ -968,6 +1019,8 @@ globals().update(
 
 评测框架位于 [benchmark](benchmark)。它支持统一 manifest、route matrix、DocQA runtime 路由、MARA fast / thorough ablation，以及回答质量、引用召回、页命中、多模态证据、claim verification、延迟与缓存统计等字段。
 
+报告会把 score authority 分成三层：只有外部 evaluator 明确声明时才作为 paper-grade external metric；本地对比默认使用 dataset-native local score；MARA diagnostic proxy score 则用于观察 controller、evidence、citation、groundedness、abstention 和格式行为。
+
 示例：
 
 ```powershell
@@ -1019,9 +1072,11 @@ uv run --python 3.10 python -m pytest -q
 ### 当前边界
 
 - Legacy GraphRAG 相关变量和兼容入口仍保留，但默认单页 QA 路径不依赖 Nano / Light / MS GraphRAG。
-- NotebookLM 风格的 notes、sources、artifacts 主线已在 CLI 中落地；更完整的 Web UI notebook 面板仍是后续扩展方向。
-- 音频、视频、公共分享、云端同步和移动端不是当前 v1 范围。
-- 完整 PPTX 生成仍属于扩展方向；当前稳定产物是 source-grounded `slide_outline` 和已有 deck 观察、审阅、导出、patch 应用能力。
+- NotebookLM 风格的 notes、sources、artifacts 主线已在 CLI 和右侧 Studio 面板中落地。
+- Audio 和 video overview artifacts 默认生成 source-grounded script 或 scene plan；`mp3` 和 `mp4` 导出需要配置 `KH_MARA_ARTIFACT_MEDIA_EXPORT_ADAPTER`。
+- Data table、infographic、slide outline 和 slide deck artifacts 支持 CSV、SVG、Markdown、HTML、JSON、PPTX 等本地导出路径。
+- Artifact evaluation 会报告本地 `proxy_metric`，并在未运行外部 benchmark adapter 时把 `external_metric` / `paper_grade_metric` 标记为未配置或未声称。传入 `--artifact` 会评估单个 artifact；省略时会汇总 notebook 中的全部 artifacts，包括 PDF、PPTX、DOCX 和 image evidence 的来源格式覆盖。
+- Public sharing、cloud sync 和 mobile clients 不在当前 v1 范围内。
 
 ### 许可
 
