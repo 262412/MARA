@@ -751,8 +751,6 @@ source .venv/bin/activate
 安装本地包：
 
 ```shell
-pip install -e "libs/kotaemon[all]"
-pip install -e "libs/ktem"
 uv sync --extra mara
 ```
 
