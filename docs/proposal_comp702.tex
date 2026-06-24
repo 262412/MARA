@@ -115,19 +115,12 @@ The aims of the project are:
 
 \textbf{Essential requirements:}
 \begin{itemize}
-  \item Users can upload, index and query PDF, Word, PowerPoint, Excel/CSV, Markdown and plain-text files through the shared Web/CLI DocQA runtime.
-  \item Users can select document sources, inspect cited pages or evidence snippets, and continue conversations with persisted local state.
-  \item Users can use knowledge-map context, notes and source-grounded learning materials where the available evidence supports them.
-  \item The system defines stable \texttt{RouteDecision}, \texttt{RetrieveDecision}, \texttt{EvidenceBundle},\\
-  \texttt{VerifyDecision} and \texttt{ControllerTrace} contracts.
-  \item A route and executor registry supports \texttt{direct\_answer}, \texttt{text\_rag}, \texttt{page\_image\_rag}, \texttt{element\_rag}, \texttt{lightweight\_graph\_rag}, \texttt{hybrid\_rag} and \texttt{abstain}.
-  \item The prototype implements usable versions of \texttt{text\_rag}, controller-auto routing and at least one multimodal or structured-evidence route, while clearly labelling any smoke or unavailable backend.
-  \item The indexing layer stores text chunks, page-image records, element records and lightweight graph records with links back to the original sources.
-  \item The controller selects routes, records reasons, respects allowed routes, and handles invalid route decisions through a safe fallback or abstention.
-  \item Lightweight CRAG-style retrieval quality checks and optional claim verification help decide whether to generate, retry, revise or abstain.
-  \item Answers include citations, evidence metadata and a compact trace of controller decisions that can be inspected in the UI, CLI and optional evaluation output.
-  \item Automated tests cover indexing, retrieval, citation handling, controller decisions, route executors, evidence schemas, Web/CLI contracts and important UI services.
-  \item A small labelled benchmark records questions, expected routes, accepted evidence and expected answers for technical evaluation.
+  \item Users can upload, index and query PDF, Word, PowerPoint, Excel/CSV, Markdown and plain-text files through shared Web and CLI workflows.
+  \item Users can select document sources, receive citation-backed answers, inspect cited evidence, and continue conversations with persisted local state.
+  \item The system provides a shared controller interface that can choose between direct answering, text retrieval, multimodal or structured evidence retrieval, graph context, hybrid retrieval and abstention.
+  \item The prototype implements usable versions of text RAG, controller-auto routing, and at least one multimodal or structured-evidence route, with unavailable or smoke backends clearly labelled.
+  \item Answers include source-linked evidence records, citations, retrieval-quality checks, optional claim verification and a compact controller trace.
+  \item Automated tests and a small labelled benchmark evaluate indexing, retrieval, route selection, citation support, answer correctness and efficiency.
 \end{itemize}
 
 \textbf{Desirable requirements:}
