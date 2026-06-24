@@ -79,7 +79,7 @@ University of Liverpool}
 \pagenumbering{arabic}
 
 \begin{abstract}
-MARA (Multimodal Agentic Retrieval and Answering) is a proposed local-first document question-answering workbench for mixed academic and technical documents. Its main technical feature is a Self-RAG-inspired controller: a program component that decides how the system should answer each question. The system will provide document upload, indexing, source selection, answers with citations, page and evidence preview, knowledge-map context, notes, learning materials and a shared Web/CLI workflow. Instead of using one fixed retrieval-augmented generation (RAG) pipeline, MARA can answer directly, retrieve text, inspect page images, use document elements such as tables or figures, use graph context, combine several routes, check evidence, retry, revise or abstain. The analytical component will use technical tests, demonstration tasks and a small labelled route comparison to support, rather than dominate, the project.
+MARA (Multimodal Agentic Retrieval and Answering) is a proposed local-first document question-answering workbench for mixed academic and technical documents. Its main technical feature is a Self-RAG-inspired controller: a program component that decides how the system should answer each question. The core system will support document upload, indexing, source selection, citation-backed answers, evidence preview and a shared Web/CLI workflow. Secondary workbench features, such as knowledge-map context, notes and learning materials, may be included where they remain supported by evidence and project time. Instead of using one fixed retrieval-augmented generation (RAG) pipeline, MARA can answer directly, retrieve text, use at least one non-text evidence route such as page-image or document-element retrieval, use scoped graph context, combine routes, check evidence, retry, revise or abstain. The analytical component will use technical tests, demonstration tasks and a small labelled route comparison to support, rather than dominate, the project.
 \end{abstract}
 
 \section{Statement of ethical compliance: A0/A1}
@@ -93,11 +93,11 @@ Data category: A0/A1 for public, synthetic or self-provided non-sensitive projec
 
 \section{Project description}
 
-MARA will help users search, compare and understand mixed document collections through a web workbench and command-line workflow. The project is framed first as a usable MSc project prototype: users can add documents, index them locally, ask questions, inspect cited evidence, select sources, view knowledge-map context, and create notes or learning materials. Its main technical contribution is a controller that combines several ways of answering: text retrieval, page-image evidence, document elements and graph context. The controller receives a \texttt{DocQARequest}, chooses one or more answer routes, retrieves evidence, checks evidence quality, generates or rejects an answer, and returns a \texttt{DocQAResponse} with citations, evidence and trace metadata.
+MARA will help users search, compare and understand mixed document collections through a web workbench and command-line workflow. The project is framed first as a usable MSc project prototype: users can add documents, index them locally, ask questions, select sources and inspect cited evidence. Secondary workbench features may include knowledge-map context, notes and source-grounded learning materials, but these will not replace the core document QA deliverable. The main technical contribution is a controller that combines several ways of answering: text retrieval, at least one non-text evidence route, scoped graph context and abstention. The controller receives a \texttt{DocQARequest}, chooses one or more answer routes, retrieves evidence, checks evidence quality, generates or rejects an answer, and returns a \texttt{DocQAResponse} with citations, evidence and trace metadata.
 
 The phrase ``Self-RAG-inspired'' is used deliberately. MARA will not train a new language model with Self-RAG reflection tokens. Instead, it will implement Self-RAG's decision ideas as ordinary program decisions: which route to use, whether to retrieve more evidence, whether the evidence is good enough, whether to check a claim, whether to retry, and whether to abstain. This keeps the thesis feasible while preserving the central technical challenge: can a controller make a practical document QA workbench more transparent and reliable than a fixed RAG workflow?
 
-The main routes will be \texttt{direct\_answer}, \texttt{text\_rag}, \texttt{page\_image\_rag}, \texttt{element\_rag}, \texttt{lightweight\_graph\_rag}, \texttt{hybrid\_rag} and \texttt{abstain}. A route is a possible way of answering a question. Text RAG will use existing text chunks and vector search. Page-image RAG will provide a ColPali-style route interface using page-image records, with real ColPali or VLM backends treated as configurable extensions if available. Element RAG will retrieve tables, figures, formulas and slide/page elements. GraphRAG will be a specialist route for global summaries, cross-document comparison and ``connect the dots'' questions, not the default factual QA path.
+The route interface will cover \texttt{direct\_answer}, \texttt{text\_rag}, \texttt{page\_image\_rag}, \texttt{element\_rag}, \texttt{lightweight\_graph\_rag}, \texttt{hybrid\_rag} and \texttt{abstain}. A route is a possible way of answering a question. The core implementation will guarantee text RAG, controller-auto routing and at least one non-text evidence route; other routes may be implemented as scoped, smoke-tested or configurable extensions. Text RAG will use existing text chunks and vector search. Page-image RAG can provide a ColPali-style route interface using page-image records, with real ColPali or VLM backends treated as configurable extensions if available. Element RAG can retrieve tables, figures, formulas and slide/page elements. Graph context will be a specialist route for global summaries, cross-document comparison and ``connect the dots'' questions, not the default factual QA path.
 
 The first engineering priority is to control system debt. The existing code already has Web and CLI entry points, local state, preview, knowledge map, artifact and evaluation scaffolding. These are useful, but they also create boundary risk: a large chat page, UI/runtime coupling, Web/CLI drift, thick dependencies and immature notebook/PPTX workflows. The proposal therefore prioritises a project-first system: shared runtime contracts, route/executor registries, evidence schema, controller trace, visible workbench features, technical evaluation support and a thin UI layer.
 
@@ -107,19 +107,19 @@ The aims of the project are:
 
 \begin{itemize}
   \item To design and implement a usable local-first multimodal document question-answering workbench with shared Web and CLI workflows.
-  \item To develop a Self-RAG-inspired controller that selects between direct answering, text retrieval, multimodal or structured evidence retrieval, graph context, hybrid retrieval and abstention.
+  \item To develop a Self-RAG-inspired controller that selects between direct answering, text retrieval, at least one non-text evidence route and abstention, with graph or hybrid routes treated as scoped extensions where available.
   \item To evaluate the prototype through technical tests and a small labelled benchmark measuring retrieval quality, route selection, citation support, answer correctness and efficiency.
 \end{itemize}
 
-\textbf{Scope note:} in this proposal, ``essential'' means a usable workbench, a stable controller interface, simplified but working answer routes, and enough technical evaluation to explain system behaviour. It does not mean a production-level reproduction of Self-RAG, CRAG, ColPali, GraphRAG or MMDocRAG. Full visual-language backends, full GraphRAG engineering, trainable routing and large benchmark studies are configurable or scoped extensions.
+\textbf{Scope note:} in this proposal, ``essential'' means a usable workbench, a stable controller interface, text RAG, at least one non-text evidence route, and enough technical evaluation to explain system behaviour. It does not mean a production-level reproduction of Self-RAG, CRAG, ColPali, GraphRAG or MMDocRAG. Full visual-language backends, full GraphRAG engineering, trainable routing and large benchmark studies are configurable or scoped extensions.
 
 \textbf{Essential requirements:}
 \begin{itemize}
   \item Users can upload, index and query PDF, Word, PowerPoint, Excel/CSV, Markdown and plain-text files through shared Web and CLI workflows.
   \item Users can select document sources, receive citation-backed answers, inspect cited evidence, and continue conversations with persisted local state.
-  \item The system provides a shared controller interface that can choose between direct answering, text retrieval, multimodal or structured evidence retrieval, graph context, hybrid retrieval and abstention.
-  \item The prototype implements usable versions of text RAG, controller-auto routing, and at least one multimodal or structured-evidence route, with unavailable or smoke backends clearly labelled.
-  \item Answers include source-linked evidence records, citations, retrieval-quality checks, optional claim verification and a compact controller trace.
+  \item The system provides a shared controller interface that can choose between direct answering, text retrieval, at least one non-text evidence route and abstention, with graph or hybrid routes exposed as scoped extensions where available.
+  \item The prototype implements usable versions of text RAG, controller-auto routing, and at least one non-text evidence route, such as page-image retrieval or document-element retrieval, with unavailable or smoke backends clearly labelled.
+  \item Answers include source-linked evidence records, citations, retrieval-quality checks, claim verification where implemented, and a compact controller trace.
   \item Automated tests and a small labelled benchmark evaluate indexing, retrieval, route selection, citation support, answer correctness and efficiency.
 \end{itemize}
 
@@ -142,9 +142,9 @@ Adaptive-RAG and MAO-ARAG help explain the routing problem \cite{jeong2024adapti
 
 CRAG focuses on a practical failure mode: if the retrieval step finds weak or irrelevant evidence, the generated answer is likely to be wrong \cite{yan2024crag}. CRAG therefore checks retrieved evidence before generation. MARA will use a simplified version of this idea. Retrieved evidence will be labelled good, ambiguous or poor. Good evidence can be used for generation; ambiguous evidence can trigger retry or hybrid fallback; poor evidence can trigger route switching or abstention.
 
-M3DocRAG and ColPali motivate the multimodal document side of the project \cite{cho2024m3docrag, faysse2024colpali}. Many documents are not just plain text: answers may depend on page layout, a figure, a table, a formula, or content spread across several pages. M3DocRAG supports multi-page and multi-document retrieval, while ColPali shows that directly retrieving page images can preserve visual details that OCR text may lose. MARA will use these ideas at prototype scale through a hybrid index of text chunks, page-image records and element records. It will not claim production-level ColPali or VLM performance unless those backends are configured and evaluated.
+M3DocRAG and ColPali motivate the multimodal document side of the project \cite{cho2024m3docrag, faysse2024colpali}. Many documents are not just plain text: answers may depend on page layout, a figure, a table, a formula, or content spread across several pages. M3DocRAG supports multi-page and multi-document retrieval, while ColPali shows that directly retrieving page images can preserve visual details that OCR text may lose. MARA will use these ideas at prototype scale through text chunks and at least one non-text evidence index, with broader page-image or element coverage treated as scoped work. It will not claim production-level ColPali or VLM performance unless those backends are configured and evaluated.
 
-GraphRAG is useful for questions about the whole collection rather than one page \cite{edge2024graphrag}. For example, a user might ask for the main themes across a set of papers or how several concepts are connected. GraphRAG builds an entity graph and community summaries for this kind of global question. MARA will implement a lightweight graph route for summaries, comparisons and ``connect the dots'' tasks. It will not make GraphRAG the default path for ordinary page-specific questions.
+GraphRAG is useful for questions about the whole collection rather than one page \cite{edge2024graphrag}. For example, a user might ask for the main themes across a set of papers or how several concepts are connected. GraphRAG builds an entity graph and community summaries for this kind of global question. MARA will treat graph context as a lightweight, scoped route for summaries, comparisons and ``connect the dots'' tasks. It will not make GraphRAG the default path for ordinary page-specific questions.
 
 The evaluation literature explains the analytical part of the project. ALCE evaluates whether generated answers with citations are fluent, correct and well supported \cite{gao2023alce}. MMDocRAG focuses on document QA where the evidence may come from text, images and tables \cite{dong2025mmdocrag}. RAGTruth provides labels for hallucination and unsupported claims in RAG outputs \cite{niu2024ragtruth}. MARA will use these ideas to guide a small technical evaluation, using practical signals such as citation quality, multimodal evidence support and unsupported claim rate rather than trying to reproduce the full external benchmarks.
 
@@ -161,7 +161,7 @@ The project will be implemented mainly in Python 3.10+. It builds on a Kotaemon-
 \toprule
 Inherited baseline & Existing document loaders, vector search integration, Gradio runtime, settings, preview services, basic DocQA flow, local state, knowledge-map scaffolding, artifact outline support and evaluation skeleton. \\
 \midrule
-New or extended work & Controller contracts, route/executor registry, structured evidence schema, scoped page-image and element indexing, lightweight GraphRAG route, CRAG-style evidence checker, claim verifier, optional route comparison adapters, shared Web/CLI runtime and inspectable controller trace. \\
+New or extended work & Controller contracts, route/executor registry, structured evidence schema, text RAG plus at least one non-text evidence route, scoped graph-context support, CRAG-style evidence checker, claim verification where feasible, small benchmark adapters, shared Web/CLI runtime and inspectable controller trace. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -175,11 +175,14 @@ Development will begin by freezing system boundaries. The chat page will not con
   \item Execute one or more route executors and return a unified \texttt{EvidenceBundle}.
   \item Run a CRAG-style evidence checker before generation; poor evidence triggers retry, route switch or abstain.
   \item Generate an answer only from accepted evidence and record citations.
-  \item Run claim verification; unsupported or insufficient evidence triggers one revision, retry or abstention.
+  \item Run claim verification where implemented; unsupported or insufficient evidence triggers one revision, retry or abstention.
   \item Return answer text, citations, route trace, evidence metadata, backend metadata and verification result.
 \end{enumerate}
 
 \textbf{Planned route executors:}
+
+The table below defines the planned route interfaces. The core prototype will prioritise text RAG, controller-auto routing and at least one non-text evidence route; graph, hybrid and visual-language backends may remain scoped or configurable if full support is too costly.
+
 \begin{center}
 \scriptsize
 \begin{tabularx}{\textwidth}{p{0.19\textwidth}p{0.25\textwidth}p{0.25\textwidth}X}
@@ -224,7 +227,7 @@ The evaluation is intentionally small-scale and prototype-level, but it will use
 \Needspace{36\baselineskip}
 \section{UI/UX mockup}
 
-The interface will be a multimodal document workbench: corpus browser on the left, page/evidence preview in the centre, and route-aware answering, citations, verification and graph context on the right.
+The interface will be a multimodal document workbench: corpus browser on the left, page/evidence preview in the centre, and route-aware answering, citations, verification and graph context, where available, on the right.
 
 \begin{Verbatim}[fontsize=\tiny]
 +----------------------------------------------------------------------------------------------------+
@@ -250,11 +253,11 @@ The interface will be a multimodal document workbench: corpus browser on the lef
 +----------------------------------------------------------------------------------------------------+
 \end{Verbatim}
 
-The left panel manages sources. The middle shows selected page, image, text and element evidence. The right panel exposes the route policy, answer, citations, controller trace, verification result and graph context. Controller and evaluation controls will be kept compact so the Web UI remains a product prototype while the CLI provides reproducible workflows and optional technical analysis.
+The left panel manages sources. The middle shows selected page, image, text and element evidence. The right panel exposes the route policy, answer, citations, controller trace, verification result and graph context where available. Controller and evaluation controls will be kept compact so the Web UI remains a product prototype while the CLI provides reproducible workflows and technical analysis.
 
 \section{Project ethics and human participants}
 
-No human participants or beta testers are planned. Evaluation will use technical tests, demonstration tasks and optional analytical fixtures built from public, synthetic or self-provided non-sensitive documents. No recruitment, interview, survey, observation or personal feedback data will be collected. If I later add a user study, I will update the ethics statement and check with my supervisor first.
+No human participants or beta testers are planned. Evaluation will use technical tests, demonstration tasks and labelled analytical fixtures built from public, synthetic or self-provided non-sensitive documents. No recruitment, interview, survey, observation or personal feedback data will be collected. If I later add a user study, I will update the ethics statement and check with my supervisor first.
 
 \section{BCS project criteria}
 
@@ -262,12 +265,12 @@ No human participants or beta testers are planned. Evaluation will use technical
 \item
 Practical and analytical skills.
 
-Python development, runtime modularisation, retrieval, multimodal indexing, controller design, Web/CLI integration, testing and optional analytical evaluation.
+Python development, runtime modularisation, retrieval, scoped multimodal indexing, controller design, Web/CLI integration, testing and small-scale analytical evaluation.
 
 \item
 Innovation or creativity.
 
-A Self-RAG-inspired controller that coordinates text, page-image, element, graph, hybrid and guarded RAG routes in one local-first prototype.
+A Self-RAG-inspired controller that coordinates text retrieval and at least one non-text evidence route, with graph, hybrid and guarded routes treated as scoped extensions in one local-first prototype.
 
 \item
 Synthesis and evaluation.
@@ -282,7 +285,7 @@ Students and knowledge workers need to inspect complex document collections with
 \item
 Self-management.
 
-Boundary freeze, version control, route milestones, contract tests, demonstration planning, optional evaluation design, risk tracking and dissertation writing time.
+Boundary freeze, version control, route milestones, contract tests, demonstration planning, small benchmark design, risk tracking and dissertation writing time.
 
 \item
 Critical self-evaluation.
@@ -302,9 +305,9 @@ Stage & W1 & W2 & W3 & W4 & W5 & W6 & W7 & W8 & W9 & W10 & W11 & W12 \\
 Background reading and proposal & X & X & & & & & & & & & & \\
 Boundary freeze and runtime contracts & & X & X & & & & & & & & & \\
 Controller and route registry & & & X & X & X & & & & & & & \\
-Text/page-image/element indexes & & & & X & X & X & & & & & & \\
+Text and non-text evidence indexes & & & & X & X & X & & & & & & \\
 CRAG guardrail and verifier & & & & & X & X & X & & & & & \\
-GraphRAG and hybrid route & & & & & & X & X & X & & & & \\
+Scoped graph/hybrid route & & & & & & X & X & X & & & & \\
 Evaluation fixtures and demo tasks & & & & & X & X & X & X & X & & & \\
 Web/CLI contract and UI trace & & & & & & & X & X & X & & & \\
 Technical analysis & & & & & & & & X & X & X & & \\
@@ -334,7 +337,7 @@ GraphRAG becomes too costly or vague & Use graph only for global routes and requ
 \hline
 CRAG-style checker blocks good answers & Tune checker thresholds and report false positive/false negative cases & Medium & Medium \\
 \hline
-Analytical scope becomes too broad & Keep the technical comparison optional, start with small synthetic fixtures, and prioritise the usable workbench & Medium & High \\
+Analytical scope becomes too broad & Keep additional ablations optional, start with small labelled fixtures, and prioritise the core benchmark and usable workbench & Medium & High \\
 \hline
 Unsupported citations or claims & Use accepted evidence labels, claim verification and abstention for weak support & Medium & High \\
 \hline
