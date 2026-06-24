@@ -5947,6 +5947,18 @@ body.dark #answer-panel .answer-reasoning-steps strong {
   color: #f8fafc;
 }
 
+html.ktem-dark-mode #answer-panel .answer-reasoning-title.answer-reasoning-shimmer,
+body.ktem-dark-mode #answer-panel .answer-reasoning-title.answer-reasoning-shimmer,
+body.dark #answer-panel .answer-reasoning-title.answer-reasoning-shimmer {
+  display: inline-block;
+  color: transparent;
+  background: var(--app-gradient-thinking);
+  background-size: 260% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: answer-reasoning-shimmer var(--app-shimmer-duration) var(--motion-ease) infinite;
+}
+
 html.ktem-dark-mode #answer-panel .answer-reasoning-block summary small,
 body.ktem-dark-mode #answer-panel .answer-reasoning-block summary small,
 body.dark #answer-panel .answer-reasoning-block summary small,

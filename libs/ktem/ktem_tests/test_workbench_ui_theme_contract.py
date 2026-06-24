@@ -58,6 +58,33 @@ def test_global_ui_uses_quiet_aurora_motion_tokens_without_layout_changes():
         assert token in reduced_motion_css
 
 
+def test_streaming_reasoning_shimmer_survives_dark_mode_title_color():
+    css = _main_css()
+
+    solid_title_start = css.index(
+        "html.ktem-dark-mode #answer-panel .answer-reasoning-title,"
+    )
+    shimmer_selector = (
+        "html.ktem-dark-mode #answer-panel "
+        ".answer-reasoning-title.answer-reasoning-shimmer"
+    )
+    shimmer_start = css.index(shimmer_selector)
+    assert solid_title_start < shimmer_start
+
+    shimmer_block = _block_after(css, shimmer_selector)
+    for token in [
+        "display: inline-block;",
+        "color: transparent;",
+        "background: var(--app-gradient-thinking);",
+        "background-size: 260% 100%;",
+        "background-clip: text;",
+        "-webkit-background-clip: text;",
+        "animation: answer-reasoning-shimmer var(--app-shimmer-duration) var(--motion-ease) infinite;",
+    ]:
+        assert token in shimmer_block
+    assert "#f8fafc" not in shimmer_block
+
+
 def test_workbench_surfaces_carry_visible_aurora_above_base_background():
     css = _main_css()
 
