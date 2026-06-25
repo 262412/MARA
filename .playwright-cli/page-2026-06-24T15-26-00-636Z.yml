@@ -1,33 +1,33 @@
 - generic [ref=e7]:
-  - generic [ref=e8]:
-    - tablist [ref=e9]:
-      - generic [ref=e11]: MARA
-      - tab "Welcome" [selected] [ref=e12] [cursor=pointer]
-      - generic [ref=e13]:
-        - 'button "Dataset: Current Corpus" [ref=e14] [cursor=pointer]':
-          - text: "Dataset:"
-          - strong [ref=e15]: Current Corpus
-        - button "Search files" [ref=e16] [cursor=pointer]:
-          - img [ref=e17]
-        - button "Resources" [ref=e19] [cursor=pointer]:
-          - img [ref=e20]
-        - button "Settings" [ref=e22] [cursor=pointer]:
-          - generic [ref=e23]: U
-        - button "Switch to dark mode" [ref=e24] [cursor=pointer]:
-          - img [ref=e25]
-    - tabpanel [ref=e27]:
-      - heading "Welcome to MARA!" [level=1] [ref=e33]
-  - generic [ref=e37]:
-    - generic [ref=e38]:
-      - strong [ref=e39]: "Model:"
-      - text: local-qwen3-8b
-    - generic [ref=e40]:
-      - strong [ref=e41]: "Embedding:"
-      - text: local-bge-m3
-    - generic [ref=e42]:
-      - strong [ref=e43]: "Indices:"
-      - text: "1"
-    - generic [ref=e44]:
-      - strong [ref=e45]: "Version:"
-      - text: 0.0.18
-    - generic [ref=e46]: Config loaded
+    - generic [ref=e8]:
+        - tablist [ref=e9]:
+            - generic [ref=e11]: MARA
+            - tab "Welcome" [selected] [ref=e12] [cursor=pointer]
+            - generic [ref=e13]:
+                - 'button "Dataset: Current Corpus" [ref=e14] [cursor=pointer]':
+                    - text: "Dataset:"
+                    - strong [ref=e15]: Current Corpus
+                - button "Search files" [ref=e16] [cursor=pointer]:
+                    - img [ref=e17]
+                - button "Resources" [ref=e19] [cursor=pointer]:
+                    - img [ref=e20]
+                - button "Settings" [ref=e22] [cursor=pointer]:
+                    - generic [ref=e23]: U
+                - button "Switch to dark mode" [ref=e24] [cursor=pointer]:
+                    - img [ref=e25]
+        - tabpanel [ref=e27]:
+            - heading "Welcome to MARA!" [level=1] [ref=e33]
+    - generic [ref=e37]:
+        - generic [ref=e38]:
+            - strong [ref=e39]: "Model:"
+            - text: local-qwen3-8b
+        - generic [ref=e40]:
+            - strong [ref=e41]: "Embedding:"
+            - text: local-bge-m3
+        - generic [ref=e42]:
+            - strong [ref=e43]: "Indices:"
+            - text: "1"
+        - generic [ref=e44]:
+            - strong [ref=e45]: "Version:"
+            - text: 0.0.18
+        - generic [ref=e46]: Config loaded

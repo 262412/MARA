@@ -1,13 +1,12 @@
+import re
 from importlib.metadata import version
 from pathlib import Path
-import re
 
 import gradio as gr
 import requests
 from decouple import config
-from theflow.settings import settings
-
 from ktem.utils.render import BASE_PATH
+from theflow.settings import settings
 
 KH_DEMO_MODE = getattr(settings, "KH_DEMO_MODE", False)
 HF_SPACE_URL = config("HF_SPACE_URL", default="")
