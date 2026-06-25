@@ -78,25 +78,22 @@ footer {
   border: none;
 }
 .header-bar button {
-  border: 1px solid var(--kg-ui-border) !important;
+  border: 1px solid var(--control-border-default) !important;
   border-radius: 999px !important;
-  background: var(--kg-ui-surface-system), var(--background-fill-primary, #fff) !important;
-  box-shadow: var(--kg-ui-shadow);
+  background: var(--nav-control-bg-default) !important;
+  color: var(--control-text-default) !important;
+  box-shadow: var(--control-shadow-default) !important;
 }
 .header-bar button.selected {
-  border: 1px solid color-mix(in srgb, var(--color-accent, #2563eb) 62%, #cbd5e1) !important;
-  background: var(--kg-ui-surface-file), var(--background-fill-primary, #fff) !important;
-
-  /* an alternative header bar style with rounded background */
-  /* background-color: var(--background-fill-primary);
-  border: 4px solid transparent;
-  border-radius: var(--radius-lg);
-  background-clip: padding-box; */
+  border-color: var(--control-border-selected) !important;
+  background: var(--control-bg-selected) !important;
+  color: var(--control-text-selected) !important;
+  box-shadow: var(--control-shadow-selected) !important;
 }
 
 /* selected buttons have highlighted text */
 button.selected {
-  color: var(--block-label-text-color);
+  color: var(--control-text-selected);
   font-weight: bold;
 }
 
@@ -653,7 +650,7 @@ button.selected {
   background-size:
     180% 180%,
     240% 100%;
-  animation: answer-reasoning-flow 3.6s ease-in-out infinite;
+  animation: answer-reasoning-flow var(--app-flow-duration) var(--motion-ease) infinite;
   opacity: 0.9;
   pointer-events: none;
 }
@@ -705,17 +702,29 @@ button.selected {
 }
 
 #answer-panel .answer-reasoning-shimmer {
-  color: transparent;
-  background: linear-gradient(
-    90deg,
-    var(--app-accent),
-    var(--app-accent-secondary),
-    var(--app-accent)
-  );
-  background-size: 220% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  animation: answer-reasoning-shimmer 2.4s ease-in-out infinite;
+  position: relative;
+  display: inline-block;
+  margin-left: -4px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  color: var(--app-accent-strong) !important;
+  background: none !important;
+  animation: none !important;
+  isolation: isolate;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--app-accent) 28%, transparent);
+}
+
+#answer-panel .answer-reasoning-shimmer::after {
+  position: absolute;
+  z-index: -1;
+  inset: -2px -4px;
+  content: "";
+  border-radius: inherit;
+  background-image: var(--app-gradient-thinking);
+  background-size: 260% 100%;
+  opacity: 0.22;
+  pointer-events: none;
+  animation: answer-reasoning-shimmer var(--app-shimmer-duration) var(--motion-ease) infinite;
 }
 
 #answer-panel .answer-reasoning-content {
@@ -795,6 +804,61 @@ button.selected {
   border-color: color-mix(in srgb, var(--app-text-muted) 58%, transparent);
 }
 
+@keyframes app-page-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes app-ambient-flow {
+  0% {
+    background-position:
+      8% 20%,
+      84% 10%,
+      50% 0%;
+  }
+  100% {
+    background-position:
+      72% 36%,
+      18% 64%,
+      50% 100%;
+  }
+}
+
+@keyframes app-tab-aurora {
+  0% {
+    opacity: 0.24;
+    background-position:
+      12% 20%,
+      88% 18%,
+      50% 0%;
+  }
+  100% {
+    opacity: 0.5;
+    background-position:
+      68% 36%,
+      24% 68%,
+      50% 100%;
+  }
+}
+
+@keyframes app-shimmer-sweep {
+  0% {
+    background-position: 160% 0;
+  }
+  50% {
+    background-position: 20% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
 @keyframes answer-reasoning-shimmer {
   0% {
     background-position: 160% 0;
@@ -840,16 +904,38 @@ button.selected {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #answer-panel .answer-reasoning-shimmer,
+  .gradio-container *,
+  .gradio-container *::before,
+  .gradio-container *::after {
+    transition-duration: 1ms !important;
+  }
+
+  .app-shimmer-text,
+  .gradio-container::before,
+  #chat-tab::before,
+  #indices-tab::before,
+  #settings-tab::before,
+  #help-tab::before,
+  #resources-tab::before,
+  #login-tab::before,
+  #answer-panel .answer-reasoning-shimmer::after,
   #answer-panel .answer-reasoning-block--streaming::before,
   #answer-panel .answer-reasoning-block--streaming .answer-reasoning-icon,
   #answer-panel .answer-reasoning-dot.is-active {
-    animation: none;
+    animation: none !important;
   }
 
-  #answer-panel .answer-reasoning-shimmer {
+  .app-shimmer-text {
     color: var(--app-accent);
     background: none;
+  }
+
+  #answer-panel .answer-reasoning-shimmer::after {
+    opacity: 0.14;
+  }
+
+  .gradio-container::before {
+    opacity: 0.24;
   }
 }
 
@@ -2771,20 +2857,70 @@ body.kg-viewer-open {
 /* UI Refresh: precise research workbench default with graph-lab dark surfaces */
 /* -------------------------------------------------------------------------- */
 :root {
+  --motion-fast: 140ms;
+  --motion-base: 220ms;
+  --motion-slow: 360ms;
+  --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
   --app-bg: #d2dde8;
   --app-surface: #e0e8f0;
-  --app-surface-raised: #d9e3ed;
-  --app-surface-muted: #c7d5e3;
-  --app-border: #b8c7d5;
-  --app-border-strong: #8aa0b4;
+  --app-surface-raised: #f3f8fc;
+  --app-surface-muted: #ccdcea;
+  --app-border: #afc2d3;
+  --app-border-strong: #7d96a9;
   --app-accent: #0f766e;
-  --app-accent-strong: #0f5f59;
+  --app-accent-strong: #0b635d;
   --app-accent-soft: #ccfbf1;
   --app-accent-secondary: #2563eb;
+  --app-accent-tertiary: #7c3aed;
   --app-focus-ring: rgba(15, 118, 110, 0.22);
-  --app-text: #172033;
+  --app-text: #142033;
   --app-text-muted: #475569;
   --app-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+  --control-bg-default: var(--app-surface-raised);
+  --control-bg-hover: var(--app-gradient-surface);
+  --control-bg-selected: var(--app-gradient-thinking);
+  --control-text-default: var(--app-text);
+  --control-text-hover: var(--app-accent-strong);
+  --control-text-selected: var(--app-bg);
+  --control-border-default: var(--app-border);
+  --control-border-hover: color-mix(in srgb, var(--app-accent) 58%, var(--app-border));
+  --control-border-selected: color-mix(in srgb, var(--app-accent) 72%, var(--app-border));
+  --control-shadow-default: none;
+  --control-shadow-hover: 0 0 0 2px var(--app-focus-ring), var(--app-shadow);
+  --control-shadow-selected: 0 0 0 3px var(--app-focus-ring), var(--app-shadow);
+  --nav-control-bg-default: color-mix(in srgb, var(--app-surface) 58%, transparent);
+  --app-gradient-thinking: linear-gradient(
+    90deg,
+    var(--app-accent),
+    var(--app-accent-secondary),
+    var(--app-accent-tertiary),
+    var(--app-accent)
+  );
+  --app-gradient-surface: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--app-surface-raised) 92%, transparent),
+    color-mix(in srgb, var(--app-accent) 7%, var(--app-surface) 93%)
+  );
+  --app-gradient-ambient: linear-gradient(
+      115deg,
+      transparent 0%,
+      color-mix(in srgb, var(--app-accent) 12%, transparent) 26%,
+      transparent 50%
+    ),
+    linear-gradient(
+      245deg,
+      transparent 8%,
+      color-mix(in srgb, var(--app-accent-secondary) 10%, transparent) 48%,
+      transparent 76%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--app-accent-tertiary) 5%, transparent),
+      transparent 42%
+    );
+  --app-ambient-opacity: 0.58;
+  --app-shimmer-duration: 2.4s;
+  --app-flow-duration: 3.8s;
   --reading-surface: #f4efe3;
   --reading-border: #d7c9ad;
   --reading-muted: #51483b;
@@ -2819,6 +2955,7 @@ gradio-app {
 }
 
 .gradio-container {
+  position: relative;
   --color-accent: var(--app-accent);
   --color-accent-soft: var(--app-accent-soft);
   --border-color-primary: var(--app-border);
@@ -2836,32 +2973,143 @@ gradio-app {
   --input-background-fill: var(--app-surface);
   --input-border-color: var(--app-border);
   --input-border-color-focus: var(--app-accent);
+  --button-primary-background-fill: var(--app-accent);
+  --button-primary-background-fill-hover: color-mix(in srgb, var(--app-accent) 86%, var(--app-text));
+  --button-primary-text-color: var(--app-bg);
+  --button-primary-border-color: color-mix(in srgb, var(--app-accent) 74%, var(--app-border));
   --button-secondary-background-fill: var(--app-surface-raised);
+  --button-secondary-background-fill-hover: color-mix(in srgb, var(--app-accent) 12%, var(--app-surface-raised));
   --button-secondary-text-color: var(--app-text);
+  --button-secondary-border-color: var(--app-border);
   --panel-background-fill: var(--app-surface);
   background: var(--app-bg) !important;
   color: var(--app-text) !important;
 }
 
+.gradio-container::before {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  content: "";
+  background: var(--app-gradient-ambient);
+  background-size: 220% 220%;
+  opacity: var(--app-ambient-opacity);
+  pointer-events: none;
+  animation: app-ambient-flow 16s var(--motion-ease) infinite alternate;
+}
+
+.gradio-container > * {
+  position: relative;
+  z-index: 1;
+}
+
+.gradio-container button,
+.gradio-container .tab-nav button,
+.gradio-container .tabs button {
+  background: var(--control-bg-default) !important;
+  border: 1px solid var(--control-border-default) !important;
+  color: var(--control-text-default) !important;
+  box-shadow: var(--control-shadow-default) !important;
+}
+
+.gradio-container button.primary,
+.gradio-container button.secondary {
+  background: var(--control-bg-default) !important;
+  border-color: var(--control-border-default) !important;
+  color: var(--control-text-default) !important;
+}
+
+.gradio-container button,
+.gradio-container input,
+.gradio-container textarea,
+.gradio-container select,
+.gradio-container label,
+.gradio-container .tab-nav button,
+.gradio-container .tabs button,
+.gradio-container .wrap {
+  transition-property: background, border-color, box-shadow, color, opacity, transform;
+  transition-duration: var(--motion-base) !important;
+  transition-timing-function: var(--motion-ease) !important;
+}
+
+.app-shimmer-text {
+  color: transparent !important;
+  background: var(--app-gradient-thinking);
+  background-size: 260% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: app-shimmer-sweep var(--app-shimmer-duration) var(--motion-ease) infinite;
+}
+
+.motion-reduce .app-shimmer-text {
+  color: var(--app-accent) !important;
+  background: none !important;
+  animation: none !important;
+}
+
+.gradio-container button:not(:disabled):hover,
+.gradio-container button:not(:disabled):focus-visible {
+  background: var(--control-bg-hover) !important;
+  border-color: var(--control-border-hover) !important;
+  box-shadow: var(--control-shadow-hover) !important;
+  color: var(--control-text-hover) !important;
+}
+
+.gradio-container button.selected,
+.gradio-container button[aria-selected="true"],
+.gradio-container label:has(input:checked),
+.gradio-container .tab-nav button.selected,
+.gradio-container .tab-nav button[aria-selected="true"] {
+  background: var(--control-bg-selected) !important;
+  background-size: 220% 100%;
+  border-color: var(--control-border-selected) !important;
+  color: var(--control-text-selected) !important;
+  box-shadow: var(--control-shadow-selected) !important;
+  font-weight: 800 !important;
+}
+
+.gradio-container button:not(:disabled):active {
+  transform: scale(0.985);
+}
+
+.gradio-container input:focus,
+.gradio-container textarea:focus,
+.gradio-container select:focus {
+  border-color: var(--app-accent) !important;
+  box-shadow: 0 0 0 3px var(--app-focus-ring) !important;
+  outline: 0 !important;
+}
+
+html.dark,
+html.ktem-dark-mode,
 body.dark,
-body.dark .gradio-container {
-  --app-bg: #d2dde8;
-  --app-surface: #e0e8f0;
-  --app-surface-raised: #d9e3ed;
-  --app-surface-muted: #c7d5e3;
-  --app-border: #b8c7d5;
-  --app-border-strong: #8aa0b4;
-  --app-accent: #0f766e;
-  --app-accent-strong: #0f5f59;
-  --app-accent-soft: #ccfbf1;
-  --app-accent-secondary: #2563eb;
-  --app-focus-ring: rgba(15, 118, 110, 0.22);
-  --app-text: #172033;
-  --app-text-muted: #475569;
-  --app-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
-  --reading-surface: #f4efe3;
-  --reading-border: #d7c9ad;
-  --reading-muted: #51483b;
+body.ktem-dark-mode,
+html.dark .gradio-container,
+html.ktem-dark-mode .gradio-container,
+body.dark .gradio-container,
+body.ktem-dark-mode .gradio-container,
+.gradio-container.dark {
+  --app-bg: #08111f;
+  --app-surface: #0f172a;
+  --app-surface-raised: #111c2e;
+  --app-surface-muted: #1e293b;
+  --app-border: #334155;
+  --app-border-strong: #475569;
+  --app-accent: #2dd4bf;
+  --app-accent-strong: #5eead4;
+  --app-accent-soft: rgba(45, 212, 191, 0.16);
+  --app-accent-secondary: #38bdf8;
+  --app-accent-tertiary: #a78bfa;
+  --app-focus-ring: rgba(45, 212, 191, 0.26);
+  --app-text: #f8fafc;
+  --app-text-muted: #cbd5e1;
+  --app-shadow: 0 14px 30px rgba(2, 6, 23, 0.36);
+  --control-border-selected: color-mix(in srgb, var(--app-accent) 68%, var(--app-border));
+  --nav-control-bg-default: color-mix(in srgb, var(--app-surface) 54%, transparent);
+  --app-ambient-opacity: 0.46;
+  --reading-surface: #141b28;
+  --reading-border: #334155;
+  --reading-muted: #cbd5e1;
   --graph-dark-surface: #06111f;
   --graph-dark-panel: #0b1728;
   --graph-dark-border: #334155;
@@ -2880,10 +3128,14 @@ body.ktem-dark-mode .gradio-container {
   --app-accent-strong: #5eead4;
   --app-accent-soft: rgba(45, 212, 191, 0.16);
   --app-accent-secondary: #38bdf8;
+  --app-accent-tertiary: #a78bfa;
   --app-focus-ring: rgba(45, 212, 191, 0.26);
   --app-text: #f8fafc;
   --app-text-muted: #cbd5e1;
   --app-shadow: 0 14px 30px rgba(2, 6, 23, 0.36);
+  --control-border-selected: color-mix(in srgb, var(--app-accent) 68%, var(--app-border));
+  --nav-control-bg-default: color-mix(in srgb, var(--app-surface) 54%, transparent);
+  --app-ambient-opacity: 0.42;
   --reading-surface: #141b28;
   --reading-border: #334155;
   --reading-muted: #cbd5e1;
@@ -2899,11 +3151,49 @@ body.ktem-dark-mode .gradio-container {
 #help-tab,
 #resources-tab,
 #login-tab {
-  background: var(--app-surface) !important;
+  background: var(--app-gradient-surface) !important;
   border: 1px solid var(--app-border) !important;
   border-radius: var(--app-radius) !important;
   box-shadow: var(--app-shadow) !important;
+  position: relative;
   overflow: hidden;
+  isolation: isolate;
+}
+
+#chat-tab::before,
+#indices-tab::before,
+#settings-tab::before,
+#help-tab::before,
+#resources-tab::before,
+#login-tab::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  content: "";
+  background: var(--app-gradient-ambient);
+  background-size: 220% 220%;
+  opacity: 0.42;
+  pointer-events: none;
+  animation: app-tab-aurora calc(var(--app-flow-duration) * 2.4) var(--motion-ease) infinite alternate;
+}
+
+#chat-tab > *,
+#indices-tab > *,
+#settings-tab > *,
+#help-tab > *,
+#resources-tab > *,
+#login-tab > * {
+  position: relative;
+  z-index: 1;
+}
+
+#chat-tab.tabitem,
+#indices-tab.tabitem,
+#settings-tab.tabitem,
+#help-tab.tabitem,
+#resources-tab.tabitem,
+#login-tab.tabitem {
+  animation: app-page-enter var(--motion-slow) var(--motion-ease) both;
 }
 
 #indices-tab,
@@ -2917,21 +3207,23 @@ body.ktem-dark-mode .gradio-container {
 }
 
 .header-bar button {
-  background: var(--app-surface) !important;
-  border: 1px solid var(--app-border) !important;
+  background: var(--nav-control-bg-default) !important;
+  border: 1px solid var(--control-border-default) !important;
   border-radius: 999px !important;
-  color: var(--app-text) !important;
-  box-shadow: none !important;
+  color: var(--control-text-default) !important;
+  box-shadow: var(--control-shadow-default) !important;
 }
 
 .header-bar button.selected {
-  background: color-mix(in srgb, var(--app-accent-soft) 62%, var(--app-surface)) !important;
-  border-color: var(--app-accent) !important;
-  color: var(--app-accent-strong) !important;
+  background: var(--control-bg-selected) !important;
+  background-size: 220% 100%;
+  border-color: var(--control-border-selected) !important;
+  color: var(--control-text-selected) !important;
+  box-shadow: var(--control-shadow-selected) !important;
 }
 
 #chat-area {
-  background: var(--app-surface-raised) !important;
+  background: var(--app-gradient-surface) !important;
   border: 1px solid var(--app-border) !important;
   border-radius: var(--app-radius) !important;
   box-shadow: none !important;
@@ -2973,8 +3265,42 @@ body.ktem-dark-mode .gradio-container {
   max-width: var(--workbench-right-width) !important;
 }
 
-#chat-area::before {
-  display: none !important;
+#conv-settings-panel,
+#chat-area,
+#page-strip-panel,
+#document-reader-panel,
+#chat-info-panel,
+#mara-status-bar {
+  position: relative !important;
+  isolation: isolate;
+}
+
+#conv-settings-panel::before,
+#chat-area::before,
+#page-strip-panel::before,
+#document-reader-panel::before,
+#chat-info-panel::before,
+#mara-status-bar::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  content: "";
+  display: block !important;
+  background: var(--app-gradient-ambient);
+  background-size: 220% 220%;
+  opacity: 0.3;
+  pointer-events: none;
+  animation: app-tab-aurora calc(var(--app-flow-duration) * 3) var(--motion-ease) infinite alternate;
+}
+
+#conv-settings-panel > *,
+#chat-area > *,
+#page-strip-panel > *,
+#document-reader-panel > *,
+#chat-info-panel > *,
+#mara-status-bar > * {
+  position: relative;
+  z-index: 1;
 }
 
 #main-chat-bot,
@@ -3218,11 +3544,11 @@ body.ktem-dark-mode .gradio-container {
 
 .gradio-container .gr-button,
 .gradio-container button {
-  background: var(--app-surface-raised) !important;
-  border: 1px solid var(--app-border) !important;
+  background: var(--control-bg-default) !important;
+  border: 1px solid var(--control-border-default) !important;
   border-radius: var(--app-radius) !important;
-  color: var(--app-text) !important;
-  box-shadow: none !important;
+  color: var(--control-text-default) !important;
+  box-shadow: var(--control-shadow-default) !important;
 }
 
 /* Rounded controls: keep labels away from curved borders and prevent spillover. */
@@ -3274,6 +3600,49 @@ body.ktem-dark-mode .gradio-container {
   line-height: 1 !important;
 }
 
+/* Markdown code copy controls: keep Gradio's generated SVG icon visible. */
+.gradio-container .code_wrap .copy_code_button {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: color-mix(in srgb, var(--app-surface-raised) 90%, transparent) !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: 8px !important;
+  color: var(--app-text) !important;
+  box-shadow: none !important;
+}
+
+.gradio-container .code_wrap .copy_code_button .copy-text,
+.gradio-container .code_wrap .copy_code_button .check {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.gradio-container .code_wrap .copy_code_button svg {
+  width: 18px !important;
+  height: 18px !important;
+  display: block !important;
+  color: currentColor !important;
+}
+
+.gradio-container .code_wrap .copy_code_button .copy-text path {
+  fill: currentColor !important;
+}
+
+.gradio-container .code_wrap .copy_code_button .check svg,
+.gradio-container .code_wrap .copy_code_button .check polyline {
+  fill: none !important;
+  stroke: currentColor !important;
+}
+
 .gradio-container label,
 .gradio-container .label-wrap,
 .gradio-container .block-label,
@@ -3297,8 +3666,8 @@ body.ktem-dark-mode .gradio-container {
 .gradio-container button:hover,
 .gradio-container input:focus,
 .gradio-container textarea:focus {
-  border-color: var(--app-accent) !important;
-  box-shadow: 0 0 0 3px var(--app-focus-ring) !important;
+  border-color: var(--control-border-hover) !important;
+  box-shadow: var(--control-shadow-hover) !important;
 }
 
 /* Radio choices: make selected pills obvious across chat, files, settings, and setup pages. */
@@ -3323,15 +3692,12 @@ body.ktem-dark-mode .gradio-container {
 .gradio-container label.selected:has(input[type="radio"]),
 .gradio-container label:has(input[type="radio"][aria-checked="true"]),
 .gradio-container .gradio-radio label.selected {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--app-accent-soft) 78%, var(--app-surface)) 0%,
-    color-mix(in srgb, var(--app-accent-soft) 54%, var(--app-surface-raised)) 100%
-  ) !important;
-  border-color: var(--app-accent) !important;
-  color: var(--app-accent-strong) !important;
+  background: var(--control-bg-selected) !important;
+  background-size: 220% 100%;
+  border-color: var(--control-border-selected) !important;
+  color: var(--control-text-selected) !important;
   font-weight: 600 !important;
-  box-shadow: 0 0 0 2px var(--app-focus-ring), inset 0 0 0 1px color-mix(in srgb, var(--app-accent) 28%, transparent) !important;
+  box-shadow: var(--control-shadow-selected) !important;
 }
 
 .gradio-container label:has(input[type="radio"]) input[type="radio"],
@@ -3603,17 +3969,19 @@ body.ktem-dark-mode .gradio-container {
   height: 42px !important;
   min-height: 42px !important;
   padding: 0 10px !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  color: var(--app-text) !important;
-  box-shadow: none !important;
+  border: 1px solid var(--control-border-default) !important;
+  border-radius: 999px !important;
+  background: var(--nav-control-bg-default) !important;
+  color: var(--control-text-default) !important;
+  box-shadow: var(--control-shadow-default) !important;
 }
 
 .header-bar button.selected {
-  color: #0f8b8d !important;
-  border-bottom: 2px solid #0f8b8d !important;
-  background: transparent !important;
+  background: var(--control-bg-selected) !important;
+  background-size: 220% 100%;
+  border-color: var(--control-border-selected) !important;
+  color: var(--control-text-selected) !important;
+  box-shadow: var(--control-shadow-selected) !important;
 }
 
 #mara-shell-actions {
@@ -4280,9 +4648,19 @@ body.ktem-dark-mode .gradio-container {
 }
 
 .reader-toolbar button:hover,
+.reader-toolbar button:focus-visible {
+  background: var(--control-bg-hover) !important;
+  border-color: var(--control-border-hover) !important;
+  color: var(--control-text-hover) !important;
+  box-shadow: var(--control-shadow-hover) !important;
+}
+
 .reader-toolbar button.is-active {
-  background: color-mix(in srgb, var(--app-accent-soft) 50%, var(--app-surface)) !important;
-  color: #2563eb !important;
+  background: var(--control-bg-selected) !important;
+  background-size: 220% 100%;
+  border-color: var(--control-border-selected) !important;
+  color: var(--control-text-selected) !important;
+  box-shadow: var(--control-shadow-selected) !important;
 }
 
 .reader-toolbar__zoom {
@@ -4572,24 +4950,27 @@ body.ktem-dark-mode .gradio-container {
 
 .right-ask-tabs {
   display: flex;
-  gap: 22px;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 8px;
+  border-bottom: 1px solid var(--app-border);
 }
 
 .right-ask-tabs button {
   height: 34px !important;
   min-height: 34px !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  color: var(--app-text) !important;
-  box-shadow: none !important;
+  padding: 0 10px !important;
+  border: 1px solid var(--control-border-default) !important;
+  border-radius: var(--app-radius) !important;
+  background: var(--control-bg-default) !important;
+  color: var(--control-text-default) !important;
+  box-shadow: var(--control-shadow-default) !important;
 }
 
 .right-ask-tabs button.is-active {
-  color: #0f8b8d !important;
-  border-bottom: 2px solid #0f8b8d !important;
+  background: var(--control-bg-selected) !important;
+  background-size: 220% 100%;
+  border-color: var(--control-border-selected) !important;
+  color: var(--control-text-selected) !important;
+  box-shadow: var(--control-shadow-selected) !important;
 }
 
 #answer-expand #chat-input-row {
@@ -5186,8 +5567,8 @@ body.ktem-dark-mode #page-strip-panel,
 body.ktem-dark-mode #document-reader-panel,
 body.ktem-dark-mode #chat-info-panel,
 body.ktem-dark-mode #mara-status-bar {
-  background: #0f172a !important;
-  border-color: #334155 !important;
+  background: var(--app-gradient-surface) !important;
+  border-color: var(--app-border) !important;
 }
 
 body.ktem-dark-mode .mara-brand-title,
@@ -5219,19 +5600,19 @@ body.ktem-dark-mode .notebook-panel-card,
 body.ktem-dark-mode .studio-kg-viewer-scope,
 body.ktem-dark-mode #html-info-panel,
 body.ktem-dark-mode #answer-expand #chat-input-row {
-  background: #111c2e !important;
-  border-color: #334155 !important;
+  background: var(--app-surface-raised) !important;
+  border-color: var(--app-border) !important;
 }
 
 body.ktem-dark-mode .prototype-page,
 body.ktem-dark-mode .pdf-preview-empty--prototype {
-  background: #141b28 !important;
-  color: #f8fafc !important;
+  background: var(--reading-surface) !important;
+  color: var(--app-text) !important;
 }
 
 body.ktem-dark-mode .prototype-page h2,
 body.ktem-dark-mode .prototype-page p {
-  color: #f8fafc;
+  color: var(--app-text);
 }
 
 html.ktem-dark-mode .header-bar,
@@ -5250,8 +5631,8 @@ body.dark #page-strip-panel,
 body.dark #document-reader-panel,
 body.dark #chat-info-panel,
 body.dark #mara-status-bar {
-  background: #0f172a !important;
-  border-color: #334155 !important;
+  background: var(--app-gradient-surface) !important;
+  border-color: var(--app-border) !important;
 }
 
 html.ktem-dark-mode .mara-brand-title,
@@ -5319,17 +5700,293 @@ body.dark #answer-expand #chat-input-row,
 body.dark .mara-dataset-switcher,
 body.dark .mara-icon-button,
 body.dark .mara-avatar {
-  background: #111c2e !important;
-  border-color: #334155 !important;
-  color: #f8fafc !important;
+  background: var(--app-surface-raised) !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text) !important;
+}
+
+html.dark #indices-tab,
+html.dark #resources-tab,
+html.dark #help-tab,
+html.dark #settings-tab,
+html.ktem-dark-mode #indices-tab,
+html.ktem-dark-mode #resources-tab,
+html.ktem-dark-mode #help-tab,
+html.ktem-dark-mode #settings-tab,
+body.dark #indices-tab,
+body.dark #resources-tab,
+body.dark #help-tab,
+body.dark #settings-tab,
+.gradio-container.dark #indices-tab,
+.gradio-container.dark #resources-tab,
+.gradio-container.dark #help-tab,
+.gradio-container.dark #settings-tab {
+  background: var(--app-gradient-surface) !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text) !important;
+}
+
+html.dark button.selected,
+html.dark .header-bar button.selected,
+html.dark .gradio-container button.selected,
+html.dark .gradio-container button[aria-selected="true"],
+html.dark #indices-tab .tab-nav button.selected,
+html.dark #indices-tab .tab-nav button[aria-selected="true"],
+body.dark button.selected,
+body.dark .header-bar button.selected,
+body.dark .gradio-container button.selected,
+body.dark .gradio-container button[aria-selected="true"],
+body.dark .gradio-container .tab-nav button.selected,
+body.dark .gradio-container .tab-nav button[aria-selected="true"],
+html.ktem-dark-mode button.selected,
+html.ktem-dark-mode .header-bar button.selected,
+html.ktem-dark-mode .gradio-container button.selected,
+html.ktem-dark-mode .gradio-container button[aria-selected="true"],
+html.ktem-dark-mode .gradio-container .tab-nav button.selected,
+html.ktem-dark-mode .gradio-container .tab-nav button[aria-selected="true"],
+.gradio-container.dark button.selected,
+.gradio-container.dark button[aria-selected="true"],
+.gradio-container.dark .tab-nav button.selected,
+.gradio-container.dark .tab-nav button[aria-selected="true"] {
+  background: var(--control-bg-selected) !important;
+  background-size: 220% 100%;
+  border-color: var(--control-border-selected) !important;
+  color: var(--control-text-selected) !important;
+  box-shadow: var(--control-shadow-selected) !important;
+}
+
+body.dark button.selected *,
+body.dark .gradio-container button[aria-selected="true"] *,
+body.dark .gradio-container .tab-nav button.selected *,
+body.dark .gradio-container .tab-nav button[aria-selected="true"] *,
+html.ktem-dark-mode button.selected *,
+html.ktem-dark-mode .gradio-container button[aria-selected="true"] *,
+html.ktem-dark-mode .gradio-container .tab-nav button.selected *,
+html.ktem-dark-mode .gradio-container .tab-nav button[aria-selected="true"] * {
+  color: inherit !important;
+}
+
+html.dark #indices-tab .wrap,
+html.dark #resources-tab .wrap,
+html.dark #help-tab .wrap,
+html.dark #settings-tab .wrap,
+html.dark #indices-tab .gap,
+html.dark #resources-tab .gap,
+html.dark #help-tab .gap,
+html.dark #settings-tab .gap,
+html.dark #indices-tab .gradio-row,
+html.dark #resources-tab .gradio-row,
+html.dark #help-tab .gradio-row,
+html.dark #settings-tab .gradio-row,
+html.dark #indices-tab .gradio-column,
+html.dark #resources-tab .gradio-column,
+html.dark #help-tab .gradio-column,
+html.dark #settings-tab .gradio-column,
+html.dark #indices-tab .tabs,
+html.dark #resources-tab .tabs,
+html.dark #help-tab .tabs,
+html.dark #settings-tab .tabs,
+html.dark #indices-tab .tabitem,
+html.dark #resources-tab .tabitem,
+html.dark #help-tab .tabitem,
+html.dark #settings-tab .tabitem,
+html.ktem-dark-mode #indices-tab .wrap,
+html.ktem-dark-mode #resources-tab .wrap,
+html.ktem-dark-mode #help-tab .wrap,
+html.ktem-dark-mode #settings-tab .wrap,
+html.ktem-dark-mode #indices-tab .gap,
+html.ktem-dark-mode #resources-tab .gap,
+html.ktem-dark-mode #help-tab .gap,
+html.ktem-dark-mode #settings-tab .gap,
+html.ktem-dark-mode #indices-tab .gradio-row,
+html.ktem-dark-mode #resources-tab .gradio-row,
+html.ktem-dark-mode #help-tab .gradio-row,
+html.ktem-dark-mode #settings-tab .gradio-row,
+html.ktem-dark-mode #indices-tab .gradio-column,
+html.ktem-dark-mode #resources-tab .gradio-column,
+html.ktem-dark-mode #help-tab .gradio-column,
+html.ktem-dark-mode #settings-tab .gradio-column,
+html.ktem-dark-mode #indices-tab .tabs,
+html.ktem-dark-mode #resources-tab .tabs,
+html.ktem-dark-mode #help-tab .tabs,
+html.ktem-dark-mode #settings-tab .tabs,
+html.ktem-dark-mode #indices-tab .tabitem,
+html.ktem-dark-mode #resources-tab .tabitem,
+html.ktem-dark-mode #help-tab .tabitem,
+html.ktem-dark-mode #settings-tab .tabitem,
+body.dark #indices-tab .wrap,
+body.dark #resources-tab .wrap,
+body.dark #help-tab .wrap,
+body.dark #settings-tab .wrap,
+body.dark #indices-tab .gap,
+body.dark #resources-tab .gap,
+body.dark #help-tab .gap,
+body.dark #settings-tab .gap,
+body.dark #indices-tab .gradio-row,
+body.dark #resources-tab .gradio-row,
+body.dark #help-tab .gradio-row,
+body.dark #settings-tab .gradio-row,
+body.dark #indices-tab .gradio-column,
+body.dark #resources-tab .gradio-column,
+body.dark #help-tab .gradio-column,
+body.dark #settings-tab .gradio-column,
+body.dark #indices-tab .tabs,
+body.dark #resources-tab .tabs,
+body.dark #help-tab .tabs,
+body.dark #settings-tab .tabs,
+body.dark #indices-tab .tabitem,
+body.dark #resources-tab .tabitem,
+body.dark #help-tab .tabitem,
+body.dark #settings-tab .tabitem,
+.gradio-container.dark #indices-tab .wrap,
+.gradio-container.dark #resources-tab .wrap,
+.gradio-container.dark #help-tab .wrap,
+.gradio-container.dark #settings-tab .wrap,
+.gradio-container.dark #indices-tab .gap,
+.gradio-container.dark #resources-tab .gap,
+.gradio-container.dark #help-tab .gap,
+.gradio-container.dark #settings-tab .gap,
+.gradio-container.dark #indices-tab .gradio-row,
+.gradio-container.dark #resources-tab .gradio-row,
+.gradio-container.dark #help-tab .gradio-row,
+.gradio-container.dark #settings-tab .gradio-row,
+.gradio-container.dark #indices-tab .gradio-column,
+.gradio-container.dark #resources-tab .gradio-column,
+.gradio-container.dark #help-tab .gradio-column,
+.gradio-container.dark #settings-tab .gradio-column,
+.gradio-container.dark #indices-tab .tabs,
+.gradio-container.dark #resources-tab .tabs,
+.gradio-container.dark #help-tab .tabs,
+.gradio-container.dark #settings-tab .tabs,
+.gradio-container.dark #indices-tab .tabitem,
+.gradio-container.dark #resources-tab .tabitem,
+.gradio-container.dark #help-tab .tabitem,
+.gradio-container.dark #settings-tab .tabitem {
+  background: transparent !important;
+  color: var(--app-text) !important;
+}
+
+html.dark #chat-tab::before,
+html.dark #indices-tab::before,
+html.dark #resources-tab::before,
+html.dark #help-tab::before,
+html.dark #settings-tab::before,
+body.dark #chat-tab::before,
+body.dark #indices-tab::before,
+body.dark #resources-tab::before,
+body.dark #help-tab::before,
+body.dark #settings-tab::before,
+html.ktem-dark-mode #chat-tab::before,
+html.ktem-dark-mode #indices-tab::before,
+html.ktem-dark-mode #resources-tab::before,
+html.ktem-dark-mode #help-tab::before,
+html.ktem-dark-mode #settings-tab::before,
+.gradio-container.dark #chat-tab::before,
+.gradio-container.dark #indices-tab::before,
+.gradio-container.dark #resources-tab::before,
+.gradio-container.dark #help-tab::before,
+.gradio-container.dark #settings-tab::before {
+  opacity: 0.58;
+  filter: saturate(1.18);
+}
+
+html.dark #indices-tab .block,
+html.dark #resources-tab .block,
+html.dark #help-tab .block,
+html.dark #settings-tab .block,
+html.dark #indices-tab form,
+html.dark #resources-tab form,
+html.dark #help-tab form,
+html.dark #settings-tab form,
+html.dark #indices-tab .form,
+html.dark #resources-tab .form,
+html.dark #help-tab .form,
+html.dark #settings-tab .form,
+html.dark #indices-tab .gradio-markdown,
+html.dark #resources-tab .gradio-markdown,
+html.dark #help-tab .gradio-markdown,
+html.dark #settings-tab .gradio-markdown,
+html.dark #indices-tab .gradio-html,
+html.dark #resources-tab .gradio-html,
+html.dark #help-tab .gradio-html,
+html.dark #settings-tab .gradio-html,
+html.ktem-dark-mode #indices-tab .block,
+html.ktem-dark-mode #resources-tab .block,
+html.ktem-dark-mode #help-tab .block,
+html.ktem-dark-mode #settings-tab .block,
+html.ktem-dark-mode #indices-tab form,
+html.ktem-dark-mode #resources-tab form,
+html.ktem-dark-mode #help-tab form,
+html.ktem-dark-mode #settings-tab form,
+html.ktem-dark-mode #indices-tab .form,
+html.ktem-dark-mode #resources-tab .form,
+html.ktem-dark-mode #help-tab .form,
+html.ktem-dark-mode #settings-tab .form,
+html.ktem-dark-mode #indices-tab .gradio-markdown,
+html.ktem-dark-mode #resources-tab .gradio-markdown,
+html.ktem-dark-mode #help-tab .gradio-markdown,
+html.ktem-dark-mode #settings-tab .gradio-markdown,
+html.ktem-dark-mode #indices-tab .gradio-html,
+html.ktem-dark-mode #resources-tab .gradio-html,
+html.ktem-dark-mode #help-tab .gradio-html,
+html.ktem-dark-mode #settings-tab .gradio-html,
+body.dark #indices-tab .block,
+body.dark #resources-tab .block,
+body.dark #help-tab .block,
+body.dark #settings-tab .block,
+body.dark #indices-tab form,
+body.dark #resources-tab form,
+body.dark #help-tab form,
+body.dark #settings-tab form,
+body.dark #indices-tab .form,
+body.dark #resources-tab .form,
+body.dark #help-tab .form,
+body.dark #settings-tab .form,
+body.dark #indices-tab .gradio-markdown,
+body.dark #resources-tab .gradio-markdown,
+body.dark #help-tab .gradio-markdown,
+body.dark #settings-tab .gradio-markdown,
+body.dark #indices-tab .gradio-html,
+body.dark #resources-tab .gradio-html,
+body.dark #help-tab .gradio-html,
+body.dark #settings-tab .gradio-html,
+.gradio-container.dark #indices-tab .block,
+.gradio-container.dark #resources-tab .block,
+.gradio-container.dark #help-tab .block,
+.gradio-container.dark #settings-tab .block,
+.gradio-container.dark #indices-tab form,
+.gradio-container.dark #resources-tab form,
+.gradio-container.dark #help-tab form,
+.gradio-container.dark #settings-tab form,
+.gradio-container.dark #indices-tab .form,
+.gradio-container.dark #resources-tab .form,
+.gradio-container.dark #help-tab .form,
+.gradio-container.dark #settings-tab .form,
+.gradio-container.dark #indices-tab .gradio-markdown,
+.gradio-container.dark #resources-tab .gradio-markdown,
+.gradio-container.dark #help-tab .gradio-markdown,
+.gradio-container.dark #settings-tab .gradio-markdown,
+.gradio-container.dark #indices-tab .gradio-html,
+.gradio-container.dark #resources-tab .gradio-html,
+.gradio-container.dark #help-tab .gradio-html,
+.gradio-container.dark #settings-tab .gradio-html {
+  background: var(--app-surface) !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text) !important;
+}
+
+body.dark .gradio-container::before,
+body.ktem-dark-mode .gradio-container::before,
+html.ktem-dark-mode .gradio-container::before {
+  background: var(--app-gradient-ambient);
 }
 
 html.ktem-dark-mode .prototype-page,
 html.ktem-dark-mode .pdf-preview-empty--prototype,
 body.dark .prototype-page,
 body.dark .pdf-preview-empty--prototype {
-  background: #141b28 !important;
-  color: #f8fafc !important;
+  background: var(--reading-surface) !important;
+  color: var(--app-text) !important;
 }
 
 html.ktem-dark-mode #answer-panel .answer-reasoning-block,
@@ -5348,6 +6005,15 @@ html.ktem-dark-mode #answer-panel .answer-reasoning-steps strong,
 body.ktem-dark-mode #answer-panel .answer-reasoning-steps strong,
 body.dark #answer-panel .answer-reasoning-steps strong {
   color: #f8fafc;
+}
+
+html.ktem-dark-mode #answer-panel .answer-reasoning-title.answer-reasoning-shimmer,
+body.ktem-dark-mode #answer-panel .answer-reasoning-title.answer-reasoning-shimmer,
+body.dark #answer-panel .answer-reasoning-title.answer-reasoning-shimmer {
+  display: inline-block;
+  color: var(--app-accent-strong) !important;
+  background: none !important;
+  animation: none !important;
 }
 
 html.ktem-dark-mode #answer-panel .answer-reasoning-block summary small,

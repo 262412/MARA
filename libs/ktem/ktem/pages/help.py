@@ -1,13 +1,36 @@
+import re
 from importlib.metadata import version
 from pathlib import Path
 
 import gradio as gr
 import requests
 from decouple import config
+from ktem.utils.render import BASE_PATH
 from theflow.settings import settings
 
 KH_DEMO_MODE = getattr(settings, "KH_DEMO_MODE", False)
 HF_SPACE_URL = config("HF_SPACE_URL", default="")
+LOCAL_MARKDOWN_IMAGE_RE = re.compile(r"!\[([^]]*)]\(([^)\s]+)\)")
+
+
+def _rewrite_local_image_links(markdown: str, doc_dir: str | Path) -> str:
+    doc_dir = Path(doc_dir)
+
+    def replace(match: re.Match[str]) -> str:
+        alt_text, image_link = match.groups()
+        if image_link.startswith(("http://", "https://", "data:", "#", "/file=")):
+            return match.group(0)
+
+        image_path = Path(image_link)
+        if not image_path.is_absolute():
+            image_path = doc_dir / image_path
+        image_path = image_path.resolve()
+        if not image_path.exists():
+            return match.group(0)
+
+        return f"![{alt_text}]({BASE_PATH}/file={image_path.as_posix()})"
+
+    return LOCAL_MARKDOWN_IMAGE_RE.sub(replace, markdown)
 
 
 def get_remote_doc(url: str) -> str:
@@ -49,14 +72,7 @@ class HelpPage:
 
         self.changelogs_cache_dir.mkdir(parents=True, exist_ok=True)
 
-        about_md_dir = self.doc_dir / "about.md"
-        if about_md_dir.exists():
-            with (self.doc_dir / "about.md").open(encoding="utf-8") as fi:
-                about_md = fi.read()
-        else:  # fetch from remote
-            about_md = get_remote_doc(
-                f"{self.remote_content_url}/v{self.app_version}/docs/about.md"
-            )
+        about_md = self._load_doc_markdown("about.md")
         if about_md:
             with gr.Accordion("About"):
                 if self.app_version:
@@ -79,14 +95,7 @@ class HelpPage:
                     size="lg",
                 )
 
-        user_guide_md_dir = self.doc_dir / "usage.md"
-        if user_guide_md_dir.exists():
-            with (self.doc_dir / "usage.md").open(encoding="utf-8") as fi:
-                user_guide_md = fi.read()
-        else:  # fetch from remote
-            user_guide_md = get_remote_doc(
-                f"{self.remote_content_url}/v{self.app_version}/docs/usage.md"
-            )
+        user_guide_md = self._load_doc_markdown("usage.md")
         if user_guide_md:
             with gr.Accordion("User Guide", open=not KH_DEMO_MODE):
                 gr.Markdown(user_guide_md)
@@ -117,3 +126,13 @@ class HelpPage:
             if changelogs:
                 with gr.Accordion(f"Changelogs (v{self.app_version})"):
                     gr.Markdown(changelogs)
+
+    def _load_doc_markdown(self, filename: str) -> str:
+        doc_path = self.doc_dir / filename
+        if doc_path.exists():
+            markdown = doc_path.read_text(encoding="utf-8")
+            return _rewrite_local_image_links(markdown, self.doc_dir)
+
+        return get_remote_doc(
+            f"{self.remote_content_url}/v{self.app_version}/docs/{filename}"
+        )

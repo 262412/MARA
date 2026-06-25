@@ -2,8 +2,6 @@
 
 ## Prompt engineering UI
 
-![chat-ui](images/271332562-ac8f9aac-d853-4571-a48b-d866a99eaf3e.png)
-
 **_Important:_** despite the name prompt engineering UI, this tool allows testers to test any kind of parameters that are exposed by developers. Prompt is one kind of param. There can be other type of params that testers can tweak (e.g. top_k, temperature...).
 
 In the development process, developers typically build the pipeline. However, for use
@@ -142,8 +140,6 @@ $ kotaemon promptui run <path/to/config/file.yml>
 ```
 
 This will generate an UI as follow:
-
-![Screenshot from 2023-09-20 12-20-31](images/269170198-9ac1b95a-b667-42e7-b318-98a1b805d6df.png)
 
 where:
 
