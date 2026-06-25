@@ -14,6 +14,7 @@ KH_FILESTORAGE_PATH = getattr(
 )
 KH_DOC_DIR = str(Path(getattr(flowsettings, "KH_DOC_DIR", "docs")).resolve())
 GRADIO_TEMP_DIR = os.getenv("GRADIO_TEMP_DIR", None)
+server_port = int(os.getenv("PORT", "7860"))
 # override GRADIO_TEMP_DIR if it's not set
 if GRADIO_TEMP_DIR is None:
     GRADIO_TEMP_DIR = ensure_gradio_temp_dir()
@@ -27,7 +28,6 @@ app = App()
 demo = app.make()
 demo.queue().launch(
     favicon_path=app._favicon,
-    inbrowser=True,
     allowed_paths=[
         str(ASSETS_DIR),
         KH_DOC_DIR,
@@ -35,4 +35,7 @@ demo.queue().launch(
         KH_FILESTORAGE_PATH,
     ],
     share=KH_GRADIO_SHARE,
+    server_name="0.0.0.0",
+    server_port=server_port,
+    inbrowser=False,
 )

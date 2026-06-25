@@ -204,25 +204,42 @@ CRAG guarded & Any retrieved evidence & Good/ambiguous/poor decision & Lightweig
 
 The project will use public, open-licence, synthetic or self-created documents such as papers, technical documentation, generated reports, screenshots and slides. These will be used only where permitted and cited if they appear in the dissertation. The application may also process self-provided non-sensitive test files during development. Self-created screenshots and slides will avoid personal, confidential or copyrighted third-party content unless permission is clear.
 
-The small technical evaluation will use public or synthetic multimodal documents and manually prepared question-answer pairs. Each item will include the question, target document type, expected answer, expected route where appropriate, accepted evidence references, and source identifiers such as file name, page, slide, table, figure, bounding box, element ID or graph community. These labels will act as the ground truth for retrieval, routing, citation and answer evaluation. System outputs will also record backend metadata so that local smoke backends are not confused with configured ColPali, VLM or LLM-planner backends. No private scraping, personal records, confidential documents or participant feedback are required.
+The technical evaluation will use a MARA benchmark harness built around public, synthetic or self-created documents. Each benchmark item will include the question, target document type, expected answer, expected route where appropriate, accepted evidence references, and source identifiers such as file name, page, slide, table, figure, bounding box, element ID or graph community. These labels will act as the ground truth for retrieval, routing, citation and answer evaluation. Public benchmark families will be used only through accessible subsets or converted local manifests, and any local scores will be reported as prototype-level diagnostic results rather than official leaderboard results. System outputs will also record backend metadata so that local smoke backends are not confused with configured ColPali, VLM or LLM-planner backends. No private scraping, personal records, confidential documents or participant feedback are required.
 
 \section{Testing and evaluation}
 
 Technical testing will cover document loading, indexing, source selection, citation construction, preview behaviour, CLI commands, Web/CLI contract behaviour, controller schema validation, route selection, route executors, structured evidence construction, retrieval quality checks, claim verification and knowledge graph services. Integration tests will check that a document or slide deck can be indexed, routed, retrieved, answered, verified and cited through the same runtime used by both Web and CLI.
 
-Project evaluation will use a small manually labelled benchmark built from public, synthetic or self-created documents. Each benchmark item will contain a question, target modality or document type, expected answer, expected route where appropriate, and accepted evidence references such as document name, page or slide number, text span, table, figure, element ID or graph context. This provides the ground truth for retrieval, routing, citation and answer evaluation. The main comparison will be between fixed text-only RAG and the controller-based MARA route. Where implemented, additional ablations will compare multimodal or structured routes, hybrid retrieval, evidence checking and abstention behaviour.
+Project evaluation will use the MARA benchmark harness rather than a single ad hoc test set. The harness normalises each task into a shared manifest containing documents, questions, reference answers, gold evidence pages or spans, expected formats, route metadata and dataset family. This makes it possible to compare routes on the same examples and to separate answer quality from retrieval, citation and controller behaviour.
+
+\begin{center}
+\scriptsize
+\begin{tabularx}{\textwidth}{p{0.26\textwidth}p{0.34\textwidth}X}
+\toprule
+Benchmark source & Purpose in the evaluation & Main MARA signal \\
+\midrule
+Self-created format and thesis-corpus examples & Local PDF, Word, PowerPoint, spreadsheet, Markdown and text robustness tests & Indexing, source selection, preview, citation construction and Web/CLI contract behaviour. \\
+FinanceBench-style text QA \cite{islam2023financebench} & Financial report questions with short factual or numeric answers and evidence strings & Text RAG baseline quality, numeric answer correctness, evidence-page hit and false abstention. \\
+QASPER-style scientific QA \cite{dasigi2021qasper} & Long scientific-paper questions with supporting evidence & Multi-paragraph retrieval, answer F1, evidence-span recall and citation support. \\
+ALCE and RAGTruth-style groundedness tasks \cite{gao2023alce, niu2024ragtruth} & Citation quality and unsupported-claim or hallucination diagnosis & Citation precision/recall, unsupported-claim rate, guarded answering and abstention behaviour. \\
+SlideVQA, MMDocRAG and ViDoRe-style visual document tasks \cite{tanaka2023slidevqa, dong2025mmdocrag, mace2025vidore} & Slide, page-image and visual-document retrieval cases & Page-image route usefulness, visual page hit, element evidence, and multimodal route comparison. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+The main comparison will be route-level. A fixed text-only RAG route will be the main baseline. MARA controller routes, such as controller-auto and guarded retrieval, will be compared against this baseline. Optional page-image, element, graph and hybrid routes will be evaluated only when their implementation is stable enough; otherwise they will be reported as smoke-tested or diagnostic routes. An oracle or gold-page route may also be used as a diagnostic upper bound to separate retrieval failure from generation or formatting failure.
 
 The main evaluation metrics will be:
 \begin{itemize}
-  \item \textbf{Retrieval quality:} Recall@k and mean reciprocal rank (MRR), measuring whether accepted evidence appears in the top retrieved results.
-  \item \textbf{Route selection:} route accuracy, measuring whether the controller selected the labelled expected route, such as text RAG, page-image evidence, element evidence, graph context, hybrid retrieval or abstention.
-  \item \textbf{Answer correctness:} a manual 0--2 rubric, where 0 means incorrect, 1 means partially correct and 2 means correct according to the ground-truth answer.
-  \item \textbf{Citation support:} the proportion of answer claims supported by cited evidence, plus citation precision where accepted evidence labels are available.
-  \item \textbf{Faithfulness and hallucination risk:} unsupported claim rate, using a RAGTruth-inspired label for claims that are not supported by retrieved evidence.
-  \item \textbf{Efficiency:} response latency, number of retrieval calls, token usage or estimated cost where relevant.
+  \item \textbf{Answer quality:} exact match, token F1, ANLS or a dataset-native local score where the benchmark family provides a suitable scoring contract.
+  \item \textbf{Retrieval quality:} Recall@k, mean reciprocal rank (MRR), gold page/source hit, evidence-span recall and element hit where labels are available.
+  \item \textbf{Route selection:} route accuracy and route ranking, measuring whether the controller selected the expected route or a route that produced better evidence.
+  \item \textbf{Citation support:} citation precision and recall, including both source/page metadata and parseable inline citations where available.
+  \item \textbf{Faithfulness and hallucination risk:} unsupported-claim rate, RAGTruth-inspired hallucination labels, abstention rate and false-abstention rate.
+  \item \textbf{Efficiency:} parsing/indexing time, retrieval latency, generation latency, number of retrieval calls, token usage or estimated cost where relevant.
 \end{itemize}
 
-The evaluation is intentionally small-scale and prototype-level, but it will use explicit labels and metrics so that the results are reproducible.
+The evaluation is intentionally prototype-level. Paper-grade external evaluator scores will only be reported if the official or externally configured evaluator is actually used. Otherwise, the dissertation will report dataset-native local scores and MARA diagnostic proxy scores separately, making clear that the latter are internal systems diagnostics rather than external benchmark results.
 
 \Needspace{36\baselineskip}
 \section{UI/UX mockup}
@@ -406,6 +423,18 @@ OWASP Foundation, ``OWASP Top 10 for Large Language Model Applications.'' Availa
 
 \bibitem{kotaemon}
 Cinnamon, ``Kotaemon: An Open-Source Tool for Chatting with Your Documents.'' Available: \url{https://github.com/Cinnamon/kotaemon}
+
+\bibitem{islam2023financebench}
+P. Islam, A. Kannappan, D. Kiela, R. Qian, N. Scherrer and B. Vidgen, ``FinanceBench: A New Benchmark for Financial Question Answering,'' arXiv, 2023. Available: \url{https://arxiv.org/abs/2311.11944}
+
+\bibitem{dasigi2021qasper}
+P. Dasigi et al., ``A Dataset of Information-Seeking Questions and Answers Anchored in Research Papers,'' arXiv, 2021. Available: \url{https://arxiv.org/abs/2105.03011}
+
+\bibitem{tanaka2023slidevqa}
+R. Tanaka, K. Nishida, K. Nishida, T. Hasegawa, I. Saito and K. Saito, ``SlideVQA: A Dataset for Document Visual Question Answering on Multiple Images,'' \textit{AAAI}, 2023. Available: \url{https://arxiv.org/abs/2301.04883}
+
+\bibitem{mace2025vidore}
+Q. Macé, A. Loison and M. Faysse, ``ViDoRe Benchmark V2: Raising the Bar for Visual Retrieval,'' arXiv, 2025. Available: \url{https://arxiv.org/abs/2505.17166}
 
 \end{thebibliography}
 
