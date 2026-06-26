@@ -12,8 +12,22 @@ if os.getenv("WEBSITE_SITE_NAME"):
         f"Azure App Service detected; KH_APP_DATA_DIR={os.environ['KH_APP_DATA_DIR']}"
     )
 
+
+def ensure_gradio_temp_dir() -> str:
+    gradio_temp_dir = os.getenv("GRADIO_TEMP_DIR", "").strip()
+    if not gradio_temp_dir:
+        app_data_dir = Path(getattr(flowsettings, "KH_APP_DATA_DIR", Path.cwd()))
+        gradio_temp_dir = str((app_data_dir / "gradio_tmp").resolve())
+        os.environ["GRADIO_TEMP_DIR"] = gradio_temp_dir
+
+    Path(gradio_temp_dir).mkdir(parents=True, exist_ok=True)
+    return gradio_temp_dir
+
+
+log_startup("Importing ktem.assets")
 from ktem.assets import ASSETS_DIR  # noqa: E402
-from ktem.launcher import ensure_gradio_temp_dir  # noqa: E402
+
+log_startup("Importing theflow.settings")
 from theflow.settings import settings as flowsettings  # noqa: E402
 
 KH_APP_DATA_DIR = getattr(flowsettings, "KH_APP_DATA_DIR", ".")
