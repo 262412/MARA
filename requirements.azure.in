@@ -1,0 +1,5 @@
+# Local workspace packages for Azure App Service and other pip-only deployments.
+# Use non-editable local paths so Oryx installs relocatable wheels into antenv.
+./libs/kotaemon
+./libs/ktem
+./libs/slide_cli
