@@ -1,9 +1,7 @@
 # Azure App Service and other pip-only deployment paths use this file as the
-# standard dependency entrypoint. Keep dependency details in the package
-# pyproject.toml files; these editable entries only wire the local workspace.
+# standard dependency entrypoint. Keep dependency details in package
+# pyproject.toml files and local package paths in requirements.azure.in.
 # Pin transitive dependencies so pip does not spend hours backtracking during
 # GitHub Actions and Azure Oryx installs.
 -c constraints.txt
--e ./libs/kotaemon
--e ./libs/ktem
--e ./libs/slide_cli
+-r requirements.azure.in
