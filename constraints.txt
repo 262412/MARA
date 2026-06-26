@@ -79,7 +79,6 @@ chromadb==0.5.16
 click==8.4.2
     # via
     #   cookiecutter
-    #   huggingface-hub
     #   kotaemon
     #   ktem
     #   mara-research-cli
@@ -223,7 +222,6 @@ httpx==0.28.1
     #   cohere
     #   gradio
     #   gradio-client
-    #   huggingface-hub
     #   langchain-mistralai
     #   langgraph-sdk
     #   langsmith
@@ -239,8 +237,9 @@ httpx-sse==0.4.3
     #   langchain-community
     #   langchain-mistralai
     #   mcp
-huggingface-hub==1.21.0
+huggingface-hub==0.36.2
     # via
+    #   -r requirements.azure.in
     #   gradio
     #   gradio-client
     #   tokenizers
@@ -746,6 +745,7 @@ requests==2.34.2
     #   cookiecutter
     #   fast-langdetect
     #   google-api-core
+    #   huggingface-hub
     #   kubernetes
     #   langchain-classic
     #   langchain-community
@@ -878,7 +878,6 @@ typer==0.25.1
     # via
     #   chromadb
     #   gradio
-    #   huggingface-hub
 types-pyyaml==6.0.12.20260518
     # via langchain-cohere
 types-requests==2.33.0.20260518
