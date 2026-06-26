@@ -244,4 +244,4 @@
 
 ## 当前一句话结论
 
-MARA 已经完成了 thesis prototype 的核心骨架：本地 Web/CLI runtime、Self-RAG-inspired controller contracts、route registry、evidence/trace schema、guardrail/verifier、multimodal route scaffolding 和 benchmark framework 都已存在。真正未完成的是“研究结论级稳定性”：route quality、visual/element/graph 深度、paper-grade evaluator、Web/CLI parity 和 UI/runtime 控债还需要系统化收口。
+MARA 已经完成了 thesis prototype 的核心骨架：本地 Web/CLI runtime、Self-RAG-inspired controller contracts、route registry、evidence/trace schema、guardrail/verifier、multimodal route scaffolding 和 benchmark framework 都已存在。真正未完成的是“研究结论级稳定性”：route quality、visual/element/graph backend 深度、paper-grade evaluator、Web/CLI parity 和 UI/runtime 控债还需要系统化收口。
