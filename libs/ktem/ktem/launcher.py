@@ -29,6 +29,7 @@ def launch_app(
     file_storage_path = Path(
         getattr(flowsettings, "KH_FILESTORAGE_PATH", Path.cwd() / "user_data" / "files")
     )
+    doc_dir = Path(getattr(flowsettings, "KH_DOC_DIR", Path.cwd() / "docs")).resolve()
     file_storage_path.mkdir(parents=True, exist_ok=True)
 
     gradio_temp_dir = ensure_gradio_temp_dir()
@@ -39,6 +40,7 @@ def launch_app(
         inbrowser=inbrowser,
         allowed_paths=[
             str(ASSETS_DIR),
+            str(doc_dir),
             gradio_temp_dir,
             str(file_storage_path),
         ],
