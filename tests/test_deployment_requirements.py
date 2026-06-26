@@ -35,22 +35,44 @@ def test_root_requirements_file_keeps_azure_app_service_build_installable():
     }
     expected_pins = {
         "huggingface-hub<1.0",
+        "langchain<0.3",
+        "langchain-community<0.3",
+        "langchain-core<0.3",
         "numpy==1.26.4",
         "ollama==0.6.2",
         "onnxruntime==1.23.2",
-        "opentelemetry-instrumentation-fastapi==0.64b0",
+        "opentelemetry-instrumentation-fastapi==0.48b0",
     }
     assert "-c constraints.txt" in requirement_lines
     assert "-r requirements.azure.in" in requirement_lines
     assert expected_local_packages.issubset(source_lines)
     assert "huggingface-hub<1.0" in source_lines
+    assert "langchain<0.3" in source_lines
+    assert "langchain-community<0.3" in source_lines
+    assert "langchain-core<0.3" in source_lines
     assert not any(line.startswith("-e ") for line in requirement_lines)
     assert not any(line.startswith("-e ") for line in source_lines)
     assert "-e ./libs/kotaemon[all]" not in requirement_lines
     assert "-e ./libs/kotaemon[all]" not in source_lines
-    assert expected_pins - {"huggingface-hub<1.0"} <= constraint_lines
+    source_only_pins = {
+        "huggingface-hub<1.0",
+        "langchain<0.3",
+        "langchain-community<0.3",
+        "langchain-core<0.3",
+    }
+    assert expected_pins - source_only_pins <= constraint_lines
     assert any(line.startswith("huggingface-hub==0.") for line in constraint_lines)
     assert not any(line.startswith("huggingface-hub==1.") for line in constraint_lines)
+    assert any(line.startswith("langchain==0.2.") for line in constraint_lines)
+    assert not any(line.startswith("langchain==1.") for line in constraint_lines)
+    assert any(
+        line.startswith("langchain-community==0.2.") for line in constraint_lines
+    )
+    assert not any(
+        line.startswith("langchain-community==0.4.") for line in constraint_lines
+    )
+    assert any(line.startswith("langchain-core==0.2.") for line in constraint_lines)
+    assert not any(line.startswith("langchain-core==1.") for line in constraint_lines)
     assert not any(line.startswith("-e ") for line in constraint_lines)
 
     for package_path in expected_local_packages:
@@ -71,3 +93,4 @@ def test_source_app_binds_to_azure_app_service_port():
     assert "inbrowser=False" in app_source
     assert app_source.count("inbrowser=") == 1
     assert "MARA Azure startup" in app_source
+    assert "from ktem.launcher import ensure_gradio_temp_dir" not in app_source

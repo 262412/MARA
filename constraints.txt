@@ -7,6 +7,7 @@ aiohappyeyeballs==2.6.2
 aiohttp==3.14.1
     # via
     #   kubernetes
+    #   langchain
     #   langchain-community
     #   llama-index-core
     #   llama-index-legacy
@@ -36,7 +37,7 @@ asgiref==3.11.1
 async-timeout==4.0.3
     # via
     #   aiohttp
-    #   langchain-classic
+    #   langchain
 attrs==26.1.0
     # via
     #   aiohttp
@@ -107,12 +108,18 @@ cycler==0.12.1
     # via matplotlib
 dataclasses-json==0.6.7
     # via
+    #   langchain-community
     #   llama-index-core
     #   llama-index-legacy
+defusedxml==0.7.1
+    # via langchain-anthropic
 deprecated==1.3.1
     # via
     #   llama-index-core
     #   llama-index-legacy
+    #   opentelemetry-api
+    #   opentelemetry-exporter-otlp-proto-grpc
+    #   opentelemetry-semantic-conventions
 deprecation==2.1.0
     # via lancedb
 dirtyjson==1.0.8
@@ -152,8 +159,6 @@ ffmpy==1.0.0
     # via gradio
 filelock==3.29.4
     # via huggingface-hub
-filetype==1.2.0
-    # via langchain-google-genai
 flatbuffers==25.12.19
     # via onnxruntime
 fonttools==4.63.0
@@ -168,14 +173,26 @@ fsspec==2026.6.0
     #   huggingface-hub
     #   llama-index-core
     #   llama-index-legacy
-google-ai-generativelanguage==0.12.0
-    # via langchain-google-genai
-google-api-core==2.31.0
-    # via google-ai-generativelanguage
+google-ai-generativelanguage==0.6.6
+    # via google-generativeai
+google-api-core==2.30.3
+    # via
+    #   google-ai-generativelanguage
+    #   google-api-python-client
+    #   google-generativeai
+google-api-python-client==2.198.0
+    # via google-generativeai
 google-auth==2.55.1
     # via
     #   google-ai-generativelanguage
     #   google-api-core
+    #   google-api-python-client
+    #   google-auth-httplib2
+    #   google-generativeai
+google-auth-httplib2==0.4.0
+    # via google-api-python-client
+google-generativeai==0.7.2
+    # via langchain-google-genai
 googleapis-common-protos==1.75.0
     # via
     #   google-api-core
@@ -195,11 +212,10 @@ greenlet==3.5.2
 grpcio==1.81.1
     # via
     #   chromadb
-    #   google-ai-generativelanguage
     #   google-api-core
     #   grpcio-status
     #   opentelemetry-exporter-otlp-proto-grpc
-grpcio-status==1.81.1
+grpcio-status==1.62.3
     # via google-api-core
 h11==0.16.0
     # via
@@ -213,6 +229,10 @@ html2text==2024.2.26
     #   llama-hub
 httpcore==1.0.9
     # via httpx
+httplib2==0.32.0
+    # via
+    #   google-api-python-client
+    #   google-auth-httplib2
 httptools==0.8.0
     # via uvicorn
 httpx==0.28.1
@@ -223,7 +243,6 @@ httpx==0.28.1
     #   gradio
     #   gradio-client
     #   langchain-mistralai
-    #   langgraph-sdk
     #   langsmith
     #   llama-cloud
     #   llama-index-core
@@ -234,7 +253,6 @@ httpx==0.28.1
     #   tavily-python
 httpx-sse==0.4.3
     # via
-    #   langchain-community
     #   langchain-mistralai
     #   mcp
 huggingface-hub==0.36.2
@@ -251,8 +269,10 @@ idna==3.18
     #   httpx
     #   requests
     #   yarl
-importlib-metadata==9.0.0
-    # via build
+importlib-metadata==8.4.0
+    # via
+    #   build
+    #   opentelemetry-api
 importlib-resources==6.5.2
     # via
     #   chromadb
@@ -296,56 +316,60 @@ lance-namespace-urllib3-client==0.7.7
     # via lance-namespace
 lancedb==0.33.0
     # via llama-index-vector-stores-lancedb
-langchain==1.3.2
-    # via kotaemon
-langchain-anthropic==1.4.7
-    # via kotaemon
-langchain-classic==1.0.8
-    # via langchain-community
-langchain-cohere==0.6.0
-    # via kotaemon
-langchain-community==0.4.2
-    # via kotaemon
-langchain-core==1.4.8
+langchain==0.2.17
     # via
+    #   -r requirements.azure.in
+    #   kotaemon
+    #   langchain-community
+langchain-anthropic==0.1.23
+    # via
+    #   -r requirements.azure.in
+    #   kotaemon
+langchain-cohere==0.2.4
+    # via
+    #   -r requirements.azure.in
+    #   kotaemon
+langchain-community==0.2.19
+    # via
+    #   -r requirements.azure.in
+    #   kotaemon
+    #   langchain-experimental
+langchain-core==0.2.43
+    # via
+    #   -r requirements.azure.in
     #   langchain
     #   langchain-anthropic
-    #   langchain-classic
     #   langchain-cohere
     #   langchain-community
+    #   langchain-experimental
     #   langchain-google-genai
     #   langchain-mistralai
     #   langchain-ollama
     #   langchain-openai
     #   langchain-text-splitters
-    #   langgraph
-    #   langgraph-checkpoint
-    #   langgraph-prebuilt
-langchain-google-genai==3.2.0
-    # via kotaemon
-langchain-mistralai==1.1.5
-    # via kotaemon
-langchain-ollama==1.1.0
-    # via kotaemon
-langchain-openai==1.1.9
-    # via kotaemon
-langchain-protocol==0.0.18
-    # via langchain-core
-langchain-text-splitters==1.1.2
-    # via langchain-classic
-langgraph==1.2.2
+langchain-experimental==0.0.65
+    # via langchain-cohere
+langchain-google-genai==1.0.10
+    # via
+    #   -r requirements.azure.in
+    #   kotaemon
+langchain-mistralai==0.1.13
+    # via
+    #   -r requirements.azure.in
+    #   kotaemon
+langchain-ollama==0.1.3
+    # via
+    #   -r requirements.azure.in
+    #   kotaemon
+langchain-openai==0.1.25
+    # via
+    #   -r requirements.azure.in
+    #   kotaemon
+langchain-text-splitters==0.2.4
     # via langchain
-langgraph-checkpoint==4.1.1
+langsmith==0.1.147
     # via
-    #   langgraph
-    #   langgraph-prebuilt
-langgraph-prebuilt==1.1.0
-    # via langgraph
-langgraph-sdk==0.3.15
-    # via langgraph
-langsmith==0.8.5
-    # via
-    #   langchain-classic
+    #   langchain
     #   langchain-community
     #   langchain-core
 linkify-it-py==2.1.0
@@ -480,6 +504,7 @@ numpy==1.26.4
     #   contourpy
     #   gradio
     #   lancedb
+    #   langchain
     #   langchain-community
     #   llama-index-core
     #   llama-index-legacy
@@ -506,7 +531,7 @@ openai==1.109.1
     #   llama-index-llms-openai
 openpyxl==3.1.5
     # via kotaemon
-opentelemetry-api==1.43.0
+opentelemetry-api==1.27.0
     # via
     #   chromadb
     #   opentelemetry-exporter-otlp-proto-grpc
@@ -515,35 +540,34 @@ opentelemetry-api==1.43.0
     #   opentelemetry-instrumentation-fastapi
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
-opentelemetry-exporter-otlp-proto-common==1.43.0
+opentelemetry-exporter-otlp-proto-common==1.27.0
     # via opentelemetry-exporter-otlp-proto-grpc
-opentelemetry-exporter-otlp-proto-grpc==1.43.0
+opentelemetry-exporter-otlp-proto-grpc==1.27.0
     # via
     #   chromadb
     #   kotaemon
-opentelemetry-instrumentation==0.64b0
+opentelemetry-instrumentation==0.48b0
     # via
     #   opentelemetry-instrumentation-asgi
     #   opentelemetry-instrumentation-fastapi
-opentelemetry-instrumentation-asgi==0.64b0
+opentelemetry-instrumentation-asgi==0.48b0
     # via opentelemetry-instrumentation-fastapi
-opentelemetry-instrumentation-fastapi==0.64b0
+opentelemetry-instrumentation-fastapi==0.48b0
     # via chromadb
-opentelemetry-proto==1.43.0
+opentelemetry-proto==1.27.0
     # via
     #   opentelemetry-exporter-otlp-proto-common
     #   opentelemetry-exporter-otlp-proto-grpc
-opentelemetry-sdk==1.43.0
+opentelemetry-sdk==1.27.0
     # via
     #   chromadb
     #   opentelemetry-exporter-otlp-proto-grpc
-opentelemetry-semantic-conventions==0.64b0
+opentelemetry-semantic-conventions==0.48b0
     # via
-    #   opentelemetry-instrumentation
     #   opentelemetry-instrumentation-asgi
     #   opentelemetry-instrumentation-fastapi
     #   opentelemetry-sdk
-opentelemetry-util-http==0.64b0
+opentelemetry-util-http==0.48b0
     # via
     #   opentelemetry-instrumentation-asgi
     #   opentelemetry-instrumentation-fastapi
@@ -551,15 +575,12 @@ orjson==3.11.9
     # via
     #   chromadb
     #   gradio
-    #   langgraph-sdk
     #   langsmith
-ormsgpack==1.12.2
-    # via langgraph-checkpoint
 overrides==7.7.0
     # via
     #   chromadb
     #   lancedb
-packaging==26.2
+packaging==24.2
     # via
     #   build
     #   deprecation
@@ -568,16 +589,15 @@ packaging==26.2
     #   huggingface-hub
     #   lancedb
     #   langchain-core
-    #   langsmith
     #   marshmallow
     #   matplotlib
     #   onnxruntime
-    #   opentelemetry-instrumentation
     #   plotly
 pandas==2.2.3
     # via
     #   gradio
     #   kotaemon
+    #   langchain-cohere
     #   llama-index-core
     #   llama-index-legacy
 pillow==10.4.0
@@ -605,10 +625,11 @@ proto-plus==1.28.0
     # via
     #   google-ai-generativelanguage
     #   google-api-core
-protobuf==7.35.1
+protobuf==4.25.9
     # via
     #   google-ai-generativelanguage
     #   google-api-core
+    #   google-generativeai
     #   googleapis-common-protos
     #   grpcio-status
     #   onnxruntime
@@ -634,18 +655,13 @@ pydantic==2.10.6
     #   chromadb
     #   cohere
     #   fastapi
+    #   google-generativeai
     #   gradio
     #   kotaemon
     #   lance-namespace-urllib3-client
     #   lancedb
     #   langchain
-    #   langchain-anthropic
-    #   langchain-classic
-    #   langchain-cohere
     #   langchain-core
-    #   langchain-google-genai
-    #   langchain-mistralai
-    #   langgraph
     #   langsmith
     #   llama-cloud
     #   llama-index-core
@@ -659,9 +675,7 @@ pydantic-core==2.27.2
     #   cohere
     #   pydantic
 pydantic-settings==2.14.2
-    # via
-    #   langchain-community
-    #   mcp
+    # via mcp
 pydub==0.25.1
     # via gradio
 pygments==2.20.0
@@ -675,7 +689,9 @@ pymupdf==1.24.11
 pynndescent==0.6.0
     # via umap-learn
 pyparsing==3.3.2
-    # via matplotlib
+    # via
+    #   httplib2
+    #   matplotlib
 pypdf==4.2.0
     # via
     #   kotaemon
@@ -722,7 +738,7 @@ pyyaml==6.0.3
     #   gradio
     #   huggingface-hub
     #   kubernetes
-    #   langchain-classic
+    #   langchain
     #   langchain-community
     #   langchain-core
     #   llama-index-core
@@ -747,7 +763,7 @@ requests==2.34.2
     #   google-api-core
     #   huggingface-hub
     #   kubernetes
-    #   langchain-classic
+    #   langchain
     #   langchain-community
     #   langsmith
     #   llama-index-core
@@ -789,6 +805,8 @@ scipy==1.15.3
     #   umap-learn
 semantic-version==2.10.0
     # via gradio
+setuptools==82.0.1
+    # via opentelemetry-instrumentation
 shellingham==1.5.4
     # via typer
 six==1.17.0
@@ -805,7 +823,7 @@ soupsieve==2.8.4
 sqlalchemy==2.0.51
     # via
     #   ktem
-    #   langchain-classic
+    #   langchain
     #   langchain-community
     #   llama-index-core
     #   llama-index-legacy
@@ -822,6 +840,8 @@ striprtf==0.0.26
     # via llama-index-readers-file
 sympy==1.14.0
     # via onnxruntime
+tabulate==0.9.0
+    # via langchain-cohere
 tantivy==0.26.0
     # via llama-index-vector-stores-lancedb
 tavily-python==0.7.26
@@ -830,6 +850,7 @@ tenacity==8.2.3
     # via
     #   chromadb
     #   kotaemon
+    #   langchain
     #   langchain-community
     #   langchain-core
     #   llama-index-core
@@ -863,6 +884,7 @@ tqdm==4.68.3
     # via
     #   chromadb
     #   docx2pdf
+    #   google-generativeai
     #   huggingface-hub
     #   lancedb
     #   llama-index-core
@@ -878,8 +900,6 @@ typer==0.25.1
     # via
     #   chromadb
     #   gradio
-types-pyyaml==6.0.12.20260518
-    # via langchain-cohere
 types-requests==2.33.0.20260518
     # via cohere
 typing-extensions==4.15.0
@@ -896,22 +916,19 @@ typing-extensions==4.15.0
     #   cryptography
     #   exceptiongroup
     #   fastapi
+    #   google-generativeai
     #   gradio
     #   gradio-client
     #   grpcio
     #   huggingface-hub
     #   lance-namespace-urllib3-client
     #   langchain-core
-    #   langchain-protocol
     #   llama-cloud
     #   llama-index-core
     #   llama-index-legacy
     #   multidict
     #   openai
-    #   opentelemetry-api
-    #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-sdk
-    #   opentelemetry-semantic-conventions
     #   posthog
     #   pydantic
     #   pydantic-core
@@ -943,6 +960,8 @@ uc-micro-py==2.0.0
     # via linkify-it-py
 umap-learn==0.5.5
     # via kotaemon
+uritemplate==4.2.0
+    # via google-api-python-client
 urllib3==2.7.0
     # via
     #   gradio
@@ -950,10 +969,6 @@ urllib3==2.7.0
     #   lance-namespace-urllib3-client
     #   requests
     #   types-requests
-uuid-utils==0.16.2
-    # via
-    #   langchain-core
-    #   langsmith
 uvicorn==0.49.0
     # via
     #   chromadb
@@ -969,23 +984,17 @@ websockets==12.0
     # via
     #   gradio-client
     #   uvicorn
-wrapt==2.2.2
+wrapt==1.17.3
     # via
     #   deprecated
     #   llama-index-core
     #   opentelemetry-instrumentation
 xlsxwriter==3.2.9
     # via python-pptx
-xxhash==3.7.1
-    # via
-    #   langgraph
-    #   langsmith
 yarl==1.24.2
     # via aiohttp
 zipp==4.1.0
     # via importlib-metadata
-zstandard==0.25.0
-    # via langsmith
 
 # The following packages were excluded from the output:
 # kotaemon

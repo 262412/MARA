@@ -6,3 +6,14 @@
 
 # Gradio 4.44 imports huggingface_hub.HfFolder, which was removed in 1.x.
 huggingface-hub<1.0
+
+# MARA still imports legacy langchain.schema APIs that were removed in 1.x.
+langchain<0.3
+langchain-community<0.3
+langchain-core<0.3
+langchain-openai<0.2
+langchain-google-genai<2
+langchain-anthropic<0.2
+langchain-ollama<0.2
+langchain-mistralai<0.2
+langchain-cohere<0.3
