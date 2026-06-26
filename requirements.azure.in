@@ -3,3 +3,6 @@
 ./libs/kotaemon
 ./libs/ktem
 ./libs/slide_cli
+
+# Gradio 4.44 imports huggingface_hub.HfFolder, which was removed in 1.x.
+huggingface-hub<1.0

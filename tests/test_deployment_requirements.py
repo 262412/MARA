@@ -34,6 +34,7 @@ def test_root_requirements_file_keeps_azure_app_service_build_installable():
         "./libs/slide_cli",
     }
     expected_pins = {
+        "huggingface-hub<1.0",
         "numpy==1.26.4",
         "ollama==0.6.2",
         "onnxruntime==1.23.2",
@@ -42,11 +43,14 @@ def test_root_requirements_file_keeps_azure_app_service_build_installable():
     assert "-c constraints.txt" in requirement_lines
     assert "-r requirements.azure.in" in requirement_lines
     assert expected_local_packages.issubset(source_lines)
+    assert "huggingface-hub<1.0" in source_lines
     assert not any(line.startswith("-e ") for line in requirement_lines)
     assert not any(line.startswith("-e ") for line in source_lines)
     assert "-e ./libs/kotaemon[all]" not in requirement_lines
     assert "-e ./libs/kotaemon[all]" not in source_lines
-    assert expected_pins.issubset(constraint_lines)
+    assert expected_pins - {"huggingface-hub<1.0"} <= constraint_lines
+    assert any(line.startswith("huggingface-hub==0.") for line in constraint_lines)
+    assert not any(line.startswith("huggingface-hub==1.") for line in constraint_lines)
     assert not any(line.startswith("-e ") for line in constraint_lines)
 
     for package_path in expected_local_packages:
@@ -56,8 +60,14 @@ def test_root_requirements_file_keeps_azure_app_service_build_installable():
 def test_source_app_binds_to_azure_app_service_port():
     app_source = (REPO_ROOT / "app.py").read_text(encoding="utf-8")
 
+    assert 'os.getenv("WEBSITE_SITE_NAME")' in app_source
+    assert 'os.environ.setdefault("KH_APP_DATA_DIR", "/home/site/mara_data")' in (
+        app_source
+    )
     assert 'os.getenv("PORT"' in app_source
     assert 'server_name="0.0.0.0"' in app_source
     assert "server_port=server_port" in app_source
+    assert 'os.getenv("PORT", "8000")' in app_source
     assert "inbrowser=False" in app_source
     assert app_source.count("inbrowser=") == 1
+    assert "MARA Azure startup" in app_source
