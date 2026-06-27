@@ -7,6 +7,17 @@
 - 需要进一步完善
 - 需要重构
 
+## 状态维护规则
+
+本文档是 MARA proposal 项目梳理的 live record。后续每完成一个 Phase 或可验证 step，必须在同一工作回合更新本文档对应小节，至少记录：
+
+- 完成日期和当前状态。
+- 改动或验证涉及的文件、命令面、JSON/session/schema/UI/runtime surface。
+- 实际运行的验证命令和结果。
+- Storage/dataset layout 与 quota 状态；若没有运行环境重任务，也要说明未触发。
+- 证据路径，例如 scratch outputs、benchmark artifacts、logs 或 targeted test 输出。
+- Residual risk 和下一步 follow-up；计划项不能提前写成已完成。
+
 ## 审计范围与约束
 
 审计输入：
@@ -26,15 +37,18 @@
 - `.venv/bin/python` 指向 fastscratch uv Python: `/mnt/fastscratch/users/tbczhang/cache/uv/python/cpython-3.10.20-linux-x86_64-gnu/bin/python3.10`。
 - `UV_CACHE_DIR`, `UV_PYTHON_INSTALL_DIR`, `HF_HOME`, `CODEX_HOME`, `KH_APP_DATA_DIR`, `TIKTOKEN_CACHE_DIR` 均在 scratch/fastscratch 合规位置。
 - Repo 根目录没有 `data/`, `datasets/`, `outputs/`。
-- Phase 0 后 `/mnt/fastscratch` 文件数为 `467050 / 500000`，已回到 soft file quota 以下。本轮只运行了一个 targeted CLI contract test，没有运行 model call、indexing、benchmark 或大文件生成。
+- Phase 1 live validation 后 `/mnt/fastscratch` 为 `148.8G / 500G`, `467157 / 500000` files；`/mnt/scratch` 为 `51.13G / 2T`,
+  `134654 / 300000` files，仍低于 soft quota。
+- Qwen3-8B vLLM 已在 `8000` 监听；DocQA indexing/ask live validation 已完成，临时索引已清理，证据保留在
+  `/mnt/scratch/users/tbczhang/outputs/MARA/phase1_quality_validation/`。
 
 ## Proposal 要求矩阵
 
 | Proposal 项                                                                                | 当前状态                 | 证据                                                                                                                                                  | 下一步                                                                                            |
 | ------------------------------------------------------------------------------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| 本地优先 Web/CLI DocQA runtime                                                             | 基本完成                 | `ktem.docqa.DocQARuntime`; Web 的 `build_web_docqa_request`; CLI 的 `MARA docqa` 命令族                                                               | 做 Web/CLI 请求模型一致性修复和真实 runtime 回归测试                                              |
+| 本地优先 Web/CLI DocQA runtime                                                             | 基本完成                 | `ktem.docqa.DocQARuntime`; Web 的 `build_web_docqa_request`; CLI 的 `MARA docqa` 命令族；Phase 1 live validation 已跑通                               | Phase 2 继续做 answer-quality protocol，不再把 request parity 作为阻塞项                          |
 | 支持 PDF/Word/PPT/Excel/CSV/Markdown/plain text upload/index/query                         | 基本完成                 | `FileIndex` 默认类型覆盖 `.pdf`, `.docx`, `.pptx`, `.xlsx`, `.csv`, `.md`, `.txt`, `.zip`; runtime indexing 支持目录和 zip 展开                       | 继续补 format robustness end-to-end 结果，特别是 PPTX/Excel/公式/图表                             |
-| 稳定 `DocQARequest` / `DocQAResponse`                                                      | 部分完成                 | `libs/ktem/ktem/docqa/_runtime_models.py` 已定义完整模型                                                                                              | `libs/slide_cli/slide_cli/docqa_request.py` 与 ktem runtime 模型发生字段漂移，需要统一或适配      |
+| 稳定 `DocQARequest` / `DocQAResponse`                                                      | 基本完成                 | `libs/ktem/ktem/docqa/_runtime_models.py` 已定义完整模型；Phase 1 已加入 CLI runtime adapter 与 Web/CLI parity tests                                  | 保持 contract tests；后续只在有迁移计划时改 public JSON/session/request shape                     |
 | `RouteDecision`, `RetrieveDecision`, `EvidenceBundle`, `VerifyDecision`, `ControllerTrace` | 基本完成                 | `libs/ktem/ktem/docqa/controller.py`, `evidence.py`, `verification.py`                                                                                | 保持 contract tests，避免在 benchmark/Web/CLI 间重复实现                                          |
 | route/executor registry                                                                    | 基本完成                 | `route_registry`, `executor_registry`, `workflow.py` 覆盖 direct/doc_text/page_image/element/graph/hybrid/abstain                                     | registry 与实际 backend readiness 需要在 UI/benchmark 中一致显示                                  |
 | text RAG                                                                                   | 基本完成                 | 复用 existing DocQA text retrieval/generation; benchmark 有 `text_rag` route                                                                          | 当前质量仍弱，需作为 baseline 固化而不是继续无目标调参                                            |
@@ -155,12 +169,12 @@
 
 ## 需要重构或重点控债
 
-1. Web/CLI request model 需要统一。
+1. Web/CLI request model 已完成 Phase 1 收口，后续仍需防漂移。
 
    - `libs/ktem/ktem/docqa/_runtime_models.py` 的 `DocQARequest` 包含 `planner_backend`, `verification_domain`, `page_image_records`, `max_context_length` 等字段。
-   - `libs/slide_cli/slide_cli/docqa_request.py` 的同名 dataclass 缺少部分 runtime 字段。
-   - `libs/ktem/ktem/docqa/_runtime_turn.py` 和 `_runtime_mara.py` 读取这些字段。若 CLI 传入 slide_cli 自己的 dataclass，存在字段漂移风险。
-   - 建议: CLI 直接复用 ktem `DocQARequest`，或增加明确 adapter + parity tests。
+   - Phase 1 已为 `libs/slide_cli/slide_cli/docqa_request.py` 增加 runtime adapter，并补齐 CLI/Web parity coverage。
+   - 当前风险不再是已知字段缺失，而是后续新增 request/session/JSON 字段时再次出现 Web/CLI/runtime 漂移。
+   - 后续要求: 任何 DocQA public request shape 变更都必须同步更新 CLI/Web parity tests 和 live-record 执行记录。
 
 2. Chat page 仍是最大结构风险。
 
@@ -191,7 +205,7 @@
 
 ## 建议后续路线
 
-### Phase 0 - 恢复可验证环境
+### Phase 0 - 恢复可验证环境 [已完成]
 
 目标: 在跑测试、index、benchmark 前先处理 file quota。
 
@@ -208,24 +222,41 @@
 - 复查 `.venv`: 仍指向 `/mnt/fastscratch/users/tbczhang/envs/mara`，Python 为 `3.10.20`。
 - Targeted verification: `PYTHONDONTWRITEBYTECODE=1 PYTEST_ADDOPTS='-p no:cacheprovider' .venv/bin/python -m pytest libs/slide_cli/tests/test_cli_contract.py -q` 通过，`8 passed`。
 
-### Phase 1 - 修复 public runtime contract
+### Phase 1 - 修复 public runtime contract [已完成]
 
 目标: 保证 Web/CLI/runtime 不漂移。
+
+状态: 2026-06-27 已关闭。Public runtime contract 不再阻塞 Phase 2；后续工作转入 answer-quality protocol、route quality 和 backend 深度验证。
 
 - 统一 `DocQARequest` 来源或加入 adapter。
 - 增加 CLI ask/chat 走真实 `DocQARuntime._prepare_turn_execution` 的 regression test。
 - 为 `planner_backend`, `verification_domain`, `page_image_records`, `max_context_length` 加 CLI/Web parity coverage。
 
-### Phase 2 - 定稿 thesis benchmark protocol
+执行记录:
+
+- 已为 CLI DocQA request 增加 runtime adapter: `MARA docqa ask/chat` 仍保持轻量 CLI request 构造，真正调用 runtime 前转换为 canonical `ktem.docqa.DocQARequest`。
+- 已补齐 CLI options: `--planner-backend`, `--verification-domain`, `--max-context-length`。
+- 已补齐 Web request builder 对 `planner_backend`, `verification_domain`, `page_image_records`, `max_context_length` 的字段传递。
+- 已增加 CLI ask/chat regression test，覆盖 request 进入真实 `DocQARuntime._prepare_turn_execution` 后仍保留 Phase 1 字段。
+- 已增加 Web request builder parity test，覆盖同一组 Phase 1 字段。
+- 已完成 `/no_think` live quality validation: direct Qwen no-context 为 0/3 expected hit；DocQA 默认 `mara` reasoning
+  为 3/3 expected hit 但 0/3 exact；DocQA `simple` reasoning 为 3/3 expected hit 且 3/3 exact，所有 live prompt
+  均以 `/no_think` 开头且未出现 `<think>` 标签。
+- 剩余质量风险: 默认 `mara` reasoning 仍倾向输出解释性文本，answer-only 评测需要 `simple` reasoning 或后续
+  runtime answer finalizer；把格式说明放在问题前会干扰检索/充分性判断，应采用 `/no_think` + question-first prompt。
+
+### Phase 2 - 定稿 thesis benchmark protocol [待执行]
 
 目标: 把“框架能跑”变成“论文能解释”。
+
+起点: Phase 1 live validation 显示 `/no_think` + `--reasoning simple` 可得到 answer-only exact 结果；默认 `mara` reasoning 更适合用户解释型回答，不适合作为 exact/F1 主评测输出。
 
 - 选择 2-3 个正式 dataset family: 一个 text-heavy, 一个 visual/page-heavy, 一个 hallucination/citation-heavy。
 - 固定 routes: direct, text_rag, page_image_rag_vlm, element_rag where meaningful, hybrid, controller_auto, crag_guarded。
 - 报告必须区分 local dataset-native, MARA proxy, external/paper-grade unavailable。
 - 写 error taxonomy: retrieval miss, wrong page, missing span, citation miss, verifier over-abstention, route mismatch。
 
-### Phase 3 - 强化 multimodal route
+### Phase 3 - 强化 multimodal route [待执行]
 
 目标: 让 proposal 的 multimodal claim 有最小可证明闭环。
 
@@ -234,7 +265,7 @@
 - Hybrid: 按 question type 证明什么时候优于 text，而不是要求所有 dataset 全面胜出。
 - Graph: 只承诺 local lightweight graph route，除非实现完整 GraphRAG pipeline。
 
-### Phase 4 - UI 和结构控债
+### Phase 4 - UI 和结构控债 [待执行]
 
 目标: 让 demo UI 稳定，不让 chat page 继续吸收业务逻辑。
 
@@ -244,4 +275,4 @@
 
 ## 当前一句话结论
 
-MARA 已经完成了 thesis prototype 的核心骨架：本地 Web/CLI runtime、Self-RAG-inspired controller contracts、route registry、evidence/trace schema、guardrail/verifier、multimodal route scaffolding 和 benchmark framework 都已存在。真正未完成的是“研究结论级稳定性”：route quality、visual/element/graph backend 深度、paper-grade evaluator、Web/CLI parity 和 UI/runtime 控债还需要系统化收口。
+MARA 已经完成了 thesis prototype 的核心骨架：本地 Web/CLI runtime、Self-RAG-inspired controller contracts、route registry、evidence/trace schema、guardrail/verifier、multimodal route scaffolding、benchmark framework 和 Phase 1 public runtime contract 都已存在。真正未完成的是“研究结论级稳定性”：answer-quality protocol、route quality、visual/element/graph backend 深度、paper-grade evaluator 和 UI/runtime 控债还需要系统化收口。

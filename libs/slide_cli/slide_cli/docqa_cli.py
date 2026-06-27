@@ -8,7 +8,7 @@ import click
 from .docqa_notebook_cli import register_docqa_notebook_commands
 from .docqa_options import docqa_shared_options as _docqa_shared_options
 from .docqa_output import print_docqa_response as _print_docqa_response
-from .docqa_request import DocQARequest
+from .docqa_request import DocQARequest, to_runtime_docqa_request
 
 _REPL_COMMANDS = (
     "Commands: /files, /use <file>, /page <n|clear>, /selected-text [text], "
@@ -140,7 +140,46 @@ def _run_docqa_turn(runtime, **request_kwargs):
     request_kwargs["qa_scope"] = str(request_kwargs.get("qa_scope") or "auto").replace(
         "-", "_"
     )
-    return runtime.run_turn(_create_docqa_request(**request_kwargs))
+    request = _create_docqa_request(**request_kwargs)
+    return runtime.run_turn(to_runtime_docqa_request(request))
+
+
+def _run_docqa_ask_turn(runtime, options):
+    selected_records = _resolve_cli_files(runtime, options["file_refs"])
+    active_record = _resolve_cli_active_file(runtime, options["active_file"])
+
+    return _run_docqa_turn(
+        runtime,
+        prompt=options["prompt"],
+        conversation_id=options["conversation"] or "",
+        selected_file_ids=[record.file_id for record in selected_records]
+        if options["file_refs"]
+        else None,
+        active_file_id=active_record.file_id if active_record else "",
+        active_file_name=active_record.name if active_record else "",
+        qa_scope=options["qa_scope"],
+        page_number=options["page"],
+        selected_text=options["selected_text"] or "",
+        graph_context=parse_graph_context_file(options["graph_context_file"]),
+        reasoning_type=options["reasoning"],
+        task_type=options["task_type"],
+        agent_mode=options["agent_mode"],
+        artifact_type=options["artifact_type"],
+        controller_mode=options["controller_mode"],
+        route_policy=options["route_policy"],
+        planner_backend=options["planner_backend"],
+        planner_model=options["planner_model"],
+        allowed_routes=list(options["allowed_routes"] or []),
+        verification_mode=options["verification_mode"],
+        verification_domain=options["verification_domain"],
+        max_context_length=options["max_context_length"],
+        llm=options["llm"],
+        visual_retriever_backend=options["visual_retriever_backend"],
+        visual_generator_backend=options["visual_generator_backend"],
+        use_mindmap=options["mindmap"],
+        use_citation=options["citation"],
+        language=options["language"],
+    )
 
 
 def _print_repl_history(runtime, conversation_id):
@@ -506,9 +545,12 @@ def docqa_ask(
     artifact_type,
     controller_mode,
     route_policy,
+    planner_backend,
     planner_model,
     allowed_routes,
     verification_mode,
+    verification_domain,
+    max_context_length,
     llm,
     visual_retriever_backend,
     visual_generator_backend,
@@ -531,39 +573,9 @@ def docqa_ask(
     Text-focused QA:
     `MARA docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"`
     """
-    runtime = create_docqa_runtime()
-    selected_records = _resolve_cli_files(runtime, file_refs)
-    active_record = _resolve_cli_active_file(runtime, active_file)
-
-    response = _run_docqa_turn(
-        runtime,
-        prompt=prompt,
-        conversation_id=conversation or "",
-        selected_file_ids=[record.file_id for record in selected_records]
-        if file_refs
-        else None,
-        active_file_id=active_record.file_id if active_record else "",
-        active_file_name=active_record.name if active_record else "",
-        qa_scope=qa_scope,
-        page_number=page,
-        selected_text=selected_text or "",
-        graph_context=parse_graph_context_file(graph_context_file),
-        reasoning_type=reasoning,
-        task_type=task_type,
-        agent_mode=agent_mode,
-        artifact_type=artifact_type,
-        controller_mode=controller_mode,
-        route_policy=route_policy,
-        planner_model=planner_model,
-        allowed_routes=list(allowed_routes or []),
-        verification_mode=verification_mode,
-        llm=llm,
-        visual_retriever_backend=visual_retriever_backend,
-        visual_generator_backend=visual_generator_backend,
-        use_mindmap=mindmap,
-        use_citation=citation,
-        language=language,
-    )
+    options = dict(locals())
+    json_output = options.pop("json_output")
+    response = _run_docqa_ask_turn(create_docqa_runtime(), options)
 
     if json_output:
         _echo_payload_json(response.as_dict())
@@ -588,9 +600,12 @@ def docqa_chat(
     artifact_type,
     controller_mode,
     route_policy,
+    planner_backend,
     planner_model,
     allowed_routes,
     verification_mode,
+    verification_domain,
+    max_context_length,
     llm,
     visual_retriever_backend,
     visual_generator_backend,
@@ -628,9 +643,12 @@ def docqa_chat(
         controller_options={
             "controller_mode": controller_mode,
             "route_policy": route_policy,
+            "planner_backend": planner_backend,
             "planner_model": planner_model,
             "allowed_routes": list(allowed_routes or []),
             "verification_mode": verification_mode,
+            "verification_domain": verification_domain,
+            "max_context_length": max_context_length,
             "visual_retriever_backend": visual_retriever_backend,
             "visual_generator_backend": visual_generator_backend,
         },
