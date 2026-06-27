@@ -9,14 +9,19 @@
 
 ## 状态维护规则
 
-本文档是 MARA proposal 项目梳理的 live record。后续每完成一个 Phase 或可验证 step，必须在同一工作回合更新本文档对应小节，至少记录：
+本文档是 MARA proposal 项目梳理的状态总表，不是长期流水日志。
 
-- 完成日期和当前状态。
-- 改动或验证涉及的文件、命令面、JSON/session/schema/UI/runtime surface。
-- 实际运行的验证命令和结果。
-- Storage/dataset layout 与 quota 状态；若没有运行环境重任务，也要说明未触发。
-- 证据路径，例如 scratch outputs、benchmark artifacts、logs 或 targeted test 输出。
-- Residual risk 和下一步 follow-up；计划项不能提前写成已完成。
+Phase 开发中可以在对应小节临时记录每一次开发的结论、验证和未满足目标。Phase 被视为结束后，必须清理这些过程记录，只保留最终总结：
+
+- Phase 当前状态和关闭日期。
+- 最终满足了哪些 proposal 目标，哪些仍未满足。
+- 最终影响的 public surface。
+- 最新一次代表性验证命令和结果。
+- Storage/dataset layout 与 quota 最新状态。
+- 证据入口路径，例如 scratch outputs、benchmark artifacts、logs 或 targeted test 输出目录。
+- Residual risk 和下一阶段 follow-up。
+
+临时失败尝试、重复 rerun、调试命令、逐轮开发细节应保留在 outputs/logs/artifacts 中；除非它们解释最终 residual risk，否则不应长期留在本文档正文。
 
 ## 审计范围与约束
 
@@ -209,52 +214,72 @@
 
 目标: 在跑测试、index、benchmark 前先处理 file quota。
 
-- 清理或归档 fastscratch 高文件数缓存，尤其是重复 `__pycache__`, old test caches, stale model/cache shards。
-- 重新确认 `lfs quota -h -u tbczhang /mnt/fastscratch` 文件数低于 soft quota。
-- 然后再运行 targeted tests。
+最终结论:
 
-执行记录:
-
-- 已清理 fastscratch 中可再生成的 `uv` 包/构建/临时缓存: `cache/uv/.tmp*`, `archive-v0`, `builds-v0`, `sdists-v9`, `wheels-v6`。
-- 已清理可再生成的 `pip` HTTP/selfcheck 缓存: `cache/pip/http-v2`, `cache/pip/selfcheck`。
-- 未清理 `envs/`, `mara_runtime/`, Hugging Face cache、模型权重、dataset、benchmark artifacts 或正在运行服务可能使用的 GPU 编译缓存。
-- 复查 `lfs quota -h -u tbczhang /mnt/fastscratch`: `148.4G / 500G`, `467050 / 500000` files。
-- 复查 `.venv`: 仍指向 `/mnt/fastscratch/users/tbczhang/envs/mara`，Python 为 `3.10.20`。
-- Targeted verification: `PYTHONDONTWRITEBYTECODE=1 PYTEST_ADDOPTS='-p no:cacheprovider' .venv/bin/python -m pytest libs/slide_cli/tests/test_cli_contract.py -q` 通过，`8 passed`。
+- 2026-06-25 已关闭。fastscratch 文件数已回到 soft quota 以下，仓库重新进入可验证状态。
+- 清理范围只包含可再生成缓存，包括 `uv` 包/构建/临时缓存和 `pip` HTTP/selfcheck 缓存；未清理 `envs/`, `mara_runtime/`, Hugging Face cache、模型权重、dataset、benchmark artifacts 或正在运行服务可能使用的 GPU 编译缓存。
+- `.venv` 保持为指向 `/mnt/fastscratch/users/tbczhang/envs/mara` 的 symlink，repo 根目录未放置 `data/`, `datasets/`, `outputs/`。
+- 代表性验证: `PYTHONDONTWRITEBYTECODE=1 PYTEST_ADDOPTS='-p no:cacheprovider' .venv/bin/python -m pytest libs/slide_cli/tests/test_cli_contract.py -q` 通过，`8 passed`。
+- Residual risk: 后续所有 `uv`, tests, model call, DocQA indexing, dataset sync, Slurm 前仍必须执行 storage/dataset preflight；fastscratch file quota 仍是常态风险。
 
 ### Phase 1 - 修复 public runtime contract [已完成]
 
 目标: 保证 Web/CLI/runtime 不漂移。
 
-状态: 2026-06-27 已关闭。Public runtime contract 不再阻塞 Phase 2；后续工作转入 answer-quality protocol、route quality 和 backend 深度验证。
+最终结论:
 
-- 统一 `DocQARequest` 来源或加入 adapter。
-- 增加 CLI ask/chat 走真实 `DocQARuntime._prepare_turn_execution` 的 regression test。
-- 为 `planner_backend`, `verification_domain`, `page_image_records`, `max_context_length` 加 CLI/Web parity coverage。
+- 2026-06-27 已关闭。Public runtime contract 不再阻塞 Phase 2；后续工作转入 answer-quality protocol、route quality 和 backend 深度验证。
+- CLI `MARA docqa ask/chat` 在调用 runtime 前会转换为 canonical `ktem.docqa.DocQARequest`，避免 CLI/Web/runtime request shape 漂移。
+- CLI/Web parity 已覆盖 `planner_backend`, `verification_domain`, `page_image_records`, `max_context_length`；CLI 也暴露了相应 options。
+- Live quality validation 证明: 用户侧默认 `mara` reasoning 更适合解释型回答；benchmark 侧必须使用独立 answer-only prompt/policy，不能用用户解释型回答直接作为 exact/F1 主评测输出。
+- Public surface 影响: `MARA docqa ask/chat` options 与 Web request builder 字段传递被补齐；未改变 DB schema、session shape 或 Gradio event chain。
+- 证据入口: `/mnt/scratch/users/tbczhang/outputs/MARA/phase1_quality_validation/`。
+- Residual risk: 未来任何 DocQA public request/session/JSON 字段变更，都必须同步更新 CLI/Web/runtime parity tests。
 
-执行记录:
-
-- 已为 CLI DocQA request 增加 runtime adapter: `MARA docqa ask/chat` 仍保持轻量 CLI request 构造，真正调用 runtime 前转换为 canonical `ktem.docqa.DocQARequest`。
-- 已补齐 CLI options: `--planner-backend`, `--verification-domain`, `--max-context-length`。
-- 已补齐 Web request builder 对 `planner_backend`, `verification_domain`, `page_image_records`, `max_context_length` 的字段传递。
-- 已增加 CLI ask/chat regression test，覆盖 request 进入真实 `DocQARuntime._prepare_turn_execution` 后仍保留 Phase 1 字段。
-- 已增加 Web request builder parity test，覆盖同一组 Phase 1 字段。
-- 已完成 `/no_think` live quality validation: direct Qwen no-context 为 0/3 expected hit；DocQA 默认 `mara` reasoning
-  为 3/3 expected hit 但 0/3 exact；DocQA `simple` reasoning 为 3/3 expected hit 且 3/3 exact，所有 live prompt
-  均以 `/no_think` 开头且未出现 `<think>` 标签。
-- 剩余质量风险: 默认 `mara` reasoning 仍倾向输出解释性文本，answer-only 评测需要 `simple` reasoning 或后续
-  runtime answer finalizer；把格式说明放在问题前会干扰检索/充分性判断，应采用 `/no_think` + question-first prompt。
-
-### Phase 2 - 定稿 thesis benchmark protocol [待执行]
+### Phase 2 - benchmark protocol engineering [已完成；thesis freeze pending]
 
 目标: 把“框架能跑”变成“论文能解释”。
 
-起点: Phase 1 live validation 显示 `/no_think` + `--reasoning simple` 可得到 answer-only exact 结果；默认 `mara` reasoning 更适合用户解释型回答，不适合作为 exact/F1 主评测输出。
+最终结论:
 
-- 选择 2-3 个正式 dataset family: 一个 text-heavy, 一个 visual/page-heavy, 一个 hallucination/citation-heavy。
-- 固定 routes: direct, text_rag, page_image_rag_vlm, element_rag where meaningful, hybrid, controller_auto, crag_guarded。
-- 报告必须区分 local dataset-native, MARA proxy, external/paper-grade unavailable。
-- 写 error taxonomy: retrieval miss, wrong page, missing span, citation miss, verifier over-abstention, route mismatch。
+- 2026-06-27 工程阶段已关闭；最终 thesis dataset/route/evaluator freeze 仍 pending。此阶段关闭的是 benchmark protocol engineering，不是论文最终分数。
+- 产品用户回答和 benchmark 回答已明确分离: 用户侧保留解释型 `mara` prompt；benchmark 侧使用 `gold_answer_v1` + `/no_think` + answer-only policy。
+- Benchmark config/CLI/manifest/artifact/summary/report 已支持 `benchmark_prompt_policy`, `benchmark_no_think`, Phase2 dataset decision, failure taxonomy, route timeout budget, VLM backend readiness metadata。
+- 七个候选 dataset family 已完成同 seed 小样本 `gold_answer_v1` live rerun 和 matched `benchmark_v1 --benchmark-no-think` baseline: FinanceBench, QASPER, RAGTruth, ALCE, MMDocRAG, SlideVQA, ViDoRe。
+- Provisional dataset matrix 已形成但不冻结最终 thesis 主数据集: QASPER/RAGTruth/MMDocRAG 暂为主候选，ALCE secondary，FinanceBench/SlideVQA/ViDoRe 保留为诊断或 blocked candidate。
+- Controller/guarded timeout 缺口已工程化处理: artifact 会记录 `error_type=route_timeout` 和 `route_timeout_seconds`；FinanceBench matched timeout rerun 已完成，但 controller/guarded 仍慢且质量为 0。
+- VLM route 已完成最小 live proof: SlideVQA `page_image_rag_vlm` limit2 为 2 predictions、0 error rows、avg F1/native 0.4000、page hit 1.0000；ViDoRe 已切到 answer-bearing ArxivQA family 并证明 full QA generation route 可跑，但质量仍为 0 且存在 2048 context limit。
+- Report score authority 已固定为三层: external/paper-grade, local dataset-native, MARA proxy。当前代表性 artifacts 仍不能声称 paper-grade external score。
+
+Public surface:
+
+- 影响范围限于 benchmark CLI/config/manifest/prediction/retrieval trace/summary/report 字段。
+- 未改变 MARA/MARA-cli 公开产品命令面、DocQA request/session/DB schema、Gradio event chain 或用户文件格式。
+
+代表性证据入口:
+
+- Gold-answer live rerun: `/mnt/scratch/users/tbczhang/outputs/MARA/phase2_gold_answer_live/`。
+- Matched baseline rerun: `/mnt/scratch/users/tbczhang/outputs/MARA/phase2_matched_baseline/`。
+- Phase2 protocol matrix: `/mnt/scratch/users/tbczhang/outputs/MARA/phase2_protocol/`。
+- Timeout fixed rerun: `/mnt/scratch/users/tbczhang/outputs/MARA/phase2_timeout_rerun_fixed_20260627/`。
+- VLM/ViDoRe rerun: `/mnt/scratch/users/tbczhang/outputs/MARA/phase2_vlm/`。
+- Gap analysis: `/mnt/scratch/users/tbczhang/outputs/MARA/phase2_gap_analysis/phase2_gap_analysis_20260627.md`。
+
+最新验证:
+
+- `uv run --python 3.10 python -m pytest benchmark/tests/test_runner_route_execution.py -q`: `9 passed`。
+- `uv run --python 3.10 python -m pytest benchmark/tests -q`: `238 passed`, `1 warning`。warning 为 pypdf/cryptography ARC4 deprecation。
+- `uv run --python 3.10 python scripts/check_codebase_hygiene.py <changed-python-files>`: `No codebase hygiene ratchet violations.`。
+- `uv run --python 3.10 python -m pre_commit run --files <changed-files>`: passed。
+- Storage/layout: `.venv` 指向 `/mnt/fastscratch/users/tbczhang/envs/mara`，`.venv/bin/python` 指向 fastscratch uv Python；`/mnt/fastscratch` 与 `/mnt/scratch` 均低于 soft quota；repo 根目录没有 `data/`, `datasets/`, `outputs/`。
+
+Residual risk / 下一阶段:
+
+- 最终 2-3 个 thesis 主数据集不能现在冻结；需要更大样本、稳定 route 对比和可解释 failure class 后再定。
+- 8001 Qwen3-VL 与 8002 retrieval server 在当前 2x L4 布局下不能稳定共存，Phase 3 需要可复现 VLM serving/health gate 或替代 backend。
+- SlideVQA VLM 有 page hit 正向信号，但仍存在重复答案和 answer mismatch；ViDoRe full QA 可跑但答案质量仍不达标。
+- Controller/hybrid/guarded 不能声称全面优于 text baseline；后续必须按 dataset/question type 分析收益。
+- Paper-grade external evaluator 尚未配置，论文表述必须继续限制为 local adapted/native/proxy metrics。
 
 ### Phase 3 - 强化 multimodal route [待执行]
 
@@ -275,4 +300,4 @@
 
 ## 当前一句话结论
 
-MARA 已经完成了 thesis prototype 的核心骨架：本地 Web/CLI runtime、Self-RAG-inspired controller contracts、route registry、evidence/trace schema、guardrail/verifier、multimodal route scaffolding、benchmark framework 和 Phase 1 public runtime contract 都已存在。真正未完成的是“研究结论级稳定性”：answer-quality protocol、route quality、visual/element/graph backend 深度、paper-grade evaluator 和 UI/runtime 控债还需要系统化收口。
+MARA 已经完成了 thesis prototype 的核心骨架：本地 Web/CLI runtime、Self-RAG-inspired controller contracts、route registry、evidence/trace schema、guardrail/verifier、multimodal route scaffolding、benchmark framework、Phase 1 public runtime contract 和 Phase 2 benchmark protocol engineering 都已存在。真正未完成的是“研究结论级稳定性”：最终 thesis dataset/route/evaluator freeze、稳定 VLM route、大样本 failure analysis、paper-grade evaluator 和 UI/runtime 控债还需要继续收口。

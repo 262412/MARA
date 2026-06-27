@@ -157,6 +157,27 @@ def test_prediction_diagnostics_classifies_runtime_error_before_retrieval():
     assert diagnostics["failure_class"] == "execution_error"
 
 
+def test_prediction_diagnostics_classifies_route_timeout_separately():
+    diagnostics = prediction_diagnostics(
+        {
+            "error": "Route controller_auto timed out after 120.0 seconds.",
+            "error_type": "route_timeout",
+            "retrieved_hits": [],
+            "retrieval_trace": [],
+            "gold_pages": [77],
+            "predicted_pages": [],
+            "predicted_sources": [],
+            "gold_sources": ["doc#page:77"],
+            "gold_evidence": [{"citation": "doc#page:77", "page": 77}],
+            "predicted_answer": "",
+        }
+    )
+
+    assert diagnostics["retrieval_failure_type"] == "route_timeout"
+    assert diagnostics["citation_failure_type"] == "not_evaluated_route_timeout"
+    assert diagnostics["failure_class"] == "route_timeout"
+
+
 def test_prediction_diagnostics_classifies_wrong_page_after_retrieval():
     diagnostics = prediction_diagnostics(
         {

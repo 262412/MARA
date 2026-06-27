@@ -12,13 +12,17 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "direct",
-      "allowed_routes": ["direct"],
+      "allowed_routes": [
+        "direct"
+      ],
       "verification_mode": "light",
       "planner_backend": "heuristic_local",
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
       "benchmark_role": "diagnostic",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "text_rag",
@@ -28,7 +32,9 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "doc",
-      "allowed_routes": ["doc_text"],
+      "allowed_routes": [
+        "doc_text"
+      ],
       "verification_mode": "light",
       "text_retriever_backend": "BAAI/bge-m3",
       "reranker_backend": "BAAI/bge-reranker-v2-m3",
@@ -36,7 +42,9 @@
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
       "benchmark_role": "qa_quality",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "page_image_rag_smoke",
@@ -46,7 +54,9 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "visual",
-      "allowed_routes": ["doc_page_image"],
+      "allowed_routes": [
+        "doc_page_image"
+      ],
       "verification_mode": "light",
       "visual_retriever_backend": "local_late_interaction",
       "visual_generator_backend": "evidence_only_without_vlm",
@@ -55,7 +65,9 @@
       "generator_backend": "evidence_only_without_vlm",
       "implementation_stage": "deterministic_page_image_smoke",
       "benchmark_role": "diagnostic",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "page_image_rag_vlm",
@@ -65,7 +77,9 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "visual",
-      "allowed_routes": ["doc_page_image"],
+      "allowed_routes": [
+        "doc_page_image"
+      ],
       "verification_mode": "light",
       "visual_retriever_backend": "colqwen",
       "visual_generator_backend": "local_qwen3_vl",
@@ -74,7 +88,9 @@
       "generator_backend": "local_qwen3_vl",
       "requires_backend_config": true,
       "benchmark_role": "diagnostic",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "element_rag",
@@ -84,7 +100,9 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "element",
-      "allowed_routes": ["doc_element"],
+      "allowed_routes": [
+        "doc_element"
+      ],
       "verification_mode": "light",
       "text_retriever_backend": "docqa_element_metadata",
       "planner_backend": "heuristic_local",
@@ -92,7 +110,9 @@
       "max_context_length": 2000,
       "implementation_stage": "prototype_element_metadata_index",
       "benchmark_role": "prototype",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "graph_rag_local",
@@ -102,7 +122,9 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "graph",
-      "allowed_routes": ["graph_global"],
+      "allowed_routes": [
+        "graph_global"
+      ],
       "verification_mode": "light",
       "graph_backend": "local_graph_index",
       "graph_mode": "local",
@@ -110,7 +132,9 @@
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
       "benchmark_role": "prototype",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "graph_rag_global",
@@ -121,7 +145,9 @@
       "controller_mode": "llm",
       "task_type": "summary",
       "route_policy": "graph",
-      "allowed_routes": ["graph_global"],
+      "allowed_routes": [
+        "graph_global"
+      ],
       "verification_mode": "light",
       "graph_backend": "local_graph_index",
       "graph_mode": "global",
@@ -129,7 +155,9 @@
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
       "benchmark_role": "prototype",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "hybrid_rag",
@@ -139,7 +167,9 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "hybrid",
-      "allowed_routes": ["hybrid"],
+      "allowed_routes": [
+        "hybrid"
+      ],
       "verification_mode": "light",
       "text_retriever_backend": "BAAI/bge-m3",
       "visual_retriever_backend": "colqwen",
@@ -150,7 +180,9 @@
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
       "benchmark_role": "qa_quality",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "controller_auto",
@@ -160,7 +192,13 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "auto",
-      "allowed_routes": ["doc_text", "hybrid", "doc_page_image", "doc_element", "graph_global"],
+      "allowed_routes": [
+        "doc_text",
+        "hybrid",
+        "doc_page_image",
+        "doc_element",
+        "graph_global"
+      ],
       "verification_mode": "light",
       "text_retriever_backend": "BAAI/bge-m3",
       "visual_retriever_backend": "colqwen",
@@ -171,8 +209,11 @@
       "planner_model": "Qwen/Qwen3-8B",
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
+      "route_timeout_seconds": 90.0,
       "benchmark_role": "qa_quality",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "crag_guarded",
@@ -183,7 +224,13 @@
       "agent_mode": "thorough",
       "controller_mode": "llm",
       "route_policy": "auto",
-      "allowed_routes": ["doc_text", "hybrid", "doc_page_image", "doc_element", "graph_global"],
+      "allowed_routes": [
+        "doc_text",
+        "hybrid",
+        "doc_page_image",
+        "doc_element",
+        "graph_global"
+      ],
       "verification_mode": "strict",
       "text_retriever_backend": "BAAI/bge-m3",
       "visual_retriever_backend": "colqwen",
@@ -195,8 +242,11 @@
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
       "ragtruth_evaluator": "local_backends.mara_evaluators.RAGTruthLocalEvaluator",
+      "route_timeout_seconds": 90.0,
       "benchmark_role": "qa_quality",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     }
   ]
 }

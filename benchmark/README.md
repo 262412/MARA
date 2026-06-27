@@ -154,22 +154,32 @@ python -m benchmark run `
 
 Outputs are written under `benchmark/artifacts/`.
 
-Benchmark runs use their own prompt contract by default. `benchmark_v1` keeps
-the raw dataset question in artifacts, but sends a benchmark-specific runtime
-prompt that asks for a concise, grounded answer and keeps formatting/citation
-requirements separate from the retrieval query. Use `raw` only for historical
-A/B comparisons:
+Benchmark runs use their own prompt contracts. `gold_answer_v1` is the Phase 2
+benchmark-only policy: it prefixes runtime prompts with `/no_think` and asks for
+answer-only output that can be compared against dataset gold answers. The older
+`benchmark_v1` policy keeps the raw dataset question in artifacts, but sends a
+benchmark-specific runtime prompt that asks for a concise, grounded answer.
+`raw` preserves historical direct prompt forwarding and should be used only for
+historical A/B comparisons:
 
 ```powershell
 python -m benchmark run `
   --manifest benchmark/manifests/format_robustness.json `
-  --suite-name format-robustness-raw-ablation `
-  --benchmark-prompt-policy raw
+  --suite-name format-robustness-gold-answer `
+  --benchmark-prompt-policy gold_answer_v1
 ```
 
 `--benchmark-prompt-profile` accepts `auto`, `concise_grounded_qa`,
 `citation_grounded_qa`, `guardrail_grounded_qa`, and `visual_grounded_qa`.
-Manifest routes may override both prompt options for route-specific ablations.
+Manifest routes may override prompt options for route-specific ablations. Use
+`--benchmark-no-think` to force `/no_think` for non-`gold_answer_v1` policies
+when testing reasoning models.
+
+Long-running route/controller paths can be bounded per example with
+`--route-timeout-seconds`. Timed-out rows remain in the artifact as normal
+predictions with an empty answer, `error_type=route_timeout`, and
+`route_timeout_seconds` in both `predictions` and `retrieval_traces`; Phase 2
+failure summaries classify them separately from generic execution errors.
 
 When benchmarking `docqa_runtime` with an LLM that does not support
 OpenAI-compatible tool calling, disable citation highlighting for the run:
@@ -192,7 +202,7 @@ finishes.
 Each prediction row now includes:
 
 - `benchmark_prompt_policy`, `benchmark_prompt_profile`,
-  `benchmark_question`, `benchmark_retrieval_query`, and
+  `benchmark_no_think`, `benchmark_question`, `benchmark_retrieval_query`, and
   `benchmark_runtime_prompt`: the benchmark prompt contract used for the run
 - `evidence_metadata`: whether figure/image/formula/page visual context reached the generation path
 - `agent_trace`: MARA planning, retrieval, verification, and final-decision events when the engine exposes them
@@ -252,6 +262,12 @@ and `examples` with the converter output or your curated manifest rows. The
 local route templates use Qwen/BGE/ColQwen/Qwen-VL names as benchmark metadata;
 actual runtime availability is still checked by the configured DocQA visual
 backend health path.
+Routes that require a configured visual generation backend set
+`requires_backend_config=true`; if the backend is unavailable, the route is
+reported as skipped/blocked instead of being counted as a completed VLM QA run.
+The controller-auto and CRAG-guarded template routes include a 90 second
+per-example timeout budget because they can otherwise block route-all smoke
+runs while the endpoint itself remains healthy.
 
 ## Dataset Converters
 
@@ -317,6 +333,18 @@ python -m benchmark run `
 Reports include `route_metrics.csv`, route-level Markdown tables, backend
 metadata, skipped routes, and evaluator status when route-matrix results are
 available.
+
+Phase 2 thesis protocol fields are also written to `summary.json` and surfaced
+in `report.md`:
+
+- `phase2_dataset_decision`: provisional dataset family decision, headline
+  routes, diagnostic routes, blocked routes, blockers, score authority, and the
+  enforced benchmark prompt policy.
+- `phase2_failure_counts`: route-level failure counts using the Phase 2
+  taxonomy, including false abstention after retrieval, false abstention with no
+  evidence, answer mismatch after retrieval, answer mismatch without retrieval,
+  retrieval-only/no-generation diagnostics, route timeouts, and execution
+  errors.
 
 `avg_mara_score` is the benchmark-native primary score for the dataset family,
 and `avg_native_score` is emitted as the same value for explicit downstream

@@ -411,6 +411,11 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
     assert all(
         route["docqa_citation_mode"] == "inline" for route in DEFAULT_MARA_ROUTES
     )
+    assert all(
+        route["benchmark_prompt_policy"] == "gold_answer_v1"
+        for route in DEFAULT_MARA_ROUTES
+    )
+    assert all(route["benchmark_no_think"] is True for route in DEFAULT_MARA_ROUTES)
     assert DEFAULT_MARA_ROUTES[2]["allowed_routes"] == ["doc_page_image"]
     assert DEFAULT_MARA_ROUTES[3]["visual_retriever_backend"] == (
         "local_late_interaction"
@@ -437,8 +442,10 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
     )
     assert DEFAULT_MARA_ROUTES[8]["controller_mode"] == "llm"
     assert DEFAULT_MARA_ROUTES[8]["allowed_routes"] == CONTROLLER_ALLOWED_ROUTES
+    assert DEFAULT_MARA_ROUTES[8]["route_timeout_seconds"] == 90.0
     assert DEFAULT_MARA_ROUTES[8]["benchmark_role"] == "qa_quality"
     assert DEFAULT_MARA_ROUTES[9]["verification_mode"] == "strict"
+    assert DEFAULT_MARA_ROUTES[9]["route_timeout_seconds"] == 90.0
     assert DEFAULT_MARA_ROUTES[9]["benchmark_role"] == "qa_quality"
 
 
@@ -481,6 +488,8 @@ def test_manifest_templates_load_expected_mara_route_sets():
     assert all_routes.routes[3]["visual_retriever_backend"] == "colqwen"
     assert all_routes.routes[3]["visual_generator_backend"] == "local_qwen3_vl"
     assert all_routes.routes[3]["generator_backend"] == "local_qwen3_vl"
+    assert all_routes.routes[3]["requires_backend_config"] is True
+    assert multimodal.routes[1]["requires_backend_config"] is True
     assert {
         route["route_id"]: route["benchmark_role"] for route in text_only.routes
     } == {
@@ -506,9 +515,17 @@ def test_manifest_templates_load_expected_mara_route_sets():
     assert all_routes.routes[8]["allowed_routes"] == CONTROLLER_ALLOWED_ROUTES
     assert text_only.routes[2]["allowed_routes"] == CONTROLLER_ALLOWED_ROUTES
     assert multimodal.routes[4]["allowed_routes"] == CONTROLLER_ALLOWED_ROUTES
+    assert all_routes.routes[8]["route_timeout_seconds"] == 90.0
+    assert all_routes.routes[9]["route_timeout_seconds"] == 90.0
+    assert text_only.routes[2]["route_timeout_seconds"] == 90.0
+    assert text_only.routes[3]["route_timeout_seconds"] == 90.0
+    assert multimodal.routes[4]["route_timeout_seconds"] == 90.0
     assert all_routes.routes[8]["controller_mode"] == "llm"
     assert text_only.routes[2]["controller_mode"] == "llm"
     assert multimodal.routes[4]["controller_mode"] == "llm"
+    for route in all_routes.routes + text_only.routes + multimodal.routes:
+        assert route["benchmark_prompt_policy"] == "gold_answer_v1"
+        assert route["benchmark_no_think"] is True
 
 
 def test_load_v2_manifest_preserves_top_level_ragas_evaluator(tmp_path):

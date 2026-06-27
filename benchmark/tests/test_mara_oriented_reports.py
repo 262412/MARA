@@ -28,10 +28,19 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
     assert "- MARA Diagnostic Proxy Score: `0.72`" in markdown
     assert "- Diagnostic F1: `None`" in markdown
     assert "- Quality Diagnostic F1: `0.8`" in markdown
+    assert "- Phase2 Decision: `main_quality_candidate`" in markdown
+    assert "- Phase2 Headline Routes: `text_rag`" in markdown
+    assert "- Phase2 Diagnostic Routes: `controller_auto`" in markdown
+    assert "- Phase2 Blockers: `paper_grade_evaluator_unavailable`" in markdown
     assert "- Citation Metadata Recall: `0.8`" in markdown
     assert "- Citation Inline Recall: `0.4`" in markdown
     assert "## Quality Route Metrics" in markdown
     assert "## Diagnostic Route Metrics" in markdown
+    assert "## Phase2 Failure Counts" in markdown
+    assert (
+        "| sample | text_rag | main_quality_candidate | "
+        "answer_mismatch_after_retrieval | 2 |"
+    ) in markdown
     assert "Dataset-Native Local Score" in markdown
     assert "MARA Native Score" not in markdown
     assert (
@@ -193,6 +202,22 @@ def _route_metric_report():
             "quality_avg_mara_proxy_score": 0.72,
             "avg_citation_metadata_recall": 0.8,
             "avg_citation_inline_recall": 0.4,
+            "phase2_dataset_decision": {
+                "decision": "main_quality_candidate",
+                "headline_routes": ["text_rag"],
+                "diagnostic_routes": ["controller_auto"],
+                "blocked_routes": [],
+                "blockers": ["paper_grade_evaluator_unavailable"],
+            },
+            "phase2_failure_counts": [
+                {
+                    "dataset_name": "sample",
+                    "route": "text_rag",
+                    "dataset_decision": "main_quality_candidate",
+                    "phase2_failure_type": "answer_mismatch_after_retrieval",
+                    "count": 2,
+                }
+            ],
             "route_rankings": [_f1_ranking(), _native_ranking(), _mara_ranking()],
         },
         "predictions": [],

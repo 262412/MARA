@@ -95,3 +95,52 @@ def test_run_benchmark_records_benchmark_prompt_contract(monkeypatch, tmp_path):
     )
     assert report["summary"]["benchmark_prompt_policy"] == "benchmark_v1"
     assert report["summary"]["benchmark_prompt_profiles"] == {"citation_grounded_qa": 1}
+
+
+def test_run_benchmark_records_gold_answer_no_think_contract(monkeypatch, tmp_path):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "financebench",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_id": "doc",
+                        "question": "What is revenue?",
+                        "answer_type": "numeric",
+                        "answers": ["$10 million"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _FakeEngine(engine_name, config),
+    )
+
+    report = run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="gold_answer_contract",
+            output_dir=tmp_path / "out",
+            benchmark_prompt_policy="gold_answer_v1",
+            benchmark_no_think=True,
+            use_generation=False,
+        ),
+    )
+
+    prediction = report["predictions"][0]
+    assert prediction["benchmark_prompt_policy"] == "gold_answer_v1"
+    assert prediction["benchmark_no_think"] is True
+    assert prediction["benchmark_runtime_prompt"].startswith("/no_think\n")
+    assert "Benchmark gold-answer contract:" in prediction["benchmark_runtime_prompt"]
+    assert "Return only the gold-answer value" in prediction["benchmark_runtime_prompt"]
+    assert prediction["benchmark_retrieval_query"] == "What is revenue?"
+    assert report["summary"]["benchmark_prompt_policy"] == "gold_answer_v1"
+    assert report["summary"]["benchmark_no_think"] is True

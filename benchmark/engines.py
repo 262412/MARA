@@ -137,6 +137,7 @@ class BaseBenchmarkEngine:
                 "benchmark_prompt_policy": "benchmark_v1",
                 "benchmark_prompt_profile": "auto",
                 "benchmark_answer_mode": "scoring_adapter_v1",
+                "benchmark_no_think": False,
                 "prompt_template": None,
             }
             payload.update(self.config)

@@ -12,12 +12,16 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "doc",
-      "allowed_routes": ["doc_text"],
+      "allowed_routes": [
+        "doc_text"
+      ],
       "text_retriever_backend": "BAAI/bge-m3",
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
       "benchmark_role": "qa_quality",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "page_image_rag_vlm",
@@ -27,12 +31,17 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "visual",
-      "allowed_routes": ["doc_page_image"],
+      "allowed_routes": [
+        "doc_page_image"
+      ],
       "visual_retriever_backend": "colqwen",
       "visual_generator_backend": "local_qwen3_vl",
       "generator_backend": "local_qwen3_vl",
+      "requires_backend_config": true,
       "benchmark_role": "qa_quality",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "element_rag",
@@ -42,12 +51,16 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "element",
-      "allowed_routes": ["doc_element"],
+      "allowed_routes": [
+        "doc_element"
+      ],
       "text_retriever_backend": "docqa_element_metadata",
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
       "benchmark_role": "prototype",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "hybrid_rag",
@@ -57,7 +70,9 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "hybrid",
-      "allowed_routes": ["hybrid"],
+      "allowed_routes": [
+        "hybrid"
+      ],
       "text_retriever_backend": "BAAI/bge-m3",
       "visual_retriever_backend": "colqwen",
       "visual_generator_backend": "local_qwen3_vl",
@@ -65,7 +80,9 @@
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
       "benchmark_role": "qa_quality",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "controller_auto",
@@ -75,7 +92,13 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "auto",
-      "allowed_routes": ["doc_text", "hybrid", "doc_page_image", "doc_element", "graph_global"],
+      "allowed_routes": [
+        "doc_text",
+        "hybrid",
+        "doc_page_image",
+        "doc_element",
+        "graph_global"
+      ],
       "text_retriever_backend": "BAAI/bge-m3",
       "visual_retriever_backend": "colqwen",
       "visual_generator_backend": "local_qwen3_vl",
@@ -84,8 +107,11 @@
       "planner_model": "Qwen/Qwen3-8B",
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
+      "route_timeout_seconds": 90.0,
       "benchmark_role": "qa_quality",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     }
   ]
 }

@@ -82,6 +82,9 @@ def _run_args(manifest_path):
         "concise_grounded_qa",
         "--benchmark-answer-mode",
         "product",
+        "--benchmark-no-think",
+        "--route-timeout-seconds",
+        "7.5",
         "--external-evaluator",
         "alce=benchmark.tests.test_cli.fixture_alce_evaluator",
         "--external-evaluator",
@@ -141,6 +144,8 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     assert captured["config"].benchmark_prompt_policy == "raw"
     assert captured["config"].benchmark_prompt_profile == "concise_grounded_qa"
     assert captured["config"].benchmark_answer_mode == "product"
+    assert captured["config"].benchmark_no_think is True
+    assert captured["config"].route_timeout_seconds == 7.5
     assert captured["config"].external_evaluators == {
         "alce": "benchmark.tests.test_cli.fixture_alce_evaluator",
         "ragtruth": "benchmark.tests.test_cli.fixture_ragtruth_evaluator",
