@@ -19,6 +19,7 @@ from .docqa_evidence_projection import (
     retrieved_hits_from_docqa_evidence,
 )
 from .docqa_image_documents import (
+    element_index_records_from_documents,
     is_image_only_document,
     page_image_records_from_documents,
 )
@@ -299,6 +300,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             ),
             "selected_file_ids": selected_file_ids,
             "page_image_records": page_image_records_from_documents(documents),
+            "element_index_records": element_index_records_from_documents(documents),
             "qa_scope": str(
                 config_value(self.config, "scope", None)
                 or field_value(example, "scope", "document")

@@ -19,6 +19,7 @@ from .mara_oriented_scores import (
 )
 from .metrics import round_metric, safe_mean
 from .phase2_protocol import phase2_dataset_decision, phase2_failure_counts
+from .phase3_multimodal import phase3_multimodal_summary
 from .prompt_summary import benchmark_prompt_summary
 from .score_authority import (
     paper_grade_score_available,
@@ -65,6 +66,13 @@ def build_benchmark_summary(
         "phase2_failure_counts": phase2_failure_counts(
             bundle.dataset_name,
             predictions,
+        ),
+        "phase3_multimodal_summary": phase3_multimodal_summary(
+            bundle.dataset_name,
+            predictions,
+            backend_metadata=backend_metadata,
+            skipped_routes=skipped_routes,
+            active_routes=active_routes,
         ),
         **verification_summary(predictions),
         **_timing_summary(predictions),
@@ -119,6 +127,10 @@ def add_mara_summary_fields(
         **answer_finalization_summary(predictions),
         "phase2_dataset_decision": phase2_dataset_decision(dataset_name),
         "phase2_failure_counts": phase2_failure_counts(dataset_name, predictions),
+        "phase3_multimodal_summary": phase3_multimodal_summary(
+            dataset_name,
+            predictions,
+        ),
         "route_metric_table": _route_metric_table(dataset_name, predictions),
         "quality_route_metric_table": _route_metric_table(
             dataset_name,

@@ -417,16 +417,13 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
     )
     assert all(route["benchmark_no_think"] is True for route in DEFAULT_MARA_ROUTES)
     assert DEFAULT_MARA_ROUTES[2]["allowed_routes"] == ["doc_page_image"]
-    assert DEFAULT_MARA_ROUTES[3]["visual_retriever_backend"] == (
-        "local_late_interaction"
-    )
-    assert DEFAULT_MARA_ROUTES[3]["generator_backend"] == "evidence_only_without_vlm"
-    assert DEFAULT_MARA_ROUTES[3]["backend_status"] == "not_configured"
+    assert DEFAULT_MARA_ROUTES[3]["visual_retriever_backend"] == "colqwen"
+    assert DEFAULT_MARA_ROUTES[3]["visual_generator_backend"] == "local_qwen3_vl"
+    assert DEFAULT_MARA_ROUTES[3]["generator_backend"] == "local_qwen3_vl"
+    assert DEFAULT_MARA_ROUTES[3]["visual_backend_type"] == "colvision_multi_vector"
     assert DEFAULT_MARA_ROUTES[3]["requires_backend_config"] is True
-    assert DEFAULT_MARA_ROUTES[3]["missing_backends"] == [
-        "colpali",
-        "visual_generator",
-    ]
+    assert "backend_status" not in DEFAULT_MARA_ROUTES[3]
+    assert "missing_backends" not in DEFAULT_MARA_ROUTES[3]
     assert DEFAULT_MARA_ROUTES[4]["allowed_routes"] == ["doc_element"]
     assert DEFAULT_MARA_ROUTES[4]["implementation_stage"] == (
         "prototype_element_metadata_index"

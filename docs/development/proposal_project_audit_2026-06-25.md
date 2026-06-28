@@ -276,19 +276,47 @@ Public surface:
 Residual risk / 下一阶段:
 
 - 最终 2-3 个 thesis 主数据集不能现在冻结；需要更大样本、稳定 route 对比和可解释 failure class 后再定。
-- 8001 Qwen3-VL 与 8002 retrieval server 在当前 2x L4 布局下不能稳定共存，Phase 3 需要可复现 VLM serving/health gate 或替代 backend。
+- 8001 Qwen3-VL health/serving 已转入 Phase 3 处理；Phase 2 不再把 VLM backend missing 作为 protocol 阻塞项。
 - SlideVQA VLM 有 page hit 正向信号，但仍存在重复答案和 answer mismatch；ViDoRe full QA 可跑但答案质量仍不达标。
 - Controller/hybrid/guarded 不能声称全面优于 text baseline；后续必须按 dataset/question type 分析收益。
 - Paper-grade external evaluator 尚未配置，论文表述必须继续限制为 local adapted/native/proxy metrics。
 
-### Phase 3 - 强化 multimodal route [待执行]
+### Phase 3 - 强化 multimodal route [架构/工作流完成；性能质量后续迭代]
 
-目标: 让 proposal 的 multimodal claim 有最小可证明闭环。
+目标: 让 proposal 的 multimodal claim 有最小可证明闭环，优先完成可复现架构、route 工作流、health gate、evidence 汇总和工程接入；具体性能提升与论文级指标作为后续迭代处理。
 
-- Page-image: 固化 ColQwen/ColPali/Qwen-VL 启动和 health check，保留 evidence-only smoke 作为 fallback。
-- Element: 优先解决真实 element index coverage，再优化 ranker。
-- Hybrid: 按 question type 证明什么时候优于 text，而不是要求所有 dataset 全面胜出。
-- Graph: 只承诺 local lightweight graph route，除非实现完整 GraphRAG pipeline。
+最终结论:
+
+- Phase 3 可以按“架构与工作流目标完成”关闭。Page-image、Element、Hybrid/Controller、Graph scope 四条路线均已有可执行路径、health/report 证据或明确的 claim 边界。
+- Phase 3 不能表述为“multimodal 质量目标完全达成”。当前证据支持的是工作流闭环和工程可复现，不支持声称所有 multimodal route 全面优于 text baseline。
+
+已完成能力:
+
+- Page-image route 已接入 `page_image_rag_vlm`，使用 ColQwen/ColPali + `local_qwen3_vl` 的 health gate；8001 Qwen3-VL 可在 GPU1 与 8000/8002/8003 共存，`/v1/models` health 返回 `Qwen/Qwen3-VL-8B-Instruct`。
+- 已新增 Phase3 benchmark summary/report 字段，记录 page-image backend readiness、element index coverage、hybrid question-type metrics 和 graph scope。
+- 已新增可复现 Slurm/runbook 入口，allocation 内检查或启动 8000/8001/8002/8003，并用 `gold_answer_v1` + `--benchmark-no-think` 跑 route-all。
+- Element route 已完成两层工程修复: benchmark document metadata 可转为 request-level `element_index_records`；DocQA file index 支持同名离线 OCR/layout sidecar（`*.mara-elements.json` / `*.elements.json` / `*.layout.json`）持久化为 `mara_element_index` docs 和 `element_index` relation。
+- GraphRAG claim 已限制为 `local_lightweight_only` / `full_graphrag_claim=false`，避免在完整 GraphRAG pipeline 尚未实现前过度表述。
+- Public surface 影响已限制在 benchmark summary/report JSON/Markdown 字段、DocQA request adapter 字段、DocQA persisted element-index 行为和 sidecar 文件格式；未改变 MARA/MARA-cli 命令面、CLI options、DB schema、session shape 或 Gradio event chain。
+
+最终证据摘要:
+
+- Slurm larger-than-smoke run `9294899` 已完成: `20` examples x `5` routes = `100` predictions，`num_skipped_routes=0`，artifact 位于 `/mnt/scratch/users/tbczhang/outputs/MARA/phase3_multimodal_slurm/20260628_045247_phase3-slidevqa-multimodal-slurm-9294899`。
+- 该 run 中 `page_image_rag_vlm` 为 `vlm_live`，F1/native `0.3911`, page hit `0.95`；`hybrid_rag` F1/native `0.3833`, page hit `0.85`；`controller_auto` F1/native `0.4161`, page hit `0.9`；`text_rag` 和 `element_rag` 均为 F1/native `0.0056`, page hit `0.0`。
+- MMDocRAG persisted element-record probe 证明非 gold persisted records 能被 route 读取: `5/5` predictions 有 `element_index`，平均 `6.0` records/prediction。但质量未提升: `element_rag` F1/native `0.0286`, page hit `0.0`；matched `text_rag` F1/native `0.5053`, page hit `0.8`。
+- 当前 manifest-level `slidevqa-test-shard0.multimodal.routes.json` 与 `mmdocrag-dev15.multimodal.routes.json` 仍产出 `element_records=0`；因此不能把现有 manifest 的 element route 结果写成真实非 gold OCR/layout 质量提升。
+
+验证摘要:
+
+- Benchmark / Phase3 tests: `benchmark/tests -q` 为 `250 passed`；Phase3 summary/report、Slurm assets、runtime helper、multimodal evidence 相关 tests 均通过。
+- Route2 tests: offline layout sidecar 与 file-index element persistence 相关 tests 为 `45 passed`。
+- Hygiene / pre-commit: changed Python files 无 codebase hygiene ratchet violations；pre-commit passed。
+- Storage/layout: `.venv` 指向 `/mnt/fastscratch/users/tbczhang/envs/mara`，`.venv/bin/python` 指向 fastscratch uv Python；fastscratch/scratch quota 均在 soft limit 内；repo 根目录没有 `data/`, `datasets/`, `outputs/`。
+
+后续迭代项:
+
+- 性能与质量: element ranker/coverage、真实非 gold sidecar corpus rerun、VLM/hybrid timeout、重复答案、answer formatting、inline citation recall/precision。
+- 论文表述: 目前只可声称 Phase3 架构/工作流闭环和局部 route 证据；不能声称 multimodal route 已全面优于 baseline。
 
 ### Phase 4 - UI 和结构控债 [待执行]
 

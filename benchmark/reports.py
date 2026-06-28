@@ -9,6 +9,7 @@ from typing import Any
 from .report_compaction_fields import TEXT_FIELDS
 from .report_headline import headline_score_lines
 from .report_phase2 import phase2_failure_counts_markdown, phase2_summary_markdown
+from .report_phase3 import phase3_report_sections, phase3_summary_markdown
 from .report_route_metrics import route_metrics_markdown
 from .report_route_rankings import route_ranking_markdown
 
@@ -177,6 +178,7 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
             f"- Quality Numeric Match: `{summary.get('quality_avg_numeric_match')}`"
         )
     lines.extend(phase2_summary_markdown(summary))
+    lines.extend(phase3_summary_markdown(summary))
     lines.extend(
         [
             f"- ANLS: `{summary.get('avg_anls')}`",
@@ -375,6 +377,7 @@ def _report_markdown_sections(
         ]
     for title, lines in (
         ("Route Ranking", route_ranking_markdown(summary)),
+        *phase3_report_sections(summary),
         ("Skipped Routes", _skipped_route_markdown(summary)),
         ("Backend Status By Route", _backend_metadata_markdown(summary)),
         ("Generic Route Diagnostics", _route_diagnostics_markdown(summary)),

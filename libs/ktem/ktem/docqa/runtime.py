@@ -143,6 +143,34 @@ def _apply_request_page_image_records(pipeline: Any, request: DocQARequest) -> N
     ]
 
 
+def _apply_request_element_index_records(pipeline: Any, request: DocQARequest) -> None:
+    if not request.element_index_records:
+        return
+    existing_records = [
+        dict(item)
+        for item in getattr(pipeline, "element_index_records", None) or []
+        if isinstance(item, dict)
+    ]
+    request_records = [
+        dict(item) for item in request.element_index_records if isinstance(item, dict)
+    ]
+    pipeline.element_index_records = _unique_element_records(
+        existing_records + request_records
+    )
+
+
+def _unique_element_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for record in records:
+        evidence_id = str(record.get("evidence_id") or "").strip()
+        if not evidence_id or evidence_id in seen:
+            continue
+        seen.add(evidence_id)
+        output.append(record)
+    return output
+
+
 def _artifact_source_scope(
     request: DocQARequest,
     prepared: _PreparedPipeline,
@@ -645,6 +673,7 @@ class DocQARuntime:
             graph_source_ids,
             graph_context,
         )
+        _apply_request_element_index_records(pipeline, request)
         _mara.apply_request_context(pipeline, request, graph_context)
 
         return _PreparedPipeline(

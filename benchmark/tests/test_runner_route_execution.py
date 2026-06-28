@@ -292,6 +292,63 @@ def test_route_skip_record_allows_retriever_only_visual_diagnostics(monkeypatch)
     assert record is None
 
 
+def test_route_skip_record_blocks_vlm_when_generator_health_fails(monkeypatch):
+    monkeypatch.setattr(
+        "ktem.docqa.visual_backends._colvision_http_available",
+        lambda _endpoint, model_family: model_family == "colqwen",
+    )
+    monkeypatch.setattr(
+        "ktem.docqa.visual_backends._openai_compatible_vlm_available",
+        lambda _base_url: False,
+    )
+
+    record = route_skip_record(
+        {
+            "route_policy": "visual",
+            "visual_retriever_backend": "colqwen",
+            "visual_generator_backend": "local_qwen3_vl",
+            "generator_backend": "local_qwen3_vl",
+            "requires_backend_config": True,
+        },
+        route_id="page_image_rag_vlm",
+        engine="docqa_runtime",
+    )
+
+    assert record == {
+        "route_id": "page_image_rag_vlm",
+        "engine": "docqa_runtime",
+        "backend_status": "not_configured",
+        "requires_backend_config": True,
+        "missing_backends": ["visual_generator"],
+        "skip_reason": "not_configured: visual_generator",
+    }
+
+
+def test_route_skip_record_allows_configured_colqwen_qwen_vl(monkeypatch):
+    monkeypatch.setattr(
+        "ktem.docqa.visual_backends._colvision_http_available",
+        lambda _endpoint, model_family: model_family == "colqwen",
+    )
+    monkeypatch.setattr(
+        "ktem.docqa.visual_backends._openai_compatible_vlm_available",
+        lambda _base_url: True,
+    )
+
+    record = route_skip_record(
+        {
+            "route_policy": "visual",
+            "visual_retriever_backend": "colqwen",
+            "visual_generator_backend": "local_qwen3_vl",
+            "generator_backend": "local_qwen3_vl",
+            "requires_backend_config": True,
+        },
+        route_id="page_image_rag_vlm",
+        engine="docqa_runtime",
+    )
+
+    assert record is None
+
+
 def _write_skip_manifest(tmp_path):
     (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
     manifest_path = tmp_path / "manifest.json"

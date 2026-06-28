@@ -19,8 +19,13 @@ def docstore_batches_and_index_rows(
     index_row_cls: Any,
     file_id: str,
     chunks: list[Any],
+    offline_element_records: list[dict[str, Any]] | None = None,
 ) -> tuple[list[list[Any]], list[Any]]:
-    element_index_docs = _element_index_docs_for_chunks(file_id, chunks)
+    element_index_docs = _element_index_docs_for_chunks(
+        file_id,
+        chunks,
+        offline_element_records or [],
+    )
     graph_index_docs = _graph_index_docs_for_chunks(file_id, chunks)
     batches = [list(chunks)]
     if element_index_docs:
@@ -55,10 +60,23 @@ def docstore_batches_and_index_rows(
     return batches, rows
 
 
-def _element_index_docs_for_chunks(file_id: str, chunks: list[Any]) -> list[Any]:
-    from ktem.docqa.multimodal_index import element_index_documents_from_documents
+def _element_index_docs_for_chunks(
+    file_id: str,
+    chunks: list[Any],
+    offline_element_records: list[dict[str, Any]],
+) -> list[Any]:
+    from ktem.docqa.multimodal_index import (
+        element_index_documents_from_records,
+        element_records_from_documents,
+    )
+    from ktem.docqa.offline_layout_index import offline_element_records_for_documents
 
-    return element_index_documents_from_documents(file_id, chunks)
+    records = element_records_from_documents(chunks)
+    records.extend(
+        offline_element_records_for_documents(file_id=file_id, documents=chunks)
+    )
+    records.extend(offline_element_records)
+    return element_index_documents_from_records(file_id, records)
 
 
 def _graph_index_docs_for_chunks(file_id: str, chunks: list[Any]) -> list[Any]:

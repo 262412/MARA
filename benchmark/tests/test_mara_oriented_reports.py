@@ -32,11 +32,16 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
     assert "- Phase2 Headline Routes: `text_rag`" in markdown
     assert "- Phase2 Diagnostic Routes: `controller_auto`" in markdown
     assert "- Phase2 Blockers: `paper_grade_evaluator_unavailable`" in markdown
+    assert "- Phase3 Page-image Status: `vlm_route_observed`" in markdown
+    assert "- Phase3 Element Coverage: `index_coverage_present`" in markdown
+    assert "- Phase3 Graph Scope: `local_lightweight_only`" in markdown
     assert "- Citation Metadata Recall: `0.8`" in markdown
     assert "- Citation Inline Recall: `0.4`" in markdown
     assert "## Quality Route Metrics" in markdown
     assert "## Diagnostic Route Metrics" in markdown
     assert "## Phase2 Failure Counts" in markdown
+    assert "## Phase3 Hybrid Question-Type Metrics" in markdown
+    assert "| visual_page | hybrid_rag | 2 | 0.45 | 0.55 | 0.5 |" in markdown
     assert (
         "| sample | text_rag | main_quality_candidate | "
         "answer_mismatch_after_retrieval | 2 |"
@@ -218,10 +223,51 @@ def _route_metric_report():
                     "count": 2,
                 }
             ],
+            "phase3_multimodal_summary": _phase3_summary(),
             "route_rankings": [_f1_ranking(), _native_ranking(), _mara_ranking()],
         },
         "predictions": [],
         "documents": [],
+    }
+
+
+def _phase3_summary():
+    return {
+        "dataset_name": "sample",
+        "page_image": {
+            "status": "vlm_route_observed",
+            "route": "page_image_rag_vlm",
+            "visual_retriever": "colqwen",
+            "visual_generator": None,
+            "requires_backend_config": True,
+            "missing_backends": [],
+        },
+        "element": {
+            "status": "index_coverage_present",
+            "routes": ["element_rag"],
+            "predictions_with_element_index": 3,
+            "avg_element_index_records": 2.0,
+            "avg_element_hit": 0.67,
+        },
+        "hybrid": {
+            "status": "question_type_breakdown_available",
+            "question_type_route_metrics": [
+                {
+                    "dataset_name": "sample",
+                    "question_type": "visual_page",
+                    "route": "hybrid_rag",
+                    "count": 2,
+                    "avg_f1": 0.45,
+                    "avg_native_score": 0.55,
+                    "avg_page_hit": 0.5,
+                }
+            ],
+        },
+        "graph": {
+            "scope": "local_lightweight_only",
+            "full_graphrag_claim": False,
+            "routes": ["local_graph_rag"],
+        },
     }
 
 

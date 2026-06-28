@@ -221,6 +221,19 @@ Reports separate score authority into three layers:
 - MARA diagnostic proxy score: an internal system diagnostic for controller,
   evidence, citation, groundedness, abstention, and format behavior.
 
+Reports also include `phase3_multimodal_summary` for multimodal route readiness:
+
+- `page_image`: whether `page_image_rag_vlm` was observed, blocked by missing
+  backends, or configured with live visual retriever and VLM generator metadata.
+- `element`: whether `element_rag` has real `element_index` coverage before
+  element-ranker scores are interpreted.
+- `hybrid`: route metrics grouped by coarse question type so hybrid gains can be
+  checked against visual, table, numeric, synthesis, and text questions instead
+  of only global averages.
+- `graph`: the current benchmark claim scope. It remains
+  `local_lightweight_only` unless a full GraphRAG implementation is added and
+  validated.
+
 ## FinanceBench
 
 Normalize the official open-source release:
@@ -265,6 +278,8 @@ backend health path.
 Routes that require a configured visual generation backend set
 `requires_backend_config=true`; if the backend is unavailable, the route is
 reported as skipped/blocked instead of being counted as a completed VLM QA run.
+For `local_qwen3_vl`, health is checked through the configured
+OpenAI-compatible `MARA_VLM_BASE_URL` `/models` endpoint.
 The controller-auto and CRAG-guarded template routes include a 90 second
 per-example timeout budget because they can otherwise block route-all smoke
 runs while the endpoint itself remains healthy.
