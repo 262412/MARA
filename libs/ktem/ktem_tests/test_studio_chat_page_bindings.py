@@ -3,6 +3,9 @@ from pathlib import Path
 CHAT_PAGE_FILE = (
     Path(__file__).resolve().parents[1] / "ktem" / "pages" / "chat" / "__init__.py"
 )
+CHAT_LAYOUT_FILE = (
+    Path(__file__).resolve().parents[1] / "ktem" / "pages" / "chat" / "chat_layout.py"
+)
 STUDIO_CONTROLS_FILE = (
     Path(__file__).resolve().parents[1]
     / "ktem"
@@ -37,6 +40,10 @@ def _read_chat_page() -> str:
     return CHAT_PAGE_FILE.read_text(encoding="utf-8")
 
 
+def _read_chat_layout() -> str:
+    return CHAT_LAYOUT_FILE.read_text(encoding="utf-8")
+
+
 def _read_studio_controls() -> str:
     return STUDIO_CONTROLS_FILE.read_text(encoding="utf-8")
 
@@ -55,10 +62,10 @@ def _read_studio_control_sources() -> str:
 
 
 def test_chat_page_exposes_studio_generate_controls():
-    chat_page = _read_chat_page()
+    chat_layout = _read_chat_layout()
     controls = _read_studio_control_sources()
 
-    assert "render_studio_artifact_controls(self)" in chat_page
+    assert "render_studio_artifact_controls(page)" in chat_layout
     assert 'elem_id="studio-artifact-selector-panel"' in controls
     assert 'elem_id="studio-artifact-overlay-backdrop"' in controls
     assert 'elem_id="studio-artifact-detail-panel"' in controls

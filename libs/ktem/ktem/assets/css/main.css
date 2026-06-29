@@ -2863,7 +2863,7 @@ body.kg-viewer-open {
   --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
   --app-bg: #d2dde8;
   --app-surface: #e0e8f0;
-  --app-surface-raised: #f3f8fc;
+  --app-surface-raised: #d9e3ed;
   --app-surface-muted: #ccdcea;
   --app-border: #afc2d3;
   --app-border-strong: #7d96a9;
@@ -3692,11 +3692,20 @@ body.ktem-dark-mode .gradio-container {
 .gradio-container label.selected:has(input[type="radio"]),
 .gradio-container label:has(input[type="radio"][aria-checked="true"]),
 .gradio-container .gradio-radio label.selected {
+  background: linear-gradient(
+    90deg,
+    var(--app-accent),
+    var(--app-accent-secondary),
+    var(--app-accent-tertiary)
+  ) !important;
   background: var(--control-bg-selected) !important;
+  border-color: var(--app-accent) !important;
   background-size: 220% 100%;
   border-color: var(--control-border-selected) !important;
+  color: var(--app-accent-strong) !important;
   color: var(--control-text-selected) !important;
   font-weight: 600 !important;
+  box-shadow: 0 0 0 2px var(--app-focus-ring), var(--app-shadow) !important;
   box-shadow: var(--control-shadow-selected) !important;
 }
 

@@ -318,14 +318,31 @@ Residual risk / 下一阶段:
 - 性能与质量: element ranker/coverage、真实非 gold sidecar corpus rerun、VLM/hybrid timeout、重复答案、answer formatting、inline citation recall/precision。
 - 论文表述: 目前只可声称 Phase3 架构/工作流闭环和局部 route 证据；不能声称 multimodal route 已全面优于 baseline。
 
-### Phase 4 - UI 和结构控债 [待执行]
+### Phase 4 - UI 和结构控债 [已完成；2026-06-29 关闭]
 
 目标: 让 demo UI 稳定，不让 chat page 继续吸收业务逻辑。
 
-- 抽出 ChatPage 的 request builder, event binding, source selection, preview, graph, studio artifact coordination。
-- 每拆一个 workflow，先加 contract test，保持 Gradio chain order。
-- UI 只负责构造 request 和渲染 response；controller/evidence/graph/benchmark 逻辑留在 services/runtime。
+最终结论:
+
+- Phase 4 可以关闭。本阶段指定的 UI/结构控债目标已经落实: ChatPage 不再继续吸收新增业务逻辑，主要 workflow 已按职责边界迁出，Gradio event chain 顺序通过 contract tests 锁定，broader UI 失败已修复。
+- `on_register_events`, `submit_msg`, `chat_fn`, `on_building_ui`, file-index event registration 和 knowledge graph builder 的关键大函数均已拆到 focused helper modules；`ChatPage` 只保留兼容 wrapper、状态协调和 Gradio callback/组件挂接。
+- UI construction 已由 `chat_layout.py` 承接；`on_building_ui` 为薄 wrapper。`chat_fn` 保留 Gradio callback public 签名，内部通过 `ChatCallbackInputs` 显式传递长输入，不用动态 `locals()` 或压缩参数来机械降行数。
+- Source selection、chat submission、preview/message/conversation/auxiliary events、runtime streaming、KG file/hierarchy/legacy/map builder、file index event chains 均有 focused tests 或 characterization tests。
+- Public surface 未改变: 未改 `MARA` / `MARA-cli` 命令面、CLI options、JSON keys、DB schema、DocQA session shape、用户文件格式或 Gradio event 语义。
+- Baseline 债务未扩大，且未刷新 `scripts/codebase_hygiene_baseline.json`。
+
+代表性验证:
+
+- `uv run --python 3.10 pytest libs/ktem/ktem_tests/test_chat_layout_contract.py libs/ktem/ktem_tests/test_assets_theme.py libs/ktem/ktem_tests/test_workbench_layout_theme.py libs/ktem/ktem_tests/test_workbench_ui_contract.py libs/ktem/ktem_tests/test_studio_chat_page_bindings.py libs/ktem/ktem_tests/test_chat_docqa_runtime_adapter.py libs/ktem/ktem_tests/test_chat_preview_timer.py libs/ktem/ktem_tests/test_chat_message_events.py libs/ktem/ktem_tests/test_chat_source_scope.py libs/ktem/ktem_tests/test_chat_submission.py libs/ktem/ktem_tests/test_knowledge_graph_phase4b_builders.py`: `56 passed, 1 warning`。
+- `uv run --python 3.10 python scripts/check_codebase_hygiene.py <changed-python-files>`: `No codebase hygiene ratchet violations.`。
+- `uv run --python 3.10 python -m pre_commit run --files <changed-files>`: passed。
+- Storage/layout: `.venv` 指向 `/mnt/fastscratch/users/tbczhang/envs/mara`，`.venv/bin/python` 指向 fastscratch uv Python；fastscratch/scratch quota 均低于 soft limit；repo 根目录没有 `data/`, `datasets/`, `outputs/`。
+
+Residual risk / 后续维护:
+
+- `ChatPage` class 仍然较大，仍聚合 preview、DocQA state、graph behavior、notebook/studio glue 等多条 workflow；`_render_chat_file_list_html` 和 `rerun_page_answer` 仍略高于 80 行 review trigger。这些是后续长期维护候选，不再阻塞 Phase 4 关闭。
+- 后续继续控债时必须先锁定对应 Gradio workflow/DOM/source-string 契约，再按真实职责边界迁移；不能为了低于行数预算而压缩 fixture、删边界情况、降低 UI 稳定性或牺牲性能。
 
 ## 当前一句话结论
 
-MARA 已经完成了 thesis prototype 的核心骨架：本地 Web/CLI runtime、Self-RAG-inspired controller contracts、route registry、evidence/trace schema、guardrail/verifier、multimodal route scaffolding、benchmark framework、Phase 1 public runtime contract 和 Phase 2 benchmark protocol engineering 都已存在。真正未完成的是“研究结论级稳定性”：最终 thesis dataset/route/evaluator freeze、稳定 VLM route、大样本 failure analysis、paper-grade evaluator 和 UI/runtime 控债还需要继续收口。
+MARA 已经完成了 thesis prototype 的核心骨架：本地 Web/CLI runtime、Self-RAG-inspired controller contracts、route registry、evidence/trace schema、guardrail/verifier、multimodal route scaffolding、benchmark framework、Phase 1 public runtime contract、Phase 2 benchmark protocol engineering、Phase 3 multimodal workflow 和 Phase 4 UI/结构控债都已形成可维护闭环。真正未完成的是“研究结论级稳定性”：最终 thesis dataset/route/evaluator freeze、稳定 VLM route、大样本 failure analysis 和 paper-grade evaluator 还需要继续收口。

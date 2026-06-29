@@ -151,6 +151,11 @@ class _FakeRuntimeDocQA:
         )
 
 
+class _FailingRuntimeDocQA:
+    def run_turn(self, request):
+        raise ValueError("runtime unavailable")
+
+
 class _FakeStreamingRuntimeDocQA:
     final_answer = "runtime answer"
 
@@ -320,6 +325,60 @@ def test_chat_fn_runs_web_turn_through_docqa_runtime():
     assert "citations:" in final[6]
     assert "Document" in final[7]
     assert "supported" in final[7]
+
+
+def test_chat_fn_value_error_yields_empty_answer_panel():
+    page = cast(Any, object.__new__(ChatPage))
+    page.docqa = _FailingRuntimeDocQA()
+    page._build_selected_input_map = lambda *selecteds: {9: ["select", ["file-1"], 1]}
+    page._json_to_plot = lambda value: {"plot": value}
+    page._generate_answer_panel_html = (
+        lambda _history, _question, answer, is_thinking=False, reasoning_html="": (
+            f"thinking:{is_thinking};answer:{answer};reasoning:{reasoning_html}"
+        )
+    )
+    page._render_citations_card_html = lambda refs="": f"citations:{refs}"
+    page._render_reasoning_trace_html = (
+        lambda question, refs, answer_html, file_id, page_number, artifact=None: (
+            f"trace:{question}:{refs}:{file_id}:{page_number}:{artifact}"
+        )
+    )
+
+    outputs = list(
+        page.chat_fn(
+            "conv-1",
+            [("What changed?", None)],
+            {"reasoning.use": "mara"},
+            "mara",
+            "gpt-4o-mini",
+            True,
+            "inline",
+            "en",
+            {"app": {"regen": False}},
+            None,
+            1,
+            "file-1",
+            "alpha.pdf",
+            3,
+            "page",
+            "selected text",
+            '{"related_file_ids": ["file-1"]}',
+            "off",
+            "element",
+            "strict",
+            "fake-planner",
+            {"graph": "state"},
+            SimpleNamespace(),
+            request=SimpleNamespace(session_hash="session-1"),
+        )
+    )
+
+    assert len(outputs) == 2
+    final = outputs[-1]
+    assert final[0] == [("What changed?", "(Sorry, I don't know)")]
+    assert final[3] == {"graph": "state"}
+    assert "thinking:False" in final[5]
+    assert "answer:(Sorry, I don't know)" in final[5]
 
 
 def test_chat_fn_streams_docqa_events_into_answer_panel():

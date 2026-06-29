@@ -80,31 +80,31 @@ def test_reader_toolbar_exposes_only_implemented_actions():
     from pathlib import Path
 
     package_root = Path(__file__).resolve().parents[1] / "ktem"
-    chat_page = (package_root / "pages" / "chat" / "__init__.py").read_text(
+    chat_layout = (package_root / "pages" / "chat" / "chat_layout.py").read_text(
         encoding="utf-8"
     )
     main_js = (package_root / "assets" / "js" / "main.js").read_text(encoding="utf-8")
 
     for action in ["pan", "select", "area", "annotate"]:
-        assert f"data-reader-action='{action}'" not in chat_page
+        assert f"data-reader-action='{action}'" not in chat_layout
     assert "setReaderMode" not in main_js
-    assert "data-reader-action='zoom-in'" in chat_page
-    assert "data-reader-action='download'" in chat_page
+    assert "data-reader-action='zoom-in'" in chat_layout
+    assert "data-reader-action='download'" in chat_layout
 
 
 def test_ask_page_panel_is_not_a_collapsible_accordion():
     from pathlib import Path
 
     package_root = Path(__file__).resolve().parents[1] / "ktem"
-    chat_page = (package_root / "pages" / "chat" / "__init__.py").read_text(
+    chat_layout = (package_root / "pages" / "chat" / "chat_layout.py").read_text(
         encoding="utf-8"
     )
     css = (package_root / "assets" / "css" / "main.css").read_text(encoding="utf-8")
 
-    assert 'gr.Accordion(\n                    label="Ask This Page"' not in chat_page
-    assert 'with gr.Column(elem_id="answer-expand")' in chat_page
-    assert "Suggested questions for this page" not in chat_page
-    assert 'elem_id="suggested-question-list"' not in chat_page
+    assert 'gr.Accordion(\n                    label="Ask This Page"' not in chat_layout
+    assert 'with gr.Column(elem_id="answer-expand")' in chat_layout
+    assert "Suggested questions for this page" not in chat_layout
+    assert 'elem_id="suggested-question-list"' not in chat_layout
     assert (
         "#info-expand-button {\n  position: static;\n  display: none !important;" in css
     )
@@ -117,6 +117,10 @@ def test_workbench_removes_static_search_and_accordion_controls():
     chat_page = (package_root / "pages" / "chat" / "__init__.py").read_text(
         encoding="utf-8"
     )
+    chat_layout = (package_root / "pages" / "chat" / "chat_layout.py").read_text(
+        encoding="utf-8"
+    )
+    chat_ui = f"{chat_page}\n{chat_layout}"
     chat_control = (package_root / "pages" / "chat" / "control.py").read_text(
         encoding="utf-8"
     )
@@ -125,20 +129,20 @@ def test_workbench_removes_static_search_and_accordion_controls():
         encoding="utf-8"
     )
 
-    assert 'placeholder="Search within file..."' not in chat_page
-    assert 'self.page_strip_search = gr.State(value="")' in chat_page
-    assert 'label="Knowledge Map (Page-level)"' not in chat_page
-    assert "Knowledge Map (Page-level)" not in chat_page
-    assert 'elem_id="knowledge-graph-refresh"' not in chat_page
-    assert 'elem_id="knowledge-graph-status"' not in chat_page
-    assert 'id="pdf-modal"' not in chat_page
+    assert 'placeholder="Search within file..."' not in chat_ui
+    assert 'page.page_strip_search = gr.State(value="")' in chat_layout
+    assert 'label="Knowledge Map (Page-level)"' not in chat_ui
+    assert "Knowledge Map (Page-level)" not in chat_ui
+    assert 'elem_id="knowledge-graph-refresh"' not in chat_ui
+    assert 'elem_id="knowledge-graph-status"' not in chat_ui
+    assert 'id="pdf-modal"' not in chat_ui
     assert 'elem_id="info-expand-button"' not in chat_control
-    assert "self.knowledge_graph_refresh = gr.Button" not in chat_page
-    assert 'elem_id="knowledge-graph-plot"' not in chat_page
-    assert 'self.plot_panel = gr.HTML("", visible=False)' in chat_page
+    assert "page.knowledge_graph_refresh = gr.Button" not in chat_layout
+    assert 'elem_id="knowledge-graph-plot"' not in chat_ui
+    assert 'page.plot_panel = gr.HTML("", visible=False)' in chat_layout
     assert 'document.querySelector("#knowledge-graph-plot")' not in main_js
     assert 'document.querySelectorAll(".knowledge-graph-shell")' in main_js
-    assert 'with gr.Column(elem_id="info-expand"):' in chat_page
+    assert 'with gr.Column(elem_id="info-expand"):' in chat_layout
     assert 'modal = document.createElement("div")' in pdf_viewer_js
     assert "document.body.appendChild(modal)" in pdf_viewer_js
     assert "corpusAddPanel.classList.toggle" not in main_js
@@ -217,9 +221,12 @@ def test_answer_panel_renders_rich_markdown_and_math():
     assert "renderAnswerPanelMath" in main_js
     assert "katex.renderToString" in main_js
     assert ".ktem-math-source" in main_js
-    assert 'self.answer_panel = gr.HTML(value="", elem_id="answer-panel")' in (
-        package_root / "pages" / "chat" / "__init__.py"
-    ).read_text(encoding="utf-8")
+    chat_layout = (package_root / "pages" / "chat" / "chat_layout.py").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        'page.answer_panel = gr.HTML(value="", elem_id="answer-panel")' in chat_layout
+    )
     assert "#html-info-panel,\n#answer-panel {\n  height: 100% !important;" not in css
     for token in [
         "#answer-panel .chat-message-content p",
