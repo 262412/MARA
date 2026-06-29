@@ -6,7 +6,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .dataset_decision_report import (
+    phase2_failure_counts_markdown,
+    phase2_summary_markdown,
+)
+from .multimodal_route_report import phase3_report_sections, phase3_summary_markdown
 from .report_compaction_fields import TEXT_FIELDS
+from .report_external_evaluators import (
+    external_evaluator_by_route_markdown,
+    external_evaluator_markdown,
+)
 from .report_headline import headline_score_lines
 from .report_route_metrics import route_metrics_markdown
 from .report_route_rankings import route_ranking_markdown
@@ -175,6 +184,8 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         lines.append(
             f"- Quality Numeric Match: `{summary.get('quality_avg_numeric_match')}`"
         )
+    lines.extend(phase2_summary_markdown(summary))
+    lines.extend(phase3_summary_markdown(summary))
     lines.extend(
         [
             f"- ANLS: `{summary.get('avg_anls')}`",
@@ -373,15 +384,17 @@ def _report_markdown_sections(
         ]
     for title, lines in (
         ("Route Ranking", route_ranking_markdown(summary)),
+        *phase3_report_sections(summary),
         ("Skipped Routes", _skipped_route_markdown(summary)),
         ("Backend Status By Route", _backend_metadata_markdown(summary)),
         ("Generic Route Diagnostics", _route_diagnostics_markdown(summary)),
         ("Route Confusion", _route_confusion_markdown(summary)),
+        ("Phase2 Failure Counts", phase2_failure_counts_markdown(summary)),
         ("Diagnostic Failure Counts", _diagnostic_failure_counts_markdown(summary)),
-        ("External Research Evaluators", _external_evaluator_markdown(summary)),
+        ("External Research Evaluators", external_evaluator_markdown(summary)),
         (
             "External Research Evaluators By Route",
-            _external_evaluator_by_route_markdown(summary),
+            external_evaluator_by_route_markdown(summary),
         ),
     ):
         if lines:
@@ -523,72 +536,3 @@ def _backend_detail_text(item: dict[str, Any]) -> str:
         if key not in ignored and value not in (None, "", [], {})
     ]
     return ", ".join(pairs)
-
-
-def _external_evaluator_markdown(summary: dict[str, Any]) -> list[str]:
-    metadata = summary.get("external_adapter_metric_metadata") or {}
-    if not isinstance(metadata, dict):
-        return []
-    lines = []
-    for adapter_name, item in metadata.items():
-        if not isinstance(item, dict):
-            continue
-        status = str(item.get("status") or "not_configured")
-        backend = str(item.get("backend") or "").strip()
-        paper_grade = item.get("paper_grade")
-        metric_category = str(item.get("metric_category") or "external_metric")
-        if status == "configured":
-            lines.append(
-                f"- `{adapter_name}`: configured via `{backend}`, "
-                f"paper_grade=`{paper_grade}`, "
-                f"metric_category=`{metric_category}`"
-            )
-        else:
-            excluded = item.get("excluded_from_summary")
-            lines.append(
-                f"- `{adapter_name}`: {status}, " f"excluded_from_summary=`{excluded}`"
-            )
-    return lines
-
-
-def _external_evaluator_by_route_markdown(summary: dict[str, Any]) -> list[str]:
-    metadata_by_route = summary.get("external_adapter_metric_metadata_by_route") or {}
-    if not isinstance(metadata_by_route, dict):
-        return []
-    lines = []
-    for route_id, metadata in metadata_by_route.items():
-        if not isinstance(metadata, dict):
-            continue
-        for adapter_name, item in metadata.items():
-            if not isinstance(item, dict):
-                continue
-            lines.append(
-                _external_evaluator_route_line(
-                    str(route_id),
-                    str(adapter_name),
-                    item,
-                )
-            )
-    return lines
-
-
-def _external_evaluator_route_line(
-    route_id: str,
-    adapter_name: str,
-    item: dict[str, Any],
-) -> str:
-    status = str(item.get("status") or "not_configured")
-    if status == "configured":
-        backend = str(item.get("backend") or "").strip()
-        paper_grade = item.get("paper_grade")
-        metric_category = str(item.get("metric_category") or "external_metric")
-        return (
-            f"- `{route_id}` / `{adapter_name}`: configured via `{backend}`, "
-            f"paper_grade=`{paper_grade}`, "
-            f"metric_category=`{metric_category}`"
-        )
-    excluded = item.get("excluded_from_summary")
-    return (
-        f"- `{route_id}` / `{adapter_name}`: {status}, "
-        f"excluded_from_summary=`{excluded}`"
-    )

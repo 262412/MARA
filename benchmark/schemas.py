@@ -17,7 +17,7 @@ LEGACY_ENGINE_ALIASES = {
     "kotaemon-text-rag": "legacy_text_rag",
 }
 CLI_ENGINE_CHOICES = (*STANDARD_BENCHMARK_ENGINES, *LEGACY_ENGINE_ALIASES)
-BENCHMARK_PROMPT_POLICIES = ("benchmark_v1", "raw")
+BENCHMARK_PROMPT_POLICIES = ("benchmark_v1", "gold_answer_v1", "raw")
 BENCHMARK_PROMPT_PROFILES = (
     "auto",
     "concise_grounded_qa",
@@ -144,6 +144,8 @@ class BenchmarkConfig:
     benchmark_prompt_policy: str = "benchmark_v1"
     benchmark_prompt_profile: str = "auto"
     benchmark_answer_mode: str = "scoring_adapter_v1"
+    benchmark_no_think: bool = False
+    route_timeout_seconds: float | None = None
     prompt_template: str | None = None
     external_evaluators: dict[str, str] = field(default_factory=dict)
 
@@ -160,6 +162,9 @@ class BenchmarkConfig:
         )
         self.benchmark_answer_mode = normalize_benchmark_answer_mode(
             self.benchmark_answer_mode
+        )
+        self.route_timeout_seconds = normalize_route_timeout_seconds(
+            self.route_timeout_seconds
         )
         from .sampling import validate_sampling_options
 
@@ -197,3 +202,16 @@ def normalize_artifact_detail(artifact_detail: str | None) -> str:
     if value not in {"compact", "full"}:
         raise ValueError("artifact_detail must be one of 'compact' or 'full'.")
     return value
+
+
+def normalize_route_timeout_seconds(value: float | str | None) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+    seconds = float(value)
+    if seconds <= 0:
+        return None
+    return seconds

@@ -73,6 +73,14 @@ def _add_benchmark_prompt_options(run_parser: argparse.ArgumentParser) -> None:
             "scores the user-facing answer directly."
         ),
     )
+    run_parser.add_argument(
+        "--benchmark-no-think",
+        action="store_true",
+        help=(
+            "Prefix benchmark runtime prompts with /no_think for reasoning "
+            "models. The gold_answer_v1 policy enables this automatically."
+        ),
+    )
 
 
 def _external_evaluator_arg(value: str) -> tuple[str, str]:
@@ -105,8 +113,7 @@ def _add_external_evaluator_options(run_parser: argparse.ArgumentParser) -> None
     )
 
 
-def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
-    run_parser = subparsers.add_parser("run", help="Run a benchmark suite")
+def _add_run_core_options(run_parser: argparse.ArgumentParser) -> None:
     run_parser.add_argument(
         "--manifest", required=True, help="Normalized manifest path"
     )
@@ -138,8 +145,9 @@ def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
         help="Directory for benchmark outputs",
     )
     _add_artifact_detail_option(run_parser)
-    _add_benchmark_prompt_options(run_parser)
-    _add_external_evaluator_options(run_parser)
+
+
+def _add_run_retrieval_options(run_parser: argparse.ArgumentParser) -> None:
     run_parser.add_argument(
         "--reader-mode",
         default="default",
@@ -154,9 +162,20 @@ def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
     run_parser.add_argument("--chunk-overlap", type=int, default=256)
     run_parser.add_argument("--top-k", type=int, default=5)
     run_parser.add_argument("--max-context-length", type=int, default=16000)
+    run_parser.add_argument(
+        "--route-timeout-seconds",
+        type=float,
+        help=(
+            "Per route/example execution budget. A timeout is recorded as an "
+            "error prediction so the run can still write artifacts."
+        ),
+    )
     run_parser.add_argument("--embedding-name")
     run_parser.add_argument("--reranker-name")
     run_parser.add_argument("--llm-name")
+
+
+def _add_run_sampling_options(run_parser: argparse.ArgumentParser) -> None:
     run_parser.add_argument(
         "--limit",
         type=int,
@@ -177,6 +196,15 @@ def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
         type=int,
         help="Total number of shards for distributed benchmark runs.",
     )
+
+
+def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
+    run_parser = subparsers.add_parser("run", help="Run a benchmark suite")
+    _add_run_core_options(run_parser)
+    _add_benchmark_prompt_options(run_parser)
+    _add_external_evaluator_options(run_parser)
+    _add_run_retrieval_options(run_parser)
+    _add_run_sampling_options(run_parser)
     _add_docqa_runtime_options(run_parser)
     run_parser.add_argument(
         "--no-generate",
@@ -468,6 +496,8 @@ def _run_benchmark_command(args: argparse.Namespace) -> int:
         benchmark_prompt_policy=args.benchmark_prompt_policy,
         benchmark_prompt_profile=args.benchmark_prompt_profile,
         benchmark_answer_mode=args.benchmark_answer_mode,
+        benchmark_no_think=args.benchmark_no_think,
+        route_timeout_seconds=args.route_timeout_seconds,
         external_evaluators=_external_evaluator_map(args.external_evaluator),
         limit=args.limit,
         sample_seed=args.sample_seed,

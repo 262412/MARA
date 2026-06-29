@@ -11,7 +11,6 @@ import gradio as gr
 from ktem.app import BasePage
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARuntime
-from ktem.index.file.ui import File
 from ktem.reasoning.prompt_optimization.mindmap import MINDMAP_HTML_EXPORT_TEMPLATE
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
     SuggestConvNamePipeline,
@@ -24,55 +23,41 @@ from sqlmodel import Session, select
 from theflow.settings import settings as flowsettings
 from theflow.utils.modules import import_dotted_string
 
-from kotaemon.indices.ingests.files import KH_DEFAULT_FILE_EXTRACTORS
 from kotaemon.indices.qa.utils import strip_think_tag
 
 from ...utils import SUPPORTED_LANGUAGE_MAP
 from ...utils.hf_papers import get_recommended_papers
 from ...utils.rate_limit import check_rate_limit
-from .answer_reasoning import render_answer_reasoning_block
 from .answer_rendering import format_chat_message_html
-from .chat_docqa_runtime import (
-    build_web_docqa_request,
-    docqa_research_control_inputs,
-    render_docqa_runtime_controls,
+
+# final_docqa_response_output consumes response.artifact for Studio panel updates.
+from .chat_auxiliary_events import (
+    bind_chat_post_studio_events,
+    bind_chat_pre_studio_events,
 )
-from .chat_docqa_streaming import (
-    build_chat_runtime_request,
-    final_docqa_response_output,
-    run_docqa_turn_with_live_updates,
-)
-from .chat_knowledge_graph_bindings import (
-    bind_knowledge_graph_events,
-    subscribe_public_knowledge_graph_events,
-)
-from .chat_panel import ChatPanel
-from .chat_submit_sources import resolve_chat_submit_sources
+from .chat_conversation_events import bind_chat_conversation_events
+from .chat_docqa_runtime import build_web_docqa_request
+from .chat_knowledge_graph_bindings import subscribe_public_knowledge_graph_events
+from .chat_layout import render_chat_workbench_layout
+from .chat_message_events import bind_chat_submit_events
+from .chat_preview_events import bind_chat_preview_events
+from .chat_runtime_runner import ChatCallbackInputs, run_chat_callback_outputs
+from .chat_submission import prepare_chat_submission
 from .chat_suggestion import ChatSuggestion
-from .common import STATE
-from .control import ConversationControl
-from .demo_hint import HintPage
-from .generation_store import (
-    get_current_view,
-    init_cache_entry,
-    make_page_key,
-    make_request_key,
-    mark_done,
-    mark_error,
-    set_current_view,
-    update_answer,
-    update_mindmap,
-    update_plot,
-)
 from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
-from .paper_list import PaperListPage
-from .report import ReportIssue
-from .studio_artifact_control_rendering import render_studio_artifact_controls
+from .source_scope import (
+    build_selected_input_map,
+    build_selector_source_map,
+    extract_selected_ids_from_data_source,
+    is_group_selector_value,
+    merge_unique_file_ids,
+    normalize_selected_file_ids,
+    sync_graph_source_ids,
+)
 from .studio_artifact_controls import bind_studio_artifact_events
 from .studio_artifacts import (
     render_conversation_notebook_update,
-    render_notebook_panel_html,
     render_studio_trace_panel,
 )
 
@@ -489,15 +474,26 @@ function() {
 
 
 class ChatPage(BasePage):
+    chat_control: Any
+    chat_panel: Any
     chat_settings: Any
     citation: Any
     docqa_controller_mode: Any
     docqa_planner_model: Any
     docqa_route_policy: Any
     docqa_verification_mode: Any
+    followup_questions: Any
+    followup_questions_ui: Any
+    info_panel: Any
     language: Any
     model_type: Any
+    notebook_panel: Any
+    plot_panel: Any
     reasoning_type: Any
+    state_chat: Any
+    state_plot_history: Any
+    state_plot_panel: Any
+    state_retrieval_history: Any
     use_mindmap: Any
 
     def __init__(self, app):
@@ -545,246 +541,13 @@ class ChatPage(BasePage):
         self._request_chat_history = gr.State(value=[])
 
     def on_building_ui(self):
-        with gr.Row(elem_id="page-workbench-layout"):
-            # Chat history state (not used for page-level isolation)
-            self.state_chat = gr.State(STATE)
-            # Retrieval and plot history states
-            self.state_retrieval_history = gr.State([])
-            self.state_plot_history = gr.State([])
-            self.state_plot_panel = gr.State(None)
-            self._graph_source_ids = gr.State([])
-            self.first_selector_choices = gr.State(None)
-            # Selected text from the current page for targeted questions
-            self._selected_page_text = gr.Textbox(
-                value="", visible=False, elem_id="selected-page-text"
-            )
-            self._selected_graph_context = gr.Textbox(
-                value="", visible=False, elem_id="selected-graph-context"
-            )
-            self._chat_file_click = gr.Textbox(
-                value="", visible=False, elem_id="chat-file-click"
-            )
-
-            with gr.Column(scale=1, elem_id="conv-settings-panel") as self.conv_column:
-                gr.HTML(
-                    (
-                        "<div class='corpus-pane-title'>"
-                        "<h2>Corpus</h2>"
-                        "<button type='button' id='corpus-add-trigger'>+ Add</button>"
-                        "</div>"
-                    )
-                )
-                self.upload_scope_hint = gr.Markdown("", elem_id="chat-upload-hint")
-
-                if len(self._app.index_manager.indices) > 0:
-                    self.quick_file_upload_status = gr.Markdown(
-                        elem_id="quick-file-upload-status"
-                    )
-                    with gr.Column(elem_id="corpus-add-panel"):
-                        if not KH_DEMO_MODE:
-                            self.quick_file_upload = File(
-                                file_types=list(KH_DEFAULT_FILE_EXTRACTORS.keys()),
-                                file_count="multiple",
-                                container=True,
-                                show_label=False,
-                                elem_id="quick-file",
-                            )
-                        self.quick_urls = gr.Textbox(
-                            placeholder=(
-                                "Paste URLs"
-                                if not KH_DEMO_MODE
-                                else "Paste Arxiv URLs\n(https://arxiv.org/abs/xxx)"
-                            ),
-                            lines=1,
-                            container=False,
-                            show_label=False,
-                            elem_id=(
-                                "quick-url" if not KH_DEMO_MODE else "quick-url-demo"
-                            ),
-                        )
-
-                with gr.Column(elem_id="chat-file-browser"):
-                    self.chat_file_filter = gr.Textbox(
-                        value="",
-                        label="Search files",
-                        placeholder="Search files...",
-                        elem_id="chat-file-filter",
-                        container=False,
-                        show_label=False,
-                        visible=True,
-                    )
-                    self.chat_file_rows = gr.State([])
-                    self.chat_selected_file = gr.Markdown(
-                        "Focus: all files",
-                        elem_id="chat-selected-file",
-                    )
-                    self.chat_file_list = gr.HTML(
-                        "<div class='chat-file-empty'>No files uploaded</div>",
-                        elem_id="chat-file-list",
-                    )
-                    self.workbench_file_summary = gr.HTML(
-                        self._render_corpus_summary_html([]),
-                        elem_id="workbench-file-summary",
-                    )
-
-                with gr.Accordion(
-                    label="Advanced Source Selectors",
-                    open=False,
-                    elem_id="advanced-source-selectors",
-                    visible=False,
-                ):
-                    for index_id, index in enumerate(self._app.index_manager.indices):
-                        index.selector = None
-                        index_ui = index.get_selector_component_ui()
-                        if not index_ui:
-                            # the index doesn't have a selector UI component
-                            continue
-
-                        index_ui.unrender()  # need to rerender later within Accordion
-                        is_first_index = index_id == 0
-                        index_name = index.name
-
-                        if KH_DEMO_MODE and is_first_index:
-                            index_name = "Select from Paper Collection"
-
-                        with gr.Accordion(
-                            label=index_name,
-                            open=is_first_index,
-                            elem_id=f"index-{index_id}",
-                        ):
-                            index_ui.render()
-                            gr_index = index_ui.as_gradio_component()
-
-                            # get the file selector choices for the first index
-                            if index_id == 0:
-                                self.first_selector_choices = index_ui.selector_choices
-                                self.first_indexing_file_fn = None
-                                self.first_indexing_url_fn = None
-
-                            if gr_index:
-                                if isinstance(gr_index, list):
-                                    index.selector = tuple(
-                                        range(
-                                            len(self._indices_input),
-                                            len(self._indices_input) + len(gr_index),
-                                        )
-                                    )
-                                    index.default_selector = index_ui.default()
-                                    self._indices_input.extend(gr_index)
-                                else:
-                                    index.selector = len(self._indices_input)
-                                    index.default_selector = index_ui.default()
-                                    self._indices_input.append(gr_index)
-                            setattr(self, f"_index_{index.id}", index_ui)
-
-                self.chat_suggestion = ChatSuggestion(self._app, show_panel=False)
-
-                if not KH_DEMO_MODE:
-                    self.report_issue = ReportIssue(self._app, show_panel=False)
-                else:
-                    with gr.Accordion(label="Related papers", open=False):
-                        self.related_papers = gr.Markdown(elem_id="related-papers")
-
-                    self.hint_page = HintPage(self._app)
-
-            with gr.Column(scale=6, elem_id="chat-area"):
-                if KH_DEMO_MODE:
-                    self.paper_list = PaperListPage(self._app)
-
-                with gr.Row(elem_id="reader-workbench"):
-                    with gr.Column(scale=1, elem_id="page-strip-panel"):
-                        self.page_strip_file_summary = gr.HTML(
-                            self._render_page_strip_header("", "", "", 1),
-                            elem_id="page-strip-file-summary",
-                        )
-                        self.page_strip_search = gr.State(value="")
-                        self.page_thumbnail_strip = gr.HTML(
-                            self._render_page_thumbnail_strip("", "", "", 1, 1),
-                            elem_id="page-thumbnail-list",
-                        )
-
-                    with gr.Column(scale=4, elem_id="document-reader-panel"):
-                        gr.HTML(
-                            (
-                                "<div class='reader-toolbar'>"
-                                "<div class='reader-toolbar__tools'>"
-                                "<button type='button' aria-label='Zoom out' data-reader-action='zoom-out'>-</button>"
-                                "<strong id='reader-zoom-label' class='reader-toolbar__zoom'>100%</strong>"
-                                "<button type='button' aria-label='Zoom in' data-reader-action='zoom-in'>+</button>"
-                                "</div>"
-                                "<div class='reader-toolbar__tools'>"
-                                "<button type='button' aria-label='Download preview' data-reader-action='download'>"
-                                "<svg viewBox='0 0 24 24'><path d='M12 3v12m0 0 4-4m-4 4-4-4M5 21h14'/></svg>"
-                                "</button>"
-                                "<button type='button' aria-label='More reader options' aria-expanded='false' data-reader-action='more'>...</button>"
-                                "</div>"
-                                "</div>"
-                            ),
-                            elem_id="reader-toolbar",
-                        )
-                        with gr.Column(elem_id="chat-preview-section"):
-                            self.chat_panel = ChatPanel(self._app)
-
-                        self.chat_panel.render_notice_and_pager()
-                        self.page_metadata_strip = gr.HTML(
-                            self._render_page_metadata_strip("", "", "", 1, 1),
-                            elem_id="page-metadata-strip",
-                        )
-
-                        render_docqa_runtime_controls(
-                            self,
-                            reasoning_limits=REASONING_LIMITS,
-                            default_setting=DEFAULT_SETTING,
-                        )
-
-            with gr.Column(
-                scale=INFO_PANEL_SCALES[False], elem_id="chat-info-panel"
-            ) as self.info_column:
-                with gr.Column(elem_id="answer-expand"):
-                    gr.HTML(
-                        (
-                            "<div class='right-ask-tabs'>"
-                            "<button type='button' class='is-active'>Ask this page</button>"
-                            "<button type='button'>Notes</button>"
-                            "</div>"
-                        )
-                    )
-                    self.chat_panel.render_input()
-                    self.kg_answer_hint = gr.HTML(
-                        value=(
-                            "<div class='kg-answer-hint kg-answer-hint--empty'>"
-                            "Select a node in the knowledge graph mind map to pin "
-                            "context and get a suggested question."
-                            "</div>"
-                        ),
-                        elem_id="kg-answer-hint",
-                    )
-                    gr.HTML("<div class='answer-panel-label'>Answer</div>")
-                    self.answer_panel = gr.HTML(value="", elem_id="answer-panel")
-                    self.citations_panel = gr.HTML(
-                        self._render_citations_card_html(),
-                        elem_id="citations-card",
-                    )
-                    self.reasoning_trace_panel = gr.HTML(
-                        self._render_reasoning_trace_html(),
-                        elem_id="reasoning-trace-card",
-                    )
-                    self.notebook_panel = gr.HTML(
-                        render_notebook_panel_html(), elem_id="notebook-panel-card"
-                    )
-                    render_studio_artifact_controls(self)
-
-                with gr.Column(elem_id="info-expand"):
-                    self.plot_panel = gr.HTML("", visible=False)
-                    self.info_panel = gr.HTML(elem_id="html-info-panel")
-
-                with gr.Accordion(
-                    label="Conversation", open=False, elem_id="conversation-dock"
-                ):
-                    self.chat_control = ConversationControl(self._app)
-
-        self.followup_questions = self.chat_suggestion.examples
-        self.followup_questions_ui = self.chat_suggestion.accordion
+        render_chat_workbench_layout(
+            self,
+            demo_mode=KH_DEMO_MODE,
+            reasoning_limits=REASONING_LIMITS,
+            default_setting=DEFAULT_SETTING,
+            info_panel_scales=INFO_PANEL_SCALES,
+        )
 
     def _json_to_plot(self, json_dict: dict | None):
         html_payload = ""
@@ -804,68 +567,15 @@ class ChatPage(BasePage):
 
     @staticmethod
     def _normalize_selected_file_ids(selected_file_ids) -> list[str]:
-        if selected_file_ids in (None, ""):
-            return []
-        if isinstance(selected_file_ids, list):
-            return [str(item) for item in selected_file_ids if item not in (None, "")]
-        return [str(selected_file_ids)]
+        return normalize_selected_file_ids(selected_file_ids)
 
     @staticmethod
     def _merge_unique_file_ids(*groups) -> list[str]:
-        merged: list[str] = []
-        seen = set()
-        for group in groups:
-            if group in (None, ""):
-                continue
-            values = group if isinstance(group, list) else [group]
-            for value in values:
-                item = str(value or "").strip()
-                if not item or item in seen:
-                    continue
-                seen.add(item)
-                merged.append(item)
-        return merged
+        return merge_unique_file_ids(*groups)
 
     @staticmethod
     def _extract_selected_ids_from_data_source(data_source: dict | None) -> list[str]:
-        if not isinstance(data_source, dict):
-            return []
-
-        selected = data_source.get("selected", {})
-        if not isinstance(selected, dict):
-            return []
-
-        file_ids: list[str] = []
-        for value in selected.values():
-            if (
-                isinstance(value, list)
-                and len(value) >= 3
-                and str(value[0] or "").strip() in {"disabled", "select", "all"}
-            ):
-                candidates = [value[1]]
-            else:
-                candidates = value if isinstance(value, list) else [value]
-            for candidate in candidates:
-                if isinstance(candidate, list):
-                    for nested in candidate:
-                        if isinstance(nested, (dict, tuple, list)):
-                            continue
-                        item = str(nested or "").strip()
-                        if not item:
-                            continue
-                        if item.lower() in {"select", "upload", "all"}:
-                            continue
-                        file_ids.append(item)
-                else:
-                    if isinstance(candidate, (dict, tuple)):
-                        continue
-                    item = str(candidate or "").strip()
-                    if not item:
-                        continue
-                    if item.lower() in {"select", "upload", "all"}:
-                        continue
-                    file_ids.append(item)
-        return ChatPage._merge_unique_file_ids(file_ids)
+        return extract_selected_ids_from_data_source(data_source)
 
     def merge_graph_source_ids(self, graph_source_ids, new_file_ids):
         return self._merge_unique_file_ids(
@@ -874,34 +584,14 @@ class ChatPage(BasePage):
         )
 
     def _build_selected_input_map(self, *selecteds) -> dict[int, object]:
-        selected_inputs: dict[int, object] = {}
-        for index in self._app.index_manager.indices:
-            if index.selector is None:
-                continue
-            if isinstance(index.selector, int) and index.selector < len(selecteds):
-                selected_inputs[index.id] = selecteds[index.selector]
-            elif isinstance(index.selector, tuple):
-                selected_inputs[index.id] = [
-                    selecteds[i] for i in index.selector if i < len(selecteds)
-                ]
-        return selected_inputs
+        return build_selected_input_map(self._app.index_manager.indices, selecteds)
 
     @staticmethod
     def _is_group_selector_value(selector_value: str) -> bool:
-        value = str(selector_value or "").strip()
-        return value.startswith("[") and value.endswith("]")
+        return is_group_selector_value(selector_value)
 
     def _build_selector_source_map(self, first_selector_choices) -> dict[str, str]:
-        source_map: dict[str, str] = {}
-        for item in list(first_selector_choices or []):
-            if not isinstance(item, (list, tuple)) or len(item) < 2:
-                continue
-            name = str(item[0] or "")
-            file_id = str(item[1] or "")
-            if not file_id or self._is_group_selector_value(file_id):
-                continue
-            source_map[file_id] = name or file_id
-        return source_map
+        return build_selector_source_map(first_selector_choices)
 
     def _load_available_source_records(self, user_id) -> dict[str, dict]:
         records: dict[str, dict] = {}
@@ -980,19 +670,13 @@ class ChatPage(BasePage):
         first_selector_choices,
         user_id,
     ):
-        current_ids = self._normalize_selected_file_ids(graph_source_ids)
-        if not current_ids:
-            return []
-
         source_map = self._load_available_source_map(user_id)
-        if not source_map:
-            source_map = self._build_selector_source_map(first_selector_choices)
-        if not source_map:
-            # Selector choices might not be loaded yet during startup.
-            return current_ids
-
-        available_ids = set(source_map.keys())
-        return [file_id for file_id in current_ids if file_id in available_ids]
+        selector_source_map = self._build_selector_source_map(first_selector_choices)
+        return sync_graph_source_ids(
+            graph_source_ids,
+            source_map,
+            selector_source_map,
+        )
 
     def persist_conversation_source_scope(
         self,
@@ -1921,829 +1605,34 @@ class ChatPage(BasePage):
         return final_output
 
     def on_register_events(self):
-        # first index paper recommendation
-        if KH_DEMO_MODE and len(self._indices_input) > 0:
-            self._indices_input[1].change(
-                self.get_recommendations,
-                inputs=[self.first_selector_choices, self._indices_input[1]],
-                outputs=[self.related_papers],
-            ).then(
-                fn=None,
-                inputs=None,
-                outputs=None,
-                js=recommended_papers_js,
-            )
-
-        if len(self._indices_input) > 1:
-            self._indices_input[1].change(
-                fn=self.page_preview.on_selected_file_change,
-                inputs=[
-                    self.first_selector_choices,
-                    self._indices_input[1],
-                    self._page_outputs_cache,
-                ],
-                outputs=[
-                    self._active_file_id,
-                    self._active_file_name,
-                    self._active_file_path,
-                    self.chat_panel.page_number,
-                    self._active_file_total_pages,
-                    self.chat_panel.pdf_preview_src,
-                    self.chat_panel.pdf_preview_notice,
-                    self._last_question,
-                    self.info_panel,
-                    self.plot_panel,
-                    self.state_plot_panel,
-                    self.answer_panel,
-                    self.chat_panel.chatbot,
-                    self._page_outputs_cache,
-                ],
-                show_progress="hidden",
-            ).then(
-                fn=lambda: "",
-                outputs=[self._selected_page_text],
-                show_progress="hidden",
-            ).then(
-                fn=self.refresh_page_context_view,
-                inputs=[
-                    self._active_file_id,
-                    self._active_file_name,
-                    self._active_file_path,
-                    self.chat_panel.page_number,
-                    self._active_file_total_pages,
-                    self.page_strip_search,
-                ],
-                outputs=[
-                    self.page_strip_file_summary,
-                    self.page_thumbnail_strip,
-                    self.page_metadata_strip,
-                ],
-                show_progress="hidden",
-            ).then(
-                fn=lambda: True,
-                inputs=None,
-                outputs=[self._preview_links],
-                js=pdfview_js,
-            )
-
-        self.chat_panel.preview_refresh_timer.tick(
-            fn=self.page_preview.on_preview_tick,
-            inputs=[
-                self._active_file_id,
-                self._active_file_name,
-                self._active_file_path,
-                self.chat_panel.page_number,
-                self._active_file_total_pages,
-                self.chat_panel.pdf_preview_src,
-                self.chat_panel.pdf_preview_notice,
-            ],
-            outputs=[
-                self.chat_panel.page_number,
-                self._active_file_total_pages,
-                self.chat_panel.pdf_preview_src,
-                self.chat_panel.pdf_preview_notice,
-            ],
-            show_progress="hidden",
+        bind_chat_preview_events(
+            self,
+            demo_mode=KH_DEMO_MODE,
+            recommended_papers_js=recommended_papers_js,
+            pdfview_js=pdfview_js,
+            refresh_page_context_view=self.refresh_page_context_view,
         )
 
-        self.chat_panel.prev_page_btn.click(
-            fn=self.page_preview.on_prev_page,
-            inputs=[
-                self.chat_panel.page_number,
-                self._active_file_id,
-                self._active_file_path,
-                self._page_outputs_cache,
-                self._active_file_total_pages,
-            ],
-            outputs=[
-                self.chat_panel.page_number,
-                self._active_file_total_pages,
-                self.chat_panel.pdf_preview_src,
-                self.chat_panel.pdf_preview_notice,
-                self._last_question,
-                self.info_panel,
-                self.plot_panel,
-                self.state_plot_panel,
-                self.answer_panel,
-                self.chat_panel.chatbot,  # Add chatbot to restore page-specific history
-            ],
-            show_progress="hidden",
-        ).then(
-            fn=lambda: "",
-            outputs=[self._selected_page_text],
-            show_progress="hidden",
-        ).then(
-            fn=self.refresh_page_context_view,
-            inputs=[
-                self._active_file_id,
-                self._active_file_name,
-                self._active_file_path,
-                self.chat_panel.page_number,
-                self._active_file_total_pages,
-                self.page_strip_search,
-            ],
-            outputs=[
-                self.page_strip_file_summary,
-                self.page_thumbnail_strip,
-                self.page_metadata_strip,
-            ],
-            show_progress="hidden",
-        ).then(
-            fn=lambda: True,
-            inputs=None,
-            outputs=[self._preview_links],
-            js=pdfview_js,
+        onSuggestChatEvent = bind_chat_submit_events(
+            self,
+            demo_mode=KH_DEMO_MODE,
+            pdfview_js=pdfview_js,
+            scroll_answer_panel_js=scroll_answer_panel_js,
         )
 
-        self.chat_panel.next_page_btn.click(
-            fn=self.page_preview.on_next_page,
-            inputs=[
-                self.chat_panel.page_number,
-                self._active_file_id,
-                self._active_file_path,
-                self._page_outputs_cache,
-                self._active_file_total_pages,
-            ],
-            outputs=[
-                self.chat_panel.page_number,
-                self._active_file_total_pages,
-                self.chat_panel.pdf_preview_src,
-                self.chat_panel.pdf_preview_notice,
-                self._last_question,
-                self.info_panel,
-                self.plot_panel,
-                self.state_plot_panel,
-                self.answer_panel,
-                self.chat_panel.chatbot,  # Add chatbot to restore page-specific history
-            ],
-            show_progress="hidden",
-        ).then(
-            fn=lambda: "",
-            outputs=[self._selected_page_text],
-            show_progress="hidden",
-        ).then(
-            fn=self.refresh_page_context_view,
-            inputs=[
-                self._active_file_id,
-                self._active_file_name,
-                self._active_file_path,
-                self.chat_panel.page_number,
-                self._active_file_total_pages,
-                self.page_strip_search,
-            ],
-            outputs=[
-                self.page_strip_file_summary,
-                self.page_thumbnail_strip,
-                self.page_metadata_strip,
-            ],
-            show_progress="hidden",
-        ).then(
-            fn=lambda: True,
-            inputs=None,
-            outputs=[self._preview_links],
-            js=pdfview_js,
+        bind_chat_conversation_events(
+            self,
+            demo_mode=KH_DEMO_MODE,
+            chat_input_focus_js=chat_input_focus_js,
+            clear_bot_message_selection_js=clear_bot_message_selection_js,
+            pdfview_js=pdfview_js,
         )
 
-        self.chat_panel.page_number.change(
-            fn=self.page_preview.on_page_set,
-            inputs=[
-                self.chat_panel.page_number,
-                self._active_file_id,
-                self._active_file_path,
-                self._page_outputs_cache,
-                self._active_file_total_pages,
-            ],
-            outputs=[
-                self.chat_panel.page_number,
-                self._active_file_total_pages,
-                self.chat_panel.pdf_preview_src,
-                self.chat_panel.pdf_preview_notice,
-                self._last_question,
-                self.info_panel,
-                self.plot_panel,
-                self.state_plot_panel,
-                self.answer_panel,
-                self.chat_panel.chatbot,  # Add chatbot to restore page-specific history
-            ],
-            show_progress="hidden",
-        ).then(
-            fn=lambda: "",
-            outputs=[self._selected_page_text],
-            show_progress="hidden",
-        ).then(
-            fn=self.refresh_page_context_view,
-            inputs=[
-                self._active_file_id,
-                self._active_file_name,
-                self._active_file_path,
-                self.chat_panel.page_number,
-                self._active_file_total_pages,
-                self.page_strip_search,
-            ],
-            outputs=[
-                self.page_strip_file_summary,
-                self.page_thumbnail_strip,
-                self.page_metadata_strip,
-            ],
-            show_progress="hidden",
-        ).then(
-            fn=lambda: True,
-            inputs=None,
-            outputs=[self._preview_links],
-            js=pdfview_js,
-        )
-
-        text_input = self.chat_panel.text_input
-        assert text_input is not None
-
-        chat_event = (
-            gr.on(
-                triggers=[
-                    text_input.submit,
-                ],
-                fn=self.submit_msg,
-                inputs=[
-                    text_input,
-                    self.chat_panel.chatbot,
-                    self._app.user_id,
-                    self._app.settings_state,
-                    self.chat_control.conversation_id,
-                    self.chat_control.conversation_rn,
-                    self.first_selector_choices,
-                    self._graph_source_ids,
-                    self._selected_page_text,
-                    self._selected_graph_context,
-                ],
-                outputs=[
-                    self.chat_panel.text_input,
-                    self.chat_panel.chatbot,
-                    self.chat_control.conversation_id,
-                    self.chat_control.conversation,
-                    self.chat_control.conversation_rn,
-                    # file selector from the first index
-                    self._indices_input[0],
-                    self._indices_input[1],
-                    self._last_question,
-                    self._command_state,
-                    self._selected_page_text,
-                    self._selected_graph_context,
-                    self._graph_source_ids,
-                ],
-                concurrency_limit=20,
-                show_progress="hidden",
-            )
-            .success(
-                fn=self.chat_fn,
-                inputs=[
-                    self.chat_control.conversation_id,
-                    self.chat_panel.chatbot,
-                    self._app.settings_state,
-                    self._reasoning_type,
-                    self.model_type,
-                    self.use_mindmap,
-                    self.citation,
-                    self.language,
-                    self.state_chat,
-                    self._command_state,
-                    self._app.user_id,
-                    self._active_file_id,
-                    self._active_file_name,
-                    self.chat_panel.page_number,
-                    self.chat_panel.qa_scope,
-                    self._selected_page_text,
-                    self._selected_graph_context,
-                    *docqa_research_control_inputs(self),
-                    self.state_plot_panel,
-                ]
-                + self._indices_input,
-                outputs=[
-                    self.chat_panel.chatbot,
-                    self.info_panel,
-                    self.plot_panel,
-                    self.state_plot_panel,
-                    self.state_chat,
-                    self.answer_panel,
-                    self.citations_panel,
-                    self.reasoning_trace_panel,
-                    self._request_page_number,
-                    self._request_file_id,
-                    self._request_last_question,
-                    self._request_info_html,
-                    self._request_answer_html,
-                    self._request_chat_history,
-                ],
-                concurrency_limit=20,
-                show_progress="minimal",
-            )
-            .success(
-                fn=self.page_preview.cache_page_outputs,
-                inputs=[
-                    self._page_outputs_cache,
-                    self._request_page_number,
-                    self._request_last_question,
-                    self._request_info_html,
-                    self._request_answer_html,
-                    self._request_file_id,
-                    self._request_chat_history,  # Pass request-scoped chat history
-                ],
-                outputs=[self._page_outputs_cache],
-                show_progress="hidden",
-            )
-            .then(
-                fn=lambda: "",
-                outputs=[self._selected_page_text],
-                show_progress="hidden",
-            )
-            .then(
-                fn=lambda: True,
-                inputs=None,
-                outputs=[self._preview_links],
-                js=pdfview_js,  # Includes auto-scroll and drag initialization.
-            )
-            .then(
-                fn=None,
-                inputs=None,
-                outputs=None,
-                js=scroll_answer_panel_js,
-            )
-            .success(
-                fn=self.check_and_suggest_name_conv,
-                inputs=self._request_chat_history,
-                outputs=[
-                    self.chat_control.conversation_rn,
-                    self._conversation_renamed,
-                ],
-            )
-            .success(
-                self.chat_control.rename_conv,
-                inputs=[
-                    self.chat_control.conversation_id,
-                    self.chat_control.conversation_rn,
-                    self._conversation_renamed,
-                    self._app.user_id,
-                ],
-                outputs=[
-                    self.chat_control.conversation,
-                    self.chat_control.conversation,
-                    self.chat_control.conversation_rn,
-                ],
-                show_progress="hidden",
-            )
-        )
-
-        onSuggestChatEvent = {
-            "fn": self.suggest_chat_conv,
-            "inputs": [
-                self._app.settings_state,
-                self.language,
-                self.chat_panel.chatbot,
-                self._use_suggestion,
-            ],
-            "outputs": [
-                self.followup_questions_ui,
-                self.followup_questions,
-            ],
-            "show_progress": "hidden",
-        }
-        if not KH_DEMO_MODE:
-            chat_event = chat_event.then(
-                fn=self.persist_data_source,
-                inputs=[
-                    self.chat_control.conversation_id,
-                    self._app.user_id,
-                    self._request_info_html,
-                    self.state_plot_panel,
-                    self.state_retrieval_history,
-                    self.state_plot_history,
-                    self._request_chat_history,
-                    self.state_chat,
-                    self._graph_source_ids,
-                ]
-                + self._indices_input,
-                outputs=[
-                    self.state_retrieval_history,
-                    self.state_plot_history,
-                ],
-                concurrency_limit=20,
-            )
-
-        self.chat_control.btn_chat_expand.click(
-            fn=None, inputs=None, js="function() {toggleChatColumn();}"
-        )
-
-        if KH_DEMO_MODE:
-            self.chat_control.btn_demo_logout.click(
-                fn=None,
-                js=self.chat_control.logout_js,
-            )
-            self.chat_control.btn_new.click(
-                fn=lambda: self.chat_control.select_conv("", None),
-                outputs=[
-                    self.chat_control.conversation_id,
-                    self.chat_control.conversation,
-                    self.chat_control.conversation_rn,
-                    self.chat_panel.chatbot,
-                    self.followup_questions,
-                    self.info_panel,
-                    self.state_plot_panel,
-                    self.state_retrieval_history,
-                    self.state_plot_history,
-                    self.chat_control.cb_is_public,
-                    self.state_chat,
-                ]
-                + self._indices_input,
-            ).then(
-                lambda: (gr.update(visible=False), gr.update(visible=True)),
-                outputs=[self.paper_list.accordion, self.chat_settings],
-            ).then(
-                fn=lambda: "",
-                outputs=[self.answer_panel],
-            ).then(
-                fn=self.render_latest_citations_card,
-                inputs=[self.state_retrieval_history],
-                outputs=[self.citations_panel],
-            ).then(
-                fn=self.render_latest_reasoning_trace,
-                inputs=[self.chat_panel.chatbot, self.state_retrieval_history],
-                outputs=[self.reasoning_trace_panel],
-            ).then(
-                fn=lambda: "",
-                outputs=[self._last_question],
-            ).then(
-                fn=self.suggest_chat_conv,
-                inputs=[
-                    self._app.settings_state,
-                    self.language,
-                    self.chat_panel.chatbot,
-                    self._use_suggestion,
-                ],
-                outputs=[
-                    self.followup_questions_ui,
-                    self.followup_questions,
-                ],
-            ).then(
-                fn=None,
-                inputs=None,
-                js=chat_input_focus_js,
-            )
-
-        if not KH_DEMO_MODE:
-            self.chat_control.btn_new.click(
-                self.chat_control.new_conv,
-                inputs=self._app.user_id,
-                outputs=[
-                    self.chat_control.conversation_id,
-                    self.chat_control.conversation,
-                ],
-                show_progress="hidden",
-            ).then(
-                self.chat_control.select_conv,
-                inputs=[self.chat_control.conversation, self._app.user_id],
-                outputs=[
-                    self.chat_control.conversation_id,
-                    self.chat_control.conversation,
-                    self.chat_control.conversation_rn,
-                    self.chat_panel.chatbot,
-                    self.followup_questions,
-                    self.info_panel,
-                    self.state_plot_panel,
-                    self.state_retrieval_history,
-                    self.state_plot_history,
-                    self.chat_control.cb_is_public,
-                    self.state_chat,
-                ]
-                + self._indices_input,
-                show_progress="hidden",
-            ).then(
-                fn=self._json_to_plot,
-                inputs=self.state_plot_panel,
-                outputs=self.plot_panel,
-            ).then(
-                fn=lambda: "",
-                outputs=[self.answer_panel],
-            ).then(
-                fn=self.render_latest_citations_card,
-                inputs=[self.state_retrieval_history],
-                outputs=[self.citations_panel],
-            ).then(
-                fn=self.render_latest_reasoning_trace,
-                inputs=[self.chat_panel.chatbot, self.state_retrieval_history],
-                outputs=[self.reasoning_trace_panel],
-            ).then(
-                fn=lambda: "",
-                outputs=[self._last_question],
-            ).then(
-                fn=self.suggest_chat_conv,
-                inputs=[
-                    self._app.settings_state,
-                    self.language,
-                    self.chat_panel.chatbot,
-                    self._use_suggestion,
-                ],
-                outputs=[
-                    self.followup_questions_ui,
-                    self.followup_questions,
-                ],
-            ).then(
-                fn=None,
-                inputs=None,
-                js=chat_input_focus_js,
-            )
-
-            self.chat_control.btn_del.click(
-                lambda id: self.toggle_delete(id),
-                inputs=[self.chat_control.conversation_id],
-                outputs=[
-                    self.chat_control._new_delete,
-                    self.chat_control._delete_confirm,
-                ],
-            )
-            self.chat_control.btn_del_conf.click(
-                self.chat_control.delete_conv,
-                inputs=[self.chat_control.conversation_id, self._app.user_id],
-                outputs=[
-                    self.chat_control.conversation_id,
-                    self.chat_control.conversation,
-                ],
-                show_progress="hidden",
-            ).then(
-                self.chat_control.select_conv,
-                inputs=[self.chat_control.conversation, self._app.user_id],
-                outputs=[
-                    self.chat_control.conversation_id,
-                    self.chat_control.conversation,
-                    self.chat_control.conversation_rn,
-                    self.chat_panel.chatbot,
-                    self.followup_questions,
-                    self.info_panel,
-                    self.state_plot_panel,
-                    self.state_retrieval_history,
-                    self.state_plot_history,
-                    self.chat_control.cb_is_public,
-                    self.state_chat,
-                ]
-                + self._indices_input,
-                show_progress="hidden",
-            ).then(
-                fn=self._json_to_plot,
-                inputs=self.state_plot_panel,
-                outputs=self.plot_panel,
-            ).then(
-                fn=self.render_latest_citations_card,
-                inputs=[self.state_retrieval_history],
-                outputs=[self.citations_panel],
-            ).then(
-                fn=self.render_latest_reasoning_trace,
-                inputs=[self.chat_panel.chatbot, self.state_retrieval_history],
-                outputs=[self.reasoning_trace_panel],
-            ).then(
-                lambda: self.toggle_delete(""),
-                outputs=[
-                    self.chat_control._new_delete,
-                    self.chat_control._delete_confirm,
-                ],
-            )
-            self.chat_control.btn_del_cnl.click(
-                lambda: self.toggle_delete(""),
-                outputs=[
-                    self.chat_control._new_delete,
-                    self.chat_control._delete_confirm,
-                ],
-            )
-            self.chat_control.btn_conversation_rn.click(
-                lambda: gr.update(visible=True),
-                outputs=[
-                    self.chat_control.conversation_rn,
-                ],
-            )
-            self.chat_control.conversation_rn.submit(
-                self.chat_control.rename_conv,
-                inputs=[
-                    self.chat_control.conversation_id,
-                    self.chat_control.conversation_rn,
-                    gr.State(value=True),
-                    self._app.user_id,
-                ],
-                outputs=[
-                    self.chat_control.conversation,
-                    self.chat_control.conversation,
-                    self.chat_control.conversation_rn,
-                ],
-                show_progress="hidden",
-            )
-
-        onConvSelect = (
-            self.chat_control.conversation.select(
-                self.chat_control.select_conv,
-                inputs=[self.chat_control.conversation, self._app.user_id],
-                outputs=[
-                    self.chat_control.conversation_id,
-                    self.chat_control.conversation,
-                    self.chat_control.conversation_rn,
-                    self.chat_panel.chatbot,
-                    self.followup_questions,
-                    self.info_panel,
-                    self.state_plot_panel,
-                    self.state_retrieval_history,
-                    self.state_plot_history,
-                    self.chat_control.cb_is_public,
-                    self.state_chat,
-                ]
-                + self._indices_input,
-                show_progress="hidden",
-            )
-            .then(
-                fn=self._json_to_plot,
-                inputs=self.state_plot_panel,
-                outputs=self.plot_panel,
-            )
-            .then(
-                lambda: self.toggle_delete(""),
-                outputs=[
-                    self.chat_control._new_delete,
-                    self.chat_control._delete_confirm,
-                ],
-            )
-            .then(
-                fn=self.suggest_chat_conv,
-                inputs=[
-                    self._app.settings_state,
-                    self.language,
-                    self.chat_panel.chatbot,
-                    self._use_suggestion,
-                ],
-                outputs=[
-                    self.followup_questions_ui,
-                    self.followup_questions,
-                ],
-            )
-        )
-
-        if KH_DEMO_MODE:
-            onConvSelect = onConvSelect.then(
-                lambda: (gr.update(visible=False), gr.update(visible=True)),
-                outputs=[self.paper_list.accordion, self.chat_settings],
-            )
-
-        onConvSelect = (
-            onConvSelect.then(
-                fn=self.page_preview.refresh_selected_file_preview,
-                inputs=[
-                    self.first_selector_choices,
-                    self._indices_input[1],
-                    self.chat_panel.page_number,
-                    self._active_file_total_pages,
-                ],
-                outputs=[
-                    self._active_file_id,
-                    self._active_file_name,
-                    self._active_file_path,
-                    self.chat_panel.page_number,
-                    self._active_file_total_pages,
-                    self.chat_panel.pdf_preview_src,
-                    self.chat_panel.pdf_preview_notice,
-                ],
-                show_progress="hidden",
-            )
-            .then(
-                fn=self.refresh_page_context_view,
-                inputs=[
-                    self._active_file_id,
-                    self._active_file_name,
-                    self._active_file_path,
-                    self.chat_panel.page_number,
-                    self._active_file_total_pages,
-                    self.page_strip_search,
-                ],
-                outputs=[
-                    self.page_strip_file_summary,
-                    self.page_thumbnail_strip,
-                    self.page_metadata_strip,
-                ],
-                show_progress="hidden",
-            )
-            .then(
-                fn=lambda: True,
-                js=clear_bot_message_selection_js,
-            )
-            .then(
-                fn=lambda: "",
-                outputs=[self._selected_page_text],
-                show_progress="hidden",
-            )
-            .then(
-                fn=lambda: True,
-                inputs=None,
-                outputs=[self._preview_links],
-                js=pdfview_js,
-            )
-            .then(
-                fn=lambda history: history[-1][1] if history else "",
-                inputs=[self.chat_panel.chatbot],
-                outputs=[self.answer_panel],
-                show_progress="hidden",
-            )
-            .then(
-                fn=lambda history: history[-1][0] if history else "",
-                inputs=[self.chat_panel.chatbot],
-                outputs=[self._last_question],
-                show_progress="hidden",
-            )
-            .then(
-                fn=self.render_latest_citations_card,
-                inputs=[self.state_retrieval_history],
-                outputs=[self.citations_panel],
-                show_progress="hidden",
-            )
-            .then(
-                fn=self.render_latest_reasoning_trace,
-                inputs=[self.chat_panel.chatbot, self.state_retrieval_history],
-                outputs=[self.reasoning_trace_panel],
-                show_progress="hidden",
-            )
-            .then(fn=None, inputs=None, outputs=None, js=chat_input_focus_js)
-        )
-
-        if not KH_DEMO_MODE:
-            # evidence display on message selection
-            self.chat_panel.chatbot.select(
-                self.message_selected,
-                inputs=[
-                    self.state_retrieval_history,
-                    self.state_plot_history,
-                ],
-                outputs=[
-                    self.info_panel,
-                    self.state_plot_panel,
-                    self.citations_panel,
-                    self.reasoning_trace_panel,
-                ],
-            ).then(
-                fn=self._json_to_plot,
-                inputs=self.state_plot_panel,
-                outputs=self.plot_panel,
-            ).then(
-                fn=lambda: True,
-                inputs=None,
-                outputs=[self._preview_links],
-                js=pdfview_js,
-            )
-
-        self.chat_control.cb_is_public.change(
-            self.on_set_public_conversation,
-            inputs=[self.chat_control.cb_is_public, self.chat_control.conversation],
-            outputs=None,
-            show_progress="hidden",
-        )
-
-        if not KH_DEMO_MODE:
-            # user feedback events
-            self.chat_panel.chatbot.like(
-                fn=self.is_liked,
-                inputs=[self.chat_control.conversation_id],
-                outputs=None,
-            )
-            self.report_issue.report_btn.click(
-                self.report_issue.report,
-                inputs=[
-                    self.report_issue.correctness,
-                    self.report_issue.issues,
-                    self.report_issue.more_detail,
-                    self.chat_control.conversation_id,
-                    self.chat_panel.chatbot,
-                    self._app.settings_state,
-                    self._app.user_id,
-                    self.info_panel,
-                    self.state_chat,
-                ]
-                + self._indices_input,
-                outputs=None,
-            )
-
-        self.reasoning_type.change(
-            self.reasoning_changed,
-            inputs=[self.reasoning_type],
-            outputs=[self._reasoning_type],
-        )
-
-        def toggle_chat_suggestion(current_state):
-            return current_state, gr.update(visible=current_state)
-
-        def raise_error_on_state(state):
-            if not state:
-                raise ValueError("Chat suggestion disabled")
-
-        self.chat_control.cb_suggest_chat.change(
-            fn=toggle_chat_suggestion,
-            inputs=[self.chat_control.cb_suggest_chat],
-            outputs=[self._use_suggestion, self.followup_questions_ui],
-            show_progress="hidden",
-        ).then(
-            fn=raise_error_on_state,
-            inputs=[self._use_suggestion],
-            show_progress="hidden",
-        ).success(
-            **onSuggestChatEvent
+        bind_chat_pre_studio_events(
+            self,
+            demo_mode=KH_DEMO_MODE,
+            on_suggest_chat_event=onSuggestChatEvent,
+            pdfview_js=pdfview_js,
         )
         self.chat_control.conversation_id.change(
             render_conversation_notebook_update,
@@ -2752,35 +1641,12 @@ class ChatPage(BasePage):
         )
         bind_studio_artifact_events(self)
 
-        self.followup_questions.select(
-            self.chat_suggestion.select_example,
-            outputs=[self.chat_panel.text_input],
-            show_progress="hidden",
-        ).then(
-            fn=None,
-            inputs=None,
-            outputs=None,
-            js=chat_input_focus_js,
+        bind_chat_post_studio_events(
+            self,
+            demo_mode=KH_DEMO_MODE,
+            chat_input_focus_js=chat_input_focus_js,
+            quick_urls_submit_js=quick_urls_submit_js,
         )
-
-        if self.knowledge_graph and len(self._indices_input) > 1:
-            bind_knowledge_graph_events(self)
-
-        if KH_DEMO_MODE:
-            self.paper_list.examples.select(
-                self.paper_list.select_example,
-                inputs=[self.paper_list.papers_state],
-                outputs=[self.quick_urls],
-                show_progress="hidden",
-            ).then(
-                lambda: (gr.update(visible=False), gr.update(visible=True)),
-                outputs=[self.paper_list.accordion, self.chat_settings],
-            ).then(
-                fn=None,
-                inputs=None,
-                outputs=None,
-                js=quick_urls_submit_js,
-            )
 
     def submit_msg(
         self,
@@ -2801,70 +1667,20 @@ class ChatPage(BasePage):
             sso_user_id = check_rate_limit("chat", request)
             logger.debug("User ID: %s", sso_user_id)
 
-        if not chat_input:
-            raise ValueError("Input is empty")
-
-        chat_input_text = chat_input.get("text", "")
-        (
-            chat_input_text,
-            file_ids,
-            selector_choices_to_add,
-            used_command,
-        ) = resolve_chat_submit_sources(
+        prepared = prepare_chat_submission(
             chat_input=chat_input,
-            chat_input_text=chat_input_text,
-            first_selector_choices=first_selector_choices,
-            settings=settings,
             user_id=user_id,
+            chat_history=chat_history,
+            settings=settings,
+            first_selector_choices=first_selector_choices,
+            graph_source_ids=graph_source_ids,
+            selected_page_text=selected_page_text,
+            selected_graph_context=selected_graph_context,
+            default_question=DEFAULT_QUESTION,
+            merge_graph_source_ids=self.merge_graph_source_ids,
             first_indexing_file_fn=getattr(self, "first_indexing_file_fn", None),
             first_indexing_url_fn=getattr(self, "first_indexing_url_fn", None),
         )
-
-        # add new file ids to the first selector choices
-        first_selector_choices.extend(selector_choices_to_add)
-        merged_graph_source_ids = self.merge_graph_source_ids(
-            graph_source_ids, file_ids
-        )
-
-        # if file_ids is not empty and chat_input_text is empty
-        # set the input to summary
-        if not chat_input_text and file_ids:
-            chat_input_text = DEFAULT_QUESTION
-
-        # if start of conversation and no query is specified
-        if not chat_input_text and not chat_history:
-            chat_input_text = DEFAULT_QUESTION
-
-        selection_marker = "[Selected text from current page]"
-        if selected_page_text and str(selected_page_text).strip():
-            selected_page_text = " ".join(str(selected_page_text).split())
-            if chat_input_text and selection_marker in chat_input_text:
-                pass
-            elif chat_input_text:
-                chat_input_text = (
-                    f"{chat_input_text}\n\n{selection_marker}\n{selected_page_text}"
-                )
-            else:
-                chat_input_text = (
-                    "Please explain the following selected text from the "
-                    "current page:\n"
-                    f"{selected_page_text}"
-                )
-
-        if file_ids:
-            selector_output = [
-                "select",
-                gr.update(value=file_ids, choices=first_selector_choices),
-            ]
-        else:
-            selector_output = [gr.update(), gr.update()]
-
-        # check if regen mode is active
-        if chat_input_text:
-            chat_history = chat_history + [(chat_input_text, None)]
-        else:
-            if not chat_history:
-                raise gr.Error("Empty chat")
 
         if not conv_id:
             if not KH_DEMO_MODE:
@@ -2885,17 +1701,17 @@ class ChatPage(BasePage):
         return (
             [
                 {},
-                chat_history,
+                prepared.chat_history,
                 new_conv_id,
                 conv_update,
                 new_conv_name,
             ]
-            + selector_output
-            + [chat_input_text]
-            + [used_command]
-            + [selected_page_text]
-            + [selected_graph_context]
-            + [merged_graph_source_ids]
+            + prepared.selector_output
+            + [prepared.chat_input_text]
+            + [prepared.used_command]
+            + [prepared.selected_page_text]
+            + [prepared.selected_graph_context]
+            + [prepared.merged_graph_source_ids]
         )
 
     def get_recommendations(self, first_selector_choices, file_ids):
@@ -3238,203 +2054,36 @@ class ChatPage(BasePage):
         *selecteds,
         request: gr.Request | None = None,
     ):
-        chat_input, chat_output = chat_history[-1] if chat_history else ("", None)
-        preserved_history = chat_history[:-1] if chat_history else []
-
-        selection_marker = "[Selected text from current page]"
-        if (not selected_page_text) and isinstance(chat_input, str):
-            if selection_marker in chat_input:
-                selected_page_text = chat_input.split(selection_marker, 1)[1].strip()
-        if isinstance(chat_input, str) and selection_marker in chat_input:
-            chat_input = chat_input.split(selection_marker, 1)[0].strip()
-
-        session_key = (
-            request.session_hash
-            if request is not None and request.session_hash
-            else "default"
+        inputs = ChatCallbackInputs(
+            conversation_id=conversation_id,
+            chat_history=chat_history,
+            settings=settings,
+            reasoning_type=reasoning_type,
+            llm_type=llm_type,
+            use_mind_map=use_mind_map,
+            use_citation=use_citation,
+            language=language,
+            chat_state=chat_state,
+            command_state=command_state,
+            user_id=user_id,
+            active_file_id=active_file_id,
+            active_file_name=active_file_name,
+            page_number=page_number,
+            qa_scope=qa_scope,
+            selected_page_text=selected_page_text,
+            selected_graph_context=selected_graph_context,
+            controller_mode=controller_mode,
+            route_policy=route_policy,
+            verification_mode=verification_mode,
+            planner_model=planner_model,
+            state_plot_panel=state_plot_panel,
+            selecteds=selecteds,
         )
-        normalized_page_number = max(1, int(page_number or 1))
-        page_key = make_page_key(active_file_id, normalized_page_number)
-        if session_key:
-            set_current_view(session_key, page_key)
-        request_key = make_request_key(session_key or "default", page_key)
-
-        init_cache_entry(
-            request_key=request_key,
-            session_key=session_key,
-            page_key=page_key,
-            file_id=active_file_id or "",
-            page_number=normalized_page_number,
-            last_question=str(chat_input or ""),
-            preserved_history=preserved_history,
+        yield from run_chat_callback_outputs(
+            self,
+            inputs,
+            request=request,
         )
-
-        text, refs, plot = "", "", state_plot_panel
-        plot_gr = self._json_to_plot(state_plot_panel)
-        mindmap_html = ""
-        artifact_payload = None
-        msg_placeholder = getattr(
-            flowsettings, "KH_CHAT_MSG_PLACEHOLDER", "Thinking ..."
-        )
-
-        def is_active_view() -> bool:
-            current_view = get_current_view(session_key) if session_key else None
-            return (current_view is None) or (current_view == page_key)
-
-        streaming_reasoning_html = render_answer_reasoning_block(is_streaming=True)
-        answer_html = self._generate_answer_panel_html(
-            preserved_history,
-            chat_input,
-            "",
-            is_thinking=True,
-            reasoning_html=streaming_reasoning_html,
-        )
-        chat_history_full = preserved_history + [(chat_input, text or msg_placeholder)]
-
-        update_answer(
-            request_key,
-            answer_text=text,
-            answer_html=answer_html,
-            chat_history=chat_history_full,
-        )
-        update_mindmap(request_key, mindmap_html)
-        update_plot(request_key, plot)
-
-        active_view = is_active_view()
-        yield (
-            chat_history_full if active_view else gr.skip(),
-            mindmap_html if active_view else gr.skip(),
-            plot_gr if active_view else gr.skip(),
-            plot,
-            chat_state,
-            answer_html if active_view else gr.skip(),
-            self._render_citations_card_html(refs) if active_view else gr.skip(),
-            (
-                self._render_reasoning_trace_html(
-                    chat_input,
-                    refs,
-                    answer_html,
-                    active_file_id or "",
-                    normalized_page_number,
-                    artifact_payload,
-                )
-                if active_view
-                else gr.skip()
-            ),
-            normalized_page_number,
-            active_file_id or "",
-            str(chat_input or ""),
-            mindmap_html,
-            answer_html,
-            chat_history_full,
-        )
-
-        try:
-            runtime_request = build_chat_runtime_request(
-                self,
-                chat_input=chat_input,
-                conversation_id=conversation_id,
-                preserved_history=preserved_history,
-                selecteds=selecteds,
-                settings=settings,
-                reasoning_type=reasoning_type,
-                llm_type=llm_type,
-                use_mind_map=use_mind_map,
-                use_citation=use_citation,
-                language=language,
-                chat_state=chat_state,
-                command_state=command_state,
-                user_id=user_id,
-                active_file_id=active_file_id,
-                active_file_name=active_file_name,
-                page_number=page_number,
-                qa_scope=qa_scope,
-                selected_page_text=selected_page_text,
-                selected_graph_context=selected_graph_context,
-                controller_mode=controller_mode,
-                route_policy=route_policy,
-                verification_mode=verification_mode,
-                planner_model=planner_model,
-            )
-            response = yield from run_docqa_turn_with_live_updates(
-                self,
-                runtime_request=runtime_request,
-                preserved_history=preserved_history,
-                chat_input=chat_input,
-                msg_placeholder=msg_placeholder,
-                request_key=request_key,
-                fallback_plot=plot,
-                fallback_chat_state=chat_state,
-                is_active_view=is_active_view,
-                active_file_id=active_file_id or "",
-                normalized_page_number=normalized_page_number,
-                artifact_payload=artifact_payload,
-            )
-            yield final_docqa_response_output(
-                self,
-                response=response,
-                preserved_history=preserved_history,
-                chat_input=chat_input,
-                msg_placeholder=msg_placeholder,
-                request_key=request_key,
-                state_plot_panel=state_plot_panel,
-                fallback_chat_state=chat_state,
-                active_view=is_active_view(),
-                active_file_id=active_file_id or "",
-                normalized_page_number=normalized_page_number,
-            )
-        except ValueError as e:
-            logger.warning("Chat runtime ValueError: %s", e)
-            mark_error(request_key, str(e))
-            empty_msg = getattr(
-                flowsettings,
-                "KH_CHAT_EMPTY_MSG_PLACEHOLDER",
-                "(Sorry, I don't know)",
-            )
-            answer_html = self._generate_answer_panel_html(
-                preserved_history, chat_input, text or empty_msg, is_thinking=False
-            )
-            chat_history_full = preserved_history + [(chat_input, text or empty_msg)]
-
-            update_answer(
-                request_key,
-                answer_text=text or empty_msg,
-                answer_html=answer_html,
-                chat_history=chat_history_full,
-            )
-            update_mindmap(request_key, mindmap_html)
-            update_plot(request_key, plot)
-
-            active_view = is_active_view()
-            yield (
-                chat_history_full if active_view else gr.skip(),
-                mindmap_html if active_view else gr.skip(),
-                plot_gr if active_view else gr.skip(),
-                plot,
-                chat_state,
-                answer_html if active_view else gr.skip(),
-                self._render_citations_card_html(refs) if active_view else gr.skip(),
-                (
-                    self._render_reasoning_trace_html(
-                        chat_input,
-                        refs,
-                        answer_html,
-                        active_file_id or "",
-                        normalized_page_number,
-                        artifact_payload,
-                    )
-                    if active_view
-                    else gr.skip()
-                ),
-                normalized_page_number,
-                active_file_id or "",
-                str(chat_input or ""),
-                mindmap_html,
-                answer_html,
-                chat_history_full,
-            )
-
-        mark_done(request_key)
 
     def check_and_suggest_name_conv(self, chat_history):
         suggest_pipeline = SuggestConvNamePipeline()

@@ -13,7 +13,7 @@
 - `D:\PythonProject\kotaemon\README.md`
 - `D:\PythonProject\kotaemon\libs\slide_cli\README.md`
 - `D:\PythonProject\kotaemon\docs\mara_research_cli_release.md`
-- `D:\PythonProject\kotaemon\docs\superpowers\plans\2026-04-22-mara-research-cli-phase3-foundation.md`
+- `D:\PythonProject\kotaemon\docs\superpowers\plans\2026-04-22-mara-research-cli-two-line-shell-foundation.md`
 
 ## Approved Framing
 

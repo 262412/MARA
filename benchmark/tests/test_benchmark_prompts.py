@@ -32,6 +32,29 @@ def test_raw_prompt_policy_preserves_dataset_question(tmp_path):
     assert prompt.retrieval_query == "What did the filing say about revenue?"
 
 
+def test_gold_answer_policy_uses_no_think_answer_only_prompt(tmp_path):
+    config = BenchmarkConfig(
+        suite_name="financebench",
+        output_dir=tmp_path / "out",
+        benchmark_prompt_policy="gold_answer_v1",
+    )
+
+    prompt = build_benchmark_prompt(
+        _example(answer_type="numeric"),
+        config,
+        dataset_name="financebench",
+    )
+
+    assert prompt.policy == "gold_answer_v1"
+    assert prompt.runtime_prompt.startswith("/no_think\n")
+    assert "Benchmark gold-answer contract:" in prompt.runtime_prompt
+    assert "Return only the gold-answer value" in prompt.runtime_prompt
+    assert "Do not provide explanation" in prompt.runtime_prompt
+    assert "Question: What did the filing say about revenue?" in prompt.runtime_prompt
+    assert prompt.runtime_prompt.rstrip().endswith("Answer:")
+    assert prompt.retrieval_query == "What did the filing say about revenue?"
+
+
 def test_benchmark_v1_uses_benchmark_prompt_contract_not_mara_marker(tmp_path):
     config = BenchmarkConfig(
         suite_name="qasper",

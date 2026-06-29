@@ -264,6 +264,8 @@ def _retrieval_failure_type(
     gold_page_hit: float | None,
     gold_span_hit: float | None,
 ) -> str:
+    if _has_route_timeout(prediction):
+        return "route_timeout"
     if _has_execution_error(prediction):
         return "execution_error"
     if not retrieved_hits:
@@ -285,6 +287,8 @@ def _citation_failure_type(
     prediction: dict[str, Any],
     gold_evidence: list[dict[str, Any]],
 ) -> str:
+    if _has_route_timeout(prediction):
+        return "not_evaluated_route_timeout"
     if _has_execution_error(prediction):
         return "not_evaluated_execution_error"
     gold_sources = {
@@ -322,6 +326,8 @@ def _citation_failure_type(
 
 
 def _failure_class(retrieval_failure_type: str, citation_failure_type: str) -> str:
+    if retrieval_failure_type == "route_timeout":
+        return "route_timeout"
     if retrieval_failure_type == "execution_error":
         return "execution_error"
     if retrieval_failure_type in {"raw_retriever_zero", "no_retrieved_hits"}:
@@ -336,6 +342,8 @@ def _failure_class(retrieval_failure_type: str, citation_failure_type: str) -> s
         return "gold_span_missing"
     if citation_failure_type == "not_evaluated_execution_error":
         return "execution_error"
+    if citation_failure_type == "not_evaluated_route_timeout":
+        return "route_timeout"
     if citation_failure_type in {"citation_miss", "missing_citation_metadata"}:
         return "citation_miss"
     return "none"
@@ -343,6 +351,10 @@ def _failure_class(retrieval_failure_type: str, citation_failure_type: str) -> s
 
 def _has_execution_error(prediction: dict[str, Any]) -> bool:
     return bool(str(prediction.get("error") or "").strip())
+
+
+def _has_route_timeout(prediction: dict[str, Any]) -> bool:
+    return str(prediction.get("error_type") or "").strip() == "route_timeout"
 
 
 def _raw_retriever_zero(prediction: dict[str, Any]) -> bool:

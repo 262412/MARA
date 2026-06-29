@@ -1,6 +1,8 @@
 import json
+import time
 
 from benchmark.route_execution import route_skip_record
+from benchmark.route_timeout import RouteExecutionTimeout
 from benchmark.runner import run_benchmark
 from benchmark.schemas import BenchmarkConfig
 
@@ -28,6 +30,21 @@ class _FakeEngine:
         }
 
 
+class _SlowEngine:
+    def run_example(self, _bundle, _example):
+        time.sleep(1.0)
+        return {"predicted_answer": "too late"}
+
+
+class _TimeoutSwallowingEngine(_FakeEngine):
+    def run_example(self, bundle, example):
+        try:
+            time.sleep(1.0)
+        except RouteExecutionTimeout:
+            time.sleep(0.02)
+        return super().run_example(bundle, example)
+
+
 def test_run_benchmark_skips_not_configured_routes(monkeypatch, tmp_path):
     manifest_path = _write_skip_manifest(tmp_path)
     calls: list[tuple[str, str, str]] = []
@@ -53,6 +70,97 @@ def test_run_benchmark_skips_not_configured_routes(monkeypatch, tmp_path):
     assert report["summary"]["backend_metadata"]["vlm"]["backend_status"] == (
         "not_configured"
     )
+
+
+def test_run_benchmark_records_route_timeout_budget_on_success(monkeypatch, tmp_path):
+    manifest_path = _write_single_route_manifest(tmp_path, route_id="text_rag")
+    calls: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _FakeEngine(engine_name, config, calls),
+    )
+
+    report = run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="route_timeout_budget",
+            output_dir=tmp_path / "out",
+            route_timeout_seconds=7.5,
+            use_generation=False,
+        ),
+    )
+
+    prediction = report["predictions"][0]
+    assert prediction["error"] is None
+    assert prediction["route_timeout_seconds"] == 7.5
+    assert report["retrieval_traces"][0]["route_timeout_seconds"] == 7.5
+
+
+def test_run_benchmark_records_route_timeout_as_error_prediction(monkeypatch, tmp_path):
+    manifest_path = _write_single_route_manifest(tmp_path, route_id="controller_auto")
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda _engine_name, _config: _SlowEngine(),
+    )
+
+    report = run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="route_timeout",
+            output_dir=tmp_path / "out",
+            route_timeout_seconds=0.01,
+            use_generation=False,
+        ),
+    )
+
+    prediction = report["predictions"][0]
+    assert prediction["route"] == "controller_auto"
+    assert prediction["error_type"] == "route_timeout"
+    assert prediction["route_timeout_seconds"] == 0.01
+    assert "timed out after 0.01 seconds" in prediction["error"]
+    assert prediction["diagnostics"]["failure_class"] == "route_timeout"
+    assert report["retrieval_traces"][0]["error_type"] == "route_timeout"
+    assert report["retrieval_traces"][0]["route_timeout_seconds"] == 0.01
+    assert report["summary"]["diagnostic_failure_counts"] == [
+        {
+            "dataset_name": "timeout",
+            "route": "controller_auto",
+            "failure_class": "route_timeout",
+            "retrieval_failure_type": "route_timeout",
+            "citation_failure_type": "not_evaluated_route_timeout",
+            "count": 1,
+        }
+    ]
+
+
+def test_run_benchmark_classifies_swallowed_timeout_as_error_prediction(
+    monkeypatch, tmp_path
+):
+    manifest_path = _write_single_route_manifest(tmp_path, route_id="controller_auto")
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda _engine_name, config: _TimeoutSwallowingEngine(
+            "docqa_runtime",
+            config,
+            [],
+        ),
+    )
+
+    report = run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="route_timeout_swallowed",
+            output_dir=tmp_path / "out",
+            route_timeout_seconds=0.01,
+            use_generation=False,
+        ),
+    )
+
+    prediction = report["predictions"][0]
+    assert prediction["error_type"] == "route_timeout"
+    assert prediction["route_timeout_seconds"] == 0.01
+    assert "timed out after 0.01 seconds" in prediction["error"]
+    assert prediction["diagnostics"]["failure_class"] == "route_timeout"
 
 
 def test_run_benchmark_propagates_visual_backend_route_fields(monkeypatch, tmp_path):
@@ -184,10 +292,92 @@ def test_route_skip_record_allows_retriever_only_visual_diagnostics(monkeypatch)
     assert record is None
 
 
+def test_route_skip_record_blocks_vlm_when_generator_health_fails(monkeypatch):
+    monkeypatch.setattr(
+        "ktem.docqa.visual_backends._colvision_http_available",
+        lambda _endpoint, model_family: model_family == "colqwen",
+    )
+    monkeypatch.setattr(
+        "ktem.docqa.visual_backends._openai_compatible_vlm_available",
+        lambda _base_url: False,
+    )
+
+    record = route_skip_record(
+        {
+            "route_policy": "visual",
+            "visual_retriever_backend": "colqwen",
+            "visual_generator_backend": "local_qwen3_vl",
+            "generator_backend": "local_qwen3_vl",
+            "requires_backend_config": True,
+        },
+        route_id="page_image_rag_vlm",
+        engine="docqa_runtime",
+    )
+
+    assert record == {
+        "route_id": "page_image_rag_vlm",
+        "engine": "docqa_runtime",
+        "backend_status": "not_configured",
+        "requires_backend_config": True,
+        "missing_backends": ["visual_generator"],
+        "skip_reason": "not_configured: visual_generator",
+    }
+
+
+def test_route_skip_record_allows_configured_colqwen_qwen_vl(monkeypatch):
+    monkeypatch.setattr(
+        "ktem.docqa.visual_backends._colvision_http_available",
+        lambda _endpoint, model_family: model_family == "colqwen",
+    )
+    monkeypatch.setattr(
+        "ktem.docqa.visual_backends._openai_compatible_vlm_available",
+        lambda _base_url: True,
+    )
+
+    record = route_skip_record(
+        {
+            "route_policy": "visual",
+            "visual_retriever_backend": "colqwen",
+            "visual_generator_backend": "local_qwen3_vl",
+            "generator_backend": "local_qwen3_vl",
+            "requires_backend_config": True,
+        },
+        route_id="page_image_rag_vlm",
+        engine="docqa_runtime",
+    )
+
+    assert record is None
+
+
 def _write_skip_manifest(tmp_path):
     (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text(json.dumps(_skip_manifest_payload()), encoding="utf-8")
+    return manifest_path
+
+
+def _write_single_route_manifest(tmp_path, *, route_id: str):
+    (tmp_path / "doc.txt").write_text("alpha", encoding="utf-8")
+    manifest_path = tmp_path / "single-route.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "timeout",
+                "documents": [{"document_id": "doc", "path": "doc.txt"}],
+                "routes": [{"route_id": route_id, "engine": "legacy_text_rag"}],
+                "examples": [
+                    {
+                        "example_id": "ex",
+                        "document_id": "doc",
+                        "question": "What is alpha?",
+                        "answers": ["alpha"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
     return manifest_path
 
 

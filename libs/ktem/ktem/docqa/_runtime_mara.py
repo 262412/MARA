@@ -333,6 +333,7 @@ def copy_request_fields(target: Any, source: Any) -> None:
     target.visual_retriever_backend = source.visual_retriever_backend
     target.visual_generator_backend = source.visual_generator_backend
     target.page_image_records = source.page_image_records
+    target.element_index_records = source.element_index_records
     target.max_context_length = source.max_context_length
 
 

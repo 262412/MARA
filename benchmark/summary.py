@@ -7,6 +7,7 @@ from .answer_summary import (
     avg_answer_tokens,
     avg_product_metric,
 )
+from .dataset_decision_protocol import phase2_dataset_decision, phase2_failure_counts
 from .diagnostics import (
     dataset_route_diagnostics,
     diagnostic_failure_counts,
@@ -18,6 +19,8 @@ from .mara_oriented_scores import (
     mara_score_metadata,
 )
 from .metrics import round_metric, safe_mean
+from .multimodal_route_summary import phase3_multimodal_summary
+from .prompt_summary import benchmark_prompt_summary
 from .score_authority import (
     paper_grade_score_available,
     primary_score_label,
@@ -56,9 +59,21 @@ def build_benchmark_summary(
         **_primary_score_summary(predictions),
         **_quality_summary(predictions),
         **_native_detail_metric_summary(predictions),
-        **_benchmark_prompt_summary(predictions),
+        **benchmark_prompt_summary(predictions),
         **answer_finalization_summary(predictions),
         **_format_guardrail_summary(predictions),
+        "phase2_dataset_decision": phase2_dataset_decision(bundle.dataset_name),
+        "phase2_failure_counts": phase2_failure_counts(
+            bundle.dataset_name,
+            predictions,
+        ),
+        "phase3_multimodal_summary": phase3_multimodal_summary(
+            bundle.dataset_name,
+            predictions,
+            backend_metadata=backend_metadata,
+            skipped_routes=skipped_routes,
+            active_routes=active_routes,
+        ),
         **verification_summary(predictions),
         **_timing_summary(predictions),
         **_cache_summary(predictions, config.cache_mode),
@@ -110,6 +125,12 @@ def add_mara_summary_fields(
         **_quality_summary(predictions),
         **_native_detail_metric_summary(predictions),
         **answer_finalization_summary(predictions),
+        "phase2_dataset_decision": phase2_dataset_decision(dataset_name),
+        "phase2_failure_counts": phase2_failure_counts(dataset_name, predictions),
+        "phase3_multimodal_summary": phase3_multimodal_summary(
+            dataset_name,
+            predictions,
+        ),
         "route_metric_table": _route_metric_table(dataset_name, predictions),
         "quality_route_metric_table": _route_metric_table(
             dataset_name,
@@ -212,38 +233,6 @@ def _primary_score_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "paper_grade_score_available": paper_grade,
         "diagnostic_score_metrics": list(_DIAGNOSTIC_SCORE_METRICS),
     }
-
-
-def _benchmark_prompt_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
-    policies = [
-        str(item.get("benchmark_prompt_policy") or "").strip()
-        for item in predictions
-        if str(item.get("benchmark_prompt_policy") or "").strip()
-    ]
-    profiles = [
-        str(item.get("benchmark_prompt_profile") or "").strip()
-        for item in predictions
-        if str(item.get("benchmark_prompt_profile") or "").strip()
-    ]
-    sources = [
-        str(item.get("benchmark_prompt_source") or "").strip()
-        for item in predictions
-        if str(item.get("benchmark_prompt_source") or "").strip()
-    ]
-    return {
-        "benchmark_prompt_policy": _single_or_mixed(policies),
-        "benchmark_prompt_profiles": _count_values(profiles),
-        "benchmark_prompt_sources": _count_values(sources),
-    }
-
-
-def _single_or_mixed(values: list[str]) -> str | None:
-    if not values:
-        return None
-    unique = sorted(set(values))
-    if len(unique) == 1:
-        return unique[0]
-    return "mixed"
 
 
 def _count_values(values: list[str]) -> dict[str, int]:

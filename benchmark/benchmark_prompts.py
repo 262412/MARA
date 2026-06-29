@@ -6,6 +6,7 @@ from typing import Any
 from .schemas import BenchmarkConfig, BenchmarkExample
 
 BENCHMARK_PROMPT_MARKER = "Benchmark prompt contract:"
+GOLD_ANSWER_PROMPT_MARKER = "Benchmark gold-answer contract:"
 
 ALCE_PROMPT_SOURCE = "princeton-nlp/ALCE prompts/asqa_default.json"
 ALCE_QAMPARI_PROMPT_SOURCE = "princeton-nlp/ALCE prompts/qampari_default.json"
@@ -13,6 +14,7 @@ RAGTRUTH_PROMPT_SOURCE = "ParticleMedia/RAGTruth baseline/dataset.py"
 QASPER_PROMPT_SOURCE = "allenai/qasper-led-baseline dataset contract"
 FINANCEBENCH_PROMPT_SOURCE = "FinanceBench paper Table 3 prompt pattern"
 GENERIC_PROMPT_SOURCE = "MARA benchmark generic grounded QA contract"
+GOLD_ANSWER_PROMPT_SOURCE = "MARA benchmark gold-answer answer-only contract"
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +26,7 @@ class BenchmarkPromptBundle:
     policy: str
     profile: str
     prompt_source: str
+    no_think: bool
 
 
 def build_benchmark_prompt(
@@ -36,32 +39,43 @@ def build_benchmark_prompt(
     policy = str(config.benchmark_prompt_policy or "benchmark_v1").strip().lower()
     benchmark_question = _benchmark_question(example, raw_question)
     retrieval_query = _retrieval_query(example, benchmark_question)
+    no_think = _no_think_enabled(config, policy)
     if policy == "raw":
         return BenchmarkPromptBundle(
             raw_question=raw_question,
             benchmark_question=benchmark_question,
-            runtime_prompt=raw_question,
+            runtime_prompt=_maybe_no_think(raw_question, no_think),
             retrieval_query=raw_question,
             policy="raw",
             profile="raw",
             prompt_source="raw_dataset_question",
+            no_think=no_think,
         )
 
     profile = _profile_for_example(example, config, dataset_name=dataset_name)
-    prompt_source, runtime_prompt = _runtime_prompt(
-        example,
-        benchmark_question,
-        profile,
-        dataset_name=dataset_name or config.suite_name,
-    )
+    if policy == "gold_answer_v1":
+        prompt_source = GOLD_ANSWER_PROMPT_SOURCE
+        runtime_prompt = _gold_answer_prompt(
+            benchmark_question,
+            profile,
+            dataset_name=dataset_name or config.suite_name,
+        )
+    else:
+        prompt_source, runtime_prompt = _runtime_prompt(
+            example,
+            benchmark_question,
+            profile,
+            dataset_name=dataset_name or config.suite_name,
+        )
     return BenchmarkPromptBundle(
         raw_question=raw_question,
         benchmark_question=benchmark_question,
-        runtime_prompt=runtime_prompt,
+        runtime_prompt=_maybe_no_think(runtime_prompt, no_think),
         retrieval_query=retrieval_query,
         policy=policy,
         profile=profile,
         prompt_source=prompt_source,
+        no_think=no_think,
     )
 
 
@@ -185,6 +199,70 @@ def _runtime_prompt(
 
 def _prompt_header(source: str) -> str:
     return f"{BENCHMARK_PROMPT_MARKER}\nPrompt source: {source}\n"
+
+
+def _gold_prompt_header(source: str) -> str:
+    return f"{GOLD_ANSWER_PROMPT_MARKER}\nPrompt source: {source}\n"
+
+
+def _no_think_enabled(config: BenchmarkConfig, policy: str) -> bool:
+    return bool(getattr(config, "benchmark_no_think", False)) or policy == (
+        "gold_answer_v1"
+    )
+
+
+def _maybe_no_think(prompt: str, enabled: bool) -> str:
+    text = str(prompt or "").strip()
+    if not enabled or text.startswith("/no_think"):
+        return text
+    return f"/no_think\n{text}"
+
+
+def _gold_answer_prompt(
+    question: str, profile: str, *, dataset_name: str | None
+) -> str:
+    dataset = str(dataset_name or "").strip().lower()
+    parts = [
+        _gold_prompt_header(GOLD_ANSWER_PROMPT_SOURCE),
+        "Use the provided evidence only. Return only the gold-answer value "
+        "that should be compared against the dataset reference answer.",
+        "Do not provide explanation, reasoning, markdown bullets, or citations "
+        "unless the dataset answer itself requires citations.",
+    ]
+    if "ragtruth" in dataset:
+        parts.append(
+            "For RAGTruth-style examples, output only the JSON object with key "
+            '"hallucination list" and no surrounding commentary.'
+        )
+    elif "alce" in dataset and "qampari" in dataset:
+        parts.append(
+            "For QAMPARI-style examples, output a comma-separated answer list "
+            "without a paragraph."
+        )
+    elif "qasper" in dataset:
+        parts.append(
+            'For QASPER-style examples, output only the answer span, "yes", '
+            '"no", or "unanswerable".'
+        )
+    elif "financebench" in dataset:
+        parts.append(
+            "For FinanceBench-style examples, output the final name, number, "
+            "date, percentage, currency amount, or yes/no value only."
+        )
+    elif profile == "visual_grounded_qa":
+        parts.append(
+            "For visual/page QA, output the visible answer text exactly as it "
+            "should be scored."
+        )
+    else:
+        parts.append(
+            "If the answer is a number or calculation result, output only the "
+            "final value. If evidence is insufficient, output "
+            '"unanswerable".'
+        )
+    parts.append(f"Question: {question}")
+    parts.append("Answer:")
+    return "\n\n".join(parts)
 
 
 def _alce_prompt(question: str) -> str:

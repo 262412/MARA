@@ -12,11 +12,15 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "direct",
-      "allowed_routes": ["direct"],
+      "allowed_routes": [
+        "direct"
+      ],
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
       "benchmark_role": "diagnostic",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "text_rag",
@@ -26,13 +30,17 @@
       "reasoning_type": "mara",
       "controller_mode": "llm",
       "route_policy": "doc",
-      "allowed_routes": ["doc_text"],
+      "allowed_routes": [
+        "doc_text"
+      ],
       "text_retriever_backend": "BAAI/bge-m3",
       "reranker_backend": "BAAI/bge-reranker-v2-m3",
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
       "benchmark_role": "qa_quality",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "controller_auto",
@@ -54,8 +62,11 @@
       "planner_model": "Qwen/Qwen3-8B",
       "generator_backend": "Qwen/Qwen3-8B",
       "max_context_length": 2000,
+      "route_timeout_seconds": 90.0,
       "benchmark_role": "qa_quality",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     },
     {
       "route_id": "crag_guarded",
@@ -80,8 +91,11 @@
       "generator_backend": "Qwen/Qwen3-8B",
       "ragtruth_evaluator": "local_backends.mara_evaluators.RAGTruthLocalEvaluator",
       "max_context_length": 2000,
+      "route_timeout_seconds": 90.0,
       "benchmark_role": "qa_quality",
-      "docqa_citation_mode": "inline"
+      "docqa_citation_mode": "inline",
+      "benchmark_prompt_policy": "gold_answer_v1",
+      "benchmark_no_think": true
     }
   ]
 }

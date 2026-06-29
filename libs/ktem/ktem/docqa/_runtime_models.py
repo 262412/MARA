@@ -39,6 +39,7 @@ class DocQARequest:
     visual_retriever_backend: Optional[str] = None
     visual_generator_backend: Optional[str] = None
     page_image_records: Optional[list[dict[str, Any]]] = None
+    element_index_records: Optional[list[dict[str, Any]]] = None
     llm: Optional[str] = None
     use_mindmap: bool | str | None = None
     use_citation: Optional[str] = None

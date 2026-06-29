@@ -210,6 +210,8 @@ _GENERATORS: dict[str, VisualBackendSpec] = {
         backend_type="openai_compatible_vlm",
         benchmark_ready=True,
         builder=QwenVLVisualGenerator,
+        available=lambda: _openai_compatible_vlm_available(_vlm_base_url()),
+        readiness_reason="requires_local_openai_compatible_vlm_server",
     ),
 }
 
@@ -480,6 +482,10 @@ def _colvision_endpoint(model_family: str) -> str:
     return os.getenv("MARA_COLVISION_ENDPOINT", "http://127.0.0.1:8003/visual-score")
 
 
+def _vlm_base_url() -> str:
+    return os.getenv("MARA_VLM_BASE_URL", "http://localhost:8001/v1")
+
+
 def _colvision_http_available(endpoint: str, model_family: str) -> bool:
     health_endpoint = endpoint.rsplit("/", 1)[0] + "/health"
     try:
@@ -491,6 +497,16 @@ def _colvision_http_available(endpoint: str, model_family: str) -> bool:
         return False
     served_family = str(payload.get("model_family") or "").strip()
     return not served_family or served_family == model_family
+
+
+def _openai_compatible_vlm_available(base_url: str) -> bool:
+    models_endpoint = str(base_url or "").rstrip("/") + "/models"
+    try:
+        with urllib.request.urlopen(models_endpoint, timeout=0.5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, urllib.error.URLError, json.JSONDecodeError):
+        return False
+    return isinstance(payload, dict) and isinstance(payload.get("data"), list)
 
 
 def _bool_value(value: Any) -> bool:

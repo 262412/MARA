@@ -315,6 +315,11 @@ def test_local_qwen3_vl_generator_budgets_output_and_evidence_text(monkeypatch):
 
 def test_visual_backend_health_reports_local_qwen3_vl_generator(monkeypatch):
     monkeypatch.setenv("MARA_VLM_BASE_URL", "http://localhost:8001/v1")
+    monkeypatch.setattr(
+        visual_backends,
+        "_openai_compatible_vlm_available",
+        lambda base_url: base_url == "http://localhost:8001/v1",
+    )
 
     health = visual_backend_health(
         {

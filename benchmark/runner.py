@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import fields, replace
+from time import perf_counter
 from typing import Any
 
 from .answer_finalizer import finalize_prediction_answer
@@ -22,6 +23,7 @@ from .research_evaluators import (
     external_research_adapter_metrics,
 )
 from .route_execution import route_skip_record
+from .route_timeout import RouteExecutionTimeout, run_with_route_timeout
 from .sampling import select_examples_for_config, selection_summary
 from .schemas import BenchmarkConfig, ManifestBundle
 from .scoring import normalize_operational_fields, score_prediction
@@ -252,6 +254,8 @@ def _error_prediction(
         "expected_formats": example.expected_formats,
         "expected_guardrails": example.expected_guardrails,
         "error": str(exc),
+        "error_type": _error_type(exc),
+        "route_timeout_seconds": _route_timeout_seconds(exc, route_config),
     }
 
 
@@ -275,6 +279,8 @@ def _prepare_prediction_defaults(
     prediction.setdefault("benchmark_prompt_profile", prompt.profile)
     prediction.setdefault("benchmark_prompt_source", prompt.prompt_source)
     prediction.setdefault("benchmark_answer_mode", route_config.benchmark_answer_mode)
+    prediction.setdefault("benchmark_no_think", prompt.no_think)
+    prediction.setdefault("route_timeout_seconds", route_config.route_timeout_seconds)
     prediction.setdefault("benchmark_question", prompt.benchmark_question)
     prediction.setdefault("benchmark_retrieval_query", prompt.retrieval_query)
     prediction.setdefault("benchmark_runtime_prompt", prompt.runtime_prompt)
@@ -329,6 +335,8 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
         "cache": item.get("cache", {}),
         "cost": item.get("cost", {}),
         "error": item.get("error"),
+        "error_type": item.get("error_type"),
+        "route_timeout_seconds": item.get("route_timeout_seconds"),
     }
 
 
@@ -358,8 +366,13 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
 
         for example in selected_bundle.examples:
             document = selected_bundle.documents[example.document_id]
+            route_started_at = perf_counter()
             try:
-                prediction = _run_engine_example(engine, selected_bundle, example)
+                prediction = run_with_route_timeout(
+                    route_config.route_timeout_seconds,
+                    lambda: _run_engine_example(engine, selected_bundle, example),
+                )
+                _raise_if_route_budget_exceeded(route_started_at, route_config)
                 prediction["error"] = None
             except Exception as exc:
                 prediction = _error_prediction(
@@ -455,6 +468,32 @@ def _benchmark_role(route: dict[str, Any], route_id: str) -> str:
     ):
         return "prototype"
     return "qa_quality"
+
+
+def _error_type(exc: Exception) -> str:
+    if isinstance(exc, RouteExecutionTimeout):
+        return "route_timeout"
+    return "execution_error"
+
+
+def _raise_if_route_budget_exceeded(
+    started_at: float,
+    route_config: BenchmarkConfig,
+) -> None:
+    timeout_seconds = route_config.route_timeout_seconds
+    if not timeout_seconds or timeout_seconds <= 0:
+        return
+    if perf_counter() - started_at > timeout_seconds:
+        raise RouteExecutionTimeout(timeout_seconds)
+
+
+def _route_timeout_seconds(
+    exc: Exception,
+    route_config: BenchmarkConfig,
+) -> float | None:
+    if isinstance(exc, RouteExecutionTimeout):
+        return exc.seconds
+    return route_config.route_timeout_seconds
 
 
 def _manifest_document_reports(bundle: ManifestBundle) -> list[dict[str, Any]]:

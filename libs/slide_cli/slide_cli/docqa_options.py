@@ -102,7 +102,7 @@ def _mara_options():
     ]
 
 
-def _response_options():
+def _controller_options():
     return [
         click.option(
             "--controller",
@@ -128,6 +128,11 @@ def _response_options():
             help="Structured planner model override for controller auto routing.",
         ),
         click.option(
+            "--planner-backend",
+            default=None,
+            help="Planner backend override, for example heuristic_local.",
+        ),
+        click.option(
             "--allowed-route",
             "allowed_routes",
             multiple=True,
@@ -141,6 +146,22 @@ def _response_options():
             show_default=True,
             help="Answer verification mode.",
         ),
+        click.option(
+            "--verification-domain",
+            default=None,
+            help="Domain profile for verifier behavior, for example finance.",
+        ),
+        click.option(
+            "--max-context-length",
+            default=None,
+            type=click.IntRange(min=1),
+            help="Maximum runtime context length for this DocQA turn.",
+        ),
+    ]
+
+
+def _response_options():
+    return [
         click.option("--llm", default=None, help="Temporary LLM override."),
         click.option(
             "--visual-retriever",
@@ -179,7 +200,12 @@ def _response_options():
 
 
 def docqa_shared_options(command):
-    options = [*_source_options(), *_mara_options(), *_response_options()]
+    options = [
+        *_source_options(),
+        *_mara_options(),
+        *_controller_options(),
+        *_response_options(),
+    ]
     for option in reversed(options):
         command = option(command)
     return command
