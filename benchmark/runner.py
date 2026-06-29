@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 from dataclasses import fields, replace
+from pathlib import Path
 from time import perf_counter
 from typing import Any
 
 from .answer_finalizer import finalize_prediction_answer
 from .benchmark_prompts import build_benchmark_prompt
+from .benchmark_taxonomy import add_prediction_taxonomy
 from .diagnostics import prediction_diagnostics
 from .engines import EngineRunResult, get_engine
 from .manifest import load_manifest
@@ -28,6 +31,7 @@ from .sampling import select_examples_for_config, selection_summary
 from .schemas import BenchmarkConfig, ManifestBundle
 from .scoring import normalize_operational_fields, score_prediction
 from .summary import build_benchmark_summary
+from .verifier_observability import prediction_verifier_observability
 
 _CONFIG_FIELD_NAMES = {field.name for field in fields(BenchmarkConfig)}
 
@@ -316,6 +320,13 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
         "benchmark_question": item.get("benchmark_question"),
         "benchmark_retrieval_query": item.get("benchmark_retrieval_query"),
         "document_ids": item["document_ids"],
+        "gold_pages": item.get("gold_pages", []),
+        "gold_sources": item.get("gold_sources", []),
+        "gold_evidence": item.get("gold_evidence", []),
+        "predicted_pages": item.get("predicted_pages", []),
+        "predicted_sources": item.get("predicted_sources", []),
+        "predicted_citations": item.get("predicted_citations", []),
+        "scored_predicted_sources": item.get("scored_predicted_sources", []),
         "retrieved_hits": item.get("retrieved_hits", []),
         "retrieval_trace": item.get("retrieval_trace", []),
         "agent_trace": item.get("agent_trace", []),
@@ -329,6 +340,7 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
         "evidence_bundle": item.get("evidence_bundle", {}),
         "workflow_plan": item.get("workflow_plan", {}),
         "claim_verification": item.get("claim_verification", {}),
+        "verifier_observability": item.get("verifier_observability", {}),
         "presentation": item.get("presentation", {}),
         "timings": item.get("timings", {}),
         "performance": item.get("performance", {}),
@@ -404,6 +416,10 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
             )
             prediction["metrics"] = score_prediction(prediction)
             prediction["diagnostics"] = prediction_diagnostics(prediction)
+            prediction["verifier_observability"] = prediction_verifier_observability(
+                prediction
+            )
+            add_prediction_taxonomy(prediction)
             add_mara_oriented_metrics(prediction, dataset_name=bundle.dataset_name)
             prediction["adapter_metrics"] = research_adapter_metrics(prediction)
             prediction["adapter_metric_metadata"] = research_adapter_metric_metadata()
@@ -431,6 +447,7 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         active_routes=active_routes,
         predictions=predictions,
         backend_metadata=backend_metadata,
+        backend_health=_load_backend_health(config.backend_health_json),
         skipped_routes=skipped_routes,
         adapter_metric_metadata=research_adapter_metric_metadata(),
         external_adapter_metric_metadata=_external_adapter_summary_metadata(
@@ -453,6 +470,12 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         "predictions": predictions,
         "retrieval_traces": [_retrieval_trace_row(item) for item in predictions],
     }
+
+
+def _load_backend_health(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _benchmark_role(route: dict[str, Any], route_id: str) -> str:

@@ -9,6 +9,7 @@ from benchmark.research_evaluators import (
 )
 from benchmark.runner import run_benchmark
 from benchmark.schemas import BenchmarkConfig
+from benchmark.tests.research_evaluator_helpers import ExternalEvaluatorEngine
 
 
 def fixture_alce_evaluator(prediction):
@@ -48,6 +49,29 @@ def fixture_alce_override_evaluator(prediction):
             "primary_metric": "official_answer_score",
             "contract_id": "alce_route_override_judge_v1",
             "implementation": "fixture_alce_override_external",
+        },
+    }
+
+
+def fixture_alce_missing_primary_evaluator(prediction):
+    return {
+        "metrics": {"official_answer_score": 0.84},
+        "metadata": {
+            "paper_grade": True,
+            "contract_id": "alce_missing_primary_judge_v1",
+            "implementation": "fixture_alce_missing_primary_external",
+        },
+    }
+
+
+def fixture_alce_missing_metric_evaluator(prediction):
+    return {
+        "metrics": {"other_score": 0.84},
+        "metadata": {
+            "paper_grade": True,
+            "primary_metric": "official_answer_score",
+            "contract_id": "alce_missing_metric_judge_v1",
+            "implementation": "fixture_alce_missing_metric_external",
         },
     }
 
@@ -128,33 +152,67 @@ def test_builtin_proxy_evaluator_alias_is_configured_but_not_paper_grade():
     assert metadata["alce"]["backend"] == "builtin:alce_proxy"
     assert metadata["alce"]["paper_grade"] is False
     assert metadata["alce"]["metric_category"] == "external_metric"
+    assert metadata["alce"]["paper_grade_ready"] is False
+    assert metadata["alce"]["paper_grade_blockers"] == ["not_paper_grade"]
     assert metrics["alce"]["correctness"] == 1.0
 
 
-class _ExternalEvaluatorEngine:
-    def __init__(self, engine_name, config):
-        self.engine_name = engine_name
-        self.config = config
+def test_external_evaluator_metadata_records_paper_grade_readiness_blockers():
+    prediction = {
+        "example_id": "ex",
+        "predicted_answer": "Revenue rose.",
+        "gold_answers": ["revenue rose"],
+        "metrics": {"f1": 0.75},
+    }
 
-    @staticmethod
-    def run_example(_bundle, example):
-        return {
-            "example_id": example.example_id,
-            "document_id": example.document_id,
-            "question": example.question,
-            "gold_answers": example.answers,
-            "gold_pages": example.evidence_pages,
-            "gold_sources": example.evidence_sources,
-            "predicted_answer": "Revenue rose.",
-            "predicted_pages": [1],
-            "predicted_sources": ["doc#page:1"],
-            "predicted_element_ids": [],
-            "retrieved_hits": [],
-        }
+    _, missing_primary_metadata = external_research_adapter_metrics(
+        prediction,
+        {
+            "external_evaluators": {
+                "alce": (
+                    "benchmark.tests.test_research_evaluators."
+                    "fixture_alce_missing_primary_evaluator"
+                )
+            }
+        },
+    )
+    _, missing_metric_metadata = external_research_adapter_metrics(
+        prediction,
+        {
+            "external_evaluators": {
+                "alce": (
+                    "benchmark.tests.test_research_evaluators."
+                    "fixture_alce_missing_metric_evaluator"
+                )
+            }
+        },
+    )
 
-    @staticmethod
-    def document_reports():
-        return []
+    assert missing_primary_metadata["alce"]["paper_grade"] is True
+    assert missing_primary_metadata["alce"]["paper_grade_ready"] is False
+    assert missing_primary_metadata["alce"]["paper_grade_blockers"] == [
+        "missing_primary_metric"
+    ]
+    assert missing_metric_metadata["alce"]["paper_grade"] is True
+    assert missing_metric_metadata["alce"]["paper_grade_ready"] is False
+    assert missing_metric_metadata["alce"]["paper_grade_blockers"] == [
+        "primary_metric_missing_from_metrics"
+    ]
+
+
+def test_external_adapter_backend_uses_primary_metric_for_readiness():
+    prediction = {
+        "example_id": "ex",
+        "predicted_answer": "Revenue rose.",
+        "gold_answers": ["revenue rose"],
+        "metrics": {"f1": 0.75},
+    }
+
+    result = ALCEEvaluator(backend=fixture_alce_primary_evaluator)(prediction)
+
+    assert result["metadata"]["paper_grade"] is True
+    assert result["metadata"]["paper_grade_ready"] is True
+    assert result["metadata"]["paper_grade_blockers"] == []
 
 
 def test_run_benchmark_reports_external_research_evaluator_status(
@@ -195,7 +253,7 @@ def test_run_benchmark_reports_external_research_evaluator_status(
     )
     monkeypatch.setattr(
         "benchmark.runner.get_engine",
-        lambda engine_name, config: _ExternalEvaluatorEngine(engine_name, config),
+        lambda engine_name, config: ExternalEvaluatorEngine(engine_name, config),
     )
 
     report = run_benchmark(
@@ -221,6 +279,8 @@ def test_run_benchmark_reports_external_research_evaluator_status(
         "metric_scope": "external",
         "metric_category": "paper_grade_metric",
         "paper_grade": True,
+        "paper_grade_ready": False,
+        "paper_grade_blockers": ["missing_primary_metric"],
         "status": "configured",
     }
     assert prediction["external_adapter_metric_metadata"]["mmdocrag"]["status"] == (
@@ -271,7 +331,7 @@ def test_run_benchmark_promotes_paper_grade_external_metric_to_headline_score(
     )
     monkeypatch.setattr(
         "benchmark.runner.get_engine",
-        lambda engine_name, config: _ExternalEvaluatorEngine(engine_name, config),
+        lambda engine_name, config: ExternalEvaluatorEngine(engine_name, config),
     )
 
     report = run_benchmark(
@@ -322,7 +382,7 @@ def test_run_benchmark_uses_configured_external_evaluator_for_single_route(
     )
     monkeypatch.setattr(
         "benchmark.runner.get_engine",
-        lambda engine_name, config: _ExternalEvaluatorEngine(engine_name, config),
+        lambda engine_name, config: ExternalEvaluatorEngine(engine_name, config),
     )
 
     report = run_benchmark(
@@ -387,7 +447,7 @@ def test_manifest_route_external_evaluator_overrides_config_default(
     )
     monkeypatch.setattr(
         "benchmark.runner.get_engine",
-        lambda engine_name, config: _ExternalEvaluatorEngine(engine_name, config),
+        lambda engine_name, config: ExternalEvaluatorEngine(engine_name, config),
     )
 
     report = run_benchmark(
@@ -435,7 +495,7 @@ def test_run_benchmark_does_not_promote_builtin_proxy_external_evaluator(
     )
     monkeypatch.setattr(
         "benchmark.runner.get_engine",
-        lambda engine_name, config: _ExternalEvaluatorEngine(engine_name, config),
+        lambda engine_name, config: ExternalEvaluatorEngine(engine_name, config),
     )
 
     report = run_benchmark(
@@ -503,7 +563,7 @@ def test_run_benchmark_summarizes_external_evaluator_status_by_route(
     )
     monkeypatch.setattr(
         "benchmark.runner.get_engine",
-        lambda engine_name, config: _ExternalEvaluatorEngine(engine_name, config),
+        lambda engine_name, config: ExternalEvaluatorEngine(engine_name, config),
     )
 
     report = run_benchmark(

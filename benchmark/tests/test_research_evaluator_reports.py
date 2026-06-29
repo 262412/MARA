@@ -14,12 +14,17 @@ def test_write_reports_lists_external_research_evaluator_status(tmp_path):
                     "backend": "tests.fixture_alce",
                     "paper_grade": True,
                     "metric_category": "paper_grade_metric",
+                    "paper_grade_ready": True,
+                    "primary_metric": "official_answer_score",
+                    "contract_id": "alce_official_judge_v1",
                 },
                 "mmdocrag": {
                     "status": "not_configured",
                     "requires_external_resources": ["MMDocRAG dataset"],
                     "excluded_from_summary": True,
                     "metric_category": "external_metric",
+                    "paper_grade_ready": False,
+                    "paper_grade_blockers": ["not_configured"],
                 },
             },
         },
@@ -35,7 +40,40 @@ def test_write_reports_lists_external_research_evaluator_status(tmp_path):
         markdown
     )
     assert "metric_category=`paper_grade_metric`" in markdown
+    assert "paper_grade_ready=`True`" in markdown
+    assert "primary_metric=`official_answer_score`" in markdown
+    assert "contract_id=`alce_official_judge_v1`" in markdown
     assert "- `mmdocrag`: not_configured, excluded_from_summary=`True`" in markdown
+    assert "blockers=`not_configured`" in markdown
+
+
+def test_write_reports_lists_external_research_evaluator_readiness_blockers(tmp_path):
+    report = {
+        "summary": {
+            "suite_name": "Evaluator Blockers",
+            "dataset_name": "research",
+            "num_examples": 1,
+            "num_documents": 1,
+            "external_adapter_metric_metadata": {
+                "alce": {
+                    "status": "configured",
+                    "backend": "tests.fixture_alce",
+                    "paper_grade": True,
+                    "metric_category": "paper_grade_metric",
+                    "paper_grade_ready": False,
+                    "paper_grade_blockers": ["missing_primary_metric"],
+                },
+            },
+        },
+        "predictions": [],
+        "documents": [],
+    }
+
+    run_dir = write_reports(report, tmp_path, "Evaluator Blockers")
+    markdown = (run_dir / "report.md").read_text(encoding="utf-8")
+
+    assert "paper_grade_ready=`False`" in markdown
+    assert "blockers=`missing_primary_metric`" in markdown
 
 
 def test_write_reports_lists_external_research_evaluator_status_by_route(tmp_path):
@@ -52,6 +90,8 @@ def test_write_reports_lists_external_research_evaluator_status_by_route(tmp_pat
                         "backend": "tests.fixture_alce",
                         "paper_grade": True,
                         "metric_category": "paper_grade_metric",
+                        "paper_grade_ready": True,
+                        "primary_metric": "official_answer_score",
                     }
                 },
                 "proxy_only": {
@@ -76,6 +116,8 @@ def test_write_reports_lists_external_research_evaluator_status_by_route(tmp_pat
         in markdown
     )
     assert "metric_category=`paper_grade_metric`" in markdown
+    assert "paper_grade_ready=`True`" in markdown
+    assert "primary_metric=`official_answer_score`" in markdown
     assert (
         "- `proxy_only` / `alce`: not_configured, excluded_from_summary=`True`"
         in markdown

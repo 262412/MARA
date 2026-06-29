@@ -45,15 +45,59 @@ def phase3_hybrid_metrics_markdown(summary: dict[str, Any]) -> list[str]:
     return lines
 
 
+def phase3_element_coverage_markdown(summary: dict[str, Any]) -> list[str]:
+    phase3 = summary.get("phase3_multimodal_summary") or {}
+    if not isinstance(phase3, dict):
+        return []
+    element = phase3.get("element") or {}
+    if not isinstance(element, dict):
+        return []
+    report = element.get("coverage_report") or {}
+    if not isinstance(report, dict) or not report:
+        return []
+    return [
+        f"- Total Predictions: `{report.get('total_predictions')}`",
+        "- Predictions With Element Index: "
+        f"`{report.get('predictions_with_element_index')}`",
+        "- Predictions Without Element Index: "
+        f"`{report.get('predictions_without_element_index')}`",
+        "- Total Element Index Records: "
+        f"`{report.get('total_element_index_records')}`",
+        "- Records By Modality: "
+        f"{_counts_text(report.get('records_by_modality') or {})}",
+        "- Records By Source: "
+        f"{_counts_text(report.get('records_by_source') or {})}",
+        "- Missing Example IDs: "
+        f"{_list_text(report.get('missing_example_ids') or [])}",
+    ]
+
+
 def phase3_report_sections(summary: dict[str, Any]) -> list[tuple[str, list[str]]]:
     return [
         (
+            "Phase3 Element Coverage Report",
+            phase3_element_coverage_markdown(summary),
+        ),
+        (
             "Phase3 Hybrid Question-Type Metrics",
             phase3_hybrid_metrics_markdown(summary),
-        )
+        ),
     ]
 
 
 def _section(summary: dict[str, Any], key: str) -> dict[str, Any]:
     value = summary.get(key) or {}
     return dict(value) if isinstance(value, dict) else {}
+
+
+def _counts_text(counts: dict[str, Any]) -> str:
+    if not counts:
+        return "`none`"
+    return ", ".join(f"`{key}={value}`" for key, value in sorted(counts.items()))
+
+
+def _list_text(values: list[Any]) -> str:
+    items = [str(value) for value in values if str(value)]
+    if not items:
+        return "`none`"
+    return ", ".join(f"`{value}`" for value in items)

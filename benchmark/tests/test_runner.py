@@ -23,6 +23,8 @@ class _FakeEngine:
             "predicted_answer": f"{self.engine_name}:{self.config.route}",
             "predicted_pages": [1],
             "predicted_sources": [f"{document_ids[0]}#page:1"],
+            "predicted_citations": [f"{document_ids[0]}#page:1"],
+            "scored_predicted_sources": [f"{document_ids[0]}#page:1"],
             "predicted_element_ids": [],
             "retrieved_hits": [
                 {
@@ -41,6 +43,16 @@ class _FakeEngine:
             "controller_trace": [
                 {"stage": "planner", "route": "graph_global"},
             ],
+            "workflow_plan": {
+                "steps": [
+                    {"stage": "retrieve", "action": "retry", "retry": True},
+                    {
+                        "stage": "route_switch",
+                        "from_route": "doc_text",
+                        "to_route": "graph_global",
+                    },
+                ]
+            },
             "route_decision": {"route": "graph_global"},
             "retrieve_decision": {"status": "good"},
             "verify_decision": {"status": "supported"},
@@ -79,6 +91,20 @@ def _assert_controller_trace_fields(report):
         "route": "graph_global",
         "items": [],
     }
+
+
+def _assert_trace_citation_fields(report):
+    assert report["retrieval_traces"][0]["predicted_sources"] == ["doc#page:1"]
+    assert report["retrieval_traces"][0]["predicted_citations"] == ["doc#page:1"]
+    assert report["retrieval_traces"][0]["scored_predicted_sources"] == ["doc#page:1"]
+
+
+def _assert_verifier_observability_fields(report):
+    assert report["predictions"][0]["verifier_observability"]["retry_count"] == 1
+    assert report["predictions"][0]["verifier_observability"]["route_switch_count"] == 1
+    assert report["summary"]["num_retry"] == 2
+    assert report["summary"]["num_route_switch"] == 2
+    assert report["summary"]["verifier_observability_by_route"][0]["num_retry"] == 1
 
 
 def test_run_benchmark_expands_manifest_route_matrix(monkeypatch, tmp_path):
@@ -150,10 +176,12 @@ def test_run_benchmark_expands_manifest_route_matrix(monkeypatch, tmp_path):
     assert report["summary"]["embedding_cache_hits"] == 4
     assert report["summary"]["embedding_cache_misses"] == 2
     assert report["summary"]["embedding_cache_hit_rate"] == 0.6667
+    _assert_verifier_observability_fields(report)
     assert len(report["retrieval_traces"]) == 2
     expected_agent_trace = [{"stage": "planner", "route": "page_fast"}]
     assert report["predictions"][0]["agent_trace"] == expected_agent_trace
     assert report["retrieval_traces"][0]["agent_trace"] == expected_agent_trace
+    _assert_trace_citation_fields(report)
     _assert_controller_trace_fields(report)
     assert report["retrieval_traces"][0]["performance"]["parse_seconds"] == 0.1
     assert report["retrieval_traces"][0]["cache"]["parse"]["hits"] == 1

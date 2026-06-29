@@ -7,12 +7,8 @@ from .answer_summary import (
     avg_answer_tokens,
     avg_product_metric,
 )
+from .backend_health_summary import backend_health_summary
 from .dataset_decision_protocol import phase2_dataset_decision, phase2_failure_counts
-from .diagnostics import (
-    dataset_route_diagnostics,
-    diagnostic_failure_counts,
-    route_confusion_table,
-)
 from .mara_oriented_scores import (
     MARA_METRIC_KEYS,
     mara_proxy_score_metadata,
@@ -26,7 +22,12 @@ from .score_authority import (
     primary_score_label,
     score_authority_level,
 )
+from .summary_diagnostics import diagnostic_summary_fields
 from .verification_metrics import verification_summary
+from .verifier_observability import (
+    route_verifier_observability_fields,
+    verifier_observability_summary,
+)
 
 _CITATION_GROUP_METRICS = (
     "citation_inline_recall",
@@ -46,6 +47,7 @@ def build_benchmark_summary(
     active_routes: list[dict[str, Any]],
     predictions: list[dict[str, Any]],
     backend_metadata: dict[str, dict[str, Any]],
+    backend_health: dict[str, Any] | None = None,
     skipped_routes: list[dict[str, Any]] | None = None,
     adapter_metric_metadata: dict[str, dict[str, Any]] | None = None,
     external_adapter_metric_metadata: dict[str, Any] | None = None,
@@ -75,20 +77,14 @@ def build_benchmark_summary(
             active_routes=active_routes,
         ),
         **verification_summary(predictions),
+        **verifier_observability_summary(predictions),
         **_timing_summary(predictions),
         **_cache_summary(predictions, config.cache_mode),
         "route_metric_table": _route_metric_table(bundle.dataset_name, predictions),
-        "dataset_route_diagnostics": dataset_route_diagnostics(
+        **diagnostic_summary_fields(
             bundle.dataset_name,
             predictions,
-        ),
-        "diagnostic_failure_counts": diagnostic_failure_counts(
-            bundle.dataset_name,
-            predictions,
-        ),
-        "route_confusion_table": route_confusion_table(
-            bundle.dataset_name,
-            predictions,
+            skipped_routes=skipped_routes,
         ),
         "quality_route_metric_table": _route_metric_table(
             bundle.dataset_name,
@@ -106,6 +102,7 @@ def build_benchmark_summary(
         ),
         "mara_proxy_score_metadata": mara_proxy_score_metadata(bundle.dataset_name),
         "backend_metadata": backend_metadata,
+        **backend_health_summary(backend_health),
         "adapter_metric_metadata": adapter_metric_metadata or {},
         "external_adapter_metric_metadata": external_adapter_metric_metadata or {},
         "external_adapter_metric_metadata_by_route": (
@@ -131,7 +128,9 @@ def add_mara_summary_fields(
             dataset_name,
             predictions,
         ),
+        **verifier_observability_summary(predictions),
         "route_metric_table": _route_metric_table(dataset_name, predictions),
+        **diagnostic_summary_fields(dataset_name, predictions),
         "quality_route_metric_table": _route_metric_table(
             dataset_name,
             _role_predictions(predictions, {"qa_quality"}),
@@ -497,6 +496,7 @@ def _route_metric_table(
                     route_predictions, "unsupported_claim_rate"
                 ),
                 "avg_abstention_rate": _avg_metric(route_predictions, "abstained"),
+                **route_verifier_observability_fields(route_predictions),
                 "avg_multimodal_answer_support": _avg_metric(
                     route_predictions, "multimodal_answer_support"
                 ),

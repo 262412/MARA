@@ -104,6 +104,23 @@ If a backend is missing, the wrapper starts the local service from
 The VLM health gate must return `Qwen/Qwen3-VL-8B-Instruct` through
 `/v1/models` before the benchmark starts.
 
+The productized health contract is:
+
+```bash
+python -m benchmark check-multimodal-backends \
+  --output /mnt/scratch/users/tbczhang/outputs/MARA/multimodal_route_slurm/logs/manual/backend-health.json \
+  --strict
+```
+
+The command writes `backend-health.json` with `schema_version`, `checked_at`,
+`overall_status`, per-backend metadata, and a run-level failure taxonomy. The
+taxonomy is for backend/run comparability, not answer scoring. Current failure
+types include `unreachable`, `timeout`, `http_error`, `bad_json`,
+`unexpected_payload`, `model_missing`, `health_not_ok`, and `family_mismatch`.
+The Slurm wrapper saves this file under its run log directory and passes it to
+`benchmark run` with `--backend-health-json`, so `summary.json` and `report.md`
+record the backend state used by the rerun.
+
 For interactive checks on the current node:
 
 ```bash
@@ -138,6 +155,8 @@ print("run_dir", run_dir)
 print("num_examples", summary["num_examples"])
 print("num_predictions", summary["num_predictions"])
 print("num_skipped_routes", summary["num_skipped_routes"])
+print("backend_health", summary.get("backend_health"))
+print("backend_failure_taxonomy", summary.get("backend_failure_taxonomy"))
 print("page_image", phase3["page_image"])
 print("element", phase3["element"])
 print("hybrid", phase3["hybrid"])
@@ -154,6 +173,8 @@ The multimodal route workflow can only be considered closed after the artifact s
   question type.
 - The result comes from a larger-than-smoke sample, not only the limit-2 live
   proof.
+- `backend_health.overall_status` is `ready`, or any blocked backend is recorded
+  with an explicit failure taxonomy and excluded from quality claims.
 
 Keep any residual answer duplication, route timeouts, or low-quality scores in
 the final Phase3 summary instead of treating a completed job as a correctness

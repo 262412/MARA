@@ -12,6 +12,7 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
         route_metrics
     )
     assert "avg_citation_inline_recall,avg_citation_inline_precision" in (route_metrics)
+    assert "num_true_abstention,num_false_abstention" in route_metrics
     assert "dataset_name,route,num_predictions,avg_mara_score" in route_metrics
     assert (
         "avg_mara_score,avg_native_score,avg_mara_proxy_score,avg_em,avg_f1"
@@ -289,6 +290,14 @@ def _route_row(route, role, score, mara_score, page_hit, unsupported_rate, secon
         "avg_page_hit": page_hit,
         "avg_unsupported_claim_rate": unsupported_rate,
         "avg_total_seconds": seconds,
+        "num_true_abstention": 0,
+        "num_false_abstention": 0,
+        "num_unsupported_claim": int(unsupported_rate > 0),
+        "total_unsupported_claim_count": int(unsupported_rate > 0),
+        "num_retry": 0,
+        "total_retry_count": 0,
+        "num_route_switch": 0,
+        "total_route_switch_count": 0,
     }
 
 

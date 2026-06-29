@@ -11,6 +11,11 @@ from .dataset_decision_report import (
     phase2_summary_markdown,
 )
 from .multimodal_route_report import phase3_report_sections, phase3_summary_markdown
+from .report_benchmark_taxonomy import (
+    failure_taxonomy_by_route_markdown,
+    failure_taxonomy_markdown,
+    routing_taxonomy_markdown,
+)
 from .report_compaction_fields import TEXT_FIELDS
 from .report_external_evaluators import (
     external_evaluator_by_route_markdown,
@@ -19,6 +24,7 @@ from .report_external_evaluators import (
 from .report_headline import headline_score_lines
 from .report_route_metrics import route_metrics_markdown
 from .report_route_rankings import route_ranking_markdown
+from .report_verifier_observability import verifier_observability_markdown
 
 ARTIFACT_LIMITS = {
     "max_evidence_text_chars": 2000,
@@ -94,6 +100,14 @@ _CSV_FIELD_ORDER = [
     "avg_citation_precision_span",
     "avg_unsupported_claim_rate",
     "avg_abstention_rate",
+    "num_true_abstention",
+    "num_false_abstention",
+    "num_unsupported_claim",
+    "total_unsupported_claim_count",
+    "num_retry",
+    "total_retry_count",
+    "num_route_switch",
+    "total_route_switch_count",
     "avg_multimodal_answer_support",
     "avg_total_seconds",
     "benchmark_role",
@@ -122,9 +136,21 @@ def _derive_retrieval_traces(predictions: list[dict[str, Any]]) -> list[dict[str
         if "retrieval_trace" in prediction:
             trace["retrieval_trace"] = prediction["retrieval_trace"]
         for key in (
+            "gold_pages",
+            "gold_sources",
+            "gold_evidence",
+            "predicted_pages",
+            "predicted_sources",
+            "predicted_citations",
+            "scored_predicted_sources",
+        ):
+            if key in prediction:
+                trace[key] = prediction[key]
+        for key in (
             "agent_trace",
             "evidence_metadata",
             "claim_verification",
+            "verifier_observability",
             "presentation",
         ):
             if key in prediction:
@@ -386,11 +412,16 @@ def _report_markdown_sections(
         ("Route Ranking", route_ranking_markdown(summary)),
         *phase3_report_sections(summary),
         ("Skipped Routes", _skipped_route_markdown(summary)),
+        ("Multimodal Backend Health", _backend_health_markdown(summary)),
         ("Backend Status By Route", _backend_metadata_markdown(summary)),
         ("Generic Route Diagnostics", _route_diagnostics_markdown(summary)),
         ("Route Confusion", _route_confusion_markdown(summary)),
         ("Phase2 Failure Counts", phase2_failure_counts_markdown(summary)),
         ("Diagnostic Failure Counts", _diagnostic_failure_counts_markdown(summary)),
+        ("Failure Taxonomy", failure_taxonomy_markdown(summary)),
+        ("Failure Taxonomy By Route", failure_taxonomy_by_route_markdown(summary)),
+        ("Routing Taxonomy", routing_taxonomy_markdown(summary)),
+        ("Verifier Observability", verifier_observability_markdown(summary)),
         ("External Research Evaluators", external_evaluator_markdown(summary)),
         (
             "External Research Evaluators By Route",
@@ -526,6 +557,36 @@ def _backend_metadata_markdown(summary: dict[str, Any]) -> list[str]:
         suffix = f"; {details}" if details else ""
         lines.append(f"- `{route_id}`: {status}{suffix}")
     return lines
+
+
+def _backend_health_markdown(summary: dict[str, Any]) -> list[str]:
+    health = summary.get("backend_health") or {}
+    if not isinstance(health, dict):
+        return []
+    backends = health.get("backends") or {}
+    if not isinstance(backends, dict):
+        return []
+    lines = [f"- Overall Status: `{health.get('overall_status')}`"]
+    for role, item in backends.items():
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status") or "unknown")
+        details = _backend_health_detail_text(item)
+        suffix = f"; {details}" if details else ""
+        lines.append(f"- `{role}`: {status}{suffix}")
+    return lines
+
+
+def _backend_health_detail_text(item: dict[str, Any]) -> str:
+    pairs = []
+    for key in ("url", "models", "model", "model_family", "failure_type"):
+        value = item.get(key)
+        if value in (None, "", [], {}):
+            continue
+        if isinstance(value, list):
+            value = ", ".join(str(entry) for entry in value)
+        pairs.append(f"{key}=`{value}`")
+    return ", ".join(pairs)
 
 
 def _backend_detail_text(item: dict[str, Any]) -> str:

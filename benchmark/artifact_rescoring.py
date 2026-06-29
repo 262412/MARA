@@ -15,6 +15,7 @@ from .reports import write_reports
 from .research_evaluators import external_research_adapter_metrics
 from .scoring import normalize_operational_fields, score_prediction
 from .summary import add_mara_summary_fields
+from .verifier_observability import prediction_verifier_observability
 
 
 def rescore_artifact_run(
@@ -88,6 +89,7 @@ def _rescore_prediction_base_metrics(
     )
     prediction["metrics"] = score_prediction(prediction)
     prediction["diagnostics"] = prediction_diagnostics(prediction)
+    prediction["verifier_observability"] = prediction_verifier_observability(prediction)
 
 
 def _prepare_prediction_defaults(prediction: dict[str, Any]) -> None:

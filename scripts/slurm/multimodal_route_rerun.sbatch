@@ -19,6 +19,7 @@ RUN_ID="${SLURM_JOB_ID:-manual-$(date +%Y%m%d_%H%M%S)}"
 SUITE_NAME="${MARA_MULTIMODAL_SUITE_NAME:-${MARA_PHASE3_SUITE_NAME:-slidevqa-multimodal-route-slurm-${RUN_ID}}}"
 LOG_ROOT="${OUT_ROOT}/logs/${RUN_ID}"
 BENCHMARK_LOG="${LOG_ROOT}/benchmark.log"
+BACKEND_HEALTH_JSON="${LOG_ROOT}/backend-health.json"
 
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/users/tbczhang/fastscratch/cache/uv}"
 export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/users/tbczhang/fastscratch/cache/uv/python}"
@@ -157,6 +158,11 @@ print(
 )
 PY
 
+uv run --python 3.10 python -m benchmark check-multimodal-backends \
+  --output "$BACKEND_HEALTH_JSON" \
+  --timeout-seconds "${MARA_MULTIMODAL_HEALTH_TIMEOUT_SECONDS:-3}" \
+  --strict
+
 NUM_SHARDS="${MARA_MULTIMODAL_NUM_SHARDS:-${MARA_PHASE3_NUM_SHARDS:-}}"
 SHARD_INDEX="${MARA_MULTIMODAL_SHARD_INDEX:-${MARA_PHASE3_SHARD_INDEX:-}}"
 SHARD_ARGS=()
@@ -185,6 +191,7 @@ uv run --python 3.10 python -m benchmark run \
   --benchmark-prompt-profile auto \
   --benchmark-no-think \
   --route-timeout-seconds "$ROUTE_TIMEOUT_SECONDS" \
+  --backend-health-json "$BACKEND_HEALTH_JSON" \
   --docqa-citation-mode inline | tee "$BENCHMARK_LOG"
 
 RUN_DIR="$(awk '/Outputs written to/ {print $NF}' "$BENCHMARK_LOG" | tail -n 1)"

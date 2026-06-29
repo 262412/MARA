@@ -33,6 +33,14 @@ class _ResearchEvaluatorAdapter:
         else:
             metrics, metadata = _coerce_evaluator_result(self.backend(prediction))
         paper_grade = bool(metadata.get("paper_grade", self.paper_grade))
+        metadata = {
+            **metadata,
+            **_paper_grade_contract_metadata(
+                metrics,
+                paper_grade=paper_grade,
+                metadata=metadata,
+            ),
+        }
         return {
             "metrics": metrics,
             "metadata": {
@@ -114,6 +122,8 @@ def _not_configured_metadata(proxy_metadata: dict[str, Any]) -> dict[str, Any]:
         "metric_scope": "external",
         "metric_category": "external_metric",
         "paper_grade": False,
+        "paper_grade_ready": False,
+        "paper_grade_blockers": ["not_configured"],
         "excluded_from_summary": True,
         "requires_external_resources": list(
             proxy_metadata.get("requires_external_resources") or []
@@ -136,6 +146,11 @@ def _run_external_evaluator(
 
     metrics, metadata = _coerce_evaluator_result(result)
     paper_grade = bool(metadata.get("paper_grade"))
+    contract_metadata = _paper_grade_contract_metadata(
+        metrics,
+        paper_grade=paper_grade,
+        metadata=metadata,
+    )
     return metrics, {
         "backend": backend_label,
         "implementation": str(
@@ -146,6 +161,7 @@ def _run_external_evaluator(
             metadata.get("metric_category") or _metric_category(paper_grade)
         ),
         "paper_grade": paper_grade,
+        **contract_metadata,
         "status": "configured",
         **_external_scoring_metadata(metadata),
     }
@@ -157,6 +173,8 @@ def _failed_metadata(backend_label: str, exc: Exception) -> dict[str, Any]:
         "metric_scope": "external",
         "metric_category": "external_metric",
         "paper_grade": False,
+        "paper_grade_ready": False,
+        "paper_grade_blockers": ["failed"],
         "status": "failed",
         "error": str(exc),
         "excluded_from_summary": True,
@@ -180,6 +198,27 @@ def _external_scoring_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         key: metadata[key]
         for key in ("contract_id", "primary_metric", "scoring_mode")
         if key in metadata
+    }
+
+
+def _paper_grade_contract_metadata(
+    metrics: dict[str, Any],
+    *,
+    paper_grade: bool,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    metadata = metadata or {}
+    blockers: list[str] = []
+    if not paper_grade:
+        blockers.append("not_paper_grade")
+    primary_metric = str(metadata.get("primary_metric") or "").strip()
+    if paper_grade and not primary_metric:
+        blockers.append("missing_primary_metric")
+    if primary_metric and primary_metric not in metrics:
+        blockers.append("primary_metric_missing_from_metrics")
+    return {
+        "paper_grade_ready": bool(paper_grade and not blockers),
+        "paper_grade_blockers": blockers,
     }
 
 

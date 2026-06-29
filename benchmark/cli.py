@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from .answer_modes import BENCHMARK_ANSWER_MODES
+from .format_smoke_cli import add_format_smoke_commands, handle_format_smoke_command
 from .schemas import (
     BENCHMARK_PROMPT_POLICIES,
     BENCHMARK_PROMPT_PROFILES,
@@ -173,6 +175,14 @@ def _add_run_retrieval_options(run_parser: argparse.ArgumentParser) -> None:
     run_parser.add_argument("--embedding-name")
     run_parser.add_argument("--reranker-name")
     run_parser.add_argument("--llm-name")
+    run_parser.add_argument(
+        "--backend-health-json",
+        type=Path,
+        help=(
+            "Attach a saved check-multimodal-backends JSON artifact to "
+            "summary.json and report.md."
+        ),
+    )
 
 
 def _add_run_sampling_options(run_parser: argparse.ArgumentParser) -> None:
@@ -252,7 +262,7 @@ def _add_existing_normalizer_commands(
 ) -> None:
     local_parser = subparsers.add_parser(
         "normalize-format-robustness",
-        help="Convert a local PDF/DOCX/PPTX QA folder into a normalized manifest",
+        help="Convert a local multi-format QA folder into a normalized manifest",
     )
     local_parser.add_argument("--source-dir", required=True)
     local_parser.add_argument("--output", required=True)
@@ -336,6 +346,22 @@ def _add_manifest_template_commands(
     template_parser.add_argument("--dataset-name")
 
 
+def _add_multimodal_backend_commands(
+    subparsers: argparse._SubParsersAction,
+) -> None:
+    health_parser = subparsers.add_parser(
+        "check-multimodal-backends",
+        help="Check local text, VLM, retrieval, and ColVision benchmark backends",
+    )
+    health_parser.add_argument("--output", type=Path)
+    health_parser.add_argument("--timeout-seconds", type=float, default=3.0)
+    health_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when any required backend is blocked.",
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Kotaemon benchmark toolkit")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -344,6 +370,8 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_existing_normalizer_commands(subparsers)
     _add_thesis_converter_commands(subparsers)
     _add_manifest_template_commands(subparsers)
+    _add_multimodal_backend_commands(subparsers)
+    add_format_smoke_commands(subparsers)
     return parser
 
 
@@ -391,6 +419,22 @@ def _handle_manifest_template_command(args: argparse.Namespace) -> int | None:
     )
     print(f"Manifest written to {output_path}")
     return 0
+
+
+def _handle_multimodal_backend_command(args: argparse.Namespace) -> int | None:
+    if args.command != "check-multimodal-backends":
+        return None
+
+    from .multimodal_backend_health import check_multimodal_backends
+
+    health = check_multimodal_backends(timeout_seconds=args.timeout_seconds)
+    payload = json.dumps(health, ensure_ascii=False, indent=2)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(payload + "\n", encoding="utf-8")
+    else:
+        print(payload)
+    return 2 if args.strict and health.get("overall_status") != "ready" else 0
 
 
 def _handle_normalizer_command(args: argparse.Namespace) -> int | None:
@@ -498,6 +542,7 @@ def _run_benchmark_command(args: argparse.Namespace) -> int:
         benchmark_answer_mode=args.benchmark_answer_mode,
         benchmark_no_think=args.benchmark_no_think,
         route_timeout_seconds=args.route_timeout_seconds,
+        backend_health_json=args.backend_health_json,
         external_evaluators=_external_evaluator_map(args.external_evaluator),
         limit=args.limit,
         sample_seed=args.sample_seed,
@@ -533,6 +578,12 @@ def main(argv: list[str] | None = None) -> int:
     normalizer_result = _handle_normalizer_command(args)
     if normalizer_result is not None:
         return normalizer_result
+    backend_result = _handle_multimodal_backend_command(args)
+    if backend_result is not None:
+        return backend_result
+    format_smoke_result = handle_format_smoke_command(args)
+    if format_smoke_result is not None:
+        return format_smoke_result
     return _run_benchmark_command(args)
 
 

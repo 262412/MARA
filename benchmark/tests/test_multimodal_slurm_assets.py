@@ -38,6 +38,9 @@ def test_multimodal_slurm_script_health_checks_backends_and_runs_no_think_routes
     assert "--benchmark-prompt-policy gold_answer_v1" in text
     assert "--benchmark-no-think" in text
     assert "--route-timeout-seconds" in text
+    assert "check-multimodal-backends" in text
+    assert "backend-health.json" in text
+    assert "--backend-health-json" in text
     assert "phase3_multimodal_summary" in text
 
 
@@ -49,6 +52,9 @@ def test_multimodal_runbook_documents_submission_and_evidence_locations():
     assert "gold_answer_v1" in text
     assert "--benchmark-no-think" in text
     assert "summary.json" in text
+    assert "backend-health.json" in text
+    assert "check-multimodal-backends" in text
+    assert "failure taxonomy" in text.lower()
     assert "phase3_multimodal_summary" in text
     assert "page_image" in text
     assert "element" in text

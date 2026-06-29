@@ -18,6 +18,37 @@ logger = logging.getLogger(__name__)
 ELEMENT_INDEX_DOC_TYPE = "mara_element_index"
 ELEMENT_INDEX_RELATION_TYPE = "element_index"
 ELEMENT_INDEX_SCHEMA_VERSION = "1.0"
+ELEMENT_INDEX_METADATA_REQUIRED_KEYS = [
+    "type",
+    "source_id",
+    "file_id",
+    "file_name",
+    "page_label",
+    "element_index_relation_type",
+    "element_index_schema_version",
+    "element_index_record",
+]
+ELEMENT_INDEX_RECORD_REQUIRED_KEYS = [
+    "evidence_id",
+    "file_id",
+    "file_name",
+    "page_label",
+    "element_id",
+    "modality",
+    "text",
+    "source_backrefs",
+    "metadata",
+]
+
+
+def element_index_persistence_contract() -> dict[str, Any]:
+    return {
+        "doc_type": ELEMENT_INDEX_DOC_TYPE,
+        "relation_type": ELEMENT_INDEX_RELATION_TYPE,
+        "schema_version": ELEMENT_INDEX_SCHEMA_VERSION,
+        "metadata_required_keys": list(ELEMENT_INDEX_METADATA_REQUIRED_KEYS),
+        "record_required_keys": list(ELEMENT_INDEX_RECORD_REQUIRED_KEYS),
+    }
 
 
 def page_image_records_from_documents(documents: Iterable[Any]) -> list[dict[str, Any]]:

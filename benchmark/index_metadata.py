@@ -66,12 +66,33 @@ def _source_backrefs(
     item: dict[str, Any],
     metadata: dict[str, Any],
 ) -> list[str]:
-    refs = item.get("source_backrefs")
-    if refs in (None, ""):
-        refs = metadata.get("source_backrefs")
-    if isinstance(refs, str):
-        return [refs] if refs.strip() else []
-    return [str(ref) for ref in refs or [] if str(ref).strip()]
+    refs: list[str] = []
+    for key in ("source_backrefs", "citations", "sources", "source_refs"):
+        refs.extend(_source_ref_values(item.get(key)))
+        refs.extend(_source_ref_values(metadata.get(key)))
+    for key in ("citation", "source", "source_ref", "reference"):
+        refs.extend(_source_ref_values(item.get(key)))
+        refs.extend(_source_ref_values(metadata.get(key)))
+    return _dedupe_text(refs)
+
+
+def _source_ref_values(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value if str(item).strip()]
+    return []
+
+
+def _dedupe_text(values: list[str]) -> list[str]:
+    refs: list[str] = []
+    for value in values:
+        ref = str(value).strip()
+        if ref and ref not in refs:
+            refs.append(ref)
+    return refs
 
 
 def _text(value: Any) -> str:

@@ -116,7 +116,19 @@ def normalize_format_robustness_manifest(
     output_path: str | Path,
 ) -> Path:
     source_dir = Path(source_dir).resolve()
-    allowed_suffixes = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt"}
+    allowed_suffixes = {
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".ppt",
+        ".pptx",
+        ".xls",
+        ".xlsx",
+        ".csv",
+        ".md",
+        ".markdown",
+        ".txt",
+    }
     records: list[dict[str, Any]] = []
 
     for format_dir in sorted(path for path in source_dir.iterdir() if path.is_dir()):

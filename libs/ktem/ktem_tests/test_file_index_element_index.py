@@ -144,6 +144,7 @@ def _expected_offline_element_record():
         "source_backrefs": ["file-1#page:4"],
         "metadata": {
             "element_schema_version": "1.0",
+            "sidecar_schema_version": "legacy",
             "index_source": "offline_layout_sidecar",
             "offline_layout_record_index": 0,
             "offline_layout_sidecar": "report.pdf.mara-elements.json",
