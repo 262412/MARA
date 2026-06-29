@@ -1,4 +1,4 @@
-from benchmark.phase3_multimodal import phase3_multimodal_summary
+from benchmark.multimodal_route_summary import phase3_multimodal_summary
 from benchmark.summary import add_mara_summary_fields
 
 

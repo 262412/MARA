@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=mara-p3-mm
+#SBATCH --job-name=mara-mm-route
 #SBATCH --partition=gpu-l40s-low
 #SBATCH --gres=gpu:l40s:2
 #SBATCH --cpus-per-task=16
@@ -13,10 +13,10 @@ set -euo pipefail
 
 PROJECT_ROOT="${MARA_PROJECT_ROOT:-/mnt/scratch/users/tbczhang/projects/MARA}"
 HPC_HOME="${MARA_HPC_HOME:-/mnt/scratch/users/tbczhang/mara-hpc}"
-OUT_ROOT="${MARA_PHASE3_OUTPUT_DIR:-/mnt/scratch/users/tbczhang/outputs/MARA/phase3_multimodal_slurm}"
-MANIFEST="${MARA_PHASE3_MANIFEST:-/mnt/scratch/users/tbczhang/outputs/MARA/manifests/plan5/current-direct-fix-20260621/slidevqa-test-shard0.multimodal.routes.json}"
+OUT_ROOT="${MARA_MULTIMODAL_OUTPUT_DIR:-${MARA_PHASE3_OUTPUT_DIR:-/mnt/scratch/users/tbczhang/outputs/MARA/multimodal_route_slurm}}"
+MANIFEST="${MARA_MULTIMODAL_MANIFEST:-${MARA_PHASE3_MANIFEST:-/mnt/scratch/users/tbczhang/outputs/MARA/manifests/plan5/current-direct-fix-20260621/slidevqa-test-shard0.multimodal.routes.json}}"
 RUN_ID="${SLURM_JOB_ID:-manual-$(date +%Y%m%d_%H%M%S)}"
-SUITE_NAME="${MARA_PHASE3_SUITE_NAME:-phase3-slidevqa-multimodal-slurm-${RUN_ID}}"
+SUITE_NAME="${MARA_MULTIMODAL_SUITE_NAME:-${MARA_PHASE3_SUITE_NAME:-slidevqa-multimodal-route-slurm-${RUN_ID}}}"
 LOG_ROOT="${OUT_ROOT}/logs/${RUN_ID}"
 BENCHMARK_LOG="${LOG_ROOT}/benchmark.log"
 
@@ -157,27 +157,34 @@ print(
 )
 PY
 
+NUM_SHARDS="${MARA_MULTIMODAL_NUM_SHARDS:-${MARA_PHASE3_NUM_SHARDS:-}}"
+SHARD_INDEX="${MARA_MULTIMODAL_SHARD_INDEX:-${MARA_PHASE3_SHARD_INDEX:-}}"
 SHARD_ARGS=()
-if [[ -n "${MARA_PHASE3_NUM_SHARDS:-}" ]]; then
-  SHARD_ARGS+=(--num-shards "${MARA_PHASE3_NUM_SHARDS}")
+if [[ -n "$NUM_SHARDS" ]]; then
+  SHARD_ARGS+=(--num-shards "$NUM_SHARDS")
 fi
-if [[ -n "${MARA_PHASE3_SHARD_INDEX:-}" ]]; then
-  SHARD_ARGS+=(--shard-index "${MARA_PHASE3_SHARD_INDEX}")
+if [[ -n "$SHARD_INDEX" ]]; then
+  SHARD_ARGS+=(--shard-index "$SHARD_INDEX")
 fi
+
+ROUTE="${MARA_MULTIMODAL_ROUTE:-${MARA_PHASE3_ROUTE:-all}}"
+LIMIT="${MARA_MULTIMODAL_LIMIT:-${MARA_PHASE3_LIMIT:-20}}"
+SAMPLE_SEED="${MARA_MULTIMODAL_SAMPLE_SEED:-${MARA_PHASE3_SAMPLE_SEED:-0}}"
+ROUTE_TIMEOUT_SECONDS="${MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS:-${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-180}}"
 
 uv run --python 3.10 python -m benchmark run \
   --manifest "$MANIFEST" \
   --suite-name "$SUITE_NAME" \
-  --route "${MARA_PHASE3_ROUTE:-all}" \
-  --limit "${MARA_PHASE3_LIMIT:-20}" \
-  --sample-seed "${MARA_PHASE3_SAMPLE_SEED:-0}" \
+  --route "$ROUTE" \
+  --limit "$LIMIT" \
+  --sample-seed "$SAMPLE_SEED" \
   "${SHARD_ARGS[@]}" \
   --output-dir "$OUT_ROOT" \
   --artifact-detail compact \
   --benchmark-prompt-policy gold_answer_v1 \
   --benchmark-prompt-profile auto \
   --benchmark-no-think \
-  --route-timeout-seconds "${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-180}" \
+  --route-timeout-seconds "$ROUTE_TIMEOUT_SECONDS" \
   --docqa-citation-mode inline | tee "$BENCHMARK_LOG"
 
 RUN_DIR="$(awk '/Outputs written to/ {print $NF}' "$BENCHMARK_LOG" | tail -n 1)"

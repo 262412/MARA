@@ -7,6 +7,7 @@ from .answer_summary import (
     avg_answer_tokens,
     avg_product_metric,
 )
+from .dataset_decision_protocol import phase2_dataset_decision, phase2_failure_counts
 from .diagnostics import (
     dataset_route_diagnostics,
     diagnostic_failure_counts,
@@ -18,8 +19,7 @@ from .mara_oriented_scores import (
     mara_score_metadata,
 )
 from .metrics import round_metric, safe_mean
-from .phase2_protocol import phase2_dataset_decision, phase2_failure_counts
-from .phase3_multimodal import phase3_multimodal_summary
+from .multimodal_route_summary import phase3_multimodal_summary
 from .prompt_summary import benchmark_prompt_summary
 from .score_authority import (
     paper_grade_score_available,

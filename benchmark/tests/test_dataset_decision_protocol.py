@@ -1,4 +1,4 @@
-from benchmark.phase2_protocol import (
+from benchmark.dataset_decision_protocol import (
     phase2_dataset_decision,
     phase2_failure_counts,
     phase2_failure_type,

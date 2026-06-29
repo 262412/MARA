@@ -68,7 +68,7 @@ def test_phase2_docs_cover_slide_docqa_mainline_boundary():
     assert "MARA docqa acceptance" in release_doc
 
 
-def test_phase3_docs_cover_two_line_mara_model():
+def test_two_line_shell_docs_cover_mara_model():
     root_readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     package_readme = (REPO_ROOT / "libs" / "slide_cli" / "README.md").read_text(
         encoding="utf-8"
@@ -76,12 +76,12 @@ def test_phase3_docs_cover_two_line_mara_model():
     release_doc = (REPO_ROOT / "docs" / "mara_research_cli_release.md").read_text(
         encoding="utf-8"
     )
-    phase3_plan = (
+    two_line_shell_plan = (
         REPO_ROOT
         / "docs"
         / "superpowers"
         / "plans"
-        / "2026-04-22-mara-research-cli-phase3-foundation.md"
+        / "2026-04-22-mara-research-cli-two-line-shell-foundation.md"
     ).read_text(encoding="utf-8")
 
     assert "`MARA ...` for the high-permission product shell" in root_readme
@@ -108,4 +108,4 @@ def test_phase3_docs_cover_two_line_mara_model():
         in release_doc
     )
     assert "`MARA docqa ...` is the specialist document-QA line" in release_doc
-    assert "two-line model" in phase3_plan
+    assert "two-line model" in two_line_shell_plan

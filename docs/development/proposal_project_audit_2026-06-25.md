@@ -328,12 +328,14 @@ Residual risk / 下一阶段:
 - `on_register_events`, `submit_msg`, `chat_fn`, `on_building_ui`, file-index event registration 和 knowledge graph builder 的关键大函数均已拆到 focused helper modules；`ChatPage` 只保留兼容 wrapper、状态协调和 Gradio callback/组件挂接。
 - UI construction 已由 `chat_layout.py` 承接；`on_building_ui` 为薄 wrapper。`chat_fn` 保留 Gradio callback public 签名，内部通过 `ChatCallbackInputs` 显式传递长输入，不用动态 `locals()` 或压缩参数来机械降行数。
 - Source selection、chat submission、preview/message/conversation/auxiliary events、runtime streaming、KG file/hierarchy/legacy/map builder、file index event chains 均有 focused tests 或 characterization tests。
+- Phase 开发阶段遗留的代码/测试/脚本文件名已清理为功能语义命名，例如 dataset decision protocol、multimodal route summary/report、DocQA request contract、KG builder components、multimodal route Slurm/runbook；历史 artifact schema key 和已生成输出路径保留兼容。
 - Public surface 未改变: 未改 `MARA` / `MARA-cli` 命令面、CLI options、JSON keys、DB schema、DocQA session shape、用户文件格式或 Gradio event 语义。
 - Baseline 债务未扩大，且未刷新 `scripts/codebase_hygiene_baseline.json`。
 
 代表性验证:
 
-- `uv run --python 3.10 pytest libs/ktem/ktem_tests/test_chat_layout_contract.py libs/ktem/ktem_tests/test_assets_theme.py libs/ktem/ktem_tests/test_workbench_layout_theme.py libs/ktem/ktem_tests/test_workbench_ui_contract.py libs/ktem/ktem_tests/test_studio_chat_page_bindings.py libs/ktem/ktem_tests/test_chat_docqa_runtime_adapter.py libs/ktem/ktem_tests/test_chat_preview_timer.py libs/ktem/ktem_tests/test_chat_message_events.py libs/ktem/ktem_tests/test_chat_source_scope.py libs/ktem/ktem_tests/test_chat_submission.py libs/ktem/ktem_tests/test_knowledge_graph_phase4b_builders.py`: `56 passed, 1 warning`。
+- `uv run --python 3.10 pytest libs/ktem/ktem_tests/test_chat_layout_contract.py libs/ktem/ktem_tests/test_assets_theme.py libs/ktem/ktem_tests/test_workbench_layout_theme.py libs/ktem/ktem_tests/test_workbench_ui_contract.py libs/ktem/ktem_tests/test_studio_chat_page_bindings.py libs/ktem/ktem_tests/test_chat_docqa_runtime_adapter.py libs/ktem/ktem_tests/test_chat_preview_timer.py libs/ktem/ktem_tests/test_chat_message_events.py libs/ktem/ktem_tests/test_chat_source_scope.py libs/ktem/ktem_tests/test_chat_submission.py libs/ktem/ktem_tests/test_knowledge_graph_builder_components.py`: `56 passed, 1 warning`。
+- `uv run --python 3.10 pytest tests/test_descriptive_file_names.py`: `1 passed`。
 - `uv run --python 3.10 python scripts/check_codebase_hygiene.py <changed-python-files>`: `No codebase hygiene ratchet violations.`。
 - `uv run --python 3.10 python -m pre_commit run --files <changed-files>`: passed。
 - Storage/layout: `.venv` 指向 `/mnt/fastscratch/users/tbczhang/envs/mara`，`.venv/bin/python` 指向 fastscratch uv Python；fastscratch/scratch quota 均低于 soft limit；repo 根目录没有 `data/`, `datasets/`, `outputs/`。

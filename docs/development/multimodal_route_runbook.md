@@ -1,11 +1,11 @@
-# Phase3 Multimodal Runbook
+# Multimodal Route Runbook
 
-This runbook is the reproducible path for the Phase3 multimodal closure runs.
+This runbook is the reproducible path for multimodal route closure runs.
 It keeps model serving, benchmark outputs, and logs out of the Git checkout.
 
 ## Scope
 
-The Phase3 Slurm run is meant to produce three pieces of evidence in one
+The multimodal Slurm run is meant to produce three pieces of evidence in one
 artifact set:
 
 - Page-image VLM route: `phase3_multimodal_summary.page_image`.
@@ -43,7 +43,7 @@ script body runs.
 ```bash
 cd /mnt/scratch/users/tbczhang/projects/MARA
 mkdir -p /mnt/scratch/users/tbczhang/outputs/MARA/slurm
-sbatch scripts/slurm/phase3_multimodal_rerun.sbatch
+sbatch scripts/slurm/multimodal_route_rerun.sbatch
 ```
 
 The default run uses:
@@ -51,7 +51,7 @@ The default run uses:
 - Manifest:
   `/mnt/scratch/users/tbczhang/outputs/MARA/manifests/plan5/current-direct-fix-20260621/slidevqa-test-shard0.multimodal.routes.json`
 - Output directory:
-  `/mnt/scratch/users/tbczhang/outputs/MARA/phase3_multimodal_slurm`
+  `/mnt/scratch/users/tbczhang/outputs/MARA/multimodal_route_slurm`
 - Route: `all`
 - Limit: `20`
 - Prompt policy: `gold_answer_v1`
@@ -63,16 +63,25 @@ Useful overrides:
 ```bash
 MARA_PHASE3_LIMIT=50 \
 MARA_PHASE3_ROUTE_TIMEOUT_SECONDS=240 \
-sbatch scripts/slurm/phase3_multimodal_rerun.sbatch
+sbatch scripts/slurm/multimodal_route_rerun.sbatch
+```
+
+The older `MARA_PHASE3_*` variables are still accepted for compatibility. New
+automation should prefer the descriptive `MARA_MULTIMODAL_*` names:
+
+```bash
+MARA_MULTIMODAL_LIMIT=50 \
+MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS=240 \
+sbatch scripts/slurm/multimodal_route_rerun.sbatch
 ```
 
 For sharded runs:
 
 ```bash
-MARA_PHASE3_LIMIT=100 \
-MARA_PHASE3_NUM_SHARDS=4 \
-MARA_PHASE3_SHARD_INDEX=0 \
-sbatch scripts/slurm/phase3_multimodal_rerun.sbatch
+MARA_MULTIMODAL_LIMIT=100 \
+MARA_MULTIMODAL_NUM_SHARDS=4 \
+MARA_MULTIMODAL_SHARD_INDEX=0 \
+sbatch scripts/slurm/multimodal_route_rerun.sbatch
 ```
 
 ## Backend Health
@@ -114,7 +123,7 @@ PY
 After the job finishes, inspect the latest run directory:
 
 ```bash
-run_dir=$(find /mnt/scratch/users/tbczhang/outputs/MARA/phase3_multimodal_slurm \
+run_dir=$(find /mnt/scratch/users/tbczhang/outputs/MARA/multimodal_route_slurm \
   -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)
 
 python - "$run_dir" <<'PY'
@@ -135,7 +144,7 @@ print("hybrid", phase3["hybrid"])
 PY
 ```
 
-Phase3 can only be considered closed after the artifact shows:
+The multimodal route workflow can only be considered closed after the artifact shows:
 
 - `page_image.status` is `vlm_live` or an equivalent completed VLM status, with
   no skipped `page_image_rag_vlm` route.
