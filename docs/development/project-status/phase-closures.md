@@ -1,6 +1,6 @@
 # Phase Closures
 
-Last updated: 2026-06-29.
+Last updated: 2026-06-30.
 
 This document keeps only final phase conclusions. It intentionally excludes
 development-by-development logs, failed attempts, and repeated rerun details.
@@ -121,9 +121,13 @@ Residual risk:
 
 - Final 2-3 thesis datasets cannot be frozen until larger reruns and failure
   analysis are complete.
+- The 2026-06-29/30 10-smoke repair cycle has completed route complement
+  artifacts for FinanceBench, ALCE, QASPER, and RAGTruth, but those smoke
+  artifacts are still not larger matched rerun evidence.
 - Controller/hybrid/guarded routes cannot be claimed as globally superior to
   text baseline.
-- Paper-grade external evaluator is not configured in representative artifacts.
+- The current evaluator decision is `local_adapted_only_scope`; no paper-grade
+  external evaluator is configured in representative artifacts.
 
 ## Phase 3 - Multimodal Route Workflow
 
@@ -175,9 +179,25 @@ Representative validation:
 
 Residual risk:
 
-- Element ranker/coverage and real non-gold sidecar corpus quality remain open.
+- Element ranker/coverage and real non-gold sidecar corpus quality remain open;
+  MMDocRAG element repair has nonzero but sparse coverage, not a positive
+  quality claim.
+- MMDocRAG job `9389243` timed out with VLM context errors; route-split repair
+  jobs `9406282-9406286` are complete for text/element/visual/controller
+  sanity and no longer show the 2048-context failure. L40S fallback rows
+  `9408508-9408510` are complete with artifacts, but `page_image_rag_vlm` and
+  `hybrid_rag` still hit route timeouts plus VLM 4096-context overflows.
+  H100/3-GPU 4k-context jobs `9413488-9413490` were cancelled before start
+  after L40S repaired fallback jobs `9414048-9414050` completed on `gpu48` with
+  the same prompt cap but page/hybrid still overflowed 4096 context.
+  L40S 8k-context rows `9416399-9416401` completed and fixed context overflow,
+  but page/hybrid still have route-timeout/performance failures. H100 8k rows
+  `9416402-9416404` remain pending as GPU ColVision/performance comparison.
+  L40S timeout-budget diagnostics `9426207-9426208` are submitted with
+  route_timeout=1200.
 - VLM/hybrid timeout, duplicate answers, answer formatting, and inline citation
-  recall/precision remain future quality work.
+  recall/precision remain quality risks until repaired artifacts and larger
+  reruns are available.
 
 ## Phase 4 - UI And Structural Debt Control
 

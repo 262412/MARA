@@ -1,6 +1,6 @@
 # Thesis Claim Boundaries
 
-Last updated: 2026-06-29.
+Last updated: 2026-06-30.
 
 This document is the claim-boundary source for dissertation text,
 proposal-facing reports, and demo narrative. Historical benchmark artifacts and
@@ -72,6 +72,29 @@ written as official benchmark, leaderboard, or paper-grade external scores:
   counts/classes.
 - Runtime/performance diagnostics: parse/index/retrieval/generation seconds,
   total seconds, cache mode, executed/skipped routes.
+
+Current benchmark-cycle note:
+
+- The 2026-06-29/30 first smoke and repair cycle is local-adapted only. The
+  ALCE proxy evaluator proves plumbing but is not paper-grade.
+- Submitted repair jobs are not evidence until their artifacts are complete.
+- MMDocRAG remains partially pending because the first job timed out and the
+  route-split sanity run found benchmark route timeouts for
+  `page_image_rag_vlm` and `hybrid_rag`. Text, element, visual, hybrid, and
+  controller sanity artifacts are available. L40S fallback rows
+  `9408508-9408510` are also available, but page/hybrid still have route
+  timeouts plus VLM 4096-context overflows. H100/3-GPU replacement rows
+  `9413488-9413490` were superseded after L40S repaired fallback rows
+  `9414048-9414050` also overflowed 4096 context. 8k-context repair rows
+  `9416399-9416401` fixed context overflow on L40S, but page/hybrid still have
+  route-timeout/performance failures. H100 8k rows `9416402-9416404` remain
+  pending as GPU ColVision/performance comparison, and L40S timeout-budget
+  diagnostics `9426207-9426208` remain pending as route-timeout evidence.
+- ViDoRe current rows are retrieval diagnostics only, not full answer-generation
+  QA claims.
+- Element RAG has nonzero but sparse MMDocRAG coverage evidence in the repair
+  cycle, so it may be described as a sparse-coverage failure. It must not be
+  described as an Element RAG quality gain.
 
 ## Out Of Final Claim Or Future Work
 

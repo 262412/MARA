@@ -1,3 +1,7 @@
+import json
+
+from pypdf.generic import DictionaryObject, NameObject, TextStringObject
+
 from ktem.docqa.multimodal_index import (
     element_index_documents_from_records,
     element_index_persistence_contract,
@@ -60,3 +64,27 @@ def test_element_index_document_metadata_satisfies_persistence_contract():
     assert set(contract["record_required_keys"]).issubset(
         doc.metadata["element_index_record"]
     )
+
+
+def test_element_index_document_metadata_normalizes_pypdf_objects():
+    record = _element_record()
+    record["bbox"] = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/BBox"),
+            NameObject("/Label"): TextStringObject("A"),
+        }
+    )
+    record["metadata"] = {
+        "parser_object": DictionaryObject(
+            {NameObject("/Subtype"): NameObject("/Table")}
+        )
+    }
+
+    [doc] = element_index_documents_from_records("file-1", [record])
+    persisted = doc.metadata["element_index_record"]
+
+    assert type(persisted["bbox"]) is dict
+    assert persisted["bbox"] == {"/Label": "A", "/Type": "/BBox"}
+    assert type(persisted["metadata"]["parser_object"]) is dict
+    assert persisted["metadata"]["parser_object"] == {"/Subtype": "/Table"}
+    json.dumps(doc.metadata, sort_keys=True)

@@ -1,6 +1,6 @@
 # Current Proposal Audit
 
-Last updated: 2026-06-29.
+Last updated: 2026-07-01.
 
 This is the canonical current status source for MARA proposal alignment. The
 old `docs/development/proposal_project_audit_2026-06-25.md` path is now a
@@ -86,6 +86,57 @@ indexing, dataset syncs, Slurm jobs, or large downloads.
    local dataset-native, and MARA diagnostic proxy scoring.
 6. Study artifact generation exceeds the minimum proposal MVP, while real
    audio/video media export remains a scoped extension.
+
+## Active Benchmark Repair Status
+
+The active run root is
+`/mnt/scratch/users/tbczhang/outputs/MARA/benchmark_next_20260629`.
+
+The first 10-smoke batch is useful as health and diagnostic evidence, but it is
+not final thesis evidence. The current repair state is:
+
+- FinanceBench, ALCE, QASPER, and RAGTruth route-matrix complement jobs
+  `9406278-9406281` are complete with full artifact four-tuples.
+- MMDocRAG first run `9389243` timed out; route-split repair/sanity jobs
+  `9406282-9406286` are tracked. `text_rag`/`element_rag` jobs
+  `9406282-9406283` are complete; visual/controller sanity rows
+  `9406284-9406286` are also complete with artifact four-tuples.
+- MMDocRAG `element_rag` now has nonzero but sparse element coverage evidence
+  (2 records in 1/10 predictions), so it supports a sparse-coverage failure
+  explanation rather than a positive Element RAG claim.
+- MMDocRAG visual sanity no longer shows the earlier 2048-context or
+  DictionaryObject failures. L40S fallback limit=10 rows `9408508-9408510`
+  completed with artifact four-tuples, but `page_image_rag_vlm` and
+  `hybrid_rag` still have route timeouts plus VLM 4096-context overflows.
+  H100/3-GPU replacement jobs `9413488-9413490` are submitted to test GPU
+  ColVision, a 600s route timeout, and evidence_text_chars=120. L40S repaired
+  fallback jobs `9414048-9414050` completed on `gpu48` with the same prompt cap
+  but still had page/hybrid route timeouts plus 4096-context overflows. The
+  L40S 8k-context rows `9416399-9416401` are complete and fixed VLM context
+  overflow, but page/hybrid still have route-timeout/performance failures. H100
+  8k rows `9416402-9416404` remain pending as GPU ColVision/performance
+  comparison. L40S timeout-budget diagnostics `9426207-9426208` are submitted
+  with route_timeout=1200.
+- External evaluator Task 2 is closed for this cycle as
+  `local_adapted_only_scope`; the ALCE proxy is not paper-grade.
+- Derived reports now exist under the run root for route matrix,
+  controller/hybrid/guarded behavior, element coverage, evaluator authority,
+  citation attribution, guardrail calibration, and synthesis.
+- Larger matched closure jobs have been submitted on L40S resources:
+  RAGTruth-50 `9426781`, ALCE-50 `9426782`, and SlideVQA-25 `9426783`. They
+  are not freeze evidence until the artifact four-tuples and failure synthesis
+  are complete. These rows are now complete with full artifact four-tuples.
+  RAGTruth-50 supports guardrail calibration/failure analysis, ALCE-50 supports
+  `text_rag` as the strongest route and `hybrid_rag` as diagnostic, and
+  SlideVQA-25 supports visual routes over text while preserving Element RAG as
+  a coverage failure.
+- H100 MMDocRAG rows `9416402-9416404` and L40S timeout-budget rows
+  `9426207-9426208` are complete. They close the missing execution/context/
+  timeout evidence gap, but MMDocRAG remains a quality/latency residual risk.
+
+Do not freeze final datasets, route table, or evaluator authority until
+failure synthesis is updated and the final thesis dataset/route/evaluator
+decision is explicitly recorded.
 
 ## No-Benchmark Engineering Closure Items
 
