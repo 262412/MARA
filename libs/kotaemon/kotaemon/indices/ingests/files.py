@@ -21,6 +21,7 @@ from kotaemon.loaders import (
     MathpixPDFReader,
     MhtmlReader,
     OCRReader,
+    PandasCSVReader,
     PandasExcelReader,
     PDFThumbnailReader,
     TxtReader,
@@ -43,6 +44,7 @@ adobe_reader.vlm_endpoint = (
 
 
 KH_DEFAULT_FILE_EXTRACTORS: dict[str, BaseReader] = {
+    ".csv": PandasCSVReader(),
     ".xlsx": PandasExcelReader(),
     ".docx": unstructured,
     ".pptx": unstructured,

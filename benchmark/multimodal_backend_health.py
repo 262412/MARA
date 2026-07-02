@@ -128,6 +128,19 @@ def _classify_payload(
                 "family_mismatch",
                 started_at,
             )
+    if spec.role == "colvision":
+        device = str(payload.get("device") or "").strip()
+        row_base = dict(base)
+        if payload.get("model_family"):
+            row_base["model_family"] = payload.get("model_family")
+        if not device:
+            return _blocked(row_base, "missing_device", started_at)
+        if device.lower().startswith("cpu"):
+            return _blocked(
+                {**row_base, "device": device},
+                "cpu_colvision",
+                started_at,
+            )
     return _ready(base, started_at, payload)
 
 

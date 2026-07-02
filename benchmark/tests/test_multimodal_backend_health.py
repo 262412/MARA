@@ -105,6 +105,72 @@ def test_check_multimodal_backends_classifies_service_failures(monkeypatch):
     ]
 
 
+def test_check_multimodal_backends_blocks_cpu_colvision_device(monkeypatch):
+    payloads: dict[str, dict] = {
+        "http://127.0.0.1:8000/v1/models": {
+            "data": [{"id": "Qwen/Qwen3-8B"}],
+        },
+        "http://127.0.0.1:8001/v1/models": {
+            "data": [{"id": "Qwen/Qwen3-VL-8B-Instruct"}],
+        },
+        "http://127.0.0.1:8002/health": {
+            "ok": True,
+            "model": "BAAI/bge-m3",
+        },
+        "http://127.0.0.1:8003/health": {
+            "ok": True,
+            "model_family": "colqwen",
+            "device": "cpu",
+        },
+    }
+
+    def fake_urlopen(request, timeout):
+        return _Response(payloads[request.full_url])
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    result = check_multimodal_backends()
+
+    assert result["overall_status"] == "blocked"
+    assert result["backends"]["colvision"]["status"] == "blocked"
+    assert result["backends"]["colvision"]["device"] == "cpu"
+    assert result["backends"]["colvision"]["failure_type"] == "cpu_colvision"
+    assert {
+        "role": "colvision",
+        "failure_type": "cpu_colvision",
+        "status": "blocked",
+    } in result["failure_taxonomy"]
+
+
+def test_check_multimodal_backends_requires_colvision_device_metadata(monkeypatch):
+    payloads: dict[str, dict] = {
+        "http://127.0.0.1:8000/v1/models": {
+            "data": [{"id": "Qwen/Qwen3-8B"}],
+        },
+        "http://127.0.0.1:8001/v1/models": {
+            "data": [{"id": "Qwen/Qwen3-VL-8B-Instruct"}],
+        },
+        "http://127.0.0.1:8002/health": {
+            "ok": True,
+            "model": "BAAI/bge-m3",
+        },
+        "http://127.0.0.1:8003/health": {
+            "ok": True,
+            "model_family": "colqwen",
+        },
+    }
+
+    def fake_urlopen(request, timeout):
+        return _Response(payloads[request.full_url])
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    result = check_multimodal_backends()
+
+    assert result["overall_status"] == "blocked"
+    assert result["backends"]["colvision"]["failure_type"] == "missing_device"
+
+
 def test_default_multimodal_backend_contract_covers_required_ports():
     endpoints = {backend.role: backend.url for backend in DEFAULT_MULTIMODAL_BACKENDS}
 

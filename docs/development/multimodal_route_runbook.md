@@ -56,7 +56,8 @@ The default run uses:
 - Limit: `20`
 - Prompt policy: `gold_answer_v1`
 - Thinking control: `--benchmark-no-think`
-- Route timeout: `180` seconds
+- Route timeout: `240` seconds
+- VLM context: `MARA_VLM_MAX_MODEL_LEN=8192`
 
 Useful overrides:
 
@@ -97,7 +98,8 @@ If a backend is missing, the wrapper starts the local service from
 `/mnt/scratch/users/tbczhang/mara-hpc`:
 
 - GPU0: `serve_qwen3_8b.sh`
-- GPU1: `serve_qwen3_vl_8b.sh`
+- GPU1: `serve_qwen3_vl_8b_4k.sh` with
+  `MARA_VLM_MAX_MODEL_LEN=8192`
 - CPU by default: `serve_retrieval.sh`
 - GPU1 by default: `serve_colvision.sh` with `MARA_COLVISION_DEVICE=cuda:0`
 
@@ -110,7 +112,9 @@ while ColVision is already resident on the same GPU. Override
 placement or a CPU-only diagnostic.
 
 The VLM health gate must return `Qwen/Qwen3-VL-8B-Instruct` through
-`/v1/models` before the benchmark starts.
+`/v1/models` before the benchmark starts. The wrapper sets
+`MARA_VLM_MAX_MODEL_LEN=8192`; the historical `serve_qwen3_vl_8b_4k.sh` script
+name is not the evidence boundary, the effective vLLM context setting is.
 
 The productized health contract is:
 
@@ -124,7 +128,8 @@ The command writes `backend-health.json` with `schema_version`, `checked_at`,
 `overall_status`, per-backend metadata, and a run-level failure taxonomy. The
 taxonomy is for backend/run comparability, not answer scoring. Current failure
 types include `unreachable`, `timeout`, `http_error`, `bad_json`,
-`unexpected_payload`, `model_missing`, `health_not_ok`, and `family_mismatch`.
+`unexpected_payload`, `model_missing`, `health_not_ok`, `family_mismatch`,
+`missing_device`, and `cpu_colvision`.
 The Slurm wrapper saves this file under its run log directory and passes it to
 `benchmark run` with `--backend-health-json`, so `summary.json` and `report.md`
 record the backend state used by the rerun.
@@ -136,7 +141,7 @@ For interactive checks on the current node:
 
 ```bash
 tmux new-session -d -s mara-qwen3-vl-8001 \
-  'cd /mnt/scratch/users/tbczhang/mara-hpc && CUDA_VISIBLE_DEVICES=1 ./serve_qwen3_vl_8b.sh'
+  'cd /mnt/scratch/users/tbczhang/mara-hpc && MARA_VLM_MAX_MODEL_LEN=8192 CUDA_VISIBLE_DEVICES=1 ./serve_qwen3_vl_8b_4k.sh'
 
 python - <<'PY'
 import json, urllib.request

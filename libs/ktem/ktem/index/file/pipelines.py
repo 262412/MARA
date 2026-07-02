@@ -912,7 +912,8 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
             "indexing. Install LibreOffice or set KH_OFFICE_TO_PDF_INDEXING=false "
             "to use direct Office text extraction."
         )
-        if getattr(settings, "KH_OFFICE_TO_PDF_INDEXING_STRICT", True):
+        strict_indexing = getattr(settings, "KH_OFFICE_TO_PDF_INDEXING_STRICT", True)
+        if strict_indexing and ext != ".docx":
             raise RuntimeError(message)
 
         logger.warning(message)
@@ -922,6 +923,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
             "source_file_extension": ext,
             "converted_from_office": False,
             "layout_preserving_parse": False,
+            "direct_office_text_fallback": ext == ".docx",
             "office_pdf_conversion_error": message,
         }
 

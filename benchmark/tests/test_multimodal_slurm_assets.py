@@ -32,10 +32,16 @@ def test_multimodal_slurm_script_health_checks_backends_and_runs_no_think_routes
     assert "http://127.0.0.1:8001/v1/models" in text
     assert "http://127.0.0.1:8002/health" in text
     assert "http://127.0.0.1:8003/health" in text
-    assert 'MARA_VLM_SERVE_SCRIPT="${MARA_VLM_SERVE_SCRIPT:-serve_qwen3_vl_8b_4k.sh}"' in text
+    assert (
+        'MARA_VLM_SERVE_SCRIPT="${MARA_VLM_SERVE_SCRIPT:-serve_qwen3_vl_8b_4k.sh}"'
+        in text
+    )
     assert '"${HPC_HOME}/${MARA_VLM_SERVE_SCRIPT}"' in text
-    assert 'MARA_VLM_MAX_MODEL_LEN="${MARA_VLM_MAX_MODEL_LEN:-4096}"' in text
-    assert 'MARA_VLM_GPU_MEMORY_UTILIZATION="${MARA_VLM_GPU_MEMORY_UTILIZATION:-0.70}"' in text
+    assert 'MARA_VLM_MAX_MODEL_LEN="${MARA_VLM_MAX_MODEL_LEN:-8192}"' in text
+    assert (
+        'MARA_VLM_GPU_MEMORY_UTILIZATION="${MARA_VLM_GPU_MEMORY_UTILIZATION:-0.70}"'
+        in text
+    )
     assert 'CUDA_VISIBLE_DEVICES="${MARA_VLM_GPU:-1}"' in text
     assert 'CUDA_VISIBLE_DEVICES="${MARA_COLVISION_GPU:-${MARA_VLM_GPU:-1}}"' in text
     assert 'ROUTE="${MARA_MULTIMODAL_ROUTE:-${MARA_PHASE3_ROUTE:-all}}"' in text
@@ -43,7 +49,10 @@ def test_multimodal_slurm_script_health_checks_backends_and_runs_no_think_routes
     assert 'MARA_VLM_TIMEOUT="${MARA_VLM_TIMEOUT:-120}"' in text
     assert 'MARA_VLM_MAX_OUTPUT_TOKENS="${MARA_VLM_MAX_OUTPUT_TOKENS:-192}"' in text
     assert 'MARA_COLVISION_DEVICE="${MARA_COLVISION_DEVICE:-cuda:0}"' in text
-    assert 'ROUTE_TIMEOUT_SECONDS="${MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS:-${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-240}}"' in text
+    assert (
+        'ROUTE_TIMEOUT_SECONDS="${MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS:-${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-240}}"'
+        in text
+    )
     assert "--benchmark-prompt-policy gold_answer_v1" in text
     assert "--benchmark-no-think" in text
     assert "--route-timeout-seconds" in text
