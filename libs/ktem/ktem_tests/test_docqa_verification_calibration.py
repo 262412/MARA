@@ -1,0 +1,61 @@
+from ktem.docqa._runtime_models import DocQARequest
+from ktem.docqa.controller import RetrieveDecision, build_controller_outputs
+from ktem.docqa.evidence import EvidenceBundle
+from ktem.docqa.verification import verify_decision
+
+
+def test_strict_verifier_supports_profitability_margin_paraphrase():
+    payload = build_controller_outputs(
+        DocQARequest(
+            prompt="What happened to profitability?",
+            verification_mode="strict",
+        ),
+        [],
+        {
+            "evidence": [
+                {
+                    "evidence_id": "source-1",
+                    "file_id": "source-1",
+                    "text": "The gross margin improved.",
+                }
+            ]
+        },
+        answer="Final answer: Profitability improved.",
+    )
+
+    assert payload["verify_decision"]["status"] == "supported"
+    assert payload["verify_decision"]["unsupported_claims"] == []
+    assert payload["guardrail_decision"]["action"] == "return"
+
+
+def test_strict_verifier_uses_available_evidence_before_abstaining():
+    request = DocQARequest(
+        prompt="What was 2024 revenue?",
+        verification_mode="strict",
+    )
+    retrieve = RetrieveDecision(
+        status="not_enough_evidence",
+        reason="retrieval threshold was not met",
+        retry=False,
+    )
+    bundle = EvidenceBundle(
+        route="crag_guarded",
+        items=[
+            {
+                "evidence_id": "source-1",
+                "file_id": "source-1",
+                "text": "The report says revenue increased to 42 million in 2024.",
+            }
+        ],
+    )
+
+    decision = verify_decision(
+        request,
+        retrieve,
+        bundle,
+        answer="Final answer: Revenue increased to 42 million in 2024.",
+    )
+
+    assert decision.status == "supported"
+    assert decision.action == "generate"
+    assert decision.claims == ["Revenue increased to 42 million in 2024."]

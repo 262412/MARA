@@ -24,6 +24,30 @@ def test_docx_reader():
     assert len(documents)
 
 
+def test_docx_reader_preserves_table_cell_text(tmp_path):
+    from docx import Document as DocxDocument
+
+    docx_path = tmp_path / "table-answer.docx"
+    document = DocxDocument()
+    document.add_paragraph("Paragraph text")
+    table = document.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "Field"
+    table.cell(0, 1).text = "Value"
+    table.cell(1, 0).text = "Owner"
+    table.cell(1, 1).text = "Task 8 Word table answer"
+    document.save(docx_path)
+
+    documents = DocxReader().load_data(docx_path)
+
+    assert any("Task 8 Word table answer" in doc.text for doc in documents)
+
+
+def test_default_file_extractors_route_docx_to_table_preserving_reader():
+    from kotaemon.indices.ingests.files import KH_DEFAULT_FILE_EXTRACTORS
+
+    assert isinstance(KH_DEFAULT_FILE_EXTRACTORS[".docx"], DocxReader)
+
+
 def test_html_reader():
     reader = HtmlReader()
     documents = reader.load_data(

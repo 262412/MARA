@@ -134,9 +134,12 @@ def _expected_offline_element_record():
     return {
         "evidence_id": "element:file-1:4:table-4-1",
         "file_id": "file-1",
+        "source_id": "file-1",
         "file_name": "report.pdf",
         "page_label": "4",
+        "page_number": 4,
         "element_id": "table-4-1",
+        "element_type": "table",
         "modality": "table",
         "bbox": [10, 20, 30, 40],
         "caption": "Regional revenue",

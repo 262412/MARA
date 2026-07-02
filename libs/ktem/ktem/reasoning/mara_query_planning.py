@@ -57,15 +57,26 @@ def with_selected_source_context(
 ) -> dict[str, Any]:
     selected_text = str(getattr(source, "selected_text", "") or "").strip()
     active_file_id = str(getattr(source, "active_file_id", "") or "").strip()
+    page_number = getattr(source, "page_number", None)
     selected_file_ids = [
         str(file_id).strip()
         for file_id in getattr(source, "selected_file_ids", None) or []
         if str(file_id).strip()
     ]
-    if not (selected_text or active_file_id or len(selected_file_ids) == 1):
+    if not (
+        selected_text
+        or active_file_id
+        or page_number not in (None, "")
+        or len(selected_file_ids) == 1
+    ):
         return understanding
     updated = dict(understanding)
     updated["selected_source_context"] = True
+    source_ids = selected_file_ids or ([active_file_id] if active_file_id else [])
+    if source_ids:
+        updated["source_ids"] = source_ids
+    if page_number not in (None, ""):
+        updated["pages"] = [page_number]
     return updated
 
 

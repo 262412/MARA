@@ -71,7 +71,14 @@ def test_runtime_elements_prefers_persisted_element_index_records(monkeypatch):
         ["file-1"],
     )
 
-    assert records == [persisted_doc.metadata["element_index_record"]]
+    assert records == [
+        {
+            **persisted_doc.metadata["element_index_record"],
+            "source_id": "file-1",
+            "page_number": 7,
+            "element_type": "table",
+        }
+    ]
     assert docstore.requests == [["element-index-doc"]]
 
 

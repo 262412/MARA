@@ -63,6 +63,40 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
     assert markdown.index("avg_native_score=`0.9`") < markdown.index("avg_f1=`0.8`")
 
 
+def test_add_mara_summary_fields_aggregates_element_locator_hit():
+    summary = add_mara_summary_fields(
+        {"dataset_name": "sample"},
+        [
+            {
+                "route": "element_rag",
+                "benchmark_role": "prototype",
+                "metrics": {
+                    "element_hit": 0.0,
+                    "element_locator_hit": 1.0,
+                    "f1": 0.1,
+                    "em": 0.0,
+                },
+                "performance": {"total_seconds": 1.0},
+            },
+            {
+                "route": "element_rag",
+                "benchmark_role": "prototype",
+                "metrics": {
+                    "element_hit": 0.0,
+                    "element_locator_hit": 0.0,
+                    "f1": 0.0,
+                    "em": 0.0,
+                },
+                "performance": {"total_seconds": 1.0},
+            },
+        ],
+    )
+
+    assert summary["avg_element_hit"] == 0.0
+    assert summary["avg_element_locator_hit"] == 0.5
+    assert summary["route_metric_table"][0]["avg_element_locator_hit"] == 0.5
+
+
 def test_add_mara_summary_fields_preserves_citation_split_summaries():
     summary = {"dataset_name": "sample"}
     predictions = [

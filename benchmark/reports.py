@@ -226,6 +226,7 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
             "- Citation Inline Precision: "
             f"`{summary.get('avg_citation_inline_precision')}`",
             f"- Element Hit: `{summary.get('avg_element_hit')}`",
+            f"- Element Locator Hit: `{summary.get('avg_element_locator_hit')}`",
             f"- Table Hit: `{summary.get('avg_table_hit')}`",
             f"- Figure Hit: `{summary.get('avg_figure_hit')}`",
             f"- Formula Hit: `{summary.get('avg_formula_hit')}`",

@@ -23,6 +23,8 @@ def normalize_retrieved_hit(item: dict[str, Any]) -> dict[str, Any]:
         "page_index": _page_index(item, metadata),
         "modality": _first_text(item, metadata, "modality", "element_type", "type"),
         "element_id": _first_text(item, metadata, "element_id", "element"),
+        "element_id_aliases": _first_list(item, metadata, "element_id_aliases"),
+        "element_type_aliases": _first_list(item, metadata, "element_type_aliases"),
         "score": item.get("score", metadata.get("score")),
         "text": _first_text(item, metadata, "text", "content", "snippet"),
         "source_backrefs": _source_backrefs(item, metadata),
@@ -55,6 +57,17 @@ def _first_text(
     return ""
 
 
+def _first_list(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    key: str,
+) -> list[str]:
+    values = _list_values(item.get(key))
+    if not values:
+        values = _list_values(metadata.get(key))
+    return _dedupe_text(values)
+
+
 def _page_index(item: dict[str, Any], metadata: dict[str, Any]) -> int | None:
     text = _first_text(item, metadata, "page_index")
     if not text:
@@ -77,6 +90,16 @@ def _source_backrefs(
 
 
 def _source_ref_values(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value if str(item).strip()]
+    return []
+
+
+def _list_values(value: Any) -> list[str]:
     if value in (None, ""):
         return []
     if isinstance(value, str):

@@ -12,6 +12,7 @@ from kotaemon.base import Document, RetrievedDocument
 
 from .mara_artifacts import build_artifact_for_pipeline
 from .mara_controller import planner_trace_payload
+from .mara_element_answer import element_evidence_answer
 from .mara_evidence import build_mara_evidence_metadata
 from .mara_query_planning import plan_steps as build_mara_plan_steps
 from .mara_query_planning import understand_query as understand_mara_query
@@ -332,19 +333,6 @@ def _visible_execution_answer(execution: RouteExecutionResult) -> str:
     return execution.answer
 
 
-def _element_evidence_answer(bundle: Any) -> str:
-    excerpts = []
-    for item in bundle.items:
-        if str(item.get("modality") or "") in {"", "text", "page_image", "graph"}:
-            continue
-        text = str(item.get("text") or item.get("caption") or "").strip()
-        if text:
-            excerpts.append(text.rstrip(".") + ".")
-        if len(excerpts) >= 3:
-            break
-    return " ".join(excerpts)
-
-
 class MaraAgentPipeline(FullQAPipeline):
     """MARA agentic wrapper around the existing DocQA retrieval stack."""
 
@@ -499,7 +487,7 @@ class MaraAgentPipeline(FullQAPipeline):
                 return generated_answer
             if _decision.route == "element_rag":
                 _bundle.metadata["generation_backend"] = "local_element_evidence"
-                generated_answer = _element_evidence_answer(_bundle)
+                generated_answer = element_evidence_answer(_bundle, message)
                 return generated_answer
             answer, events = _collect_text_rag_generation(
                 self, message, conv_id, history, kwargs

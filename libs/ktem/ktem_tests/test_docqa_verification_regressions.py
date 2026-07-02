@@ -426,6 +426,58 @@ def test_summary_verifier_rejects_unanchored_structured_source_claim():
     assert payload["guardrail_decision"]["action"] == "revise"
 
 
+def test_strict_verifier_rejects_conflicting_year_on_same_event():
+    payload = build_controller_outputs(
+        DocQARequest(
+            prompt="When did the project launch?",
+            verification_mode="strict",
+        ),
+        [],
+        {
+            "evidence": [
+                {
+                    "evidence_id": "source-1",
+                    "file_id": "source-1",
+                    "text": "The project launched in 2024 after the pilot ended.",
+                }
+            ]
+        },
+        answer="Final answer: The project launched in 2025.",
+    )
+
+    assert payload["verify_decision"]["status"] == "unsupported"
+    assert payload["verify_decision"]["unsupported_claims"] == [
+        "The project launched in 2025."
+    ]
+    assert payload["guardrail_decision"]["action"] == "revise"
+
+
+def test_strict_verifier_rejects_conflicting_direction_on_same_metric():
+    payload = build_controller_outputs(
+        DocQARequest(
+            prompt="Did revenue increase or decrease?",
+            verification_mode="strict",
+        ),
+        [],
+        {
+            "evidence": [
+                {
+                    "evidence_id": "source-1",
+                    "file_id": "source-1",
+                    "text": "Revenue increased to 42 million in 2024.",
+                }
+            ]
+        },
+        answer="Final answer: Revenue decreased to 42 million in 2024.",
+    )
+
+    assert payload["verify_decision"]["status"] == "unsupported"
+    assert payload["verify_decision"]["unsupported_claims"] == [
+        "Revenue decreased to 42 million in 2024."
+    ]
+    assert payload["guardrail_decision"]["action"] == "revise"
+
+
 def test_answer_claims_drop_evidence_commentary_after_answer_claim():
     answer = (
         "The Svalbard Global Seed Vault opened on February 26, 2008. "

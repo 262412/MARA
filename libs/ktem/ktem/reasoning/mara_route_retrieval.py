@@ -198,6 +198,7 @@ def _element_metadata(
         str(understanding.get("question") or ""),
         records,
         retriever=getattr(pipeline, "element_retriever", None),
+        evidence_hints=_element_evidence_hints(understanding, pipeline),
     )
     return {
         "requested_modalities": list(understanding.get("modalities", [])),
@@ -216,6 +217,62 @@ def _element_records_for_pipeline(pipeline: Any) -> list[dict[str, Any]]:
     if not explicit_records:
         return []
     return [dict(item) for item in explicit_records if isinstance(item, dict)]
+
+
+def _element_evidence_hints(
+    understanding: dict[str, Any], pipeline: Any
+) -> dict[str, list[Any]]:
+    return {
+        "pages": _hint_values(
+            understanding.get("evidence_pages")
+            or understanding.get("pages")
+            or understanding.get("page_numbers")
+            or _request_page_hint(pipeline)
+        ),
+        "source_ids": _hint_values(
+            understanding.get("source_ids")
+            or understanding.get("document_ids")
+            or understanding.get("file_ids")
+            or _request_source_hints(pipeline)
+        ),
+        "element_types": list(
+            understanding.get("element_types")
+            or understanding.get("modalities")
+            or understanding.get("expected_modalities")
+            or []
+        ),
+    }
+
+
+def _request_page_hint(pipeline: Any) -> list[Any]:
+    request = getattr(pipeline, "docqa_request", None)
+    page_number = getattr(request, "page_number", None)
+    if page_number in (None, ""):
+        page_number = getattr(pipeline, "page_number", None)
+    return [] if page_number in (None, "") else [page_number]
+
+
+def _request_source_hints(pipeline: Any) -> list[Any]:
+    request = getattr(pipeline, "docqa_request", None)
+    selected = [
+        item
+        for item in getattr(request, "selected_file_ids", None) or []
+        if str(item).strip()
+    ]
+    if selected:
+        return selected
+    active_file_id = getattr(request, "active_file_id", None) or getattr(
+        pipeline, "active_file_id", None
+    )
+    return [] if active_file_id in (None, "") else [active_file_id]
+
+
+def _hint_values(value: Any) -> list[Any]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return [value]
 
 
 def _element_modality_counts(records: list[dict[str, Any]]) -> dict[str, int]:

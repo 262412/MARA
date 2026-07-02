@@ -9,6 +9,7 @@ from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
 
 MAX_PAGE_IMAGE_EVIDENCE_ITEMS = 10
+MAX_ELEMENT_EVIDENCE_ITEMS = 10
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,11 @@ def build_evidence_bundle(
         element_items.extend(
             _coerce_item(item) for item in evidence_metadata.get("elements") or []
         )
-        items.extend(_rank_route_items(element_items, request, "doc_element"))
+        items.extend(
+            _rank_route_items(element_items, request, "doc_element")[
+                :MAX_ELEMENT_EVIDENCE_ITEMS
+            ]
+        )
     if route in {"graph_global", "hybrid"}:
         items.extend(_graph_items(request, evidence_metadata))
 
@@ -455,6 +460,8 @@ def _route_item_score(
         score += 2
     if route == "doc_element" and modality not in {"", "page_image", "text"}:
         score += 2
+    if route == "doc_element":
+        score += _element_retriever_score(item)
 
     active_file_id = str(getattr(request, "active_file_id", "") or "").strip()
     source_id = str(item.get("source_id") or "").strip()
@@ -514,6 +521,11 @@ def _metadata_tokens(item: dict[str, Any]) -> set[str]:
 def _visual_retriever_score(item: dict[str, Any]) -> int:
     metadata = dict(item.get("metadata") or {})
     return int(float(metadata.get("visual_retriever_score") or 0.0) * 100)
+
+
+def _element_retriever_score(item: dict[str, Any]) -> int:
+    metadata = dict(item.get("metadata") or {})
+    return int(float(metadata.get("element_retriever_score") or 0.0) * 100)
 
 
 def _tokens(value: str) -> set[str]:

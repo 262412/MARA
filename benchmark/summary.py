@@ -189,6 +189,7 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         **_citation_group_summary(predictions),
         **_citation_locator_summary(predictions),
         "avg_element_hit": _avg_metric(predictions, "element_hit"),
+        "avg_element_locator_hit": _avg_metric(predictions, "element_locator_hit"),
         **_multimodal_hit_summary(predictions),
         "avg_span_recall": _avg_metric(predictions, "span_recall"),
         "avg_image_quote_hit": _avg_metric(predictions, "image_quote_hit"),
@@ -484,6 +485,10 @@ def _route_metric_table(
                 **_native_detail_metric_summary(route_predictions),
                 "avg_anls": _avg_metric(route_predictions, "anls"),
                 "avg_page_hit": _avg_metric(route_predictions, "page_hit"),
+                "avg_element_hit": _avg_metric(route_predictions, "element_hit"),
+                "avg_element_locator_hit": _avg_metric(
+                    route_predictions, "element_locator_hit"
+                ),
                 "avg_citation_recall": _avg_metric(
                     route_predictions, "citation_recall"
                 ),

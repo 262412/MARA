@@ -100,9 +100,12 @@ def test_element_index_documents_round_trip_records_for_persistence():
         {
             "evidence_id": "element:file-1:4:table-table-doc",
             "file_id": "file-1",
+            "source_id": "file-1",
             "file_name": "report.pdf",
             "page_label": "4",
+            "page_number": 4,
             "element_id": "table-table-doc",
+            "element_type": "table",
             "modality": "table",
             "bbox": None,
             "caption": "Regional revenue",
@@ -116,3 +119,31 @@ def test_element_index_documents_round_trip_records_for_persistence():
             },
         }
     ]
+
+
+def test_persisted_element_records_normalize_locator_aliases():
+    persisted_docs = multimodal_index_module.element_index_documents_from_records(
+        "file-1",
+        [
+            {
+                "evidence_id": "element:file-1:64:image4",
+                "source_id": "inditex_2021",
+                "file_id": "file-1",
+                "source_name": "inditex_2021.pdf",
+                "page": 64,
+                "element_id": "image4",
+                "element_type": "table",
+                "text": "Amortisation and depreciation charge",
+            }
+        ],
+    )
+
+    [record] = multimodal_index_module.element_records_from_index_documents(
+        persisted_docs
+    )
+
+    assert record["source_id"] == "inditex_2021"
+    assert record["page_label"] == "64"
+    assert record["page_number"] == 64
+    assert record["element_type"] == "table"
+    assert record["modality"] == "table"

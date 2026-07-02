@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any, Iterable
@@ -28,11 +29,15 @@ def offline_element_records_for_file(
     file_id: str,
     file_name: str,
     file_path: str | Path,
+    sidecar_roots: Iterable[str | Path] | None = None,
 ) -> list[dict[str, Any]]:
-    """Read same-file offline OCR/layout sidecars into element-index records."""
+    """Read offline OCR/layout sidecars into element-index records."""
 
     records: list[dict[str, Any]] = []
-    for sidecar_path in offline_layout_sidecar_paths(file_path):
+    for sidecar_path in offline_layout_sidecar_paths(
+        file_path,
+        sidecar_roots=sidecar_roots,
+    ):
         payload = _read_sidecar(sidecar_path)
         records.extend(
             _records_from_payload(
@@ -63,13 +68,53 @@ def offline_element_records_for_documents(
     return records
 
 
-def offline_layout_sidecar_paths(file_path: str | Path) -> list[Path]:
-    path = Path(file_path)
+def _same_file_sidecar_candidates(path: Path) -> list[Path]:
     candidates = []
     for suffix in SIDECAR_SUFFIXES:
         candidates.append(Path(f"{path}{suffix}"))
         candidates.append(path.with_name(f"{path.stem}{suffix}"))
+    return candidates
+
+
+def offline_layout_sidecar_paths(
+    file_path: str | Path,
+    *,
+    sidecar_roots: Iterable[str | Path] | None = None,
+) -> list[Path]:
+    path = Path(file_path)
+    candidates = list(_same_file_sidecar_candidates(path))
+    roots = _configured_sidecar_roots() if sidecar_roots is None else sidecar_roots
+    candidates.extend(_external_sidecar_candidates(path, roots))
     return _existing_unique_paths(candidates)
+
+
+def _external_sidecar_candidates(
+    source_path: Path,
+    roots: Iterable[str | Path],
+) -> list[Path]:
+    candidates = []
+    for root in roots:
+        root_path = Path(root)
+        if not str(root_path).strip():
+            continue
+        for suffix in SIDECAR_SUFFIXES:
+            candidates.append(root_path / f"{source_path.name}{suffix}")
+            candidates.append(root_path / f"{source_path.stem}{suffix}")
+    return candidates
+
+
+def _configured_sidecar_roots() -> list[Path]:
+    roots: list[Path] = []
+    for env_name in (
+        "MARA_OFFLINE_LAYOUT_SIDECAR_DIR",
+        "MARA_OFFLINE_LAYOUT_SIDECAR_DIRS",
+    ):
+        raw_value = os.environ.get(env_name, "")
+        for item in raw_value.split(os.pathsep):
+            value = item.strip()
+            if value:
+                roots.append(Path(value))
+    return roots
 
 
 def _read_sidecar(sidecar_path: Path) -> Any:
@@ -132,7 +177,7 @@ def _normalize_record(
         str(record.get("evidence_id") or "").strip()
         or f"element:{file_id}:{page_label}:{element_id}"
     )
-    return {
+    output = {
         "evidence_id": evidence_id,
         "file_id": file_id,
         "file_name": file_name,
@@ -151,6 +196,13 @@ def _normalize_record(
             record_index,
         ),
     }
+    element_id_aliases = _alias_values(record.get("element_id_aliases"))
+    if element_id_aliases:
+        output["element_id_aliases"] = element_id_aliases
+    element_type_aliases = _alias_values(record.get("element_type_aliases"))
+    if element_type_aliases:
+        output["element_type_aliases"] = element_type_aliases
+    return output
 
 
 def _metadata(
@@ -234,6 +286,23 @@ def _source_backrefs(
         raw_backrefs = [raw_backrefs]
     backrefs = [str(item).strip() for item in raw_backrefs or [] if str(item).strip()]
     return backrefs or [f"{file_id}#page:{page_label}"]
+
+
+def _alias_values(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, (list, tuple, set)):
+        values = list(value)
+    else:
+        values = []
+    output: list[str] = []
+    for item in values:
+        text = str(item or "").strip()
+        if text and text not in output:
+            output.append(text)
+    return output
 
 
 def _slug(value: str) -> str:

@@ -279,22 +279,25 @@ def _persisted_element_record(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
     evidence_id = str(value.get("evidence_id") or "").strip()
-    file_id = str(value.get("file_id") or value.get("source_id") or "").strip()
+    source_id = str(value.get("source_id") or value.get("document_id") or "").strip()
+    file_id = str(value.get("file_id") or source_id or "").strip()
     page_label = str(value.get("page_label") or value.get("page") or "").strip()
     element_id = str(value.get("element_id") or "").strip()
     if not evidence_id or not file_id or not page_label or not element_id:
         return None
     raw_metadata = value.get("metadata")
     metadata = _safe_dict(raw_metadata)
+    modality = str(value.get("modality") or value.get("element_type") or "element")
     return {
         "evidence_id": evidence_id,
         "file_id": file_id,
+        "source_id": source_id or file_id,
         "file_name": str(value.get("file_name") or value.get("source_name") or ""),
         "page_label": page_label,
+        "page_number": _page_number(page_label),
         "element_id": element_id,
-        "modality": str(
-            value.get("modality") or value.get("element_type") or "element"
-        ),
+        "element_type": modality,
+        "modality": modality,
         "bbox": _serialize_value(value.get("bbox")),
         "caption": str(value.get("caption") or ""),
         "text": str(value.get("text") or ""),
