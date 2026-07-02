@@ -161,6 +161,8 @@ def _ready(
         row["model_family"] = payload.get("model_family")
     if payload.get("model"):
         row["model"] = payload.get("model")
+    if payload.get("device"):
+        row["device"] = payload.get("device")
     return row
 
 

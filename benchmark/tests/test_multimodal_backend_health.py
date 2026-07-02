@@ -38,6 +38,7 @@ def test_check_multimodal_backends_records_ready_ports_and_models(monkeypatch):
         "http://127.0.0.1:8003/health": {
             "ok": True,
             "model_family": "colqwen",
+            "device": "cuda:0",
         },
     }
 
@@ -61,6 +62,7 @@ def test_check_multimodal_backends_records_ready_ports_and_models(monkeypatch):
     assert result["backends"]["vlm"]["models"] == ["Qwen/Qwen3-VL-8B-Instruct"]
     assert result["backends"]["retrieval"]["status"] == "ready"
     assert result["backends"]["colvision"]["model_family"] == "colqwen"
+    assert result["backends"]["colvision"]["device"] == "cuda:0"
     assert result["failure_taxonomy"] == []
 
 

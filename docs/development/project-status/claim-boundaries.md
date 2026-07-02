@@ -1,6 +1,6 @@
 # Thesis Claim Boundaries
 
-Last updated: 2026-06-30.
+Last updated: 2026-07-02.
 
 This document is the claim-boundary source for dissertation text,
 proposal-facing reports, and demo narrative. Historical benchmark artifacts and
@@ -75,26 +75,29 @@ written as official benchmark, leaderboard, or paper-grade external scores:
 
 Current benchmark-cycle note:
 
-- The 2026-06-29/30 first smoke and repair cycle is local-adapted only. The
-  ALCE proxy evaluator proves plumbing but is not paper-grade.
-- Submitted repair jobs are not evidence until their artifacts are complete.
-- MMDocRAG remains partially pending because the first job timed out and the
-  route-split sanity run found benchmark route timeouts for
-  `page_image_rag_vlm` and `hybrid_rag`. Text, element, visual, hybrid, and
-  controller sanity artifacts are available. L40S fallback rows
-  `9408508-9408510` are also available, but page/hybrid still have route
-  timeouts plus VLM 4096-context overflows. H100/3-GPU replacement rows
-  `9413488-9413490` were superseded after L40S repaired fallback rows
-  `9414048-9414050` also overflowed 4096 context. 8k-context repair rows
-  `9416399-9416401` fixed context overflow on L40S, but page/hybrid still have
-  route-timeout/performance failures. H100 8k rows `9416402-9416404` remain
-  pending as GPU ColVision/performance comparison, and L40S timeout-budget
-  diagnostics `9426207-9426208` remain pending as route-timeout evidence.
+- The 2026-07-01 clean Task 0-9 rerun is local-adapted only. The ALCE proxy
+  evaluator proves plumbing but is not paper-grade.
+- Task 9 closes a local-adapted thesis evidence package, not an official
+  leaderboard or external-evaluator package.
+- SlideVQA is the primary local-adapted multimodal thesis dataset: job
+  `9469112`, 25 examples, full multimodal route matrix, and zero prediction
+  errors.
+- MMDocRAG is secondary visual stability evidence: jobs `9469113` and
+  `9469114` validate page-image and hybrid execution with GPU-ColVision / 8k
+  VLM settings, but do not establish matched full-route superiority.
+- FinanceBench, QASPER, ALCE, and RAGTruth are supporting 10-smoke diagnostics
+  in this clean rerun, not main headline thesis datasets.
 - ViDoRe current rows are retrieval diagnostics only, not full answer-generation
   QA claims.
-- Element RAG has nonzero but sparse MMDocRAG coverage evidence in the repair
-  cycle, so it may be described as a sparse-coverage failure. It must not be
-  described as an Element RAG quality gain.
+- Element RAG has nonzero but sparse MMDocRAG coverage evidence, so it may be
+  described as a sparse-coverage failure. It must not be described as an
+  Element RAG quality gain.
+- Task 6 attribution and Task 7 guardrail reports are local diagnostics only:
+  inline citation evidence is absent in current candidates, and guarded-route
+  unsupported-claim detection is not calibrated paper-grade detection.
+- Task 8 format evidence is diagnostic only: 6/7 complex synthetic samples
+  indexed and 5/7 query turns found expected answers, but DOCX/CSV issues
+  remain and preview/OCR were not exercised.
 
 ## Out Of Final Claim Or Future Work
 
@@ -106,13 +109,14 @@ These must not be written as completed current-system claims:
 - Full GraphRAG, including community detection, global query-focused
   summarization, and graph construction quality evaluation.
 - Production ColPali / ColQwen benchmark claim.
-- Stable large-sample VLM performance.
+- Broad stable large-sample VLM performance beyond the clean local-adapted
+  SlideVQA/MMDocRAG evidence package.
 - Element RAG stable answer-quality improvement on real non-gold OCR/layout
   corpus.
 - Calibrated verifier thresholds and paper-grade attribution/hallucination
   evaluation.
-- Dissertation-level format robustness proof for complex PPTX, Excel, formulas,
-  and charts.
+- Full production-style format robustness, including preview, OCR, DOCX
+  conversion, CSV retrieval, complex PPTX, Excel formulas, and charts.
 - Rich graph UI with full-screen pan/zoom/filter/study-guide views.
 - Real audio/video media export.
 - Global claim that controller, hybrid, or guarded routes are stably superior

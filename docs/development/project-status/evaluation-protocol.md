@@ -1,6 +1,6 @@
 # Evaluation Protocol Freeze Draft
 
-Last updated: 2026-06-30.
+Last updated: 2026-07-02.
 
 This document freezes the protocol draft, not the final benchmark results. It
 should be reopened only for a concrete system change, a new regression target,
@@ -77,39 +77,43 @@ Frozen:
 - Evaluator authority hierarchy.
 - Score promotion rule.
 - Dataset primary-metric draft.
+- Clean 2026-07-01 local-adapted thesis evidence package:
+  SlideVQA primary, MMDocRAG secondary visual stability, and local
+  dataset-native / adapted metric authority.
 
 Not frozen:
 
-- Final 2-3 thesis main datasets.
-- Final route matrix for dissertation tables.
-- Final evaluator authority with paper-grade external scores.
-- Any superiority claim over `text_rag`.
+- Paper-grade external evaluator scores.
+- Text/core dataset promotion beyond smoke-scale supporting diagnostics.
+- Any global superiority claim over `text_rag`.
+- Element RAG answer-quality improvement.
+- Calibrated guardrail or paper-grade attribution claims.
+- Full production-style format robustness.
 
 Current execution status:
 
-- The active 2026-06-29/30 run root is
-  `/mnt/scratch/users/tbczhang/outputs/MARA/benchmark_next_20260629`.
-- Route-matrix complement jobs `9406278-9406281` are complete for FinanceBench,
-  ALCE, QASPER, and RAGTruth.
-- MMDocRAG route-split repair/sanity jobs `9406282-9406286` are tracked after
-  the first all-route job timed out. Text and element jobs `9406282-9406283`
-  are complete; visual/controller sanity rows `9406284-9406286` are also
-  complete with artifact four-tuples.
-- MMDocRAG element coverage is nonzero but sparse, so it is evidence for a
-  sparse-coverage failure rather than a positive Element RAG quality claim.
-- The MMDocRAG visual sanity run no longer shows the 2048-context failure, but
-  L40S fallback rows `9408508-9408510` show the 4k prompt cap is still too
-  tight for page/hybrid: each has 3 route timeouts and 3 VLM 4096-context
-  overflows. L40S repaired fallback jobs `9414048-9414050` completed on
-  `gpu48` with evidence_text_chars=120 but still overflowed 4096 context for
-  page/hybrid. H100/3-GPU 4k-context jobs `9413488-9413490` were cancelled
-  before start. L40S 8k-context rows `9416399-9416401` completed and fixed
-  context overflow, but page/hybrid still have route-timeout/performance
-  failures. H100 8k rows `9416402-9416404` remain pending, and L40S
-  timeout-budget diagnostics `9426207-9426208` are submitted with
-  route_timeout=1200.
-- Task 2 evaluator authority is closed for this cycle as
-  `local_adapted_only_scope`; `alce=builtin:alce_proxy` is diagnostic plumbing
-  only.
-- Freeze still waits for H100 replacement artifacts, larger matched reruns, and
-  failure synthesis.
+- The active clean run root is
+  `/mnt/scratch/users/tbczhang/outputs/MARA/benchmark_next_20260701_task0_9_rerun`.
+- Task 9 closes this rerun as `local_adapted_thesis_synthesis_complete`.
+- Final synthesis artifacts live under `09_synthesis/`, including
+  `task9_final_synthesis.md`,
+  `thesis_dataset_route_freeze_decision.md`,
+  `final_result_table.csv`,
+  `route_failure_latency_backend_table.csv`,
+  `thesis_route_freeze_table.csv`,
+  `final_evaluator_authority_table.csv`, and
+  `demo_preflight_checklist.md`.
+- Primary local-adapted thesis dataset: `slidevqa_test_shard0_multimodal`,
+  job `9469112`, 25 examples, full multimodal route matrix, zero prediction
+  errors.
+- Secondary visual stability evidence:
+  `mmdocrag_dev15_available_docs_multimodal`, jobs `9469113` and `9469114`,
+  with route-split page-image and hybrid evidence under GPU-ColVision / 8k VLM
+  settings.
+- FinanceBench, QASPER, ALCE, and RAGTruth are supporting 10-smoke diagnostics
+  in this clean rerun.
+- Task 2 evaluator authority is closed as `local_adapted_only_scope`;
+  `alce=builtin:alce_proxy` is diagnostic plumbing only.
+- ViDoRe remains retrieval-only diagnostic evidence.
+- Element RAG, guardrail calibration, citation attribution, and format E2E are
+  diagnostic-only evidence unless reopened with stronger artifacts.

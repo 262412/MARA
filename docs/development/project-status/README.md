@@ -43,45 +43,41 @@ MARA has a complete thesis-prototype engineering skeleton: local Web/CLI DocQA
 runtime, typed request/response contracts, route-aware controller semantics,
 evidence and verification traces, benchmark protocol engineering, multimodal
 workflow plumbing, UI/structure debt control, and paper-grade evaluator
-readiness hooks. The remaining work is research-result stability: final
-dataset/route/evaluator freeze, larger reruns, VLM/element quality evidence,
-citation/claim attribution analysis, and any true paper-grade external
-evaluator run.
+readiness hooks. The 2026-07-01 clean Task 0-9 rerun has now closed a
+local-adapted thesis evidence package: SlideVQA is the primary local-adapted
+multimodal dataset, MMDocRAG is secondary visual stability evidence, and
+headline score authority remains local dataset-native / adapted metrics only.
+Remaining work is limited to out-of-scope or residual research evidence:
+paper-grade external evaluator configuration, larger text/core promotion if
+needed, Element RAG quality, calibrated guardrail/attribution evaluation, and
+full production-style format robustness.
 
 ## Current Benchmark Repair Status
 
-As of 2026-07-01, the active execution plan is
-`/mnt/scratch/users/tbczhang/outputs/MARA/benchmark_next_20260629/benchmark_task_checklist.md`.
+As of 2026-07-02, the active clean rerun root is
+`/mnt/scratch/users/tbczhang/outputs/MARA/benchmark_next_20260701_task0_9_rerun`.
 It is an execution artifact, not a replacement for this canonical status
 directory.
 
-The first 10-smoke batch produced usable text, SlideVQA, ViDoRe, and evaluator
-plumbing artifacts, but it did not freeze thesis datasets/routes/evaluator
-authority. Route-matrix complement jobs `9406278-9406281` are complete with
-full artifacts. MMDocRAG `text_rag`/`element_rag` repair jobs `9406282-9406283`
-are complete, with sparse element coverage evidence. MMDocRAG visual/controller
-sanity jobs `9406284-9406286` are also complete with artifacts and no 2048
-context regression. L40S fallback limit=10 rows `9408508-9408510` completed
-with full artifacts, but `page_image_rag_vlm` and `hybrid_rag` still show route
-timeouts plus VLM 4096-context overflows. The original H100 rows
-`9408062-9408064` were cancelled before start and replaced by H100/3-GPU rows
-`9413488-9413490` using `MARA_VLM_EVIDENCE_TEXT_CHARS=120`. Because H100
-remained queued, L40S repaired fallback rows `9414048-9414050` were also
-submitted on `gpu48` with the same prompt cap. Those rows completed, but
-`page_image_rag_vlm` and `hybrid_rag` still had route timeouts plus VLM
-4096-context overflows. L40S 8k-context rows `9416399-9416401` completed and
-fixed VLM context overflow, but `page_image_rag_vlm` and `hybrid_rag` still
-have route-timeout/performance failures. H100 8k rows `9416402-9416404` remain
-pending as GPU ColVision/performance comparison. L40S timeout-budget diagnostic
-rows `9426207-9426208` are submitted with route_timeout=1200 to distinguish a
-too-short 600s budget from a persistent route performance blocker. The 1-7
-repair plan is closed as an evidence-chain repair, but final freeze remains
-blocked until timeout/performance synthesis, larger matched reruns, and failure
-synthesis are updated here. The first larger matched closure jobs have now been
-submitted on L40S resources: RAGTruth-50 `9426781`, ALCE-50 `9426782`, and
-SlideVQA-25 `9426783`. These are pending/in-flight evidence rows, not freeze
-results. Those closure jobs have since completed with full artifact four-tuples,
-as have H100 MMDocRAG comparison rows `9416402-9416404` and L40S
-timeout-budget rows `9426207-9426208`. The missing benchmark artifact gap is
-now closed; the remaining benchmark work is final failure synthesis and the
-explicit thesis dataset/route/evaluator freeze decision.
+Task 0-9 is closed for this clean rerun. The Task 9 synthesis artifacts are in
+`09_synthesis/`, especially `task9_final_synthesis.md`,
+`thesis_dataset_route_freeze_decision.md`,
+`route_failure_latency_backend_table.csv`, and
+`demo_preflight_checklist.md`. No Slurm job was submitted for Task 9 because
+the required raw artifacts already existed and the task was synthesis plus
+canonical status alignment.
+
+The final local-adapted freeze decision is:
+
+- Primary thesis dataset: `slidevqa_test_shard0_multimodal`, job `9469112`,
+  25 examples and full multimodal route matrix.
+- Secondary visual stability evidence:
+  `mmdocrag_dev15_available_docs_multimodal`, jobs `9469113` and `9469114`,
+  with GPU-ColVision / 8k VLM settings and zero prediction errors.
+- Text/core datasets are supporting 10-smoke diagnostics in this clean rerun,
+  not main thesis headline datasets.
+- Task 2 is formally closed as `local_adapted_only_scope`; the ALCE proxy run
+  is evaluator plumbing only and is not paper-grade.
+- ViDoRe remains retrieval-only diagnostic evidence.
+- Element RAG, guardrail calibration, citation attribution, and format E2E are
+  reported as local diagnostics with explicit residual limits.

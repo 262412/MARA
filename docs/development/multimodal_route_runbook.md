@@ -99,7 +99,15 @@ If a backend is missing, the wrapper starts the local service from
 - GPU0: `serve_qwen3_8b.sh`
 - GPU1: `serve_qwen3_vl_8b.sh`
 - CPU by default: `serve_retrieval.sh`
-- CPU by default: `serve_colvision.sh`
+- GPU1 by default: `serve_colvision.sh` with `MARA_COLVISION_DEVICE=cuda:0`
+
+The default 2-GPU L40S placement keeps the text LLM on GPU0 and shares VLM plus
+ColVision on GPU1. The wrapper sets
+`MARA_VLM_GPU_MEMORY_UTILIZATION=0.70` so the VLM server can start reliably
+while ColVision is already resident on the same GPU. Override
+`MARA_COLVISION_GPU`, `MARA_COLVISION_DEVICE`, and
+`MARA_VLM_GPU_MEMORY_UTILIZATION` together when using a 3-GPU A100/H100
+placement or a CPU-only diagnostic.
 
 The VLM health gate must return `Qwen/Qwen3-VL-8B-Instruct` through
 `/v1/models` before the benchmark starts.
@@ -120,6 +128,9 @@ types include `unreachable`, `timeout`, `http_error`, `bad_json`,
 The Slurm wrapper saves this file under its run log directory and passes it to
 `benchmark run` with `--backend-health-json`, so `summary.json` and `report.md`
 record the backend state used by the rerun.
+ColVision health includes the served `device` when the local ColVision server
+reports it; MMDocRAG visual evidence should use `device=cuda:0`, not CPU
+ColVision.
 
 For interactive checks on the current node:
 

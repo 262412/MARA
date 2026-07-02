@@ -1,6 +1,6 @@
 # Current Proposal Audit
 
-Last updated: 2026-07-01.
+Last updated: 2026-07-02.
 
 This is the canonical current status source for MARA proposal alignment. The
 old `docs/development/proposal_project_audit_2026-06-25.md` path is now a
@@ -55,21 +55,21 @@ indexing, dataset syncs, Slurm jobs, or large downloads.
 | Proposal item                                           | Current status                           | Evidence                                                                                   | Remaining work                                                       |
 | ------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | Local-first Web/CLI DocQA runtime                       | Basically complete                       | Shared `ktem.docqa.DocQARuntime`; `MARA docqa`; Web request builder                        | Preserve parity tests for new request/session fields                 |
-| PDF/Word/PPT/Excel/CSV/Markdown/text upload/index/query | Basically complete; fixture smoke exists | `FileIndex` type coverage; `benchmark/format_smoke_harness.py`                             | Real complex PPTX/Excel/formula/chart E2E evidence                   |
+| PDF/Word/PPT/Excel/CSV/Markdown/text upload/index/query | Basically complete; diagnostic E2E exists | `FileIndex` type coverage; `benchmark/format_smoke_harness.py`; Task 8 complex-format diagnostic | DOCX/CSV/preview/OCR residual limits                                 |
 | Stable `DocQARequest` / `DocQAResponse`                 | Basically complete                       | Typed runtime models and CLI/Web parity coverage                                           | Avoid public JSON/session/request drift                              |
 | Controller decisions and evidence contracts             | Basically complete                       | `RouteDecision`, `RetrieveDecision`, `EvidenceBundle`, `VerifyDecision`, `ControllerTrace` | Keep contracts shared across Web/CLI/benchmark                       |
 | Route/executor registry                                 | Basically complete                       | Direct, text, page-image, element, graph, hybrid, abstain families                         | Keep backend readiness visible in UI/benchmark                       |
 | Text RAG                                                | Basically complete                       | Existing DocQA retrieval/generation and `text_rag` route                                   | Treat as baseline, not as a tuning target                            |
 | Controller auto routing                                 | Partly complete                          | Heuristic/structured planner path and `controller_auto` route                              | Route confusion and expected-route analysis                          |
-| Page-image RAG                                          | Partly complete                          | Local smoke retriever, ColVision HTTP retriever, Qwen-VL adapter                           | Larger stable VLM rerun and latency/error analysis                   |
+| Page-image RAG                                          | Local-adapted thesis evidence available  | SlideVQA larger25 full matrix; MMDocRAG larger15 visual stability rows                     | No paper-grade or broad large-sample VLM claim                       |
 | Element RAG                                             | Partly complete                          | Element parser/ranker/index persistence and sidecar contract                               | Real non-gold OCR/layout quality evidence                            |
 | Lightweight GraphRAG                                    | Partly complete                          | Local graph evidence selector and graph-summary path                                       | Claim only local lightweight graph route                             |
 | Hybrid RAG                                              | Partly complete                          | Weighted fusion/RRF/learned-ranker hook                                                    | Question-type split before benefit claims                            |
 | CRAG-style evaluator                                    | Partly complete                          | Retrieval adequacy, retry, route switch, abstain paths                                     | Threshold calibration and false-abstention analysis                  |
 | Claim verification                                      | Partly complete                          | Light/strict verifier and unsupported-claim handling                                       | Do not claim calibrated paper-grade hallucination detection          |
-| Citations and evidence metadata                         | Basically complete                       | `agent_trace`, `evidence_metadata`, `evidence_bundle`, `workflow_plan`                     | Attribution-quality analysis still needed                            |
-| Benchmark harness and route ablations                   | Framework complete; evaluation not final | Manifest v2, route matrix, route metrics, authority metadata                               | External paper-grade evaluator and final thesis protocol             |
-| ALCE/MMDocRAG/RAGTruth-style metrics                    | Partly complete                          | Local converters/evaluators/report fields                                                  | External evaluators mostly `not_configured`                          |
+| Citations and evidence metadata                         | Basically complete; local diagnostics    | `agent_trace`, `evidence_metadata`, `evidence_bundle`, `workflow_plan`; Task 6 report      | Paper-grade attribution not configured                               |
+| Benchmark harness and route ablations                   | Local-adapted synthesis complete         | Manifest v2, route matrix, route metrics, authority metadata; Task 9 synthesis             | External paper-grade evaluator remains optional/out-of-scope         |
+| ALCE/MMDocRAG/RAGTruth-style metrics                    | Local adapted only                       | Local converters/evaluators/report fields; ALCE proxy plumbing                             | No paper-grade external evaluator configured                         |
 | Web UI workbench                                        | Partly complete                          | Source browser, preview, chat, route controls, trace, graph, Studio artifacts              | Final UI information architecture polish                             |
 | Automated tests                                         | Partly complete                          | Focused benchmark/ktem/slide_cli tests                                                     | Continue targeted gates; avoid root `pytest -q` as default readiness |
 
@@ -87,56 +87,44 @@ indexing, dataset syncs, Slurm jobs, or large downloads.
 6. Study artifact generation exceeds the minimum proposal MVP, while real
    audio/video media export remains a scoped extension.
 
-## Active Benchmark Repair Status
+## Current Benchmark Synthesis Status
 
-The active run root is
-`/mnt/scratch/users/tbczhang/outputs/MARA/benchmark_next_20260629`.
+The current clean run root is
+`/mnt/scratch/users/tbczhang/outputs/MARA/benchmark_next_20260701_task0_9_rerun`.
+The outputs checklist under that directory remains an execution plan only; this
+directory is the canonical status source.
 
-The first 10-smoke batch is useful as health and diagnostic evidence, but it is
-not final thesis evidence. The current repair state is:
+Task 0-9 is closed for the clean rerun as
+`local_adapted_thesis_synthesis_complete`. The final synthesis lives under
+`09_synthesis/`, especially `task9_final_synthesis.md`,
+`thesis_dataset_route_freeze_decision.md`, `final_result_table.csv`,
+`route_failure_latency_backend_table.csv`,
+`final_evaluator_authority_table.csv`, and `demo_preflight_checklist.md`.
 
-- FinanceBench, ALCE, QASPER, and RAGTruth route-matrix complement jobs
-  `9406278-9406281` are complete with full artifact four-tuples.
-- MMDocRAG first run `9389243` timed out; route-split repair/sanity jobs
-  `9406282-9406286` are tracked. `text_rag`/`element_rag` jobs
-  `9406282-9406283` are complete; visual/controller sanity rows
-  `9406284-9406286` are also complete with artifact four-tuples.
-- MMDocRAG `element_rag` now has nonzero but sparse element coverage evidence
-  (2 records in 1/10 predictions), so it supports a sparse-coverage failure
-  explanation rather than a positive Element RAG claim.
-- MMDocRAG visual sanity no longer shows the earlier 2048-context or
-  DictionaryObject failures. L40S fallback limit=10 rows `9408508-9408510`
-  completed with artifact four-tuples, but `page_image_rag_vlm` and
-  `hybrid_rag` still have route timeouts plus VLM 4096-context overflows.
-  H100/3-GPU replacement jobs `9413488-9413490` are submitted to test GPU
-  ColVision, a 600s route timeout, and evidence_text_chars=120. L40S repaired
-  fallback jobs `9414048-9414050` completed on `gpu48` with the same prompt cap
-  but still had page/hybrid route timeouts plus 4096-context overflows. The
-  L40S 8k-context rows `9416399-9416401` are complete and fixed VLM context
-  overflow, but page/hybrid still have route-timeout/performance failures. H100
-  8k rows `9416402-9416404` remain pending as GPU ColVision/performance
-  comparison. L40S timeout-budget diagnostics `9426207-9426208` are submitted
-  with route_timeout=1200.
-- External evaluator Task 2 is closed for this cycle as
-  `local_adapted_only_scope`; the ALCE proxy is not paper-grade.
-- Derived reports now exist under the run root for route matrix,
-  controller/hybrid/guarded behavior, element coverage, evaluator authority,
-  citation attribution, guardrail calibration, and synthesis.
-- Larger matched closure jobs have been submitted on L40S resources:
-  RAGTruth-50 `9426781`, ALCE-50 `9426782`, and SlideVQA-25 `9426783`. They
-  are not freeze evidence until the artifact four-tuples and failure synthesis
-  are complete. These rows are now complete with full artifact four-tuples.
-  RAGTruth-50 supports guardrail calibration/failure analysis, ALCE-50 supports
-  `text_rag` as the strongest route and `hybrid_rag` as diagnostic, and
-  SlideVQA-25 supports visual routes over text while preserving Element RAG as
-  a coverage failure.
-- H100 MMDocRAG rows `9416402-9416404` and L40S timeout-budget rows
-  `9426207-9426208` are complete. They close the missing execution/context/
-  timeout evidence gap, but MMDocRAG remains a quality/latency residual risk.
+Current thesis evidence decision:
 
-Do not freeze final datasets, route table, or evaluator authority until
-failure synthesis is updated and the final thesis dataset/route/evaluator
-decision is explicitly recorded.
+- Primary local-adapted thesis dataset: `slidevqa_test_shard0_multimodal`,
+  job `9469112`, 25 examples, full multimodal route matrix, zero prediction
+  errors.
+- Secondary visual stability evidence:
+  `mmdocrag_dev15_available_docs_multimodal`, jobs `9469113` and `9469114`,
+  using GPU-ColVision / 8k VLM settings, route-split page-image and hybrid
+  evidence, and zero prediction errors.
+- Text/core datasets are 10-smoke supporting diagnostics in this clean rerun,
+  not main thesis headline datasets.
+- Evaluator authority is `local_adapted_only_scope`. No `external_paper_grade`
+  result is configured; ALCE proxy evidence is plumbing only.
+- ViDoRe remains retrieval-only diagnostic evidence.
+- Element RAG, citation attribution, guardrail calibration, and format E2E are
+  local diagnostics with explicit residual limits.
+
+Current conclusion:
+
+MARA is ready to be described as a local-first, route-aware, multimodal DocQA
+research prototype with a local-adapted thesis evidence package. It is not
+ready for official leaderboard, paper-grade external evaluation, production
+Self-RAG/CRAG/GraphRAG/MMDocRAG/ColPali reproduction, stable Element RAG
+quality, or global superiority claims over `text_rag`.
 
 ## No-Benchmark Engineering Closure Items
 
@@ -147,11 +135,11 @@ unfinished problems.
 | Closure item                              | Final conclusion                                                                                                                | Remaining use                                   |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | Final thesis claim boundary               | Completed artifacts, local diagnostics, and future work boundaries are frozen                                                   | Apply in dissertation text and tables           |
-| Route matrix / evaluator authority draft  | Route reporting roles, authority hierarchy, primary-metric draft, and promotion rule are recorded                               | Final thesis datasets still need larger results |
+| Route matrix / evaluator authority draft  | Route reporting roles, authority hierarchy, primary-metric draft, promotion rule, and clean-run local-adapted freeze are recorded | Reopen only for external paper-grade scoring or text/core promotion |
 | Paper-grade evaluator interface readiness | Prediction, summary, and report preserve readiness/blocker metadata                                                             | Real external evaluator run remains separate    |
 | Citation schema/path consistency          | Metadata citation, inline citation, scored citation, and trace locators are aligned                                             | Quality/attribution analysis remains            |
 | CRAG / verifier observability             | True/false abstention, unsupported claim, retry, and route switch are reportable                                                | Threshold calibration remains                   |
-| VLM / multimodal runbook productization   | 8000/8001/8002/8003 checks, Slurm template, backend logging, taxonomy exist                                                     | Larger VLM rerun remains                        |
+| VLM / multimodal runbook productization   | 8000/8001/8002/8003 checks, Slurm template, backend logging, taxonomy, and clean-run visual stability artifacts exist            | Broader VLM generalization remains              |
 | Element index engineering contract        | OCR/layout sidecar schema, persisted index contract, coverage report, fixture tests exist                                       | Quality evidence remains                        |
 | Format robustness test framework          | PDF/Word/PPTX/Excel/CSV/Markdown/text indexing/query smoke harness exists                                                       | Complex live E2E evidence remains               |
 | Failure/routing taxonomy                  | Answer mismatch, timeout, backend unavailable, empty retrieval, false abstention, bad citation, and route family are reportable | Large-sample analysis remains                   |
@@ -160,7 +148,9 @@ unfinished problems.
 ## Current Conclusion
 
 MARA is ready to be described as a local-first, route-aware, multimodal DocQA
-research prototype with strong engineering artifacts and local diagnostic
-evaluation infrastructure. It is not yet ready for broad claims that
-controller/hybrid/guarded, VLM, or element routes are stably superior to text
-RAG, nor for claims of paper-grade external evaluation.
+research prototype with strong engineering artifacts, local diagnostic
+evaluation infrastructure, and a clean-run local-adapted thesis evidence
+package. It is not ready for official leaderboard claims, paper-grade external
+evaluation, production-level system reproduction claims, stable Element RAG
+quality claims, or global claims that controller/hybrid/guarded routes are
+superior to `text_rag`.
