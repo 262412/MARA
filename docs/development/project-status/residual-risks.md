@@ -1,18 +1,38 @@
 # Residual Risks And Remaining Work
 
-Last updated: 2026-07-02.
+Last updated: 2026-07-03.
 
-This document lists only work that still needs true benchmark evidence,
-dissertation result synthesis, or final demo rehearsal. Items already closed
-through code contracts, schema alignment, runbooks, or claim boundaries are not
-kept here as unfinished problems.
+This document lists only work that still needs true benchmark evidence beyond
+the final required benchmark rows, dissertation writing, or final demo
+rehearsal. Items already closed through code contracts, schema alignment,
+runbooks, final synthesis, or claim boundaries are not kept here as unfinished
+problems.
+
+## Final Benchmark Evidence Now Closed
+
+The 2026-07-02 final required benchmark rows completed and were synthesized
+under
+`/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_20260702`.
+
+Closed evidence:
+
+- SlideVQA primary local-adapted route comparison, job `9559018`, 25 examples
+  and 100 predictions across four routes.
+- MMDocRAG secondary visual stability rows, jobs `9559019` and `9559020`, with
+  per-job GPU-ColVision / 8k VLM health.
+- MMDocRAG text baseline diagnostic, job `9559021`.
+- Final tables:
+  `09_synthesis/final_main_result_table.csv`,
+  `09_synthesis/final_secondary_visual_stability_table.csv`, and
+  `09_synthesis/final_failure_latency_backend_table.csv`.
 
 ## Essential Remaining Work
 
 1. Paper-grade external evaluation.
 
    - Interface readiness is complete, but no real paper-grade evaluator is
-     configured in the clean Task 0-9 rerun.
+     configured in either the clean Task 0-9 rerun or the 2026-07-02 final
+     required benchmark rows.
    - Task 2 is formally closed as `local_adapted_only_scope`. The ALCE proxy
      run verifies evaluator plumbing only:
      `paper_grade_ready=False`, blocker `not_paper_grade`.
@@ -63,8 +83,8 @@ kept here as unfinished problems.
 
 ## Thesis-Ready Reporting Still Needed
 
-1. Dissertation prose, tables, figures, and demo narrative that apply
-   [Claim Boundaries](claim-boundaries.md).
+1. Dissertation prose, figures, and demo narrative that apply
+   [Claim Boundaries](claim-boundaries.md) to the completed final tables.
 2. Optional text/core larger matched reruns if a third headline dataset is
    required.
 3. Optional paper-grade external evaluator run if the dissertation must include

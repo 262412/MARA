@@ -43,8 +43,8 @@ MARA has a complete thesis-prototype engineering skeleton: local Web/CLI DocQA
 runtime, typed request/response contracts, route-aware controller semantics,
 evidence and verification traces, benchmark protocol engineering, multimodal
 workflow plumbing, UI/structure debt control, and paper-grade evaluator
-readiness hooks. The 2026-07-01 clean Task 0-9 rerun has now closed a
-local-adapted thesis evidence package: SlideVQA is the primary local-adapted
+readiness hooks. The 2026-07-02 final thesis benchmark required rows have now
+completed and been synthesized: SlideVQA is the primary local-adapted
 multimodal dataset, MMDocRAG is secondary visual stability evidence, and
 headline score authority remains local dataset-native / adapted metrics only.
 Remaining work is limited to out-of-scope or residual research evidence:
@@ -52,32 +52,38 @@ paper-grade external evaluator configuration, larger text/core promotion if
 needed, Element RAG quality, calibrated guardrail/attribution evaluation, and
 full production-style format robustness.
 
-## Current Benchmark Repair Status
+## Current Final Benchmark Status
 
-As of 2026-07-02, the active clean rerun root is
-`/mnt/scratch/users/tbczhang/outputs/MARA/benchmark_next_20260701_task0_9_rerun`.
+As of 2026-07-03, the final thesis benchmark root is
+`/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_20260702`.
 It is an execution artifact, not a replacement for this canonical status
 directory.
 
-Task 0-9 is closed for this clean rerun. The Task 9 synthesis artifacts are in
-`09_synthesis/`, especially `task9_final_synthesis.md`,
-`thesis_dataset_route_freeze_decision.md`,
-`route_failure_latency_backend_table.csv`, and
-`demo_preflight_checklist.md`. No Slurm job was submitted for Task 9 because
-the required raw artifacts already existed and the task was synthesis plus
-canonical status alignment.
+The final required Slurm jobs completed on A100 node `gpu06` with
+`COMPLETED 0:0`. The final synthesis artifacts are in `09_synthesis/`,
+especially `final_benchmark_synthesis_report.md`,
+`final_main_result_table.csv`,
+`final_secondary_visual_stability_table.csv`,
+`final_failure_latency_backend_table.csv`, and
+`final_controller_route_decision_summary.md`,
+`final_required_benchmark_closeout_report.md`.
 
-The final local-adapted freeze decision is:
+The final local-adapted benchmark decision is:
 
-- Primary thesis dataset: `slidevqa_test_shard0_multimodal`, job `9469112`,
-  25 examples and full multimodal route matrix.
+- Primary thesis dataset: `slidevqa_test_shard0_multimodal`, job `9559018`,
+  25 examples and four-route multimodal matrix:
+  `text_rag`, `page_image_rag_vlm`, `hybrid_rag`, `controller_auto`.
 - Secondary visual stability evidence:
-  `mmdocrag_dev15_available_docs_multimodal`, jobs `9469113` and `9469114`,
-  with GPU-ColVision / 8k VLM settings and zero prediction errors.
-- Text/core datasets are supporting 10-smoke diagnostics in this clean rerun,
-  not main thesis headline datasets.
-- Task 2 is formally closed as `local_adapted_only_scope`; the ALCE proxy run
+  `mmdocrag_dev15_available_docs_multimodal`, jobs `9559019` and `9559020`,
+  with GPU-ColVision / 8k VLM settings, plus text baseline diagnostic job
+  `9559021`.
+- Text/core datasets remain supporting 10-smoke diagnostics from the clean
+  rerun, not main thesis headline datasets.
+- Evaluator authority remains `local_adapted_only_scope`; the ALCE proxy run
   is evaluator plumbing only and is not paper-grade.
+- The `controller_auto` headline row must be interpreted together with
+  `final_controller_route_decision_summary.md`, which records the actual
+  selected internal route and route-switch behavior.
 - ViDoRe remains retrieval-only diagnostic evidence.
 - Element RAG, guardrail calibration, citation attribution, and format E2E are
   reported as local diagnostics with explicit residual limits.

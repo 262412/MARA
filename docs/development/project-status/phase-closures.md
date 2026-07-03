@@ -1,6 +1,6 @@
 # Phase Closures
 
-Last updated: 2026-07-02.
+Last updated: 2026-07-03.
 
 This document keeps only final phase conclusions. It intentionally excludes
 development-by-development logs, failed attempts, and repeated rerun details.
@@ -119,8 +119,8 @@ Representative validation:
 
 Residual risk:
 
-- The clean 2026-07-01 Task 0-9 rerun freezes a local-adapted thesis evidence
-  package, not a paper-grade external evaluation package.
+- The 2026-07-02 final thesis benchmark required rows freeze a local-adapted
+  thesis evidence package, not a paper-grade external evaluation package.
 - SlideVQA is the primary local-adapted multimodal thesis dataset; MMDocRAG is
   secondary visual stability evidence. FinanceBench, ALCE, QASPER, and
   RAGTruth remain supporting smoke-scale diagnostics unless a later text/core
@@ -183,10 +183,10 @@ Residual risk:
 - Element ranker/coverage and real non-gold sidecar corpus quality remain open.
   Task 4 in the clean rerun found nonzero but sparse MMDocRAG element coverage,
   not a positive quality claim.
-- The clean 2026-07-01 rerun includes a larger SlideVQA 25-example full
-  multimodal matrix and MMDocRAG 15-example page-image / hybrid stability rows.
-  The earlier MMDocRAG timeout/context execution gap is closed for the current
-  evidence package through GPU-ColVision / 8k VLM runs.
+- The 2026-07-02 final thesis benchmark includes a SlideVQA 25-example
+  four-route multimodal matrix and MMDocRAG 15-example page-image / hybrid
+  stability rows. The earlier MMDocRAG timeout/context execution gap is closed
+  for the current evidence package through GPU-ColVision / 8k VLM runs.
 - VLM quality, latency, answer mismatch, and sample-size generalization remain
   research limits; current interactive backend health is not necessarily
   benchmark-equivalent because local ColVision may be CPU and VLM context may

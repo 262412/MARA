@@ -1,6 +1,6 @@
 # Current Proposal Audit
 
-Last updated: 2026-07-02.
+Last updated: 2026-07-03.
 
 This is the canonical current status source for MARA proposal alignment. The
 old `docs/development/proposal_project_audit_2026-06-25.md` path is now a
@@ -61,14 +61,14 @@ indexing, dataset syncs, Slurm jobs, or large downloads.
 | Route/executor registry                                 | Basically complete                       | Direct, text, page-image, element, graph, hybrid, abstain families                         | Keep backend readiness visible in UI/benchmark                       |
 | Text RAG                                                | Basically complete                       | Existing DocQA retrieval/generation and `text_rag` route                                   | Treat as baseline, not as a tuning target                            |
 | Controller auto routing                                 | Partly complete                          | Heuristic/structured planner path and `controller_auto` route                              | Route confusion and expected-route analysis                          |
-| Page-image RAG                                          | Local-adapted thesis evidence available  | SlideVQA larger25 full matrix; MMDocRAG larger15 visual stability rows                     | No paper-grade or broad large-sample VLM claim                       |
+| Page-image RAG                                          | Local-adapted thesis evidence available  | Final SlideVQA 25 full matrix; final MMDocRAG 15 visual stability rows                     | No paper-grade or broad large-sample VLM claim                       |
 | Element RAG                                             | Partly complete                          | Element parser/ranker/index persistence and sidecar contract                               | Real non-gold OCR/layout quality evidence                            |
 | Lightweight GraphRAG                                    | Partly complete                          | Local graph evidence selector and graph-summary path                                       | Claim only local lightweight graph route                             |
 | Hybrid RAG                                              | Partly complete                          | Weighted fusion/RRF/learned-ranker hook                                                    | Question-type split before benefit claims                            |
 | CRAG-style evaluator                                    | Partly complete                          | Retrieval adequacy, retry, route switch, abstain paths                                     | Threshold calibration and false-abstention analysis                  |
 | Claim verification                                      | Partly complete                          | Light/strict verifier and unsupported-claim handling                                       | Do not claim calibrated paper-grade hallucination detection          |
 | Citations and evidence metadata                         | Basically complete; local diagnostics    | `agent_trace`, `evidence_metadata`, `evidence_bundle`, `workflow_plan`; Task 6 report      | Paper-grade attribution not configured                               |
-| Benchmark harness and route ablations                   | Local-adapted synthesis complete         | Manifest v2, route matrix, route metrics, authority metadata; Task 9 synthesis             | External paper-grade evaluator remains optional/out-of-scope         |
+| Benchmark harness and route ablations                   | Local-adapted final synthesis complete   | Manifest v2, route matrix, route metrics, authority metadata; final 2026-07-02 synthesis  | External paper-grade evaluator remains optional/out-of-scope         |
 | ALCE/MMDocRAG/RAGTruth-style metrics                    | Local adapted only                       | Local converters/evaluators/report fields; ALCE proxy plumbing                             | No paper-grade external evaluator configured                         |
 | Web UI workbench                                        | Partly complete                          | Source browser, preview, chat, route controls, trace, graph, Studio artifacts              | Final UI information architecture polish                             |
 | Automated tests                                         | Partly complete                          | Focused benchmark/ktem/slide_cli tests                                                     | Continue targeted gates; avoid root `pytest -q` as default readiness |
@@ -89,27 +89,36 @@ indexing, dataset syncs, Slurm jobs, or large downloads.
 
 ## Current Benchmark Synthesis Status
 
-The current clean run root is
-`/mnt/scratch/users/tbczhang/outputs/MARA/benchmark_next_20260701_task0_9_rerun`.
-The outputs checklist under that directory remains an execution plan only; this
-directory is the canonical status source.
+The current final benchmark run root is
+`/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_20260702`.
+The outputs directory remains an execution artifact only; this directory is
+the canonical status source.
 
-Task 0-9 is closed for the clean rerun as
-`local_adapted_thesis_synthesis_complete`. The final synthesis lives under
-`09_synthesis/`, especially `task9_final_synthesis.md`,
-`thesis_dataset_route_freeze_decision.md`, `final_result_table.csv`,
-`route_failure_latency_backend_table.csv`,
-`final_evaluator_authority_table.csv`, and `demo_preflight_checklist.md`.
+The final required benchmark rows are closed as
+`required_jobs_completed_artifacts_validated` and
+`final_required_rows_synthesized`. The final synthesis lives under
+`09_synthesis/`, especially `final_benchmark_synthesis_report.md`,
+`final_main_result_table.csv`,
+`final_secondary_visual_stability_table.csv`,
+`final_failure_latency_backend_table.csv`,
+`final_optional_diagnostic_scope_table.csv`, and
+`final_controller_route_decision_summary.md`,
+`final_required_benchmark_closeout_report.md`.
 
 Current thesis evidence decision:
 
 - Primary local-adapted thesis dataset: `slidevqa_test_shard0_multimodal`,
-  job `9469112`, 25 examples, full multimodal route matrix, zero prediction
-  errors.
+  job `9559018`, 25 examples, 100 predictions across
+  `text_rag`, `page_image_rag_vlm`, `hybrid_rag`, and `controller_auto`, zero
+  prediction errors.
 - Secondary visual stability evidence:
-  `mmdocrag_dev15_available_docs_multimodal`, jobs `9469113` and `9469114`,
+  `mmdocrag_dev15_available_docs_multimodal`, jobs `9559019` and `9559020`,
   using GPU-ColVision / 8k VLM settings, route-split page-image and hybrid
-  evidence, and zero prediction errors.
+  evidence, plus text baseline diagnostic job `9559021`, all with zero
+  prediction errors.
+- Controller trace evidence:
+  `final_controller_route_decision_summary.md` records that the final
+  `controller_auto` row selected internal `hybrid_rag` with route-switch traces.
 - Text/core datasets are 10-smoke supporting diagnostics in this clean rerun,
   not main thesis headline datasets.
 - Evaluator authority is `local_adapted_only_scope`. No `external_paper_grade`

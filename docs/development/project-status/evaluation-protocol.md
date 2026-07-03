@@ -1,6 +1,6 @@
 # Evaluation Protocol Freeze Draft
 
-Last updated: 2026-07-02.
+Last updated: 2026-07-03.
 
 This document freezes the protocol draft, not the final benchmark results. It
 should be reopened only for a concrete system change, a new regression target,
@@ -77,7 +77,7 @@ Frozen:
 - Evaluator authority hierarchy.
 - Score promotion rule.
 - Dataset primary-metric draft.
-- Clean 2026-07-01 local-adapted thesis evidence package:
+- Final 2026-07-02 local-adapted thesis evidence package:
   SlideVQA primary, MMDocRAG secondary visual stability, and local
   dataset-native / adapted metric authority.
 
@@ -92,24 +92,29 @@ Not frozen:
 
 Current execution status:
 
-- The active clean run root is
-  `/mnt/scratch/users/tbczhang/outputs/MARA/benchmark_next_20260701_task0_9_rerun`.
-- Task 9 closes this rerun as `local_adapted_thesis_synthesis_complete`.
+- The active final benchmark run root is
+  `/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_20260702`.
+- The final required rows are closed as
+  `required_jobs_completed_artifacts_validated` and
+  `final_required_rows_synthesized`.
 - Final synthesis artifacts live under `09_synthesis/`, including
-  `task9_final_synthesis.md`,
-  `thesis_dataset_route_freeze_decision.md`,
-  `final_result_table.csv`,
-  `route_failure_latency_backend_table.csv`,
-  `thesis_route_freeze_table.csv`,
-  `final_evaluator_authority_table.csv`, and
-  `demo_preflight_checklist.md`.
+  `final_benchmark_synthesis_report.md`,
+  `final_main_result_table.csv`,
+  `final_secondary_visual_stability_table.csv`,
+  `final_failure_latency_backend_table.csv`,
+  `final_optional_diagnostic_scope_table.csv`, and
+  `final_controller_route_decision_summary.md`,
+  `final_required_benchmark_closeout_report.md`.
 - Primary local-adapted thesis dataset: `slidevqa_test_shard0_multimodal`,
-  job `9469112`, 25 examples, full multimodal route matrix, zero prediction
+  job `9559018`, 25 examples, four-route multimodal matrix, zero prediction
   errors.
+- Controller route-decision synthesis:
+  `final_controller_route_decision_summary.md` is required when interpreting
+  the `controller_auto` score.
 - Secondary visual stability evidence:
-  `mmdocrag_dev15_available_docs_multimodal`, jobs `9469113` and `9469114`,
+  `mmdocrag_dev15_available_docs_multimodal`, jobs `9559019` and `9559020`,
   with route-split page-image and hybrid evidence under GPU-ColVision / 8k VLM
-  settings.
+  settings, plus text baseline diagnostic job `9559021`.
 - FinanceBench, QASPER, ALCE, and RAGTruth are supporting 10-smoke diagnostics
   in this clean rerun.
 - Task 2 evaluator authority is closed as `local_adapted_only_scope`;

@@ -1,6 +1,6 @@
 # Thesis Claim Boundaries
 
-Last updated: 2026-07-02.
+Last updated: 2026-07-03.
 
 This document is the claim-boundary source for dissertation text,
 proposal-facing reports, and demo narrative. Historical benchmark artifacts and
@@ -75,16 +75,20 @@ written as official benchmark, leaderboard, or paper-grade external scores:
 
 Current benchmark-cycle note:
 
-- The 2026-07-01 clean Task 0-9 rerun is local-adapted only. The ALCE proxy
-  evaluator proves plumbing but is not paper-grade.
-- Task 9 closes a local-adapted thesis evidence package, not an official
-  leaderboard or external-evaluator package.
+- The 2026-07-02 final thesis benchmark is local-adapted only. The ALCE proxy
+  evaluator from the clean rerun proves plumbing but is not paper-grade.
+- The final synthesis closes a local-adapted thesis evidence package, not an
+  official leaderboard or external-evaluator package.
 - SlideVQA is the primary local-adapted multimodal thesis dataset: job
-  `9469112`, 25 examples, full multimodal route matrix, and zero prediction
+  `9559018`, 25 examples, four-route multimodal matrix, and zero prediction
   errors.
-- MMDocRAG is secondary visual stability evidence: jobs `9469113` and
-  `9469114` validate page-image and hybrid execution with GPU-ColVision / 8k
-  VLM settings, but do not establish matched full-route superiority.
+- The `controller_auto` row must be discussed with the final controller
+  route-decision summary. It supports inspectable controller routing, not a
+  learned-router or global controller-superiority claim.
+- MMDocRAG is secondary visual stability evidence: jobs `9559019` and
+  `9559020` validate page-image and hybrid execution with GPU-ColVision / 8k
+  VLM settings, with text baseline diagnostic job `9559021`, but do not
+  establish matched full-route superiority.
 - FinanceBench, QASPER, ALCE, and RAGTruth are supporting 10-smoke diagnostics
   in this clean rerun, not main headline thesis datasets.
 - ViDoRe current rows are retrieval diagnostics only, not full answer-generation
