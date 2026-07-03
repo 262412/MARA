@@ -18,6 +18,12 @@ from .mara_query_planning import plan_steps as build_mara_plan_steps
 from .mara_query_planning import understand_query as understand_mara_query
 from .mara_query_planning import with_selected_source_context
 from .mara_retrieval_query import messages_share_retrieval_cache_key, retrieval_query
+from .mara_route_probe import (
+    controller_latency_budget,
+    controller_route_probe,
+    dataset_family,
+    page_image_route_available,
+)
 from .mara_route_retrieval import route_retrieval_metadata
 from .mara_visual_gate import hybrid_should_use_visual_generator
 from .simple import FullQAPipeline
@@ -148,7 +154,7 @@ def _with_available_modalities(
         if modality
     ]
     if (
-        _page_image_route_available(pipeline)
+        page_image_route_available(pipeline)
         and "page_image" not in available_modalities
     ):
         available_modalities.append("page_image")
@@ -157,23 +163,6 @@ def _with_available_modalities(
     updated = dict(understanding)
     updated["available_modalities"] = available_modalities
     return updated
-
-
-def _page_image_route_available(pipeline: Any) -> bool:
-    allowed_routes = [
-        str(route).strip()
-        for route in getattr(pipeline, "allowed_routes", None) or []
-        if str(route).strip()
-    ]
-    if allowed_routes and not any(
-        route in {"doc_page_image", "hybrid"} for route in allowed_routes
-    ):
-        return False
-    return bool(
-        getattr(pipeline, "visual_retriever_backend", None)
-        or getattr(pipeline, "visual_retriever", None)
-        or getattr(pipeline, "page_image_index_records", None)
-    )
 
 
 @contextmanager
@@ -531,12 +520,17 @@ class MaraAgentPipeline(FullQAPipeline):
                 plan,
             ),
         )
+        route_probe = controller_route_probe(self, message, history, understanding)
+        latency_budget = controller_latency_budget(self)
         planner_payload = planner_trace_payload(
             understanding,
             planner=getattr(self, "planner", None),
             planner_model=getattr(self, "planner_model", None),
             question=message,
             allowed_routes=getattr(self, "allowed_routes", None),
+            route_probe=route_probe,
+            dataset_family=dataset_family(self),
+            latency_budget=latency_budget,
         )
         yield _mara_event("agent_trace", planner_payload)
         effective_route = _effective_route(self, planner_payload)

@@ -89,6 +89,139 @@ def test_mara_stream_normalizes_llm_graph_route_for_visual_question(monkeypatch)
     assert decision["routing_features"]["visual_intent"] is True
 
 
+def test_mara_stream_uses_visual_initial_route_without_route_switch(monkeypatch):
+    class FakeVisualGenerator:
+        name = "fake_vlm"
+
+        def generate(self, _request, bundle):
+            assert bundle.items[0]["evidence_id"] == "page-image:file-b:5"
+            return "CARE. CONNECT. CAMPAIGN."
+
+    def graph_first_planner(_payload, _planner_model):
+        return json.dumps(
+            {
+                "route": "graph",
+                "reason": "The planner over-selected global graph evidence.",
+            }
+        )
+
+    monkeypatch.setattr(
+        mara_controller,
+        "_run_planner_model",
+        graph_first_planner,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        MaraAgentPipeline,
+        "retrieve",
+        lambda _self, _message, _history: ([], []),
+    )
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.planner_model = "fake-planner"
+    pipeline.allowed_routes = [
+        "graph_global",
+        "hybrid",
+        "doc_text",
+        "doc_page_image",
+    ]
+    pipeline.visual_retriever_backend = "local_late_interaction"
+    pipeline.page_image_index_records = _visual_page_records()
+    pipeline.vlm_generator = FakeVisualGenerator()
+    pipeline.verification_mode = "off"
+
+    events = list(pipeline.stream("What slogan is shown on the slide?", "conv-1", []))
+
+    execution_payloads = [
+        event.content["payload"]
+        for event in events
+        if event.channel == "debug"
+        and event.content.get("mara_channel") == "execution"
+    ]
+    assert execution_payloads
+    decision = execution_payloads[0]["controller_decision"]
+    assert decision["legacy_route"] == "doc_page_image"
+    assert decision["initial_route"] == "doc_page_image"
+    assert decision["final_route"] == "doc_page_image"
+    assert decision["planner_route"] == "graph_global"
+    assert decision["scored_route"] == "doc_page_image"
+    assert decision["route_selection_policy"] == "cost_aware_initial"
+    assert decision["route_switch_used"] is False
+    assert decision["route_confidences"]["visual"] >= 0.6
+    assert not any(
+        item.get("stage") == "route_switch"
+        for item in execution_payloads[0]["controller_trace"]
+    )
+
+
+def test_mara_stream_uses_text_initial_route_for_text_strong_question(monkeypatch):
+    class FailingVisualGenerator:
+        name = "must_not_run"
+
+        def generate(self, _request, _bundle):
+            raise AssertionError("text-strong controller route must not call VLM")
+
+    def graph_first_planner(_payload, _planner_model):
+        return json.dumps(
+            {
+                "route": "graph",
+                "reason": "The planner over-selected global graph evidence.",
+            }
+        )
+
+    monkeypatch.setattr(
+        mara_controller,
+        "_run_planner_model",
+        graph_first_planner,
+        raising=False,
+    )
+    monkeypatch.setattr(FullQAPipeline, "stream", _fake_answer_stream)
+    docs = [
+        RetrievedDocument(
+            text="The annual report states that revenue increased.",
+            id_="doc-1",
+            metadata={"file_id": "file-b", "page_label": "5", "score": 0.91},
+        )
+    ]
+    monkeypatch.setattr(
+        MaraAgentPipeline,
+        "retrieve",
+        lambda _self, _message, _history: (docs, []),
+    )
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.planner_model = "fake-planner"
+    pipeline.allowed_routes = [
+        "graph_global",
+        "hybrid",
+        "doc_text",
+        "doc_page_image",
+    ]
+    pipeline.verification_domain = "mmdocrag"
+    pipeline.visual_retriever_backend = "local_late_interaction"
+    pipeline.page_image_index_records = _visual_page_records()
+    pipeline.vlm_generator = FailingVisualGenerator()
+    pipeline.verification_mode = "off"
+
+    events = list(pipeline.stream("What happened to revenue?", "conv-1", []))
+
+    assert [event.content for event in events if event.channel == "chat"] == [
+        "grounded answer"
+    ]
+    execution_payloads = [
+        event.content["payload"]
+        for event in events
+        if event.channel == "debug"
+        and event.content.get("mara_channel") == "execution"
+    ]
+    decision = execution_payloads[0]["controller_decision"]
+    assert decision["legacy_route"] == "doc_text"
+    assert decision["initial_route"] == "doc_text"
+    assert decision["final_route"] == "doc_text"
+    assert decision["planner_route"] == "graph_global"
+    assert decision["scored_route"] == "doc_text"
+    assert decision["route_switch_used"] is False
+    assert decision["route_confidences"]["text"] >= 0.65
+
+
 def test_route_switch_candidates_follow_cost_aware_order_for_visual_questions():
     request = SimpleNamespace(
         prompt="What slogan is shown on the slide?",

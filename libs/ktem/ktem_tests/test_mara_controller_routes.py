@@ -210,18 +210,17 @@ def test_mara_stream_uses_structured_planner_callable(monkeypatch):
 
     events = list(pipeline.stream("What does the figure show?", "conv-1", []))
 
-    assert _planner_events(events) == [
-        {
-            "event": "planner_output",
-            "planner_model": "fake-planner",
-            "decision": {
-                "route": "doc_page_image",
-                "reason": "The question asks about page imagery.",
-                "evidence_types": ["page_image"],
-                "verify": True,
-            },
-        }
-    ]
+    planner_event = _planner_events(events)[0]
+    assert planner_event["event"] == "planner_output"
+    assert planner_event["planner_model"] == "fake-planner"
+    decision = planner_event["decision"]
+    assert decision["route"] == "doc_page_image"
+    assert decision["evidence_types"] == ["page_image"]
+    assert decision["verify"] is True
+    assert decision["planner_route"] == "doc_page_image"
+    assert decision["scored_route"] == "doc_page_image"
+    assert decision["route_selection_policy"] == "cost_aware_initial"
+    assert decision["routing_features"]["visual_intent"] is True
 
 
 def test_mara_stream_falls_back_when_structured_planner_is_invalid(monkeypatch):
@@ -231,12 +230,13 @@ def test_mara_stream_falls_back_when_structured_planner_is_invalid(monkeypatch):
 
     events = list(pipeline.stream("What changed?", "conv-1", []))
 
-    assert _planner_events(events)[0]["decision"] == {
-        "route": "doc_text",
-        "reason": "Invalid planner output; using document text route.",
-        "evidence_types": ["text"],
-        "verify": True,
-    }
+    decision = _planner_events(events)[0]["decision"]
+    assert decision["route"] == "doc_text"
+    assert decision["evidence_types"] == ["text"]
+    assert decision["verify"] is True
+    assert decision["planner_route"] == "doc_text"
+    assert decision["scored_route"] == "doc_text"
+    assert decision["route_selection_policy"] == "cost_aware_initial"
 
 
 def test_mara_stream_passes_question_to_visual_retriever(monkeypatch):

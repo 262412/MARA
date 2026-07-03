@@ -14,6 +14,11 @@ from .controller import (
 )
 from .evidence import EvidenceBundle, build_evidence_bundle
 from .evidence_text import extract_final_answer_text
+from .route_selection import (
+    ControllerDecision,
+    controller_decision_from_route,
+    mark_route_switch_recovery,
+)
 from .workflow import build_workflow_plan, planner_payload_from_trace
 
 DIRECT_ANSWER_MESSAGE = (
@@ -38,19 +43,6 @@ _CANONICAL_ROUTES = {
     "hybrid": "hybrid_rag",
     "abstain": "abstain",
 }
-
-
-@dataclass(frozen=True)
-class ControllerDecision:
-    route: str
-    legacy_route: str
-    policy: str
-    controller_mode: str
-    requires_retrieval: bool
-    reason: str
-
-    def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -95,8 +87,9 @@ def execute_controller_turn(
     rewrite: RewriteFn | None = None,
     agent_trace: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
+    planner_payload = planner_payload_from_trace(agent_trace or [])
     route_decision = _route_decision(request, agent_trace or [])
-    controller_decision = _controller_decision(route_decision)
+    controller_decision = _controller_decision(route_decision, planner_payload)
     workflow_plan = _build_execution_workflow_plan(
         request,
         route_decision.route,
@@ -212,14 +205,21 @@ def _retrieve_and_evaluate(
     return evidence_bundle, retrieve_decision
 
 
-def _controller_decision(route_decision: RouteDecision) -> ControllerDecision:
-    return ControllerDecision(
-        route=_CANONICAL_ROUTES[route_decision.route],
-        legacy_route=route_decision.route,
-        policy=route_decision.policy,
-        controller_mode=route_decision.controller_mode,
-        requires_retrieval=route_decision.requires_retrieval,
-        reason=route_decision.reason,
+def _controller_decision(
+    route_decision: RouteDecision,
+    planner_payload: Any = None,
+) -> ControllerDecision:
+    return _controller_decision_from_payload(route_decision, planner_payload)
+
+
+def _controller_decision_from_payload(
+    route_decision: RouteDecision,
+    planner_payload: Any,
+) -> ControllerDecision:
+    return controller_decision_from_route(
+        route_decision,
+        canonical_routes=_CANONICAL_ROUTES,
+        planner_payload=planner_payload,
     )
 
 
@@ -229,7 +229,8 @@ def _switch_after_failed_retrieval(
     failed_decision: RetrieveDecision,
     retrieve: RetrieveFn,
 ) -> tuple[ControllerDecision, EvidenceBundle, RetrieveDecision, dict[str, Any]] | None:
-    for route in _route_switch_candidates(request, decision.legacy_route):
+    candidates = _route_switch_candidates(request, decision.legacy_route)
+    for route in candidates:
         switched_decision = _controller_decision(
             RouteDecision(
                 route=route,
@@ -242,6 +243,11 @@ def _switch_after_failed_retrieval(
                 ),
             )
         )
+        switched_decision = mark_route_switch_recovery(
+            switched_decision,
+            initial_decision=decision,
+            candidates=candidates,
+        )
         bundle, retrieve_decision = _retrieve_and_evaluate(
             request,
             switched_decision,
@@ -252,6 +258,8 @@ def _switch_after_failed_retrieval(
             "from_route": decision.legacy_route,
             "to_route": route,
             "reason": failed_decision.reason,
+            "route_switch_used": True,
+            "route_switch_candidates": list(candidates),
         }
         if retrieve_decision.status == "good":
             return switched_decision, bundle, retrieve_decision, switch_event

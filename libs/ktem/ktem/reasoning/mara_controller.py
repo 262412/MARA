@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from ktem.docqa.controller import ROUTE_EVIDENCE_TYPES, parse_planner_decision
+from ktem.reasoning.mara_route_scorer import score_adaptive_route
 
 _STRUCTURED_CALCULATION_TERMS = (
     "average",
@@ -56,6 +57,9 @@ def planner_decision(
     planner_model: str | None = None,
     question: str = "",
     allowed_routes: Any = None,
+    route_probe: dict[str, Any] | None = None,
+    dataset_family: str = "",
+    latency_budget: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if planner is not None:
         return _call_structured_planner(
@@ -64,6 +68,9 @@ def planner_decision(
             planner_model=planner_model,
             question=question,
             allowed_routes=allowed_routes,
+            route_probe=route_probe,
+            dataset_family=dataset_family,
+            latency_budget=latency_budget,
         )
     if planner_model:
         return _call_structured_planner(
@@ -72,14 +79,29 @@ def planner_decision(
             planner_model=planner_model,
             question=question,
             allowed_routes=allowed_routes,
+            route_probe=route_probe,
+            dataset_family=dataset_family,
+            latency_budget=latency_budget,
         )
-    return _constrain_heuristic_decision(
+    decision = _constrain_heuristic_decision(
         _heuristic_planner_decision(
             understanding,
             question=question,
             allowed_routes=allowed_routes,
         ),
         allowed_routes=allowed_routes,
+    )
+    if not route_probe:
+        return decision
+    return score_adaptive_route(
+        understanding,
+        question=question,
+        allowed_routes=allowed_routes,
+        route_probe=route_probe,
+        planner_route=str(decision.get("route") or ""),
+        planner_reason=str(decision.get("reason") or ""),
+        dataset_family=dataset_family,
+        latency_budget=latency_budget,
     )
 
 
@@ -90,6 +112,9 @@ def planner_trace_payload(
     planner_model: str | None = None,
     question: str = "",
     allowed_routes: Any = None,
+    route_probe: dict[str, Any] | None = None,
+    dataset_family: str = "",
+    latency_budget: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = {
         "event": "planner_output",
@@ -99,6 +124,9 @@ def planner_trace_payload(
             planner_model=planner_model,
             question=question,
             allowed_routes=allowed_routes,
+            route_probe=route_probe,
+            dataset_family=dataset_family,
+            latency_budget=latency_budget,
         ),
     }
     if planner_model:
@@ -399,6 +427,9 @@ def _call_structured_planner(
     planner_model: str | None,
     question: str,
     allowed_routes: Any,
+    route_probe: dict[str, Any] | None,
+    dataset_family: str,
+    latency_budget: dict[str, Any] | None,
 ) -> dict[str, Any]:
     payload = {
         "question": question,
@@ -417,16 +448,23 @@ def _call_structured_planner(
             "verify": False,
         }
     decision = parse_planner_decision(raw_decision, allowed_routes=allowed_routes)
-    return _normalize_cost_aware_planner_decision(
-        {
-            "route": decision.route,
-            "reason": decision.reason,
-            "evidence_types": _evidence_types_for_route(decision.route),
-            "verify": decision.route not in {"direct", "abstain"},
-        },
+    payload = {
+        "route": decision.route,
+        "reason": decision.reason,
+        "evidence_types": _evidence_types_for_route(decision.route),
+        "verify": decision.route not in {"direct", "abstain"},
+    }
+    if decision.route in {"direct", "abstain"}:
+        return payload
+    return score_adaptive_route(
         understanding,
         question=question,
         allowed_routes=allowed_routes,
+        route_probe=route_probe,
+        planner_route=decision.route,
+        planner_reason=decision.reason,
+        dataset_family=dataset_family,
+        latency_budget=latency_budget,
     )
 
 
