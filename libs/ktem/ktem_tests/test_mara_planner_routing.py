@@ -47,7 +47,7 @@ def test_mara_planner_does_not_report_alias_normalization_as_constraint():
     assert "Constrained" not in decision["reason"]
 
 
-def test_mara_planner_uses_hybrid_when_page_images_are_available():
+def test_mara_planner_keeps_text_route_for_text_strong_page_image_documents():
     decision = planner_decision(
         {
             "task_type": "qa",
@@ -65,5 +65,34 @@ def test_mara_planner_uses_hybrid_when_page_images_are_available():
         ],
     )
 
-    assert decision["route"] == "hybrid"
-    assert decision["evidence_types"] == ["text", "page_image", "element"]
+    assert decision["route"] == "doc_text"
+    assert decision["evidence_types"] == ["text"]
+    assert decision["routing_features"]["visual_intent"] is False
+    assert decision["route_scores"]["doc_text"] > decision["route_scores"]["hybrid"]
+    assert decision["latency_budget_reason"] == "text_route_avoids_visual_latency"
+
+
+def test_mara_planner_uses_page_image_for_visual_slide_questions():
+    decision = planner_decision(
+        {
+            "task_type": "qa",
+            "modalities": ["slide"],
+            "available_modalities": ["page_image"],
+            "scope": "document",
+        },
+        question="What label is shown in the chart on this slide?",
+        allowed_routes=[
+            "doc_text",
+            "hybrid",
+            "doc_page_image",
+            "doc_element",
+            "graph_global",
+        ],
+    )
+
+    assert decision["route"] == "doc_page_image"
+    assert decision["evidence_types"] == ["page_image"]
+    assert decision["routing_features"]["visual_intent"] is True
+    assert decision["route_scores"]["doc_page_image"] > decision["route_scores"][
+        "hybrid"
+    ]

@@ -3,7 +3,7 @@ from ktem.docqa.evidence import build_evidence_bundle
 from ktem.docqa.hybrid_fusion import fuse_hybrid_evidence
 
 
-def test_hybrid_route_uses_weighted_cross_modal_fusion_scores():
+def test_hybrid_route_uses_modality_normalized_fusion_scores():
     request = DocQARequest(
         prompt="Explain the revenue chart and table.",
         route_policy="hybrid",
@@ -46,17 +46,14 @@ def test_hybrid_route_uses_weighted_cross_modal_fusion_scores():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert bundle.items[0]["evidence_id"] == "page-image:file-b:5"
-    assert bundle.items[0]["metadata"]["hybrid_fusion_score"] > (
-        bundle.items[1]["metadata"]["hybrid_fusion_score"]
-    )
+    assert bundle.items[0]["evidence_id"] == "text-b"
     assert bundle.metadata["hybrid_fusion_trace"]["ranker"] == (
-        "weighted_cross_modal_v1"
+        "modality_normalized_rrf_v1"
     )
-    assert (
-        bundle.metadata["hybrid_fusion_trace"]["item_scores"]["page-image:file-b:5"]
-        > bundle.metadata["hybrid_fusion_trace"]["item_scores"]["text-b"]
-    )
+    confidence = bundle.items[0]["metadata"]["evidence_confidence"]
+    assert confidence["route"] == "text"
+    assert confidence["normalized_score"] == 1.0
+    assert confidence["pre_fusion_rank"] == 1
 
 
 def test_hybrid_route_can_use_rrf_fusion_strategy():
@@ -189,7 +186,7 @@ def test_hybrid_fusion_prioritizes_financial_statement_text_over_irrelevant_visu
     assert fused[0]["evidence_id"] == "text-income-balance-page"
     components = fused[0]["metadata"]["hybrid_fusion_components"]
     assert components["finance_statement_match"] > 0
-    assert trace["ranker"] == "weighted_cross_modal_v1"
+    assert trace["ranker"] == "modality_normalized_rrf_v1"
 
 
 def test_hybrid_fusion_does_not_apply_finance_statement_boost_by_default():
@@ -217,9 +214,94 @@ def test_hybrid_fusion_does_not_apply_finance_statement_boost_by_default():
         ],
     )
 
-    assert fused[0]["evidence_id"] == "visual-derivative-page"
-    components = fused[1]["metadata"]["hybrid_fusion_components"]
+    assert fused[0]["evidence_id"] == "text-income-balance-page"
+    components = fused[0]["metadata"]["hybrid_fusion_components"]
     assert components["finance_statement_match"] == 0.0
+
+
+def test_hybrid_fusion_keeps_top_text_and_limits_noisy_visual_pages():
+    fused, trace = fuse_hybrid_evidence(
+        "What were the revenue growth risks?",
+        [
+            {
+                "evidence_id": "text-risk",
+                "source_id": "mmdoc",
+                "page_label": "4",
+                "modality": "text",
+                "text": "Revenue growth risks include weaker renewal demand.",
+            },
+            {
+                "evidence_id": "text-summary",
+                "source_id": "mmdoc",
+                "page_label": "5",
+                "modality": "text",
+                "text": "The report summarizes revenue growth and operating risk.",
+            },
+            {
+                "evidence_id": "page-image:mmdoc:99",
+                "source_id": "mmdoc",
+                "page_label": "99",
+                "modality": "page_image",
+                "text": "Unrelated appendix image.",
+                "metadata": {"visual_retriever_score": 0.99},
+            },
+            {
+                "evidence_id": "page-image:mmdoc:4",
+                "source_id": "mmdoc",
+                "page_label": "4",
+                "modality": "page_image",
+                "ocr_text": "Revenue growth risks chart.",
+                "metadata": {"visual_retriever_score": 0.7},
+            },
+        ],
+    )
+
+    assert [item["evidence_id"] for item in fused] == [
+        "text-risk",
+        "text-summary",
+        "page-image:mmdoc:4",
+    ]
+    assert trace["dropped_noise_count"] == 1
+    assert trace["selected_top_k"] == {"text": 2, "page_image": 1, "element": 2}
+
+
+def test_hybrid_bundle_falls_back_to_text_when_visual_page_degrades_locator():
+    request = DocQARequest(
+        prompt="What were the revenue growth risks?",
+        route_policy="hybrid",
+        verification_domain="document_complex",
+    )
+    metadata = {
+        "evidence": [
+            {
+                "evidence_id": "text-risk",
+                "source_id": "mmdoc",
+                "file_id": "mmdoc",
+                "file_name": "mmdoc.pdf",
+                "page_label": "4",
+                "modality": "text",
+                "text": "Revenue growth risks include weaker renewal demand.",
+            }
+        ],
+        "page_image_index": [
+            {
+                "evidence_id": "page-image:mmdoc:99",
+                "source_id": "mmdoc",
+                "file_id": "mmdoc",
+                "file_name": "mmdoc.pdf",
+                "page_label": "99",
+                "modality": "page_image",
+                "ocr_text": "Unrelated appendix image.",
+            }
+        ],
+        "visual_retriever_scores": {"page-image:mmdoc:99": 0.99},
+    }
+
+    bundle = build_evidence_bundle("hybrid", request, metadata)
+
+    assert [item["evidence_id"] for item in bundle.items] == ["text-risk"]
+    assert bundle.metadata["hybrid_fusion_trace"]["fallback_route"] == "text"
+    assert bundle.metadata["hybrid_fusion_trace"]["best_single_route"] == "text"
 
 
 def test_hybrid_fusion_applies_finance_statement_boost_when_opted_in():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+import re
 from typing import Any, Callable
 
 from .controller import (
@@ -258,12 +259,40 @@ def _switch_after_failed_retrieval(
 
 
 def _route_switch_candidates(request: Any, current_route: str) -> list[str]:
+    allowed_routes = list(getattr(request, "allowed_routes", []) or [])
+    preferred_order = _cost_aware_route_switch_order(request)
+    allowed = [
+        route
+        for route in preferred_order
+        if route in allowed_routes
+    ]
+    allowed.extend(
+        route
+        for route in allowed_routes
+        if route not in allowed
+    )
     return [
         route
-        for route in getattr(request, "allowed_routes", []) or []
+        for route in allowed
         if route in _CANONICAL_ROUTES
         and route not in {current_route, "direct", "abstain"}
     ]
+
+
+def _cost_aware_route_switch_order(request: Any) -> list[str]:
+    prompt = str(getattr(request, "prompt", "") or "").lower()
+    if _has_visual_route_intent(prompt):
+        return ["doc_page_image", "doc_text", "hybrid", "doc_element", "graph_global"]
+    return ["doc_text", "doc_page_image", "hybrid", "doc_element", "graph_global"]
+
+
+def _has_visual_route_intent(prompt: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(chart|diagram|figure|graph|image|layout|plot|shown|slide|visual|visible)\b",
+            prompt,
+        )
+    )
 
 
 def _static_result(

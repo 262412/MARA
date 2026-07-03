@@ -118,12 +118,6 @@ def _hybrid_fusion_sort_score(item: dict[str, Any]) -> int:
     components = metadata.get("hybrid_fusion_components")
     if not isinstance(components, dict):
         return 0
-    has_rank_signal = (
-        float(components.get("retriever_score") or 0.0) > 0
-        or float(components.get("learned_score") or 0.0) > 0
-    )
-    if not has_rank_signal:
-        return 0
     return _hybrid_fusion_score(item)
 
 

@@ -177,7 +177,10 @@ def test_mara_stream_exposes_page_image_capability_to_planner(monkeypatch):
         assert str(exc) == "stop after planner"
 
     assert captured["understanding"]["available_modalities"] == ["page_image"]
-    assert captured["planner_payload"]["decision"]["route"] == "hybrid"
+    assert captured["planner_payload"]["decision"]["route"] == "doc_text"
+    assert captured["planner_payload"]["decision"]["latency_budget_reason"] == (
+        "text_route_avoids_visual_latency"
+    )
 
 
 def test_mara_element_route_uses_element_index_without_text_retrieval():

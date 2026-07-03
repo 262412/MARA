@@ -25,6 +25,20 @@ _STRUCTURED_CALCULATION_CONTEXT_TERMS = (
     "in the table",
     "using the",
 )
+_VISUAL_INTENT_TERMS = {
+    "chart",
+    "diagram",
+    "figure",
+    "graph",
+    "image",
+    "layout",
+    "plot",
+    "shown",
+    "slide",
+    "visual",
+    "visible",
+}
+_VISUAL_MODALITIES = {"figure", "slide", "table", "formula", "page_image"}
 
 
 class LLMPlanner:
@@ -129,49 +143,48 @@ def _heuristic_planner_decision(
             "verify": True,
         }
     if _is_structured_calculation_question(question_text):
-        return {
-            "route": "hybrid",
-            "reason": (
+        return _route_payload(
+            "hybrid",
+            (
                 "Structured calculation questions use hybrid evidence so text, "
                 "page-image, and element routes can recover source values."
             ),
-            "evidence_types": ["text", "page_image", "element"],
-            "verify": True,
-            "calculation_scope": "structured_document_calculation",
-        }
-    if any(
-        modality in {"figure", "slide", "table", "formula"} for modality in modalities
-    ):
-        return {
-            "route": "hybrid",
-            "reason": "Multimodal document questions use text, page-image, and element evidence.",
-            "evidence_types": ["text", "page_image", "element"],
-            "verify": True,
-        }
+            ["text", "page_image", "element"],
+            question_text=question_text,
+            modalities=modalities,
+            available_modalities=available_modalities,
+            scope=scope,
+            latency_budget_reason="hybrid_allowed_for_structured_calculation",
+            calculation_scope="structured_document_calculation",
+        )
+    if any(modality in _VISUAL_MODALITIES for modality in modalities):
+        return _visual_modality_decision(
+            question_text,
+            modalities=modalities,
+            available_modalities=available_modalities,
+            scope=scope,
+            allowed_routes=allowed_routes,
+        )
     if "page_image" in available_modalities:
-        if _route_is_allowed("hybrid", allowed_routes):
-            return {
-                "route": "hybrid",
-                "reason": (
-                    "Page-image evidence is available, so hybrid evidence can "
-                    "combine text, visual, and element signals."
-                ),
-                "evidence_types": ["text", "page_image", "element"],
-                "verify": True,
-            }
-        if _route_is_allowed("doc_page_image", allowed_routes):
-            return {
-                "route": "doc_page_image",
-                "reason": "Page-image evidence is available for this question.",
-                "evidence_types": ["page_image"],
-                "verify": True,
-            }
-    return {
-        "route": "doc",
-        "reason": "Document text evidence is the default retrieval route.",
-        "evidence_types": ["text"],
-        "verify": True,
-    }
+        decision = _page_image_available_decision(
+            question_text,
+            modalities=modalities,
+            available_modalities=available_modalities,
+            scope=scope,
+            allowed_routes=allowed_routes,
+        )
+        if decision is not None:
+            return decision
+    return _route_payload(
+        "doc",
+        "Document text evidence is the default retrieval route.",
+        ["text"],
+        question_text=question_text,
+        modalities=modalities,
+        available_modalities=available_modalities,
+        scope=scope,
+        latency_budget_reason="text_default",
+    )
 
 
 def _is_structured_calculation_question(question_text: str) -> bool:
@@ -181,6 +194,160 @@ def _is_structured_calculation_question(question_text: str) -> bool:
     if not has_calculation_term:
         return False
     return any(term in question_text for term in _STRUCTURED_CALCULATION_CONTEXT_TERMS)
+
+
+def _visual_modality_decision(
+    question_text: str,
+    *,
+    modalities: list[str],
+    available_modalities: list[str],
+    scope: str,
+    allowed_routes: Any,
+) -> dict[str, Any]:
+    route = "doc_page_image" if _route_is_allowed("doc_page_image", allowed_routes) else "hybrid"
+    evidence_types = (
+        ["page_image"] if route == "doc_page_image" else ["text", "page_image", "element"]
+    )
+    return _route_payload(
+        route,
+        "Visual document questions use page-image evidence before broad hybrid fusion.",
+        evidence_types,
+        question_text=question_text,
+        modalities=modalities,
+        available_modalities=available_modalities,
+        scope=scope,
+        latency_budget_reason="visual_intent_justifies_visual_route",
+    )
+
+
+def _page_image_available_decision(
+    question_text: str,
+    *,
+    modalities: list[str],
+    available_modalities: list[str],
+    scope: str,
+    allowed_routes: Any,
+) -> dict[str, Any] | None:
+    if _has_visual_intent(question_text) and _route_is_allowed(
+        "doc_page_image", allowed_routes
+    ):
+        return _route_payload(
+            "doc_page_image",
+            "Question has visual intent and page-image evidence is available.",
+            ["page_image"],
+            question_text=question_text,
+            modalities=modalities,
+            available_modalities=available_modalities,
+            scope=scope,
+            latency_budget_reason="visual_intent_justifies_visual_route",
+        )
+    if _route_is_allowed("doc_text", allowed_routes):
+        return _route_payload(
+            "doc_text",
+            (
+                "Page-image evidence is available, but the question is text-"
+                "answerable enough to avoid visual generation cost."
+            ),
+            ["text"],
+            question_text=question_text,
+            modalities=modalities,
+            available_modalities=available_modalities,
+            scope=scope,
+            latency_budget_reason="text_route_avoids_visual_latency",
+        )
+    if _route_is_allowed("doc_page_image", allowed_routes):
+        return _route_payload(
+            "doc_page_image",
+            "Page-image evidence is available for this question.",
+            ["page_image"],
+            question_text=question_text,
+            modalities=modalities,
+            available_modalities=available_modalities,
+            scope=scope,
+            latency_budget_reason="text_route_unavailable",
+        )
+    return None
+
+
+def _has_visual_intent(question_text: str) -> bool:
+    tokens = set(question_text.split())
+    return bool(tokens & _VISUAL_INTENT_TERMS) or any(
+        term in question_text for term in _VISUAL_INTENT_TERMS
+    )
+
+
+def _route_payload(
+    route: str,
+    reason: str,
+    evidence_types: list[str],
+    *,
+    question_text: str,
+    modalities: list[str],
+    available_modalities: list[str],
+    scope: str,
+    latency_budget_reason: str,
+    **extra: Any,
+) -> dict[str, Any]:
+    features = _routing_features(
+        question_text,
+        modalities=modalities,
+        available_modalities=available_modalities,
+        scope=scope,
+    )
+    payload = {
+        "route": route,
+        "reason": reason,
+        "evidence_types": evidence_types,
+        "verify": route not in {"direct", "abstain"},
+        "routing_features": features,
+        "route_scores": _route_scores(features),
+        "latency_budget_reason": latency_budget_reason,
+        "selected_route_reason": reason,
+    }
+    payload.update(extra)
+    return payload
+
+
+def _routing_features(
+    question_text: str,
+    *,
+    modalities: list[str],
+    available_modalities: list[str],
+    scope: str,
+) -> dict[str, Any]:
+    return {
+        "visual_intent": _has_visual_intent(question_text)
+        or any(modality in _VISUAL_MODALITIES for modality in modalities),
+        "structured_calculation": _is_structured_calculation_question(question_text),
+        "page_image_available": "page_image" in available_modalities,
+        "scope": scope,
+    }
+
+
+def _route_scores(features: dict[str, Any]) -> dict[str, float]:
+    visual_intent = bool(features.get("visual_intent"))
+    structured = bool(features.get("structured_calculation"))
+    page_image_available = bool(features.get("page_image_available"))
+    scores = {
+        "doc_text": 0.65,
+        "doc_page_image": 0.15,
+        "hybrid": 0.25,
+        "doc_element": 0.2,
+        "graph_global": 0.1,
+    }
+    if structured:
+        scores["hybrid"] += 0.65
+        scores["doc_text"] -= 0.1
+    elif visual_intent and page_image_available:
+        scores["doc_page_image"] += 0.7
+        scores["hybrid"] += 0.15
+    elif page_image_available:
+        scores["doc_text"] += 0.25
+        scores["hybrid"] -= 0.15
+        scores["doc_page_image"] -= 0.05
+    if not page_image_available:
+        scores["doc_page_image"] = 0.0
+    return {key: round(value, 4) for key, value in scores.items()}
 
 
 def _has_selected_source_context(understanding: dict[str, Any]) -> bool:
@@ -250,12 +417,79 @@ def _call_structured_planner(
             "verify": False,
         }
     decision = parse_planner_decision(raw_decision, allowed_routes=allowed_routes)
-    return {
-        "route": decision.route,
-        "reason": decision.reason,
-        "evidence_types": _evidence_types_for_route(decision.route),
-        "verify": decision.route not in {"direct", "abstain"},
-    }
+    return _normalize_cost_aware_planner_decision(
+        {
+            "route": decision.route,
+            "reason": decision.reason,
+            "evidence_types": _evidence_types_for_route(decision.route),
+            "verify": decision.route not in {"direct", "abstain"},
+        },
+        understanding,
+        question=question,
+        allowed_routes=allowed_routes,
+    )
+
+
+def _normalize_cost_aware_planner_decision(
+    decision: dict[str, Any],
+    understanding: dict[str, Any],
+    *,
+    question: str,
+    allowed_routes: Any,
+) -> dict[str, Any]:
+    route = str(decision.get("route") or "").strip()
+    if route not in {"graph_global", "hybrid"}:
+        return decision
+    task_type = str(understanding.get("task_type") or "qa")
+    if task_type != "qa":
+        return decision
+    modalities = [
+        str(modality)
+        for modality in understanding.get("modalities", ["text"])
+        if modality
+    ]
+    available_modalities = [
+        str(modality)
+        for modality in understanding.get("available_modalities", [])
+        if modality
+    ]
+    question_text = " ".join(
+        str(value or "")
+        for value in (question, understanding.get("question"), understanding.get("query"))
+    ).lower()
+    scope = str(understanding.get("scope") or "document")
+    features = _routing_features(
+        question_text,
+        modalities=modalities,
+        available_modalities=available_modalities,
+        scope=scope,
+    )
+    normalized_route = ""
+    latency_reason = ""
+    if features["visual_intent"] and _route_is_allowed("doc_page_image", allowed_routes):
+        normalized_route = "doc_page_image"
+        latency_reason = "visual_intent_justifies_visual_route"
+    elif _route_is_allowed("doc_text", allowed_routes):
+        normalized_route = "doc_text"
+        latency_reason = "text_route_avoids_visual_latency"
+    if not normalized_route or normalized_route == route:
+        return decision
+    reason = (
+        f"{decision.get('reason') or 'Planner selected a broad route.'} "
+        f"Cost-aware calibration selected {normalized_route} for QA execution."
+    )
+    return _route_payload(
+        normalized_route,
+        reason,
+        _evidence_types_for_route(normalized_route),
+        question_text=question_text,
+        modalities=modalities,
+        available_modalities=available_modalities,
+        scope=scope,
+        latency_budget_reason=latency_reason,
+        cost_gate_decision=f"normalized_from_{route}",
+        original_planner_route=route,
+    )
 
 
 def _evidence_types_for_route(route: str) -> list[str]:

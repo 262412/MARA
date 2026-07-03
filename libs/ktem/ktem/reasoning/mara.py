@@ -19,6 +19,7 @@ from .mara_query_planning import understand_query as understand_mara_query
 from .mara_query_planning import with_selected_source_context
 from .mara_retrieval_query import messages_share_retrieval_cache_key, retrieval_query
 from .mara_route_retrieval import route_retrieval_metadata
+from .mara_visual_gate import hybrid_should_use_visual_generator
 from .simple import FullQAPipeline
 
 MARA_ABSTAIN_MESSAGE = (
@@ -298,13 +299,6 @@ def _visual_generator_answer(generator: Any, request: Any, bundle: Any) -> str:
     raise ValueError("Configured visual generator must be callable or expose generate.")
 
 
-def _bundle_has_page_image_evidence(bundle: Any) -> bool:
-    return any(
-        isinstance(item, dict) and str(item.get("modality") or "") == "page_image"
-        for item in getattr(bundle, "items", []) or []
-    )
-
-
 def _route_visual_answer(
     pipeline: Any,
     request: Any,
@@ -469,8 +463,8 @@ class MaraAgentPipeline(FullQAPipeline):
                 assert visual_answer is not None
                 generated_answer = visual_answer
                 return generated_answer
-            if _decision.route == "hybrid_rag" and _bundle_has_page_image_evidence(
-                _bundle
+            if _decision.route == "hybrid_rag" and hybrid_should_use_visual_generator(
+                _request, _decision, _bundle
             ):
                 visual_answer = _route_visual_answer(
                     self,
@@ -508,11 +502,9 @@ class MaraAgentPipeline(FullQAPipeline):
         )
         if generation_events and execution.answer != generated_answer:
             generation_events = []
-        artifact = (
-            self.build_artifact(understanding)
-            if execution.guardrail_decision.action == "return"
-            else None
-        )
+        artifact = None
+        if execution.guardrail_decision.action == "return":
+            artifact = self.build_artifact(understanding)
         return execution, generation_events, artifact
 
     def stream(  # type: ignore
