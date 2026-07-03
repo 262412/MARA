@@ -1,11 +1,10 @@
 import json
 
-from pypdf.generic import DictionaryObject, NameObject, TextStringObject
-
 from ktem.docqa.multimodal_index import (
     element_index_documents_from_records,
     element_index_persistence_contract,
 )
+from pypdf.generic import DictionaryObject, NameObject, TextStringObject
 
 
 def _element_record():
