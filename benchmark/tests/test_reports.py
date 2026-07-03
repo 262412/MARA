@@ -340,6 +340,46 @@ def test_write_reports_full_artifacts_preserve_large_fields(tmp_path):
     assert prediction["agent_trace"][0]["text"] == large_text
 
 
+def test_write_reports_derived_trace_preserves_citation_locator_fields(tmp_path):
+    report = {
+        "summary": {
+            "suite_name": "Trace Citation Suite",
+            "dataset_name": "sample",
+            "num_examples": 1,
+            "num_documents": 1,
+        },
+        "predictions": [
+            {
+                "example_id": "ex-1",
+                "predicted_pages": ["4"],
+                "predicted_sources": ["doc#page:4"],
+                "predicted_citations": ["doc#page:4"],
+                "scored_predicted_sources": ["doc#page:4"],
+                "gold_pages": ["4"],
+                "gold_sources": ["doc#page:4"],
+                "gold_evidence": [{"citation": "doc#page:4", "page": 4}],
+                "retrieved_hits": [
+                    {
+                        "evidence_id": "hit-1",
+                        "source_backrefs": ["doc#page:4"],
+                    }
+                ],
+            }
+        ],
+        "documents": [],
+    }
+
+    run_dir = write_reports(report, tmp_path, "Trace Citation Suite")
+    trace = _read_jsonl(run_dir / "retrieval_traces.jsonl")[0]
+
+    assert trace["predicted_pages"] == ["4"]
+    assert trace["predicted_sources"] == ["doc#page:4"]
+    assert trace["predicted_citations"] == ["doc#page:4"]
+    assert trace["scored_predicted_sources"] == ["doc#page:4"]
+    assert trace["gold_sources"] == ["doc#page:4"]
+    assert trace["gold_evidence"] == [{"citation": "doc#page:4", "page": 4}]
+
+
 def test_write_reports_lists_skipped_routes(tmp_path):
     report = {
         "summary": {
@@ -367,6 +407,66 @@ def test_write_reports_lists_skipped_routes(tmp_path):
     assert "- Skipped Routes: `1`" in markdown
     assert (
         "- `page_image_rag_vlm`: not_configured: colpali, visual_generator" in markdown
+    )
+
+
+def test_write_reports_lists_multimodal_backend_health(tmp_path):
+    report = {
+        "summary": {
+            "suite_name": "Backend Health Suite",
+            "dataset_name": "sample",
+            "num_examples": 1,
+            "num_documents": 1,
+            "backend_health": {
+                "schema_version": 1,
+                "overall_status": "blocked",
+                "backends": {
+                    "text_llm": {
+                        "role": "text_llm",
+                        "url": "http://127.0.0.1:8000/v1/models",
+                        "status": "ready",
+                        "models": ["Qwen/Qwen3-8B"],
+                    },
+                    "vlm": {
+                        "role": "vlm",
+                        "url": "http://127.0.0.1:8001/v1/models",
+                        "status": "blocked",
+                        "failure_type": "unreachable",
+                    },
+                },
+                "failure_taxonomy": [
+                    {
+                        "role": "vlm",
+                        "failure_type": "unreachable",
+                        "status": "blocked",
+                    }
+                ],
+            },
+        },
+        "predictions": [],
+        "documents": [],
+    }
+
+    run_dir = write_reports(report, tmp_path, "Backend Health Suite")
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    markdown = (run_dir / "report.md").read_text(encoding="utf-8")
+
+    assert summary["backend_health"]["failure_taxonomy"] == [
+        {
+            "role": "vlm",
+            "failure_type": "unreachable",
+            "status": "blocked",
+        }
+    ]
+    assert "## Multimodal Backend Health" in markdown
+    assert "- Overall Status: `blocked`" in markdown
+    assert (
+        "- `text_llm`: ready; url=`http://127.0.0.1:8000/v1/models`, "
+        "models=`Qwen/Qwen3-8B`" in markdown
+    )
+    assert (
+        "- `vlm`: blocked; url=`http://127.0.0.1:8001/v1/models`, "
+        "failure_type=`unreachable`" in markdown
     )
 
 

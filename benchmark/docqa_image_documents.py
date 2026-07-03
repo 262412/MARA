@@ -38,6 +38,7 @@ def element_index_records_from_documents(
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for document in documents:
+        records.extend(_offline_element_records(document))
         for payload in _document_element_payloads(document):
             record = _element_index_record_from_payload(
                 document, payload, len(records) + 1
@@ -81,6 +82,16 @@ def _document_element_payloads(document: BenchmarkDocument) -> list[dict[str, An
     return payloads
 
 
+def _offline_element_records(document: BenchmarkDocument) -> list[dict[str, Any]]:
+    from ktem.docqa.offline_layout_index import offline_element_records_for_file
+
+    return offline_element_records_for_file(
+        file_id=document.document_id,
+        file_name=document.path.name,
+        file_path=document.path,
+    )
+
+
 def _element_index_record_from_payload(
     document: BenchmarkDocument,
     payload: dict[str, Any],
@@ -110,7 +121,7 @@ def _element_index_record_from_payload(
     ).strip()
     raw_metadata = payload.get("metadata")
     metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
-    return {
+    output = {
         "evidence_id": str(
             payload.get("evidence_id") or f"element:{file_id}:{page_label}:{element_id}"
         ),
@@ -127,6 +138,13 @@ def _element_index_record_from_payload(
         "source_backrefs": _source_backrefs(payload, file_id, page_label),
         "metadata": dict(metadata),
     }
+    element_id_aliases = _alias_values(payload.get("element_id_aliases"))
+    if element_id_aliases:
+        output["element_id_aliases"] = element_id_aliases
+    element_type_aliases = _alias_values(payload.get("element_type_aliases"))
+    if element_type_aliases:
+        output["element_type_aliases"] = element_type_aliases
+    return output
 
 
 def _source_backrefs(
@@ -138,6 +156,23 @@ def _source_backrefs(
         if str(item).strip()
     ]
     return backrefs or [f"{file_id}#page:{page_label}"]
+
+
+def _alias_values(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, (list, tuple, set)):
+        values = list(value)
+    else:
+        values = []
+    output: list[str] = []
+    for item in values:
+        text = str(item or "").strip()
+        if text and text not in output:
+            output.append(text)
+    return output
 
 
 def _unique_element_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:

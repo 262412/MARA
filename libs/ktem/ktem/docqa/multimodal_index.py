@@ -12,12 +12,44 @@ from typing import Any, Iterable
 
 from kotaemon.base import Document
 
+from ._runtime_utils import _serialize_value
 from .element_parser import parse_element_index_record
 
 logger = logging.getLogger(__name__)
 ELEMENT_INDEX_DOC_TYPE = "mara_element_index"
 ELEMENT_INDEX_RELATION_TYPE = "element_index"
 ELEMENT_INDEX_SCHEMA_VERSION = "1.0"
+ELEMENT_INDEX_METADATA_REQUIRED_KEYS = [
+    "type",
+    "source_id",
+    "file_id",
+    "file_name",
+    "page_label",
+    "element_index_relation_type",
+    "element_index_schema_version",
+    "element_index_record",
+]
+ELEMENT_INDEX_RECORD_REQUIRED_KEYS = [
+    "evidence_id",
+    "file_id",
+    "file_name",
+    "page_label",
+    "element_id",
+    "modality",
+    "text",
+    "source_backrefs",
+    "metadata",
+]
+
+
+def element_index_persistence_contract() -> dict[str, Any]:
+    return {
+        "doc_type": ELEMENT_INDEX_DOC_TYPE,
+        "relation_type": ELEMENT_INDEX_RELATION_TYPE,
+        "schema_version": ELEMENT_INDEX_SCHEMA_VERSION,
+        "metadata_required_keys": list(ELEMENT_INDEX_METADATA_REQUIRED_KEYS),
+        "record_required_keys": list(ELEMENT_INDEX_RECORD_REQUIRED_KEYS),
+    }
 
 
 def page_image_records_from_documents(documents: Iterable[Any]) -> list[dict[str, Any]]:
@@ -227,7 +259,7 @@ def _element_record(
     page_label: str,
     element_id: str,
 ) -> dict[str, Any]:
-    element_metadata = dict(metadata.get("element_metadata") or {})
+    element_metadata = _safe_dict(metadata.get("element_metadata"))
     return {
         "evidence_id": f"element:{file_id}:{page_label}:{element_id}",
         "file_id": file_id,
@@ -235,7 +267,7 @@ def _element_record(
         "page_label": page_label,
         "element_id": element_id,
         "modality": _element_modality(metadata),
-        "bbox": metadata.get("bbox"),
+        "bbox": _serialize_value(metadata.get("bbox")),
         "caption": str(metadata.get("caption") or "").strip(),
         "text": _text(doc, metadata),
         "source_backrefs": [f"{file_id}#page:{page_label}"],
@@ -247,27 +279,30 @@ def _persisted_element_record(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
     evidence_id = str(value.get("evidence_id") or "").strip()
-    file_id = str(value.get("file_id") or value.get("source_id") or "").strip()
+    source_id = str(value.get("source_id") or value.get("document_id") or "").strip()
+    file_id = str(value.get("file_id") or source_id or "").strip()
     page_label = str(value.get("page_label") or value.get("page") or "").strip()
     element_id = str(value.get("element_id") or "").strip()
     if not evidence_id or not file_id or not page_label or not element_id:
         return None
     raw_metadata = value.get("metadata")
-    metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
+    metadata = _safe_dict(raw_metadata)
+    modality = str(value.get("modality") or value.get("element_type") or "element")
     return {
         "evidence_id": evidence_id,
         "file_id": file_id,
+        "source_id": source_id or file_id,
         "file_name": str(value.get("file_name") or value.get("source_name") or ""),
         "page_label": page_label,
+        "page_number": _page_number(page_label),
         "element_id": element_id,
-        "modality": str(
-            value.get("modality") or value.get("element_type") or "element"
-        ),
-        "bbox": value.get("bbox"),
+        "element_type": modality,
+        "modality": modality,
+        "bbox": _serialize_value(value.get("bbox")),
         "caption": str(value.get("caption") or ""),
         "text": str(value.get("text") or ""),
         "source_backrefs": _source_backrefs(value, file_id, page_label),
-        "metadata": dict(metadata),
+        "metadata": metadata,
     }
 
 
@@ -297,14 +332,19 @@ def _element_index_text(record: dict[str, Any]) -> str:
 
 
 def _element_index_doc_id(file_id: str, record: dict[str, Any]) -> str:
-    payload = json.dumps(record, sort_keys=True, default=str)
+    payload = json.dumps(_serialize_value(record), sort_keys=True, default=str)
     digest = hashlib.sha256(f"{file_id}\n{payload}".encode("utf-8")).hexdigest()
     return f"element-index:{file_id}:{digest[:16]}"
 
 
 def _metadata(doc: Any) -> dict[str, Any]:
     metadata = getattr(doc, "metadata", None)
-    return metadata if isinstance(metadata, dict) else {}
+    return _safe_dict(metadata)
+
+
+def _safe_dict(value: Any) -> dict[str, Any]:
+    serialized = _serialize_value(value)
+    return serialized if isinstance(serialized, dict) else {}
 
 
 def _doc_id(doc: Any) -> str:

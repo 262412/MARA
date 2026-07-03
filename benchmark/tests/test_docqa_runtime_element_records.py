@@ -1,3 +1,4 @@
+import json
 import sys
 import types
 
@@ -110,6 +111,77 @@ def test_docqa_runtime_engine_passes_document_element_index_records(
     assert fake_runtime.indexed == []
     assert fake_runtime.requests[0].selected_file_ids == []
     assert fake_runtime.requests[0].element_index_records == [element_record]
+
+
+def test_docqa_runtime_engine_passes_external_offline_sidecar_records(
+    monkeypatch,
+    tmp_path,
+):
+    pdf_path = tmp_path / "report.pdf"
+    pdf_path.write_bytes(b"%PDF")
+    sidecar_root = tmp_path / "sidecars"
+    sidecar_root.mkdir()
+    (sidecar_root / "report.pdf.mara-elements.json").write_text(
+        json.dumps(
+            {
+                "layout_elements": [
+                    {
+                        "page_label": "3",
+                        "element_id": "answer-table",
+                        "type": "table",
+                        "caption": "Answer-bearing table",
+                        "text": "Revenue 42 million",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MARA_OFFLINE_LAYOUT_SIDECAR_DIR", str(sidecar_root))
+    fake_runtime = _install_response_runtime_for_path(
+        monkeypatch,
+        pdf_path,
+        types.SimpleNamespace(
+            answer="42 million",
+            references_text="",
+            evidence_metadata={},
+            evidence_bundle={"route": "doc_element", "items": []},
+        ),
+    )
+    engine = get_engine(
+        "docqa_runtime",
+        BenchmarkConfig(
+            suite_name="runtime",
+            output_dir=tmp_path / "out",
+            route_policy="element",
+        ),
+    )
+
+    engine.run(
+        example=BenchmarkExample(
+            example_id="ex",
+            document_id="report",
+            question="What was revenue?",
+            answers=["42 million"],
+            evidence_pages=[3],
+        ),
+        documents=[
+            BenchmarkDocument(
+                document_id="report",
+                path=pdf_path,
+                format_type="pdf",
+                modality="mixed",
+                metadata={},
+            )
+        ],
+    )
+
+    records = fake_runtime.requests[0].element_index_records
+    assert len(records) == 1
+    assert records[0]["file_id"] == "report"
+    assert records[0]["page_label"] == "3"
+    assert records[0]["modality"] == "table"
+    assert records[0]["metadata"]["index_source"] == "offline_layout_sidecar"
 
 
 def _install_response_runtime_for_path(monkeypatch, doc_path, response):

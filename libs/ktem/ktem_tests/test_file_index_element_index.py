@@ -134,9 +134,12 @@ def _expected_offline_element_record():
     return {
         "evidence_id": "element:file-1:4:table-4-1",
         "file_id": "file-1",
+        "source_id": "file-1",
         "file_name": "report.pdf",
         "page_label": "4",
+        "page_number": 4,
         "element_id": "table-4-1",
+        "element_type": "table",
         "modality": "table",
         "bbox": [10, 20, 30, 40],
         "caption": "Regional revenue",
@@ -144,6 +147,7 @@ def _expected_offline_element_record():
         "source_backrefs": ["file-1#page:4"],
         "metadata": {
             "element_schema_version": "1.0",
+            "sidecar_schema_version": "legacy",
             "index_source": "offline_layout_sidecar",
             "offline_layout_record_index": 0,
             "offline_layout_sidecar": "report.pdf.mara-elements.json",

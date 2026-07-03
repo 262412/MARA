@@ -56,7 +56,8 @@ The default run uses:
 - Limit: `20`
 - Prompt policy: `gold_answer_v1`
 - Thinking control: `--benchmark-no-think`
-- Route timeout: `180` seconds
+- Route timeout: `240` seconds
+- VLM context: `MARA_VLM_MAX_MODEL_LEN=8192`
 
 Useful overrides:
 
@@ -97,18 +98,50 @@ If a backend is missing, the wrapper starts the local service from
 `/mnt/scratch/users/tbczhang/mara-hpc`:
 
 - GPU0: `serve_qwen3_8b.sh`
-- GPU1: `serve_qwen3_vl_8b.sh`
+- GPU1: `serve_qwen3_vl_8b_4k.sh` with
+  `MARA_VLM_MAX_MODEL_LEN=8192`
 - CPU by default: `serve_retrieval.sh`
-- CPU by default: `serve_colvision.sh`
+- GPU1 by default: `serve_colvision.sh` with `MARA_COLVISION_DEVICE=cuda:0`
+
+The default 2-GPU L40S placement keeps the text LLM on GPU0 and shares VLM plus
+ColVision on GPU1. The wrapper sets
+`MARA_VLM_GPU_MEMORY_UTILIZATION=0.70` so the VLM server can start reliably
+while ColVision is already resident on the same GPU. Override
+`MARA_COLVISION_GPU`, `MARA_COLVISION_DEVICE`, and
+`MARA_VLM_GPU_MEMORY_UTILIZATION` together when using a 3-GPU A100/H100
+placement or a CPU-only diagnostic.
 
 The VLM health gate must return `Qwen/Qwen3-VL-8B-Instruct` through
-`/v1/models` before the benchmark starts.
+`/v1/models` before the benchmark starts. The wrapper sets
+`MARA_VLM_MAX_MODEL_LEN=8192`; the historical `serve_qwen3_vl_8b_4k.sh` script
+name is not the evidence boundary, the effective vLLM context setting is.
+
+The productized health contract is:
+
+```bash
+python -m benchmark check-multimodal-backends \
+  --output /mnt/scratch/users/tbczhang/outputs/MARA/multimodal_route_slurm/logs/manual/backend-health.json \
+  --strict
+```
+
+The command writes `backend-health.json` with `schema_version`, `checked_at`,
+`overall_status`, per-backend metadata, and a run-level failure taxonomy. The
+taxonomy is for backend/run comparability, not answer scoring. Current failure
+types include `unreachable`, `timeout`, `http_error`, `bad_json`,
+`unexpected_payload`, `model_missing`, `health_not_ok`, `family_mismatch`,
+`missing_device`, and `cpu_colvision`.
+The Slurm wrapper saves this file under its run log directory and passes it to
+`benchmark run` with `--backend-health-json`, so `summary.json` and `report.md`
+record the backend state used by the rerun.
+ColVision health includes the served `device` when the local ColVision server
+reports it; MMDocRAG visual evidence should use `device=cuda:0`, not CPU
+ColVision.
 
 For interactive checks on the current node:
 
 ```bash
 tmux new-session -d -s mara-qwen3-vl-8001 \
-  'cd /mnt/scratch/users/tbczhang/mara-hpc && CUDA_VISIBLE_DEVICES=1 ./serve_qwen3_vl_8b.sh'
+  'cd /mnt/scratch/users/tbczhang/mara-hpc && MARA_VLM_MAX_MODEL_LEN=8192 CUDA_VISIBLE_DEVICES=1 ./serve_qwen3_vl_8b_4k.sh'
 
 python - <<'PY'
 import json, urllib.request
@@ -138,6 +171,8 @@ print("run_dir", run_dir)
 print("num_examples", summary["num_examples"])
 print("num_predictions", summary["num_predictions"])
 print("num_skipped_routes", summary["num_skipped_routes"])
+print("backend_health", summary.get("backend_health"))
+print("backend_failure_taxonomy", summary.get("backend_failure_taxonomy"))
 print("page_image", phase3["page_image"])
 print("element", phase3["element"])
 print("hybrid", phase3["hybrid"])
@@ -154,6 +189,8 @@ The multimodal route workflow can only be considered closed after the artifact s
   question type.
 - The result comes from a larger-than-smoke sample, not only the limit-2 live
   proof.
+- `backend_health.overall_status` is `ready`, or any blocked backend is recorded
+  with an explicit failure taxonomy and excluded from quality claims.
 
 Keep any residual answer duplication, route timeouts, or low-quality scores in
 the final Phase3 summary instead of treating a completed job as a correctness

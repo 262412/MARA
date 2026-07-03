@@ -4,7 +4,7 @@ from .base import AutoReader, BaseReader
 from .composite_loader import DirectoryReader
 from .docling_loader import DoclingReader
 from .docx_loader import DocxReader
-from .excel_loader import ExcelReader, PandasExcelReader
+from .excel_loader import ExcelReader, PandasCSVReader, PandasExcelReader
 from .html_loader import HtmlReader, MhtmlReader
 from .mathpix_loader import MathpixPDFReader
 from .ocr_loader import ImageReader, OCRReader
@@ -17,6 +17,7 @@ __all__ = [
     "AutoReader",
     "AzureAIDocumentIntelligenceLoader",
     "BaseReader",
+    "PandasCSVReader",
     "PandasExcelReader",
     "ExcelReader",
     "MathpixPDFReader",

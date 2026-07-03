@@ -104,6 +104,66 @@ class PandasExcelReader(BaseReader):
         return output
 
 
+class PandasCSVReader(BaseReader):
+    r"""Pandas-based CSV reader with row and column search text."""
+
+    def __init__(
+        self,
+        *args: Any,
+        pandas_config: Optional[dict] = None,
+        row_joiner: str = "\n",
+        col_joiner: str = "; ",
+        **kwargs: Any,
+    ) -> None:
+        """Init params."""
+        super().__init__(*args, **kwargs)
+        self._pandas_config = pandas_config or {}
+        self._row_joiner = row_joiner if row_joiner else "\n"
+        self._col_joiner = col_joiner if col_joiner else "; "
+
+    def load_data(
+        self,
+        file: Path,
+        extra_info: Optional[dict] = None,
+        **kwargs,
+    ) -> List[Document]:
+        """Parse a CSV file into searchable row/column text."""
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError(
+                "install pandas using `pip3 install pandas` to use this loader"
+            )
+
+        file = Path(file)
+        df = pd.read_csv(file, **self._pandas_config)
+        df = df.dropna(axis=0, how="all")
+        df = df.astype("object")
+        df.fillna("", inplace=True)
+
+        columns = [str(column) for column in df.columns]
+        rows = []
+        for row_number, row in enumerate(df.to_dict(orient="records"), start=1):
+            pairs = [
+                f"{column}: {str(row.get(column, '')).strip()}"
+                for column in columns
+                if str(row.get(column, "")).strip()
+            ]
+            rows.append(f"row {row_number}: {self._col_joiner.join(pairs)}")
+
+        content = self._row_joiner.join(rows).strip()
+        if not content:
+            content = f"columns: {', '.join(columns)}"
+
+        metadata = {
+            "page_label": 1,
+            "sheet_name": file.stem,
+            "type": "table",
+            **(extra_info or {}),
+        }
+        return [Document(text=content, metadata=metadata)]
+
+
 class ExcelReader(BaseReader):
     r"""Spreadsheet exporter respecting multiple worksheets
 

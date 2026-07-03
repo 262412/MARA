@@ -19,6 +19,7 @@ RUN_ID="${SLURM_JOB_ID:-manual-$(date +%Y%m%d_%H%M%S)}"
 SUITE_NAME="${MARA_MULTIMODAL_SUITE_NAME:-${MARA_PHASE3_SUITE_NAME:-slidevqa-multimodal-route-slurm-${RUN_ID}}}"
 LOG_ROOT="${OUT_ROOT}/logs/${RUN_ID}"
 BENCHMARK_LOG="${LOG_ROOT}/benchmark.log"
+BACKEND_HEALTH_JSON="${LOG_ROOT}/backend-health.json"
 
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/users/tbczhang/fastscratch/cache/uv}"
 export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/users/tbczhang/fastscratch/cache/uv/python}"
@@ -30,12 +31,19 @@ export KH_APP_DATA_DIR="${KH_APP_DATA_DIR:-/users/tbczhang/fastscratch/mara_runt
 export MARA_VLM_BASE_URL="${MARA_VLM_BASE_URL:-http://127.0.0.1:8001/v1}"
 export MARA_VLM_API_KEY="${MARA_VLM_API_KEY:-local}"
 export MARA_VLM_MODEL="${MARA_VLM_MODEL:-Qwen/Qwen3-VL-8B-Instruct}"
+export MARA_VLM_MAX_MODEL_LEN="${MARA_VLM_MAX_MODEL_LEN:-8192}"
+export MARA_VLM_GPU_MEMORY_UTILIZATION="${MARA_VLM_GPU_MEMORY_UTILIZATION:-0.70}"
+export MARA_VLM_EVIDENCE_TEXT_CHARS="${MARA_VLM_EVIDENCE_TEXT_CHARS:-120}"
+export MARA_VLM_TIMEOUT="${MARA_VLM_TIMEOUT:-120}"
+export MARA_VLM_MAX_OUTPUT_TOKENS="${MARA_VLM_MAX_OUTPUT_TOKENS:-192}"
+export MARA_VLM_MAX_IMAGES="${MARA_VLM_MAX_IMAGES:-1}"
 export MARA_COLVISION_ENDPOINT="${MARA_COLVISION_ENDPOINT:-http://127.0.0.1:8003/visual-score}"
-export MARA_COLVISION_DEVICE="${MARA_COLVISION_DEVICE:-cpu}"
+export MARA_COLVISION_DEVICE="${MARA_COLVISION_DEVICE:-cuda:0}"
 export MARA_COLVISION_LOCAL_FILES_ONLY="${MARA_COLVISION_LOCAL_FILES_ONLY:-1}"
 export MARA_RETRIEVAL_DEVICES="${MARA_RETRIEVAL_DEVICES:-cpu}"
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 export TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
+MARA_VLM_SERVE_SCRIPT="${MARA_VLM_SERVE_SCRIPT:-serve_qwen3_vl_8b_4k.sh}"
 
 SERVICE_PIDS=()
 
@@ -121,7 +129,7 @@ fi
 if ! http_ok "http://127.0.0.1:8001/v1/models"; then
   start_service qwen3_vl_8b \
     env CUDA_VISIBLE_DEVICES="${MARA_VLM_GPU:-1}" \
-    "${HPC_HOME}/serve_qwen3_vl_8b.sh"
+    "${HPC_HOME}/${MARA_VLM_SERVE_SCRIPT}"
 fi
 if ! http_ok "http://127.0.0.1:8002/health"; then
   start_service retrieval \
@@ -131,7 +139,8 @@ if ! http_ok "http://127.0.0.1:8002/health"; then
 fi
 if ! http_ok "http://127.0.0.1:8003/health"; then
   start_service colvision \
-    env MARA_COLVISION_DEVICE="${MARA_COLVISION_DEVICE:-cpu}" \
+    env CUDA_VISIBLE_DEVICES="${MARA_COLVISION_GPU:-${MARA_VLM_GPU:-1}}" \
+    MARA_COLVISION_DEVICE="${MARA_COLVISION_DEVICE}" \
     "${HPC_HOME}/serve_colvision.sh"
 fi
 
@@ -157,6 +166,11 @@ print(
 )
 PY
 
+uv run --python 3.10 python -m benchmark check-multimodal-backends \
+  --output "$BACKEND_HEALTH_JSON" \
+  --timeout-seconds "${MARA_MULTIMODAL_HEALTH_TIMEOUT_SECONDS:-3}" \
+  --strict
+
 NUM_SHARDS="${MARA_MULTIMODAL_NUM_SHARDS:-${MARA_PHASE3_NUM_SHARDS:-}}"
 SHARD_INDEX="${MARA_MULTIMODAL_SHARD_INDEX:-${MARA_PHASE3_SHARD_INDEX:-}}"
 SHARD_ARGS=()
@@ -170,7 +184,7 @@ fi
 ROUTE="${MARA_MULTIMODAL_ROUTE:-${MARA_PHASE3_ROUTE:-all}}"
 LIMIT="${MARA_MULTIMODAL_LIMIT:-${MARA_PHASE3_LIMIT:-20}}"
 SAMPLE_SEED="${MARA_MULTIMODAL_SAMPLE_SEED:-${MARA_PHASE3_SAMPLE_SEED:-0}}"
-ROUTE_TIMEOUT_SECONDS="${MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS:-${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-180}}"
+ROUTE_TIMEOUT_SECONDS="${MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS:-${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-240}}"
 
 uv run --python 3.10 python -m benchmark run \
   --manifest "$MANIFEST" \
@@ -185,6 +199,7 @@ uv run --python 3.10 python -m benchmark run \
   --benchmark-prompt-profile auto \
   --benchmark-no-think \
   --route-timeout-seconds "$ROUTE_TIMEOUT_SECONDS" \
+  --backend-health-json "$BACKEND_HEALTH_JSON" \
   --docqa-citation-mode inline | tee "$BENCHMARK_LOG"
 
 RUN_DIR="$(awk '/Outputs written to/ {print $NF}' "$BENCHMARK_LOG" | tail -n 1)"

@@ -146,6 +146,7 @@ class BenchmarkConfig:
     benchmark_answer_mode: str = "scoring_adapter_v1"
     benchmark_no_think: bool = False
     route_timeout_seconds: float | None = None
+    backend_health_json: Path | None = None
     prompt_template: str | None = None
     external_evaluators: dict[str, str] = field(default_factory=dict)
 
@@ -166,6 +167,7 @@ class BenchmarkConfig:
         self.route_timeout_seconds = normalize_route_timeout_seconds(
             self.route_timeout_seconds
         )
+        self.backend_health_json = normalize_optional_path(self.backend_health_json)
         from .sampling import validate_sampling_options
 
         validate_sampling_options(
@@ -177,6 +179,8 @@ class BenchmarkConfig:
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["output_dir"] = str(self.output_dir)
+        if self.backend_health_json is not None:
+            payload["backend_health_json"] = str(self.backend_health_json)
         return payload
 
 
@@ -215,3 +219,10 @@ def normalize_route_timeout_seconds(value: float | str | None) -> float | None:
     if seconds <= 0:
         return None
     return seconds
+
+
+def normalize_optional_path(value: str | Path | None) -> Path | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return Path(text) if text else None

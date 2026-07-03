@@ -141,6 +141,25 @@ python -m benchmark normalize-format-robustness `
   --output benchmark/manifests/format_robustness.json
 ```
 
+Build and run the deterministic format smoke harness without live model calls:
+
+```powershell
+python -m benchmark build-format-smoke-fixtures `
+  --source-dir ~/scratch/outputs/MARA/format_smoke_fixtures `
+  --manifest ~/scratch/outputs/MARA/format_smoke_manifest.json
+
+python -m benchmark run-format-smoke `
+  --manifest ~/scratch/outputs/MARA/format_smoke_manifest.json `
+  --output ~/scratch/outputs/MARA/format_smoke_report.json `
+  --strict
+```
+
+The smoke harness covers PDF, Word `.docx`, PPTX, Excel `.xlsx`, CSV,
+Markdown, and plain text. It validates that each fixture can be indexed into
+extractable text and that each gold answer can be retrieved from that indexed
+text. It is a fixture-level indexing/query contract, not a live DocQA quality
+benchmark.
+
 Run the benchmark:
 
 ```powershell
@@ -205,11 +224,22 @@ Each prediction row now includes:
   `benchmark_no_think`, `benchmark_question`, `benchmark_retrieval_query`, and
   `benchmark_runtime_prompt`: the benchmark prompt contract used for the run
 - `evidence_metadata`: whether figure/image/formula/page visual context reached the generation path
+- `predicted_sources`, `predicted_citations`, and
+  `scored_predicted_sources`: metadata citation locators, inline citation
+  locators, and optional citation locators used for scoring
 - `agent_trace`: MARA planning, retrieval, verification, and final-decision events when the engine exposes them
 - `claim_verification`: abstention and rewrite-skip behavior when the engine exposes it
+- `verifier_observability`: CRAG/verifier counters derived from existing
+  answer, verifier, guardrail, trace, and workflow fields, including true/false
+  abstention, unsupported claims, retries, and route switches
 - `presentation`: renderer or answer-format metadata when the engine exposes it
 - `metrics`: dataset-native score fields, text accuracy, retrieval grounding,
   false abstention, Markdown table, LaTeX, and guardrail scores
+
+`retrieval_traces.jsonl` preserves the same citation locator fields alongside
+`retrieved_hits`, `evidence_metadata`, and runtime traces so metadata citations,
+inline citations, and evidence trace rows can be audited without changing
+schema shape.
 
 Reports separate score authority into three layers:
 
@@ -346,8 +376,8 @@ python -m benchmark run `
 ```
 
 Reports include `route_metrics.csv`, route-level Markdown tables, backend
-metadata, skipped routes, and evaluator status when route-matrix results are
-available.
+metadata, skipped routes, CRAG/verifier observability by route, and evaluator
+status when route-matrix results are available.
 
 Phase 2 thesis protocol fields are also written to `summary.json` and surfaced
 in `report.md`:
@@ -392,6 +422,20 @@ Local proxy evaluator aliases are also available for route plumbing checks:
 recorded as external diagnostics but do not replace the dataset-native headline
 score. Only an evaluator backend that explicitly returns `paper_grade=true` and
 a `primary_metric` can promote its score to the paper-grade external headline.
+
+Evaluator backend contract:
+
+- The backend receives one prediction row and may return either a flat metrics
+  dictionary or `{"metrics": {...}, "metadata": {...}}`.
+- Paper-grade promotion requires `metadata.paper_grade=true`,
+  `metadata.primary_metric`, and a metric with the same name.
+- `metadata.contract_id` and `metadata.scoring_mode` are preserved when
+  provided so reports can identify the evaluator version/configuration.
+- Each configured, failed, or not-configured evaluator records
+  `paper_grade_ready` and `paper_grade_blockers` in predictions,
+  `summary.json`, and `report.md`. Common blockers are `not_configured`,
+  `not_paper_grade`, `missing_primary_metric`,
+  `primary_metric_missing_from_metrics`, and `failed`.
 
 ## Notes
 

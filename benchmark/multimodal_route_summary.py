@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .element_coverage_report import element_coverage_report
 from .metrics import round_metric, safe_mean
 
 _PAGE_IMAGE_ROUTE = "page_image_rag_vlm"
@@ -82,7 +83,8 @@ def _element_summary(
         len(((prediction.get("evidence_metadata") or {}).get("element_index") or []))
         for prediction in element_predictions
     ]
-    predictions_with_index = sum(1 for count in index_counts if count > 0)
+    coverage = element_coverage_report(element_predictions)
+    predictions_with_index = int(coverage["predictions_with_element_index"])
     avg_index_records = round_metric(
         safe_mean([float(count) for count in index_counts])
     )
@@ -100,6 +102,7 @@ def _element_summary(
         "predictions_with_element_index": predictions_with_index,
         "avg_element_index_records": avg_index_records,
         "avg_element_hit": avg_element_hit,
+        "coverage_report": coverage,
     }
 
 

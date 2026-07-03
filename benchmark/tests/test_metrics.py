@@ -1,3 +1,4 @@
+from benchmark.element_locator_metrics import element_locator_hit_score
 from benchmark.metrics import (
     anls_score,
     element_hit_score,
@@ -40,6 +41,38 @@ def test_element_hit_matches_gold_evidence_element_ids():
         ],
     )
     assert score == 1.0
+
+
+def test_element_locator_hit_uses_source_page_and_alias_alignment():
+    score = element_locator_hit_score(
+        retrieved_hits=[
+            {
+                "source_id": "annual_report",
+                "page_label": "12",
+                "element_id": "text-12-3",
+                "element_id_aliases": ["image4"],
+                "element_type_aliases": ["figure", "image"],
+                "source_backrefs": ["annual_report#page:12"],
+            }
+        ],
+        gold_evidence=[
+            {
+                "document_id": "annual_report",
+                "page": 12,
+                "element_id": "image4",
+                "element_type": "image",
+            }
+        ],
+    )
+
+    assert score == 1.0
+    assert (
+        element_hit_score(
+            ["text-12-3"],
+            [{"document_id": "annual_report", "page": 12, "element_id": "image4"}],
+        )
+        == 0.0
+    )
 
 
 def test_modality_hit_uses_expected_modality_and_evidence_metadata():

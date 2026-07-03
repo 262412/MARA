@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any, Iterable
 
 from .element_parser import ELEMENT_SCHEMA_VERSION
+from .element_sidecar_schema import (
+    iter_sidecar_record_payloads,
+    sidecar_page_label,
+    sidecar_parser_backend,
+    sidecar_record_modality,
+    sidecar_record_text,
+    sidecar_schema_version,
+)
 
 SIDECAR_SUFFIXES = (
     ".mara-elements.json",
@@ -20,11 +29,15 @@ def offline_element_records_for_file(
     file_id: str,
     file_name: str,
     file_path: str | Path,
+    sidecar_roots: Iterable[str | Path] | None = None,
 ) -> list[dict[str, Any]]:
-    """Read same-file offline OCR/layout sidecars into element-index records."""
+    """Read offline OCR/layout sidecars into element-index records."""
 
     records: list[dict[str, Any]] = []
-    for sidecar_path in offline_layout_sidecar_paths(file_path):
+    for sidecar_path in offline_layout_sidecar_paths(
+        file_path,
+        sidecar_roots=sidecar_roots,
+    ):
         payload = _read_sidecar(sidecar_path)
         records.extend(
             _records_from_payload(
@@ -55,13 +68,53 @@ def offline_element_records_for_documents(
     return records
 
 
-def offline_layout_sidecar_paths(file_path: str | Path) -> list[Path]:
-    path = Path(file_path)
+def _same_file_sidecar_candidates(path: Path) -> list[Path]:
     candidates = []
     for suffix in SIDECAR_SUFFIXES:
         candidates.append(Path(f"{path}{suffix}"))
         candidates.append(path.with_name(f"{path.stem}{suffix}"))
+    return candidates
+
+
+def offline_layout_sidecar_paths(
+    file_path: str | Path,
+    *,
+    sidecar_roots: Iterable[str | Path] | None = None,
+) -> list[Path]:
+    path = Path(file_path)
+    candidates = list(_same_file_sidecar_candidates(path))
+    roots = _configured_sidecar_roots() if sidecar_roots is None else sidecar_roots
+    candidates.extend(_external_sidecar_candidates(path, roots))
     return _existing_unique_paths(candidates)
+
+
+def _external_sidecar_candidates(
+    source_path: Path,
+    roots: Iterable[str | Path],
+) -> list[Path]:
+    candidates = []
+    for root in roots:
+        root_path = Path(root)
+        if not str(root_path).strip():
+            continue
+        for suffix in SIDECAR_SUFFIXES:
+            candidates.append(root_path / f"{source_path.name}{suffix}")
+            candidates.append(root_path / f"{source_path.stem}{suffix}")
+    return candidates
+
+
+def _configured_sidecar_roots() -> list[Path]:
+    roots: list[Path] = []
+    for env_name in (
+        "MARA_OFFLINE_LAYOUT_SIDECAR_DIR",
+        "MARA_OFFLINE_LAYOUT_SIDECAR_DIRS",
+    ):
+        raw_value = os.environ.get(env_name, "")
+        for item in raw_value.split(os.pathsep):
+            value = item.strip()
+            if value:
+                roots.append(Path(value))
+    return roots
 
 
 def _read_sidecar(sidecar_path: Path) -> Any:
@@ -81,7 +134,8 @@ def _records_from_payload(
     sidecar_path: Path,
 ) -> list[dict[str, Any]]:
     records = []
-    parser = _parser_name(payload)
+    parser = sidecar_parser_backend(payload)
+    schema_version = sidecar_schema_version(payload)
     for index, item in enumerate(_iter_record_payloads(payload)):
         record = _normalize_record(
             item,
@@ -89,6 +143,7 @@ def _records_from_payload(
             file_name=file_name,
             sidecar_name=sidecar_path.name,
             parser=parser,
+            schema_version=schema_version,
             record_index=index,
         )
         if record is not None:
@@ -97,39 +152,7 @@ def _records_from_payload(
 
 
 def _iter_record_payloads(payload: Any) -> Iterable[dict[str, Any]]:
-    if isinstance(payload, list):
-        yield from (item for item in payload if isinstance(item, dict))
-        return
-    if not isinstance(payload, dict):
-        return
-
-    yield from _record_list(payload, page_context={})
-    for page in payload.get("pages") or []:
-        if not isinstance(page, dict):
-            continue
-        page_context = {"page_label": _page_label_from(page)}
-        yield from _record_list(page, page_context=page_context)
-
-
-def _record_list(
-    container: dict[str, Any],
-    *,
-    page_context: dict[str, str],
-) -> Iterable[dict[str, Any]]:
-    for key in (
-        "element_index_records",
-        "layout_elements",
-        "elements",
-        "element_index",
-    ):
-        value = container.get(key)
-        if isinstance(value, list):
-            for item in value:
-                if isinstance(item, dict):
-                    yield {**page_context, **item}
-            return
-    if _looks_like_record(container):
-        yield {**page_context, **container}
+    yield from iter_sidecar_record_payloads(payload)
 
 
 def _normalize_record(
@@ -139,6 +162,7 @@ def _normalize_record(
     file_name: str,
     sidecar_name: str,
     parser: str,
+    schema_version: str,
     record_index: int,
 ) -> dict[str, Any] | None:
     page_label = _page_label_from(record)
@@ -153,7 +177,7 @@ def _normalize_record(
         str(record.get("evidence_id") or "").strip()
         or f"element:{file_id}:{page_label}:{element_id}"
     )
-    return {
+    output = {
         "evidence_id": evidence_id,
         "file_id": file_id,
         "file_name": file_name,
@@ -164,19 +188,34 @@ def _normalize_record(
         "caption": caption,
         "text": text,
         "source_backrefs": _source_backrefs(record, file_id, page_label),
-        "metadata": _metadata(record, sidecar_name, parser, record_index),
+        "metadata": _metadata(
+            record,
+            sidecar_name,
+            parser,
+            schema_version,
+            record_index,
+        ),
     }
+    element_id_aliases = _alias_values(record.get("element_id_aliases"))
+    if element_id_aliases:
+        output["element_id_aliases"] = element_id_aliases
+    element_type_aliases = _alias_values(record.get("element_type_aliases"))
+    if element_type_aliases:
+        output["element_type_aliases"] = element_type_aliases
+    return output
 
 
 def _metadata(
     record: dict[str, Any],
     sidecar_name: str,
     parser: str,
+    schema_version: str,
     record_index: int,
 ) -> dict[str, Any]:
     raw_metadata = record.get("metadata")
     metadata = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
     metadata.setdefault("element_schema_version", ELEMENT_SCHEMA_VERSION)
+    metadata.setdefault("sidecar_schema_version", schema_version)
     metadata.setdefault("index_source", "offline_layout_sidecar")
     metadata.setdefault("offline_layout_record_index", record_index)
     metadata.setdefault("offline_layout_sidecar", sidecar_name)
@@ -209,40 +248,16 @@ def _source_from_documents(documents: Iterable[Any]) -> dict[str, str] | None:
     return None
 
 
-def _parser_name(payload: Any) -> str:
-    if isinstance(payload, dict):
-        return str(payload.get("parser") or payload.get("parser_backend") or "").strip()
-    return ""
-
-
 def _page_label_from(record: dict[str, Any]) -> str:
-    return str(
-        record.get("page_label")
-        or record.get("page")
-        or record.get("page_number")
-        or ""
-    ).strip()
+    return sidecar_page_label(record)
 
 
 def _modality(record: dict[str, Any]) -> str:
-    value = str(
-        record.get("modality")
-        or record.get("element_type")
-        or record.get("type")
-        or "element"
-    ).strip()
-    normalized = value.lower()
-    return {"image": "figure", "ocr": "text"}.get(normalized, normalized)
+    return sidecar_record_modality(record) or "element"
 
 
 def _text(record: dict[str, Any]) -> str:
-    return str(
-        record.get("text")
-        or record.get("ocr_text")
-        or record.get("content")
-        or record.get("value")
-        or ""
-    ).strip()
+    return sidecar_record_text(record)
 
 
 def _bbox(record: dict[str, Any]) -> Any:
@@ -273,8 +288,21 @@ def _source_backrefs(
     return backrefs or [f"{file_id}#page:{page_label}"]
 
 
-def _looks_like_record(container: dict[str, Any]) -> bool:
-    return any(key in container for key in ("text", "ocr_text", "caption", "bbox"))
+def _alias_values(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, (list, tuple, set)):
+        values = list(value)
+    else:
+        values = []
+    output: list[str] = []
+    for item in values:
+        text = str(item or "").strip()
+        if text and text not in output:
+            output.append(text)
+    return output
 
 
 def _slug(value: str) -> str:

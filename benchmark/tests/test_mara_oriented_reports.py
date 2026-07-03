@@ -12,6 +12,7 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
         route_metrics
     )
     assert "avg_citation_inline_recall,avg_citation_inline_precision" in (route_metrics)
+    assert "num_true_abstention,num_false_abstention" in route_metrics
     assert "dataset_name,route,num_predictions,avg_mara_score" in route_metrics
     assert (
         "avg_mara_score,avg_native_score,avg_mara_proxy_score,avg_em,avg_f1"
@@ -60,6 +61,40 @@ def test_write_reports_emits_route_metric_table_csv_and_markdown(tmp_path):
     assert "1. `controller_auto` avg_native_score=`0.9`" in markdown
     assert "1. `controller_auto` avg_f1=`0.8`" in markdown
     assert markdown.index("avg_native_score=`0.9`") < markdown.index("avg_f1=`0.8`")
+
+
+def test_add_mara_summary_fields_aggregates_element_locator_hit():
+    summary = add_mara_summary_fields(
+        {"dataset_name": "sample"},
+        [
+            {
+                "route": "element_rag",
+                "benchmark_role": "prototype",
+                "metrics": {
+                    "element_hit": 0.0,
+                    "element_locator_hit": 1.0,
+                    "f1": 0.1,
+                    "em": 0.0,
+                },
+                "performance": {"total_seconds": 1.0},
+            },
+            {
+                "route": "element_rag",
+                "benchmark_role": "prototype",
+                "metrics": {
+                    "element_hit": 0.0,
+                    "element_locator_hit": 0.0,
+                    "f1": 0.0,
+                    "em": 0.0,
+                },
+                "performance": {"total_seconds": 1.0},
+            },
+        ],
+    )
+
+    assert summary["avg_element_hit"] == 0.0
+    assert summary["avg_element_locator_hit"] == 0.5
+    assert summary["route_metric_table"][0]["avg_element_locator_hit"] == 0.5
 
 
 def test_add_mara_summary_fields_preserves_citation_split_summaries():
@@ -289,6 +324,14 @@ def _route_row(route, role, score, mara_score, page_hit, unsupported_rate, secon
         "avg_page_hit": page_hit,
         "avg_unsupported_claim_rate": unsupported_rate,
         "avg_total_seconds": seconds,
+        "num_true_abstention": 0,
+        "num_false_abstention": 0,
+        "num_unsupported_claim": int(unsupported_rate > 0),
+        "total_unsupported_claim_count": int(unsupported_rate > 0),
+        "num_retry": 0,
+        "total_retry_count": 0,
+        "num_route_switch": 0,
+        "total_route_switch_count": 0,
     }
 
 

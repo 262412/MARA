@@ -1,4 +1,5 @@
 from ktem.docqa._runtime_models import DocQARequest
+from ktem.docqa.element_retriever import rank_element_records
 from ktem.docqa.evidence import EvidenceElement, build_evidence_bundle
 from ktem.docqa.multimodal_index import (
     build_local_page_image_records,
@@ -379,6 +380,46 @@ def test_element_route_ranks_requested_element_type_before_other_elements():
     assert bundle.items[0]["evidence_id"] == "element:file-1:4:table-a"
     assert bundle.items[0]["modality"] == "table"
     assert bundle.items[0]["bbox"] == [10, 20, 30, 40]
+
+
+def test_element_ranker_uses_page_source_and_element_type_hints():
+    records = [
+        {
+            "evidence_id": "element:file-1:444:table-noise",
+            "file_id": "file-1",
+            "source_id": "inditex_2021",
+            "file_name": "inditex_2021.pdf",
+            "page_label": "444",
+            "element_id": "table-noise",
+            "modality": "table",
+            "text": "Training and compliance table with many overlapping query words.",
+        },
+        {
+            "evidence_id": "element:file-1:64:image4",
+            "file_id": "file-1",
+            "source_id": "inditex_2021",
+            "file_name": "inditex_2021.pdf",
+            "page_label": "64",
+            "element_id": "image4",
+            "element_type": "table",
+            "text": "Amortisation and depreciation charge totals for 2021 and 2020.",
+        },
+    ]
+
+    ranked, _scores = rank_element_records(
+        "What was the amortisation and depreciation charge?",
+        records,
+        evidence_hints={
+            "source_ids": ["inditex_2021"],
+            "pages": [64],
+            "element_types": ["table"],
+        },
+    )
+
+    assert ranked[0]["element_id"] == "image4"
+    assert ranked[0]["metadata"]["element_retriever_page_hint_match"] is True
+    assert ranked[0]["metadata"]["element_retriever_source_hint_match"] is True
+    assert ranked[0]["metadata"]["element_retriever_type_hint_match"] is True
 
 
 def test_element_index_records_preserve_layout_identity():

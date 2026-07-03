@@ -70,6 +70,14 @@ def test_run_benchmark_skips_not_configured_routes(monkeypatch, tmp_path):
     assert report["summary"]["backend_metadata"]["vlm"]["backend_status"] == (
         "not_configured"
     )
+    assert report["summary"]["failure_taxonomy_by_route"][-1] == {
+        "dataset_name": "skip_routes",
+        "route": "vlm",
+        "routing_taxonomy": "visual_retrieval",
+        "failure_taxonomy": "backend_unavailable",
+        "count": 1,
+        "unit": "route_skip",
+    }
 
 
 def test_run_benchmark_records_route_timeout_budget_on_success(monkeypatch, tmp_path):
@@ -93,7 +101,64 @@ def test_run_benchmark_records_route_timeout_budget_on_success(monkeypatch, tmp_
     prediction = report["predictions"][0]
     assert prediction["error"] is None
     assert prediction["route_timeout_seconds"] == 7.5
+    assert prediction["routing_taxonomy"] == "text_retrieval"
+    assert prediction["failure_taxonomy"] == "empty_retrieval"
+    assert report["summary"]["routing_taxonomy_counts"] == [
+        {
+            "dataset_name": "timeout",
+            "routing_taxonomy": "text_retrieval",
+            "count": 1,
+        }
+    ]
     assert report["retrieval_traces"][0]["route_timeout_seconds"] == 7.5
+
+
+def test_run_benchmark_includes_backend_health_artifact(monkeypatch, tmp_path):
+    manifest_path = _write_single_route_manifest(tmp_path, route_id="text_rag")
+    health_path = tmp_path / "backend-health.json"
+    health = {
+        "schema_version": 1,
+        "overall_status": "blocked",
+        "backends": {
+            "vlm": {
+                "role": "vlm",
+                "status": "blocked",
+                "failure_type": "unreachable",
+            }
+        },
+        "failure_taxonomy": [
+            {
+                "role": "vlm",
+                "failure_type": "unreachable",
+                "status": "blocked",
+            }
+        ],
+    }
+    health_path.write_text(json.dumps(health), encoding="utf-8")
+    calls: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _FakeEngine(engine_name, config, calls),
+    )
+
+    report = run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="backend_health",
+            output_dir=tmp_path / "out",
+            backend_health_json=health_path,
+            use_generation=False,
+        ),
+    )
+
+    assert report["summary"]["backend_health"] == health
+    assert report["summary"]["backend_failure_taxonomy"] == [
+        {
+            "role": "vlm",
+            "failure_type": "unreachable",
+            "status": "blocked",
+        }
+    ]
 
 
 def test_run_benchmark_records_route_timeout_as_error_prediction(monkeypatch, tmp_path):

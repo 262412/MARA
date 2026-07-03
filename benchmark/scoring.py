@@ -5,6 +5,7 @@ from typing import Any
 from ktem.docqa.evidence_text import extract_final_answer_text
 
 from .citation_metrics import citation_precision_score, citation_recall_score
+from .element_locator_metrics import element_locator_hit_score
 from .engine_context import extract_citations
 from .metrics import (
     anls_score,
@@ -244,6 +245,9 @@ def _add_gold_evidence_metrics(
     predicted_citations = inline_citations or metadata_citations
     metrics["element_hit"] = element_hit_score(
         prediction.get("predicted_element_ids", []), gold_evidence
+    )
+    metrics["element_locator_hit"] = element_locator_hit_score(
+        list(prediction.get("retrieved_hits") or []), gold_evidence
     )
     metrics["span_recall"] = span_recall_score(predicted_answer, gold_evidence)
     metrics["image_quote_hit"] = image_quote_hit_score(predicted_answer, gold_evidence)

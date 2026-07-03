@@ -23,6 +23,8 @@ def normalize_retrieved_hit(item: dict[str, Any]) -> dict[str, Any]:
         "page_index": _page_index(item, metadata),
         "modality": _first_text(item, metadata, "modality", "element_type", "type"),
         "element_id": _first_text(item, metadata, "element_id", "element"),
+        "element_id_aliases": _first_list(item, metadata, "element_id_aliases"),
+        "element_type_aliases": _first_list(item, metadata, "element_type_aliases"),
         "score": item.get("score", metadata.get("score")),
         "text": _first_text(item, metadata, "text", "content", "snippet"),
         "source_backrefs": _source_backrefs(item, metadata),
@@ -55,6 +57,17 @@ def _first_text(
     return ""
 
 
+def _first_list(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    key: str,
+) -> list[str]:
+    values = _list_values(item.get(key))
+    if not values:
+        values = _list_values(metadata.get(key))
+    return _dedupe_text(values)
+
+
 def _page_index(item: dict[str, Any], metadata: dict[str, Any]) -> int | None:
     text = _first_text(item, metadata, "page_index")
     if not text:
@@ -66,12 +79,43 @@ def _source_backrefs(
     item: dict[str, Any],
     metadata: dict[str, Any],
 ) -> list[str]:
-    refs = item.get("source_backrefs")
-    if refs in (None, ""):
-        refs = metadata.get("source_backrefs")
-    if isinstance(refs, str):
-        return [refs] if refs.strip() else []
-    return [str(ref) for ref in refs or [] if str(ref).strip()]
+    refs: list[str] = []
+    for key in ("source_backrefs", "citations", "sources", "source_refs"):
+        refs.extend(_source_ref_values(item.get(key)))
+        refs.extend(_source_ref_values(metadata.get(key)))
+    for key in ("citation", "source", "source_ref", "reference"):
+        refs.extend(_source_ref_values(item.get(key)))
+        refs.extend(_source_ref_values(metadata.get(key)))
+    return _dedupe_text(refs)
+
+
+def _source_ref_values(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value if str(item).strip()]
+    return []
+
+
+def _list_values(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value if str(item).strip()]
+    return []
+
+
+def _dedupe_text(values: list[str]) -> list[str]:
+    refs: list[str] = []
+    for value in values:
+        ref = str(value).strip()
+        if ref and ref not in refs:
+            refs.append(ref)
+    return refs
 
 
 def _text(value: Any) -> str:
