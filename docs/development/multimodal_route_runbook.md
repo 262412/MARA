@@ -35,6 +35,35 @@ test ! -e outputs
 Stop if `.venv` is not a symlink to fastscratch, if quota is above the soft
 limit, or if repo-root `data/`, `datasets/`, or `outputs/` exists.
 
+## Runtime Isolation
+
+Every benchmark Slurm task must run with an isolated `KH_APP_DATA_DIR`. The
+wrapper sources `scripts/slurm/benchmark_runtime_isolation.sh`, derives a
+per-task runtime from the Slurm job and array ids, and refuses to run if the
+runtime still points at the shared interactive app directory:
+
+```text
+/users/tbczhang/fastscratch/mara_runtime/ktem_app_data
+```
+
+This is a hard correctness boundary for full-system benchmark runs. Concurrent
+benchmark shards must not write into the same shared Chroma collection, because
+that can corrupt the local HNSW index and surface as Slurm `139:0` native
+segfaults rather than Python exceptions. Text, visual, controller, hybrid, and
+element rerun scripts generated for a final benchmark should either call this
+wrapper or source the same helper before starting model services or invoking
+`python -m benchmark run`.
+
+The default isolated runtime shape is:
+
+```text
+/users/tbczhang/fastscratch/mara_runtime/benchmark_runs/<suite>/<slurm-task>/ktem_app_data
+```
+
+The wrapper logs `kh_app_data_dir=...` at job start. Treat a missing log line,
+or a path ending exactly in `/mara_runtime/ktem_app_data`, as a failed
+preflight and do not use that run for final thesis results.
+
 ## Submit Slurm Job
 
 Create the Slurm log directory before `sbatch`; Slurm opens stdout before the

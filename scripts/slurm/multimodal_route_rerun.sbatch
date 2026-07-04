@@ -27,7 +27,6 @@ export PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-/users/tbczhang/scratch/pre-commit-ca
 export HF_HOME="${HF_HOME:-/users/tbczhang/fastscratch/cache/huggingface}"
 export TIKTOKEN_CACHE_DIR="${TIKTOKEN_CACHE_DIR:-/users/tbczhang/fastscratch/cache/tiktoken}"
 export CODEX_HOME="${CODEX_HOME:-/users/tbczhang/fastscratch/.codex}"
-export KH_APP_DATA_DIR="${KH_APP_DATA_DIR:-/users/tbczhang/fastscratch/mara_runtime/ktem_app_data}"
 export MARA_VLM_BASE_URL="${MARA_VLM_BASE_URL:-http://127.0.0.1:8001/v1}"
 export MARA_VLM_API_KEY="${MARA_VLM_API_KEY:-local}"
 export MARA_VLM_MODEL="${MARA_VLM_MODEL:-Qwen/Qwen3-VL-8B-Instruct}"
@@ -111,15 +110,25 @@ require_path output "$OUT_ROOT" \
   "/mnt/scratch/users/tbczhang/outputs/MARA" \
   "/users/tbczhang/scratch/outputs/MARA"
 
+source "${PROJECT_ROOT}/scripts/slurm/benchmark_runtime_isolation.sh"
+mara_configure_benchmark_runtime "$SUITE_NAME"
+mara_assert_isolated_kh_app_data
+require_path runtime "$KH_APP_DATA_DIR" \
+  "/mnt/fastscratch/users/tbczhang/mara_runtime" \
+  "/users/tbczhang/fastscratch/mara_runtime"
+
 mkdir -p "$OUT_ROOT" "$LOG_ROOT" /mnt/scratch/users/tbczhang/outputs/MARA/slurm
 cd "$PROJECT_ROOT"
 
 log "repo=$(pwd)"
+log "kh_app_data_dir=${KH_APP_DATA_DIR}"
 log "manifest=${MANIFEST}"
 log "output=${OUT_ROOT}"
 log "suite=${SUITE_NAME}"
 log "node=${SLURMD_NODENAME:-$(hostname)}"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader || true
+
+mara_bootstrap_benchmark_runtime
 
 if ! http_ok "http://127.0.0.1:8000/v1/models"; then
   start_service qwen3_8b \
@@ -148,6 +157,8 @@ wait_http text_llm "http://127.0.0.1:8000/v1/models" 600
 wait_http vlm "http://127.0.0.1:8001/v1/models" 600
 wait_http retrieval "http://127.0.0.1:8002/health" 240
 wait_http colvision "http://127.0.0.1:8003/health" 240
+
+uv run --python 3.10 python "${HPC_HOME}/configure_mara_local_models.py"
 
 uv run --python 3.10 python - <<'PY'
 from ktem.docqa.visual_backends import visual_backend_health
