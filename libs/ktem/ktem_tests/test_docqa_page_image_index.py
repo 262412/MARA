@@ -1,4 +1,8 @@
-from ktem.docqa.multimodal_index import page_image_records_from_documents
+from ktem.docqa import multimodal_index
+from ktem.docqa.multimodal_index import (
+    build_local_page_image_records,
+    page_image_records_from_documents,
+)
 
 from kotaemon.base import RetrievedDocument
 
@@ -101,3 +105,27 @@ def test_page_image_index_persists_colpali_multivector_fields():
         "source_backrefs": ["file-1#page:7"],
     }
     assert record["metadata"]["visual_retriever"] == "colpali"
+
+
+def test_local_page_image_records_cap_rendered_pages_without_page_hint(
+    monkeypatch, tmp_path
+):
+    rendered_pages = []
+    pdf_path = tmp_path / "long.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+
+    monkeypatch.setattr(multimodal_index, "_pdf_page_count", lambda _path: 10)
+
+    def fake_renderer(_path, pages, _dpi):
+        rendered_pages.extend(pages)
+        return [f"image-{page}" for page in pages]
+
+    records = build_local_page_image_records(
+        [{"file_id": "long", "file_name": "long.pdf", "path": str(pdf_path)}],
+        renderer=fake_renderer,
+        text_extractor=lambda _path, page: f"page {page} text",
+        max_pages=3,
+    )
+
+    assert rendered_pages == [0, 1, 2]
+    assert [record["page_number"] for record in records] == [1, 2, 3]

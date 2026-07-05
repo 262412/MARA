@@ -96,3 +96,89 @@ def test_mara_planner_uses_page_image_for_visual_slide_questions():
     assert decision["route_scores"]["doc_page_image"] > decision["route_scores"][
         "hybrid"
     ]
+
+
+def test_mara_planner_exposes_expected_quality_cost_and_skips_expensive_visual():
+    decision = planner_decision(
+        {
+            "task_type": "qa",
+            "modalities": ["text"],
+            "available_modalities": ["page_image"],
+            "scope": "multi_document",
+        },
+        question="What happened to revenue?",
+        allowed_routes=[
+            "doc_text",
+            "hybrid",
+            "doc_page_image",
+            "doc_element",
+            "graph_global",
+        ],
+        route_probe={
+            "text": {
+                "evidence_count": 3,
+                "top_score": 0.92,
+                "top_margin": 0.22,
+                "locator_quality": 1.0,
+                "has_text_or_ocr": True,
+            },
+            "visual": {
+                "evidence_count": 2,
+                "top_score": 0.7,
+                "top_margin": 0.03,
+                "locator_quality": 0.8,
+                "has_text_or_ocr": True,
+                "backend_healthy": True,
+            },
+        },
+        dataset_family="mmdocrag",
+    )
+
+    assert decision["route"] == "doc_text"
+    assert decision["route_confidence_by_modality"] == decision["route_confidences"]
+    assert decision["expected_route_quality"]["doc_text"] > (
+        decision["expected_route_quality"]["doc_page_image"]
+    )
+    assert decision["expected_route_cost"]["doc_page_image"] > (
+        decision["expected_route_cost"]["doc_text"]
+    )
+    assert "doc_page_image" in decision["skipped_expensive_routes"]
+
+
+def test_mara_planner_blocks_element_route_when_coverage_is_low():
+    decision = planner_decision(
+        {
+            "task_type": "qa",
+            "modalities": ["table"],
+            "available_modalities": ["page_image"],
+            "scope": "document",
+        },
+        question="What value is in the revenue table?",
+        allowed_routes=[
+            "doc_text",
+            "hybrid",
+            "doc_page_image",
+            "doc_element",
+            "graph_global",
+        ],
+        route_probe={
+            "text": {
+                "evidence_count": 2,
+                "top_score": 0.72,
+                "top_margin": 0.1,
+                "locator_quality": 1.0,
+                "has_text_or_ocr": True,
+            },
+            "element": {
+                "evidence_count": 1,
+                "top_score": 0.95,
+                "top_margin": 0.4,
+                "locator_quality": 0.0,
+                "has_text_or_ocr": False,
+            },
+        },
+    )
+
+    assert decision["route"] != "doc_element"
+    assert decision["expected_route_quality"]["doc_element"] == 0.0
+    assert "doc_element" in decision["skipped_expensive_routes"]

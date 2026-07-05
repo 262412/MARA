@@ -4,6 +4,13 @@ import re
 from typing import Any
 
 from ktem.docqa.controller import ROUTE_EVIDENCE_TYPES
+from ktem.reasoning.mara_route_costing import (
+    dataset_text,
+    effective_route_confidences,
+    is_mmdocrag_dataset,
+    route_confidence_trace_fields,
+    select_route,
+)
 
 VISUAL_INTENT_TERMS = {
     "chart",
@@ -83,9 +90,36 @@ def score_adaptive_route(
     allowed = _allowed_routes(allowed_routes)
     features = _question_features(understanding, question)
     probe = _normalized_route_probe(route_probe or {}, features)
-    confidences = _route_confidences(probe, features)
-    route_scores = _route_scores(features, confidences, dataset_family)
-    selected_route = _select_route(route_scores, allowed)
+    raw_confidences = _route_confidences(probe, features)
+    confidences = effective_route_confidences(
+        raw_confidences,
+        features,
+        dataset_family=dataset_family,
+        latency_budget=latency_budget or {},
+    )
+    expected_quality = _expected_route_quality(
+        features,
+        confidences,
+        probe,
+        dataset_family,
+    )
+    expected_cost = _expected_route_cost(
+        features,
+        confidences,
+        probe,
+        dataset_family,
+        latency_budget or {},
+    )
+    skipped_expensive_routes = _skipped_expensive_routes(
+        features,
+        confidences,
+        probe,
+        dataset_family,
+        expected_quality,
+        expected_cost,
+    )
+    route_scores = _route_scores(expected_quality, expected_cost)
+    selected_route = select_route(route_scores, allowed, skipped_expensive_routes)
     latency_reason = _latency_budget_reason(selected_route, features, confidences)
     reason = _selection_reason(
         selected_route,
@@ -100,12 +134,18 @@ def score_adaptive_route(
         "verify": selected_route not in {"direct", "abstain"},
         "routing_features": features,
         "route_scores": route_scores,
-        "route_confidences": confidences,
+        "expected_route_quality": expected_quality,
+        "expected_route_cost": expected_cost,
+        **route_confidence_trace_fields(
+            raw_confidences,
+            confidences,
+            skipped_expensive_routes,
+            allowed,
+            selected_route,
+        ),
         "latency_budget": dict(latency_budget or {}),
         "latency_budget_reason": latency_reason,
-        "cost_gate_decision": _cost_gate_decision(
-            selected_route, planner_route=planner_route
-        ),
+        "cost_gate_decision": _cost_gate_decision(selected_route, planner_route=planner_route),
         "selected_route_reason": reason,
         "route_selection_reason": reason,
         "route_selection_policy": "cost_aware_initial",
@@ -332,8 +372,20 @@ def _confidence(
 
 
 def _route_scores(
+    expected_quality: dict[str, float],
+    expected_cost: dict[str, float],
+) -> dict[str, float]:
+    routes = set(expected_quality) | set(expected_cost)
+    return {
+        route: round(max(0.0, expected_quality.get(route, 0.0) - expected_cost.get(route, 0.0)), 4)
+        for route in routes
+    }
+
+
+def _expected_route_quality(
     features: dict[str, Any],
     confidences: dict[str, float],
+    probe: dict[str, dict[str, Any]],
     dataset_family: str,
 ) -> dict[str, float]:
     text = confidences["text"]
@@ -341,35 +393,112 @@ def _route_scores(
     element = confidences["element"]
     graph = confidences["graph"]
     hybrid_allowed = _hybrid_allowed(confidences, features)
-    dataset = str(dataset_family or "").lower()
-    scores = {
+    dataset = dataset_text(dataset_family, {})
+    element_coverage_ok = _element_coverage_ok(probe["element"])
+    quality = {
         "doc_text": 0.15 + text,
         "doc_page_image": 0.1 + visual,
-        "doc_element": 0.1 + element,
+        "doc_element": 0.1 + element if element_coverage_ok else 0.0,
         "graph_global": 0.05 + graph,
         "hybrid": 0.2 + (text + max(visual, element)) / 2 if hybrid_allowed else 0.0,
     }
     if features["visual_intent"]:
-        scores["doc_page_image"] += 0.25
-        scores["doc_text"] -= 0.08
+        quality["doc_page_image"] += 0.32
+        quality["doc_text"] -= 0.08
     if features["element_intent"]:
-        scores["doc_element"] += 0.25
-        scores["hybrid"] += 0.1 if hybrid_allowed else 0.0
+        if element_coverage_ok:
+            quality["doc_element"] += 0.25
+        quality["hybrid"] += 0.1 if hybrid_allowed else 0.0
     if features["structured_calculation"]:
-        scores["hybrid"] += 0.2 if hybrid_allowed else 0.0
-        scores["doc_element"] += 0.15
+        quality["doc_text"] += 0.1
+        quality["hybrid"] += 0.12 if hybrid_allowed else 0.0
+        if element_coverage_ok:
+            quality["doc_element"] += 0.15
     if features["graph_intent"]:
-        scores["graph_global"] += 0.35
+        quality["graph_global"] += 0.35
     else:
-        scores["graph_global"] -= 0.25
+        quality["graph_global"] -= 0.25
     if text >= 0.65 and not features["visual_intent"]:
-        scores["doc_text"] += 0.25
-        scores["doc_page_image"] -= 0.2
-        scores["hybrid"] -= 0.1
-    if "mmdocrag" in dataset and not features["visual_intent"]:
-        scores["doc_text"] += 0.1
-        scores["doc_page_image"] -= 0.1
-    return {key: round(max(0.0, value), 4) for key, value in scores.items()}
+        quality["doc_text"] += 0.25
+        quality["doc_page_image"] -= 0.2
+        quality["hybrid"] -= 0.1
+    if is_mmdocrag_dataset(dataset) and not features["visual_intent"]:
+        quality["doc_text"] += 0.2
+        quality["doc_page_image"] -= 0.2
+        quality["hybrid"] -= 0.12
+    if "finance" in dataset and features["structured_calculation"]:
+        quality["doc_text"] += 0.2
+        quality["hybrid"] -= 0.05
+    return {key: round(max(0.0, value), 4) for key, value in quality.items()}
+
+
+def _expected_route_cost(
+    features: dict[str, Any],
+    confidences: dict[str, float],
+    probe: dict[str, dict[str, Any]],
+    dataset_family: str,
+    latency_budget: dict[str, Any],
+) -> dict[str, float]:
+    del confidences
+    dataset = dataset_text(dataset_family, latency_budget)
+    cost = {
+        "doc_text": 0.05,
+        "doc_page_image": 0.45,
+        "doc_element": 0.15,
+        "graph_global": 0.1,
+        "hybrid": 0.35,
+    }
+    if features["visual_intent"]:
+        cost["doc_page_image"] -= 0.18
+    if features["element_intent"] and _element_coverage_ok(probe["element"]):
+        cost["doc_element"] -= 0.05
+    if is_mmdocrag_dataset(dataset):
+        cost["doc_page_image"] += 0.22
+        cost["hybrid"] += 0.18
+    if not latency_budget.get("vlm_generator_available", True):
+        if features["visual_intent"]:
+            cost["doc_page_image"] += 0.05
+        else:
+            cost["doc_page_image"] += 0.25
+        cost["hybrid"] += 0.12
+    return {key: round(max(0.0, value), 4) for key, value in cost.items()}
+
+
+def _skipped_expensive_routes(
+    features: dict[str, Any],
+    confidences: dict[str, float],
+    probe: dict[str, dict[str, Any]],
+    dataset_family: str,
+    expected_quality: dict[str, float],
+    expected_cost: dict[str, float],
+) -> list[str]:
+    skipped: list[str] = []
+    dataset = dataset_text(dataset_family, {})
+    if (
+        is_mmdocrag_dataset(dataset)
+        and confidences["text"] >= 0.65
+        and not features["visual_intent"]
+    ):
+        skipped.extend(["doc_page_image", "hybrid"])
+    if not _element_coverage_ok(probe["element"]):
+        skipped.append("doc_element")
+    for route, cost in expected_cost.items():
+        if (
+            route in {"doc_page_image", "hybrid"}
+            and cost >= 0.55
+            and expected_quality.get(route, 0.0) <= expected_quality.get("doc_text", 0.0)
+            and route not in skipped
+        ):
+            skipped.append(route)
+    return skipped
+
+
+def _element_coverage_ok(item: dict[str, Any]) -> bool:
+    return (
+        int(item["evidence_count"]) > 0
+        and float(item["locator_quality"]) >= 0.5
+        and bool(item["has_text_or_ocr"])
+    )
 
 
 def _hybrid_allowed(
@@ -380,29 +509,6 @@ def _hybrid_allowed(
     return confidences["text"] >= 0.45 and (
         confidences["visual"] >= 0.45 or confidences["element"] >= 0.45
     )
-
-
-def _select_route(route_scores: dict[str, float], allowed_routes: list[str]) -> str:
-    allowed = allowed_routes or list(route_scores)
-    candidates = [
-        (score, route)
-        for route, score in route_scores.items()
-        if route in allowed and route not in {"direct", "abstain"}
-    ]
-    if not candidates:
-        return allowed[0] if allowed else "doc_text"
-    return max(candidates, key=lambda item: (item[0], _route_tie_breaker(item[1])))[1]
-
-
-def _route_tie_breaker(route: str) -> int:
-    order = {
-        "doc_text": 5,
-        "doc_page_image": 4,
-        "doc_element": 3,
-        "hybrid": 2,
-        "graph_global": 1,
-    }
-    return order.get(route, 0)
 
 
 def _latency_budget_reason(
@@ -457,7 +563,7 @@ def _allowed_routes(value: Any) -> list[str]:
 
 def _has_term(text: str, terms: set[str]) -> bool:
     tokens = set(re.findall(r"[a-zA-Z0-9]+", str(text or "").lower()))
-    return bool(tokens & terms) or any(term in text for term in terms)
+    return bool(tokens & terms)
 
 
 def _unique(values: Any) -> list[str]:

@@ -226,6 +226,7 @@ def build_local_page_image_records(
     file_records: Iterable[dict[str, Any]],
     *,
     page_numbers: list[int] | None = None,
+    max_pages: int | None = None,
     renderer: Any | None = None,
     text_extractor: Any | None = None,
     dpi: int = 120,
@@ -236,7 +237,7 @@ def build_local_page_image_records(
         if not _is_pdf_record(file_record):
             continue
         file_path = Path(str(file_record.get("path") or file_record.get("file_path")))
-        pages = _requested_pages(file_path, page_numbers)
+        pages = _requested_pages(file_path, page_numbers, max_pages=max_pages)
         if not pages:
             continue
         images = _render_pages(file_path, pages, renderer=renderer, dpi=dpi)
@@ -403,11 +404,19 @@ def _is_pdf_record(file_record: dict[str, Any]) -> bool:
     return Path(file_name or file_path).suffix.lower() == ".pdf"
 
 
-def _requested_pages(file_path: Path, page_numbers: list[int] | None) -> list[int]:
+def _requested_pages(
+    file_path: Path,
+    page_numbers: list[int] | None,
+    *,
+    max_pages: int | None = None,
+) -> list[int]:
     if page_numbers:
         return sorted({max(1, int(page)) for page in page_numbers})
     page_count = _pdf_page_count(file_path)
-    return list(range(1, page_count + 1))
+    pages = list(range(1, page_count + 1))
+    if max_pages is None or max_pages <= 0:
+        return pages
+    return pages[:max_pages]
 
 
 def _pdf_page_count(file_path: Path) -> int:

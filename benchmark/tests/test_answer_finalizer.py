@@ -280,3 +280,85 @@ def test_finalizer_uses_canonical_predicted_source_when_backref_missing():
     assert prediction["structured_citations"][0]["source_id"] == "OTC_NSRGY_2020"
     assert prediction["structured_citations"][0]["page_label"] == "62"
     assert prediction["predicted_citations"] == ["OTC_NSRGY_2020#page:62"]
+
+
+def test_finalizer_attaches_financebench_citation_from_canonical_source():
+    prediction: dict[str, Any] = {
+        "predicted_answer": "0.96",
+        "answer_type": "extractive",
+        "evidence_bundle": {
+            "items": [
+                {
+                    "evidence_id": "text-hit",
+                    "source_id": "30ce33e9-7648-4d4f-a7de-internal",
+                    "page_label": "42",
+                    "text": "The quick ratio was 0.96.",
+                }
+            ]
+        },
+        "scored_predicted_sources": ["MMM_2022_10K#page:42"],
+        "gold_evidence": [{"source_id": "MMM_2022_10K", "page_label": "42"}],
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="financebench_plan5_text_main_current",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_scoring"] == "0.96"
+    assert prediction["structured_citations"][0]["source_id"] == "MMM_2022_10K"
+    assert prediction["structured_citations"][0]["page_label"] == "42"
+    assert prediction["predicted_citations"] == ["MMM_2022_10K#page:42"]
+
+
+def test_finalizer_canonicalizes_existing_financebench_uuid_citation():
+    prediction: dict[str, Any] = {
+        "predicted_answer": "The cash conversion cycle is not provided.",
+        "answer_type": "extractive",
+        "structured_citations": [
+            {
+                "evidence_id": "a99fe487-90ba-45b2-810d-fef2fddb5ac8",
+                "source_id": "de95827e-87fb-4151-99bb-338b2d79f22c",
+                "page_label": "60",
+                "span": "The cash conversion cycle is not provided.",
+            }
+        ],
+        "predicted_citations": [
+            "de95827e-87fb-4151-99bb-338b2d79f22c#page:60"
+        ],
+        "evidence_bundle": {
+            "items": [
+                {
+                    "source_id": "de95827e-87fb-4151-99bb-338b2d79f22c",
+                    "page_label": "60",
+                    "source_backrefs": [
+                        "de95827e-87fb-4151-99bb-338b2d79f22c#page:60"
+                    ],
+                }
+            ]
+        },
+        "predicted_sources": [
+            "GENERALMILLS_2019_10K#page:60",
+            "GENERALMILLS_2019_10K#page:3",
+        ],
+        "gold_evidence": [
+            {"source_id": "GENERALMILLS_2019_10K", "page_label": "60"}
+        ],
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="financebench_plan5_text_main_current",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_user"] == (
+        "The cash conversion cycle is not provided. "
+        "GENERALMILLS_2019_10K#page:60"
+    )
+    assert prediction["structured_citations"][0]["source_id"] == (
+        "GENERALMILLS_2019_10K"
+    )
+    assert prediction["structured_citations"][0]["page_label"] == "60"
+    assert prediction["predicted_citations"] == ["GENERALMILLS_2019_10K#page:60"]

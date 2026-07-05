@@ -198,6 +198,16 @@ def _run_engine_example(engine, bundle: ManifestBundle, example) -> dict[str, An
     return _engine_result_to_prediction(result, example=example, documents=documents)
 
 
+def _prepare_engine_examples(
+    engine,
+    bundle: ManifestBundle,
+    examples: list[Any],
+) -> None:
+    prepare_examples = getattr(engine, "prepare_examples", None)
+    if callable(prepare_examples):
+        prepare_examples(bundle, examples)
+
+
 def _error_prediction(
     *,
     example,
@@ -375,6 +385,7 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         if engine_key not in engines:
             engines[engine_key] = get_engine(route_config.engine, route_config)
         engine = engines[engine_key]
+        _prepare_engine_examples(engine, selected_bundle, selected_bundle.examples)
 
         for example in selected_bundle.examples:
             document = selected_bundle.documents[example.document_id]

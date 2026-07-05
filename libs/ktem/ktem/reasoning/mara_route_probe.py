@@ -28,7 +28,7 @@ def controller_route_probe(
             metadata_builder=pipeline.build_evidence_metadata,
         )
         probe["text"] = route_probe_from_metadata("text", text_metadata)
-    if page_image_route_available(pipeline) and (
+    if _should_probe_visual_route(pipeline, understanding, probe) and (
         _route_allowed(pipeline, "doc_page_image")
         or _route_allowed(pipeline, "hybrid")
     ):
@@ -123,10 +123,13 @@ def _route_allowed(pipeline: Any, route: str) -> bool:
 
 
 def _should_probe_text_route(pipeline: Any, understanding: dict[str, Any]) -> bool:
-    return not (
-        page_image_route_available(pipeline)
-        and _understanding_has_visual_intent(understanding)
-    )
+    planner = getattr(pipeline, "planner", None)
+    planner_model = getattr(pipeline, "planner_model", None)
+    if callable(planner) and not planner_model and _understanding_has_visual_intent(
+        understanding
+    ):
+        return False
+    return True
 
 
 def _understanding_has_visual_intent(understanding: dict[str, Any]) -> bool:
@@ -152,4 +155,34 @@ def _understanding_has_visual_intent(understanding: dict[str, Any]) -> bool:
             "visual",
             "visible",
         )
+    )
+
+
+def _should_probe_visual_route(
+    pipeline: Any,
+    understanding: dict[str, Any],
+    probe: dict[str, Any],
+) -> bool:
+    if not page_image_route_available(pipeline):
+        return False
+    if _understanding_has_visual_intent(understanding):
+        return True
+    if "mmdocrag" not in dataset_family(pipeline).lower():
+        return True
+    text_probe = dict(probe.get("text") or {})
+    if not text_probe:
+        return True
+    return not _text_probe_is_confident(text_probe)
+
+
+def _text_probe_is_confident(text_probe: dict[str, Any]) -> bool:
+    try:
+        evidence_count = int(text_probe.get("evidence_count") or 0)
+        locator_quality = float(text_probe.get("locator_quality") or 0.0)
+    except (TypeError, ValueError):
+        return False
+    return (
+        evidence_count > 0
+        and locator_quality >= 0.5
+        and bool(text_probe.get("has_text_or_ocr"))
     )

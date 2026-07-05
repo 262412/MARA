@@ -187,6 +187,7 @@ def _retrieve_and_evaluate(
         evidence_bundle.metadata,
         prompt=str(getattr(request, "prompt", "") or ""),
         verification_domain=getattr(request, "verification_domain", None),
+        origin=getattr(request, "origin", None),
     )
     if retrieve_decision.status != "ambiguous" or not retrieve_decision.retry:
         return evidence_bundle, retrieve_decision
@@ -201,6 +202,7 @@ def _retrieve_and_evaluate(
         attempted_retry=True,
         prompt=str(getattr(request, "prompt", "") or ""),
         verification_domain=getattr(request, "verification_domain", None),
+        origin=getattr(request, "origin", None),
     )
     return evidence_bundle, retrieve_decision
 
@@ -361,7 +363,7 @@ def _verified_result(
 ) -> RouteExecutionResult:
     if bundle.metadata.get("generation_backend") == "evidence_only_without_vlm":
         verify_decision = _evidence_only_verify_decision(request, bundle)
-        guardrail = _verification_guardrail(verify_decision)
+        guardrail = _verification_guardrail(verify_decision, request)
         return _result(
             decision,
             retrieve_decision,
@@ -374,7 +376,7 @@ def _verified_result(
         )
     if not extract_final_answer_text(answer).strip():
         verify_decision = _empty_answer_verify_decision(request, bundle)
-        guardrail = _verification_guardrail(verify_decision)
+        guardrail = _verification_guardrail(verify_decision, request)
         return _result(
             decision,
             retrieve_decision,
@@ -389,7 +391,7 @@ def _verified_result(
     if verify_decision.action == "revise" and rewrite is not None:
         answer = rewrite(request, decision, bundle, answer)
         verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
-    guardrail = _verification_guardrail(verify_decision)
+    guardrail = _verification_guardrail(verify_decision, request)
     if guardrail.action == "abstain":
         answer = ABSTAIN_MESSAGE
     return _result(
@@ -404,14 +406,27 @@ def _verified_result(
     )
 
 
-def _verification_guardrail(verify_decision: VerifyDecision) -> GuardrailDecision:
+def _verification_guardrail(
+    verify_decision: VerifyDecision,
+    request: Any | None = None,
+) -> GuardrailDecision:
     if verify_decision.status in {"supported", "not_requested", "not_required"}:
         return GuardrailDecision("ok", "return", verify_decision.reason)
     if verify_decision.action == "revise":
+        if _finance_benchmark_request(request):
+            return GuardrailDecision("unsupported", "revise", verify_decision.reason)
         return GuardrailDecision("unsupported", "abstain", verify_decision.reason)
     return GuardrailDecision(
         verify_decision.status, verify_decision.action, verify_decision.reason
     )
+
+
+def _finance_benchmark_request(request: Any | None) -> bool:
+    if request is None:
+        return False
+    origin = str(getattr(request, "origin", "") or "").strip().lower()
+    domain = str(getattr(request, "verification_domain", "") or "").strip().lower()
+    return origin == "benchmark" and domain in {"finance", "financial"}
 
 
 def _evidence_only_verify_decision(

@@ -52,6 +52,10 @@ def _fuse_with_modality_normalized_rrf(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     rows = _fusion_rows(query, items, domain=domain)
     selected_rows = _selected_normalized_rrf_rows(query, rows)
+    selected_rows, element_gate_trace = _drop_low_coverage_element_rows(
+        domain,
+        selected_rows,
+    )
     selected_rows, guard_trace = _document_complex_text_guard(
         domain,
         selected_rows,
@@ -59,6 +63,7 @@ def _fuse_with_modality_normalized_rrf(
     selected_rows.sort(key=lambda row: (-row["final_score"], row["index"]))
     fused, item_scores = _materialize_normalized_rows(rows, selected_rows)
     trace = _normalized_rrf_trace(items, fused, item_scores)
+    trace.update(element_gate_trace)
     trace.update(guard_trace)
     return fused, trace
 
@@ -208,6 +213,36 @@ def _document_complex_text_guard(
     trace["fallback_route"] = "text"
     trace["best_single_route"] = "text"
     return text_rows, trace
+
+
+def _drop_low_coverage_element_rows(
+    domain: str | None,
+    selected_rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if str(domain or "").strip().lower() not in {"document_complex", "mmdocrag"}:
+        return selected_rows, {"dropped_low_coverage_element_count": 0}
+    kept: list[dict[str, Any]] = []
+    dropped_count = 0
+    for row in selected_rows:
+        if str(row.get("group") or "") == "element" and not _element_row_has_coverage(
+            row
+        ):
+            dropped_count += 1
+            continue
+        kept.append(row)
+    return kept, {"dropped_low_coverage_element_count": dropped_count}
+
+
+def _element_row_has_coverage(row: dict[str, Any]) -> bool:
+    item = dict(row.get("item") or {})
+    has_locator = bool(
+        str(item.get("source_id") or item.get("file_id") or "").strip()
+        and str(item.get("page_label") or item.get("page_number") or "").strip()
+    )
+    has_text_or_ocr = bool(
+        str(item.get("text") or item.get("ocr_text") or item.get("caption") or "").strip()
+    )
+    return has_locator and has_text_or_ocr
 
 
 def _best_single_route(rows: list[dict[str, Any]]) -> str:

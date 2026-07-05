@@ -3,7 +3,9 @@ from types import SimpleNamespace
 
 import ktem.reasoning.mara_controller as mara_controller
 from ktem.docqa.execution import _route_switch_candidates
+from ktem.reasoning.mara_visual_gate import hybrid_should_use_visual_generator
 from ktem.reasoning.mara import MaraAgentPipeline
+from ktem.reasoning.mara_route_probe import controller_route_probe
 from ktem.reasoning.simple import FullQAPipeline
 
 from kotaemon.base import Document, RetrievedDocument
@@ -56,6 +58,7 @@ def test_mara_stream_normalizes_llm_graph_route_for_visual_question(monkeypatch)
         understanding,
         planner_payload,
         kwargs,
+        **_extra,
     ):
         del self, message, conv_id, history, understanding, kwargs
         captured["planner_payload"] = dict(planner_payload)
@@ -268,3 +271,96 @@ def test_mara_hybrid_route_skips_vlm_for_text_strong_question(monkeypatch):
     assert [event.content for event in events if event.channel == "chat"] == [
         "grounded answer"
     ]
+
+
+def test_hybrid_visual_gate_skips_mmdocrag_vlm_when_text_confidence_is_strong():
+    bundle = SimpleNamespace(
+        metadata={},
+        items=[
+            {"modality": "text", "text": "Revenue increased.", "evidence_id": "text"},
+            {
+                "modality": "page_image",
+                "text": "Revenue chart.",
+                "evidence_id": "page",
+            },
+        ],
+    )
+    request = SimpleNamespace(
+        prompt="What does the revenue chart show?",
+        verification_domain="mmdocrag",
+    )
+    decision = SimpleNamespace(
+        reason="visual intent",
+        route_confidences={"text": 0.72, "visual": 0.56},
+        route_probe={"visual": {"top_margin": 0.03}},
+    )
+
+    assert hybrid_should_use_visual_generator(request, decision, bundle) is False
+    assert bundle.metadata["visual_generation_gate"] == "skipped_text_strong"
+    assert "doc_page_image" in bundle.metadata["skipped_expensive_routes"]
+
+
+def test_mmdocrag_controller_probe_skips_visual_scoring_for_text_strong_table_question(
+    monkeypatch,
+):
+    class FailingVisualRetriever:
+        name = "must_not_score"
+        backend_type = "unit_test"
+
+        def score(self, _query, _record):
+            raise AssertionError("text-strong MMDocRAG probe must not score images")
+
+    docs = [
+        RetrievedDocument(
+            text=(
+                "The amortisation and depreciation-related charge was 123 in "
+                "2021 and 100 in 2020."
+            ),
+            id_=f"doc-{index}",
+            metadata={
+                "file_id": "inditex_2021",
+                "file_name": "inditex_2021.pdf",
+                "page_label": str(64 + index),
+            },
+            score=0.9,
+        )
+        for index in range(3)
+    ]
+    pipeline = MaraAgentPipeline(retrievers=[])
+    pipeline.allowed_routes = [
+        "graph_global",
+        "hybrid",
+        "doc_text",
+        "doc_page_image",
+    ]
+    pipeline.dataset_family = "mmdocrag"
+    pipeline.visual_retriever_backend = "colqwen"
+    pipeline.visual_retriever = FailingVisualRetriever()
+    pipeline.page_image_index_records = _visual_page_records()
+    monkeypatch.setattr(
+        MaraAgentPipeline,
+        "retrieve",
+        lambda _self, _message, _history: (docs, []),
+    )
+
+    probe = controller_route_probe(
+        pipeline,
+        (
+            "What are the differences in the total amortisation and "
+            "depreciation-related charges between 2021 and 2020?"
+        ),
+        [],
+        {
+            "question": (
+                "What are the differences in the total amortisation and "
+                "depreciation-related charges between 2021 and 2020?"
+            ),
+            "task_type": "qa",
+            "modalities": ["table"],
+            "available_modalities": ["page_image"],
+            "scope": "document",
+        },
+    )
+
+    assert "text" in probe
+    assert "visual" not in probe

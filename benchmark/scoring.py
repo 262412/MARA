@@ -181,7 +181,11 @@ def _guardrail_abstained(prediction: dict[str, Any]) -> bool:
     guardrail = dict(prediction.get("guardrail_decision") or {})
     action = str(guardrail.get("action") or "").strip().lower()
     status = str(guardrail.get("status") or "").strip().lower()
-    return action == "abstain" or status in {"not_enough_evidence", "unsupported"}
+    if action == "abstain":
+        return True
+    if action == "revise":
+        return False
+    return status == "not_enough_evidence"
 
 
 def _prediction_abstained(

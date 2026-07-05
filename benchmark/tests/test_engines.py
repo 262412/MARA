@@ -62,6 +62,10 @@ def _install_fake_docqa_runtime(monkeypatch, doc_path):
             return FakeResponse()
 
     fake_runtime = FakeRuntime()
+    monkeypatch.setattr(
+        "benchmark.engines.element_index_records_from_documents",
+        lambda _documents: [],
+    )
     monkeypatch.setitem(
         sys.modules,
         "ktem.docqa",
@@ -308,6 +312,43 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert result.presentation == {"markdown_normalized": True}
 
 
+def test_docqa_runtime_engine_passes_controller_question_and_dataset_family(
+    monkeypatch, tmp_path
+):
+    doc_path = tmp_path / "doc.txt"
+    doc_path.write_text("runtime text", encoding="utf-8")
+    fake_runtime = _install_fake_docqa_runtime(monkeypatch, doc_path)
+    engine = get_engine(
+        "docqa_runtime",
+        BenchmarkConfig(
+            suite_name="mixed-controller-smoke",
+            output_dir=tmp_path / "out",
+            scope="multi_document",
+            benchmark_prompt_policy="gold_answer_v1",
+            visual_retriever_backend="colqwen",
+        ),
+    )
+
+    engine.run(
+        example=BenchmarkExample(
+            example_id="ex",
+            document_id="doc",
+            document_ids=["doc"],
+            question="How did revenue change in 2020?",
+            answers=["runtime answer"],
+            metadata={"dataset_family": "multimodal_doc_qa"},
+        ),
+        documents=[BenchmarkDocument(document_id="doc", path=doc_path, format_type="txt")],
+    )
+
+    request = fake_runtime.requests[0]
+    assert "Benchmark gold-answer contract:" in request.prompt
+    assert request.controller_question == "How did revenue change in 2020?"
+    assert request.retrieval_query == "How did revenue change in 2020?"
+    assert request.dataset_family == "mmdocrag"
+    assert request.verification_domain == "mmdocrag"
+
+
 def test_docqa_runtime_engine_passes_visual_backend_config(monkeypatch, tmp_path):
     doc_path = tmp_path / "doc.txt"
     doc_path.write_text("runtime text", encoding="utf-8")
@@ -382,6 +423,10 @@ def test_docqa_runtime_engine_reuses_already_indexed_documents(monkeypatch, tmp_
             return FakeResponse()
 
     fake_runtime = FakeRuntime()
+    monkeypatch.setattr(
+        "benchmark.engines.element_index_records_from_documents",
+        lambda _documents: [],
+    )
     monkeypatch.setitem(
         sys.modules,
         "ktem.docqa",

@@ -12,6 +12,7 @@ def test_selected_source_summary_routes_to_document_text(monkeypatch):
         understanding,
         planner_payload,
         kwargs,
+        **_extra,
     ):
         del self, message, conv_id, history, kwargs
         captured["understanding"] = dict(understanding)
@@ -50,6 +51,7 @@ def test_selected_source_context_exposes_locator_hints(monkeypatch):
         understanding,
         planner_payload,
         kwargs,
+        **_extra,
     ):
         del self, message, conv_id, history, planner_payload, kwargs
         captured["understanding"] = dict(understanding)

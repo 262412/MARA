@@ -23,6 +23,10 @@ class ControllerDecision:
     routing_features: dict[str, Any] = field(default_factory=dict)
     route_scores: dict[str, Any] = field(default_factory=dict)
     route_confidences: dict[str, Any] = field(default_factory=dict)
+    route_confidence_by_modality: dict[str, Any] = field(default_factory=dict)
+    expected_route_quality: dict[str, Any] = field(default_factory=dict)
+    expected_route_cost: dict[str, Any] = field(default_factory=dict)
+    skipped_expensive_routes: list[str] = field(default_factory=list)
     cost_gate_decision: str = ""
     route_probe: dict[str, Any] = field(default_factory=dict)
     route_switch_candidates: list[str] = field(default_factory=list)
@@ -51,6 +55,22 @@ class ControllerDecision:
             _put_if_present(payload, "routing_features", self.routing_features)
             _put_if_present(payload, "route_scores", self.route_scores)
             _put_if_present(payload, "route_confidences", self.route_confidences)
+            _put_if_present(
+                payload,
+                "route_confidence_by_modality",
+                self.route_confidence_by_modality,
+            )
+            _put_if_present(
+                payload,
+                "expected_route_quality",
+                self.expected_route_quality,
+            )
+            _put_if_present(payload, "expected_route_cost", self.expected_route_cost)
+            _put_if_present(
+                payload,
+                "skipped_expensive_routes",
+                self.skipped_expensive_routes,
+            )
             _put_if_present(payload, "cost_gate_decision", self.cost_gate_decision)
             _put_if_present(payload, "route_probe", self.route_probe)
             _put_if_present(
@@ -105,6 +125,10 @@ def mark_route_switch_recovery(
         routing_features=initial_decision.routing_features,
         route_scores=initial_decision.route_scores,
         route_confidences=initial_decision.route_confidences,
+        route_confidence_by_modality=initial_decision.route_confidence_by_modality,
+        expected_route_quality=initial_decision.expected_route_quality,
+        expected_route_cost=initial_decision.expected_route_cost,
+        skipped_expensive_routes=initial_decision.skipped_expensive_routes,
         cost_gate_decision=initial_decision.cost_gate_decision,
         route_probe=initial_decision.route_probe,
         route_switch_candidates=list(candidates),
@@ -136,6 +160,18 @@ def _route_selection_metadata(
         "routing_features": dict(payload.get("routing_features") or {}),
         "route_scores": dict(payload.get("route_scores") or {}),
         "route_confidences": dict(payload.get("route_confidences") or {}),
+        "route_confidence_by_modality": dict(
+            payload.get("route_confidence_by_modality")
+            or payload.get("route_confidences")
+            or {}
+        ),
+        "expected_route_quality": dict(payload.get("expected_route_quality") or {}),
+        "expected_route_cost": dict(payload.get("expected_route_cost") or {}),
+        "skipped_expensive_routes": [
+            str(route)
+            for route in payload.get("skipped_expensive_routes") or []
+            if str(route).strip()
+        ],
         "cost_gate_decision": str(payload.get("cost_gate_decision") or ""),
         "route_probe": dict(payload.get("route_probe") or {}),
         "override_reason": str(payload.get("override_reason") or ""),

@@ -304,6 +304,31 @@ def test_hybrid_bundle_falls_back_to_text_when_visual_page_degrades_locator():
     assert bundle.metadata["hybrid_fusion_trace"]["best_single_route"] == "text"
 
 
+def test_hybrid_fusion_drops_low_coverage_element_noise_for_document_complex():
+    fused, trace = fuse_hybrid_evidence(
+        "What value is in the revenue table?",
+        [
+            {
+                "evidence_id": "text-table",
+                "source_id": "mmdoc",
+                "page_label": "4",
+                "modality": "text",
+                "text": "The revenue table reports $42 million.",
+            },
+            {
+                "evidence_id": "element-missing-locator",
+                "modality": "table",
+                "element_id": "table-1",
+                "metadata": {"element_retriever_score": 0.99},
+            },
+        ],
+        domain="mmdocrag",
+    )
+
+    assert [item["evidence_id"] for item in fused] == ["text-table"]
+    assert trace["dropped_low_coverage_element_count"] == 1
+
+
 def test_hybrid_fusion_applies_finance_statement_boost_when_opted_in():
     fused, _trace = fuse_hybrid_evidence(
         "Calculate inventory turnover using cost of sales and inventories.",

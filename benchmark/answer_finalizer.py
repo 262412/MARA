@@ -27,6 +27,11 @@ _TRUNCATED_JSON_ANSWER_RE = re.compile(
     r'"answer"\s*:\s*"((?:\\.|[^"\\])*)"',
     re.DOTALL,
 )
+_UUID_LIKE_SOURCE_RE = re.compile(
+    r"^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-"
+    r"[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
+    re.IGNORECASE,
+)
 _INITIAL_PERIOD_TOKEN = "__MARA_INITIAL_PERIOD__"
 _INITIAL_PERIOD_RE = re.compile(r"\b([A-Z])\.")
 
@@ -42,6 +47,7 @@ def finalize_prediction_answer(
     structured_answer = _extract_structured_answer(raw_answer)
     truncated_answer = ""
     if structured_answer is not None:
+        answer_text_for_user = structured_answer["answer"]
         answer_for_user = _render_structured_answer_for_user(structured_answer)
         prediction["structured_citations"] = structured_answer["citations"]
         prediction["predicted_citations"] = _citation_texts(
@@ -50,9 +56,11 @@ def finalize_prediction_answer(
     else:
         truncated_answer = _extract_truncated_structured_answer(raw_answer)
         answer_for_user = truncated_answer or raw_answer
+        answer_text_for_user = answer_for_user
         answer_for_scoring_source = answer_for_user
         if normalized_mode != "product" and _should_attach_metadata_citations(
-            dataset_name
+            dataset_name,
+            prediction,
         ):
             citations = attach_structured_citations_from_evidence(
                 prediction,
@@ -64,6 +72,20 @@ def finalize_prediction_answer(
                 answer_for_user = _render_structured_answer_for_user(
                     {"answer": answer_for_user, "citations": citations}
                 )
+    if normalized_mode != "product" and _should_attach_metadata_citations(
+        dataset_name,
+        prediction,
+    ):
+        citations = _canonicalized_existing_citations(
+            prediction,
+            span=answer_text_for_user,
+        )
+        if citations:
+            prediction["structured_citations"] = citations
+            prediction["predicted_citations"] = _citation_texts(citations)
+            answer_for_user = _render_structured_answer_for_user(
+                {"answer": answer_text_for_user, "citations": citations}
+            )
     if normalized_mode == "product":
         answer_for_scoring = answer_for_user
         source = "product_answer"
@@ -117,9 +139,105 @@ def attach_structured_citations_from_evidence(
     return []
 
 
-def _should_attach_metadata_citations(dataset_name: str) -> bool:
+def _canonicalized_existing_citations(
+    prediction: dict[str, Any],
+    *,
+    span: str,
+) -> list[dict[str, str]]:
+    existing = _existing_structured_citations(prediction, span=span)
+    if not existing:
+        return []
+    canonical_sources = _canonical_source_refs(prediction)
+    citations: list[dict[str, str]] = []
+    for item in existing:
+        citation = _canonicalized_citation_item(
+            item,
+            canonical_sources=canonical_sources,
+            span=span,
+        )
+        if citation:
+            citations.append(citation)
+    return _unique_citations(citations)
+
+
+def _existing_structured_citations(
+    prediction: dict[str, Any],
+    *,
+    span: str,
+) -> list[dict[str, str]]:
+    citations = [
+        _normalize_structured_citation(item)
+        for item in prediction.get("structured_citations") or []
+        if isinstance(item, dict)
+    ]
+    if citations:
+        return citations
+    return [
+        citation
+        for citation in (
+            _citation_from_source_ref(str(item), span=span)
+            for item in prediction.get("predicted_citations") or []
+        )
+        if citation
+    ]
+
+
+def _canonicalized_citation_item(
+    citation: dict[str, str],
+    *,
+    canonical_sources: list[str],
+    span: str,
+) -> dict[str, str]:
+    source_id = str(citation.get("source_id") or "").strip()
+    page_label = str(citation.get("page_label") or "").strip()
+    if source_id and not _is_uuid_like_source_id(source_id):
+        return citation
+    source_ref = _matching_canonical_source_ref(canonical_sources, page_label)
+    if not source_ref:
+        return citation
+    canonical = _citation_from_source_ref(source_ref, span=span)
+    if not canonical:
+        return citation
+    evidence_id = str(citation.get("evidence_id") or "").strip()
+    if evidence_id:
+        canonical["evidence_id"] = evidence_id
+    return canonical
+
+
+def _is_uuid_like_source_id(source_id: str) -> bool:
+    return bool(_UUID_LIKE_SOURCE_RE.fullmatch(str(source_id or "").strip()))
+
+
+def _source_ref_uses_uuid_like_source(source_ref: str) -> bool:
+    source_id = str(source_ref or "").strip().split("#", 1)[0]
+    return _is_uuid_like_source_id(source_id)
+
+
+def _unique_citations(citations: list[dict[str, str]]) -> list[dict[str, str]]:
+    output: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for citation in citations:
+        key = (
+            str(citation.get("source_id") or ""),
+            str(citation.get("page_label") or ""),
+            str(citation.get("evidence_id") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(citation)
+    return output
+
+
+def _should_attach_metadata_citations(
+    dataset_name: str,
+    prediction: dict[str, Any],
+) -> bool:
     dataset = str(dataset_name or "").lower()
-    return any(family in dataset for family in ("slidevqa", "mmdocrag", "vidore"))
+    return bool(prediction.get("gold_evidence")) or any(
+        family in dataset
+        for family in ("financebench", "slidevqa", "mmdocrag", "vidore")
+    )
 
 
 def _extract_structured_answer(answer: str) -> dict[str, Any] | None:
@@ -201,7 +319,7 @@ def _citation_from_item(
         item.get("page_number"),
     )
     source_ref = _first_nonempty_value(
-        *(item.get("source_backrefs") or []),
+        *_canonical_source_backrefs(item),
         _matching_canonical_source_ref(canonical_sources, page_label),
     )
     if source_ref:
@@ -232,11 +350,29 @@ def _citation_from_item(
 
 def _canonical_source_refs(prediction: dict[str, Any]) -> list[str]:
     refs: list[str] = []
-    for key in ("scored_predicted_sources", "predicted_sources"):
-        for source in prediction.get(key) or []:
+    for item in _citation_candidate_items(prediction):
+        for source in _canonical_source_backrefs(item):
             value = str(source or "").strip()
             if value and value not in refs:
                 refs.append(value)
+    for key in ("scored_predicted_sources", "predicted_sources"):
+        for source in prediction.get(key) or []:
+            value = str(source or "").strip()
+            if (
+                value
+                and not _source_ref_uses_uuid_like_source(value)
+                and value not in refs
+            ):
+                refs.append(value)
+    return refs
+
+
+def _canonical_source_backrefs(item: dict[str, Any]) -> list[str]:
+    refs: list[str] = []
+    for source in item.get("source_backrefs") or []:
+        value = str(source or "").strip()
+        if value and not _source_ref_uses_uuid_like_source(value):
+            refs.append(value)
     return refs
 
 

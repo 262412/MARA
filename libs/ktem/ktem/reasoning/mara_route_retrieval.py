@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import re
 from typing import Any, Callable
 
 from ktem.docqa.element_retriever import rank_element_records
@@ -12,6 +14,26 @@ from ktem.docqa.visual_retriever import rank_page_image_records
 
 TextRetrieveFn = Callable[[], tuple[list[Any], list[Any]]]
 MetadataBuilderFn = Callable[[list[Any], dict[str, Any]], dict[str, Any]]
+DEFAULT_PAGE_IMAGE_RANK_CANDIDATE_LIMIT = 48
+_QUERY_STOPWORDS = {
+    "and",
+    "are",
+    "between",
+    "does",
+    "from",
+    "how",
+    "is",
+    "of",
+    "on",
+    "page",
+    "show",
+    "shown",
+    "the",
+    "this",
+    "to",
+    "what",
+    "which",
+}
 
 
 def route_retrieval_metadata(
@@ -96,7 +118,8 @@ def _page_image_metadata(
     pipeline: Any,
     understanding: dict[str, Any],
 ) -> dict[str, Any]:
-    records = _page_image_records_for_pipeline(pipeline)
+    all_records = _page_image_records_for_pipeline(pipeline)
+    records = _page_image_scoring_candidates(pipeline, understanding, all_records)
     if not records:
         return {
             "requested_modalities": list(understanding.get("modalities", [])),
@@ -105,6 +128,8 @@ def _page_image_metadata(
             "source_ids": [],
             "evidence_ids": [],
             "evidence": [],
+            "page_image_candidate_count": len(all_records),
+            "page_image_scored_candidate_count": 0,
         }
     ranked, scores = rank_page_image_records(
         str(understanding.get("question") or ""),
@@ -121,7 +146,12 @@ def _page_image_metadata(
         "page_image_index": ranked,
         "visual_retriever_scores": scores,
         "visual_backend_type": _visual_backend_type(ranked),
+        "page_image_candidate_count": len(all_records),
+        "page_image_scored_candidate_count": len(records),
     }
+    if len(records) < len(all_records):
+        metadata["page_image_candidate_selection"] = "lightweight_text_overlap_cap"
+    return metadata
 
 
 def _page_image_metadata_enabled(pipeline: Any) -> bool:
@@ -177,7 +207,113 @@ def _page_image_records_for_pipeline(pipeline: Any) -> list[dict[str, Any]]:
     page_numbers = None
     if page_number not in (None, ""):
         page_numbers = [int(str(page_number))]
-    return build_local_page_image_records(file_records, page_numbers=page_numbers)
+    max_pages = None if page_numbers else _page_image_rank_candidate_limit(pipeline)
+    return build_local_page_image_records(
+        file_records,
+        page_numbers=page_numbers,
+        max_pages=max_pages,
+    )
+
+
+def _page_image_scoring_candidates(
+    pipeline: Any,
+    understanding: dict[str, Any],
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    limit = _page_image_rank_candidate_limit(pipeline)
+    if limit <= 0 or len(records) <= limit:
+        return records
+    page_scoped = _page_scoped_records(pipeline, records)
+    if page_scoped:
+        return page_scoped[:limit]
+    query_tokens = _query_tokens(str(understanding.get("question") or ""))
+    ranked = sorted(
+        (
+            (
+                _record_query_overlap(record, query_tokens),
+                _record_has_text(record),
+                -index,
+                record,
+            )
+            for index, record in enumerate(records)
+        ),
+        reverse=True,
+    )
+    return [record for *_scores, record in ranked[:limit]]
+
+
+def _page_image_rank_candidate_limit(pipeline: Any) -> int:
+    raw_value = getattr(pipeline, "page_image_rank_candidate_limit", None)
+    if raw_value in (None, ""):
+        raw_value = os.getenv(
+            "MARA_PAGE_IMAGE_RANK_CANDIDATE_LIMIT",
+            str(DEFAULT_PAGE_IMAGE_RANK_CANDIDATE_LIMIT),
+        )
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError):
+        return DEFAULT_PAGE_IMAGE_RANK_CANDIDATE_LIMIT
+
+
+def _page_scoped_records(
+    pipeline: Any,
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    page_number = getattr(pipeline, "page_number", None)
+    if page_number in (None, ""):
+        return []
+    page_label = str(page_number).strip()
+    return [
+        record
+        for record in records
+        if str(record.get("page_label") or record.get("page_number") or "").strip()
+        == page_label
+    ]
+
+
+def _record_query_overlap(record: dict[str, Any], query_tokens: set[str]) -> int:
+    if not query_tokens:
+        return 0
+    return len(_record_tokens(record) & query_tokens)
+
+
+def _record_has_text(record: dict[str, Any]) -> bool:
+    return bool(
+        str(record.get("text") or record.get("ocr_text") or record.get("caption") or "")
+        .strip()
+    )
+
+
+def _record_tokens(record: dict[str, Any]) -> set[str]:
+    metadata = dict(record.get("metadata") or {})
+    values = [
+        record.get("text"),
+        record.get("ocr_text"),
+        record.get("caption"),
+        record.get("page_label"),
+        record.get("file_name"),
+        metadata.get("late_interaction_tokens"),
+        metadata.get("multi_vector_representation"),
+    ]
+    return _query_tokens(" ".join(_string_values(values)))
+
+
+def _query_tokens(value: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-zA-Z0-9]+", str(value or "").lower())
+        if len(token) > 2 and token not in _QUERY_STOPWORDS
+    }
+
+
+def _string_values(values: list[Any]) -> list[str]:
+    strings: list[str] = []
+    for value in values:
+        if isinstance(value, (list, tuple, set)):
+            strings.extend(str(item) for item in value)
+            continue
+        strings.append(str(value or ""))
+    return strings
 
 
 def _element_metadata(
