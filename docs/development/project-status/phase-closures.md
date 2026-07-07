@@ -1,6 +1,6 @@
 # Phase Closures
 
-Last updated: 2026-07-03.
+Last updated: 2026-07-07.
 
 This document keeps only final phase conclusions. It intentionally excludes
 development-by-development logs, failed attempts, and repeated rerun details.
@@ -119,12 +119,17 @@ Representative validation:
 
 Residual risk:
 
-- The 2026-07-02 final thesis benchmark required rows freeze a local-adapted
-  thesis evidence package, not a paper-grade external evaluation package.
+- The 2026-07-05 fullsystem postfix synthesis and 2026-07-07 RAGTruth repair
+  freeze a local-adapted thesis evidence package, not a paper-grade external
+  evaluation package.
 - SlideVQA is the primary local-adapted multimodal thesis dataset; MMDocRAG is
   secondary visual stability evidence. FinanceBench, ALCE, QASPER, and
-  RAGTruth remain supporting smoke-scale diagnostics unless a later text/core
-  promotion rerun is performed.
+  RAGTruth remain supporting diagnostics unless a later text/core promotion
+  rerun is performed.
+- RAGTruth long-prompt execution failures are fixed at benchmark prompt-policy
+  level and validated on the affected examples through direct/lexical local
+  Qwen reruns; the original DocQA all-route repair waits for stable 8002
+  retrieval.
 - Controller/hybrid/guarded routes cannot be claimed as globally superior to
   text baseline.
 - The current evaluator decision is `local_adapted_only_scope`; no paper-grade

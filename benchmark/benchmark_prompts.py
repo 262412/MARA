@@ -15,6 +15,8 @@ QASPER_PROMPT_SOURCE = "allenai/qasper-led-baseline dataset contract"
 FINANCEBENCH_PROMPT_SOURCE = "FinanceBench paper Table 3 prompt pattern"
 GENERIC_PROMPT_SOURCE = "MARA benchmark generic grounded QA contract"
 GOLD_ANSWER_PROMPT_SOURCE = "MARA benchmark gold-answer answer-only contract"
+MIN_PROMPT_TEXT_BUDGET_CHARS = 512
+PROMPT_TEXT_TRUNCATION_NOTICE = "[truncated to fit benchmark prompt budget]"
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,7 +40,6 @@ def build_benchmark_prompt(
     raw_question = str(example.question or "").strip()
     policy = str(config.benchmark_prompt_policy or "benchmark_v1").strip().lower()
     benchmark_question = _benchmark_question(example, raw_question)
-    retrieval_query = _retrieval_query(example, benchmark_question)
     no_think = _no_think_enabled(config, policy)
     if policy == "raw":
         return BenchmarkPromptBundle(
@@ -52,6 +53,15 @@ def build_benchmark_prompt(
             no_think=no_think,
         )
 
+    prompt_budget_chars = _prompt_text_budget_chars(config)
+    benchmark_question = _truncate_prompt_text(
+        benchmark_question,
+        prompt_budget_chars,
+    )
+    retrieval_query = _truncate_prompt_text(
+        _retrieval_query(example, benchmark_question),
+        prompt_budget_chars,
+    )
     profile = _profile_for_example(example, config, dataset_name=dataset_name)
     if policy == "gold_answer_v1":
         prompt_source = GOLD_ANSWER_PROMPT_SOURCE
@@ -66,6 +76,7 @@ def build_benchmark_prompt(
             benchmark_question,
             profile,
             dataset_name=dataset_name or config.suite_name,
+            prompt_budget_chars=prompt_budget_chars,
         )
     return BenchmarkPromptBundle(
         raw_question=raw_question,
@@ -131,6 +142,22 @@ def _retrieval_query(example: BenchmarkExample, benchmark_question: str) -> str:
     return value or benchmark_question
 
 
+def _prompt_text_budget_chars(config: BenchmarkConfig) -> int:
+    value = int(getattr(config, "max_context_length", 0) or 0)
+    return max(value, MIN_PROMPT_TEXT_BUDGET_CHARS)
+
+
+def _truncate_prompt_text(text: str, max_chars: int) -> str:
+    value = str(text or "").strip()
+    if len(value) <= max_chars:
+        return value
+    notice = f"\n\n{PROMPT_TEXT_TRUNCATION_NOTICE}"
+    body_chars = max_chars - len(notice)
+    if body_chars <= 0:
+        return PROMPT_TEXT_TRUNCATION_NOTICE[:max_chars]
+    return f"{value[:body_chars].rstrip()}{notice}"
+
+
 def _metadata(example: BenchmarkExample) -> dict[str, Any]:
     return dict(getattr(example, "metadata", {}) or {})
 
@@ -182,10 +209,15 @@ def _runtime_prompt(
     profile: str,
     *,
     dataset_name: str | None,
+    prompt_budget_chars: int,
 ) -> tuple[str, str]:
     dataset = str(dataset_name or "").strip().lower()
     if "ragtruth" in dataset:
-        return RAGTRUTH_PROMPT_SOURCE, _ragtruth_prompt(example, question)
+        return RAGTRUTH_PROMPT_SOURCE, _ragtruth_prompt(
+            example,
+            question,
+            prompt_budget_chars=prompt_budget_chars,
+        )
     if "alce" in dataset and _is_qampari_example(example, dataset_name=dataset):
         return ALCE_QAMPARI_PROMPT_SOURCE, _alce_qampari_prompt(question)
     if "alce" in dataset:
@@ -295,15 +327,26 @@ def _alce_qampari_prompt(question: str) -> str:
     )
 
 
-def _ragtruth_prompt(example: BenchmarkExample, question: str) -> str:
+def _ragtruth_prompt(
+    example: BenchmarkExample,
+    question: str,
+    *,
+    prompt_budget_chars: int,
+) -> str:
     metadata = _metadata(example)
-    source_info = _first_present(
-        metadata.get("source_info"),
-        metadata.get("reference"),
-        metadata.get("related_passages"),
-        _first_gold_evidence_span(example),
+    source_info = _truncate_prompt_text(
+        _first_present(
+            metadata.get("source_info"),
+            metadata.get("reference"),
+            metadata.get("related_passages"),
+            _first_gold_evidence_span(example),
+        ),
+        prompt_budget_chars,
     )
-    response = _first_present(metadata.get("response"), _first_answer(example))
+    response = _truncate_prompt_text(
+        _first_present(metadata.get("response"), _first_answer(example)),
+        prompt_budget_chars,
+    )
     task_type = str(metadata.get("task_type") or "QA").strip() or "QA"
     if task_type.lower() == "qa":
         source_block = (

@@ -1,6 +1,6 @@
 # Evaluation Protocol Freeze Draft
 
-Last updated: 2026-07-03.
+Last updated: 2026-07-07.
 
 This document freezes the protocol draft, not the final benchmark results. It
 should be reopened only for a concrete system change, a new regression target,
@@ -77,9 +77,10 @@ Frozen:
 - Evaluator authority hierarchy.
 - Score promotion rule.
 - Dataset primary-metric draft.
-- Final 2026-07-02 local-adapted thesis evidence package:
-  SlideVQA primary, MMDocRAG secondary visual stability, and local
-  dataset-native / adapted metric authority.
+- Final local-adapted thesis evidence package:
+  SlideVQA primary, MMDocRAG secondary visual stability, RAGTruth
+  prompt-budget repair evidence, and local dataset-native / adapted metric
+  authority.
 
 Not frozen:
 
@@ -89,22 +90,26 @@ Not frozen:
 - Element RAG answer-quality improvement.
 - Calibrated guardrail or paper-grade attribution claims.
 - Full production-style format robustness.
+- Original DocQA all-route RAGTruth route-quality repair until the 8002
+  retrieval backend is stable and the route-matrix rerun completes.
 
 Current execution status:
 
-- The active final benchmark run root is
+- The current final benchmark synthesis root is
+  `/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_statistical_20260705_fullsystem_postfix`.
+- Earlier required-row synthesis remains available at
   `/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_20260702`.
-- The final required rows are closed as
-  `required_jobs_completed_artifacts_validated` and
-  `final_required_rows_synthesized`.
-- Final synthesis artifacts live under `09_synthesis/`, including
-  `final_benchmark_synthesis_report.md`,
-  `final_main_result_table.csv`,
-  `final_secondary_visual_stability_table.csv`,
-  `final_failure_latency_backend_table.csv`,
-  `final_optional_diagnostic_scope_table.csv`, and
-  `final_controller_route_decision_summary.md`,
-  `final_required_benchmark_closeout_report.md`.
+- RAGTruth prompt-budget repair artifacts live at
+  `/mnt/scratch/users/tbczhang/outputs/MARA/ragtruth_prompt_budget_repair_20260707`.
+- The 2026-07-05 fullsystem postfix synthesis closed the MMDocRAG route-timeout
+  issue for required routes and isolated the remaining execution-error cluster
+  to RAGTruth prompt-budget overflow.
+- The 2026-07-07 RAGTruth repair validates the prompt-policy fix on the five
+  affected examples with direct and lexical local-Qwen reruns, each producing
+  5/5 `NO_ERROR`. These repair artifacts are prompt-budget robustness evidence,
+  not headline route-quality evidence.
+- The original DocQA all-route RAGTruth repair manifest remains blocked by 8002
+  retrieval rate limits and should be treated as residual backend evidence.
 - Primary local-adapted thesis dataset: `slidevqa_test_shard0_multimodal`,
   job `9559018`, 25 examples, four-route multimodal matrix, zero prediction
   errors.
@@ -115,8 +120,8 @@ Current execution status:
   `mmdocrag_dev15_available_docs_multimodal`, jobs `9559019` and `9559020`,
   with route-split page-image and hybrid evidence under GPU-ColVision / 8k VLM
   settings, plus text baseline diagnostic job `9559021`.
-- FinanceBench, QASPER, ALCE, and RAGTruth are supporting 10-smoke diagnostics
-  in this clean rerun.
+- FinanceBench, QASPER, ALCE, and RAGTruth remain supporting diagnostics unless
+  promoted by larger matched reruns.
 - Task 2 evaluator authority is closed as `local_adapted_only_scope`;
   `alce=builtin:alce_proxy` is diagnostic plumbing only.
 - ViDoRe remains retrieval-only diagnostic evidence.
