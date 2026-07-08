@@ -80,7 +80,7 @@ The UI walkthrough is a complete QA loop. A user opens a local app, indexes the 
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{figures/mara-ui-qa.png}
-\caption{Live MARA UI screenshot on the non-sensitive demonstration document \texttt{ResearchProject.docx}: source selection, question, routed answer, citations, evidence preview, and controller trace in one QA workflow.}
+\caption{Live MARA UI screenshot on the non-sensitive demonstration document \texttt{ResearchProject.docx}: source selection, page preview, routed answer, evidence metadata, retrieval status, and controller trace in one QA workflow.}
 \label{fig:ui}
 \end{figure*}
 
@@ -88,7 +88,7 @@ The CLI walkthrough supports the same scenario without a browser:
 \begin{quote}\small
 \texttt{MARA docqa index ./docs/report.pdf}\\
 \texttt{MARA docqa files}\\
-\texttt{MARA docqa ask --file report.pdf --reasoning mara --prompt "..."}
+\texttt{MARA docqa ask -{}-file report.pdf -{}-reasoning mara -{}-prompt "..."}
 \end{quote}
 The benchmark walkthrough starts from route manifests and produces prediction records, route metrics, and synthesis tables. This is important for a demo paper: route-aware behaviour is not only visible in the UI, but also reproducible through a public release tag and supplementary benchmark bundle whose synthesis script, backend metadata, and evaluator status are recorded in the appendix.
 

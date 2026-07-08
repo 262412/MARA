@@ -36,15 +36,15 @@ MARA separates high-permission product commands from the specialist document-QA 
 \begin{description}[leftmargin=0pt,labelindent=0pt,style=nextline,itemsep=2pt,topsep=2pt]
     \item[App lifecycle] \texttt{MARA app init}, \texttt{MARA app doctor}, \texttt{MARA app run}.
     \item[DocQA indexing] \texttt{MARA docqa index ./docs/report.pdf}, \texttt{MARA docqa files}, \texttt{MARA docqa delete \textless file-id\textgreater}.
-    \item[DocQA answering] \texttt{MARA docqa ask --file report.pdf --reasoning mara --prompt "..."}; \texttt{MARA docqa chat --file report.pdf}.
-    \item[Sessions and sources] \texttt{MARA docqa sessions}, \texttt{MARA docqa resume \textless conversation-id\textgreater}, \texttt{MARA docqa sources select \textless conversation-id\textgreater{} --file paper.pdf}.
-    \item[Notes and artifacts] \texttt{MARA docqa notes save-answer \textless conversation-id\textgreater}; \texttt{MARA docqa artifacts generate \textless conversation-id\textgreater{} --type quiz}.
-    \item[Agent support assets] \texttt{MARA platform install --platform codex --mode full --yes}; \texttt{MARA platform install --platform claude-code --mode full --yes}; \texttt{MARA platform validate}.
+    \item[DocQA answering] \texttt{MARA docqa ask -{}-file report.pdf -{}-reasoning mara -{}-prompt "..."}; \texttt{MARA docqa chat -{}-file report.pdf}.
+    \item[Sessions and sources] \texttt{MARA docqa sessions}, \texttt{MARA docqa resume \textless conversation-id\textgreater}, \texttt{MARA docqa sources select \textless conversation-id\textgreater{} -{}-file paper.pdf}.
+    \item[Notes and artifacts] \texttt{MARA docqa notes save-answer \textless conversation-id\textgreater}; \texttt{MARA docqa artifacts generate \textless conversation-id\textgreater{} -{}-type quiz}.
+    \item[Agent support assets] \texttt{MARA platform install -{}-platform codex -{}-mode full -{}-yes}; \texttt{MARA platform install -{}-platform claude-code -{}-mode full -{}-yes}; \texttt{MARA platform validate}.
 \end{description}
 \end{small}
 
 {\raggedright
-Focused skill wrappers include \texttt{MARA-docqa-index}, \texttt{MARA-docqa-ask}, \texttt{MARA-docqa-chat}, \texttt{MARA-docqa-resume}, \texttt{MARA-app-run}, \texttt{MARA-model-run}, and platform installation/status skills. They provide agent-facing documentation around the same CLI surface. The local Web app default is port 7860; \texttt{MARA app run --port}, \texttt{GRADIO\_SERVER\_PORT}, or platform \texttt{PORT} can override it.
+Focused skill wrappers include \texttt{MARA-docqa-index}, \texttt{MARA-docqa-ask}, \texttt{MARA-docqa-chat}, \texttt{MARA-docqa-resume}, \texttt{MARA-app-run}, \texttt{MARA-model-run}, and platform installation/status skills. They provide agent-facing documentation around the same CLI surface. The local Web app default is port 7860; \texttt{MARA app run -{}-port}, \texttt{GRADIO\_SERVER\_PORT}, or platform \texttt{PORT} can override it.
 \par}
 
 \section{Kotaemon Increment Boundary}
