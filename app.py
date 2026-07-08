@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from ktem.app_server import resolve_gradio_server_port
+
 
 def log_startup(message: str) -> None:
     print(f"[MARA Azure startup] {message}", flush=True)
@@ -39,7 +41,7 @@ KH_FILESTORAGE_PATH = getattr(
 )
 KH_DOC_DIR = str(Path(getattr(flowsettings, "KH_DOC_DIR", "docs")).resolve())
 GRADIO_TEMP_DIR = os.getenv("GRADIO_TEMP_DIR", None)
-server_port = int(os.getenv("PORT", "8000"))
+server_port = resolve_gradio_server_port()
 # override GRADIO_TEMP_DIR if it's not set
 if GRADIO_TEMP_DIR is None:
     GRADIO_TEMP_DIR = ensure_gradio_temp_dir()

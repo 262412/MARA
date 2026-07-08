@@ -1,0 +1,54 @@
+\documentclass[11pt]{article}
+
+% ACL style options:
+% review   = anonymous review version
+% final    = camera-ready version
+% preprint = non-anonymous version with page numbers
+\usepackage[preprint]{acl}
+
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\IfFileExists{inconsolata.sty}{\usepackage{inconsolata}}{}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{tikz}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{}
+\usetikzlibrary{arrows.meta,positioning,fit}
+
+\Urlmuskip=0mu plus 2mu\relax
+\setlist[itemize]{leftmargin=*,itemsep=1pt,topsep=2pt}
+\setlist[enumerate]{leftmargin=*,itemsep=1pt,topsep=2pt}
+\newcounter{algorithm}
+\newif\ifmaraanonymous
+\maraanonymousfalse
+
+\author{
+Chenghao Zhang \\
+Student ID: 201844864 \\
+COMP702 -- M.Sc. Project (2025/26) \\
+School of Computer Science and Informatics \\
+University of Liverpool \\
+Supervisor: Meng Fang \\
+\texttt{tbczhang@liverpool.ac.uk}
+}
+
+\title{MARA: A Local-First Multimodal Document QA Workbench with Self-RAG-Inspired Routing}
+
+\begin{document}
+\maketitle
+
+\input{paper_body}
+
+\bibliography{references}
+
+\appendix
+\input{appendix}
+
+\end{document}

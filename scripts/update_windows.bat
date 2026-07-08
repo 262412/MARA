@@ -52,7 +52,7 @@ IF "%CONDA_PREFIX%" == "%env_dir%" (
 GOTO :eof
 
 :update_latest
-FOR /F "tokens=1,2" %%a in ('pip list') do if "%%a"=="kotaemon-app" set current_version=%%b
+FOR /F "tokens=1,2" %%a in ('pip list') do if "%%a"=="mara-app" set current_version=%%b
 ECHO Current version %current_version%
 
 IF EXIST "pyproject.toml" (
@@ -62,9 +62,9 @@ IF EXIST "pyproject.toml" (
 ) ELSE (
     ECHO Installing version: %app_version%
     @REM Work around for versioning control
-    python -m pip install git+https://github.com/Cinnamon/kotaemon.git@"%app_version%"#subdirectory=libs/kotaemon
-    python -m pip install git+https://github.com/Cinnamon/kotaemon.git@"%app_version%"#subdirectory=libs/ktem
-    python -m pip install --no-deps git+https://github.com/Cinnamon/kotaemon.git@"%app_version%"
+    python -m pip install git+https://github.com/262412/MARA.git@"%app_version%"#subdirectory=libs/kotaemon
+    python -m pip install git+https://github.com/262412/MARA.git@"%app_version%"#subdirectory=libs/ktem
+    python -m pip install --no-deps git+https://github.com/262412/MARA.git@"%app_version%"
 ) || (
     ECHO. && ECHO Update failed. You may need to run the update again.
     CALL :deactivate_environment
@@ -72,7 +72,7 @@ IF EXIST "pyproject.toml" (
 )
 
 CALL :print_highlight "Update successfully."
-FOR /F "tokens=1,2" %%a in ('pip list') do if "%%a"=="kotaemon-app" set updated_version=%%b
+FOR /F "tokens=1,2" %%a in ('pip list') do if "%%a"=="mara-app" set updated_version=%%b
 ECHO Updated version %updated_version%
 ECHO %updated_version% > VERSION
 GOTO :eof

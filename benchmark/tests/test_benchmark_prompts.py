@@ -55,6 +55,44 @@ def test_gold_answer_policy_uses_no_think_answer_only_prompt(tmp_path):
     assert prompt.retrieval_query == "What did the filing say about revenue?"
 
 
+def test_gold_answer_policy_truncates_overlong_ragtruth_prompt_question(tmp_path):
+    long_question = (
+        "Original source prompt. "
+        + ("This passage is intentionally long and repeats support text. " * 300)
+        + "UNIQUE_RAGTRUTH_TAIL_SHOULD_BE_TRUNCATED"
+    )
+    config = BenchmarkConfig(
+        suite_name="ragtruth",
+        output_dir=tmp_path / "out",
+        benchmark_prompt_policy="gold_answer_v1",
+        benchmark_no_think=True,
+        max_context_length=1200,
+    )
+
+    prompt = build_benchmark_prompt(
+        _example(
+            question=long_question,
+            answer_type="verification",
+            metadata={
+                "source_info": long_question,
+                "response": "The answer contains one unsupported claim.",
+            },
+        ),
+        config,
+        dataset_name="ragtruth",
+    )
+
+    assert prompt.raw_question == long_question.strip()
+    assert len(prompt.benchmark_question) <= 1200
+    assert len(prompt.retrieval_query) <= 1200
+    assert "[truncated to fit benchmark prompt budget]" in prompt.benchmark_question
+    assert prompt.runtime_prompt.startswith("/no_think\n")
+    assert "For RAGTruth-style examples" in prompt.runtime_prompt
+    assert "Original source prompt." in prompt.runtime_prompt
+    assert "UNIQUE_RAGTRUTH_TAIL_SHOULD_BE_TRUNCATED" not in prompt.runtime_prompt
+    assert prompt.runtime_prompt.rstrip().endswith("Answer:")
+
+
 def test_benchmark_v1_uses_benchmark_prompt_contract_not_mara_marker(tmp_path):
     config = BenchmarkConfig(
         suite_name="qasper",

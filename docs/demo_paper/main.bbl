@@ -1,0 +1,120 @@
+\begin{thebibliography}{16}
+\providecommand{\natexlab}[1]{#1}
+
+\bibitem[{Asai et~al.(2023)Asai, Wu, Wang, Sil, and
+  Hajishirzi}]{asai2023selfrag}
+Akari Asai, Zeqiu Wu, Yizhong Wang, Avirup Sil, and Hannaneh Hajishirzi. 2023.
+\newblock \href {https://arxiv.org/abs/2310.11511} {Self-{RAG}: Learning to
+  retrieve, generate, and critique through self-reflection}.
+\newblock \emph{Preprint}, arXiv:2310.11511.
+
+\bibitem[{{Cinnamon}(2024)}]{kotaemon}
+{Cinnamon}. 2024.
+\newblock Kotaemon: An open-source tool for chatting with your documents.
+\newblock \url{https://github.com/Cinnamon/kotaemon}.
+
+\bibitem[{Dasigi et~al.(2021)Dasigi, Lo, Beltagy, Cohan, Smith, and
+  Gardner}]{dasigi2021qasper}
+Pradeep Dasigi, Kyle Lo, Iz~Beltagy, Arman Cohan, Noah~A. Smith, and Matt
+  Gardner. 2021.
+\newblock A dataset of information-seeking questions and answers anchored in
+  research papers.
+\newblock In \emph{Proceedings of the 2021 Conference of the North American
+  Chapter of the Association for Computational Linguistics}.
+
+\bibitem[{Dong et~al.(2025)Dong, Chang, Huang, Wang, Tang, and
+  Liu}]{dong2025mmdocrag}
+Kai Dong, Yu~Chang, Shiyue Huang, Yiming Wang, Ruixiang Tang, and Yong Liu.
+  2025.
+\newblock \href {https://arxiv.org/abs/2505.16470} {Benchmarking
+  retrieval-augmented multimodal generation for document question answering}.
+\newblock \emph{Preprint}, arXiv:2505.16470.
+
+\bibitem[{Edge et~al.(2024)Edge, Trinh, Cheng, Bradley, Chao, Mody, Truitt, and
+  Larson}]{edge2024graphrag}
+Darren Edge, Ha~Trinh, Newman Cheng, Joshua Bradley, Alex Chao, Apurva Mody,
+  Steven Truitt, and Jonathan Larson. 2024.
+\newblock \href {https://arxiv.org/abs/2404.16130} {From local to global: A
+  graph {RAG} approach to query-focused summarization}.
+\newblock \emph{Preprint}, arXiv:2404.16130.
+
+\bibitem[{Faysse et~al.(2024)Faysse, Sibille, Wu, Omrani, Viaud, Hudelot, and
+  Colombo}]{faysse2024colpali}
+Manuel Faysse, Hugues Sibille, Tony Wu, Bilel Omrani, Gautier Viaud, Celine
+  Hudelot, and Pierre Colombo. 2024.
+\newblock \href {https://arxiv.org/abs/2407.01449} {{ColPali}: Efficient
+  document retrieval with vision language models}.
+\newblock \emph{Preprint}, arXiv:2407.01449.
+
+\bibitem[{Gao et~al.(2023{\natexlab{a}})Gao, Yen, Yu, and Chen}]{gao2023alce}
+Tianyu Gao, Howard Yen, Jiatong Yu, and Danqi Chen. 2023{\natexlab{a}}.
+\newblock \href {https://arxiv.org/abs/2305.14627} {Enabling large language
+  models to generate text with citations}.
+\newblock \emph{Preprint}, arXiv:2305.14627.
+
+\bibitem[{Gao et~al.(2023{\natexlab{b}})Gao, Xiong, Gao, Jia, Pan, Bi, Dai,
+  Sun, Wang, and Wang}]{gao2023rag}
+Yunfan Gao, Yun Xiong, Xinyu Gao, Kangxiang Jia, Jinliu Pan, Yuxi Bi, Yi~Dai,
+  Jiawei Sun, Meng Wang, and Haofen Wang. 2023{\natexlab{b}}.
+\newblock \href {https://arxiv.org/abs/2312.10997} {Retrieval-augmented
+  generation for large language models: A survey}.
+\newblock \emph{Preprint}, arXiv:2312.10997.
+
+\bibitem[{{Gradio}(2026)}]{gradio}
+{Gradio}. 2026.
+\newblock Gradio documentation.
+\newblock \url{https://www.gradio.app/docs}.
+
+\bibitem[{Jeong et~al.(2024)Jeong, Baek, Cho, Hwang, and
+  Park}]{jeong2024adaptiverag}
+Soyeong Jeong, Jinheon Baek, Sukmin Cho, Sung~Ju Hwang, and Jong~C. Park. 2024.
+\newblock \href {https://arxiv.org/abs/2403.14403} {Adaptive-{RAG}: Learning to
+  adapt retrieval-augmented large language models through question complexity}.
+\newblock \emph{Preprint}, arXiv:2403.14403.
+
+\bibitem[{Karpukhin et~al.(2020)Karpukhin, Oguz, Min, Lewis, Wu, Edunov, Chen,
+  and Yih}]{karpukhin2020dpr}
+Vladimir Karpukhin, Barlas Oguz, Sewon Min, Patrick Lewis, Ledell Wu, Sergey
+  Edunov, Danqi Chen, and Wen-tau Yih. 2020.
+\newblock Dense passage retrieval for open-domain question answering.
+\newblock In \emph{Proceedings of the 2020 Conference on Empirical Methods in
+  Natural Language Processing}.
+
+\bibitem[{Lewis et~al.(2020)Lewis, Perez, Piktus, Petroni, Karpukhin, Goyal,
+  Kuttler, Lewis, Yih, Rocktaschel, Riedel, and Kiela}]{lewis2020rag}
+Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir
+  Karpukhin, Naman Goyal, Heinrich Kuttler, Mike Lewis, Wen-tau Yih, Tim
+  Rocktaschel, Sebastian Riedel, and Douwe Kiela. 2020.
+\newblock Retrieval-augmented generation for knowledge-intensive {NLP} tasks.
+\newblock In \emph{Advances in Neural Information Processing Systems}.
+
+\bibitem[{Niu et~al.(2024)Niu, Wu, Zhang, Zhang, Li, Zhang, and
+  Li}]{niu2024ragtruth}
+Chenglei Niu, Guoyin Wu, Yue Zhang, Yilin Zhang, Shuo Li, Bin Zhang, and Jia
+  Li. 2024.
+\newblock \href {https://arxiv.org/abs/2401.00396} {{RAGTruth}: A hallucination
+  corpus for developing trustworthy retrieval-augmented language models}.
+\newblock \emph{Preprint}, arXiv:2401.00396.
+
+\bibitem[{{OWASP Foundation}(2025)}]{owaspLLM}
+{OWASP Foundation}. 2025.
+\newblock {OWASP} top 10 for large language model applications.
+\newblock
+  \url{https://owasp.org/www-project-top-10-for-large-language-model-applications/}.
+
+\bibitem[{Tanaka et~al.(2023)Tanaka, Nishida, Nishida, Hasegawa, Saito, and
+  Saito}]{tanaka2023slidevqa}
+Ryota Tanaka, Kyosuke Nishida, Kosuke Nishida, Takuya Hasegawa, Itsumi Saito,
+  and Kuniko Saito. 2023.
+\newblock {SlideVQA}: A dataset for document visual question answering on
+  multiple images.
+\newblock In \emph{Proceedings of the AAAI Conference on Artificial
+  Intelligence}.
+
+\bibitem[{Yan et~al.(2024)Yan, Gu, Zhu, and Ling}]{yan2024crag}
+Shi-Qi Yan, Jia-Chen Gu, Yun Zhu, and Zhen-Hua Ling. 2024.
+\newblock \href {https://arxiv.org/abs/2401.15884} {Corrective retrieval
+  augmented generation}.
+\newblock \emph{Preprint}, arXiv:2401.15884.
+
+\end{thebibliography}

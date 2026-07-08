@@ -20,7 +20,7 @@ def build_kotaemon_settings(
     app_data_dir: Path,
     docs_dir: Path | None = None,
     mode: str = "dev",
-    package_name: str = "kotaemon-app",
+    package_name: str = "mara-app",
 ) -> dict[str, Any]:
     base_dir = Path(base_dir).resolve()
     app_data_dir = Path(app_data_dir).resolve()

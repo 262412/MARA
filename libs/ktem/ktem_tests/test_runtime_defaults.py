@@ -36,3 +36,12 @@ def test_runtime_defaults_use_mara_public_app_name(tmp_path):
     )
 
     assert settings["KH_APP_NAME"] == "MARA"
+
+
+def test_runtime_defaults_use_mara_package_name(tmp_path):
+    settings = build_kotaemon_settings(
+        base_dir=tmp_path,
+        app_data_dir=tmp_path / "app-data",
+    )
+
+    assert settings["KH_PACKAGE_NAME"] == "mara-app"

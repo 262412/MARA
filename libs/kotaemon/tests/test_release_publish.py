@@ -24,7 +24,7 @@ def test_publish_script_exists_and_releases_three_packages():
     for token in [
         "ktem",
         "kotaemon",
-        "kotaemon-app",
+        "mara-app",
         "--repository",
         "testpypi",
         "pypi",
@@ -83,6 +83,6 @@ def test_publish_workflow_exists_and_uploads_in_order():
         "--repository pypi",
         "ktem",
         "kotaemon",
-        "kotaemon-app",
+        "mara-app",
     ]:
         assert token in content

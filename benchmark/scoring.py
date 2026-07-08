@@ -181,7 +181,11 @@ def _guardrail_abstained(prediction: dict[str, Any]) -> bool:
     guardrail = dict(prediction.get("guardrail_decision") or {})
     action = str(guardrail.get("action") or "").strip().lower()
     status = str(guardrail.get("status") or "").strip().lower()
-    return action == "abstain" or status in {"not_enough_evidence", "unsupported"}
+    if action == "abstain":
+        return True
+    if action == "revise":
+        return False
+    return status == "not_enough_evidence"
 
 
 def _prediction_abstained(
@@ -369,6 +373,9 @@ def _inline_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
     predicted_citations = list(prediction.get("predicted_citations") or [])
     if predicted_citations:
         return predicted_citations
+    structured_citations = _structured_citations_for_scoring(prediction)
+    if structured_citations:
+        return structured_citations
     return extract_citations(str(prediction.get("predicted_answer") or ""))
 
 
@@ -377,6 +384,26 @@ def _metadata_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
     if scored_sources:
         return scored_sources
     return list(prediction["predicted_sources"])
+
+
+def _structured_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
+    citations = []
+    for item in prediction.get("structured_citations") or []:
+        if not isinstance(item, dict):
+            continue
+        source_id = str(item.get("source_id") or "").strip()
+        page_label = str(item.get("page_label") or item.get("page") or "").strip()
+        evidence_id = str(item.get("evidence_id") or "").strip()
+        citation = ""
+        if source_id and page_label:
+            citation = f"{source_id}#page:{page_label}"
+        elif source_id:
+            citation = f"{source_id}#source"
+        elif evidence_id:
+            citation = f"{evidence_id}#evidence:{evidence_id}"
+        if citation and citation not in citations:
+            citations.append(citation)
+    return citations
 
 
 def _gold_evidence_has_locator(item: dict[str, Any], locator_kind: str) -> bool:

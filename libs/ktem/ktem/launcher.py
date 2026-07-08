@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from ktem.app_server import resolve_gradio_server_port
 from ktem.assets import ASSETS_DIR
 from ktem.main import App
 from theflow.settings import settings as flowsettings
@@ -48,6 +49,6 @@ def launch_app(
         if share is None
         else share,
         server_name=host,
-        server_port=port,
+        server_port=resolve_gradio_server_port(port),
     )
     return app

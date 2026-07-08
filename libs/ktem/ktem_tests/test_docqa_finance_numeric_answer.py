@@ -1,0 +1,56 @@
+from ktem.docqa.finance_numeric_answer import finance_numeric_answer
+
+
+def test_finance_numeric_answer_computes_quick_ratio_from_evidence_text():
+    answer = finance_numeric_answer(
+        "What was 3M's quick ratio in 2022?",
+        [
+            {
+                "text": (
+                    "Current assets were $14,688 million, inventories were "
+                    "$4,962 million, and current liabilities were $10,116 million."
+                )
+            }
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "0.96"
+    assert answer.confidence >= 0.7
+    assert answer.question_type == "quick_ratio"
+
+
+def test_finance_numeric_answer_computes_percentage_change():
+    answer = finance_numeric_answer(
+        "What was the percentage change in revenue from 2021 to 2022?",
+        [
+            {
+                "text": (
+                    "Revenue was $10.0 million in 2021. Revenue was "
+                    "$12.5 million in 2022."
+                )
+            }
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "25.0%"
+    assert answer.question_type == "percentage_change"
+
+
+def test_finance_numeric_answer_parses_negative_parentheses_for_difference():
+    answer = finance_numeric_answer(
+        "What was the difference in operating income from 2021 to 2022?",
+        [
+            {
+                "text": (
+                    "Operating income was $(120) million in 2021. "
+                    "Operating income was $80 million in 2022."
+                )
+            }
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "$200.0 million"
+    assert answer.inputs["prior"] == -120.0

@@ -13,20 +13,17 @@ dirty_template = "{tag}"
 tag_filter = "v?\\d+(\\.\\d+)*.*"
 
 [project]
-name = "kotaemon-app"
+name = "mara-app"
 dynamic = ["version"]
 requires-python = ">= 3.10"
-description = "Slides App"
+description = "MARA local-first multimodal document QA workbench."
 readme = "README.md"
 dependencies = [
     "kotaemon[all]",
     "ktem"
 ]
 authors = [
-    { name = "@trducng", email = "john@cinnamon.is" },
-    { name = "@lone17", email = "ian@cinnamon.is" },
-    { name = "@taprosoft", email = "tadashi@cinnamon.is" },
-    { name = "@cin-albert", email = "albert@cinnamon.is" },
+    { name = "Chenghao Zhang", email = "tbczhang@liverpool.ac.uk" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -58,13 +55,13 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/262412/kotaemon/"
-Repository = "https://github.com/262412/kotaemon/"
-Documentation = "https://cinnamon.github.io/kotaemon/"
+Homepage = "https://github.com/262412/MARA/"
+Repository = "https://github.com/262412/MARA/"
+Documentation = "https://github.com/262412/MARA/#readme"
 Upstream = "https://github.com/Cinnamon/kotaemon/"
 
 [tool.codespell]
-skip = "*.js,*.css,*.map"
+skip = "*.js,*.css,*.map,.playwright-cli/*,docs/demo_paper/acl.sty,docs/demo_paper/acl_natbib.bst"
 # `llm` abbreviation for large language models
 ignore-words-list = "llm,fo,multline,asai"
 quiet-level = 3

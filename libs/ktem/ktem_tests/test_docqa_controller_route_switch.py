@@ -50,7 +50,11 @@ def test_execute_controller_turn_switches_route_after_ambiguous_finance_retrieva
 
     assert calls == ["hybrid", "hybrid", "doc_text"]
     assert result.controller_decision.legacy_route == "doc_text"
+    assert result.controller_decision.initial_route == "hybrid"
+    assert result.controller_decision.final_route == "doc_text"
+    assert result.controller_decision.route_switch_used is True
     assert result.retrieve_decision.status == "good"
     assert result.controller_trace[0]["stage"] == "route_switch"
     assert result.controller_trace[0]["from_route"] == "hybrid"
     assert result.controller_trace[0]["to_route"] == "doc_text"
+    assert result.controller_trace[0]["route_switch_used"] is True

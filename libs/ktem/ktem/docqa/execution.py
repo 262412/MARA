@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
@@ -13,6 +14,11 @@ from .controller import (
 )
 from .evidence import EvidenceBundle, build_evidence_bundle
 from .evidence_text import extract_final_answer_text
+from .route_selection import (
+    ControllerDecision,
+    controller_decision_from_route,
+    mark_route_switch_recovery,
+)
 from .workflow import build_workflow_plan, planner_payload_from_trace
 
 DIRECT_ANSWER_MESSAGE = (
@@ -37,19 +43,6 @@ _CANONICAL_ROUTES = {
     "hybrid": "hybrid_rag",
     "abstain": "abstain",
 }
-
-
-@dataclass(frozen=True)
-class ControllerDecision:
-    route: str
-    legacy_route: str
-    policy: str
-    controller_mode: str
-    requires_retrieval: bool
-    reason: str
-
-    def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -94,8 +87,9 @@ def execute_controller_turn(
     rewrite: RewriteFn | None = None,
     agent_trace: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
+    planner_payload = planner_payload_from_trace(agent_trace or [])
     route_decision = _route_decision(request, agent_trace or [])
-    controller_decision = _controller_decision(route_decision)
+    controller_decision = _controller_decision(route_decision, planner_payload)
     workflow_plan = _build_execution_workflow_plan(
         request,
         route_decision.route,
@@ -193,6 +187,7 @@ def _retrieve_and_evaluate(
         evidence_bundle.metadata,
         prompt=str(getattr(request, "prompt", "") or ""),
         verification_domain=getattr(request, "verification_domain", None),
+        origin=getattr(request, "origin", None),
     )
     if retrieve_decision.status != "ambiguous" or not retrieve_decision.retry:
         return evidence_bundle, retrieve_decision
@@ -207,18 +202,26 @@ def _retrieve_and_evaluate(
         attempted_retry=True,
         prompt=str(getattr(request, "prompt", "") or ""),
         verification_domain=getattr(request, "verification_domain", None),
+        origin=getattr(request, "origin", None),
     )
     return evidence_bundle, retrieve_decision
 
 
-def _controller_decision(route_decision: RouteDecision) -> ControllerDecision:
-    return ControllerDecision(
-        route=_CANONICAL_ROUTES[route_decision.route],
-        legacy_route=route_decision.route,
-        policy=route_decision.policy,
-        controller_mode=route_decision.controller_mode,
-        requires_retrieval=route_decision.requires_retrieval,
-        reason=route_decision.reason,
+def _controller_decision(
+    route_decision: RouteDecision,
+    planner_payload: Any = None,
+) -> ControllerDecision:
+    return _controller_decision_from_payload(route_decision, planner_payload)
+
+
+def _controller_decision_from_payload(
+    route_decision: RouteDecision,
+    planner_payload: Any,
+) -> ControllerDecision:
+    return controller_decision_from_route(
+        route_decision,
+        canonical_routes=_CANONICAL_ROUTES,
+        planner_payload=planner_payload,
     )
 
 
@@ -228,7 +231,8 @@ def _switch_after_failed_retrieval(
     failed_decision: RetrieveDecision,
     retrieve: RetrieveFn,
 ) -> tuple[ControllerDecision, EvidenceBundle, RetrieveDecision, dict[str, Any]] | None:
-    for route in _route_switch_candidates(request, decision.legacy_route):
+    candidates = _route_switch_candidates(request, decision.legacy_route)
+    for route in candidates:
         switched_decision = _controller_decision(
             RouteDecision(
                 route=route,
@@ -241,6 +245,11 @@ def _switch_after_failed_retrieval(
                 ),
             )
         )
+        switched_decision = mark_route_switch_recovery(
+            switched_decision,
+            initial_decision=decision,
+            candidates=candidates,
+        )
         bundle, retrieve_decision = _retrieve_and_evaluate(
             request,
             switched_decision,
@@ -251,6 +260,8 @@ def _switch_after_failed_retrieval(
             "from_route": decision.legacy_route,
             "to_route": route,
             "reason": failed_decision.reason,
+            "route_switch_used": True,
+            "route_switch_candidates": list(candidates),
         }
         if retrieve_decision.status == "good":
             return switched_decision, bundle, retrieve_decision, switch_event
@@ -258,12 +269,32 @@ def _switch_after_failed_retrieval(
 
 
 def _route_switch_candidates(request: Any, current_route: str) -> list[str]:
+    allowed_routes = list(getattr(request, "allowed_routes", []) or [])
+    preferred_order = _cost_aware_route_switch_order(request)
+    allowed = [route for route in preferred_order if route in allowed_routes]
+    allowed.extend(route for route in allowed_routes if route not in allowed)
     return [
         route
-        for route in getattr(request, "allowed_routes", []) or []
+        for route in allowed
         if route in _CANONICAL_ROUTES
         and route not in {current_route, "direct", "abstain"}
     ]
+
+
+def _cost_aware_route_switch_order(request: Any) -> list[str]:
+    prompt = str(getattr(request, "prompt", "") or "").lower()
+    if _has_visual_route_intent(prompt):
+        return ["doc_page_image", "doc_text", "hybrid", "doc_element", "graph_global"]
+    return ["doc_text", "doc_page_image", "hybrid", "doc_element", "graph_global"]
+
+
+def _has_visual_route_intent(prompt: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(chart|diagram|figure|graph|image|layout|plot|shown|slide|visual|visible)\b",
+            prompt,
+        )
+    )
 
 
 def _static_result(
@@ -324,7 +355,7 @@ def _verified_result(
 ) -> RouteExecutionResult:
     if bundle.metadata.get("generation_backend") == "evidence_only_without_vlm":
         verify_decision = _evidence_only_verify_decision(request, bundle)
-        guardrail = _verification_guardrail(verify_decision)
+        guardrail = _verification_guardrail(verify_decision, request)
         return _result(
             decision,
             retrieve_decision,
@@ -337,7 +368,7 @@ def _verified_result(
         )
     if not extract_final_answer_text(answer).strip():
         verify_decision = _empty_answer_verify_decision(request, bundle)
-        guardrail = _verification_guardrail(verify_decision)
+        guardrail = _verification_guardrail(verify_decision, request)
         return _result(
             decision,
             retrieve_decision,
@@ -352,7 +383,7 @@ def _verified_result(
     if verify_decision.action == "revise" and rewrite is not None:
         answer = rewrite(request, decision, bundle, answer)
         verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
-    guardrail = _verification_guardrail(verify_decision)
+    guardrail = _verification_guardrail(verify_decision, request)
     if guardrail.action == "abstain":
         answer = ABSTAIN_MESSAGE
     return _result(
@@ -367,14 +398,27 @@ def _verified_result(
     )
 
 
-def _verification_guardrail(verify_decision: VerifyDecision) -> GuardrailDecision:
+def _verification_guardrail(
+    verify_decision: VerifyDecision,
+    request: Any | None = None,
+) -> GuardrailDecision:
     if verify_decision.status in {"supported", "not_requested", "not_required"}:
         return GuardrailDecision("ok", "return", verify_decision.reason)
     if verify_decision.action == "revise":
+        if _finance_benchmark_request(request):
+            return GuardrailDecision("unsupported", "revise", verify_decision.reason)
         return GuardrailDecision("unsupported", "abstain", verify_decision.reason)
     return GuardrailDecision(
         verify_decision.status, verify_decision.action, verify_decision.reason
     )
+
+
+def _finance_benchmark_request(request: Any | None) -> bool:
+    if request is None:
+        return False
+    origin = str(getattr(request, "origin", "") or "").strip().lower()
+    domain = str(getattr(request, "verification_domain", "") or "").strip().lower()
+    return origin == "benchmark" and domain in {"finance", "financial"}
 
 
 def _evidence_only_verify_decision(

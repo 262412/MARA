@@ -232,6 +232,13 @@ def _route_decision_from_controller(
 
 def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> None:
     pipeline.graph_context = graph_context
+    pipeline.controller_question = str(
+        getattr(request, "controller_question", "") or ""
+    ).strip()
+    pipeline.retrieval_query = str(
+        getattr(request, "retrieval_query", "") or ""
+    ).strip()
+    pipeline.dataset_family = str(getattr(request, "dataset_family", "") or "").strip()
     pipeline.task_type = request.task_type or ""
     pipeline.agent_mode = request.agent_mode or getattr(pipeline, "agent_mode", "auto")
     pipeline.artifact_type = request.artifact_type or ""
@@ -246,6 +253,8 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
     pipeline.allowed_routes = list(request.allowed_routes or [])
     pipeline.verification_mode = request.verification_mode or "off"
     pipeline.verification_domain = request.verification_domain or ""
+    if not pipeline.dataset_family:
+        pipeline.dataset_family = pipeline.verification_domain
     pipeline.graph_mode = str(getattr(request, "graph_mode", "") or "").strip()
     _apply_visual_backends(pipeline, request)
     pipeline.docqa_request = request
@@ -318,6 +327,9 @@ def _backend_metadata(
 
 
 def copy_request_fields(target: Any, source: Any) -> None:
+    target.controller_question = getattr(source, "controller_question", "")
+    target.retrieval_query = getattr(source, "retrieval_query", "")
+    target.dataset_family = getattr(source, "dataset_family", "")
     target.task_type = source.task_type
     target.agent_mode = source.agent_mode
     target.artifact_type = source.artifact_type

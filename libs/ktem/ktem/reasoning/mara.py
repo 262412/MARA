@@ -14,11 +14,20 @@ from .mara_artifacts import build_artifact_for_pipeline
 from .mara_controller import planner_trace_payload
 from .mara_element_answer import element_evidence_answer
 from .mara_evidence import build_mara_evidence_metadata
+from .mara_finance_answering import route_finance_numeric_answer
 from .mara_query_planning import plan_steps as build_mara_plan_steps
 from .mara_query_planning import understand_query as understand_mara_query
 from .mara_query_planning import with_selected_source_context
 from .mara_retrieval_query import messages_share_retrieval_cache_key, retrieval_query
+from .mara_route_probe import (
+    controller_latency_budget,
+    controller_route_probe,
+    dataset_family,
+    page_image_route_available,
+)
 from .mara_route_retrieval import route_retrieval_metadata
+from .mara_visual_answering import route_visual_answer as _route_visual_answer
+from .mara_visual_gate import hybrid_should_use_visual_generator
 from .simple import FullQAPipeline
 
 MARA_ABSTAIN_MESSAGE = (
@@ -32,11 +41,6 @@ MARA_DIRECT_MESSAGE = (
 MARA_PLANNER_ABSTAIN_MESSAGE = (
     "MARA could not identify a safe document-grounded route for this question. "
     "Select relevant sources or ask a source-specific question."
-)
-MARA_VISUAL_EVIDENCE_ONLY_MESSAGE = (
-    "MARA found visual page evidence, but no VLM backend is configured. "
-    "Use the cited page evidence or configure a visual generator for a grounded "
-    "visual answer."
 )
 ANSWER_FORMAT_REQUIREMENTS = (
     "\n\nAnswer formatting requirements:\n"
@@ -116,18 +120,36 @@ def _effective_route(pipeline: Any, planner_payload: dict[str, Any]) -> str:
     return _ROUTE_POLICY_ALIASES.get(planner_route, planner_route)
 
 
+def _controller_routing_message(pipeline: Any, message: str) -> str:
+    return str(
+        getattr(pipeline, "controller_question", None)
+        or getattr(pipeline, "retrieval_query", None)
+        or message
+    ).strip()
+
+
 def _controller_execution_request(
     pipeline: Any,
     message: str,
 ) -> SimpleNamespace:
     controller_mode = str(getattr(pipeline, "controller_mode", "") or "").strip()
+    docqa_request = getattr(pipeline, "docqa_request", None)
     return SimpleNamespace(
         prompt=message,
+        origin=str(
+            getattr(docqa_request, "origin", None)
+            or getattr(pipeline, "origin", "")
+            or ""
+        ),
         controller_mode=controller_mode or "llm",
         route_policy=getattr(pipeline, "route_policy", None) or "auto",
         allowed_routes=list(getattr(pipeline, "allowed_routes", None) or []),
         verification_mode=getattr(pipeline, "verification_mode", None) or "light",
-        verification_domain=getattr(pipeline, "verification_domain", None) or "",
+        verification_domain=(
+            getattr(pipeline, "verification_domain", None)
+            or getattr(pipeline, "dataset_family", None)
+            or ""
+        ),
         active_file_id=getattr(pipeline, "active_file_id", "") or "",
         active_file_name=getattr(pipeline, "active_file_name", "") or "",
         page_number=getattr(pipeline, "page_number", None),
@@ -147,7 +169,7 @@ def _with_available_modalities(
         if modality
     ]
     if (
-        _page_image_route_available(pipeline)
+        page_image_route_available(pipeline)
         and "page_image" not in available_modalities
     ):
         available_modalities.append("page_image")
@@ -156,23 +178,6 @@ def _with_available_modalities(
     updated = dict(understanding)
     updated["available_modalities"] = available_modalities
     return updated
-
-
-def _page_image_route_available(pipeline: Any) -> bool:
-    allowed_routes = [
-        str(route).strip()
-        for route in getattr(pipeline, "allowed_routes", None) or []
-        if str(route).strip()
-    ]
-    if allowed_routes and not any(
-        route in {"doc_page_image", "hybrid"} for route in allowed_routes
-    ):
-        return False
-    return bool(
-        getattr(pipeline, "visual_retriever_backend", None)
-        or getattr(pipeline, "visual_retriever", None)
-        or getattr(pipeline, "page_image_index_records", None)
-    )
 
 
 @contextmanager
@@ -278,52 +283,6 @@ def _route_execution_events(
     return Document(channel="chat", content=MARA_ABSTAIN_MESSAGE)
 
 
-def _visual_evidence_only_answer(bundle: Any) -> str:
-    pages = [
-        f"{item.get('source_name') or item.get('source_id')} page {item.get('page_label')}"
-        for item in bundle.items
-        if item.get("modality") == "page_image"
-    ]
-    if not pages:
-        return MARA_VISUAL_EVIDENCE_ONLY_MESSAGE
-    preview = "; ".join(str(page) for page in pages[:3])
-    return f"{MARA_VISUAL_EVIDENCE_ONLY_MESSAGE} Evidence: {preview}."
-
-
-def _visual_generator_answer(generator: Any, request: Any, bundle: Any) -> str:
-    if hasattr(generator, "generate"):
-        return str(generator.generate(request, bundle))
-    if callable(generator):
-        return str(generator(request, bundle))
-    raise ValueError("Configured visual generator must be callable or expose generate.")
-
-
-def _bundle_has_page_image_evidence(bundle: Any) -> bool:
-    return any(
-        isinstance(item, dict) and str(item.get("modality") or "") == "page_image"
-        for item in getattr(bundle, "items", []) or []
-    )
-
-
-def _route_visual_answer(
-    pipeline: Any,
-    request: Any,
-    bundle: Any,
-    *,
-    evidence_only_fallback: bool,
-) -> str | None:
-    vlm_generator = getattr(pipeline, "vlm_generator", None)
-    if vlm_generator is None:
-        if not evidence_only_fallback:
-            return None
-        bundle.metadata["generation_backend"] = "evidence_only_without_vlm"
-        return _visual_evidence_only_answer(bundle)
-    bundle.metadata["generation_backend"] = str(
-        getattr(vlm_generator, "name", "visual_generator")
-    )
-    return _visual_generator_answer(vlm_generator, request, bundle)
-
-
 def _visible_execution_answer(execution: RouteExecutionResult) -> str:
     route = execution.controller_decision.route
     if route == "direct_answer":
@@ -331,6 +290,49 @@ def _visible_execution_answer(execution: RouteExecutionResult) -> str:
     if route == "abstain":
         return MARA_PLANNER_ABSTAIN_MESSAGE
     return execution.answer
+
+
+def _generate_controller_route_answer(
+    pipeline: Any,
+    request: Any,
+    decision: Any,
+    bundle: Any,
+    *,
+    message: str,
+    conv_id: str,
+    history: list,
+    kwargs: dict[str, Any],
+) -> tuple[str, list[Document]]:
+    if decision.route == "page_image_rag":
+        visual_answer = _route_visual_answer(
+            pipeline,
+            request,
+            bundle,
+            evidence_only_fallback=True,
+        )
+        assert visual_answer is not None
+        return visual_answer, []
+    finance_answer = route_finance_numeric_answer(request, decision, bundle)
+    if finance_answer is not None:
+        return finance_answer, []
+    if decision.route == "hybrid_rag" and hybrid_should_use_visual_generator(
+        request, decision, bundle
+    ):
+        visual_answer = _route_visual_answer(
+            pipeline,
+            request,
+            bundle,
+            evidence_only_fallback=False,
+        )
+        if visual_answer is not None:
+            return visual_answer, []
+    if decision.route == "graph_rag":
+        bundle.metadata["generation_backend"] = "local_graph_summary"
+        return graph_answer_from_evidence(bundle.items), []
+    if decision.route == "element_rag":
+        bundle.metadata["generation_backend"] = "local_element_evidence"
+        return element_evidence_answer(bundle, message), []
+    return _collect_text_rag_generation(pipeline, message, conv_id, history, kwargs)
 
 
 class MaraAgentPipeline(FullQAPipeline):
@@ -442,55 +444,35 @@ class MaraAgentPipeline(FullQAPipeline):
         understanding: dict[str, Any],
         planner_payload: dict[str, Any],
         kwargs: dict[str, Any],
+        *,
+        routing_message: str | None = None,
     ) -> tuple[RouteExecutionResult, list[Document], Any]:
         generation_events: list[Document] = []
         generated_answer = ""
+        retrieval_message = str(routing_message or message)
 
         def retrieve(_request: Any, _decision: Any) -> dict[str, Any]:
             return route_retrieval_metadata(
                 self,
                 _decision.route,
-                message,
+                retrieval_message,
                 history,
                 understanding,
-                text_retrieve=lambda: self.retrieve(message, history),
+                text_retrieve=lambda: self.retrieve(retrieval_message, history),
                 metadata_builder=self.build_evidence_metadata,
             )
 
         def generate(_request: Any, _decision: Any, _bundle: Any) -> str:
             nonlocal generated_answer
-            if _decision.route == "page_image_rag":
-                visual_answer = _route_visual_answer(
-                    self,
-                    _request,
-                    _bundle,
-                    evidence_only_fallback=True,
-                )
-                assert visual_answer is not None
-                generated_answer = visual_answer
-                return generated_answer
-            if _decision.route == "hybrid_rag" and _bundle_has_page_image_evidence(
-                _bundle
-            ):
-                visual_answer = _route_visual_answer(
-                    self,
-                    _request,
-                    _bundle,
-                    evidence_only_fallback=False,
-                )
-                if visual_answer is not None:
-                    generated_answer = visual_answer
-                    return generated_answer
-            if _decision.route == "graph_rag":
-                _bundle.metadata["generation_backend"] = "local_graph_summary"
-                generated_answer = graph_answer_from_evidence(_bundle.items)
-                return generated_answer
-            if _decision.route == "element_rag":
-                _bundle.metadata["generation_backend"] = "local_element_evidence"
-                generated_answer = element_evidence_answer(_bundle, message)
-                return generated_answer
-            answer, events = _collect_text_rag_generation(
-                self, message, conv_id, history, kwargs
+            answer, events = _generate_controller_route_answer(
+                self,
+                _request,
+                _decision,
+                _bundle,
+                message=message,
+                conv_id=conv_id,
+                history=history,
+                kwargs=kwargs,
             )
             generation_events.extend(events)
             generated_answer = answer
@@ -508,18 +490,17 @@ class MaraAgentPipeline(FullQAPipeline):
         )
         if generation_events and execution.answer != generated_answer:
             generation_events = []
-        artifact = (
-            self.build_artifact(understanding)
-            if execution.guardrail_decision.action == "return"
-            else None
-        )
+        artifact = None
+        if execution.guardrail_decision.action == "return":
+            artifact = self.build_artifact(understanding)
         return execution, generation_events, artifact
 
     def stream(  # type: ignore
         self, message: str, conv_id: str, history: list, **kwargs  # type: ignore
     ) -> Generator[Document, None, Document]:
+        routing_message = _controller_routing_message(self, message)
         understanding = self.understand_query(
-            message,
+            routing_message,
             task_type=getattr(self, "task_type", None),
             qa_scope=getattr(self, "qa_scope", None),
             active_file_id=getattr(self, "active_file_id", None),
@@ -539,12 +520,19 @@ class MaraAgentPipeline(FullQAPipeline):
                 plan,
             ),
         )
+        route_probe = controller_route_probe(
+            self, routing_message, history, understanding
+        )
+        latency_budget = controller_latency_budget(self)
         planner_payload = planner_trace_payload(
             understanding,
             planner=getattr(self, "planner", None),
             planner_model=getattr(self, "planner_model", None),
-            question=message,
+            question=routing_message,
             allowed_routes=getattr(self, "allowed_routes", None),
+            route_probe=route_probe,
+            dataset_family=dataset_family(self),
+            latency_budget=latency_budget,
         )
         yield _mara_event("agent_trace", planner_payload)
         effective_route = _effective_route(self, planner_payload)
@@ -564,6 +552,7 @@ class MaraAgentPipeline(FullQAPipeline):
                 understanding,
                 planner_payload,
                 kwargs,
+                routing_message=routing_message,
             )
             return (
                 yield from _route_execution_events(
@@ -583,5 +572,6 @@ def _retrieval_domain(pipeline: Any) -> str:
     return str(
         getattr(pipeline, "retrieval_domain", None)
         or getattr(pipeline, "verification_domain", None)
+        or getattr(pipeline, "dataset_family", None)
         or ""
     ).strip()

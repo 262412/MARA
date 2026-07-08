@@ -1,0 +1,205 @@
+- generic [ref=e7]:
+  - generic [ref=e8]:
+    - tablist [ref=e9]:
+      - generic [ref=e11]: MARA
+      - tab "chat" [ref=e292] [cursor=pointer]
+      - tab "files" [selected] [ref=e293] [cursor=pointer]
+      - tab "resources" [ref=e59] [cursor=pointer]
+      - tab "help" [ref=e60] [cursor=pointer]
+      - tab "settings" [ref=e61] [cursor=pointer]
+      - generic [ref=e13]:
+        - 'button "Dataset: Current Corpus" [ref=e14] [cursor=pointer]':
+          - text: "Dataset:"
+          - strong [ref=e15]: Current Corpus
+        - button "Search files" [ref=e16] [cursor=pointer]:
+          - img [ref=e17]
+        - button "Resources" [ref=e19] [cursor=pointer]:
+          - img [ref=e20]
+        - button "Settings" [ref=e22] [cursor=pointer]:
+          - generic [ref=e23]: AD
+        - button "Switch to dark mode" [ref=e24] [cursor=pointer]:
+          - img [ref=e25]
+    - tabpanel [ref=e294]:
+      - generic [ref=e296]:
+        - generic [ref=e298]:
+          - generic [ref=e299]:
+            - tablist [ref=e300]:
+              - tab "Upload Files" [selected] [ref=e301] [cursor=pointer]
+              - tab "Use Web Links" [ref=e302] [cursor=pointer]
+            - tabpanel [ref=e303]:
+              - generic [ref=e304]:
+                - generic [ref=e305]:
+                  - generic:
+                    - generic:
+                      - img
+                    - text: File
+                  - button "Upload files" [ref=e306] [cursor=pointer]:
+                    - generic [ref=e307]:
+                      - img [ref=e309]
+                      - text: Drop File Here
+                      - generic [ref=e313]: "- or -"
+                      - text: Click to Upload
+                - list [ref=e318]:
+                  - listitem [ref=e319]: "Supported file types: .png, .jpeg, .jpg, .tiff, .tif, .pdf, .xls, .xlsx, .doc, .docx, .ppt, .pptx, .csv, .html, .mhtml, .txt, .md, .zip"
+          - button "Advanced indexing options ▼" [ref=e321] [cursor=pointer]:
+            - generic [ref=e322]: Advanced indexing options
+            - generic [ref=e323]: ▼
+          - button "Upload and Index" [ref=e324] [cursor=pointer]
+        - generic [ref=e326]:
+          - tablist [ref=e327]:
+            - tab "Files" [selected] [ref=e328] [cursor=pointer]
+            - tab "Groups" [ref=e329] [cursor=pointer]
+          - tabpanel [ref=e330]:
+            - generic [ref=e331]:
+              - generic [ref=e334]:
+                - generic [ref=e335]: "Filter by name:"
+                - generic [ref=e336]: (1) Case-insensitive. (2) Search with empty string to show all files.
+                - 'textbox "Filter by name: (1) Case-insensitive. (2) Search with empty string to show all files." [ref=e337]':
+                  - /placeholder: ""
+              - grid [ref=e340]:
+                - table [ref=e341]:
+                  - rowgroup [ref=e342]:
+                    - row "id name size tokens loader conversations date_created" [ref=e343]:
+                      - columnheader "id" [ref=e344]:
+                        - generic [ref=e345]:
+                          - button "id" [ref=e346] [cursor=pointer]
+                          - img [ref=e348] [cursor=pointer]
+                      - columnheader "name" [ref=e350]:
+                        - generic [ref=e351]:
+                          - button "name" [ref=e352] [cursor=pointer]
+                          - img [ref=e354] [cursor=pointer]
+                      - columnheader "size" [ref=e356]:
+                        - generic [ref=e357]:
+                          - button "size" [ref=e358] [cursor=pointer]
+                          - img [ref=e360] [cursor=pointer]
+                      - columnheader "tokens" [ref=e362]:
+                        - generic [ref=e363]:
+                          - button "tokens" [ref=e364] [cursor=pointer]
+                          - img [ref=e366] [cursor=pointer]
+                      - columnheader "loader" [ref=e368]:
+                        - generic [ref=e369]:
+                          - button "loader" [ref=e370] [cursor=pointer]
+                          - img [ref=e372] [cursor=pointer]
+                      - columnheader "conversations" [ref=e374]:
+                        - generic [ref=e375]:
+                          - button "conversations" [ref=e376] [cursor=pointer]
+                          - img [ref=e378] [cursor=pointer]
+                      - columnheader "date_created" [ref=e380]:
+                        - generic [ref=e381]:
+                          - button "date_created" [ref=e382] [cursor=pointer]
+                          - img [ref=e384] [cursor=pointer]
+                  - rowgroup [ref=e386]:
+                    - row "aa027380-f936-442f-9870-d895490c63ec chapter1-introductiontomanagementandorganizations-090411125412-phpapp02_95_page_10.jpg 1MB 155K PDFThumbnailReader Untitled - 2026-06-13 20:35:41, Untitled - 2026-06-13 20:35:54 (+184) 2026-06-13 13:34:41" [ref=e387]:
+                      - cell "aa027380-f936-442f-9870-d895490c63ec" [ref=e388]:
+                        - button "aa027380-f936-442f-9870-d895490c63ec" [ref=e390] [cursor=pointer]
+                      - cell "chapter1-introductiontomanagementandorganizations-090411125412-phpapp02_95_page_10.jpg" [ref=e391]:
+                        - button "chapter1-introductiontomanagementandorganizations-090411125412-phpapp02_95_page_10.jpg" [ref=e393] [cursor=pointer]
+                      - cell "1MB" [ref=e394]:
+                        - button "1MB" [ref=e396] [cursor=pointer]
+                      - cell "155K" [ref=e397]:
+                        - button "155K" [ref=e399] [cursor=pointer]
+                      - cell "PDFThumbnailReader" [ref=e400]:
+                        - button "PDFThumbnailReader" [ref=e402] [cursor=pointer]
+                      - cell "Untitled - 2026-06-13 20:35:41, Untitled - 2026-06-13 20:35:54 (+184)" [ref=e403]:
+                        - button "Untitled - 2026-06-13 20:35:41, Untitled - 2026-06-13 20:35:54 (+184)" [ref=e405] [cursor=pointer]
+                      - cell "2026-06-13 13:34:41" [ref=e406]:
+                        - button "2026-06-13 13:34:41" [ref=e408] [cursor=pointer]
+                - button "Upload files" [ref=e409]:
+                  - table [ref=e411]:
+                    - rowgroup [ref=e412]:
+                      - row "id name size tokens loader conversations date_created" [ref=e413]:
+                        - columnheader "id" [ref=e414]:
+                          - generic [ref=e415]:
+                            - button "id" [ref=e416] [cursor=pointer]
+                            - img [ref=e418] [cursor=pointer]
+                        - columnheader "name" [ref=e420]:
+                          - generic [ref=e421]:
+                            - button "name" [ref=e422] [cursor=pointer]
+                            - img [ref=e424] [cursor=pointer]
+                        - columnheader "size" [ref=e426]:
+                          - generic [ref=e427]:
+                            - button "size" [ref=e428] [cursor=pointer]
+                            - img [ref=e430] [cursor=pointer]
+                        - columnheader "tokens" [ref=e432]:
+                          - generic [ref=e433]:
+                            - button "tokens" [ref=e434] [cursor=pointer]
+                            - img [ref=e436] [cursor=pointer]
+                        - columnheader "loader" [ref=e438]:
+                          - generic [ref=e439]:
+                            - button "loader" [ref=e440] [cursor=pointer]
+                            - img [ref=e442] [cursor=pointer]
+                        - columnheader "conversations" [ref=e444]:
+                          - generic [ref=e445]:
+                            - button "conversations" [ref=e446] [cursor=pointer]
+                            - img [ref=e448] [cursor=pointer]
+                        - columnheader "date_created" [ref=e450]:
+                          - generic [ref=e451]:
+                            - button "date_created" [ref=e452] [cursor=pointer]
+                            - img [ref=e454] [cursor=pointer]
+                      - iframe [ref=e456]:
+                        
+                    - rowgroup [ref=e457]:
+                      - row "aa027380-f936-442f-9870-d895490c63ec 3M_2018_10K.pdf 1MB 155K PDFThumbnailReader Untitled - 2026-06-14 11:21:36, Untitled - 2026-06-14 11:21:37 (+69) 2026-06-13 13:34:41" [ref=e458]:
+                        - cell "aa027380-f936-442f-9870-d895490c63ec" [ref=e459]:
+                          - button "aa027380-f936-442f-9870-d895490c63ec" [ref=e461] [cursor=pointer]
+                        - cell "3M_2018_10K.pdf" [ref=e462]:
+                          - button "3M_2018_10K.pdf" [ref=e464] [cursor=pointer]
+                        - cell "1MB" [ref=e465]:
+                          - button "1MB" [ref=e467] [cursor=pointer]
+                        - cell "155K" [ref=e468]:
+                          - button "155K" [ref=e470] [cursor=pointer]
+                        - cell "PDFThumbnailReader" [ref=e471]:
+                          - button "PDFThumbnailReader" [ref=e473] [cursor=pointer]
+                        - cell "Untitled - 2026-06-14 11:21:36, Untitled - 2026-06-14 11:21:37 (+69)" [ref=e474]:
+                          - button "Untitled - 2026-06-14 11:21:36, Untitled - 2026-06-14 11:21:37 (+69)" [ref=e476] [cursor=pointer]
+                        - cell "2026-06-13 13:34:41" [ref=e477]:
+                          - button "2026-06-13 13:34:41" [ref=e479] [cursor=pointer]
+                      - row "7e54a9e0-d259-479b-a6a6-2a3d79e597bc 3M_2022_10K.pdf 2MB 215K PDFThumbnailReader Untitled - 2026-06-13 20:35:41, Untitled - 2026-06-13 20:35:54 (+184) 2026-06-13 13:34:41" [ref=e480]:
+                        - cell "7e54a9e0-d259-479b-a6a6-2a3d79e597bc" [ref=e481]:
+                          - button "7e54a9e0-d259-479b-a6a6-2a3d79e597bc" [ref=e483] [cursor=pointer]
+                        - cell "3M_2022_10K.pdf" [ref=e484]:
+                          - button "3M_2022_10K.pdf" [ref=e486] [cursor=pointer]
+                        - cell "2MB" [ref=e487]:
+                          - button "2MB" [ref=e489] [cursor=pointer]
+                        - cell "215K" [ref=e490]:
+                          - button "215K" [ref=e492] [cursor=pointer]
+                        - cell "PDFThumbnailReader" [ref=e493]:
+                          - button "PDFThumbnailReader" [ref=e495] [cursor=pointer]
+                        - cell "Untitled - 2026-06-13 20:35:41, Untitled - 2026-06-13 20:35:54 (+184)" [ref=e496]:
+                          - button "Untitled - 2026-06-13 20:35:41, Untitled - 2026-06-13 20:35:54 (+184)" [ref=e498] [cursor=pointer]
+                        - cell "2026-06-13 13:34:41" [ref=e499]:
+                          - button "2026-06-13 13:34:41" [ref=e501] [cursor=pointer]
+                      - row "c8af10df-f6b5-49ec-893a-cf7a405bdfb4 3M_2023Q2_10Q.pdf 5MB 86K PDFThumbnailReader Untitled - 2026-06-13 20:35:38, Untitled - 2026-06-13 20:35:51 (+89) 2026-06-13 13:34:41" [ref=e502]:
+                        - cell "c8af10df-f6b5-49ec-893a-cf7a405bdfb4" [ref=e503]:
+                          - button "c8af10df-f6b5-49ec-893a-cf7a405bdfb4" [ref=e505] [cursor=pointer]
+                        - cell "3M_2023Q2_10Q.pdf" [ref=e506]:
+                          - button "3M_2023Q2_10Q.pdf" [ref=e508] [cursor=pointer]
+                        - cell "5MB" [ref=e509]:
+                          - button "5MB" [ref=e511] [cursor=pointer]
+                        - cell "86K" [ref=e512]:
+                          - button "86K" [ref=e514] [cursor=pointer]
+                        - cell "PDFThumbnailReader" [ref=e515]:
+                          - button "PDFThumbnailReader" [ref=e517] [cursor=pointer]
+                        - cell "Untitled - 2026-06-13 20:35:38, Untitled - 2026-06-13 20:35:51 (+89)" [ref=e518]:
+                          - button "Untitled - 2026-06-13 20:35:38, Untitled - 2026-06-13 20:35:51 (+89)" [ref=e520] [cursor=pointer]
+                        - cell "2026-06-13 13:34:41" [ref=e521]:
+                          - button "2026-06-13 13:34:41" [ref=e523] [cursor=pointer]
+                    - rowgroup
+              - paragraph [ref=e530]: "Selected file: (please select above)"
+              - button "Advance options ▼" [ref=e532] [cursor=pointer]:
+                - generic [ref=e533]: Advance options
+                - generic [ref=e534]: ▼
+  - generic [ref=e37]:
+    - generic [ref=e38]:
+      - strong [ref=e39]: "Model:"
+      - text: local-qwen3-8b
+    - generic [ref=e40]:
+      - strong [ref=e41]: "Embedding:"
+      - text: local-bge-m3
+    - generic [ref=e42]:
+      - strong [ref=e43]: "Indices:"
+      - text: "1"
+    - generic [ref=e44]:
+      - strong [ref=e45]: "Version:"
+      - text: 0.0.18
+    - generic [ref=e46]: Config loaded

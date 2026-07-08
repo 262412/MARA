@@ -9,7 +9,7 @@ from typing import Any, Protocol, cast, runtime_checkable
 from kotaemon.base import RetrievedDocument
 
 from . import controller_fields as cf
-from .benchmark_prompts import runtime_prompt_for
+from .docqa_controller_context import controller_request_context
 from .docqa_evidence_projection import (
     evidence_element_ids,
     evidence_pages,
@@ -285,6 +285,21 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 selected_ids.append(file_id)
         return selected_ids
 
+    def prepare_examples(self, bundle: Any, examples: list[Any]) -> None:
+        documents: list[BenchmarkDocument] = []
+        seen_document_ids: set[str] = set()
+        for example in examples:
+            for document_id in example.document_ids or [example.document_id]:
+                if document_id in seen_document_ids:
+                    continue
+                document = bundle.documents.get(document_id)
+                if document is None:
+                    continue
+                seen_document_ids.add(document_id)
+                documents.append(document)
+        if documents:
+            self._index_documents(documents)
+
     def _docqa_request_kwargs(
         self,
         *,
@@ -295,8 +310,8 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
     ) -> dict[str, Any]:
         config = self._benchmark_config()
         return {
-            "prompt": runtime_prompt_for(
-                example, config, dataset_name=config.suite_name
+            **controller_request_context(
+                example, config, lambda key: config_value(self.config, key, None)
             ),
             "selected_file_ids": selected_file_ids,
             "page_image_records": page_image_records_from_documents(documents),
@@ -329,9 +344,6 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 self.config,
                 "visual_generator_backend",
                 None,
-            ),
-            **cf.controller_config_kwargs(
-                lambda key: config_value(self.config, key, None)
             ),
             "origin": "benchmark",
         }

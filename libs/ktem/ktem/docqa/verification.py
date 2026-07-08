@@ -73,11 +73,12 @@ def verify_decision(
     unsupported = [
         claim
         for claim in claims
-        if not claim_supported(
+        if _claim_unsupported_after_calibration(
             claim,
             evidence_bundle.items,
             prompt=prompt,
             domain=domain,
+            mode=mode,
         )
     ]
     if unsupported:
@@ -164,6 +165,72 @@ def claim_supported(
     if len(overlap) >= min(2, len(claim_tokens)):
         return True
     return _source_summary_supports_claim(prompt, overlap, evidence_tokens)
+
+
+def _claim_unsupported_after_calibration(
+    claim: str,
+    evidence_items: list[dict[str, Any]],
+    *,
+    prompt: str,
+    domain: str,
+    mode: str,
+) -> bool:
+    if claim_supported(claim, evidence_items, prompt=prompt, domain=domain):
+        return False
+    return _unsupported_confidence(
+        claim,
+        evidence_items,
+        prompt=prompt,
+        domain=domain,
+        mode=mode,
+    ) >= _unsupported_threshold(mode=mode, domain=domain)
+
+
+def _unsupported_threshold(*, mode: str, domain: str) -> float:
+    if domain == "finance":
+        return 0.9
+    if mode == "strict":
+        return 0.75
+    return 0.85
+
+
+def _unsupported_confidence(
+    claim: str,
+    evidence_items: list[dict[str, Any]],
+    *,
+    prompt: str,
+    domain: str,
+    mode: str,
+) -> float:
+    domain_supported = domain_claim_supported(
+        domain,
+        claim,
+        evidence_items,
+        prompt=prompt,
+    )
+    if domain_supported is False:
+        return 1.0
+    if _claim_contradicts_evidence(claim, evidence_items):
+        return 0.95
+    claim_tokens = meaningful_tokens(claim)
+    evidence_tokens = meaningful_tokens(evidence_text(evidence_items))
+    if (
+        _is_source_summary_prompt(prompt)
+        and claim_tokens
+        and not (claim_tokens & evidence_tokens)
+    ):
+        return 0.85
+    if (
+        mode == "strict"
+        and domain != "finance"
+        and _direction_markers(claim)
+        and _direction_markers(evidence_text(evidence_items))
+        and not (claim_tokens & evidence_tokens)
+    ):
+        return 0.78
+    if not evidence_tokens and claim_tokens:
+        return 0.8
+    return 0.55
 
 
 def _short_evidence_supports_claim(

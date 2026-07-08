@@ -1,6 +1,6 @@
 # Thesis Claim Boundaries
 
-Last updated: 2026-07-03.
+Last updated: 2026-07-07.
 
 This document is the claim-boundary source for dissertation text,
 proposal-facing reports, and demo narrative. Historical benchmark artifacts and
@@ -75,10 +75,13 @@ written as official benchmark, leaderboard, or paper-grade external scores:
 
 Current benchmark-cycle note:
 
-- The 2026-07-02 final thesis benchmark is local-adapted only. The ALCE proxy
-  evaluator from the clean rerun proves plumbing but is not paper-grade.
+- The 2026-07-05 fullsystem postfix synthesis and 2026-07-07 RAGTruth repair
+  freeze the final thesis claim boundary. The benchmark package is
+  local-adapted only. The ALCE proxy evaluator proves plumbing but is not
+  paper-grade.
 - The final synthesis closes a local-adapted thesis evidence package, not an
-  official leaderboard or external-evaluator package.
+  official leaderboard, external-evaluator, or global route-superiority
+  package.
 - SlideVQA is the primary local-adapted multimodal thesis dataset: job
   `9559018`, 25 examples, four-route multimodal matrix, and zero prediction
   errors.
@@ -89,8 +92,18 @@ Current benchmark-cycle note:
   `9559020` validate page-image and hybrid execution with GPU-ColVision / 8k
   VLM settings, with text baseline diagnostic job `9559021`, but do not
   establish matched full-route superiority.
-- FinanceBench, QASPER, ALCE, and RAGTruth are supporting 10-smoke diagnostics
-  in this clean rerun, not main headline thesis datasets.
+- FinanceBench, QASPER, ALCE, and RAGTruth are supporting diagnostics unless
+  promoted by larger matched reruns, not main headline thesis datasets.
+- RAGTruth long-prompt execution failures are a completed prompt-policy repair
+  claim: the original 11 execution errors were caused by Qwen 4k prompt-budget
+  overflow from long `gold_answer_v1` source prompts, and the fix was validated
+  on the five affected examples with direct and lexical local-Qwen reruns
+  producing 5/5 `NO_ERROR` each. This supports a prompt-budget robustness
+  claim, not a route-quality improvement claim.
+- The original DocQA all-route RAGTruth repair manifest remains residual
+  backend evidence because the 8002 retrieval endpoint rate-limited during the
+  rerun. Do not describe that route matrix as fully repaired or quality
+  validated.
 - ViDoRe current rows are retrieval diagnostics only, not full answer-generation
   QA claims.
 - Element RAG has nonzero but sparse MMDocRAG coverage evidence, so it may be
@@ -115,6 +128,8 @@ These must not be written as completed current-system claims:
 - Production ColPali / ColQwen benchmark claim.
 - Broad stable large-sample VLM performance beyond the clean local-adapted
   SlideVQA/MMDocRAG evidence package.
+- Original DocQA all-route RAGTruth repair quality claim until the 8002
+  retrieval backend is stable and the route-matrix repair rerun completes.
 - Element RAG stable answer-quality improvement on real non-gold OCR/layout
   corpus.
 - Calibrated verifier thresholds and paper-grade attribution/hallucination

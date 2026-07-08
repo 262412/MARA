@@ -43,30 +43,53 @@ MARA has a complete thesis-prototype engineering skeleton: local Web/CLI DocQA
 runtime, typed request/response contracts, route-aware controller semantics,
 evidence and verification traces, benchmark protocol engineering, multimodal
 workflow plumbing, UI/structure debt control, and paper-grade evaluator
-readiness hooks. The 2026-07-02 final thesis benchmark required rows have now
-completed and been synthesized: SlideVQA is the primary local-adapted
-multimodal dataset, MMDocRAG is secondary visual stability evidence, and
-headline score authority remains local dataset-native / adapted metrics only.
-Remaining work is limited to out-of-scope or residual research evidence:
-paper-grade external evaluator configuration, larger text/core promotion if
-needed, Element RAG quality, calibrated guardrail/attribution evaluation, and
-full production-style format robustness.
+readiness hooks. The 2026-07-05 fullsystem postfix benchmark and 2026-07-07
+RAGTruth prompt-budget repair evidence freeze the final claim boundary:
+SlideVQA remains the primary local-adapted multimodal dataset, MMDocRAG remains
+secondary visual stability evidence, RAGTruth long-prompt execution failures
+are fixed at prompt-policy level and validated on the affected examples through
+local Qwen direct/lexical repair reruns, and headline score authority remains
+local dataset-native / adapted metrics only. Remaining work is limited to
+out-of-scope or residual research evidence: paper-grade external evaluator
+configuration, larger text/core promotion if needed, Element RAG quality,
+calibrated guardrail/attribution evaluation, original DocQA RAGTruth route
+matrix rerun once the 8002 retrieval backend is stable, and full
+production-style format robustness.
 
 ## Current Final Benchmark Status
 
-As of 2026-07-03, the final thesis benchmark root is
-`/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_20260702`.
-It is an execution artifact, not a replacement for this canonical status
+As of 2026-07-07, the current final thesis evidence roots are:
+
+- Fullsystem postfix benchmark:
+  `/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_statistical_20260705_fullsystem_postfix`.
+- Earlier required-row synthesis:
+  `/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_20260702`.
+- RAGTruth prompt-budget repair:
+  `/mnt/scratch/users/tbczhang/outputs/MARA/ragtruth_prompt_budget_repair_20260707`.
+
+These are execution artifacts, not replacements for this canonical status
 directory.
 
-The final required Slurm jobs completed on A100 node `gpu06` with
-`COMPLETED 0:0`. The final synthesis artifacts are in `09_synthesis/`,
-especially `final_benchmark_synthesis_report.md`,
-`final_main_result_table.csv`,
-`final_secondary_visual_stability_table.csv`,
-`final_failure_latency_backend_table.csv`, and
-`final_controller_route_decision_summary.md`,
-`final_required_benchmark_closeout_report.md`.
+The 2026-07-05 fullsystem postfix synthesis supersedes earlier intermediate
+benchmark notes for current claim-boundary decisions. It closed the required
+route-timeout issue for MMDocRAG and left only RAGTruth residual execution
+errors: 3 `controller_auto`, 3 `crag_guarded`, and 5 `text_rag` errors. Those
+11 errors were traced to the Qwen 4k prompt budget: long RAGTruth
+`gold_answer_v1` source prompts bypassed benchmark prompt truncation and hit
+the model maximum-context guard before generation.
+
+The 2026-07-07 repair added benchmark prompt-budget truncation for long
+question/retrieval-query fields and validated the fix on the five affected
+RAGTruth examples with local Qwen generation:
+
+- Direct prompt-budget repair: 5 predictions, 5 `NO_ERROR`, no maximum-context
+  failures.
+- Lexical text repair with retrieved evidence: 5 predictions, 5 `NO_ERROR`,
+  three retrieved hits per example, no maximum-context failures.
+- The original DocQA all-route repair manifest remains a backend-evidence gap,
+  because the 8002 retrieval endpoint produced repeated rate-limit failures
+  during the rerun. This is not the original 4096-token context failure and
+  must not be reported as route-quality evidence.
 
 The final local-adapted benchmark decision is:
 
@@ -77,8 +100,8 @@ The final local-adapted benchmark decision is:
   `mmdocrag_dev15_available_docs_multimodal`, jobs `9559019` and `9559020`,
   with GPU-ColVision / 8k VLM settings, plus text baseline diagnostic job
   `9559021`.
-- Text/core datasets remain supporting 10-smoke diagnostics from the clean
-  rerun, not main thesis headline datasets.
+- Text/core datasets, including FinanceBench, QASPER, ALCE, and RAGTruth,
+  remain supporting diagnostics unless promoted by larger matched reruns.
 - Evaluator authority remains `local_adapted_only_scope`; the ALCE proxy run
   is evaluator plumbing only and is not paper-grade.
 - The `controller_auto` headline row must be interpreted together with

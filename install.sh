@@ -35,25 +35,25 @@ if [[ -f "$SCRIPT_DIR/libs/ktem/pyproject.toml" && -f "$SCRIPT_DIR/libs/kotaemon
     "$VENV_PYTHON" -m pip install "$SCRIPT_DIR/libs/slide_cli"
   fi
 else
-  "$VENV_PYTHON" -m pip install kotaemon-app
+  "$VENV_PYTHON" -m pip install "mara-app[mara]"
 fi
 
 if [[ "$SKIP_INIT" != "1" ]]; then
-  if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
+  if [[ -x "$VENV_MARA" ]]; then
     "$VENV_MARA" app init
   else
     "$VENV_KOTAEMON" app init
   fi
 fi
 
-if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
+if [[ -x "$VENV_MARA" ]]; then
   "$VENV_MARA" app doctor
 else
   "$VENV_KOTAEMON" app doctor
 fi
 
 if [[ "$INSTALL_CODEX" == "1" ]]; then
-  if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
+  if [[ -x "$VENV_MARA" ]]; then
     "$VENV_MARA" platform install --platform codex --mode full --yes
   else
     "$VENV_KOTAEMON" platform install --platform codex --mode full --yes
@@ -61,7 +61,7 @@ if [[ "$INSTALL_CODEX" == "1" ]]; then
 fi
 
 if [[ "$INSTALL_CLAUDE_CODE" == "1" ]]; then
-  if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
+  if [[ -x "$VENV_MARA" ]]; then
     "$VENV_MARA" platform install --platform claude-code --mode full --yes
   else
     "$VENV_KOTAEMON" platform install --platform claude-code --mode full --yes
@@ -69,7 +69,7 @@ if [[ "$INSTALL_CLAUDE_CODE" == "1" ]]; then
 fi
 
 echo
-if [[ -f "$SCRIPT_DIR/libs/slide_cli/pyproject.toml" ]]; then
+if [[ -x "$VENV_MARA" ]]; then
   echo "MARA is ready."
   echo "Run '$VENV_MARA app run' to launch the Web UI."
   echo "Run '$VENV_MARA docqa doctor' to validate the shared DocQA runtime."

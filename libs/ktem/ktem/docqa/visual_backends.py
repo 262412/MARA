@@ -140,7 +140,7 @@ class QwenVLVisualGenerator:
             model=self.model,
             messages=[{"role": "user", "content": content}],
             temperature=0,
-            max_tokens=self.max_output_tokens,
+            max_tokens=_effective_max_output_tokens(request, self.max_output_tokens),
         )
         return str(response.choices[0].message.content or "").strip()
 
@@ -411,25 +411,52 @@ def _visual_prompt(
     prompt = str(getattr(request, "prompt", "") or "").strip()
     evidence = []
     for item in items[:4]:
+        evidence_id = str(item.get("evidence_id") or "").strip()
         page = str(item.get("page_label") or item.get("page_number") or "").strip()
         source = str(item.get("file_name") or item.get("source_name") or "").strip()
         text = _truncate_text(
-            str(item.get("text") or item.get("ocr_text") or "").strip(),
+            str(
+                item.get("ocr_text") or item.get("text") or item.get("vlm_text") or ""
+            ).strip(),
             max_text_chars,
         )
         label = " ".join(
             part for part in [source, f"page {page}" if page else ""] if part
         )
+        if evidence_id:
+            label = f"{label} evidence_id={evidence_id}".strip()
         if text:
             evidence.append(f"- {label}: {text}" if label else f"- {text}")
         elif label:
             evidence.append(f"- {label}")
     evidence_text = "\n".join(evidence) if evidence else "- No text evidence provided."
+    if _is_benchmark_gold_answer_request(request, prompt):
+        return (
+            "Answer the benchmark visual QA request using the page image and OCR "
+            "evidence. Preserve the benchmark gold-answer contract below. Return "
+            "only the shortest answer span. Do not return JSON, markdown, "
+            "references, explanations, or surrounding prose.\n\n"
+            f"{prompt}\n\nEvidence:\n{evidence_text}"
+        )
     return (
         "Answer the user's question using the provided page image evidence. "
         "If the image evidence is insufficient, say so.\n\n"
         f"Question: {prompt}\n\nEvidence:\n{evidence_text}"
     )
+
+
+def _is_benchmark_gold_answer_request(request: Any, prompt: str) -> bool:
+    return (
+        str(getattr(request, "origin", "") or "").strip() == "benchmark"
+        or "Benchmark gold-answer contract:" in prompt
+    )
+
+
+def _effective_max_output_tokens(request: Any, configured: int) -> int:
+    prompt = str(getattr(request, "prompt", "") or "")
+    if _is_benchmark_gold_answer_request(request, prompt):
+        return min(configured, 48)
+    return configured
 
 
 def _truncate_text(text: str, limit: int) -> str:

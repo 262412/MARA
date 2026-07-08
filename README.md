@@ -194,7 +194,9 @@ For TestPyPI validation, use:
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mara-research-cli
 ```
 
-After startup, open the local URL printed by Gradio, usually `http://localhost:7860/`.
+After startup, open the local URL printed by Gradio. The local default is
+`http://localhost:7860/`; override it with `MARA app run --port ...`,
+`GRADIO_SERVER_PORT`, or platform `PORT` when deploying.
 
 Useful health checks:
 
@@ -717,7 +719,9 @@ MARA app run
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mara-research-cli
 ```
 
-启动后访问 Gradio 输出的本地地址，默认通常是 `http://localhost:7860/`。
+启动后访问 Gradio 输出的本地地址。本地默认是
+`http://localhost:7860/`；部署或调试时可通过 `MARA app run --port ...`、
+`GRADIO_SERVER_PORT` 或平台提供的 `PORT` 覆盖。
 
 常用健康检查：
 

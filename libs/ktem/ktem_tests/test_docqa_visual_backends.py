@@ -313,6 +313,69 @@ def test_local_qwen3_vl_generator_budgets_output_and_evidence_text(monkeypatch):
     assert "[truncated]" in prompt_text
 
 
+def test_local_qwen3_vl_generator_uses_answer_only_benchmark_contract(
+    monkeypatch,
+):
+    captured = {}
+
+    class _Message:
+        content = "Market size"
+
+    class _Choice:
+        message = _Message()
+
+    class _Completions:
+        @staticmethod
+        def create(**kwargs):
+            captured.update(kwargs)
+            return type("Response", (), {"choices": [_Choice()]})()
+
+    class _Client:
+        chat = type("Chat", (), {"completions": _Completions()})()
+
+    monkeypatch.setattr(QwenVLVisualGenerator, "_client", lambda _self: _Client())
+    generator = QwenVLVisualGenerator()
+    request = type(
+        "Request",
+        (),
+        {
+            "prompt": (
+                "Benchmark gold-answer contract:\n"
+                "Use the provided evidence only. Return only the gold-answer value.\n"
+                "Question: What label is shown?"
+            ),
+            "origin": "benchmark",
+        },
+    )()
+    bundle = type(
+        "Bundle",
+        (),
+        {
+            "items": [
+                {
+                    "evidence_id": "page-image:deck:3",
+                    "modality": "page_image",
+                    "file_name": "deck.pdf",
+                    "page_label": "3",
+                    "ocr_text": "The visible label is Market size.",
+                    "page_image_path": "data:image/png;base64,first",
+                }
+            ]
+        },
+    )()
+
+    assert generator.generate(request, bundle) == "Market size"
+
+    prompt_text = captured["messages"][0]["content"][0]["text"]
+    assert "Benchmark gold-answer contract:" in prompt_text
+    assert "Return only the shortest answer span" in prompt_text
+    assert "Do not return JSON" in prompt_text
+    assert "citations" not in prompt_text.lower()
+    assert "evidence_id=page-image:deck:3" in prompt_text
+    assert "The visible label is Market size." in prompt_text
+    assert captured["max_tokens"] == 48
+
+
 def test_visual_backend_health_reports_local_qwen3_vl_generator(monkeypatch):
     monkeypatch.setenv("MARA_VLM_BASE_URL", "http://localhost:8001/v1")
     monkeypatch.setattr(

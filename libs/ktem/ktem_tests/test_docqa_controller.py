@@ -430,11 +430,16 @@ def test_execute_controller_turn_switches_route_after_poor_retrieval():
     assert result.controller_decision.legacy_route == "hybrid"
     assert result.retrieve_decision.status == "good"
     assert result.answer == "Revenue increased in 2026."
-    assert result.controller_trace[0] == {
+    assert {
+        "route_switch_candidates": [],
+        "route_switch_used": False,
+    } | result.controller_trace[0] == {
         "stage": "route_switch",
         "from_route": "doc_text",
         "to_route": "hybrid",
         "reason": "No retrieved evidence was captured for this turn.",
+        "route_switch_candidates": ["hybrid"],
+        "route_switch_used": True,
     }
 
 

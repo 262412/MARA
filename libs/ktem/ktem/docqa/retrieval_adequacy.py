@@ -8,6 +8,7 @@ def retrieval_adequacy_issue(
     evidence_metadata: dict[str, Any],
     *,
     domain: str | None = None,
+    require_page_scoped: bool = True,
 ) -> str:
     if not _finance_domain_enabled(domain):
         return ""
@@ -20,13 +21,14 @@ def retrieval_adequacy_issue(
         for label, aliases in requirements
         if not any(alias in evidence_text for alias in aliases)
     ]
-    if missing:
+    if require_page_scoped and not _has_page_scoped_evidence(evidence_metadata):
+        return "Retrieved evidence lacks page-scoped financial statement support."
+    present_count = len(requirements) - len(missing)
+    if missing and present_count <= 0:
         return (
             "Retrieved evidence lacks financial statement fields needed for "
             f"generation: {', '.join(missing)}."
         )
-    if not _has_page_scoped_evidence(evidence_metadata):
-        return "Retrieved evidence lacks page-scoped financial statement support."
     return ""
 
 

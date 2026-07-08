@@ -1,0 +1,43 @@
+\documentclass[11pt]{article}
+
+% Anonymous review version.
+\usepackage[review]{acl}
+
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\IfFileExists{inconsolata.sty}{\usepackage{inconsolata}}{}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{tikz}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{}
+\usetikzlibrary{arrows.meta,positioning,fit}
+
+\Urlmuskip=0mu plus 2mu\relax
+\setlist[itemize]{leftmargin=*,itemsep=1pt,topsep=2pt}
+\setlist[enumerate]{leftmargin=*,itemsep=1pt,topsep=2pt}
+\newcounter{algorithm}
+\newif\ifmaraanonymous
+\maraanonymoustrue
+
+\title{MARA: A Local-First Multimodal Document QA Workbench with Self-RAG-Inspired Routing}
+
+\author{Anonymous Submission}
+
+\begin{document}
+\maketitle
+
+\input{paper_body}
+
+\bibliography{references}
+
+\appendix
+\input{appendix}
+
+\end{document}

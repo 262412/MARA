@@ -47,7 +47,7 @@ IF ERRORLEVEL 1 GOTO :end
 CALL :activate_environment
 IF ERRORLEVEL 1 GOTO :end
 
-CALL :print_highlight "Installing Kotaemon"
+CALL :print_highlight "Installing MARA"
 CALL :install_dependencies
 IF ERRORLEVEL 1 GOTO :end
 
@@ -212,11 +212,11 @@ IF %ERRORLEVEL% == 0  (
 
         python -m pip install --no-deps -e .
     ) ELSE (
-        ECHO Installing Kotaemon %app_version%
+        ECHO Installing MARA %app_version%
         @REM Work around for versioning control
-        python -m pip install git+https://github.com/Cinnamon/kotaemon.git@"%app_version%"#subdirectory=libs/kotaemon
-        python -m pip install git+https://github.com/Cinnamon/kotaemon.git@"%app_version%"#subdirectory=libs/ktem
-        python -m pip install --no-deps git+https://github.com/Cinnamon/kotaemon.git@"%app_version%"
+        python -m pip install git+https://github.com/262412/MARA.git@"%app_version%"#subdirectory=libs/kotaemon
+        python -m pip install git+https://github.com/262412/MARA.git@"%app_version%"#subdirectory=libs/ktem
+        python -m pip install --no-deps git+https://github.com/262412/MARA.git@"%app_version%"
     )
 
     ( CALL pip list | findstr /C:"kotaemon" >NUL 2>&1 ) || (

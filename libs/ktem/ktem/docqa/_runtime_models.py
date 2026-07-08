@@ -9,6 +9,9 @@ from ._runtime_utils import _serialize_value
 @dataclass
 class DocQARequest:
     prompt: str
+    controller_question: str = ""
+    retrieval_query: str = ""
+    dataset_family: str = ""
     conversation_id: str = ""
     selected_file_ids: Optional[list[str]] = None
     selected_inputs: Optional[dict[int, Any]] = None

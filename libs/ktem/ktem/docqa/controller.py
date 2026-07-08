@@ -175,6 +175,7 @@ def build_controller_outputs(
         evidence_bundle.metadata,
         prompt=str(getattr(request, "prompt", "") or ""),
         verification_domain=getattr(request, "verification_domain", None),
+        origin=getattr(request, "origin", None),
     )
     verify_decision = _verify_decision(
         request,
@@ -258,6 +259,7 @@ def evaluate_retrieval_quality(
     *,
     prompt: str = "",
     verification_domain: str | None = None,
+    origin: str | None = None,
 ) -> RetrieveDecision:
     if route == "direct":
         return RetrieveDecision(
@@ -275,6 +277,10 @@ def evaluate_retrieval_quality(
             prompt,
             evidence_metadata,
             domain=verification_domain,
+            require_page_scoped=not _finance_benchmark_origin(
+                verification_domain,
+                origin,
+            ),
         )
         if adequacy_issue:
             return RetrieveDecision(
@@ -298,6 +304,17 @@ def evaluate_retrieval_quality(
         reason="No retrieved evidence was captured for this turn.",
         retry=not attempted_retry,
     )
+
+
+def _finance_benchmark_origin(
+    verification_domain: str | None,
+    origin: str | None,
+) -> bool:
+    domain = str(verification_domain or "").strip().lower()
+    return str(origin or "").strip().lower() == "benchmark" and domain in {
+        "finance",
+        "financial",
+    }
 
 
 def _route_decision(
