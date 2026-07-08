@@ -77,23 +77,12 @@ The Web UI is built as a workbench rather than a chat-only interface, following 
 
 The UI walkthrough is a complete QA loop. A user opens a local app, indexes a public benchmark document, selects the source, asks a question, and receives a routed answer. The right-hand answer panel shows the selected route and verification status. The evidence panel shows retrieved text, page, or visual records with source identifiers. Citation metadata makes the answer inspectable rather than a plain chat response. Figure~\ref{fig:ui} shows a live capture from the local app on a public ALCE-ASQA-style example.
 
-\begin{figure}[t]
+\begin{figure*}[t]
 \centering
-\IfFileExists{figures/mara-ui-qa.png}{%
-  \includegraphics[width=\linewidth]{figures/mara-ui-qa.png}%
-}{%
-\IfFileExists{docs/demo_paper/figures/mara-ui-qa.png}{%
-  \includegraphics[width=\linewidth]{docs/demo_paper/figures/mara-ui-qa.png}%
-}{%
-  \fbox{\begin{minipage}[c][1.25in][c]{0.92\linewidth}
-  \centering
-  \small Live MARA UI screenshot to be captured from a public benchmark QA example.
-  \end{minipage}}%
-}%
-}
+\includegraphics[width=\textwidth]{figures/mara-ui-qa.png}
 \caption{Live MARA UI screenshot for the demo: source selection, question, routed answer, citations, evidence preview, and controller trace in one QA workflow.}
 \label{fig:ui}
-\end{figure}
+\end{figure*}
 
 The CLI walkthrough supports the same scenario without a browser:
 \begin{quote}\small
