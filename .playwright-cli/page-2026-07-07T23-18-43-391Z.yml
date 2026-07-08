@@ -1,0 +1,230 @@
+- generic [ref=e7]:
+  - generic [ref=e8]:
+    - tablist [ref=e9]:
+      - generic [ref=e11]: MARA
+      - tab "chat" [selected] [ref=e1376] [cursor=pointer]
+      - tab "files" [ref=e1377] [cursor=pointer]
+      - tab "resources" [ref=e59] [cursor=pointer]
+      - tab "help" [ref=e60] [cursor=pointer]
+      - tab "settings" [ref=e61] [cursor=pointer]
+      - generic [ref=e13]:
+        - 'button "Dataset: Current Corpus" [ref=e14] [cursor=pointer]':
+          - text: "Dataset:"
+          - strong [ref=e15]: Current Corpus
+        - button "Search files" [ref=e16] [cursor=pointer]:
+          - img [ref=e17]
+        - button "Resources" [ref=e19] [cursor=pointer]:
+          - img [ref=e20]
+        - button "Settings" [ref=e22] [cursor=pointer]:
+          - generic [ref=e23]: AD
+        - button "Switch to dark mode" [ref=e24] [cursor=pointer]:
+          - img [ref=e25]
+    - tabpanel [ref=e62]:
+      - generic [ref=e64]:
+        - generic [ref=e65]:
+          - generic [ref=e69]:
+            - heading "Corpus" [level=2] [ref=e70]
+            - button "+ Add" [ref=e71] [cursor=pointer]
+          - generic:
+            - generic:
+              - generic:
+                - generic: Textbox
+                - textbox "Textbox":
+                  - /placeholder: Paste URLs
+          - generic [ref=e72]:
+            - generic [ref=e74]:
+              - generic [ref=e75]: Search files
+              - textbox "Search files" [ref=e76]:
+                - /placeholder: Search files...
+                - text: alce_0.txt
+            - paragraph [ref=e6667]: "Focus: alce_0.txt"
+            - generic [ref=e6669]:
+              - generic [ref=e6670]:
+                - strong [ref=e6671]: Documents
+                - generic [ref=e6672]: "1"
+              - button "DOC alce_0.txt 1 page - 1.6 KB Indexed" [ref=e6674] [cursor=pointer]:
+                - generic [ref=e6675]: DOC
+                - generic [ref=e6676]:
+                  - generic [ref=e6677]: alce_0.txt
+                  - generic [ref=e6678]: 1 page - 1.6 KB
+                - generic [ref=e6679]: Indexed
+            - generic [ref=e6658]:
+              - generic [ref=e6659]:
+                - strong [ref=e6660]: 1 file
+                - generic [ref=e6661]: 1 page
+              - generic [ref=e6662]:
+                - strong [ref=e6663]: 1.6 KB
+                - generic [ref=e6664]: stored
+        - generic [ref=e98]:
+          - generic [ref=e99]:
+            - generic [ref=e6680]:
+              - generic [ref=e6681]: DOC
+              - generic [ref=e6682]:
+                - strong [ref=e6683]: alce_0.txt
+                - generic [ref=e6684]: 1 page - 1.6 KB
+              - generic [ref=e6685]: Indexed
+            - button "1 No context provided No context provided The first player to reach 100 international goals was Italian Elisabetta Vignotto. Abby Wambach scored 100 goals in 9 years, while Christine Sinclair reached the milestone in just under 10 years while Mia Hamm is the you Page 1" [ref=e6687] [cursor=pointer]:
+              - generic [ref=e6688]: "1"
+              - generic [ref=e6689]: No context provided No context provided The first player to reach 100 international goals was Italian Elisabetta Vignotto. Abby Wambach scored 100 goals in 9 years, while Christine Sinclair reached the milestone in just under 10 years while Mia Hamm is the you
+              - strong [ref=e6690]: Page 1
+          - generic [ref=e108]:
+            - generic [ref=e112]:
+              - generic [ref=e113]:
+                - button "Zoom out" [ref=e114] [cursor=pointer]: "-"
+                - strong [ref=e115]: 100%
+                - button "Zoom in" [ref=e116] [cursor=pointer]: +
+              - generic [ref=e117]:
+                - button "Download preview" [ref=e118] [cursor=pointer]:
+                  - img [ref=e119]
+                - button "More reader options" [ref=e121] [cursor=pointer]: ...
+            - iframe [ref=e6691]:
+              - generic [ref=f3e2]: No context provided No context provided The first player to reach 100 international goals was Italian Elisabetta Vignotto. Abby Wambach scored 100 goals in 9 years, while Christine Sinclair reached the milestone in just under 10 years while Mia Hamm is the youngest player to score 100 international goals at the age of 26 years 185 days. Most played exclusively in the forward position, with Kristine Lilly and Michelle Akers having also played as midfielder. All players scored at a high average rate of more than one goal every three matches. International goals in this list should not include goals scored in penalty-shoot-out; see Penalty shootout (association football). Players who are currently active at international level are indicated in bold type background. Ali Dael has the highest goals in men's world international football with 109 goals. Josef Bican has the highest goals all-time in men's football and Christine Sinclair has the highest goals in women's world international football. The players with the highest all-time goals and highest men's and women's international football goals differ. The player with the highest all-time men's football goals is Josef Bican, who in 2020 was recognized by FIFA, the international governing body of football, as the record scorer with an estimated 805 goals. Christine Sinclair has the highest goals in women's international football with 187 and is the all-time leader for international goals scored for men or women. Cristiano Ronaldo and Ali Daei are currently tied for leading goalscorer in the history of men's international football with 109.
+            - generic [ref=e133]:
+              - button "◀ Prev" [ref=e134] [cursor=pointer]
+              - generic [ref=e136]:
+                - generic [ref=e137]: Number
+                - spinbutton "Number" [ref=e138]: "1"
+              - button "Next ▶" [ref=e139] [cursor=pointer]
+            - generic [ref=e6693]:
+              - generic [ref=e6694]:
+                - generic [ref=e6695]: Modality
+                - strong [ref=e6696]: Documents
+              - generic [ref=e6697]:
+                - generic [ref=e6698]: Page
+                - strong [ref=e6699]: 1 / 1
+              - generic [ref=e6700]:
+                - generic [ref=e6701]: Page Summary
+                - strong [ref=e6702]: Previewing alce_0.txt
+              - generic [ref=e6703]:
+                - generic [ref=e6704]: Extracted Text
+                - strong [ref=e6705]: Available
+              - generic [ref=e6706]:
+                - generic [ref=e6707]: OCR
+                - strong [ref=e6708]: Not needed
+              - generic [ref=e6709]:
+                - generic [ref=e6710]: Language
+                - strong [ref=e6711]: en
+            - button "Research Controls ▼" [ref=e163] [cursor=pointer]:
+              - generic [ref=e164]: Research Controls
+              - generic [ref=e165]: ▼
+        - generic [ref=e166]:
+          - generic [ref=e167]:
+            - generic [ref=e168]:
+              - group [ref=e169]:
+                - generic [ref=e170]: Radio
+                - generic [ref=e171]:
+                  - generic [ref=e172] [cursor=pointer]:
+                    - radio "Page" [ref=e173]
+                    - generic [ref=e174]: Page
+                  - generic [ref=e175] [cursor=pointer]:
+                    - radio "Document" [checked] [active] [ref=e176]
+                    - generic [ref=e177]: Document
+                  - generic [ref=e178] [cursor=pointer]:
+                    - radio "Multi-doc" [ref=e179]
+                    - generic [ref=e180]: Multi-doc
+              - generic [ref=e182]:
+                - generic [ref=e183]: MultimodalTextbox
+                - generic [ref=e184]:
+                  - textbox "Ask a question about the selected page" [ref=e185]
+                  - button "Icon button" [ref=e186] [cursor=pointer]:
+                    - img [ref=e187]
+            - generic [ref=e193]: Answer
+            - generic [ref=e6713]: Ask a question about the current page to generate an answer.
+            - generic [ref=e198]:
+              - strong [ref=e199]: Citations
+              - paragraph [ref=e200]: No cited evidence returned yet.
+            - generic [ref=e204]:
+              - generic [ref=e205]:
+                - strong [ref=e206]: Studio Artifacts
+                - generic [ref=e207]: Waiting
+              - generic [ref=e208]:
+                - strong [ref=e209]: Quick Generate
+                - text: Study GuideQuizFlashcardsMind Map
+              - generic [ref=e210]:
+                - strong [ref=e211]: Reports
+                - text: Briefing DocFAQTimeline
+              - generic [ref=e212]:
+                - strong [ref=e213]: Visual / Export
+                - text: Data TableInfographicSlide OutlineSlide Deck
+              - generic [ref=e214]:
+                - strong [ref=e215]: Media
+                - text: Audio OverviewVideo Overview
+            - generic [ref=e219]:
+              - generic [ref=e220]:
+                - strong [ref=e221]: Research Notebook
+                - generic [ref=e222]: MARA
+              - generic [ref=e223]:
+                - generic [ref=e224]:
+                  - strong [ref=e225]: Sources
+                  - generic [ref=e226]: No selection
+                - generic [ref=e227]: Source Guide
+                - paragraph [ref=e228]: Waiting
+              - generic [ref=e229]:
+                - generic [ref=e230]:
+                  - strong [ref=e231]: Notes
+                  - generic [ref=e232]: No notes
+                - generic [ref=e233]: Saved Answers
+                - paragraph [ref=e234]: Waiting
+              - generic [ref=e235]:
+                - generic [ref=e236]:
+                  - strong [ref=e237]: Artifacts
+                  - generic [ref=e238]: No artifacts
+                - generic [ref=e239]: Studio
+                - paragraph [ref=e240]: Waiting
+            - generic [ref=e241]:
+              - generic [ref=e245]:
+                - strong [ref=e246]: Studio
+                - generic [ref=e247]: Select an artifact type to configure generation.
+              - generic [ref=e248]:
+                - generic [ref=e249]:
+                  - button "Study Guide Guided notes >" [ref=e250] [cursor=pointer]
+                  - button "Quiz Custom assessment >" [ref=e251] [cursor=pointer]
+                - generic [ref=e252]:
+                  - button "Flashcards Study cards >" [ref=e253] [cursor=pointer]
+                  - button "Mind Map Concept map >" [ref=e254] [cursor=pointer]
+                - generic [ref=e255]:
+                  - button "Slide Outline Presentation draft >" [ref=e256] [cursor=pointer]
+                  - button "Briefing Doc Executive report >" [ref=e257] [cursor=pointer]
+                - generic [ref=e258]:
+                  - button "FAQ Question set >" [ref=e259] [cursor=pointer]
+                  - button "Timeline Chronology >" [ref=e260] [cursor=pointer]
+                - generic [ref=e261]:
+                  - button "Data Table Structured table >" [ref=e262] [cursor=pointer]
+                  - button "Infographic Visual summary >" [ref=e263] [cursor=pointer]
+                - generic [ref=e264]:
+                  - button "Slide Deck Deck plan >" [ref=e265] [cursor=pointer]
+                  - button "Audio Overview Narrated source overview >" [ref=e266] [cursor=pointer]
+                - button "Video Overview Scripted video outline >" [ref=e268] [cursor=pointer]
+            - button "Studio Notes ▼" [ref=e270] [cursor=pointer]:
+              - generic [ref=e271]: Studio Notes
+              - generic [ref=e272]: ▼
+            - generic [ref=e273]:
+              - button "Save Latest Answer as Note" [ref=e274] [cursor=pointer]
+              - button "Save Latest Artifact as Note" [ref=e275] [cursor=pointer]
+            - button "Delete Latest Artifact" [ref=e277] [cursor=pointer]
+            - generic [ref=e278]:
+              - generic [ref=e280]:
+                - generic [ref=e281]: Export
+                - generic [ref=e284]:
+                  - listbox "Export" [ref=e285]: md
+                  - generic:
+                    - img
+              - button "Export Latest Artifact" [ref=e286] [cursor=pointer]
+            - button "Regenerate Latest Artifact" [ref=e287] [cursor=pointer]
+          - button "Conversation ▼" [ref=e289] [cursor=pointer]:
+            - generic [ref=e290]: Conversation
+            - generic [ref=e291]: ▼
+  - generic [ref=e37]:
+    - generic [ref=e38]:
+      - strong [ref=e39]: "Model:"
+      - text: local-qwen3-8b
+    - generic [ref=e40]:
+      - strong [ref=e41]: "Embedding:"
+      - text: local-bge-m3
+    - generic [ref=e42]:
+      - strong [ref=e43]: "Indices:"
+      - text: "1"
+    - generic [ref=e44]:
+      - strong [ref=e45]: "Version:"
+      - text: 0.0.18
+    - generic [ref=e46]: Config loaded

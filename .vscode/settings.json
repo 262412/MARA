@@ -1,0 +1,32 @@
+{
+    "latex-workshop.latex.recipes": [
+        {
+            "name": "pdflatex+bibtex via texlive module",
+            "tools": [
+                "mara-texlive-pdflatex",
+                "mara-texlive-bibtex",
+                "mara-texlive-pdflatex",
+                "mara-texlive-pdflatex"
+            ]
+        }
+    ],
+    "latex-workshop.latex.tools": [
+        {
+            "name": "mara-texlive-pdflatex",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "module load texlive/2023 && cd \"%DIR%\" && export APPTAINER_BINDPATH=/mnt,/opt/apps && apptainer exec \"$LATEX_SIF\" pdflatex -synctex=1 -interaction=nonstopmode -file-line-error \"%DOCFILE%\""
+            ]
+        },
+        {
+            "name": "mara-texlive-bibtex",
+            "command": "bash",
+            "args": [
+                "-lc",
+                "module load texlive/2023 && cd \"%DIR%\" && export APPTAINER_BINDPATH=/mnt,/opt/apps && TEXFILE=\"%DOCFILE%\" && apptainer exec \"$LATEX_SIF\" bibtex \"${TEXFILE%.tex}\""
+            ]
+        }
+    ],
+    "latex-workshop.latex.recipe.default": "pdflatex+bibtex via texlive module"
+}

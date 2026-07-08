@@ -1,0 +1,204 @@
+\begin{abstract}
+MARA is a local-first workbench for document question answering over mixed technical and academic collections. It extends a basic local QA framework, inherited from Kotaemon, with a route-aware controller, shared Web and CLI workflows, multimodal evidence routes, citation and trace observability, and a benchmark harness for route-level diagnosis. The main technical feature is a Self-RAG-inspired controller implemented as explicit program decisions rather than as a trained reflection-token model. Given a question and selected sources, the controller probes available text, visual, element, and graph evidence; estimates route quality and cost; selects among text RAG, page-image/VLM, hybrid, guarded retrieval, graph, direct, and abstention behaviours; and returns answer, citation, evidence, and verification traces. A full-system benchmark over 41 completed artifact sets and 3,540 prediction records shows that MARA's controller behaviour is measurable across text-heavy, citation-grounded, and multimodal QA settings. The paper presents the system, demo workflows, controller design, benchmark results, and the engineering limitations that remain before broader deployment.
+\end{abstract}
+
+\section{Introduction}
+
+Document question answering systems are useful only when users can see why an answer was produced. A single fixed retrieval-augmented generation (RAG) path can answer many text-heavy questions, but practical document work involves tables, slide images, page layouts, cross-document summaries, incomplete evidence, and cases where the safest output is to abstain. These cases are common in academic and technical collections: a user may ask for a numerical value in a report, an evidence-backed answer in a paper, or a visual detail on a slide. In each case, the system should choose an appropriate route, expose the evidence it used, and avoid unsupported claims.
+
+MARA, short for Multimodal Agentic Retrieval and Answering, is a local-first multimodal document QA workbench built for this setting. It is not a new foundation model. Instead, it is a demonstrable system that extends a Kotaemon-style local QA baseline \citep{kotaemon}. The inherited baseline already supports file upload, model configuration, and a standard document QA flow. MARA focuses on the controller-centred extension: route-aware retrieval and answering, evidence checking, citation and trace observability, multimodal routes, shared Web/CLI workflows, and benchmark-backed evaluation of these behaviours.
+
+The distinguishing idea is a Self-RAG-inspired controller. Self-RAG treats retrieval and critique as explicit decisions \citep{asai2023selfrag}; MARA adapts this idea at the system level. Rather than training a model with reflection tokens, MARA records ordinary program decisions: whether to retrieve, which route to use, whether evidence is adequate, whether a higher-cost route is justified, whether to switch routes, and whether to abstain. This design keeps the project feasible for a local MSc prototype while preserving the core research question: can route-aware control make a document QA workbench more transparent and reliable than a fixed RAG pipeline?
+
+The demo target is a system paper rather than a leaderboard paper. The user-facing workflow shows a corpus, a page/evidence preview, a QA panel, citations, controller trace, and verification metadata. The non-UI workflow exposes the same runtime through the \texttt{MARA docqa} CLI. Optional Codex and Claude Code skill wrappers install documented command families for external coding assistants, but the system boundary remains the local MARA runtime. The benchmark workflow evaluates route behaviour from manifests, predictions, route metrics, and synthesis reports.
+
+This paper makes three contributions:
+\begin{itemize}
+    \item A local-first multimodal document QA workbench exposing the same QA workflow through Web UI, local CLI, and optional agent-platform wrappers.
+    \item A traceable Self-RAG-inspired controller that selects among text, visual, hybrid, CRAG-guarded, and abstention behaviours using route probes, evidence checks, cost-aware scoring, and verification traces.
+    \item A benchmark-backed demonstration using a full-system benchmark to compare routes across QASPER, ALCE-ASQA, and MMDocRAG, with additional routes and datasets analysed diagnostically.
+\end{itemize}
+
+\section{Related Work}
+
+RAG systems retrieve external evidence before generation and are a standard pattern for knowledge-intensive QA \citep{lewis2020rag,karpukhin2020dpr,gao2023rag}. Their weakness is that retrieval is often treated as a fixed step. MARA instead treats route choice, evidence adequacy, and abstention as observable controller decisions.
+
+Self-RAG motivates this design by learning when to retrieve and when to critique retrieved evidence \citep{asai2023selfrag}. MARA does not reproduce Self-RAG training. It uses the decision structure as a system-level controller. Adaptive RAG systems similarly motivate route selection by question type and difficulty \citep{jeong2024adaptiverag}. Corrective RAG (CRAG) highlights the need to judge retrieval quality before generation \citep{yan2024crag}; MARA includes guarded retrieval and verification states that can retry, switch, or abstain.
+
+Multimodal document QA adds further route pressure. Page-image retrieval methods such as ColPali preserve layout and visual details that OCR chunks can lose \citep{faysse2024colpali}. MMDocRAG benchmarks retrieval-augmented multimodal generation for document QA and exposes text/visual trade-offs \citep{dong2025mmdocrag}. GraphRAG methods are useful for global summarisation and cross-document questions \citep{edge2024graphrag}, while datasets such as QASPER, ALCE, RAGTruth, and SlideVQA expose long-document evidence, citations, hallucination risk, and visual QA \citep{dasigi2021qasper,gao2023alce,niu2024ragtruth,tanaka2023slidevqa}.
+
+MARA sits between these lines of work. It is a local workbench with practical UI and CLI affordances, but its main research-facing object is the controller trace: route, evidence, verification, cost, and abstention decisions that can be inspected by a user and measured by a benchmark harness.
+
+\section{System Overview}
+
+MARA has three user surfaces and one shared runtime. The Web UI provides the primary demo: users add documents, select sources, ask questions, inspect answers, and see evidence and route traces. The CLI supports non-UI workflows such as indexing, file inspection, one-shot QA, chat, sessions, sources, notes, and artifacts. Optional platform skills wrap those documented commands for Codex and Claude Code environments. All three surfaces call the same DocQA runtime rather than maintaining separate behaviours.
+
+The implementation boundary is deliberately conservative. Kotaemon provides the basic local QA substrate: document upload, model and embedding configuration, indexing, and a conventional document QA path. MARA keeps this substrate, but adds a controller layer and a benchmark layer around it. The controller layer builds route decisions, workflow plans, evidence bundles, retrieval adequacy decisions, verification decisions, guardrail payloads, and controller traces. The benchmark layer converts public or local datasets into route manifests and evaluates the same runtime used by the UI and CLI. This separation is important for the paper claim: MARA does not claim novelty for ordinary file upload or model configuration, but for the route-aware extension and its observability.
+
+The Web UI is built as a workbench rather than a chat-only interface, following the practical affordances of Gradio-style local applications \citep{gradio}. The target first screen for the demo exposes source management, a page or evidence viewer, and a route-aware QA panel. The answer panel is expected to display the selected route, citations, verification status, and enough trace metadata for a user to understand whether the system used text, visual, hybrid, graph, or abstention behaviour. Local-first execution also supports a clearer security story: the system can run with local files and local or explicitly configured model endpoints, reducing hidden data movement and making backend metadata visible, which is aligned with LLM application risk guidance \citep{owaspLLM}.
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    box/.style={draw, align=center, minimum height=8mm, text width=27mm},
+    wide/.style={draw, align=center, minimum height=9mm, text width=45mm},
+    route/.style={draw, align=center, minimum height=8mm, text width=25mm},
+    arrow/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box] (web) {Web UI\\upload, chat, evidence};
+\node[box, right=7mm of web] (cli) {Local CLI\\\texttt{MARA docqa}};
+\node[box, right=7mm of cli] (agents) {Agent wrappers\\Codex / Claude Code};
+\node[wide, below=8mm of cli] (runtime) {Shared DocQA runtime\\requests, sessions, selected sources};
+\node[wide, below=8mm of runtime] (controller) {Self-RAG-inspired controller\\route probes, quality/cost scoring, guardrails};
+\node[route, below left=8mm and -3mm of controller] (text) {Text RAG};
+\node[route, right=4mm of text] (visual) {Page-image / VLM};
+\node[route, right=4mm of visual] (hybrid) {Hybrid / CRAG};
+\node[route, right=4mm of hybrid] (graph) {Graph / element};
+\node[wide, below=9mm of hybrid] (outputs) {Answer, citations, evidence bundle, route trace, verifier status};
+\node[wide, right=9mm of controller] (bench) {Benchmark harness\\manifests, route metrics, synthesis tables};
+\draw[arrow] (web) -- (runtime);
+\draw[arrow] (cli) -- (runtime);
+\draw[arrow] (agents) -- (runtime);
+\draw[arrow] (runtime) -- (controller);
+\draw[arrow] (controller) -- (text);
+\draw[arrow] (controller) -- (visual);
+\draw[arrow] (controller) -- (hybrid);
+\draw[arrow] (controller) -- (graph);
+\draw[arrow] (text) -- (outputs);
+\draw[arrow] (visual) -- (outputs);
+\draw[arrow] (hybrid) -- (outputs);
+\draw[arrow] (graph) -- (outputs);
+\draw[arrow] (controller) -- (bench);
+\draw[arrow] (bench.east) -- ++(7mm,0) |- (outputs.east);
+\end{tikzpicture}
+\caption{MARA system architecture. User surfaces share one DocQA runtime. The controller probes evidence routes, selects an execution path, and returns answer, citations, evidence, trace, and verifier metadata.}
+\label{fig:architecture}
+\end{figure*}
+
+The UI walkthrough is a complete QA loop. A user opens a local app, indexes a public benchmark document, selects the source, asks a question, and receives a routed answer. The right-hand answer panel shows the selected route and verification status. The evidence panel shows retrieved text, page, or visual records with source identifiers. Citation metadata makes the answer inspectable rather than a plain chat response. Figure~\ref{fig:ui} shows a live capture from the local app on a public ALCE-ASQA-style example.
+
+\begin{figure}[t]
+\centering
+\IfFileExists{figures/mara-ui-qa.png}{%
+  \includegraphics[width=\linewidth]{figures/mara-ui-qa.png}%
+}{%
+\IfFileExists{docs/demo_paper/figures/mara-ui-qa.png}{%
+  \includegraphics[width=\linewidth]{docs/demo_paper/figures/mara-ui-qa.png}%
+}{%
+  \fbox{\begin{minipage}[c][1.25in][c]{0.92\linewidth}
+  \centering
+  \small Live MARA UI screenshot to be captured from a public benchmark QA example.
+  \end{minipage}}%
+}%
+}
+\caption{Live MARA UI screenshot for the demo: source selection, question, routed answer, citations, evidence preview, and controller trace in one QA workflow.}
+\label{fig:ui}
+\end{figure}
+
+The CLI walkthrough supports the same scenario without a browser:
+\begin{quote}\small
+\texttt{MARA docqa index ./docs/report.pdf}\\
+\texttt{MARA docqa files}\\
+\texttt{MARA docqa ask --file report.pdf --reasoning mara --prompt "..."}
+\end{quote}
+The benchmark walkthrough starts from route manifests and produces prediction records, route metrics, and synthesis tables. This is important for a demo paper: route-aware behaviour is not only visible in the UI, but also reproducible through artifacts.
+
+The intended demonstration has three short scenarios. First, a UI scenario indexes a public benchmark document and asks a question whose answer requires source-grounded evidence. The demo highlights document selection, answer generation, citations, and the route trace. Second, a CLI scenario repeats a similar workflow without launching the browser, showing that \texttt{MARA docqa} is not a separate implementation but a reproducible surface over the same runtime. Third, a benchmark scenario opens the full-system synthesis tables and connects the UI-visible route trace to aggregate route metrics. The Codex and Claude Code wrappers are shown only as optional platform integrations, with details left to the appendix.
+
+\section{Self-RAG-Inspired Routing Controller}
+
+The controller exposes seven legacy route families: \texttt{direct}, \texttt{doc\_text}, \texttt{doc\_page\_image}, \texttt{doc\_element}, \texttt{graph\_global}, \texttt{hybrid}, and \texttt{abstain}. Benchmark-facing route ids include \texttt{direct\_answer}, \texttt{text\_rag}, \texttt{controller\_auto}, \texttt{crag\_guarded}, \texttt{hybrid\_rag}, \texttt{page\_image\_rag\_vlm}, \texttt{element\_rag}, graph variants, and visual retrieval diagnostics. The top-five routes used for the main paper narrative are \texttt{controller\_auto}, \texttt{text\_rag}, \texttt{crag\_guarded}, \texttt{hybrid\_rag}, and \texttt{page\_image\_rag\_vlm}.
+
+The current implementation is a structured controller, not a trained router. It uses a heuristic local planner by default, optional structured planner hooks, and adaptive route scoring. For \texttt{controller\_auto}, the runtime can build route probes for text, visual, element, and graph evidence. Each probe records evidence count, top score, locator quality, top pages/sources, OCR/text availability, and backend health. The scorer converts these into expected route quality and expected route cost. A cost gate can skip routes that are expensive and unlikely to improve the answer, while still preserving the decision trace.
+
+The route policy follows the task and evidence context. Text evidence is the default for ordinary document QA. Visual intent terms, visual modalities, or page-image availability can move the plan toward page-image routes when the backend is healthy. Structured calculation or table-like questions can justify hybrid evidence so that text, page-image, and element records can recover source values. Summary, comparison, and study-guide tasks can select graph context when the question is global rather than page-specific. For MMDocRAG-style workloads, the scorer protects confident text routes from unnecessary visual cost unless the question or probe indicates that visual evidence is likely to help.
+
+The trace is part of the interface contract. A controller decision records the selected route, legacy route, policy, controller mode, reason, initial route, final route, planner route, scored route, route selection policy, route scores, route confidences, expected quality, expected cost, skipped expensive routes, cost-gate decision, route probe, and route-switch candidates when available. The user does not need every field in the main UI, but the fields are available to the benchmark harness and to debugging workflows. This is why the paper treats the controller as a measurable system component rather than an implementation detail hidden behind a chat response.
+
+Route switching and abstention are explicit safety mechanisms. If a planned route fails retrieval adequacy or verification, MARA can record a route switch recovery and return the final route along with initial route, planner route, scored route, route confidences, skipped expensive routes, and override reason. When evidence is poor, the guardrail decision can abstain rather than fabricate. This makes abstention a measurable controller behaviour rather than an invisible generation failure.
+
+\begin{figure}[t]
+\refstepcounter{algorithm}\label{alg:controller}
+\fbox{\begin{minipage}{0.94\linewidth}
+\small
+\textbf{Algorithm \thealgorithm: MARA route selection}\\[1mm]
+\begin{tabbing}
+\quad\=\quad\=\quad\=\kill
+\textbf{Input:} question $q$, selected sources $S$, route policy $p$\\
+\textbf{Output:} answer, citations, evidence bundle, route trace\\
+features $\leftarrow$ inspect task type, scope, modalities, backends\\
+\textbf{if} $p$ fixes a route \textbf{then}\\
+\> candidates $\leftarrow$ \{requested route\}\\
+\textbf{else}\\
+\> probes $\leftarrow$ probe text, visual, element, and graph evidence\\
+\> quality $\leftarrow$ estimate expected route quality from probes\\
+\> cost $\leftarrow$ estimate expected route cost and backend health\\
+\> candidates $\leftarrow$ apply cost gate to remove low-benefit routes\\
+\textbf{end if}\\
+route $\leftarrow$ select highest-scoring allowed candidate\\
+evidence $\leftarrow$ retrieve and normalise route evidence\\
+verify $\leftarrow$ check retrieval adequacy and answer support\\
+\textbf{if} verify fails \textbf{then}\\
+\> \textbf{if} recovery route is available \textbf{then}\\
+\>\> switch route and retry retrieval once\\
+\> \textbf{else}\\
+\>\> abstain with evidence status and reason\\
+\> \textbf{end if}\\
+\textbf{end if}\\
+\textbf{return} answer, citations, evidence, route decision, verifier state
+\end{tabbing}
+\end{minipage}}
+\caption{Controller algorithm used in the system description. The implementation records the intermediate route and verification fields so both UI and benchmark artifacts can inspect them.}
+\end{figure}
+
+This design follows Self-RAG's spirit while staying system-level: retrieval, critique, and abstention are recorded as typed fields and traces. It also supports CRAG-style guarded answering by tightening verification mode for \texttt{crag\_guarded}, which increases abstention on weak evidence and exposes the corresponding false-abstention trade-off.
+
+\section{Benchmark and Demonstration Evaluation}
+
+The main quantitative evidence comes from the full-system benchmark. The synthesis loaded 41 complete artifact sets and 3,540 per-example prediction records. Required synthesis tables for main results, route decisions, failures/latency/backend metadata, paired route deltas, bootstrap confidence intervals, controller oracle regret, and win/loss/tie comparisons were generated successfully.
+
+The paper prioritises three datasets for the demo narrative. QASPER represents text-heavy scientific document QA \citep{dasigi2021qasper}. ALCE-ASQA represents citation-grounded answer generation \citep{gao2023alce}. MMDocRAG represents multimodal document QA with text, page-image, hybrid, and element routes \citep{dong2025mmdocrag}. FinanceBench, RAGTruth, SlideVQA, and ViDoRe remain useful diagnostics, but they are not the main narrative trio.
+
+The benchmark protocol is route-level. Each run specifies a dataset, shard, route request, allowed routes, backend metadata, verification mode, citation mode, and benchmark role. The harness stores per-example predictions, retrieval traces, documents, route metrics, and summaries. Metrics include exact match, token F1, local dataset-native score, citation recall, page hit, unsupported-claim rate, false-abstention rate, route-switch rate, errors, timeout counts, and latency. The benchmark separates local dataset-native and MARA diagnostic scores from paper-grade external evaluator scores, because no official external evaluator was configured for the main synthesis.
+
+The configured backends also matter for interpretation. The text routes used Qwen/Qwen3-8B as the main text generator and BAAI/bge-m3 as the text retriever in the recorded metadata. MMDocRAG visual routes used ColQwen-style visual retrieval where configured, and page-image generation used a local Qwen3-VL backend where configured. These details are not claimed as fixed product requirements; they are the backend conditions under which the reported benchmark run was produced.
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabular}{llrrrrrr}
+\toprule
+Dataset & Route & N & F1 & Native & Citation & Page hit & False abs. \\
+\midrule
+QASPER & controller\_auto & 200 & 21.43 & 21.43 & 89.65 & -- & 0.00 \\
+QASPER & text\_rag & 200 & 21.44 & 21.44 & 90.91 & -- & 1.50 \\
+QASPER & crag\_guarded & 200 & 20.06 & 20.06 & 89.65 & -- & 6.00 \\
+\midrule
+ALCE-ASQA & controller\_auto & 200 & 25.74 & 77.07 & 95.50 & -- & 0.00 \\
+ALCE-ASQA & text\_rag & 200 & 26.68 & 77.14 & 95.50 & -- & 0.00 \\
+ALCE-ASQA & crag\_guarded & 200 & 15.16 & 63.20 & 95.50 & -- & 46.00 \\
+\midrule
+MMDocRAG & controller\_auto & 120 & 34.60 & 34.60 & 67.99 & 82.50 & 0.00 \\
+MMDocRAG & text\_rag & 120 & 35.44 & 35.44 & 68.62 & 81.67 & 5.83 \\
+MMDocRAG & hybrid\_rag & 120 & 33.99 & 33.99 & 30.77 & 58.33 & 0.00 \\
+MMDocRAG & page\_image\_rag\_vlm & 120 & 16.38 & 16.38 & 48.41 & 56.67 & 0.00 \\
+\bottomrule
+\end{tabular}
+\caption{Selected main results from the full-system benchmark. Scores are reported on a 0--100 scale; false abstention is also a percentage. Citation is metadata citation recall; for QASPER and ALCE-ASQA, inline and metadata recall are equal or nearly equal in the synthesis table. Native is the local dataset-native score used by the benchmark harness.}
+\label{tab:main-results}
+\end{table*}
+
+Table~\ref{tab:main-results} supports three observations. First, the controller stays competitive with text RAG on QASPER and ALCE-ASQA, where the evidence is largely textual. The text baseline remains slightly stronger by F1 on ALCE-ASQA, so the honest claim is not that the controller dominates text RAG, but that the route-aware system maintains comparable answer quality while exposing trace and guardrail metadata. Second, CRAG-guarded mode demonstrates the cost of strict evidence checks: it reduces unsupported-claim risk in some settings but can increase false abstention, especially on ALCE-ASQA. Third, MMDocRAG shows the value of measuring multimodal route behaviour directly. Text RAG and controller-auto are the strongest quality routes, while hybrid and page-image/VLM routes expose visual and multimodal evidence paths that remain useful for diagnosis and future optimisation.
+
+Paired comparisons reinforce this cautious interpretation. On QASPER, controller-auto was essentially tied with text RAG by F1 and improved over CRAG-guarded by a mean paired delta of 1.38 points on the 0--100 scale. On ALCE-ASQA, controller-auto trailed text RAG by 0.94 points but improved over CRAG-guarded by 10.57 points. On MMDocRAG, controller-auto trailed text RAG by 0.84 points but exceeded page-image/VLM by 18.22 points and element RAG by 29.03 points. The win/loss/tie tables show that many examples are ties, which is expected for short-answer and citation-heavy tasks. The main paper therefore treats the benchmark as a diagnostic system evaluation rather than a claim of state-of-the-art accuracy.
+
+\section{Discussion, Limitations, and Conclusion}
+
+MARA's strongest current result is not a single benchmark number. It is the integration of UI, CLI, controller trace, evidence records, and route-level evaluation into one local-first system. The controller makes routing inspectable: users can see not only an answer, but also the route, evidence, citations, verifier status, skipped expensive routes, and abstention behaviour.
+
+The limitations are important. The controller is heuristic and cost-aware by default, with optional structured planner hooks; it is not a trained router. Element and graph routes are implemented as prototype or scoped routes and need stronger evidence indexes and task-specific evaluation before they should be framed as mature. Page-image/VLM support depends on configured visual retrieval and generation backends, which can be slower than text routes. The full-system benchmark did not use paper-grade external evaluators; it reports local dataset-native and MARA diagnostic metrics. A later RAGTruth prompt-budget repair was a post-hoc targeted diagnostic. It verified a repaired failure mode on a small subset, but it is not mixed into the main benchmark table because it was not run under the same full-system protocol.
+
+These constraints shape the next steps: expand full-protocol reruns only after concrete system changes, improve element and graph evidence quality, and replace heuristic routing with a trained or calibrated router only after enough controller traces are available. Even in its current form, MARA demonstrates that a local document QA workbench can make retrieval, routing, evidence, and abstention visible to both users and evaluators.
+
+For MSc delivery, the same constraints are useful rather than problematic. They define a clear prototype boundary: a usable local workbench, a controller with inspectable routes, and benchmark evidence that explains the system's behaviour. For a later submission, the strongest path is to keep the system/demo framing, include a real UI screenshot and short video, and avoid overstating results as leaderboard performance. The core claim is that MARA makes route-aware document QA demonstrable and auditable in a local workbench.

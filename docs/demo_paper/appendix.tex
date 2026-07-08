@@ -1,0 +1,54 @@
+\ifmaraanonymous
+\section{Anonymous Appendix Note}
+
+This anonymous version omits MSc-specific identity, student, and supervisor details. The technical appendix retains command families, evaluation protocol, and diagnostic notes that do not identify the author.
+\else
+\section{MSc Project Mapping}
+
+\begin{tabularx}{\linewidth}{p{0.30\linewidth}X}
+\toprule
+Requirement area & MARA coverage \\
+\midrule
+Practical implementation & Local Web UI, CLI workflows, document indexing, route-aware DocQA runtime, evidence preview, citations, and benchmark artifacts. \\
+Analytical evaluation & Full-system benchmark synthesis over 41 complete artifact sets and 3,540 prediction records, with route metrics, paired deltas, bootstrap CIs, route decisions, and diagnostics. \\
+Innovation & Controller-centred extension of a basic local QA framework using Self-RAG-inspired route decisions, evidence checks, cost gates, route switches, and abstention. \\
+Ethics & Public, synthetic, or self-provided non-sensitive documents; no human participants; local-first execution and visible backend metadata. \\
+Project context & COMP702 -- M.Sc. Project (2025/26), School of Computer Science and Informatics, University of Liverpool. \\
+\bottomrule
+\end{tabularx}
+\fi
+
+\section{Command and Skill Surface}
+
+MARA separates high-permission product commands from the specialist document-QA workflow. The paper's system claims refer to the shared runtime behind these commands, not to separate implementations.
+
+\begin{tabularx}{\linewidth}{p{0.27\linewidth}X}
+\toprule
+Surface & Examples \\
+\midrule
+App lifecycle & \texttt{MARA app init}, \texttt{MARA app doctor}, \texttt{MARA app run} \\
+DocQA indexing & \texttt{MARA docqa index ./docs/report.pdf}, \texttt{MARA docqa files}, \texttt{MARA docqa delete \textless file-id\textgreater} \\
+DocQA answering & \texttt{MARA docqa ask --file report.pdf --reasoning mara --prompt "..."}; \texttt{MARA docqa chat --file report.pdf} \\
+Sessions and sources & \texttt{MARA docqa sessions}, \texttt{MARA docqa resume \textless conversation-id\textgreater}, \texttt{MARA docqa sources select \textless conversation-id\textgreater{} --file paper.pdf} \\
+Notes and artifacts & \texttt{MARA docqa notes save-answer \textless conversation-id\textgreater}; \texttt{MARA docqa artifacts generate \textless conversation-id\textgreater{} --type quiz} \\
+Agent support assets & \texttt{MARA platform install --platform codex --mode full --yes}; \texttt{MARA platform install --platform claude-code --mode full --yes}; \texttt{MARA platform validate} \\
+\bottomrule
+\end{tabularx}
+
+Focused skill wrappers include \texttt{MARA-docqa-index}, \texttt{MARA-docqa-ask}, \texttt{MARA-docqa-chat}, \texttt{MARA-docqa-resume}, \texttt{MARA-app-run}, \texttt{MARA-model-run}, and platform installation/status skills. They provide agent-facing documentation around the same CLI surface.
+
+\section{Additional Route Interpretation}
+
+Routes outside the main top-five are still part of the implemented system.
+\texttt{direct\_answer} is a baseline and a useful non-document control.
+\texttt{element\_rag} exposes table, formula, and element metadata but showed weak MMDocRAG quality in the full-system benchmark, consistent with sparse element evidence and high false abstention.
+Graph routes are scoped routes for summaries, comparison, and global context; they are visible in controller decisions but need stronger standalone graph evaluation before being promoted to a headline route.
+\texttt{visual\_retriever\_only} is best understood as a retrieval diagnostic rather than a full QA route.
+
+\section{Post-Benchmark Diagnostic}
+
+After the full-system benchmark, a targeted RAGTruth prompt-budget rerun inspected a prompt-length failure mode. The repair was verified on a small diagnostic subset, but it was not part of the same full-system protocol. The paper therefore treats it as a resolved engineering diagnostic, not as a replacement for the main RAGTruth or route-ranking results.
+
+\section{Reproducibility Notes}
+
+The main benchmark source for this paper is the full-system synthesis. The run used local model and retrieval backends recorded in the benchmark metadata, including Qwen/Qwen3-8B for text generation, BAAI/bge-m3 for text retrieval, ColQwen for visual retrieval where configured, and local Qwen3-VL for page-image generation where configured. Paper-grade external evaluators were not configured for the main result table; results are reported as local dataset-native scores and MARA diagnostic metrics.
