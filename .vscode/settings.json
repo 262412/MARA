@@ -8,9 +8,27 @@
                 "mara-texlive-pdflatex",
                 "mara-texlive-pdflatex"
             ]
+        },
+        {
+            "name": "latexmk (local TeX Live)",
+            "tools": [
+                "mara-local-latexmk"
+            ]
         }
     ],
     "latex-workshop.latex.tools": [
+        {
+            "name": "mara-local-latexmk",
+            "command": "latexmk",
+            "args": [
+                "-synctex=1",
+                "-interaction=nonstopmode",
+                "-file-line-error",
+                "-pdf",
+                "-cd",
+                "%DOC%"
+            ]
+        },
         {
             "name": "mara-texlive-pdflatex",
             "command": "bash",
@@ -28,5 +46,5 @@
             ]
         }
     ],
-    "latex-workshop.latex.recipe.default": "pdflatex+bibtex via texlive module"
+    "latex-workshop.latex.recipe.default": "lastUsed"
 }
