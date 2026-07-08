@@ -73,7 +73,9 @@ def test_visual_route_caches_vlm_answer_by_page_and_prompt():
 
     generator = CountingVLMGenerator()
     pipeline = SimpleNamespace(vlm_generator=generator)
-    request = SimpleNamespace(prompt="What does the chart show?", verification_domain="")
+    request = SimpleNamespace(
+        prompt="What does the chart show?", verification_domain=""
+    )
     bundle = SimpleNamespace(metadata={}, items=[_visual_page_records()[0]])
     cached_bundle = SimpleNamespace(metadata={}, items=[_visual_page_records()[0]])
 

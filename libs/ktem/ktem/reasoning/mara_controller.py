@@ -232,9 +232,15 @@ def _visual_modality_decision(
     scope: str,
     allowed_routes: Any,
 ) -> dict[str, Any]:
-    route = "doc_page_image" if _route_is_allowed("doc_page_image", allowed_routes) else "hybrid"
+    route = (
+        "doc_page_image"
+        if _route_is_allowed("doc_page_image", allowed_routes)
+        else "hybrid"
+    )
     evidence_types = (
-        ["page_image"] if route == "doc_page_image" else ["text", "page_image", "element"]
+        ["page_image"]
+        if route == "doc_page_image"
+        else ["text", "page_image", "element"]
     )
     return _route_payload(
         route,
@@ -431,14 +437,14 @@ def _call_structured_planner(
     dataset_family: str,
     latency_budget: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    payload = {
+    planner_payload: dict[str, Any] = {
         "question": question,
         "understanding": dict(understanding),
         "planner_model": planner_model or "",
         "allowed_routes": list(allowed_routes or []),
     }
     try:
-        raw_decision = planner(payload)
+        raw_decision = planner(planner_payload)
     except (ImportError, RuntimeError, ValueError) as exc:
         return {
             "route": "abstain",
@@ -448,7 +454,7 @@ def _call_structured_planner(
             "verify": False,
         }
     decision = parse_planner_decision(raw_decision, allowed_routes=allowed_routes)
-    payload = {
+    payload: dict[str, Any] = {
         "route": decision.route,
         "reason": decision.reason,
         "evidence_types": _evidence_types_for_route(decision.route),
@@ -493,7 +499,11 @@ def _normalize_cost_aware_planner_decision(
     ]
     question_text = " ".join(
         str(value or "")
-        for value in (question, understanding.get("question"), understanding.get("query"))
+        for value in (
+            question,
+            understanding.get("question"),
+            understanding.get("query"),
+        )
     ).lower()
     scope = str(understanding.get("scope") or "document")
     features = _routing_features(
@@ -504,7 +514,9 @@ def _normalize_cost_aware_planner_decision(
     )
     normalized_route = ""
     latency_reason = ""
-    if features["visual_intent"] and _route_is_allowed("doc_page_image", allowed_routes):
+    if features["visual_intent"] and _route_is_allowed(
+        "doc_page_image", allowed_routes
+    ):
         normalized_route = "doc_page_image"
         latency_reason = "visual_intent_justifies_visual_route"
     elif _route_is_allowed("doc_text", allowed_routes):

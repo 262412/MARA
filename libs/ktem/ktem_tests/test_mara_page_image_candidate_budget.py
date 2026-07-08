@@ -72,3 +72,4 @@ def test_mara_page_image_route_caps_visual_scoring_candidates():
     assert "page-image:file-b:6" in retriever.scored_ids
     assert metadata["page_image_candidate_count"] == 8
     assert metadata["page_image_scored_candidate_count"] == 3
+    assert metadata["page_image_candidate_selection"] == "lightweight_text_overlap_cap"

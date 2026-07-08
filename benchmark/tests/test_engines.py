@@ -338,7 +338,9 @@ def test_docqa_runtime_engine_passes_controller_question_and_dataset_family(
             answers=["runtime answer"],
             metadata={"dataset_family": "multimodal_doc_qa"},
         ),
-        documents=[BenchmarkDocument(document_id="doc", path=doc_path, format_type="txt")],
+        documents=[
+            BenchmarkDocument(document_id="doc", path=doc_path, format_type="txt")
+        ],
     )
 
     request = fake_runtime.requests[0]

@@ -197,6 +197,7 @@ class KotaemonTextRAGEngine(BaseBenchmarkEngine):
 class DocQARuntimeEngine(BaseBenchmarkEngine):
     name = "docqa_runtime"
     _PAGE_RE = re.compile(r"(?:#page:|page[:\s]+)([\w.-]+)", flags=re.IGNORECASE)
+
     def __init__(self, config: Any) -> None:
         super().__init__(config)
         self._runtime: Any | None = None

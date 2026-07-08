@@ -302,7 +302,9 @@ def _citation_candidate_items(prediction: dict[str, Any]) -> list[dict[str, Any]
             if isinstance(item, dict)
         )
     items.extend(
-        item for item in prediction.get("retrieved_hits") or [] if isinstance(item, dict)
+        item
+        for item in prediction.get("retrieved_hits") or []
+        if isinstance(item, dict)
     )
     return items
 

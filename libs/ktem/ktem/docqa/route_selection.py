@@ -154,7 +154,9 @@ def _route_selection_metadata(
             or selected_route
         ),
         "final_route": selected_route,
-        "planner_route": str(payload.get("planner_route") or payload.get("route") or ""),
+        "planner_route": str(
+            payload.get("planner_route") or payload.get("route") or ""
+        ),
         "scored_route": str(payload.get("scored_route") or selected_route),
         "route_selection_policy": route_selection_policy,
         "routing_features": dict(payload.get("routing_features") or {}),

@@ -473,7 +473,7 @@ def test_mara_page_image_route_builds_local_index_from_selected_files(monkeypatc
     monkeypatch.setattr(
         route_retrieval,
         "build_local_page_image_records",
-        lambda records, page_numbers=None: _visual_page_records(),
+        lambda records, page_numbers=None, max_pages=None: _visual_page_records(),
     )
     pipeline = MaraAgentPipeline(retrievers=[])
     pipeline.route_policy = "visual"

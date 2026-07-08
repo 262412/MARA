@@ -117,7 +117,11 @@ def controller_oracle_regret_rows(
     rows: list[dict[str, Any]] = []
     for (dataset, example_id), items in sorted(grouped.items()):
         controller = next(
-            (item for item in items if str(item.get("route") or "") == controller_route),
+            (
+                item
+                for item in items
+                if str(item.get("route") or "") == controller_route
+            ),
             None,
         )
         fixed_routes = [

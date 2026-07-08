@@ -64,7 +64,9 @@ def _visual_generator_answer(generator: Any, request: Any, bundle: Any) -> str:
 def _ocr_first_visual_answer(request: Any, bundle: Any) -> str:
     if not _should_use_ocr_first_visual(request):
         return ""
-    question_tokens = _meaningful_question_tokens(str(getattr(request, "prompt", "") or ""))
+    question_tokens = _meaningful_question_tokens(
+        str(getattr(request, "prompt", "") or "")
+    )
     candidates = _visual_ocr_sentences(bundle)
     ranked = sorted(
         (
@@ -183,4 +185,3 @@ def _first_page_image_item(bundle: Any) -> dict[str, Any]:
         if isinstance(item, dict) and str(item.get("modality") or "") == "page_image":
             return item
     return {}
-

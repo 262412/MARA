@@ -13,8 +13,11 @@ repos:
         args: ["--unsafe"]
       - id: check-toml
       - id: end-of-file-fixer
+        exclude: "^\\.playwright-cli/"
       - id: trailing-whitespace
+        exclude: "^(\\.playwright-cli/|docs/demo_paper/acl_natbib\\.bst$)"
       - id: mixed-line-ending
+        exclude: "^\\.playwright-cli/"
       - id: detect-aws-credentials
         args: ["--allow-missing-credentials"]
       - id: detect-private-key
@@ -54,7 +57,7 @@ repos:
     hooks:
       - id: prettier
         types_or: [markdown, yaml]
-        exclude: "^README\\.md$"
+        exclude: "(^README\\.md$|^\\.playwright-cli/)"
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: "v1.7.1"
     hooks:

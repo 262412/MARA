@@ -127,6 +127,7 @@ def score_adaptive_route(
         planner_reason=planner_reason,
         latency_reason=latency_reason,
     )
+    cost_gate_decision = _cost_gate_decision(selected_route, planner_route)
     return {
         "route": selected_route,
         "reason": reason,
@@ -145,7 +146,7 @@ def score_adaptive_route(
         ),
         "latency_budget": dict(latency_budget or {}),
         "latency_budget_reason": latency_reason,
-        "cost_gate_decision": _cost_gate_decision(selected_route, planner_route=planner_route),
+        "cost_gate_decision": cost_gate_decision,
         "selected_route_reason": reason,
         "route_selection_reason": reason,
         "route_selection_policy": "cost_aware_initial",
@@ -204,9 +205,7 @@ def _bounded_score(value: Any) -> float:
     return min(score, 1.0)
 
 
-def _locator_quality(
-    records: list[dict[str, Any]], metadata: dict[str, Any]
-) -> float:
+def _locator_quality(records: list[dict[str, Any]], metadata: dict[str, Any]) -> float:
     if not records:
         return 0.0
     located = [
@@ -267,13 +266,21 @@ def _question_features(
 def _question_type(task_type: str, question_text: str, modalities: list[str]) -> str:
     if task_type in SUMMARY_TASK_TYPES:
         return task_type
-    if _has_term(question_text, ELEMENT_INTENT_TERMS) or set(modalities) & ELEMENT_MODALITIES:
+    if (
+        _has_term(question_text, ELEMENT_INTENT_TERMS)
+        or set(modalities) & ELEMENT_MODALITIES
+    ):
         return "table_lookup"
-    if _has_term(question_text, VISUAL_INTENT_TERMS) or set(modalities) & VISUAL_MODALITIES:
+    if (
+        _has_term(question_text, VISUAL_INTENT_TERMS)
+        or set(modalities) & VISUAL_MODALITIES
+    ):
         return "visual_lookup"
     if _has_term(question_text, CALCULATION_TERMS):
         return "calculation"
-    if question_text.startswith(("did ", "does ", "do ", "is ", "are ", "was ", "were ")):
+    if question_text.startswith(
+        ("did ", "does ", "do ", "is ", "are ", "was ", "were ")
+    ):
         return "yes_no"
     return "qa"
 
@@ -377,7 +384,10 @@ def _route_scores(
 ) -> dict[str, float]:
     routes = set(expected_quality) | set(expected_cost)
     return {
-        route: round(max(0.0, expected_quality.get(route, 0.0) - expected_cost.get(route, 0.0)), 4)
+        route: round(
+            max(0.0, expected_quality.get(route, 0.0) - expected_cost.get(route, 0.0)),
+            4,
+        )
         for route in routes
     }
 
@@ -486,7 +496,8 @@ def _skipped_expensive_routes(
         if (
             route in {"doc_page_image", "hybrid"}
             and cost >= 0.55
-            and expected_quality.get(route, 0.0) <= expected_quality.get("doc_text", 0.0)
+            and expected_quality.get(route, 0.0)
+            <= expected_quality.get("doc_text", 0.0)
             and route not in skipped
         ):
             skipped.append(route)
@@ -501,9 +512,7 @@ def _element_coverage_ok(item: dict[str, Any]) -> bool:
     )
 
 
-def _hybrid_allowed(
-    confidences: dict[str, float], features: dict[str, Any]
-) -> bool:
+def _hybrid_allowed(confidences: dict[str, float], features: dict[str, Any]) -> bool:
     if features["graph_intent"]:
         return False
     return confidences["text"] >= 0.45 and (
@@ -547,7 +556,7 @@ def _selection_reason(
     return f"{prefix} Cost-aware scoring selected {route} ({latency_reason})."
 
 
-def _cost_gate_decision(route: str, *, planner_route: str) -> str:
+def _cost_gate_decision(route: str, planner_route: str) -> str:
     if planner_route and planner_route != route:
         return f"normalized_from_{planner_route}"
     if route == "doc_text":

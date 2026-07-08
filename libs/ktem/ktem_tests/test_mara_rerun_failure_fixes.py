@@ -3,9 +3,9 @@ from types import SimpleNamespace
 
 import ktem.reasoning.mara_controller as mara_controller
 from ktem.docqa.execution import _route_switch_candidates
-from ktem.reasoning.mara_visual_gate import hybrid_should_use_visual_generator
 from ktem.reasoning.mara import MaraAgentPipeline
 from ktem.reasoning.mara_route_probe import controller_route_probe
+from ktem.reasoning.mara_visual_gate import hybrid_should_use_visual_generator
 from ktem.reasoning.simple import FullQAPipeline
 
 from kotaemon.base import Document, RetrievedDocument
@@ -137,8 +137,7 @@ def test_mara_stream_uses_visual_initial_route_without_route_switch(monkeypatch)
     execution_payloads = [
         event.content["payload"]
         for event in events
-        if event.channel == "debug"
-        and event.content.get("mara_channel") == "execution"
+        if event.channel == "debug" and event.content.get("mara_channel") == "execution"
     ]
     assert execution_payloads
     decision = execution_payloads[0]["controller_decision"]
@@ -212,8 +211,7 @@ def test_mara_stream_uses_text_initial_route_for_text_strong_question(monkeypatc
     execution_payloads = [
         event.content["payload"]
         for event in events
-        if event.channel == "debug"
-        and event.content.get("mara_channel") == "execution"
+        if event.channel == "debug" and event.content.get("mara_channel") == "execution"
     ]
     decision = execution_payloads[0]["controller_decision"]
     assert decision["legacy_route"] == "doc_text"

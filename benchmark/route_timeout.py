@@ -19,15 +19,20 @@ def run_with_route_timeout(
 ) -> T:
     if not timeout_seconds or timeout_seconds <= 0:
         return call()
+    sigalrm = getattr(signal, "SIGALRM", None)
+    setitimer = getattr(signal, "setitimer", None)
+    itimer_real = getattr(signal, "ITIMER_REAL", None)
+    if sigalrm is None or setitimer is None or itimer_real is None:
+        return call()
 
     def _handle_timeout(_signum, _frame):
         raise RouteExecutionTimeout(float(timeout_seconds))
 
-    previous_handler = signal.getsignal(signal.SIGALRM)
-    signal.signal(signal.SIGALRM, _handle_timeout)
-    signal.setitimer(signal.ITIMER_REAL, float(timeout_seconds))
+    previous_handler = signal.getsignal(sigalrm)
+    signal.signal(sigalrm, _handle_timeout)
+    setitimer(itimer_real, float(timeout_seconds))
     try:
         return call()
     finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous_handler)
+        setitimer(itimer_real, 0)
+        signal.signal(sigalrm, previous_handler)

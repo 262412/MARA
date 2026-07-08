@@ -101,7 +101,7 @@ def _quick_ratio_answer(text: str) -> FinanceNumericAnswer | None:
         text,
         ("total current liabilities", "current liabilities"),
     )
-    if assets is None or inventories is None or liabilities in (None, 0):
+    if assets is None or inventories is None or liabilities is None or liabilities == 0:
         return None
     value = (assets - inventories) / liabilities
     return FinanceNumericAnswer(
@@ -127,7 +127,7 @@ def _ratio_answer(
 ) -> FinanceNumericAnswer | None:
     numerator = _amount_after(text, numerator_labels)
     denominator = _amount_after(text, denominator_labels)
-    if numerator is None or denominator in (None, 0):
+    if numerator is None or denominator is None or denominator == 0:
         return None
     value = numerator / float(denominator)
     return FinanceNumericAnswer(
@@ -191,7 +191,9 @@ def _difference_answer(
     )
 
 
-def _direct_value_answer(lowered_question: str, text: str) -> FinanceNumericAnswer | None:
+def _direct_value_answer(
+    lowered_question: str, text: str
+) -> FinanceNumericAnswer | None:
     candidates = [
         ("capital_expenditure", ("capital expenditures", "capital expenditure")),
         (

@@ -61,7 +61,7 @@ Documentation = "https://github.com/262412/MARA/#readme"
 Upstream = "https://github.com/Cinnamon/kotaemon/"
 
 [tool.codespell]
-skip = "*.js,*.css,*.map"
+skip = "*.js,*.css,*.map,.playwright-cli/*,docs/demo_paper/acl.sty,docs/demo_paper/acl_natbib.bst"
 # `llm` abbreviation for large language models
 ignore-words-list = "llm,fo,multline,asai"
 quiet-level = 3

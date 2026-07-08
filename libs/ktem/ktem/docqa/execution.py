@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
 import re
+from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
 from .controller import (
@@ -271,16 +271,8 @@ def _switch_after_failed_retrieval(
 def _route_switch_candidates(request: Any, current_route: str) -> list[str]:
     allowed_routes = list(getattr(request, "allowed_routes", []) or [])
     preferred_order = _cost_aware_route_switch_order(request)
-    allowed = [
-        route
-        for route in preferred_order
-        if route in allowed_routes
-    ]
-    allowed.extend(
-        route
-        for route in allowed_routes
-        if route not in allowed
-    )
+    allowed = [route for route in preferred_order if route in allowed_routes]
+    allowed.extend(route for route in allowed_routes if route not in allowed)
     return [
         route
         for route in allowed

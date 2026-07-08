@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
+
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/multimodal_route_rerun.sbatch"
@@ -10,7 +13,13 @@ RUNTIME_HELPER = PROJECT_ROOT / "scripts/slurm/benchmark_runtime_isolation.sh"
 RUNBOOK = PROJECT_ROOT / "docs/development/multimodal_route_runbook.md"
 
 
+def _require_posix_bash() -> None:
+    if os.name == "nt":
+        pytest.skip("Slurm shell validation requires a POSIX bash environment")
+
+
 def test_multimodal_slurm_script_is_parseable_and_uses_safe_storage_layout():
+    _require_posix_bash()
     result = subprocess.run(
         ["bash", "-n", str(SLURM_SCRIPT)],
         check=False,
@@ -65,6 +74,7 @@ def test_multimodal_slurm_script_health_checks_backends_and_runs_no_think_routes
 
 
 def test_benchmark_runtime_isolation_helper_assigns_per_array_task_app_data(tmp_path):
+    _require_posix_bash()
     result = subprocess.run(
         [
             "bash",
@@ -104,11 +114,15 @@ def test_multimodal_slurm_script_requires_isolated_benchmark_runtime():
     assert text.index("mara_bootstrap_benchmark_runtime") < text.index(
         "configure_mara_local_models.py"
     )
-    assert 'KH_APP_DATA_DIR="${KH_APP_DATA_DIR:-/users/tbczhang/fastscratch/mara_runtime/ktem_app_data}"' not in text
-    assert '${MARA_RUNTIME_DIR}/ktem_app_data' not in text
+    assert (
+        'KH_APP_DATA_DIR="${KH_APP_DATA_DIR:-/users/tbczhang/fastscratch/mara_runtime/ktem_app_data}"'
+        not in text
+    )
+    assert "${MARA_RUNTIME_DIR}/ktem_app_data" not in text
 
 
 def test_text_route_slurm_script_requires_isolated_benchmark_runtime():
+    _require_posix_bash()
     result = subprocess.run(
         ["bash", "-n", str(TEXT_SLURM_SCRIPT)],
         check=False,
@@ -126,8 +140,11 @@ def test_text_route_slurm_script_requires_isolated_benchmark_runtime():
         "configure_mara_local_models.py"
     )
     assert "--docqa-citation-mode inline" in text
-    assert 'KH_APP_DATA_DIR="${KH_APP_DATA_DIR:-/users/tbczhang/fastscratch/mara_runtime/ktem_app_data}"' not in text
-    assert '${MARA_RUNTIME_DIR}/ktem_app_data' not in text
+    assert (
+        'KH_APP_DATA_DIR="${KH_APP_DATA_DIR:-/users/tbczhang/fastscratch/mara_runtime/ktem_app_data}"'
+        not in text
+    )
+    assert "${MARA_RUNTIME_DIR}/ktem_app_data" not in text
 
 
 def test_benchmark_runtime_isolation_helper_bootstraps_empty_runtime():

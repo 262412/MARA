@@ -240,7 +240,9 @@ def _element_row_has_coverage(row: dict[str, Any]) -> bool:
         and str(item.get("page_label") or item.get("page_number") or "").strip()
     )
     has_text_or_ocr = bool(
-        str(item.get("text") or item.get("ocr_text") or item.get("caption") or "").strip()
+        str(
+            item.get("text") or item.get("ocr_text") or item.get("caption") or ""
+        ).strip()
     )
     return has_locator and has_text_or_ocr
 
@@ -450,7 +452,9 @@ def _rows_by_modality(
     return rows
 
 
-def _dict_rows_by_modality(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+def _dict_rows_by_modality(
+    rows: list[dict[str, Any]]
+) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         grouped.setdefault(str(row["group"]), []).append(row)
@@ -501,7 +505,9 @@ def _with_evidence_confidence(
     metadata = dict(scored.get("metadata") or {})
     has_locator = bool(scored.get("source_id") and scored.get("page_label"))
     has_text_or_ocr = bool(
-        str(scored.get("text") or scored.get("ocr_text") or scored.get("vlm_text") or "").strip()
+        str(
+            scored.get("text") or scored.get("ocr_text") or scored.get("vlm_text") or ""
+        ).strip()
     )
     locator_confidence = 1.0 if has_locator else 0.5 if scored.get("source_id") else 0.0
     metadata["evidence_confidence"] = {

@@ -16,7 +16,9 @@ VISUAL_GENERATION_TERMS = (
 )
 
 
-def hybrid_should_use_visual_generator(request: Any, decision: Any, bundle: Any) -> bool:
+def hybrid_should_use_visual_generator(
+    request: Any, decision: Any, bundle: Any
+) -> bool:
     if not _bundle_has_page_image_evidence(bundle):
         return False
     if not _bundle_has_text_evidence(bundle):

@@ -54,4 +54,3 @@ def test_finance_numeric_answer_parses_negative_parentheses_for_difference():
     assert answer is not None
     assert answer.answer == "$200.0 million"
     assert answer.inputs["prior"] == -120.0
-

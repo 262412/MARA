@@ -214,8 +214,10 @@ def _unsupported_confidence(
         return 0.95
     claim_tokens = meaningful_tokens(claim)
     evidence_tokens = meaningful_tokens(evidence_text(evidence_items))
-    if _is_source_summary_prompt(prompt) and claim_tokens and not (
-        claim_tokens & evidence_tokens
+    if (
+        _is_source_summary_prompt(prompt)
+        and claim_tokens
+        and not (claim_tokens & evidence_tokens)
     ):
         return 0.85
     if (

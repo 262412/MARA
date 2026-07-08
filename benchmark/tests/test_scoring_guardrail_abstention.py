@@ -22,9 +22,7 @@ def test_score_prediction_does_not_count_revise_as_abstention():
             "claim_verification": {},
             "verify_decision": {
                 "status": "unsupported",
-                "unsupported_claims": [
-                    "The company is not a high growth company."
-                ],
+                "unsupported_claims": ["The company is not a high growth company."],
             },
             "guardrail_decision": {
                 "status": "unsupported",

@@ -235,7 +235,9 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
     pipeline.controller_question = str(
         getattr(request, "controller_question", "") or ""
     ).strip()
-    pipeline.retrieval_query = str(getattr(request, "retrieval_query", "") or "").strip()
+    pipeline.retrieval_query = str(
+        getattr(request, "retrieval_query", "") or ""
+    ).strip()
     pipeline.dataset_family = str(getattr(request, "dataset_family", "") or "").strip()
     pipeline.task_type = request.task_type or ""
     pipeline.agent_mode = request.agent_mode or getattr(pipeline, "agent_mode", "auto")

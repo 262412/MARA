@@ -29,8 +29,7 @@ def controller_route_probe(
         )
         probe["text"] = route_probe_from_metadata("text", text_metadata)
     if _should_probe_visual_route(pipeline, understanding, probe) and (
-        _route_allowed(pipeline, "doc_page_image")
-        or _route_allowed(pipeline, "hybrid")
+        _route_allowed(pipeline, "doc_page_image") or _route_allowed(pipeline, "hybrid")
     ):
         page_metadata = route_retrieval_metadata(
             pipeline,
@@ -76,8 +75,7 @@ def controller_latency_budget(pipeline: Any) -> dict[str, Any]:
     return {
         "dataset_family": family,
         "visual_retriever_available": page_image_route_available(pipeline),
-        "vlm_generator_available": getattr(pipeline, "vlm_generator", None)
-        is not None,
+        "vlm_generator_available": getattr(pipeline, "vlm_generator", None) is not None,
         "text_protect": "mmdocrag" in family.lower(),
     }
 
@@ -125,8 +123,10 @@ def _route_allowed(pipeline: Any, route: str) -> bool:
 def _should_probe_text_route(pipeline: Any, understanding: dict[str, Any]) -> bool:
     planner = getattr(pipeline, "planner", None)
     planner_model = getattr(pipeline, "planner_model", None)
-    if callable(planner) and not planner_model and _understanding_has_visual_intent(
-        understanding
+    if (
+        callable(planner)
+        and not planner_model
+        and _understanding_has_visual_intent(understanding)
     ):
         return False
     return True

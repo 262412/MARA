@@ -324,17 +324,13 @@ def test_finalizer_canonicalizes_existing_financebench_uuid_citation():
                 "span": "The cash conversion cycle is not provided.",
             }
         ],
-        "predicted_citations": [
-            "de95827e-87fb-4151-99bb-338b2d79f22c#page:60"
-        ],
+        "predicted_citations": ["de95827e-87fb-4151-99bb-338b2d79f22c#page:60"],
         "evidence_bundle": {
             "items": [
                 {
                     "source_id": "de95827e-87fb-4151-99bb-338b2d79f22c",
                     "page_label": "60",
-                    "source_backrefs": [
-                        "de95827e-87fb-4151-99bb-338b2d79f22c#page:60"
-                    ],
+                    "source_backrefs": ["de95827e-87fb-4151-99bb-338b2d79f22c#page:60"],
                 }
             ]
         },
@@ -342,9 +338,7 @@ def test_finalizer_canonicalizes_existing_financebench_uuid_citation():
             "GENERALMILLS_2019_10K#page:60",
             "GENERALMILLS_2019_10K#page:3",
         ],
-        "gold_evidence": [
-            {"source_id": "GENERALMILLS_2019_10K", "page_label": "60"}
-        ],
+        "gold_evidence": [{"source_id": "GENERALMILLS_2019_10K", "page_label": "60"}],
     }
 
     finalize_prediction_answer(
@@ -354,8 +348,7 @@ def test_finalizer_canonicalizes_existing_financebench_uuid_citation():
     )
 
     assert prediction["answer_for_user"] == (
-        "The cash conversion cycle is not provided. "
-        "GENERALMILLS_2019_10K#page:60"
+        "The cash conversion cycle is not provided. " "GENERALMILLS_2019_10K#page:60"
     )
     assert prediction["structured_citations"][0]["source_id"] == (
         "GENERALMILLS_2019_10K"

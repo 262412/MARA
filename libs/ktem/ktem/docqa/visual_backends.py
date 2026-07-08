@@ -415,7 +415,9 @@ def _visual_prompt(
         page = str(item.get("page_label") or item.get("page_number") or "").strip()
         source = str(item.get("file_name") or item.get("source_name") or "").strip()
         text = _truncate_text(
-            str(item.get("ocr_text") or item.get("text") or item.get("vlm_text") or "").strip(),
+            str(
+                item.get("ocr_text") or item.get("text") or item.get("vlm_text") or ""
+            ).strip(),
             max_text_chars,
         )
         label = " ".join(

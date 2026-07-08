@@ -136,7 +136,7 @@ def _page_image_metadata(
         records,
         retriever=getattr(pipeline, "visual_retriever", None),
     )
-    return {
+    metadata = {
         "requested_modalities": list(understanding.get("modalities", [])),
         "modality_counts": {"page_image": len(ranked)},
         "page_coverage": _unique(item.get("page_label") for item in ranked),
@@ -249,6 +249,8 @@ def _page_image_rank_candidate_limit(pipeline: Any) -> int:
             "MARA_PAGE_IMAGE_RANK_CANDIDATE_LIMIT",
             str(DEFAULT_PAGE_IMAGE_RANK_CANDIDATE_LIMIT),
         )
+    if raw_value is None:
+        return DEFAULT_PAGE_IMAGE_RANK_CANDIDATE_LIMIT
     try:
         return int(raw_value)
     except (TypeError, ValueError):
@@ -279,8 +281,9 @@ def _record_query_overlap(record: dict[str, Any], query_tokens: set[str]) -> int
 
 def _record_has_text(record: dict[str, Any]) -> bool:
     return bool(
-        str(record.get("text") or record.get("ocr_text") or record.get("caption") or "")
-        .strip()
+        str(
+            record.get("text") or record.get("ocr_text") or record.get("caption") or ""
+        ).strip()
     )
 
 

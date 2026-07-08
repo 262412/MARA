@@ -93,9 +93,9 @@ def test_mara_planner_uses_page_image_for_visual_slide_questions():
     assert decision["route"] == "doc_page_image"
     assert decision["evidence_types"] == ["page_image"]
     assert decision["routing_features"]["visual_intent"] is True
-    assert decision["route_scores"]["doc_page_image"] > decision["route_scores"][
-        "hybrid"
-    ]
+    assert (
+        decision["route_scores"]["doc_page_image"] > decision["route_scores"]["hybrid"]
+    )
 
 
 def test_mara_planner_exposes_expected_quality_cost_and_skips_expensive_visual():

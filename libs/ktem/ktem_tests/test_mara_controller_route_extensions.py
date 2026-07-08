@@ -2,10 +2,7 @@ import json
 
 import ktem.reasoning.mara_controller as mara_controller
 import ktem.reasoning.mara_route_retrieval as route_retrieval
-from ktem.reasoning.mara import (
-    MARA_PLANNER_ABSTAIN_MESSAGE,
-    MaraAgentPipeline,
-)
+from ktem.reasoning.mara import MARA_PLANNER_ABSTAIN_MESSAGE, MaraAgentPipeline
 from ktem.reasoning.simple import FullQAPipeline
 
 from kotaemon.base import Document, RetrievedDocument
