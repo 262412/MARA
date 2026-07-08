@@ -5,8 +5,8 @@
 - Clone the repo
 
   ```shell
-  git clone git@github.com:Cinnamon/kotaemon.git
-  cd kotaemon
+  git clone git@github.com:262412/MARA.git
+  cd MARA
   ```
 
 - Install the environment
@@ -14,8 +14,8 @@
   - Create a conda environment (python >= 3.10 is recommended)
 
     ```shell
-    conda create -n kotaemon python=3.10
-    conda activate kotaemon
+    conda create -n mara python=3.10
+    conda activate mara
 
     # install dependencies
     cd libs/kotaemon

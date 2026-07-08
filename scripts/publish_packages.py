@@ -22,7 +22,7 @@ PACKAGE_ORDER = (
     PackageSpec("ktem", REPO_ROOT / "libs" / "ktem"),
     PackageSpec("kotaemon", REPO_ROOT / "libs" / "kotaemon"),
     PackageSpec("mara-research-cli", REPO_ROOT / "libs" / "slide_cli"),
-    PackageSpec("kotaemon-app", REPO_ROOT),
+    PackageSpec("mara-app", REPO_ROOT),
 )
 
 PACKAGE_BY_NAME = {package.name: package for package in PACKAGE_ORDER}
@@ -224,7 +224,7 @@ def cmd_release(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Build and publish Kotaemon Python packages in dependency order."
+        description="Build and publish MARA Python packages in dependency order."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

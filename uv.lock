@@ -12,8 +12,8 @@ resolution-markers = [
 [manifest]
 members = [
     "kotaemon",
-    "kotaemon-app",
     "ktem",
+    "mara-app",
     "mara-research-cli",
 ]
 
@@ -2859,7 +2859,7 @@ requires-dist = [
 provides-extras = ["adv", "dev", "all"]
 
 [[package]]
-name = "kotaemon-app"
+name = "mara-app"
 source = { editable = "." }
 dependencies = [
     { name = "kotaemon", extra = ["all"] },

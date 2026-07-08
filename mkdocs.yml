@@ -1,6 +1,6 @@
-repo_name: 262412/kotaemon
-repo_url: https://github.com/262412/kotaemon
-site_name: Slides Docs
+repo_name: 262412/MARA
+repo_url: https://github.com/262412/MARA
+site_name: MARA Docs
 edit_uri: edit/main/docs/
 
 nav:
@@ -29,9 +29,8 @@ nav:
       - Contributing: development/contributing.md
   # generated using gen-files + literate-nav
   - API Reference: reference/
-  - Changelogs: https://github.com/Cinnamon/kotaemon/releases
-  - Issue Tracker: https://github.com/Cinnamon/kotaemon/issues
-  - Live Demo: https://huggingface.co/spaces/cin-model/kotaemon-demo
+  - Changelogs: https://github.com/262412/MARA/releases
+  - Issue Tracker: https://github.com/262412/MARA/issues
 
 markdown_extensions:
   - admonition

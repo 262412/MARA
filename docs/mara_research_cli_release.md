@@ -45,7 +45,7 @@ Release automation publishes packages in dependency order:
 1. `ktem`
 2. `kotaemon`
 3. `mara-research-cli`
-4. `kotaemon-app`
+4. `mara-app`
 
 This order is enforced by `scripts/publish_packages.py` and used by `.github/workflows/publish-packages.yaml`.
 

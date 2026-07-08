@@ -110,11 +110,11 @@ function install_dependencies() {
 
             python -m pip install --no-deps -e .
         else
-            echo "Installing Kotaemon $app_version"
+            echo "Installing MARA $app_version"
             # Work around for versioning control
-            python -m pip install "git+https://github.com/Cinnamon/kotaemon.git@$app_version#subdirectory=libs/kotaemon"
-            python -m pip install "git+https://github.com/Cinnamon/kotaemon.git@$app_version#subdirectory=libs/ktem"
-            python -m pip install --no-deps "git+https://github.com/Cinnamon/kotaemon.git@$app_version"
+            python -m pip install "git+https://github.com/262412/MARA.git@$app_version#subdirectory=libs/kotaemon"
+            python -m pip install "git+https://github.com/262412/MARA.git@$app_version#subdirectory=libs/ktem"
+            python -m pip install --no-deps "git+https://github.com/262412/MARA.git@$app_version"
         fi
 
         if ! pip list 2>/dev/null | grep -q "kotaemon"; then

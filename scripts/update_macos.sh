@@ -35,7 +35,7 @@ function deactivate_conda_env() {
 }
 
 function update_latest() {
-    current_version=$(pip list | awk '/kotaemon-app/ {print $2}')
+    current_version=$(pip list | awk '/mara-app/ {print $2}')
     echo "Current version $current_version"
 
     if [ -f "pyproject.toml" ]; then
@@ -45,9 +45,9 @@ function update_latest() {
     else
         echo "Installing version: $app_version"
         # Work around for versioning control
-        python -m pip install "git+https://github.com/Cinnamon/kotaemon.git@$app_version#subdirectory=libs/kotaemon"
-        python -m pip install "git+https://github.com/Cinnamon/kotaemon.git@$app_version#subdirectory=libs/ktem"
-        python -m pip install --no-deps git+https://github.com/Cinnamon/kotaemon.git@$app_version
+        python -m pip install "git+https://github.com/262412/MARA.git@$app_version#subdirectory=libs/kotaemon"
+        python -m pip install "git+https://github.com/262412/MARA.git@$app_version#subdirectory=libs/ktem"
+        python -m pip install --no-deps git+https://github.com/262412/MARA.git@$app_version
         if [ $? -ne 0 ]; then
             echo
             echo "Update failed. You may need to run the update again."

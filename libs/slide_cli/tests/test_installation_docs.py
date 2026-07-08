@@ -8,6 +8,7 @@ def test_windows_installer_installs_mara_cli_from_local_implementation():
 
     assert "slide_cli" in install_script
     assert "MARA.exe" in install_script
+    assert "mara-app[mara]" in install_script
     assert "Run '$venvMARA app run' to launch the Web UI." in install_script
     assert (
         "Run '$venvMARA docqa doctor' to validate the shared DocQA runtime."
@@ -20,6 +21,7 @@ def test_posix_installer_installs_mara_cli_from_local_implementation():
 
     assert "libs/slide_cli" in install_script
     assert "/bin/MARA" in install_script
+    assert "mara-app[mara]" in install_script
     assert "Run '$VENV_MARA app run' to launch the Web UI." in install_script
     assert (
         "Run '$VENV_MARA docqa doctor' to validate the shared DocQA runtime."

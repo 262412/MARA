@@ -96,3 +96,11 @@ def test_app_run_help_lists_platform_skill(tmp_path):
 
     assert result.returncode == 0, result.stdout + "\nSTDERR:\n" + result.stderr
     assert "Platform skill: MARA-app-run" in result.stdout
+
+
+def test_source_app_uses_shared_gradio_port_resolver():
+    repo_root = Path(__file__).resolve().parents[3]
+    source = (repo_root / "app.py").read_text(encoding="utf-8")
+
+    assert "resolve_gradio_server_port()" in source
+    assert 'os.getenv("PORT", "8000")' not in source

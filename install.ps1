@@ -50,25 +50,25 @@ if ((Test-Path $localKtem) -and (Test-Path $localKotaemon)) {
         & $venvPython -m pip install (Join-Path $scriptRoot "libs\\slide_cli")
     }
 } else {
-    & $venvPython -m pip install kotaemon-app
+    & $venvPython -m pip install "mara-app[mara]"
 }
 
 if (-not $SkipInit) {
-    if (Test-Path $localSlideCli) {
+    if (Test-Path $venvMARA) {
         & $venvMARA app init
     } else {
         & $venvKotaemon app init
     }
 }
 
-if (Test-Path $localSlideCli) {
+if (Test-Path $venvMARA) {
     & $venvMARA app doctor
 } else {
     & $venvKotaemon app doctor
 }
 
 if ($InstallCodex) {
-    if (Test-Path $localSlideCli) {
+    if (Test-Path $venvMARA) {
         & $venvMARA platform install --platform codex --mode full --yes
     } else {
         & $venvKotaemon platform install --platform codex --mode full --yes
@@ -76,7 +76,7 @@ if ($InstallCodex) {
 }
 
 if ($InstallClaudeCode) {
-    if (Test-Path $localSlideCli) {
+    if (Test-Path $venvMARA) {
         & $venvMARA platform install --platform claude-code --mode full --yes
     } else {
         & $venvKotaemon platform install --platform claude-code --mode full --yes
@@ -84,7 +84,7 @@ if ($InstallClaudeCode) {
 }
 
 Write-Host ""
-if (Test-Path $localSlideCli) {
+if (Test-Path $venvMARA) {
     Write-Host "MARA is ready."
     Write-Host "Run '$venvMARA app run' to launch the Web UI."
     Write-Host "Run '$venvMARA docqa doctor' to validate the shared DocQA runtime."

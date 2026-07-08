@@ -28,8 +28,7 @@ dependencies = [
     "ktem",
 ]
 authors = [
-    { name = "@trducng", email = "john@cinnamon.is" },
-    { name = "@lone17", email = "ian@cinnamon.is" },
+    { name = "Chenghao Zhang", email = "tbczhang@liverpool.ac.uk" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -45,5 +44,7 @@ kotaemon = { workspace = true }
 ktem = { workspace = true }
 
 [project.urls]
-Homepage = "https://github.com/Cinnamon/kotaemon/"
-Repository = "https://github.com/Cinnamon/kotaemon/"
+Homepage = "https://github.com/262412/MARA/"
+Repository = "https://github.com/262412/MARA/"
+Documentation = "https://github.com/262412/MARA/#readme"
+Upstream = "https://github.com/Cinnamon/kotaemon/"

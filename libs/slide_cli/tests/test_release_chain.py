@@ -24,7 +24,7 @@ def test_publish_script_includes_mara_research_cli_in_dependency_order():
         "ktem",
         "kotaemon",
         "mara-research-cli",
-        "kotaemon-app",
+        "mara-app",
     ]
 
 
@@ -48,7 +48,7 @@ def test_release_docs_cover_direct_mara_research_cli_publish_and_install():
     assert "pip install mara-research-cli" in root_readme
     assert "testpypi" in root_readme.lower()
     assert "pip install mara-research-cli" in package_readme
-    assert "ktem -> kotaemon -> mara-research-cli -> kotaemon-app" in workflow
+    assert "ktem -> kotaemon -> mara-research-cli -> mara-app" in workflow
 
 
 def test_phase2_docs_cover_slide_docqa_mainline_boundary():
