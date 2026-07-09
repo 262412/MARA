@@ -1,10 +1,12 @@
+\section{Appendix}
+
 \ifmaraanonymous
-\section{Anonymous Appendix Note}
+\paragraph{Anonymous note.}
 
 This anonymous version omits identity, student, course, and supervisor details. The technical appendix retains command families, evaluation protocol, project mapping, and diagnostic notes that do not identify the author.
 \fi
 
-\section{MSc Project Mapping}
+\noindent\textbf{MSc project mapping.}\par\smallskip
 
 \begin{tabularx}{\linewidth}{p{0.30\linewidth}>{\raggedright\arraybackslash}X}
 \toprule
@@ -28,7 +30,7 @@ For MSc delivery, these constraints define a clear prototype boundary: a usable 
 For venue-facing versions, this mapping is supplementary project context rather than a main-paper claim. The main paper is framed as a system demo with a public release, screenshot, command surface, and route-level evaluation.
 \fi
 
-\section{Command and Skill Surface}
+\paragraph{Command and skill surface.}
 
 MARA separates high-permission product commands from the specialist document-QA workflow. The paper's system claims refer to the shared runtime and persisted state behind these commands, not to independent QA implementations. This reduces Web/CLI drift, but contract tests remain necessary because the codebase still has entrypoints across \texttt{ktem}, \texttt{kotaemon}, and \texttt{slide\_cli}.
 
@@ -47,11 +49,11 @@ MARA separates high-permission product commands from the specialist document-QA 
 Focused skill wrappers include \texttt{MARA-docqa-index}, \texttt{MARA-docqa-ask}, \texttt{MARA-docqa-chat}, \texttt{MARA-docqa-resume}, \texttt{MARA-app-run}, \texttt{MARA-model-run}, and platform installation/status skills. They provide agent-facing documentation around the same CLI surface. The local Web app default is port 7860; \texttt{MARA app run -{}-port}, \texttt{GRADIO\_SERVER\_PORT}, or platform \texttt{PORT} can override it.
 \par}
 
-\section{Kotaemon Increment Boundary}
+\paragraph{Kotaemon increment boundary.}
 
 MARA is a branded fork of Kotaemon. The inherited substrate provides upload, model configuration, indexing, and ordinary local document QA. MARA's paper contribution is the controller-centred extension: explicit route decisions, evidence and verification traces, multimodal route interfaces, DocQA CLI reuse, platform command wrappers, and route-level benchmark artifacts. Internal package names remain compatible with the fork history, but the user-facing product surface is \texttt{MARA} / \texttt{MARA-cli}.
 
-\section{Additional Route Interpretation}
+\paragraph{Additional route interpretation.}
 
 Routes outside the main top-five are still part of the implemented system.
 \texttt{direct\_answer} is a baseline and a useful non-document control.
@@ -59,11 +61,11 @@ Routes outside the main top-five are still part of the implemented system.
 Graph routes are scoped routes for summaries, comparison, and global context; they are visible in controller decisions but need stronger standalone graph evaluation before being promoted to a headline route.
 \texttt{visual\_retriever\_only} is best understood as a retrieval diagnostic rather than a full QA route.
 
-\section{Post-Benchmark Diagnostic}
+\paragraph{Post-benchmark diagnostic.}
 
 After the full-system benchmark, a targeted RAGTruth prompt-budget rerun inspected a prompt-length failure mode. The repair was verified on a small diagnostic subset, but it was not part of the same full-system protocol. The paper therefore treats it as a resolved engineering diagnostic, not as a replacement for the main RAGTruth or route-ranking results.
 
-\section{Reproducibility Notes}
+\paragraph{Reproducibility notes.}
 
 The software artifact for this paper is the public MARA release \texttt{v0.0.40}: \url{https://github.com/262412/MARA/releases/tag/v0.0.40}. The release tag identifies the application version used for the demo. Benchmark evidence is packaged separately as the companion supplementary bundle \path{mara-full-system-benchmark-synthesis-v0.0.40.zip}, rather than referenced through environment-specific runtime locations. In an external submission, that bundle accompanies the paper and contains a README, the synthesis report, aggregate result tables, route-decision summaries, failure/latency/backend summaries, paired-delta tables, bootstrap confidence intervals, controller-oracle regret diagnostics, win/loss/tie diagnostics, the Slurm submission ledger, the synthesis input manifest, per-example metric records, and the synthesis script. Exact filenames are listed in the bundle README.
 
