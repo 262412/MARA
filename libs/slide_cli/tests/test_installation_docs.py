@@ -6,9 +6,11 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 def test_windows_installer_installs_mara_cli_from_local_implementation():
     install_script = (REPO_ROOT / "install.ps1").read_text(encoding="utf-8")
 
-    assert "slide_cli" in install_script
+    assert "uv sync" in install_script
+    assert "--frozen" in install_script
+    assert "--extra mara" in install_script
     assert "MARA.exe" in install_script
-    assert "mara-app[mara]" in install_script
+    assert "pip install" not in install_script
     assert "Run '$venvMARA app run' to launch the Web UI." in install_script
     assert (
         "Run '$venvMARA docqa doctor' to validate the shared DocQA runtime."
@@ -19,9 +21,11 @@ def test_windows_installer_installs_mara_cli_from_local_implementation():
 def test_posix_installer_installs_mara_cli_from_local_implementation():
     install_script = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
 
-    assert "libs/slide_cli" in install_script
+    assert "uv sync" in install_script
+    assert "--frozen" in install_script
+    assert "--extra mara" in install_script
     assert "/bin/MARA" in install_script
-    assert "mara-app[mara]" in install_script
+    assert "pip install" not in install_script
     assert "Run '$VENV_MARA app run' to launch the Web UI." in install_script
     assert (
         "Run '$VENV_MARA docqa doctor' to validate the shared DocQA runtime."
