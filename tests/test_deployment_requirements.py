@@ -1,4 +1,7 @@
+import runpy
+import sys
 from pathlib import Path
+from types import ModuleType
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -79,18 +82,33 @@ def test_root_requirements_file_keeps_azure_app_service_build_installable():
         assert (REPO_ROOT / package_path / "pyproject.toml").exists()
 
 
-def test_source_app_binds_to_azure_app_service_port():
+def test_source_app_binds_to_azure_app_service_port(monkeypatch):
+    from ktem.app_server import resolve_gradio_server_port
+
     app_source = (REPO_ROOT / "app.py").read_text(encoding="utf-8")
 
     assert 'os.getenv("WEBSITE_SITE_NAME")' in app_source
     assert 'os.environ.setdefault("KH_APP_DATA_DIR", "/home/site/mara_data")' in (
         app_source
     )
-    assert 'os.getenv("PORT"' in app_source
-    assert 'server_name="0.0.0.0"' in app_source
-    assert "server_port=server_port" in app_source
-    assert 'os.getenv("PORT", "8000")' in app_source
-    assert "inbrowser=False" in app_source
-    assert app_source.count("inbrowser=") == 1
-    assert "MARA Azure startup" in app_source
-    assert "from ktem.launcher import ensure_gradio_temp_dir" not in app_source
+
+    captured = {}
+    fake_launcher = ModuleType("ktem.launcher")
+
+    def capture_launch(**kwargs):
+        captured.update(kwargs)
+        captured["resolved_port"] = resolve_gradio_server_port(kwargs.get("port"))
+
+    fake_launcher.launch_app = capture_launch
+    monkeypatch.setitem(sys.modules, "ktem.launcher", fake_launcher)
+    monkeypatch.setenv("WEBSITE_SITE_NAME", "mara-test")
+    monkeypatch.setenv("PORT", "8123")
+    monkeypatch.delenv("GRADIO_SERVER_NAME", raising=False)
+
+    runpy.run_path(str(REPO_ROOT / "app.py"), run_name="__mara_test_app__")
+
+    assert captured == {
+        "host": "0.0.0.0",
+        "inbrowser": False,
+        "resolved_port": 8123,
+    }

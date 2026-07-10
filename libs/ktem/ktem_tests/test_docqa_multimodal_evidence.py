@@ -117,8 +117,8 @@ def test_hybrid_route_normalizes_text_page_image_and_element_evidence():
 
     assert [item["modality"] for item in bundle.items] == [
         "text",
-        "page_image",
         "table",
+        "page_image",
     ]
     assert bundle.metadata["modality_counts"] == {
         "page_image": 1,

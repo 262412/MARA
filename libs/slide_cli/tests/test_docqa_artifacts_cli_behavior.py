@@ -2,7 +2,7 @@ from typing import Any, cast
 
 from click.testing import CliRunner
 from slide_cli.docqa_cli import docqa
-from test_docqa_notebook_cli import (
+from .test_docqa_notebook_cli import (
     _DummyNotebookService,
     _DummyRuntime,
     _extract_json_payload,
