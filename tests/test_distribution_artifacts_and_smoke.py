@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import io
 import inspect
+import io
 import subprocess
 import sys
 import tarfile
@@ -208,9 +208,7 @@ def test_offline_environment_contains_only_guard_pythonpath(tmp_path):
 
 def test_layer_imports_use_isolated_layer_venv_before_fresh_offline_phase():
     install_source = inspect.getsource(run_clean_wheel_smoke._install_wheel_layers)
-    offline_source = inspect.getsource(
-        run_clean_wheel_smoke._run_offline_runtime_smoke
-    )
+    offline_source = inspect.getsource(run_clean_wheel_smoke._run_offline_runtime_smoke)
     run_source = inspect.getsource(run_clean_wheel_smoke.run_smoke)
 
     assert "_run_layer_imports" in install_source
@@ -258,9 +256,7 @@ def test_only_locked_export_runs_from_repository_root():
     metadata_source = inspect.getsource(
         run_clean_wheel_smoke._assert_installed_distribution_paths
     )
-    offline_source = inspect.getsource(
-        run_clean_wheel_smoke._run_offline_runtime_smoke
-    )
+    offline_source = inspect.getsource(run_clean_wheel_smoke._run_offline_runtime_smoke)
 
     assert "cwd=REPO_ROOT" in export_source
     for source in (layer_source, metadata_source, offline_source):
