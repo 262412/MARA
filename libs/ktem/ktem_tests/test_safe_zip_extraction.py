@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-
 from ktem.docqa import _runtime_indexing
 from ktem.index.file.archive import (
     ArchiveExtractionError,
@@ -150,6 +149,28 @@ def test_safe_zip_rejects_corrupt_archives_with_actionable_stage(tmp_path):
     diagnostic = str(exc_info.value)
     assert f"archive={archive_path}" in diagnostic
     assert "stage=open" in diagnostic
+
+
+def test_safe_zip_removes_owned_output_after_crc_failure(tmp_path):
+    archive_path = tmp_path / "bad-crc.zip"
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("report.txt", b"unique-payload")
+    archive_path.write_bytes(
+        archive_path.read_bytes().replace(b"unique-payload", b"broken-payload", 1)
+    )
+    output_parent = tmp_path / "expanded"
+
+    with pytest.raises(ArchiveExtractionError) as exc_info:
+        extract_supported_zip_files(
+            archive_path,
+            destination_parent=output_parent,
+            supported_types={".txt"},
+        )
+
+    assert "stage=extract-member" in str(exc_info.value)
+    assert "member=report.txt" in str(exc_info.value)
+    assert output_parent.is_dir()
+    assert list(output_parent.iterdir()) == []
 
 
 def test_runtime_zip_expansion_uses_safe_shared_extractor(tmp_path, monkeypatch):

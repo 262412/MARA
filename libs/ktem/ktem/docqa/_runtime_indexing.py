@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import tempfile
-import zipfile
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional, cast
+
+from ktem.index.file.archive import extract_supported_zip_files
 
 from kotaemon.base import Document
 
@@ -121,22 +121,11 @@ def _extract_supported_zip_children(
     supported_types: set[str],
     zip_input_dir: str | Path,
 ) -> list[str]:
-    Path(zip_input_dir).mkdir(parents=True, exist_ok=True)
-    out_dir = Path(
-        tempfile.mkdtemp(
-            dir=str(zip_input_dir),
-            prefix=f"{path.stem}_",
-        )
+    return extract_supported_zip_files(
+        path,
+        destination_parent=zip_input_dir,
+        supported_types=supported_types,
     )
-    with zipfile.ZipFile(path, "r") as zip_ref:
-        zip_ref.extractall(out_dir)
-    return [
-        str(child.resolve())
-        for child in sorted(out_dir.rglob("*"))
-        if child.is_file()
-        and child.suffix.lower() in supported_types
-        and child.suffix.lower() != ".zip"
-    ]
 
 
 def _consume_indexing_stream(

@@ -1,7 +1,6 @@
 import html
 import json
 import os
-import shutil
 import tempfile
 import zipfile
 from copy import deepcopy
@@ -29,6 +28,7 @@ from ._listing import (
     format_conversation_scope,
     normalize_selected_ids_from_payload,
 )
+from .archive import ArchiveExtractionError, extract_supported_zip_files
 from .utils import download_arxiv_pdf, is_arxiv_url
 
 KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
@@ -621,35 +621,27 @@ class FileIndexPage(BasePage):
 
     def _may_extract_zip(self, files, zip_dir: str):
         """Handle zip files"""
-        zip_files = [file for file in files if file.endswith(".zip")]
-        remaining_files = [file for file in files if not file.endswith("zip")]
+        zip_files = [file for file in files if str(file).lower().endswith(".zip")]
+        remaining_files = [
+            file for file in files if not str(file).lower().endswith(".zip")
+        ]
         errors: list[str] = []
+        extracted_count = 0
 
-        # Clean-up <zip_dir> before unzip to remove old files
-        shutil.rmtree(zip_dir, ignore_errors=True)
-
-        # Unzip
         for zip_file in zip_files:
-            # Prepare new zip output dir, separated for each files
-            basename = os.path.splitext(os.path.basename(zip_file))[0]
-            zip_out_dir = os.path.join(zip_dir, basename)
-            os.makedirs(zip_out_dir, exist_ok=True)
+            try:
+                extracted = extract_supported_zip_files(
+                    zip_file,
+                    destination_parent=zip_dir,
+                    supported_types=set(self._supported_file_types),
+                )
+                remaining_files.extend(extracted)
+                extracted_count += len(extracted)
+            except ArchiveExtractionError as exc:
+                errors.append(str(exc))
 
-            with zipfile.ZipFile(zip_file, "r") as zip_ref:
-                zip_ref.extractall(zip_out_dir)
-
-        n_zip_file = 0
-        for root, dirs, files in os.walk(zip_dir):
-            for file in files:
-                ext = os.path.splitext(file)[1]
-
-                # only allow supported file-types ( not zip )
-                if ext not in [".zip"] and ext in self._supported_file_types:
-                    remaining_files += [os.path.join(root, file)]
-                    n_zip_file += 1
-
-        if n_zip_file > 0:
-            print(f"Update zip files: {n_zip_file}")
+        if extracted_count:
+            print(f"Update zip files: {extracted_count}")
 
         return remaining_files, errors
 
@@ -973,9 +965,11 @@ class FileIndexPage(BasePage):
                     file_id_to_name.get(file_id, "-") for file_id in item["files"]
                 ]
                 item["files"] = ", ".join(
-                    f"'{it[:MAX_FILENAME_LENGTH]}..'"
-                    if len(it) > MAX_FILENAME_LENGTH
-                    else f"'{it}'"
+                    (
+                        f"'{it[:MAX_FILENAME_LENGTH]}..'"
+                        if len(it) > MAX_FILENAME_LENGTH
+                        else f"'{it}'"
+                    )
                     for it in file_names
                 )
                 item_count = len(file_names)
