@@ -10,7 +10,7 @@ from ktem.utils.render import Render
 
 HOSTILE_HTML = (
     '<img src="x" onerror="window.__maraRenderXss += 1">'
-    '<script>window.__maraRenderXss += 10</script>'
+    "<script>window.__maraRenderXss += 10</script>"
     '<a href="javascript:window.__maraRenderXss += 100">script URL</a>'
     '<a href="data:text/html,<script>window.__maraRenderXss += 1000</script>">'
     "data URL</a></summary></details>"

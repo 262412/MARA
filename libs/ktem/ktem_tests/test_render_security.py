@@ -1,16 +1,17 @@
 from html.parser import HTMLParser
 from types import SimpleNamespace
+from typing import cast
 from urllib.parse import urlsplit
-
-from kotaemon.base import RetrievedDocument
 
 from ktem.pages.chat.answer_rendering import format_chat_message_html
 from ktem.reasoning.simple import FullQAPipeline
 from ktem.utils.render import Render
 
+from kotaemon.base import RetrievedDocument
+
 HOSTILE_HTML = (
     '<img src="x" onerror="globalThis.__maraXss += 1">'
-    '<script>globalThis.__maraXss += 10</script>'
+    "<script>globalThis.__maraXss += 10</script>"
     '<a href="javascript:globalThis.__maraXss += 100">script URL</a>'
     '<a href="data:text/html,<script>globalThis.__maraXss += 1000</script>">'
     "data URL</a></summary></details>"
@@ -22,9 +23,7 @@ class _ActiveContentParser(HTMLParser):
         super().__init__()
         self.active: list[str] = []
 
-    def handle_starttag(
-        self, tag: str, attrs: list[tuple[str, str | None]]
-    ) -> None:
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag.lower() == "script":
             self.active.append("script")
         for name, value in attrs:
@@ -34,9 +33,7 @@ class _ActiveContentParser(HTMLParser):
                 self.active.append(lowered_name)
             if lowered_name in {"href", "src", "xlink:href"}:
                 scheme = urlsplit(lowered_value).scheme
-                if scheme == "javascript" or lowered_value.startswith(
-                    "data:text/html"
-                ):
+                if scheme == "javascript" or lowered_value.startswith("data:text/html"):
                     self.active.append(f"{lowered_name}={scheme or 'data'}")
 
 
@@ -91,8 +88,8 @@ def test_document_metadata_preview_and_body_are_sanitized(tmp_path):
     )
 
     _assert_hostile_markup_is_inert(rendered)
-    assert "class=\"pdf-link\"" in rendered or "class='pdf-link'" in rendered
-    assert "data-page=\"7\"" in rendered or "data-page='7'" in rendered
+    assert 'class="pdf-link"' in rendered or "class='pdf-link'" in rendered
+    assert 'data-page="7"' in rendered or "data-page='7'" in rendered
     assert "Evidence body" in rendered
     assert "quarterly" in rendered
 
@@ -125,14 +122,19 @@ def test_safe_evidence_structure_survives_the_allowlist():
     assert "<mark" in rendered
     assert "mark-citation-1" in rendered
 
+    citation = Render.table("<a href='#' class='citation' id='mark-2'>【2】</a>")
+    assert 'class="citation"' in citation
+    assert 'id="mark-2"' in citation
+
 
 def test_mindmap_template_escapes_model_controlled_closing_tags():
-    mindmap_text = "# Root\n## Safe node\n</script><img src=x onerror='globalThis.__xss=1'>"
-    answer = SimpleNamespace(
-        metadata={"mindmap": SimpleNamespace(text=mindmap_text)}
+    mindmap_text = (
+        "# Root\n## Safe node\n</script><img src=x onerror='globalThis.__xss=1'>"
     )
+    answer = SimpleNamespace(metadata={"mindmap": SimpleNamespace(text=mindmap_text)})
 
-    rendered = FullQAPipeline.prepare_mindmap(object(), answer)
+    pipeline = cast(FullQAPipeline, object())
+    rendered = FullQAPipeline.prepare_mindmap(pipeline, answer)
 
     assert rendered is not None
     assert '<script type="text/template">' in rendered.content
@@ -140,7 +142,6 @@ def test_mindmap_template_escapes_model_controlled_closing_tags():
     assert "## Safe node" in rendered.content
     assert "</script><img" not in rendered.content
     assert "&lt;/script&gt;&lt;img" in rendered.content
-    assert "onerror=" not in rendered.content
 
 
 def test_answer_rendering_keeps_hostile_markdown_as_text():

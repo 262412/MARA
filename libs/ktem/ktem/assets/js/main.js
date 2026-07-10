@@ -1,4 +1,5 @@
 function run() {
+  const trustedPdfJsViewerPath = KTEM_PDFJS_VIEWER_PATH;
   let answerPanelObserver = globalThis._ktemAnswerPanelObserver || null;
   let answerMathRetry = globalThis._ktemAnswerMathRetry || null;
   let answerMathRetryCount = Number(globalThis._ktemAnswerMathRetryCount || 0);
@@ -185,13 +186,6 @@ function run() {
       return false;
     }
     return /^data:text\/html/i.test(src.trim());
-  }
-
-  function isScriptedDataHtmlPreviewSrc(src) {
-    if (!src || typeof src !== "string") {
-      return false;
-    }
-    return /^data:text\/html;ktem-scripted=1(?:;|,)/i.test(src.trim());
   }
 
   function isInlineHtmlPreviewSrc(src) {
@@ -413,11 +407,11 @@ function run() {
     const inlineHtmlPreview = isInlineHtmlPreviewSrc(nextSrc);
     const dataHtmlPreview = isDataHtmlPreviewSrc(nextSrc);
     const passthroughPreview = inlineHtmlPreview || dataHtmlPreview;
-    const iframePolicyMode = passthroughPreview
-      ? isScriptedDataHtmlPreviewSrc(nextSrc)
-        ? "scripted-document"
-        : "document"
-      : "pdf";
+    const iframePolicyMode = KtemSafeDom.previewModeForSource(
+      nextSrc,
+      window.location.origin,
+      trustedPdfJsViewerPath
+    );
     KtemSafeDom.setIframePolicy(iframe, iframePolicyMode);
     const nextDocKey = passthroughPreview ? "" : getPreviewDocKey(nextSrc);
     const currentDocKey = passthroughPreview ? "" : getPreviewDocKey(currentIframeSrc);

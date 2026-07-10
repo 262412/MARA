@@ -40,13 +40,46 @@
   }
 
   function previewPolicy(mode) {
-    const scriptsRequired = mode === "pdf" || mode === "scripted-document";
+    if (mode === "scripted-document") {
+      return {
+        sandbox: "allow-scripts",
+        referrerPolicy: "no-referrer",
+      };
+    }
+    const scriptsRequired = mode === "pdf";
     return {
       sandbox: scriptsRequired
         ? "allow-scripts allow-same-origin"
         : "allow-same-origin",
       referrerPolicy: "no-referrer",
     };
+  }
+
+  function previewModeForSource(source, origin, trustedPdfViewerPath) {
+    const value = String(source || "").trim();
+    if (!value) {
+      return "document";
+    }
+    if (/^data:text\/html;ktem-scripted=1(?:;|,)/i.test(value)) {
+      return "scripted-document";
+    }
+    if (/^data:text\/html/i.test(value) || value.startsWith("<")) {
+      return "document";
+    }
+    try {
+      const candidate = new URL(value, origin);
+      const trustedViewer = new URL(trustedPdfViewerPath, origin);
+      if (
+        candidate.origin === origin &&
+        trustedViewer.origin === origin &&
+        candidate.pathname === trustedViewer.pathname
+      ) {
+        return "pdf";
+      }
+    } catch (error) {
+      return "document";
+    }
+    return "document";
   }
 
   function setIframePolicy(iframe, mode) {
@@ -265,6 +298,7 @@
     normalizeSearchText,
     openSvgDocument,
     previewPolicy,
+    previewModeForSource,
     replaceChildrenWithText,
     setIframePolicy,
     setTextHighlight,
