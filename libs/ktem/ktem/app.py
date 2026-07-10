@@ -80,8 +80,12 @@ class BaseApp:
             encoding="utf-8"
         ) as fi:
             self._kg_viewer_js = fi.read()
+        with (dir_assets / "js" / "safe_dom.js").open(encoding="utf-8") as fi:
+            self._safe_dom_js = fi.read()
         with (dir_assets / "js" / "main.js").open() as fi:
-            self._js = compose_blocks_js(fi.read(), self._kg_viewer_js)
+            self._js = compose_blocks_js(
+                fi.read(), f"{self._safe_dom_js}\n{self._kg_viewer_js}"
+            )
             self._js = self._js.replace("KH_APP_VERSION", self.app_version)
         with (dir_assets / "js" / "pdf_viewer.js").open(encoding="utf-8") as fi:
             self._pdf_view_js = fi.read()

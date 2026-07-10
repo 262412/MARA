@@ -1,4 +1,5 @@
 import os
+import secrets
 from html import escape
 from urllib.parse import quote
 
@@ -74,14 +75,32 @@ def build_html_pages(
     html_pages: list[str] = []
     for content_html in page_contents:
         body_attr = f" class='{body_class}'" if body_class else ""
-        script_html = f"<script>{inline_script}</script>" if inline_script else ""
+        nonce = secrets.token_urlsafe(18) if inline_script else ""
+        script_policy = f"'nonce-{nonce}'" if nonce else "'none'"
+        content_security_policy = (
+            "default-src 'none'; "
+            f"script-src {script_policy}; "
+            "style-src 'unsafe-inline'; img-src data: blob:; font-src data:; "
+            "connect-src 'none'; object-src 'none'; base-uri 'none'; "
+            "form-action 'none'; frame-src 'none'"
+        )
+        script_html = (
+            f"<script nonce='{nonce}'>{inline_script}</script>" if inline_script else ""
+        )
         html_doc = (
             "<!doctype html><html><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            '<meta http-equiv="Content-Security-Policy" '
+            f'content="{content_security_policy}">'
             f"<style>{PREVIEW_HTML_STYLE}</style>{extra_head}</head><body{body_attr}>"
             f"{content_html}"
             f"{script_html}"
             "</body></html>"
         )
-        html_pages.append("data:text/html;charset=utf-8," + quote(html_doc, safe=""))
+        media_type = (
+            "data:text/html;ktem-scripted=1;charset=utf-8,"
+            if inline_script
+            else "data:text/html;charset=utf-8,"
+        )
+        html_pages.append(media_type + quote(html_doc, safe=""))
     return html_pages

@@ -187,6 +187,13 @@ function run() {
     return /^data:text\/html/i.test(src.trim());
   }
 
+  function isScriptedDataHtmlPreviewSrc(src) {
+    if (!src || typeof src !== "string") {
+      return false;
+    }
+    return /^data:text\/html;ktem-scripted=1(?:;|,)/i.test(src.trim());
+  }
+
   function isInlineHtmlPreviewSrc(src) {
     if (!src || typeof src !== "string") {
       return false;
@@ -406,6 +413,12 @@ function run() {
     const inlineHtmlPreview = isInlineHtmlPreviewSrc(nextSrc);
     const dataHtmlPreview = isDataHtmlPreviewSrc(nextSrc);
     const passthroughPreview = inlineHtmlPreview || dataHtmlPreview;
+    const iframePolicyMode = passthroughPreview
+      ? isScriptedDataHtmlPreviewSrc(nextSrc)
+        ? "scripted-document"
+        : "document"
+      : "pdf";
+    KtemSafeDom.setIframePolicy(iframe, iframePolicyMode);
     const nextDocKey = passthroughPreview ? "" : getPreviewDocKey(nextSrc);
     const currentDocKey = passthroughPreview ? "" : getPreviewDocKey(currentIframeSrc);
     const chosenPage = getPageFromPreviewSrc(nextSrc);
@@ -2655,9 +2668,7 @@ function run() {
 
       // convert all <mark> in evidences to normal text
       evidences.forEach((evidence) => {
-        evidence.querySelectorAll("mark").forEach((mark) => {
-          mark.outerHTML = mark.innerText;
-        });
+        KtemSafeDom.clearHighlights(evidence);
       });
 
       // highlight matched_text in evidences
@@ -2669,10 +2680,10 @@ function run() {
           for (var p of paragraphs) {
             var p_content = p.textContent.replace(/[\r\n]+/g, " ");
             if (p_content.includes(matched_text)) {
-              p.innerHTML = p_content.replace(
-                matched_text,
-                "<mark>" + matched_text + "</mark>"
-              );
+              const highlight = KtemSafeDom.highlightText(p, matched_text);
+              if (!highlight) {
+                continue;
+              }
               if (modal.style.display == "block") {
                 // trigger on click event of PDF Preview link
                 var detail_elem = p;
@@ -2696,23 +2707,7 @@ function run() {
   };
 
   globalThis.spawnDocument = (content, options) => {
-    let opt = {
-      window: "",
-      closeChild: true,
-      childId: "_blank",
-    };
-    Object.assign(opt, options);
-    // minimal error checking
-    if (
-      content &&
-      typeof content.toString == "function" &&
-      content.toString().length
-    ) {
-      let child = window.open("", opt.childId, opt.window);
-      child.document.write(content.toString());
-      if (opt.closeChild) child.document.close();
-      return child;
-    }
+    return KtemSafeDom.openSvgDocument(content, options);
   };
 
   globalThis.fillChatInput = (event) => {

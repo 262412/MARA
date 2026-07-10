@@ -11,7 +11,6 @@ import gradio as gr
 from ktem.app import BasePage
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARuntime
-from ktem.reasoning.prompt_optimization.mindmap import MINDMAP_HTML_EXPORT_TEMPLATE
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
     SuggestConvNamePipeline,
 )
@@ -158,12 +157,7 @@ function() {
         links[i].onclick = scrollToCitation;
     }
 
-    var markmap_div = document.querySelector("div.markmap");
     var mindmap_el_script = document.querySelector('div.markmap script');
-
-    if (mindmap_el_script) {
-        markmap_div_html = markmap_div.outerHTML;
-    }
 
     // render the mindmap if the script tag is present
     if (mindmap_el_script) {
@@ -180,9 +174,8 @@ function() {
 
         if (mindmap_el) {
             function on_svg_export(event) {
-                html = "{html_template}";
-                html = html.replace("{markmap_div}", markmap_div_html);
-                spawnDocument(html, {window: "width=1000,height=1000"});
+                event.preventDefault();
+                spawnDocument(mindmap_el, {window: "width=1000,height=1000"});
             }
 
             var link = document.getElementById("mindmap-toggle");
@@ -201,11 +194,9 @@ function() {
                 };
             }
 
-            if (markmap_div_html) {
-                var link = document.getElementById("mindmap-export");
-                if (link) {
-                    link.addEventListener('click', on_svg_export);
-                }
+            var export_link = document.getElementById("mindmap-export");
+            if (export_link) {
+                export_link.addEventListener('click', on_svg_export);
             }
         }
     }, 250);
@@ -333,10 +324,7 @@ function() {
 
     return [links.length]
 }
-""".replace(
-    "{html_template}",
-    MINDMAP_HTML_EXPORT_TEMPLATE.replace("\n", "").replace('"', '\\"'),
-)
+"""
 
 fetch_api_key_js = """
 function(_, __) {

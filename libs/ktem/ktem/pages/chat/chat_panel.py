@@ -61,7 +61,9 @@ class ChatPanel(BasePage):
         self.pdf_preview = gr.HTML(
             value=(
                 "<div class='pdf-preview-shell'>"
-                "<iframe id='main-pdf-preview-frame' title='PDF Preview' loading='lazy'></iframe>"
+                "<iframe id='main-pdf-preview-frame' title='PDF Preview' "
+                "loading='lazy' sandbox='allow-same-origin' "
+                "referrerpolicy='no-referrer'></iframe>"
                 "<img id='main-pdf-preview-image' class='pdf-preview-image' alt='PDF page preview' />"
                 "<div id='main-pdf-preview-empty' class='pdf-preview-empty pdf-preview-empty--prototype'>"
                 "<div class='preview-empty-state'>Select a file and page to preview.</div>"
