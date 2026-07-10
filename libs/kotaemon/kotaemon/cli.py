@@ -11,6 +11,9 @@ from trogon import tui
 from kotaemon.app_init import acquire_admin_password as _acquire_admin_password
 from kotaemon.app_init import initialize_password_app as _initialize_password_app
 from kotaemon.app_init import write_app_init_files as _write_app_init_files
+from kotaemon.docqa_request_adapters import (
+    build_legacy_docqa_request as _build_legacy_docqa_request,
+)
 
 PLATFORM_CHOICES = ("claude-code", "codex")
 
@@ -526,8 +529,6 @@ def _run_docqa_repl(
     mindmap=None,
     json_output=False,
 ):
-    from ktem.docqa import DocQARequest
-
     session = runtime.load_session(conversation_id)
     if session is None:
         raise click.ClickException(f"Conversation '{conversation_id}' does not exist.")
@@ -622,7 +623,7 @@ def _run_docqa_repl(
             continue
 
         response = runtime.run_turn(
-            DocQARequest(
+            _build_legacy_docqa_request(
                 prompt=prompt,
                 conversation_id=conversation_id,
                 selected_file_ids=selected_file_ids_override,
@@ -901,19 +902,17 @@ def docqa_ask(
     Text-focused QA:
     `MARA docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"`
     """
-    from ktem.docqa import DocQARequest
-
     runtime = _create_docqa_runtime()
     selected_records = _resolve_cli_files(runtime, file_refs)
     active_record = _resolve_cli_active_file(runtime, active_file)
 
     response = runtime.run_turn(
-        DocQARequest(
+        _build_legacy_docqa_request(
             prompt=prompt,
             conversation_id=conversation or "",
-            selected_file_ids=[record.file_id for record in selected_records]
-            if file_refs
-            else None,
+            selected_file_ids=(
+                [record.file_id for record in selected_records] if file_refs else None
+            ),
             active_file_id=active_record.file_id if active_record else "",
             active_file_name=active_record.name if active_record else "",
             qa_scope=str(qa_scope or "auto").replace("-", "_"),

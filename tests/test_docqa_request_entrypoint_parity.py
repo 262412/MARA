@@ -58,6 +58,7 @@ def test_benchmark_request_uses_named_policy_and_keeps_benchmark_lists(tmp_path)
         document_id="document-1",
         question="What changed?",
         answers=["Revenue increased."],
+        evidence_pages=[7],
         metadata={"dataset_family": "financebench", "page": 7},
     )
     documents = [

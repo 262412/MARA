@@ -44,6 +44,14 @@ from .runtime import (
     DocQASessionSummary,
     DocQATurnUpdate,
 )
+from .request_policies import (
+    BENCHMARK_REQUEST_POLICY,
+    DOCQA_REQUEST_POLICIES,
+    LEGACY_CLI_REQUEST_POLICY,
+    MARA_CLI_REQUEST_POLICY,
+    WEB_REQUEST_POLICY,
+    DocQARequestPolicy,
+)
 from .workflow import WorkflowPlan, WorkflowStep, build_workflow_plan
 
 __all__ = [
@@ -56,6 +64,12 @@ __all__ = [
     "DocQASession",
     "DocQASessionSummary",
     "DocQATurnUpdate",
+    "DocQARequestPolicy",
+    "DOCQA_REQUEST_POLICIES",
+    "WEB_REQUEST_POLICY",
+    "MARA_CLI_REQUEST_POLICY",
+    "LEGACY_CLI_REQUEST_POLICY",
+    "BENCHMARK_REQUEST_POLICY",
     "RouteDecision",
     "RetrieveDecision",
     "EvidenceBundle",
