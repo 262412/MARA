@@ -135,6 +135,28 @@ def test_control_new_session_uses_server_identity(password_identity):
             _delete_rows(created_id)
 
 
+def test_control_rename_uses_request_when_hidden_user_is_missing(password_identity):
+    row = _conversation(user="attacker-id", name="Original")
+    control = _control()
+
+    try:
+        control.rename_conv(
+            row.id,
+            "Renamed",
+            True,
+            None,
+            password_identity,
+        )
+
+        with Session(engine) as session:
+            renamed = session.exec(
+                select(Conversation).where(Conversation.id == row.id)
+            ).one()
+        assert renamed.name == "Renamed"
+    finally:
+        _delete_rows(row.id)
+
+
 def test_gradio_injects_control_request_without_component_input_changes(
     password_identity,
 ):
