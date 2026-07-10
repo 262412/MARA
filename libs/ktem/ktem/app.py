@@ -6,7 +6,7 @@ from typing import Optional, TypeVar
 import gradio as gr
 import pluggy
 from ktem import extension_protocol
-from ktem.assets import PDFJS_PREBUILT_DIR, KotaemonTheme
+from ktem.assets import KotaemonTheme, get_pdfjs_runtime_dir
 from ktem.components import reasonings
 from ktem.exceptions import HookAlreadyDeclared, HookNotDeclared
 from ktem.index import IndexManager
@@ -87,8 +87,11 @@ class BaseApp:
             self._js = compose_blocks_js(
                 fi.read(), f"{self._safe_dom_js}\n{self._kg_viewer_js}"
             )
+            pdfjs_dir = get_pdfjs_runtime_dir(
+                getattr(settings, "KH_APP_DATA_DIR", None)
+            )
             pdf_js_viewer_path = (
-                f"{BASE_PATH}/file={PDFJS_PREBUILT_DIR / 'web' / 'viewer.html'}"
+                f"{BASE_PATH}/file={pdfjs_dir / 'web' / 'viewer.html'}"
             ).replace("\\", "/")
             self._js = self._js.replace(
                 "KTEM_PDFJS_VIEWER_PATH", json.dumps(pdf_js_viewer_path)
@@ -97,7 +100,7 @@ class BaseApp:
         with (dir_assets / "js" / "pdf_viewer.js").open(encoding="utf-8") as fi:
             self._pdf_view_js = fi.read()
             # workaround for Windows path
-            pdf_js_dist_dir = str(PDFJS_PREBUILT_DIR).replace("\\", "\\\\")
+            pdf_js_dist_dir = str(pdfjs_dir).replace("\\", "\\\\")
             self._pdf_view_js = self._pdf_view_js.replace(
                 "PDFJS_PREBUILT_DIR",
                 pdf_js_dist_dir,

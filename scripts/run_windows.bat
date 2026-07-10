@@ -51,12 +51,16 @@ CALL :print_highlight "Installing MARA"
 CALL :install_dependencies
 IF ERRORLEVEL 1 GOTO :end
 
+IF NOT DEFINED KH_APP_DATA_DIR (
+    FOR /F "delims=" %%i IN ('python -c "from ktem.runtime_bootstrap import get_runtime_paths; print(get_runtime_paths().data_dir)"') DO SET "KH_APP_DATA_DIR=%%i"
+)
+
 CALL :print_highlight "Setting up a local model"
 CALL :setup_local_model
 IF ERRORLEVEL 1 GOTO :end
 
-CALL :print_highlight "Downloading and extracting PDF.js"
-CALL :download_and_extract_pdf_js
+CALL :print_highlight "Materializing bundled PDF.js"
+CALL python -m ktem.assets.pdfjs_assets
 IF ERRORLEVEL 1 GOTO :end
 
 CALL :print_highlight "Launching Kotaemon in your browser, please wait..."
@@ -231,41 +235,6 @@ IF %ERRORLEVEL% == 0  (
 )
 GOTO :eof
 
-:download_and_extract_pdf_js
-:: Download and extract a ZIP file from a URL to a destination directory
-
-REM Define variables
-set "pdf_js_version=4.0.379"
-set "pdf_js_dist_name=pdfjs-%pdf_js_version%-dist"
-set "pdf_js_dist_url=https://github.com/mozilla/pdf.js/releases/download/v%pdf_js_version%/%pdf_js_dist_name%.zip"
-for /f "delims=" %%i in ('cd') do set "current_dir=%%i"
-set "target_pdf_js_dir=%current_dir%\libs\ktem\ktem\assets\prebuilt\%pdf_js_dist_name%"
-
-REM Create the target directory if it does not exist (including parent folders)
-if not exist "%target_pdf_js_dir%" (
-    echo Creating directory %target_pdf_js_dir%
-    mkdir "%target_pdf_js_dir%"
-) else (
-    echo Directory already exists: %target_pdf_js_dir%
-    GOTO :eof
-)
-
-REM Download the ZIP file using PowerShell
-set "zip_file=%temp%\downloaded.zip"
-echo Downloading %url% to %zip_file%
-powershell -Command "Invoke-WebRequest -Uri '%pdf_js_dist_url%' -OutFile '%zip_file%'"
-
-
-REM Extract the ZIP file using PowerShell
-echo Extracting %zip_file% to %dest_dir%
-powershell -Command "Expand-Archive -Path '%zip_file%' -DestinationPath '%target_pdf_js_dir%'"
-
-REM Clean up the downloaded ZIP file
-del "%zip_file%"
-echo Download and extraction completed successfully.
-
-goto :eof
-
 :setup_local_model
 python "%CD%\scripts\serve_local.py"
 GOTO :eof
@@ -273,21 +242,8 @@ GOTO :eof
 :launch_ui
 :: Workaround for diskcache path with folder start with .
 SET THEFLOW_TEMP_PATH=flow_tmp
-SET PDFJS_PREBUILT_DIR=%target_pdf_js_dir%
 
-:: Check if PDF.js exists, download if not
-if not exist "%PDFJS_PREBUILT_DIR%\web\viewer.html" (
-    echo PDF.js not found, downloading...
-    call :download_and_extract_pdf_js
-    if errorlevel 1 (
-        echo Failed to download PDF.js. Please run manually:
-        echo scripts\run_windows.bat
-        GOTO :exit_func_with_error
-    )
-    echo PDF.js downloaded successfully!
-)
-
-echo Starting Kotaemon UI... (prebuilt PDF.js is at %PDFJS_PREBUILT_DIR%)
+echo Starting Kotaemon UI with bundled PDF.js...
 CALL python -Xutf8 "%CD%\app.py" || ( ECHO. && ECHO Will exit now... && GOTO :exit_func_with_error )
 GOTO :eof
 

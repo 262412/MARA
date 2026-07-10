@@ -144,47 +144,8 @@ function setup_local_model() {
     python $(pwd)/scripts/serve_local.py
 }
 
-function download_and_unzip() {
-    local url=$1
-    local dest_dir=$2
-
-    # Check if the destination directory exists, create if it doesn't
-    if [ -d "$dest_dir" ]; then
-        echo "Destination directory $dest_dir already exists. Skipping download."
-        return
-    fi
-
-    mkdir -p "$dest_dir"
-
-    # Download the ZIP file
-    local zip_file="${dest_dir}/downloaded.zip"
-    echo "Downloading $url to $zip_file"
-    curl -L -o "$zip_file" "$url"
-
-    # Unzip the file to the destination directory
-    echo "Unzipping $zip_file to $dest_dir"
-    unzip -o "$zip_file" -d "$dest_dir"
-
-    # Clean up the downloaded ZIP file
-    rm "$zip_file"
-    echo "Download and unzip completed successfully."
-}
-
 function launch_ui() {
-    local pdfjs_prebuilt_dir=$1
-
-    # Check if PDF.js exists, download if not
-    if [ ! -f "$pdfjs_prebuilt_dir/web/viewer.html" ]; then
-        echo "⚠️  PDF.js not found, downloading automatically..."
-        bash scripts/download_pdfjs.sh "$pdfjs_prebuilt_dir" || {
-            echo "❌ Failed to download PDF.js. Please run manually:"
-            echo "   bash scripts/download_pdfjs.sh $pdfjs_prebuilt_dir"
-            exit 1
-        }
-        echo "✅ PDF.js downloaded successfully!"
-    fi
-
-    PDFJS_PREBUILT_DIR="$pdfjs_prebuilt_dir" python $(pwd)/app.py || {
+    python $(pwd)/app.py || {
         echo "" && echo "Will exit now..."
         exit 1
     }
@@ -210,11 +171,6 @@ conda_root="${install_dir}/conda"
 env_dir="${install_dir}/env"
 python_version="3.10"
 
-pdf_js_version="4.0.379"
-pdf_js_dist_name="pdfjs-${pdf_js_version}-dist"
-pdf_js_dist_url="https://github.com/mozilla/pdf.js/releases/download/v${pdf_js_version}/${pdf_js_dist_name}.zip"
-target_pdf_js_dir="$(pwd)/libs/ktem/ktem/assets/prebuilt/${pdf_js_dist_name}"
-
 check_path_for_spaces
 
 print_highlight "Setting up Miniconda"
@@ -227,14 +183,18 @@ activate_conda_env
 print_highlight "Installing requirements"
 install_dependencies
 
-print_highlight "Downloading and unzipping PDF.js"
-download_and_unzip $pdf_js_dist_url $target_pdf_js_dir
+if [ -z "${KH_APP_DATA_DIR:-}" ]; then
+    export KH_APP_DATA_DIR="$(python -c 'from ktem.runtime_bootstrap import get_runtime_paths; print(get_runtime_paths().data_dir)')"
+fi
+
+print_highlight "Materializing bundled PDF.js"
+python -m ktem.assets.pdfjs_assets
 
 print_highlight "Setting up a local model"
 setup_local_model
 
 print_highlight "Launching Kotaemon in your browser, please wait..."
-launch_ui $target_pdf_js_dir
+launch_ui
 
 deactivate_conda_env
 

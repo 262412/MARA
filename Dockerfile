@@ -29,12 +29,6 @@ ENV TARGETARCH=${TARGETARCH}
 # Create working directory
 WORKDIR /app
 
-# Download pdfjs
-COPY scripts/download_pdfjs.sh /app/scripts/download_pdfjs.sh
-RUN chmod +x /app/scripts/download_pdfjs.sh
-ENV PDFJS_PREBUILT_DIR="/app/libs/ktem/ktem/assets/prebuilt/pdfjs-dist"
-RUN bash scripts/download_pdfjs.sh $PDFJS_PREBUILT_DIR
-
 # Install uv dependencies
 RUN pip install --no-cache-dir "uv"
 
@@ -51,6 +45,9 @@ RUN --mount=type=ssh  \
     --mount=type=cache,target=/root/.cache/uv  \
     uv sync --frozen --no-cache \
     && uv pip install --python .venv "pdfservices-sdk@git+https://github.com/niallcm/pdfservices-python-sdk.git@bump-and-unfreeze-requirements"
+
+ENV KH_APP_DATA_DIR="/app/ktem_app_data"
+RUN .venv/bin/python -m ktem.assets.pdfjs_assets
 
 RUN --mount=type=ssh  \
     --mount=type=cache,target=/root/.cache/uv  \

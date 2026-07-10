@@ -68,3 +68,4 @@ outputs/
 .gitignore
 .gitattributes
 *.zip
+!libs/ktem/ktem/assets/vendor/pdfjs/pdfjs-6.1.200-dist.zip

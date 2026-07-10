@@ -88,6 +88,16 @@ def ensure_gradio_temp_dir() -> str:
     return gradio_temp_dir
 
 
+def ensure_pdfjs_runtime_assets(settings=flowsettings) -> Path:
+    """Materialize or revalidate the fixed offline PDF.js runtime tree."""
+
+    from ktem.assets.pdfjs_assets import materialize_pdfjs
+
+    return materialize_pdfjs(
+        app_data_dir=getattr(settings, "KH_APP_DATA_DIR", None)
+    ).path
+
+
 def _sso_mode_requested(settings=flowsettings) -> bool:
     configured_mode = getattr(settings, "MARA_AUTH_MODE", None)
     if configured_mode is not None:
@@ -130,6 +140,7 @@ def launch_app(
         getattr(flowsettings, "KH_FILESTORAGE_PATH", Path.cwd() / "user_data" / "files")
     )
     doc_dir = Path(getattr(flowsettings, "KH_DOC_DIR", Path.cwd() / "docs")).resolve()
+    pdfjs_dir = ensure_pdfjs_runtime_assets(settings=flowsettings)
     file_storage_path.mkdir(parents=True, exist_ok=True)
 
     gradio_temp_dir = ensure_gradio_temp_dir()
@@ -140,6 +151,7 @@ def launch_app(
         inbrowser=inbrowser,
         allowed_paths=[
             str(ASSETS_DIR),
+            str(pdfjs_dir),
             str(doc_dir),
             gradio_temp_dir,
             str(file_storage_path),

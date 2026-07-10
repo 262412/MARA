@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import socket
-from pathlib import Path
 
 import pytest
 
 from kotaemon import app_init as app_init_module
-
 
 EXPECTED_PAYLOAD_KEYS = {
     "config_dir",

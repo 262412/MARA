@@ -12,7 +12,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from ktem.assets import ASSETS_DIR
 from ktem.auth.policy import AuthConfigurationError
-from ktem.launcher import ensure_gradio_temp_dir, prepare_launch
+from ktem.launcher import (
+    ensure_gradio_temp_dir,
+    ensure_pdfjs_runtime_assets,
+    prepare_launch,
+)
 from ktem.main import App
 from theflow.settings import settings as flowsettings
 
@@ -97,6 +101,7 @@ def create_sso_app(
     )
     doc_dir = Path(getattr(flowsettings, "KH_DOC_DIR", Path.cwd() / "docs")).resolve()
     file_storage_path.mkdir(parents=True, exist_ok=True)
+    pdfjs_dir = ensure_pdfjs_runtime_assets(settings=flowsettings)
 
     mara_app = App()
     blocks = mara_app.make()
@@ -117,6 +122,7 @@ def create_sso_app(
         auth_dependency=sso_auth_dependency,
         allowed_paths=[
             str(ASSETS_DIR),
+            str(pdfjs_dir),
             str(doc_dir),
             gradio_temp_dir,
             str(file_storage_path),

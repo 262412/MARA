@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -7,19 +8,21 @@ import shutil
 import socket
 import stat
 import zipfile
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
-
 from ktem.assets.pdfjs_assets import (
     PDFJS_ARCHIVE_NAME,
     PDFJS_ARCHIVE_SHA256,
     PDFJS_RELEASE_URL,
+    PDFJS_RUNTIME_FILE_SHA256,
     PDFJS_VERSION,
     PDFJS_VERSION_DIST,
     PdfJsAssetError,
     _materialize_pdfjs_archive,
     materialize_pdfjs,
+    rollback_pdfjs_materialization,
 )
 
 
@@ -27,7 +30,7 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _write_archive(path: Path, entries: dict[str, bytes | str]) -> str:
+def _write_archive(path: Path, entries: Mapping[str, bytes | str]) -> str:
     with zipfile.ZipFile(path, "w") as archive:
         for name, contents in entries.items():
             archive.writestr(name, contents)
@@ -50,17 +53,24 @@ def _destination(app_data_dir: Path) -> Path:
 
 
 def test_vendored_pdfjs_manifest_and_archive_match_official_release():
-    vendor_dir = Path(__file__).resolve().parents[1] / "ktem" / "assets" / "vendor" / "pdfjs"
+    vendor_dir = (
+        Path(__file__).resolve().parents[1] / "ktem" / "assets" / "vendor" / "pdfjs"
+    )
     manifest_path = vendor_dir / "manifest.json"
     archive_path = vendor_dir / PDFJS_ARCHIVE_NAME
     license_path = vendor_dir / "LICENSE.pdfjs"
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
+    assert PDFJS_RELEASE_URL == (
+        "https://github.com/mozilla/pdf.js/releases/download/v6.1.200/"
+        "pdfjs-6.1.200-dist.zip"
+    )
     assert manifest == {
         "archive": PDFJS_ARCHIVE_NAME,
         "license": "LICENSE.pdfjs",
         "release_url": PDFJS_RELEASE_URL,
+        "runtime_files": PDFJS_RUNTIME_FILE_SHA256,
         "sha256": PDFJS_ARCHIVE_SHA256,
         "upstream": "https://github.com/mozilla/pdf.js",
         "version": PDFJS_VERSION,
@@ -105,6 +115,10 @@ def test_materialization_is_offline_atomic_and_idempotent(monkeypatch, tmp_path)
     assert viewer.stat().st_mtime_ns == first_mtime
     marker = json.loads((first.path / ".mara-pdfjs.json").read_text(encoding="utf-8"))
     assert marker == {
+        "files": {
+            "build/pdf.mjs": _sha256(first.path / "build" / "pdf.mjs"),
+            "web/viewer.html": _sha256(first.path / "web" / "viewer.html"),
+        },
         "sha256": archive_sha256,
         "version": PDFJS_VERSION,
         "version_dist": PDFJS_VERSION_DIST,
@@ -190,10 +204,14 @@ def test_rejects_symlink_archive_member(tmp_path):
         )
 
 
-@pytest.mark.parametrize("missing_name", ["LICENSE", "web/viewer.html"])
+@pytest.mark.parametrize(
+    "missing_name",
+    ["LICENSE", "build/pdf.mjs", "web/viewer.html"],
+)
 def test_rejects_archive_missing_required_files(tmp_path, missing_name):
     entries = {
         "LICENSE": "license",
+        "build/pdf.mjs": "build",
         "web/viewer.html": "viewer",
     }
     del entries[missing_name]
@@ -245,6 +263,36 @@ def test_extraction_failure_removes_partial_temporary_directory(
     assert not pdfjs_parent.exists() or not list(pdfjs_parent.iterdir())
 
 
+def test_marker_write_failure_is_actionable_and_removes_partial_directory(
+    monkeypatch,
+    tmp_path,
+):
+    archive_path = tmp_path / "valid.zip"
+    archive_sha256 = _write_valid_archive(archive_path)
+    app_data_dir = tmp_path / "app-data"
+    real_write_text = Path.write_text
+
+    def _fail_marker(self, *args, **kwargs):
+        if self.name == ".mara-pdfjs.json":
+            raise OSError("synthetic read-only filesystem")
+        return real_write_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", _fail_marker)
+
+    with pytest.raises(
+        PdfJsAssetError,
+        match="write PDF.js runtime marker.*read-only filesystem",
+    ):
+        _materialize_pdfjs_archive(
+            archive_path=archive_path,
+            expected_sha256=archive_sha256,
+            app_data_dir=app_data_dir,
+        )
+
+    assert not _destination(app_data_dir).exists()
+    assert not list(_destination(app_data_dir).parent.iterdir())
+
+
 def test_existing_corrupt_destination_is_preserved_and_rejected(tmp_path):
     archive_path = tmp_path / "valid.zip"
     archive_sha256 = _write_valid_archive(archive_path)
@@ -266,9 +314,43 @@ def test_existing_corrupt_destination_is_preserved_and_rejected(tmp_path):
     assert sentinel.read_text(encoding="utf-8") == "do not overwrite"
 
 
+def test_existing_destination_with_tampered_viewer_is_rejected(tmp_path):
+    archive_path = tmp_path / "valid.zip"
+    archive_sha256 = _write_valid_archive(archive_path)
+    app_data_dir = tmp_path / "app-data"
+    result = _materialize_pdfjs_archive(
+        archive_path=archive_path,
+        expected_sha256=archive_sha256,
+        app_data_dir=app_data_dir,
+    )
+    (result.path / "web" / "viewer.html").write_text(
+        "<script>window.tampered = true</script>",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        PdfJsAssetError,
+        match="content hash mismatch.*web/viewer.html",
+    ):
+        _materialize_pdfjs_archive(
+            archive_path=archive_path,
+            expected_sha256=archive_sha256,
+            app_data_dir=app_data_dir,
+        )
+
+
+@pytest.mark.parametrize(
+    "race_error",
+    [
+        FileExistsError(errno.EEXIST, "publisher exists"),
+        OSError(errno.ENOTEMPTY, "publisher directory not empty"),
+    ],
+    ids=["eexist", "enotempty"],
+)
 def test_concurrent_publisher_revalidates_winner_and_cleans_loser(
     monkeypatch,
     tmp_path,
+    race_error,
 ):
     archive_path = tmp_path / "valid.zip"
     archive_sha256 = _write_valid_archive(archive_path)
@@ -281,10 +363,12 @@ def test_concurrent_publisher_revalidates_winner_and_cleans_loser(
         if not raced and Path(source).name.startswith(f".{PDFJS_VERSION}."):
             raced = True
             shutil.copytree(source, destination)
-            raise FileExistsError("another PDF.js materializer won the race")
+            raise race_error
         return real_rename(source, destination)
 
-    monkeypatch.setattr("ktem.assets.pdfjs_assets.os.rename", _publish_other_process_then_fail)
+    monkeypatch.setattr(
+        "ktem.assets.pdfjs_assets.os.rename", _publish_other_process_then_fail
+    )
 
     result = _materialize_pdfjs_archive(
         archive_path=archive_path,
@@ -297,6 +381,18 @@ def test_concurrent_publisher_revalidates_winner_and_cleans_loser(
     assert result.created is False
     assert (result.path / "web" / "viewer.html").is_file()
     assert not list(result.path.parent.glob(f".{PDFJS_VERSION}.*"))
+
+
+def test_rollback_filesystem_failure_is_actionable(monkeypatch, tmp_path):
+    materialization = materialize_pdfjs(app_data_dir=tmp_path / "app-data")
+
+    def _fail_remove(*_args, **_kwargs):
+        raise OSError("synthetic busy destination")
+
+    monkeypatch.setattr("ktem.assets.pdfjs_assets.shutil.rmtree", _fail_remove)
+
+    with pytest.raises(PdfJsAssetError, match="roll back PDF.js.*busy destination"):
+        rollback_pdfjs_materialization(materialization)
 
 
 def test_rejects_symlinked_assets_parent_that_escapes_app_data(tmp_path):

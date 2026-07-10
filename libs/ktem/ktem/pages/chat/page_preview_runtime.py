@@ -2,6 +2,7 @@
 
 Provides helper functions for PDF handling, file signatures, and preview directory management.
 """
+
 import hashlib
 import os
 import shutil
@@ -10,7 +11,7 @@ from urllib.parse import quote
 
 from pypdf import PdfReader
 
-from ...assets import PDFJS_PREBUILT_DIR
+from ...assets import get_pdfjs_runtime_dir
 from ...utils.render import BASE_PATH
 from .page_preview_types import is_pdf_source
 
@@ -43,7 +44,10 @@ def build_pdfjs_viewer_src(file_path: str, page: int, fit_mode: str = "pdf") -> 
     Returns:
         Complete URL for PDF.js viewer or empty string if viewer not found
     """
-    viewer_html_path = PDFJS_PREBUILT_DIR / "web" / "viewer.html"
+    from theflow.settings import settings as flowsettings
+
+    pdfjs_dir = get_pdfjs_runtime_dir(getattr(flowsettings, "KH_APP_DATA_DIR", None))
+    viewer_html_path = pdfjs_dir / "web" / "viewer.html"
     if not viewer_html_path.is_file():
         return ""
 
