@@ -98,9 +98,13 @@ def test_app_run_help_lists_platform_skill(tmp_path):
     assert "Platform skill: MARA-app-run" in result.stdout
 
 
-def test_source_app_uses_shared_gradio_port_resolver():
+def test_source_app_uses_shared_policy_aware_launcher():
     repo_root = Path(__file__).resolve().parents[3]
-    source = (repo_root / "app.py").read_text(encoding="utf-8")
+    app_source = (repo_root / "app.py").read_text(encoding="utf-8")
+    launcher_source = (repo_root / "libs/ktem/ktem/launcher.py").read_text(
+        encoding="utf-8"
+    )
 
-    assert "resolve_gradio_server_port()" in source
-    assert 'os.getenv("PORT", "8000")' not in source
+    assert "from ktem.launcher import launch_app" in app_source
+    assert "resolve_gradio_server_port(port)" in launcher_source
+    assert 'os.getenv("PORT", "8000")' not in app_source
