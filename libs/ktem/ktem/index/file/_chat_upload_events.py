@@ -132,10 +132,10 @@ def full_upload_ports(page: Any) -> FullUploadPorts:
 def _full_chat_ports(
     page: Any,
 ) -> tuple[UploadEventPorts, UploadEventPorts, UploadEventPorts]:
-    chat_page = getattr(page._app, "chat_page", None)
-    if chat_page is None:
+    if not _should_refresh_uploaded_chat_graph(page):
         empty = UploadEventPorts()
         return empty, empty, empty
+    chat_page = page._app.chat_page
     graph_merge = UploadEventPorts(
         inputs=(chat_page._graph_source_ids, page.upload_new_source_ids),
         outputs=(chat_page._graph_source_ids,),
