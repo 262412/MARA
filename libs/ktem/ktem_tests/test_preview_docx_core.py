@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 import pytest
-from docx.shared import RGBColor
+from docx.shared import Pt, RGBColor
 
 from .docx_preview_test_utils import (
     PNG_1X1,
@@ -80,6 +80,22 @@ def test_nested_list_markup_is_characterized(tmp_path):
         "<ul><li><span>Parent</span></li><ul><li><span>Child</span></li>"
         "</ul><li><span>Sibling</span></li></ul><p><span>After</span></p>"
     ) in html
+
+
+def test_list_first_line_indent_remains_ignored(tmp_path):
+    def build(document):
+        item = document.add_paragraph("Indented list item")
+        item.paragraph_format.first_line_indent = Pt(24)
+        set_list_level(item, 0)
+
+    source = write_document(tmp_path / "list-indent.docx", build)
+
+    from ktem.pages.chat.page_preview_document import extract_docx_html
+
+    html = extract_docx_html(str(source))
+
+    assert "<li><span>Indented list item</span></li>" in html
+    assert "text-indent" not in html
 
 
 def test_html_max_chars_keeps_only_complete_existing_paragraphs(tmp_path):
