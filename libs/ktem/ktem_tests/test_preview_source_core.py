@@ -4,7 +4,11 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from ktem_tests.preview_test_utils import write_ooxml, write_valid_pdf
+from ktem_tests.preview_test_utils import (
+    write_minimal_cfb,
+    write_ooxml,
+    write_valid_pdf,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -47,13 +51,26 @@ def test_classifies_valid_ooxml_by_package_marker(tmp_path, extension):
 def test_classifies_legacy_cfb_using_declared_office_extension(tmp_path, extension):
     from ktem.preview.models import PreviewSourceKind
 
-    source = tmp_path / f"legacy{extension}"
-    source.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"payload")
+    source = write_minimal_cfb(tmp_path / f"legacy{extension}")
 
     classified = _classify(source)
 
     assert classified.kind is PreviewSourceKind.CFB
     assert classified.extension == extension
+
+
+def test_corrupt_cfb_container_is_rejected_with_typed_context(tmp_path):
+    from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
+
+    corrupt = tmp_path / "corrupt.doc"
+    corrupt.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"truncated")
+
+    with pytest.raises(PreviewSourceError) as caught:
+        _classify(corrupt)
+
+    assert caught.value.code is PreviewErrorCode.SOURCE_INVALID
+    assert caught.value.stage == "cfb_validation"
+    assert "compound file" in caught.value.details.lower()
 
 
 def test_missing_source_error_carries_actionable_context(tmp_path):
@@ -130,8 +147,7 @@ def test_signature_and_declared_type_mismatch_is_rejected(
 def test_modern_extension_on_cfb_source_is_rejected_as_mismatch(tmp_path):
     from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
 
-    source = tmp_path / "renamed.docx"
-    source.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"payload")
+    source = write_minimal_cfb(tmp_path / "renamed.docx")
 
     with pytest.raises(PreviewSourceError) as caught:
         _classify(source)
