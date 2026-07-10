@@ -130,7 +130,7 @@ def test_prepare_nltk_cache_uses_wheel_bundled_data_without_downloading(tmp_path
     assert (cache / "tokenizers/punkt").is_dir()
 
 
-def test_container_lock_keeps_existing_versions_and_uses_linux_cpu_torch():
+def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
     repo_root = Path(__file__).resolve().parents[1]
     project = tomli.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
     lock = tomli.loads((repo_root / "uv.lock").read_text(encoding="utf-8"))
@@ -146,14 +146,25 @@ def test_container_lock_keeps_existing_versions_and_uses_linux_cpu_torch():
     assert set(project["tool"]["uv"]["constraint-dependencies"]) == (
         expected_constraints
     )
+    assert set(project["tool"]["uv"]["build-constraint-dependencies"]) == {
+        "setuptools==80.9.0",
+        "setuptools-git-versioning==2.1.0",
+        "wheel==0.45.1",
+    }
+    assert project["tool"]["uv"]["required-version"] == "==0.11.19"
     extras = project["project"]["optional-dependencies"]
     assert extras["container-lite"] == ["mara-research-cli", "torch==2.8.0"]
     assert extras["container-full"] == ["mara-research-cli", "torch==2.8.0"]
 
     packages = lock["package"]
+    sources = project["tool"]["uv"]["sources"]["torch"]
+    assert sources == [
+        {"index": "pytorch-cpu", "extra": "container-lite"},
+        {"index": "pytorch-cpu", "extra": "container-full"},
+    ]
     names = {package["name"] for package in packages}
-    assert "triton" not in names
-    assert not any(name.startswith("nvidia-") for name in names)
+    assert "triton" in names
+    assert any(name.startswith("nvidia-") for name in names)
     assert any(
         package.get("name") == "torch"
         and package.get("version") == "2.8.0+cpu"
@@ -161,3 +172,33 @@ def test_container_lock_keeps_existing_versions_and_uses_linux_cpu_torch():
         == "https://download.pytorch.org/whl/cpu"
         for package in packages
     )
+    assert any(
+        package.get("name") == "torch"
+        and package.get("version") == "2.8.0"
+        and package.get("source", {}).get("registry") == "https://pypi.org/simple"
+        for package in packages
+    )
+
+
+def test_llama_cpp_is_optional_and_not_built_for_container_runtime():
+    repo_root = Path(__file__).resolve().parents[1]
+    kotaemon = tomli.loads(
+        (repo_root / "libs/kotaemon/pyproject.toml").read_text(encoding="utf-8")
+    )
+    extras = kotaemon["project"]["optional-dependencies"]
+
+    assert not any("llama-cpp-python" in item for item in extras["mara-runtime"])
+    assert extras["llama-cpp"] == ["llama-cpp-python<0.2.8"]
+    assert "llama-cpp" in extras["all"][0]
+
+
+def test_readme_uses_non_root_compatible_volume_and_secret_permissions():
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "docker volume create mara-data" in readme
+    assert "type=volume,src=mara-data,dst=/var/lib/mara" in readme
+    assert 'chmod 0444 "$MARA_SECRET_FILE"' in readme
+    assert "${XDG_RUNTIME_DIR:-/tmp}/mara-admin-password" in readme
+    assert "-v ./ktem_app_data:/var/lib/mara" not in readme

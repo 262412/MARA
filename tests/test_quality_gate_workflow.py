@@ -75,6 +75,7 @@ def test_static_and_test_jobs_enforce_the_repository_contracts():
     assert "pre-commit run" in static_commands and "--all-files" in static_commands
     assert "check_codebase_hygiene.py" in static_commands
     assert "check_hygiene_baseline.py" in static_commands
+    assert "check_supply_chain_policy.py" in static_commands
     assert "ruff check" in static_commands
     collection_commands = _commands(jobs["collection"])
     assert "check_pytest_collection.py" in collection_commands
@@ -131,13 +132,30 @@ def test_supply_chain_jobs_build_scan_and_retain_evidence():
         "spdx-json",
         "cyclonedx",
         "upload-artifact@",
+        "attest-build-provenance@",
     ):
         assert token in container_source
+    assert container["permissions"] == {
+        "contents": "read",
+        "id-token": "write",
+        "attestations": "write",
+    }
+    build_step = next(step for step in container["steps"] if step.get("id") == "build")
+    assert build_step["with"]["no-cache"] is True
+    container_commands = _commands(container)
+    assert "docker load" in container_commands
+    assert "smoke_container_runtime.py" in container_commands
 
     python_commands = _commands(python)
     assert "publish_packages.py check" in python_commands
     assert "generate_distribution_attestations.py" in python_commands
     assert "upload-artifact@" in str(python)
+    assert "attest-build-provenance@" in str(python)
+    assert python["permissions"] == {
+        "contents": "read",
+        "id-token": "write",
+        "attestations": "write",
+    }
 
 
 def test_every_workflow_uses_immutable_actions_and_runner_images():
@@ -155,6 +173,11 @@ def test_every_workflow_uses_immutable_actions_and_runner_images():
                     path.name,
                     action,
                 )
+
+
+def test_workflows_do_not_grant_blanket_write_permissions():
+    for path in (REPO_ROOT / ".github" / "workflows").glob("*.y*ml"):
+        assert "write-all" not in path.read_text(encoding="utf-8"), path.name
 
 
 def test_release_workflows_have_no_mutable_latest_aliases():
@@ -193,6 +216,20 @@ def test_python_publish_reuses_the_digest_verified_quality_artifacts():
     assert "publish_packages.py" in commands
     assert "upload --outdir release-artifacts/dist/supply-chain" in commands
     assert 'publish_packages.py "${ARGS[@]}"' in commands
+
+
+def test_supply_chain_pin_changes_require_trusted_context_owner_review():
+    path = REPO_ROOT / ".github" / "workflows" / "supply-chain-review.yaml"
+    workflow = _load_workflow(path)
+    triggers = _trigger(workflow)
+    source = path.read_text(encoding="utf-8")
+
+    assert "pull_request_target" in triggers
+    assert "pull_request" not in triggers
+    assert "actions/checkout@" not in source
+    assert "pull_request.head.sha" in source
+    assert "author_association" in source
+    assert "APPROVED" in source
 
 
 @pytest.mark.parametrize(

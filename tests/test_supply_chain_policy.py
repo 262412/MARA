@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 from scripts.check_supply_chain_policy import _check_action_pins, scan_repository
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -78,3 +80,35 @@ def test_action_policy_rejects_unknown_digests_and_malformed_version_comments():
 
     assert "action-allowlist" in unknown_rules
     assert "action-version-comment" in malformed_rules
+
+
+def test_external_precommit_revisions_are_full_verified_commits():
+    config = yaml.safe_load(
+        (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    for repository in config["repos"]:
+        if repository["repo"] == "local":
+            continue
+        assert len(repository["rev"]) == 40
+        int(repository["rev"], 16)
+
+
+def test_dockerfile_frontend_is_digest_pinned():
+    first_line = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8").splitlines()[0]
+    assert first_line == (
+        "# syntax=docker/dockerfile:1.7@"
+        "sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e"
+    )
+
+
+def test_setup_uv_downloads_are_versioned_and_checksum_verified():
+    for path in (REPO_ROOT / ".github" / "workflows").glob("*.y*ml"):
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job in workflow.get("jobs", {}).values():
+            for step in job.get("steps", []):
+                if not str(step.get("uses", "")).startswith("astral-sh/setup-uv@"):
+                    continue
+                assert step["with"]["version"] == "0.11.19"
+                assert step["with"]["checksum"] == (
+                    "7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368"
+                )

@@ -1,9 +1,39 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
+import tarfile
+import zipfile
+from pathlib import Path
 
 import pytest
+
+
+def _write_distribution_artifact(
+    path: Path,
+    distribution: str,
+    *,
+    requires: tuple[str, ...] = ("demo-dependency>=2",),
+) -> None:
+    metadata = "\n".join(
+        [
+            "Metadata-Version: 2.3",
+            f"Name: {distribution}",
+            "Version: 1.0.0",
+            *[f"Requires-Dist: {requirement}" for requirement in requires],
+            "",
+        ]
+    ).encode()
+    normalized = distribution.replace("-", "_")
+    if path.suffix == ".whl":
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(f"{normalized}-1.0.0.dist-info/METADATA", metadata)
+        return
+    with tarfile.open(path, "w:gz") as archive:
+        info = tarfile.TarInfo(f"{normalized}-1.0.0/PKG-INFO")
+        info.size = len(metadata)
+        archive.addfile(info, io.BytesIO(metadata))
 
 
 def test_distribution_attestations_cover_every_artifact(tmp_path):
@@ -28,7 +58,7 @@ def test_distribution_attestations_cover_every_artifact(tmp_path):
         package_dir.mkdir(parents=True)
         for filename in filenames:
             artifact = package_dir / filename
-            artifact.write_bytes(f"artifact:{distribution}:{filename}".encode())
+            _write_distribution_artifact(artifact, distribution)
             artifacts.append(artifact)
 
     output_dir = tmp_path / "attestations"
@@ -57,10 +87,21 @@ def test_distribution_attestations_cover_every_artifact(tmp_path):
         assert sbom["metadata"]["component"]["hashes"] == [
             {"alg": "SHA-256", "content": digest}
         ]
+        dependency = next(
+            component
+            for component in sbom["components"]
+            if component["name"] == "demo-dependency"
+        )
+        assert dependency["bom-ref"] in sbom["dependencies"][0]["dependsOn"]
         assert spdx["spdxVersion"] == "SPDX-2.3"
         assert spdx["packages"][0]["checksums"] == [
             {"algorithm": "SHA256", "checksumValue": digest}
         ]
+        assert any(package["name"] == "demo-dependency" for package in spdx["packages"])
+        assert any(
+            relationship["relationshipType"] == "DEPENDS_ON"
+            for relationship in spdx["relationships"]
+        )
         assert provenance["_type"] == "https://in-toto.io/Statement/v1"
         assert provenance["subject"] == [
             {"name": relative, "digest": {"sha256": digest}}
@@ -76,8 +117,8 @@ def test_distribution_attestations_fail_closed_when_a_distribution_is_missing(
     dist_root = tmp_path / "dist"
     package_dir = dist_root / "ktem"
     package_dir.mkdir(parents=True)
-    (package_dir / "ktem-1.0.0-py3-none-any.whl").write_bytes(b"wheel")
-    (package_dir / "ktem-1.0.0.tar.gz").write_bytes(b"sdist")
+    _write_distribution_artifact(package_dir / "ktem-1.0.0-py3-none-any.whl", "ktem")
+    _write_distribution_artifact(package_dir / "ktem-1.0.0.tar.gz", "ktem")
 
     with pytest.raises(RuntimeError, match="missing required distributions"):
         generate_attestations(
@@ -108,7 +149,7 @@ def test_distribution_attestations_require_one_wheel_and_one_sdist(tmp_path):
         package_dir = dist_root / distribution
         package_dir.mkdir(parents=True)
         for filename in package_filenames:
-            (package_dir / filename).write_bytes(filename.encode())
+            _write_distribution_artifact(package_dir / filename, distribution)
 
     with pytest.raises(RuntimeError, match="one wheel and one sdist"):
         generate_attestations(
@@ -142,7 +183,7 @@ def test_distribution_attestation_verification_rejects_tampered_artifact(tmp_pat
         package_dir = dist_root / distribution
         package_dir.mkdir(parents=True)
         for filename in package_filenames:
-            (package_dir / filename).write_bytes(filename.encode())
+            _write_distribution_artifact(package_dir / filename, distribution)
 
     evidence = tmp_path / "evidence"
     generate_attestations(

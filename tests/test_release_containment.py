@@ -30,6 +30,8 @@ def test_docker_context_excludes_secrets_runtime_state_and_generated_data():
     required_exclusions = {
         ".env",
         ".env.*",
+        "admin-password",
+        ".secrets/",
         "modelcli.yml",
         "modelcli.yaml",
         "modelcli.*.yml",
@@ -112,11 +114,12 @@ def test_secret_scanning_covers_full_history_and_built_image():
         step for step in history_steps if "checkout" in step["name"].lower()
     )
     assert checkout_step["with"]["fetch-depth"] == 0
-    gitleaks_step = next(step for step in history_steps if "Gitleaks" in step["name"])
-    assert gitleaks_step["uses"].startswith("gitleaks/gitleaks-action@")
-    assert gitleaks_step["env"]["GITLEAKS_ENABLE_COMMENTS"] == "false"
-    assert gitleaks_step["env"]["GITLEAKS_ENABLE_SUMMARY"] == "false"
-    assert gitleaks_step["env"]["GITLEAKS_ENABLE_UPLOAD_ARTIFACT"] == "false"
+    history_command = "\n".join(
+        step.get("run", "") for step in history_steps if "run" in step
+    )
+    assert "ghcr.io/gitleaks/gitleaks:v8.24.3@sha256:" in history_command
+    assert " git --source /repo" in history_command
+    assert " dir --source /repo" in history_command
 
     image_steps = workflow["jobs"]["image"]["steps"]
     build_step = next(step for step in image_steps if "Build" in step["name"])
