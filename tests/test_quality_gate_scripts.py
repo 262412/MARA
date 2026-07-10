@@ -159,6 +159,17 @@ def test_coverage_policy_has_real_package_floors_and_excludes_tests():
     assert "*/ktem_tests/*" in coverage_gate.COVERAGE_OMIT
 
 
+def test_coverage_policy_captures_python_subprocesses(tmp_path):
+    coverage_gate = _load_script("run_coverage_gates.py")
+
+    config_path = coverage_gate.write_coverage_config(tmp_path)
+    config = config_path.read_text(encoding="utf-8")
+
+    assert "patch = subprocess" in config
+    assert "parallel = True" in config
+    assert "relative_files = True" in config
+
+
 def test_diff_coverage_uses_only_changed_production_statements(tmp_path):
     diff_gate = _load_script("check_diff_coverage.py")
     payload = {
