@@ -41,6 +41,7 @@ APPROVED_EXTERNAL_IMAGES = {
 APPROVED_ACTIONS = {
     "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683": "v4.2.2",
     "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10": "v6.0.3",
+    "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093": "v4.3.0",
     "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065": "v5.6.0",
     "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02": "v4.6.2",
     "amannn/action-semantic-pull-request@0723387faaf9b38adef4775cd42cfd5155ed6017": "v5.5.3",

@@ -345,11 +345,17 @@ jobs:
             --output-dir distribution-evidence \
             --commit "$GITHUB_SHA" \
             --builder-id "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          uv run python scripts/generate_distribution_attestations.py \
+            --dist-root dist/supply-chain \
+            --output-dir distribution-evidence \
+            --verify
       - name: Upload distribution evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: python-distribution-supply-chain
-          path: distribution-evidence/
+          path: |
+            dist/supply-chain/
+            distribution-evidence/
           if-no-files-found: error
           retention-days: 30
 
