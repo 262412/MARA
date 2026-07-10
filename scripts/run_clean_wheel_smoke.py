@@ -175,15 +175,21 @@ def _venv_command(venv: Path, name: str) -> Path:
     return venv / suffix
 
 
-def _run(command: list[str | Path], *, env: dict[str, str]) -> None:
+def _run(
+    command: list[str | Path],
+    *,
+    env: dict[str, str],
+    cwd: Path,
+) -> None:
     printable = [str(item) for item in command]
     print("[wheel-smoke]", " ".join(printable), flush=True)
-    subprocess.run(printable, cwd=REPO_ROOT, env=env, check=True)
+    subprocess.run(printable, cwd=cwd, env=env, check=True)
 
 
 def _clean_environment() -> dict[str, str]:
     env = os.environ.copy()
-    env.pop("PYTHONPATH", None)
+    for variable in ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "VIRTUAL_ENV"):
+        env.pop(variable, None)
     return env
 
 
@@ -228,6 +234,7 @@ def _export_constraints(uv: str, root: Path, env: dict[str, str]) -> Path:
             constraints,
         ],
         env=env,
+        cwd=REPO_ROOT,
     )
     return constraints
 
@@ -254,6 +261,7 @@ for distribution in {PACKAGE_ORDER!r}:
     _run(
         [_venv_python(venv), "-c", validation],
         env=env,
+        cwd=venv.parent,
     )
 
 
@@ -283,7 +291,11 @@ if not location.is_relative_to(prefix):
         f"{distribution} metadata loaded outside clean venv: {{location}}"
     )
 """
-    _run([_venv_python(venv), "-c", validation], env=env)
+    _run(
+        [_venv_python(venv), "-c", validation],
+        env=env,
+        cwd=venv.parent,
+    )
 
 
 def _install_wheel_layers(
@@ -307,8 +319,13 @@ def _install_wheel_layers(
                 wheels[distribution],
             ],
             env=env,
+            cwd=venv.parent,
         )
-        _run([uv, "pip", "check", "--python", python], env=env)
+        _run(
+            [uv, "pip", "check", "--python", python],
+            env=env,
+            cwd=venv.parent,
+        )
         _run_layer_imports(distribution, venv, env)
 
 
@@ -332,8 +349,13 @@ def _install_combined_wheels(
             *(wheels[distribution] for distribution in PACKAGE_ORDER),
         ],
         env=env,
+        cwd=venv.parent,
     )
-    _run([uv, "pip", "check", "--python", python], env=env)  # pip check
+    _run(
+        [uv, "pip", "check", "--python", python],
+        env=env,
+        cwd=venv.parent,
+    )  # pip check
 
 
 def _offline_environment(root: Path, env: dict[str, str]) -> dict[str, str]:
@@ -360,13 +382,18 @@ def _run_offline_runtime_smoke(
 ) -> None:
     _assert_installed_distribution_paths(venv, offline_env)
     for executable in ("MARA", "MARA-cli"):
-        _run([_venv_command(venv, executable), "--help"], env=offline_env)
+        _run(
+            [_venv_command(venv, executable), "--help"],
+            env=offline_env,
+            cwd=venv.parent,
+        )
     mara = _venv_command(venv, "MARA")
-    _run([mara, "docqa", "--help"], env=offline_env)
-    _run([mara, "app", "--help"], env=offline_env)
+    _run([mara, "docqa", "--help"], env=offline_env, cwd=venv.parent)
+    _run([mara, "app", "--help"], env=offline_env, cwd=venv.parent)
     _run(
         [mara, "app", "init", "--auth-mode", "local", "--force", "--json"],
         env=offline_env,
+        cwd=venv.parent,
     )
     viewer = (
         runtime.app_data_dir / "assets" / "pdfjs" / "6.1.200" / "web" / "viewer.html"
@@ -399,11 +426,19 @@ def run_smoke(dist_root: Path) -> None:
         env.update(runtime.environment())
         constraints = _export_constraints(uv, smoke_root, env)
 
-        _run([uv, "venv", "--python", sys.executable, str(layer_venv)], env=env)
+        _run(
+            [uv, "venv", "--python", sys.executable, str(layer_venv)],
+            env=env,
+            cwd=smoke_root,
+        )
         _install_wheel_layers(uv, layer_venv, constraints, wheels, env)
         shutil.rmtree(layer_venv)
 
-        _run([uv, "venv", "--python", sys.executable, str(combined_venv)], env=env)
+        _run(
+            [uv, "venv", "--python", sys.executable, str(combined_venv)],
+            env=env,
+            cwd=smoke_root,
+        )
         _install_combined_wheels(uv, combined_venv, constraints, wheels, env)
         _run_offline_runtime_smoke(
             combined_venv,
