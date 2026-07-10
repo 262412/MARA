@@ -3,8 +3,8 @@
 ## Outcome
 
 Task 12A is implemented on top of base
-`0a2002f8edb2991e536e2b6d7f373ce59bf88886`. The implementation commit is
-`54b616a`.
+`0a2002f8edb2991e536e2b6d7f373ce59bf88886`. The original implementation
+commit is `54b616a`; the review-hardened implementation head is `83e1c2a`.
 
 The Web and DocQA Office preview paths now re-export one no-Gradio compatibility
 service backed by a strict shared core. The core validates source signatures,
@@ -350,3 +350,97 @@ runtime data on fastscratch, and no repository-root `data/`, `datasets/`, or
 `outputs/`. Fastscratch is at 295.8G and 471,857 files; scratch is at 71.91G and
 472,450 files, still above its inode soft quota with grace active. No user data
 or caches were deleted.
+
+## Review R2 Remediation (2026-07-11)
+
+R2 identified one Important CFB parser denial-of-service path and one Minor
+lock-lifecycle leak. Protection tests were committed first in `28c9bc5`; the
+minimal production correction is `83e1c2a`.
+
+### R2 Corrections
+
+- The CFB DIFAT header count is rejected before traversal when it exceeds the
+  total sectors physically present in the file. A hostile `0xFFFFFFFF` count
+  paired with a self-referential DIFAT sector can no longer consume unbounded
+  CPU.
+- DIFAT traversal records visited sector IDs and rejects a repeated sector as a
+  cycle. The existing sector reader continues to enforce physical sector
+  bounds for every link.
+- After consuming the declared DIFAT sector count, the chain must point to
+  `END_OF_CHAIN`; a pointer to a FAT, directory, or other non-terminal sector is
+  rejected.
+- All parser failures cross the public classifier boundary as typed
+  `SOURCE_INVALID` errors with `stage=cfb_validation` and actionable details.
+- `hold_conversion_lock` now puts acquisition and the context body under one
+  cleanup path. `KeyboardInterrupt` and `SystemExit` raised by `acquire()`
+  decrement the registry user count and reclaim the keyed entry without trying
+  to release an unacquired lock. Registry cleanup also runs if release itself
+  raises.
+
+The public `MARA`/`MARA-cli`, Web, DocQA, Gradio, DB, JSON, session, cache-name,
+and supported-format surfaces are unchanged.
+
+### R2 TDD Evidence
+
+The pre-change baseline for the directly affected source and Office modules was
+`45 passed`, exit 0.
+
+The R2 RED command exercised three hostile CFB files plus interrupted lock
+acquisition for both `KeyboardInterrupt` and `SystemExit`. Result: `5 failed`,
+exit 1, for the expected reasons:
+
+- the huge-count self-loop exceeded the one-second subprocess safety limit;
+- the short self-cycle and unterminated chain were incorrectly accepted; and
+- both acquisition interruptions left the registry key retained.
+
+After the production change, the same five cases completed in 0.32 seconds:
+`5 passed`, exit 0.
+
+Focused Task 12A GREEN included source classification, coordination, strict
+Office conversion, and compatibility facades: `61 passed`, exit 0.
+
+The relevant ktem regression gate additionally covered import laziness, the
+existing indexing conversion utility, runtime defaults, preview ABI/timer,
+DocQA runtime/helpers/graph scope, and file-index extraction: `135 passed`,
+exit 0. All GREEN pytest runs emitted only the existing pypdf ARC4
+`CryptographyDeprecationWarning`.
+
+### R2 Verification and Diagnostics
+
+- Explicit hygiene over every R2-changed Python file:
+  `No codebase hygiene ratchet violations.`, exit 0.
+- Changed-file pre-commit: every hook passed, including hygiene, Black, isort,
+  flake8, autoflake, mypy, and codespell.
+- `git diff --check` passed for the working tree and R2 commit range.
+- `scripts/codebase_hygiene_baseline.json` remains unchanged.
+- Current production module sizes are `preview/source.py` 450 lines and
+  `preview/coordination.py` 89 lines.
+
+The first test-only hygiene command exited 1 because adding the lock regression
+to `test_preview_office_core.py` made that module 620 lines. The test moved to
+the responsibility-specific `test_preview_coordination.py`; no test data was
+compressed and no baseline was refreshed. The next pre-commit run exited 1
+because mypy correctly rejected a variable-length tuple from the hostile-CFB
+subprocess helper. An explicit three-field assertion and return fixed that test
+contract; all subsequent gates passed.
+
+### R2 Changed Files
+
+- `libs/ktem/ktem/preview/source.py`
+- `libs/ktem/ktem/preview/coordination.py`
+- `libs/ktem/ktem_tests/preview_test_utils.py`
+- `libs/ktem/ktem_tests/test_preview_source_core.py`
+- `libs/ktem/ktem_tests/test_preview_coordination.py`
+
+Minor residual: registry reclamation relies on normal Python exception
+unwinding. Uncatchable process termination such as `SIGKILL` or `os._exit`
+cannot execute a `finally`; the registry is process-local memory and disappears
+with that process, so no stale entry persists across restart. Cross-process
+conversion safety remains the isolated-workspace/validated-atomic-publication
+boundary documented above, not filesystem-lock deduplication.
+
+Final R2 storage checks still show `.venv`, Python, caches, and runtime data on
+the approved fastscratch paths and no repository-root `data/`, `datasets/`, or
+`outputs/`. Fastscratch is at 295.8G and 471,864/500,000 soft files; scratch is
+at 71.91G and 472,476/300,000 soft files, still in inode grace. No user data or
+caches were deleted.
