@@ -7,7 +7,7 @@ repos:
         language: python
         types: [python]
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.3.0
+    rev: 3298ddab3c13dd77d6ce1fc0baf97691430d84b0 # v4.3.0
     hooks:
       - id: check-yaml
         args: ["--unsafe"]
@@ -26,23 +26,23 @@ repos:
         exclude: "^libs/ktem/ktem/assets/vendor/pdfjs/pdfjs-6\\.1\\.200-dist\\.zip$"
       - id: debug-statements
   - repo: https://github.com/ambv/black
-    rev: 22.3.0
+    rev: ae2c0758c9e61a385df9700dc9c231bf54887041 # 22.3.0
     hooks:
       - id: black
         language_version: python3
   - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
+    rev: e44834b7b294701f596c9118d6c370f86671a50d # 5.12.0
     hooks:
       - id: isort
         args: ["--profile", "black"]
         language_version: python3.10
   - repo: https://github.com/pycqa/flake8
-    rev: 4.0.1
+    rev: 82b698e09996cdde5d473e234681d8380810d7a2 # 4.0.1
     hooks:
       - id: flake8
         args: ["--max-line-length", "88", "--extend-ignore", "E203,E501"]
   - repo: https://github.com/myint/autoflake
-    rev: v1.4
+    rev: d43d8a770c0f9ef2f68b368670ab882f6ca6ea03 # v1.4
     hooks:
       - id: autoflake
         args:
@@ -54,23 +54,23 @@ repos:
             "--exclude=tests/*",
           ]
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v2.7.1
+    rev: 50c5478ed9e10bf360335449280cf2a67f4edb7a # v2.7.1
     hooks:
       - id: prettier
         types_or: [markdown, yaml]
         exclude: "(^README\\.md$|^\\.playwright-cli/)"
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: "v1.7.1"
+    rev: 4daa14b20c0f48f472528c2b5f5bca28a18a7ce0 # v1.7.1
     hooks:
       - id: mypy
         additional_dependencies:
           &mypy_dependencies [
             types-PyYAML==6.0.12.11,
-            "types-requests",
-            "sqlmodel",
-            "types-Markdown",
-            "types-cachetools",
-            types-tzlocal,
+            types-requests==2.32.4.20250913,
+            sqlmodel==0.0.25,
+            types-Markdown==3.10.2.20260518,
+            types-cachetools==7.0.0.20260518,
+            types-tzlocal==5.1.0.1,
           ]
         args: ["--check-untyped-defs", "--ignore-missing-imports"]
         exclude: "(^templates/|\\.pyi$|^libs/(kotaemon|slide_cli)/tests/conftest\\.py$)"
@@ -85,8 +85,8 @@ repos:
         args: ["--check-untyped-defs", "--ignore-missing-imports"]
         files: "^libs/slide_cli/tests/conftest\\.py$"
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.4
+    rev: ec0f41b9573937aebab66e3ca5b00d00a7b339fa # v2.2.4
     hooks:
       - id: codespell
         additional_dependencies:
-          - tomli
+          - tomli==2.2.1

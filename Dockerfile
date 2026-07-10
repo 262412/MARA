@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
 FROM ghcr.io/astral-sh/uv:0.11.19@sha256:b46b03ddfcfbf8f547af7e9eaefdf8a39c8cebcba7c98858d3162bd28cf536f6 AS uv-bin
 FROM ollama/ollama:0.31.2@sha256:509fdf54e23bd50d87af646cb51c0a7a203d6a83cc4d6695b3b08c5be1c62c0a AS ollama-source
@@ -17,16 +17,18 @@ RUN apt-get update -qqy \
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=never
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PROJECT_ENVIRONMENT=/opt/mara/.venv
 WORKDIR /opt/mara
 RUN install -d -m 0755 /opt/mara/bin
 COPY pyproject.toml uv.lock README.md LICENSE.txt NOTICE ./
+COPY docker/pyproject.toml docker/uv.lock ./docker/
 COPY libs ./libs
 COPY scripts/prepare_container_nltk.py /opt/mara/bin/prepare_container_nltk.py
 
 FROM builder-base AS lite-builder
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable --extra container-lite \
+    uv sync --project /opt/mara/docker --frozen --no-dev --no-editable \
     && NLTK_CACHE="$(echo /opt/mara/.venv/lib/python*/site-packages/llama_index/core/_static/nltk_cache)" \
     && /opt/mara/.venv/bin/python /opt/mara/bin/prepare_container_nltk.py "$NLTK_CACHE" \
     && NLTK_DATA="$NLTK_CACHE" /opt/mara/.venv/bin/python -c \
@@ -34,7 +36,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM builder-base AS full-builder
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable --extra container-full \
+    uv sync --project /opt/mara/docker --frozen --no-dev --no-editable \
     && NLTK_CACHE="$(echo /opt/mara/.venv/lib/python*/site-packages/llama_index/core/_static/nltk_cache)" \
     && /opt/mara/.venv/bin/python /opt/mara/bin/prepare_container_nltk.py "$NLTK_CACHE" \
     && NLTK_DATA="$NLTK_CACHE" /opt/mara/.venv/bin/python -c \

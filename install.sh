@@ -16,6 +16,11 @@ if ! command -v uv >/dev/null 2>&1; then
   echo "uv is required. Install a verified uv release with your package manager." >&2
   exit 69
 fi
+export UV_PYTHON_DOWNLOADS=never
+if ! uv python find "$PYTHON_BIN" >/dev/null 2>&1; then
+  echo "A local Python $PYTHON_BIN interpreter is required; automatic downloads are disabled." >&2
+  exit 69
+fi
 
 export UV_PROJECT_ENVIRONMENT="$VENV_DIR"
 uv sync \

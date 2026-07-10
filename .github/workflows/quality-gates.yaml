@@ -48,19 +48,56 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
         with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
           enable-cache: true
       - name: Sync locked development environment
         run: uv sync --frozen --python 3.10
       - name: Validate lock and repository hooks
         run: |
           uv lock --check
+          uv lock --project docker --check --python 3.10
           uv run python scripts/sync_locked_constraints.py --check
+          uv run python scripts/check_container_lock_parity.py
           uv run pre-commit run --show-diff-on-failure --all-files
       - name: Enforce static and hygiene checks
         run: |
           uv run ruff check . --exclude '*.pyi' --exclude .playwright-cli --exclude .superpowers
           uv run python scripts/check_codebase_hygiene.py
           uv run python scripts/check_hygiene_baseline.py
+          uv run python scripts/check_supply_chain_policy.py
+
+  dependency-audit:
+    name: Dependency audit ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    env:
+      UV_PYTHON_DOWNLOADS: never
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: root-py310
+            project: .
+            python-version: "3.10"
+          - label: root-py311
+            project: .
+            python-version: "3.11"
+          - label: container-py310
+            project: docker
+            python-version: "3.10"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Fail on known Python dependency vulnerabilities
+        run: |
+          uv audit --project "${{ matrix.project }}" --frozen \
+            --python-version "${{ matrix.python-version }}" \
+            --python-platform x86_64-unknown-linux-gnu
 
   collection:
     name: Unified pytest collection
@@ -74,6 +111,9 @@ jobs:
           python-version: "3.10"
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
       - name: Sync locked environment
         run: uv sync --frozen --python 3.10
       - name: Collect the unified repository suite
@@ -100,6 +140,8 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
         with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
           enable-cache: true
       - name: Sync locked environment
         run: uv sync --frozen --python ${{ matrix.python-version }}
@@ -122,6 +164,9 @@ jobs:
           python-version: "3.10"
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
       - name: Sync locked environment
         run: uv sync --frozen --python 3.10
       - name: Run ktem tests
@@ -139,6 +184,9 @@ jobs:
           python-version: "3.10"
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
       - name: Sync locked environment
         run: uv sync --frozen --python 3.10
       - name: Run slide_cli tests
@@ -156,6 +204,9 @@ jobs:
           python-version: "3.10"
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
       - name: Sync locked environment
         run: uv sync --frozen --python 3.10
       - name: Run benchmark and root tests
@@ -178,6 +229,9 @@ jobs:
           python-version: "3.10"
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
       - name: Sync locked environment
         run: uv sync --frozen --python 3.10
       - name: Install locked Node dependencies
@@ -205,6 +259,9 @@ jobs:
           python-version: "3.10"
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
       - name: Sync locked environment
         run: uv sync --frozen --python 3.10
       - name: Run package coverage floors
@@ -236,6 +293,9 @@ jobs:
           python-version: "3.10"
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
       - name: Sync locked environment
         run: uv sync --frozen --python 3.10
       - name: Build and check four distributions
@@ -259,6 +319,9 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        with:
+          version: v0.34.1
+          driver-opts: image=moby/buildkit:v0.30.0@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f
       - name: Build immutable OCI target with attestations
         id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
@@ -268,12 +331,13 @@ jobs:
           target: ${{ matrix.target }}
           platforms: linux/amd64
           push: false
-          outputs: type=oci,dest=/tmp/mara-${{ matrix.target }}.oci.tar
+          outputs: |
+            type=oci,dest=/tmp/mara-${{ matrix.target }}.oci.tar
+            type=docker,dest=/tmp/mara-${{ matrix.target }}.docker.tar
           tags: mara-quality:${{ matrix.target }}-${{ github.sha }}
           sbom: true
           provenance: mode=max
-          cache-from: type=gha,scope=quality-${{ matrix.target }}
-          cache-to: type=gha,mode=max,scope=quality-${{ matrix.target }}
+          no-cache: true
       - name: Validate and retain BuildKit provenance
         env:
           BUILD_METADATA: ${{ steps.build.outputs.metadata }}
@@ -281,6 +345,19 @@ jobs:
           python scripts/generate_container_attestation.py \
             --target "${{ matrix.target }}" \
             --output-dir container-evidence
+      - name: Load and smoke the actual built runtime
+        run: |
+          docker load --input /tmp/mara-${{ matrix.target }}.docker.tar
+          MARA_SECRET_DIR="$(mktemp -d)"
+          MARA_SECRET_FILE="$MARA_SECRET_DIR/admin-password"
+          trap 'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"' EXIT
+          install -m 0600 /dev/null "$MARA_SECRET_FILE"
+          python -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())' >"$MARA_SECRET_FILE"
+          chmod 0444 "$MARA_SECRET_FILE"
+          python scripts/smoke_container_runtime.py \
+            --image mara-quality:${{ matrix.target }}-${{ github.sha }} \
+            --target "${{ matrix.target }}" \
+            --secret-file "$MARA_SECRET_FILE"
       - name: Scan fixable high and critical image findings
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -332,6 +409,9 @@ jobs:
           python-version: "3.10"
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
       - name: Sync locked build environment
         run: uv sync --frozen --python 3.10
       - name: Build and validate all four distributions
@@ -364,6 +444,7 @@ jobs:
     if: ${{ always() }}
     needs:
       - static
+      - dependency-audit
       - collection
       - secret-scan
       - kotaemon
@@ -378,6 +459,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       STATIC_RESULT: ${{ needs.static.result }}
+      DEPENDENCY_AUDIT_RESULT: ${{ needs['dependency-audit'].result }}
       COLLECTION_RESULT: ${{ needs.collection.result }}
       SECRET_SCAN_RESULT: ${{ needs['secret-scan'].result }}
       KOTAEMON_RESULT: ${{ needs.kotaemon.result }}
@@ -393,7 +475,7 @@ jobs:
       - name: Require every gate to succeed
         run: |
           for result in \
-            "$STATIC_RESULT" "$COLLECTION_RESULT" "$SECRET_SCAN_RESULT" \
+            "$STATIC_RESULT" "$DEPENDENCY_AUDIT_RESULT" "$COLLECTION_RESULT" "$SECRET_SCAN_RESULT" \
             "$KOTAEMON_RESULT" "$KTEM_RESULT" "$SLIDE_RESULT" \
             "$BENCHMARK_RESULT" "$FRONTEND_RESULT" "$COVERAGE_RESULT" "$WHEEL_RESULT" \
             "$CONTAINER_RESULT" "$PYTHON_SUPPLY_RESULT"

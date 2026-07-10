@@ -35,6 +35,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -48,6 +50,9 @@ jobs:
 
       - name: Set up uv
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
 
       - name: Sync locked publishing environment
         run: uv sync --frozen --python 3.11
@@ -64,6 +69,14 @@ jobs:
             --dist-root release-artifacts/dist/supply-chain \
             --output-dir release-artifacts/distribution-evidence \
             --verify
+
+      - name: Sign release distributions and evidence
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: |
+            release-artifacts/dist/supply-chain/**/*.whl
+            release-artifacts/dist/supply-chain/**/*.tar.gz
+            release-artifacts/distribution-evidence/*.json
 
       - name: Publish to TestPyPI
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.repository == 'testpypi' }}

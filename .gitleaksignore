@@ -1,0 +1,13 @@
+# Historical SSO test fixture. The tracked test now constructs a low-entropy fake.
+d7eee97a8fe4bdb5c8723cd19ad405e9b230bf62:libs/ktem/ktem_tests/test_sso_factory.py:generic-api-key:144
+
+# Historical git-secret mappings. Values are SHA-256 path mappings, not credentials.
+c6dd01e8203aacdecd01541cac8429c596fe889a:.gitsecret/paths/mapping.cfg:generic-api-key:1
+5241edbc4696386af3c3bacfff648a7ee80caed7:.gitsecret/paths/mapping.cfg:generic-api-key:1
+
+# Historical benchmark debug records. page_key values identify pages, not secrets.
+026df48b2c2fac399bdfd334bb05a3a588664cda:mara-stream-debug.jsonl:generic-api-key:1
+026df48b2c2fac399bdfd334bb05a3a588664cda:mara-stream-debug.jsonl:generic-api-key:2
+026df48b2c2fac399bdfd334bb05a3a588664cda:mara-stream-debug.jsonl:generic-api-key:3
+026df48b2c2fac399bdfd334bb05a3a588664cda:mara-stream-debug.jsonl:generic-api-key:5
+026df48b2c2fac399bdfd334bb05a3a588664cda:mara-stream-debug.jsonl:generic-api-key:19714

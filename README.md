@@ -272,20 +272,35 @@ docker build --target full -t mara:full .
 Run:
 
 ```shell
+docker volume create mara-data
+MARA_SECRET_DIR="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/mara-secret.XXXXXX")"
+MARA_SECRET_FILE="$MARA_SECRET_DIR/admin-password"
+trap 'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"' EXIT
+install -m 0600 /dev/null "$MARA_SECRET_FILE"
+read -rsp 'MARA admin password: ' MARA_ADMIN_PASSWORD
+printf '\n'
+printf '%s\n' "$MARA_ADMIN_PASSWORD" >"$MARA_SECRET_FILE"
+unset MARA_ADMIN_PASSWORD
+chmod 0444 "$MARA_SECRET_FILE"
 docker run \
   -e MARA_AUTH_MODE=password \
-  --mount type=bind,src="$(pwd)/admin-password",dst=/run/secrets/mara_admin_password,readonly \
-  -v ./ktem_app_data:/var/lib/mara \
+  --mount type=bind,src="$MARA_SECRET_FILE",dst=/run/secrets/mara_admin_password,readonly \
+  --mount type=volume,src=mara-data,dst=/var/lib/mara \
   -p 7860:7860 \
   --rm -it \
   mara:full
 ```
 
 The image runs as fixed user `10001:10001`, and `/var/lib/mara` is its only
-application-data root. Create `admin-password` as a one-line secret file before
-the first run; it is read at runtime and is never copied into the image. For SSO,
-set `MARA_AUTH_MODE=sso`, configure the SSO environment, and omit the password
-mount.
+application-data root. The named volume inherits the image directory ownership,
+so first-run initialization remains writable without making the source tree
+writable. A plain bind-mounted secret must be readable by UID 10001; the example
+uses mode `0444` and keeps it outside the repository/build context. On shared
+hosts, prefer a Docker/Kubernetes secret configured for UID 10001 with mode
+`0440`; the temporary directory and file above are removed automatically when
+the shell exits. `.dockerignore` also excludes common secret names as a second
+line of defense. For SSO, set `MARA_AUTH_MODE=sso`,
+configure the SSO environment, and omit the password mount.
 
 Supply-chain scope:
 
@@ -303,6 +318,11 @@ Supply-chain scope:
   `/var/lib/mara/ollama` directory after deployment.
 - Package and image publishing remains hard-frozen until the required security
   gates and external credential rotation are complete.
+- Supply-chain policy, pins, locks, build definitions, and scanner exclusions
+  require a current-head approval from another owner, member, or invited
+  collaborator. This
+  intentional two-person control means a sole owner cannot approve their own PR;
+  the repository must add a second trusted reviewer before changing these files.
 
 ### CLI Usage
 
@@ -814,19 +834,32 @@ docker build --target full -t mara:full .
 运行：
 
 ```shell
+docker volume create mara-data
+MARA_SECRET_DIR="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/mara-secret.XXXXXX")"
+MARA_SECRET_FILE="$MARA_SECRET_DIR/admin-password"
+trap 'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"' EXIT
+install -m 0600 /dev/null "$MARA_SECRET_FILE"
+read -rsp 'MARA 管理员密码: ' MARA_ADMIN_PASSWORD
+printf '\n'
+printf '%s\n' "$MARA_ADMIN_PASSWORD" >"$MARA_SECRET_FILE"
+unset MARA_ADMIN_PASSWORD
+chmod 0444 "$MARA_SECRET_FILE"
 docker run \
   -e MARA_AUTH_MODE=password \
-  --mount type=bind,src="$(pwd)/admin-password",dst=/run/secrets/mara_admin_password,readonly \
-  -v ./ktem_app_data:/var/lib/mara \
+  --mount type=bind,src="$MARA_SECRET_FILE",dst=/run/secrets/mara_admin_password,readonly \
+  --mount type=volume,src=mara-data,dst=/var/lib/mara \
   -p 7860:7860 \
   --rm -it \
   mara:full
 ```
 
-镜像使用固定用户 `10001:10001`，`/var/lib/mara` 是唯一应用数据根目录。首次
-运行前创建仅含一行密码的 `admin-password` secret 文件；它只在运行时读取，
-不会复制进镜像。SSO 部署应设置 `MARA_AUTH_MODE=sso` 和对应 SSO 环境变量，
-并省略密码挂载。
+镜像使用固定用户 `10001:10001`，`/var/lib/mara` 是唯一应用数据根目录。命名
+volume 会继承镜像目录的 ownership，因此首次初始化可写，同时源码仍保持只读。
+普通 bind secret 必须允许 UID 10001 读取；示例使用 `0444`，并把临时文件放在
+仓库和构建上下文之外。多用户主机优先使用 Docker/Kubernetes secret，将 UID
+设为 10001、mode 设为 `0440`；上例临时目录和文件会在 shell 退出时自动清理，
+`.dockerignore` 也会作为第二层防线排除常见 secret 文件名。SSO 部署应设置
+`MARA_AUTH_MODE=sso` 和对应 SSO 环境变量，并省略密码挂载。
 
 供应链范围：
 
@@ -840,6 +873,9 @@ docker run \
 - Ollama 镜像包含固定版本的二进制和库，但不隐式拉取可变模型；部署后请将
   明确选择的模型拉取到挂载的 `/var/lib/mara/ollama`。
 - 在安全门禁完成并确认外部凭据轮换前，包和镜像发布继续保持硬冻结。
+- 供应链策略、固定版本、锁文件、构建定义和扫描器排除项必须由另一位仓库 owner、
+  member 或受邀 collaborator 对当前 PR head 批准。这是有意的双人控制；单一 owner 无法批准自己的
+  PR，修改这些文件前必须加入第二位可信 reviewer。
 
 ### CLI 使用
 
