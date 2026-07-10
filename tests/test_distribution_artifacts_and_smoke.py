@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import inspect
 import subprocess
 import sys
 import tarfile
@@ -178,3 +179,49 @@ def test_clean_layer_smoke_imports_representative_installed_modules():
     assert layer_imports["ktem"] == ("ktem.index.file.pipelines",)
     assert layer_imports["mara-research-cli"] == ("slide_cli.cli",)
     assert callable(getattr(run_clean_wheel_smoke, "_run_layer_imports", None))
+
+
+def test_smoke_environment_discards_external_pythonpath(monkeypatch):
+    monkeypatch.setenv(
+        "PYTHONPATH",
+        "/checkout/libs/ktem:/checkout/libs/kotaemon:/checkout/libs/slide_cli",
+    )
+    clean_environment = getattr(run_clean_wheel_smoke, "_clean_environment", None)
+
+    assert callable(clean_environment)
+    assert "PYTHONPATH" not in clean_environment()
+
+
+def test_offline_environment_contains_only_guard_pythonpath(tmp_path):
+    offline = run_clean_wheel_smoke._offline_environment(
+        tmp_path,
+        {"PYTHONPATH": "/checkout/libs/ktem", "PATH": "/usr/bin"},
+    )
+
+    assert offline["PYTHONPATH"] == str(tmp_path / "offline-guard")
+
+
+def test_layer_imports_move_to_fresh_offline_runtime_phase():
+    install_source = inspect.getsource(run_clean_wheel_smoke._install_wheel_layers)
+    offline_source = inspect.getsource(
+        run_clean_wheel_smoke._run_offline_runtime_smoke
+    )
+    run_source = inspect.getsource(run_clean_wheel_smoke.run_smoke)
+
+    assert "_run_layer_imports" not in install_source
+    assert "_run_layer_imports" in offline_source
+    assert "layer-venv" in run_source
+    assert "combined-venv" in run_source
+
+
+def test_offline_runtime_verifies_modules_are_loaded_from_venv():
+    assert callable(
+        getattr(run_clean_wheel_smoke, "_assert_installed_distribution_paths", None)
+    )
+    source = inspect.getsource(
+        run_clean_wheel_smoke._assert_installed_distribution_paths
+    )
+
+    assert "PACKAGE_ORDER" in source
+    assert "sys.prefix" in source
+    assert "__file__" in source
