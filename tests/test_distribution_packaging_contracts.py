@@ -104,7 +104,7 @@ def test_constraints_are_a_marker_preserving_export_of_locked_runtime_versions()
     constraints_path = REPO_ROOT / "constraints.txt"
     lines = constraints_path.read_text(encoding="utf-8").splitlines()
     expected_command = (
-        "uv export --locked --no-dev --no-hashes --no-emit-workspace "
+        "uv export --locked --all-packages --no-dev --no-hashes --no-emit-workspace "
         "--no-header --no-annotate"
     )
     assert lines[:3] == [
@@ -125,7 +125,13 @@ def test_constraints_are_a_marker_preserving_export_of_locked_runtime_versions()
         if line.strip() and not line.lstrip().startswith("#")
     ]
     assert requirements
-    assert not {canonicalize_name(req.name) for req in requirements} & DEVELOPER_TOOLS
+    # `build` is a declared chromadb runtime dependency and Gradio 4.39
+    # declares `ruff`; the remaining first-party development group must not
+    # leak through the deprecated `all` extra.
+    transitive_runtime_tools = {"build", "ruff"}
+    assert not {canonicalize_name(req.name) for req in requirements} & (
+        DEVELOPER_TOOLS - transitive_runtime_tools
+    )
     for requirement in requirements:
         pins = [
             specifier.version
