@@ -62,6 +62,17 @@ class ChatAppLoadPorts:
     focus: EventPorts
 
 
+@dataclass(frozen=True)
+class ChatPreviewPorts:
+    selected_file: EventPorts
+    navigation: EventPorts
+    timer: EventPorts
+    context: EventPorts
+    conversation_preview: EventPorts
+    clear_selection: EventPorts
+    pdf_refresh: EventPorts
+
+
 def chat_submit_ports(page: Any) -> ChatSubmitPorts:
     return ChatSubmitPorts(
         submit=_submit_ports(page),
@@ -342,5 +353,87 @@ def _page_context_ports(page: Any) -> EventPorts:
             page.page_strip_file_summary,
             page.page_thumbnail_strip,
             page.page_metadata_strip,
+        ),
+    )
+
+
+def chat_preview_ports(page: Any) -> ChatPreviewPorts:
+    return ChatPreviewPorts(
+        selected_file=_selected_file_ports(page),
+        navigation=_navigation_ports(page),
+        timer=_preview_timer_ports(page),
+        context=_page_context_ports(page),
+        conversation_preview=_conversation_preview_ports(page),
+        clear_selection=EventPorts(outputs=(page._selected_page_text,)),
+        pdf_refresh=EventPorts(outputs=(page._preview_links,)),
+    )
+
+
+def _selected_file_ports(page: Any) -> EventPorts:
+    return EventPorts(
+        inputs=(
+            page.first_selector_choices,
+            page._indices_input[1],
+            page._page_outputs_cache,
+        ),
+        outputs=(
+            page._active_file_id,
+            page._active_file_name,
+            page._active_file_path,
+            page.chat_panel.page_number,
+            page._active_file_total_pages,
+            page.chat_panel.pdf_preview_src,
+            page.chat_panel.pdf_preview_notice,
+            page._last_question,
+            page.info_panel,
+            page.plot_panel,
+            page.state_plot_panel,
+            page.answer_panel,
+            page.chat_panel.chatbot,
+            page._page_outputs_cache,
+        ),
+    )
+
+
+def _navigation_ports(page: Any) -> EventPorts:
+    return EventPorts(
+        inputs=(
+            page.chat_panel.page_number,
+            page._active_file_id,
+            page._active_file_path,
+            page._page_outputs_cache,
+            page._active_file_total_pages,
+        ),
+        outputs=(
+            page.chat_panel.page_number,
+            page._active_file_total_pages,
+            page.chat_panel.pdf_preview_src,
+            page.chat_panel.pdf_preview_notice,
+            page._last_question,
+            page.info_panel,
+            page.plot_panel,
+            page.state_plot_panel,
+            page.answer_panel,
+            page.chat_panel.chatbot,
+        ),
+    )
+
+
+def _preview_timer_ports(page: Any) -> EventPorts:
+    return EventPorts(
+        inputs=(
+            page._active_file_id,
+            page._active_file_name,
+            page._active_file_path,
+            page.chat_panel.page_number,
+            page._active_file_total_pages,
+            page.chat_panel.pdf_preview_src,
+            page.chat_panel.pdf_preview_notice,
+        ),
+        outputs=(
+            page.chat_panel.page_number,
+            page._active_file_total_pages,
+            page.chat_panel.pdf_preview_src,
+            page.chat_panel.pdf_preview_notice,
         ),
     )

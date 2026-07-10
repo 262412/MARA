@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from .chat_gradio_adapters import ChatPreviewPorts, chat_preview_ports
+
 
 def bind_chat_preview_events(
     page: Any,
@@ -57,37 +59,24 @@ def bind_selected_file_change_event(
     if len(page._indices_input) <= 1:
         return
 
+    ports = chat_preview_ports(page)
     event_chain = page._indices_input[1].change(
         fn=page.page_preview.on_selected_file_change,
-        inputs=[
-            page.first_selector_choices,
-            page._indices_input[1],
-            page._page_outputs_cache,
-        ],
-        outputs=_selected_file_outputs(page),
+        inputs=ports.selected_file.gradio_inputs,
+        outputs=ports.selected_file.gradio_outputs,
         show_progress="hidden",
     )
-    _append_context_refresh(event_chain, page, pdfview_js, refresh_page_context_view)
+    _append_context_refresh(
+        event_chain, page, ports, pdfview_js, refresh_page_context_view
+    )
 
 
 def bind_preview_refresh_timer(page: Any) -> None:
+    ports = chat_preview_ports(page)
     page.chat_panel.preview_refresh_timer.tick(
         fn=page.page_preview.on_preview_tick,
-        inputs=[
-            page._active_file_id,
-            page._active_file_name,
-            page._active_file_path,
-            page.chat_panel.page_number,
-            page._active_file_total_pages,
-            page.chat_panel.pdf_preview_src,
-            page.chat_panel.pdf_preview_notice,
-        ],
-        outputs=[
-            page.chat_panel.page_number,
-            page._active_file_total_pages,
-            page.chat_panel.pdf_preview_src,
-            page.chat_panel.pdf_preview_notice,
-        ],
+        inputs=ports.timer.gradio_inputs,
+        outputs=ports.timer.gradio_outputs,
         show_progress="hidden",
     )
 
@@ -100,13 +89,16 @@ def bind_preview_page_button(
     pdfview_js: str,
     refresh_page_context_view: Callable[..., Any],
 ) -> None:
+    ports = chat_preview_ports(page)
     event_chain = button.click(
         fn=handler,
-        inputs=_page_navigation_inputs(page),
-        outputs=_page_navigation_outputs(page),
+        inputs=ports.navigation.gradio_inputs,
+        outputs=ports.navigation.gradio_outputs,
         show_progress="hidden",
     )
-    _append_context_refresh(event_chain, page, pdfview_js, refresh_page_context_view)
+    _append_context_refresh(
+        event_chain, page, ports, pdfview_js, refresh_page_context_view
+    )
 
 
 def bind_page_number_change_event(
@@ -114,96 +106,41 @@ def bind_page_number_change_event(
     pdfview_js: str,
     refresh_page_context_view: Callable[..., Any],
 ) -> None:
+    ports = chat_preview_ports(page)
     event_chain = page.chat_panel.page_number.change(
         fn=page.page_preview.on_page_set,
-        inputs=_page_navigation_inputs(page),
-        outputs=_page_navigation_outputs(page),
+        inputs=ports.navigation.gradio_inputs,
+        outputs=ports.navigation.gradio_outputs,
         show_progress="hidden",
     )
-    _append_context_refresh(event_chain, page, pdfview_js, refresh_page_context_view)
+    _append_context_refresh(
+        event_chain, page, ports, pdfview_js, refresh_page_context_view
+    )
 
 
 def _append_context_refresh(
     event_chain: Any,
     page: Any,
+    ports: ChatPreviewPorts,
     pdfview_js: str,
     refresh_page_context_view: Callable[..., Any],
 ) -> Any:
     return (
         event_chain.then(
             fn=lambda: "",
-            outputs=[page._selected_page_text],
+            outputs=ports.clear_selection.gradio_outputs,
             show_progress="hidden",
         )
         .then(
             fn=refresh_page_context_view,
-            inputs=_page_context_inputs(page),
-            outputs=[
-                page.page_strip_file_summary,
-                page.page_thumbnail_strip,
-                page.page_metadata_strip,
-            ],
+            inputs=ports.context.gradio_inputs,
+            outputs=ports.context.gradio_outputs,
             show_progress="hidden",
         )
         .then(
             fn=lambda: True,
             inputs=None,
-            outputs=[page._preview_links],
+            outputs=ports.pdf_refresh.gradio_outputs,
             js=pdfview_js,
         )
     )
-
-
-def _selected_file_outputs(page: Any) -> list[Any]:
-    return [
-        page._active_file_id,
-        page._active_file_name,
-        page._active_file_path,
-        page.chat_panel.page_number,
-        page._active_file_total_pages,
-        page.chat_panel.pdf_preview_src,
-        page.chat_panel.pdf_preview_notice,
-        page._last_question,
-        page.info_panel,
-        page.plot_panel,
-        page.state_plot_panel,
-        page.answer_panel,
-        page.chat_panel.chatbot,
-        page._page_outputs_cache,
-    ]
-
-
-def _page_navigation_inputs(page: Any) -> list[Any]:
-    return [
-        page.chat_panel.page_number,
-        page._active_file_id,
-        page._active_file_path,
-        page._page_outputs_cache,
-        page._active_file_total_pages,
-    ]
-
-
-def _page_navigation_outputs(page: Any) -> list[Any]:
-    return [
-        page.chat_panel.page_number,
-        page._active_file_total_pages,
-        page.chat_panel.pdf_preview_src,
-        page.chat_panel.pdf_preview_notice,
-        page._last_question,
-        page.info_panel,
-        page.plot_panel,
-        page.state_plot_panel,
-        page.answer_panel,
-        page.chat_panel.chatbot,
-    ]
-
-
-def _page_context_inputs(page: Any) -> list[Any]:
-    return [
-        page._active_file_id,
-        page._active_file_name,
-        page._active_file_path,
-        page.chat_panel.page_number,
-        page._active_file_total_pages,
-        page.page_strip_search,
-    ]
