@@ -82,6 +82,28 @@ def test_private_group_read_update_and_delete_require_owner(private_file_databas
     assert service.delete_group(group_id, "victim") == "Victim"
 
 
+def test_public_index_groups_remain_owner_scoped(private_file_database):
+    index, _source, _index_table, group_table, db_engine = private_file_database
+    index.config = {"private": False}
+    service = FileGroupService(index=index, engine=db_engine)
+    group_id = service.save_group(None, "Victim", ["victim-file"], "victim")
+
+    rows, _frame = service.list_groups("attacker", [])
+    assert rows == []
+    with pytest.raises(GroupServiceError, match="No group found"):
+        service.selected_file_ids(group_id, "attacker")
+    with pytest.raises(GroupServiceError, match="No group found"):
+        service.save_group(group_id, "Stolen", ["attacker-file"], "attacker")
+    with pytest.raises(GroupServiceError, match="No group found"):
+        service.delete_group(group_id, "attacker")
+
+    with Session(db_engine) as session:
+        row = session.query(group_table).filter_by(id=group_id).one()
+        assert row.name == "Victim"
+        assert row.user == "victim"
+        assert row.data == {"files": ["victim-file"]}
+
+
 def test_private_chunk_rendering_and_source_lookup_require_owner(
     private_file_database,
 ):
