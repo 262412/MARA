@@ -162,6 +162,7 @@ def _build_chat_control(graph: EventGraphSpy) -> SimpleNamespace:
         _delete_confirm=marker("chat_control._delete_confirm"),
         new_conv=marker("chat_control.new_conv"),
         select_conv=marker("chat_control.select_conv"),
+        clear_conv=marker("chat_control.clear_conv"),
         delete_conv=marker("chat_control.delete_conv"),
         rename_conv=marker("chat_control.rename_conv"),
         reload_conv=marker("chat_control.reload_conv"),

@@ -418,15 +418,15 @@
       "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/pages/chat/__init__.py": {
-      "module_lines": 2100,
+      "module_lines": 2075,
       "functions": {
         "ChatPage._render_chat_file_list_html": 86,
         "ChatPage.rerun_page_answer": 81
       },
       "classes": {
-        "ChatPage": 1636
+        "ChatPage": 1609
       },
-      "non_actionable_broad_exceptions": 9
+      "non_actionable_broad_exceptions": 6
     },
     "libs/ktem/ktem/pages/chat/chat_knowledge_graph_bindings.py": {
       "module_lines": 230,
@@ -442,7 +442,7 @@
         "ConversationControl.on_building_ui": 124
       },
       "classes": {
-        "ConversationControl": 405
+        "ConversationControl": 404
       },
       "non_actionable_broad_exceptions": 0
     },

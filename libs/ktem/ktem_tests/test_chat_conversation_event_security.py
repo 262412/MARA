@@ -1,10 +1,12 @@
 from types import SimpleNamespace
+from typing import cast
 
 from ktem.pages.chat.chat_auxiliary_events import (
     _bind_user_feedback_events,
     bind_chat_pre_studio_events,
 )
 from ktem.pages.chat.chat_conversation_events import _bind_demo_conversation_events
+from ktem.pages.chat.chat_gradio_adapters import ChatConversationPorts
 
 
 class _Chain:
@@ -70,7 +72,24 @@ def test_demo_new_chat_binds_clear_conversation_callback():
         suggest_chat_conv=object(),
     )
 
-    _bind_demo_conversation_events(page, "focus")
+    def port(*, inputs=None, outputs=None):
+        return SimpleNamespace(gradio_inputs=inputs, gradio_outputs=outputs)
+
+    ports = SimpleNamespace(
+        selection=port(outputs=[]),
+        demo_visibility=port(outputs=[]),
+        clear_answer=port(outputs=[]),
+        citations=port(inputs=[], outputs=[]),
+        reasoning=port(inputs=[], outputs=[]),
+        last_question=port(outputs=[]),
+        suggestions=port(inputs=[], outputs=[]),
+    )
+
+    _bind_demo_conversation_events(
+        page,
+        cast(ChatConversationPorts, ports),
+        "focus",
+    )
 
     assert btn_new.calls[0][1]["fn"] is clear_conv
 

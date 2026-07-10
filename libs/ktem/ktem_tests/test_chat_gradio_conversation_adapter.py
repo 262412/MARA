@@ -157,7 +157,7 @@ def test_demo_conversation_adds_only_visibility_branch_and_keeps_root_order():
     assert _fn_name(select_chain[5]) == "page_preview.refresh_selected_file_preview"
     new_chain = linear_chain(graph, graph.roots("chat_control.btn_new")[0])
     assert [_fn_name(call) for call in new_chain] == [
-        "<lambda>",
+        "chat_control.clear_conv",
         "<lambda>",
         "<lambda>",
         "page.render_latest_citations_card",
@@ -170,19 +170,19 @@ def test_demo_conversation_adds_only_visibility_branch_and_keeps_root_order():
     assert new_chain[-1].params["js"] == "focus-js"
 
 
-def test_sign_out_uses_named_conversation_outputs_and_server_select_values():
+def test_sign_out_uses_named_conversation_outputs_and_clear_adapter():
     graph = EventGraphSpy()
     page = build_chat_page(graph, index_count=6)
     subscriptions = []
-    select_calls = []
+    clear_calls = []
     page.knowledge_graph = False
     page.file_index = None
 
-    def select_conv(conv, user):
-        select_calls.append((conv, user))
+    def clear_conv():
+        clear_calls.append(True)
         return "signed-out"
 
-    page.chat_control.select_conv = select_conv
+    page.chat_control.clear_conv = clear_conv
     page._app.subscribe_event = lambda **definition: subscriptions.append(definition)
 
     ChatPage.on_subscribe_public_events(cast(ChatPage, page))
@@ -191,7 +191,7 @@ def test_sign_out_uses_named_conversation_outputs_and_server_select_values():
     sign_out = subscriptions[1]["definition"]
     assert sign_out["outputs"] == list(chat_conversation_ports(page).selection.outputs)
     assert sign_out["fn"]() == "signed-out"
-    assert select_calls == [("", None)]
+    assert clear_calls == [True]
     assert sign_out["show_progress"] == "hidden"
 
 
