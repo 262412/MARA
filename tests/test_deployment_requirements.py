@@ -99,7 +99,7 @@ def test_source_app_binds_to_azure_app_service_port(monkeypatch):
         captured.update(kwargs)
         captured["resolved_port"] = resolve_gradio_server_port(kwargs.get("port"))
 
-    fake_launcher.launch_app = capture_launch
+    setattr(fake_launcher, "launch_app", capture_launch)
     monkeypatch.setitem(sys.modules, "ktem.launcher", fake_launcher)
     monkeypatch.setenv("WEBSITE_SITE_NAME", "mara-test")
     monkeypatch.setenv("PORT", "8123")

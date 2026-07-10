@@ -1,10 +1,8 @@
 from typing import Any, cast
 
-from _docqa_notebook_fakes import (
-    DummyNotebookService as _DummyNotebookService,
-    DummyRuntime as _DummyRuntime,
-    extract_json_payload as _extract_json_payload,
-)
+from _docqa_notebook_fakes import DummyNotebookService as _DummyNotebookService
+from _docqa_notebook_fakes import DummyRuntime as _DummyRuntime
+from _docqa_notebook_fakes import extract_json_payload as _extract_json_payload
 from click.testing import CliRunner
 from slide_cli.docqa_cli import docqa
 

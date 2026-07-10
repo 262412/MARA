@@ -6,13 +6,11 @@ from pathlib import Path
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from pytest_runtime_isolation import start_process_test_runtime
-
+from pytest_runtime_isolation import start_process_test_runtime  # noqa: E402
 
 _TEST_RUNTIME = start_process_test_runtime()
 atexit.register(_TEST_RUNTIME.close)

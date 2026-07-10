@@ -72,7 +72,7 @@ repos:
             types-tzlocal,
           ]
         args: ["--check-untyped-defs", "--ignore-missing-imports"]
-        exclude: "(^templates/|\\.pyi$)"
+        exclude: "(^templates/|\\.pyi$|(^|/)conftest\\.py$)"
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.4
     hooks:

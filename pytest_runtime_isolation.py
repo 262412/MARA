@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, MutableMapping
 
-
 ISOLATED_RUNTIME_ENV_KEYS = (
     "MARA_RUNTIME_DIR",
     "MARA_OUTPUT_DIR",
