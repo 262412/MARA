@@ -44,8 +44,8 @@ def test_root_uses_runtime_only_kotaemon_extra():
     assert "kotaemon[mara-runtime]" in root_project["dependencies"]
     assert not any("kotaemon[all]" in item for item in root_project["dependencies"])
     assert kotaemon_extras["mara-runtime"]
-    assert kotaemon_extras["adv"] == ["kotaemon[mara-runtime]"]
-    assert kotaemon_extras["all"] == ["kotaemon[mara-runtime,dev]"]
+    assert kotaemon_extras["adv"] == ["kotaemon[llama-cpp,mara-runtime]"]
+    assert kotaemon_extras["all"] == ["kotaemon[dev,llama-cpp,mara-runtime]"]
 
     runtime_names = {
         canonicalize_name(Requirement(item).name)
@@ -76,10 +76,11 @@ def test_all_distributions_use_modern_apache_metadata_and_ship_legal_files():
             item == "License :: OSI Approved :: Apache Software License"
             for item in project.get("classifiers", [])
         ), package_name
-        assert any(
-            requirement.startswith("setuptools >= 77")
-            for requirement in build_requirements
-        ), package_name
+        assert build_requirements == [
+            "setuptools==80.9.0",
+            "wheel==0.45.1",
+            "setuptools-git-versioning==2.1.0",
+        ], package_name
         assert (package_root / "LICENSE.txt").is_file(), package_name
         assert (package_root / "NOTICE").is_file(), package_name
 

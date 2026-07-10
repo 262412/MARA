@@ -19,6 +19,10 @@ from ktem.auth.policy import AuthConfigurationError
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
+def _fake_secret(label: str) -> str:
+    return f"test-only-{label}-" + ("x" * 40)
+
+
 def _sso_module():
     module_spec = importlib.util.find_spec("ktem.sso")
     assert module_spec is not None, "ktem.sso must provide the packaged SSO factory"
@@ -141,7 +145,7 @@ def test_sso_factory_mount_has_login_route_without_model_services(
     )
     monkeypatch.setattr(gradiologin, "register", lambda **_kwargs: None)
     monkeypatch.setenv("AUTHENTICATION_METHOD", "GOOGLE")
-    monkeypatch.setenv("SECRET_KEY", "route-test-secret-with-sufficient-entropy-123")
+    monkeypatch.setenv("SECRET_KEY", _fake_secret("route"))
 
     app = sso.create_sso_app(host="0.0.0.0")
 
@@ -159,7 +163,7 @@ def test_sso_predict_route_rejects_unauthenticated_callback(monkeypatch, tmp_pat
     monkeypatch.setattr(sso, "prepare_launch", lambda **_kwargs: _launch_config())
     monkeypatch.setattr(gradiologin, "register", lambda **_kwargs: None)
     monkeypatch.setenv("AUTHENTICATION_METHOD", "GOOGLE")
-    monkeypatch.setenv("SECRET_KEY", "predict-route-secret-with-sufficient-entropy")
+    monkeypatch.setenv("SECRET_KEY", _fake_secret("predict-route"))
     app = sso.create_sso_app(host="0.0.0.0")
 
     with TestClient(app) as client:
@@ -175,7 +179,7 @@ def test_sso_predict_route_rejects_unauthenticated_callback(monkeypatch, tmp_pat
 def test_sso_predict_route_accepts_signed_provider_session(monkeypatch, tmp_path):
     sso = _sso_module()
     callback_calls: list[str] = []
-    secret_key = "authenticated-route-secret-with-sufficient-entropy"
+    secret_key = _fake_secret("authenticated-route")
     monkeypatch.setattr(sso, "App", _callback_mara_app(tmp_path, callback_calls))
     monkeypatch.setattr(sso, "prepare_launch", lambda **_kwargs: _launch_config())
     monkeypatch.setattr(gradiologin, "register", lambda **_kwargs: None)

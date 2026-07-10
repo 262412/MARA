@@ -114,14 +114,33 @@ def test_secret_scanning_covers_full_history_and_built_image():
         step for step in history_steps if "checkout" in step["name"].lower()
     )
     assert checkout_step["with"]["fetch-depth"] == 0
-    history_command = "\n".join(
-        step.get("run", "") for step in history_steps if "run" in step
+    assert checkout_step["with"]["persist-credentials"] is False
+    history_scan = next(
+        step
+        for step in history_steps
+        if step["name"] == "Scan full Git history with Gitleaks"
     )
-    assert "ghcr.io/gitleaks/gitleaks:v8.24.3@sha256:" in history_command
-    assert " git --source /repo" in history_command
-    assert " dir --source /repo" in history_command
+    worktree_scan = next(
+        step
+        for step in history_steps
+        if step["name"] == "Scan current worktree with Gitleaks"
+    )
+    assert "ghcr.io/gitleaks/gitleaks:v8.24.3@sha256:" in history_scan["run"]
+    assert " git /repo" in history_scan["run"]
+    assert " dir /repo" in worktree_scan["run"]
+    assert "--config /repo/.gitleaks.toml" in history_scan["run"]
+    assert "--config /repo/.gitleaks.toml" in worktree_scan["run"]
+    assert "--verbose" in history_scan["run"]
+    assert "--verbose" in worktree_scan["run"]
+    assert "--redact" in history_scan["run"]
+    assert "--redact" in worktree_scan["run"]
+    assert "always()" in worktree_scan["if"]
 
     image_steps = workflow["jobs"]["image"]["steps"]
+    image_checkout = next(
+        step for step in image_steps if "checkout" in step["name"].lower()
+    )
+    assert image_checkout["with"]["persist-credentials"] is False
     build_step = next(step for step in image_steps if "Build" in step["name"])
     assert "docker build" in build_step["run"]
     assert "--target lite" in build_step["run"]
@@ -131,3 +150,23 @@ def test_secret_scanning_covers_full_history_and_built_image():
     assert trivy_step["with"]["scanners"] == "secret"
     assert trivy_step["with"]["exit-code"] == "1"
     assert trivy_step["with"]["image-ref"]
+
+
+def test_gitleaks_history_baseline_contains_only_exact_triaged_fingerprints():
+    from scripts.supply_chain_pins import GITLEAKS_IGNORE_FINGERPRINTS
+
+    lines = (REPO_ROOT / ".gitleaksignore").read_text(encoding="utf-8").splitlines()
+    actual = tuple(
+        line.strip()
+        for line in lines
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+
+    assert actual == GITLEAKS_IGNORE_FINGERPRINTS
+    assert len(actual) == 8
+
+    config = (REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8")
+    assert "useDefault = true" in config
+    assert 'id = "mara-promptui-frp-token"' in config
+    assert "promptui/tunnel" in config
+    assert "allowlist" not in config.lower()

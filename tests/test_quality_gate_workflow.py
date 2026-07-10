@@ -8,8 +8,10 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "quality-gates.yaml"
+SIGNED_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "signed-provenance.yaml"
 REQUIRED_JOBS = {
     "static",
+    "dependency-audit",
     "collection",
     "secret-scan",
     "kotaemon",
@@ -72,11 +74,28 @@ def test_static_and_test_jobs_enforce_the_repository_contracts():
 
     assert "uv sync --frozen" in static_commands
     assert "uv lock --check" in static_commands
+    assert "uv lock --project docker --check" in static_commands
+    assert "check_container_lock_parity.py" in static_commands
     assert "pre-commit run" in static_commands and "--all-files" in static_commands
     assert "check_codebase_hygiene.py" in static_commands
     assert "check_hygiene_baseline.py" in static_commands
     assert "check_supply_chain_policy.py" in static_commands
     assert "ruff check" in static_commands
+    audit = jobs["dependency-audit"]
+    assert audit["strategy"]["fail-fast"] is False
+    assert audit["strategy"]["matrix"]["include"] == [
+        {"label": "root-py310", "project": ".", "python-version": "3.10"},
+        {"label": "root-py311", "project": ".", "python-version": "3.11"},
+        {
+            "label": "container-py310",
+            "project": "docker",
+            "python-version": "3.10",
+        },
+    ]
+    audit_commands = _commands(audit)
+    assert "uv audit --project" in audit_commands
+    assert "--frozen" in audit_commands
+    assert "--python-version" in audit_commands
     collection_commands = _commands(jobs["collection"])
     assert "check_pytest_collection.py" in collection_commands
     assert "--minimum 1260" in collection_commands
@@ -132,14 +151,10 @@ def test_supply_chain_jobs_build_scan_and_retain_evidence():
         "spdx-json",
         "cyclonedx",
         "upload-artifact@",
-        "attest-build-provenance@",
     ):
         assert token in container_source
-    assert container["permissions"] == {
-        "contents": "read",
-        "id-token": "write",
-        "attestations": "write",
-    }
+    assert "attest-build-provenance@" not in container_source
+    assert "permissions" not in container
     build_step = next(step for step in container["steps"] if step.get("id") == "build")
     assert build_step["with"]["no-cache"] is True
     container_commands = _commands(container)
@@ -150,12 +165,34 @@ def test_supply_chain_jobs_build_scan_and_retain_evidence():
     assert "publish_packages.py check" in python_commands
     assert "generate_distribution_attestations.py" in python_commands
     assert "upload-artifact@" in str(python)
-    assert "attest-build-provenance@" in str(python)
-    assert python["permissions"] == {
+    assert "attest-build-provenance@" not in str(python)
+    assert "permissions" not in python
+
+
+def test_signed_provenance_runs_only_after_a_successful_trusted_push():
+    workflow = _load_workflow(SIGNED_WORKFLOW_PATH)
+    triggers = _trigger(workflow)
+    source = SIGNED_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert triggers == {
+        "workflow_run": {
+            "workflows": ["Quality gates"],
+            "types": ["completed"],
+            "branches": ["main", "Dev"],
+        }
+    }
+    assert workflow["permissions"] == {
+        "actions": "read",
         "contents": "read",
         "id-token": "write",
         "attestations": "write",
     }
+    for job in workflow["jobs"].values():
+        assert "workflow_run.conclusion == 'success'" in job["if"]
+        assert "workflow_run.event == 'push'" in job["if"]
+    assert "run-id: ${{ github.event.workflow_run.id }}" in source
+    assert source.count("actions/attest-build-provenance@") == 2
+    assert "subject-digest: ${{ steps.subject.outputs.digest }}" in source
 
 
 def test_every_workflow_uses_immutable_actions_and_runner_images():
@@ -216,6 +253,26 @@ def test_python_publish_reuses_the_digest_verified_quality_artifacts():
     assert "publish_packages.py" in commands
     assert "upload --outdir release-artifacts/dist/supply-chain" in commands
     assert 'publish_packages.py "${ARGS[@]}"' in commands
+    assert "actions/attest-build-provenance@" in source
+    assert publish["permissions"] == {
+        "contents": "read",
+        "id-token": "write",
+        "attestations": "write",
+    }
+
+
+def test_release_container_digest_is_signed_and_pushed_to_the_registry():
+    build = _load_workflow(
+        REPO_ROOT / ".github" / "workflows" / "build-push-docker.yaml"
+    )["jobs"]["build"]
+    attest = next(
+        step
+        for step in build["steps"]
+        if str(step.get("uses", "")).startswith("actions/attest-build-provenance@")
+    )
+
+    assert attest["with"]["subject-digest"] == "${{ steps.build.outputs.digest }}"
+    assert attest["with"]["push-to-registry"] is True
 
 
 def test_supply_chain_pin_changes_require_trusted_context_owner_review():
@@ -225,11 +282,39 @@ def test_supply_chain_pin_changes_require_trusted_context_owner_review():
     source = path.read_text(encoding="utf-8")
 
     assert "pull_request_target" in triggers
+    assert triggers["pull_request_review"]["types"] == ["submitted", "dismissed"]
     assert "pull_request" not in triggers
     assert "actions/checkout@" not in source
     assert "pull_request.head.sha" in source
     assert "author_association" in source
     assert "APPROVED" in source
+    assert "COLLABORATOR" in source
+    assert "pull_request.changed_files" in source
+    assert "len(files) != expected_file_count" in source
+    for protected in (
+        ".dockerignore",
+        ".gitleaks",
+        "gitleaks.toml",
+        ".trivy",
+        "trivy.yaml",
+        "trivy.yml",
+        "pyproject.toml",
+        "uv.lock",
+        "constraints.txt",
+        "requirements.txt",
+        "requirements.azure.in",
+        "package-lock.json",
+        "install.sh",
+        "install.ps1",
+        "publish_packages.py",
+        "MANIFEST.in",
+        "generate_distribution_attestations.py",
+        "generate_container_attestation.py",
+        "smoke_container_runtime.py",
+        "check_container_lock_parity.py",
+    ):
+        assert protected in source
+    assert "two-person control" in source
 
 
 @pytest.mark.parametrize(

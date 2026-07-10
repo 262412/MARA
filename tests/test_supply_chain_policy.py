@@ -112,3 +112,21 @@ def test_setup_uv_downloads_are_versioned_and_checksum_verified():
                 assert step["with"]["checksum"] == (
                     "7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368"
                 )
+
+
+def test_buildx_and_buildkit_are_version_and_digest_pinned():
+    for path in (REPO_ROOT / ".github" / "workflows").glob("*.y*ml"):
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job in workflow.get("jobs", {}).values():
+            for step in job.get("steps", []):
+                if not str(step.get("uses", "")).startswith(
+                    "docker/setup-buildx-action@"
+                ):
+                    continue
+                assert step["with"] == {
+                    "version": "v0.34.1",
+                    "driver-opts": (
+                        "image=moby/buildkit:v0.30.0@sha256:"
+                        "0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f"
+                    ),
+                }

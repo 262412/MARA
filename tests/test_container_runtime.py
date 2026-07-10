@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import threading
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -134,6 +135,12 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
     repo_root = Path(__file__).resolve().parents[1]
     project = tomli.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
     lock = tomli.loads((repo_root / "uv.lock").read_text(encoding="utf-8"))
+    container_project = tomli.loads(
+        (repo_root / "docker/pyproject.toml").read_text(encoding="utf-8")
+    )
+    container_lock = tomli.loads(
+        (repo_root / "docker/uv.lock").read_text(encoding="utf-8")
+    )
 
     expected_constraints = {
         "mcp==1.12.4",
@@ -152,16 +159,11 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         "wheel==0.45.1",
     }
     assert project["tool"]["uv"]["required-version"] == "==0.11.19"
-    extras = project["project"]["optional-dependencies"]
-    assert extras["container-lite"] == ["mara-research-cli", "torch==2.8.0"]
-    assert extras["container-full"] == ["mara-research-cli", "torch==2.8.0"]
-
     packages = lock["package"]
-    sources = project["tool"]["uv"]["sources"]["torch"]
-    assert sources == [
-        {"index": "pytorch-cpu", "extra": "container-lite"},
-        {"index": "pytorch-cpu", "extra": "container-full"},
-    ]
+    assert "torch" not in project["tool"]["uv"]["sources"]
+    assert container_project["tool"]["uv"]["sources"]["torch"] == {
+        "index": "pytorch-cpu"
+    }
     names = {package["name"] for package in packages}
     assert "triton" in names
     assert any(name.startswith("nvidia-") for name in names)
@@ -170,7 +172,7 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         and package.get("version") == "2.8.0+cpu"
         and package.get("source", {}).get("registry")
         == "https://download.pytorch.org/whl/cpu"
-        for package in packages
+        for package in container_lock["package"]
     )
     assert any(
         package.get("name") == "torch"
@@ -178,6 +180,28 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         and package.get("source", {}).get("registry") == "https://pypi.org/simple"
         for package in packages
     )
+
+    def exported(*arguments: str) -> str:
+        completed = subprocess.run(
+            ["uv", "export", "--frozen", "--no-dev", "--no-hashes", *arguments],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        return completed.stdout
+
+    for gpu_export in (exported(), exported("--extra", "mara")):
+        assert "torch==2.8.0\n" in gpu_export
+        assert "torch==2.8.0+cpu" not in gpu_export
+        assert "nvidia-cuda-runtime-cu12" in gpu_export
+        assert "triton==3.4.0" in gpu_export
+
+    cpu_export = exported("--project", "docker")
+    assert "torch==2.8.0+cpu" in cpu_export
+    assert "nvidia-cuda-runtime-cu12" not in cpu_export
+    assert "triton==3.4.0" not in cpu_export
 
 
 def test_llama_cpp_is_optional_and_not_built_for_container_runtime():
@@ -199,6 +223,39 @@ def test_readme_uses_non_root_compatible_volume_and_secret_permissions():
 
     assert "docker volume create mara-data" in readme
     assert "type=volume,src=mara-data,dst=/var/lib/mara" in readme
+    assert 'install -m 0600 /dev/null "$MARA_SECRET_FILE"' in readme
     assert 'chmod 0444 "$MARA_SECRET_FILE"' in readme
-    assert "${XDG_RUNTIME_DIR:-/tmp}/mara-admin-password" in readme
+    assert "${XDG_RUNTIME_DIR:-/tmp}/mara-secret.XXXXXX" in readme
+    assert "read -rsp 'MARA admin password: ' MARA_ADMIN_PASSWORD" in readme
+    assert "unset MARA_ADMIN_PASSWORD" in readme
+    assert 'trap \'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"\' EXIT' in readme
     assert "-v ./ktem_app_data:/var/lib/mara" not in readme
+
+
+def test_documented_secret_file_permissions_are_non_root_readable_and_cleaned(
+    tmp_path,
+):
+    script = r"""set -eu
+MARA_SECRET_DIR="$(mktemp -d "$1/mara-secret.XXXXXX")"
+MARA_SECRET_FILE="$MARA_SECRET_DIR/admin-password"
+trap 'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"' EXIT
+install -m 0600 /dev/null "$MARA_SECRET_FILE"
+MARA_ADMIN_PASSWORD='not-in-the-command-line'
+printf '%s\n' "$MARA_ADMIN_PASSWORD" >"$MARA_SECRET_FILE"
+unset MARA_ADMIN_PASSWORD
+chmod 0444 "$MARA_SECRET_FILE"
+test "$(stat -c %a "$MARA_SECRET_FILE")" = 444
+test "$(cat "$MARA_SECRET_FILE")" = not-in-the-command-line
+printf '%s\n' "$MARA_SECRET_DIR" >"$2"
+"""
+    marker = tmp_path / "secret-dir"
+
+    completed = subprocess.run(
+        ["bash", "-c", script, "bash", str(tmp_path), str(marker)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert not Path(marker.read_text(encoding="utf-8").strip()).exists()
