@@ -18,17 +18,28 @@ MAX_ADMIN_PASSWORD_FILE_BYTES = 4096
 class _FileSnapshot:
     contents: bytes | None
     mode: int | None
+    write_path: Path
+    symlink_target: str | None
 
 
 def _snapshot_file(path: Path) -> _FileSnapshot:
+    symlink_target = os.readlink(path) if path.is_symlink() else None
+    write_path = path.resolve(strict=False) if symlink_target is not None else path
     try:
-        file_stat = path.stat()
+        file_stat = write_path.stat()
         return _FileSnapshot(
-            contents=path.read_bytes(),
+            contents=write_path.read_bytes(),
             mode=stat.S_IMODE(file_stat.st_mode),
+            write_path=write_path,
+            symlink_target=symlink_target,
         )
     except FileNotFoundError:
-        return _FileSnapshot(contents=None, mode=None)
+        return _FileSnapshot(
+            contents=None,
+            mode=None,
+            write_path=write_path,
+            symlink_target=symlink_target,
+        )
 
 
 def _atomic_replace_file(path: Path, contents: bytes, *, mode: int | None) -> None:
@@ -56,9 +67,18 @@ def _atomic_replace_file(path: Path, contents: bytes, *, mode: int | None) -> No
 def _restore_config_files(snapshots: dict[Path, _FileSnapshot]) -> None:
     for path, snapshot in snapshots.items():
         if snapshot.contents is None:
-            path.unlink(missing_ok=True)
+            snapshot.write_path.unlink(missing_ok=True)
         else:
-            _atomic_replace_file(path, snapshot.contents, mode=snapshot.mode)
+            _atomic_replace_file(
+                snapshot.write_path,
+                snapshot.contents,
+                mode=snapshot.mode,
+            )
+        if snapshot.symlink_target is not None and (
+            not path.is_symlink() or os.readlink(path) != snapshot.symlink_target
+        ):
+            path.unlink(missing_ok=True)
+            path.symlink_to(snapshot.symlink_target)
 
 
 def _write_app_init_files_with_snapshots(
@@ -77,7 +97,10 @@ def _write_app_init_files_with_snapshots(
     runtime_paths.config_dir.mkdir(parents=True, exist_ok=True)
     runtime_paths.data_dir.mkdir(parents=True, exist_ok=True)
     runtime_paths.cache_dir.mkdir(parents=True, exist_ok=True)
-    if runtime_paths.flowsettings_path.exists() and not force:
+    if (
+        runtime_paths.flowsettings_path.exists()
+        or runtime_paths.flowsettings_path.is_symlink()
+    ) and not force:
         raise click.ClickException(
             f"Config file already exists: {runtime_paths.flowsettings_path}"
         )
@@ -91,7 +114,12 @@ def _write_app_init_files_with_snapshots(
     snapshots = {path: _snapshot_file(path) for path in file_contents}
     try:
         for path, contents in file_contents.items():
-            _atomic_replace_file(path, contents, mode=snapshots[path].mode)
+            snapshot = snapshots[path]
+            _atomic_replace_file(
+                snapshot.write_path,
+                contents,
+                mode=snapshot.mode,
+            )
     except Exception:
         _restore_config_files(snapshots)
         raise
@@ -125,13 +153,29 @@ def read_admin_password_file() -> str | None:
         os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
     )
     try:
-        file_descriptor = os.open(password_file, open_flags)
-        file_stat = os.fstat(file_descriptor)
-        if not stat.S_ISREG(file_stat.st_mode):
+        path_stat = os.stat(password_file, follow_symlinks=True)
+        if not stat.S_ISREG(path_stat.st_mode):
             raise click.ClickException(
                 "MARA_ADMIN_PASSWORD_FILE must name an existing regular file."
             )
-        password_bytes = os.read(file_descriptor, MAX_ADMIN_PASSWORD_FILE_BYTES + 1)
+        file_descriptor = os.open(password_file, open_flags)
+        file_stat = os.fstat(file_descriptor)
+        if not stat.S_ISREG(file_stat.st_mode) or (
+            file_stat.st_dev,
+            file_stat.st_ino,
+        ) != (path_stat.st_dev, path_stat.st_ino):
+            raise click.ClickException(
+                "MARA_ADMIN_PASSWORD_FILE must name an existing regular file."
+            )
+        password_chunks = []
+        remaining = MAX_ADMIN_PASSWORD_FILE_BYTES + 1
+        while remaining:
+            chunk = os.read(file_descriptor, remaining)
+            if not chunk:
+                break
+            password_chunks.append(chunk)
+            remaining -= len(chunk)
+        password_bytes = b"".join(password_chunks)
     except OSError:
         raise click.ClickException(
             "MARA_ADMIN_PASSWORD_FILE must name an existing regular file."
@@ -188,29 +232,35 @@ def acquire_admin_password(*, json_output: bool) -> str:
 
 
 def provision_password_admin(*, username: str, password: str, force: bool) -> None:
-    from ktem.runtime_bootstrap import bootstrap_packaged_runtime_settings
-
-    bootstrap_packaged_runtime_settings()
-
+    from ktem.auth.admin_provisioning import provision_password_admin as provision_admin
     from ktem.auth.policy import AuthConfigurationError
-    from ktem.auth.service import provision_password_admin as provision_admin
+    from ktem.runtime_bootstrap import get_runtime_paths
 
     try:
-        provision_admin(username=username, password=password, force=force)
+        database_path = get_runtime_paths().data_dir / "user_data" / "sql.db"
+        provision_admin(
+            database_path=database_path,
+            username=username,
+            password=password,
+            force=force,
+        )
     except AuthConfigurationError as exc:
         raise click.ClickException(str(exc)) from None
 
 
 def preflight_password_admin(*, username: str, password: str, force: bool) -> None:
-    from ktem.runtime_bootstrap import bootstrap_packaged_runtime_settings
-
-    bootstrap_packaged_runtime_settings()
-
+    from ktem.auth.admin_provisioning import preflight_password_admin as preflight_admin
     from ktem.auth.policy import AuthConfigurationError
-    from ktem.auth.service import preflight_password_admin as preflight_admin
+    from ktem.runtime_bootstrap import get_runtime_paths
 
     try:
-        preflight_admin(username=username, password=password, force=force)
+        database_path = get_runtime_paths().data_dir / "user_data" / "sql.db"
+        preflight_admin(
+            database_path=database_path,
+            username=username,
+            password=password,
+            force=force,
+        )
     except AuthConfigurationError as exc:
         raise click.ClickException(str(exc)) from None
 

@@ -247,6 +247,53 @@ def test_password_file_accepts_symlink_to_regular_secret(monkeypatch, tmp_path):
     assert app_init_module.read_admin_password_file() == "SymlinkHorse7!"
 
 
+def test_password_file_rejects_device_before_open(monkeypatch):
+    monkeypatch.setenv("MARA_ADMIN_PASSWORD_FILE", "/dev/null")
+
+    def _unexpected_open(*_args, **_kwargs):
+        pytest.fail("non-regular password path must be rejected before open")
+
+    monkeypatch.setattr(app_init_module.os, "open", _unexpected_open)
+
+    with pytest.raises(click.ClickException, match="existing regular file"):
+        app_init_module.read_admin_password_file()
+
+
+@pytest.mark.parametrize(
+    ("content", "error_fragment"),
+    [
+        pytest.param(
+            b"Aa1!" * 1025,
+            "at most 4096 bytes",
+            id="oversized",
+        ),
+        pytest.param(
+            b"ShortHorse7!\ntrailing-data",
+            "exactly one password line",
+            id="multiline",
+        ),
+    ],
+)
+def test_password_file_short_reads_still_detect_trailing_content(
+    monkeypatch,
+    tmp_path,
+    content,
+    error_fragment,
+):
+    password_path = tmp_path / "short-read-secret.txt"
+    password_path.write_bytes(content)
+    monkeypatch.setenv("MARA_ADMIN_PASSWORD_FILE", str(password_path))
+    original_read = os.read
+
+    def _short_read(file_descriptor, size):
+        return original_read(file_descriptor, min(size, 4))
+
+    monkeypatch.setattr(app_init_module.os, "read", _short_read)
+
+    with pytest.raises(click.ClickException, match=error_fragment):
+        app_init_module.read_admin_password_file()
+
+
 @pytest.mark.parametrize("json_output", [False, True], ids=["text", "json"])
 def test_app_init_password_mode_refuses_noninteractive_input_without_file(
     tmp_path,
