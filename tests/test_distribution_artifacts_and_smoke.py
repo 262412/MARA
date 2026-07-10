@@ -186,10 +186,15 @@ def test_smoke_environment_discards_external_pythonpath(monkeypatch):
         "PYTHONPATH",
         "/checkout/libs/ktem:/checkout/libs/kotaemon:/checkout/libs/slide_cli",
     )
+    monkeypatch.setenv("PYTHONHOME", "/checkout/python")
+    monkeypatch.setenv("PYTHONSTARTUP", "/checkout/startup.py")
+    monkeypatch.setenv("VIRTUAL_ENV", "/checkout/.venv")
     clean_environment = getattr(run_clean_wheel_smoke, "_clean_environment", None)
 
     assert callable(clean_environment)
-    assert "PYTHONPATH" not in clean_environment()
+    clean = clean_environment()
+    for variable in ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "VIRTUAL_ENV"):
+        assert variable not in clean
 
 
 def test_offline_environment_contains_only_guard_pythonpath(tmp_path):
@@ -228,3 +233,35 @@ def test_offline_runtime_verifies_modules_are_loaded_from_venv():
     assert "sys.prefix" in source
     assert "sys.prefix" in layer_source
     assert "__file__" in layer_source
+
+
+def test_command_runner_uses_an_explicit_non_repository_cwd(monkeypatch, tmp_path):
+    captured = {}
+
+    def capture_run(*_args, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(run_clean_wheel_smoke.subprocess, "run", capture_run)
+    run_clean_wheel_smoke._run(
+        ["python", "-c", "pass"],
+        env={},
+        cwd=tmp_path,
+    )
+
+    assert captured["cwd"] == tmp_path
+    assert captured["cwd"] != REPO_ROOT
+
+
+def test_only_locked_export_runs_from_repository_root():
+    export_source = inspect.getsource(run_clean_wheel_smoke._export_constraints)
+    layer_source = inspect.getsource(run_clean_wheel_smoke._run_layer_imports)
+    metadata_source = inspect.getsource(
+        run_clean_wheel_smoke._assert_installed_distribution_paths
+    )
+    offline_source = inspect.getsource(
+        run_clean_wheel_smoke._run_offline_runtime_smoke
+    )
+
+    assert "cwd=REPO_ROOT" in export_source
+    for source in (layer_source, metadata_source, offline_source):
+        assert "cwd=venv.parent" in source
