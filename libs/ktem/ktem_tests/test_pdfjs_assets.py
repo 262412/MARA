@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
 import socket
 import stat
 import zipfile
@@ -262,6 +264,39 @@ def test_existing_corrupt_destination_is_preserved_and_rejected(tmp_path):
         )
 
     assert sentinel.read_text(encoding="utf-8") == "do not overwrite"
+
+
+def test_concurrent_publisher_revalidates_winner_and_cleans_loser(
+    monkeypatch,
+    tmp_path,
+):
+    archive_path = tmp_path / "valid.zip"
+    archive_sha256 = _write_valid_archive(archive_path)
+    app_data_dir = tmp_path / "app-data"
+    real_rename = os.rename
+    raced = False
+
+    def _publish_other_process_then_fail(source, destination):
+        nonlocal raced
+        if not raced and Path(source).name.startswith(f".{PDFJS_VERSION}."):
+            raced = True
+            shutil.copytree(source, destination)
+            raise FileExistsError("another PDF.js materializer won the race")
+        return real_rename(source, destination)
+
+    monkeypatch.setattr("ktem.assets.pdfjs_assets.os.rename", _publish_other_process_then_fail)
+
+    result = _materialize_pdfjs_archive(
+        archive_path=archive_path,
+        expected_sha256=archive_sha256,
+        app_data_dir=app_data_dir,
+    )
+
+    assert raced is True
+    assert result.path == _destination(app_data_dir)
+    assert result.created is False
+    assert (result.path / "web" / "viewer.html").is_file()
+    assert not list(result.path.parent.glob(f".{PDFJS_VERSION}.*"))
 
 
 def test_rejects_symlinked_assets_parent_that_escapes_app_data(tmp_path):
