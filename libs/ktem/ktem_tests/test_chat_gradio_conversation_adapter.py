@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+from typing import cast
 
 import ktem.pages.chat as chat_page_module
 from ktem.pages.chat import ChatPage, chat_conversation_events
@@ -78,6 +78,36 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
         "chat_control.conversation_rn",
         "chat_control.conversation",
     ]
+    new_chain = linear_chain(graph, graph.roots("chat_control.btn_new")[0])
+    assert [_fn_name(call) for call in new_chain] == [
+        "chat_control.new_conv",
+        "chat_control.select_conv",
+        "page._json_to_plot",
+        "<lambda>",
+        "page.render_latest_citations_card",
+        "page.render_latest_reasoning_trace",
+        "<lambda>",
+        "page.suggest_chat_conv",
+        None,
+    ]
+    assert new_chain[0].params["inputs"] is page._app.user_id
+    assert new_chain[1].params["outputs"][-6:] == page._indices_input
+    delete_chain = linear_chain(graph, graph.roots("chat_control.btn_del_conf")[0])
+    assert [_fn_name(call) for call in delete_chain] == [
+        "chat_control.delete_conv",
+        "chat_control.select_conv",
+        "page._json_to_plot",
+        "page.render_latest_citations_card",
+        "page.render_latest_reasoning_trace",
+        "<lambda>",
+    ]
+    rename = graph.roots("chat_control.conversation_rn")[0]
+    assert _fn_name(rename) == "chat_control.rename_conv"
+    assert rename.params["outputs"] == [
+        page.chat_control.conversation,
+        page.chat_control.conversation,
+        page.chat_control.conversation_rn,
+    ]
     select_root = graph.roots("chat_control.conversation")[0]
     select_chain = linear_chain(graph, select_root)
     assert [_fn_name(call) for call in select_chain] == [
@@ -126,6 +156,16 @@ def test_demo_conversation_adds_only_visibility_branch_and_keeps_root_order():
     ]
     assert _fn_name(select_chain[5]) == "page_preview.refresh_selected_file_preview"
     new_chain = linear_chain(graph, graph.roots("chat_control.btn_new")[0])
+    assert [_fn_name(call) for call in new_chain] == [
+        "<lambda>",
+        "<lambda>",
+        "<lambda>",
+        "page.render_latest_citations_card",
+        "page.render_latest_reasoning_trace",
+        "<lambda>",
+        "page.suggest_chat_conv",
+        None,
+    ]
     assert new_chain[0].params["outputs"][-5:] == page._indices_input
     assert new_chain[-1].params["js"] == "focus-js"
 
@@ -137,18 +177,19 @@ def test_sign_out_uses_named_conversation_outputs_and_server_select_values():
     select_calls = []
     page.knowledge_graph = False
     page.file_index = None
-    page.chat_control.select_conv = lambda conv, user: select_calls.append(
-        (conv, user)
-    ) or "signed-out"
+
+    def select_conv(conv, user):
+        select_calls.append((conv, user))
+        return "signed-out"
+
+    page.chat_control.select_conv = select_conv
     page._app.subscribe_event = lambda **definition: subscriptions.append(definition)
 
-    ChatPage.on_subscribe_public_events(page)
+    ChatPage.on_subscribe_public_events(cast(ChatPage, page))
 
     assert [item["name"] for item in subscriptions] == ["onSignIn", "onSignOut"]
     sign_out = subscriptions[1]["definition"]
-    assert sign_out["outputs"] == list(
-        chat_conversation_ports(page).selection.outputs
-    )
+    assert sign_out["outputs"] == list(chat_conversation_ports(page).selection.outputs)
     assert sign_out["fn"]() == "signed-out"
     assert select_calls == [("", None)]
     assert sign_out["show_progress"] == "hidden"
@@ -164,7 +205,7 @@ def test_demo_app_load_chain_uses_named_ports_and_exact_parent_order(monkeypatch
     page.chat_control.btn_demo_login = marker("chat_control.btn_demo_login")
     monkeypatch.setattr(chat_page_module, "KH_DEMO_MODE", True)
 
-    ChatPage._on_app_created(page)
+    ChatPage._on_app_created(cast(ChatPage, page))
 
     chain = linear_chain(graph, graph.roots("app.load")[0])
     ports = chat_app_load_ports(page)

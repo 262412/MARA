@@ -124,7 +124,9 @@ def linear_chain(graph: EventGraphSpy, root: EventCall) -> list[EventCall]:
         if not children:
             return chain
         if len(children) != 1:
-            raise AssertionError(f"node {chain[-1].node_id} has {len(children)} children")
+            raise AssertionError(
+                f"node {chain[-1].node_id} has {len(children)} children"
+            )
         chain.append(children[0])
 
 
