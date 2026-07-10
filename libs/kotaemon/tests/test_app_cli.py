@@ -3,6 +3,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from click.testing import CliRunner
+
+from kotaemon import cli as cli_module
 from kotaemon.cli import _extract_json_payload
 
 
@@ -96,6 +99,27 @@ def test_app_run_help_lists_platform_skill(tmp_path):
 
     assert result.returncode == 0, result.stdout + "\nSTDERR:\n" + result.stderr
     assert "Platform skill: MARA-app-run" in result.stdout
+
+
+def test_app_run_share_forwards_explicit_share_to_policy_launcher(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cli_module, "_bootstrap_runtime_settings", lambda: None)
+
+    from ktem import launcher as launcher_module
+
+    monkeypatch.setattr(
+        launcher_module,
+        "launch_app",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    result = CliRunner().invoke(
+        cli_module.app,
+        ["run", "--share", "--no-browser"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls == [{"host": None, "port": None, "share": True, "inbrowser": False}]
 
 
 def test_source_app_uses_shared_policy_aware_launcher():

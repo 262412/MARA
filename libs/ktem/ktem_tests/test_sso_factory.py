@@ -1,5 +1,8 @@
 import importlib
 import importlib.util
+import inspect
+import json
+from base64 import b64encode
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -9,6 +12,7 @@ import gradiologin
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
+from itsdangerous import TimestampSigner
 from ktem import launcher
 from ktem.auth.policy import AuthConfigurationError
 
@@ -35,6 +39,34 @@ def _fake_mara_app(tmp_path):
             return blocks
 
     return _FakeMaraApp
+
+
+def _callback_mara_app(tmp_path, callback_calls):
+    class _CallbackMaraApp:
+        _favicon = str(tmp_path / "favicon.svg")
+
+        def make(self):
+            def _predict(value):
+                callback_calls.append(value)
+                return f"handled:{value}"
+
+            with gr.Blocks() as blocks:
+                value = gr.Textbox()
+                output = gr.Textbox()
+                gr.Button("Run").click(
+                    _predict,
+                    inputs=value,
+                    outputs=output,
+                    api_name="predict",
+                )
+            return blocks
+
+    return _CallbackMaraApp
+
+
+def _signed_session_cookie(secret_key, claim):
+    payload = b64encode(json.dumps({"user": claim}).encode("utf-8"))
+    return TimestampSigner(secret_key).sign(payload).decode("utf-8")
 
 
 def test_packaged_sso_factory_uses_gradiologin_mount(monkeypatch, tmp_path):
@@ -75,6 +107,7 @@ def test_packaged_sso_factory_uses_gradiologin_mount(monkeypatch, tmp_path):
     assert mounted["path"] == "/app"
     assert str(sso.ASSETS_DIR) in mounted["kwargs"]["allowed_paths"]
     assert mounted["kwargs"]["secret_key"] != "some-secret-string"
+    assert mounted["kwargs"]["auth_dependency"] is sso.sso_auth_dependency
     assert registered[0]["name"] == "google"
     assert app.state.mara_app is mara_app
 
@@ -108,7 +141,7 @@ def test_sso_factory_mount_has_login_route_without_model_services(
     )
     monkeypatch.setattr(gradiologin, "register", lambda **_kwargs: None)
     monkeypatch.setenv("AUTHENTICATION_METHOD", "GOOGLE")
-    monkeypatch.setenv("SECRET_KEY", "route-test-secret")
+    monkeypatch.setenv("SECRET_KEY", "route-test-secret-with-sufficient-entropy-123")
 
     app = sso.create_sso_app(host="0.0.0.0")
 
@@ -119,14 +152,115 @@ def test_sso_factory_mount_has_login_route_without_model_services(
         assert client.get("/login").status_code == 200
 
 
+def test_sso_predict_route_rejects_unauthenticated_callback(monkeypatch, tmp_path):
+    sso = _sso_module()
+    callback_calls: list[str] = []
+    monkeypatch.setattr(sso, "App", _callback_mara_app(tmp_path, callback_calls))
+    monkeypatch.setattr(sso, "prepare_launch", lambda **_kwargs: _launch_config())
+    monkeypatch.setattr(gradiologin, "register", lambda **_kwargs: None)
+    monkeypatch.setenv("AUTHENTICATION_METHOD", "GOOGLE")
+    monkeypatch.setenv("SECRET_KEY", "predict-route-secret-with-sufficient-entropy")
+    app = sso.create_sso_app(host="0.0.0.0")
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/app/api/predict",
+            json={"data": ["blocked"], "fn_index": 0, "session_hash": "test"},
+        )
+
+    assert response.status_code == 401
+    assert callback_calls == []
+
+
+def test_sso_predict_route_accepts_signed_provider_session(monkeypatch, tmp_path):
+    sso = _sso_module()
+    callback_calls: list[str] = []
+    secret_key = "authenticated-route-secret-with-sufficient-entropy"
+    monkeypatch.setattr(sso, "App", _callback_mara_app(tmp_path, callback_calls))
+    monkeypatch.setattr(sso, "prepare_launch", lambda **_kwargs: _launch_config())
+    monkeypatch.setattr(gradiologin, "register", lambda **_kwargs: None)
+    monkeypatch.setenv("AUTHENTICATION_METHOD", "GOOGLE")
+    monkeypatch.setenv("SECRET_KEY", secret_key)
+    app = sso.create_sso_app(host="0.0.0.0")
+
+    with TestClient(app) as client:
+        client.cookies.set(
+            "session",
+            _signed_session_cookie(
+                secret_key,
+                {"sub": "provider-subject", "email": "person@example.test"},
+            ),
+        )
+        response = client.post(
+            "/app/api/predict",
+            json={"data": ["allowed"], "fn_index": 0, "session_hash": "test"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == ["handled:allowed"]
+    assert callback_calls == ["allowed"]
+
+
+def test_sso_factory_has_no_prepared_config_bypass():
+    sso = _sso_module()
+
+    assert "launch_config" not in inspect.signature(sso.create_sso_app).parameters
+
+
+@pytest.mark.parametrize(
+    "weak_secret",
+    [
+        "some-secret-string",
+        "default-secret-key",
+        "short-secret",
+        "a" * 64,
+    ],
+)
+def test_sso_factory_rejects_weak_configured_session_secret(
+    monkeypatch,
+    weak_secret,
+):
+    sso = _sso_module()
+    monkeypatch.setenv("SECRET_KEY", weak_secret)
+
+    with pytest.raises(AuthConfigurationError, match="SECRET_KEY") as captured:
+        sso._session_secret()
+
+    assert weak_secret not in str(captured.value)
+
+
+def test_sso_factory_accepts_strong_configured_session_secret(monkeypatch):
+    sso = _sso_module()
+    configured_secret = "strong-configured-secret-with-entropy-123456789"
+    monkeypatch.setenv("SECRET_KEY", configured_secret)
+
+    assert sso._session_secret() == configured_secret
+
+
 def test_packaged_launcher_dispatches_sso_to_uvicorn(monkeypatch, tmp_path):
     sso = _sso_module()
-    config = _launch_config(host="0.0.0.0")
     mara_app = object()
-    fastapi_app = SimpleNamespace(state=SimpleNamespace(mara_app=mara_app))
+    fastapi_app = SimpleNamespace(
+        state=SimpleNamespace(
+            mara_app=mara_app,
+            launch_config=_launch_config(host="0.0.0.0"),
+        )
+    )
     calls = []
-    monkeypatch.setattr(launcher, "prepare_launch", lambda **_kwargs: config)
-    monkeypatch.setattr(sso, "create_sso_app", lambda **_kwargs: fastapi_app)
+    factory_calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(launcher.flowsettings, "MARA_AUTH_MODE", "sso", raising=False)
+    monkeypatch.setattr(launcher.flowsettings, "KH_SSO_ENABLED", False, raising=False)
+    monkeypatch.setattr(
+        launcher,
+        "prepare_launch",
+        lambda **_kwargs: pytest.fail("SSO policy belongs to the SSO factory"),
+    )
+
+    def _create_sso_app(**kwargs):
+        factory_calls.append(kwargs)
+        return fastapi_app
+
+    monkeypatch.setattr(sso, "create_sso_app", _create_sso_app)
     monkeypatch.setattr(
         uvicorn,
         "run",
@@ -141,6 +275,7 @@ def test_packaged_launcher_dispatches_sso_to_uvicorn(monkeypatch, tmp_path):
     result = launcher.launch_app(host="0.0.0.0", port=9000, inbrowser=False)
 
     assert result is mara_app
+    assert factory_calls == [{"host": "0.0.0.0", "share": None}]
     assert calls == [(fastapi_app, {"host": "0.0.0.0", "port": 9000})]
 
 

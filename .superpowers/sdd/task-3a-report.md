@@ -119,3 +119,45 @@ launch paths pass through the shared pre-bind policy seam.
   compatible CLI options themselves remain intentionally deferred to Task 3B.
 - Existing Gradio/FastAPI lifecycle and pypdf ARC4 deprecation warnings remain
   unrelated dependency debt.
+
+## Formal review fixes
+
+Formal review found five follow-up issues. All were reproduced with focused
+tests before production changes.
+
+- Added a package-owned Gradio `auth_dependency` that accepts only a signed
+  gradiologin session containing nonempty `sub` and `email` claims, and returns
+  the stable provider subject. This closes gradiologin's `/app/api/predict`
+  middleware exemption at Gradio's own `login_check` dependency.
+- Added an in-memory callback regression: unauthenticated
+  `POST /app/api/predict` now returns 401 and executes the backend zero times;
+  the same request with a locally signed provider session returns 200 and
+  executes exactly once. No OAuth or external request is used.
+- Moved effective Gradio share resolution into `prepare_launch()`. Explicit or
+  flowsetting-enabled share is rejected for `auto`/`local`; password mode may
+  share. `MARA app run --share` forwarding remains unchanged.
+- `prepare_launch()` now propagates the resolved canonical `MARA_AUTH_MODE`,
+  derived legacy SSO flag, and user-management flag into runtime flowsettings.
+  Both legacy SSO and safe legacy-admin mappings have focused coverage.
+- Removed the SSO factory's prepared-`LaunchConfig` argument. The factory now
+  accepts only primitive host/share inputs and always calls the policy seam;
+  the packaged launcher reads the resulting config from FastAPI state only
+  after the factory has validated it.
+- Configured SSO secrets now reject both known defaults, values below 32
+  characters, and low-diversity values. Diagnostics never echo the secret;
+  the cryptographic per-process fallback remains available when unset.
+
+Review RED: exit 1, **17 failed, 11 passed**. Failures covered the executed
+unauthenticated callback (HTTP 200 instead of 401), absent auth dependency,
+factory config bypass, four weak-secret cases, local share bypass, both missing
+legacy-mode propagations, and SSO launcher policy bypass.
+
+Review GREEN:
+
+- Focused review suite: **29 passed**.
+- Auth/launcher/login integration: **155 passed**.
+- Packaged app CLI integration: **8 passed**.
+- Changed-file hygiene: no ratchet violations.
+- Changed-file pre-commit: all hooks passed after formatter/type cleanup.
+- Baseline, public CLI options, DB/JSON/session shapes, and event order remain
+  unchanged.
