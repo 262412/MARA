@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import subprocess
 import sys
 import tarfile
@@ -17,6 +18,14 @@ PACKAGES = {
     "ktem": REPO_ROOT / "libs" / "ktem",
     "mara-research-cli": REPO_ROOT / "libs" / "slide_cli",
 }
+
+
+def _write_sdist(path: Path, members: list[tuple[str, bytes]]) -> None:
+    with tarfile.open(path, mode="w:gz") as archive:
+        for name, content in members:
+            member = tarfile.TarInfo(name)
+            member.size = len(content)
+            archive.addfile(member, io.BytesIO(content))
 
 
 def _build(
@@ -84,6 +93,65 @@ def test_wheel_validator_rejects_artifact_without_legal_files(tmp_path):
 
     with pytest.raises(RuntimeError, match="LICENSE"):
         run_clean_wheel_smoke.validate_wheel_contents(wheels)
+
+
+def test_sdist_validator_selects_root_metadata_over_egg_info_copy(tmp_path):
+    sdist = tmp_path / "mara_app-1.0.tar.gz"
+    _write_sdist(
+        sdist,
+        [
+            ("mara_app-1.0/LICENSE.txt", b"license"),
+            ("mara_app-1.0/NOTICE", b"notice"),
+            (
+                "mara_app-1.0/PKG-INFO",
+                b"Metadata-Version: 2.4\nLicense-Expression: Apache-2.0\n",
+            ),
+            (
+                "mara_app-1.0/mara_app.egg-info/PKG-INFO",
+                b"Metadata-Version: 2.4\n",
+            ),
+        ],
+    )
+
+    run_clean_wheel_smoke.validate_sdist_contents({"mara-app": sdist})
+
+
+def test_sdist_validator_rejects_missing_root_metadata(tmp_path):
+    sdist = tmp_path / "mara_app-1.0.tar.gz"
+    _write_sdist(
+        sdist,
+        [
+            ("mara_app-1.0/LICENSE.txt", b"license"),
+            ("mara_app-1.0/NOTICE", b"notice"),
+            (
+                "mara_app-1.0/mara_app.egg-info/PKG-INFO",
+                b"Metadata-Version: 2.4\nLicense-Expression: Apache-2.0\n",
+            ),
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="root PKG-INFO"):
+        run_clean_wheel_smoke.validate_sdist_contents({"mara-app": sdist})
+
+
+def test_sdist_validator_rejects_duplicate_root_metadata(tmp_path):
+    sdist = tmp_path / "mara_app-1.0.tar.gz"
+    root_metadata = (
+        "mara_app-1.0/PKG-INFO",
+        b"Metadata-Version: 2.4\nLicense-Expression: Apache-2.0\n",
+    )
+    _write_sdist(
+        sdist,
+        [
+            ("mara_app-1.0/LICENSE.txt", b"license"),
+            ("mara_app-1.0/NOTICE", b"notice"),
+            root_metadata,
+            root_metadata,
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="root PKG-INFO"):
+        run_clean_wheel_smoke.validate_sdist_contents({"mara-app": sdist})
 
 
 def test_distribution_smoke_validates_sdists_and_offline_app_init():
