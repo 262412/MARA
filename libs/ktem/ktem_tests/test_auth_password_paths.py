@@ -1,6 +1,8 @@
 import hashlib
 import importlib
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import gradiologin
 import pytest
@@ -77,6 +79,95 @@ def test_login_accepts_versioned_bcrypt_sha256_password(monkeypatch, user_engine
     page = object.__new__(login_module.LoginPage)
 
     assert page.login("BcryptUser", password, None) == (user_id, "", "")
+
+
+def test_login_missing_user_runs_password_verifier_once(monkeypatch, user_engine):
+    password = "CorrectHorse7!"
+    verify_calls = []
+    warnings: list[str] = []
+
+    def _verify_password(candidate, stored_hash):
+        verify_calls.append((candidate, stored_hash))
+        return False, None
+
+    monkeypatch.setattr(login_module, "engine", user_engine)
+    monkeypatch.setattr(login_module, "verify_password", _verify_password)
+    monkeypatch.setattr(gradiologin, "get_user", lambda _request: None)
+    monkeypatch.setattr(login_module.gr, "Warning", warnings.append)
+
+    page = object.__new__(login_module.LoginPage)
+
+    assert page.login("MissingUser", password, None) == (
+        None,
+        "MissingUser",
+        password,
+    )
+    assert verify_calls == [(password, None)]
+    assert warnings == ["Invalid username or password"]
+
+
+def test_login_rejects_stale_legacy_auth_when_concurrent_reset_wins(monkeypatch):
+    password = "CorrectHorse7!"
+    legacy_hash = hashlib.sha256(password.encode()).hexdigest()
+    reset_hash = importlib.import_module("ktem.auth.passwords").hash_password(
+        "ResetHorse8!"
+    )
+    stale_user = User(
+        id="race-user",
+        username="RaceUser",
+        username_lower="raceuser",
+        password=legacy_hash,
+    )
+    state: dict[str, Any] = {
+        "password": legacy_hash,
+        "rolled_back": False,
+        "cas_parameters": [],
+    }
+    warnings: list[str] = []
+
+    class _RaceResult:
+        def first(self):
+            state["password"] = reset_hash
+            return stale_user
+
+    class _RaceSession:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def exec(self, _statement):
+            return _RaceResult()
+
+        def execute(self, statement):
+            state["cas_parameters"] = list(statement.compile().params.values())
+            return SimpleNamespace(rowcount=0)
+
+        def add(self, user):
+            state["password"] = user.password
+
+        def commit(self):
+            return None
+
+        def rollback(self):
+            state["rolled_back"] = True
+
+    monkeypatch.setattr(login_module, "Session", _RaceSession)
+    monkeypatch.setattr(gradiologin, "get_user", lambda _request: None)
+    monkeypatch.setattr(login_module.gr, "Warning", warnings.append)
+
+    page = object.__new__(login_module.LoginPage)
+
+    assert page.login("RaceUser", password, None) == (None, "RaceUser", password)
+    assert state["password"] == reset_hash
+    assert state["rolled_back"] is True
+    assert legacy_hash in state["cas_parameters"]
+    assert "race-user" in state["cas_parameters"]
+    assert warnings == ["Invalid username or password"]
 
 
 def test_ktem_declares_bcrypt_as_a_direct_runtime_dependency():

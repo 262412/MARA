@@ -133,6 +133,56 @@ def test_verify_password_rejects_prefixed_bcrypt_with_wrong_cost():
 @pytest.mark.parametrize(
     "stored_hash",
     [
+        None,
+        "",
+        "not-a-password-hash",
+        "g" * 64,
+        hashlib.sha256(b"CorrectHorse7!").hexdigest(),
+        "$2b$12$malformed",
+        f"{MARA_BCRYPT_SHA256_PREFIX}$2b$12$malformed",
+        f"{MARA_BCRYPT_SHA256_PREFIX}$2b$12${'a' * 53}",
+        f"{MARA_BCRYPT_SHA256_PREFIX}$2b$04${'a' * 53}",
+    ],
+)
+def test_non_versioned_failure_paths_use_one_fixed_cost_12_bcrypt_check(
+    monkeypatch,
+    stored_hash,
+):
+    passwords = _passwords_module()
+    check_calls = []
+
+    def _checkpw(password_input, bcrypt_hash):
+        check_calls.append((password_input, bcrypt_hash))
+        return False
+
+    monkeypatch.setattr(passwords.bcrypt, "checkpw", _checkpw)
+
+    assert passwords.verify_password("WrongHorse7!", stored_hash) == (False, None)
+    assert len(check_calls) == 1
+    assert check_calls[0][1] == passwords._DUMMY_BCRYPT_HASH
+    assert check_calls[0][1].startswith(b"$2b$12$")
+
+
+def test_failed_versioned_password_uses_the_stored_bcrypt_hash_once(monkeypatch):
+    passwords = _passwords_module()
+    stored_hash = passwords.hash_password("CorrectHorse7!")
+    bcrypt_hash = stored_hash[len(MARA_BCRYPT_SHA256_PREFIX) :].encode("ascii")
+    check_calls = []
+
+    def _checkpw(password_input, selected_hash):
+        check_calls.append((password_input, selected_hash))
+        return False
+
+    monkeypatch.setattr(passwords.bcrypt, "checkpw", _checkpw)
+
+    assert passwords.verify_password("WrongHorse7!", stored_hash) == (False, None)
+    assert len(check_calls) == 1
+    assert check_calls[0][1] == bcrypt_hash
+
+
+@pytest.mark.parametrize(
+    "stored_hash",
+    [
         "",
         "not-a-password-hash",
         "g" * 64,

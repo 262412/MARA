@@ -1,8 +1,12 @@
+from typing import Any, cast
+
 import gradio as gr
 from ktem.app import BasePage
 from ktem.auth.passwords import verify_password
 from ktem.db.models import User, engine
 from ktem.pages.resources.user import create_user
+from sqlalchemy import update
+from sqlalchemy.engine import CursorResult
 from sqlmodel import Session, select
 
 fetch_creds = """
@@ -20,6 +24,29 @@ function(usn, pwd) {
     return [usn, pwd];
 }
 """
+
+
+def _compare_and_swap_password_hash(
+    session: Session,
+    *,
+    user_id: str,
+    original_hash: str,
+    upgraded_hash: str,
+) -> bool:
+    result = cast(
+        CursorResult[Any],
+        session.execute(
+            update(User)
+            .where(User.id == user_id, User.password == original_hash)
+            .values(password=upgraded_hash)
+        ),
+    )
+    if result.rowcount != 1:
+        session.rollback()
+        return False
+
+    session.commit()
+    return True
 
 
 class LoginPage(BasePage):
@@ -122,13 +149,15 @@ class LoginPage(BasePage):
                     User.username_lower == usn.lower().strip(),
                 )
                 user = session.exec(stmt).first()
-                if user is not None:
-                    verified, upgraded_hash = verify_password(pwd, user.password)
-                    if verified:
-                        if upgraded_hash is not None:
-                            user.password = upgraded_hash
-                            session.add(user)
-                            session.commit()
+                stored_hash = user.password if user is not None else None
+                verified, upgraded_hash = verify_password(pwd, stored_hash)
+                if user is not None and verified:
+                    if upgraded_hash is None or _compare_and_swap_password_hash(
+                        session,
+                        user_id=user.id,
+                        original_hash=user.password,
+                        upgraded_hash=upgraded_hash,
+                    ):
                         return user.id, "", ""
 
                 gr.Warning("Invalid username or password")

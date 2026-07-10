@@ -11,7 +11,10 @@ import bcrypt
 
 BCRYPT_ROUNDS = 12
 MARA_BCRYPT_SHA256_PREFIX = "$mara-bcrypt-sha256$"
-_BCRYPT_HASH_PATTERN = re.compile(r"\$2[aby]\$12\$[./A-Za-z0-9]{53}\Z")
+_DUMMY_BCRYPT_HASH = b"$2b$12$RwhUy721./dNELW47maHVeTbdjFVSiiZZLHJ1XGD5gqvLWMjafAt."
+_BCRYPT_HASH_PATTERN = re.compile(
+    r"\$2[aby]\$12\$[./A-Za-z0-9]{21}[.Oeu]" r"[./A-Za-z0-9]{30}[.CGKOSWaeimquy26]\Z"
+)
 _LEGACY_SHA256_PATTERN = re.compile(r"[0-9a-fA-F]{64}\Z")
 
 
@@ -29,33 +32,41 @@ def hash_password(password: str) -> str:
     return f"{MARA_BCRYPT_SHA256_PREFIX}{bcrypt_hash}"
 
 
+def _reject_with_dummy_bcrypt_check(
+    password_input: bytes,
+) -> tuple[bool, str | None]:
+    bcrypt.checkpw(password_input, _DUMMY_BCRYPT_HASH)
+    return False, None
+
+
 def verify_password(
     password: str,
     stored_hash: str | None,
 ) -> tuple[bool, str | None]:
     """Verify a password and return an upgraded hash for legacy SHA-256 rows."""
+    password_input = _bcrypt_password_input(password)
     if not isinstance(stored_hash, str):
-        return False, None
+        return _reject_with_dummy_bcrypt_check(password_input)
 
     if _LEGACY_SHA256_PATTERN.fullmatch(stored_hash):
         candidate_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
         if not hmac.compare_digest(candidate_hash, stored_hash.lower()):
-            return False, None
+            return _reject_with_dummy_bcrypt_check(password_input)
         return True, hash_password(password)
 
     if not stored_hash.startswith(MARA_BCRYPT_SHA256_PREFIX):
-        return False, None
+        return _reject_with_dummy_bcrypt_check(password_input)
 
     bcrypt_hash = stored_hash[len(MARA_BCRYPT_SHA256_PREFIX) :]
     if not _BCRYPT_HASH_PATTERN.fullmatch(bcrypt_hash):
-        return False, None
+        return _reject_with_dummy_bcrypt_check(password_input)
 
     try:
         verified = bcrypt.checkpw(
-            _bcrypt_password_input(password),
+            password_input,
             bcrypt_hash.encode("ascii"),
         )
     except (UnicodeError, ValueError):
-        return False, None
+        return _reject_with_dummy_bcrypt_check(password_input)
 
     return verified, None
