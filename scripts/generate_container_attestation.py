@@ -31,7 +31,7 @@ def generate_container_evidence(
         raise ValueError("Build metadata has no BuildKit provenance")
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    statement_path = output_dir / f"{target}.provenance.intoto.json"
+    statement_path = output_dir / f"{target}.provenance.json"
     metadata_path = output_dir / f"{target}.build-metadata.json"
     statement = {
         "_type": "https://in-toto.io/Statement/v1",

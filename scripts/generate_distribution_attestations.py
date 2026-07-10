@@ -135,7 +135,7 @@ def generate_attestations(
         digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
         slug = relative.replace("/", "__")
         sbom_name = f"{slug}.cdx.json"
-        provenance_name = f"{slug}.intoto.json"
+        provenance_name = f"{slug}.provenance.json"
         _write_json(output_dir / sbom_name, _sbom(name, version, relative, digest))
         _write_json(
             output_dir / provenance_name,
