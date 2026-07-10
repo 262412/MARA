@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools >= 61.0", "wheel", "setuptools-git-versioning>=2.0,<3"]
+requires = ["setuptools >= 77.0", "wheel", "setuptools-git-versioning>=2.0,<3"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -19,6 +19,8 @@ dynamic = ["version"]
 requires-python = ">= 3.10"
 description = "MARA application runtime and local document QA workbench UI."
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE.txt", "NOTICE"]
 dependencies = [
     "bcrypt>=5.0.0,<6",
     "click>=8.1.7,<9",

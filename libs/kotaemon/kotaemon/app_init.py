@@ -87,17 +87,11 @@ def _materialize_pdfjs_assets():
     return materialize_pdfjs()
 
 
-def _rollback_pdfjs_assets(materialization) -> None:
-    from ktem.assets.pdfjs_assets import rollback_pdfjs_materialization
-
-    rollback_pdfjs_materialization(materialization)
-
-
 def _write_app_init_files_with_snapshots(
     *,
     force: bool,
     auth_mode: str,
-) -> tuple[dict, dict[Path, _FileSnapshot], object]:
+) -> tuple[dict, dict[Path, _FileSnapshot]]:
     from ktem.runtime_bootstrap import (
         build_user_env,
         build_user_env_example,
@@ -124,7 +118,6 @@ def _write_app_init_files_with_snapshots(
         env_example_path: build_user_env_example().encode(),
     }
     snapshots = {path: _snapshot_file(path) for path in file_contents}
-    pdfjs_materialization = None
     try:
         for path, contents in file_contents.items():
             snapshot = snapshots[path]
@@ -133,11 +126,9 @@ def _write_app_init_files_with_snapshots(
                 contents,
                 mode=snapshot.mode,
             )
-        pdfjs_materialization = _materialize_pdfjs_assets()
+        _materialize_pdfjs_assets()
     except Exception:
         _restore_config_files(snapshots)
-        if pdfjs_materialization is not None:
-            _rollback_pdfjs_assets(pdfjs_materialization)
         raise
 
     payload = {
@@ -148,11 +139,11 @@ def _write_app_init_files_with_snapshots(
         "env_path": str(runtime_paths.env_path),
         "env_example_path": str(env_example_path),
     }
-    return payload, snapshots, pdfjs_materialization
+    return payload, snapshots
 
 
 def write_app_init_files(*, force: bool = False, auth_mode: str = "auto") -> dict:
-    payload, _snapshots, _pdfjs_materialization = _write_app_init_files_with_snapshots(
+    payload, _snapshots = _write_app_init_files_with_snapshots(
         force=force,
         auth_mode=auth_mode,
     )
@@ -288,7 +279,7 @@ def initialize_password_app(
     force: bool,
 ) -> dict:
     preflight_password_admin(username=username, password=password, force=force)
-    payload, snapshots, pdfjs_materialization = _write_app_init_files_with_snapshots(
+    payload, snapshots = _write_app_init_files_with_snapshots(
         force=force,
         auth_mode="password",
     )
@@ -296,6 +287,5 @@ def initialize_password_app(
         provision_password_admin(username=username, password=password, force=force)
     except Exception:
         _restore_config_files(snapshots)
-        _rollback_pdfjs_assets(pdfjs_materialization)
         raise
     return payload

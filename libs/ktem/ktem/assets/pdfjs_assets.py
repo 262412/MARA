@@ -32,8 +32,7 @@ PDFJS_RUNTIME_FILE_SHA256 = {
 
 _VENDOR_RESOURCE_PARTS = ("vendor", "pdfjs", PDFJS_ARCHIVE_NAME)
 _RUNTIME_MARKER = ".mara-pdfjs.json"
-_HASHED_RUNTIME_FILES = tuple(PDFJS_RUNTIME_FILE_SHA256)
-_REQUIRED_FILES = ("LICENSE", *_HASHED_RUNTIME_FILES)
+_REQUIRED_FILES = ("LICENSE", "build/pdf.mjs", "web/viewer.html")
 _WINDOWS_ABSOLUTE_PATH = re.compile(r"^[A-Za-z]:")
 
 
@@ -97,6 +96,34 @@ def _corrupt_destination_error(destination: Path, detail: str) -> PdfJsAssetErro
     )
 
 
+def _runtime_regular_files(destination: Path) -> set[str]:
+    regular_files: set[str] = set()
+    for runtime_path in destination.rglob("*"):
+        relative_name = runtime_path.relative_to(destination).as_posix()
+        if runtime_path.is_symlink():
+            raise _corrupt_destination_error(
+                destination,
+                f"runtime symbolic link is forbidden: {relative_name}",
+            )
+        try:
+            path_mode = runtime_path.stat().st_mode
+        except OSError as exc:
+            raise _corrupt_destination_error(
+                destination,
+                f"cannot inspect runtime path {relative_name}: {exc}",
+            ) from exc
+        if stat.S_ISDIR(path_mode):
+            continue
+        if not stat.S_ISREG(path_mode):
+            raise _corrupt_destination_error(
+                destination,
+                f"unsupported runtime file type: {relative_name}",
+            )
+        if relative_name != _RUNTIME_MARKER:
+            regular_files.add(relative_name)
+    return regular_files
+
+
 def _validate_materialized_destination(
     destination: Path,
     *,
@@ -128,6 +155,21 @@ def _validate_materialized_destination(
         raise _corrupt_destination_error(
             destination,
             f"unexpected {_RUNTIME_MARKER} contents",
+        )
+
+    actual_files = _runtime_regular_files(destination)
+    expected_files = set(expected_file_hashes)
+    unexpected_files = sorted(actual_files - expected_files)
+    if unexpected_files:
+        raise _corrupt_destination_error(
+            destination,
+            f"unexpected runtime file: {unexpected_files[0]}",
+        )
+    missing_files = sorted(expected_files - actual_files)
+    if missing_files:
+        raise _corrupt_destination_error(
+            destination,
+            f"missing runtime file: {missing_files[0]}",
         )
     for relative_name, expected_hash in expected_file_hashes.items():
         runtime_file = destination / relative_name
@@ -202,20 +244,17 @@ def _archive_runtime_file_hashes(
     archive: zipfile.ZipFile,
     members: list[tuple[zipfile.ZipInfo, PurePosixPath]],
 ) -> dict[str, str]:
-    members_by_name = {
-        relative_path.as_posix(): info
-        for info, relative_path in members
-        if not info.is_dir()
-    }
     hashes: dict[str, str] = {}
     try:
-        for relative_name in _HASHED_RUNTIME_FILES:
+        for info, relative_path in members:
+            if info.is_dir():
+                continue
             digest = hashlib.sha256()
-            with archive.open(members_by_name[relative_name], "r") as source:
+            with archive.open(info, "r") as source:
                 for chunk in iter(lambda: source.read(1024 * 1024), b""):
                     digest.update(chunk)
-            hashes[relative_name] = digest.hexdigest()
-    except (KeyError, OSError, RuntimeError, zipfile.BadZipFile) as exc:
+            hashes[relative_path.as_posix()] = digest.hexdigest()
+    except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
         raise PdfJsAssetError(
             f"Could not verify executable files in the PDF.js archive: {exc}"
         ) from exc
@@ -402,24 +441,6 @@ def materialize_pdfjs(
             expected_sha256=PDFJS_ARCHIVE_SHA256,
             app_data_dir=app_data_dir,
         )
-
-
-def rollback_pdfjs_materialization(result: PdfJsMaterialization) -> None:
-    """Remove only a runtime tree created by the current app-init operation."""
-
-    if not result.created:
-        return
-    _validate_materialized_destination(
-        result.path,
-        expected_sha256=PDFJS_ARCHIVE_SHA256,
-        expected_file_hashes=PDFJS_RUNTIME_FILE_SHA256,
-    )
-    try:
-        shutil.rmtree(result.path)
-    except OSError as exc:
-        raise PdfJsAssetError(
-            f"Failed to roll back PDF.js runtime directory {result.path}: {exc}"
-        ) from exc
 
 
 def main() -> int:

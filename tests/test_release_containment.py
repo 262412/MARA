@@ -82,7 +82,10 @@ def test_dockerfile_uses_only_explicit_application_inputs():
     assert "COPY . /app" not in dockerfile
     assert "COPY .env.example /app/.env\n" not in dockerfile
     assert "COPY .env.example /app/.env.example" in dockerfile
-    assert "COPY scripts/download_pdfjs.sh /app/scripts/download_pdfjs.sh" not in dockerfile
+    assert (
+        "COPY scripts/download_pdfjs.sh /app/scripts/download_pdfjs.sh"
+        not in dockerfile
+    )
     assert "RUN bash scripts/download_pdfjs.sh" not in dockerfile
     assert "RUN .venv/bin/python -m ktem.assets.pdfjs_assets" in dockerfile
     assert "COPY launch.sh /app/launch.sh" in dockerfile

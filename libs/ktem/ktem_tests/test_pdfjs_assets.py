@@ -11,8 +11,8 @@ import zipfile
 from collections.abc import Mapping
 from pathlib import Path
 
-import pytest
 import ktem.assets.pdfjs_assets as pdfjs_assets
+import pytest
 from ktem.assets.pdfjs_assets import (
     PDFJS_ARCHIVE_NAME,
     PDFJS_ARCHIVE_SHA256,
@@ -115,9 +115,7 @@ def test_materialization_is_offline_atomic_and_idempotent(monkeypatch, tmp_path)
     assert second.created is False
     assert viewer.stat().st_ino == first_inode
     assert viewer.stat().st_mtime_ns == first_mtime
-    marker = json.loads(
-        (first.path / ".mara-pdfjs.json").read_text(encoding="utf-8")
-    )
+    marker = json.loads((first.path / ".mara-pdfjs.json").read_text(encoding="utf-8"))
     expected_files = {
         relative_name: _sha256(first.path / relative_name)
         for relative_name in (

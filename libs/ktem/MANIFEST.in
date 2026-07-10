@@ -1,4 +1,7 @@
+include LICENSE.txt
+include NOTICE
 include ktem/assets/css/*.css
+include ktem/assets/icons/*.svg
 include ktem/assets/img/*.svg
 include ktem/assets/img/*.png
 include ktem/assets/js/*.js

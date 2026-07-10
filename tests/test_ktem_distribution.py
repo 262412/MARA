@@ -12,15 +12,16 @@ KTEM_ROOT = REPO_ROOT / "libs" / "ktem"
 
 
 def test_ktem_declares_apache_license_and_distribution_files():
-    project = tomli.loads(
-        (KTEM_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    )["project"]
+    project = tomli.loads((KTEM_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+        "project"
+    ]
 
     assert project["license"] == "Apache-2.0"
     assert project["license-files"] == ["LICENSE.txt", "NOTICE"]
-    assert "License :: OSI Approved :: Apache Software License" in project[
-        "classifiers"
-    ]
+    assert (
+        "License :: OSI Approved :: Apache Software License"
+        not in project["classifiers"]
+    )
     assert (KTEM_ROOT / "LICENSE.txt").is_file()
     assert (KTEM_ROOT / "NOTICE").is_file()
 
@@ -64,4 +65,6 @@ def test_ktem_wheel_contains_icons_help_pdfjs_and_legal_files(tmp_path):
     assert any(name.endswith(".dist-info/licenses/LICENSE.txt") for name in names)
     assert any(name.endswith(".dist-info/licenses/NOTICE") for name in names)
     assert "License-Expression: Apache-2.0" in metadata
-    assert "Classifier: License :: OSI Approved :: Apache Software License" in metadata
+    assert (
+        "Classifier: License :: OSI Approved :: Apache Software License" not in metadata
+    )
