@@ -11,8 +11,8 @@ from ktem.index.file._chat_upload_events import (
 )
 from ktem.index.file._events import (
     register_quick_upload_events as reexported_quick_upload_events,
-    register_upload_events as reexported_upload_events,
 )
+from ktem.index.file._events import register_upload_events as reexported_upload_events
 
 from .event_chain_spy import EventGraphSpy, linear_chain
 from .file_index_event_spy import build_upload_page
