@@ -24,15 +24,20 @@ def hold_conversion_lock(cache_dir: Path, signature: str) -> Iterator[None]:
         entry = _conversion_locks.setdefault(key, _LockEntry())
         entry.users += 1
 
-    entry.lock.acquire()
+    acquired = False
     try:
+        entry.lock.acquire()
+        acquired = True
         yield
     finally:
-        entry.lock.release()
-        with _conversion_locks_guard:
-            entry.users -= 1
-            if entry.users == 0 and _conversion_locks.get(key) is entry:
-                _conversion_locks.pop(key, None)
+        try:
+            if acquired:
+                entry.lock.release()
+        finally:
+            with _conversion_locks_guard:
+                entry.users -= 1
+                if entry.users == 0 and _conversion_locks.get(key) is entry:
+                    _conversion_locks.pop(key, None)
 
 
 class _SharedConversionLimiter:

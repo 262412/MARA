@@ -323,7 +323,13 @@ def _read_cfb_difat(
     fat_sector_ids = [sector for sector in fat_sector_ids if sector != _CFB_FREE_SECTOR]
     next_difat = unpack_from("<I", header, 68)[0]
     difat_count = unpack_from("<I", header, 72)[0]
+    if difat_count > total_sectors:
+        raise ValueError("compound file DIFAT sector count exceeds file sectors")
+    visited: set[int] = set()
     for _ in range(difat_count):
+        if next_difat in visited:
+            raise ValueError("compound file DIFAT chain contains a cycle")
+        visited.add(next_difat)
         sector = _read_cfb_sector(file_obj, next_difat, sector_size, total_sectors)
         entry_count = sector_size // 4
         values = [
@@ -333,6 +339,8 @@ def _read_cfb_difat(
             value for value in values[:-1] if value != _CFB_FREE_SECTOR
         )
         next_difat = values[-1]
+    if next_difat != _CFB_END_OF_CHAIN:
+        raise ValueError("compound file DIFAT chain does not terminate")
     return fat_sector_ids
 
 
