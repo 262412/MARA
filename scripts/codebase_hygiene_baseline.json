@@ -353,14 +353,14 @@
       "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/index/file/index.py": {
-      "module_lines": 662,
+      "module_lines": 631,
       "functions": {
         "FileIndex._setup_resources": 116
       },
       "classes": {
-        "FileIndex": 637
+        "FileIndex": 606
       },
-      "non_actionable_broad_exceptions": 2
+      "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/index/file/knet/pipelines.py": {
       "module_lines": 172,

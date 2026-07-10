@@ -40,9 +40,9 @@ def test_private_explicit_selection_intersects_authenticated_scope():
 def test_private_legacy_selection_intersects_authenticated_scope():
     index = _index(private=True, visible_ids=["own-1"])
 
-    assert index.resolve_selected_ids(
-        "server-user", ["victim-file", "own-1"]
-    ) == ["own-1"]
+    assert index.resolve_selected_ids("server-user", ["victim-file", "own-1"]) == [
+        "own-1"
+    ]
 
 
 def test_public_selection_preserves_explicit_ids():
