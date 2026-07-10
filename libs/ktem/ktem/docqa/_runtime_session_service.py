@@ -37,17 +37,32 @@ class RuntimeSessionService:
                 settings.update(result[0].setting)
         return settings
 
-    def list_sessions(self, user_id: Any = None) -> list[DocQASessionSummary]:
+    def list_sessions(
+        self,
+        user_id: Any = None,
+        *,
+        include_public: bool = True,
+        public_first: bool = False,
+    ) -> list[DocQASessionSummary]:
         resolved_user_id = self._resolve_user_id(user_id)
         with Session(self._engine) as session:
-            statement = (
-                select(Conversation)
-                .where(
+            statement = select(Conversation)
+            if include_public:
+                statement = statement.where(
                     (Conversation.user == resolved_user_id)
                     | Conversation.is_public.is_(True)
                 )
-                .order_by(Conversation.date_created.desc())  # type: ignore[attr-defined]
-            )
+            else:
+                statement = statement.where(Conversation.user == resolved_user_id)
+            if public_first:
+                statement = statement.order_by(
+                    Conversation.is_public.desc(),
+                    Conversation.date_created.desc(),  # type: ignore[attr-defined]
+                )
+            else:
+                statement = statement.order_by(
+                    Conversation.date_created.desc()  # type: ignore[attr-defined]
+                )
             rows = session.exec(statement).all()
 
         return [self._session_summary(row) for row in rows]

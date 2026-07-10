@@ -139,3 +139,21 @@ def test_gradio_injects_request_without_changing_component_input_order():
     assert resolved_inputs[:9] == original_inputs[:9]
     assert resolved_inputs[9] is request
     assert resolved_inputs[10:] == original_inputs[9:]
+
+
+def test_gradio_injects_chat_runtime_request_before_dynamic_index_inputs():
+    page, _runtime, _resolved_users = _page()
+    request = cast(gr.Request, SimpleNamespace(username="alice"))
+    fixed_inputs = list(range(22))
+    selected_input = ["select", ["file-1"], "claimed-user"]
+    component_inputs = [*fixed_inputs, selected_input]
+
+    resolved_inputs, _progress_index, _event_data_index = special_args(
+        page.chat_fn,
+        inputs=list(component_inputs),
+        request=request,
+    )
+
+    assert resolved_inputs[:22] == fixed_inputs
+    assert resolved_inputs[22] is request
+    assert resolved_inputs[23:] == [selected_input]

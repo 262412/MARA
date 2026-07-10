@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any, cast
 
 from ktem.index.file import FileIndex
@@ -43,6 +44,15 @@ def test_private_legacy_selection_intersects_authenticated_scope():
     assert index.resolve_selected_ids("server-user", ["victim-file", "own-1"]) == [
         "own-1"
     ]
+
+
+def test_private_selector_ui_result_intersects_authenticated_scope():
+    index = _index(private=True, visible_ids=["own-1"])
+    index._selector_ui = SimpleNamespace(
+        get_selected_ids=lambda _selected: ["victim-file", "own-1"]
+    )
+
+    assert index.resolve_selected_ids("server-user", object()) == ["own-1"]
 
 
 def test_public_selection_preserves_explicit_ids():

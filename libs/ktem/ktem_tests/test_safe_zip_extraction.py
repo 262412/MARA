@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import ktem.index.file.archive as archive_module
 import pytest
 from ktem.docqa import _runtime_indexing
 from ktem.index.file.archive import (
@@ -338,6 +339,35 @@ def test_safe_zip_crc_checks_unsupported_members_before_creating_output(tmp_path
     assert not output_parent.exists()
 
 
+def test_safe_zip_removes_owned_output_after_extraction_failure(
+    tmp_path,
+    monkeypatch,
+):
+    archive_path = tmp_path / "extract-failure.zip"
+    _write_zip(archive_path, {"report.txt": b"report"})
+    output_parent = tmp_path / "expanded"
+    original_copy = archive_module._copy_member
+
+    def fail_during_output(source, target, byte_limit):
+        if target is None:
+            return original_copy(source, target, byte_limit)
+        raise OSError("simulated output failure")
+
+    monkeypatch.setattr(archive_module, "_copy_member", fail_during_output)
+
+    with pytest.raises(ArchiveExtractionError) as exc_info:
+        extract_supported_zip_files(
+            archive_path,
+            destination_parent=output_parent,
+            supported_types={".txt"},
+        )
+
+    assert "stage=extract-member" in str(exc_info.value)
+    assert "member=report.txt" in str(exc_info.value)
+    assert output_parent.is_dir()
+    assert list(output_parent.iterdir()) == []
+
+
 def test_runtime_zip_expansion_uses_safe_shared_extractor(tmp_path, monkeypatch):
     calls: list[tuple[Path, Path, set[str]]] = []
 
@@ -366,6 +396,7 @@ def test_file_index_page_reports_archive_diagnostic_and_keeps_safe_files(
     tmp_path, monkeypatch
 ):
     page = cast(Any, FileIndexPage.__new__(FileIndexPage))
+    page._index = SimpleNamespace(id=7, config={})
     page._supported_file_types = [".txt"]
     safe_zip = tmp_path / "safe.zip"
     unsafe_zip = tmp_path / "unsafe.zip"

@@ -1652,6 +1652,7 @@ class ChatPage(BasePage):
         request: gr.Request,
     ):
         """Submit a message to the chatbot"""
+        user_id = self._resolve_persist_user_id(user_id, request)
         if KH_DEMO_MODE:
             sso_user_id = check_rate_limit("chat", request)
             logger.debug("User ID: %s", sso_user_id)
@@ -1673,7 +1674,7 @@ class ChatPage(BasePage):
 
         if not conv_id:
             if not KH_DEMO_MODE:
-                id_, update = self.chat_control.new_conv(user_id)
+                id_, update = self.chat_control.new_conv(user_id, request)
                 with Session(engine) as session:
                     statement = select(Conversation).where(Conversation.id == id_)
                     name = session.exec(statement).one().name
@@ -1760,7 +1761,7 @@ class ChatPage(BasePage):
             self._app.subscribe_event(
                 name="onSignOut",
                 definition={
-                    "fn": lambda: self.chat_control.select_conv("", None),
+                    "fn": self.chat_control.clear_conv,
                     "outputs": [
                         self.chat_control.conversation_id,
                         self.chat_control.conversation,
@@ -2052,9 +2053,10 @@ class ChatPage(BasePage):
         verification_mode,
         planner_model,
         state_plot_panel,
+        request: gr.Request,
         *selecteds,
-        request: gr.Request | None = None,
     ):
+        user_id = self._resolve_persist_user_id(user_id, request)
         inputs = ChatCallbackInputs(
             conversation_id=conversation_id,
             chat_history=chat_history,

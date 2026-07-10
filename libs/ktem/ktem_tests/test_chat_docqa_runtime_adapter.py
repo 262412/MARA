@@ -296,8 +296,8 @@ def test_chat_fn_runs_web_turn_through_docqa_runtime():
             "strict",
             "fake-planner",
             {"graph": "state"},
+            SimpleNamespace(session_hash="session-1"),
             SimpleNamespace(),
-            request=SimpleNamespace(session_hash="session-1"),
         )
     )
 
@@ -368,8 +368,8 @@ def test_chat_fn_value_error_yields_empty_answer_panel():
             "strict",
             "fake-planner",
             {"graph": "state"},
+            SimpleNamespace(session_hash="session-1"),
             SimpleNamespace(),
-            request=SimpleNamespace(session_hash="session-1"),
         )
     )
 
@@ -423,8 +423,8 @@ def test_chat_fn_streams_docqa_events_into_answer_panel():
             "strict",
             "fake-planner",
             {"graph": "state"},
+            SimpleNamespace(session_hash="session-1"),
             SimpleNamespace(),
-            request=SimpleNamespace(session_hash="session-1"),
         )
     )
 
@@ -483,8 +483,8 @@ def test_chat_fn_final_output_preserves_last_streamed_answer_frame():
             "strict",
             "fake-planner",
             {"graph": "state"},
+            SimpleNamespace(session_hash="session-1"),
             SimpleNamespace(),
-            request=SimpleNamespace(session_hash="session-1"),
         )
     )
 
