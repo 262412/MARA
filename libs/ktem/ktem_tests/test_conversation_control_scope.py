@@ -151,3 +151,29 @@ def test_gradio_injects_control_request_without_component_input_changes(
 
     assert resolved_inputs[:2] == component_inputs
     assert resolved_inputs[2] is password_identity
+
+
+def test_control_trusted_local_direct_calls_keep_optional_request(monkeypatch):
+    row = _conversation(user="local-user", name="Local")
+    control = _control()
+    monkeypatch.setattr(control_module.flowsettings, "MARA_AUTH_MODE", "local")
+
+    try:
+        assert control.load_chat_history("local-user") == [("Local", row.id)]
+        assert control.select_conv(row.id, "local-user")[0] == row.id
+    finally:
+        _delete_rows(row.id)
+
+
+def test_control_network_direct_call_without_request_fails_closed(
+    monkeypatch,
+):
+    row = _conversation(user="victim-id", name="Private")
+    control = _control()
+    monkeypatch.setattr(control_module.flowsettings, "MARA_AUTH_MODE", "password")
+
+    try:
+        with pytest.raises(gr.Error, match="Authenticated user identity is unavailable"):
+            control.select_conv(row.id, "victim-id")
+    finally:
+        _delete_rows(row.id)
