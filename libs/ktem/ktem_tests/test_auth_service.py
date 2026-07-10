@@ -13,6 +13,7 @@ from ktem.auth.passwords import hash_password, verify_password
 from ktem.auth.policy import AuthConfigurationError
 from ktem.db.models import User
 from ktem.pages.resources import user as user_module
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, SQLModel, create_engine, select
 
 
@@ -339,6 +340,62 @@ def test_provision_password_admin_force_resets_promotes_and_preserves_other_user
     assert target.admin is True
     assert other.password == other_hash
     assert other.admin is False
+
+
+def test_provision_password_admin_rolls_back_and_sanitizes_database_failure(
+    monkeypatch,
+):
+    service = _service_module()
+    password = "DatabaseHorse7!"
+    password_path = "/private/password-file-location"
+    state: dict[str, Any] = {"rollback": False, "password_hash": ""}
+
+    class _FailingSession:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def exec(self, _statement):
+            return SimpleNamespace(first=lambda: None)
+
+        def add(self, user):
+            state["password_hash"] = user.password
+
+        def commit(self):
+            raise SQLAlchemyError(
+                f"bound values: {password} {state['password_hash']} {password_path}"
+            )
+
+        def rollback(self):
+            state["rollback"] = True
+
+    monkeypatch.setattr(service, "Session", _FailingSession)
+
+    with pytest.raises(AuthConfigurationError) as error:
+        service.provision_password_admin(
+            username="Operator",
+            password=password,
+            force=False,
+        )
+
+    rendered_error = str(error.value)
+    assert "database operation failed" in rendered_error
+    assert password not in rendered_error
+    assert state["password_hash"] not in rendered_error
+    assert password_path not in rendered_error
+    assert error.value.__cause__ is None
+    assert state["rollback"] is True
+
+
+def test_runtime_database_engine_hides_bound_parameters():
+    service = _service_module()
+
+    assert service.engine.hide_parameters is True
 
 
 @pytest.mark.parametrize(

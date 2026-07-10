@@ -9,7 +9,7 @@ import yaml
 from trogon import tui
 
 from kotaemon.app_init import acquire_admin_password as _acquire_admin_password
-from kotaemon.app_init import provision_password_admin as _provision_password_admin
+from kotaemon.app_init import initialize_password_app as _initialize_password_app
 from kotaemon.app_init import write_app_init_files as _write_app_init_files
 
 PLATFORM_CHOICES = ("claude-code", "codex")
@@ -323,13 +323,14 @@ def app_init(auth_mode, admin_user, force, json_output):
     if auth_mode == "password":
         password = _acquire_admin_password(json_output=json_output)
 
-    payload = _write_app_init_files(force=force, auth_mode=auth_mode)
     if password is not None:
-        _provision_password_admin(
+        payload = _initialize_password_app(
             username=admin_user,
             password=password,
             force=force,
         )
+    else:
+        payload = _write_app_init_files(force=force, auth_mode=auth_mode)
     if json_output:
         _echo_json(payload)
         return

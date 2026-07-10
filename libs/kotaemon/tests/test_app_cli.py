@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import click
 import pytest
 from click.testing import CliRunner
 from ktem.auth.passwords import verify_password
@@ -136,11 +137,15 @@ def test_app_init_hidden_confirmation_prompt_never_echoes_password(monkeypatch):
     }
     monkeypatch.delenv("MARA_ADMIN_PASSWORD_FILE", raising=False)
     monkeypatch.setattr(app_init_module, "is_interactive_terminal", lambda: True)
-    monkeypatch.setattr(cli_module, "_write_app_init_files", lambda **_kwargs: payload)
+
+    def _initialize_password_app(**kwargs):
+        provisioned.append(kwargs)
+        return payload
+
     monkeypatch.setattr(
         cli_module,
-        "_provision_password_admin",
-        lambda **kwargs: provisioned.append(kwargs),
+        "_initialize_password_app",
+        _initialize_password_app,
     )
 
     result = CliRunner().invoke(
@@ -163,6 +168,7 @@ def test_app_init_hidden_confirmation_prompt_never_echoes_password(monkeypatch):
     [
         ("missing", None, "existing regular file"),
         ("directory", None, "existing regular file"),
+        ("fifo", None, "existing regular file"),
         ("file", b"", "nonempty line"),
         ("file", b"\n", "nonempty line"),
         ("file", b"CorrectHorse7!\nSecondHorse8!", "exactly one"),
@@ -179,24 +185,66 @@ def test_app_init_rejects_invalid_password_file_without_leaking_path(
     password_path = tmp_path / "admin-secret.txt"
     if file_kind == "directory":
         password_path.mkdir()
+    elif file_kind == "fifo":
+        os.mkfifo(password_path)
     elif file_kind == "file":
         password_path.write_bytes(content)
 
-    result = _run_package_mode_cli(
-        tmp_path,
-        "app",
-        "init",
-        "--force",
-        "--json",
-        "--auth-mode",
-        "password",
-        env_overrides={"MARA_ADMIN_PASSWORD_FILE": str(password_path)},
-    )
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "kotaemon.cli",
+                "app",
+                "init",
+                "--force",
+                "--json",
+                "--auth-mode",
+                "password",
+            ],
+            cwd=str(tmp_path),
+            env=_package_mode_env(
+                tmp_path,
+                overrides={"MARA_ADMIN_PASSWORD_FILE": str(password_path)},
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=3,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail("password-file validation blocked on a non-regular file")
 
     output = result.stdout + result.stderr
     assert result.returncode != 0
     assert error_fragment in output
     assert str(password_path) not in output
+
+
+def test_password_file_rejects_oversized_content_without_reading_it_all(
+    monkeypatch,
+    tmp_path,
+):
+    password_path = tmp_path / "oversized-secret.txt"
+    password_path.write_bytes(b"Aa1!" * 1025)
+    monkeypatch.setenv("MARA_ADMIN_PASSWORD_FILE", str(password_path))
+
+    with pytest.raises(click.ClickException, match="at most 4096 bytes") as error:
+        app_init_module.read_admin_password_file()
+
+    assert str(password_path) not in str(error.value)
+    assert "Aa1!" not in str(error.value)
+
+
+def test_password_file_accepts_symlink_to_regular_secret(monkeypatch, tmp_path):
+    target_path = tmp_path / "mounted-secret-target.txt"
+    target_path.write_text("SymlinkHorse7!\n", encoding="utf-8")
+    password_path = tmp_path / "mounted-secret-link.txt"
+    password_path.symlink_to(target_path)
+    monkeypatch.setenv("MARA_ADMIN_PASSWORD_FILE", str(password_path))
+
+    assert app_init_module.read_admin_password_file() == "SymlinkHorse7!"
 
 
 @pytest.mark.parametrize("json_output", [False, True], ids=["text", "json"])
