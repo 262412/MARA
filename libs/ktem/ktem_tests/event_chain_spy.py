@@ -113,6 +113,20 @@ class ComponentSpy:
     def tick(self, *args: Any, **kwargs: Any) -> ChainNodeSpy:
         return self._event("tick", *args, **kwargs)
 
+    def load(self, *args: Any, **kwargs: Any) -> ChainNodeSpy:
+        return self._event("load", *args, **kwargs)
+
+
+def linear_chain(graph: EventGraphSpy, root: EventCall) -> list[EventCall]:
+    chain = [root]
+    while True:
+        children = [call for call in graph.calls if call.parent_id == chain[-1].node_id]
+        if not children:
+            return chain
+        if len(children) != 1:
+            raise AssertionError(f"node {chain[-1].node_id} has {len(children)} children")
+        chain.append(children[0])
+
 
 def _build_app(graph: EventGraphSpy) -> SimpleNamespace:
     return SimpleNamespace(
