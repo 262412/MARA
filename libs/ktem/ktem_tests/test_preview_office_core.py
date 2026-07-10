@@ -71,6 +71,32 @@ def test_cache_path_is_signature_derived_and_reused(tmp_path):
     assert runner.calls == 1
 
 
+def test_invalid_existing_cache_is_replaced_by_a_fresh_valid_conversion(tmp_path):
+    source = write_ooxml(tmp_path / "layout.pptx")
+    cache_dir = tmp_path / "cache"
+    first_runner = SuccessfulSofficeRunner()
+    first_service = _service(
+        cache_dir,
+        soffice_finder=lambda: "soffice",
+        process_runner=first_runner,
+    )
+    output = first_service.convert_to_pdf(source, source.name)
+    output.write_bytes(b"corrupt-cache-entry")
+
+    retry_runner = SuccessfulSofficeRunner()
+    retry_service = _service(
+        cache_dir,
+        soffice_finder=lambda: "soffice",
+        process_runner=retry_runner,
+    )
+
+    recovered = retry_service.convert_to_pdf(source, source.name)
+
+    assert recovered == output
+    assert recovered.is_file()
+    assert retry_runner.calls == 1
+
+
 def test_same_names_in_different_directories_never_share_cache_entries(tmp_path):
     first_source = write_ooxml(tmp_path / "one" / "report.pptx")
     second_source = write_ooxml(tmp_path / "two" / "report.pptx")
