@@ -29,9 +29,7 @@ class FileGroupService:
 
         group_table = self._index._resources["FileGroup"]
         with Session(self._engine) as session:
-            statement = select(group_table)
-            if self._index.config.get("private", False):
-                statement = statement.where(group_table.user == user_id)
+            statement = select(group_table).where(group_table.user == user_id)
             groups = [row[0] for row in session.execute(statement).all()]
 
         results = [_group_record(group) for group in groups]
@@ -108,10 +106,7 @@ class FileGroupService:
         group_id: str,
         user_id: Any,
     ) -> Any:
-        query = session.query(group_table).filter_by(id=group_id)
-        if self._index.config.get("private", False):
-            query = query.filter_by(user=user_id)
-        return query.first()
+        return session.query(group_table).filter_by(id=group_id, user=user_id).first()
 
 
 def _group_record(group: Any) -> dict[str, Any]:
