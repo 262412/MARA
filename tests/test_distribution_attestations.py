@@ -47,6 +47,7 @@ def test_distribution_attestations_cover_every_artifact(tmp_path):
         digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
         entry = next(item for item in index["artifacts"] if item["name"] == relative)
         sbom = json.loads((output_dir / entry["sbom"]).read_text(encoding="utf-8"))
+        spdx = json.loads((output_dir / entry["spdx"]).read_text(encoding="utf-8"))
         provenance = json.loads(
             (output_dir / entry["provenance"]).read_text(encoding="utf-8")
         )
@@ -55,6 +56,10 @@ def test_distribution_attestations_cover_every_artifact(tmp_path):
         assert sbom["specVersion"] == "1.6"
         assert sbom["metadata"]["component"]["hashes"] == [
             {"alg": "SHA-256", "content": digest}
+        ]
+        assert spdx["spdxVersion"] == "SPDX-2.3"
+        assert spdx["packages"][0]["checksums"] == [
+            {"algorithm": "SHA256", "checksumValue": digest}
         ]
         assert provenance["_type"] == "https://in-toto.io/Statement/v1"
         assert provenance["subject"] == [
