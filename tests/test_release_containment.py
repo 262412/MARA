@@ -81,27 +81,23 @@ def test_dockerfile_uses_only_explicit_application_inputs():
 
     assert "COPY . /app" not in dockerfile
     assert "COPY .env.example /app/.env\n" not in dockerfile
-    assert "COPY .env.example /app/.env.example" in dockerfile
+    assert "COPY .env.example" not in dockerfile
     assert (
         "COPY scripts/download_pdfjs.sh /app/scripts/download_pdfjs.sh"
         not in dockerfile
     )
     assert "RUN bash scripts/download_pdfjs.sh" not in dockerfile
-    assert "RUN .venv/bin/python -m ktem.assets.pdfjs_assets" in dockerfile
-    assert "COPY launch.sh /app/launch.sh" in dockerfile
-    assert (
-        "COPY pyproject.toml uv.lock README.md LICENSE.txt NOTICE /app/" in dockerfile
-    )
-    assert "COPY libs /app/libs" in dockerfile
-    assert "COPY docs /app/docs" in dockerfile
-    assert (
-        "COPY app.py flowsettings.py sso_app.py sso_app_demo.py "
-        "settings.yaml.example /app/"
-    ) in dockerfile
+    assert "COPY pyproject.toml uv.lock README.md LICENSE.txt NOTICE ./" in dockerfile
+    assert "COPY libs ./libs" in dockerfile
+    assert "COPY docs" not in dockerfile
+    assert "COPY app.py" not in dockerfile
 
-    assert "FROM python:3.10-slim AS lite" in dockerfile
-    assert "FROM lite AS full" in dockerfile
-    assert "FROM full AS ollama" in dockerfile
+    assert "python:3.10.20-slim-bookworm@sha256:" in dockerfile
+    assert "FROM runtime-base AS lite" in dockerfile
+    assert "FROM runtime-full AS full" in dockerfile
+    assert "FROM runtime-full AS ollama" in dockerfile
+    assert dockerfile.count("USER 10001:10001") == 3
+    assert dockerfile.count("HEALTHCHECK") == 3
 
 
 def test_secret_scanning_covers_full_history_and_built_image():

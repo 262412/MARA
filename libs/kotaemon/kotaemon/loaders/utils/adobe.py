@@ -51,11 +51,11 @@ def request_adobe_service(file_path: str, output_path: str = "") -> str:
         )
     except ImportError:
         raise ImportError(
-            "pdfservices-sdk is not installed. "
-            "Please install it by running `pip install pdfservices-sdk"
-            "@git+https://github.com/niallcm/pdfservices-python-sdk.git"
-            "@bump-and-unfreeze-requirements`"
-        )
+            "pdfservices-sdk 2.3.1 is not compatible with the current MARA runtime "
+            "because it requires an obsolete urllib3 version. Use the built-in PDF "
+            "reader, or run Adobe extraction in a separately managed compatible "
+            "service environment."
+        ) from None
 
     if not output_path:
         output_path = tempfile.mkdtemp()

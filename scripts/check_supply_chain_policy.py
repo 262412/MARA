@@ -33,6 +33,11 @@ FROM_LINE = re.compile(
     re.IGNORECASE,
 )
 EXTERNAL_IMAGE = re.compile(r"^[^:@\s]+(?:/[^:@\s]+)*:[^@\s]+@sha256:[0-9a-f]{64}$")
+APPROVED_EXTERNAL_IMAGES = {
+    "ghcr.io/astral-sh/uv:0.11.19@sha256:b46b03ddfcfbf8f547af7e9eaefdf8a39c8cebcba7c98858d3162bd28cf536f6",
+    "ollama/ollama:0.31.2@sha256:509fdf54e23bd50d87af646cb51c0a7a203d6a83cc4d6695b3b08c5be1c62c0a",
+    "python:3.10.20-slim-bookworm@sha256:ff7161e2b8e2a56fc6a62a6099ff8feb72f1a6dbae9860cdcb9a6c65cf4c6be9",
+}
 FORBIDDEN_DOWNLOADS = (
     (re.compile(r"curl\s+[^\n|]*-k(?:\s|$)", re.IGNORECASE), "insecure-curl"),
     (re.compile(r"curl[^\n|]*\|\s*(?:ba)?sh\b", re.IGNORECASE), "curl-pipe-shell"),
@@ -299,6 +304,30 @@ def _docker_stages(source: str) -> dict[str, str]:
     return stages
 
 
+def _check_docker_targets(path: Path, source: str) -> list[Violation]:
+    violations: list[Violation] = []
+    stages = _docker_stages(source)
+    for target in ("lite", "full", "ollama"):
+        stage = stages.get(target, "")
+        for token, rule in (
+            ("USER 10001:10001", "non-root-user"),
+            ("HEALTHCHECK", "healthcheck"),
+            ('ENTRYPOINT ["/usr/bin/tini"', "pid1"),
+            ("HOME=/home/mara", "runtime-home"),
+            ("KH_APP_DATA_DIR=/var/lib/mara", "runtime-data"),
+            ("MARA_AUTH_MODE=password", "network-auth"),
+            (
+                "MARA_ADMIN_PASSWORD_FILE=/run/secrets/mara_admin_password",
+                "password-secret-file",
+            ),
+        ):
+            if token not in stage:
+                violations.append(
+                    _violation(path, source, rule, f"{target} missing {token}")
+                )
+    return violations
+
+
 def check_dockerfile(root: Path) -> list[Violation]:
     path = Path("Dockerfile")
     source = (root / path).read_text(encoding="utf-8")
@@ -316,6 +345,18 @@ def check_dockerfile(root: Path) -> list[Violation]:
                     number,
                     "base-image-pin",
                     f"{image} lacks fixed version/digest",
+                )
+            )
+        elif (
+            image.lower() not in internal_stages
+            and image not in APPROVED_EXTERNAL_IMAGES
+        ):
+            violations.append(
+                Violation(
+                    path.as_posix(),
+                    number,
+                    "base-image-allowlist",
+                    f"{image} was not independently verified",
                 )
             )
         if match.group("stage"):
@@ -345,28 +386,13 @@ def check_dockerfile(root: Path) -> list[Violation]:
                 "Docker dependencies must come from uv.lock",
             )
         )
-    stages = _docker_stages(source)
-    for target in ("lite", "full", "ollama"):
-        stage = stages.get(target, "")
-        for token, rule in (
-            ("USER 10001:10001", "non-root-user"),
-            ("HEALTHCHECK", "healthcheck"),
-            ('ENTRYPOINT ["/usr/bin/tini"', "pid1"),
-            ("HOME=/home/mara", "runtime-home"),
-            ("KH_APP_DATA_DIR=/var/lib/mara", "runtime-data"),
-            ("MARA_AUTH_MODE=password", "network-auth"),
-            (
-                "MARA_ADMIN_PASSWORD_FILE=/run/secrets/mara_admin_password",
-                "password-secret-file",
-            ),
-        ):
-            if token not in stage:
-                violations.append(
-                    _violation(path, source, rule, f"{target} missing {token}")
-                )
+    violations.extend(_check_docker_targets(path, source))
     for token, rule in (
         ("/usr/lib/ollama", "ollama-libraries"),
         ("OLLAMA_MODELS=/var/lib/mara/ollama", "ollama-model-dir"),
+        ("prepare_container_nltk.py", "offline-nltk"),
+        ("network download forbidden", "offline-nltk-smoke"),
+        ("NLTK_DATA=/opt/mara/.venv", "offline-nltk-runtime"),
         ("chmod -R a-w /opt/mara", "readonly-source"),
     ):
         if token not in source:
