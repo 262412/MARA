@@ -8,6 +8,7 @@ import zipfile
 from pathlib import Path
 
 from ktem.db.models import engine
+from ktem.preview.docx import extract_docx_text
 from ktem.preview.office import OfficePreviewConversionService
 from sqlmodel import Session, select
 
@@ -65,24 +66,6 @@ def read_text_file(file_path: str, max_chars: int = 9000) -> str:
         except Exception:
             continue
     return ""
-
-
-def extract_docx_text(file_path: str, max_chars: int = 9000) -> str:
-    texts: list[str] = []
-    try:
-        with zipfile.ZipFile(file_path) as zf:
-            with zf.open("word/document.xml") as file_obj:
-                root = ET.fromstring(file_obj.read())
-        total_chars = 0
-        for node in root.iter():
-            if node.tag.endswith("}t") and node.text:
-                texts.append(node.text)
-                total_chars += len(node.text)
-                if total_chars >= max_chars:
-                    break
-    except Exception:
-        return ""
-    return " ".join(texts)[:max_chars]
 
 
 def extract_xlsx_text(file_path: str, max_chars: int = 9000) -> str:

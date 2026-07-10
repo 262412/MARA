@@ -293,12 +293,10 @@
       "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/docqa/preview_support.py": {
-      "module_lines": 561,
-      "functions": {
-        "OfficePreviewConversionService.convert_to_pdf_preview": 95
-      },
+      "module_lines": 364,
+      "functions": {},
       "classes": {},
-      "non_actionable_broad_exceptions": 18
+      "non_actionable_broad_exceptions": 11
     },
     "libs/ktem/ktem/docqa/runtime.py": {
       "module_lines": 816,
@@ -491,15 +489,6 @@
         "ChatPagePreviewController": 790
       },
       "non_actionable_broad_exceptions": 1
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_document.py": {
-      "module_lines": 394,
-      "functions": {
-        "extract_docx_html": 277,
-        "paginate_docx_html": 89
-      },
-      "classes": {},
-      "non_actionable_broad_exceptions": 11
     },
     "libs/ktem/ktem/pages/chat/page_preview_handlers.py": {
       "module_lines": 236,

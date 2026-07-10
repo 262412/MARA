@@ -11,6 +11,15 @@ SAFE_RASTER_MIME_TYPES = frozenset(
 MAX_EMBEDDED_IMAGE_BYTES = 5 * 1024 * 1024
 
 
+def safe_font(font_name: str, fallback: str) -> str:
+    candidate = str(font_name or "").strip()
+    if not candidate or len(candidate) > 120:
+        return fallback
+    if not all(char.isalnum() or char in " .,_-" for char in candidate):
+        return fallback
+    return candidate
+
+
 def safe_hyperlink_target(target: str) -> str:
     candidate = str(target or "")
     if not candidate or candidate != candidate.strip():
@@ -69,6 +78,7 @@ __all__ = [
     "SAFE_HYPERLINK_SCHEMES",
     "SAFE_RASTER_MIME_TYPES",
     "escape",
+    "safe_font",
     "safe_hyperlink_target",
     "safe_raster_data_url",
 ]
