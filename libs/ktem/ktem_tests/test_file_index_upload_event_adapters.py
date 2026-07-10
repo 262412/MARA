@@ -33,7 +33,9 @@ def test_quick_upload_ports_preserve_scalar_list_and_none_shapes():
     assert isinstance(file_ports.index.gradio_inputs, list)
     assert file_ports.index.gradio_outputs is page.quick_upload_state
     assert file_ports.selector_copy.gradio_inputs is page.quick_upload_state
-    assert file_ports.selector_copy.gradio_outputs is page._app.chat_page._indices_input[1]
+    assert (
+        file_ports.selector_copy.gradio_outputs is page._app.chat_page._indices_input[1]
+    )
     assert file_ports.focus.gradio_inputs is None
     assert file_ports.focus.gradio_outputs is None
     assert file_ports.reset.outputs == (
