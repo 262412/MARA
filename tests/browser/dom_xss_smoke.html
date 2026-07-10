@@ -9,6 +9,7 @@
     <p id="evidence">prefix <em>nested evidence</em> suffix</p>
     <span id="pdf-text"></span>
     <iframe id="document-preview" title="malicious document preview"></iframe>
+    <iframe id="scripted-document-preview" title="forged scripted preview"></iframe>
     <script>
       window.__maraXssExecuted = 0;
       const payload =
@@ -50,6 +51,27 @@
         await new Promise((resolve) => setTimeout(resolve, 50));
         if (window.__maraXssExecuted !== 0) {
           throw new Error("sandboxed document payload executed");
+        }
+
+        const scriptedIframe = document.getElementById("scripted-document-preview");
+        KtemSafeDom.setIframePolicy(scriptedIframe, "scripted-document");
+        const scriptedTokens = new Set(
+          scriptedIframe.getAttribute("sandbox").split(/\s+/).filter(Boolean)
+        );
+        const scriptedPolicyIsOpaque =
+          scriptedTokens.has("allow-scripts") && !scriptedTokens.has("allow-same-origin");
+        const scriptedLoaded = new Promise((resolve) =>
+          scriptedIframe.addEventListener("load", resolve)
+        );
+        scriptedIframe.srcdoc =
+          "<!doctype html><script>parent.__maraXssExecuted = 1337<\/script>";
+        await scriptedLoaded;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        if (window.__maraXssExecuted !== 0) {
+          throw new Error("forged scripted preview reached its parent");
+        }
+        if (!scriptedPolicyIsOpaque) {
+          throw new Error("scripted document did not receive an opaque origin");
         }
 
         document.body.dataset.testStatus = "passed";

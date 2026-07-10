@@ -41,6 +41,53 @@ test("preview sandbox policies never grant navigation, forms, or popup powers", 
   }
 });
 
+test("scripted document previews run with an opaque origin", () => {
+  const policy = safeDom.previewPolicy("scripted-document");
+  const tokens = new Set(policy.sandbox.split(/\s+/).filter(Boolean));
+
+  assert.equal(tokens.has("allow-scripts"), true);
+  assert.equal(tokens.has("allow-same-origin"), false);
+});
+
+test("only the exact same-origin PDF.js viewer receives the PDF policy", () => {
+  const origin = "https://mara.example.test";
+  const trustedViewer =
+    "https://mara.example.test/gradio_api/file=/runtime/pdfjs/web/viewer.html";
+
+  assert.equal(
+    safeDom.previewModeForSource(
+      `${trustedViewer}?embed=1&file=%2Fgradio_api%2Ffile%3Dreport.pdf`,
+      origin,
+      trustedViewer
+    ),
+    "pdf"
+  );
+  assert.equal(
+    safeDom.previewModeForSource(
+      "data:text/html;ktem-scripted=1,<script>parent.__xss=1</script>",
+      origin,
+      trustedViewer
+    ),
+    "scripted-document"
+  );
+  assert.equal(
+    safeDom.previewModeForSource(
+      "https://mara.example.test/gradio_api/file=/uploads/viewer.html",
+      origin,
+      trustedViewer
+    ),
+    "document"
+  );
+  assert.equal(
+    safeDom.previewModeForSource(
+      "https://attacker.invalid/gradio_api/file=/runtime/pdfjs/web/viewer.html",
+      origin,
+      trustedViewer
+    ),
+    "document"
+  );
+});
+
 test("untrusted evidence and PDF text never flow through HTML string sinks", () => {
   assert.doesNotMatch(MAIN_JS, /mark\.outerHTML\s*=/);
   assert.doesNotMatch(MAIN_JS, /p\.innerHTML\s*=/);
