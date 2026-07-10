@@ -5,6 +5,7 @@ from typing import Any, cast
 import ktem.index.file.ui as file_ui_module
 import pandas as pd
 import pytest
+from gradio.helpers import special_args
 from ktem.index.file._deletion import FileIndexDeletionController
 from ktem.index.file._events import (
     register_file_index_events,
@@ -252,6 +253,25 @@ def test_file_index_page_forwards_delete_identity_and_request():
         ("one", "file-1", "browser-user", request),
         ("all", file_list, "browser-user", request),
     ]
+
+
+def test_gradio_injects_request_into_registered_delete_facades():
+    page = cast(Any, FileIndexPage.__new__(FileIndexPage))
+    request = cast(Any, SimpleNamespace(username="alice"))
+
+    one_inputs, _, _ = special_args(
+        page.delete_event,
+        inputs=["file-1", "browser-user"],
+        request=request,
+    )
+    all_inputs, _, _ = special_args(
+        page.delete_all_files,
+        inputs=[pd.DataFrame({"id": ["file-1"]}), "browser-user"],
+        request=request,
+    )
+
+    assert one_inputs == ["file-1", "browser-user", request]
+    assert all_inputs[-1] is request
 
 
 def test_page_label_sort_key_handles_mixed_page_label_types():
