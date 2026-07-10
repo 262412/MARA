@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>MARA DOM XSS smoke</title>
+    <script src="/libs/ktem/ktem/assets/js/safe_dom.js"></script>
+  </head>
+  <body data-test-status="running">
+    <p id="evidence">prefix <em>nested evidence</em> suffix</p>
+    <span id="pdf-text"></span>
+    <iframe id="document-preview" title="malicious document preview"></iframe>
+    <script>
+      window.__maraXssExecuted = 0;
+      const payload =
+        '<img src=x onerror="parent.__maraXssExecuted += 1"><script>parent.__maraXssExecuted += 10<\/script></mark><svg onload="parent.__maraXssExecuted += 100">';
+
+      async function runSmoke() {
+        const evidence = document.getElementById("evidence");
+        const nested = evidence.querySelector("em");
+        nested.firstChild.appendData(` ${payload}`);
+        const originalText = evidence.textContent;
+        const mark = KtemSafeDom.highlightText(evidence, payload);
+        if (!mark || mark.textContent !== payload) {
+          throw new Error("hostile evidence text was not highlighted as text");
+        }
+        if (evidence.querySelector("img, script, svg")) {
+          throw new Error("hostile evidence text became executable DOM");
+        }
+        KtemSafeDom.clearHighlights(evidence);
+        if (evidence.textContent !== originalText || !evidence.querySelector("em")) {
+          throw new Error("clearing a highlight damaged evidence DOM");
+        }
+
+        const pdfText = document.getElementById("pdf-text");
+        pdfText.textContent = payload;
+        KtemSafeDom.setTextHighlight(pdfText, true);
+        if (pdfText.querySelector("img, script, svg")) {
+          throw new Error("hostile PDF text became executable DOM");
+        }
+        KtemSafeDom.setTextHighlight(pdfText, false);
+        if (pdfText.textContent !== payload) {
+          throw new Error("clearing a PDF highlight changed its text");
+        }
+
+        const iframe = document.getElementById("document-preview");
+        KtemSafeDom.setIframePolicy(iframe, "document");
+        const loaded = new Promise((resolve) => iframe.addEventListener("load", resolve));
+        iframe.srcdoc = `<!doctype html><img src=x onerror="parent.__maraXssExecuted += 1"><script>parent.__maraXssExecuted += 10<\/script><form action="https://attacker.invalid"><button>submit</button></form>`;
+        await loaded;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        if (window.__maraXssExecuted !== 0) {
+          throw new Error("sandboxed document payload executed");
+        }
+
+        document.body.dataset.testStatus = "passed";
+      }
+
+      runSmoke().catch((error) => {
+        document.body.dataset.testStatus = "failed";
+        document.body.dataset.testError = error.message;
+      });
+    </script>
+  </body>
+</html>
