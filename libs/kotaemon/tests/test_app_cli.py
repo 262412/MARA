@@ -14,6 +14,11 @@ from kotaemon import app_init as app_init_module
 from kotaemon import cli as cli_module
 from kotaemon.cli import _extract_json_payload
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+PACKAGE_MODE_PYTHONPATH = os.pathsep.join(
+    str(REPOSITORY_ROOT / path) for path in ("libs/kotaemon", "libs/ktem")
+)
+
 
 def _package_mode_env(tmp_path, *, overrides=None):
     home_dir = tmp_path / "home"
@@ -38,6 +43,7 @@ def _package_mode_env(tmp_path, *, overrides=None):
     env["MARA_RUNTIME_DIR"] = str(tmp_path / "runtime")
     env["KH_APP_DATA_DIR"] = str(tmp_path / "runtime" / "ktem_app_data")
     env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONPATH"] = PACKAGE_MODE_PYTHONPATH
     env.update(overrides or {})
     return env
 
