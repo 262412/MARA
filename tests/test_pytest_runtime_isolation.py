@@ -87,9 +87,10 @@ def test_root_pytest_configuration_uses_importlib_collection_mode():
     assert 'addopts = "--import-mode=importlib"' in source
 
 
-def test_mypy_gate_checks_conftest_modules_with_explicit_package_bases():
+def test_mypy_gate_checks_conftest_modules_without_global_exclusion():
     source = (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
     mypy_config = source.split("- id: mypy", 1)[1].split("- repo:", 1)[0]
 
-    assert "--explicit-package-bases" in mypy_config
-    assert "conftest\\.py" not in mypy_config
+    assert "(^|/)conftest\\.py" not in mypy_config
+    assert "mypy kotaemon conftest" in mypy_config
+    assert "mypy slide-cli conftest" in mypy_config
