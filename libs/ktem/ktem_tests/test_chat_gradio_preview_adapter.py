@@ -3,12 +3,7 @@ from __future__ import annotations
 from ktem.pages.chat import chat_preview_events
 from ktem.pages.chat.chat_gradio_adapters import chat_preview_ports
 
-from .event_chain_spy import (
-    ComponentSpy,
-    EventGraphSpy,
-    build_chat_page,
-    linear_chain,
-)
+from .event_chain_spy import ComponentSpy, EventGraphSpy, build_chat_page, linear_chain
 
 
 def _fn_name(call):
