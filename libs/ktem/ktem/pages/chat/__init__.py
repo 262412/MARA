@@ -9,6 +9,7 @@ from typing import Any
 
 import gradio as gr
 from ktem.app import BasePage
+from ktem.auth.service import resolve_request_user_id
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARuntime
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
@@ -1799,12 +1800,14 @@ class ChatPage(BasePage):
         messages,
         state,
         graph_source_ids,
+        request: gr.Request,
         *selecteds,
     ):
         """Update the data source"""
         if not convo_id:
             gr.Warning("No conversation selected")
             return
+        user_id = self._resolve_persist_user_id(user_id, request)
         selected_inputs = self._build_selected_input_map(*selecteds)
         selected_file_ids = []
         if self.file_index is not None:
@@ -1827,6 +1830,16 @@ class ChatPage(BasePage):
             selected_file_ids=selected_file_ids,
         )
         return result
+
+    @staticmethod
+    def _resolve_persist_user_id(user_id, request: gr.Request | None):
+        auth_mode = str(getattr(flowsettings, "MARA_AUTH_MODE", "auto")).lower()
+        if auth_mode not in {"password", "sso"}:
+            return user_id
+        resolved = resolve_request_user_id(request, auth_mode=auth_mode)
+        if not resolved:
+            raise gr.Error("Authenticated user identity is unavailable.")
+        return resolved
 
     def reasoning_changed(self, reasoning_type):
         if reasoning_type != DEFAULT_SETTING:
