@@ -301,15 +301,14 @@
       "non_actionable_broad_exceptions": 18
     },
     "libs/ktem/ktem/docqa/runtime.py": {
-      "module_lines": 1067,
+      "module_lines": 816,
       "functions": {
-        "DocQARuntime._prepare_pipeline": 117,
-        "DocQARuntime.run_turn": 153
+        "DocQARuntime._prepare_pipeline": 116
       },
       "classes": {
-        "DocQARuntime": 1023
+        "DocQARuntime": 618
       },
-      "non_actionable_broad_exceptions": 6
+      "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/embeddings/ui.py": {
       "module_lines": 413,
