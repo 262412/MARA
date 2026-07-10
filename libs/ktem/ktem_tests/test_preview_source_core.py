@@ -59,6 +59,54 @@ def test_classifies_legacy_cfb_using_declared_office_extension(tmp_path, extensi
     assert classified.extension == extension
 
 
+@pytest.mark.parametrize(
+    ("extension", "expected"),
+    [
+        (".doc", ".doc"),
+        (".ppt", ".ppt"),
+        (".xls", ".xls"),
+    ],
+)
+def test_classifies_extensionless_cfb_from_office_stream_name(
+    tmp_path, extension, expected
+):
+    source = write_minimal_cfb(tmp_path / "upload", extension=extension)
+
+    classified = _classify(source)
+
+    assert classified.extension == expected
+
+
+def test_cfb_declared_type_must_match_office_stream_name(tmp_path):
+    from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
+
+    source = write_minimal_cfb(tmp_path / "report.doc")
+
+    with pytest.raises(PreviewSourceError) as caught:
+        _classify(source, file_name="report.ppt")
+
+    assert caught.value.code is PreviewErrorCode.SOURCE_TYPE_MISMATCH
+    assert caught.value.stage == "source_classification"
+    assert ".doc" in caught.value.details
+    assert ".ppt" in caught.value.details
+
+
+def test_cfb_without_known_office_stream_is_rejected(tmp_path):
+    from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
+
+    source = write_minimal_cfb(
+        tmp_path / "unknown.doc",
+        stream_name="UnknownApplicationData",
+    )
+
+    with pytest.raises(PreviewSourceError) as caught:
+        _classify(source)
+
+    assert caught.value.code is PreviewErrorCode.SOURCE_INVALID
+    assert caught.value.stage == "cfb_validation"
+    assert "stream" in caught.value.details.lower()
+
+
 def test_corrupt_cfb_container_is_rejected_with_typed_context(tmp_path):
     from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
 
@@ -147,7 +195,7 @@ def test_signature_and_declared_type_mismatch_is_rejected(
 def test_modern_extension_on_cfb_source_is_rejected_as_mismatch(tmp_path):
     from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
 
-    source = write_minimal_cfb(tmp_path / "renamed.docx")
+    source = write_minimal_cfb(tmp_path / "renamed.docx", extension=".doc")
 
     with pytest.raises(PreviewSourceError) as caught:
         _classify(source)
@@ -194,3 +242,25 @@ def test_ooxml_uncompressed_size_limit_is_enforced(tmp_path):
 
     assert caught.value.code is PreviewErrorCode.SOURCE_ARCHIVE_INVALID
     assert "uncompressed size" in caught.value.details.lower()
+
+
+def test_ooxml_compression_ratio_limit_is_enforced(tmp_path):
+    from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
+    from ktem.preview.models import ArchiveLimits
+
+    source = tmp_path / "compressed.docx"
+    with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("word/document.xml", "x" * 4096)
+
+    with pytest.raises(PreviewSourceError) as caught:
+        _classify(
+            source,
+            archive_limits=ArchiveLimits(
+                max_entries=10,
+                max_uncompressed_bytes=10_000,
+                max_compression_ratio=2,
+            ),
+        )
+
+    assert caught.value.code is PreviewErrorCode.SOURCE_ARCHIVE_INVALID
+    assert "compression ratio" in caught.value.details.lower()

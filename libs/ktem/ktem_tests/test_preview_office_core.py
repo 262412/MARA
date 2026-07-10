@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import unquote, urlparse
 
 import pytest
-from ktem_tests.preview_test_utils import SuccessfulSofficeRunner, write_ooxml
+from ktem_tests.preview_test_utils import (
+    SuccessfulSofficeRunner,
+    write_ooxml,
+    write_valid_pdf,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +32,10 @@ def _error_types():
     from ktem.preview.errors import PreviewConversionError, PreviewErrorCode
 
     return PreviewConversionError, PreviewErrorCode
+
+
+def _job_workspaces(cache_dir: Path) -> list[Path]:
+    return list(cache_dir.glob(".preview-job-*"))
 
 
 def test_conversion_uses_isolated_output_and_user_profile_then_cleans_them(tmp_path):
@@ -69,6 +79,25 @@ def test_cache_path_is_signature_derived_and_reused(tmp_path):
     assert first.name.startswith("layout_")
     assert first.suffix == ".pdf"
     assert runner.calls == 1
+
+
+def test_symlink_cache_key_preserves_legacy_absolute_input_path(tmp_path):
+    target = write_ooxml(tmp_path / "storage" / "target.pptx")
+    source_link = tmp_path / "alias.pptx"
+    source_link.symlink_to(target)
+    runner = SuccessfulSofficeRunner()
+    service = _service(
+        tmp_path / "cache",
+        soffice_finder=lambda: "soffice",
+        process_runner=runner,
+    )
+
+    output = service.convert_to_pdf(source_link, source_link.name)
+
+    stat = os.stat(source_link)
+    payload = f"{os.path.abspath(source_link)}|{stat.st_size}|{int(stat.st_mtime_ns)}"
+    legacy_signature = hashlib.md5(payload.encode("utf-8")).hexdigest()
+    assert output.name == f"alias_{legacy_signature[:12]}.pdf"
 
 
 def test_invalid_existing_cache_is_replaced_by_a_fresh_valid_conversion(tmp_path):
@@ -160,6 +189,56 @@ def test_conversion_concurrency_is_bounded(tmp_path):
 
     assert all(output.is_file() for output in outputs)
     assert runner.max_active == 2
+
+
+def test_conversion_limit_is_shared_across_service_instances(tmp_path):
+    sources = [write_ooxml(tmp_path / f"shared-{index}.pptx") for index in range(4)]
+    runner = SuccessfulSofficeRunner(delay=0.05)
+    services = [
+        _service(
+            tmp_path / "cache",
+            max_concurrency=1,
+            soffice_finder=lambda: "soffice",
+            process_runner=runner,
+        )
+        for _ in sources
+    ]
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        outputs = list(
+            executor.map(
+                lambda item: item[0].convert_to_pdf(item[1], item[1].name),
+                zip(services, sources),
+            )
+        )
+
+    assert all(output.is_file() for output in outputs)
+    assert runner.max_active == 1
+
+
+def test_same_source_lock_entries_are_released_after_file_changes(tmp_path):
+    import ktem.preview.office as office_module
+
+    source = write_ooxml(tmp_path / "changing.pptx")
+    cache_dir = tmp_path / "cache"
+    runner = SuccessfulSofficeRunner()
+    service = _service(
+        cache_dir,
+        soffice_finder=lambda: "soffice",
+        process_runner=runner,
+    )
+
+    for version in range(3):
+        stat = source.stat()
+        os.utime(
+            source,
+            ns=(stat.st_atime_ns, stat.st_mtime_ns + version + 1),
+        )
+        service.convert_to_pdf(source, source.name)
+
+    cache_key = str(cache_dir.resolve())
+    retained = [key for key in office_module._conversion_locks if key[0] == cache_key]
+    assert retained == []
 
 
 def test_missing_converter_raises_typed_actionable_error(tmp_path):
@@ -295,11 +374,91 @@ def test_docx_retry_error_retains_all_converter_diagnostics(tmp_path):
     assert "docx2pdf failed" in caught.value.details
 
 
-def test_cleanup_failure_is_typed_without_deleting_published_output(
+def test_unexpected_converter_exception_still_cleans_isolated_workspace(
+    tmp_path,
+):
+    PreviewConversionError, PreviewErrorCode = _error_types()
+    source = write_ooxml(tmp_path / "slides.pptx")
+    cache_dir = tmp_path / "cache"
+    observed_paths: dict[str, Path] = {}
+
+    def unexpected_runner(command, **_kwargs):
+        observed_paths["input"] = Path(command[-1])
+        observed_paths["output"] = Path(command[command.index("--outdir") + 1])
+        profile_arg = next(
+            value for value in command if value.startswith("-env:UserInstallation=")
+        )
+        observed_paths["profile"] = Path(
+            unquote(urlparse(profile_arg.split("=", 1)[1]).path)
+        )
+        raise ValueError("unexpected converter bug")
+
+    service = _service(
+        cache_dir,
+        soffice_finder=lambda: "soffice",
+        process_runner=unexpected_runner,
+    )
+
+    with pytest.raises(PreviewConversionError) as caught:
+        service.convert_to_pdf(source, source.name)
+
+    assert caught.value.code is PreviewErrorCode.CONVERTER_FAILED
+    assert "unexpected converter bug" in caught.value.details
+    assert observed_paths
+    assert all(not path.exists() for path in observed_paths.values())
+    assert _job_workspaces(cache_dir) == []
+
+
+def test_workspace_is_cleaned_when_staging_directory_creation_fails(
     monkeypatch, tmp_path
 ):
+    PreviewConversionError, _ = _error_types()
+    source = write_ooxml(tmp_path / "slides.pptx")
+    cache_dir = tmp_path / "cache"
+    original_mkdir = Path.mkdir
+
+    def fail_output_directory(path, *args, **kwargs):
+        if path.name == "output" and path.parent.name.startswith(".preview-job-"):
+            raise OSError("output directory denied")
+        return original_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", fail_output_directory)
+    service = _service(cache_dir, soffice_finder=lambda: "soffice")
+
+    with pytest.raises(PreviewConversionError, match="output directory denied"):
+        service.convert_to_pdf(source, source.name)
+
+    assert _job_workspaces(cache_dir) == []
+
+
+def test_workspace_is_cleaned_when_atomic_publish_fails(monkeypatch, tmp_path):
+    PreviewConversionError, _ = _error_types()
     import ktem.preview.office as office_module
-    from ktem.preview.errors import PreviewCleanupError, PreviewErrorCode
+
+    source = write_ooxml(tmp_path / "slides.pptx")
+    cache_dir = tmp_path / "cache"
+    runner = SuccessfulSofficeRunner()
+    monkeypatch.setattr(
+        office_module.os,
+        "replace",
+        lambda *_args: (_ for _ in ()).throw(OSError("atomic publish denied")),
+    )
+    service = _service(
+        cache_dir,
+        soffice_finder=lambda: "soffice",
+        process_runner=runner,
+    )
+
+    with pytest.raises(PreviewConversionError, match="atomic publish denied"):
+        service.convert_to_pdf(source, source.name)
+
+    assert _job_workspaces(cache_dir) == []
+
+
+def test_cleanup_failure_after_publish_logs_and_preserves_success(
+    monkeypatch, tmp_path, caplog
+):
+    import ktem.preview.office as office_module
 
     source = write_ooxml(tmp_path / "slides.pptx")
     runner = SuccessfulSofficeRunner()
@@ -316,6 +475,37 @@ def test_cleanup_failure_is_typed_without_deleting_published_output(
         lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("cleanup denied")),
     )
 
+    with caplog.at_level("WARNING"):
+        output = service.convert_to_pdf(source, source.name)
+
+    assert output.is_file()
+    assert "stage=cleanup" in caplog.text
+    assert "converter=filesystem" in caplog.text
+    assert str(source.resolve()) in caplog.text
+    assert "cleanup denied" in caplog.text
+
+
+def test_cleanup_failure_on_failed_conversion_remains_typed(monkeypatch, tmp_path):
+    import ktem.preview.office as office_module
+    from ktem.preview.errors import PreviewCleanupError, PreviewErrorCode
+
+    source = write_ooxml(tmp_path / "slides.pptx")
+    cache_dir = tmp_path / "cache"
+    service = _service(
+        cache_dir,
+        soffice_finder=lambda: "soffice",
+        process_runner=lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=7,
+            stdout="",
+            stderr="conversion denied",
+        ),
+    )
+    monkeypatch.setattr(
+        office_module.shutil,
+        "rmtree",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("cleanup denied")),
+    )
+
     with pytest.raises(PreviewCleanupError) as caught:
         service.convert_to_pdf(source, source.name)
 
@@ -323,7 +513,50 @@ def test_cleanup_failure_is_typed_without_deleting_published_output(
     assert caught.value.stage == "cleanup"
     assert caught.value.converter == "filesystem"
     assert "cleanup denied" in caught.value.details
-    assert len(list(cache_dir.glob("slides_*.pdf"))) == 1
+    assert "conversion denied" in caught.value.details
+    assert not list(cache_dir.glob("slides_*.pdf"))
+
+
+def test_concurrent_failed_loser_cannot_delete_valid_winner(tmp_path):
+    from ktem.preview.errors import PreviewConversionError
+    from ktem.preview.source import classify_preview_source, is_valid_pdf
+
+    source_path = write_ooxml(tmp_path / "shared.pptx")
+    cache_dir = tmp_path / "cache"
+    barrier = threading.Barrier(2)
+    thread_state = threading.local()
+
+    def split_runner(command, **_kwargs):
+        barrier.wait(timeout=2)
+        if thread_state.role == "loser":
+            raise ValueError("worker conversion failed")
+        output_dir = Path(command[command.index("--outdir") + 1])
+        input_path = Path(command[-1])
+        write_valid_pdf(output_dir / f"{input_path.stem}.pdf")
+        return SimpleNamespace(returncode=0, stdout="converted", stderr="")
+
+    service = _service(
+        cache_dir,
+        soffice_finder=lambda: "soffice",
+        process_runner=split_runner,
+    )
+    source = classify_preview_source(source_path, file_name=source_path.name)
+    output_path = service._cache_path(source)
+
+    def convert_without_process_lock(role):
+        thread_state.role = role
+        try:
+            return role, service._convert_new(source, output_path)
+        except PreviewConversionError as exc:
+            return role, exc
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = dict(executor.map(convert_without_process_lock, ("winner", "loser")))
+
+    assert results["winner"] == output_path
+    assert isinstance(results["loser"], PreviewConversionError)
+    assert is_valid_pdf(output_path)
+    assert _job_workspaces(cache_dir) == []
 
 
 def test_atomic_publish_never_exposes_partial_cache_file(monkeypatch, tmp_path):

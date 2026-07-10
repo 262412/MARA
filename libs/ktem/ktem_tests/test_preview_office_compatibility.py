@@ -108,6 +108,38 @@ def test_legacy_converter_failure_retains_empty_string_fallback(
     assert service.get_cached_pdf_preview(str(source)) == ""
 
 
+def test_scheduled_facade_marks_done_when_only_workspace_cleanup_fails(
+    monkeypatch, tmp_path, caplog
+):
+    import ktem.preview.office as office_module
+    from ktem.pages.chat.page_preview_office import OfficePreviewConversionService
+    from ktem.preview.source import source_signature
+
+    source = write_ooxml(tmp_path / "slides.pptx")
+    runner = SuccessfulSofficeRunner()
+    monkeypatch.setattr(
+        OfficePreviewConversionService,
+        "find_soffice_binary",
+        staticmethod(lambda: "soffice"),
+    )
+    monkeypatch.setattr(subprocess, "run", runner)
+    monkeypatch.setattr(
+        office_module.shutil,
+        "rmtree",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("cleanup denied")),
+    )
+    service = OfficePreviewConversionService(cache_dir=tmp_path / "cache")
+    job_key = source_signature(source)
+
+    with caplog.at_level("WARNING"):
+        service._run_scheduled_conversion(str(source), source.name, job_key)
+
+    assert service.get_status(str(source)) == "done"
+    assert len(list((tmp_path / "cache").glob("slides_*.pdf"))) == 1
+    assert "stage=cleanup" in caplog.text
+    assert "cleanup denied" in caplog.text
+
+
 def test_supported_office_extensions_remain_unchanged():
     from ktem.docqa.preview_support import OFFICE_EXTENSIONS as docqa_extensions
     from ktem.pages.chat.page_preview_handlers import (
