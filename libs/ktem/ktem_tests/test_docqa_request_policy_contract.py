@@ -5,14 +5,17 @@ from dataclasses import FrozenInstanceError, asdict
 from types import SimpleNamespace
 
 import pytest
-
-from ktem.docqa import DocQARequest, DocQAResponse, _runtime_mara, _runtime_sessions
-from ktem.docqa import _runtime_turn
+from ktem.docqa import (
+    DocQARequest,
+    DocQAResponse,
+    _runtime_mara,
+    _runtime_sessions,
+    _runtime_turn,
+)
 from ktem.docqa._runtime_notebook import NOTEBOOK_KEY
 from ktem.pages.chat.chat_docqa_runtime import build_web_docqa_request
 
-
-EXPECTED_POLICY_MATRIX = {
+EXPECTED_POLICY_MATRIX: dict[str, dict[str, object]] = {
     "web": {
         "qa_scope_default": "page",
         "page_number_default": 1,
@@ -122,13 +125,14 @@ def _policies():
 
 def test_named_request_policies_are_immutable_and_match_parity_matrix():
     policies = _policies()
+    expected_payloads = {
+        name: dict(expected, name=name)
+        for name, expected in EXPECTED_POLICY_MATRIX.items()
+    }
 
     assert {
         name: asdict(policy) for name, policy in policies.DOCQA_REQUEST_POLICIES.items()
-    } == {
-        name: {"name": name, **expected}
-        for name, expected in EXPECTED_POLICY_MATRIX.items()
-    }
+    } == expected_payloads
     with pytest.raises(TypeError):
         policies.DOCQA_REQUEST_POLICIES["web"] = policies.WEB_REQUEST_POLICY
     with pytest.raises(FrozenInstanceError):

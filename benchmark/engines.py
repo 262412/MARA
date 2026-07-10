@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Protocol, cast, runtime_checkable
 
 from kotaemon.base import RetrievedDocument
+from kotaemon.docqa_request_policies import BENCHMARK_REQUEST_POLICY
 
 from . import controller_fields as cf
 from .docqa_controller_context import controller_request_context
@@ -62,7 +63,8 @@ class BenchmarkEngine(Protocol):
         *,
         example: Any,
         documents: list[Any],
-    ) -> EngineRunResult: ...
+    ) -> EngineRunResult:
+        ...
 
 
 class BaseBenchmarkEngine:
@@ -307,8 +309,6 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         selected_file_ids: list[str],
         active_record: Any,
     ) -> dict[str, Any]:
-        from kotaemon.docqa_request_policies import BENCHMARK_REQUEST_POLICY
-
         policy = BENCHMARK_REQUEST_POLICY
         config = self._benchmark_config()
         return {

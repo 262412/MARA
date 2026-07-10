@@ -6,12 +6,11 @@ import sys
 import types
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
+from typing import Any
 
 import pytest
-
 from ktem.docqa import DocQARequest as RuntimeDocQARequest
 from slide_cli import docqa_request as request_module
-
 
 CANONICAL_REQUEST_FIELDS = (
     "prompt",
@@ -126,7 +125,7 @@ def test_facade_defaults_match_canonical_defaults_for_all_42_fields():
 
 
 def test_facade_conversion_explicitly_round_trips_every_field():
-    payload = {
+    payload: dict[str, Any] = {
         name: f"sentinel-{index}-{name}"
         for index, name in enumerate(CANONICAL_REQUEST_FIELDS)
     }
@@ -168,7 +167,7 @@ def test_facade_conversion_fails_loudly_when_runtime_contract_drifts(monkeypatch
         prompt: str
 
     fake_docqa = types.ModuleType("ktem.docqa")
-    fake_docqa.DocQARequest = DriftedRuntimeRequest
+    setattr(fake_docqa, "DocQARequest", DriftedRuntimeRequest)
     monkeypatch.setitem(sys.modules, "ktem.docqa", fake_docqa)
 
     with pytest.raises(
