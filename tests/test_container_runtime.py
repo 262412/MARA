@@ -4,6 +4,7 @@ import threading
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import tomli
@@ -82,6 +83,27 @@ def test_only_ollama_target_starts_ollama():
     assert ollama_command("lite") is None
     assert ollama_command("full") is None
     assert ollama_command("ollama") == ["/usr/bin/ollama", "serve"]
+
+
+def test_initialized_password_container_reprovisions_admin_from_rotated_secret(
+    monkeypatch,
+):
+    from scripts import container_entrypoint
+
+    calls = []
+    app_init = SimpleNamespace(
+        read_admin_password_file=lambda: "rotated-secret",
+        provision_password_admin=lambda **kwargs: calls.append(kwargs),
+    )
+    monkeypatch.setattr(container_entrypoint, "_runtime_initialized", lambda: True)
+    monkeypatch.setitem(__import__("sys").modules, "kotaemon.app_init", app_init)
+    monkeypatch.setenv("MARA_ADMIN_USER", "operator")
+
+    container_entrypoint._initialize_runtime("password")
+
+    assert calls == [
+        {"username": "operator", "password": "rotated-secret", "force": True}
+    ]
 
 
 def test_container_does_not_force_incompatible_legacy_provider_dependencies():

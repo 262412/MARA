@@ -46,6 +46,22 @@ def _runtime_initialized() -> bool:
 
 def _initialize_runtime(auth_mode: str) -> None:
     if _runtime_initialized():
+        if auth_mode == "password":
+            from kotaemon.app_init import (
+                provision_password_admin,
+                read_admin_password_file,
+            )
+
+            password = read_admin_password_file()
+            if password is None:
+                raise ContainerConfigurationError(
+                    "Password mode requires MARA_ADMIN_PASSWORD_FILE."
+                )
+            provision_password_admin(
+                username=os.environ.get("MARA_ADMIN_USER", "admin").strip(),
+                password=password,
+                force=True,
+            )
         return
     command = ["/opt/mara/.venv/bin/MARA", "app", "init", "--auth-mode", auth_mode]
     admin_user = os.environ.get("MARA_ADMIN_USER", "admin").strip()
