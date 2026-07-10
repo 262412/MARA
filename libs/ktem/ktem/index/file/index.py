@@ -557,14 +557,6 @@ class FileIndex(BaseIndex):
         if isinstance(selected, list) and len(selected) == 0:
             return []
 
-        if self._selector_ui is not None:
-            try:
-                resolved = self._selector_ui.get_selected_ids(selected)
-            except Exception:
-                resolved = None
-            if resolved is not None:
-                return self._scope_selected_ids(user_id, resolved)
-
         if isinstance(selected, (list, tuple)) and len(selected) >= 3:
             mode = selected[0]
             selected_value = selected[1]
@@ -574,6 +566,14 @@ class FileIndex(BaseIndex):
                 return self._scope_selected_ids(user_id, selected_value)
             if mode == "all":
                 return self.list_source_ids(user_id)
+
+        if self._selector_ui is not None:
+            try:
+                resolved = self._selector_ui.get_selected_ids(selected)
+            except Exception:
+                resolved = None
+            if resolved is not None:
+                return self._scope_selected_ids(user_id, resolved)
 
         normalized = self._normalize_selected_values(selected)
         if normalized:

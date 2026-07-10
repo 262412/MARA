@@ -318,6 +318,10 @@ def test_register_file_index_events_wires_delete_chat_and_upload_flows():
         page.list_file,
         page.file_selected,
     ]
+    assert delete_chain[3][1]["inputs"] == [
+        page.selected_file_id,
+        page._app.user_id,
+    ]
     assert delete_chain[4] == ("then", {"fn": "public-event"})
 
     assert page.chat_button.calls[0] == (
@@ -339,6 +343,20 @@ def test_register_file_index_events_wires_delete_chat_and_upload_flows():
     assert upload_chain[4][1]["fn"] == page.collect_new_source_ids
     assert upload_chain[5][1]["fn"] == page.list_file
     assert upload_chain[6] == ("then", {"fn": "public-event"})
+
+    assert page.download_single_button.calls[0][1]["inputs"] == [
+        page.is_zipped_state,
+        page.selected_file_id,
+        page._app.user_id,
+    ]
+    assert page.group_chat_button.calls[0][1]["inputs"] == [
+        page.selected_group_id,
+        page._app.user_id,
+    ]
+    assert page.group_delete_button.calls[0][1]["inputs"] == [
+        page.selected_group_id,
+        page._app.user_id,
+    ]
 
 
 def test_register_file_index_events_keeps_graph_scope_tail_wired():
@@ -421,7 +439,7 @@ def test_file_index_page_listing_wrappers_delegate_to_active_helpers(monkeypatch
         lambda names: f"scope:{','.join(names)}",
     )
 
-    assert page.list_file("user-1", "budget") == ("rows", "frame")
+    assert page.list_file("user-1", None, "budget") == ("rows", "frame")
     assert page.list_file_names([{"id": "1"}]) == ("choices", [{"id": "1"}])
     assert file_index_page_cls._normalize_selected_ids_from_payload({"a": 1}) == [
         "normalized",

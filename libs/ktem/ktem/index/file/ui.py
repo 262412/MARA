@@ -3,7 +3,7 @@ import os
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Generator
+from typing import Generator, TypeAlias
 
 import gradio as gr
 from gradio.data_classes import FileData
@@ -19,6 +19,7 @@ from ...utils.rate_limit import check_rate_limit
 from ._deletion import FileIndexDeletionController
 from ._events import register_file_index_events, register_quick_upload_events
 from ._group_service import FileGroupService, GroupServiceError
+from ._identity import resolve_file_index_user_id
 from ._indexing_service import FileIndexingService
 from ._listing import (
     FileIndexListingController,
@@ -26,7 +27,7 @@ from ._listing import (
     format_conversation_scope,
     normalize_selected_ids_from_payload,
 )
-from ._selection_service import FileSelectionService
+from ._selection_service import FileSelectionError, FileSelectionService
 from .archive import extract_supported_zip_files
 from .utils import download_arxiv_pdf, is_arxiv_url
 
@@ -34,6 +35,7 @@ KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
 DOWNLOAD_MESSAGE = "Start download"
 MAX_FILE_COUNT = 200
+Request: TypeAlias = gr.Request
 
 
 def _page_label_sort_key(doc):
@@ -424,20 +426,41 @@ class FileIndexPage(BasePage):
     def _list_source_ids_for_user(self, user_id) -> list[str]:
         return self._listing_controller._list_source_ids_for_user(user_id)
 
-    def snapshot_source_ids(self, user_id) -> list[str]:
+    def snapshot_source_ids(
+        self,
+        user_id,
+        request: Request,
+    ) -> list[str]:
+        user_id = resolve_file_index_user_id(user_id, request)
         return self._listing_controller.snapshot_source_ids(user_id)
 
-    def collect_new_source_ids(self, before_source_ids, user_id) -> list[str]:
+    def collect_new_source_ids(
+        self,
+        before_source_ids,
+        user_id,
+        request: Request,
+    ) -> list[str]:
+        user_id = resolve_file_index_user_id(user_id, request)
         return self._listing_controller.collect_new_source_ids(
             before_source_ids, user_id
         )
 
-    def file_selected(self, file_id):
-        chunks = (
-            self._get_file_selection_service().render_chunks(file_id)
-            if file_id is not None
-            else ""
-        )
+    def file_selected(
+        self,
+        file_id,
+        user_id,
+        request: Request,
+    ):
+        chunks = ""
+        if file_id is not None:
+            user_id = resolve_file_index_user_id(user_id, request)
+            try:
+                chunks = self._get_file_selection_service().render_chunks(
+                    file_id,
+                    user_id,
+                )
+            except FileSelectionError as exc:
+                raise gr.Error(str(exc)) from exc
         return (
             gr.update(value=chunks, visible=file_id is not None),
             gr.update(visible=file_id is not None),
@@ -462,15 +485,20 @@ class FileIndexPage(BasePage):
             gr.update(visible=False),
         )
 
-    def download_single_file(self, is_zipped_state, file_id):
-        with Session(engine) as session:
-            source = session.execute(
-                select(self._index._resources["Source"]).where(
-                    self._index._resources["Source"].id == file_id
-                )
-            ).first()
-        if source:
-            target_file_name = Path(source[0].name)
+    def download_single_file(
+        self,
+        is_zipped_state,
+        file_id,
+        user_id,
+        request: Request,
+    ):
+        user_id = resolve_file_index_user_id(user_id, request)
+        try:
+            target_file_name = Path(
+                self._get_file_selection_service().source_name(file_id, user_id)
+            )
+        except FileSelectionError as exc:
+            raise gr.Error(str(exc)) from exc
         zip_files = []
         for file_name in os.listdir(flowsettings.KH_CHUNKS_OUTPUT_DIR):
             if target_file_name.stem in file_name:
@@ -498,15 +526,21 @@ class FileIndexPage(BasePage):
 
         return not is_zipped_state, new_button
 
-    def download_single_file_simple(self, is_zipped_state, file_html, file_id):
-        with Session(engine) as session:
-            source = session.execute(
-                select(self._index._resources["Source"]).where(
-                    self._index._resources["Source"].id == file_id
-                )
-            ).first()
-        if source:
-            target_file_name = Path(source[0].name)
+    def download_single_file_simple(
+        self,
+        is_zipped_state,
+        file_html,
+        file_id,
+        user_id,
+        request: Request,
+    ):
+        user_id = resolve_file_index_user_id(user_id, request)
+        try:
+            target_file_name = Path(
+                self._get_file_selection_service().source_name(file_id, user_id)
+            )
+        except FileSelectionError as exc:
+            raise gr.Error(str(exc)) from exc
 
         # create a temporary file with a path to export
         output_file_path = os.path.join(
@@ -592,8 +626,15 @@ class FileIndexPage(BasePage):
         return self._get_indexing_service(zip_input_dir=zip_dir).extract_archives(files)
 
     def index_fn(
-        self, files, urls, reindex: bool, settings, user_id
+        self,
+        files,
+        urls,
+        reindex: bool,
+        settings,
+        user_id,
+        request: Request,
     ) -> Generator[tuple[str, str], None, list[str] | None]:
+        user_id = resolve_file_index_user_id(user_id, request)
         return (
             yield from self._get_indexing_service().index(
                 files,
@@ -605,8 +646,14 @@ class FileIndexPage(BasePage):
         )
 
     def index_fn_file_with_default_loaders(
-        self, files, reindex: bool, settings, user_id
+        self,
+        files,
+        reindex: bool,
+        settings,
+        user_id,
+        request: Request,
     ) -> list["str"]:
+        user_id = resolve_file_index_user_id(user_id, request)
         print("Overriding with default loaders")
         return self._get_indexing_service().index_files_with_default_loaders(
             files,
@@ -621,8 +668,9 @@ class FileIndexPage(BasePage):
         reindex: bool,
         settings,
         user_id,
-        request: gr.Request,
+        request: Request,
     ):
+        user_id = resolve_file_index_user_id(user_id, request)
         if KH_DEMO_MODE:
             check_rate_limit("file_upload", request)
         return self._get_indexing_service().index_urls_with_default_loaders(
@@ -633,8 +681,14 @@ class FileIndexPage(BasePage):
         )
 
     def index_files_from_dir(
-        self, folder_path, reindex, settings, user_id
+        self,
+        folder_path,
+        reindex,
+        settings,
+        user_id,
+        request: Request,
     ) -> Generator[tuple[str, str], None, list[str] | None]:
+        user_id = resolve_file_index_user_id(user_id, request)
         return (
             yield from self._get_indexing_service().index_directory(
                 folder_path,
@@ -687,20 +741,49 @@ class FileIndexPage(BasePage):
     def _format_conversation_scope(conversation_names: list[str]) -> str:
         return format_conversation_scope(conversation_names)
 
-    def list_file(self, user_id, name_pattern=""):
+    def list_file(
+        self,
+        user_id,
+        request: Request,
+        name_pattern="",
+    ):
+        user_id = resolve_file_index_user_id(user_id, request)
         return self._listing_controller.list_file(user_id, name_pattern)
 
     def list_file_names(self, file_list_state):
         return self._listing_controller.list_file_names(file_list_state)
 
-    def list_group(self, user_id, file_list):
+    def list_group(
+        self,
+        user_id,
+        file_list,
+        request: Request,
+    ):
+        user_id = resolve_file_index_user_id(user_id, request)
         return self._get_group_service().list_groups(user_id, file_list)
 
-    def set_group_id_selector(self, selected_group_id):
-        file_ids = self._get_group_service().selected_file_ids(selected_group_id)
+    def set_group_id_selector(
+        self,
+        selected_group_id,
+        user_id,
+        request: Request,
+    ):
+        user_id = resolve_file_index_user_id(user_id, request)
+        file_ids = self._get_group_service().selected_file_ids(
+            selected_group_id,
+            user_id,
+        )
         return [file_ids, "select", gr.Tabs(selected="chat-tab")]
 
-    def save_group(self, group_id, group_name, group_files, user_id):
+    def save_group(
+        self,
+        group_id,
+        group_name,
+        group_files,
+        user_id,
+        request: Request,
+    ):
+        user_id = resolve_file_index_user_id(user_id, request)
         try:
             group_id = self._get_group_service().save_group(
                 group_id,
@@ -713,9 +796,15 @@ class FileIndexPage(BasePage):
         gr.Info(f"Group {group_name} has been saved")
         return group_id
 
-    def delete_group(self, group_id):
+    def delete_group(
+        self,
+        group_id,
+        user_id,
+        request: Request,
+    ):
+        user_id = resolve_file_index_user_id(user_id, request)
         try:
-            group_name = self._get_group_service().delete_group(group_id)
+            group_name = self._get_group_service().delete_group(group_id, user_id)
         except GroupServiceError as exc:
             raise gr.Error(str(exc)) from exc
         gr.Info(f"Group {group_name} has been deleted")
@@ -798,7 +887,7 @@ class FileSelector(BasePage):
 
     def on_register_events(self):
         self.mode.change(
-            fn=lambda mode, user_id: (gr.update(visible=mode == "select"), user_id),
+            fn=self.mode_changed,
             inputs=[self.mode, self._app.user_id],
             outputs=[self.selector, self.selector_user_id],
         )
@@ -813,6 +902,15 @@ class FileSelector(BasePage):
 
     def as_gradio_component(self):
         return [self.mode, self.selector, self.selector_user_id]
+
+    def mode_changed(
+        self,
+        mode,
+        user_id,
+        request: Request,
+    ):
+        user_id = resolve_file_index_user_id(user_id, request)
+        return gr.update(visible=mode == "select"), user_id
 
     def get_selected_ids(self, components):
         mode, selected, user_id = components[0], components[1], components[2]
@@ -837,7 +935,13 @@ class FileSelector(BasePage):
 
         return file_ids
 
-    def load_files(self, selected_files, user_id):
+    def load_files(
+        self,
+        selected_files,
+        user_id,
+        request: Request,
+    ):
+        user_id = resolve_file_index_user_id(user_id, request)
         options: list = []
         available_ids = []
         if user_id is None:

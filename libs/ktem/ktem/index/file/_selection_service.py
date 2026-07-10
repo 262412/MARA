@@ -8,6 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 
+class FileSelectionError(PermissionError):
+    pass
+
+
 class FileSelectionService:
     def __init__(
         self,
@@ -20,7 +24,8 @@ class FileSelectionService:
         self._engine = engine
         self._sort_key = sort_key
 
-    def render_chunks(self, file_id: str) -> str:
+    def render_chunks(self, file_id: str, user_id: Any = None) -> str:
+        self._require_file_access(file_id, user_id)
         documents = sorted(
             self._documents_for_file(file_id),
             key=self._sort_key,
@@ -29,6 +34,22 @@ class FileSelectionService:
             self._render_document(document, position, len(documents))
             for position, document in enumerate(documents, start=1)
         )
+
+    def source_name(self, file_id: str, user_id: Any = None) -> str:
+        return str(self._require_file_access(file_id, user_id).name)
+
+    def _require_file_access(self, file_id: str, user_id: Any) -> Any:
+        source_table = self._index._resources["Source"]
+        statement = select(source_table).where(source_table.id == file_id)
+        if self._index.config.get("private", False):
+            statement = statement.where(source_table.user == user_id)
+        with Session(self._engine) as session:
+            match = session.execute(statement).first()
+        if match is None:
+            raise FileSelectionError(
+                "File is outside the authenticated user scope: " f"file_id={file_id}"
+            )
+        return match[0]
 
     def _documents_for_file(self, file_id: str) -> list[Any]:
         index_table = self._index._resources["Index"]
@@ -63,4 +84,4 @@ class FileSelectionService:
         return Render.collapsible(header=f"{header} {title}", content=content)
 
 
-__all__ = ["FileSelectionService"]
+__all__ = ["FileSelectionError", "FileSelectionService"]
