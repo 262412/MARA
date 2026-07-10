@@ -36,6 +36,7 @@ from .chat_auxiliary_events import (
 )
 from .chat_conversation_events import bind_chat_conversation_events
 from .chat_docqa_runtime import build_web_docqa_request
+from .chat_gradio_adapters import chat_app_load_ports, chat_conversation_ports
 from .chat_knowledge_graph_bindings import subscribe_public_knowledge_graph_events
 from .chat_layout import render_chat_workbench_layout
 from .chat_message_events import bind_chat_submit_events
@@ -1760,52 +1761,27 @@ class ChatPage(BasePage):
                 name="onSignOut",
                 definition={
                     "fn": lambda: self.chat_control.select_conv("", None),
-                    "outputs": [
-                        self.chat_control.conversation_id,
-                        self.chat_control.conversation,
-                        self.chat_control.conversation_rn,
-                        self.chat_panel.chatbot,
-                        self.followup_questions,
-                        self.info_panel,
-                        self.state_plot_panel,
-                        self.state_retrieval_history,
-                        self.state_plot_history,
-                        self.chat_control.cb_is_public,
-                        self.state_chat,
-                    ]
-                    + self._indices_input,
+                    "outputs": chat_conversation_ports(self).selection.gradio_outputs,
                     "show_progress": "hidden",
                 },
             )
 
     def _on_app_created(self):
         if KH_DEMO_MODE:
+            ports = chat_app_load_ports(self)
             self._app.app.load(
                 fn=lambda x: x,
-                inputs=[self._user_api_key],
-                outputs=[self._user_api_key],
+                inputs=ports.api_key.gradio_inputs,
+                outputs=ports.api_key.gradio_outputs,
                 js=fetch_api_key_js,
             ).then(
                 fn=self.chat_control.toggle_demo_login_visibility,
-                inputs=[self._user_api_key],
-                outputs=[
-                    self.chat_control.cb_suggest_chat,
-                    self.chat_control.btn_new,
-                    self.chat_control.btn_demo_logout,
-                    self.chat_control.btn_demo_login,
-                ],
+                inputs=ports.login_visibility.gradio_inputs,
+                outputs=ports.login_visibility.gradio_outputs,
             ).then(
                 fn=self.suggest_chat_conv,
-                inputs=[
-                    self._app.settings_state,
-                    self.language,
-                    self.chat_panel.chatbot,
-                    self._use_suggestion,
-                ],
-                outputs=[
-                    self.followup_questions_ui,
-                    self.followup_questions,
-                ],
+                inputs=ports.suggestions.gradio_inputs,
+                outputs=ports.suggestions.gradio_outputs,
             ).then(
                 fn=None,
                 inputs=None,
