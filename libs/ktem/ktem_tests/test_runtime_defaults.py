@@ -1,5 +1,4 @@
 import pytest
-
 from ktem.runtime_defaults import build_kotaemon_settings
 
 

@@ -20,6 +20,7 @@ requires-python = ">= 3.10"
 description = "MARA application runtime and local document QA workbench UI."
 readme = "README.md"
 dependencies = [
+    "bcrypt>=5.0.0,<6",
     "click>=8.1.7,<9",
     "platformdirs>=4.2.1,<5",
     "pluggy>=1.5.0,<2",

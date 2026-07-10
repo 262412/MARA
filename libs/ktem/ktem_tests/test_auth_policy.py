@@ -50,7 +50,9 @@ def test_authenticated_modes_allow_non_loopback_hosts(host, mode):
 def test_invalid_auth_mode_is_rejected(mode):
     policy = _policy_module()
 
-    with pytest.raises(policy.AuthConfigurationError, match="auto, local, password, sso"):
+    with pytest.raises(
+        policy.AuthConfigurationError, match="auto, local, password, sso"
+    ):
         policy.resolve_auth_mode(configured_mode=mode, host="localhost")
 
 

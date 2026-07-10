@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from ktem.db.models import User
 from slide_cli.docqa_runtime import _resolve_default_user_id
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import Session, SQLModel, create_engine
 
 
 def _user_engine(tmp_path):

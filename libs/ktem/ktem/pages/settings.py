@@ -1,7 +1,6 @@
-import hashlib
-
 import gradio as gr
 from ktem.app import BasePage
+from ktem.auth.passwords import hash_password
 from ktem.components import reasonings
 from ktem.db.models import Settings, User, engine
 from sqlmodel import Session, select
@@ -264,8 +263,7 @@ class SettingsPage(BasePage):
             result = session.exec(statement).all()
             if result:
                 user = result[0]
-                hashed_password = hashlib.sha256(password.encode()).hexdigest()
-                user.password = hashed_password
+                user.password = hash_password(password)
                 session.add(user)
                 session.commit()
                 gr.Info("Password changed")

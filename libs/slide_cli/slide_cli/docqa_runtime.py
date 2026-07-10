@@ -130,19 +130,23 @@ def _resolve_default_user_id(flowsettings, engine, user_model) -> tuple[str, lis
     if not getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT", False):
         return "default", []
 
+    from ktem.auth.policy import NO_MANAGED_USER_DIAGNOSTIC
+
     configured_username = str(
-        getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_ADMIN", "admin") or "admin"
+        getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_ADMIN", "") or ""
     ).strip()
-    username_lookup = configured_username.lower()
 
     from sqlmodel import Session, select
 
     with Session(engine) as session:
-        existing = session.exec(
-            select(user_model).where(user_model.username_lower == username_lookup)
-        ).first()
-        if existing is not None:
-            return str(existing.id), []
+        if configured_username:
+            existing = session.exec(
+                select(user_model).where(
+                    user_model.username_lower == configured_username.lower()
+                )
+            ).first()
+            if existing is not None:
+                return str(existing.id), []
 
         fallback_admin = session.exec(
             select(user_model).where(user_model.admin.is_(True))
@@ -150,7 +154,7 @@ def _resolve_default_user_id(flowsettings, engine, user_model) -> tuple[str, lis
         if fallback_admin is not None:
             return str(fallback_admin.id), []
 
-    return "", ["Default managed DocQA user does not exist yet."]
+    return "", [NO_MANAGED_USER_DIAGNOSTIC]
 
 
 def _pick_default_model_name(

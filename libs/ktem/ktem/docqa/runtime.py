@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Optional, cast
 
+from ktem.auth.passwords import hash_password
+from ktem.auth.policy import (
+    NO_MANAGED_USER_DIAGNOSTIC,
+    AuthConfigurationError,
+    resolve_legacy_bootstrap_credentials,
+)
 from ktem.components import reasonings
 from ktem.db.models import Conversation, Settings, User, engine
 from ktem.embeddings.manager import embedding_models_manager
@@ -221,22 +226,19 @@ class DocQARuntime:
 
     def _ensure_default_managed_user(self) -> str:
         configured_username = str(
-            getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_ADMIN", "admin")
-            or "admin"
+            getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_ADMIN", "") or ""
         ).strip()
-        configured_password = str(
-            getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_PASSWORD", "admin")
-            or "admin"
-        )
-        username_lookup = configured_username.lower()
 
         try:
             with Session(engine) as session:
-                existing = session.exec(
-                    select(User).where(User.username_lower == username_lookup)
-                ).first()
-                if existing is not None:
-                    return str(existing.id)
+                if configured_username:
+                    existing = session.exec(
+                        select(User).where(
+                            User.username_lower == configured_username.lower()
+                        )
+                    ).first()
+                    if existing is not None:
+                        return str(existing.id)
 
                 fallback_admin = session.exec(
                     select(User).where(User.admin.is_(True))
@@ -244,13 +246,20 @@ class DocQARuntime:
                 if fallback_admin is not None:
                     return str(fallback_admin.id)
 
-                hashed_password = hashlib.sha256(
-                    configured_password.encode()
-                ).hexdigest()
+                try:
+                    credentials = resolve_legacy_bootstrap_credentials(flowsettings)
+                except AuthConfigurationError as exc:
+                    logger.warning("Managed default user was not created: %s", exc)
+                    return ""
+                if credentials is None:
+                    logger.warning(NO_MANAGED_USER_DIAGNOSTIC)
+                    return ""
+
+                username, password = credentials
                 created = User(
-                    username=configured_username,
-                    username_lower=username_lookup,
-                    password=hashed_password,
+                    username=username,
+                    username_lower=username.lower(),
+                    password=hash_password(password),
                     admin=True,
                 )
                 session.add(created)

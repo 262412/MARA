@@ -4,11 +4,9 @@ from pathlib import Path
 
 import gradiologin
 import pytest
-from sqlmodel import SQLModel, Session, create_engine, select
-
 from ktem.db.models import User
 from ktem.pages import login as login_module
-
+from sqlmodel import Session, SQLModel, create_engine, select
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SECURITY_PASSWORD_FILES = [
@@ -56,10 +54,10 @@ def test_login_upgrades_legacy_sha256_after_success(monkeypatch, user_engine):
     assert result == (user_id, "", "")
     with Session(user_engine) as session:
         upgraded_user = session.exec(select(User).where(User.id == user_id)).one()
-    assert upgraded_user.password.startswith("$2b$12$")
+    assert upgraded_user.password.startswith("$mara-bcrypt-sha256$$2b$12$")
 
 
-def test_login_accepts_bcrypt_password(monkeypatch, user_engine):
+def test_login_accepts_versioned_bcrypt_sha256_password(monkeypatch, user_engine):
     passwords = importlib.import_module("ktem.auth.passwords")
     password = "CorrectHorse7!"
     with Session(user_engine) as session:

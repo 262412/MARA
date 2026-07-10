@@ -1,9 +1,13 @@
-import hashlib
 import logging
 
 import gradio as gr
 import pandas as pd
 from ktem.app import BasePage
+from ktem.auth.passwords import hash_password
+from ktem.auth.policy import (
+    AuthConfigurationError,
+    resolve_legacy_bootstrap_credentials,
+)
 from ktem.db.models import User, engine
 from sqlmodel import Session, select
 from theflow.settings import settings as flowsettings
@@ -106,12 +110,11 @@ def create_user(usn, pwd, user_id=None, is_admin=True) -> bool:
             return False
 
         else:
-            hashed_password = hashlib.sha256(pwd.encode()).hexdigest()
             user = User(
                 id=user_id,
                 username=usn,
                 username_lower=usn.lower(),
-                password=hashed_password,
+                password=hash_password(pwd),
                 admin=is_admin,
             )
             session.add(user)
@@ -125,15 +128,13 @@ class UserManagement(BasePage):
         self._app = app
 
         self.on_building_ui()
-        if hasattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_ADMIN") and hasattr(
-            flowsettings, "KH_FEATURE_USER_MANAGEMENT_PASSWORD"
-        ):
-            usn = flowsettings.KH_FEATURE_USER_MANAGEMENT_ADMIN
-            pwd = flowsettings.KH_FEATURE_USER_MANAGEMENT_PASSWORD
-
-            is_created = create_user(usn, pwd)
-            if is_created:
-                gr.Info(f'User "{usn}" created successfully')
+        try:
+            credentials = resolve_legacy_bootstrap_credentials(flowsettings)
+        except AuthConfigurationError as exc:
+            logger.warning("Legacy admin bootstrap was not applied: %s", exc)
+        else:
+            if credentials is not None and create_user(*credentials):
+                gr.Info(f'User "{credentials[0]}" created successfully')
 
     def on_building_ui(self):
         with gr.Tab(label="User list"):
@@ -305,9 +306,10 @@ class UserManagement(BasePage):
                 gr.Warning(f'Username "{usn}" already exists')
                 return
 
-            hashed_password = hashlib.sha256(pwd.encode()).hexdigest()
             user = User(
-                username=usn, username_lower=usn.lower(), password=hashed_password
+                username=usn,
+                username_lower=usn.lower(),
+                password=hash_password(pwd),
             )
             session.add(user)
             session.commit()
@@ -437,7 +439,7 @@ class UserManagement(BasePage):
             user.username_lower = usn.lower()
             user.admin = admin
             if pwd:
-                user.password = hashlib.sha256(pwd.encode()).hexdigest()
+                user.password = hash_password(pwd)
             session.commit()
             gr.Info(f'User "{usn}" updated successfully')
 
