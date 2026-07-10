@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TypeAlias
+
 import gradio as gr
 from ktem.auth.service import resolve_request_user_id
 from ktem.db.engine import engine
@@ -7,13 +9,15 @@ from theflow.settings import settings as flowsettings
 
 from .deletion import DeletionCoordinator, DeletionError
 
+Request: TypeAlias = gr.Request | None
+
 
 class FileIndexDeletionController:
     def __init__(self, index, selected_panel_false: str) -> None:
         self._index = index
         self._selected_panel_false = selected_panel_false
 
-    def delete_event(self, file_id, user_id=None, request: gr.Request | None = None):
+    def delete_event(self, file_id, user_id=None, request: Request = None):
         scoped_user_id = self._resolve_user_id(user_id, request)
         resources = self._index._resources
         coordinator = DeletionCoordinator(
@@ -33,7 +37,7 @@ class FileIndexDeletionController:
         return None, self._selected_panel_false
 
     @staticmethod
-    def _resolve_user_id(user_id, request: gr.Request | None):
+    def _resolve_user_id(user_id, request: Request):
         auth_mode = str(getattr(flowsettings, "MARA_AUTH_MODE", "auto"))
         if auth_mode in {"password", "sso"}:
             resolved = resolve_request_user_id(request, auth_mode=auth_mode)
@@ -42,9 +46,7 @@ class FileIndexDeletionController:
             return resolved
         return user_id
 
-    def delete_all_files(
-        self, file_list, user_id=None, request: gr.Request | None = None
-    ):
+    def delete_all_files(self, file_list, user_id=None, request: Request = None):
         for file_id in file_list.id.values:
             if not file_id or str(file_id) == "-":
                 continue

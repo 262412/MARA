@@ -21,7 +21,7 @@ from theflow.settings import settings as flowsettings
 
 from ...utils.commands import WEB_SEARCH_COMMAND
 from ...utils.rate_limit import check_rate_limit
-from ._deletion import FileIndexDeletionController
+from ._deletion import FileIndexDeletionController, Request
 from ._events import register_file_index_events, register_quick_upload_events
 from ._listing import (
     FileIndexListingController,
@@ -484,8 +484,8 @@ class FileIndexPage(BasePage):
             gr.update(visible=file_id is not None),
         )
 
-    def delete_event(self, file_id):
-        return self._deletion_controller.delete_event(file_id)
+    def delete_event(self, file_id, user_id=None, request: Request = None):
+        return self._deletion_controller.delete_event(file_id, user_id, request)
 
     def delete_no_event(self):
         return (
@@ -575,8 +575,8 @@ class FileIndexPage(BasePage):
                 zipMe.write(file, arcname=arcname.name)
         return gr.DownloadButton(label=DOWNLOAD_MESSAGE, value=f"{zip_file_path}.zip")
 
-    def delete_all_files(self, file_list):
-        return self._deletion_controller.delete_all_files(file_list)
+    def delete_all_files(self, file_list, user_id=None, request: Request = None):
+        return self._deletion_controller.delete_all_files(file_list, user_id, request)
 
     def set_file_id_selector(self, selected_file_id):
         return self._deletion_controller.set_file_id_selector(selected_file_id)

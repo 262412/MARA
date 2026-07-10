@@ -247,9 +247,7 @@ def test_file_index_page_forwards_delete_identity_and_request():
     file_list = pd.DataFrame({"id": ["file-1"]})
 
     assert page.delete_event("file-1", "browser-user", request) == "deleted"
-    assert (
-        page.delete_all_files(file_list, "browser-user", request) == "deleted-all"
-    )
+    assert page.delete_all_files(file_list, "browser-user", request) == "deleted-all"
     assert calls == [
         ("one", "file-1", "browser-user", request),
         ("all", file_list, "browser-user", request),
