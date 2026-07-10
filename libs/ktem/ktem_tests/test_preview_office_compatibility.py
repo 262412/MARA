@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import subprocess
 from pathlib import Path
@@ -71,9 +72,14 @@ def test_legacy_success_returns_string_in_existing_preview_cache(
     output = service.convert_to_pdf_preview(str(source), source.name)
 
     output_path = Path(output)
+    stat = source.stat()
+    signature_payload = f"{source.resolve()}|{stat.st_size}|{int(stat.st_mtime_ns)}"
+    legacy_signature = hashlib.md5(signature_payload.encode("utf-8")).hexdigest()
     assert isinstance(output, str)
     assert output_path.is_file()
-    assert output_path.parent == tmp_path / "gradio" / "pdf_previews"
+    assert output_path == (
+        tmp_path / "gradio" / "pdf_previews" / f"layout_{legacy_signature[:12]}.pdf"
+    )
     assert service.get_cached_pdf_preview(str(source)) == output
 
 
