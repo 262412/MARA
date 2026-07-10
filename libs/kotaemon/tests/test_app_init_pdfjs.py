@@ -46,7 +46,7 @@ def test_app_init_materializes_pdfjs_offline_without_payload_drift(
     assert (pdfjs_dir / "web" / "viewer.html").is_file()
 
 
-def test_password_init_failure_rolls_back_new_pdfjs_and_config(
+def test_password_init_failure_preserves_complete_pdfjs_but_rolls_back_config(
     monkeypatch,
     tmp_path,
 ):
@@ -71,7 +71,12 @@ def test_password_init_failure_rolls_back_new_pdfjs_and_config(
 
     assert not (tmp_path / "config" / "Kotaemon" / "flowsettings.py").exists()
     pdfjs_dir = tmp_path / "runtime" / "ktem_app_data" / "assets" / "pdfjs" / "6.1.200"
-    assert not pdfjs_dir.exists()
+    assert (pdfjs_dir / ".mara-pdfjs.json").is_file()
+    assert (pdfjs_dir / "web" / "viewer.html").is_file()
+
+
+def test_app_init_has_no_completed_asset_rollback_seam():
+    assert not hasattr(app_init_module, "_rollback_pdfjs_assets")
 
 
 def test_password_init_failure_preserves_preexisting_pdfjs(

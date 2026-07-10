@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+import ktem.assets.pdfjs_assets as pdfjs_assets
 from ktem.assets.pdfjs_assets import (
     PDFJS_ARCHIVE_NAME,
     PDFJS_ARCHIVE_SHA256,
@@ -22,7 +23,6 @@ from ktem.assets.pdfjs_assets import (
     PdfJsAssetError,
     _materialize_pdfjs_archive,
     materialize_pdfjs,
-    rollback_pdfjs_materialization,
 )
 
 
@@ -43,7 +43,9 @@ def _write_valid_archive(path: Path) -> str:
         {
             "LICENSE": "Apache License\n",
             "build/pdf.mjs": "export const version = 'test';\n",
+            "build/pdf.worker.mjs": "export const worker = 'test';\n",
             "web/viewer.html": "<!doctype html><title>PDF.js</title>\n",
+            "web/viewer.mjs": "export const viewer = 'test';\n",
         },
     )
 
@@ -113,12 +115,21 @@ def test_materialization_is_offline_atomic_and_idempotent(monkeypatch, tmp_path)
     assert second.created is False
     assert viewer.stat().st_ino == first_inode
     assert viewer.stat().st_mtime_ns == first_mtime
-    marker = json.loads((first.path / ".mara-pdfjs.json").read_text(encoding="utf-8"))
+    marker = json.loads(
+        (first.path / ".mara-pdfjs.json").read_text(encoding="utf-8")
+    )
+    expected_files = {
+        relative_name: _sha256(first.path / relative_name)
+        for relative_name in (
+            "LICENSE",
+            "build/pdf.mjs",
+            "build/pdf.worker.mjs",
+            "web/viewer.html",
+            "web/viewer.mjs",
+        )
+    }
     assert marker == {
-        "files": {
-            "build/pdf.mjs": _sha256(first.path / "build" / "pdf.mjs"),
-            "web/viewer.html": _sha256(first.path / "web" / "viewer.html"),
-        },
+        "files": expected_files,
         "sha256": archive_sha256,
         "version": PDFJS_VERSION,
         "version_dist": PDFJS_VERSION_DIST,
@@ -340,6 +351,48 @@ def test_existing_destination_with_tampered_viewer_is_rejected(tmp_path):
 
 
 @pytest.mark.parametrize(
+    ("mutation", "expected_detail"),
+    [
+        ("tamper-viewer", "content hash mismatch.*web/viewer.mjs"),
+        ("tamper-worker", "content hash mismatch.*build/pdf.worker.mjs"),
+        ("unexpected-file", "unexpected runtime file.*operator.txt"),
+        ("unexpected-symlink", "symbolic link.*viewer-link"),
+    ],
+)
+def test_reuse_rejects_any_full_tree_tampering(tmp_path, mutation, expected_detail):
+    archive_path = tmp_path / "valid.zip"
+    archive_sha256 = _write_valid_archive(archive_path)
+    app_data_dir = tmp_path / "app-data"
+    result = _materialize_pdfjs_archive(
+        archive_path=archive_path,
+        expected_sha256=archive_sha256,
+        app_data_dir=app_data_dir,
+    )
+
+    if mutation == "tamper-viewer":
+        (result.path / "web" / "viewer.mjs").write_text(
+            "window.tampered = true",
+            encoding="utf-8",
+        )
+    elif mutation == "tamper-worker":
+        (result.path / "build" / "pdf.worker.mjs").write_text(
+            "self.tampered = true",
+            encoding="utf-8",
+        )
+    elif mutation == "unexpected-file":
+        (result.path / "operator.txt").write_text("unexpected", encoding="utf-8")
+    else:
+        (result.path / "viewer-link").symlink_to("web/viewer.html")
+
+    with pytest.raises(PdfJsAssetError, match=expected_detail):
+        _materialize_pdfjs_archive(
+            archive_path=archive_path,
+            expected_sha256=archive_sha256,
+            app_data_dir=app_data_dir,
+        )
+
+
+@pytest.mark.parametrize(
     "race_error",
     [
         FileExistsError(errno.EEXIST, "publisher exists"),
@@ -383,16 +436,8 @@ def test_concurrent_publisher_revalidates_winner_and_cleans_loser(
     assert not list(result.path.parent.glob(f".{PDFJS_VERSION}.*"))
 
 
-def test_rollback_filesystem_failure_is_actionable(monkeypatch, tmp_path):
-    materialization = materialize_pdfjs(app_data_dir=tmp_path / "app-data")
-
-    def _fail_remove(*_args, **_kwargs):
-        raise OSError("synthetic busy destination")
-
-    monkeypatch.setattr("ktem.assets.pdfjs_assets.shutil.rmtree", _fail_remove)
-
-    with pytest.raises(PdfJsAssetError, match="roll back PDF.js.*busy destination"):
-        rollback_pdfjs_materialization(materialization)
+def test_completed_asset_has_no_transactional_deletion_api():
+    assert not hasattr(pdfjs_assets, "rollback_pdfjs_materialization")
 
 
 def test_rejects_symlinked_assets_parent_that_escapes_app_data(tmp_path):
