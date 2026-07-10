@@ -142,9 +142,7 @@ class FileSelector(BasePage):
                 options.append((source.name, source.id))
 
             group_table = self._index._resources["FileGroup"]
-            statement = select(group_table)
-            if self._index.config.get("private", False):
-                statement = statement.where(group_table.user == user_id)
+            statement = select(group_table).where(group_table.user == user_id)
             for (group,) in session.execute(statement).all():
                 options.append(
                     (f"group: '{group.name}'", json.dumps(group.data.get("files", [])))
