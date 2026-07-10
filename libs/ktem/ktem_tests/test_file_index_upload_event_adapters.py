@@ -11,6 +11,7 @@ from ktem.index.file._chat_upload_events import (
 )
 from ktem.index.file._events import (
     register_quick_upload_events as reexported_quick_upload_events,
+    register_upload_events as reexported_upload_events,
 )
 
 from .event_chain_spy import EventGraphSpy, linear_chain
@@ -43,6 +44,7 @@ def test_quick_upload_ports_preserve_scalar_list_and_none_shapes():
         page._app.chat_page._indices_input[0],
     )
     assert reexported_quick_upload_events is register_quick_upload_events
+    assert reexported_upload_events is register_upload_events
 
 
 def test_standard_quick_upload_chains_keep_exact_verbs_functions_and_parents():
@@ -147,6 +149,21 @@ def test_full_upload_clear_files_is_independent_child_of_clear_url():
     assert clear_files.parent_id == clear_url.node_id
     assert clear_files.parent_id != graph_tail[-1].node_id
     assert full_upload_ports(page).clear_files.outputs == (page.files,)
+
+
+def test_full_upload_does_not_read_chat_graph_ports_when_refresh_is_disabled():
+    graph = EventGraphSpy()
+    page = build_upload_page(graph)
+    page._index.id = 2
+    del page._app.chat_page._graph_source_ids
+    del page._app.chat_page.first_selector_choices
+
+    register_upload_events(page)
+
+    graph_tail_functions = [_fn_name(call) for call in graph.calls]
+    assert "chat.merge_graph_source_ids" not in graph_tail_functions
+    assert "chat.persist_conversation_source_scope" not in graph_tail_functions
+    assert "chat.refresh_chat_file_list" not in graph_tail_functions
 
 
 def test_quick_upload_registration_logs_actionable_stage_and_remains_resilient(
