@@ -10,6 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "quality-gates.yaml"
 REQUIRED_JOBS = {
     "static",
+    "collection",
+    "secret-scan",
     "kotaemon",
     "ktem",
     "slide-cli",
@@ -72,6 +74,9 @@ def test_static_and_test_jobs_enforce_the_repository_contracts():
     assert "check_codebase_hygiene.py" in static_commands
     assert "check_hygiene_baseline.py" in static_commands
     assert "ruff check" in static_commands
+    collection_commands = _commands(jobs["collection"])
+    assert "check_pytest_collection.py" in collection_commands
+    assert "--minimum 1260" in collection_commands
     assert jobs["kotaemon"]["strategy"]["matrix"]["python-version"] == [
         "3.10",
         "3.11",
@@ -119,8 +124,46 @@ def test_release_workflows_are_frozen_behind_reusable_quality_gate(path, publish
     jobs = workflow["jobs"]
 
     assert jobs["quality"]["uses"] == "./.github/workflows/quality-gates.yaml"
+    assert jobs["quality"]["with"]["base_ref"] == "main"
     assert jobs[publish_job]["needs"] == "quality"
     assert jobs[publish_job]["if"] == "${{ false }}"
+
+
+def test_non_pr_quality_calls_use_a_trusted_base_not_head_parent():
+    workflow = _load_workflow(WORKFLOW_PATH)
+    triggers = _trigger(workflow)
+    source = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    base_input = triggers["workflow_call"]["inputs"]["base_ref"]
+    assert base_input["type"] == "string"
+    assert base_input["required"] is False
+    assert "HEAD^" not in source
+    for job_name in ("static", "coverage"):
+        base_expression = workflow["jobs"][job_name]["env"]["MARA_BASE_REF"]
+        assert "inputs.base_ref" in base_expression
+        assert "github.event.pull_request.base.sha" in base_expression
+        assert "github.event.before" in base_expression
+        assert "github.event.repository.default_branch" in base_expression
+
+
+def test_secret_scan_is_reusable_required_and_pinned():
+    quality = _load_workflow(WORKFLOW_PATH)
+    secret_path = REPO_ROOT / ".github" / "workflows" / "secret-scan.yaml"
+    secret = _load_workflow(secret_path)
+    triggers = _trigger(secret)
+
+    assert quality["jobs"]["secret-scan"]["uses"] == (
+        "./.github/workflows/secret-scan.yaml"
+    )
+    assert "secret-scan" in quality["jobs"]["required"]["needs"]
+    assert "workflow_call" in triggers
+    assert "pull_request" not in triggers
+    assert "push" not in triggers
+    for job in secret["jobs"].values():
+        for step in job.get("steps", []):
+            action = step.get("uses")
+            if action and not action.startswith("./"):
+                assert FULL_SHA.fullmatch(action.rsplit("@", 1)[-1]), action
 
 
 @pytest.mark.parametrize("path", ["style-check.yaml", "unit-test.yaml"])

@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -198,3 +200,33 @@ def test_diff_coverage_uses_only_changed_production_statements(tmp_path):
     assert result.covered == 3
     assert result.total == 4
     assert result.percent == 75.0
+
+
+def test_collection_gate_parses_root_summary_and_enforces_floor(monkeypatch, capsys):
+    collection_gate = _load_script("check_pytest_collection.py")
+
+    assert collection_gate.parse_collected_count("1512 tests collected in 14.57s\n") == 1512
+    with pytest.raises(ValueError, match="collection summary"):
+        collection_gate.parse_collected_count("collection output without a summary")
+
+    completed = subprocess.CompletedProcess(
+        args=[sys.executable, "-m", "pytest"],
+        returncode=0,
+        stdout="1259 tests collected in 1.00s\n",
+    )
+    monkeypatch.setattr(collection_gate.subprocess, "run", lambda *args, **kwargs: completed)
+
+    assert collection_gate.run_collection(minimum=1260, pytest_args=()) == 1
+    assert "below required minimum 1260" in capsys.readouterr().out
+
+
+def test_collection_gate_preserves_pytest_collection_failure(monkeypatch):
+    collection_gate = _load_script("check_pytest_collection.py")
+    completed = subprocess.CompletedProcess(
+        args=[sys.executable, "-m", "pytest"],
+        returncode=2,
+        stdout="collection error\n",
+    )
+    monkeypatch.setattr(collection_gate.subprocess, "run", lambda *args, **kwargs: completed)
+
+    assert collection_gate.run_collection(minimum=1260, pytest_args=()) == 2
