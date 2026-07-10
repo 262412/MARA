@@ -1,10 +1,17 @@
 from types import SimpleNamespace
 
+from ktem.pages.chat.chat_auxiliary_events import (
+    _bind_user_feedback_events,
+    bind_chat_pre_studio_events,
+)
 from ktem.pages.chat.chat_conversation_events import _bind_demo_conversation_events
 
 
 class _Chain:
     def then(self, *args, **kwargs):
+        return self
+
+    def success(self, *args, **kwargs):
         return self
 
 
@@ -13,6 +20,14 @@ class _Button:
         self.calls = []
 
     def click(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        return _Chain()
+
+    def change(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        return _Chain()
+
+    def like(self, *args, **kwargs):
         self.calls.append((args, kwargs))
         return _Chain()
 
@@ -58,3 +73,54 @@ def test_demo_new_chat_binds_clear_conversation_callback():
     _bind_demo_conversation_events(page, "focus")
 
     assert btn_new.calls[0][1]["fn"] is clear_conv
+
+
+def test_public_and_like_events_include_local_user_identity():
+    cb_is_public = _Button()
+    cb_suggest_chat = _Button()
+    reasoning_type = _Button()
+    chatbot = _Button()
+    report_btn = _Button()
+    app = SimpleNamespace(user_id="user-id", settings_state="settings")
+    page = SimpleNamespace(
+        _app=app,
+        _indices_input=[],
+        _reasoning_type="reasoning-state",
+        _use_suggestion="suggestion-state",
+        followup_questions_ui="suggestion-ui",
+        reasoning_type=reasoning_type,
+        reasoning_changed=object(),
+        on_set_public_conversation=object(),
+        is_liked=object(),
+        info_panel="info",
+        state_chat="chat-state",
+        chat_panel=SimpleNamespace(chatbot=chatbot),
+        chat_control=SimpleNamespace(
+            cb_is_public=cb_is_public,
+            cb_suggest_chat=cb_suggest_chat,
+            conversation="conversation",
+            conversation_id="conversation-id",
+        ),
+        report_issue=SimpleNamespace(
+            report_btn=report_btn,
+            report=object(),
+            correctness="correctness",
+            issues="issues",
+            more_detail="detail",
+        ),
+    )
+
+    bind_chat_pre_studio_events(
+        page,
+        demo_mode=True,
+        on_suggest_chat_event={},
+        pdfview_js="",
+    )
+    _bind_user_feedback_events(page)
+
+    assert cb_is_public.calls[0][1]["inputs"] == [
+        cb_is_public,
+        "conversation",
+        "user-id",
+    ]
+    assert chatbot.calls[0][1]["inputs"] == ["conversation-id", "user-id"]

@@ -108,6 +108,10 @@ def test_bind_knowledge_graph_events_wires_source_scope_chains():
         page.persist_conversation_source_scope,
         page.refresh_chat_file_list,
     ]
+    assert conversation_chain.steps[0][1]["inputs"] == [
+        page.chat_control.conversation_id,
+        page._app.user_id,
+    ]
 
     assert not hasattr(page, "knowledge_graph_refresh")
 
