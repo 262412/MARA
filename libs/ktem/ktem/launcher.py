@@ -1,12 +1,52 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from ktem.app_server import resolve_gradio_server_port
 from ktem.assets import ASSETS_DIR
+from ktem.auth.policy import resolve_auth_mode, resolve_legacy_bootstrap_credentials
+from ktem.auth.service import authenticate_password, validate_password_admin_readiness
 from ktem.main import App
 from theflow.settings import settings as flowsettings
+
+
+@dataclass(frozen=True)
+class LaunchConfig:
+    auth_mode: str
+    host: str
+    auth: Callable[[str, str], bool] | None
+
+
+def _resolve_launch_host(host: str | None) -> str:
+    return str(host or os.getenv("GRADIO_SERVER_NAME") or "127.0.0.1").strip()
+
+
+def prepare_launch(*, host: str | None = None, settings=flowsettings) -> LaunchConfig:
+    """Resolve authentication and validate policy before a server can bind."""
+    effective_host = _resolve_launch_host(host)
+    configured_mode = getattr(settings, "MARA_AUTH_MODE", None)
+    legacy_sso_enabled = bool(getattr(settings, "KH_SSO_ENABLED", False))
+    if configured_mode is None and not legacy_sso_enabled:
+        legacy_credentials = resolve_legacy_bootstrap_credentials(settings)
+        if legacy_credentials is not None:
+            configured_mode = "password"
+
+    auth_mode = resolve_auth_mode(
+        configured_mode=configured_mode,
+        host=effective_host,
+        legacy_sso_enabled=legacy_sso_enabled,
+    )
+    settings.KH_FEATURE_USER_MANAGEMENT = auth_mode in {"password", "sso"}
+
+    auth = None
+    if auth_mode == "password":
+        validate_password_admin_readiness()
+        auth = authenticate_password
+
+    return LaunchConfig(auth_mode=auth_mode, host=effective_host, auth=auth)
 
 
 def ensure_gradio_temp_dir() -> str:
@@ -27,6 +67,7 @@ def launch_app(
     share: bool | None = None,
     inbrowser: bool = True,
 ):
+    launch_config = prepare_launch(host=host)
     file_storage_path = Path(
         getattr(flowsettings, "KH_FILESTORAGE_PATH", Path.cwd() / "user_data" / "files")
     )
@@ -48,7 +89,8 @@ def launch_app(
         share=getattr(flowsettings, "KH_GRADIO_SHARE", False)
         if share is None
         else share,
-        server_name=host,
+        server_name=launch_config.host,
         server_port=resolve_gradio_server_port(port),
+        auth=launch_config.auth,
     )
     return app

@@ -3,10 +3,11 @@ from __future__ import annotations
 import os
 from importlib.metadata import version
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from decouple import config
-from ktem.auth.policy import resolve_auth_mode
+from ktem.auth.policy import resolve_auth_mode, resolve_legacy_bootstrap_credentials
 from ktem.utils.lang import SUPPORTED_LANGUAGE_MAP
 
 
@@ -16,13 +17,30 @@ def _ensure_dir(path: Path) -> Path:
 
 
 def _build_auth_settings() -> dict[str, Any]:
+    configured_mode = config("MARA_AUTH_MODE", default=None)
+    legacy_sso_enabled = config("KH_SSO_ENABLED", default=False, cast=bool)
+    if configured_mode is None and not legacy_sso_enabled:
+        legacy_credentials = resolve_legacy_bootstrap_credentials(
+            SimpleNamespace(
+                KH_FEATURE_USER_MANAGEMENT_ADMIN=config(
+                    "KH_FEATURE_USER_MANAGEMENT_ADMIN", default=""
+                ),
+                KH_FEATURE_USER_MANAGEMENT_PASSWORD=config(
+                    "KH_FEATURE_USER_MANAGEMENT_PASSWORD", default=""
+                ),
+            )
+        )
+        if legacy_credentials is not None:
+            configured_mode = "password"
+
     auth_mode = resolve_auth_mode(
-        configured_mode=config("MARA_AUTH_MODE", default=None),
-        legacy_sso_enabled=config("KH_SSO_ENABLED", default=False, cast=bool),
+        configured_mode=configured_mode,
+        legacy_sso_enabled=legacy_sso_enabled,
     )
     return {
         "MARA_AUTH_MODE": auth_mode,
         "KH_SSO_ENABLED": auth_mode == "sso",
+        "KH_FEATURE_USER_MANAGEMENT": auth_mode in {"password", "sso"},
     }
 
 
@@ -96,9 +114,6 @@ def build_kotaemon_settings(
         **_build_auth_settings(),
         "KH_FEATURE_CHAT_SUGGESTION": config(
             "KH_FEATURE_CHAT_SUGGESTION", default=False, cast=bool
-        ),
-        "KH_FEATURE_USER_MANAGEMENT": config(
-            "KH_FEATURE_USER_MANAGEMENT", default=True, cast=bool
         ),
         "KH_USER_CAN_SEE_PUBLIC": None,
         "KH_FEATURE_USER_MANAGEMENT_ADMIN": str(

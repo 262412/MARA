@@ -1,52 +1,21 @@
-from typing import Any, cast
-
 import gradio as gr
 from ktem.app import BasePage
-from ktem.auth.passwords import verify_password
-from ktem.db.models import User, engine
-from ktem.pages.resources.user import create_user
-from sqlalchemy import update
-from sqlalchemy.engine import CursorResult
-from sqlmodel import Session, select
+from ktem.auth.service import resolve_request_user_id
+from theflow.settings import settings as flowsettings
 
 fetch_creds = """
 function() {
     const username = getStorage('username', '')
-    const password = getStorage('password', '')
-    return [username, password, null];
+    return [username, '', null];
 }
 """
 
 signin_js = """
 function(usn, pwd) {
     setStorage('username', usn);
-    setStorage('password', pwd);
-    return [usn, pwd];
+    return [usn, ''];
 }
 """
-
-
-def _compare_and_swap_password_hash(
-    session: Session,
-    *,
-    user_id: str,
-    original_hash: str,
-    upgraded_hash: str,
-) -> bool:
-    result = cast(
-        CursorResult[Any],
-        session.execute(
-            update(User)
-            .where(User.id == user_id, User.password == original_hash)
-            .values(password=upgraded_hash)
-        ),
-    )
-    if result.rowcount != 1:
-        session.rollback()
-        return False
-
-    session.commit()
-    return True
 
 
 class LoginPage(BasePage):
@@ -113,52 +82,11 @@ class LoginPage(BasePage):
         )
 
     def login(self, usn, pwd, request: gr.Request):
-        try:
-            import gradiologin as grlogin
-
-            user = grlogin.get_user(request)
-        except (ImportError, AssertionError):
-            user = None
-
-        if user:
-            user_id = user["sub"]
-            with Session(engine) as session:
-                stmt = select(User).where(
-                    User.id == user_id,
-                )
-                result = session.exec(stmt).all()
-
-            if result:
-                print("Existing user:", user)
-                return user_id, "", ""
-            else:
-                print("Creating new user:", user)
-                create_user(
-                    usn=user["email"],
-                    pwd="",
-                    user_id=user_id,
-                    is_admin=False,
-                )
-                return user_id, "", ""
-        else:
-            if not usn or not pwd:
-                return None, usn, pwd
-
-            with Session(engine) as session:
-                stmt = select(User).where(
-                    User.username_lower == usn.lower().strip(),
-                )
-                user = session.exec(stmt).first()
-                stored_hash = user.password if user is not None else None
-                verified, upgraded_hash = verify_password(pwd, stored_hash)
-                if user is not None and verified:
-                    if upgraded_hash is None or _compare_and_swap_password_hash(
-                        session,
-                        user_id=user.id,
-                        original_hash=user.password,
-                        upgraded_hash=upgraded_hash,
-                    ):
-                        return user.id, "", ""
-
-                gr.Warning("Invalid username or password")
-                return None, usn, pwd
+        auth_mode = str(getattr(flowsettings, "MARA_AUTH_MODE", "auto"))
+        user_id = resolve_request_user_id(request, auth_mode=auth_mode)
+        username = (
+            str(getattr(request, "username", "") or "")
+            if auth_mode == "password"
+            else ""
+        )
+        return user_id, username, ""

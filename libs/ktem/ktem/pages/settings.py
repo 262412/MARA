@@ -12,7 +12,7 @@ KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
 signout_js = """
 function(u, c, pw, pwc) {
     removeFromStorage('username');
-    removeFromStorage('password');
+    window.location.href = "/logout";
     return [u, c, pw, pwc];
 }
 """
