@@ -79,17 +79,27 @@ def test_web_delete_uses_server_identity_in_password_mode(monkeypatch):
 def test_runtime_delete_uses_shared_coordinator_and_resolved_user(monkeypatch):
     _CoordinatorSpy.instances.clear()
     monkeypatch.setattr("ktem.docqa.runtime.DeletionCoordinator", _CoordinatorSpy)
-    match = SimpleNamespace(file_id="file-1", name="report.pdf")
-    runtime = cast(
-        DocQARuntime,
-        SimpleNamespace(
-            file_index=SimpleNamespace(_resources=_resources()),
-            _resolve_user_id=lambda _value: "runtime-user",
-            resolve_file_refs=lambda _refs, user_id: [match],
-        ),
+    runtime = cast(DocQARuntime, object.__new__(DocQARuntime))
+    runtime._user_id = "runtime-user"
+    runtime._resolve_user_id = lambda _value=None: "runtime-user"  # type: ignore[assignment]
+    runtime.file_index = SimpleNamespace(  # type: ignore[assignment]
+        _resources=_resources(),
+        list_source_rows=lambda user_id: [
+            {
+                "id": "file-1",
+                "name": "report.pdf",
+                "size": 10,
+                "note": {},
+                "path": "report.pdf",
+                "date_created": None,
+                "user": user_id,
+            }
+        ],
     )
 
-    deleted = DocQARuntime.delete_files(runtime, ["report.pdf"], user_id="ignored")
+    deleted = runtime.delete_files(["report.pdf"], user_id="ignored")
 
-    assert deleted == [match]
+    assert [(record.file_id, record.name) for record in deleted] == [
+        ("file-1", "report.pdf")
+    ]
     assert _CoordinatorSpy.instances[0].deleted == [("file-1", "runtime-user")]
