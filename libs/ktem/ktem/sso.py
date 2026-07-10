@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 
 import gradiologin
@@ -13,6 +14,14 @@ from ktem.auth.policy import AuthConfigurationError
 from ktem.launcher import LaunchConfig, ensure_gradio_temp_dir, prepare_launch
 from ktem.main import App
 from theflow.settings import settings as flowsettings
+
+_GENERATED_SESSION_SECRET = secrets.token_urlsafe(48)
+
+
+def _session_secret() -> str:
+    return (
+        str(config("SECRET_KEY", default="") or "").strip() or _GENERATED_SESSION_SECRET
+    )
 
 
 def _register_provider() -> None:
@@ -79,7 +88,7 @@ def create_sso_app(
         app,
         blocks,
         "/app",
-        secret_key=config("SECRET_KEY", default="some-secret-string"),
+        secret_key=_session_secret(),
         allowed_paths=[
             str(ASSETS_DIR),
             str(doc_dir),

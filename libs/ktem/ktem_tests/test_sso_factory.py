@@ -74,6 +74,7 @@ def test_packaged_sso_factory_uses_gradiologin_mount(monkeypatch, tmp_path):
     assert mounted["blocks"] is not None
     assert mounted["path"] == "/app"
     assert str(sso.ASSETS_DIR) in mounted["kwargs"]["allowed_paths"]
+    assert mounted["kwargs"]["secret_key"] != "some-secret-string"
     assert registered[0]["name"] == "google"
     assert app.state.mara_app is mara_app
 
