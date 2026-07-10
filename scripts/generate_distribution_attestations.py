@@ -107,16 +107,24 @@ def generate_attestations(
             "missing required distributions: " + ", ".join(sorted(missing))
         )
     if unexpected:
+        raise RuntimeError("unexpected distributions: " + ", ".join(sorted(unexpected)))
+    artifact_kinds = Counter(
+        (name, "wheel" if artifact.suffix == ".whl" else "sdist")
+        for artifact, (name, _version) in zip(artifacts, identities, strict=True)
+    )
+    invalid_kinds = {
+        name: {
+            "wheel": artifact_kinds[(name, "wheel")],
+            "sdist": artifact_kinds[(name, "sdist")],
+        }
+        for name in REQUIRED_DISTRIBUTIONS
+        if artifact_kinds[(name, "wheel")] != 1 or artifact_kinds[(name, "sdist")] != 1
+    }
+    if invalid_kinds:
         raise RuntimeError(
-            "unexpected distributions: " + ", ".join(sorted(unexpected))
-        )
-    counts = Counter(name for name, _version in identities)
-    invalid_counts = {name: count for name, count in counts.items() if count != 2}
-    if invalid_counts:
-        raise RuntimeError(
-            "each distribution must have exactly one wheel and one sdist: "
+            "each distribution must have one wheel and one sdist: "
             + ", ".join(
-                f"{name}={count}" for name, count in sorted(invalid_counts.items())
+                f"{name}={counts}" for name, counts in sorted(invalid_kinds.items())
             )
         )
     output_dir.mkdir(parents=True, exist_ok=True)

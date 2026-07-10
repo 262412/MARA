@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 
 import pytest
 
@@ -76,6 +75,37 @@ def test_distribution_attestations_fail_closed_when_a_distribution_is_missing(
     (package_dir / "ktem-1.0.0.tar.gz").write_bytes(b"sdist")
 
     with pytest.raises(RuntimeError, match="missing required distributions"):
+        generate_attestations(
+            dist_root,
+            tmp_path / "attestations",
+            commit_sha="a" * 40,
+            builder_id="https://github.com/example/mara/actions/runs/1",
+        )
+
+
+def test_distribution_attestations_require_one_wheel_and_one_sdist(tmp_path):
+    from scripts.generate_distribution_attestations import generate_attestations
+
+    dist_root = tmp_path / "dist"
+    filenames = {
+        "ktem": ("ktem-1.0.0-py3-none-any.whl", "ktem-1.0.0-py2-none-any.whl"),
+        "kotaemon": (
+            "kotaemon-1.0.0-py3-none-any.whl",
+            "kotaemon-1.0.0.tar.gz",
+        ),
+        "mara-research-cli": (
+            "mara_research_cli-1.0.0-py3-none-any.whl",
+            "mara_research_cli-1.0.0.tar.gz",
+        ),
+        "mara-app": ("mara_app-1.0.0-py3-none-any.whl", "mara_app-1.0.0.tar.gz"),
+    }
+    for distribution, package_filenames in filenames.items():
+        package_dir = dist_root / distribution
+        package_dir.mkdir(parents=True)
+        for filename in package_filenames:
+            (package_dir / filename).write_bytes(filename.encode())
+
+    with pytest.raises(RuntimeError, match="one wheel and one sdist"):
         generate_attestations(
             dist_root,
             tmp_path / "attestations",

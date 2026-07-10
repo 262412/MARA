@@ -41,9 +41,7 @@ def test_container_provenance_subject_matches_buildkit_digest(tmp_path):
         {"containerimage.digest": "sha256:" + "a" * 64},
     ],
 )
-def test_container_provenance_fails_closed_on_incomplete_metadata(
-    tmp_path, metadata
-):
+def test_container_provenance_fails_closed_on_incomplete_metadata(tmp_path, metadata):
     from scripts.generate_container_attestation import generate_container_evidence
 
     with pytest.raises(ValueError):

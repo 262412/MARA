@@ -69,7 +69,9 @@ def test_action_policy_rejects_unknown_digests_and_malformed_version_comments():
         " # release-4\n"
     )
 
-    unknown_rules = {item.rule for item in _check_action_pins(Path("test.yml"), unknown)}
+    unknown_rules = {
+        item.rule for item in _check_action_pins(Path("test.yml"), unknown)
+    }
     malformed_rules = {
         item.rule for item in _check_action_pins(Path("test.yml"), malformed)
     }

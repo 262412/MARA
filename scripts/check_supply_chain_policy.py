@@ -27,7 +27,7 @@ INSTALLER_PATHS = (
     Path("scripts/update_windows.bat"),
 )
 FULL_SHA = re.compile(r"[0-9a-f]{40}")
-ACTION_LINE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)\s*(?:#\s*(v[^\s]+))?\s*$")
+ACTION_LINE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)(?:\s+#\s*([^\s]+))?\s*$")
 FROM_LINE = re.compile(
     r"^FROM\s+(?P<image>[^\s]+)(?:\s+AS\s+(?P<stage>[A-Za-z0-9_.-]+))?\s*$",
     re.IGNORECASE,
@@ -37,6 +37,27 @@ APPROVED_EXTERNAL_IMAGES = {
     "ghcr.io/astral-sh/uv:0.11.19@sha256:b46b03ddfcfbf8f547af7e9eaefdf8a39c8cebcba7c98858d3162bd28cf536f6",
     "ollama/ollama:0.31.2@sha256:509fdf54e23bd50d87af646cb51c0a7a203d6a83cc4d6695b3b08c5be1c62c0a",
     "python:3.10.20-slim-bookworm@sha256:ff7161e2b8e2a56fc6a62a6099ff8feb72f1a6dbae9860cdcb9a6c65cf4c6be9",
+}
+APPROVED_ACTIONS = {
+    "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683": "v4.2.2",
+    "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10": "v6.0.3",
+    "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065": "v5.6.0",
+    "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02": "v4.6.2",
+    "amannn/action-semantic-pull-request@0723387faaf9b38adef4775cd42cfd5155ed6017": "v5.5.3",
+    "anothrNick/github-tag-action@4ed44965e0db8dab2b466a16da04aec3cc312fd8": "1.75.0",
+    "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25": "v0.36.0",
+    "astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4": "v6.7.0",
+    "buildingcash/json-to-markdown-table-action@b442169239ef35f1dc4e5c8c3d47686c081a7e65": "v1.1.0",
+    "docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8": "v6.19.2",
+    "docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9": "v3.7.0",
+    "docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051": "v5.10.0",
+    "docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f": "v3.12.0",
+    "docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130": "v3.7.0",
+    "gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e": "v3.0.0",
+    "jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be": "v1.3.1",
+    "marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405": "v2.9.4",
+    "softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65": "v2.6.2",
+    "wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed": "v6.2.1",
 }
 FORBIDDEN_DOWNLOADS = (
     (re.compile(r"curl\s+[^\n|]*-k(?:\s|$)", re.IGNORECASE), "insecure-curl"),
@@ -98,6 +119,14 @@ def _check_action_pins(path: Path, source: str) -> list[Violation]:
             continue
         match = ACTION_LINE.match(line)
         if not match:
+            violations.append(
+                Violation(
+                    path.as_posix(),
+                    number,
+                    "action-line",
+                    "uses line must contain one action and an exact version comment",
+                )
+            )
             continue
         action, version_comment = match.groups()
         if action.startswith("./"):
@@ -112,13 +141,23 @@ def _check_action_pins(path: Path, source: str) -> list[Violation]:
                     f"{action} is not pinned to 40 hex",
                 )
             )
-        if not version_comment:
+        expected_version = APPROVED_ACTIONS.get(action)
+        if expected_version is None:
+            violations.append(
+                Violation(
+                    path.as_posix(),
+                    number,
+                    "action-allowlist",
+                    f"{action} was not independently verified",
+                )
+            )
+        if version_comment != expected_version:
             violations.append(
                 Violation(
                     path.as_posix(),
                     number,
                     "action-version-comment",
-                    f"{action} has no version comment",
+                    f"{action} must be commented as {expected_version!r}",
                 )
             )
     return violations
