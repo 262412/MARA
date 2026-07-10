@@ -74,6 +74,12 @@ def _server_user_id(request, auth_mode):
     return resolve_request_user_id(request, auth_mode=auth_mode)
 
 
+def _should_reject_rename(user_id, errors):
+    if errors:
+        gr.Warning(errors)
+    return user_id is None or bool(errors)
+
+
 class ConversationControl(BasePage):
     """Manage conversation"""
 
@@ -360,16 +366,7 @@ class ConversationControl(BasePage):
         request: gr.Request = _REQUEST,
     ):
         """Rename the conversation"""
-        if not is_renamed or KH_DEMO_MODE or user_id is None or not conversation_id:
-            return (
-                gr.update(),
-                conversation_id,
-                gr.update(visible=False),
-            )
-
-        errors = is_conv_name_valid(new_name)
-        if errors:
-            gr.Warning(errors)
+        if not is_renamed or KH_DEMO_MODE or not conversation_id:
             return (
                 gr.update(),
                 conversation_id,
@@ -377,6 +374,14 @@ class ConversationControl(BasePage):
             )
 
         user_id = self._resolve_user_id(user_id, request)
+        errors = is_conv_name_valid(new_name)
+        if _should_reject_rename(user_id, errors):
+            return (
+                gr.update(),
+                conversation_id,
+                gr.update(visible=False),
+            )
+
         try:
             self._get_mutation_service(user_id).rename_session(
                 conversation_id,
