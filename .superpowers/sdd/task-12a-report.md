@@ -231,3 +231,122 @@ commit.
    pre-existing.
 4. Indexing/acceptance integration, authorization, DOCX decomposition, and
    render/browser safety remain explicitly deferred to Task 12B/12C.
+
+## Review Remediation (2026-07-10)
+
+The Task 12A clean review identified four required fixes and three additional
+regressions to lock down. Test commits `73f8f53` and `f30fa98` captured those
+cases before production commit `4411a70` implemented the corrections.
+
+### Corrections
+
+- Workspace cleanup now runs from a true `finally` boundary. Unexpected
+  converter, staging-directory, and atomic-publication exceptions are logged
+  with file/stage/converter context, wrapped as typed conversion failures, and
+  cannot bypass cleanup.
+- A cleanup-only failure after a validated PDF has been published is an
+  actionable warning and no longer changes a successful result into facade
+  failure. When conversion and cleanup both fail, the typed cleanup error
+  retains the primary failure details and conversion attempts.
+- Conversion capacity is now shared process-wide across service instances.
+  Same-cache/source lock entries count active and waiting users and are removed
+  when the final user exits, so the keyed-lock registry does not grow without
+  bound.
+- CFB classification now reads the actual directory stream names through the
+  header, DIFAT, FAT, and directory chains. `WordDocument`, `Workbook`/`Book`,
+  and `PowerPoint Document` determine `.doc`, `.xls`, and `.ppt`; unknown,
+  conflicting, corrupt, and declared/detected mismatch containers are rejected
+  with typed `cfb_validation` or source-mismatch context.
+- Legacy cache identity preserves the unresolved absolute input path. A real
+  target and a symlink alias retain their distinct established MD5-derived
+  filenames and cannot reuse one another's in-memory cache entry.
+- OOXML compression-ratio enforcement and concurrent failed-loser safety now
+  have explicit regressions.
+
+The limiter and keyed locks are intentionally process-local; they prevent
+duplicate work and enforce capacity within one Python process. Cross-process
+correctness does not depend on a fragile filesystem mutex: every contender has
+its own workspace and LibreOffice profile, validates its candidate, publishes
+with atomic `os.replace`, and cleans only its own workspace. Two processes may
+therefore both perform conversion, but a failed loser cannot remove a valid
+winner. The concurrent-loser regression bypasses the process lock explicitly
+to exercise this safety boundary.
+
+### Review TDD Evidence
+
+The first review RED run covered actual CFB subtype/mismatch/unknown streams,
+the shared limiter, lock reclamation, unexpected exception cleanup,
+cleanup-only success, failure-plus-cleanup context, concurrent-loser safety,
+symlink cache naming, compression-ratio limits, and scheduled-facade status.
+
+Result: `13 failed, 43 passed`. The failures matched the review gaps; the
+compression-ratio and failure-plus-cleanup tests passed immediately as useful
+characterization.
+
+A self-review then strengthened the symlink regression to convert both a real
+target and its alias through the same service. Result before the production
+cache-map correction: `1 failed` because the alias reused the target's cached
+path.
+
+Focused GREEN command:
+
+```bash
+uv run --python 3.10 python -m pytest \
+  libs/ktem/ktem_tests/test_preview_source_core.py \
+  libs/ktem/ktem_tests/test_preview_office_core.py \
+  libs/ktem/ktem_tests/test_preview_office_compatibility.py -q
+```
+
+Result: `56 passed`, exit 0.
+
+The relevant ktem regression command additionally covered import laziness, the
+existing indexing conversion utility, runtime defaults, preview ABI/timer,
+DocQA runtime/helpers/graph scope, and file-index extraction.
+
+Result: `130 passed`, exit 0. Both GREEN runs emitted only the existing pypdf
+ARC4 `CryptographyDeprecationWarning`.
+
+The standard CFB test fixture was also opened with `olefile.OleFileIO`; the
+reported stream lists were `WordDocument`, `PowerPoint Document`, and
+`Workbook` for `.doc`, `.ppt`, and `.xls`, respectively.
+
+### Review Verification and Diagnostics
+
+- Explicit hygiene over all review-changed Python files:
+  `No codebase hygiene ratchet violations.`, exit 0.
+- Changed-file pre-commit: every hook passed, including hygiene, Black, isort,
+  flake8, autoflake, mypy, and codespell.
+- `git diff --check`: passed before the implementation commit.
+- `scripts/codebase_hygiene_baseline.json`: unchanged.
+- Current budgets: `preview/coordination.py` 84 lines,
+  `preview/office.py` 596 lines, and `preview/source.py` 442 lines;
+  `_OfficeConverterRunner` is 136 lines, `OfficeConversionService` 277 lines,
+  `OfficePreviewConversionService` 115 lines, and no function reaches 70 lines.
+- Black changed only newly edited functional regions; there was no unrelated
+  formatting-only churn.
+
+The first post-fix hygiene command exited 1 because the unexpected-exception
+catch stored a typed failure but did not itself emit an actionable diagnostic.
+Adding the contextual error log satisfied the broad-catch contract; the next
+hygiene and pre-commit runs passed. A one-off AST budget inspection also exited
+1 because it tried to read `lineno` from the module node; restricting the
+inspection to function and class nodes corrected the diagnostic, which then
+reported the budgets above.
+
+### Review Changed Files
+
+- `libs/ktem/ktem/preview/coordination.py`
+- `libs/ktem/ktem/preview/models.py`
+- `libs/ktem/ktem/preview/office.py`
+- `libs/ktem/ktem/preview/source.py`
+- `libs/ktem/ktem_tests/preview_test_utils.py`
+- `libs/ktem/ktem_tests/test_preview_source_core.py`
+- `libs/ktem/ktem_tests/test_preview_office_core.py`
+- `libs/ktem/ktem_tests/test_preview_office_compatibility.py`
+
+The public `MARA`/`MARA-cli`, Web, DocQA, Gradio, DB, JSON, and session surfaces
+remain unchanged. Final storage checks still show `.venv` linked to fastscratch,
+runtime data on fastscratch, and no repository-root `data/`, `datasets/`, or
+`outputs/`. Fastscratch is at 295.8G and 471,857 files; scratch is at 71.91G and
+472,450 files, still above its inode soft quota with grace active. No user data
+or caches were deleted.
