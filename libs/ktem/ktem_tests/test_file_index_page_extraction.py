@@ -229,6 +229,33 @@ def test_delete_all_files_skips_placeholder_rows():
     assert controller.deleted_ids == ["file-1", "file-2"]
 
 
+def test_file_index_page_forwards_delete_identity_and_request():
+    calls = []
+
+    class _Controller:
+        def delete_event(self, file_id, user_id, request=None):
+            calls.append(("one", file_id, user_id, request))
+            return "deleted"
+
+        def delete_all_files(self, file_list, user_id, request=None):
+            calls.append(("all", file_list, user_id, request))
+            return "deleted-all"
+
+    page = cast(Any, FileIndexPage.__new__(FileIndexPage))
+    page._deletion_controller = _Controller()
+    request = SimpleNamespace(username="alice")
+    file_list = pd.DataFrame({"id": ["file-1"]})
+
+    assert page.delete_event("file-1", "browser-user", request) == "deleted"
+    assert (
+        page.delete_all_files(file_list, "browser-user", request) == "deleted-all"
+    )
+    assert calls == [
+        ("one", "file-1", "browser-user", request),
+        ("all", file_list, "browser-user", request),
+    ]
+
+
 def test_page_label_sort_key_handles_mixed_page_label_types():
     docs = [
         SimpleNamespace(metadata={"page_label": "appendix"}),
