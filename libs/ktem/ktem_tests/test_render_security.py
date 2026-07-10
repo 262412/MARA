@@ -149,3 +149,18 @@ def test_answer_rendering_keeps_hostile_markdown_as_text():
 
     _assert_hostile_markup_is_inert(rendered)
     assert "&lt;img" in rendered
+
+
+def test_answer_markdown_rejects_unsafe_link_and_image_urls():
+    content = (
+        "[script link](javascript:globalThis.__maraXss=1)\n\n"
+        "![script image](javascript:globalThis.__maraXss=2)\n\n"
+        "[data link](data:text/html,<script>globalThis.__maraXss=3</script>)"
+    )
+
+    rendered = format_chat_message_html(content, "assistant")
+
+    _assert_hostile_markup_is_inert(rendered)
+    assert "script link" in rendered
+    assert "script image" in rendered
+    assert "data link" in rendered
