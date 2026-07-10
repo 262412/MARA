@@ -4,7 +4,6 @@ from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from typing import Any
 
-
 RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
     "prompt",
     "controller_question",

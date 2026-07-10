@@ -33,6 +33,14 @@ from .multimodal_index import (
     element_records_from_documents,
     page_image_records_from_documents,
 )
+from .request_policies import (
+    BENCHMARK_REQUEST_POLICY,
+    DOCQA_REQUEST_POLICIES,
+    LEGACY_CLI_REQUEST_POLICY,
+    MARA_CLI_REQUEST_POLICY,
+    WEB_REQUEST_POLICY,
+    DocQARequestPolicy,
+)
 from .runtime import (
     DocQADoctorResult,
     DocQAFileRecord,
@@ -43,14 +51,6 @@ from .runtime import (
     DocQASession,
     DocQASessionSummary,
     DocQATurnUpdate,
-)
-from .request_policies import (
-    BENCHMARK_REQUEST_POLICY,
-    DOCQA_REQUEST_POLICIES,
-    LEGACY_CLI_REQUEST_POLICY,
-    MARA_CLI_REQUEST_POLICY,
-    WEB_REQUEST_POLICY,
-    DocQARequestPolicy,
 )
 from .workflow import WorkflowPlan, WorkflowStep, build_workflow_plan
 

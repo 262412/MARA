@@ -7,7 +7,6 @@ from kotaemon.docqa_request_policies import (
     DocQARequestPolicy,
 )
 
-
 __all__ = [
     "BENCHMARK_REQUEST_POLICY",
     "DOCQA_REQUEST_POLICIES",

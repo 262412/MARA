@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from slide_cli.docqa_cli import _run_docqa_turn
+
 from benchmark.engines import DocQARuntimeEngine
 from benchmark.schemas import BenchmarkDocument, BenchmarkExample
 from kotaemon import cli as legacy_cli
-from slide_cli.docqa_cli import _run_docqa_turn
 
 
 class _RuntimeCapture:
