@@ -38,10 +38,13 @@ RUN bash scripts/download_pdfjs.sh $PDFJS_PREBUILT_DIR
 # Install uv dependencies
 RUN pip install --no-cache-dir "uv"
 
-# Copy contents
-COPY . /app
+# Copy only the application inputs required by the image
+COPY pyproject.toml uv.lock README.md LICENSE.txt NOTICE /app/
+COPY libs /app/libs
+COPY docs /app/docs
+COPY app.py flowsettings.py sso_app.py sso_app_demo.py settings.yaml.example /app/
+COPY .env.example /app/.env.example
 COPY launch.sh /app/launch.sh
-COPY .env.example /app/.env
 
 # Install pip packages
 RUN --mount=type=ssh  \

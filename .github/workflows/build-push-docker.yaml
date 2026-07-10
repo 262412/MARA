@@ -16,6 +16,8 @@ env:
 
 jobs:
   build:
+    # Temporary P0 containment until Task 7 adds the reusable quality gate.
+    if: ${{ false }}
     name: Build and push container
     runs-on: ubuntu-latest
     permissions:

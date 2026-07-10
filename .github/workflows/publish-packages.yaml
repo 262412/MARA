@@ -22,6 +22,8 @@ on:
 
 jobs:
   publish:
+    # Temporary P0 containment until Task 7 adds the reusable quality gate.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
