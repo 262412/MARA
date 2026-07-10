@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import atexit
+import sys
+from pathlib import Path
 
 import pytest
+
+
+REPO_ROOT = Path(__file__).resolve().parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from pytest_runtime_isolation import start_process_test_runtime
 
