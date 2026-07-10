@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import stat
+import struct
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -94,6 +95,147 @@ def test_safe_zip_rejects_symbolic_link_members_before_writing(tmp_path):
         )
 
     assert not (tmp_path / "expanded").exists()
+
+
+def test_safe_zip_rejects_non_regular_members_before_writing(tmp_path):
+    archive_path = tmp_path / "special.zip"
+    special = zipfile.ZipInfo("pipe.txt")
+    special.create_system = 3
+    special.external_attr = (stat.S_IFIFO | 0o600) << 16
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr(special, b"payload")
+
+    with pytest.raises(ArchiveExtractionError, match="non-regular member"):
+        extract_supported_zip_files(
+            archive_path,
+            destination_parent=tmp_path / "expanded",
+            supported_types={".txt"},
+        )
+
+    assert not (tmp_path / "expanded").exists()
+
+
+def test_safe_zip_rejects_directory_mode_masquerading_as_file(tmp_path):
+    archive_path = tmp_path / "directory-file.zip"
+    malformed = zipfile.ZipInfo("directory-masquerading-as-file.txt")
+    malformed.create_system = 3
+    malformed.external_attr = (stat.S_IFDIR | 0o700) << 16
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr(malformed, b"not a regular file")
+
+    with pytest.raises(ArchiveExtractionError, match="directory type"):
+        extract_supported_zip_files(
+            archive_path,
+            destination_parent=tmp_path / "expanded",
+            supported_types={".txt"},
+        )
+
+    assert not (tmp_path / "expanded").exists()
+
+
+def test_safe_zip_rejects_encrypted_members_before_writing(tmp_path):
+    archive_path = tmp_path / "encrypted.zip"
+    _write_zip(archive_path, {"secret.txt": b"payload"})
+    payload = bytearray(archive_path.read_bytes())
+    local_header = payload.index(b"PK\x03\x04")
+    central_header = payload.index(b"PK\x01\x02")
+    local_flags = struct.unpack_from("<H", payload, local_header + 6)[0] | 0x1
+    central_flags = struct.unpack_from("<H", payload, central_header + 8)[0] | 0x1
+    struct.pack_into("<H", payload, local_header + 6, local_flags)
+    struct.pack_into("<H", payload, central_header + 8, central_flags)
+    archive_path.write_bytes(payload)
+
+    with pytest.raises(ArchiveExtractionError, match="encrypted members"):
+        extract_supported_zip_files(
+            archive_path,
+            destination_parent=tmp_path / "expanded",
+            supported_types={".txt"},
+        )
+
+    assert not (tmp_path / "expanded").exists()
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ("folder\\same.txt", "folder/same.txt"),
+        ("File.txt", "file.txt"),
+        ("report.txt", "report.txt."),
+        ("notes.txt", "notes.txt "),
+    ],
+)
+def test_safe_zip_rejects_duplicate_portable_member_paths(tmp_path, first, second):
+    archive_path = tmp_path / "duplicate.zip"
+    _write_zip(archive_path, {first: b"first", second: b"second"})
+
+    with pytest.raises(ArchiveExtractionError, match="duplicate normalized"):
+        extract_supported_zip_files(
+            archive_path,
+            destination_parent=tmp_path / "expanded",
+            supported_types={".txt"},
+        )
+
+    assert not (tmp_path / "expanded").exists()
+
+
+def test_safe_zip_rejects_windows_reserved_member_names(tmp_path):
+    archive_path = tmp_path / "reserved.zip"
+    _write_zip(archive_path, {"nested/CON.txt": b"reserved"})
+
+    with pytest.raises(ArchiveExtractionError, match="reserved"):
+        extract_supported_zip_files(
+            archive_path,
+            destination_parent=tmp_path / "expanded",
+            supported_types={".txt"},
+        )
+
+    assert not (tmp_path / "expanded").exists()
+
+
+def test_safe_zip_validates_all_members_before_any_output(tmp_path):
+    archive_path = tmp_path / "late-malicious.zip"
+    _write_zip(
+        archive_path,
+        {"safe.txt": b"safe", "nested/../../outside.txt": b"malicious"},
+    )
+
+    with pytest.raises(ArchiveExtractionError, match="escapes"):
+        extract_supported_zip_files(
+            archive_path,
+            destination_parent=tmp_path / "expanded",
+            supported_types={".txt"},
+        )
+
+    assert not (tmp_path / "expanded").exists()
+    assert not (tmp_path / "outside.txt").exists()
+
+
+def test_safe_zip_uses_private_owned_output_directory(tmp_path):
+    archive_path = tmp_path / "private.zip"
+    _write_zip(archive_path, {"report.txt": b"report"})
+    destination = tmp_path / "expanded"
+
+    extracted = extract_supported_zip_files(
+        archive_path,
+        destination_parent=destination,
+        supported_types={".txt"},
+    )
+
+    owned_root = Path(extracted[0]).relative_to(destination).parts[0]
+    assert stat.S_IMODE((destination / owned_root).stat().st_mode) == 0o700
+
+
+def test_safe_zip_returns_supported_files_in_deterministic_path_order(tmp_path):
+    archive_path = tmp_path / "ordered.zip"
+    _write_zip(archive_path, {"b.txt": b"b", "a.txt": b"a"})
+
+    extracted = extract_supported_zip_files(
+        archive_path,
+        destination_parent=tmp_path / "expanded",
+        supported_types={".txt"},
+    )
+
+    assert [Path(path).name for path in extracted] == ["a.txt", "b.txt"]
 
 
 @pytest.mark.parametrize(

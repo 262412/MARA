@@ -6,7 +6,7 @@ import stat
 import tempfile
 import zipfile
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import IO
 
 
@@ -62,11 +62,15 @@ def extract_supported_zip_files(
     try:
         with zipfile.ZipFile(archive, "r") as zip_file:
             members = _validate_members(archive, zip_file.infolist(), limits)
-            selected = [
-                member
-                for member in members
-                if member.relative_path.suffix.lower() in normalized_types
-            ]
+            _verify_members(archive, zip_file, members, limits)
+            selected = sorted(
+                (
+                    member
+                    for member in members
+                    if member.relative_path.suffix.lower() in normalized_types
+                ),
+                key=lambda member: member.relative_path.as_posix(),
+            )
             if not selected:
                 return []
             return _extract_members(
@@ -116,7 +120,7 @@ def _validate_members(
                 ),
                 member=info.filename,
             )
-        normalized = relative_path.as_posix()
+        normalized = _portable_member_key(relative_path)
         if normalized in seen_paths:
             raise ArchiveExtractionError(
                 archive,
@@ -134,20 +138,26 @@ def _validate_member_path(archive: Path, info: zipfile.ZipInfo) -> PurePosixPath
     raw_name = info.filename
     normalized_name = raw_name.replace("\\", "/")
     relative_path = PurePosixPath(normalized_name)
-    has_drive = bool(
-        relative_path.parts and re.match(r"^[A-Za-z]:", relative_path.parts[0])
+    has_drive = any(":" in part for part in relative_path.parts)
+    has_reserved_name = any(
+        PureWindowsPath(part).is_reserved() for part in relative_path.parts
     )
     if (
         not normalized_name
         or "\x00" in normalized_name
         or normalized_name.startswith("/")
         or has_drive
+        or has_reserved_name
         or any(part == ".." for part in relative_path.parts)
+        or any(not part.rstrip(" .") for part in relative_path.parts)
     ):
         raise ArchiveExtractionError(
             archive,
             stage="validate-member",
-            reason="member path is absolute or escapes the extraction directory",
+            reason=(
+                "member path is absolute, reserved, or escapes the extraction "
+                "directory"
+            ),
             member=raw_name,
         )
     if not any(part not in {"", "."} for part in relative_path.parts):
@@ -158,6 +168,10 @@ def _validate_member_path(archive: Path, info: zipfile.ZipInfo) -> PurePosixPath
             member=raw_name,
         )
     return relative_path
+
+
+def _portable_member_key(relative_path: PurePosixPath) -> str:
+    return "/".join(part.rstrip(" .").casefold() for part in relative_path.parts)
 
 
 def _validate_member_type(archive: Path, info: zipfile.ZipInfo) -> None:
@@ -177,8 +191,21 @@ def _validate_member_type(archive: Path, info: zipfile.ZipInfo) -> None:
             reason="symbolic link members are not allowed",
             member=info.filename,
         )
-    allowed_types = {0, stat.S_IFREG, stat.S_IFDIR}
-    if file_type not in allowed_types:
+    if file_type == stat.S_IFDIR and not info.is_dir():
+        raise ArchiveExtractionError(
+            archive,
+            stage="validate-member",
+            reason="directory type does not match the member path",
+            member=info.filename,
+        )
+    if info.is_dir() and file_type not in {0, stat.S_IFDIR}:
+        raise ArchiveExtractionError(
+            archive,
+            stage="validate-member",
+            reason="directory member is not marked as a directory",
+            member=info.filename,
+        )
+    if file_type not in {0, stat.S_IFREG, stat.S_IFDIR}:
         raise ArchiveExtractionError(
             archive,
             stage="validate-member",
@@ -265,13 +292,49 @@ def _extract_members(
     return extracted
 
 
-def _copy_member(source: IO[bytes], target: IO[bytes], byte_limit: int) -> int:
+def _verify_members(
+    archive: Path,
+    zip_file: zipfile.ZipFile,
+    members: list[_ValidatedMember],
+    limits: ArchiveLimits,
+) -> None:
+    total_bytes = 0
+    for member in members:
+        try:
+            with zip_file.open(member.info, "r") as source:
+                copied = _copy_member(source, None, limits.max_member_bytes)
+            if copied != member.info.file_size:
+                raise ValueError(
+                    f"verified size {copied} does not match declared size "
+                    f"{member.info.file_size}"
+                )
+            total_bytes += copied
+            if total_bytes > limits.max_total_bytes:
+                raise ValueError(
+                    f"verified total size {total_bytes} exceeds limit "
+                    f"{limits.max_total_bytes}"
+                )
+        except Exception as exc:
+            raise ArchiveExtractionError(
+                archive,
+                stage="verify-member",
+                reason=str(exc),
+                member=member.info.filename,
+            ) from exc
+
+
+def _copy_member(
+    source: IO[bytes],
+    target: IO[bytes] | None,
+    byte_limit: int,
+) -> int:
     copied = 0
     while chunk := source.read(min(1024 * 1024, byte_limit + 1 - copied)):
         copied += len(chunk)
         if copied > byte_limit:
             raise ValueError(f"extracted member exceeds byte limit {byte_limit}")
-        target.write(chunk)
+        if target is not None:
+            target.write(chunk)
     return copied
 
 
