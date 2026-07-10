@@ -15,8 +15,14 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  quality:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/quality-gates.yaml
+
   build:
-    # Temporary P0 containment until Task 7 adds the reusable quality gate.
+    needs: quality
+    # P0 release containment remains in force until P3 supply-chain gates pass.
     if: ${{ false }}
     name: Build and push container
     runs-on: ubuntu-latest

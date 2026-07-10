@@ -48,13 +48,16 @@ addopts = "--import-mode=importlib"
 [dependency-groups]
 dev = [
     "black",
+    "build",
     "coverage",
     "flake8",
     "ipython",
     "pre-commit",
     "pytest",
     "pytest-mock",
-    "sphinx"
+    "ruff",
+    "sphinx",
+    "twine",
 ]
 
 [project.urls]

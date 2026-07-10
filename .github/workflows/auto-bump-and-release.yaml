@@ -6,7 +6,15 @@ on:
       - main
 
 jobs:
+  quality:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/quality-gates.yaml
+
   auto-bump-and-release:
+    needs: quality
+    # P0 release containment remains in force until P3 supply-chain gates pass.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - name: Clone the repo

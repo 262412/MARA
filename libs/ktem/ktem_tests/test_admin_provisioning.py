@@ -1,7 +1,6 @@
 import sqlite3
 
 import pytest
-
 from ktem.auth import admin_provisioning
 from ktem.auth.policy import AuthConfigurationError
 
@@ -29,7 +28,7 @@ def test_admin_provisioning_helpers_handle_absent_state_and_failed_rollback():
         def rollback(self):
             raise sqlite3.OperationalError("rollback failed")
 
-    admin_provisioning._rollback(_RollbackFailure())
+    admin_provisioning._rollback(_RollbackFailure())  # type: ignore[arg-type]
 
 
 def test_preflight_sanitizes_invalid_sqlite_database(tmp_path):
