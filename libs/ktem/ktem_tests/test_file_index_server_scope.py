@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from typing import Any, cast
 from uuid import uuid4
 
+import ktem.index.file._scoped_page as scoped_page_module
+import ktem.index.file._selector_ui as selector_ui_module
 import ktem.index.file.ui as file_ui_module
 import pytest
 from gradio.helpers import special_args
@@ -20,20 +22,20 @@ from sqlalchemy.orm import Session, declarative_base
 def private_file_database():
     base = declarative_base()
 
-    class Source(base):
+    class Source(base):  # type: ignore[valid-type,misc]
         __tablename__ = "scoped_source"
         id = Column(String, primary_key=True, default=lambda: uuid4().hex)
         name = Column(String)
         user = Column(String)
 
-    class Index(base):
+    class Index(base):  # type: ignore[valid-type,misc]
         __tablename__ = "scoped_index"
         id = Column(String, primary_key=True, default=lambda: uuid4().hex)
         source_id = Column(String)
         target_id = Column(String)
         relation_type = Column(String)
 
-    class FileGroup(base):
+    class FileGroup(base):  # type: ignore[valid-type,misc]
         __tablename__ = "scoped_file_group"
         id = Column(String, primary_key=True, default=lambda: uuid4().hex)
         name = Column(String)
@@ -124,7 +126,7 @@ def test_file_page_selection_uses_server_identity(monkeypatch):
     service = _SelectionSpy()
     page._get_file_selection_service = lambda: service
     monkeypatch.setattr(
-        file_ui_module,
+        scoped_page_module,
         "resolve_file_index_user_id",
         lambda _browser_user, _request: "server-user",
         raising=False,
@@ -216,9 +218,9 @@ def test_file_selector_load_uses_server_identity(
 
     selector = cast(Any, FileSelector.__new__(FileSelector))
     selector._index = index
-    monkeypatch.setattr(file_ui_module, "engine", db_engine)
+    monkeypatch.setattr(selector_ui_module, "engine", db_engine)
     monkeypatch.setattr(
-        file_ui_module,
+        selector_ui_module,
         "resolve_file_index_user_id",
         lambda _browser_user, _request: "server-user",
     )

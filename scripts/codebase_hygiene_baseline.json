@@ -372,10 +372,10 @@
       "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/index/file/ui.py": {
-      "module_lines": 911,
+      "module_lines": 630,
       "functions": {},
       "classes": {
-        "FileIndexPage": 605
+        "FileIndexPage": 508
       },
       "non_actionable_broad_exceptions": 0
     },

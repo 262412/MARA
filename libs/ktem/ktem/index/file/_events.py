@@ -3,6 +3,7 @@ from __future__ import annotations
 import gradio as gr
 
 from ._chat_upload_events import register_quick_upload_events, register_upload_events
+from ._download_events import register_download_events
 from ._event_chain import append_index_changed_events as _append_index_changed_events
 
 __all__ = [
@@ -63,39 +64,6 @@ def _register_delete_file_events(page) -> None:
         fn=page.file_selected,
         inputs=[page.selected_file_id, page._app.user_id],
         outputs=_file_selection_outputs(page),
-        show_progress="hidden",
-    )
-
-
-def _register_download_events(page, *, sso_enabled: bool) -> None:
-    if not sso_enabled:
-        page.download_all_button.click(
-            fn=page.download_all_files,
-            inputs=[],
-            outputs=page.download_all_button,
-            show_progress="hidden",
-        )
-        page.download_single_button.click(
-            fn=page.download_single_file,
-            inputs=[
-                page.is_zipped_state,
-                page.selected_file_id,
-                page._app.user_id,
-            ],
-            outputs=[page.is_zipped_state, page.download_single_button],
-            show_progress="hidden",
-        )
-        return
-
-    page.download_single_button.click(
-        fn=page.download_single_file_simple,
-        inputs=[
-            page.is_zipped_state,
-            page.chunks,
-            page.selected_file_id,
-            page._app.user_id,
-        ],
-        outputs=[page.is_zipped_state, page.download_single_button],
         show_progress="hidden",
     )
 
@@ -304,7 +272,7 @@ def register_file_index_events(
         inputs=[page.selected_file_id],
         outputs=page_selector_outputs,
     )
-    _register_download_events(page, sso_enabled=sso_enabled)
+    register_download_events(page, sso_enabled=sso_enabled)
     _register_delete_all_events(page)
     register_upload_events(page)
     _register_file_selection_events(page)
