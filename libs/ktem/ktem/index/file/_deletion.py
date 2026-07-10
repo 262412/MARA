@@ -5,8 +5,8 @@ from typing import TypeAlias
 import gradio as gr
 from ktem.db.engine import engine
 
-from .deletion import DeletionCoordinator, DeletionError
 from ._identity import resolve_file_index_user_id
+from .deletion import DeletionCoordinator, DeletionError
 
 Request: TypeAlias = gr.Request | None
 

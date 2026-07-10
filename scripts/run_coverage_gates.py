@@ -50,7 +50,9 @@ def _run(command: list[str], *, env: dict[str, str]) -> None:
 def write_coverage_config(output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     config_path = output_dir / "coverage.ini"
-    source_lines = "\n".join(f"    {path}" for path in (*SOURCE_PATHS, *ROOT_SOURCE_MODULES))
+    source_lines = "\n".join(
+        f"    {path}" for path in (*SOURCE_PATHS, *ROOT_SOURCE_MODULES)
+    )
     omit_lines = "\n".join(f"    {pattern}" for pattern in COVERAGE_OMIT)
     config_path.write_text(
         "[run]\n"
