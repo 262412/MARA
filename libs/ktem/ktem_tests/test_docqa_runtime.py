@@ -1,8 +1,10 @@
-import hashlib
+import logging
+import re
 import uuid
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
 import ktem.docqa.runtime as runtime_module
 from ktem.db.models import Conversation, User, engine
 from ktem.docqa import _runtime_app, _runtime_models, _runtime_utils
@@ -439,7 +441,9 @@ def test_ensure_default_managed_user_reuses_existing_admin(monkeypatch):
                 session.commit()
 
 
-def test_ensure_default_managed_user_creates_missing_admin(monkeypatch):
+def test_ensure_default_managed_user_creates_missing_admin_from_safe_legacy_config(
+    monkeypatch,
+):
     runtime = object.__new__(DocQARuntime)
     runtime._app = SimpleNamespace(f_user_management=True)
 
@@ -489,14 +493,118 @@ def test_ensure_default_managed_user_creates_missing_admin(monkeypatch):
 
     monkeypatch.setattr(runtime_module, "Session", _FakeSession)
 
-    created_id = runtime._ensure_default_managed_user()
+    with pytest.warns(DeprecationWarning, match="one minor release"):
+        created_id = runtime._ensure_default_managed_user()
     created_user = captured["user"]
 
     assert str(created_user.id) == created_id
     assert created_user.username == username
     assert created_user.username_lower == username.lower()
     assert created_user.admin is True
-    assert created_user.password == hashlib.sha256(password.encode()).hexdigest()
+    assert created_user.password.startswith("$2b$12$")
+
+
+def test_ensure_default_managed_user_reuses_fallback_admin(monkeypatch):
+    runtime = object.__new__(DocQARuntime)
+    runtime._app = SimpleNamespace(f_user_management=True)
+    monkeypatch.setattr(
+        runtime_module.flowsettings,
+        "KH_FEATURE_USER_MANAGEMENT_ADMIN",
+        "",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        runtime_module.flowsettings,
+        "KH_FEATURE_USER_MANAGEMENT_PASSWORD",
+        "",
+        raising=False,
+    )
+    fallback_admin = SimpleNamespace(id="fallback-admin")
+
+    class _FakeResult:
+        def first(self):
+            return fallback_admin
+
+    class _FakeSession:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def exec(self, _statement):
+            return _FakeResult()
+
+    monkeypatch.setattr(runtime_module, "Session", _FakeSession)
+
+    assert runtime._ensure_default_managed_user() == "fallback-admin"
+
+
+@pytest.mark.parametrize(
+    ("username", "password", "diagnostic"),
+    [
+        ("", "", "existing admin user"),
+        ("operator", "", "both.*nonempty"),
+        ("admin", "admin", "admin/admin"),
+    ],
+)
+def test_ensure_default_managed_user_does_not_create_unsafe_defaults(
+    monkeypatch,
+    caplog,
+    username,
+    password,
+    diagnostic,
+):
+    runtime = object.__new__(DocQARuntime)
+    runtime._app = SimpleNamespace(f_user_management=True)
+    monkeypatch.setattr(
+        runtime_module.flowsettings,
+        "KH_FEATURE_USER_MANAGEMENT_ADMIN",
+        username,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        runtime_module.flowsettings,
+        "KH_FEATURE_USER_MANAGEMENT_PASSWORD",
+        password,
+        raising=False,
+    )
+
+    class _FakeResult:
+        def first(self):
+            return None
+
+    class _FakeSession:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def exec(self, _statement):
+            return _FakeResult()
+
+        def add(self, _user):
+            pytest.fail("unsafe/default credentials must not create a user")
+
+    monkeypatch.setattr(runtime_module, "Session", _FakeSession)
+
+    with caplog.at_level(logging.WARNING):
+        if username or password:
+            with pytest.warns(DeprecationWarning):
+                user_id = runtime._ensure_default_managed_user()
+        else:
+            user_id = runtime._ensure_default_managed_user()
+
+    assert user_id == ""
+    assert caplog.text.lower()
+    assert re.search(diagnostic, caplog.text, re.IGNORECASE)
 
 
 def test_doctor_reports_invalid_optional_models_as_warnings(monkeypatch):
