@@ -201,15 +201,16 @@ def test_offline_environment_contains_only_guard_pythonpath(tmp_path):
     assert offline["PYTHONPATH"] == str(tmp_path / "offline-guard")
 
 
-def test_layer_imports_move_to_fresh_offline_runtime_phase():
+def test_layer_imports_use_isolated_layer_venv_before_fresh_offline_phase():
     install_source = inspect.getsource(run_clean_wheel_smoke._install_wheel_layers)
     offline_source = inspect.getsource(
         run_clean_wheel_smoke._run_offline_runtime_smoke
     )
     run_source = inspect.getsource(run_clean_wheel_smoke.run_smoke)
 
-    assert "_run_layer_imports" not in install_source
-    assert "_run_layer_imports" in offline_source
+    assert "_run_layer_imports" in install_source
+    assert "_run_layer_imports" not in offline_source
+    assert "_assert_installed_distribution_paths" in offline_source
     assert "layer-venv" in run_source
     assert "combined-venv" in run_source
 
@@ -221,7 +222,9 @@ def test_offline_runtime_verifies_modules_are_loaded_from_venv():
     source = inspect.getsource(
         run_clean_wheel_smoke._assert_installed_distribution_paths
     )
+    layer_source = inspect.getsource(run_clean_wheel_smoke._run_layer_imports)
 
     assert "PACKAGE_ORDER" in source
     assert "sys.prefix" in source
-    assert "__file__" in source
+    assert "sys.prefix" in layer_source
+    assert "__file__" in layer_source
