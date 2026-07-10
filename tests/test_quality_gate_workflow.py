@@ -19,6 +19,8 @@ REQUIRED_JOBS = {
     "frontend-browser",
     "coverage",
     "wheel-smoke",
+    "container-supply-chain",
+    "python-supply-chain",
     "required",
 }
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -95,7 +97,8 @@ def test_frontend_coverage_and_wheel_jobs_are_executable_gates():
     wheel_commands = _commands(jobs["wheel-smoke"])
 
     assert "node --test" in frontend_commands
-    assert "playwright@" in frontend_commands
+    assert "./node_modules/.bin/playwright" in frontend_commands
+    assert "npx" not in frontend_commands
     assert "chromium" in frontend_commands
     assert "tests/browser" in frontend_commands
     assert "run_coverage_gates.py" in coverage_commands
@@ -109,6 +112,63 @@ def test_frontend_coverage_and_wheel_jobs_are_executable_gates():
     required = jobs["required"]
     assert set(required["needs"]) == REQUIRED_JOBS - {"required"}
     assert "always()" in required["if"]
+
+
+def test_supply_chain_jobs_build_scan_and_retain_evidence():
+    jobs = _load_workflow(WORKFLOW_PATH)["jobs"]
+    container = jobs["container-supply-chain"]
+    python = jobs["python-supply-chain"]
+
+    assert container["strategy"]["matrix"]["target"] == ["lite", "full", "ollama"]
+    container_source = str(container)
+    for token in (
+        "docker/build-push-action@",
+        "aquasecurity/trivy-action@",
+        "vuln,secret,misconfig",
+        "HIGH,CRITICAL",
+        "sbom",
+        "provenance",
+        "spdx-json",
+        "cyclonedx",
+        "upload-artifact@",
+    ):
+        assert token in container_source
+
+    python_commands = _commands(python)
+    assert "publish_packages.py check" in python_commands
+    assert "generate_distribution_attestations.py" in python_commands
+    assert "upload-artifact@" in str(python)
+
+
+def test_every_workflow_uses_immutable_actions_and_runner_images():
+    for path in (REPO_ROOT / ".github" / "workflows").glob("*.y*ml"):
+        workflow = _load_workflow(path)
+        for job in workflow.get("jobs", {}).values():
+            runner = job.get("runs-on")
+            if runner is not None:
+                assert runner == "ubuntu-24.04", (path.name, runner)
+            for step in job.get("steps", []):
+                action = step.get("uses")
+                if not action or action.startswith("./"):
+                    continue
+                assert FULL_SHA.fullmatch(action.rsplit("@", 1)[-1]), (
+                    path.name,
+                    action,
+                )
+
+
+def test_release_workflows_have_no_mutable_latest_aliases():
+    for name in (
+        "auto-bump-and-release.yaml",
+        "build-push-docker.yaml",
+        "publish-packages.yaml",
+    ):
+        source = (REPO_ROOT / ".github" / "workflows" / name).read_text(
+            encoding="utf-8"
+        )
+        assert "make_latest:" not in source
+        assert "refs/heads/latest" not in source
+        assert "type=raw,value=latest" not in source
 
 
 @pytest.mark.parametrize(
