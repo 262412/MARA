@@ -182,3 +182,61 @@ def test_public_non_owner_persistence_keeps_owner_selection_mapping():
         }
     finally:
         _delete_conversations(row.id)
+
+
+@pytest.mark.parametrize(
+    ("operation", "arguments"),
+    [
+        ("delete_session", ()),
+        ("rename_session", ("Stolen name",)),
+        ("update_chat_suggestions", (["stolen suggestion"],)),
+    ],
+)
+def test_runtime_session_mutations_require_owner(operation, arguments):
+    row = _conversation(
+        user="mutation-owner",
+        name="Protected",
+        is_public=True,
+        data_source={"origin": "web", "messages": []},
+    )
+    runtime = _runtime("other-user")
+
+    try:
+        with pytest.raises(PermissionError, match="owner scope"):
+            getattr(runtime, operation)(row.id, *arguments, user_id="other-user")
+
+        with Session(engine) as session:
+            unchanged = session.exec(
+                select(Conversation).where(Conversation.id == row.id)
+            ).one()
+        assert unchanged.name == "Protected"
+        assert "chat_suggestions" not in unchanged.data_source
+    finally:
+        _delete_conversations(row.id)
+
+
+def test_runtime_owner_can_rename_update_and_delete_session():
+    row = _conversation(
+        user="mutation-owner",
+        name="Original",
+        data_source={"origin": "web", "messages": []},
+    )
+    runtime = _runtime("mutation-owner")
+
+    runtime.rename_session(row.id, "Renamed")
+    runtime.update_chat_suggestions(row.id, ["Next question"])
+    with Session(engine) as session:
+        updated = session.exec(
+            select(Conversation).where(Conversation.id == row.id)
+        ).one()
+    assert updated.name == "Renamed"
+    assert updated.data_source["chat_suggestions"] == [["Next question"]]
+
+    runtime.delete_session(row.id)
+    with Session(engine) as session:
+        assert (
+            session.exec(
+                select(Conversation).where(Conversation.id == row.id)
+            ).one_or_none()
+            is None
+        )
