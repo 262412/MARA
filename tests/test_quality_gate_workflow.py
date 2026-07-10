@@ -171,6 +171,27 @@ def test_release_workflows_have_no_mutable_latest_aliases():
         assert "type=raw,value=latest" not in source
 
 
+def test_python_publish_reuses_the_digest_verified_quality_artifacts():
+    quality = _load_workflow(WORKFLOW_PATH)["jobs"]["python-supply-chain"]
+    upload = next(
+        step for step in quality["steps"] if step.get("name") == "Upload distribution evidence"
+    )
+    assert "dist/supply-chain/" in upload["with"]["path"]
+    assert "distribution-evidence/" in upload["with"]["path"]
+
+    publish = _load_workflow(
+        REPO_ROOT / ".github" / "workflows" / "publish-packages.yaml"
+    )["jobs"]["publish"]
+    source = str(publish)
+    commands = _commands(publish)
+    assert "actions/download-artifact@" in source
+    assert "generate_distribution_attestations.py" in commands
+    assert "--verify" in commands
+    assert "publish_packages.py" in commands
+    assert "upload --outdir release-artifacts/dist/supply-chain" in commands
+    assert "publish_packages.py \"${ARGS[@]}\"" in commands
+
+
 @pytest.mark.parametrize(
     ("path", "publish_job", "trusted_base"),
     [
