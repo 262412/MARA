@@ -3,13 +3,15 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from ktem.index.file._group_service import FileGroupService, GroupServiceError
 from ktem.index.file._indexing_service import FileIndexingService
+from ktem.index.file._selection_service import FileSelectionService
 from sqlalchemy import JSON, Column, DateTime, String, create_engine
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.orm import declarative_base
 
 
 def _drain(generator):
@@ -150,8 +152,8 @@ def test_default_loader_indexing_preserves_existing_ids_and_setting_overrides(
     assert returned == ["existing:existing.txt", "source:new.txt"]
     assert original_settings == {"unchanged": True}
     assert any(
-        settings["index.options.7.reader_mode"] == "default"
-        and settings["index.options.7.quick_index_mode"] is True
+        settings.get("index.options.7.reader_mode") == "default"
+        and settings.get("index.options.7.quick_index_mode") is True
         for settings, _user_id in index.settings_seen
     )
 
@@ -169,7 +171,7 @@ def group_database():
 
     class FileGroup(base):
         __tablename__ = "test_file_group"
-        id = Column(String, primary_key=True)
+        id = Column(String, primary_key=True, default=lambda: uuid4().hex)
         name = Column(String)
         user = Column(String)
         data = Column(MutableDict.as_mutable(JSON), default={"files": []})
@@ -241,3 +243,29 @@ def test_group_service_keeps_private_user_scope(group_database):
     rows, _frame = service.list_groups("alice", [])
 
     assert [row["name"] for row in rows] == ["Alice"]
+
+
+def test_file_selection_service_escapes_text_and_preserves_page_order(monkeypatch):
+    service = FileSelectionService(
+        index=SimpleNamespace(),
+        engine=object(),
+        sort_key=lambda doc: int(doc.metadata["page_label"]),
+    )
+    documents = [
+        SimpleNamespace(
+            text="Second <script>alert(1)</script>",
+            metadata={"type": "text", "page_label": "2"},
+        ),
+        SimpleNamespace(
+            text="First & grounded",
+            metadata={"type": "text", "page_label": "1"},
+        ),
+    ]
+    monkeypatch.setattr(service, "_documents_for_file", lambda _file_id: documents)
+
+    rendered = service.render_chunks("file-1")
+
+    assert rendered.index("Page 1") < rendered.index("Page 2")
+    assert "First &amp; grounded" in rendered
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in rendered
+    assert "<script>" not in rendered
