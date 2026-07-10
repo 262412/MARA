@@ -372,12 +372,12 @@
       "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/index/file/ui.py": {
-      "module_lines": 1278,
+      "module_lines": 911,
       "functions": {},
       "classes": {
-        "FileIndexPage": 970
+        "FileIndexPage": 605
       },
-      "non_actionable_broad_exceptions": 1
+      "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/index/ui.py": {
       "module_lines": 348,
@@ -437,12 +437,12 @@
       "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/pages/chat/control.py": {
-      "module_lines": 453,
+      "module_lines": 448,
       "functions": {
-        "ConversationControl.on_building_ui": 133
+        "ConversationControl.on_building_ui": 124
       },
       "classes": {
-        "ConversationControl": 413
+        "ConversationControl": 405
       },
       "non_actionable_broad_exceptions": 0
     },

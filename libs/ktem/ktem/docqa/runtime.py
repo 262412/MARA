@@ -42,11 +42,11 @@ from ._runtime_models import (
     DocQATurnUpdate,
     _PreparedPipeline,
 )
+from ._runtime_session_facade import RuntimeSessionMutationFacade
 from ._runtime_session_service import RuntimeSessionService
 from ._runtime_utils import _html_to_text, _serialize_value
 
 logger = logging.getLogger(__name__)
-DEFAULT_SETTING, STATE = "(default)", {"app": {"regen": False}}
 
 
 def _build_turn_response(
@@ -196,7 +196,7 @@ def _artifact_source_scope(
     return scope
 
 
-class DocQARuntime:
+class DocQARuntime(RuntimeSessionMutationFacade):
     def __init__(self, app=None, user_id: Any = None):
         self._app = app or _RuntimeAppContext()
         self._owns_app = app is None
@@ -447,10 +447,10 @@ class DocQARuntime:
     def _prepare_pipeline(self, request: DocQARequest) -> _PreparedPipeline:
         resolved_user_id = self._resolve_user_id(request.user_id)
         settings = deepcopy(request.settings or self.load_settings(resolved_user_id))
-        state = deepcopy(request.state or STATE)
+        state = deepcopy(request.state or {"app": {"regen": False}})
         selected_inputs = dict(request.selected_inputs or {})
 
-        if request.reasoning_type in (DEFAULT_SETTING, None):
+        if request.reasoning_type in ("(default)", None):
             reasoning_mode = settings["reasoning.use"]
         else:
             reasoning_mode = request.reasoning_type
