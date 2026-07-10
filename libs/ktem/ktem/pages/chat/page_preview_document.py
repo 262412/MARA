@@ -2,10 +2,10 @@ import os
 import re
 import xml.etree.ElementTree as ET
 import zipfile
-from html import escape
 
 from docx import Document as DocxDocument
 from docx.oxml.ns import qn
+from ktem.preview.docx_security import escape, safe_hyperlink_target
 
 
 def extract_docx_text(file_path: str, max_chars: int = 9000) -> str:
@@ -258,7 +258,7 @@ def extract_docx_html(file_path: str, max_chars: int = 12000) -> str:
         inner = "".join(run_html_parts).strip()
         if not inner:
             return ""
-        if href:
+        if href := safe_hyperlink_target(href):
             return (
                 f'<a href="{escape(href)}" target="_blank" rel="noopener noreferrer">'
                 f"{inner}</a>"
