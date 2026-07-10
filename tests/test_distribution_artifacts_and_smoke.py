@@ -19,7 +19,9 @@ PACKAGES = {
 }
 
 
-def _build(package_name: str, package_root: Path, output_root: Path) -> tuple[Path, Path]:
+def _build(
+    package_name: str, package_root: Path, output_root: Path
+) -> tuple[Path, Path]:
     output = output_root / package_name
     result = subprocess.run(
         [
@@ -86,9 +88,7 @@ def test_distribution_smoke_validates_sdists_and_offline_app_init():
         encoding="utf-8"
     )
 
-    assert callable(
-        getattr(run_clean_wheel_smoke, "validate_sdist_contents", None)
-    )
+    assert callable(getattr(run_clean_wheel_smoke, "validate_sdist_contents", None))
     assert '"--all-packages"' in smoke_source
     assert '"--all-extras"' not in smoke_source
     assert '"app", "init"' in smoke_source
@@ -98,3 +98,12 @@ def test_distribution_smoke_validates_sdists_and_offline_app_init():
     assert '"MARA", "MARA-cli"' in smoke_source
     assert '"docqa", "--help"' in smoke_source
     assert '"app", "--help"' in smoke_source
+
+
+def test_clean_layer_smoke_imports_representative_installed_modules():
+    layer_imports = getattr(run_clean_wheel_smoke, "LAYER_IMPORTS", {})
+
+    assert layer_imports["kotaemon"] == ("kotaemon",)
+    assert layer_imports["ktem"] == ("ktem.index.file.pipelines",)
+    assert layer_imports["mara-research-cli"] == ("slide_cli.cli",)
+    assert callable(getattr(run_clean_wheel_smoke, "_run_layer_imports", None))

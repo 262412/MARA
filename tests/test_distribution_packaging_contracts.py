@@ -100,6 +100,15 @@ def test_ktem_legacy_requirements_shim_cannot_drift_from_package_metadata():
     assert not (PACKAGES["ktem"] / "requirements.txt").exists()
 
 
+def test_ktem_declares_its_kotaemon_runtime_dependency():
+    dependencies = _pyproject(PACKAGES["ktem"])["project"]["dependencies"]
+    dependency_names = {
+        canonicalize_name(Requirement(item).name) for item in dependencies
+    }
+
+    assert "kotaemon" in dependency_names
+
+
 def test_constraints_are_a_marker_preserving_export_of_locked_runtime_versions():
     constraints_path = REPO_ROOT / "constraints.txt"
     lines = constraints_path.read_text(encoding="utf-8").splitlines()
