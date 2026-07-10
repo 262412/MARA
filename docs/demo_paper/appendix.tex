@@ -8,7 +8,7 @@ This anonymous version omits identity, student, course, and supervisor details. 
 
 \noindent\textbf{MSc project mapping.}\par\smallskip
 
-\begin{tabularx}{\linewidth}{p{0.30\linewidth}>{\raggedright\arraybackslash}X}
+\noindent\begin{tabularx}{\linewidth}{@{}p{0.30\linewidth}>{\raggedright\arraybackslash}X@{}}
 \toprule
 Requirement area & MARA coverage \\
 \midrule
@@ -29,6 +29,58 @@ For MSc delivery, these constraints define a clear prototype boundary: a usable 
 \else
 For venue-facing versions, this mapping is supplementary project context rather than a main-paper claim. The main paper is framed as a system demo with a public release, screenshot, command surface, and route-level evaluation.
 \fi
+
+\paragraph{Full-system benchmark coverage.}
+
+The main paper reports the three datasets that best support the demo narrative: QASPER for text-heavy scientific QA, ALCE-ASQA for citation-grounded QA, and MMDocRAG for multimodal QA. The full-system benchmark claim in the abstract is broader than this selected table. Table~\ref{tab:appendix-coverage} accounts for all 41 complete artifact sets and all 3,540 per-example prediction records in the synthesis bundle. Records count route-level prediction rows, not unique questions. Table~\ref{tab:appendix-diagnostic-results} reports the remaining diagnostic dataset results on the same 0--100 scale as the main table; the source CSV files keep the original 0--1 scores.
+
+\begin{center}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\linewidth}{@{}lrr>{\raggedright\arraybackslash}X@{}}
+\toprule
+\rowcolor{gray!10}
+Dataset & Sets & Records & Paper role \\
+\midrule
+ALCE-ASQA & 4 & 600 & Main citation-grounded dataset. \\
+FinanceBench & 3 & 600 & Diagnostic numeric and financial QA dataset. \\
+MMDocRAG & 20 & 600 & Main multimodal and visual dataset. \\
+QASPER & 4 & 600 & Main text-heavy scientific QA dataset. \\
+RAGTruth & 6 & 900 & Diagnostic groundedness and abstention dataset. \\
+SlideVQA & 4 & 240 & Diagnostic visual slide QA dataset. \\
+\bottomrule
+\end{tabularx}
+\refstepcounter{table}
+\label{tab:appendix-coverage}
+\smallskip
+Table~\thetable: Full-system benchmark coverage.
+\end{center}
+
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llrrrrrr}
+\toprule
+\rowcolor{gray!10}
+Dataset & Route & N & F1 & Native & Citation & Page hit & False abs. \\
+\midrule
+FinanceBench & controller\_auto & 150 & 15.10 & 8.67 & 51.00 & 60.00 & 2.67 \\
+FinanceBench & crag\_guarded & 150 & 15.33 & 8.67 & 51.00 & 60.00 & 2.67 \\
+FinanceBench & direct\_answer & 150 & 17.34 & 2.67 & 0.00 & 0.00 & 0.00 \\
+FinanceBench & text\_rag & 150 & 14.83 & 8.67 & 48.56 & 60.00 & 7.33 \\
+\midrule
+RAGTruth & controller\_auto & 300 & 21.68 & 54.00 & 55.67 & -- & 0.00 \\
+RAGTruth & crag\_guarded & 300 & 21.45 & 54.00 & 55.67 & -- & 1.00 \\
+RAGTruth & text\_rag & 300 & 23.06 & 54.00 & 98.33 & -- & 0.00 \\
+\midrule
+SlideVQA & controller\_auto & 120 & 43.25 & 43.25 & 100.00 & 100.00 & 0.00 \\
+SlideVQA & page\_image\_rag\_vlm & 120 & 43.25 & 43.25 & 100.00 & 100.00 & 0.00 \\
+\bottomrule
+\end{tabular}
+\caption{Diagnostic dataset route results.}
+\label{tab:appendix-diagnostic-results}
+\end{table*}
 
 \paragraph{Command and skill surface.}
 
@@ -67,7 +119,7 @@ After the full-system benchmark, a targeted RAGTruth prompt-budget rerun inspect
 
 \paragraph{Reproducibility notes.}
 
-The software artifact for this paper is the public MARA release \texttt{v0.0.40}: \url{https://github.com/262412/MARA/releases/tag/v0.0.40}. The release tag identifies the application version used for the demo. Benchmark evidence is packaged separately as the companion supplementary bundle \path{mara-full-system-benchmark-synthesis-v0.0.40.zip}, rather than referenced through environment-specific runtime locations. In an external submission, that bundle accompanies the paper and contains a README, the synthesis report, aggregate result tables, route-decision summaries, failure/latency/backend summaries, paired-delta tables, bootstrap confidence intervals, controller-oracle regret diagnostics, win/loss/tie diagnostics, the Slurm submission ledger, the synthesis input manifest, per-example metric records, and the synthesis script. Exact filenames are listed in the bundle README.
+The software artifact for this paper is the public MARA release \texttt{v0.0.40}\footnote{\url{https://github.com/262412/MARA/releases/tag/v0.0.40}}. The release tag identifies the application version used for the demo. Benchmark evidence is packaged separately as the companion supplementary bundle\footnote{\path{mara-full-system-benchmark-synthesis-v0.0.40.zip}}, rather than referenced through environment-specific runtime locations. In an external submission, that bundle accompanies the paper and contains a README, the synthesis report, aggregate result tables, route-decision summaries, failure/latency/backend summaries, paired-delta tables, bootstrap confidence intervals, controller-oracle regret diagnostics, win/loss/tie diagnostics, the Slurm submission ledger, the synthesis input manifest, per-example metric records, and the synthesis script. Exact filenames are listed in the bundle README.
 
 Inside the supplementary files, runtime roots are replaced by a symbolic benchmark-run root while dataset, route, backend, score, and manifest fields are preserved. The artifact files themselves should be treated as the authority for scores and backend metadata; the external-facing paper uses the public release tag and supplement filename as its reproducibility anchors.
 
