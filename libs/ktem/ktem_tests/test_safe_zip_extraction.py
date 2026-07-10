@@ -55,6 +55,8 @@ def test_safe_zip_extracts_only_supported_regular_files(tmp_path):
         "/absolute.txt",
         r"C:\\absolute.txt",
         r"\\\\server\\share\\outside.txt",
+        "nested/D:outside.txt",
+        "nested/D:/outside.txt",
     ],
 )
 def test_safe_zip_rejects_paths_outside_owned_directory(tmp_path, member):
@@ -151,7 +153,7 @@ def test_safe_zip_rejects_corrupt_archives_with_actionable_stage(tmp_path):
     assert "stage=open" in diagnostic
 
 
-def test_safe_zip_removes_owned_output_after_crc_failure(tmp_path):
+def test_safe_zip_rejects_crc_failure_before_creating_output(tmp_path):
     archive_path = tmp_path / "bad-crc.zip"
     with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED) as archive:
         archive.writestr("report.txt", b"unique-payload")
@@ -167,10 +169,31 @@ def test_safe_zip_removes_owned_output_after_crc_failure(tmp_path):
             supported_types={".txt"},
         )
 
-    assert "stage=extract-member" in str(exc_info.value)
+    assert "stage=verify-member" in str(exc_info.value)
     assert "member=report.txt" in str(exc_info.value)
-    assert output_parent.is_dir()
-    assert list(output_parent.iterdir()) == []
+    assert not output_parent.exists()
+
+
+def test_safe_zip_crc_checks_unsupported_members_before_creating_output(tmp_path):
+    archive_path = tmp_path / "bad-ignored-crc.zip"
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("ignored.md", b"unique-ignored")
+        archive.writestr("report.txt", b"safe-report")
+    archive_path.write_bytes(
+        archive_path.read_bytes().replace(b"unique-ignored", b"broken-ignored", 1)
+    )
+    output_parent = tmp_path / "expanded"
+
+    with pytest.raises(ArchiveExtractionError) as exc_info:
+        extract_supported_zip_files(
+            archive_path,
+            destination_parent=output_parent,
+            supported_types={".txt"},
+        )
+
+    assert "stage=verify-member" in str(exc_info.value)
+    assert "member=ignored.md" in str(exc_info.value)
+    assert not output_parent.exists()
 
 
 def test_runtime_zip_expansion_uses_safe_shared_extractor(tmp_path, monkeypatch):
