@@ -40,6 +40,9 @@ def _build(
         encoding="utf-8",
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    source_prefix = package_name.replace("-", "_")
+    staging_debris = sorted(package_root.glob(f"{source_prefix}-[0-9]*"))
+    assert not staging_debris, staging_debris
     return next(output.glob("*.whl")), next(output.glob("*.tar.gz"))
 
 
