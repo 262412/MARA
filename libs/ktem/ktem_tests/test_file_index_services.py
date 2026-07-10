@@ -83,7 +83,7 @@ def _indexing_service(tmp_path, index, notices):
 def test_indexing_service_preserves_stream_payload_and_return_ids(tmp_path):
     source = tmp_path / "report.txt"
     source.write_text("report", encoding="utf-8")
-    notices = []
+    notices: list[tuple[str, str]] = []
     pipeline = _Pipeline()
     service = _indexing_service(tmp_path, _Index(pipeline), notices)
 
@@ -171,7 +171,7 @@ def _group_index(group_model):
 def group_database():
     base = declarative_base()
 
-    class FileGroup(base):
+    class FileGroup(base):  # type: ignore[valid-type,misc]
         __tablename__ = "test_file_group"
         id = Column(String, primary_key=True, default=lambda: uuid4().hex)
         name = Column(String)

@@ -75,10 +75,14 @@ def load_baseline_at_revision(repo: Path, revision: str) -> dict[str, Any]:
 def _compare_number(
     violations: list[str], label: str, base: object, current: object
 ) -> None:
-    base_value = int(base or 0)
-    current_value = int(current or 0)
+    base_value = _baseline_number(base)
+    current_value = _baseline_number(current)
     if current_value > base_value:
         violations.append(f"{label} increased from {base_value} to {current_value}")
+
+
+def _baseline_number(value: object) -> int:
+    return int(value) if isinstance(value, (int, str)) else 0
 
 
 def _compare_named_exemptions(
