@@ -114,7 +114,7 @@ def test_sso_factory_mount_has_login_route_without_model_services(
     with TestClient(app) as client:
         root = client.get("/", follow_redirects=False)
         assert root.status_code in {302, 307}
-        assert root.headers["location"] == "login"
+        assert root.headers["location"] == "/login"
         assert client.get("/login").status_code == 200
 
 

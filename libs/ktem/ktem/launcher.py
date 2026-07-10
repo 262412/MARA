@@ -60,6 +60,19 @@ def ensure_gradio_temp_dir() -> str:
     return gradio_temp_dir
 
 
+def _launch_sso_app(launch_config: LaunchConfig, port: int | None):
+    import uvicorn
+    from ktem.sso import create_sso_app
+
+    fastapi_app = create_sso_app(launch_config=launch_config)
+    uvicorn.run(
+        fastapi_app,
+        host=launch_config.host,
+        port=resolve_gradio_server_port(port),
+    )
+    return fastapi_app.state.mara_app
+
+
 def launch_app(
     *,
     host: str | None = None,
@@ -68,6 +81,9 @@ def launch_app(
     inbrowser: bool = True,
 ):
     launch_config = prepare_launch(host=host)
+    if launch_config.auth_mode == "sso":
+        return _launch_sso_app(launch_config, port)
+
     file_storage_path = Path(
         getattr(flowsettings, "KH_FILESTORAGE_PATH", Path.cwd() / "user_data" / "files")
     )
