@@ -93,17 +93,13 @@ class TestRuntimePaths:
             "KH_MARKDOWN_OUTPUT_DIR": str(self.app_data_dir / "markdown_cache_dir"),
             "KH_CHUNKS_OUTPUT_DIR": str(self.app_data_dir / "chunks_cache_dir"),
             "KH_PARSE_CACHE_DIR": str(self.app_data_dir / "parse_cache_dir"),
-            "KH_EMBEDDING_CACHE_DIR": str(
-                self.app_data_dir / "embedding_cache_dir"
-            ),
+            "KH_EMBEDDING_CACHE_DIR": str(self.app_data_dir / "embedding_cache_dir"),
             "KH_VISION_CACHE_DIR": str(self.app_data_dir / "vision_cache_dir"),
             "KH_OCR_CACHE_DIR": str(self.app_data_dir / "ocr_cache_dir"),
             "KH_FORMULA_OCR_CACHE_DIR": str(
                 self.app_data_dir / "formula_ocr_cache_dir"
             ),
-            "KH_OFFICE_PDF_CACHE_DIR": str(
-                self.app_data_dir / "office_pdf_cache_dir"
-            ),
+            "KH_OFFICE_PDF_CACHE_DIR": str(self.app_data_dir / "office_pdf_cache_dir"),
             "KH_ZIP_OUTPUT_DIR": str(self.app_data_dir / "zip_cache_dir"),
             "KH_ZIP_INPUT_DIR": str(self.app_data_dir / "zip_cache_dir_in"),
             "GRADIO_TEMP_DIR": str(self.app_data_dir / "gradio_tmp"),
