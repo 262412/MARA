@@ -18,7 +18,11 @@ def bind_chat_pre_studio_events(
         _bind_message_selection_events(page, pdfview_js)
     page.chat_control.cb_is_public.change(
         page.on_set_public_conversation,
-        inputs=[page.chat_control.cb_is_public, page.chat_control.conversation],
+        inputs=[
+            page.chat_control.cb_is_public,
+            page.chat_control.conversation,
+            page._app.user_id,
+        ],
         outputs=None,
         show_progress="hidden",
     )
@@ -98,7 +102,7 @@ def _bind_message_selection_events(page: Any, pdfview_js: str) -> None:
 def _bind_user_feedback_events(page: Any) -> None:
     page.chat_panel.chatbot.like(
         fn=page.is_liked,
-        inputs=[page.chat_control.conversation_id],
+        inputs=[page.chat_control.conversation_id, page._app.user_id],
         outputs=None,
     )
     page.report_issue.report_btn.click(
