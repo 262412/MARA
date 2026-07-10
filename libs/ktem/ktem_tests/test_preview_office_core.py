@@ -92,11 +92,13 @@ def test_symlink_cache_key_preserves_legacy_absolute_input_path(tmp_path):
         process_runner=runner,
     )
 
+    target_output = service.convert_to_pdf(target, target.name)
     output = service.convert_to_pdf(source_link, source_link.name)
 
     stat = os.stat(source_link)
     payload = f"{os.path.abspath(source_link)}|{stat.st_size}|{int(stat.st_mtime_ns)}"
     legacy_signature = hashlib.md5(payload.encode("utf-8")).hexdigest()
+    assert target_output != output
     assert output.name == f"alias_{legacy_signature[:12]}.pdf"
 
 
