@@ -112,19 +112,25 @@ def test_frontend_coverage_and_wheel_jobs_are_executable_gates():
 
 
 @pytest.mark.parametrize(
-    ("path", "publish_job"),
+    ("path", "publish_job", "trusted_base"),
     [
-        ("publish-packages.yaml", "publish"),
-        ("build-push-docker.yaml", "build"),
-        ("auto-bump-and-release.yaml", "auto-bump-and-release"),
+        ("publish-packages.yaml", "publish", "main"),
+        ("build-push-docker.yaml", "build", "main"),
+        (
+            "auto-bump-and-release.yaml",
+            "auto-bump-and-release",
+            "${{ github.event.before }}",
+        ),
     ],
 )
-def test_release_workflows_are_frozen_behind_reusable_quality_gate(path, publish_job):
+def test_release_workflows_are_frozen_behind_reusable_quality_gate(
+    path, publish_job, trusted_base
+):
     workflow = _load_workflow(REPO_ROOT / ".github" / "workflows" / path)
     jobs = workflow["jobs"]
 
     assert jobs["quality"]["uses"] == "./.github/workflows/quality-gates.yaml"
-    assert jobs["quality"]["with"]["base_ref"] == "main"
+    assert jobs["quality"]["with"]["base_ref"] == trusted_base
     assert jobs[publish_job]["needs"] == "quality"
     assert jobs[publish_job]["if"] == "${{ false }}"
 
