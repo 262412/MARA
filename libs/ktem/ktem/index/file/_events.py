@@ -267,7 +267,7 @@ def _register_delete_file_events(page) -> None:
     on_deleted = (
         page.delete_button.click(
             fn=page.delete_event,
-            inputs=[page.selected_file_id],
+            inputs=[page.selected_file_id, page._app.user_id],
             outputs=None,
         )
         .then(
@@ -353,7 +353,7 @@ def _register_delete_all_events(page) -> None:
 
     on_deleted_all = page.delete_all_button_confirm.click(
         fn=page.delete_all_files,
-        inputs=[page.file_list],
+        inputs=[page.file_list, page._app.user_id],
         outputs=[],
         show_progress="hidden",
     ).then(

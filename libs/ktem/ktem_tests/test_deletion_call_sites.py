@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import cast
 
 from ktem.docqa.runtime import DocQARuntime
 from ktem.index.file._deletion import FileIndexDeletionController
@@ -6,11 +7,11 @@ from ktem.index.file.pipelines import IndexPipeline
 
 
 class _CoordinatorSpy:
-    instances = []
+    instances: list["_CoordinatorSpy"] = []
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
-        self.deleted = []
+        self.deleted: list[tuple[str, str]] = []
         type(self).instances.append(self)
 
     def delete(self, file_id, *, user_id):
@@ -33,13 +34,16 @@ def test_pipeline_delete_uses_shared_coordinator_and_pipeline_user(monkeypatch):
     monkeypatch.setattr(
         "ktem.index.file.pipelines.DeletionCoordinator", _CoordinatorSpy
     )
-    pipeline = SimpleNamespace(
-        Source=object(),
-        Index=object(),
-        VS=object(),
-        DS=object(),
-        FSPath="/tmp/storage",
-        user_id="pipeline-user",
+    pipeline = cast(
+        IndexPipeline,
+        SimpleNamespace(
+            Source=object(),
+            Index=object(),
+            VS=object(),
+            DS=object(),
+            FSPath="/tmp/storage",
+            user_id="pipeline-user",
+        ),
     )
 
     IndexPipeline.delete_file(pipeline, "file-1")
@@ -76,10 +80,13 @@ def test_runtime_delete_uses_shared_coordinator_and_resolved_user(monkeypatch):
     _CoordinatorSpy.instances.clear()
     monkeypatch.setattr("ktem.docqa.runtime.DeletionCoordinator", _CoordinatorSpy)
     match = SimpleNamespace(file_id="file-1", name="report.pdf")
-    runtime = SimpleNamespace(
-        file_index=SimpleNamespace(_resources=_resources()),
-        _resolve_user_id=lambda _value: "runtime-user",
-        resolve_file_refs=lambda _refs, user_id: [match],
+    runtime = cast(
+        DocQARuntime,
+        SimpleNamespace(
+            file_index=SimpleNamespace(_resources=_resources()),
+            _resolve_user_id=lambda _value: "runtime-user",
+            resolve_file_refs=lambda _refs, user_id: [match],
+        ),
     )
 
     deleted = DocQARuntime.delete_files(runtime, ["report.pdf"], user_id="ignored")

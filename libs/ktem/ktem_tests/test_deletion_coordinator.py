@@ -25,14 +25,14 @@ class _Store:
 def deletion_db(tmp_path):
     base = declarative_base()
 
-    class Source(base):
+    class Source(base):  # type: ignore[misc, valid-type]
         __tablename__ = "source"
         id = Column(String, primary_key=True)
         name = Column(String, nullable=False)
         path = Column(String, nullable=False, default="")
         user = Column(String, nullable=False, default="")
 
-    class IndexRow(base):
+    class IndexRow(base):  # type: ignore[misc, valid-type]
         __tablename__ = "index_row"
         id = Column(Integer, primary_key=True, autoincrement=True)
         source_id = Column(String, nullable=False)
@@ -79,9 +79,11 @@ def _seed_file(
                 )
             )
         session.commit()
-    if stored_path and not Path(stored_path).is_absolute() and ".." not in Path(
+    if (
         stored_path
-    ).parts:
+        and not Path(stored_path).is_absolute()
+        and ".." not in Path(stored_path).parts
+    ):
         target = storage / stored_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(b"document")
@@ -91,8 +93,8 @@ def _row_counts(deletion_db) -> tuple[int, int]:
     engine, source_table, index_table, _storage = deletion_db
     with Session(engine) as session:
         return (
-            session.scalar(select(func.count()).select_from(source_table)),
-            session.scalar(select(func.count()).select_from(index_table)),
+            int(session.scalar(select(func.count()).select_from(source_table)) or 0),
+            int(session.scalar(select(func.count()).select_from(index_table)) or 0),
         )
 
 
@@ -128,7 +130,7 @@ def test_deletes_all_docstore_relations_then_sql(deletion_db):
 
     assert (result.file_id, result.name) == ("file-1", "report.pdf")
     assert vectors.calls == [["vector-1"]]
-    assert documents.calls == [["document-1", "element-1", "graph-1"]]
+    assert documents.calls == [["document-1"], ["element-1"], ["graph-1"]]
     assert not (deletion_db[3] / "stored.bin").exists()
     assert _row_counts(deletion_db) == (0, 0)
 
@@ -138,7 +140,9 @@ def test_external_failure_retains_sql_and_retry_is_safe(deletion_db, failed_stag
     _seed_file(deletion_db)
     vectors = _Store(
         {"vector-1"},
-        failure=RuntimeError("vector unavailable") if failed_stage == "vector" else None,
+        failure=RuntimeError("vector unavailable")
+        if failed_stage == "vector"
+        else None,
     )
     documents = _Store(
         {"document-1", "element-1", "graph-1"},
@@ -188,15 +192,39 @@ def test_missing_external_targets_are_idempotent_success(deletion_db):
     assert _row_counts(deletion_db) == (0, 0)
 
 
+def test_one_missing_docstore_target_does_not_skip_later_targets(deletion_db):
+    _seed_file(deletion_db)
+
+    class _MissingRaisesStore:
+        def __init__(self):
+            self.values = {"document-1", "graph-1"}
+
+        def delete(self, values):
+            for value in values:
+                if value not in self.values:
+                    raise KeyError(value)
+                self.values.remove(value)
+
+    documents = _MissingRaisesStore()
+    _coordinator(
+        deletion_db,
+        vector_store=_Store({"vector-1"}),
+        doc_store=documents,
+    ).delete("file-1", user_id="user-1")
+
+    assert documents.values == set()
+    assert _row_counts(deletion_db) == (0, 0)
+
+
 def test_user_scope_is_revalidated_before_any_external_delete(deletion_db):
     _seed_file(deletion_db)
     vectors = _Store({"vector-1"})
     documents = _Store({"document-1", "element-1", "graph-1"})
 
     with pytest.raises(DeletionError, match="validate") as exc_info:
-        _coordinator(
-            deletion_db, vector_store=vectors, doc_store=documents
-        ).delete("file-1", user_id="user-2")
+        _coordinator(deletion_db, vector_store=vectors, doc_store=documents).delete(
+            "file-1", user_id="user-2"
+        )
 
     assert exc_info.value.stage == "validate"
     assert vectors.calls == []

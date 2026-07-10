@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Iterator, Optional, cast
 
 from ktem.auth.passwords import hash_password
@@ -16,6 +15,7 @@ from ktem.components import reasonings
 from ktem.db.models import Conversation, Settings, User, engine
 from ktem.embeddings.manager import embedding_models_manager
 from ktem.index.file import FileIndex
+from ktem.index.file.deletion import DeletionCoordinator
 from ktem.llms.manager import llms
 from ktem.rerankings.manager import reranking_models_manager
 from ktem.utils.commands import WEB_SEARCH_COMMAND
@@ -954,58 +954,17 @@ class DocQARuntime:
 
         resolved_user_id = self._resolve_user_id(user_id)
         matches = self.resolve_file_refs(refs, user_id=resolved_user_id)
-        source_table = cast(Any, self.file_index._resources["Source"])
-        index_table = cast(Any, self.file_index._resources["Index"])
-        vector_store = cast(Any, self.file_index._resources["VectorStore"])
-        doc_store = cast(Any, self.file_index._resources["DocStore"])
-        file_storage_path = cast(Any, self.file_index._resources.get("FileStoragePath"))
-
+        resources = self.file_index._resources
+        coordinator = DeletionCoordinator(
+            engine=engine,
+            source_table=resources["Source"],
+            index_table=resources["Index"],
+            vector_store=resources["VectorStore"],
+            doc_store=resources["DocStore"],
+            file_storage_path=resources.get("FileStoragePath"),
+        )
         for match in matches:
-            stored_rel_path = ""
-            vector_ids: list[str] = []
-            document_ids: list[str] = []
-
-            with Session(engine) as session:
-                source_row = session.exec(
-                    select(source_table).where(source_table.id == match.file_id)
-                ).one_or_none()
-                if source_row is None:
-                    continue
-
-                stored_rel_path = str(getattr(source_row, "path", "") or "")
-                session.delete(source_row)
-
-                index_rows = session.exec(
-                    select(index_table).where(index_table.source_id == match.file_id)
-                ).all()
-                for row in index_rows:
-                    relation_type = str(getattr(row, "relation_type", "") or "")
-                    target_id = str(getattr(row, "target_id", "") or "")
-                    if relation_type == "vector" and target_id:
-                        vector_ids.append(target_id)
-                    elif relation_type == "document" and target_id:
-                        document_ids.append(target_id)
-                    session.delete(row)
-
-                session.commit()
-
-            if vector_ids and vector_store:
-                vector_store.delete(vector_ids)
-            if document_ids:
-                doc_store.delete(document_ids)
-
-            if stored_rel_path:
-                candidate_paths = []
-                if file_storage_path:
-                    candidate_paths.append(Path(file_storage_path) / stored_rel_path)
-                candidate_paths.append(Path(stored_rel_path))
-                for candidate in candidate_paths:
-                    try:
-                        if candidate.is_file():
-                            candidate.unlink()
-                            break
-                    except Exception:
-                        continue
+            coordinator.delete(match.file_id, user_id=resolved_user_id)
         return matches
 
     def doctor(self, user_id: Any = None) -> DocQADoctorResult:

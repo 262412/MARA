@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Any
 
 import ktem.index.file.pipelines as file_pipelines_module
 from ktem.index.file._deletion import FileIndexDeletionController
@@ -37,62 +38,6 @@ class _DocStoreWriter:
 
     def add(self, docs):
         self.batches.append(list(docs))
-
-
-class _DeleteResult:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def first(self):
-        return self._rows[0] if self._rows else None
-
-    def all(self):
-        return self._rows
-
-
-class _DeleteSession:
-    def __init__(self, source_row, index_rows):
-        self._source_row = source_row
-        self._index_rows = index_rows
-        self._execute_count = 0
-        self.deleted_rows = []
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-    def execute(self, _statement):
-        self._execute_count += 1
-        if self._execute_count == 1:
-            return _DeleteResult([(self._source_row,)])
-        return _DeleteResult([(row,) for row in self._index_rows])
-
-    def delete(self, row):
-        self.deleted_rows.append(row)
-
-    @staticmethod
-    def commit():
-        return None
-
-
-class _Statement:
-    def where(self, *_args, **_kwargs):
-        return self
-
-
-class _ComparableColumn:
-    def __eq__(self, _other):
-        return True
-
-
-class _DeleteSourceTable:
-    id = _ComparableColumn()
-
-
-class _DeleteIndexTable:
-    source_id = _ComparableColumn()
 
 
 class _DeleteStore:
@@ -250,31 +195,35 @@ def test_index_pipeline_persists_offline_element_records(monkeypatch, tmp_path):
     ]
 
 
-def test_delete_event_removes_element_index_docs_from_docstore(monkeypatch):
-    source_row = SimpleNamespace(name="report.pdf")
-    rows = [
-        SimpleNamespace(relation_type="document", target_id="doc-1"),
-        SimpleNamespace(relation_type="element_index", target_id="element-1"),
-        SimpleNamespace(relation_type="graph_index", target_id="graph-1"),
-        SimpleNamespace(relation_type="vector", target_id="vector-1"),
-    ]
-    session = _DeleteSession(source_row, rows)
+def test_delete_event_delegates_to_shared_coordinator(monkeypatch):
     vector_store = _DeleteStore()
     docstore = _DeleteStore()
+    calls: list[tuple[Any, ...]] = []
+
+    class _Coordinator:
+        def __init__(self, **kwargs):
+            calls.append(("init", kwargs))
+
+        def delete(self, file_id, *, user_id):
+            calls.append(("delete", file_id, user_id))
+            return SimpleNamespace(name="report.pdf")
+
     controller = FileIndexDeletionController(
         index=SimpleNamespace(
-            _resources={"Source": _DeleteSourceTable, "Index": _DeleteIndexTable},
-            _vs=vector_store,
-            _docstore=docstore,
+            _resources={
+                "Source": object(),
+                "Index": object(),
+                "VectorStore": vector_store,
+                "DocStore": docstore,
+                "FileStoragePath": "/tmp/storage",
+            },
         ),
         selected_panel_false="Selected",
     )
-    monkeypatch.setattr("ktem.index.file._deletion.Session", lambda _engine: session)
-    monkeypatch.setattr("ktem.index.file._deletion.select", lambda _table: _Statement())
+    monkeypatch.setattr("ktem.index.file._deletion.DeletionCoordinator", _Coordinator)
     monkeypatch.setattr("ktem.index.file._deletion.gr.Info", lambda _message: None)
 
-    result = controller.delete_event("file-1")
+    result = controller.delete_event("file-1", "user-1")
 
     assert result == (None, "Selected")
-    assert vector_store.deleted == [["vector-1"]]
-    assert docstore.deleted == [["doc-1", "element-1", "graph-1"]]
+    assert calls[1] == ("delete", "file-1", "user-1")

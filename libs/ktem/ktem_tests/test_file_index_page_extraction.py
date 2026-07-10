@@ -62,7 +62,7 @@ class _DeletionSpy(FileIndexDeletionController):
         super().__init__(index=SimpleNamespace(), selected_panel_false="Selected")
         self.deleted_ids: list[str] = []
 
-    def delete_event(self, file_id):
+    def delete_event(self, file_id, user_id=None, request=None):
         self.deleted_ids.append(file_id)
 
 
@@ -264,7 +264,7 @@ def test_register_file_index_events_wires_delete_chat_and_upload_flows():
         "click",
         {
             "fn": page.delete_event,
-            "inputs": [page.selected_file_id],
+            "inputs": [page.selected_file_id, page._app.user_id],
             "outputs": None,
         },
     )

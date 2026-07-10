@@ -497,7 +497,12 @@ def docqa_files(json_output):
 )
 def docqa_delete(refs, json_output):
     runtime = create_docqa_runtime()
-    deleted = runtime.delete_files(list(refs))
+    from ktem.index.file.deletion import DeletionError
+
+    try:
+        deleted = runtime.delete_files(list(refs))
+    except DeletionError as exc:
+        raise click.ClickException(str(exc)) from exc
 
     if json_output:
         _echo_payload_json([record.as_dict() for record in deleted])

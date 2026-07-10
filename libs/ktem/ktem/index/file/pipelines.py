@@ -34,7 +34,7 @@ from llama_index.core.vector_stores import (
     MetadataFilters,
 )
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from theflow.settings import settings
 from theflow.utils.modules import import_dotted_string
@@ -57,7 +57,8 @@ from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
 from kotaemon.loaders import MathpixPDFReader
 
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
-from .element_index import docstore_batches_and_index_rows, is_docstore_relation_type
+from .deletion import DeletionCoordinator
+from .element_index import docstore_batches_and_index_rows
 
 logger = logging.getLogger(__name__)
 _office_pdf_converter: OfficeToPdfConversionService | None = None
@@ -657,24 +658,15 @@ class IndexPipeline(BaseComponent):
         Args:
             file_id: the file id
         """
-        with Session(engine) as session:
-            session.execute(delete(self.Source).where(self.Source.id == file_id))
-            vs_ids, ds_ids = [], []
-            index = session.execute(
-                select(self.Index).where(self.Index.source_id == file_id)
-            ).all()
-            for each in index:
-                if each[0].relation_type == "vector":
-                    vs_ids.append(each[0].target_id)
-                elif is_docstore_relation_type(each[0].relation_type):
-                    ds_ids.append(each[0].target_id)
-                session.delete(each[0])
-            session.commit()
-
-        if vs_ids and self.VS:
-            self.VS.delete(vs_ids)
-        if ds_ids:
-            self.DS.delete(ds_ids)
+        coordinator = DeletionCoordinator(
+            engine=engine,
+            source_table=self.Source,
+            index_table=self.Index,
+            vector_store=self.VS,
+            doc_store=self.DS,
+            file_storage_path=self.FSPath,
+        )
+        coordinator.delete(file_id, user_id=self.user_id)
 
     def run(
         self, file_path: str | Path, reindex: bool, **kwargs

@@ -3,9 +3,10 @@ from types import SimpleNamespace
 
 import pytest
 from click.testing import CliRunner
-from kotaemon.cli import main as mara_cli
 from ktem.index.file.deletion import DeletionError
 from slide_cli.docqa_cli import docqa as compat_docqa
+
+from kotaemon.cli import main as mara_cli
 
 
 class _FailingRuntime:
@@ -41,7 +42,9 @@ class _SuccessfulRuntime:
 )
 def test_delete_failure_is_nonzero_and_actionable(monkeypatch, command, patch_target):
     monkeypatch.setattr(patch_target, lambda: _FailingRuntime())
-    args = ["docqa", "delete", "file-9"] if command is mara_cli else ["delete", "file-9"]
+    args = (
+        ["docqa", "delete", "file-9"] if command is mara_cli else ["delete", "file-9"]
+    )
 
     result = CliRunner().invoke(command, args)
 
