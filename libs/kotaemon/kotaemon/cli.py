@@ -8,6 +8,10 @@ import click
 import yaml
 from trogon import tui
 
+from kotaemon.app_init import acquire_admin_password as _acquire_admin_password
+from kotaemon.app_init import provision_password_admin as _provision_password_admin
+from kotaemon.app_init import write_app_init_files as _write_app_init_files
+
 PLATFORM_CHOICES = ("claude-code", "codex")
 
 
@@ -230,40 +234,6 @@ def _collect_app_doctor_payload():
     return payload
 
 
-def _write_app_init_files(*, force=False):
-    from ktem.runtime_bootstrap import (
-        build_user_env_example,
-        build_user_flowsettings_template,
-    )
-
-    runtime_paths = _get_runtime_paths()
-    runtime_paths.config_dir.mkdir(parents=True, exist_ok=True)
-    runtime_paths.data_dir.mkdir(parents=True, exist_ok=True)
-    runtime_paths.cache_dir.mkdir(parents=True, exist_ok=True)
-
-    if runtime_paths.flowsettings_path.exists() and not force:
-        raise click.ClickException(
-            f"Config file already exists: {runtime_paths.flowsettings_path}"
-        )
-
-    runtime_paths.flowsettings_path.write_text(
-        build_user_flowsettings_template(),
-        encoding="utf-8",
-    )
-    runtime_paths.env_path.write_text(build_user_env_example(), encoding="utf-8")
-    env_example_path = runtime_paths.config_dir / ".env.example"
-    env_example_path.write_text(build_user_env_example(), encoding="utf-8")
-
-    return {
-        "config_dir": str(runtime_paths.config_dir),
-        "data_dir": str(runtime_paths.data_dir),
-        "cache_dir": str(runtime_paths.cache_dir),
-        "flowsettings_path": str(runtime_paths.flowsettings_path),
-        "env_path": str(runtime_paths.env_path),
-        "env_example_path": str(env_example_path),
-    }
-
-
 def _print_docqa_response(response):
     _echo_text(f"Conversation: {response.conversation_id}")
     if response.active_file_name:
@@ -317,6 +287,19 @@ def _print_docqa_acceptance_summary(payload):
 
 @app.command("init")
 @click.option(
+    "--auth-mode",
+    type=click.Choice(("auto", "local", "password", "sso")),
+    default="auto",
+    show_default=True,
+    help="Write the canonical application authentication mode.",
+)
+@click.option(
+    "--admin-user",
+    default="admin",
+    show_default=True,
+    help="Administrator username to create or reset in password mode.",
+)
+@click.option(
     "--force",
     is_flag=True,
     default=False,
@@ -331,12 +314,22 @@ def _print_docqa_acceptance_summary(payload):
     show_default=True,
     help="Emit structured JSON output.",
 )
-def app_init(force, json_output):
+def app_init(auth_mode, admin_user, force, json_output):
     """Initialize the packaged user config directory with editable templates.
 
     Platform skill: MARA-app-init
     """
-    payload = _write_app_init_files(force=force)
+    password = None
+    if auth_mode == "password":
+        password = _acquire_admin_password(json_output=json_output)
+
+    payload = _write_app_init_files(force=force, auth_mode=auth_mode)
+    if password is not None:
+        _provision_password_admin(
+            username=admin_user,
+            password=password,
+            force=force,
+        )
     if json_output:
         _echo_json(payload)
         return

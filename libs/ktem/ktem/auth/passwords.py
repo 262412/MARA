@@ -16,6 +16,28 @@ _BCRYPT_HASH_PATTERN = re.compile(
     r"\$2[aby]\$12\$[./A-Za-z0-9]{21}[.Oeu]" r"[./A-Za-z0-9]{30}[.CGKOSWaeimquy26]\Z"
 )
 _LEGACY_SHA256_PATTERN = re.compile(r"[0-9a-fA-F]{64}\Z")
+PASSWORD_SPECIAL_CHARACTERS = "^$*.[]{}()?-\"!@#%&/\\,><':;|_~+="
+
+
+def validate_password(password: str, confirmation: str) -> str:
+    """Return the existing MARA password-policy errors, if any."""
+    errors = []
+    if password != confirmation:
+        errors.append("Password does not match")
+    if len(password) < 8:
+        errors.append("Password must be at least 8 characters long")
+    if not any(character.isupper() for character in password):
+        errors.append("Password must contain at least one uppercase letter")
+    if not any(character.islower() for character in password):
+        errors.append("Password must contain at least one lowercase letter")
+    if not any(character.isdigit() for character in password):
+        errors.append("Password must contain at least one digit")
+    if not any(character in PASSWORD_SPECIAL_CHARACTERS for character in password):
+        errors.append(
+            "Password must contain at least one special character from the "
+            f"following: {PASSWORD_SPECIAL_CHARACTERS}"
+        )
+    return "; ".join(errors)
 
 
 def _bcrypt_password_input(password: str) -> bytes:

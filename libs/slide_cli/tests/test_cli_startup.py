@@ -29,6 +29,8 @@ def test_importing_cli_module_does_not_eagerly_import_heavy_modules():
             "'slide_cli.docqa_cli', "
             "'slide_cli.runtime', "
             "'ktem.docqa', "
+            "'ktem.auth.service', "
+            "'ktem.db.models', "
             "'kotaemon.agents'"
             "]; "
             "print(json.dumps({name: (name in sys.modules) for name in targets}))"
@@ -49,6 +51,8 @@ def test_importing_cli_module_does_not_eagerly_import_heavy_modules():
         "slide_cli.docqa_cli": False,
         "slide_cli.runtime": False,
         "ktem.docqa": False,
+        "ktem.auth.service": False,
+        "ktem.db.models": False,
         "kotaemon.agents": False,
     }
 

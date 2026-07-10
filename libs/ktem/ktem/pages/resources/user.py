@@ -3,7 +3,7 @@ import logging
 import gradio as gr
 import pandas as pd
 from ktem.app import BasePage
-from ktem.auth.passwords import hash_password
+from ktem.auth.passwords import hash_password, validate_password
 from ktem.db.models import User, engine
 from sqlmodel import Session, select
 
@@ -48,52 +48,6 @@ def validate_username(usn):
         )
 
     return "; ".join(errors)
-
-
-def validate_password(pwd, pwd_cnf):
-    """Validate that whether password is valid
-
-    - Password must be at least 8 characters long
-    - Password must contain at least one uppercase letter
-    - Password must contain at least one lowercase letter
-    - Password must contain at least one digit
-    - Password must contain at least one special character from the following:
-        ^ $ * . [ ] { } ( ) ? - " ! @ # % & / \\ , > < ' : ; | _ ~  + =
-
-    Args:
-        pwd (str): Password
-        pwd_cnf (str): Confirm password
-
-    Returns:
-        str: Error message if password is not valid
-    """
-    errors = []
-    if pwd != pwd_cnf:
-        errors.append("Password does not match")
-
-    if len(pwd) < 8:
-        errors.append("Password must be at least 8 characters long")
-
-    if not any(c.isupper() for c in pwd):
-        errors.append("Password must contain at least one uppercase letter")
-
-    if not any(c.islower() for c in pwd):
-        errors.append("Password must contain at least one lowercase letter")
-
-    if not any(c.isdigit() for c in pwd):
-        errors.append("Password must contain at least one digit")
-
-    special_chars = "^$*.[]{}()?-\"!@#%&/\\,><':;|_~+="
-    if not any(c in special_chars for c in pwd):
-        errors.append(
-            "Password must contain at least one special character from the "
-            f"following: {special_chars}"
-        )
-
-    if errors:
-        return "; ".join(errors)
-
-    return ""
 
 
 def create_user(usn, pwd, user_id=None, is_admin=True) -> bool:

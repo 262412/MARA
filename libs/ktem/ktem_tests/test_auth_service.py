@@ -9,7 +9,7 @@ import gradiologin
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from ktem.auth.passwords import hash_password
+from ktem.auth.passwords import hash_password, verify_password
 from ktem.auth.policy import AuthConfigurationError
 from ktem.db.models import User
 from ktem.pages.resources import user as user_module
@@ -250,6 +250,145 @@ def test_password_readiness_accepts_safe_admin(monkeypatch, user_engine):
     monkeypatch.setattr(service, "engine", user_engine)
 
     service.validate_password_admin_readiness()
+
+
+def test_provision_password_admin_creates_normalized_bcrypt_admin(
+    monkeypatch,
+    user_engine,
+):
+    service = _service_module()
+    monkeypatch.setattr(service, "engine", user_engine)
+
+    service.provision_password_admin(
+        username="  NewOperator  ",
+        password="CorrectHorse7!",
+        force=False,
+    )
+
+    with Session(user_engine) as session:
+        users = session.exec(select(User)).all()
+    assert len(users) == 1
+    user = users[0]
+    assert user.username == "NewOperator"
+    assert user.username_lower == "newoperator"
+    assert user.admin is True
+    assert verify_password("CorrectHorse7!", user.password) == (True, None)
+
+
+def test_provision_password_admin_requires_force_for_existing_user(
+    monkeypatch,
+    user_engine,
+):
+    service = _service_module()
+    original_hash = hash_password("OriginalHorse7!")
+    user_id = _add_user(
+        user_engine,
+        username="ExistingOperator",
+        password_hash=original_hash,
+        admin=False,
+    )
+    monkeypatch.setattr(service, "engine", user_engine)
+
+    with pytest.raises(AuthConfigurationError, match="--force"):
+        service.provision_password_admin(
+            username=" existingoperator ",
+            password="ReplacementHorse8!",
+            force=False,
+        )
+
+    with Session(user_engine) as session:
+        user = session.exec(select(User).where(User.id == user_id)).one()
+    assert user.password == original_hash
+    assert user.admin is False
+
+
+def test_provision_password_admin_force_resets_promotes_and_preserves_other_users(
+    monkeypatch,
+    user_engine,
+):
+    service = _service_module()
+    target_hash = hash_password("OriginalHorse7!")
+    target_id = _add_user(
+        user_engine,
+        username="ExistingOperator",
+        password_hash=target_hash,
+        admin=False,
+    )
+    other_hash = hash_password("OtherHorse9!")
+    other_id = _add_user(
+        user_engine,
+        username="OtherOperator",
+        password_hash=other_hash,
+        admin=False,
+    )
+    monkeypatch.setattr(service, "engine", user_engine)
+
+    service.provision_password_admin(
+        username=" existingoperator ",
+        password="ReplacementHorse8!",
+        force=True,
+    )
+
+    with Session(user_engine) as session:
+        target = session.exec(select(User).where(User.id == target_id)).one()
+        other = session.exec(select(User).where(User.id == other_id)).one()
+    assert target.username == "ExistingOperator"
+    assert target.username_lower == "existingoperator"
+    assert target.password != target_hash
+    assert verify_password("ReplacementHorse8!", target.password) == (True, None)
+    assert target.admin is True
+    assert other.password == other_hash
+    assert other.admin is False
+
+
+@pytest.mark.parametrize(
+    ("username", "password", "message"),
+    [
+        ("   ", "CorrectHorse7!", "username must be nonempty"),
+        ("Operator", "weak-secret", "uppercase"),
+    ],
+)
+def test_provision_password_admin_validates_credentials_before_database_write(
+    monkeypatch,
+    user_engine,
+    username,
+    password,
+    message,
+):
+    service = _service_module()
+    monkeypatch.setattr(service, "engine", user_engine)
+
+    with pytest.raises(AuthConfigurationError, match=message):
+        service.provision_password_admin(
+            username=username,
+            password=password,
+            force=False,
+        )
+
+    with Session(user_engine) as session:
+        assert session.exec(select(User)).all() == []
+
+
+@pytest.mark.parametrize(
+    ("password", "confirmation", "expected"),
+    [
+        ("CorrectHorse7!", "CorrectHorse7!", ""),
+        ("weak-secret", "weak-secret", "uppercase"),
+        ("CorrectHorse7!", "DifferentHorse8!", "does not match"),
+    ],
+)
+def test_shared_password_policy_matches_user_management_policy(
+    password,
+    confirmation,
+    expected,
+):
+    from ktem.auth import passwords
+
+    shared_error = passwords.validate_password(password, confirmation)
+    ui_error = user_module.validate_password(password, confirmation)
+
+    assert shared_error == ui_error
+    assert expected in shared_error
 
 
 def test_user_management_construction_does_not_bootstrap_credentials(monkeypatch):

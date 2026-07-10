@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 import gradiologin
-from ktem.auth.passwords import hash_password, verify_password
+from ktem.auth.passwords import hash_password, validate_password, verify_password
 from ktem.auth.policy import AuthConfigurationError
 from ktem.db.models import User, engine
 from sqlalchemy import update
@@ -13,6 +13,48 @@ from sqlalchemy.engine import CursorResult
 from sqlmodel import Session, select
 
 PASSWORD_ADMIN_SETUP = "MARA app init --auth-mode password"
+
+
+def provision_password_admin(
+    *,
+    username: str,
+    password: str,
+    force: bool = False,
+) -> None:
+    """Create or explicitly reset one password-mode administrator."""
+    normalized_username = str(username or "").strip()
+    if not normalized_username:
+        raise AuthConfigurationError("Admin username must be nonempty after trimming.")
+
+    password_text = str(password or "")
+    password_error = validate_password(password_text, password_text)
+    if password_error:
+        raise AuthConfigurationError(f"Admin password is invalid: {password_error}")
+
+    username_lower = normalized_username.lower()
+    with Session(engine) as session:
+        user = session.exec(
+            select(User).where(User.username_lower == username_lower)
+        ).first()
+        if user is not None and not force:
+            raise AuthConfigurationError(
+                f'User "{normalized_username}" already exists. Rerun with --force '
+                "to reset that user's password and grant administrator access."
+            )
+
+        password_hash = hash_password(password_text)
+        if user is None:
+            user = User(
+                username=normalized_username,
+                username_lower=username_lower,
+                password=password_hash,
+                admin=True,
+            )
+            session.add(user)
+        else:
+            user.password = password_hash
+            user.admin = True
+        session.commit()
 
 
 def _compare_and_swap_password_hash(
