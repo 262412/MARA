@@ -105,19 +105,25 @@ def validate_wheel_contents(wheels: dict[str, Path]) -> None:
 def validate_sdist_contents(sdists: dict[str, Path]) -> None:
     for distribution, sdist_path in sdists.items():
         with tarfile.open(sdist_path, mode="r:gz") as archive:
-            members = {member.name: member for member in archive.getmembers()}
+            member_list = archive.getmembers()
+            members = {member.name: member for member in member_list}
             names = set(members)
             for legal_name in ("LICENSE.txt", "NOTICE"):
                 if not any(name.endswith(f"/{legal_name}") for name in names):
                     raise RuntimeError(
                         f"{sdist_path.name} does not contain {legal_name}."
                     )
-            metadata_names = [name for name in names if name.endswith("/PKG-INFO")]
-            if len(metadata_names) != 1:
+            root_metadata = [
+                member
+                for member in member_list
+                if len(Path(member.name).parts) == 2
+                and Path(member.name).name == "PKG-INFO"
+            ]
+            if len(root_metadata) != 1:
                 raise RuntimeError(
-                    f"{sdist_path.name} has no unique distribution metadata."
+                    f"{sdist_path.name} must contain exactly one root PKG-INFO."
                 )
-            metadata_file = archive.extractfile(members[metadata_names[0]])
+            metadata_file = archive.extractfile(root_metadata[0])
             if metadata_file is None:
                 raise RuntimeError(f"Cannot read {sdist_path.name} metadata.")
             metadata = metadata_file.read().decode("utf-8")
