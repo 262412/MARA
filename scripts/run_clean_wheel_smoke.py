@@ -181,6 +181,12 @@ def _run(command: list[str | Path], *, env: dict[str, str]) -> None:
     subprocess.run(printable, cwd=REPO_ROOT, env=env, check=True)
 
 
+def _clean_environment() -> dict[str, str]:
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    return env
+
+
 def _write_offline_guard(root: Path) -> Path:
     guard_dir = root / "offline-guard"
     guard_dir.mkdir()
@@ -226,19 +232,58 @@ def _export_constraints(uv: str, root: Path, env: dict[str, str]) -> Path:
     return constraints
 
 
+def _assert_installed_distribution_paths(
+    venv: Path,
+    env: dict[str, str],
+) -> None:
+    validation = f"""
+import importlib.metadata
+import pathlib
+import sys
+
+prefix = pathlib.Path(sys.prefix).resolve()
+for distribution in {PACKAGE_ORDER!r}:
+    location = pathlib.Path(
+        importlib.metadata.distribution(distribution).locate_file("")
+    ).resolve()
+    if not location.is_relative_to(prefix):
+        raise RuntimeError(
+            f"{{distribution}} metadata loaded outside clean venv: {{location}}"
+        )
+"""
+    _run(
+        [_venv_python(venv), "-c", validation],
+        env=env,
+    )
+
+
 def _run_layer_imports(
     distribution: str,
     venv: Path,
     env: dict[str, str],
 ) -> None:
-    modules = LAYER_IMPORTS.get(distribution, ())
-    if not modules:
-        return
-    imports = "; ".join(f"importlib.import_module({module!r})" for module in modules)
-    _run(
-        [_venv_python(venv), "-c", f"import importlib; {imports}"],
-        env=env,
+    validation = f"""
+import importlib
+import importlib.metadata
+import pathlib
+import sys
+
+prefix = pathlib.Path(sys.prefix).resolve()
+for module_name in {LAYER_IMPORTS.get(distribution, ())!r}:
+    module = importlib.import_module(module_name)
+    module_path = pathlib.Path(module.__file__).resolve()
+    if not module_path.is_relative_to(prefix):
+        raise RuntimeError(f"{{module_name}} loaded outside clean venv: {{module_path}}")
+
+location = pathlib.Path(
+    importlib.metadata.distribution({distribution!r}).locate_file("")
+).resolve()
+if not location.is_relative_to(prefix):
+    raise RuntimeError(
+        f"{distribution} metadata loaded outside clean venv: {{location}}"
     )
+"""
+    _run([_venv_python(venv), "-c", validation], env=env)
 
 
 def _install_wheel_layers(
@@ -265,6 +310,16 @@ def _install_wheel_layers(
         )
         _run([uv, "pip", "check", "--python", python], env=env)
         _run_layer_imports(distribution, venv, env)
+
+
+def _install_combined_wheels(
+    uv: str,
+    venv: Path,
+    constraints: Path,
+    wheels: dict[str, Path],
+    env: dict[str, str],
+) -> None:
+    python = _venv_python(venv)
     _run(
         [
             uv,
@@ -292,9 +347,7 @@ def _offline_environment(root: Path, env: dict[str, str]) -> dict[str, str]:
             "NO_PROXY": "",
             "PIP_NO_INDEX": "1",
             "UV_OFFLINE": "1",
-            "PYTHONPATH": os.pathsep.join(
-                filter(None, (str(guard_dir), env.get("PYTHONPATH", "")))
-            ),
+            "PYTHONPATH": str(guard_dir),
         }
     )
     return offline_env
@@ -305,6 +358,7 @@ def _run_offline_runtime_smoke(
     runtime: TestRuntimePaths,
     offline_env: dict[str, str],
 ) -> None:
+    _assert_installed_distribution_paths(venv, offline_env)
     for executable in ("MARA", "MARA-cli"):
         _run([_venv_command(venv, executable), "--help"], env=offline_env)
     mara = _venv_command(venv, "MARA")
@@ -337,16 +391,22 @@ def run_smoke(dist_root: Path) -> None:
     validate_sdist_contents(sdists)
     with tempfile.TemporaryDirectory(prefix="mara-wheel-smoke-") as temp_dir:
         smoke_root = Path(temp_dir)
-        venv = smoke_root / "venv"
+        layer_venv = smoke_root / "layer-venv"
+        combined_venv = smoke_root / "combined-venv"
         runtime = TestRuntimePaths.from_root(smoke_root / "runtime")
         runtime.create_directories()
-        env = os.environ.copy()
+        env = _clean_environment()
         env.update(runtime.environment())
-        _run([uv, "venv", "--python", sys.executable, str(venv)], env=env)
         constraints = _export_constraints(uv, smoke_root, env)
-        _install_wheel_layers(uv, venv, constraints, wheels, env)
+
+        _run([uv, "venv", "--python", sys.executable, str(layer_venv)], env=env)
+        _install_wheel_layers(uv, layer_venv, constraints, wheels, env)
+        shutil.rmtree(layer_venv)
+
+        _run([uv, "venv", "--python", sys.executable, str(combined_venv)], env=env)
+        _install_combined_wheels(uv, combined_venv, constraints, wheels, env)
         _run_offline_runtime_smoke(
-            venv,
+            combined_venv,
             runtime,
             _offline_environment(smoke_root, env),
         )
