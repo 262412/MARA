@@ -42,8 +42,8 @@ def test_root_requirements_file_keeps_azure_app_service_build_installable():
         "langchain-community<0.3",
         "langchain-core<0.3",
         "numpy==1.26.4",
-        "ollama==0.6.2",
-        "onnxruntime==1.23.2",
+        "ollama==0.6.0",
+        "onnxruntime==1.19.2",
         "opentelemetry-instrumentation-fastapi==0.48b0",
     }
     assert "-c constraints.txt" in requirement_lines
