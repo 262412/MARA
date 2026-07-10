@@ -19,6 +19,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/quality-gates.yaml
+    with:
+      base_ref: main
 
   build:
     needs: quality

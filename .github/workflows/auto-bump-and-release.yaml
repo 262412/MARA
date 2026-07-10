@@ -10,6 +10,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/quality-gates.yaml
+    with:
+      base_ref: ${{ github.event.before }}
 
   auto-bump-and-release:
     needs: quality
