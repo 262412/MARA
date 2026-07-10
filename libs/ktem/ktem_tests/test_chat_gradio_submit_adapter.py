@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import pytest
-
 from ktem.pages.chat import chat_message_events
 from ktem.pages.chat.chat_gradio_adapters import chat_submit_ports
 
 from .event_chain_spy import EventGraphSpy, build_chat_page
+
+
+def _fn_name(call):
+    fn = call.params.get("fn")
+    return getattr(fn, "name", getattr(fn, "__name__", None))
 
 
 def _bind_submit(page, graph, monkeypatch, *, demo_mode: bool):
@@ -40,14 +44,42 @@ def test_submit_ports_are_named_immutable_and_preserve_all_index_inputs():
         page._selected_page_text,
         page._selected_graph_context,
     )
-    assert len(ports.submit.outputs) == 12
+    assert ports.submit.outputs == (
+        page.chat_panel.text_input,
+        page.chat_panel.chatbot,
+        page.chat_control.conversation_id,
+        page.chat_control.conversation,
+        page.chat_control.conversation_rn,
+        page._indices_input[0],
+        page._indices_input[1],
+        page._last_question,
+        page._command_state,
+        page._selected_page_text,
+        page._selected_graph_context,
+        page._graph_source_ids,
+    )
     assert ports.runtime.inputs[-6:] == tuple(page._indices_input)
     assert len(ports.runtime.inputs) == 22 + len(page._indices_input)
-    assert len(ports.runtime.outputs) == 14
+    assert ports.runtime.outputs == (
+        page.chat_panel.chatbot,
+        page.info_panel,
+        page.plot_panel,
+        page.state_plot_panel,
+        page.state_chat,
+        page.answer_panel,
+        page.citations_panel,
+        page.reasoning_trace_panel,
+        page._request_page_number,
+        page._request_file_id,
+        page._request_last_question,
+        page._request_info_html,
+        page._request_answer_html,
+        page._request_chat_history,
+    )
     assert ports.persist.inputs[-6:] == tuple(page._indices_input)
     assert ports.submit.inputs is ports.submit.inputs
     with pytest.raises((AttributeError, TypeError)):
-        ports.submit.inputs += (object(),)
+        setattr(ports.submit, "inputs", (*ports.submit.inputs, object()))
 
 
 def test_submit_chain_preserves_distinct_parent_nodes_and_exact_event_order(
@@ -115,6 +147,6 @@ def test_demo_submit_omits_only_persist_tail(monkeypatch):
     assert [call.verb for call in demo_graph.calls] == [
         call.verb for call in standard_graph.calls[:-1]
     ]
-    assert [call.params.get("fn") for call in demo_graph.calls] == [
-        call.params.get("fn") for call in standard_graph.calls[:-1]
+    assert [_fn_name(call) for call in demo_graph.calls] == [
+        _fn_name(call) for call in standard_graph.calls[:-1]
     ]

@@ -136,7 +136,9 @@ def _build_chat_control(graph: EventGraphSpy) -> SimpleNamespace:
         "conversation_rn",
         "conversation",
     )
-    controls = {name: ComponentSpy(graph, f"chat_control.{name}") for name in names}
+    controls: dict[str, Any] = {
+        name: ComponentSpy(graph, f"chat_control.{name}") for name in names
+    }
     controls.update(
         conversation_id=marker("chat_control.conversation_id"),
         cb_is_public=marker("chat_control.cb_is_public"),
@@ -174,7 +176,9 @@ def build_chat_page(graph: EventGraphSpy, index_count: int = 5) -> SimpleNamespa
     page._indices_input = [marker(f"indices[{index}]") for index in range(index_count)]
     page.page_preview = SimpleNamespace(
         cache_page_outputs=marker("page_preview.cache_page_outputs"),
-        refresh_selected_file_preview=marker("page_preview.refresh_selected_file_preview"),
+        refresh_selected_file_preview=marker(
+            "page_preview.refresh_selected_file_preview"
+        ),
         on_selected_file_change=marker("page_preview.on_selected_file_change"),
         on_preview_tick=marker("page_preview.on_preview_tick"),
         on_prev_page=marker("page_preview.on_prev_page"),
