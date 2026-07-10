@@ -7,9 +7,10 @@ from uuid import uuid4
 
 import ktem.index.file.ui as file_ui_module
 import pytest
+from gradio.helpers import special_args
 from ktem.index.file._group_service import FileGroupService, GroupServiceError
 from ktem.index.file._selection_service import FileSelectionService
-from ktem.index.file.ui import FileIndexPage
+from ktem.index.file.ui import FileIndexPage, FileSelector
 from sqlalchemy import JSON, Column, DateTime, String, create_engine
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Session, declarative_base
@@ -176,3 +177,57 @@ def test_file_page_indexing_uses_server_identity(monkeypatch):
 
     assert result == ["new-file"]
     assert service.user_ids == ["server-user"]
+
+
+def test_gradio_injects_file_scope_request_after_component_inputs():
+    page = cast(Any, FileIndexPage.__new__(FileIndexPage))
+    request = SimpleNamespace(username="alice")
+
+    selected_inputs, _, _ = special_args(
+        page.file_selected,
+        inputs=["file-1", "browser-user"],
+        request=cast(Any, request),
+    )
+    indexing_inputs, _, _ = special_args(
+        page.index_fn_file_with_default_loaders,
+        inputs=[["report.pdf"], False, {}, "browser-user"],
+        request=cast(Any, request),
+    )
+
+    assert selected_inputs == ["file-1", "browser-user", request]
+    assert indexing_inputs == [
+        ["report.pdf"],
+        False,
+        {},
+        "browser-user",
+        request,
+    ]
+
+
+def test_file_selector_load_uses_server_identity(
+    private_file_database,
+    monkeypatch,
+):
+    index, source_table, _index_table, _group_table, db_engine = private_file_database
+    with Session(db_engine) as session:
+        session.add(source_table(id="server-file", name="own.pdf", user="server-user"))
+        session.add(source_table(id="victim-file", name="secret.pdf", user="victim"))
+        session.commit()
+
+    selector = cast(Any, FileSelector.__new__(FileSelector))
+    selector._index = index
+    monkeypatch.setattr(file_ui_module, "engine", db_engine)
+    monkeypatch.setattr(
+        file_ui_module,
+        "resolve_file_index_user_id",
+        lambda _browser_user, _request: "server-user",
+    )
+
+    update, options = selector.load_files(
+        [],
+        "victim",
+        request=SimpleNamespace(username="alice"),
+    )
+
+    assert update["choices"] == [("own.pdf", "server-file")]
+    assert options == [("own.pdf", "server-file")]

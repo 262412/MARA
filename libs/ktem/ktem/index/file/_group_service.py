@@ -42,10 +42,10 @@ class FileGroupService:
             item["files"] = _format_group_files(item["files"], file_id_to_name)
         return results, pd.DataFrame.from_records(formatted)
 
-    def selected_file_ids(self, group_id: str) -> list[str]:
+    def selected_file_ids(self, group_id: str, user_id: Any) -> list[str]:
         group_table = self._index._resources["FileGroup"]
         with Session(self._engine) as session:
-            group = session.query(group_table).filter_by(id=group_id).first()
+            group = self._group_for_user(session, group_table, group_id, user_id)
         if group is None:
             raise GroupServiceError("No group found")
         return [json.dumps(group.data["files"])]
@@ -60,7 +60,12 @@ class FileGroupService:
         group_table = self._index._resources["FileGroup"]
         with Session(self._engine) as session:
             if group_id:
-                group = session.query(group_table).filter_by(id=group_id).first()
+                group = self._group_for_user(
+                    session,
+                    group_table,
+                    group_id,
+                    user_id,
+                )
                 if group is None:
                     raise GroupServiceError("No group found")
                 group.name = group_name
@@ -83,21 +88,30 @@ class FileGroupService:
             group_id = str(group.id)
         return group_id
 
-    def delete_group(self, group_id: str | None) -> str:
+    def delete_group(self, group_id: str | None, user_id: Any) -> str:
         if not group_id:
             raise GroupServiceError("No group is selected")
         group_table = self._index._resources["FileGroup"]
         with Session(self._engine) as session:
-            row = session.execute(
-                select(group_table).where(group_table.id == group_id)
-            ).first()
-            if row is None:
+            group = self._group_for_user(session, group_table, group_id, user_id)
+            if group is None:
                 raise GroupServiceError("No group found")
-            group = row[0]
             group_name = str(group.name)
             session.delete(group)
             session.commit()
         return group_name
+
+    def _group_for_user(
+        self,
+        session: Session,
+        group_table: Any,
+        group_id: str,
+        user_id: Any,
+    ) -> Any:
+        query = session.query(group_table).filter_by(id=group_id)
+        if self._index.config.get("private", False):
+            query = query.filter_by(user=user_id)
+        return query.first()
 
 
 def _group_record(group: Any) -> dict[str, Any]:

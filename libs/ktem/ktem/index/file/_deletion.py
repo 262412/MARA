@@ -3,11 +3,10 @@ from __future__ import annotations
 from typing import TypeAlias
 
 import gradio as gr
-from ktem.auth.service import resolve_request_user_id
 from ktem.db.engine import engine
-from theflow.settings import settings as flowsettings
 
 from .deletion import DeletionCoordinator, DeletionError
+from ._identity import resolve_file_index_user_id
 
 Request: TypeAlias = gr.Request | None
 
@@ -38,13 +37,7 @@ class FileIndexDeletionController:
 
     @staticmethod
     def _resolve_user_id(user_id, request: Request):
-        auth_mode = str(getattr(flowsettings, "MARA_AUTH_MODE", "auto"))
-        if auth_mode in {"password", "sso"}:
-            resolved = resolve_request_user_id(request, auth_mode=auth_mode)
-            if not resolved:
-                raise gr.Error("Authenticated user identity is unavailable.")
-            return resolved
-        return user_id
+        return resolve_file_index_user_id(user_id, request)
 
     def delete_all_files(self, file_list, user_id=None, request: Request = None):
         for file_id in file_list.id.values:

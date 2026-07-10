@@ -38,7 +38,9 @@ class _Pipeline:
         self.stream_calls = []
 
     def route(self, path):
-        existing_id = f"existing:{path.name}" if path.name in self._existing_names else None
+        existing_id = (
+            f"existing:{path.name}" if path.name in self._existing_names else None
+        )
         return _Route(existing_id)
 
     def stream(self, files, *, reindex):
@@ -203,18 +205,16 @@ def test_group_service_preserves_rows_selection_update_and_delete(group_database
     assert rows[0]["id"] == group_id
     assert rows[0]["files"] == ["file-1", "file-2"]
     assert frame.iloc[0]["files"] == "[2 items] 'Alpha.pdf', 'Beta.pdf'"
-    assert service.selected_file_ids(group_id) == ['["file-1", "file-2"]']
+    assert service.selected_file_ids(group_id, "user-1") == ['["file-1", "file-2"]']
 
-    assert service.save_group(group_id, "Renamed", ["file-2"], "user-1") == (
-        group_id
-    )
+    assert service.save_group(group_id, "Renamed", ["file-2"], "user-1") == (group_id)
     updated_rows, _frame = service.list_groups(
         "user-1", [{"id": "file-2", "name": "Beta.pdf"}]
     )
     assert updated_rows[0]["name"] == "Renamed"
     assert updated_rows[0]["files"] == ["file-2"]
 
-    assert service.delete_group(group_id) == "Renamed"
+    assert service.delete_group(group_id, "user-1") == "Renamed"
     empty_rows, empty_frame = service.list_groups("user-1", [])
     assert empty_rows == []
     assert empty_frame.iloc[0].to_dict() == {
@@ -262,6 +262,7 @@ def test_file_selection_service_escapes_text_and_preserves_page_order(monkeypatc
         ),
     ]
     monkeypatch.setattr(service, "_documents_for_file", lambda _file_id: documents)
+    monkeypatch.setattr(service, "_require_file_access", lambda *_args: object())
 
     rendered = service.render_chunks("file-1")
 

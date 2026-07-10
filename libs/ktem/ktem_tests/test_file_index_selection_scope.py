@@ -55,6 +55,18 @@ def test_private_selector_ui_result_intersects_authenticated_scope():
     assert index.resolve_selected_ids("server-user", object()) == ["own-1"]
 
 
+def test_private_all_mode_ignores_selector_component_user():
+    index = _index(private=True, visible_ids=["own-1", "own-2"])
+    index._selector_ui = SimpleNamespace(
+        get_selected_ids=lambda _selected: ["victim-file"]
+    )
+
+    assert index.resolve_selected_ids(
+        "server-user",
+        ["all", [], "victim-user"],
+    ) == ["own-1", "own-2"]
+
+
 def test_public_selection_preserves_explicit_ids():
     index = _index(private=False, visible_ids=["public-1"])
 

@@ -58,12 +58,12 @@ def test_web_delete_uses_server_identity_in_password_mode(monkeypatch):
         "ktem.index.file._deletion.DeletionCoordinator", _CoordinatorSpy
     )
     monkeypatch.setattr(
-        "ktem.index.file._deletion.resolve_request_user_id",
+        "ktem.index.file._identity.resolve_request_user_id",
         lambda _request, auth_mode: "server-user",
     )
     monkeypatch.setattr("ktem.index.file._deletion.gr.Info", lambda _message: None)
     monkeypatch.setattr(
-        "ktem.index.file._deletion.flowsettings.MARA_AUTH_MODE", "password"
+        "ktem.index.file._identity.flowsettings.MARA_AUTH_MODE", "password"
     )
     index = SimpleNamespace(_resources=_resources())
     controller = FileIndexDeletionController(index, "Selected")

@@ -283,7 +283,7 @@ def _register_delete_file_events(page) -> None:
         )
         .then(
             fn=page.file_selected,
-            inputs=[page.selected_file_id],
+            inputs=[page.selected_file_id, page._app.user_id],
             outputs=_file_selection_outputs(page),
             show_progress="hidden",
         )
@@ -297,7 +297,7 @@ def _register_delete_file_events(page) -> None:
         show_progress="hidden",
     ).then(
         fn=page.file_selected,
-        inputs=[page.selected_file_id],
+        inputs=[page.selected_file_id, page._app.user_id],
         outputs=_file_selection_outputs(page),
         show_progress="hidden",
     )
@@ -313,7 +313,11 @@ def _register_download_events(page, *, sso_enabled: bool) -> None:
         )
         page.download_single_button.click(
             fn=page.download_single_file,
-            inputs=[page.is_zipped_state, page.selected_file_id],
+            inputs=[
+                page.is_zipped_state,
+                page.selected_file_id,
+                page._app.user_id,
+            ],
             outputs=[page.is_zipped_state, page.download_single_button],
             show_progress="hidden",
         )
@@ -321,7 +325,12 @@ def _register_download_events(page, *, sso_enabled: bool) -> None:
 
     page.download_single_button.click(
         fn=page.download_single_file_simple,
-        inputs=[page.is_zipped_state, page.chunks, page.selected_file_id],
+        inputs=[
+            page.is_zipped_state,
+            page.chunks,
+            page.selected_file_id,
+            page._app.user_id,
+        ],
         outputs=[page.is_zipped_state, page.download_single_button],
         show_progress="hidden",
     )
@@ -443,7 +452,7 @@ def _register_file_selection_events(page) -> None:
         show_progress="hidden",
     ).then(
         fn=page.file_selected,
-        inputs=[page.selected_file_id],
+        inputs=[page.selected_file_id, page._app.user_id],
         outputs=_file_selection_outputs(page),
         show_progress="hidden",
     )
@@ -526,7 +535,7 @@ def _register_group_events(page, page_selector_outputs) -> None:
 
     page.group_chat_button.click(
         fn=page.set_group_id_selector,
-        inputs=[page.selected_group_id],
+        inputs=[page.selected_group_id, page._app.user_id],
         outputs=page_selector_outputs,
     )
 
@@ -563,7 +572,7 @@ def _register_group_delete_event(page, on_group_closed_event):
     return (
         page.group_delete_button.click(
             fn=page.delete_group,
-            inputs=[page.selected_group_id],
+            inputs=[page.selected_group_id, page._app.user_id],
         )
         .then(
             fn=page.list_group,
