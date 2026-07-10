@@ -112,6 +112,7 @@ def test_facade_covers_canonical_request_without_breaking_positional_abi():
     facade_names = tuple(field.name for field in fields(request_module.DocQARequest))
 
     assert runtime_names == CANONICAL_REQUEST_FIELDS
+    assert request_module.RUNTIME_DOCQA_REQUEST_FIELD_NAMES == CANONICAL_REQUEST_FIELDS
     assert facade_names[:38] == HISTORICAL_FACADE_POSITIONAL_FIELDS
     assert facade_names[38:] == APPENDED_FACADE_FIELDS
     assert set(facade_names) == set(runtime_names)
@@ -136,6 +137,31 @@ def test_facade_conversion_explicitly_round_trips_every_field():
     assert asdict(runtime_request) == payload
 
 
+def test_facade_conversion_deep_copies_mutable_fields():
+    facade = request_module.DocQARequest(
+        prompt="question",
+        selected_file_ids=["file-1"],
+        selected_inputs={9: ["file-1"]},
+        graph_context={"nested": {"value": 1}},
+        state={"app": {"regen": False}},
+        history=[("old question", "old answer")],
+        page_image_records=[{"evidence_id": "page-1"}],
+        element_index_records=[{"evidence_id": "element-1"}],
+    )
+    facade_before = asdict(facade)
+
+    runtime_request = request_module.to_runtime_docqa_request(facade)
+    runtime_request.selected_file_ids.append("file-2")
+    runtime_request.selected_inputs[9].append("file-2")
+    runtime_request.graph_context["nested"]["value"] = 2
+    runtime_request.state["app"]["regen"] = True
+    runtime_request.history.append(("new question", "new answer"))
+    runtime_request.page_image_records[0]["evidence_id"] = "page-2"
+    runtime_request.element_index_records[0]["evidence_id"] = "element-2"
+
+    assert asdict(facade) == facade_before
+
+
 def test_facade_conversion_fails_loudly_when_runtime_contract_drifts(monkeypatch):
     @dataclass
     class DriftedRuntimeRequest:
@@ -154,7 +180,7 @@ def test_facade_conversion_fails_loudly_when_runtime_contract_drifts(monkeypatch
         )
 
 
-def test_constructing_facade_does_not_import_ktem_docqa():
+def test_constructing_facade_does_not_import_ktem_docqa(tmp_path):
     package_root = Path(__file__).resolve().parents[1]
     script = """
 import sys
@@ -170,6 +196,7 @@ assert 'ktem.docqa' not in sys.modules
         [sys.executable, "-c", script],
         capture_output=True,
         check=False,
+        cwd=tmp_path,
         env=env,
         text=True,
     )
