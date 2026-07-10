@@ -54,6 +54,7 @@ jobs:
       - name: Validate lock and repository hooks
         run: |
           uv lock --check
+          uv run python scripts/sync_locked_constraints.py --check
           uv run pre-commit run --show-diff-on-failure --all-files
       - name: Enforce static and hygiene checks
         run: |

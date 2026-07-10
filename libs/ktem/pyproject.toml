@@ -24,6 +24,7 @@ license-files = ["LICENSE.txt", "NOTICE"]
 dependencies = [
     "bcrypt>=5.0.0,<6",
     "click>=8.1.7,<9",
+    "kotaemon",
     "platformdirs>=4.2.1,<5",
     "pluggy>=1.5.0,<2",
     "python-decouple>=3.8,<4",

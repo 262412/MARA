@@ -8,6 +8,11 @@ TBD
 
 ## Install
 
+MARA installs the advanced application runtime through the explicit
+`mara-runtime` extra. The older `adv` and `all` extras remain compatibility
+aliases for one release and are deprecated; `all` continues to include
+development tools only for callers that request it explicitly.
+
 ```shell
 pip install kotaemon@git+ssh://git@github.com/Cinnamon/kotaemon.git
 ```

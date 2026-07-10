@@ -1,6 +1,6 @@
 # build backand and build dependencies
 [build-system]
-requires = ["setuptools >= 61.0", "wheel", "setuptools-git-versioning>=2.0,<3"]
+requires = ["setuptools >= 77.0", "wheel", "setuptools-git-versioning>=2.0,<3"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -67,6 +67,8 @@ dependencies = [
     "pydantic<=2.10.6",
 ]
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE.txt", "NOTICE"]
 authors = [
     { name = "@trducng", email = "john@cinnamon.is" },
     { name = "@lone17", email = "ian@cinnamon.is" },
@@ -79,7 +81,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-adv = [
+mara-runtime = [
     "duckduckgo-search>=6.1.0,<6.2",
     "elasticsearch>=8.13.0,<8.14",
     "fastembed",
@@ -107,4 +109,5 @@ dev = [
     "pytest-mock",
     "sphinx",
 ]
-all = ["kotaemon[adv,dev]"]
+adv = ["kotaemon[mara-runtime]"]
+all = ["kotaemon[mara-runtime,dev]"]
