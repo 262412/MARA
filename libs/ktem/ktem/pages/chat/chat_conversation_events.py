@@ -62,7 +62,7 @@ def _suggest_chat_outputs(page: Any) -> list[Any]:
 def _bind_demo_conversation_events(page: Any, chat_input_focus_js: str) -> None:
     page.chat_control.btn_demo_logout.click(fn=None, js=page.chat_control.logout_js)
     page.chat_control.btn_new.click(
-        fn=lambda: page.chat_control.select_conv("", None),
+        fn=page.chat_control.clear_conv,
         outputs=_conversation_outputs(page),
     ).then(
         lambda: (gr.update(visible=False), gr.update(visible=True)),

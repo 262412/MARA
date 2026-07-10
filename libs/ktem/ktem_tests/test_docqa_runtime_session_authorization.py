@@ -111,9 +111,7 @@ def test_runtime_owner_graph_read_self_heals_legacy_source_scope():
         data_source={
             "origin": "web",
             "graph_source_ids": ["file-1"],
-            "selected": {
-                "9": ["select", ["file-2", "file-1"], "graph-owner"]
-            },
+            "selected": {"9": ["select", ["file-2", "file-1"], "graph-owner"]},
         },
     )
     runtime = _runtime("graph-owner")
@@ -137,9 +135,7 @@ def test_runtime_public_graph_read_does_not_mutate_owner_source_scope():
         is_public=True,
         data_source={
             "origin": "web",
-            "selected": {
-                "9": ["select", ["public-file"], "graph-owner"]
-            },
+            "selected": {"9": ["select", ["public-file"], "graph-owner"]},
         },
     )
     runtime = _runtime("graph-viewer")

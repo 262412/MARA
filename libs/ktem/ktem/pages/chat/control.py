@@ -1,5 +1,5 @@
 import logging
-from typing import TypeAlias
+from typing import TypeAlias, cast
 
 import gradio as gr
 from ktem.app import BasePage
@@ -20,6 +20,7 @@ KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
 ASSETS_DIR = str(ICONS_DIR)
 Request: TypeAlias = gr.Request | None
+_REQUEST = cast(gr.Request, object())
 
 
 logout_js = """
@@ -39,6 +40,38 @@ def is_conv_name_valid(name):
         errors.append("Name cannot be longer than 40 characters")
 
     return "; ".join(errors)
+
+
+def _empty_conversation_state(app):
+    default_chat_suggestions = [[each] for each in ChatSuggestion.CHAT_SAMPLES]
+    indices = []
+    for index in app.index_manager.indices:
+        if index.selector is None:
+            continue
+        if isinstance(index.selector, int):
+            indices.append(index.default_selector)
+        if isinstance(index.selector, tuple):
+            indices.extend(index.default_selector)
+    return (
+        "",
+        "",
+        "",
+        [],
+        default_chat_suggestions,
+        "",
+        None,
+        [],
+        [],
+        False,
+        STATE,
+        *indices,
+    )
+
+
+def _server_user_id(request, auth_mode):
+    if request is _REQUEST:
+        return None
+    return resolve_request_user_id(request, auth_mode=auth_mode)
 
 
 class ConversationControl(BasePage):
@@ -174,7 +207,7 @@ class ConversationControl(BasePage):
                 visible=False,
             )
 
-    def load_chat_history(self, user_id, request: gr.Request):
+    def load_chat_history(self, user_id, request: gr.Request = _REQUEST):
         """Reload chat history"""
         resolved_user_id = self._resolve_user_id(user_id, request)
         return self._load_chat_history(resolved_user_id)
@@ -200,14 +233,14 @@ class ConversationControl(BasePage):
         )
         return [(session.name, session.conversation_id) for session in sessions]
 
-    def reload_conv(self, user_id, request: gr.Request):
+    def reload_conv(self, user_id, request: gr.Request = _REQUEST):
         conv_list = self.load_chat_history(user_id, request)
         if conv_list:
             return gr.update(value=None, choices=conv_list)
         else:
             return gr.update(value=None, choices=[])
 
-    def new_conv(self, user_id, request: gr.Request):
+    def new_conv(self, user_id, request: gr.Request = _REQUEST):
         """Create new chat"""
         user_id = self._resolve_user_id(user_id, request)
         if user_id is None:
@@ -220,7 +253,7 @@ class ConversationControl(BasePage):
             choices=history,
         )
 
-    def delete_conv(self, conversation_id, user_id, request: gr.Request):
+    def delete_conv(self, conversation_id, user_id, request: gr.Request = _REQUEST):
         """Delete the selected conversation"""
         if not conversation_id:
             gr.Warning("No conversation selected.")
@@ -243,11 +276,11 @@ class ConversationControl(BasePage):
         else:
             return None, gr.update(value=None, choices=[])
 
-    def select_conv(self, conversation_id, user_id, request: gr.Request):
+    def select_conv(self, conversation_id, user_id, request: gr.Request = _REQUEST):
         """Select the conversation"""
         default_chat_suggestions = [[each] for each in ChatSuggestion.CHAT_SAMPLES]
+        user_id = self._resolve_user_id(user_id, request)
         try:
-            user_id = self._resolve_user_id(user_id, request)
             session_info = self._get_session_service(user_id).load_session(
                 conversation_id,
                 user_id=user_id,
@@ -316,7 +349,7 @@ class ConversationControl(BasePage):
         )
 
     def clear_conv(self):
-        return self.select_conv("", None, None)  # type: ignore[arg-type]
+        return _empty_conversation_state(self._app)
 
     def rename_conv(
         self,
@@ -324,7 +357,7 @@ class ConversationControl(BasePage):
         new_name,
         is_renamed,
         user_id,
-        request: gr.Request,
+        request: gr.Request = _REQUEST,
     ):
         """Rename the conversation"""
         if not is_renamed or KH_DEMO_MODE or user_id is None or not conversation_id:
@@ -366,7 +399,7 @@ class ConversationControl(BasePage):
         new_suggestions,
         is_updated,
         user_id,
-        request: gr.Request,
+        request: gr.Request = _REQUEST,
     ):
         """Update the conversation's chat suggestions"""
         if not is_updated:
@@ -396,7 +429,7 @@ class ConversationControl(BasePage):
         auth_mode = str(getattr(flowsettings, "MARA_AUTH_MODE", "auto")).lower()
         if auth_mode not in {"password", "sso"}:
             return user_id
-        resolved = resolve_request_user_id(request, auth_mode=auth_mode)
+        resolved = _server_user_id(request, auth_mode)
         if not resolved:
             raise gr.Error("Authenticated user identity is unavailable.")
         return resolved

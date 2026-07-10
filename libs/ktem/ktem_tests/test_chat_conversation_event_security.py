@@ -1,8 +1,6 @@
 from types import SimpleNamespace
 
-from ktem.pages.chat.chat_conversation_events import (
-    _bind_demo_conversation_events,
-)
+from ktem.pages.chat.chat_conversation_events import _bind_demo_conversation_events
 
 
 class _Chain:
