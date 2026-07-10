@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 
 import markdown
+from ktem.utils.html_sanitizer import sanitize_html
 
 
 @dataclass(frozen=True)
@@ -54,7 +55,7 @@ def _render_assistant_markdown(content: str) -> str:
     )
     for span in math_spans:
         rendered = rendered.replace(span.placeholder, _render_math_source(span))
-    return _wrap_wide_answer_blocks(rendered)
+    return sanitize_html(_wrap_wide_answer_blocks(rendered))
 
 
 def _wrap_wide_answer_blocks(rendered: str) -> str:

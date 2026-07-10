@@ -164,3 +164,25 @@ def test_answer_markdown_rejects_unsafe_link_and_image_urls():
     assert "script link" in rendered
     assert "script image" in rendered
     assert "data link" in rendered
+
+
+def test_answer_sanitizer_preserves_rich_markdown_contracts():
+    content = (
+        "| Metric | Value |\n"
+        "| --- | --- |\n"
+        "| Revenue | 42 |\n\n"
+        "```python\nprint('safe')\n```\n\n"
+        "Formula: $E = mc^2$\n\n"
+        "[Source 2](#mark-2)"
+    )
+
+    rendered = format_chat_message_html(content, "assistant")
+
+    assert 'class="ktem-answer-table-scroll"' in rendered
+    assert 'role="region"' in rendered
+    assert 'aria-label="Scrollable table"' in rendered
+    assert 'tabindex="0"' in rendered
+    assert "<pre>" in rendered and 'class="language-python"' in rendered
+    assert 'class="ktem-math-source"' in rendered
+    assert 'data-ktem-latex="E = mc^2"' in rendered
+    assert 'href="#mark-2"' in rendered

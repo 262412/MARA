@@ -60,7 +60,7 @@ ALLOWED_ATTRIBUTES = {
     },
     "code": {"class"},
     "details": {"class", "open"},
-    "div": {"class"},
+    "div": {"aria-label", "class", "role", "tabindex"},
     "img": {"alt", "class", "src", "title"},
     "mark": {"class", "id"},
     "span": {"class", "data-ktem-display", "data-ktem-latex"},
@@ -73,6 +73,10 @@ ALLOWED_CLASS_NAMES = {
     "evidence",
     "evidence-content",
     "highlight",
+    "ktem-answer-chart-scroll",
+    "ktem-answer-table-scroll",
+    "ktem-math-source",
+    "ktem-math-source--display",
     "pdf-link",
     "selected",
 }
@@ -86,8 +90,10 @@ def _safe_link_or_image_url(tag: str, attribute: str, value: str) -> str | None:
     normalized = value.strip()
     lowered = normalized.lower()
     if lowered.startswith("data:"):
-        if tag == "img" and attribute == "src" and _SAFE_DATA_IMAGE_RE.fullmatch(
-            normalized
+        if (
+            tag == "img"
+            and attribute == "src"
+            and _SAFE_DATA_IMAGE_RE.fullmatch(normalized)
         ):
             return normalized
         return None
@@ -123,6 +129,12 @@ def _attribute_filter(tag: str, attribute: str, value: str) -> str | None:
         return value if value.isdigit() and int(value) > 0 else None
     if attribute == "data-phrase":
         return value if value in {"true", "false"} else None
+    if attribute == "role":
+        return value if value == "region" else None
+    if attribute == "tabindex":
+        return value if value == "0" else None
+    if attribute == "aria-label":
+        return value if value in {"Scrollable chart", "Scrollable table"} else None
     if attribute == "id":
         return value if _SAFE_ID_RE.fullmatch(value) else None
     return value
