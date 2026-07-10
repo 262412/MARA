@@ -4,7 +4,9 @@ import hashlib
 import os
 import zipfile
 from pathlib import Path
+from struct import error as StructError
 from struct import unpack_from
+from typing import BinaryIO
 
 from .errors import PreviewErrorCode, PreviewSourceError
 from .models import ArchiveLimits, PreviewSource, PreviewSourceKind
@@ -18,6 +20,16 @@ OOXML_MARKERS = {
     "xl/workbook.xml": ".xlsx",
 }
 CFB_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+_CFB_FREE_SECTOR = 0xFFFFFFFF
+_CFB_END_OF_CHAIN = 0xFFFFFFFE
+_CFB_FAT_SECTOR = 0xFFFFFFFD
+_CFB_DIFAT_SECTOR = 0xFFFFFFFC
+_CFB_STREAM_EXTENSIONS = {
+    "WordDocument": ".doc",
+    "PowerPoint Document": ".ppt",
+    "Workbook": ".xls",
+    "Book": ".xls",
+}
 
 
 def source_signature(file_path: str | Path) -> str:
@@ -47,7 +59,9 @@ def classify_preview_source(
     file_name: str | None = None,
     archive_limits: ArchiveLimits | None = None,
 ) -> PreviewSource:
-    path = Path(file_path).expanduser().resolve()
+    input_path = Path(file_path).expanduser()
+    cache_path = Path(os.path.abspath(os.fspath(input_path)))
+    path = input_path.resolve()
     if not path.is_file():
         raise _source_error(
             PreviewErrorCode.SOURCE_MISSING,
@@ -62,9 +76,10 @@ def classify_preview_source(
         declared,
         archive_limits or ArchiveLimits(),
     )
-    _validate_declared_type(path, declared, detected, kind)
+    _validate_declared_type(path, declared, detected)
     return PreviewSource(
         path=path,
+        cache_path=cache_path,
         kind=kind,
         extension=detected,
         signature=source_signature(path),
@@ -121,9 +136,7 @@ def _classify_signature(
     if header.startswith(b"PK"):
         return PreviewSourceKind.OOXML, _inspect_ooxml_archive(path, limits)
     if header.startswith(CFB_SIGNATURE):
-        _validate_cfb(path)
-        detected = declared if declared in CFB_EXTENSIONS else ".doc"
-        return PreviewSourceKind.CFB, detected
+        return PreviewSourceKind.CFB, _inspect_cfb(path)
     if declared in OOXML_EXTENSIONS:
         return PreviewSourceKind.OOXML, _inspect_ooxml_archive(path, limits)
     if declared == ".pdf":
@@ -219,54 +232,192 @@ def _validate_pdf(path: Path) -> None:
         ) from exc
 
 
-def _validate_cfb(path: Path) -> None:
+def _inspect_cfb(path: Path) -> str:
     try:
         with path.open("rb") as file_obj:
             header = file_obj.read(512)
-        file_size = path.stat().st_size
-    except OSError as exc:
-        raise _source_error(
-            PreviewErrorCode.SOURCE_INVALID,
-            path,
-            "cfb_validation",
-            f"Unable to read the compound file header: {exc}",
-        ) from exc
+            layout = _read_cfb_layout(file_obj, header, path.stat().st_size)
+            sector_size, total_sectors, first_directory, fat_sector_ids = layout
+            fat = _read_cfb_fat(
+                file_obj,
+                sector_size,
+                total_sectors,
+                fat_sector_ids,
+            )
+            stream_names = _read_cfb_directory_streams(
+                file_obj,
+                sector_size,
+                total_sectors,
+                first_directory,
+                fat,
+            )
+    except PreviewSourceError:
+        raise
+    except (OSError, ValueError, UnicodeError, StructError) as exc:
+        raise _cfb_error(path, f"The compound file cannot be parsed: {exc}") from exc
 
-    valid = len(header) == 512 and header.startswith(CFB_SIGNATURE)
-    if valid:
-        major_version, byte_order, sector_shift = unpack_from("<HHH", header, 26)
-        expected_shift = {3: 9, 4: 12}.get(major_version)
-        sector_size = 1 << sector_shift if sector_shift < 16 else 0
-        payload_size = file_size - 512
-        fat_sectors = unpack_from("<I", header, 44)[0]
-        first_directory_sector = unpack_from("<I", header, 48)[0]
-        valid = bool(
-            byte_order == 0xFFFE
-            and expected_shift == sector_shift
-            and sector_size
-            and payload_size >= 2 * sector_size
-            and payload_size % sector_size == 0
-            and fat_sectors >= 1
-            and first_directory_sector not in {0xFFFFFFFF, 0xFFFFFFFE}
-        )
-    if not valid:
-        raise _source_error(
-            PreviewErrorCode.SOURCE_INVALID,
+    extensions = {
+        extension
+        for name, extension in _CFB_STREAM_EXTENSIONS.items()
+        if name in stream_names
+    }
+    if len(extensions) == 1:
+        return extensions.pop()
+    if not extensions:
+        raise _cfb_error(
             path,
-            "cfb_validation",
-            "The compound file header or sector layout is corrupt.",
+            "The compound file has no recognized Office document stream.",
         )
+    raise _cfb_error(
+        path,
+        "The compound file contains conflicting Office document streams.",
+    )
+
+
+def _read_cfb_layout(
+    file_obj: BinaryIO,
+    header: bytes,
+    file_size: int,
+) -> tuple[int, int, int, list[int]]:
+    if len(header) != 512 or not header.startswith(CFB_SIGNATURE):
+        raise ValueError("invalid compound file header")
+    major_version, byte_order, sector_shift = unpack_from("<HHH", header, 26)
+    expected_shift = {3: 9, 4: 12}.get(major_version)
+    if byte_order != 0xFFFE or expected_shift != sector_shift:
+        raise ValueError("invalid compound file byte order or sector size")
+    sector_size = 1 << sector_shift
+    if file_size < 3 * sector_size or file_size % sector_size:
+        raise ValueError("invalid compound file sector layout")
+    total_sectors = file_size // sector_size - 1
+    fat_sector_count = unpack_from("<I", header, 44)[0]
+    first_directory = unpack_from("<I", header, 48)[0]
+    if not 1 <= fat_sector_count <= total_sectors:
+        raise ValueError("invalid compound file FAT sector count")
+    if first_directory >= total_sectors:
+        raise ValueError("invalid compound file directory sector")
+    fat_sector_ids = _read_cfb_difat(
+        file_obj,
+        header,
+        sector_size,
+        total_sectors,
+    )
+    if len(fat_sector_ids) < fat_sector_count:
+        raise ValueError("compound file DIFAT is incomplete")
+    return (
+        sector_size,
+        total_sectors,
+        first_directory,
+        fat_sector_ids[:fat_sector_count],
+    )
+
+
+def _read_cfb_difat(
+    file_obj: BinaryIO,
+    header: bytes,
+    sector_size: int,
+    total_sectors: int,
+) -> list[int]:
+    fat_sector_ids = [
+        unpack_from("<I", header, 76 + index * 4)[0] for index in range(109)
+    ]
+    fat_sector_ids = [sector for sector in fat_sector_ids if sector != _CFB_FREE_SECTOR]
+    next_difat = unpack_from("<I", header, 68)[0]
+    difat_count = unpack_from("<I", header, 72)[0]
+    for _ in range(difat_count):
+        sector = _read_cfb_sector(file_obj, next_difat, sector_size, total_sectors)
+        entry_count = sector_size // 4
+        values = [
+            unpack_from("<I", sector, index * 4)[0] for index in range(entry_count)
+        ]
+        fat_sector_ids.extend(
+            value for value in values[:-1] if value != _CFB_FREE_SECTOR
+        )
+        next_difat = values[-1]
+    return fat_sector_ids
+
+
+def _read_cfb_fat(
+    file_obj: BinaryIO,
+    sector_size: int,
+    total_sectors: int,
+    fat_sector_ids: list[int],
+) -> list[int]:
+    fat: list[int] = []
+    for sector_id in fat_sector_ids:
+        sector = _read_cfb_sector(file_obj, sector_id, sector_size, total_sectors)
+        fat.extend(
+            unpack_from("<I", sector, offset)[0] for offset in range(0, sector_size, 4)
+        )
+    if len(fat) < total_sectors:
+        raise ValueError("compound file FAT is incomplete")
+    return fat
+
+
+def _read_cfb_directory_streams(
+    file_obj: BinaryIO,
+    sector_size: int,
+    total_sectors: int,
+    first_directory: int,
+    fat: list[int],
+) -> set[str]:
+    streams: set[str] = set()
+    visited: set[int] = set()
+    sector_id = first_directory
+    while sector_id != _CFB_END_OF_CHAIN:
+        if sector_id in visited:
+            raise ValueError("compound file directory chain contains a cycle")
+        visited.add(sector_id)
+        sector = _read_cfb_sector(file_obj, sector_id, sector_size, total_sectors)
+        for offset in range(0, sector_size, 128):
+            if sector[offset + 66] != 2:
+                continue
+            name_length = unpack_from("<H", sector, offset + 64)[0]
+            if name_length < 2 or name_length > 64 or name_length % 2:
+                raise ValueError("invalid compound file stream name")
+            name_bytes = sector[offset : offset + name_length - 2]
+            streams.add(name_bytes.decode("utf-16le"))
+        if sector_id >= len(fat):
+            raise ValueError("compound file directory is outside the FAT")
+        sector_id = fat[sector_id]
+        if sector_id in {
+            _CFB_FREE_SECTOR,
+            _CFB_FAT_SECTOR,
+            _CFB_DIFAT_SECTOR,
+        }:
+            raise ValueError("invalid compound file directory chain marker")
+    return streams
+
+
+def _read_cfb_sector(
+    file_obj: BinaryIO,
+    sector_id: int,
+    sector_size: int,
+    total_sectors: int,
+) -> bytes:
+    if sector_id >= total_sectors:
+        raise ValueError(f"compound file sector {sector_id} is out of range")
+    file_obj.seek((sector_id + 1) * sector_size)
+    sector = file_obj.read(sector_size)
+    if len(sector) != sector_size:
+        raise ValueError(f"compound file sector {sector_id} is truncated")
+    return sector
+
+
+def _cfb_error(path: Path, details: str) -> PreviewSourceError:
+    return _source_error(
+        PreviewErrorCode.SOURCE_INVALID,
+        path,
+        "cfb_validation",
+        details,
+    )
 
 
 def _validate_declared_type(
     path: Path,
     declared: str,
     detected: str,
-    kind: PreviewSourceKind,
 ) -> None:
     if not declared or declared == detected:
-        return
-    if kind is PreviewSourceKind.CFB and declared in CFB_EXTENSIONS:
         return
     raise _source_error(
         PreviewErrorCode.SOURCE_TYPE_MISMATCH,

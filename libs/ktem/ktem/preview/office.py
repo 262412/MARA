@@ -13,6 +13,7 @@ from typing import Any
 
 from ktem.utils.dependencies import find_soffice_binary
 
+from . import coordination as _coordination
 from .errors import (
     PreviewCleanupError,
     PreviewConversionError,
@@ -29,8 +30,7 @@ from .source import (
     source_signature,
 )
 
-_conversion_locks_guard = threading.Lock()
-_conversion_locks: dict[tuple[str, str], threading.Lock] = {}
+_conversion_locks = _coordination._conversion_locks
 
 
 def get_preview_cache_dir() -> Path:
@@ -38,12 +38,6 @@ def get_preview_cache_dir() -> Path:
     cache_dir = root / "pdf_previews"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
-
-
-def _conversion_lock(cache_dir: Path, signature: str) -> threading.Lock:
-    key = (str(cache_dir.resolve()), signature)
-    with _conversion_locks_guard:
-        return _conversion_locks.setdefault(key, threading.Lock())
 
 
 def _default_docx_converter(input_path: Path, output_path: Path) -> None:
@@ -223,7 +217,8 @@ class OfficeConversionService:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache: dict[str, str] = {}
-        self._semaphore = threading.BoundedSemaphore(max(1, max_concurrency))
+        self._logger = logger or logging.getLogger(__name__)
+        self._max_concurrency = max(1, max_concurrency)
         self._converter_runner = _OfficeConverterRunner(
             timeout=timeout,
             soffice_finder=soffice_finder or find_soffice_binary,
@@ -246,15 +241,17 @@ class OfficeConversionService:
                 details=f"{source.extension!r} is not a supported Office source.",
             )
         output_path = self._cache_path(source)
-        lock = _conversion_lock(self.cache_dir, source.signature)
+        cache_key = self._cache_key(source)
         try:
-            with lock:
+            with _coordination.hold_conversion_lock(self.cache_dir, cache_key):
                 cached = self._cached_output(source, output_path)
                 if cached is not None:
                     return cached
-                with self._semaphore:
+                with _coordination.shared_conversion_limiter.slot(
+                    self._max_concurrency
+                ):
                     converted = self._convert_new(source, output_path)
-                self.cache[source.signature] = str(converted)
+                self.cache[cache_key] = str(converted)
                 return converted
         except PreviewError:
             raise
@@ -278,21 +275,28 @@ class OfficeConversionService:
         return self._cached_output(source, self._cache_path(source))
 
     def _cache_path(self, source: PreviewSource) -> Path:
-        cache_signature = legacy_preview_cache_signature(source.path)
-        return self.cache_dir / f"{source.path.stem}_{cache_signature[:12]}.pdf"
+        return (
+            self.cache_dir
+            / f"{source.cache_path.stem}_{self._cache_key(source)[:12]}.pdf"
+        )
+
+    @staticmethod
+    def _cache_key(source: PreviewSource) -> str:
+        return legacy_preview_cache_signature(source.cache_path)
 
     def _cached_output(
         self,
         source: PreviewSource,
         expected_path: Path,
     ) -> Path | None:
-        cached = Path(self.cache.get(source.signature, expected_path))
+        cache_key = self._cache_key(source)
+        cached = Path(self.cache.get(cache_key, expected_path))
         if not cached.is_file():
             return None
         if is_valid_pdf(cached):
-            self.cache[source.signature] = str(cached)
+            self.cache[cache_key] = str(cached)
             return cached
-        self.cache.pop(source.signature, None)
+        self.cache.pop(cache_key, None)
         return None
 
     def _convert_new(self, source: PreviewSource, output_path: Path) -> Path:
@@ -300,22 +304,44 @@ class OfficeConversionService:
         failure: PreviewError | None = None
         converted: Path | None = None
         try:
-            converted = self._run_conversion_attempts(source, output_path, workspace)
-        except PreviewError as exc:
-            failure = exc
+            try:
+                converted = self._run_conversion_attempts(
+                    source, output_path, workspace
+                )
+            except PreviewError as exc:
+                failure = exc
+            except Exception as exc:
+                self._logger.error(
+                    "Unexpected Office conversion failure file=%s stage=conversion "
+                    "converter=office details=%s",
+                    source.path,
+                    exc,
+                    exc_info=True,
+                )
+                failure = PreviewConversionError(
+                    PreviewErrorCode.CONVERTER_FAILED,
+                    stage="conversion",
+                    source_path=source.path,
+                    converter="office",
+                    details=f"Unexpected Office conversion failure: {exc}",
+                )
+        finally:
+            cleanup_failure = self._cleanup_workspace(workspace)
 
-        try:
-            shutil.rmtree(workspace)
-        except OSError as exc:
-            prior = f" Prior failure: {failure}" if failure is not None else ""
-            raise PreviewCleanupError(
-                PreviewErrorCode.CLEANUP_FAILED,
-                stage="cleanup",
-                source_path=source.path,
-                converter="filesystem",
-                details=f"Unable to remove isolated workspace {workspace}: {exc}.{prior}",
-                attempts=getattr(failure, "attempts", ()),
-            ) from exc
+        if cleanup_failure is not None:
+            cleanup_error = self._build_cleanup_error(
+                source, workspace, cleanup_failure, failure
+            )
+            if converted is not None and is_valid_pdf(converted):
+                self._logger.warning(
+                    "Preview workspace cleanup failed file=%s stage=cleanup "
+                    "converter=filesystem workspace=%s details=%s",
+                    source.path,
+                    workspace,
+                    cleanup_failure,
+                )
+            else:
+                raise cleanup_error from cleanup_failure
 
         if failure is not None:
             raise failure
@@ -328,6 +354,38 @@ class OfficeConversionService:
                 details="Conversion ended without a published PDF.",
             )
         return converted
+
+    @staticmethod
+    def _cleanup_workspace(workspace: Path) -> OSError | None:
+        try:
+            shutil.rmtree(workspace)
+        except OSError as exc:
+            return exc
+        return None
+
+    @staticmethod
+    def _build_cleanup_error(
+        source: PreviewSource,
+        workspace: Path,
+        cleanup_failure: OSError,
+        primary_failure: PreviewError | None,
+    ) -> PreviewCleanupError:
+        prior = (
+            f" Primary failure: {primary_failure}"
+            if primary_failure is not None
+            else ""
+        )
+        return PreviewCleanupError(
+            PreviewErrorCode.CLEANUP_FAILED,
+            stage="cleanup",
+            source_path=source.path,
+            converter="filesystem",
+            details=(
+                f"Unable to remove isolated workspace {workspace}: "
+                f"{cleanup_failure}.{prior}"
+            ),
+            attempts=getattr(primary_failure, "attempts", ()),
+        )
 
     def _run_conversion_attempts(
         self,
@@ -388,6 +446,8 @@ class OfficeConversionService:
             )
         if output_path.is_file() and is_valid_pdf(output_path):
             return output_path
+        # Cross-process converters never share a workspace. A loser can only
+        # replace the final path atomically; its cleanup remains workspace-local.
         os.replace(candidate, output_path)
         return output_path
 

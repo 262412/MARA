@@ -21,6 +21,7 @@ class ArchiveLimits:
 @dataclass(frozen=True)
 class PreviewSource:
     path: Path
+    cache_path: Path
     kind: PreviewSourceKind
     extension: str
     signature: str
