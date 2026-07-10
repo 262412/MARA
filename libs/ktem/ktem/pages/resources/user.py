@@ -4,13 +4,8 @@ import gradio as gr
 import pandas as pd
 from ktem.app import BasePage
 from ktem.auth.passwords import hash_password
-from ktem.auth.policy import (
-    AuthConfigurationError,
-    resolve_legacy_bootstrap_credentials,
-)
 from ktem.db.models import User, engine
 from sqlmodel import Session, select
-from theflow.settings import settings as flowsettings
 
 logger = logging.getLogger(__name__)
 
@@ -128,13 +123,6 @@ class UserManagement(BasePage):
         self._app = app
 
         self.on_building_ui()
-        try:
-            credentials = resolve_legacy_bootstrap_credentials(flowsettings)
-        except AuthConfigurationError as exc:
-            logger.warning("Legacy admin bootstrap was not applied: %s", exc)
-        else:
-            if credentials is not None and create_user(*credentials):
-                gr.Info(f'User "{credentials[0]}" created successfully')
 
     def on_building_ui(self):
         with gr.Tab(label="User list"):

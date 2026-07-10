@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from ktem.auth.passwords import hash_password
 from ktem.auth.policy import AuthConfigurationError
 from ktem.db.models import User
+from ktem.pages.resources import user as user_module
 from sqlmodel import Session, SQLModel, create_engine, select
 
 
@@ -249,6 +250,32 @@ def test_password_readiness_accepts_safe_admin(monkeypatch, user_engine):
     monkeypatch.setattr(service, "engine", user_engine)
 
     service.validate_password_admin_readiness()
+
+
+def test_user_management_construction_does_not_bootstrap_credentials(monkeypatch):
+    monkeypatch.setattr(
+        user_module,
+        "flowsettings",
+        SimpleNamespace(
+            KH_FEATURE_USER_MANAGEMENT_ADMIN="LegacyOperator",
+            KH_FEATURE_USER_MANAGEMENT_PASSWORD="CorrectHorse7!",
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        user_module.UserManagement,
+        "on_building_ui",
+        lambda _self: None,
+    )
+    monkeypatch.setattr(
+        user_module,
+        "create_user",
+        lambda *_args, **_kwargs: pytest.fail(
+            "launch-time UI construction must not create credentials"
+        ),
+    )
+
+    user_module.UserManagement(SimpleNamespace())
 
 
 def test_gradio_password_auth_issues_httponly_cookie_and_logout_clears_it(
