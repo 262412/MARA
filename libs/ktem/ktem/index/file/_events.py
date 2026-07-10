@@ -4,6 +4,8 @@ import logging
 
 import gradio as gr
 
+from ._download_events import register_download_events
+
 logger = logging.getLogger(__name__)
 
 
@@ -303,39 +305,6 @@ def _register_delete_file_events(page) -> None:
     )
 
 
-def _register_download_events(page, *, sso_enabled: bool) -> None:
-    if not sso_enabled:
-        page.download_all_button.click(
-            fn=page.download_all_files,
-            inputs=[],
-            outputs=page.download_all_button,
-            show_progress="hidden",
-        )
-        page.download_single_button.click(
-            fn=page.download_single_file,
-            inputs=[
-                page.is_zipped_state,
-                page.selected_file_id,
-                page._app.user_id,
-            ],
-            outputs=[page.is_zipped_state, page.download_single_button],
-            show_progress="hidden",
-        )
-        return
-
-    page.download_single_button.click(
-        fn=page.download_single_file_simple,
-        inputs=[
-            page.is_zipped_state,
-            page.chunks,
-            page.selected_file_id,
-            page._app.user_id,
-        ],
-        outputs=[page.is_zipped_state, page.download_single_button],
-        show_progress="hidden",
-    )
-
-
 def _register_delete_all_events(page) -> None:
     page.delete_all_button.click(
         fn=page.show_delete_all_confirm,
@@ -597,7 +566,7 @@ def register_file_index_events(
         inputs=[page.selected_file_id],
         outputs=page_selector_outputs,
     )
-    _register_download_events(page, sso_enabled=sso_enabled)
+    register_download_events(page, sso_enabled=sso_enabled)
     _register_delete_all_events(page)
     _register_upload_events(page)
     _register_file_selection_events(page)

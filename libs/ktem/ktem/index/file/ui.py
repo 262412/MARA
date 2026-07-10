@@ -1,4 +1,3 @@
-import json
 import os
 import tempfile
 import zipfile
@@ -10,16 +9,13 @@ from gradio.data_classes import FileData
 from gradio.utils import NamedString
 from ktem.app import BasePage
 from ktem.db.engine import engine
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 from theflow.settings import settings as flowsettings
 
-from ...utils.commands import WEB_SEARCH_COMMAND
 from ...utils.rate_limit import check_rate_limit
 from ._deletion import FileIndexDeletionController
 from ._events import register_file_index_events, register_quick_upload_events
-from ._group_service import FileGroupService, GroupServiceError
-from ._identity import resolve_file_index_user_id
+from ._group_service import FileGroupService
+from ._identity import MISSING_REQUEST, resolve_file_index_user_id
 from ._indexing_service import FileIndexingService
 from ._listing import (
     FileIndexListingController,
@@ -27,14 +23,16 @@ from ._listing import (
     format_conversation_scope,
     normalize_selected_ids_from_payload,
 )
-from ._selection_service import FileSelectionError, FileSelectionService
+from ._scoped_page import ScopedFileIndexPageMixin
+from ._selection_service import FileSelectionService
+from ._selector_ui import FileSelector
 from .archive import extract_supported_zip_files
 from .utils import download_arxiv_pdf, is_arxiv_url
 
+__all__ = ["DirectoryUpload", "File", "FileIndexPage", "FileSelector"]
 KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
 DOWNLOAD_MESSAGE = "Start download"
-MAX_FILE_COUNT = 200
 Request: TypeAlias = gr.Request
 
 
@@ -60,39 +58,9 @@ function() {
 chat_input_focus_js_with_submit = """
 function() {
     let chatInput = document.querySelector("#chat-input textarea");
-    // Only focus the input, don't auto-submit
     chatInput.focus();
 }
 """
-
-update_file_list_js = """
-function(file_list) {
-    var values = [];
-    for (var i = 0; i < file_list.length; i++) {
-        values.push({
-            key: file_list[i][0],
-            value: '"' + file_list[i][0] + '"',
-        });
-    }
-
-    // manually push web search tag
-    values.push({
-        key: "web_search",
-        value: '"web_search"',
-    });
-
-    var tribute = new Tribute({
-        values: values,
-        noMatchTemplate: "",
-        allowSpaces: true,
-    })
-    input_box = document.querySelector('#chat-input textarea');
-    tribute.detach(input_box);
-    tribute.attach(input_box);
-}
-""".replace(
-    "web_search", WEB_SEARCH_COMMAND
-)
 
 
 class File(gr.File):
@@ -152,7 +120,7 @@ class DirectoryUpload(BasePage):
             self.upload_button = gr.Button("Upload and Index")
 
 
-class FileIndexPage(BasePage):
+class FileIndexPage(ScopedFileIndexPageMixin, BasePage):
     def __init__(self, app, index):
         super().__init__(app)
         self._index = index
@@ -426,49 +394,6 @@ class FileIndexPage(BasePage):
     def _list_source_ids_for_user(self, user_id) -> list[str]:
         return self._listing_controller._list_source_ids_for_user(user_id)
 
-    def snapshot_source_ids(
-        self,
-        user_id,
-        request: Request,
-    ) -> list[str]:
-        user_id = resolve_file_index_user_id(user_id, request)
-        return self._listing_controller.snapshot_source_ids(user_id)
-
-    def collect_new_source_ids(
-        self,
-        before_source_ids,
-        user_id,
-        request: Request,
-    ) -> list[str]:
-        user_id = resolve_file_index_user_id(user_id, request)
-        return self._listing_controller.collect_new_source_ids(
-            before_source_ids, user_id
-        )
-
-    def file_selected(
-        self,
-        file_id,
-        user_id,
-        request: Request,
-    ):
-        chunks = ""
-        if file_id is not None:
-            user_id = resolve_file_index_user_id(user_id, request)
-            try:
-                chunks = self._get_file_selection_service().render_chunks(
-                    file_id,
-                    user_id,
-                )
-            except FileSelectionError as exc:
-                raise gr.Error(str(exc)) from exc
-        return (
-            gr.update(value=chunks, visible=file_id is not None),
-            gr.update(visible=file_id is not None),
-            gr.update(visible=file_id is not None),
-            gr.update(visible=file_id is not None),
-            gr.update(visible=file_id is not None),
-        )
-
     def _get_file_selection_service(self) -> FileSelectionService:
         return FileSelectionService(
             index=self._index,
@@ -484,81 +409,6 @@ class FileIndexPage(BasePage):
             gr.update(visible=True),
             gr.update(visible=False),
         )
-
-    def download_single_file(
-        self,
-        is_zipped_state,
-        file_id,
-        user_id,
-        request: Request,
-    ):
-        user_id = resolve_file_index_user_id(user_id, request)
-        try:
-            target_file_name = Path(
-                self._get_file_selection_service().source_name(file_id, user_id)
-            )
-        except FileSelectionError as exc:
-            raise gr.Error(str(exc)) from exc
-        zip_files = []
-        for file_name in os.listdir(flowsettings.KH_CHUNKS_OUTPUT_DIR):
-            if target_file_name.stem in file_name:
-                zip_files.append(
-                    os.path.join(flowsettings.KH_CHUNKS_OUTPUT_DIR, file_name)
-                )
-        for file_name in os.listdir(flowsettings.KH_MARKDOWN_OUTPUT_DIR):
-            if target_file_name.stem in file_name:
-                zip_files.append(
-                    os.path.join(flowsettings.KH_MARKDOWN_OUTPUT_DIR, file_name)
-                )
-        zip_file_path = os.path.join(
-            flowsettings.KH_ZIP_OUTPUT_DIR, target_file_name.stem
-        )
-        with zipfile.ZipFile(f"{zip_file_path}.zip", "w") as zipMe:
-            for file in zip_files:
-                zipMe.write(file, arcname=os.path.basename(file))
-
-        if is_zipped_state:
-            new_button = gr.DownloadButton(label="Download", value=None)
-        else:
-            new_button = gr.DownloadButton(
-                label=DOWNLOAD_MESSAGE, value=f"{zip_file_path}.zip"
-            )
-
-        return not is_zipped_state, new_button
-
-    def download_single_file_simple(
-        self,
-        is_zipped_state,
-        file_html,
-        file_id,
-        user_id,
-        request: Request,
-    ):
-        user_id = resolve_file_index_user_id(user_id, request)
-        try:
-            target_file_name = Path(
-                self._get_file_selection_service().source_name(file_id, user_id)
-            )
-        except FileSelectionError as exc:
-            raise gr.Error(str(exc)) from exc
-
-        # create a temporary file with a path to export
-        output_file_path = os.path.join(
-            flowsettings.KH_ZIP_OUTPUT_DIR, target_file_name.stem + ".html"
-        )
-        with open(output_file_path, "w") as f:
-            f.write(file_html)
-
-        if is_zipped_state:
-            new_button = gr.DownloadButton(label="Download", value=None)
-        else:
-            # export the file path
-            new_button = gr.DownloadButton(
-                label=DOWNLOAD_MESSAGE,
-                value=output_file_path,
-            )
-
-        return not is_zipped_state, new_button
 
     def download_all_files(self):
         if self._index.config.get("private", False):
@@ -632,7 +482,7 @@ class FileIndexPage(BasePage):
         reindex: bool,
         settings,
         user_id,
-        request: Request,
+        request: Request = MISSING_REQUEST,
     ) -> Generator[tuple[str, str], None, list[str] | None]:
         user_id = resolve_file_index_user_id(user_id, request)
         return (
@@ -651,7 +501,7 @@ class FileIndexPage(BasePage):
         reindex: bool,
         settings,
         user_id,
-        request: Request,
+        request: Request = MISSING_REQUEST,
     ) -> list["str"]:
         user_id = resolve_file_index_user_id(user_id, request)
         print("Overriding with default loaders")
@@ -668,7 +518,7 @@ class FileIndexPage(BasePage):
         reindex: bool,
         settings,
         user_id,
-        request: Request,
+        request: Request = MISSING_REQUEST,
     ):
         user_id = resolve_file_index_user_id(user_id, request)
         if KH_DEMO_MODE:
@@ -686,7 +536,7 @@ class FileIndexPage(BasePage):
         reindex,
         settings,
         user_id,
-        request: Request,
+        request: Request = MISSING_REQUEST,
     ) -> Generator[tuple[str, str], None, list[str] | None]:
         user_id = resolve_file_index_user_id(user_id, request)
         return (
@@ -741,74 +591,8 @@ class FileIndexPage(BasePage):
     def _format_conversation_scope(conversation_names: list[str]) -> str:
         return format_conversation_scope(conversation_names)
 
-    def list_file(
-        self,
-        user_id,
-        request: Request,
-        name_pattern="",
-    ):
-        user_id = resolve_file_index_user_id(user_id, request)
-        return self._listing_controller.list_file(user_id, name_pattern)
-
     def list_file_names(self, file_list_state):
         return self._listing_controller.list_file_names(file_list_state)
-
-    def list_group(
-        self,
-        user_id,
-        file_list,
-        request: Request,
-    ):
-        user_id = resolve_file_index_user_id(user_id, request)
-        return self._get_group_service().list_groups(user_id, file_list)
-
-    def set_group_id_selector(
-        self,
-        selected_group_id,
-        user_id,
-        request: Request,
-    ):
-        user_id = resolve_file_index_user_id(user_id, request)
-        file_ids = self._get_group_service().selected_file_ids(
-            selected_group_id,
-            user_id,
-        )
-        return [file_ids, "select", gr.Tabs(selected="chat-tab")]
-
-    def save_group(
-        self,
-        group_id,
-        group_name,
-        group_files,
-        user_id,
-        request: Request,
-    ):
-        user_id = resolve_file_index_user_id(user_id, request)
-        try:
-            group_id = self._get_group_service().save_group(
-                group_id,
-                group_name,
-                group_files,
-                user_id,
-            )
-        except GroupServiceError as exc:
-            raise gr.Error(str(exc)) from exc
-        gr.Info(f"Group {group_name} has been saved")
-        return group_id
-
-    def delete_group(
-        self,
-        group_id,
-        user_id,
-        request: Request,
-    ):
-        user_id = resolve_file_index_user_id(user_id, request)
-        try:
-            group_name = self._get_group_service().delete_group(group_id, user_id)
-        except GroupServiceError as exc:
-            raise gr.Error(str(exc)) from exc
-        gr.Info(f"Group {group_name} has been deleted")
-        return None
 
     def _get_group_service(self) -> FileGroupService:
         return FileGroupService(index=self._index, engine=engine)
@@ -844,172 +628,3 @@ class FileIndexPage(BasePage):
 
     def validate_urls(self, urls: list[str]):
         return self._get_indexing_service().validate_urls(urls)
-
-
-class FileSelector(BasePage):
-    """File selector UI in the Chat page"""
-
-    def __init__(self, app, index):
-        super().__init__(app)
-        self._index = index
-        self.on_building_ui()
-
-    def default(self):
-        if self._app.f_user_management:
-            return "disabled", [], -1
-        return "disabled", [], 1
-
-    def on_building_ui(self):
-        default_mode, default_selector, user_id = self.default()
-
-        self.mode = gr.Radio(
-            value=default_mode,
-            choices=[
-                ("Search All", "all"),
-                ("Search In File(s)", "select"),
-            ],
-            container=False,
-        )
-        self.selector = gr.Dropdown(
-            label="Files",
-            value=default_selector,
-            choices=[],
-            multiselect=True,
-            container=False,
-            interactive=True,
-            visible=False,
-        )
-        self.selector_user_id = gr.State(value=user_id)
-        self.selector_choices = gr.JSON(
-            value=[],
-            visible=False,
-        )
-
-    def on_register_events(self):
-        self.mode.change(
-            fn=self.mode_changed,
-            inputs=[self.mode, self._app.user_id],
-            outputs=[self.selector, self.selector_user_id],
-        )
-        # attach special event for the first index
-        if self._index.id == 1:
-            self.selector_choices.change(
-                fn=None,
-                inputs=[self.selector_choices],
-                js=update_file_list_js,
-                show_progress="hidden",
-            )
-
-    def as_gradio_component(self):
-        return [self.mode, self.selector, self.selector_user_id]
-
-    def mode_changed(
-        self,
-        mode,
-        user_id,
-        request: Request,
-    ):
-        user_id = resolve_file_index_user_id(user_id, request)
-        return gr.update(visible=mode == "select"), user_id
-
-    def get_selected_ids(self, components):
-        mode, selected, user_id = components[0], components[1], components[2]
-        if user_id is None:
-            return []
-
-        if mode == "disabled":
-            return []
-        elif mode == "select":
-            return selected
-
-        file_ids = []
-        with Session(engine) as session:
-            statement = select(self._index._resources["Source"].id)
-            if self._index.config.get("private", False):
-                statement = statement.where(
-                    self._index._resources["Source"].user == user_id
-                )
-            results = session.execute(statement).all()
-            for (id,) in results:
-                file_ids.append(id)
-
-        return file_ids
-
-    def load_files(
-        self,
-        selected_files,
-        user_id,
-        request: Request,
-    ):
-        user_id = resolve_file_index_user_id(user_id, request)
-        options: list = []
-        available_ids = []
-        if user_id is None:
-            # not signed in
-            return gr.update(value=selected_files, choices=options), options
-
-        with Session(engine) as session:
-            # get file list from Source table
-            statement = select(self._index._resources["Source"])
-            if self._index.config.get("private", False):
-                statement = statement.where(
-                    self._index._resources["Source"].user == user_id
-                )
-
-            if KH_DEMO_MODE:
-                # limit query by MAX_FILE_COUNT
-                statement = statement.limit(MAX_FILE_COUNT)
-
-            results = session.execute(statement).all()
-            for result in results:
-                available_ids.append(result[0].id)
-                options.append((result[0].name, result[0].id))
-
-            # get group list from FileGroup table
-            FileGroup = self._index._resources["FileGroup"]
-            statement = select(FileGroup)
-            if self._index.config.get("private", False):
-                statement = statement.where(FileGroup.user == user_id)
-            results = session.execute(statement).all()
-            for result in results:
-                item = result[0]
-                options.append(
-                    (f"group: '{item.name}'", json.dumps(item.data.get("files", [])))
-                )
-
-        if selected_files:
-            available_ids_set = set(available_ids)
-            selected_files = [
-                each for each in selected_files if each in available_ids_set
-            ]
-
-        return gr.update(value=selected_files, choices=options), options
-
-    def _on_app_created(self):
-        self._app.app.load(
-            self.load_files,
-            inputs=[self.selector, self._app.user_id],
-            outputs=[self.selector, self.selector_choices],
-        )
-
-    def on_subscribe_public_events(self):
-        self._app.subscribe_event(
-            name=f"onFileIndex{self._index.id}Changed",
-            definition={
-                "fn": self.load_files,
-                "inputs": [self.selector, self._app.user_id],
-                "outputs": [self.selector, self.selector_choices],
-                "show_progress": "hidden",
-            },
-        )
-        if self._app.f_user_management:
-            for event_name in ["onSignIn", "onSignOut"]:
-                self._app.subscribe_event(
-                    name=event_name,
-                    definition={
-                        "fn": self.load_files,
-                        "inputs": [self.selector, self._app.user_id],
-                        "outputs": [self.selector, self.selector_choices],
-                        "show_progress": "hidden",
-                    },
-                )

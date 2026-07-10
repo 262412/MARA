@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import gradio as gr
 from ktem.auth.service import resolve_request_user_id
 from theflow.settings import settings as flowsettings
+
+MISSING_REQUEST = cast(gr.Request, object())
 
 
 def resolve_file_index_user_id(user_id: Any, request: gr.Request | None) -> Any:
@@ -18,4 +20,4 @@ def resolve_file_index_user_id(user_id: Any, request: gr.Request | None) -> Any:
     return resolved
 
 
-__all__ = ["resolve_file_index_user_id"]
+__all__ = ["MISSING_REQUEST", "resolve_file_index_user_id"]
