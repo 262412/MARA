@@ -4,7 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.check_supply_chain_policy import scan_repository
+from scripts.check_supply_chain_policy import _check_action_pins, scan_repository
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LEGACY_INSTALLERS = (
@@ -55,3 +55,24 @@ def test_legacy_installers_are_formally_retired_and_fail_closed():
             assert "exit" in source.lower() and "64" in source, relative
         else:
             assert "exit 64" in source, relative
+
+
+def test_action_policy_rejects_unknown_digests_and_malformed_version_comments():
+    unknown = (
+        "steps:\n"
+        "  - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        " # v4.2.2\n"
+    )
+    malformed = (
+        "steps:\n"
+        "  - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683"
+        " # release-4\n"
+    )
+
+    unknown_rules = {item.rule for item in _check_action_pins(Path("test.yml"), unknown)}
+    malformed_rules = {
+        item.rule for item in _check_action_pins(Path("test.yml"), malformed)
+    }
+
+    assert "action-allowlist" in unknown_rules
+    assert "action-version-comment" in malformed_rules
