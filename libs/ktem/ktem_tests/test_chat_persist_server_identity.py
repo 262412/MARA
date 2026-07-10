@@ -19,6 +19,37 @@ class _RuntimeSpy:
         return ["refs"], ["plot"]
 
 
+class _SessionRuntimeSpy:
+    def __init__(self) -> None:
+        self.calls: list[tuple[Any, ...]] = []
+
+    def set_session_public(self, conversation_id, is_public, user_id=None):
+        self.calls.append(("set_public", conversation_id, is_public, user_id))
+        return "Conversation"
+
+    def load_graph_source_ids(self, conversation_id, user_id=None):
+        self.calls.append(("load_graph", conversation_id, user_id))
+        return ["file-1"]
+
+    def persist_graph_source_ids(self, conversation_id, source_ids, user_id=None):
+        self.calls.append(
+            ("persist_graph", conversation_id, list(source_ids), user_id)
+        )
+        return list(source_ids)
+
+    def append_session_like(
+        self,
+        conversation_id,
+        index,
+        value,
+        liked,
+        user_id=None,
+    ):
+        self.calls.append(
+            ("like", conversation_id, index, value, liked, user_id)
+        )
+
+
 def _page():
     page = cast(Any, object.__new__(ChatPage))
     runtime = _RuntimeSpy()
@@ -157,3 +188,75 @@ def test_gradio_injects_chat_runtime_request_before_dynamic_index_inputs():
     assert resolved_inputs[:22] == fixed_inputs
     assert resolved_inputs[22] is request
     assert resolved_inputs[23:] == [selected_input]
+
+
+def test_chat_session_metadata_callbacks_delegate_server_identity(monkeypatch):
+    page = cast(Any, object.__new__(ChatPage))
+    runtime = _SessionRuntimeSpy()
+    page.docqa = runtime
+    page._normalize_selected_file_ids = lambda values: list(values or [])
+    request = cast(gr.Request, SimpleNamespace(username="alice"))
+    monkeypatch.setattr(chat_module.flowsettings, "MARA_AUTH_MODE", "password")
+    monkeypatch.setattr(
+        chat_module,
+        "resolve_request_user_id",
+        lambda received, *, auth_mode: (
+            "server-user"
+            if received is request and auth_mode == "password"
+            else None
+        ),
+    )
+    liked = SimpleNamespace(index=[0, 1], value="answer", liked=True)
+
+    page.on_set_public_conversation(True, "conversation-1", "forged", request)
+    assert page.load_conversation_graph_state(
+        "conversation-1", "forged", request
+    ) == ["file-1"]
+    assert page.persist_conversation_source_scope(
+        "conversation-1", "forged", ["file-1"], request
+    ) == ["file-1"]
+    page.is_liked("conversation-1", liked, "forged", request)
+
+    assert runtime.calls == [
+        ("set_public", "conversation-1", True, "server-user"),
+        ("load_graph", "conversation-1", "server-user"),
+        ("persist_graph", "conversation-1", ["file-1"], "server-user"),
+        ("like", "conversation-1", [0, 1], "answer", True, "server-user"),
+    ]
+
+
+def test_chat_session_metadata_callbacks_reject_missing_server_identity(monkeypatch):
+    page = cast(Any, object.__new__(ChatPage))
+    runtime = _SessionRuntimeSpy()
+    page.docqa = runtime
+    page._normalize_selected_file_ids = lambda values: list(values or [])
+    monkeypatch.setattr(chat_module.flowsettings, "MARA_AUTH_MODE", "password")
+    monkeypatch.setattr(
+        chat_module,
+        "resolve_request_user_id",
+        lambda _request, *, auth_mode: None,
+    )
+
+    with pytest.raises(gr.Error, match="Authenticated user identity is unavailable"):
+        page.on_set_public_conversation(True, "conversation-1", "forged", None)
+
+    assert runtime.calls == []
+
+
+def test_gradio_injects_rerun_request_without_component_input_changes():
+    page, _runtime, _resolved_users = _page()
+    request = cast(gr.Request, SimpleNamespace(username="alice"))
+    fixed_inputs = list(range(16))
+    selected_input = ["select", ["file-1"], "claimed-user"]
+    component_inputs = [*fixed_inputs, selected_input]
+    original_inputs = list(component_inputs)
+
+    resolved_inputs, _progress_index, _event_data_index = special_args(
+        page.rerun_page_answer,
+        inputs=component_inputs,
+        request=request,
+    )
+
+    assert resolved_inputs[:16] == original_inputs[:16]
+    assert resolved_inputs[16] is request
+    assert resolved_inputs[17:] == original_inputs[16:]

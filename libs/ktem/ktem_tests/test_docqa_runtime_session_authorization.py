@@ -104,6 +104,58 @@ def test_runtime_session_load_preserves_legacy_graph_fallback_and_shape():
         _delete_conversations(row.id)
 
 
+def test_runtime_owner_graph_read_self_heals_legacy_source_scope():
+    row = _conversation(
+        user="graph-owner",
+        name="Legacy graph scope",
+        data_source={
+            "origin": "web",
+            "graph_source_ids": ["file-1"],
+            "selected": {
+                "9": ["select", ["file-2", "file-1"], "graph-owner"]
+            },
+        },
+    )
+    runtime = _runtime("graph-owner")
+
+    try:
+        assert runtime.load_graph_source_ids(row.id) == ["file-1", "file-2"]
+
+        with Session(engine) as session:
+            healed = session.exec(
+                select(Conversation).where(Conversation.id == row.id)
+            ).one()
+        assert healed.data_source["graph_source_ids"] == ["file-1", "file-2"]
+    finally:
+        _delete_conversations(row.id)
+
+
+def test_runtime_public_graph_read_does_not_mutate_owner_source_scope():
+    row = _conversation(
+        user="graph-owner",
+        name="Public graph scope",
+        is_public=True,
+        data_source={
+            "origin": "web",
+            "selected": {
+                "9": ["select", ["public-file"], "graph-owner"]
+            },
+        },
+    )
+    runtime = _runtime("graph-viewer")
+
+    try:
+        assert runtime.load_graph_source_ids(row.id) == ["public-file"]
+
+        with Session(engine) as session:
+            unchanged = session.exec(
+                select(Conversation).where(Conversation.id == row.id)
+            ).one()
+        assert "graph_source_ids" not in unchanged.data_source
+    finally:
+        _delete_conversations(row.id)
+
+
 def test_runtime_rejects_private_non_owner_persistence():
     row = _conversation(
         user="private-owner",
@@ -240,3 +292,65 @@ def test_runtime_owner_can_rename_update_and_delete_session():
             ).one_or_none()
             is None
         )
+
+
+@pytest.mark.parametrize(
+    ("operation", "arguments"),
+    [
+        ("set_session_public", (False,)),
+        ("persist_graph_source_ids", (["viewer-file"],)),
+        ("append_session_like", ([0, 1], "answer", True)),
+    ],
+)
+def test_runtime_public_session_metadata_writes_require_owner(operation, arguments):
+    row = _conversation(
+        user="metadata-owner",
+        name="Public metadata",
+        is_public=True,
+        data_source={
+            "origin": "web",
+            "graph_source_ids": ["owner-file"],
+            "likes": [],
+        },
+    )
+    runtime = _runtime("metadata-viewer")
+
+    try:
+        with pytest.raises(PermissionError, match="owner scope"):
+            getattr(runtime, operation)(row.id, *arguments)
+
+        with Session(engine) as session:
+            unchanged = session.exec(
+                select(Conversation).where(Conversation.id == row.id)
+            ).one()
+        assert unchanged.is_public is True
+        assert unchanged.data_source["graph_source_ids"] == ["owner-file"]
+        assert unchanged.data_source["likes"] == []
+    finally:
+        _delete_conversations(row.id)
+
+
+def test_runtime_owner_can_update_public_graph_and_like_metadata():
+    row = _conversation(
+        user="metadata-owner",
+        name="Owner metadata",
+        data_source={"origin": "web", "likes": []},
+    )
+    runtime = _runtime("metadata-owner")
+
+    try:
+        assert runtime.set_session_public(row.id, True) == "Owner metadata"
+        assert runtime.persist_graph_source_ids(row.id, ["file-2", "file-2"]) == [
+            "file-2"
+        ]
+        runtime.append_session_like(row.id, [0, 1], "answer", True)
+
+        with Session(engine) as session:
+            updated = session.exec(
+                select(Conversation).where(Conversation.id == row.id)
+            ).one()
+        assert updated.is_public is True
+        assert updated.data_source["graph_source_ids"] == ["file-2"]
+        assert updated.data_source["likes"] == [[[0, 1], "answer", True]]
+    finally:
+        _delete_conversations(row.id)
