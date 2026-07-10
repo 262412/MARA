@@ -5,7 +5,7 @@ import os
 import re
 import shutil
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import gradio as gr
 from ktem.app import BasePage
@@ -66,6 +66,7 @@ KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
 KH_WEB_SEARCH_BACKEND = getattr(flowsettings, "KH_WEB_SEARCH_BACKEND", None)
 logger = logging.getLogger(__name__)
+_DIRECT_CALL_REQUEST = cast(gr.Request, object())
 WebSearch = None
 if KH_WEB_SEARCH_BACKEND:
     try:
@@ -673,38 +674,20 @@ class ChatPage(BasePage):
         conversation_id,
         user_id,
         graph_source_ids,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
         normalized_ids = self._normalize_selected_file_ids(graph_source_ids)
         if not conversation_id:
             return normalized_ids
-
+        user_id = self._resolve_persist_user_id(user_id, request)
         try:
-            with Session(engine) as session:
-                statement = select(Conversation).where(
-                    Conversation.id == conversation_id
-                )
-                row = session.exec(statement).one_or_none()
-                if not row:
-                    return normalized_ids
-
-                if row.user not in (None, user_id):
-                    return normalized_ids
-
-                data_source = dict(row.data_source or {})
-                existing_ids = self._normalize_selected_file_ids(
-                    data_source.get("graph_source_ids", [])
-                )
-                if existing_ids == normalized_ids:
-                    return normalized_ids
-
-                data_source["graph_source_ids"] = normalized_ids
-                row.data_source = data_source
-                session.add(row)
-                session.commit()
-        except Exception as exc:
-            logger.warning("Failed to persist conversation source scope: %s", exc)
-
-        return normalized_ids
+            return self.docqa.persist_graph_source_ids(
+                conversation_id,
+                normalized_ids,
+                user_id=user_id,
+            )
+        except PermissionError as exc:
+            raise gr.Error(str(exc)) from exc
 
     @staticmethod
     def _format_corpus_file_type(file_name: str) -> str:
@@ -1290,56 +1273,22 @@ class ChatPage(BasePage):
             return gr.update(), gr.update(), ""
         return "select", gr.update(value=[target_id]), ""
 
-    def load_conversation_graph_state(self, conversation_id):
+    def load_conversation_graph_state(
+        self,
+        conversation_id,
+        user_id=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
+    ):
         if not conversation_id:
             return []
+        user_id = self._resolve_persist_user_id(user_id, request)
         try:
-            with Session(engine) as session:
-                statement = select(Conversation).where(
-                    Conversation.id == conversation_id
-                )
-                result = session.exec(statement).one_or_none()
-        except Exception:
-            return []
-        if not result:
-            return []
-        data_source = dict(result.data_source or {})
-        value = self._normalize_selected_file_ids(
-            data_source.get("graph_source_ids", [])
-        )
-        fallback_ids = self._extract_selected_ids_from_data_source(data_source)
-        merged_ids = self._merge_unique_file_ids(value, fallback_ids)
-        if merged_ids and merged_ids != value:
-            data_source["graph_source_ids"] = merged_ids
-            try:
-                with Session(engine) as session:
-                    statement = select(Conversation).where(
-                        Conversation.id == conversation_id
-                    )
-                    row = session.exec(statement).one_or_none()
-                    if row:
-                        row.data_source = data_source
-                        session.add(row)
-                        session.commit()
-            except Exception:
-                pass
-            return merged_ids
-
-        if fallback_ids and not value:
-            data_source["graph_source_ids"] = fallback_ids
-            try:
-                with Session(engine) as session:
-                    statement = select(Conversation).where(
-                        Conversation.id == conversation_id
-                    )
-                    row = session.exec(statement).one_or_none()
-                    if row:
-                        row.data_source = data_source
-                        session.add(row)
-                        session.commit()
-            except Exception:
-                pass
-        return value if value else fallback_ids
+            return self.docqa.load_graph_source_ids(
+                conversation_id,
+                user_id=user_id,
+            )
+        except PermissionError as exc:
+            raise gr.Error(str(exc)) from exc
 
     def show_knowledge_graph_loading(self, _trigger=None, mode: str = "update"):
         normalized_mode = str(mode or "update").strip().lower()
@@ -1530,6 +1479,7 @@ class ChatPage(BasePage):
         active_file_name,
         page_number,
         selected_page_text,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
         *selecteds,
     ):
         if not last_question:
@@ -1552,7 +1502,6 @@ class ChatPage(BasePage):
             rerun_history = rerun_history[:-1] + [(last_question, None)]
         else:
             rerun_history = rerun_history + [(last_question, None)]
-
         final_output = None
         for output in self.chat_fn(
             conversation_id,
@@ -1571,7 +1520,7 @@ class ChatPage(BasePage):
             page_number,
             "page",
             selected_page_text,
-            *("", "llm", "auto", "light", "", None),
+            *("", "llm", "auto", "light", "", None, request),
             *selecteds,
         ):
             final_output = output
@@ -1722,27 +1671,26 @@ class ChatPage(BasePage):
         else:
             return gr.update(visible=True), gr.update(visible=False)
 
-    def on_set_public_conversation(self, is_public, convo_id):
+    def on_set_public_conversation(
+        self,
+        is_public,
+        convo_id,
+        user_id=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
+    ):
         if not convo_id:
             gr.Warning("No conversation selected")
             return
-
-        with Session(engine) as session:
-            statement = select(Conversation).where(Conversation.id == convo_id)
-
-            result = session.exec(statement).one()
-            name = result.name
-
-            if result.is_public != is_public:
-                # Only trigger updating when user
-                # select different value from the current
-                result.is_public = is_public
-                session.add(result)
-                session.commit()
-
-                gr.Info(
-                    f"Conversation: {name} is {'public' if is_public else 'private'}."
-                )
+        user_id = self._resolve_persist_user_id(user_id, request)
+        try:
+            name = self.docqa.set_session_public(
+                convo_id,
+                bool(is_public),
+                user_id=user_id,
+            )
+        except PermissionError as exc:
+            raise gr.Error(str(exc)) from exc
+        gr.Info(f"Conversation: {name} is {'public' if is_public else 'private'}.")
 
     def on_subscribe_public_events(self):
         if self.knowledge_graph and len(self._indices_input) > 1 and self.file_index:
@@ -1837,7 +1785,11 @@ class ChatPage(BasePage):
         auth_mode = str(getattr(flowsettings, "MARA_AUTH_MODE", "auto")).lower()
         if auth_mode not in {"password", "sso"}:
             return user_id
-        resolved = resolve_request_user_id(request, auth_mode=auth_mode)
+        resolved = (
+            None
+            if request is _DIRECT_CALL_REQUEST
+            else resolve_request_user_id(request, auth_mode=auth_mode)
+        )
         if not resolved:
             raise gr.Error("Authenticated user identity is unavailable.")
         return resolved
@@ -1848,19 +1800,27 @@ class ChatPage(BasePage):
             gr.Info("Reasoning type changed to `{}`".format(reasoning_type))
         return reasoning_type
 
-    def is_liked(self, convo_id, liked: gr.LikeData):
-        with Session(engine) as session:
-            statement = select(Conversation).where(Conversation.id == convo_id)
-            result = session.exec(statement).one()
-
-            data_source = deepcopy(result.data_source)
-            likes = data_source.get("likes", [])
-            likes.append([liked.index, liked.value, liked.liked])
-            data_source["likes"] = likes
-
-            result.data_source = data_source
-            session.add(result)
-            session.commit()
+    def is_liked(
+        self,
+        convo_id,
+        liked: gr.LikeData,
+        user_id=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
+    ):
+        if not convo_id:
+            gr.Warning("No conversation selected")
+            return
+        user_id = self._resolve_persist_user_id(user_id, request)
+        try:
+            self.docqa.append_session_like(
+                convo_id,
+                liked.index,
+                liked.value,
+                liked.liked,
+                user_id=user_id,
+            )
+        except PermissionError as exc:
+            raise gr.Error(str(exc)) from exc
 
     def message_selected(self, retrieval_history, plot_history, msg: gr.SelectData):
         index = msg.index[0]

@@ -32,9 +32,7 @@ class _SessionRuntimeSpy:
         return ["file-1"]
 
     def persist_graph_source_ids(self, conversation_id, source_ids, user_id=None):
-        self.calls.append(
-            ("persist_graph", conversation_id, list(source_ids), user_id)
-        )
+        self.calls.append(("persist_graph", conversation_id, list(source_ids), user_id))
         return list(source_ids)
 
     def append_session_like(
@@ -45,9 +43,7 @@ class _SessionRuntimeSpy:
         liked,
         user_id=None,
     ):
-        self.calls.append(
-            ("like", conversation_id, index, value, liked, user_id)
-        )
+        self.calls.append(("like", conversation_id, index, value, liked, user_id))
 
 
 def _page():
@@ -201,17 +197,15 @@ def test_chat_session_metadata_callbacks_delegate_server_identity(monkeypatch):
         chat_module,
         "resolve_request_user_id",
         lambda received, *, auth_mode: (
-            "server-user"
-            if received is request and auth_mode == "password"
-            else None
+            "server-user" if received is request and auth_mode == "password" else None
         ),
     )
     liked = SimpleNamespace(index=[0, 1], value="answer", liked=True)
 
     page.on_set_public_conversation(True, "conversation-1", "forged", request)
-    assert page.load_conversation_graph_state(
-        "conversation-1", "forged", request
-    ) == ["file-1"]
+    assert page.load_conversation_graph_state("conversation-1", "forged", request) == [
+        "file-1"
+    ]
     assert page.persist_conversation_source_scope(
         "conversation-1", "forged", ["file-1"], request
     ) == ["file-1"]
@@ -260,3 +254,83 @@ def test_gradio_injects_rerun_request_without_component_input_changes():
     assert resolved_inputs[:16] == original_inputs[:16]
     assert resolved_inputs[16] is request
     assert resolved_inputs[17:] == original_inputs[16:]
+
+
+def test_gradio_injects_session_metadata_requests_without_component_inputs():
+    page, _runtime, _resolved_users = _page()
+    request = cast(gr.Request, SimpleNamespace(username="alice"))
+
+    public_inputs, *_ = special_args(
+        page.on_set_public_conversation,
+        inputs=[True, "conversation-1"],
+        request=request,
+    )
+    graph_inputs, *_ = special_args(
+        page.load_conversation_graph_state,
+        inputs=["conversation-1"],
+        request=request,
+    )
+    persist_inputs, *_ = special_args(
+        page.persist_conversation_source_scope,
+        inputs=["conversation-1", "claimed-user", ["file-1"]],
+        request=request,
+    )
+    like_inputs, *_ = special_args(
+        page.is_liked,
+        inputs=["conversation-1"],
+        request=request,
+        event_data=gr.EventData(
+            None,
+            {"index": [0, 1], "value": "answer", "liked": True},
+        ),
+    )
+
+    assert public_inputs == [True, "conversation-1", None, request]
+    assert graph_inputs == ["conversation-1", None, request]
+    assert persist_inputs == [
+        "conversation-1",
+        "claimed-user",
+        ["file-1"],
+        request,
+    ]
+    assert like_inputs[0] == "conversation-1"
+    assert isinstance(like_inputs[1], gr.LikeData)
+    assert like_inputs[2:] == [None, request]
+
+
+def test_rerun_page_answer_forwards_server_request_to_chat_runtime():
+    page = cast(Any, object.__new__(ChatPage))
+    request = cast(gr.Request, SimpleNamespace(username="alice"))
+    selected = ["select", ["file-1"], "claimed-user"]
+    calls = []
+
+    def chat_fn(*args):
+        calls.append(args)
+        yield ("final",)
+
+    page.chat_fn = chat_fn
+
+    result = page.rerun_page_answer(
+        "Question",
+        "conversation-1",
+        [],
+        {},
+        "mara",
+        "model",
+        False,
+        "inline",
+        "en",
+        {"app": {"regen": False}},
+        None,
+        "claimed-user",
+        "file-1",
+        "alpha.pdf",
+        1,
+        "selected text",
+        request,
+        selected,
+    )
+
+    assert result == ("final",)
+    assert calls[0][22] is request
+    assert calls[0][23:] == (selected,)

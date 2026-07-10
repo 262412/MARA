@@ -107,6 +107,43 @@ class RuntimeSessionService:
             return None
         return self._loaded_session(row)
 
+    def load_graph_source_ids(
+        self,
+        conversation_id: str,
+        *,
+        user_id: Any = None,
+    ) -> list[str]:
+        if not conversation_id:
+            return []
+
+        resolved_user_id = self._resolve_user_id(user_id)
+        with Session(self._engine) as session:
+            row = session.exec(
+                select(Conversation).where(
+                    Conversation.id == conversation_id,
+                    (Conversation.user == resolved_user_id)
+                    | Conversation.is_public.is_(True),
+                )
+            ).one_or_none()
+            if row is None:
+                return []
+
+            data_source = dict(row.data_source or {})
+            stored_ids = _selection.normalize_selected_file_ids(
+                data_source.get("graph_source_ids", [])
+            )
+            fallback_ids = _selection.extract_selected_ids_from_data_source(data_source)
+            graph_source_ids = _selection.merge_unique_file_ids(
+                stored_ids,
+                fallback_ids,
+            )
+            if graph_source_ids != stored_ids and row.user == resolved_user_id:
+                data_source["graph_source_ids"] = graph_source_ids
+                row.data_source = data_source
+                session.add(row)
+                session.commit()
+        return graph_source_ids
+
     @staticmethod
     def _loaded_session(row: Conversation) -> DocQASession:
         data_source = dict(row.data_source or {})

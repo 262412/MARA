@@ -52,9 +52,7 @@ def password_identity(monkeypatch):
         control_module,
         "resolve_request_user_id",
         lambda received, *, auth_mode: (
-            "attacker-id"
-            if received is request and auth_mode == "password"
-            else None
+            "attacker-id" if received is request and auth_mode == "password" else None
         ),
         raising=False,
     )
@@ -173,7 +171,9 @@ def test_control_network_direct_call_without_request_fails_closed(
     monkeypatch.setattr(control_module.flowsettings, "MARA_AUTH_MODE", "password")
 
     try:
-        with pytest.raises(gr.Error, match="Authenticated user identity is unavailable"):
+        with pytest.raises(
+            gr.Error, match="Authenticated user identity is unavailable"
+        ):
             control.select_conv(row.id, "victim-id")
     finally:
         _delete_rows(row.id)
