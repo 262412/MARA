@@ -42,6 +42,9 @@ ktem = { workspace = true }
 [tool.uv.workspace]
 members = ["libs/kotaemon", "libs/ktem", "libs/slide_cli"]
 
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+
 [dependency-groups]
 dev = [
     "black",
