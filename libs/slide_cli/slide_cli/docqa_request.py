@@ -1,7 +1,58 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field, fields
+from copy import deepcopy
+from dataclasses import dataclass, field, fields
 from typing import Any
+
+
+RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
+    "prompt",
+    "controller_question",
+    "retrieval_query",
+    "dataset_family",
+    "conversation_id",
+    "selected_file_ids",
+    "selected_inputs",
+    "qa_scope",
+    "active_file_id",
+    "active_file_name",
+    "page_number",
+    "selected_text",
+    "graph_context",
+    "graph_source_ids",
+    "settings",
+    "state",
+    "history",
+    "max_context_length",
+    "reasoning_type",
+    "task_type",
+    "agent_mode",
+    "artifact_type",
+    "note_ids",
+    "controller_mode",
+    "route_policy",
+    "planner_backend",
+    "planner_model",
+    "allowed_routes",
+    "verification_mode",
+    "verification_domain",
+    "graph_mode",
+    "visual_retriever_backend",
+    "visual_generator_backend",
+    "page_image_records",
+    "element_index_records",
+    "llm",
+    "use_mindmap",
+    "use_citation",
+    "language",
+    "command_state",
+    "user_id",
+    "origin",
+)
+
+
+class DocQARequestContractError(RuntimeError):
+    """The compatibility facade and canonical runtime request have drifted."""
 
 
 @dataclass
@@ -44,13 +95,66 @@ class DocQARequest:
     command_state: str | None = None
     user_id: Any = None
     origin: str = "cli"
+    controller_question: str = ""
+    retrieval_query: str = ""
+    dataset_family: str = ""
+    element_index_records: list[dict[str, Any]] | None = None
 
 
 def to_runtime_docqa_request(request: DocQARequest):
     from ktem.docqa import DocQARequest as RuntimeDocQARequest
 
-    payload = asdict(request)
+    expected = set(RUNTIME_DOCQA_REQUEST_FIELD_NAMES)
     runtime_field_names = {field.name for field in fields(RuntimeDocQARequest)}
+    missing = sorted(expected - runtime_field_names)
+    unexpected = sorted(runtime_field_names - expected)
+    if missing or unexpected:
+        raise DocQARequestContractError(
+            "Canonical DocQARequest contract drifted: "
+            f"missing={missing}, unexpected={unexpected}"
+        )
+
     return RuntimeDocQARequest(
-        **{key: value for key, value in payload.items() if key in runtime_field_names}
+        prompt=deepcopy(request.prompt),
+        controller_question=deepcopy(request.controller_question),
+        retrieval_query=deepcopy(request.retrieval_query),
+        dataset_family=deepcopy(request.dataset_family),
+        conversation_id=deepcopy(request.conversation_id),
+        selected_file_ids=deepcopy(request.selected_file_ids),
+        selected_inputs=deepcopy(request.selected_inputs),
+        qa_scope=deepcopy(request.qa_scope),
+        active_file_id=deepcopy(request.active_file_id),
+        active_file_name=deepcopy(request.active_file_name),
+        page_number=deepcopy(request.page_number),
+        selected_text=deepcopy(request.selected_text),
+        graph_context=deepcopy(request.graph_context),
+        graph_source_ids=deepcopy(request.graph_source_ids),
+        settings=deepcopy(request.settings),
+        state=deepcopy(request.state),
+        history=deepcopy(request.history),
+        max_context_length=deepcopy(request.max_context_length),
+        reasoning_type=deepcopy(request.reasoning_type),
+        task_type=deepcopy(request.task_type),
+        agent_mode=deepcopy(request.agent_mode),
+        artifact_type=deepcopy(request.artifact_type),
+        note_ids=deepcopy(request.note_ids),
+        controller_mode=deepcopy(request.controller_mode),
+        route_policy=deepcopy(request.route_policy),
+        planner_backend=deepcopy(request.planner_backend),
+        planner_model=deepcopy(request.planner_model),
+        allowed_routes=deepcopy(request.allowed_routes),
+        verification_mode=deepcopy(request.verification_mode),
+        verification_domain=deepcopy(request.verification_domain),
+        graph_mode=deepcopy(request.graph_mode),
+        visual_retriever_backend=deepcopy(request.visual_retriever_backend),
+        visual_generator_backend=deepcopy(request.visual_generator_backend),
+        page_image_records=deepcopy(request.page_image_records),
+        element_index_records=deepcopy(request.element_index_records),
+        llm=deepcopy(request.llm),
+        use_mindmap=deepcopy(request.use_mindmap),
+        use_citation=deepcopy(request.use_citation),
+        language=deepcopy(request.language),
+        command_state=deepcopy(request.command_state),
+        user_id=deepcopy(request.user_id),
+        origin=deepcopy(request.origin),
     )

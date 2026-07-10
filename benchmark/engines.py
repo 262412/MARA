@@ -62,8 +62,7 @@ class BenchmarkEngine(Protocol):
         *,
         example: Any,
         documents: list[Any],
-    ) -> EngineRunResult:
-        ...
+    ) -> EngineRunResult: ...
 
 
 class BaseBenchmarkEngine:
@@ -308,6 +307,9 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         selected_file_ids: list[str],
         active_record: Any,
     ) -> dict[str, Any]:
+        from kotaemon.docqa_request_policies import BENCHMARK_REQUEST_POLICY
+
+        policy = BENCHMARK_REQUEST_POLICY
         config = self._benchmark_config()
         return {
             **controller_request_context(
@@ -318,7 +320,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             "element_index_records": element_index_records_from_documents(documents),
             "qa_scope": str(
                 config_value(self.config, "scope", None)
-                or field_value(example, "scope", "document")
+                or field_value(example, "scope", policy.qa_scope_default)
             ).replace("-", "_"),
             "active_file_id": getattr(active_record, "file_id", ""),
             "active_file_name": getattr(active_record, "name", ""),
@@ -345,7 +347,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 "visual_generator_backend",
                 None,
             ),
-            "origin": "benchmark",
+            "origin": policy.origin,
         }
 
     def _response_evidence_outputs(
