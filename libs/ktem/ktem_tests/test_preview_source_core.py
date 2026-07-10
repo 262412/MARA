@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
 import pytest
 from ktem_tests.preview_test_utils import (
+    add_cfb_difat_chain,
     write_minimal_cfb,
     write_ooxml,
     write_valid_pdf,
@@ -20,6 +23,36 @@ def _classify(path: Path, file_name: str | None = None, **kwargs):
     from ktem.preview.source import classify_preview_source
 
     return classify_preview_source(path, file_name=file_name, **kwargs)
+
+
+def _classify_cfb_in_subprocess(path: Path) -> tuple[str, str, str]:
+    script = """
+import sys
+
+from ktem.preview.errors import PreviewSourceError
+from ktem.preview.source import classify_preview_source
+
+try:
+    classify_preview_source(sys.argv[1])
+except PreviewSourceError as exc:
+    print(f"{exc.code.value}\\t{exc.stage}\\t{exc.details}")
+else:
+    raise SystemExit("hostile CFB source was accepted")
+"""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(path)],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=1,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail("hostile CFB classification exceeded the one-second limit")
+    assert result.returncode == 0, result.stderr
+    fields = result.stdout.strip().split("\t", 2)
+    assert len(fields) == 3
+    return fields[0], fields[1], fields[2]
 
 
 def test_classifies_valid_pdf_by_signature(tmp_path):
@@ -119,6 +152,52 @@ def test_corrupt_cfb_container_is_rejected_with_typed_context(tmp_path):
     assert caught.value.code is PreviewErrorCode.SOURCE_INVALID
     assert caught.value.stage == "cfb_validation"
     assert "compound file" in caught.value.details.lower()
+
+
+def test_cfb_huge_difat_count_is_rejected_promptly_with_typed_context(tmp_path):
+    source = add_cfb_difat_chain(
+        write_minimal_cfb(tmp_path / "huge-difat.doc"),
+        sector_count=0xFFFFFFFF,
+    )
+
+    code, stage, details = _classify_cfb_in_subprocess(source)
+
+    assert code == "source_invalid"
+    assert stage == "cfb_validation"
+    assert "DIFAT sector count" in details
+
+
+def test_cfb_difat_self_cycle_is_rejected_with_typed_context(tmp_path):
+    from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
+
+    source = add_cfb_difat_chain(
+        write_minimal_cfb(tmp_path / "cyclic-difat.doc"),
+        sector_count=2,
+    )
+
+    with pytest.raises(PreviewSourceError) as caught:
+        _classify(source)
+
+    assert caught.value.code is PreviewErrorCode.SOURCE_INVALID
+    assert caught.value.stage == "cfb_validation"
+    assert "cycle" in caught.value.details.lower()
+
+
+def test_cfb_unterminated_difat_chain_is_rejected_with_typed_context(tmp_path):
+    from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
+
+    source = add_cfb_difat_chain(
+        write_minimal_cfb(tmp_path / "unterminated-difat.doc"),
+        sector_count=1,
+        next_sector=0,
+    )
+
+    with pytest.raises(PreviewSourceError) as caught:
+        _classify(source)
+
+    assert caught.value.code is PreviewErrorCode.SOURCE_INVALID
+    assert caught.value.stage == "cfb_validation"
+    assert "terminate" in caught.value.details.lower()
 
 
 def test_missing_source_error_carries_actionable_context(tmp_path):

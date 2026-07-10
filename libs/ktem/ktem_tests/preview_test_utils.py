@@ -115,6 +115,29 @@ def write_minimal_cfb(
     return path
 
 
+def add_cfb_difat_chain(
+    path: Path,
+    *,
+    sector_count: int,
+    next_sector: int | None = None,
+) -> Path:
+    """Append a controlled DIFAT sector for corrupt-chain regressions."""
+    payload = bytearray(path.read_bytes())
+    difat_sector_id = len(payload) // 512 - 1
+    difat = bytearray(512)
+    for index in range(128):
+        pack_into("<I", difat, 4 * index, _CFB_FREE_SECTOR)
+    pack_into(
+        "<I",
+        difat,
+        4 * 127,
+        difat_sector_id if next_sector is None else next_sector,
+    )
+    pack_into("<II", payload, 68, difat_sector_id, sector_count)
+    path.write_bytes(payload + difat)
+    return path
+
+
 class SuccessfulSofficeRunner:
     def __init__(self, delay: float = 0.0):
         self.delay = delay
