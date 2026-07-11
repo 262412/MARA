@@ -250,7 +250,8 @@ class GlobalKnowledgeGraphService:
     def _build_nodes_and_edges(
         self, source_ids: list[str], *, user_id: Any = None, sources: Any = None
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        sources = sources or self._load_sources(source_ids, user_id=user_id)
+        if sources is None:
+            sources = self._load_sources(source_ids, user_id=user_id)
         if not sources:
             return {"nodes": [], "edges": [], "clusters": {}}, {}
 
@@ -275,7 +276,6 @@ class GlobalKnowledgeGraphService:
                 if not normalized:
                     continue
                 keyword_files[normalized].add(file_id)
-                display = keyword
                 for sentence in self._split_sentences(combined_text):
                     sentence_norm = sentence.lower()
                     if keyword.lower() in sentence_norm:
@@ -284,7 +284,7 @@ class GlobalKnowledgeGraphService:
                                 "file_id": file_id,
                                 "file_name": source.get("name", file_id),
                                 "sentence": self._trim_sentence(sentence),
-                                "keyword": display,
+                                "keyword": keyword,
                             }
                         )
                         if len(evidence_by_keyword[normalized]) >= 5:
