@@ -182,6 +182,40 @@ def test_docqa_knowledge_graph_resolves_authorized_sources_once(
     assert list(state["manifest"]) == ["attacker-file"]
 
 
+def test_docqa_knowledge_graph_empty_scope_resolves_once_before_cache(
+    monkeypatch,
+    managed_graph_app,
+):
+    app, index, _docstore = managed_graph_app
+    service = DocQAKnowledgeGraphService(app, index)
+    events: list[str] = []
+    cache_loaded = False
+    load_sources = service._load_sources
+    load_cached_state = service._load_cached_state
+
+    def trace_sources(*args, **kwargs):
+        events.append("sources-after-cache" if cache_loaded else "sources-before-cache")
+        return load_sources(*args, **kwargs)
+
+    def trace_cache(*args, **kwargs):
+        nonlocal cache_loaded
+        cache_loaded = True
+        events.append("cache")
+        return load_cached_state(*args, **kwargs)
+
+    monkeypatch.setattr(service, "_load_sources", trace_sources)
+    monkeypatch.setattr(service, "_load_cached_state", trace_cache)
+
+    state = service.build_graph("conversation-empty", [], user_id="attacker")
+
+    assert events == ["sources-before-cache", "cache"]
+    assert state == {
+        "conversation_id": "conversation-empty",
+        "manifest": {},
+        "graph": {"nodes": [], "edges": [], "clusters": {}},
+    }
+
+
 class _StudioGraphBoundary:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
