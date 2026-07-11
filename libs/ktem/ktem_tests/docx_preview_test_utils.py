@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import struct
 import zipfile
 from pathlib import Path
 
@@ -122,6 +123,31 @@ def add_high_ratio_archive_member(path: Path, member_name: str) -> Path:
         info = archive.getinfo(member_name)
     assert info.file_size / info.compress_size > 1_000
     return path
+
+
+def set_archive_member_compression_method(
+    path: Path,
+    member_name: str,
+    method: int,
+) -> Path:
+    with zipfile.ZipFile(path) as archive:
+        member = archive.getinfo(member_name)
+    payload = bytearray(path.read_bytes())
+    struct.pack_into("<H", payload, member.header_offset + 8, method)
+    cursor = 0
+    while True:
+        cursor = payload.find(b"PK\x01\x02", cursor)
+        assert cursor >= 0
+        name_length, extra_length, comment_length = struct.unpack_from(
+            "<HHH", payload, cursor + 28
+        )
+        name_start = cursor + 46
+        name = bytes(payload[name_start : name_start + name_length]).decode("utf-8")
+        if name == member_name:
+            struct.pack_into("<H", payload, cursor + 10, method)
+            path.write_bytes(payload)
+            return path
+        cursor = name_start + name_length + extra_length + comment_length
 
 
 def invalidate_first_table_grid_span(path: Path) -> Path:

@@ -39,11 +39,19 @@ def test_remaining_html_budget_rejects_image_before_base64(monkeypatch):
     assert html.endswith("</div>")
 
 
-def test_huge_text_is_rejected_before_escape_allocation(monkeypatch):
+@pytest.mark.parametrize(
+    ("hostile_char", "repeat_count"),
+    [('"', 2 * 1024 * 1024), ("'", 1_500_000)],
+)
+def test_huge_text_is_rejected_before_escape_allocation(
+    monkeypatch,
+    hostile_char,
+    repeat_count,
+):
     from ktem.preview import docx_runs
     from ktem.preview.docx_security import MAX_RENDERED_HTML_CHARS
 
-    hostile_text = '"' * (2 * 1024 * 1024)
+    hostile_text = hostile_char * repeat_count
     document = Document()
     document.add_paragraph(hostile_text)
 
@@ -61,11 +69,19 @@ def test_huge_text_is_rejected_before_escape_allocation(monkeypatch):
     assert html.endswith("</div>")
 
 
-def test_huge_hyperlink_is_rejected_before_escape_allocation(monkeypatch):
+@pytest.mark.parametrize(
+    ("hostile_char", "repeat_count"),
+    [('"', 2 * 1024 * 1024), ("'", 1_500_000)],
+)
+def test_huge_hyperlink_is_rejected_before_escape_allocation(
+    monkeypatch,
+    hostile_char,
+    repeat_count,
+):
     from ktem.preview import docx_runs
     from ktem.preview.docx_security import MAX_RENDERED_HTML_CHARS
 
-    hostile_target = "https://example.test/" + '"' * (2 * 1024 * 1024)
+    hostile_target = "https://example.test/" + hostile_char * repeat_count
     document = Document()
     paragraph = document.add_paragraph()
     add_hyperlink(paragraph, "Safe label", hostile_target)
@@ -84,11 +100,19 @@ def test_huge_hyperlink_is_rejected_before_escape_allocation(monkeypatch):
     assert "<a " not in html
 
 
-def test_huge_image_alt_is_rejected_before_escape_allocation(monkeypatch):
+@pytest.mark.parametrize(
+    ("hostile_char", "repeat_count"),
+    [('"', 2 * 1024 * 1024), ("'", 1_500_000)],
+)
+def test_huge_image_alt_is_rejected_before_escape_allocation(
+    monkeypatch,
+    hostile_char,
+    repeat_count,
+):
     from ktem.preview import docx_runs
     from ktem.preview.docx_security import MAX_RENDERED_HTML_CHARS
 
-    hostile_alt = '"' * (2 * 1024 * 1024)
+    hostile_alt = hostile_char * repeat_count
     document = Document()
     add_picture_with_alt(document, hostile_alt)
     blip = document.element.body.xpath(".//a:blip")[0]
@@ -106,3 +130,11 @@ def test_huge_image_alt_is_rejected_before_escape_allocation(monkeypatch):
     assert len(html) <= MAX_RENDERED_HTML_CHARS
     assert hostile_alt not in html
     assert html.endswith("</div>")
+
+
+def test_single_quote_escape_length_matches_html_escape():
+    from ktem.preview.docx_security import escaped_html_length
+
+    value = "'" * 4096
+
+    assert escaped_html_length(value) == len(html_escape(value))

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import logging
 import zipfile
 
 import pytest
 
-from .docx_preview_test_utils import add_high_ratio_archive_member, write_document
+from .docx_preview_test_utils import (
+    add_high_ratio_archive_member,
+    set_archive_member_compression_method,
+    write_document,
+)
 
 
 @pytest.mark.parametrize(
@@ -59,3 +64,41 @@ def test_archive_resource_limit_error_has_structured_reason(tmp_path):
 
     assert caught.value.stage == "archive_validation"
     assert caught.value.reason == "archive_resource_limit"
+
+
+def test_unknown_compression_has_structured_archive_reason(tmp_path):
+    from ktem.preview.docx import extract_docx_html_strict
+    from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
+
+    source = write_document(
+        tmp_path / "method-99.docx",
+        lambda document: document.add_paragraph("bounded"),
+    )
+    set_archive_member_compression_method(source, "word/document.xml", 99)
+
+    with pytest.raises(PreviewSourceError) as caught:
+        extract_docx_html_strict(str(source))
+
+    assert caught.value.code is PreviewErrorCode.SOURCE_ARCHIVE_INVALID
+    assert caught.value.stage == "docx_package"
+    assert caught.value.source_path == source.resolve()
+    assert caught.value.reason == "archive_unsupported_compression"
+
+
+def test_unknown_compression_compatibility_is_empty_and_logs_reason(
+    caplog,
+    tmp_path,
+):
+    from ktem.preview.docx import extract_docx_html
+
+    source = write_document(
+        tmp_path / "method-99-compat.docx",
+        lambda document: document.add_paragraph("bounded"),
+    )
+    set_archive_member_compression_method(source, "word/document.xml", 99)
+
+    with caplog.at_level(logging.WARNING, logger="ktem.preview.docx"):
+        rendered = extract_docx_html(str(source))
+
+    assert rendered == ""
+    assert "reason=archive_unsupported_compression" in caplog.text
