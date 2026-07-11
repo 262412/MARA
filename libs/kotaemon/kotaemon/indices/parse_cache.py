@@ -68,19 +68,24 @@ def load_data_with_parse_cache(
                 cache_key=key,
             )
 
-    loaded_documents = loader.load_data(
-        Path(file_path), extra_info=extra_info, **load_kwargs
-    )
+    loaded_documents = loader.load_data(Path(file_path), extra_info=None, **load_kwargs)
     artifact_sidecar = getattr(loaded_documents, "artifact_sidecar", None)
-    documents = list(loaded_documents)
-    documents = _apply_extra_info(documents, extra_info)
+    parsed_documents = list(loaded_documents)
     cache.set(
         key,
         _cache_payload(
-            documents,
+            parsed_documents,
             artifact_sidecar=artifact_sidecar,
-            runtime_metadata_keys=(extra_info or {}).keys(),
+            runtime_metadata_keys=(),
         ),
+    )
+    documents = _apply_extra_info(parsed_documents, extra_info)
+    _write_cached_artifact(
+        loader,
+        Path(file_path),
+        extra_info,
+        documents,
+        cast(dict[str, Any] | None, artifact_sidecar),
     )
     return CachedLoadResult(
         documents=documents,

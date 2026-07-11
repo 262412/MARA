@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import IO
 
-from kotaemon.artifact_paths import portable_member_key
+from kotaemon.artifact_paths import portable_member_key, validate_portable_component
+from kotaemon.artifact_types import ArtifactNamespaceError
 
 
 @dataclass(frozen=True)
@@ -131,6 +132,7 @@ def _validate_members(
                 member=info.filename,
             )
         seen_paths.add(normalized)
+        _validate_portable_member_path(archive, info, relative_path)
         if not info.is_dir():
             validated.append(_ValidatedMember(info, relative_path))
     return validated
@@ -170,6 +172,23 @@ def _validate_member_path(archive: Path, info: zipfile.ZipInfo) -> PurePosixPath
             member=raw_name,
         )
     return relative_path
+
+
+def _validate_portable_member_path(
+    archive: Path,
+    info: zipfile.ZipInfo,
+    relative_path: PurePosixPath,
+) -> None:
+    try:
+        for part in relative_path.parts:
+            validate_portable_component(part)
+    except ArtifactNamespaceError as exc:
+        raise ArchiveExtractionError(
+            archive,
+            stage="validate-member",
+            reason="member path is not portable",
+            member=info.filename,
+        ) from exc
 
 
 def _portable_member_key(relative_path: PurePosixPath) -> str:

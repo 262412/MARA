@@ -29,9 +29,16 @@ def consume_in_background(factory: Callable[[], Iterable[Any]]) -> Future[None]:
     def consume() -> None:
         try:
             list(factory())
-        except Exception as exc:
+        except BaseException as exc:
             logger.exception("Artifact background writer failed")
-            future.set_exception(exc)
+            error = (
+                exc
+                if isinstance(exc, Exception)
+                else RuntimeError(
+                    f"Artifact background writer terminated: {type(exc).__name__}"
+                )
+            )
+            future.set_exception(error)
         else:
             future.set_result(None)
 

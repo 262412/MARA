@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable
 from uuid import uuid4
 
+from .artifact_paths import validate_portable_component
 from .artifact_types import ArtifactNamespaceError
 
 _DIRECTORY_FLAGS = (
@@ -41,17 +42,14 @@ def open_directory_fd(
     """Open a directory chain without following its configured or child symlinks."""
 
     require_secure_dir_fd()
-    root_path = Path(root).expanduser().absolute()
-    if create:
-        try:
-            root_path.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            raise ArtifactNamespaceError("Artifact root unavailable") from exc
-    root_fd = _open_root(root_path)
-    current_fd = root_fd
-    current_path = root_path
+    root_path = _configured_root_path(root)
     try:
-        for part in parts:
+        current_fd = os.open("/", _DIRECTORY_FLAGS)
+    except OSError as exc:
+        raise ArtifactNamespaceError("Trusted filesystem anchor unavailable") from exc
+    current_path = Path("/")
+    try:
+        for part in (*root_path.parts[1:], *parts):
             _validate_component(part)
             next_fd = _open_child_directory(current_fd, part, create=create)
             os.close(current_fd)
@@ -192,20 +190,13 @@ def open_child_directory(parent_fd: int, name: str, *, create: bool) -> int:
     return _open_child_directory(parent_fd, name, create=create)
 
 
-def _open_root(path: Path) -> int:
-    try:
-        metadata = os.lstat(path)
-        if stat.S_ISLNK(metadata.st_mode):
-            raise ArtifactNamespaceError("Configured artifact root cannot be a symlink")
-        fd = os.open(path, _DIRECTORY_FLAGS)
-    except ArtifactNamespaceError:
-        raise
-    except OSError as exc:
-        raise ArtifactNamespaceError("Artifact root unavailable") from exc
-    if not stat.S_ISDIR(os.fstat(fd).st_mode):
-        os.close(fd)
-        raise ArtifactNamespaceError("Artifact root must be a directory")
-    return fd
+def _configured_root_path(root: str | Path) -> Path:
+    path = Path(root).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if ".." in path.parts:
+        raise ArtifactNamespaceError("Configured artifact root must be canonical")
+    return Path(os.path.normpath(path))
 
 
 def _open_child_directory(parent_fd: int, name: str, *, create: bool) -> int:
@@ -236,8 +227,7 @@ def _validate_regular_metadata(metadata: os.stat_result) -> None:
 
 
 def _validate_component(value: str) -> None:
-    if not value or value in {".", ".."} or "/" in value or "\\" in value:
-        raise ArtifactNamespaceError("Invalid artifact path component")
+    validate_portable_component(value)
 
 
 __all__ = [

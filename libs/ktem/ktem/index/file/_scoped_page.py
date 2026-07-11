@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import zipfile
 from pathlib import Path
@@ -21,6 +22,14 @@ DOWNLOAD_UNAVAILABLE_MESSAGE = (
     "File export is unavailable; reindex the file and try again."
 )
 Request: TypeAlias = gr.Request
+logger = logging.getLogger(__name__)
+
+
+def _cleanup_workspace(workspace: DownloadWorkspace) -> None:
+    try:
+        workspace.cleanup()
+    except Exception:
+        logger.exception("Failed to clean up isolated download workspace")
 
 
 class ScopedFileIndexPageMixin:
@@ -120,7 +129,7 @@ class ScopedFileIndexPageMixin:
             zipfile.LargeZipFile,
         ) as exc:
             if workspace is not None:
-                workspace.cleanup()
+                _cleanup_workspace(workspace)
             raise gr.Error(DOWNLOAD_UNAVAILABLE_MESSAGE) from exc
         finally:
             close_manifest_artifacts(artifacts)
@@ -156,7 +165,7 @@ class ScopedFileIndexPageMixin:
             output_file_path = workspace.publish()
         except (ArtifactNamespaceError, OSError, TypeError, ValueError) as exc:
             if workspace is not None:
-                workspace.cleanup()
+                _cleanup_workspace(workspace)
             raise gr.Error(DOWNLOAD_UNAVAILABLE_MESSAGE) from exc
 
         return True, gr.DownloadButton(

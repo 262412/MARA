@@ -6,14 +6,19 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping
 
 from .artifact_identifiers import namespace_token
-from .artifact_paths import portable_member_key
+from .artifact_paths import portable_member_key, validate_portable_component
 from .artifact_secure_fs import (
     atomic_write_bytes,
     list_regular_files,
     open_directory_fd,
     open_regular_file,
 )
-from .artifact_types import ArtifactNamespaceError, ManifestArtifact
+from .artifact_types import (
+    ArtifactNamespaceError,
+    FileIdentity,
+    ManifestArtifact,
+    digest_fd,
+)
 
 MANIFEST_VERSION = 1
 ARTIFACT_KINDS = ("chunks", "markdown")
@@ -95,19 +100,28 @@ def resolve_manifest_entry(
     if kind not in artifact_roots:
         raise ArtifactNamespaceError(f"Missing artifact root: {kind}")
     parts = relative_parts(entry["relative_path"])
-    if len(parts) < 3 or parts[0] != file_id:
-        raise ArtifactNamespaceError("Artifact is outside its file namespace")
+    if len(parts) != 3 or parts[0] != file_id:
+        raise ArtifactNamespaceError("Invalid artifact relative path layout")
     if namespace_token(parts[1]) != parts[1]:
         raise ArtifactNamespaceError("Invalid artifact generation")
     fd, metadata = open_regular_file(artifact_roots[kind], parts)
-    archive_name = PurePosixPath(kind, *parts[2:]).as_posix()
-    return ManifestArtifact(
-        fd=fd,
-        archive_name=archive_name,
-        size=metadata.st_size,
-        device=metadata.st_dev,
-        inode=metadata.st_ino,
-    )
+    try:
+        if metadata.st_size > MAX_TOTAL_ARTIFACT_BYTES:
+            raise ArtifactNamespaceError("Artifact total size exceeds limit")
+        archive_name = PurePosixPath(kind, *parts[2:]).as_posix()
+        identity = FileIdentity.from_stat(metadata)
+        digest = digest_fd(fd, metadata.st_size)
+        identity.validate_fd(fd, message="Artifact changed while validating")
+        return ManifestArtifact(
+            fd=fd,
+            archive_name=archive_name,
+            size=metadata.st_size,
+            identity=identity,
+            digest=digest,
+        )
+    except BaseException:
+        os.close(fd)
+        raise
 
 
 def relative_parts(value: object) -> tuple[str, ...]:
@@ -123,6 +137,11 @@ def relative_parts(value: object) -> tuple[str, ...]:
     parts = tuple(value.split("/"))
     if any(part in {"", ".", ".."} for part in parts):
         raise ArtifactNamespaceError("Invalid artifact relative path")
+    try:
+        for part in parts:
+            validate_portable_component(part)
+    except ArtifactNamespaceError as exc:
+        raise ArtifactNamespaceError("Invalid artifact relative path") from exc
     return parts
 
 
@@ -177,7 +196,11 @@ def _read_manifest(manifest_root: str | Path, file_id: str) -> dict[str, Any]:
         )
         if metadata.st_size > MAX_MANIFEST_BYTES:
             raise ArtifactNamespaceError("Artifact manifest exceeds size limit")
+        identity = FileIdentity.from_stat(metadata)
         payload = _read_bounded(fd)
+        identity.validate_fd(fd, message="Artifact manifest changed while reading")
+        if os.pread(fd, len(payload) + 1, 0) != payload:
+            raise ArtifactNamespaceError("Artifact manifest changed while reading")
         record = json.loads(payload.decode("utf-8"), object_pairs_hook=_unique_object)
     except _DuplicateJsonKey as exc:
         raise ArtifactNamespaceError(
