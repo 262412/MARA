@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 
-from .docx_preview_test_utils import write_document
+from .docx_preview_test_utils import invalidate_first_table_grid_span, write_document
 
 
 @pytest.fixture(autouse=True)
@@ -60,6 +62,46 @@ def test_missing_and_corrupt_compatibility_fallbacks_remain_empty(tmp_path):
     assert web_html(str(corrupt)) == ""
     assert web_text(str(corrupt)) == ""
     assert docqa_text(str(corrupt)) == ""
+
+
+@pytest.mark.parametrize("compat_name", ["extract_docx_text", "extract_docx_html"])
+@pytest.mark.parametrize("invalid_source", [None, "invalid\0source.docx"])
+def test_invalid_docx_paths_keep_empty_actionable_compatibility_fallback(
+    caplog, compat_name, invalid_source
+):
+    import ktem.preview.docx as docx_preview
+
+    compat_extract = getattr(docx_preview, compat_name)
+
+    with caplog.at_level(logging.WARNING):
+        result = compat_extract(invalid_source)
+
+    assert result == ""
+    assert "code=source_invalid" in caplog.text
+    assert "stage=docx_source" in caplog.text
+    assert "converter=python-docx" in caplog.text
+    assert repr(invalid_source) in caplog.text
+
+
+def test_invalid_required_table_xml_keeps_empty_logged_compatibility_fallback(
+    tmp_path, caplog
+):
+    from ktem.preview.docx import extract_docx_html
+
+    source = write_document(
+        tmp_path / "invalid-table.docx",
+        lambda document: document.add_table(rows=1, cols=1),
+    )
+    invalidate_first_table_grid_span(source)
+
+    with caplog.at_level(logging.WARNING):
+        result = extract_docx_html(str(source))
+
+    assert result == ""
+    assert "code=source_invalid" in caplog.text
+    assert "stage=docx_render" in caplog.text
+    assert str(source.resolve()) in caplog.text
+    assert "converter=python-docx" in caplog.text
 
 
 def test_non_pdf_page_cache_and_page_clamp_behavior_are_preserved(monkeypatch):

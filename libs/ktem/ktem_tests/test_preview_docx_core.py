@@ -7,8 +7,11 @@ from docx.shared import Pt, RGBColor
 
 from .docx_preview_test_utils import (
     PNG_1X1,
+    add_high_ratio_archive_member,
     add_hyperlink,
     add_picture_with_alt,
+    incompressible_text,
+    invalidate_first_table_grid_span,
     replace_image_payload,
     set_list_level,
     write_document,
@@ -280,6 +283,56 @@ def test_oversized_decoded_image_never_enters_a_data_url(tmp_path):
     assert "Oversized image" in html
 
 
+def test_image_occurrence_budget_applies_when_max_chars_has_no_image_text(tmp_path):
+    def build(document):
+        for index in range(20):
+            add_picture_with_alt(document, f"Occurrence image {index}")
+
+    source = write_document(tmp_path / "image-count.docx", build)
+
+    from ktem.preview.docx import extract_docx_html_strict
+
+    html = extract_docx_html_strict(str(source), max_chars=1)
+
+    assert html.count("data:image/png;base64,") == 16
+    assert "Occurrence image 19" in html
+    assert html.endswith("</div>")
+
+
+def test_aggregate_image_bytes_are_bounded_per_render(tmp_path):
+    def build(document):
+        for index in range(3):
+            add_picture_with_alt(document, f"Aggregate image {index}")
+
+    source = write_document(tmp_path / "image-bytes.docx", build)
+    payload = PNG_1X1[:8] + bytes(2 * 1024 * 1024 - 8)
+    replace_image_payload(source, payload)
+
+    from ktem.preview.docx import extract_docx_html_strict
+
+    html = extract_docx_html_strict(str(source), max_chars=1)
+
+    assert html.count("data:image/png;base64,") == 2
+    assert "Aggregate image 2" in html
+    assert html.endswith("</div>")
+
+
+def test_final_html_budget_keeps_image_only_render_complete(tmp_path):
+    oversized_alt = incompressible_text(8 * 1024 * 1024 + 1024)
+    source = write_document(
+        tmp_path / "html-budget.docx",
+        lambda document: add_picture_with_alt(document, oversized_alt),
+    )
+
+    from ktem.preview.docx import extract_docx_html_strict
+
+    html = extract_docx_html_strict(str(source), max_chars=1)
+
+    assert len(html) <= 8 * 1024 * 1024
+    assert html.startswith("<div class='docx-preview'")
+    assert html.endswith("</div>")
+
+
 def test_table_survives_docx_pagination():
     from ktem.pages.chat.page_preview_document import paginate_docx_html
 
@@ -309,6 +362,80 @@ def test_strict_corrupt_docx_error_has_path_stage_and_converter(tmp_path):
     assert caught.value.source_path == corrupt.resolve()
     assert caught.value.converter == "python-docx"
     assert "DOCX" in caught.value.details
+
+
+@pytest.mark.parametrize(
+    "member_name",
+    [
+        "word/review-bomb.bin",
+        "word/_rels/review-bomb.rels",
+    ],
+)
+@pytest.mark.parametrize(
+    "strict_name", ["extract_docx_text_strict", "extract_docx_html_strict"]
+)
+def test_strict_docx_rejects_high_ratio_entries_before_package_parsing(
+    tmp_path, strict_name, member_name
+):
+    import ktem.preview.docx as docx_preview
+    from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
+
+    source = write_document(
+        tmp_path / f"high-ratio-{strict_name}.docx",
+        lambda document: document.add_paragraph("bounded"),
+    )
+    add_high_ratio_archive_member(source, member_name)
+    strict_extract = getattr(docx_preview, strict_name)
+
+    with pytest.raises(PreviewSourceError) as caught:
+        strict_extract(str(source))
+
+    assert caught.value.code is PreviewErrorCode.SOURCE_ARCHIVE_INVALID
+    assert caught.value.stage == "archive_validation"
+    assert caught.value.source_path == source.resolve()
+    assert caught.value.converter == "python-docx"
+    assert "compression ratio" in caught.value.details.lower()
+
+
+def test_invalid_required_table_xml_raises_typed_render_error(tmp_path):
+    from ktem.preview.docx import extract_docx_html_strict
+    from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
+
+    source = write_document(
+        tmp_path / "invalid-table.docx",
+        lambda document: document.add_table(rows=1, cols=1),
+    )
+    invalidate_first_table_grid_span(source)
+
+    with pytest.raises(PreviewSourceError) as caught:
+        extract_docx_html_strict(str(source))
+
+    assert caught.value.code is PreviewErrorCode.SOURCE_INVALID
+    assert caught.value.stage == "docx_render"
+    assert caught.value.source_path == source.resolve()
+    assert caught.value.converter == "python-docx"
+    assert "malformed" in caught.value.details.lower()
+
+
+@pytest.mark.parametrize(
+    "strict_name", ["extract_docx_text_strict", "extract_docx_html_strict"]
+)
+@pytest.mark.parametrize("invalid_source", [None, "invalid\0source.docx"])
+def test_strict_invalid_docx_paths_raise_typed_source_errors(
+    strict_name, invalid_source
+):
+    import ktem.preview.docx as docx_preview
+    from ktem.preview.errors import PreviewErrorCode, PreviewSourceError
+
+    strict_extract = getattr(docx_preview, strict_name)
+
+    with pytest.raises(PreviewSourceError) as caught:
+        strict_extract(invalid_source)
+
+    assert caught.value.code is PreviewErrorCode.SOURCE_INVALID
+    assert caught.value.stage == "docx_source"
+    assert caught.value.converter == "python-docx"
+    assert repr(invalid_source) in caught.value.details
 
 
 def test_compat_corrupt_docx_fallback_logs_actionable_context(tmp_path, caplog):

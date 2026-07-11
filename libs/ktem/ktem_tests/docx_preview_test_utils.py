@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import zipfile
 from pathlib import Path
@@ -88,3 +89,56 @@ def replace_image_payload(
             archive.writestr(item, member_payload)
     replacement.replace(path)
     return path
+
+
+def replace_archive_member(path: Path, member_name: str, payload: bytes) -> Path:
+    with zipfile.ZipFile(path) as archive:
+        members = [(item, archive.read(item.filename)) for item in archive.infolist()]
+    assert member_name in {item.filename for item, _payload in members}
+
+    replacement = path.with_suffix(".rewritten.docx")
+    with zipfile.ZipFile(replacement, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for item, original_payload in members:
+            archive.writestr(
+                item,
+                payload if item.filename == member_name else original_payload,
+            )
+    replacement.replace(path)
+    return path
+
+
+def add_high_ratio_archive_member(path: Path, member_name: str) -> Path:
+    with zipfile.ZipFile(path) as archive:
+        members = [(item, archive.read(item.filename)) for item in archive.infolist()]
+
+    replacement = path.with_suffix(".rewritten.docx")
+    with zipfile.ZipFile(replacement, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for item, payload in members:
+            archive.writestr(item, payload)
+        archive.writestr(member_name, bytes(4 * 1024 * 1024))
+    replacement.replace(path)
+
+    with zipfile.ZipFile(path) as archive:
+        info = archive.getinfo(member_name)
+    assert info.file_size / info.compress_size > 1_000
+    return path
+
+
+def invalidate_first_table_grid_span(path: Path) -> Path:
+    with zipfile.ZipFile(path) as archive:
+        payload = archive.read("word/document.xml")
+    assert b"<w:tcPr>" in payload
+    malformed = payload.replace(
+        b"<w:tcPr>",
+        b"<w:tcPr><w:gridSpan/>",
+        1,
+    )
+    return replace_archive_member(path, "word/document.xml", malformed)
+
+
+def incompressible_text(size: int) -> str:
+    blocks = (
+        hashlib.sha256(str(index).encode("ascii")).hexdigest()
+        for index in range((size + 63) // 64)
+    )
+    return "".join(blocks)[:size]
