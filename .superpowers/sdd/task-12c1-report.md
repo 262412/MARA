@@ -252,3 +252,8 @@ flake8、mypy）和 range diff-check 全部 exit 0。`preview/office.py` 恰为 
 实现中扩展并发测试首次暴露 key writer 对 fd 的二次关闭会误关另一线程复用的描述符；
 根因修正为 `fdopen` 接管后清空原 descriptor ownership。原子发布 characterization
 同步要求 PDF 与 attestation 两个目标都通过原子替换，不再只断言一次 replace。
+
+复审随后指出 4 KiB manifest 限额曾在 `read_bytes()` 之后检查，cache 写者可用巨大
+sidecar 造成内存耗尽。`f132a77` 先以禁止无界 `Path.read_bytes()` 的测试稳定复现，
+`f430533` 改为只读取 `_MAX_MANIFEST_BYTES + 1` 字节再拒绝超限内容；安全集为
+`7 passed`，changed-file pre-commit 全绿。
