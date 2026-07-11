@@ -21,6 +21,11 @@ from .errors import (
     PreviewErrorCode,
 )
 from .models import ConversionAttempt, PreviewSource
+from .service import (
+    OfficePreviewStore,
+    canonical_office_cache_dir,
+    get_preview_cache_dir,
+)
 from .source import (
     OFFICE_EXTENSIONS,
     classify_preview_source,
@@ -31,13 +36,6 @@ from .source import (
 )
 
 _conversion_locks = _coordination._conversion_locks
-
-
-def get_preview_cache_dir() -> Path:
-    root = Path(os.environ.get("GRADIO_TEMP_DIR", tempfile.gettempdir()))
-    cache_dir = root / "pdf_previews"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir
 
 
 def _default_docx_converter(input_path: Path, output_path: Path) -> None:
@@ -489,12 +487,14 @@ class OfficePreviewConversionService:
         max_concurrency: int = 2,
     ) -> None:
         self._logger = logger or logging.getLogger(__name__)
+        visible_cache_dir = Path(cache_dir) if cache_dir else get_preview_cache_dir()
         self._core = OfficeConversionService(
-            cache_dir or get_preview_cache_dir(),
+            visible_cache_dir if cache_dir else canonical_office_cache_dir(),
             logger=self._logger,
             max_concurrency=max_concurrency,
             soffice_finder=self.find_soffice_binary,
         )
+        self._preview_store = OfficePreviewStore(self._core, visible_cache_dir)
         self._office_pdf_cache = self._core.cache
         self._office_pdf_job_status: dict[str, str] = {}
         self._office_pdf_job_ts: dict[str, float] = {}
@@ -514,14 +514,14 @@ class OfficePreviewConversionService:
 
     def convert_to_pdf_preview(self, file_path: str, file_name: str) -> str:
         try:
-            return str(self._core.convert_to_pdf(file_path, file_name))
+            return str(self._preview_store.convert(file_path, file_name))
         except PreviewError as exc:
             self._record_error(file_path, exc)
             return ""
 
     def get_cached_pdf_preview(self, file_path: str) -> str:
         try:
-            cached = self._core.get_cached_pdf(file_path)
+            cached = self._preview_store.get_cached(file_path)
         except PreviewError as exc:
             self._record_error(file_path, exc)
             return ""

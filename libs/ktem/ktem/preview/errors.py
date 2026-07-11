@@ -18,6 +18,7 @@ class PreviewErrorCode(str, Enum):
     OUTPUT_MISSING = "output_missing"
     OUTPUT_INVALID = "output_invalid"
     CLEANUP_FAILED = "cleanup_failed"
+    CONTEXT_TEXT_UNAVAILABLE = "context_text_unavailable"
 
 
 class PreviewError(RuntimeError):
@@ -68,3 +69,7 @@ class PreviewConversionError(PreviewError):
 
 class PreviewCleanupError(PreviewError):
     """An isolated conversion workspace could not be removed."""
+
+
+class PreviewContextError(PreviewError):
+    """A consumer-required preview page context could not be produced."""

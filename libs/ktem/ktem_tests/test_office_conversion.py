@@ -32,11 +32,7 @@ def test_legacy_office_conversion_imports_and_cache_helpers_remain_compatible(
 ):
     source = write_ooxml(tmp_path / "source.docx")
     cache_dir = tmp_path / "cache"
-    monkeypatch.setattr(
-        "ktem.utils.office_conversion.flowsettings.KH_OFFICE_PDF_CACHE_DIR",
-        cache_dir,
-        raising=False,
-    )
+    monkeypatch.setenv("KH_OFFICE_PDF_CACHE_DIR", str(cache_dir))
 
     assert OFFICE_EXTENSIONS == {".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"}
     assert LAYOUT_PRESERVING_OFFICE_EXTENSIONS == {".doc", ".docx"}
