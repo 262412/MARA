@@ -22,6 +22,8 @@ from kotaemon.loaders.azureai_document_intelligence_loader import (
 )
 from kotaemon.loaders.html_loader import MhtmlReader
 
+GENERATION = "generation-a"
+
 
 class _SelectionService:
     def __init__(self, names, barrier: threading.Barrier | None = None):
@@ -68,7 +70,7 @@ def artifact_roots(tmp_path, monkeypatch):
 
 
 def _artifact_path(root: Path, file_id: str, name: str, content: str) -> Path:
-    path = root / file_id / name
+    path = root / file_id / GENERATION / name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     return path
@@ -89,7 +91,10 @@ def _write_manifest(roots, file_id: str, entries: list[dict[str, str]]) -> Path:
 
 
 def _entry(kind: str, file_id: str, name: str) -> dict[str, str]:
-    return {"kind": kind, "relative_path": f"{file_id}/{name}"}
+    return {
+        "kind": kind,
+        "relative_path": f"{file_id}/{GENERATION}/{name}",
+    }
 
 
 def _download_value(result) -> Path:
@@ -163,7 +168,11 @@ def test_chunk_and_markdown_paths_are_unique_per_file_id(artifact_roots, tmp_pat
             [
                 Document(
                     text=marker,
-                    metadata={"file_id": file_id, "file_name": "report.pdf"},
+                    metadata={
+                        "file_id": file_id,
+                        "file_name": "report.pdf",
+                        "artifact_generation": GENERATION,
+                    },
                 )
             ],
         )
@@ -180,11 +189,19 @@ def test_chunk_and_markdown_paths_are_unique_per_file_id(artifact_roots, tmp_pat
         )
         MhtmlReader(
             cache_dir=str(artifact_roots.markdown), open_encoding="utf-8"
-        ).load_data(source, extra_info={"file_id": file_id})
-        mhtml_paths.append(artifact_roots.markdown / file_id / "report.md")
+        ).load_data(
+            source,
+            extra_info={
+                "file_id": file_id,
+                "artifact_generation": GENERATION,
+            },
+        )
+        mhtml_paths.append(artifact_roots.markdown / file_id / GENERATION / "report.md")
 
-    assert (artifact_roots.chunks / "file-a" / "report_0.md").read_text() != (
-        artifact_roots.chunks / "file-b" / "report_0.md"
+    assert (
+        artifact_roots.chunks / "file-a" / GENERATION / "report_0.md"
+    ).read_text() != (
+        artifact_roots.chunks / "file-b" / GENERATION / "report_0.md"
     ).read_text()
     assert [path.read_text() for path in mhtml_paths] == ["OWNER HTML", "VICTIM HTML"]
 
@@ -204,9 +221,12 @@ def test_chunk_and_markdown_paths_are_unique_per_file_id(artifact_roots, tmp_pat
         AzureAIDocumentIntelligenceLoader.load_data(
             cast(AzureAIDocumentIntelligenceLoader, loader),
             source,
-            extra_info={"file_id": file_id},
+            extra_info={
+                "file_id": file_id,
+                "artifact_generation": GENERATION,
+            },
         )
-        azure_paths.append(artifact_roots.markdown / file_id / "report.md")
+        azure_paths.append(artifact_roots.markdown / file_id / GENERATION / "report.md")
 
     assert [path.read_text() for path in azure_paths] == [
         "OWNER AZURE",
@@ -354,7 +374,7 @@ def test_failed_indexing_does_not_publish_downloadable_manifest(
         "entries": [
             {
                 "kind": "chunks",
-                "relative_path": "file-success/report_0.md",
+                "relative_path": (f"file-success/{GENERATION}/report_0.md"),
             }
         ],
     }

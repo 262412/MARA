@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,7 +14,12 @@ from ktem.index.file._scoped_page import ScopedFileIndexPageMixin
 from ktem.index.file._selection_service import FileSelectionError
 from theflow.settings import settings as flowsettings
 
-from kotaemon.artifact_namespace import write_markdown_artifact
+from kotaemon.artifact_namespace import (
+    ArtifactNamespaceError,
+    finish_and_publish_artifacts,
+    load_manifest_artifacts,
+    write_markdown_artifact,
+)
 
 FILE_ID = "file-owner"
 GENERATION = "generation-a"
@@ -168,3 +174,118 @@ def test_markdown_writer_replaces_leaf_symlink_without_touching_victim(roots):
     assert victim.read_text(encoding="utf-8") == "VICTIM"
     assert not generation_leaf.is_symlink()
     assert generation_leaf.read_text(encoding="utf-8") == "OWNER"
+
+
+def test_markdown_writer_keeps_held_namespace_when_path_is_swapped(roots, monkeypatch):
+    generation_dir = roots.markdown / FILE_ID / GENERATION
+    generation_dir.mkdir(parents=True)
+    detached = roots.markdown / FILE_ID / "detached-generation"
+    victim_dir = roots.markdown / "victim-generation"
+    victim_dir.mkdir()
+    victim_leaf = victim_dir / "report.md"
+    victim_leaf.write_text("VICTIM", encoding="utf-8")
+    real_replace = os.replace
+    swapped = False
+
+    def swap_namespace_then_replace(source, destination, *args, **kwargs):
+        nonlocal swapped
+        if str(destination).endswith("report.md") and not swapped:
+            generation_dir.rename(detached)
+            generation_dir.symlink_to(victim_dir, target_is_directory=True)
+            swapped = True
+        return real_replace(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(os, "replace", swap_namespace_then_replace)
+
+    write_markdown_artifact(
+        roots.markdown,
+        "report.mhtml",
+        {"file_id": FILE_ID, "artifact_generation": GENERATION},
+        "OWNER",
+    )
+
+    assert swapped is True
+    assert victim_leaf.read_text(encoding="utf-8") == "VICTIM"
+    assert (detached / "report.md").read_text(encoding="utf-8") == "OWNER"
+
+
+def test_markdown_writer_rejects_configured_root_symlink(tmp_path):
+    real_root = tmp_path / "real-markdown"
+    real_root.mkdir()
+    configured_root = tmp_path / "configured-markdown"
+    configured_root.symlink_to(real_root, target_is_directory=True)
+
+    with pytest.raises(ArtifactNamespaceError):
+        write_markdown_artifact(
+            configured_root,
+            "report.mhtml",
+            {"file_id": FILE_ID, "artifact_generation": GENERATION},
+            "OWNER",
+        )
+
+
+@pytest.mark.parametrize("linked_root", ["artifact", "manifest"])
+def test_manifest_consumer_rejects_configured_root_symlink(
+    roots, tmp_path, linked_root
+):
+    _leaf(roots.markdown)
+    _manifest(roots)
+    artifact_root = roots.markdown
+    manifest_root = roots.zip
+    if linked_root == "artifact":
+        artifact_root = tmp_path / "linked-markdown"
+        artifact_root.symlink_to(roots.markdown, target_is_directory=True)
+    else:
+        manifest_root = tmp_path / "linked-zip"
+        manifest_root.symlink_to(roots.zip, target_is_directory=True)
+
+    with pytest.raises(ArtifactNamespaceError):
+        load_manifest_artifacts(
+            FILE_ID,
+            {"chunks": roots.chunks, "markdown": artifact_root},
+            manifest_root,
+        )
+
+
+def test_manifest_publication_fsyncs_parent_directory(roots, tmp_path, monkeypatch):
+    _leaf(roots.chunks)
+    settings = SimpleNamespace(
+        KH_CHUNKS_OUTPUT_DIR=str(roots.chunks),
+        KH_MARKDOWN_OUTPUT_DIR=str(roots.markdown),
+        KH_ZIP_OUTPUT_DIR=str(roots.zip),
+    )
+    pipeline = SimpleNamespace(
+        _artifact_generation=GENERATION,
+        _artifact_writer_future=None,
+        finish=lambda *_args: None,
+    )
+    real_fsync = os.fsync
+    fsync_modes = []
+
+    def record_fsync(fd):
+        fsync_modes.append(os.fstat(fd).st_mode)
+        return real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", record_fsync)
+
+    finish_and_publish_artifacts(
+        pipeline,
+        FILE_ID,
+        tmp_path / "source.pdf",
+        settings,
+    )
+
+    assert any(stat.S_ISDIR(mode) for mode in fsync_modes)
+
+
+def test_manifest_consumer_fails_closed_without_dir_fd_support(roots, monkeypatch):
+    _leaf(roots.markdown)
+    _manifest(roots)
+    monkeypatch.setattr(os, "supports_dir_fd", set())
+
+    with pytest.raises(ArtifactNamespaceError, match="platform"):
+        load_manifest_artifacts(
+            FILE_ID,
+            {"chunks": roots.chunks, "markdown": roots.markdown},
+            roots.zip,
+        )
