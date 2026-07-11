@@ -128,6 +128,25 @@ def test_cache_writer_cannot_forge_attestation_after_replacing_artifact(tmp_path
     assert recovered.read_bytes() != poison_bytes
 
 
+def test_oversized_attestation_is_rejected_before_unbounded_read(monkeypatch, tmp_path):
+    source_path = write_ooxml(tmp_path / "source" / "report.docx")
+    cache_dir = tmp_path / "cache"
+    first = _service(cache_dir, SuccessfulSofficeRunner())
+    output = first.convert_to_pdf(source_path, source_path.name)
+    manifest_path = output.with_name(f".{output.name}.attestation.json")
+    manifest_path.write_bytes(b"x" * 4097)
+    original_read_bytes = Path.read_bytes
+
+    def reject_manifest_read(path):
+        if path == manifest_path:
+            raise AssertionError("oversized manifest was read without a bound")
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", reject_manifest_read)
+
+    assert first.get_cached_pdf(source_path, source_path.name) is None
+
+
 def test_web_visible_cache_name_keeps_legacy_signature(tmp_path):
     from ktem.preview.office import OfficePreviewConversionService
 
