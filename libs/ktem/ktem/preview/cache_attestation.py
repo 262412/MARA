@@ -46,7 +46,8 @@ class CacheAttestationStore:
         if manifest_file is None:
             return False
         try:
-            raw = manifest_file.read_bytes()
+            with manifest_file.open("rb") as file_obj:
+                raw = file_obj.read(_MAX_MANIFEST_BYTES + 1)
             if len(raw) > _MAX_MANIFEST_BYTES:
                 return False
             recorded = json.loads(raw)
