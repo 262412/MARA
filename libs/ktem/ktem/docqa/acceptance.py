@@ -299,7 +299,7 @@ class AcceptanceMatrix:
                 raise AcceptanceFailure(
                     f"Shared preview conversion returned no PDF for {source_path}"
                 )
-            publish_validated_pdf(converted_pdf, output_pdf)
+            publish_validated_pdf(converted_pdf, output_pdf.parent, output_pdf.name)
         except PreviewError as exc:
             raise AcceptanceFailure(
                 "Unable to generate the PDF sample: "

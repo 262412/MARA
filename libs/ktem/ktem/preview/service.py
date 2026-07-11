@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
+import stat
 import tempfile
 from pathlib import Path
 from typing import Protocol
@@ -56,15 +58,19 @@ def get_preview_cache_dir() -> Path:
     return _ensure_dir(root / "pdf_previews")
 
 
-def publish_validated_pdf(source_path: str | Path, target_path: str | Path) -> Path:
-    source = Path(source_path).expanduser().resolve()
-    target = Path(target_path).expanduser().resolve()
+def publish_validated_pdf(
+    source_path: str | Path,
+    trusted_root: str | Path,
+    entry: str | Path,
+) -> Path:
+    source = _regular_source_path(source_path)
     if not is_valid_pdf(source):
         raise _artifact_error(source, "The source artifact is not a valid PDF.")
-    target.parent.mkdir(parents=True, exist_ok=True)
+    root = _ensure_dir(Path(trusted_root))
+    target = _trusted_target(root, Path(entry), source)
     if source == target:
         return target
-    if target.is_file() and is_valid_pdf(target):
+    if target.is_file() and is_valid_pdf(target) and _same_artifact(source, target):
         return target
 
     descriptor, temporary_name = tempfile.mkstemp(
@@ -108,7 +114,7 @@ class OfficePreviewStore:
         return self._visible_artifact(canonical)
 
     def _visible_artifact(self, canonical: Path) -> Path:
-        return publish_validated_pdf(canonical, self.visible_dir / canonical.name)
+        return publish_validated_pdf(canonical, self.visible_dir, canonical.name)
 
 
 class PreviewService:
@@ -259,5 +265,63 @@ def _artifact_error(source: Path, details: str) -> PreviewConversionError:
 
 
 def _ensure_dir(path: Path) -> Path:
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    normalized = Path(os.path.abspath(os.fspath(path.expanduser())))
+    normalized.mkdir(parents=True, exist_ok=True)
+    mode = normalized.lstat().st_mode
+    if stat.S_ISLNK(mode):
+        raise _artifact_error(normalized, "The trusted cache root cannot be a symlink.")
+    if not stat.S_ISDIR(mode):
+        raise _artifact_error(normalized, "The trusted cache root is not a directory.")
+    return normalized
+
+
+def _regular_source_path(source_path: str | Path) -> Path:
+    source = Path(os.path.abspath(os.fspath(Path(source_path).expanduser())))
+    try:
+        mode = source.lstat().st_mode
+    except OSError as exc:
+        raise _artifact_error(
+            source, f"Unable to inspect the source artifact: {exc}"
+        ) from exc
+    if stat.S_ISLNK(mode) or not stat.S_ISREG(mode):
+        raise _artifact_error(source, "The source artifact must be a regular file.")
+    return source
+
+
+def _trusted_target(root: Path, entry: Path, source: Path) -> Path:
+    if entry.is_absolute() or not entry.parts or ".." in entry.parts:
+        raise _artifact_error(
+            source, "The artifact entry must stay in the trusted cache root."
+        )
+    parent = root
+    for part in entry.parts[:-1]:
+        if part in {"", "."}:
+            continue
+        parent = parent / part
+        if parent.is_symlink():
+            raise _artifact_error(source, f"Artifact parent {parent} is a symlink.")
+        parent.mkdir(exist_ok=True)
+        if not stat.S_ISDIR(parent.lstat().st_mode):
+            raise _artifact_error(
+                source, f"Artifact parent {parent} is not a directory."
+            )
+    target = parent / entry.name
+    if target.is_symlink():
+        raise _artifact_error(source, f"Artifact target {target} is a symlink.")
+    if target.exists() and not stat.S_ISREG(target.lstat().st_mode):
+        raise _artifact_error(
+            source, f"Artifact target {target} is not a regular file."
+        )
+    return target
+
+
+def _same_artifact(source: Path, target: Path) -> bool:
+    return _file_digest(source) == _file_digest(target)
+
+
+def _file_digest(path: Path) -> bytes:
+    digest = hashlib.sha256()
+    with path.open("rb") as file_obj:
+        for block in iter(lambda: file_obj.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.digest()
