@@ -579,3 +579,79 @@ is the only documentation change. Residual risk remains bounded by the existing
 members during `testzip()`, and the approved single-handle design prevents path
 replacement but is not a copied byte snapshot against a writer modifying the
 already-open inode in place. DOCX pagination remains the existing heuristic.
+
+## Review Remediation Round 3 (2026-07-11)
+
+Round 3 is isolated in `a8040f8` (tests first) and `13ba62b` (minimal
+production fix).
+
+### Round 3 Corrections
+
+- `escaped_html_length()` now counts a single quote exactly as Python
+  `html.escape(..., quote=True)` emits it: `&#x27;` is six characters, so the
+  expansion delta is five rather than four. Large single-quote run text,
+  hyperlink targets, and image alt text are therefore rejected before
+  `html.escape` when their real expansion cannot fit. The shared ledger and
+  final output remain within the 8 MiB character budget.
+- A DOCX member whose ZIP compression method is unknown now receives the
+  specific structured reason `archive_unsupported_compression` at archive
+  inspection. Strict HTML retains `SOURCE_ARCHIVE_INVALID`, the established
+  `docx_package` boundary stage, resolved source path, and `python-docx`
+  converter context. Compatibility HTML returns `""` and its warning now
+  includes the structured reason alongside code, stage, path, converter, and
+  details.
+
+The review's reported bare `NotImplementedError` was not reproducible at the
+Round 2 head: Python's `NotImplementedError` subclasses `RuntimeError`, so the
+existing archive branch already converted it to `PreviewSourceError` with the
+generic `archive_corrupt` reason, and compatibility HTML already returned an
+empty string. Round 3 narrows that existing behavior to the actionable reason
+and makes the reason visible in compatibility diagnostics; it does not broaden
+the exception boundary.
+
+### Round 3 TDD and Verification
+
+A real DOCX fixture has both its local-file header and central-directory entry
+patched to compression method 99. Together with the large single-quote cases,
+the pre-production command returned `6 failed, 7 passed`, exit 1:
+
+- text, hyperlink, and image alt values reached the guarded `html.escape`;
+- the exact estimator reported 20,480 characters where `html.escape` produced
+  24,576;
+- strict HTML reported the generic `archive_corrupt` reason; and
+- compatibility logging omitted the unsupported-compression reason.
+
+After the two-line estimator/reason behavior and the compatibility diagnostic
+change, the targeted command returned `13 passed`, exit 0. Final focused DOCX
+coverage returned `57 passed`, exit 0 in 10.19 seconds. The established relevant
+gate returned `192 passed`, exit 0 in 11.73 seconds. Both larger gates emitted
+only the pre-existing pypdf ARC4 `CryptographyDeprecationWarning`.
+
+- Explicit hygiene over all six R3 Python files reported no ratchet violations.
+- `scripts/check_hygiene_baseline.py --base-ref a5feffb` reported that the
+  baseline did not widen; the tracked baseline remains unchanged.
+- Changed-file pre-commit passed hygiene, Black, isort, flake8, autoflake,
+  mypy, Prettier, and codespell. Commit-range and working-tree diff checks
+  passed.
+- Current touched production sizes are `docx.py` 77 lines,
+  `docx_security.py` 170, and `source.py` 476. No function or class exceeds its
+  hygiene contract budget.
+
+The first exploratory method-99 probe mistakenly used the system Python and
+exited 1 with `ModuleNotFoundError: docx`; the identical probe through
+`uv run --python 3.10` reproduced the real archive call stack. The first
+attempt to read the testing anti-pattern reference used the skill directory
+instead of its nested `test-driven-development` directory and exited 2; an
+`rg --files` lookup located and loaded the required reference before tests were
+written.
+
+R3 changes only `docx.py`, `docx_security.py`, `source.py`, the DOCX fixture
+helper, the two focused regression modules, and this report. Public extraction
+function names/signatures, Web/DocQA re-exports, successful HTML, fallback
+shapes, pagination/cache behavior, Gradio/event wiring, CLI, DB, and persisted
+JSON/session surfaces remain unchanged.
+
+Final storage checks show fastscratch at 295.8G and 471,884/500,000 soft files.
+Scratch is at 71.91G and 472,675/300,000 soft files, still in inode grace. No
+`task12b-r3-*` runtime directories remain, and no user data or caches were
+deleted. Residual archive and pagination risks remain as recorded in Round 2.
