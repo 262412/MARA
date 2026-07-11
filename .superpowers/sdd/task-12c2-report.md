@@ -53,7 +53,7 @@ circuit，单文件为 `2 passed`，最终已包含在上述 163 cases。
   `SOURCE_UNAVAILABLE`，错误不披露文件名、路径或 owner。
 - local default 行为保留；private index 即使 local mode 也继续 owner-scoped。
 - strict batch resolution 在任何 preview conversion、PDF/page read、Index/docstore graph
-  read前完成；返回的 `ResolvedPreviewSource` 携带已授权 path/name/owner/index metadata。
+  read 前完成；返回的 `ResolvedPreviewSource` 携带已授权 path/name/owner/index metadata。
 
 ### Web preview 与 Gradio ABI
 
@@ -96,17 +96,10 @@ exports。
 35 个 changed files 按责任分组：
 
 - preview core：`preview/{__init__,context,errors,service}.py`
-- Web preview/KG：`pages/chat/{__init__,page_preview,page_preview_callbacks,
-  page_preview_resolver,chat_knowledge_graph_runtime,knowledge_graph_service,
-  source_scope,studio_artifact_controls,studio_artifact_mindmap}.py`
-- DocQA：`docqa/{_runtime_app,_runtime_preview,preview_support,runtime,
-  knowledge_graph}.py`
+- Web preview/KG：`pages/chat/{__init__,page_preview,page_preview_callbacks, page_preview_resolver,chat_knowledge_graph_runtime,knowledge_graph_service, source_scope,studio_artifact_controls,studio_artifact_mindmap}.py`
+- DocQA：`docqa/{_runtime_app,_runtime_preview,preview_support,runtime, knowledge_graph}.py`
 - owner selectors：`index/file/{_selection,_selector_ui,index}.py`
-- tests：`test_{preview_owner_scope,chat_preview_timer,chat_source_owner_scope,
-  chat_source_scope,knowledge_graph_owner_scope,knowledge_graph_service,
-  docqa_owner_preview_scope,docqa_runtime,docqa_runtime_graph_scope,
-  docqa_runtime_helpers,file_index_selection_scope,studio_artifact_failure_scope,
-  studio_artifact_generation,studio_artifact_mindmap}.py`
+- tests：`test_{preview_owner_scope,chat_preview_timer,chat_source_owner_scope, chat_source_scope,knowledge_graph_owner_scope,knowledge_graph_service, docqa_owner_preview_scope,docqa_runtime,docqa_runtime_graph_scope, docqa_runtime_helpers,file_index_selection_scope,studio_artifact_failure_scope, studio_artifact_generation,studio_artifact_mindmap}.py`
 
 ## 5. Storage 与 quota
 
@@ -156,9 +149,10 @@ warnings 仅为 locked dependency 的 cryptography ARC4 与 SWIG deprecations。
 
 ## 7. 审查与残余风险
 
-自审按 plan alignment、security ordering、type safety、ABI、error handling 与测试真实性
-逐项检查，未发现 Critical 或 Important issue。由于本 delegated slice 明确禁止再派
-subagent，本轮没有独立 reviewer；这是 process-level residual risk，不是已知功能缺陷。
+初次自审按 plan alignment、security ordering、type safety、ABI、error handling 与测试
+真实性逐项检查；随后 external review 发现一个 DocQA KG cache-before-auth Important
+ordering issue，修复证据见第 8 节。由于本 delegated slice 明确禁止再派 subagent，修复
+后没有再派独立 reviewer；这是 process-level residual risk，不是已知功能缺陷。
 
 - 按 brief 使用 browser-free tests，未运行 browser/CSP/live UI E2E；Task 12D 负责该
   范围。
@@ -169,3 +163,29 @@ subagent，本轮没有独立 reviewer；这是 process-level residual risk，�
 
 结论：Task 12C2 为 **DONE**，无已知未修复的 security/functional concern；上述仅为
 明确的环境、E2E 与独立审查边界。
+
+## 8. External review：DocQA KG cache-before-auth 修复
+
+External review 指出 `docqa/knowledge_graph.py::build_graph` 在 strict owner Source
+validation 前调用 `_load_cached_state(conversation_id)`。这会在 victim source 被拒绝前
+读取 conversation cache，违反 Task 12C2 的“任何 cache/path/Index/docstore read 前先验证
+全部 source IDs”顺序。
+
+修复继续保持 RED 与 production 独立提交：
+
+- `14d6e07 test: authorize DocQA graph sources before cache reads`
+- `bbda6a5 security: authorize DocQA graph before cache reads`
+
+RED 单文件结果为 `1 failed, 4 passed`：`_load_cached_state` spy 先抛
+`AssertionError(cache read happened before source authorization)`，而测试期望 non-disclosing
+`PreviewAccessError`。同一 RED commit 还加入 authorized-source single-resolution
+characterization，防止 production 修复先验证一次、graph builder 再查询一次。
+
+Production 只调整 DocQA KG：`build_graph` 先 strict `_load_sources(..., user_id=...)`，成功
+后才读 cache，并把已授权 source map 传给 `_build_nodes_and_edges`。graph dict、manifest、
+cache schema、save order 与 return shape 不变。安全 test 随后为 `5 passed`；DocQA/Web KG、
+owner、runtime graph 与 Studio mindmap focused gate 为 `43 passed`；full hygiene 无 ratchet。
+
+同轮 review 的另一 finding 涉及 Studio `_latest_notebook_artifact` notebook authorization。
+Task 12C2 brief 明确把 notebook CRUD authorization 排除在本切片之外，因此本轮未修改该
+路径；该 finding 已锁定由 **Task 12F** 实施，避免在 C2 扩大权限与数据模型范围。
