@@ -529,9 +529,9 @@ def test_layout_preserving_docx_conversion_routes_indexing_to_pdf(
     assert metadata["converted_pdf_path"] == str(converted_path.resolve())
 
 
-def test_layout_preserving_docx_conversion_falls_back_to_direct_text(
-    monkeypatch, tmp_path
-):
+def test_layout_preserving_docx_conversion_fails_strictly(monkeypatch, tmp_path):
+    from ktem.preview.errors import PreviewConversionError, PreviewErrorCode
+
     source_path = tmp_path / "layout.docx"
     source_path.write_bytes(b"docx")
 
@@ -546,22 +546,16 @@ def test_layout_preserving_docx_conversion_falls_back_to_direct_text(
     )
 
     pipeline = IndexDocumentPipeline(embedding=SimpleNamespace())
-    parse_path, metadata = pipeline.prepare_layout_preserving_parse_file(source_path)
+    with pytest.raises(PreviewConversionError) as caught:
+        pipeline.prepare_layout_preserving_parse_file(source_path)
 
-    assert parse_path == source_path
-    assert metadata is not None
-    assert metadata["source_file_name"] == "layout.docx"
-    assert metadata["source_file_extension"] == ".docx"
-    assert metadata["converted_from_office"] is False
-    assert metadata["layout_preserving_parse"] is False
-    assert metadata["direct_office_text_fallback"] is True
-    assert (
-        "Failed to convert layout.docx to PDF"
-        in metadata["office_pdf_conversion_error"]
-    )
+    assert caught.value.code is PreviewErrorCode.OUTPUT_MISSING
+    assert caught.value.stage == "output_validation"
 
 
 def test_layout_preserving_doc_conversion_fails_strictly(monkeypatch, tmp_path):
+    from ktem.preview.errors import PreviewConversionError, PreviewErrorCode
+
     source_path = tmp_path / "layout.doc"
     source_path.write_bytes(b"doc")
 
@@ -576,5 +570,8 @@ def test_layout_preserving_doc_conversion_fails_strictly(monkeypatch, tmp_path):
     )
 
     pipeline = IndexDocumentPipeline(embedding=SimpleNamespace())
-    with pytest.raises(RuntimeError, match="Failed to convert layout.doc to PDF"):
+    with pytest.raises(PreviewConversionError) as caught:
         pipeline.prepare_layout_preserving_parse_file(source_path)
+
+    assert caught.value.code is PreviewErrorCode.OUTPUT_MISSING
+    assert caught.value.stage == "output_validation"

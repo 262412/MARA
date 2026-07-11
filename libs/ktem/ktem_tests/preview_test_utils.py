@@ -7,6 +7,7 @@ from pathlib import Path
 from struct import pack_into
 from types import SimpleNamespace
 
+import fitz
 from pypdf import PdfWriter
 
 OOXML_MARKERS = {
@@ -30,6 +31,20 @@ def write_valid_pdf(path: Path) -> Path:
     writer.add_blank_page(width=72, height=72)
     with path.open("wb") as file_obj:
         writer.write(file_obj)
+    return path
+
+
+def write_text_pdf(path: Path, pages: list[str]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.unlink(missing_ok=True)
+    document = fitz.open()
+    try:
+        for text in pages:
+            page = document.new_page()
+            page.insert_text((36, 72), text)
+        document.save(path)
+    finally:
+        document.close()
     return path
 
 
