@@ -69,8 +69,15 @@ def artifact_roots(tmp_path, monkeypatch):
     return roots
 
 
-def _artifact_path(root: Path, file_id: str, name: str, content: str) -> Path:
-    path = root / file_id / GENERATION / name
+def _artifact_path(
+    root: Path,
+    file_id: str,
+    name: str,
+    content: str,
+    *,
+    generation: str = GENERATION,
+) -> Path:
+    path = root / file_id / generation / name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     return path
@@ -347,12 +354,19 @@ def test_failed_indexing_does_not_publish_downloadable_manifest(
             stats={"hits": 0, "misses": 1, "writes": 0},
         )
 
-        def handle_docs(_docs, produced_file_id, _file_name):
+        def handle_docs(
+            _docs,
+            produced_file_id,
+            _file_name,
+            artifact_generation=None,
+        ):
+            assert artifact_generation
             _artifact_path(
                 artifact_roots.chunks,
                 produced_file_id,
                 "report_0.md",
                 produced_file_id,
+                generation=artifact_generation,
             )
             yield Document(text="indexed", channel="debug")
 
@@ -368,14 +382,14 @@ def test_failed_indexing_does_not_publish_downloadable_manifest(
     with pytest.raises(RuntimeError, match="finish failed"):
         run("file-failed", fail=True)
 
-    assert json.loads(_manifest_path(artifact_roots, "file-success").read_text()) == {
-        "version": 1,
-        "file_id": "file-success",
-        "entries": [
-            {
-                "kind": "chunks",
-                "relative_path": (f"file-success/{GENERATION}/report_0.md"),
-            }
-        ],
-    }
+    manifest = json.loads(_manifest_path(artifact_roots, "file-success").read_text())
+    assert manifest["version"] == 1
+    assert manifest["file_id"] == "file-success"
+    assert len(manifest["entries"]) == 1
+    entry = manifest["entries"][0]
+    assert entry["kind"] == "chunks"
+    file_id, generation, leaf = entry["relative_path"].split("/")
+    assert file_id == "file-success"
+    assert generation
+    assert leaf == "report_0.md"
     assert not _manifest_path(artifact_roots, "file-failed").exists()

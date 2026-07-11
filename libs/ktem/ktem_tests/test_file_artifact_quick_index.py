@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from concurrent.futures import Future
+import threading
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -55,16 +56,26 @@ def test_manifest_finalization_propagates_background_writer_failure(tmp_path):
 
 def test_manifest_finalization_waits_for_writer_before_finish(tmp_path):
     order = []
+    writer_waiting = threading.Event()
+    finish_called = threading.Event()
 
-    class _CompletedWriter:
-        @staticmethod
-        def result():
+    class _ObservedFuture(Future[None]):
+        def result(self, timeout=None):
+            writer_waiting.set()
+            value = super().result(timeout=timeout)
             order.append("writer")
+            return value
+
+    writer = _ObservedFuture()
+
+    def finish(*_args):
+        order.append("finish")
+        finish_called.set()
 
     pipeline = SimpleNamespace(
         _artifact_generation="generation-a",
-        _artifact_writer_future=_CompletedWriter(),
-        finish=lambda *_args: order.append("finish"),
+        _artifact_writer_future=writer,
+        finish=finish,
     )
     settings = _settings(tmp_path)
     artifact = (
@@ -76,11 +87,26 @@ def test_manifest_finalization_waits_for_writer_before_finish(tmp_path):
     artifact.parent.mkdir(parents=True)
     artifact.write_text("OWNER", encoding="utf-8")
 
-    finish_and_publish_artifacts(
-        pipeline,
-        "file-owner",
-        tmp_path / "source.pdf",
-        settings,
+    manifest = (
+        Path(settings.KH_ZIP_OUTPUT_DIR)
+        / "manifests"
+        / "v1"
+        / "file-owner"
+        / "manifest.json"
     )
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        finalization = pool.submit(
+            finish_and_publish_artifacts,
+            pipeline,
+            "file-owner",
+            tmp_path / "source.pdf",
+            settings,
+        )
+        assert writer_waiting.wait(timeout=2)
+        assert not finish_called.is_set()
+        assert not manifest.exists()
+        writer.set_result(None)
+        finalization.result(timeout=2)
 
     assert order == ["writer", "finish"]
+    assert manifest.is_file()
