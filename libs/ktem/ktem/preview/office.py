@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 import subprocess
 import tempfile
@@ -14,6 +13,7 @@ from typing import Any
 from ktem.utils.dependencies import find_soffice_binary
 
 from . import coordination as _coordination
+from .cache_attestation import CacheAttestationStore
 from .errors import (
     PreviewCleanupError,
     PreviewConversionError,
@@ -214,6 +214,7 @@ class OfficeConversionService:
         docx_converter: Callable[[Path, Path], None] | None = None,
     ) -> None:
         self.cache_dir = normalize_cache_root(Path(cache_dir))
+        self._attestations = CacheAttestationStore(self.cache_dir)
         self.cache: dict[str, str] = {}
         self._logger = logger or logging.getLogger(__name__)
         self._max_concurrency = max(1, max_concurrency)
@@ -289,9 +290,12 @@ class OfficeConversionService:
     ) -> Path | None:
         cache_key = self._cache_key(source)
         cached = Path(self.cache.get(cache_key, expected_path))
-        if not cached.is_file():
+        if cached != expected_path:
+            self.cache.pop(cache_key, None)
             return None
-        if is_valid_pdf(cached):
+        if self._attestations.is_trusted(
+            source.path, cached, cache_key
+        ) and is_valid_pdf(cached):
             self.cache[cache_key] = str(cached)
             return cached
         self.cache.pop(cache_key, None)
@@ -442,12 +446,12 @@ class OfficeConversionService:
                 "office",
                 f"Converter output is not a valid PDF: {candidate}",
             )
-        if output_path.is_file() and is_valid_pdf(output_path):
-            return output_path
-        # Cross-process converters never share a workspace. A loser can only
-        # replace the final path atomically; its cleanup remains workspace-local.
-        os.replace(candidate, output_path)
-        return output_path
+        return self._attestations.publish_artifact(
+            source.path,
+            candidate,
+            output_path,
+            self._cache_key(source),
+        )
 
     def _merged_attempt_error(
         self,

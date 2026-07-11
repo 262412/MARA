@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -9,7 +10,6 @@ from ktem_tests.preview_test_utils import (
     SuccessfulSofficeRunner,
     write_ooxml,
     write_text_pdf,
-    write_valid_pdf,
 )
 
 
@@ -102,6 +102,30 @@ def test_attested_cache_is_reused_across_service_instances(tmp_path):
     assert second_output == first_output
     assert first_runner.calls == 1
     assert second_runner.calls == 0
+
+
+def test_cache_writer_cannot_forge_attestation_after_replacing_artifact(tmp_path):
+    source_path = write_ooxml(tmp_path / "source" / "report.docx")
+    cache_dir = tmp_path / "cache"
+    first_runner = SuccessfulSofficeRunner()
+    first = _service(cache_dir, first_runner)
+    output = first.convert_to_pdf(source_path, source_path.name)
+    manifest_path = output.with_name(f".{output.name}.attestation.json")
+
+    poison = write_text_pdf(output, ["attacker replacement"])
+    poison_bytes = poison.read_bytes()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifact_sha256"] = hashlib.sha256(poison_bytes).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    retry_runner = SuccessfulSofficeRunner()
+    recovered = _service(cache_dir, retry_runner).convert_to_pdf(
+        source_path, source_path.name
+    )
+
+    assert recovered == output
+    assert retry_runner.calls == 1
+    assert recovered.read_bytes() != poison_bytes
 
 
 def test_web_visible_cache_name_keeps_legacy_signature(tmp_path):

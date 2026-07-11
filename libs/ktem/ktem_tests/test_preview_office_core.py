@@ -435,13 +435,13 @@ def test_workspace_is_cleaned_when_staging_directory_creation_fails(
 
 def test_workspace_is_cleaned_when_atomic_publish_fails(monkeypatch, tmp_path):
     PreviewConversionError, _ = _error_types()
-    import ktem.preview.office as office_module
+    import ktem.preview.cache_attestation as attestation_module
 
     source = write_ooxml(tmp_path / "slides.pptx")
     cache_dir = tmp_path / "cache"
     runner = SuccessfulSofficeRunner()
     monkeypatch.setattr(
-        office_module.os,
+        attestation_module.os,
         "replace",
         lambda *_args: (_ for _ in ()).throw(OSError("atomic publish denied")),
     )
@@ -562,7 +562,7 @@ def test_concurrent_failed_loser_cannot_delete_valid_winner(tmp_path):
 
 
 def test_atomic_publish_never_exposes_partial_cache_file(monkeypatch, tmp_path):
-    import ktem.preview.office as office_module
+    import ktem.preview.cache_attestation as attestation_module
 
     source = write_ooxml(tmp_path / "slides.pptx")
     runner = SuccessfulSofficeRunner()
@@ -575,7 +575,7 @@ def test_atomic_publish_never_exposes_partial_cache_file(monkeypatch, tmp_path):
         assert not Path(target_path).exists()
         original_replace(source_path, target_path)
 
-    monkeypatch.setattr(office_module.os, "replace", recording_replace)
+    monkeypatch.setattr(attestation_module.os, "replace", recording_replace)
     service = _service(
         tmp_path / "cache",
         soffice_finder=lambda: "soffice",
@@ -584,5 +584,7 @@ def test_atomic_publish_never_exposes_partial_cache_file(monkeypatch, tmp_path):
 
     output = service.convert_to_pdf(source, source.name)
 
-    assert replacements == [(replacements[0][0], output)]
+    assert len(replacements) == 2
+    assert replacements[0][1] == output
+    assert replacements[1][1].name == f".{output.name}.attestation.json"
     assert output.is_file()
