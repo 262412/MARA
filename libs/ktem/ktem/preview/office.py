@@ -25,6 +25,7 @@ from .service import (
     OfficePreviewStore,
     canonical_office_cache_dir,
     get_preview_cache_dir,
+    normalize_cache_root,
 )
 from .source import (
     OFFICE_EXTENSIONS,
@@ -212,8 +213,7 @@ class OfficeConversionService:
         process_runner: Callable[..., Any] | None = None,
         docx_converter: Callable[[Path, Path], None] | None = None,
     ) -> None:
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.cache_dir = normalize_cache_root(Path(cache_dir))
         self.cache: dict[str, str] = {}
         self._logger = logger or logging.getLogger(__name__)
         self._max_concurrency = max(1, max_concurrency)

@@ -6,7 +6,7 @@ import shutil
 import stat
 import tempfile
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from .context import PageContext, PreviewPurpose
 from .errors import (
@@ -16,8 +16,10 @@ from .errors import (
     PreviewErrorCode,
 )
 from .models import PreviewSourceKind
-from .pdf import PdfPage, PdfService
 from .source import classify_preview_source, is_valid_pdf
+
+if TYPE_CHECKING:
+    from .pdf import PdfPage, PdfService
 
 
 class _OfficeConverter(Protocol):
@@ -37,25 +39,27 @@ class _OfficeConverter(Protocol):
 def canonical_office_cache_dir() -> Path:
     configured = os.environ.get("KH_OFFICE_PDF_CACHE_DIR")
     if configured:
-        return _ensure_dir(Path(configured))
+        return normalize_cache_root(Path(configured))
     app_data = os.environ.get("KH_APP_DATA_DIR")
     if app_data:
-        return _ensure_dir(Path(app_data) / "office_pdf_cache_dir")
+        return normalize_cache_root(Path(app_data) / "office_pdf_cache_dir")
 
     from theflow.settings import settings as flowsettings
 
     configured = getattr(flowsettings, "KH_OFFICE_PDF_CACHE_DIR", None)
     if configured:
-        return _ensure_dir(Path(configured))
+        return normalize_cache_root(Path(configured))
     app_data = getattr(flowsettings, "KH_APP_DATA_DIR", None)
     if app_data:
-        return _ensure_dir(Path(app_data) / "office_pdf_cache_dir")
-    return _ensure_dir(Path(tempfile.gettempdir()) / "kotaemon_office_pdf_cache")
+        return normalize_cache_root(Path(app_data) / "office_pdf_cache_dir")
+    return normalize_cache_root(
+        Path(tempfile.gettempdir()) / "kotaemon_office_pdf_cache"
+    )
 
 
 def get_preview_cache_dir() -> Path:
     root = Path(os.environ.get("GRADIO_TEMP_DIR", tempfile.gettempdir()))
-    return _ensure_dir(root / "pdf_previews")
+    return normalize_cache_root(root / "pdf_previews")
 
 
 def publish_validated_pdf(
@@ -66,7 +70,7 @@ def publish_validated_pdf(
     source = _regular_source_path(source_path)
     if not is_valid_pdf(source):
         raise _artifact_error(source, "The source artifact is not a valid PDF.")
-    root = _ensure_dir(Path(trusted_root))
+    root = normalize_cache_root(Path(trusted_root))
     target = _trusted_target(root, Path(entry), source)
     if source == target:
         return target
@@ -99,7 +103,7 @@ class OfficePreviewStore:
 
     def __init__(self, converter: _OfficeConverter, visible_dir: str | Path) -> None:
         self.converter = converter
-        self.visible_dir = _ensure_dir(Path(visible_dir))
+        self.visible_dir = normalize_cache_root(Path(visible_dir))
 
     def convert(self, file_path: str | Path, file_name: str | None = None) -> Path:
         canonical = self.converter.convert_to_pdf(file_path, file_name)
@@ -133,8 +137,12 @@ class PreviewService:
             office = OfficeConversionService(
                 office_cache_dir or canonical_office_cache_dir()
             )
+        if pdf is None:
+            from .pdf import PdfService
+
+            pdf = PdfService()
         self.office = office
-        self.pdf = pdf or PdfService()
+        self.pdf = pdf
 
     def prepare_pdf(
         self,
@@ -173,7 +181,7 @@ class PreviewService:
 
         normalized_fallback = " ".join(str(fallback_text or "").split())[:max_chars]
         if pdf_page is not None and pdf_page.text:
-            return _page_context(pdf_page, file_name, purpose)
+            return _page_context(source_path, pdf_page, file_name, purpose)
         if normalized_fallback:
             return _fallback_context(
                 source_path,
@@ -187,7 +195,7 @@ class PreviewService:
         if purpose is PreviewPurpose.DOCQA:
             raise _context_error(source_path, diagnostic)
         if pdf_page is not None:
-            return _page_context(pdf_page, file_name, purpose)
+            return _page_context(source_path, pdf_page, file_name, purpose)
         return _fallback_context(
             source_path, file_name, page, purpose, "", diagnostic, None
         )
@@ -201,12 +209,13 @@ class PreviewService:
 
 
 def _page_context(
+    source_path: Path,
     page: PdfPage,
     file_name: str,
     purpose: PreviewPurpose,
 ) -> PageContext:
     return PageContext(
-        source_path=page.path,
+        source_path=source_path,
         file_name=file_name,
         purpose=purpose,
         page=page.page,
@@ -264,7 +273,7 @@ def _artifact_error(source: Path, details: str) -> PreviewConversionError:
     )
 
 
-def _ensure_dir(path: Path) -> Path:
+def normalize_cache_root(path: Path) -> Path:
     normalized = Path(os.path.abspath(os.fspath(path.expanduser())))
     normalized.mkdir(parents=True, exist_ok=True)
     mode = normalized.lstat().st_mode
