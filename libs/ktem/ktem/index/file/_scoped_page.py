@@ -106,12 +106,8 @@ class ScopedFileIndexPageMixin:
             with workspace.open_temporary() as output:
                 with zipfile.ZipFile(output, "w") as archive:
                     for artifact in artifacts:
-                        with artifact.open() as source:
-                            with archive.open(artifact.archive_name, "w") as target:
-                                for chunk in iter(
-                                    lambda: source.read(1024 * 1024), b""
-                                ):
-                                    target.write(chunk)
+                        with archive.open(artifact.archive_name, "w") as target:
+                            artifact.copy_to(target)
                 output.flush()
                 os.fsync(output.fileno())
             zip_file_path = workspace.publish()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -8,6 +9,8 @@ from typing import Any, cast
 from kotaemon.base import Document
 
 from .performance_cache import JsonDiskCache, content_hash, file_hash, stable_cache_key
+
+PARSE_CACHE_PAYLOAD_VERSION = 2
 
 
 @dataclass
@@ -30,11 +33,11 @@ def load_data_with_parse_cache(
     """Load parser output through a file-hash cache, then apply runtime metadata."""
 
     if not cache_dir:
-        documents = loader.load_data(
+        loaded_documents = loader.load_data(
             Path(file_path), extra_info=extra_info, **load_kwargs
         )
         return CachedLoadResult(
-            documents=list(documents),
+            documents=list(loaded_documents),
             stats={"hits": 0, "misses": 0, "writes": 0},
             cache_hit=False,
         )
@@ -43,25 +46,42 @@ def load_data_with_parse_cache(
     key = build_parse_cache_key(loader, file_path, reader_policy=reader_policy)
     found, cached_payload = cache.get_with_status(key)
     if found:
-        payload = cast(
-            list[dict[str, Any]],
-            cached_payload if isinstance(cached_payload, list) else [],
+        decoded = _decode_cache_payload(
+            cached_payload,
+            require_sidecar=_requires_artifact_sidecar(loader),
         )
-        documents = documents_from_cache_payload(payload)
-        documents = _apply_extra_info(documents, extra_info)
-        _write_cached_artifact(loader, Path(file_path), extra_info, documents)
-        return CachedLoadResult(
-            documents=documents,
-            stats=cache.stats.to_dict(),
-            cache_hit=True,
-            cache_key=key,
-        )
+        if decoded is not None:
+            payload, artifact_sidecar = decoded
+            documents = documents_from_cache_payload(payload)
+            documents = _apply_extra_info(documents, extra_info)
+            _write_cached_artifact(
+                loader,
+                Path(file_path),
+                extra_info,
+                documents,
+                artifact_sidecar,
+            )
+            return CachedLoadResult(
+                documents=documents,
+                stats=cache.stats.to_dict(),
+                cache_hit=True,
+                cache_key=key,
+            )
 
-    documents = list(
-        loader.load_data(Path(file_path), extra_info=extra_info, **load_kwargs)
+    loaded_documents = loader.load_data(
+        Path(file_path), extra_info=extra_info, **load_kwargs
     )
+    artifact_sidecar = getattr(loaded_documents, "artifact_sidecar", None)
+    documents = list(loaded_documents)
     documents = _apply_extra_info(documents, extra_info)
-    cache.set(key, documents_to_cache_payload(documents))
+    cache.set(
+        key,
+        _cache_payload(
+            documents,
+            artifact_sidecar=artifact_sidecar,
+            runtime_metadata_keys=(extra_info or {}).keys(),
+        ),
+    )
     return CachedLoadResult(
         documents=documents,
         stats=cache.stats.to_dict(),
@@ -91,11 +111,17 @@ def build_parse_cache_key(
     return stable_cache_key("parse", payload)
 
 
-def documents_to_cache_payload(documents: list[Document]) -> list[dict[str, Any]]:
+def documents_to_cache_payload(
+    documents: list[Document],
+    *,
+    runtime_metadata_keys: Iterable[str] = (),
+) -> list[dict[str, Any]]:
+    excluded = set(runtime_metadata_keys)
     payload = []
     for document in documents:
         metadata = dict(document.metadata or {})
-        metadata.pop("artifact_generation", None)
+        for key in excluded:
+            metadata.pop(key, None)
         payload.append(
             {
                 "doc_id": document.doc_id,
@@ -144,10 +170,63 @@ def _write_cached_artifact(
     file_path: Path,
     extra_info: dict | None,
     documents: list[Document],
+    artifact_sidecar: dict[str, Any] | None,
 ) -> None:
     writer = getattr(loader, "write_cached_artifact", None)
-    if callable(writer):
-        writer(file_path, extra_info=extra_info, documents=documents)
+    if callable(writer) and artifact_sidecar is not None:
+        writer(
+            file_path,
+            extra_info=extra_info,
+            documents=documents,
+            artifact_sidecar=artifact_sidecar,
+        )
+
+
+def _cache_payload(
+    documents: list[Document],
+    *,
+    artifact_sidecar: object,
+    runtime_metadata_keys: Iterable[str],
+) -> dict[str, Any]:
+    return {
+        "version": PARSE_CACHE_PAYLOAD_VERSION,
+        "documents": documents_to_cache_payload(
+            documents,
+            runtime_metadata_keys=runtime_metadata_keys,
+        ),
+        "artifact_sidecar": _json_safe(artifact_sidecar),
+    }
+
+
+def _decode_cache_payload(
+    cached_payload: object,
+    *,
+    require_sidecar: bool,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None] | None:
+    if isinstance(cached_payload, list) and not require_sidecar:
+        return cast(list[dict[str, Any]], cached_payload), None
+    if not isinstance(cached_payload, dict):
+        return None
+    documents = cached_payload.get("documents")
+    sidecar = cached_payload.get("artifact_sidecar")
+    if (
+        cached_payload.get("version") != PARSE_CACHE_PAYLOAD_VERSION
+        or not isinstance(documents, list)
+        or (require_sidecar and not _valid_artifact_sidecar(sidecar))
+    ):
+        return None
+    return (
+        cast(list[dict[str, Any]], documents),
+        cast(dict[str, Any] | None, sidecar),
+    )
+
+
+def _valid_artifact_sidecar(value: object) -> bool:
+    return isinstance(value, dict) and isinstance(value.get("markdown"), str)
+
+
+def _requires_artifact_sidecar(loader: Any) -> bool:
+    return bool(getattr(loader, "artifact_cache_version", None))
 
 
 def _parser_version(loader: Any) -> str:
@@ -172,6 +251,7 @@ def _loader_policy(loader: Any) -> dict[str, Any]:
         "ocr_endpoint",
         "api",
         "server_url",
+        "artifact_cache_version",
     )
     return {
         attr: getattr(loader, attr)

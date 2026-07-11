@@ -101,7 +101,13 @@ def resolve_manifest_entry(
         raise ArtifactNamespaceError("Invalid artifact generation")
     fd, metadata = open_regular_file(artifact_roots[kind], parts)
     archive_name = PurePosixPath(kind, *parts[2:]).as_posix()
-    return ManifestArtifact(fd=fd, archive_name=archive_name, size=metadata.st_size)
+    return ManifestArtifact(
+        fd=fd,
+        archive_name=archive_name,
+        size=metadata.st_size,
+        device=metadata.st_dev,
+        inode=metadata.st_ino,
+    )
 
 
 def relative_parts(value: object) -> tuple[str, ...]:
