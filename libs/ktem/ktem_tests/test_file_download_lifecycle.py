@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +12,11 @@ import pytest
 from ktem.index.file._scoped_page import ScopedFileIndexPageMixin
 from ktem.index.file._selection_service import FileSelectionError
 from theflow.settings import settings as flowsettings
+
+from kotaemon.artifact_downloads import (
+    READY_FETCH_WINDOW_SECONDS,
+    READY_OUTPUT_TTL_SECONDS,
+)
 
 FILE_ID = "file-owner"
 GENERATION = "generation-a"
@@ -138,7 +144,14 @@ def test_pruning_removes_expired_ready_outputs_but_keeps_active_request(roots):
     for index in range(35):
         ready = parent / f"ready-{index:02d}"
         ready.mkdir()
-        (ready / ".ready").write_text("0", encoding="utf-8")
+        marker = ready / ".ready"
+        marker.write_text("0", encoding="utf-8")
+        (ready / f"download-{index:02d}.html").write_text(
+            "EXPIRED",
+            encoding="utf-8",
+        )
+        expired = time.time() - READY_OUTPUT_TTL_SECONDS - 1
+        os.utime(marker, (expired, expired))
 
     _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
 
@@ -147,6 +160,30 @@ def test_pruning_removes_expired_ready_outputs_but_keeps_active_request(roots):
         path
         for path in parent.iterdir()
         if path.name.startswith("ready-") and path.exists()
+    ]
+    assert remaining_old == []
+
+
+def test_pruning_bounds_valid_ready_payloads_outside_fetch_window(roots):
+    parent = roots.zip / "downloads" / FILE_ID
+    stale = time.time() - READY_FETCH_WINDOW_SECONDS - 1
+    for index in range(35):
+        ready = parent / f"stale-{index:02d}"
+        ready.mkdir(parents=True)
+        marker = ready / ".ready"
+        marker.write_text("0", encoding="utf-8")
+        (ready / f"download-{index:02d}.html").write_text(
+            "STALE",
+            encoding="utf-8",
+        )
+        os.utime(marker, (stale, stale))
+
+    _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+
+    remaining_old = [
+        path
+        for path in parent.iterdir()
+        if path.name.startswith("stale-") and path.exists()
     ]
     assert len(remaining_old) <= 32
 
@@ -166,9 +203,13 @@ def test_ready_output_survives_followup_prune_for_browser_fetch_window(roots):
     assert not (first_server_path.parent / ".active").exists()
 
     for index in range(40):
-        ready = roots.zip / "downloads" / FILE_ID / f"expired-{index:02d}"
+        ready = roots.zip / "downloads" / FILE_ID / f"fresh-{index:02d}"
         ready.mkdir()
         (ready / ".ready").write_text("0", encoding="utf-8")
+        (ready / f"download-{index:02d}.html").write_text(
+            "FRESH",
+            encoding="utf-8",
+        )
     _Page().download_single_file_simple(False, "OWNER TWO", FILE_ID, "owner")
 
     assert first_server_path.read_text(encoding="utf-8") == "OWNER ONE"

@@ -154,6 +154,36 @@ def test_download_streams_held_leaf_after_intermediate_swap(roots, monkeypatch):
     assert names == ["markdown/report.md"]
 
 
+@pytest.mark.parametrize("mutation", ["grow", "shrink"])
+def test_download_rejects_held_leaf_size_change_and_cleans_workspace(
+    roots, monkeypatch, mutation
+):
+    leaf = _leaf(roots.markdown)
+    _manifest(roots)
+    original = scoped_page_module.load_manifest_artifacts
+
+    def mutate_after_open(*args, **kwargs):
+        artifacts = original(*args, **kwargs)
+        if mutation == "grow":
+            with leaf.open("ab") as output:
+                output.write(b" GROWN")
+        else:
+            leaf.write_text("O", encoding="utf-8")
+        return artifacts
+
+    monkeypatch.setattr(
+        scoped_page_module,
+        "load_manifest_artifacts",
+        mutate_after_open,
+    )
+
+    with pytest.raises(gr.Error, match="reindex"):
+        _Page().download_single_file(False, FILE_ID, "owner")
+
+    download_parent = roots.zip / "downloads" / FILE_ID
+    assert not download_parent.exists() or list(download_parent.iterdir()) == []
+
+
 def test_markdown_writer_replaces_leaf_symlink_without_touching_victim(roots):
     victim = roots.markdown / "victim-secret.md"
     victim.write_text("VICTIM", encoding="utf-8")

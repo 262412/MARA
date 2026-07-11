@@ -8,11 +8,18 @@ from typing import cast
 
 import pytest
 from ktem.index.file.pipelines import IndexPipeline
+from PIL import Image
 from theflow.settings import settings as flowsettings
 
+import kotaemon.loaders.azureai_document_intelligence_loader as azure_loader_module
 from kotaemon.artifact_namespace import finish_and_publish_artifacts
 from kotaemon.base import Document
-from kotaemon.indices.parse_cache import load_data_with_parse_cache
+from kotaemon.indices.parse_cache import (
+    build_parse_cache_key,
+    documents_to_cache_payload,
+    load_data_with_parse_cache,
+)
+from kotaemon.indices.performance_cache import JsonDiskCache
 from kotaemon.loaders.azureai_document_intelligence_loader import (
     AzureAIDocumentIntelligenceLoader,
 )
@@ -113,6 +120,21 @@ def _mhtml_source(path: Path) -> None:
     )
 
 
+def _multipart_mhtml_source(path: Path) -> None:
+    path.write_text(
+        "MIME-Version: 1.0\n"
+        'Content-Type: multipart/related; boundary="MARA-BOUNDARY"\n\n'
+        "--MARA-BOUNDARY\n"
+        'Content-Type: text/html; charset="utf-8"\n\n'
+        "<html><body>FIRST ARTIFACT</body></html>\n"
+        "--MARA-BOUNDARY\n"
+        'Content-Type: text/html; charset="utf-8"\n\n'
+        "<html><body>SECOND DOCUMENT</body></html>\n"
+        "--MARA-BOUNDARY--\n",
+        encoding="utf-8",
+    )
+
+
 def test_mhtml_parse_cache_miss_and_hit_publish_current_generation(roots, tmp_path):
     source = tmp_path / "report.mhtml"
     _mhtml_source(source)
@@ -138,11 +160,67 @@ def test_mhtml_parse_cache_miss_and_hit_publish_current_generation(roots, tmp_pa
         assert output.read_text(encoding="utf-8") == "CACHED MHTML"
 
 
+def test_mhtml_parse_cache_hit_replays_exact_first_part_artifact(roots, tmp_path):
+    source = tmp_path / "multipart.mhtml"
+    _multipart_mhtml_source(source)
+    reader = MhtmlReader(cache_dir=str(roots.markdown), open_encoding="utf-8")
+
+    first = load_data_with_parse_cache(
+        reader,
+        source,
+        extra_info={"file_id": FILE_ID, "artifact_generation": "generation-a"},
+        cache_dir=roots.parse,
+    )
+    second = load_data_with_parse_cache(
+        reader,
+        source,
+        extra_info={"file_id": FILE_ID, "artifact_generation": "generation-b"},
+        cache_dir=roots.parse,
+    )
+
+    assert first.cache_hit is False
+    assert second.cache_hit is True
+    assert "SECOND DOCUMENT" in second.documents[0].text
+    for generation in ("generation-a", "generation-b"):
+        output = roots.markdown / FILE_ID / generation / "multipart.md"
+        assert output.read_text(encoding="utf-8") == "FIRST ARTIFACT"
+
+
 class _AzureResult(dict):
     def __init__(self):
         super().__init__(figures=[], tables=[])
         self.content = "CACHED AZURE"
         self.pages = []
+
+
+class _AzureSpanResult(dict):
+    def __init__(self):
+        content = "FIGURE CAPTION\nBODY\nTABLE CELL"
+        table_offset = content.index("TABLE CELL")
+        super().__init__(
+            figures=[
+                {
+                    "boundingRegions": [
+                        {
+                            "pageNumber": 1,
+                            "polygon": [0, 0, 100, 0, 100, 100, 0, 100],
+                        }
+                    ],
+                    "spans": [{"offset": 0, "length": len("FIGURE CAPTION")}],
+                    "caption": {
+                        "spans": [{"offset": 0, "length": len("FIGURE CAPTION")}]
+                    },
+                }
+            ],
+            tables=[
+                {
+                    "boundingRegions": [],
+                    "spans": [{"offset": table_offset, "length": len("TABLE CELL")}],
+                }
+            ],
+        )
+        self.content = content
+        self.pages = [{"width": 100, "height": 100}]
 
 
 def test_azure_parse_cache_miss_and_hit_publish_current_generation(
@@ -175,6 +253,118 @@ def test_azure_parse_cache_miss_and_hit_publish_current_generation(
     for generation in ("generation-a", "generation-b"):
         output = roots.markdown / FILE_ID / generation / "report.md"
         assert output.read_text(encoding="utf-8") == "CACHED AZURE"
+
+
+def test_azure_parse_cache_hit_replays_raw_artifact_without_network(
+    roots, tmp_path, monkeypatch
+):
+    source = tmp_path / "spans.pdf"
+    source.write_bytes(b"%PDF-1.4")
+    reader = AzureAIDocumentIntelligenceLoader(
+        endpoint="endpoint",
+        credential="key",
+        cache_dir=str(roots.markdown),
+    )
+    calls = 0
+
+    def analyze(_path):
+        nonlocal calls
+        calls += 1
+        return _AzureSpanResult()
+
+    monkeypatch.setattr(reader, "_analyze_document", analyze)
+    monkeypatch.setattr(
+        azure_loader_module,
+        "crop_image",
+        lambda *_args: Image.new("RGB", (2, 2), color="white"),
+    )
+    reader.vlm_endpoint = ""
+
+    first = load_data_with_parse_cache(
+        reader,
+        source,
+        extra_info={"file_id": FILE_ID, "artifact_generation": "generation-a"},
+        cache_dir=roots.parse,
+    )
+    second = load_data_with_parse_cache(
+        reader,
+        source,
+        extra_info={"file_id": FILE_ID, "artifact_generation": "generation-b"},
+        cache_dir=roots.parse,
+    )
+
+    assert first.cache_hit is False
+    assert second.cache_hit is True
+    assert calls == 1
+    assert "TABLE CELL" not in second.documents[0].text
+    for generation in ("generation-a", "generation-b"):
+        output = roots.markdown / FILE_ID / generation / "spans.md"
+        assert output.read_text(encoding="utf-8") == _AzureSpanResult().content
+
+
+def test_parse_cache_does_not_persist_runtime_extra_info(roots, tmp_path):
+    source = tmp_path / "runtime.txt"
+    source.write_text("source", encoding="utf-8")
+
+    class _Loader:
+        @staticmethod
+        def load_data(_path, extra_info=None):
+            return [
+                Document(
+                    text="cached",
+                    metadata={"intrinsic": "keep", **(extra_info or {})},
+                )
+            ]
+
+    first = load_data_with_parse_cache(
+        _Loader(),
+        source,
+        extra_info={
+            "file_id": "file-a",
+            "artifact_generation": "generation-a",
+            "user_scope": "alice-private",
+        },
+        cache_dir=roots.parse,
+    )
+    second = load_data_with_parse_cache(
+        _Loader(),
+        source,
+        extra_info={
+            "file_id": "file-b",
+            "artifact_generation": "generation-b",
+        },
+        cache_dir=roots.parse,
+    )
+
+    assert first.cache_hit is False
+    assert second.cache_hit is True
+    assert second.documents[0].metadata == {
+        "intrinsic": "keep",
+        "file_id": "file-b",
+        "artifact_generation": "generation-b",
+    }
+
+
+def test_mhtml_sidecar_policy_does_not_reuse_legacy_payload(roots, tmp_path):
+    source = tmp_path / "legacy.mhtml"
+    _mhtml_source(source)
+    reader = MhtmlReader(cache_dir=str(roots.markdown), open_encoding="utf-8")
+    legacy_key = build_parse_cache_key(reader, source)
+    JsonDiskCache(roots.parse, "parse").set(
+        legacy_key,
+        documents_to_cache_payload([Document(text="LEGACY WITHOUT SIDECAR")]),
+    )
+
+    result = load_data_with_parse_cache(
+        reader,
+        source,
+        extra_info={"file_id": FILE_ID, "artifact_generation": "generation-a"},
+        cache_dir=roots.parse,
+    )
+
+    assert result.cache_hit is False
+    output = roots.markdown / FILE_ID / "generation-a" / "legacy.md"
+    assert output.read_text(encoding="utf-8") == "CACHED MHTML"
 
 
 def test_manifest_publication_scans_only_current_generation(roots, tmp_path):
