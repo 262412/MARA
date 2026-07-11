@@ -248,9 +248,9 @@ class GlobalKnowledgeGraphService:
         return f"{trimmed}..."
 
     def _build_nodes_and_edges(
-        self, source_ids: list[str], *, user_id: Any = None
+        self, source_ids: list[str], *, user_id: Any = None, sources: Any = None
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        sources = self._load_sources(source_ids, user_id=user_id)
+        sources = sources or self._load_sources(source_ids, user_id=user_id)
         if not sources:
             return {"nodes": [], "edges": [], "clusters": {}}, {}
 
@@ -360,8 +360,9 @@ class GlobalKnowledgeGraphService:
         user_id: Any = None,
     ) -> dict[str, Any]:
         source_ids = self._normalize_source_ids(source_ids)
+        sources = self._load_sources(source_ids, user_id=user_id)
         cached_state = self._load_cached_state(conversation_id)
-        graph, manifest = self._build_nodes_and_edges(source_ids, user_id=user_id)
+        graph, manifest = self._build_nodes_and_edges(source_ids, sources=sources)
         cached_state["conversation_id"] = conversation_id
         cached_state["manifest"] = manifest
         cached_state["graph"] = graph
