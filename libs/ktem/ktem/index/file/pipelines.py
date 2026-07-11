@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 from theflow.settings import settings
 from theflow.utils.modules import import_dotted_string
 
+from kotaemon.artifact_namespace import finish_and_publish_artifacts
 from kotaemon.base import BaseComponent, Document, Node, Param, RetrievedDocument
 from kotaemon.embeddings import BaseEmbeddings
 from kotaemon.indices import VectorIndexing, VectorRetrieval
@@ -724,8 +725,7 @@ class IndexPipeline(BaseComponent):
         else:
             extra_info = {"file_name": stored_file_path}
             file_name = source_file_name or stored_file_path
-        if layout_metadata:
-            extra_info.update(layout_metadata)
+        extra_info.update(layout_metadata or {})
 
         extra_info["file_id"] = file_id
         extra_info["collection_name"] = self.collection_name
@@ -744,7 +744,7 @@ class IndexPipeline(BaseComponent):
         )
         yield from self.handle_docs(docs, file_id, file_name)
 
-        self.finish(file_id, stored_file_path)
+        finish_and_publish_artifacts(self, file_id, stored_file_path, settings)
 
         yield Document(f" => Finished indexing {file_name}", channel="debug")
         return file_id, docs

@@ -6,6 +6,7 @@ from typing import Optional
 
 from PIL import Image
 
+from kotaemon.artifact_namespace import write_markdown_artifact
 from kotaemon.base import Document, Param
 
 from .base import BaseReader
@@ -230,11 +231,7 @@ class AzureAIDocumentIntelligenceLoader(BaseReader):
             )
             removed_spans += table_desc["spans"]
         # save the text content into markdown format
-        if self.cache_dir is not None:
-            with open(
-                Path(self.cache_dir) / f"{file_name.stem}.md", "w", encoding="utf-8"
-            ) as f:
-                f.write(text_content)
+        write_markdown_artifact(self.cache_dir, file_name, metadata, text_content)
 
         removed_spans = sorted(removed_spans, key=lambda x: x["offset"], reverse=True)
         for span in removed_spans:

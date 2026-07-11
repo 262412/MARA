@@ -5,6 +5,7 @@ from typing import Optional
 from llama_index.core.readers.base import BaseReader
 from theflow.settings import settings as flowsettings
 
+from kotaemon.artifact_namespace import write_markdown_artifact
 from kotaemon.base import Document
 
 
@@ -152,10 +153,6 @@ class MhtmlReader(BaseReader):
                     if text:
                         page.append(text)
         # save the page into markdown format
-        print(self.cache_dir)
-        if self.cache_dir is not None:
-            print(Path(self.cache_dir) / f"{file_name.stem}.md")
-            with open(Path(self.cache_dir) / f"{file_name.stem}.md", "w") as f:
-                f.write(page[0])
+        write_markdown_artifact(self.cache_dir, file_name, extra_info, page[0])
 
         return [Document(text="\n\n".join(page), metadata=metadata)]
