@@ -15,7 +15,9 @@ from theflow.settings import settings as flowsettings
 
 from kotaemon.artifact_downloads import (
     READY_FETCH_WINDOW_SECONDS,
+    READY_OUTPUT_HARD_LIMIT,
     READY_OUTPUT_TTL_SECONDS,
+    DownloadWorkspace,
 )
 
 FILE_ID = "file-owner"
@@ -86,6 +88,24 @@ def _server_download_dirs(roots) -> list[Path]:
     return sorted(path for path in parent.iterdir()) if parent.exists() else []
 
 
+def _ready_workspace(
+    root: Path,
+    file_id: str,
+    request_name: str,
+    *,
+    marker_age: float = 0,
+) -> Path:
+    request = root / "downloads" / file_id / request_name
+    request.mkdir(parents=True)
+    marker = request / ".ready"
+    marker.write_text("0", encoding="utf-8")
+    (request / "download.html").write_text("READY", encoding="utf-8")
+    if marker_age:
+        modified = time.time() - marker_age
+        os.utime(marker, (modified, modified))
+    return request
+
+
 def test_zip_toggle_off_does_not_create_unreturned_output(roots):
     _prepare_manifest(roots)
 
@@ -116,6 +136,22 @@ def test_zip_failure_removes_temporary_and_active_request_directory(roots, monke
         _Page().download_single_file(False, FILE_ID, "owner")
 
     assert _server_download_dirs(roots) == []
+
+
+def test_cleanup_failure_does_not_override_uniform_download_error(roots, monkeypatch):
+    _prepare_manifest(roots)
+
+    def fail_archive_open(*_args, **_kwargs):
+        raise OSError("zip stream failed")
+
+    def fail_cleanup(_workspace):
+        raise OSError("cleanup failed")
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", fail_archive_open)
+    monkeypatch.setattr(DownloadWorkspace, "cleanup", fail_cleanup)
+
+    with pytest.raises(gr.Error, match="reindex"):
+        _Page().download_single_file(False, FILE_ID, "owner")
 
 
 def test_html_replace_failure_removes_temporary_and_active_request_directory(
@@ -186,6 +222,63 @@ def test_pruning_bounds_valid_ready_payloads_outside_fetch_window(roots):
         if path.name.startswith("stale-") and path.exists()
     ]
     assert len(remaining_old) <= 32
+
+
+def test_global_pruning_reclaims_expired_ready_output_from_other_file_id(roots):
+    expired = _ready_workspace(
+        roots.zip,
+        "file-other",
+        "expired-request",
+        marker_age=READY_OUTPUT_TTL_SECONDS + 1,
+    )
+
+    _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+
+    assert not expired.exists()
+
+
+def test_global_pruning_reclaims_unlocked_stale_active_workspace(roots):
+    stale = roots.zip / "downloads" / "file-other" / "stale-active"
+    stale.mkdir(parents=True)
+    marker = stale / ".active"
+    marker.write_text("0", encoding="utf-8")
+    (stale / ".download-stale.tmp").write_text("PARTIAL", encoding="utf-8")
+    expired = time.time() - READY_OUTPUT_TTL_SECONDS - 1
+    os.utime(marker, (expired, expired))
+
+    _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+
+    assert not stale.exists()
+
+
+def test_global_pruning_keeps_old_live_active_lease(roots):
+    workspace = DownloadWorkspace.create(roots.zip, FILE_ID, ".html")
+    marker = workspace.directory / ".active"
+    expired = time.time() - READY_OUTPUT_TTL_SECONDS - 1
+    os.utime(marker, (expired, expired))
+
+    try:
+        _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+        assert workspace.directory.exists()
+        assert marker.exists()
+    finally:
+        workspace.cleanup()
+
+
+def test_global_capacity_rejects_new_output_without_revoking_fresh_paths(roots):
+    existing = [
+        _ready_workspace(
+            roots.zip,
+            f"file-{index:03d}",
+            "fresh-request",
+        )
+        for index in range(READY_OUTPUT_HARD_LIMIT)
+    ]
+
+    with pytest.raises(gr.Error, match="reindex"):
+        _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+
+    assert all(path.exists() for path in existing)
 
 
 def test_ready_output_survives_followup_prune_for_browser_fetch_window(roots):

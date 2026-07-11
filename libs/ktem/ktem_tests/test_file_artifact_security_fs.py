@@ -14,6 +14,7 @@ from ktem.index.file._scoped_page import ScopedFileIndexPageMixin
 from ktem.index.file._selection_service import FileSelectionError
 from theflow.settings import settings as flowsettings
 
+import kotaemon.artifact_manifest as manifest_module
 from kotaemon.artifact_namespace import (
     ArtifactNamespaceError,
     finish_and_publish_artifacts,
@@ -112,7 +113,7 @@ def test_download_rejects_hardlinked_manifest_artifact(roots):
         _Page().download_single_file(False, FILE_ID, "owner")
 
 
-def test_download_streams_held_leaf_after_validation_swap(roots, monkeypatch):
+def test_download_rejects_unlinked_leaf_after_validation_swap(roots, monkeypatch):
     leaf = _leaf(roots.markdown)
     victim = roots.markdown / "victim-secret.md"
     victim.write_text("VICTIM", encoding="utf-8")
@@ -127,9 +128,11 @@ def test_download_streams_held_leaf_after_validation_swap(roots, monkeypatch):
 
     monkeypatch.setattr(scoped_page_module, "load_manifest_artifacts", swap_after_open)
 
-    names, content = _download(_Page())
-    assert content == "OWNER"
-    assert names == ["markdown/report.md"]
+    with pytest.raises(gr.Error, match="reindex"):
+        _Page().download_single_file(False, FILE_ID, "owner")
+
+    download_parent = roots.zip / "downloads" / FILE_ID
+    assert not download_parent.exists() or list(download_parent.iterdir()) == []
 
 
 def test_download_streams_held_leaf_after_intermediate_swap(roots, monkeypatch):
@@ -182,6 +185,101 @@ def test_download_rejects_held_leaf_size_change_and_cleans_workspace(
 
     download_parent = roots.zip / "downloads" / FILE_ID
     assert not download_parent.exists() or list(download_parent.iterdir()) == []
+
+
+def test_download_rejects_equal_length_leaf_rewrite_after_validation(
+    roots, monkeypatch
+):
+    leaf = _leaf(roots.markdown)
+    _manifest(roots)
+    original = scoped_page_module.load_manifest_artifacts
+
+    def rewrite_after_open(*args, **kwargs):
+        artifacts = original(*args, **kwargs)
+        with leaf.open("r+b") as output:
+            output.write(b"OTHER")
+            output.flush()
+            os.fsync(output.fileno())
+        return artifacts
+
+    monkeypatch.setattr(
+        scoped_page_module,
+        "load_manifest_artifacts",
+        rewrite_after_open,
+    )
+
+    with pytest.raises(gr.Error, match="reindex"):
+        _Page().download_single_file(False, FILE_ID, "owner")
+
+
+def test_download_rejects_equal_length_leaf_rewrite_during_copy(roots, monkeypatch):
+    leaf = _leaf(roots.markdown)
+    _manifest(roots)
+    real_open = zipfile.ZipFile.open
+    mutated = False
+
+    class _MutatingTarget:
+        def __init__(self, target):
+            self.target = target
+
+        def __enter__(self):
+            self.target.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.target.__exit__(*args)
+
+        def write(self, data):
+            nonlocal mutated
+            if not mutated:
+                with leaf.open("r+b") as output:
+                    output.write(b"OTHER")
+                    output.flush()
+                    os.fsync(output.fileno())
+                mutated = True
+            return self.target.write(data)
+
+    def mutate_while_copying(archive, name, mode="r", *args, **kwargs):
+        target = real_open(archive, name, mode, *args, **kwargs)
+        return _MutatingTarget(target) if mode == "w" else target
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", mutate_while_copying)
+
+    with pytest.raises(gr.Error, match="reindex"):
+        _Page().download_single_file(False, FILE_ID, "owner")
+    assert mutated is True
+
+
+def test_manifest_rejects_equal_length_rewrite_during_bounded_read(roots, monkeypatch):
+    _leaf(roots.markdown)
+    _manifest(roots)
+    path = roots.zip / "manifests" / "v1" / FILE_ID / "manifest.json"
+    real_read = manifest_module.os.read
+    mutated = False
+
+    def rewrite_after_read(fd, size):
+        nonlocal mutated
+        data = real_read(fd, size)
+        if data and not mutated:
+            payload = path.read_bytes()
+            replacement = payload.replace(b": ", b":\t", 1)
+            assert len(replacement) == len(payload)
+            with path.open("r+b") as output:
+                output.write(replacement)
+                output.flush()
+                os.fsync(output.fileno())
+            mutated = True
+        return data
+
+    monkeypatch.setattr(manifest_module.os, "read", rewrite_after_read)
+
+    with pytest.raises(ArtifactNamespaceError, match="manifest"):
+        load_manifest_artifacts(
+            FILE_ID,
+            {"chunks": roots.chunks, "markdown": roots.markdown},
+            roots.zip,
+        )
+    assert mutated is True
 
 
 def test_markdown_writer_replaces_leaf_symlink_without_touching_victim(roots):
@@ -254,6 +352,33 @@ def test_markdown_writer_rejects_configured_root_symlink(tmp_path):
         )
 
 
+def test_markdown_writer_rejects_configured_root_symlink_ancestor(tmp_path):
+    real_parent = tmp_path / "real-parent"
+    real_parent.mkdir()
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(real_parent, target_is_directory=True)
+
+    with pytest.raises(ArtifactNamespaceError):
+        write_markdown_artifact(
+            linked_parent / "markdown",
+            "report.mhtml",
+            {"file_id": FILE_ID, "artifact_generation": GENERATION},
+            "OWNER",
+        )
+    assert not (real_parent / "markdown").exists()
+
+
+@pytest.mark.parametrize("source_name", ["CON", "report:", "report\x01"])
+def test_markdown_writer_rejects_nonportable_output_names(roots, source_name):
+    with pytest.raises(ArtifactNamespaceError):
+        write_markdown_artifact(
+            roots.markdown,
+            source_name,
+            {"file_id": FILE_ID, "artifact_generation": GENERATION},
+            "OWNER",
+        )
+
+
 @pytest.mark.parametrize("linked_root", ["artifact", "manifest"])
 def test_manifest_consumer_rejects_configured_root_symlink(
     roots, tmp_path, linked_root
@@ -275,6 +400,53 @@ def test_manifest_consumer_rejects_configured_root_symlink(
             {"chunks": roots.chunks, "markdown": artifact_root},
             manifest_root,
         )
+
+
+@pytest.mark.parametrize("linked_root", ["artifact", "manifest"])
+def test_manifest_consumer_rejects_configured_root_symlink_ancestor(
+    roots, tmp_path, linked_root
+):
+    _leaf(roots.markdown)
+    _manifest(roots)
+    linked_parent = tmp_path / f"linked-{linked_root}"
+    linked_parent.symlink_to(roots.markdown.parent, target_is_directory=True)
+    artifact_root = (
+        linked_parent / roots.markdown.name
+        if linked_root == "artifact"
+        else roots.markdown
+    )
+    manifest_root = (
+        linked_parent / roots.zip.name if linked_root == "manifest" else roots.zip
+    )
+
+    with pytest.raises(ArtifactNamespaceError):
+        load_manifest_artifacts(
+            FILE_ID,
+            {"chunks": roots.chunks, "markdown": artifact_root},
+            manifest_root,
+        )
+
+
+def test_simple_download_rejects_configured_root_symlink_ancestor(
+    tmp_path, monkeypatch
+):
+    real_parent = tmp_path / "real-parent"
+    real_parent.mkdir()
+    real_root = real_parent / "zip"
+    real_root.mkdir()
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(real_parent, target_is_directory=True)
+    monkeypatch.setattr(flowsettings, "MARA_AUTH_MODE", "auto", raising=False)
+    monkeypatch.setattr(
+        flowsettings,
+        "KH_ZIP_OUTPUT_DIR",
+        str(linked_parent / "zip"),
+        raising=False,
+    )
+
+    with pytest.raises(gr.Error, match="reindex"):
+        _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+    assert not (real_root / "downloads").exists()
 
 
 def test_manifest_publication_fsyncs_parent_directory(roots, tmp_path, monkeypatch):

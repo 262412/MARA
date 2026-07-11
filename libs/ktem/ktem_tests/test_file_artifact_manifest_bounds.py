@@ -187,7 +187,7 @@ def test_manifest_rejects_empty_entries(roots):
 
 def test_manifest_rejects_portable_duplicate_archive_names(roots):
     first = _leaf(roots, "Report.md")
-    second = first.with_name("report.md ")
+    second = first.with_name("report.md")
     second.write_text("OTHER", encoding="utf-8")
     _write_record(
         roots,
@@ -200,6 +200,33 @@ def test_manifest_rejects_portable_duplicate_archive_names(roots):
     )
 
     with pytest.raises(ArtifactNamespaceError, match="Duplicate"):
+        _load(roots)
+
+
+def test_manifest_rejects_paths_deeper_than_generation_leaf_layout(roots):
+    nested = roots.markdown / FILE_ID / GENERATION / "nested" / "report.md"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("OWNER", encoding="utf-8")
+    _write_record(
+        roots,
+        _record([_entry(f"{FILE_ID}/{GENERATION}/nested/report.md")]),
+    )
+
+    with pytest.raises(ArtifactNamespaceError, match="path"):
+        _load(roots)
+
+
+@pytest.mark.parametrize(
+    "leaf_name",
+    ["CON.md", "report:.md", "report\x01.md", "report.md ", "report\x00.md"],
+)
+def test_manifest_rejects_nonportable_leaf_names(roots, leaf_name):
+    _write_record(
+        roots,
+        _record([_entry(f"{FILE_ID}/{GENERATION}/{leaf_name}")]),
+    )
+
+    with pytest.raises(ArtifactNamespaceError, match="path"):
         _load(roots)
 
 

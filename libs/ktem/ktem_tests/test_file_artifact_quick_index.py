@@ -9,6 +9,7 @@ import pytest
 from ktem.index.file._indexing_service import _quick_index_settings
 
 from kotaemon.artifact_namespace import finish_and_publish_artifacts
+from kotaemon.artifact_pipeline import consume_in_background
 
 
 def _settings(tmp_path):
@@ -110,3 +111,19 @@ def test_manifest_finalization_waits_for_writer_before_finish(tmp_path):
 
     assert order == ["writer", "finish"]
     assert manifest.is_file()
+
+
+def test_background_base_exception_completes_future_with_actionable_error():
+    started = threading.Event()
+
+    def exit_writer():
+        started.set()
+        raise SystemExit("writer exited")
+        yield
+
+    writer = consume_in_background(exit_writer)
+    assert started.wait(timeout=2)
+
+    with pytest.raises(RuntimeError, match="background writer"):
+        writer.result(timeout=0.1)
+    assert writer.done()

@@ -345,6 +345,71 @@ def test_parse_cache_does_not_persist_runtime_extra_info(roots, tmp_path):
     }
 
 
+def test_cached_parse_runs_without_runtime_context_in_text_or_content(roots, tmp_path):
+    source = tmp_path / "context-sensitive.txt"
+    source.write_text("source", encoding="utf-8")
+    seen = []
+
+    class _ContextSensitiveLoader:
+        @staticmethod
+        def load_data(_path, extra_info=None):
+            seen.append(extra_info)
+            scope = (extra_info or {}).get("user_scope", "neutral")
+            document = Document(
+                text=f"text:{scope}",
+                metadata={"parsed": True, **(extra_info or {})},
+            )
+            document.content = f"content:{scope}"
+            return [document]
+
+    first = load_data_with_parse_cache(
+        _ContextSensitiveLoader(),
+        source,
+        extra_info={"file_id": "file-a", "user_scope": "alice"},
+        cache_dir=roots.parse,
+    )
+    second = load_data_with_parse_cache(
+        _ContextSensitiveLoader(),
+        source,
+        extra_info={"file_id": "file-b", "user_scope": "bob"},
+        cache_dir=roots.parse,
+    )
+
+    assert seen == [None]
+    assert first.cache_hit is False
+    assert second.cache_hit is True
+    assert [
+        (item.text, item.content) for item in (first.documents[0], second.documents[0])
+    ] == [
+        ("text:neutral", "content:neutral"),
+        ("text:neutral", "content:neutral"),
+    ]
+    assert first.documents[0].metadata["user_scope"] == "alice"
+    assert second.documents[0].metadata["user_scope"] == "bob"
+
+
+def test_uncached_parse_preserves_runtime_context(roots, tmp_path):
+    source = tmp_path / "uncached-context.txt"
+    source.write_text("source", encoding="utf-8")
+    seen = []
+
+    class _ContextSensitiveLoader:
+        @staticmethod
+        def load_data(_path, extra_info=None):
+            seen.append(extra_info)
+            return [Document(text=(extra_info or {})["user_scope"])]
+
+    result = load_data_with_parse_cache(
+        _ContextSensitiveLoader(),
+        source,
+        extra_info={"user_scope": "alice"},
+        cache_dir=None,
+    )
+
+    assert seen == [{"user_scope": "alice"}]
+    assert result.documents[0].text == "alice"
+
+
 def test_mhtml_sidecar_policy_does_not_reuse_legacy_payload(roots, tmp_path):
     source = tmp_path / "legacy.mhtml"
     _mhtml_source(source)
