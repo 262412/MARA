@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import importlib
+import os
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 
+import pypdf
 import pytest
 from ktem_tests.preview_test_utils import write_text_pdf
 
@@ -86,3 +91,81 @@ def test_pdf_service_types_are_exported_from_preview_package():
     assert PdfPage.__module__ == "ktem.preview.pdf"
     assert PreviewPurpose.__module__ == "ktem.preview.context"
     assert PageContext.__module__ == "ktem.preview.context"
+
+
+def test_page_uses_one_stable_snapshot_when_path_is_replaced(monkeypatch, tmp_path):
+    import ktem.preview.pdf as pdf_module
+    from ktem.preview.pdf import PdfService
+
+    source = write_text_pdf(tmp_path / "report.pdf", ["Old page one", "Old page two"])
+    replacement = write_text_pdf(tmp_path / "replacement.pdf", ["New page one"])
+    real_reader = pypdf.PdfReader
+    reader_calls = 0
+
+    def replacing_reader(*args, **kwargs):
+        nonlocal reader_calls
+        reader_calls += 1
+        if reader_calls == 2:
+            os.replace(replacement, source)
+        return real_reader(*args, **kwargs)
+
+    monkeypatch.setattr(pypdf, "PdfReader", replacing_reader)
+    monkeypatch.setattr(pdf_module, "PdfReader", replacing_reader, raising=False)
+
+    page = PdfService().page(source, 2)
+
+    assert reader_calls == 1
+    assert page.page == 2
+    assert page.total_pages == 2
+    assert page.text == "Old page two"
+
+
+def test_parallel_same_page_miss_parses_one_snapshot(monkeypatch, tmp_path):
+    import ktem.preview.pdf as pdf_module
+    from ktem.preview.pdf import PdfService
+
+    source = write_text_pdf(tmp_path / "report.pdf", ["Shared page"])
+    real_reader = pypdf.PdfReader
+    reader_calls = 0
+    calls_lock = threading.Lock()
+
+    def counting_reader(*args, **kwargs):
+        nonlocal reader_calls
+        with calls_lock:
+            reader_calls += 1
+        time.sleep(0.02)
+        return real_reader(*args, **kwargs)
+
+    monkeypatch.setattr(pypdf, "PdfReader", counting_reader)
+    monkeypatch.setattr(pdf_module, "PdfReader", counting_reader, raising=False)
+    service = PdfService()
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        pages = list(executor.map(lambda _index: service.page(source, 1), range(8)))
+
+    assert [page.text for page in pages] == ["Shared page"] * 8
+    assert reader_calls == 1
+
+
+def test_pdf_count_text_and_path_caches_are_bounded_lru(tmp_path):
+    import ktem.preview.pdf as pdf_module
+
+    sources = [
+        write_text_pdf(tmp_path / f"report-{index}.pdf", [f"Document {index}"])
+        for index in range(3)
+    ]
+    service = getattr(pdf_module, "PdfService")(max_cache_entries=2)
+
+    for source in sources:
+        service.page(source, 1, max_chars=4)
+
+    assert len(service._count_cache) == 2
+    assert len(service._path_signatures) == 2
+    assert len(service._text_cache) == 2
+    assert all(key[2] == 4 for key in service._text_cache)
+
+    service.page(sources[-1], 1, max_chars=5)
+    service.page(sources[-1], 1, max_chars=6)
+
+    assert len(service._text_cache) == 2
+    assert {key[2] for key in service._text_cache} == {5, 6}

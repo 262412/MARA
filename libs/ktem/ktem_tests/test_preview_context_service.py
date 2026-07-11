@@ -113,3 +113,30 @@ def test_all_conversion_consumers_share_one_canonical_office_artifact(
     assert Path(web_output).parent == tmp_path / "gradio" / "pdf_previews"
     assert Path(web_output).name == Path(indexing_output).name
     assert Path(web_output).read_bytes() == Path(indexing_output).read_bytes()
+
+
+def test_office_page_context_keeps_original_source_and_pdf_artifact_paths(tmp_path):
+    from ktem.preview.context import PreviewPurpose
+    from ktem.preview.service import PreviewService
+
+    source = write_ooxml(tmp_path / "source" / "report.docx")
+    artifact = write_text_pdf(tmp_path / "canonical" / "report.pdf", ["Page text"])
+
+    class FakeOfficeConverter:
+        cache_dir = artifact.parent
+
+        def convert_to_pdf(self, _file_path, _file_name=None):
+            return artifact
+
+        def get_cached_pdf(self, _file_path, _file_name=None):
+            return artifact
+
+    context = PreviewService(office=FakeOfficeConverter()).page_context(
+        source,
+        source.name,
+        1,
+        purpose=PreviewPurpose.DOCQA,
+    )
+
+    assert context.source_path == source.resolve()
+    assert context.pdf_path == artifact.resolve()
