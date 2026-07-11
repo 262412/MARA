@@ -29,6 +29,52 @@ class DocxImageBudget:
         self.decoded_bytes += payload_size
         return True
 
+    def checkpoint(self) -> tuple[int, int]:
+        return self.count, self.decoded_bytes
+
+    def restore(self, checkpoint: tuple[int, int]) -> None:
+        self.count, self.decoded_bytes = checkpoint
+
+
+class DocxHtmlBudgetExceeded(RuntimeError):
+    """Raised before allocating markup that cannot fit in the HTML budget."""
+
+
+@dataclass
+class DocxHtmlBudget:
+    limit: int = MAX_RENDERED_HTML_CHARS
+    used: int = 0
+
+    @property
+    def remaining(self) -> int:
+        return self.limit - self.used
+
+    def checkpoint(self) -> int:
+        return self.used
+
+    def restore(self, checkpoint: int) -> None:
+        self.used = checkpoint
+
+    def reserve(self, char_count: int) -> None:
+        if not self.try_reserve(char_count):
+            raise DocxHtmlBudgetExceeded
+
+    def try_reserve(self, char_count: int) -> bool:
+        if char_count < 0 or char_count > self.remaining:
+            return False
+        self.used += char_count
+        return True
+
+
+def escaped_html_length(value: str, *, quote: bool = True) -> int:
+    length = len(value)
+    length += value.count("&") * 4
+    length += (value.count("<") + value.count(">")) * 3
+    if quote:
+        length += value.count('"') * 5
+        length += value.count("'") * 4
+    return length
+
 
 def safe_font(font_name: str, fallback: str) -> str:
     candidate = str(font_name or "").strip()
@@ -65,6 +111,8 @@ def safe_raster_data_url(
     *,
     max_decoded_bytes: int = MAX_EMBEDDED_IMAGE_BYTES,
     budget: DocxImageBudget | None = None,
+    html_budget: DocxHtmlBudget | None = None,
+    rendered_html_chars: int = 0,
 ) -> str:
     mime_type = str(content_type or "").strip().lower()
     if mime_type not in SAFE_RASTER_MIME_TYPES:
@@ -73,7 +121,16 @@ def safe_raster_data_url(
         return ""
     if not _matches_raster_signature(mime_type, payload):
         return ""
+    html_checkpoint = html_budget.checkpoint() if html_budget is not None else 0
+    encoded_length = 4 * ((len(payload) + 2) // 3)
+    data_url_length = len(f"data:{mime_type};base64,") + encoded_length
+    if html_budget is not None and not html_budget.try_reserve(
+        rendered_html_chars + data_url_length
+    ):
+        return ""
     if budget is not None and not budget.try_consume(len(payload)):
+        if html_budget is not None:
+            html_budget.restore(html_checkpoint)
         return ""
     encoded = base64.b64encode(payload).decode("ascii")
     return f"data:{mime_type};base64,{encoded}"
@@ -96,6 +153,8 @@ def _matches_raster_signature(mime_type: str, payload: bytes) -> bool:
 
 
 __all__ = [
+    "DocxHtmlBudget",
+    "DocxHtmlBudgetExceeded",
     "DocxImageBudget",
     "MAX_AGGREGATE_IMAGE_BYTES",
     "MAX_EMBEDDED_IMAGE_BYTES",
@@ -103,6 +162,7 @@ __all__ = [
     "MAX_RENDERED_HTML_CHARS",
     "SAFE_HYPERLINK_SCHEMES",
     "SAFE_RASTER_MIME_TYPES",
+    "escaped_html_length",
     "escape",
     "safe_font",
     "safe_hyperlink_target",

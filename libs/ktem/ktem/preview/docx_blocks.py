@@ -6,7 +6,7 @@ from docx.oxml.ns import qn
 
 from .docx_relationships import DOCX_NAMESPACES
 from .docx_runs import DocxRunRenderer, _local_name
-from .docx_security import escape
+from .docx_security import DocxHtmlBudget, escape, escaped_html_length
 
 
 @dataclass(frozen=True)
@@ -67,9 +67,15 @@ class DocxNumbering:
 
 
 class DocxParagraphRenderer:
-    def __init__(self, runs: DocxRunRenderer, numbering: DocxNumbering) -> None:
+    def __init__(
+        self,
+        runs: DocxRunRenderer,
+        numbering: DocxNumbering,
+        html_budget: DocxHtmlBudget,
+    ) -> None:
         self._runs = runs
         self._numbering = numbering
+        self._html_budget = html_budget
 
     def render(self, paragraph) -> ParagraphMarkup | None:
         text = paragraph.text or ""
@@ -86,7 +92,11 @@ class DocxParagraphRenderer:
                 rendered = self._runs.render_hyperlink(child)
             if rendered:
                 inner_parts.append(rendered)
-        inner_html = "".join(inner_parts) or escape(text)
+        if inner_parts:
+            inner_html = "".join(inner_parts)
+        else:
+            self._html_budget.reserve(escaped_html_length(text))
+            inner_html = escape(text)
         style_name = _style_name(paragraph)
         tag = _paragraph_tag(style_name)
         list_tag, list_level = self._list_info(paragraph, style_name)
@@ -150,13 +160,23 @@ class DocxParagraphRenderer:
 
 
 class DocxTableRenderer:
-    def __init__(self, paragraphs: DocxParagraphRenderer) -> None:
+    def __init__(
+        self,
+        paragraphs: DocxParagraphRenderer,
+        html_budget: DocxHtmlBudget,
+    ) -> None:
         self._paragraphs = paragraphs
+        self._html_budget = html_budget
 
     def render(self, table) -> str:
+        self._html_budget.reserve(len("<table><tbody></tbody></table>"))
         rows: list[str] = []
         for row in table.rows:
-            cells = [f"<td>{self._render_cell(cell)}</td>" for cell in row.cells]
+            self._html_budget.reserve(len("<tr></tr>"))
+            cells: list[str] = []
+            for cell in row.cells:
+                self._html_budget.reserve(len("<td></td>"))
+                cells.append(f"<td>{self._render_cell(cell)}</td>")
             rows.append(f"<tr>{''.join(cells)}</tr>")
         return f"<table><tbody>{''.join(rows)}</tbody></table>"
 
@@ -167,6 +187,7 @@ class DocxTableRenderer:
             if markup is None:
                 continue
             tag = markup.tag if markup.list_tag is None else "p"
+            self._html_budget.reserve(len(f"<{tag}{markup.style_attr}></{tag}>"))
             parts.append(f"<{tag}{markup.style_attr}>{markup.inner_html}</{tag}>")
         return "".join(parts)
 

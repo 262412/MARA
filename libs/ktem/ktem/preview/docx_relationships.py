@@ -5,7 +5,13 @@ from dataclasses import dataclass
 
 from docx.oxml.ns import qn
 
-from .docx_security import DocxImageBudget, safe_hyperlink_target, safe_raster_data_url
+from .docx_security import (
+    DocxHtmlBudget,
+    DocxImageBudget,
+    escaped_html_length,
+    safe_hyperlink_target,
+    safe_raster_data_url,
+)
 
 DOCX_NAMESPACES = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
@@ -25,9 +31,11 @@ class DocxRelationshipResolver:
         self,
         relationships: Mapping[str, object],
         image_budget: DocxImageBudget,
+        html_budget: DocxHtmlBudget,
     ) -> None:
         self._relationships = relationships
         self._image_budget = image_budget
+        self._html_budget = html_budget
 
     def hyperlink_target(self, hyperlink_element) -> str:
         relationship_id = hyperlink_element.attrib.get(qn("r:id"), "")
@@ -37,7 +45,12 @@ class DocxRelationshipResolver:
         target = str(getattr(relationship, "target_ref", "") or "")
         return safe_hyperlink_target(target)
 
-    def embedded_image(self, drawing_element) -> EmbeddedImage:
+    def embedded_image(
+        self,
+        drawing_element,
+        *,
+        markup_chars: int,
+    ) -> EmbeddedImage:
         alt_text = self._image_alt_text(drawing_element)
         blip = drawing_element.find(".//a:blip", DOCX_NAMESPACES)
         if blip is None:
@@ -56,6 +69,8 @@ class DocxRelationshipResolver:
                 content_type,
                 payload,
                 budget=self._image_budget,
+                html_budget=self._html_budget,
+                rendered_html_chars=markup_chars + escaped_html_length(alt_text),
             ),
         )
 

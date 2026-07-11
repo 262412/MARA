@@ -15,72 +15,120 @@ from .docx_blocks import (
 )
 from .docx_relationships import DocxRelationshipResolver
 from .docx_runs import DocxRunRenderer
-from .docx_security import MAX_RENDERED_HTML_CHARS, DocxImageBudget, escape, safe_font
+from .docx_security import (
+    DocxHtmlBudget,
+    DocxHtmlBudgetExceeded,
+    DocxImageBudget,
+    escape,
+    safe_font,
+)
 
 
 class DocxHtmlRenderer:
     def __init__(self, document) -> None:
         self._document = document
         self._base_font_name, self._base_font_size_em = _base_font(document)
+        self._html_budget = DocxHtmlBudget()
+        self._image_budget = DocxImageBudget()
         relationships = DocxRelationshipResolver(
             document.part.rels,
-            DocxImageBudget(),
+            self._image_budget,
+            self._html_budget,
         )
-        runs = DocxRunRenderer(relationships, self._base_font_name)
+        runs = DocxRunRenderer(
+            relationships,
+            self._base_font_name,
+            self._html_budget,
+        )
         paragraphs = DocxParagraphRenderer(
             runs,
             DocxNumbering.from_document(document),
+            self._html_budget,
         )
         self._paragraphs = paragraphs
-        self._tables = DocxTableRenderer(paragraphs)
+        self._tables = DocxTableRenderer(paragraphs, self._html_budget)
 
     def render(self, max_chars: int = 12000) -> str:
-        parts = [self._opening_tag()]
+        self._html_budget.restore(0)
+        self._image_budget.restore((0, 0))
+        opening_tag = self._opening_tag()
+        self._html_budget.reserve(len(opening_tag) + len("</div>"))
+        parts = [opening_tag]
         active_lists: list[str] = []
         consumed = 0
-        rendered_chars = len(parts[0])
         for block in _iter_blocks(self._document):
             if isinstance(block, Paragraph):
-                markup = self._paragraphs.render(block)
-                if markup is None:
-                    continue
-                consumed += len(block.text or "")
-                if consumed > max_chars:
+                block_chars = len(block.text or "")
+                if consumed + block_chars > max_chars:
                     break
-                start = len(parts)
-                previous_lists = list(active_lists)
-                self._append_paragraph(parts, active_lists, markup)
-                next_rendered_chars = _accept_appended_html(
-                    parts,
-                    active_lists,
-                    start,
-                    previous_lists,
-                    rendered_chars,
-                )
-                if next_rendered_chars is None:
+                if not self._render_paragraph_block(parts, active_lists, block):
                     break
-                rendered_chars = next_rendered_chars
+                consumed += block_chars
                 continue
-            consumed += _table_text_length(block)
-            if consumed > max_chars:
+            block_chars = _table_text_length(block)
+            if consumed + block_chars > max_chars:
                 break
-            start = len(parts)
-            previous_lists = list(active_lists)
-            self._close_lists(parts, active_lists)
-            parts.append(self._tables.render(block))
-            next_rendered_chars = _accept_appended_html(
-                parts,
-                active_lists,
-                start,
-                previous_lists,
-                rendered_chars,
-            )
-            if next_rendered_chars is None:
+            if not self._render_table_block(parts, active_lists, block):
                 break
-            rendered_chars = next_rendered_chars
+            consumed += block_chars
         self._close_lists(parts, active_lists)
         parts.append("</div>")
         return "".join(parts)
+
+    def _render_paragraph_block(
+        self,
+        parts: list[str],
+        active_lists: list[str],
+        paragraph: Paragraph,
+    ) -> bool:
+        checkpoint = self._block_checkpoint(parts, active_lists)
+        try:
+            markup = self._paragraphs.render(paragraph)
+            if markup is not None:
+                self._append_paragraph(parts, active_lists, markup)
+            return True
+        except DocxHtmlBudgetExceeded:
+            self._restore_block(parts, active_lists, checkpoint)
+            return False
+
+    def _render_table_block(
+        self,
+        parts: list[str],
+        active_lists: list[str],
+        table: Table,
+    ) -> bool:
+        checkpoint = self._block_checkpoint(parts, active_lists)
+        try:
+            self._close_lists(parts, active_lists)
+            parts.append(self._tables.render(table))
+            return True
+        except DocxHtmlBudgetExceeded:
+            self._restore_block(parts, active_lists, checkpoint)
+            return False
+
+    def _block_checkpoint(
+        self,
+        parts: list[str],
+        active_lists: list[str],
+    ) -> tuple[int, list[str], int, tuple[int, int]]:
+        return (
+            len(parts),
+            list(active_lists),
+            self._html_budget.checkpoint(),
+            self._image_budget.checkpoint(),
+        )
+
+    def _restore_block(
+        self,
+        parts: list[str],
+        active_lists: list[str],
+        checkpoint: tuple[int, list[str], int, tuple[int, int]],
+    ) -> None:
+        part_count, previous_lists, html_checkpoint, image_checkpoint = checkpoint
+        del parts[part_count:]
+        active_lists[:] = previous_lists
+        self._html_budget.restore(html_checkpoint)
+        self._image_budget.restore(image_checkpoint)
 
     def _opening_tag(self) -> str:
         return (
@@ -89,14 +137,17 @@ class DocxHtmlRenderer:
             f'font-size:{self._base_font_size_em:.2f}em;">'
         )
 
-    @staticmethod
     def _append_paragraph(
+        self,
         parts: list[str],
         active_lists: list[str],
         markup: ParagraphMarkup,
     ) -> None:
         if not markup.list_tag:
-            DocxHtmlRenderer._close_lists(parts, active_lists)
+            self._close_lists(parts, active_lists)
+            self._html_budget.reserve(
+                len(f"<{markup.tag}{markup.style_attr}></{markup.tag}>")
+            )
             parts.append(
                 f"<{markup.tag}{markup.style_attr}>{markup.inner_html}</{markup.tag}>"
             )
@@ -106,11 +157,14 @@ class DocxHtmlRenderer:
             parts.append(f"</{active_lists.pop()}>")
         while len(active_lists) < target_depth:
             active_lists.append(markup.list_tag)
+            self._html_budget.reserve(len(f"<{markup.list_tag}></{markup.list_tag}>"))
             parts.append(f"<{markup.list_tag}>")
         if active_lists[-1] != markup.list_tag:
             parts.append(f"</{active_lists.pop()}>")
             active_lists.append(markup.list_tag)
+            self._html_budget.reserve(len(f"<{markup.list_tag}></{markup.list_tag}>"))
             parts.append(f"<{markup.list_tag}>")
+        self._html_budget.reserve(len(f"<li{markup.style_attr}></li>"))
         parts.append(f"<li{markup.style_attr}>{markup.inner_html}</li>")
 
     @staticmethod
@@ -144,21 +198,3 @@ def _base_font(document) -> tuple[str, float]:
 
 def _table_text_length(table: Table) -> int:
     return sum(len(cell.text or "") for row in table.rows for cell in row.cells)
-
-
-def _accept_appended_html(
-    parts: list[str],
-    active_lists: list[str],
-    start: int,
-    previous_lists: list[str],
-    rendered_chars: int,
-) -> int | None:
-    appended_chars = sum(len(part) for part in parts[start:])
-    closing_chars = len("</div>") + sum(
-        len(f"</{list_tag}>") for list_tag in active_lists
-    )
-    if rendered_chars + appended_chars + closing_chars <= MAX_RENDERED_HTML_CHARS:
-        return rendered_chars + appended_chars
-    del parts[start:]
-    active_lists[:] = previous_lists
-    return None
