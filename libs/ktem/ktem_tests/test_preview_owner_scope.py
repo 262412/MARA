@@ -144,7 +144,7 @@ def _managed_preview_controller(monkeypatch, owned_preview_app):
         calls.append(args)
         return 1, 1, "preview", "notice"
 
-    controller._build_preview_payload = build_payload
+    monkeypatch.setattr(controller, "_build_preview_payload", build_payload)
     request = SimpleNamespace(username="attacker", session_hash="session-a")
     return controller, request, calls, storage
 
@@ -312,8 +312,12 @@ def test_preview_direct_call_abi_keeps_shapes(monkeypatch, owned_preview_app):
     monkeypatch.setattr(resolver_module, "engine", db_engine)
     monkeypatch.setattr(callback_module.flowsettings, "MARA_AUTH_MODE", "local")
     controller = preview_module.ChatPagePreviewController(app)
-    controller._build_preview_payload = lambda *_args: (1, 1, "preview", "notice")
-    controller._get_office_job_status = lambda _path: "pending"
+    monkeypatch.setattr(
+        controller,
+        "_build_preview_payload",
+        lambda *_args: (1, 1, "preview", "notice"),
+    )
+    monkeypatch.setattr(controller, "_get_office_job_status", lambda _path: "pending")
 
     selected = controller.on_selected_file_change([], ["attacker-file"], {})
     navigation = controller.on_next_page(

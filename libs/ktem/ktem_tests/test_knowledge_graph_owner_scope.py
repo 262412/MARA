@@ -5,9 +5,6 @@ from typing import Any, cast
 
 import pytest
 from gradio.helpers import special_args
-from sqlalchemy import Column, DateTime, Integer, String, create_engine
-from sqlalchemy.orm import Session, declarative_base
-
 from ktem.docqa.knowledge_graph import (
     GlobalKnowledgeGraphService as DocQAKnowledgeGraphService,
 )
@@ -19,6 +16,8 @@ from ktem.pages.chat.studio_artifact_controls import (
     generate_studio_artifact_panel_update,
 )
 from ktem.pages.chat.studio_artifact_mindmap import _build_graph_view
+from sqlalchemy import Column, DateTime, Integer, String, create_engine
+from sqlalchemy.orm import Session, declarative_base
 
 
 class _DocStoreSpy:

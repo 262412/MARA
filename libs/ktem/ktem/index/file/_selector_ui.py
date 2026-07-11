@@ -40,7 +40,9 @@ function(file_list) {
     tribute.detach(input_box);
     tribute.attach(input_box);
 }
-""".replace("web_search", WEB_SEARCH_COMMAND)
+""".replace(
+    "web_search", WEB_SEARCH_COMMAND
+)
 
 
 class FileSelector(BasePage):

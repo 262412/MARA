@@ -12,6 +12,11 @@ from kotaemon.loaders.pdf_loader import get_page_thumbnails
 from ...db.models import engine
 from . import page_preview_cache
 from .generation_store import has_in_progress, make_page_key, set_current_view
+from .page_preview_callbacks import (
+    normalize_preview_tick,
+    poll_office_conversion,
+    resolve_preview_access,
+)
 
 # Import preview handlers for different file types
 from .page_preview_document import (
@@ -20,11 +25,6 @@ from .page_preview_document import (
     paginate_docx_html,
 )
 from .page_preview_models import PreviewPayloadRequest
-from .page_preview_callbacks import (
-    normalize_preview_tick,
-    poll_office_conversion,
-    resolve_preview_access,
-)
 from .page_preview_non_pdf import NonPdfPreviewService
 from .page_preview_office import OfficePreviewConversionService
 from .page_preview_presentation import PresentationPreviewService, extract_pptx_text

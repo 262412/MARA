@@ -10,12 +10,7 @@ from typing import TYPE_CHECKING, Any, Protocol, Sequence
 
 from sqlmodel import Session, select
 
-from .context import (
-    PageContext,
-    PreviewAccess,
-    PreviewPurpose,
-    ResolvedPreviewSource,
-)
+from .context import PageContext, PreviewAccess, PreviewPurpose, ResolvedPreviewSource
 from .errors import (
     PreviewAccessError,
     PreviewContextError,
@@ -35,11 +30,13 @@ class _OfficeConverter(Protocol):
 
     def convert_to_pdf(
         self, file_path: str | Path, file_name: str | None = None
-    ) -> Path: ...
+    ) -> Path:
+        ...
 
     def get_cached_pdf(
         self, file_path: str | Path, file_name: str | None = None
-    ) -> Path | None: ...
+    ) -> Path | None:
+        ...
 
 
 def canonical_office_cache_dir() -> Path:

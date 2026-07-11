@@ -7,8 +7,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
-from ktem.preview.docx import extract_docx_text
 from ktem.preview.context import PreviewPurpose, preview_access_for_user
+from ktem.preview.docx import extract_docx_text
 from ktem.preview.office import OfficePreviewConversionService
 from ktem.preview.service import PreviewService
 

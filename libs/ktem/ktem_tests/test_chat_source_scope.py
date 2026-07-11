@@ -71,8 +71,11 @@ def test_source_scope_syncs_graph_ids_against_available_sources():
         "file-1"
     ]
     assert sync_graph_source_ids(["file-1"], {}, {}) == []
-    assert sync_graph_source_ids(
-        ["file-1", "file-2"],
-        {},
-        {"file-2": "Slides"},
-    ) == []
+    assert (
+        sync_graph_source_ids(
+            ["file-1", "file-2"],
+            {},
+            {"file-2": "Slides"},
+        )
+        == []
+    )

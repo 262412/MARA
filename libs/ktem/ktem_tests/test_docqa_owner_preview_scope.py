@@ -3,9 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, cast
 
-import pytest
-
 import ktem.docqa.runtime as runtime_module
+import pytest
 from ktem.docqa.runtime import DocQARuntime
 
 

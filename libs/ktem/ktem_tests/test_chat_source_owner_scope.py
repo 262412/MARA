@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from gradio.helpers import special_args
-
 from ktem.pages.chat import ChatPage
 from ktem.pages.chat.source_scope import sync_graph_source_ids
 
@@ -107,7 +106,7 @@ def test_loaded_graph_ids_are_intersected_with_request_owner_sources():
 def test_scope_and_sidebar_callbacks_receive_injected_request():
     page = _scoped_page()
     request = cast(Any, SimpleNamespace(username="attacker"))
-    callbacks = [
+    callbacks: list[tuple[Any, list[Any]]] = [
         (
             page.sync_graph_source_ids_with_selector_choices,
             [["victim-file"], [["Victim.pdf", "victim-file"]], "victim-state"],
