@@ -57,11 +57,13 @@ def extract_docx_html(file_path: str, max_chars: int = 12000) -> str:
 
 def _log_compatibility_fallback(error: PreviewError) -> None:
     logger.warning(
-        "DOCX preview fallback: code=%s stage=%s file=%s converter=%s details=%s",
+        "DOCX preview fallback: code=%s stage=%s file=%s converter=%s "
+        "reason=%s details=%s",
         error.code.value,
         error.stage,
         error.source_path,
         error.converter,
+        error.reason,
         error.details,
     )
 

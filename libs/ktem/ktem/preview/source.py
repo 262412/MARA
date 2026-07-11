@@ -175,6 +175,14 @@ def _inspect_ooxml_archive_file(
             names = {info.filename for info in infos}
     except PreviewSourceError:
         raise
+    except NotImplementedError as exc:
+        raise _source_error(
+            PreviewErrorCode.SOURCE_ARCHIVE_INVALID,
+            path,
+            "archive_validation",
+            f"The OOXML archive uses an unsupported compression method: {exc}",
+            reason="archive_unsupported_compression",
+        ) from exc
     except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
         raise _source_error(
             PreviewErrorCode.SOURCE_ARCHIVE_INVALID,

@@ -72,7 +72,7 @@ def escaped_html_length(value: str, *, quote: bool = True) -> int:
     length += (value.count("<") + value.count(">")) * 3
     if quote:
         length += value.count('"') * 5
-        length += value.count("'") * 4
+        length += value.count("'") * 5
     return length
 
 
