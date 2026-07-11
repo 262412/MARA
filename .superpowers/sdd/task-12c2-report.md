@@ -189,3 +189,24 @@ owner、runtime graph 与 Studio mindmap focused gate 为 `43 passed`；full hyg
 同轮 review 的另一 finding 涉及 Studio `_latest_notebook_artifact` notebook authorization。
 Task 12C2 brief 明确把 notebook CRUD authorization 排除在本切片之外，因此本轮未修改该
 路径；该 finding 已锁定由 **Task 12F** 实施，避免在 C2 扩大权限与数据模型范围。
+
+### 8.1 Empty authorized source sentinel re-review
+
+Re-review 进一步指出 `_build_nodes_and_edges` 使用
+`sources = sources or self._load_sources(...)`：当 `build_graph` 已在 cache 前验证空 source
+scope 并传入 `{}` 时，falsy fallback 会在 cache read 后再次调用 `_load_sources([])`。
+
+修复再次保持 RED 与 production 独立提交：
+
+- `19cbcf3 test: reuse empty authorized graph sources`
+- `daa4b62 security: preserve empty authorized graph scope`
+
+RED 单文件结果为 `1 failed, 5 passed`，真实 method wrappers 记录到事件顺序
+`sources-before-cache -> cache -> sources-after-cache`。Production 改为显式
+`if sources is None`，因此已授权空 dict 与非空 source map 都直接复用，不会在 cache 后
+重新 resolution。为保持既有 104-line function ratchet，同函数内只删除一个无语义的
+`display = keyword` alias，graph evidence payload 仍使用相同 keyword 值。
+
+Fresh verification：targeted owner/KG 为 `6 passed`；DocQA/Web KG、owner、runtime graph
+与 Studio mindmap focused gate 为 `44 passed`；full hygiene 无 ratchet；full pre-commit
+全部 hooks 通过。graph/cache schema、manifest、save order 与 return shape 未变化。
