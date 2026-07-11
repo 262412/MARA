@@ -274,13 +274,13 @@
       "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/docqa/acceptance.py": {
-      "module_lines": 862,
+      "module_lines": 851,
       "functions": {
         "AcceptanceMatrix.prepare_sample_files": 116,
         "AcceptanceMatrix.run_cli_to_web_restore_matrix": 143
       },
       "classes": {
-        "AcceptanceMatrix": 745
+        "AcceptanceMatrix": 732
       },
       "non_actionable_broad_exceptions": 0
     },
@@ -358,14 +358,14 @@
       "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/index/file/pipelines.py": {
-      "module_lines": 1027,
+      "module_lines": 990,
       "functions": {
         "DocumentRetrievalPipeline.run": 99,
         "IndexDocumentPipeline.stream": 89,
         "IndexPipeline.handle_docs": 107
       },
       "classes": {
-        "IndexPipeline": 417
+        "IndexPipeline": 401
       },
       "non_actionable_broad_exceptions": 0
     },
@@ -635,12 +635,6 @@
       "functions": {},
       "classes": {},
       "non_actionable_broad_exceptions": 2
-    },
-    "libs/ktem/ktem/utils/office_conversion.py": {
-      "module_lines": 211,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 6
     },
     "libs/ktem/ktem_tests/test_file_index_page_extraction.py": {
       "module_lines": 485,
