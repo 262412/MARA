@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-from functools import partial
-from typing import Any
+from inspect import Signature, signature
+from typing import Any, cast
 
 import gradio as gr
 
@@ -36,6 +36,7 @@ from .studio_artifacts import (
 from .studio_note_controls import bind_studio_note_events
 
 LOGGER = logging.getLogger(__name__)
+_DIRECT_CALL_REQUEST = cast(gr.Request, object())
 
 
 def bind_studio_artifact_events(page: Any) -> None:
@@ -63,7 +64,7 @@ def bind_studio_artifact_events(page: Any) -> None:
         ],
         show_progress="hidden",
     ).then(
-        partial(generate_studio_artifact_panel_update, page),
+        _bind_page_callback(generate_studio_artifact_panel_update, page),
         inputs=studio_generate_inputs(page),
         outputs=studio_generate_outputs(page),
         show_progress="minimal",
@@ -87,7 +88,7 @@ def bind_studio_artifact_events(page: Any) -> None:
         outputs=[page.reasoning_trace_panel, page.plot_panel],
         show_progress="hidden",
     ).then(
-        partial(regenerate_latest_studio_artifact_panel_update, page),
+        _bind_page_callback(regenerate_latest_studio_artifact_panel_update, page),
         inputs=studio_regenerate_inputs(page),
         outputs=studio_generate_outputs(page),
         show_progress="minimal",
@@ -204,8 +205,13 @@ def generate_studio_artifact_panel_update(
     verification_mode: str,
     planner_model: str,
     note_ids: str = "",
+    request: gr.Request = _DIRECT_CALL_REQUEST,
     *selecteds: Any,
 ):
+    if not _is_request_value(request):
+        selecteds = (request, *selecteds)
+        request = _DIRECT_CALL_REQUEST
+    user_id = page._resolve_persist_user_id(user_id, request)
     values = locals()
     if not str(conversation_id or "").strip():
         return failed_generation_studio_artifact_outputs(
@@ -325,8 +331,13 @@ def regenerate_latest_studio_artifact_panel_update(
     verification_mode: str,
     planner_model: str,
     graph_source_ids: list[str],
+    request: gr.Request = _DIRECT_CALL_REQUEST,
     *selecteds: Any,
 ):
+    if not _is_request_value(request):
+        selecteds = (request, *selecteds)
+        request = _DIRECT_CALL_REQUEST
+    user_id = page._resolve_persist_user_id(user_id, request)
     if not str(conversation_id or "").strip():
         raise ValueError("Select a conversation before regenerating artifacts.")
     artifact = _latest_notebook_artifact(conversation_id)
@@ -495,3 +506,23 @@ def _run_regeneration_turn(
         verification_mode=verification_mode,
         planner_model=planner_model,
     )
+
+
+def _is_request_value(value: Any) -> bool:
+    return bool(
+        value is _DIRECT_CALL_REQUEST
+        or isinstance(value, gr.Request)
+        or hasattr(value, "username")
+        or hasattr(value, "session_hash")
+    )
+
+
+def _bind_page_callback(callback, page):
+    def bound(*args, **kwargs):
+        return callback(page, *args, **kwargs)
+
+    parameters = tuple(signature(callback).parameters.values())[1:]
+    bound.__signature__ = Signature(parameters=parameters)  # type: ignore[attr-defined]
+    bound.__annotations__ = {"request": gr.Request}
+    bound.__name__ = callback.__name__
+    return bound

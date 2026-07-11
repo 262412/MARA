@@ -8,6 +8,7 @@ from .models import ConversionAttempt
 
 
 class PreviewErrorCode(str, Enum):
+    SOURCE_UNAVAILABLE = "source_unavailable"
     SOURCE_MISSING = "source_missing"
     SOURCE_TYPE_MISMATCH = "source_type_mismatch"
     SOURCE_ARCHIVE_INVALID = "source_archive_invalid"
@@ -61,6 +62,10 @@ class PreviewError(RuntimeError):
 
 class PreviewSourceError(PreviewError):
     """The source is absent, corrupt, unsafe, or does not match its type."""
+
+
+class PreviewAccessError(PreviewError):
+    """A source is unknown or outside the authenticated principal's scope."""
 
 
 class PreviewConversionError(PreviewError):

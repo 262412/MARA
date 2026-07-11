@@ -6,10 +6,18 @@ import shutil
 import stat
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, Sequence
 
-from .context import PageContext, PreviewPurpose
+from sqlmodel import Session, select
+
+from .context import (
+    PageContext,
+    PreviewAccess,
+    PreviewPurpose,
+    ResolvedPreviewSource,
+)
 from .errors import (
+    PreviewAccessError,
     PreviewContextError,
     PreviewConversionError,
     PreviewError,
@@ -27,13 +35,11 @@ class _OfficeConverter(Protocol):
 
     def convert_to_pdf(
         self, file_path: str | Path, file_name: str | None = None
-    ) -> Path:
-        ...
+    ) -> Path: ...
 
     def get_cached_pdf(
         self, file_path: str | Path, file_name: str | None = None
-    ) -> Path | None:
-        ...
+    ) -> Path | None: ...
 
 
 def canonical_office_cache_dir() -> Path:
@@ -126,11 +132,19 @@ class PreviewService:
 
     def __init__(
         self,
+        app: Any = None,
         *,
+        engine: Any = None,
         office: _OfficeConverter | None = None,
         pdf: PdfService | None = None,
         office_cache_dir: str | Path | None = None,
     ) -> None:
+        self.app = app
+        if engine is None and app is not None:
+            from ktem.db.models import engine as db_engine
+
+            engine = db_engine
+        self.engine = engine
         if office is None:
             from .office import OfficeConversionService
 
@@ -143,6 +157,57 @@ class PreviewService:
             pdf = PdfService()
         self.office = office
         self.pdf = pdf
+
+    def resolve_source(
+        self,
+        file_id: str,
+        *,
+        access: PreviewAccess,
+    ) -> ResolvedPreviewSource:
+        sources = self.resolve_sources([file_id], access=access, strict=True)
+        return sources[0]
+
+    def resolve_sources(
+        self,
+        file_ids: Sequence[str],
+        *,
+        access: PreviewAccess,
+        strict: bool = True,
+    ) -> list[ResolvedPreviewSource]:
+        normalized = _unique_source_ids(file_ids)
+        if not normalized:
+            return []
+        if self.app is None or self.engine is None:
+            raise _source_unavailable()
+
+        matches: dict[str, tuple[Any, Any]] = {}
+        for index in getattr(self.app.index_manager, "indices", []):
+            remaining = [file_id for file_id in normalized if file_id not in matches]
+            if not remaining:
+                break
+            resources = getattr(index, "_resources", {}) or {}
+            source_table = resources.get("Source")
+            if source_table is None:
+                continue
+            statement = select(source_table).where(source_table.id.in_(remaining))
+            if _owner_required(index, access):
+                statement = statement.where(source_table.user == access.user_id)
+            with Session(self.engine) as session:
+                rows = session.exec(statement).all()
+            for row in rows:
+                source = _unwrap_source_row(row)
+                source_id = str(getattr(source, "id", "") or "")
+                if source_id and source_id not in matches:
+                    matches[source_id] = (index, source)
+
+        missing = [file_id for file_id in normalized if file_id not in matches]
+        if missing and strict:
+            raise _source_unavailable()
+        return [
+            _resolved_source(file_id, *matches[file_id])
+            for file_id in normalized
+            if file_id in matches
+        ]
 
     def prepare_pdf(
         self,
@@ -161,18 +226,31 @@ class PreviewService:
     def page_context(
         self,
         file_path: str | Path,
-        file_name: str,
-        page: int,
+        file_name: str | None = None,
+        page: int = 1,
         *,
+        access: PreviewAccess | None = None,
         purpose: PreviewPurpose,
         max_chars: int = 7000,
         fallback_text: str = "",
     ) -> PageContext:
-        source_path = Path(file_path).expanduser().resolve()
+        resolved_source = (
+            self.resolve_source(str(file_path), access=access)
+            if access is not None
+            else None
+        )
+        source_path = (
+            resolved_source.path
+            if resolved_source is not None
+            else Path(file_path).expanduser().resolve()
+        )
+        resolved_name = str(
+            resolved_source.name if resolved_source is not None else file_name or ""
+        )
         diagnostic: PreviewError | None = None
         pdf_page: PdfPage | None = None
         try:
-            pdf_path = self._prepare_pdf_strict(source_path, file_name)
+            pdf_path = self._prepare_pdf_strict(source_path, resolved_name)
             pdf_page = self.pdf.page(pdf_path, page, max_chars=max_chars)
         except PreviewError as exc:
             if purpose in {PreviewPurpose.INDEXING, PreviewPurpose.ACCEPTANCE}:
@@ -181,23 +259,35 @@ class PreviewService:
 
         normalized_fallback = " ".join(str(fallback_text or "").split())[:max_chars]
         if pdf_page is not None and pdf_page.text:
-            return _page_context(source_path, pdf_page, file_name, purpose)
+            return _page_context(
+                source_path, pdf_page, resolved_name, purpose, resolved_source
+            )
         if normalized_fallback:
             return _fallback_context(
                 source_path,
-                file_name,
+                resolved_name,
                 page,
                 purpose,
                 normalized_fallback,
                 diagnostic,
                 pdf_page,
+                resolved_source,
             )
         if purpose is PreviewPurpose.DOCQA:
             raise _context_error(source_path, diagnostic)
         if pdf_page is not None:
-            return _page_context(source_path, pdf_page, file_name, purpose)
+            return _page_context(
+                source_path, pdf_page, resolved_name, purpose, resolved_source
+            )
         return _fallback_context(
-            source_path, file_name, page, purpose, "", diagnostic, None
+            source_path,
+            resolved_name,
+            page,
+            purpose,
+            "",
+            diagnostic,
+            None,
+            resolved_source,
         )
 
     def _prepare_pdf_strict(self, file_path: str | Path, file_name: str | None) -> Path:
@@ -213,6 +303,7 @@ def _page_context(
     page: PdfPage,
     file_name: str,
     purpose: PreviewPurpose,
+    source: ResolvedPreviewSource | None = None,
 ) -> PageContext:
     return PageContext(
         source_path=source_path,
@@ -222,6 +313,7 @@ def _page_context(
         total_pages=page.total_pages,
         text=page.text,
         pdf_path=page.path,
+        source=source,
     )
 
 
@@ -233,6 +325,7 @@ def _fallback_context(
     text: str,
     diagnostic: PreviewError | None,
     pdf_page: PdfPage | None,
+    source: ResolvedPreviewSource | None = None,
 ) -> PageContext:
     return PageContext(
         source_path=source_path,
@@ -246,6 +339,52 @@ def _fallback_context(
         pdf_path=pdf_page.path if pdf_page is not None else None,
         used_text_fallback=bool(text),
         diagnostic=diagnostic,
+        source=source,
+    )
+
+
+def _unique_source_ids(file_ids: Sequence[str]) -> list[str]:
+    output: list[str] = []
+    for file_id in file_ids:
+        normalized = str(file_id or "").strip()
+        if normalized and normalized not in output:
+            output.append(normalized)
+    return output
+
+
+def _owner_required(index: Any, access: PreviewAccess) -> bool:
+    return bool(access.owner_required or getattr(index, "config", {}).get("private"))
+
+
+def _unwrap_source_row(row: Any) -> Any:
+    if isinstance(row, (tuple, list)):
+        return row[0]
+    return row
+
+
+def _resolved_source(file_id: str, index: Any, row: Any) -> ResolvedPreviewSource:
+    stored_path = str(getattr(row, "path", "") or "")
+    storage_root = (getattr(index, "_resources", {}) or {}).get("FileStoragePath")
+    path = Path(storage_root or "") / Path(stored_path).expanduser()
+    return ResolvedPreviewSource(
+        file_id=file_id,
+        name=str(getattr(row, "name", "") or ""),
+        path=path.resolve(),
+        owner=str(getattr(row, "user", "") or ""),
+        index_id=getattr(index, "id", ""),
+        stored_path=stored_path,
+        size=int(getattr(row, "size", 0) or 0),
+        date_created=getattr(row, "date_created", None),
+    )
+
+
+def _source_unavailable() -> PreviewAccessError:
+    return PreviewAccessError(
+        PreviewErrorCode.SOURCE_UNAVAILABLE,
+        stage="source_resolution",
+        source_path="source-unavailable",
+        converter="database",
+        details="The requested source is unavailable.",
     )
 
 

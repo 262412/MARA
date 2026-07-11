@@ -513,7 +513,9 @@ class FileIndex(BaseIndex):
         self._ensure_resources()
         source_table = cast(Any, self._resources["Source"])
         statement = select(source_table)
-        if self.config.get("private", False):
+        if self.config.get("private", False) or getattr(
+            self._app, "f_user_management", False
+        ):
             statement = statement.where(source_table.user == user_id)
 
         rows: list[dict[str, Any]] = []
@@ -587,7 +589,10 @@ class FileIndex(BaseIndex):
         selected_ids: Any,
     ) -> list[str]:
         normalized = self._normalize_selected_values(selected_ids)
-        if not self.config.get("private", False):
+        if not (
+            self.config.get("private", False)
+            or getattr(self._app, "f_user_management", False)
+        ):
             return normalized
         visible_ids = set(self.list_source_ids(user_id))
         return [file_id for file_id in normalized if file_id in visible_ids]

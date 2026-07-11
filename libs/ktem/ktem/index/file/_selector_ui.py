@@ -40,9 +40,7 @@ function(file_list) {
     tribute.detach(input_box);
     tribute.attach(input_box);
 }
-""".replace(
-    "web_search", WEB_SEARCH_COMMAND
-)
+""".replace("web_search", WEB_SEARCH_COMMAND)
 
 
 class FileSelector(BasePage):
@@ -112,7 +110,9 @@ class FileSelector(BasePage):
 
         source_table = self._index._resources["Source"]
         statement = select(source_table.id)
-        if self._index.config.get("private", False):
+        if self._index.config.get("private", False) or getattr(
+            self._app, "f_user_management", False
+        ):
             statement = statement.where(source_table.user == user_id)
         with Session(engine) as session:
             return [file_id for (file_id,) in session.execute(statement).all()]
@@ -131,7 +131,9 @@ class FileSelector(BasePage):
 
         with Session(engine) as session:
             statement = select(self._index._resources["Source"])
-            if self._index.config.get("private", False):
+            if self._index.config.get("private", False) or getattr(
+                self._app, "f_user_management", False
+            ):
                 statement = statement.where(
                     self._index._resources["Source"].user == user_id
                 )

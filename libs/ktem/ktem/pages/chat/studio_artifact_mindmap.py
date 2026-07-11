@@ -84,6 +84,7 @@ def _build_graph_view(
         graph_source_ids=source_ids,
         focus_file_id=str(values["active_file_id"] or "").strip(),
         force_rebuild=True,
+        user_id=values["user_id"],
     )
 
 

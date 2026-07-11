@@ -16,6 +16,7 @@ from ktem.embeddings.manager import embedding_models_manager
 from ktem.index.file import FileIndex
 from ktem.index.file.deletion import DeletionCoordinator
 from ktem.llms.manager import llms
+from ktem.preview.errors import PreviewContextError, PreviewErrorCode
 from ktem.rerankings.manager import reranking_models_manager
 from ktem.utils.commands import WEB_SEARCH_COMMAND
 from sqlmodel import Session, select
@@ -96,11 +97,23 @@ def _build_turn_response(
     )
 
 
-def _preview_value(preview: Any, method_name: str, file_id: str) -> str:
+def _preview_value(
+    preview: Any, method_name: str, file_id: str, *, user_id: Any
+) -> str:
     method = getattr(preview, method_name, None)
     if method is None:
         return ""
-    return str(method(file_id) or "")
+    return str(method(file_id, user_id=user_id) or "")
+
+
+def _empty_page_context_error() -> PreviewContextError:
+    return PreviewContextError(
+        PreviewErrorCode.CONTEXT_TEXT_UNAVAILABLE,
+        stage="page_context",
+        source_path="source-unavailable",
+        converter="preview",
+        details="No text is available for the requested DocQA page.",
+    )
 
 
 def _graph_context_with_local_index(
@@ -331,8 +344,12 @@ class DocQARuntime(RuntimeSessionMutationFacade):
     def list_sessions(self, user_id: Any = None) -> list[DocQASessionSummary]:
         return self._get_session_service().list_sessions(user_id)
 
-    def load_session(self, conversation_id: str) -> Optional[DocQASession]:
-        return self._get_session_service().load_session(conversation_id)
+    def load_session(
+        self, conversation_id: str, user_id: Any = None
+    ) -> Optional[DocQASession]:
+        return self._get_session_service().load_session(
+            conversation_id, user_id=user_id
+        )
 
     def create_session(
         self, name: str | None = None, user_id: Any = None
@@ -356,18 +373,14 @@ class DocQARuntime(RuntimeSessionMutationFacade):
         file_ids = self._merge_unique_file_ids(selected_file_ids, [active_file_id])
         if not file_ids:
             return []
-        del user_id
+        sources = self._preview.resolve_sources(file_ids, user_id=user_id, strict=True)
         return [
             {
-                "file_id": file_id,
-                "file_name": _preview_value(
-                    self._preview,
-                    "resolve_file_name",
-                    file_id,
-                ),
-                "path": _preview_value(self._preview, "resolve_file_path", file_id),
+                "file_id": source.file_id,
+                "file_name": source.name,
+                "path": str(source.path),
             }
-            for file_id in file_ids
+            for source in sources
         ]
 
     def _build_selected_mapping(
@@ -490,11 +503,13 @@ class DocQARuntime(RuntimeSessionMutationFacade):
             )
 
             if active_file_id and not active_file_name:
-                active_file_name = self._preview.resolve_file_name(active_file_id)
+                active_file_name = self._preview.resolve_file_name(
+                    active_file_id, user_id=resolved_user_id
+                )
 
             if not active_file_name:
                 inferred_id, inferred_name, _ = self._preview.resolve_selected_file(
-                    selected_file_ids
+                    selected_file_ids, user_id=resolved_user_id
                 )
                 active_file_id = active_file_id or inferred_id
                 active_file_name = active_file_name or inferred_name
@@ -513,7 +528,10 @@ class DocQARuntime(RuntimeSessionMutationFacade):
                 active_file_id,
                 active_file_name,
                 normalized_page_number,
+                user_id=resolved_user_id,
             )
+        if qa_scope == "page" and not selected_text:
+            raise _empty_page_context_error()
 
         graph_context = (
             request.graph_context if isinstance(request.graph_context, dict) else {}
@@ -536,6 +554,9 @@ class DocQARuntime(RuntimeSessionMutationFacade):
         )
         _apply_request_page_image_records(pipeline, request)
         graph_source_ids = self._normalize_selected_file_ids(request.graph_source_ids)
+        self._preview.resolve_sources(
+            graph_source_ids, user_id=resolved_user_id, strict=True
+        )
         graph_context = _apply_multimodal_runtime_indexes(
             pipeline,
             self.file_index,
@@ -660,7 +681,7 @@ class DocQARuntime(RuntimeSessionMutationFacade):
     ]:
         resolved_user_id = self._resolve_user_id(request.user_id)
         session_info = (
-            self.load_session(request.conversation_id)
+            self.load_session(request.conversation_id, user_id=resolved_user_id)
             if request.conversation_id
             else None
         )

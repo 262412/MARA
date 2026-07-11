@@ -12,6 +12,8 @@ from ktem.app import BasePage
 from ktem.auth.service import resolve_request_user_id
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARuntime
+from ktem.preview.context import preview_access_for_user
+from ktem.preview.errors import PreviewAccessError
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
     SuggestConvNamePipeline,
 )
@@ -612,7 +614,9 @@ class ChatPage(BasePage):
         try:
             with Session(engine) as session:
                 statement = select(Source)
-                if self.file_index.config.get("private", False):
+                if self.file_index.config.get("private", False) or getattr(
+                    self._app, "f_user_management", False
+                ):
                     statement = statement.where(Source.user == user_id)
 
                 rows = session.execute(statement).all()
@@ -660,7 +664,9 @@ class ChatPage(BasePage):
         graph_source_ids,
         first_selector_choices,
         user_id,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
+        user_id = self._resolve_persist_user_id(user_id, request)
         source_map = self._load_available_source_map(user_id)
         selector_source_map = self._build_selector_source_map(first_selector_choices)
         return sync_graph_source_ids(
@@ -680,6 +686,10 @@ class ChatPage(BasePage):
         if not conversation_id:
             return normalized_ids
         user_id = self._resolve_persist_user_id(user_id, request)
+        available_ids = set(self._load_available_source_map(user_id))
+        normalized_ids = [
+            file_id for file_id in normalized_ids if file_id in available_ids
+        ]
         try:
             return self.docqa.persist_graph_source_ids(
                 conversation_id,
@@ -723,11 +733,14 @@ class ChatPage(BasePage):
             return "1 page"
         return "page count unavailable"
 
-    def _resolve_source_file_path(self, file_id: str) -> str:
+    def _resolve_source_file_path(self, file_id: str, user_id=None) -> str:
         if not file_id:
             return ""
         try:
-            return self.page_preview.resolve_file_path(file_id)
+            return self.page_preview.resolve_file_path(
+                file_id,
+                access=preview_access_for_user(self._app, user_id),
+            )
         except Exception as exc:
             logger.debug("Failed to resolve source file path %s: %s", file_id, exc)
             return ""
@@ -760,12 +773,7 @@ class ChatPage(BasePage):
             file_id: str(record.get("name", "") or file_id)
             for file_id, record in records.items()
         }
-        if not source_map:
-            source_map = self._build_selector_source_map(first_selector_choices)
-            records = {
-                file_id: {"id": file_id, "name": name, "path": "", "size": 0}
-                for file_id, name in source_map.items()
-            }
+        del first_selector_choices
 
         rows: list[dict] = []
         for file_id in source_map:
@@ -773,7 +781,7 @@ class ChatPage(BasePage):
             file_name = str(record.get("name", "") or source_map.get(file_id, file_id))
             if keyword and keyword not in file_name.lower():
                 continue
-            file_path = self._resolve_source_file_path(file_id)
+            file_path = self._resolve_source_file_path(file_id, user_id)
             size = int(record.get("size", 0) or 0)
             if not size and file_path and os.path.isfile(file_path):
                 size = os.path.getsize(file_path)
@@ -1213,8 +1221,19 @@ class ChatPage(BasePage):
         )
 
     def refresh_page_context_view(
-        self, file_id, file_name, file_path, page_number, total_pages, filter_text=""
+        self,
+        file_id,
+        file_name,
+        file_path,
+        page_number,
+        total_pages,
+        filter_text="",
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
+        if file_id:
+            file_name, file_path = self.page_preview._resolve_callback_source(
+                file_id, request
+            )
         return (
             self._render_page_strip_header(file_id, file_name, file_path, total_pages),
             self._render_page_thumbnail_strip(
@@ -1233,7 +1252,9 @@ class ChatPage(BasePage):
         selected_file_ids,
         graph_source_ids,
         filter_text,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
+        user_id = self._resolve_persist_user_id(user_id, request)
         selected_ids = self._normalize_selected_file_ids(selected_file_ids)
         selected_set = set(selected_ids)
         keyword = str(filter_text or "").strip().lower()
@@ -1283,10 +1304,16 @@ class ChatPage(BasePage):
             return []
         user_id = self._resolve_persist_user_id(user_id, request)
         try:
-            return self.docqa.load_graph_source_ids(
+            graph_source_ids = self.docqa.load_graph_source_ids(
                 conversation_id,
                 user_id=user_id,
             )
+            available_ids = set(self._load_available_source_map(user_id))
+            return [
+                file_id
+                for file_id in self._normalize_selected_file_ids(graph_source_ids)
+                if file_id in available_ids
+            ]
         except PermissionError as exc:
             raise gr.Error(str(exc)) from exc
 
@@ -1321,6 +1348,7 @@ class ChatPage(BasePage):
         graph_source_ids,
         focus_file_id,
         selected_file_ids=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
         if not self.knowledge_graph:
             return gr.update(value=""), None, "Status: knowledge graph unavailable.", []
@@ -1329,12 +1357,14 @@ class ChatPage(BasePage):
             self._normalize_selected_file_ids(selected_file_ids),
             [focus_file_id] if focus_file_id else [],
         )
+        user_id = self._resolve_persist_user_id("default", request)
         try:
             graph_view = self.knowledge_graph.get_graph_view(
                 conversation_id=conversation_id,
                 graph_source_ids=source_scope,
                 focus_file_id=focus_file_id,
                 force_rebuild=False,
+                user_id=user_id,
             )
 
             # Auto-heal stale cache during normal refresh so file add/delete events
@@ -1345,6 +1375,7 @@ class ChatPage(BasePage):
                     graph_source_ids=source_scope,
                     focus_file_id=focus_file_id,
                     force_rebuild=True,
+                    user_id=user_id,
                 )
 
             return (
@@ -1353,6 +1384,8 @@ class ChatPage(BasePage):
                 f"Status: {graph_view.get('status_message', 'ready')}",
                 graph_view.get("graph_source_ids", []),
             )
+        except PreviewAccessError:
+            raise
         except Exception as exc:
             logger.warning("Failed to refresh knowledge graph: %s", exc)
             return (
@@ -1368,6 +1401,7 @@ class ChatPage(BasePage):
         graph_source_ids,
         focus_file_id,
         selected_file_ids=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
         # Keep backward compatibility with existing event wiring without
         # forcing a rebuild.
@@ -1376,6 +1410,7 @@ class ChatPage(BasePage):
             graph_source_ids=graph_source_ids,
             focus_file_id=focus_file_id,
             selected_file_ids=selected_file_ids,
+            request=request,
         )
 
     def generate_knowledge_graph(
@@ -1384,6 +1419,7 @@ class ChatPage(BasePage):
         graph_source_ids,
         focus_file_id,
         selected_file_ids=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
         if not self.knowledge_graph:
             return gr.update(value=""), None, "Status: knowledge graph unavailable.", []
@@ -1392,12 +1428,14 @@ class ChatPage(BasePage):
             self._normalize_selected_file_ids(selected_file_ids),
             [focus_file_id] if focus_file_id else [],
         )
+        user_id = self._resolve_persist_user_id("default", request)
         try:
             graph_view = self.knowledge_graph.get_graph_view(
                 conversation_id=conversation_id,
                 graph_source_ids=source_scope,
                 focus_file_id=focus_file_id,
                 force_rebuild=True,
+                user_id=user_id,
             )
             return (
                 self._json_to_plot(graph_view),
@@ -1405,6 +1443,8 @@ class ChatPage(BasePage):
                 f"Status: {graph_view.get('status_message', 'ready')}",
                 graph_view.get("graph_source_ids", []),
             )
+        except PreviewAccessError:
+            raise
         except Exception as exc:
             logger.warning("Failed to generate knowledge graph: %s", exc)
             return (
