@@ -456,3 +456,126 @@ approved fastscratch paths and no repository-root `data/`, `datasets/`, or
 `outputs/`. Fastscratch is at 295.8G and 471,883/500,000 soft files. Scratch is
 at 71.91G and 472,609/300,000 soft files, still in inode grace. No user data or
 caches were deleted.
+
+## Review Remediation Round 2 (2026-07-11)
+
+The second review round is implemented in three behavior-separated commits:
+`9ce5053` adds failing protections, `0724613` preallocates DOCX render
+resources, and `52e777f` binds archive validation and parsing to one opened
+file handle while adding a structured error reason.
+
+### Round 2 Corrections
+
+- One exact remaining-character budget is shared by the relationship, run,
+  paragraph, table, and document block renderers. It reserves the root/list,
+  block, run, hyperlink, image, and fallback-alt wrappers as they are admitted.
+  A rejected block restores both its HTML and image-budget checkpoints, so no
+  partial block or unclosed tag enters the result and final output remains at
+  or below 8 MiB.
+- XML text, hyperlink targets, and image alt text have their escaped expansion
+  counted before `html.escape` is called. The counter handles the exact Python
+  HTML entities for ampersands, angle brackets, and quoted characters without
+  first allocating the escaped string. An over-budget required value rejects
+  its block; an over-budget optional hyperlink target keeps its already-safe
+  visible label without an anchor.
+- Safe raster images reserve their exact base64 encoded length, data-URL
+  prefix, image wrapper, and escaped alt expansion before aggregate image
+  accounting and `base64.b64encode`. If the complete image cannot fit, no
+  encoded payload is allocated and the renderer tries the bounded escaped-alt
+  fallback instead.
+- Strict text and HTML extraction now open the source once and pass that same
+  binary handle through ZIP metadata limits, `testzip()` integrity validation,
+  and the subsequent python-docx or `word/document.xml` read. Replacing the
+  source path after validation therefore cannot redirect parsing to a different
+  unvalidated archive.
+- `PreviewError` has an additive, default-empty `reason` field. OOXML resource
+  limits use `archive_resource_limit`; corrupt and structurally invalid
+  archives use their own reasons. DOCX stage routing now checks the structured
+  reason instead of searching diagnostic prose for `"exceeds"`.
+
+These changes preserve the strict and compatibility function names and
+signatures, established HTML for admitted content, Web/DocQA re-exports,
+fallback values, pagination, cache behavior, Gradio/event wiring, CLI, DB, and
+JSON/session surfaces.
+
+### Round 2 TDD Evidence
+
+The focused RED command selected the two new test modules before production
+changes. Result: `7 failed`, exit 1. The failures proved that:
+
+- an image could reach `base64.b64encode` after preceding HTML had exhausted
+  the remaining budget;
+- oversized run text, hyperlink targets, and image alt text reached
+  `html.escape` before final admission;
+- replacing the source path from inside `ZipFile.testzip()` made strict text
+  and HTML parse the unvalidated replacement; and
+- archive resource errors had no structured `reason`.
+
+After the render-budget commit, DOCX core, compatibility, and budget coverage
+returned `48 passed`, exit 0. A mixed DOCX/source gate after the snapshot fix
+returned `77 passed`, exit 0. The full relevant gate reused the previous 179
+tests and added the seven new regressions:
+
+```bash
+KH_APP_DATA_DIR=<fastscratch-temp> uv run --python 3.10 python -m pytest -q \
+  libs/ktem/ktem_tests/test_preview_docx_core.py \
+  libs/ktem/ktem_tests/test_preview_docx_compatibility.py \
+  libs/ktem/ktem_tests/test_preview_docx_budget.py \
+  libs/ktem/ktem_tests/test_preview_docx_snapshot.py \
+  libs/ktem/ktem_tests/test_preview_source_core.py \
+  libs/ktem/ktem_tests/test_preview_coordination.py \
+  libs/ktem/ktem_tests/test_preview_office_core.py \
+  libs/ktem/ktem_tests/test_preview_office_compatibility.py \
+  libs/ktem/ktem_tests/test_chat_gradio_preview_adapter.py \
+  libs/ktem/ktem_tests/test_chat_preview_timer.py \
+  libs/ktem/ktem_tests/test_import_laziness.py \
+  libs/ktem/ktem_tests/test_runtime_defaults.py \
+  libs/ktem/ktem_tests/test_office_conversion.py \
+  libs/ktem/ktem_tests/test_docqa_runtime.py \
+  libs/ktem/ktem_tests/test_docqa_runtime_helpers.py \
+  libs/ktem/ktem_tests/test_docqa_runtime_graph_scope.py \
+  libs/ktem/ktem_tests/test_file_index_page_extraction.py --tb=short
+```
+
+Result: `186 passed`, exit 0 in 11.18 seconds. The only warning was the
+pre-existing pypdf ARC4 `CryptographyDeprecationWarning`.
+
+The first source-classifier regression run returned `2 failed, 75 passed`
+because the initial single-handle refactor checked a declared OOXML extension
+before an actual PDF/CFB signature. Restoring real-signature priority fixed the
+regression without weakening the snapshot behavior; the immediate rerun
+returned `77 passed`. One earlier focused command exited 4 because it named a
+nonexistent `test_preview_docx_invalid_inputs.py`; using the repository's four
+actual `test_preview_docx*.py` modules corrected the test selection. The first
+security pre-commit run exited 1 only because Black reformatted the edited block
+and render modules; the clean rerun passed.
+
+### Round 2 Verification and Storage
+
+- Explicit hygiene over all ten R2 Python files reported
+  `No codebase hygiene ratchet violations.`, exit 0.
+- `scripts/check_hygiene_baseline.py --base-ref def6b67` reported that the
+  hygiene baseline did not widen. The tracked baseline was not edited.
+- Changed-file pre-commit passed hygiene, Black, isort, flake8, autoflake,
+  mypy, and codespell. Commit-range and working-tree `git diff --check` passed.
+- The HTML budget ledger was checked on a document containing heading, escaped
+  text, hyperlink, nested list, table, and raster image; its reserved count
+  exactly matched the final HTML length (`581 == 581`).
+- Final production sizes are `docx_blocks.py` 208 lines, `docx_package.py` 164,
+  `docx_relationships.py` 87, `docx_render.py` 200, `docx_runs.py` 157,
+  `docx_security.py` 170, `errors.py` 70, and `source.py` 468. The hygiene gate
+  confirms that no new function or class exceeds its contract budget.
+- `.venv`, Python, caches, and runtime paths remain on their contracted
+  fastscratch locations; repository-root `data/`, `datasets/`, and `outputs/`
+  remain absent. Fastscratch is at 295.8G and 471,891/500,000 soft files.
+  Scratch is at 71.91G and 472,652/300,000 soft files, still in inode grace.
+  All `task12b-r2-*` runtime directories created by verification were empty and
+  removed with `rmdir`; no user data or cache was deleted.
+
+Round 2 changed the eight production modules listed above and added
+`test_preview_docx_budget.py` plus `test_preview_docx_snapshot.py`; this report
+is the only documentation change. Residual risk remains bounded by the existing
+512 MiB aggregate archive policy: validation still decompresses accepted
+members during `testzip()`, and the approved single-handle design prevents path
+replacement but is not a copied byte snapshot against a writer modifying the
+already-open inode in place. DOCX pagination remains the existing heuristic.
