@@ -218,3 +218,37 @@ Fresh storage check：repo 位于 scratch，`.venv` 仍解析到
   同时伪造全部 metadata，理论上仍可制造 cache collision。
 - symlink cache root 现在会被明确拒绝；这是防止 trusted-root escape 的有意 hardening，
   使用 symlink 配置的部署需要改为真实目录路径。
+
+## 9. Canonical Office cache attestation 修复（2026-07-11）
+
+第二轮安全复审发现 canonical Office cache 仍会把可预测目标路径上的任意有效 PDF
+当作转换结果，并会跟随 leaf symlink。修复继续采用独立 security RED 与 production
+提交：
+
+- `56d6416 test: reject poisoned Office preview cache`
+- `42d8f0d security: attest canonical Office preview cache`
+
+RED 为 `3 failed, 2 passed`：预置 poison PDF 时 converter 调用数错误地为 0；canonical
+leaf symlink 未被拒绝；`_publish` 保留有效但不可信的旧目标。与此同时跨 service 正常
+复用和旧 Web-visible `<stem>_<legacy-md5[:12]>.pdf` 文件名保持通过。
+
+修复新增 no-Gradio `CacheAttestationStore`：
+
+- cache 外的运行时 key 以原子 hard-link 竞争发布并强制 0600；
+- manifest 绑定 source SHA-256、artifact SHA-256、cache key、绝对 target 与版本，并用
+  HMAC-SHA-256 验证；普通 cache-root 写者不能通过篡改摘要字段伪造命中；
+- artifact 先原子替换，manifest 最后原子替换；崩溃或任一失配只会导致 cache miss 和
+  安全重转换，不会消费未认证 PDF；
+- artifact、manifest 与 key 的 symlink/non-regular 形态均以 typed
+  `cache_attestation` error 拒绝；
+- canonical 和 Web-visible PDF 文件名、跨进程锁、跨实例单次转换以及 string/empty
+  compatibility façade 均保持不变。
+
+Fresh verification：安全/core/context/compatibility 集 `48 passed`；完整 Task 12C1
+relevant gate `268 passed`（15.33s）；full hygiene、changed-file pre-commit（含 Black、
+flake8、mypy）和 range diff-check 全部 exit 0。`preview/office.py` 恰为 600 行，新增
+`cache_attestation.py` 为 243 行；新模块/类/函数未超过 600/300/80，baseline 未修改。
+
+实现中扩展并发测试首次暴露 key writer 对 fd 的二次关闭会误关另一线程复用的描述符；
+根因修正为 `fdopen` 接管后清空原 descriptor ownership。原子发布 characterization
+同步要求 PDF 与 attestation 两个目标都通过原子替换，不再只断言一次 replace。
