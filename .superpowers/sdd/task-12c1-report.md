@@ -141,3 +141,80 @@ module/class/function 均在 600/300/80 budget 内。
 - `PdfService` cache signature 沿用 path/size/mtime_ns contract；消费者若原地替换文件
   但刻意保留全部 metadata，仍可能命中旧 cache，这与现有 source signature contract
   一致，后续若改 content digest 需另行评估 I/O 成本和 cache filename ABI。
+
+## 8. 审查修复（2026-07-11）
+
+### 8.1 提交与 RED -> GREEN
+
+审查修复继续保持 security tests、security production、functional tests、functional
+production 独立提交：
+
+- `f292ed0 test: reject unsafe preview artifact targets`
+- `11482d3 security: anchor preview artifact publication`
+- `4f93c05 test: specify stable lazy PDF preview state`
+- `967cd63 fix: stabilize lazy PDF preview state`
+
+Security RED 的 5 个 case 全部失败，分别证明旧 artifact publisher 无法表达可信根与
+相对 entry、会跟随 parent/leaf symlink、接受 traversal/absolute target，并会复用同名
+但内容不同的有效 PDF。修复后 publisher 把目标锚定到规范化 trusted root，拒绝
+symlink/non-regular target，以 SHA-256 比较已有 artifact，并使用同目录临时文件验证后
+`os.replace` 发布。
+
+Functional RED 的 7 个 case 全部失败，分别暴露 path replacement 时的二次打开、并发
+cache miss 重复解析、三个无界 cache、Office `source_path` 误指 canonical PDF、`~`
+cache root 未规范化、package import eager-load PDF/Office/service，以及 DocQA import 链
+提前加载 pypdf。生产修复后的同一选择集为 `7 passed`；扩展 PDF/context/cache-root/
+Office/security/acceptance/import 集为 `65 passed`。
+
+### 8.2 修复结果与 public surface
+
+- `PdfService` 在单个已打开文件描述符上完成 metadata snapshot、PDF header 检查、
+  page count 与目标页取文；路径在调用中被替换时不会把两个文件混成一个结果。
+- 同一 signature 的 process-local miss 使用 condition single-flight；count、text 与 path
+  signature cache 都是默认上限 128 的 LRU，source signature 变化会淘汰旧值。
+- `pypdf.PdfReader` 推迟到实际解析 PDF 时导入；`ktem.preview` 使用 PEP 562 lazy
+  exports，原 export 名称保持不变，DocQA preview module import 不再加载 PDF stack。
+- Office context 现在保留原 DOC/DOCX `source_path`，同时把 canonical artifact 放在
+  `pdf_path`；PDF 输入的既有语义不变。
+- 所有 Office/cache roots 都会 expanduser 并转换为 absolute path；trusted cache root
+  若是 symlink 或非目录会以 typed artifact error 拒绝。
+- `publish_validated_pdf` 的仓库内部调用契约由 `(source, target)` 收紧为
+  `(source, trusted_root, entry)`，所有 call sites 已迁移。`PdfService()` 旧构造仍有效，
+  只新增可选 keyword `max_cache_entries`。MARA/MARA-cli、Gradio ports/event order、
+  PDF.js URL、JSON/DB/session shapes 均未变化。
+
+### 8.3 Fresh verification
+
+最终 relevant command 覆盖全部 `test_preview_*.py`、Gradio preview/timer/submit/
+conversation adapters、import laziness、runtime defaults、Office/indexing/acceptance、
+DocQA runtime/helpers/graph/pipeline/serialization/session authorization，以及 file-index
+extraction/policy/services：`262 passed`，exit 0，15.50 秒。
+
+- full `scripts/check_codebase_hygiene.py`：通过，exit 0；
+- `d185d68..967cd63` review range baseline diff：空，未提高或刷新 baseline；
+- review-range 10 个 Python files 的 pre-commit：所有 hooks 通过，包括 full hygiene、
+  Black、isort、flake8、autoflake、mypy 与 codespell；
+- `git diff --check d185d68..967cd63`：通过；
+- budgets：`preview/pdf.py` 249 行、`service.py` 336 行、`office.py` 596 行，均在
+  600/300/80 contract 内；
+- warnings 仍只有既有 PyMuPDF SWIG、cryptography ARC4 deprecation。
+
+验证中有两个已修正的命令错误：第一次 focused command 引用了不存在的
+`test_preview_acceptance_core.py`，exit 4；改用实际的
+`test_docqa_acceptance_preview.py` 后通过。第一次 changed-file pre-commit 因 Black
+格式化 `service.py` 返回 exit 1；按格式化结果复跑后所有 hooks exit 0。
+
+Fresh storage check：repo 位于 scratch，`.venv` 仍解析到
+`/mnt/fastscratch/users/tbczhang/envs/mara`；repo root 无 `data/`、`datasets/`、
+`outputs/`。fastscratch 当前为 `310176888 / 524288000 KiB` soft block quota，
+`471882 / 500000` soft file quota。
+
+### 8.4 残余风险
+
+- single-flight 与 LRU 是进程内状态；跨 worker/process 不共享，但 artifact conversion
+  仍使用 Task 12A 的跨进程 coordination。
+- PDF snapshot signature 使用 resolved path、device/inode、size、mtime_ns 与 ctime_ns，
+  不做整文件 content digest；这避免每次 page access 的全文件 I/O，但特权调用方若能
+  同时伪造全部 metadata，理论上仍可制造 cache collision。
+- symlink cache root 现在会被明确拒绝；这是防止 trusted-root escape 的有意 hardening，
+  使用 symlink 配置的部署需要改为真实目录路径。
