@@ -156,3 +156,18 @@ class MhtmlReader(BaseReader):
         write_markdown_artifact(self.cache_dir, file_name, extra_info, page[0])
 
         return [Document(text="\n\n".join(page), metadata=metadata)]
+
+    def write_cached_artifact(
+        self,
+        file_path: Path,
+        *,
+        extra_info: Optional[dict],
+        documents: list[Document],
+    ) -> None:
+        if documents:
+            write_markdown_artifact(
+                self.cache_dir,
+                file_path,
+                extra_info or {},
+                documents[0].text,
+            )

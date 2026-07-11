@@ -242,6 +242,22 @@ class AzureAIDocumentIntelligenceLoader(BaseReader):
 
         return [Document(content=text_content, metadata=metadata)] + figures + tables
 
+    def write_cached_artifact(
+        self,
+        file_path: Path,
+        *,
+        extra_info: Optional[dict],
+        documents: list[Document],
+    ) -> None:
+        if documents:
+            content = getattr(documents[0], "content", None) or documents[0].text
+            write_markdown_artifact(
+                self.cache_dir,
+                file_path,
+                extra_info or {},
+                str(content),
+            )
+
     def _analyze_document(self, file_path: Path):
         with open(file_path, "rb") as fi:
             poller = self.client_.begin_analyze_document(

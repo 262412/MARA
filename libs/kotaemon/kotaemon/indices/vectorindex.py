@@ -45,6 +45,7 @@ class VectorIndexing(BaseIndexing):
     doc_store: Optional[BaseDocumentStore] = None
     embedding: BaseEmbeddings
     count_: int = 0
+    artifact_count_namespace_: tuple[object, object] | None = None
     embedding_cache_dir: Optional[str] = getattr(
         flowsettings, "KH_EMBEDDING_CACHE_DIR", None
     )
@@ -63,10 +64,31 @@ class VectorIndexing(BaseIndexing):
             **kwargs,
         )
 
-    def write_chunk_to_file(self, docs: list[Document]):
+    def write_chunk_to_file(
+        self,
+        docs: list[Document],
+        file_id: object | None = None,
+        artifact_generation: object | None = None,
+    ):
         # save the chunks content into markdown format
+        if docs:
+            file_id = file_id or docs[0].metadata.get("file_id")
+            artifact_generation = artifact_generation or docs[0].metadata.get(
+                "artifact_generation"
+            )
+        namespace = (file_id, artifact_generation)
+        if getattr(self, "artifact_count_namespace_", None) != namespace:
+            self.count_ = 0
+            self.artifact_count_namespace_ = namespace
         if self.cache_dir:
-            write_chunk_artifacts(self.cache_dir, docs, self.count_)
+            write_chunk_artifacts(
+                self.cache_dir,
+                docs,
+                self.count_,
+                file_id=file_id,
+                artifact_generation=artifact_generation,
+            )
+        self.count_ += len(docs)
 
     def add_to_docstore(self, docs: list[Document]):
         if self.doc_store:
@@ -209,7 +231,6 @@ class VectorIndexing(BaseIndexing):
             tracker.finish("refresh", count=1 if self.vector_store else 0)
 
             self.write_chunk_to_file(input_)
-            self.count_ += len(input_)
         except Exception as exc:
             for stage_name, stage in tracker.stages.items():
                 if stage.status == "running":

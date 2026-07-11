@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import shutil
-import threading
 import time
 import warnings
 from collections import defaultdict
@@ -39,6 +38,7 @@ from sqlalchemy.orm import Session
 from theflow.settings import settings
 from theflow.utils.modules import import_dotted_string
 
+from kotaemon import artifact_pipeline as artifacts
 from kotaemon.artifact_namespace import finish_and_publish_artifacts
 from kotaemon.base import BaseComponent, Document, Node, Param, RetrievedDocument
 from kotaemon.embeddings import BaseEmbeddings
@@ -405,7 +405,9 @@ class IndexPipeline(BaseComponent):
             ),
         }
 
-    def handle_docs(self, docs, file_id, file_name) -> Generator[Document, None, int]:
+    def handle_docs(
+        self, docs, file_id, file_name, artifact_generation=None
+    ) -> Generator[Document, None, int]:
         s_time = time.time()
         status_tracker = IndexingStatusTracker()
         text_docs = []
@@ -472,7 +474,7 @@ class IndexPipeline(BaseComponent):
             status_tracker.start("vector_write", count=len(to_index_chunks))
             for start_idx in range(0, len(to_index_chunks), chunk_size):
                 chunks = to_index_chunks[start_idx : start_idx + chunk_size]
-                self.handle_chunks_vectorstore(chunks, file_id)
+                self.handle_chunks_vectorstore(chunks, file_id, artifact_generation)
                 n_chunks += len(chunks)
                 if self.VS:
                     cache_stats = self.vector_indexing.last_embedding_cache_stats
@@ -501,14 +503,7 @@ class IndexPipeline(BaseComponent):
                     channel="debug",
                 )
 
-        # run vector indexing in thread if specified
-        if self.run_embedding_in_thread:
-            logger.debug("Running embedding in background thread")
-            threading.Thread(
-                target=lambda: list(insert_chunks_to_vectorstore())
-            ).start()
-        else:
-            yield from insert_chunks_to_vectorstore()
+        yield from artifacts.schedule_writer(self, insert_chunks_to_vectorstore)
 
         logger.debug("Indexing step took %.3fs", time.time() - s_time)
         return n_chunks
@@ -525,11 +520,11 @@ class IndexPipeline(BaseComponent):
             session.add_all(nodes)
             session.commit()
 
-    def handle_chunks_vectorstore(self, chunks, file_id):
+    def handle_chunks_vectorstore(self, chunks, file_id, artifact_generation=None):
         """Run chunks"""
         # run embedding, add to both vector store and doc store
         self.vector_indexing.add_to_vectorstore(chunks)
-        self.vector_indexing.write_chunk_to_file(chunks)
+        self.vector_indexing.write_chunk_to_file(chunks, file_id, artifact_generation)
 
         if self.VS:
             # record in the index
@@ -729,10 +724,11 @@ class IndexPipeline(BaseComponent):
 
         extra_info["file_id"] = file_id
         extra_info["collection_name"] = self.collection_name
+        artifact_generation = artifacts.begin_artifact_generation(self, extra_info)
 
         yield Document(f" => Converting {file_name} to text", channel="debug")
         parse_result = self.load_docs_with_parse_cache(file_path, extra_info)
-        docs = parse_result.documents
+        docs = artifacts.strip_artifact_generation(parse_result.documents)
         cache_status = "hit" if parse_result.cache_hit else "miss"
         yield Document(
             f" => Converted {file_name} to text"
@@ -742,7 +738,7 @@ class IndexPipeline(BaseComponent):
             f"writes={parse_result.stats.get('writes', 0)})",
             channel="debug",
         )
-        yield from self.handle_docs(docs, file_id, file_name)
+        yield from self.handle_docs(docs, file_id, file_name, artifact_generation)
 
         finish_and_publish_artifacts(self, file_id, stored_file_path, settings)
 

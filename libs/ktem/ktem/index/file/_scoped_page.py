@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import zipfile
 from pathlib import Path
 from typing import Any, TypeAlias
@@ -7,11 +8,9 @@ from typing import Any, TypeAlias
 import gradio as gr
 from theflow.settings import settings as flowsettings
 
-from kotaemon.artifact_namespace import (
-    ArtifactNamespaceError,
-    isolated_output_path,
-    load_manifest_artifacts,
-)
+from kotaemon.artifact_downloads import DownloadWorkspace
+from kotaemon.artifact_manifest import close_manifest_artifacts
+from kotaemon.artifact_namespace import ArtifactNamespaceError, load_manifest_artifacts
 
 from ._group_service import GroupServiceError
 from ._identity import MISSING_REQUEST, resolve_file_index_user_id
@@ -86,6 +85,10 @@ class ScopedFileIndexPageMixin:
     ):
         user_id = resolve_file_index_user_id(user_id, request)
         self._authorize_download(file_id, user_id)
+        if is_zipped_state:
+            return False, gr.DownloadButton(label="Download", value=None)
+        artifacts = []
+        workspace = None
         try:
             artifacts = load_manifest_artifacts(
                 file_id,
@@ -95,22 +98,41 @@ class ScopedFileIndexPageMixin:
                 },
                 flowsettings.KH_ZIP_OUTPUT_DIR,
             )
-            zip_file_path = isolated_output_path(
+            workspace = DownloadWorkspace.create(
                 flowsettings.KH_ZIP_OUTPUT_DIR,
                 file_id,
                 ".zip",
             )
-            temporary_path = zip_file_path.with_suffix(".zip.tmp")
-            with zipfile.ZipFile(temporary_path, "x") as archive:
-                for artifact in artifacts:
-                    archive.write(artifact.path, arcname=artifact.archive_name)
-            temporary_path.replace(zip_file_path)
-        except (ArtifactNamespaceError, OSError, zipfile.BadZipFile) as exc:
+            with workspace.open_temporary() as output:
+                with zipfile.ZipFile(output, "w") as archive:
+                    for artifact in artifacts:
+                        with artifact.open() as source:
+                            with archive.open(artifact.archive_name, "w") as target:
+                                for chunk in iter(
+                                    lambda: source.read(1024 * 1024), b""
+                                ):
+                                    target.write(chunk)
+                output.flush()
+                os.fsync(output.fileno())
+            zip_file_path = workspace.publish()
+        except (
+            ArtifactNamespaceError,
+            OSError,
+            RuntimeError,
+            ValueError,
+            zipfile.BadZipFile,
+            zipfile.LargeZipFile,
+        ) as exc:
+            if workspace is not None:
+                workspace.cleanup()
             raise gr.Error(DOWNLOAD_UNAVAILABLE_MESSAGE) from exc
+        finally:
+            close_manifest_artifacts(artifacts)
 
-        value = None if is_zipped_state else str(zip_file_path)
-        label = "Download" if is_zipped_state else DOWNLOAD_MESSAGE
-        return not is_zipped_state, gr.DownloadButton(label=label, value=value)
+        return True, gr.DownloadButton(
+            label=DOWNLOAD_MESSAGE,
+            value=str(zip_file_path),
+        )
 
     def download_single_file_simple(
         self,
@@ -122,20 +144,29 @@ class ScopedFileIndexPageMixin:
     ):
         user_id = resolve_file_index_user_id(user_id, request)
         self._authorize_download(file_id, user_id)
+        if is_zipped_state:
+            return False, gr.DownloadButton(label="Download", value=None)
+        workspace = None
         try:
-            output_file_path = isolated_output_path(
+            workspace = DownloadWorkspace.create(
                 flowsettings.KH_ZIP_OUTPUT_DIR,
                 file_id,
                 ".html",
             )
-        except ArtifactNamespaceError as exc:
+            with workspace.open_temporary() as output_file:
+                output_file.write(str(file_html).encode("utf-8"))
+                output_file.flush()
+                os.fsync(output_file.fileno())
+            output_file_path = workspace.publish()
+        except (ArtifactNamespaceError, OSError, TypeError, ValueError) as exc:
+            if workspace is not None:
+                workspace.cleanup()
             raise gr.Error(DOWNLOAD_UNAVAILABLE_MESSAGE) from exc
-        with output_file_path.open("w", encoding="utf-8") as output_file:
-            output_file.write(file_html)
 
-        value = None if is_zipped_state else str(output_file_path)
-        label = "Download" if is_zipped_state else DOWNLOAD_MESSAGE
-        return not is_zipped_state, gr.DownloadButton(label=label, value=value)
+        return True, gr.DownloadButton(
+            label=DOWNLOAD_MESSAGE,
+            value=str(output_file_path),
+        )
 
     def _authorize_download(self, file_id, user_id) -> None:
         try:

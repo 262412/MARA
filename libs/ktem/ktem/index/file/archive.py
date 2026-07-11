@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import IO
 
+from kotaemon.artifact_paths import portable_member_key
+
 
 @dataclass(frozen=True)
 class ArchiveLimits:
@@ -171,7 +173,7 @@ def _validate_member_path(archive: Path, info: zipfile.ZipInfo) -> PurePosixPath
 
 
 def _portable_member_key(relative_path: PurePosixPath) -> str:
-    return "/".join(part.rstrip(" .").casefold() for part in relative_path.parts)
+    return portable_member_key(relative_path)
 
 
 def _validate_member_type(archive: Path, info: zipfile.ZipInfo) -> None:

@@ -48,17 +48,22 @@ def load_data_with_parse_cache(
             cached_payload if isinstance(cached_payload, list) else [],
         )
         documents = documents_from_cache_payload(payload)
+        documents = _apply_extra_info(documents, extra_info)
+        _write_cached_artifact(loader, Path(file_path), extra_info, documents)
         return CachedLoadResult(
-            documents=_apply_extra_info(documents, extra_info),
+            documents=documents,
             stats=cache.stats.to_dict(),
             cache_hit=True,
             cache_key=key,
         )
 
-    documents = list(loader.load_data(Path(file_path), extra_info=None, **load_kwargs))
+    documents = list(
+        loader.load_data(Path(file_path), extra_info=extra_info, **load_kwargs)
+    )
+    documents = _apply_extra_info(documents, extra_info)
     cache.set(key, documents_to_cache_payload(documents))
     return CachedLoadResult(
-        documents=_apply_extra_info(documents, extra_info),
+        documents=documents,
         stats=cache.stats.to_dict(),
         cache_hit=False,
         cache_key=key,
@@ -87,15 +92,19 @@ def build_parse_cache_key(
 
 
 def documents_to_cache_payload(documents: list[Document]) -> list[dict[str, Any]]:
-    return [
-        {
-            "doc_id": document.doc_id,
-            "text": str(getattr(document, "text", "") or ""),
-            "content": _json_safe(getattr(document, "content", None)),
-            "metadata": _json_safe(dict(document.metadata or {})),
-        }
-        for document in documents
-    ]
+    payload = []
+    for document in documents:
+        metadata = dict(document.metadata or {})
+        metadata.pop("artifact_generation", None)
+        payload.append(
+            {
+                "doc_id": document.doc_id,
+                "text": str(getattr(document, "text", "") or ""),
+                "content": _json_safe(getattr(document, "content", None)),
+                "metadata": _json_safe(metadata),
+            }
+        )
+    return payload
 
 
 def documents_from_cache_payload(payload: list[dict[str, Any]]) -> list[Document]:
@@ -128,6 +137,17 @@ def _apply_extra_info(
         copied.metadata = metadata
         applied.append(copied)
     return applied
+
+
+def _write_cached_artifact(
+    loader: Any,
+    file_path: Path,
+    extra_info: dict | None,
+    documents: list[Document],
+) -> None:
+    writer = getattr(loader, "write_cached_artifact", None)
+    if callable(writer):
+        writer(file_path, extra_info=extra_info, documents=documents)
 
 
 def _parser_version(loader: Any) -> str:
