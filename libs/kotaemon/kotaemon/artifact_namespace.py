@@ -329,12 +329,7 @@ def _directory_chain(root: Path, parts: tuple[str, ...], *, create: bool) -> Pat
 
 def _safe_file_name(file_name: str) -> str:
     value = str(file_name or "")
-    if (
-        not value
-        or value in {".", ".."}
-        or "\\" in value
-        or Path(value).name != value
-    ):
+    if not value or value in {".", ".."} or "\\" in value or Path(value).name != value:
         raise ArtifactNamespaceError("Invalid artifact output name")
     return value
 

@@ -159,7 +159,7 @@ def test_chunk_and_markdown_paths_are_unique_per_file_id(artifact_roots, tmp_pat
     vector_writer = SimpleNamespace(cache_dir=str(artifact_roots.chunks), count_=0)
     for file_id, marker in (("file-a", "OWNER"), ("file-b", "VICTIM")):
         VectorIndexing.write_chunk_to_file(
-            vector_writer,
+            cast(VectorIndexing, vector_writer),
             [
                 Document(
                     text=marker,
@@ -202,7 +202,9 @@ def test_chunk_and_markdown_paths_are_unique_per_file_id(artifact_roots, tmp_pat
             _analyze_document=lambda _path, value=result: value,
         )
         AzureAIDocumentIntelligenceLoader.load_data(
-            loader, source, extra_info={"file_id": file_id}
+            cast(AzureAIDocumentIntelligenceLoader, loader),
+            source,
+            extra_info={"file_id": file_id},
         )
         azure_paths.append(artifact_roots.markdown / file_id / "report.md")
 
