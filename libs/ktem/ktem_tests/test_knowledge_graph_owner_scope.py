@@ -131,10 +131,18 @@ def test_web_knowledge_graph_rejects_victim_before_docstore_read(
 
 
 def test_docqa_knowledge_graph_rejects_victim_before_docstore_read(
+    monkeypatch,
     managed_graph_app,
 ):
     app, index, docstore = managed_graph_app
     service = DocQAKnowledgeGraphService(app, index)
+    cache_calls: list[str] = []
+
+    def reject_cache_read(conversation_id):
+        cache_calls.append(conversation_id)
+        raise AssertionError("cache read happened before source authorization")
+
+    monkeypatch.setattr(service, "_load_cached_state", reject_cache_read)
 
     with pytest.raises(Exception) as caught:
         service.build_graph(
@@ -144,7 +152,34 @@ def test_docqa_knowledge_graph_rejects_victim_before_docstore_read(
         )
 
     _assert_access_error(caught)
+    assert cache_calls == []
     assert docstore.calls == []
+
+
+def test_docqa_knowledge_graph_resolves_authorized_sources_once(
+    monkeypatch,
+    managed_graph_app,
+):
+    app, index, _docstore = managed_graph_app
+    service = DocQAKnowledgeGraphService(app, index)
+    resolve_calls: list[list[str]] = []
+    resolve_sources = service._preview.resolve_sources
+
+    def resolve_once(file_ids, **kwargs):
+        resolve_calls.append(list(file_ids))
+        return resolve_sources(file_ids, **kwargs)
+
+    monkeypatch.setattr(service._preview, "resolve_sources", resolve_once)
+
+    state = service.build_graph(
+        "conversation-1",
+        ["attacker-file"],
+        user_id="attacker",
+    )
+
+    assert resolve_calls == [["attacker-file"]]
+    assert set(state) == {"conversation_id", "manifest", "graph"}
+    assert list(state["manifest"]) == ["attacker-file"]
 
 
 class _StudioGraphBoundary:
