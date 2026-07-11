@@ -335,3 +335,124 @@ semantic regions, so no empty formatting-only commit was created.
    formats. Unsupported or invalid embedded images display escaped alt text
    instead of active data content.
 5. The pypdf/cryptography ARC4 warning is dependency-level and pre-existing.
+
+## Review Remediation (2026-07-11)
+
+The review-hardened Task 12B implementation head is `a7367d6`, on top of the
+reported Task 12B head `15efd92`. Review protection tests were committed first
+in `bb4283f`; archive/render security is isolated in `4df1d64`, and strict
+typed-boundary compatibility fixes are isolated in `a7367d6`.
+
+### Reviewed Corrections
+
+- Both strict paths now run the shared OOXML classifier before either
+  `python-docx` package loading or direct `word/document.xml` extraction. Its
+  10,000-entry, 512 MiB aggregate-uncompressed, and 1,000x per-entry ratio
+  policy applies to the entire package, including relationship entries, before
+  python-docx can traverse or decompress them. The bounded `testzip()` integrity
+  pass runs only after those metadata limits.
+- Resource-limit failures retain `SOURCE_ARCHIVE_INVALID`,
+  `stage=archive_validation`, resolved source path, and converter
+  `python-docx`. Other corrupt-package failures retain the established
+  `docx_package` stage and DOCX-specific diagnostic wording.
+- Every HTML renderer owns one image budget: at most 16 safe raster
+  occurrences and 5 MiB aggregate decoded bytes. MIME, signature, and 5 MiB
+  per-image checks run before the aggregate budget; budget consumption happens
+  before base64 encoding. Rejected occurrences keep escaped alt text.
+- Rendered HTML has an 8 MiB final character budget. Paragraph/table admission
+  is block-atomic, including list-stack rollback, so the renderer stops before
+  an over-budget block and still returns a complete wrapper rather than a
+  truncated tag. Image-only paragraphs can no longer bypass bounds when
+  `max_chars=1` contributes no text characters.
+- Invalid `None` and embedded-NUL source inputs now become typed
+  `SOURCE_INVALID` errors at `stage=docx_source`. The diagnostic uses a safe
+  placeholder path and retains `repr()` of the rejected input in details.
+- Both python-docx exception families are translated at strict load/render
+  boundaries: `PythonDocxError` and `XmlchemyError`, including
+  `docx.oxml.exceptions.InvalidXmlError` from missing required XML attributes.
+  Compatibility entrypoints therefore keep returning `""` while logging code,
+  stage, source, converter, and details.
+
+The Web/DocQA function objects and signatures, successful/fallback return
+shapes, HTML wrapper, page cache, pagination, Gradio/event wiring, CLI, DB,
+JSON/session, and preview-cache surfaces are unchanged.
+
+### Review TDD Evidence
+
+The final pre-production RED command selected only the reviewed regressions
+from the DOCX core and compatibility files. Result: `17 failed, 27 deselected`,
+exit 1. The failures showed:
+
+- four strict text/HTML cases accepted high-ratio package or relationship
+  entries;
+- image-only rendering emitted 20 data URLs despite the 16-occurrence contract,
+  emitted three 2 MiB images despite the 5 MiB aggregate contract, and exceeded
+  the 8 MiB final HTML contract at `max_chars=1`;
+- strict text/HTML leaked native `TypeError` or NUL `ValueError`, and all four
+  compatibility calls leaked the same exceptions; and
+- strict and compatibility HTML leaked
+  `docx.oxml.exceptions.InvalidXmlError` for `<w:gridSpan/>` without required
+  `w:val`.
+
+Security GREEN selected archive and render-budget cases: `7 passed, 28 deselected`, exit 0. The security-only compatibility regression then passed
+`34` cases with the typed-boundary cases intentionally deselected.
+
+Typed-boundary GREEN: `10 passed, 34 deselected`, exit 0.
+
+Final focused DOCX result: `44 passed`, exit 0. The relevant ktem gate added
+source/coordination/Office preview, Web ABI/timer, import laziness, runtime
+defaults, existing conversion, DocQA runtime/helpers/graph scope, and
+file-index extraction: `179 passed`, exit 0 in 10.59 seconds. Pytest emitted
+only the existing pypdf ARC4 `CryptographyDeprecationWarning`.
+
+### Review Verification and Diagnostics
+
+- Explicit hygiene over all eight review-changed Python files:
+  `No codebase hygiene ratchet violations.`, exit 0.
+- Baseline guard against `15efd92`:
+  `Hygiene baseline did not widen`, exit 0. The tracked baseline is unchanged.
+- Changed-file pre-commit passed hygiene, Black, isort, flake8, autoflake,
+  mypy, and codespell.
+- `git diff --check` passed for working-tree and review commit-range checks.
+- Current production sizes are: `docx.py` 75 lines, `docx_package.py` 144,
+  `docx_relationships.py` 72, `docx_render.py` 164, and `docx_security.py` 110.
+  The hygiene gate confirms no function reaches 80 lines.
+
+The first archive fixture rewrite exited 1 in four cases because modifying an
+existing XML member did not reliably exceed the central 1,000x threshold; it
+was replaced with genuine small high-ratio package and `.rels` entries that
+python-docx currently ignores. The first aggregate-image GREEN run exited 1
+because its zero-filled payload was itself a compression-ratio bomb, so the
+new archive guard correctly rejected it before render. The aggregate and
+existing oversized-image fixtures now use deterministic low-compression bytes,
+preserving their intended render-boundary assertions. Rewrapped corrupt-package
+details also regained the established `DOCX` wording.
+
+The first test pre-commit and first production pre-commit runs exited 1 only
+because Black formatted new long regions and isort reordered new imports.
+Immediate reruns were clean; no unrelated formatting-only churn was committed.
+The first report pre-commit likewise exited 1 only to apply Prettier's Markdown
+reflow; its immediate rerun passed.
+
+### Review Changed Files
+
+- `libs/ktem/ktem/preview/docx.py`
+- `libs/ktem/ktem/preview/docx_package.py`
+- `libs/ktem/ktem/preview/docx_relationships.py`
+- `libs/ktem/ktem/preview/docx_render.py`
+- `libs/ktem/ktem/preview/docx_security.py`
+- `libs/ktem/ktem_tests/docx_preview_test_utils.py`
+- `libs/ktem/ktem_tests/test_preview_docx_core.py`
+- `libs/ktem/ktem_tests/test_preview_docx_compatibility.py`
+
+Residual risk remains intentionally bounded: the validator still decompresses
+members during `testzip()`, but only after entry, aggregate-size, and ratio
+limits have accepted their central-directory metadata; the final HTML limit
+omits a whole over-budget block rather than partially rendering it. DOCX
+pagination remains the previously documented heuristic.
+
+Final review storage checks show `.venv`, Python, caches, and runtime data on
+approved fastscratch paths and no repository-root `data/`, `datasets/`, or
+`outputs/`. Fastscratch is at 295.8G and 471,883/500,000 soft files. Scratch is
+at 71.91G and 472,609/300,000 soft files, still in inode grace. No user data or
+caches were deleted.
