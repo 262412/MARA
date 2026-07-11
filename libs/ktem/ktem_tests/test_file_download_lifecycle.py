@@ -13,6 +13,7 @@ from ktem.index.file._scoped_page import ScopedFileIndexPageMixin
 from ktem.index.file._selection_service import FileSelectionError
 from theflow.settings import settings as flowsettings
 
+import kotaemon.artifact_retention as retention_module
 from kotaemon.artifact_downloads import (
     READY_FETCH_WINDOW_SECONDS,
     READY_OUTPUT_HARD_LIMIT,
@@ -251,6 +252,18 @@ def test_global_pruning_reclaims_unlocked_stale_active_workspace(roots):
     assert not stale.exists()
 
 
+def test_global_pruning_reclaims_stale_workspace_created_before_marker(roots):
+    stale = roots.zip / "downloads" / "file-other" / "stale-pending"
+    stale.mkdir(parents=True)
+    (stale / ".download-stale.tmp").write_text("PARTIAL", encoding="utf-8")
+    expired = time.time() - READY_OUTPUT_TTL_SECONDS - 1
+    os.utime(stale, (expired, expired))
+
+    _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+
+    assert not stale.exists()
+
+
 def test_global_pruning_keeps_old_live_active_lease(roots):
     workspace = DownloadWorkspace.create(roots.zip, FILE_ID, ".html")
     marker = workspace.directory / ".active"
@@ -279,6 +292,18 @@ def test_global_capacity_rejects_new_output_without_revoking_fresh_paths(roots):
         _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
 
     assert all(path.exists() for path in existing)
+
+
+def test_missing_fcntl_keeps_module_importable_and_download_fails_closed(
+    roots, monkeypatch
+):
+    monkeypatch.setattr(retention_module, "fcntl", None)
+
+    with pytest.raises(gr.Error, match="reindex"):
+        _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+
+    assert retention_module.__name__ == "kotaemon.artifact_retention"
+    assert _server_download_dirs(roots) == []
 
 
 def test_ready_output_survives_followup_prune_for_browser_fetch_window(roots):
