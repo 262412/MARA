@@ -122,6 +122,14 @@ def _classify_signature(
     try:
         with path.open("rb") as file_obj:
             header = file_obj.read(8)
+            known_non_ooxml = header.startswith((b"%PDF-", CFB_SIGNATURE))
+            if header.startswith(b"PK") or (
+                declared in OOXML_EXTENSIONS and not known_non_ooxml
+            ):
+                detected = _inspect_ooxml_archive_file(file_obj, path, limits)
+                return PreviewSourceKind.OOXML, detected
+    except PreviewSourceError:
+        raise
     except OSError as exc:
         raise _source_error(
             PreviewErrorCode.SOURCE_INVALID,
@@ -133,12 +141,8 @@ def _classify_signature(
     if header.startswith(b"%PDF-"):
         _validate_pdf(path)
         return PreviewSourceKind.PDF, ".pdf"
-    if header.startswith(b"PK"):
-        return PreviewSourceKind.OOXML, _inspect_ooxml_archive(path, limits)
     if header.startswith(CFB_SIGNATURE):
         return PreviewSourceKind.CFB, _inspect_cfb(path)
-    if declared in OOXML_EXTENSIONS:
-        return PreviewSourceKind.OOXML, _inspect_ooxml_archive(path, limits)
     if declared == ".pdf":
         _validate_pdf(path)
     raise _source_error(
@@ -149,9 +153,14 @@ def _classify_signature(
     )
 
 
-def _inspect_ooxml_archive(path: Path, limits: ArchiveLimits) -> str:
+def _inspect_ooxml_archive_file(
+    file_obj: BinaryIO,
+    path: Path,
+    limits: ArchiveLimits,
+) -> str:
     try:
-        with zipfile.ZipFile(path) as archive:
+        file_obj.seek(0)
+        with zipfile.ZipFile(file_obj) as archive:
             infos = archive.infolist()
             _validate_archive_limits(path, infos, limits)
             damaged_member = archive.testzip()
@@ -161,6 +170,7 @@ def _inspect_ooxml_archive(path: Path, limits: ArchiveLimits) -> str:
                     path,
                     "archive_validation",
                     f"The OOXML archive has a corrupt member: {damaged_member}.",
+                    reason="archive_corrupt",
                 )
             names = {info.filename for info in infos}
     except PreviewSourceError:
@@ -171,6 +181,7 @@ def _inspect_ooxml_archive(path: Path, limits: ArchiveLimits) -> str:
             path,
             "archive_validation",
             f"The OOXML archive cannot be read safely: {exc}",
+            reason="archive_corrupt",
         ) from exc
 
     detected = next(
@@ -183,6 +194,7 @@ def _inspect_ooxml_archive(path: Path, limits: ArchiveLimits) -> str:
         path,
         "archive_validation",
         "The archive is missing its Word, PowerPoint, or Excel package marker.",
+        reason="archive_structure",
     )
 
 
@@ -197,6 +209,7 @@ def _validate_archive_limits(
             path,
             "archive_validation",
             f"The OOXML archive exceeds the {limits.max_entries} entry limit.",
+            reason="archive_resource_limit",
         )
     total_size = sum(max(0, info.file_size) for info in infos)
     if total_size > limits.max_uncompressed_bytes:
@@ -205,6 +218,7 @@ def _validate_archive_limits(
             path,
             "archive_validation",
             "The OOXML archive exceeds the configured uncompressed size limit.",
+            reason="archive_resource_limit",
         )
     for info in infos:
         ratio = info.file_size / max(1, info.compress_size)
@@ -214,6 +228,7 @@ def _validate_archive_limits(
                 path,
                 "archive_validation",
                 f"Archive member {info.filename!r} exceeds the compression ratio limit.",
+                reason="archive_resource_limit",
             )
 
 
@@ -440,6 +455,8 @@ def _source_error(
     path: Path,
     stage: str,
     details: str,
+    *,
+    reason: str = "",
 ) -> PreviewSourceError:
     return PreviewSourceError(
         code,
@@ -447,4 +464,5 @@ def _source_error(
         source_path=path,
         converter="source",
         details=details,
+        reason=reason,
     )

@@ -32,6 +32,7 @@ class PreviewError(RuntimeError):
         converter: str,
         details: str,
         attempts: Sequence[ConversionAttempt] = (),
+        reason: str = "",
     ) -> None:
         self.code = code
         self.stage = stage
@@ -39,6 +40,7 @@ class PreviewError(RuntimeError):
         self.converter = converter
         self.details = details
         self.attempts = tuple(attempts)
+        self.reason = reason
         super().__init__(self._message())
 
     def _message(self) -> str:

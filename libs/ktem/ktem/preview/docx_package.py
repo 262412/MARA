@@ -3,6 +3,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
+from typing import BinaryIO
 
 from docx import Document as load_docx_document
 from docx.document import Document
@@ -12,7 +13,8 @@ from docx.oxml.exceptions import XmlchemyError
 from lxml.etree import XMLSyntaxError
 
 from .errors import PreviewErrorCode, PreviewSourceError
-from .source import classify_preview_source
+from .models import ArchiveLimits
+from .source import _inspect_ooxml_archive_file
 
 DOCX_CONVERTER = "python-docx"
 
@@ -31,9 +33,13 @@ class DocxPackageReader:
 
     def load_document(self) -> Document:
         self._require_source()
-        self._validate_archive()
         try:
-            return load_docx_document(str(self.source_path))
+            with self.source_path.open("rb") as file_obj:
+                self._validate_archive(file_obj)
+                file_obj.seek(0)
+                return load_docx_document(file_obj)
+        except PreviewSourceError:
+            raise
         except (
             PackageNotFoundError,
             PythonDocxError,
@@ -68,10 +74,14 @@ class DocxPackageReader:
 
     def _read_document_xml(self) -> ET.Element:
         self._require_source()
-        self._validate_archive()
         try:
-            with zipfile.ZipFile(self.source_path) as archive:
-                payload = archive.read("word/document.xml")
+            with self.source_path.open("rb") as file_obj:
+                self._validate_archive(file_obj)
+                file_obj.seek(0)
+                with zipfile.ZipFile(file_obj) as archive:
+                    payload = archive.read("word/document.xml")
+        except PreviewSourceError:
+            raise
         except (
             zipfile.BadZipFile,
             zipfile.LargeZipFile,
@@ -106,26 +116,33 @@ class DocxPackageReader:
             "DOCX source is missing or is not a regular file.",
         )
 
-    def _validate_archive(self) -> None:
+    def _validate_archive(self, file_obj: BinaryIO) -> None:
         try:
-            source = classify_preview_source(
+            detected = _inspect_ooxml_archive_file(
+                file_obj,
                 self.source_path,
-                file_name=self.source_path.name,
+                ArchiveLimits(),
             )
         except PreviewSourceError as exc:
-            stage = "archive_validation" if "exceeds" in exc.details else "docx_package"
+            stage = (
+                "archive_validation"
+                if exc.reason == "archive_resource_limit"
+                else "docx_package"
+            )
             raise docx_error(
                 exc.code,
                 self.source_path,
                 stage,
                 f"DOCX package validation failed: {exc.details}",
+                reason=exc.reason,
             ) from exc
-        if source.extension != ".docx":
+        if detected != ".docx":
             raise docx_error(
                 PreviewErrorCode.SOURCE_TYPE_MISMATCH,
                 self.source_path,
                 "docx_package",
-                f"Expected a DOCX package, detected {source.extension!r}.",
+                f"Expected a DOCX package, detected {detected!r}.",
+                reason="archive_type_mismatch",
             )
 
 
@@ -134,6 +151,8 @@ def docx_error(
     source_path: str | Path,
     stage: str,
     details: str,
+    *,
+    reason: str = "",
 ) -> PreviewSourceError:
     return PreviewSourceError(
         code,
@@ -141,4 +160,5 @@ def docx_error(
         source_path=source_path,
         converter=DOCX_CONVERTER,
         details=details,
+        reason=reason,
     )
