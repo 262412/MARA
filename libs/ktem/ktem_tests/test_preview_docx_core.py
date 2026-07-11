@@ -272,7 +272,7 @@ def test_oversized_decoded_image_never_enters_a_data_url(tmp_path):
         tmp_path / "oversized-image.docx",
         lambda document: add_picture_with_alt(document, "Oversized image"),
     )
-    oversized_png = PNG_1X1[:8] + bytes(5 * 1024 * 1024)
+    oversized_png = PNG_1X1[:8] + incompressible_text(5 * 1024 * 1024).encode("ascii")
     replace_image_payload(source, oversized_png)
 
     from ktem.pages.chat.page_preview_document import extract_docx_html
@@ -305,7 +305,7 @@ def test_aggregate_image_bytes_are_bounded_per_render(tmp_path):
             add_picture_with_alt(document, f"Aggregate image {index}")
 
     source = write_document(tmp_path / "image-bytes.docx", build)
-    payload = PNG_1X1[:8] + bytes(2 * 1024 * 1024 - 8)
+    payload = PNG_1X1[:8] + incompressible_text(2 * 1024 * 1024 - 8).encode("ascii")
     replace_image_payload(source, payload)
 
     from ktem.preview.docx import extract_docx_html_strict

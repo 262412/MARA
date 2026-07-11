@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from docx.oxml.ns import qn
 
-from .docx_security import safe_hyperlink_target, safe_raster_data_url
+from .docx_security import DocxImageBudget, safe_hyperlink_target, safe_raster_data_url
 
 DOCX_NAMESPACES = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
@@ -21,8 +21,13 @@ class EmbeddedImage:
 
 
 class DocxRelationshipResolver:
-    def __init__(self, relationships: Mapping[str, object]) -> None:
+    def __init__(
+        self,
+        relationships: Mapping[str, object],
+        image_budget: DocxImageBudget,
+    ) -> None:
         self._relationships = relationships
+        self._image_budget = image_budget
 
     def hyperlink_target(self, hyperlink_element) -> str:
         relationship_id = hyperlink_element.attrib.get(qn("r:id"), "")
@@ -47,7 +52,11 @@ class DocxRelationshipResolver:
         payload = bytes(blob) if isinstance(blob, (bytes, bytearray)) else b""
         return EmbeddedImage(
             alt_text,
-            safe_raster_data_url(content_type, payload),
+            safe_raster_data_url(
+                content_type,
+                payload,
+                budget=self._image_budget,
+            ),
         )
 
     @staticmethod

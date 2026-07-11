@@ -10,6 +10,7 @@ from docx.opc.exceptions import PackageNotFoundError
 from lxml.etree import XMLSyntaxError
 
 from .errors import PreviewErrorCode, PreviewSourceError
+from .source import classify_preview_source
 
 DOCX_CONVERTER = "python-docx"
 
@@ -20,6 +21,7 @@ class DocxPackageReader:
 
     def load_document(self) -> Document:
         self._require_source()
+        self._validate_archive()
         try:
             return load_docx_document(str(self.source_path))
         except (
@@ -54,6 +56,7 @@ class DocxPackageReader:
 
     def _read_document_xml(self) -> ET.Element:
         self._require_source()
+        self._validate_archive()
         try:
             with zipfile.ZipFile(self.source_path) as archive:
                 payload = archive.read("word/document.xml")
@@ -90,6 +93,28 @@ class DocxPackageReader:
             "docx_package",
             "DOCX source is missing or is not a regular file.",
         )
+
+    def _validate_archive(self) -> None:
+        try:
+            source = classify_preview_source(
+                self.source_path,
+                file_name=self.source_path.name,
+            )
+        except PreviewSourceError as exc:
+            stage = "archive_validation" if "exceeds" in exc.details else "docx_package"
+            raise docx_error(
+                exc.code,
+                self.source_path,
+                stage,
+                f"DOCX package validation failed: {exc.details}",
+            ) from exc
+        if source.extension != ".docx":
+            raise docx_error(
+                PreviewErrorCode.SOURCE_TYPE_MISMATCH,
+                self.source_path,
+                "docx_package",
+                f"Expected a DOCX package, detected {source.extension!r}.",
+            )
 
 
 def docx_error(

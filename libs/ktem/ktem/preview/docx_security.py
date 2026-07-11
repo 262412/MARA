@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from dataclasses import dataclass
 from html import escape
 from urllib.parse import urlsplit
 
@@ -9,6 +10,24 @@ SAFE_RASTER_MIME_TYPES = frozenset(
     {"image/gif", "image/jpeg", "image/png", "image/webp"}
 )
 MAX_EMBEDDED_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_EMBEDDED_IMAGE_COUNT = 16
+MAX_AGGREGATE_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_RENDERED_HTML_CHARS = 8 * 1024 * 1024
+
+
+@dataclass
+class DocxImageBudget:
+    count: int = 0
+    decoded_bytes: int = 0
+
+    def try_consume(self, payload_size: int) -> bool:
+        if self.count >= MAX_EMBEDDED_IMAGE_COUNT:
+            return False
+        if self.decoded_bytes + payload_size > MAX_AGGREGATE_IMAGE_BYTES:
+            return False
+        self.count += 1
+        self.decoded_bytes += payload_size
+        return True
 
 
 def safe_font(font_name: str, fallback: str) -> str:
@@ -45,6 +64,7 @@ def safe_raster_data_url(
     payload: bytes,
     *,
     max_decoded_bytes: int = MAX_EMBEDDED_IMAGE_BYTES,
+    budget: DocxImageBudget | None = None,
 ) -> str:
     mime_type = str(content_type or "").strip().lower()
     if mime_type not in SAFE_RASTER_MIME_TYPES:
@@ -52,6 +72,8 @@ def safe_raster_data_url(
     if not payload or len(payload) > max_decoded_bytes:
         return ""
     if not _matches_raster_signature(mime_type, payload):
+        return ""
+    if budget is not None and not budget.try_consume(len(payload)):
         return ""
     encoded = base64.b64encode(payload).decode("ascii")
     return f"data:{mime_type};base64,{encoded}"
@@ -74,7 +96,11 @@ def _matches_raster_signature(mime_type: str, payload: bytes) -> bool:
 
 
 __all__ = [
+    "DocxImageBudget",
+    "MAX_AGGREGATE_IMAGE_BYTES",
     "MAX_EMBEDDED_IMAGE_BYTES",
+    "MAX_EMBEDDED_IMAGE_COUNT",
+    "MAX_RENDERED_HTML_CHARS",
     "SAFE_HYPERLINK_SCHEMES",
     "SAFE_RASTER_MIME_TYPES",
     "escape",

@@ -15,14 +15,17 @@ from .docx_blocks import (
 )
 from .docx_relationships import DocxRelationshipResolver
 from .docx_runs import DocxRunRenderer
-from .docx_security import escape, safe_font
+from .docx_security import MAX_RENDERED_HTML_CHARS, DocxImageBudget, escape, safe_font
 
 
 class DocxHtmlRenderer:
     def __init__(self, document) -> None:
         self._document = document
         self._base_font_name, self._base_font_size_em = _base_font(document)
-        relationships = DocxRelationshipResolver(document.part.rels)
+        relationships = DocxRelationshipResolver(
+            document.part.rels,
+            DocxImageBudget(),
+        )
         runs = DocxRunRenderer(relationships, self._base_font_name)
         paragraphs = DocxParagraphRenderer(
             runs,
@@ -35,6 +38,7 @@ class DocxHtmlRenderer:
         parts = [self._opening_tag()]
         active_lists: list[str] = []
         consumed = 0
+        rendered_chars = len(parts[0])
         for block in _iter_blocks(self._document):
             if isinstance(block, Paragraph):
                 markup = self._paragraphs.render(block)
@@ -43,13 +47,37 @@ class DocxHtmlRenderer:
                 consumed += len(block.text or "")
                 if consumed > max_chars:
                     break
+                start = len(parts)
+                previous_lists = list(active_lists)
                 self._append_paragraph(parts, active_lists, markup)
+                next_rendered_chars = _accept_appended_html(
+                    parts,
+                    active_lists,
+                    start,
+                    previous_lists,
+                    rendered_chars,
+                )
+                if next_rendered_chars is None:
+                    break
+                rendered_chars = next_rendered_chars
                 continue
             consumed += _table_text_length(block)
             if consumed > max_chars:
                 break
+            start = len(parts)
+            previous_lists = list(active_lists)
             self._close_lists(parts, active_lists)
             parts.append(self._tables.render(block))
+            next_rendered_chars = _accept_appended_html(
+                parts,
+                active_lists,
+                start,
+                previous_lists,
+                rendered_chars,
+            )
+            if next_rendered_chars is None:
+                break
+            rendered_chars = next_rendered_chars
         self._close_lists(parts, active_lists)
         parts.append("</div>")
         return "".join(parts)
@@ -116,3 +144,21 @@ def _base_font(document) -> tuple[str, float]:
 
 def _table_text_length(table: Table) -> int:
     return sum(len(cell.text or "") for row in table.rows for cell in row.cells)
+
+
+def _accept_appended_html(
+    parts: list[str],
+    active_lists: list[str],
+    start: int,
+    previous_lists: list[str],
+    rendered_chars: int,
+) -> int | None:
+    appended_chars = sum(len(part) for part in parts[start:])
+    closing_chars = len("</div>") + sum(
+        len(f"</{list_tag}>") for list_tag in active_lists
+    )
+    if rendered_chars + appended_chars + closing_chars <= MAX_RENDERED_HTML_CHARS:
+        return rendered_chars + appended_chars
+    del parts[start:]
+    active_lists[:] = previous_lists
+    return None
