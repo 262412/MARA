@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import logging
 
+from docx.exceptions import PythonDocxError
+from docx.oxml.exceptions import XmlchemyError
+
 from .docx_package import DocxPackageReader, docx_error
 from .docx_pagination import paginate_docx_html
 from .docx_render import DocxHtmlRenderer
@@ -19,7 +22,15 @@ def extract_docx_html_strict(file_path: str, max_chars: int = 12000) -> str:
     document = reader.load_document()
     try:
         return DocxHtmlRenderer(document).render(max_chars=max_chars)
-    except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
+    except (
+        AttributeError,
+        IndexError,
+        KeyError,
+        PythonDocxError,
+        TypeError,
+        ValueError,
+        XmlchemyError,
+    ) as exc:
         raise docx_error(
             PreviewErrorCode.SOURCE_INVALID,
             reader.source_path,

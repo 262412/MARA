@@ -6,7 +6,9 @@ from pathlib import Path
 
 from docx import Document as load_docx_document
 from docx.document import Document
+from docx.exceptions import PythonDocxError
 from docx.opc.exceptions import PackageNotFoundError
+from docx.oxml.exceptions import XmlchemyError
 from lxml.etree import XMLSyntaxError
 
 from .errors import PreviewErrorCode, PreviewSourceError
@@ -17,7 +19,15 @@ DOCX_CONVERTER = "python-docx"
 
 class DocxPackageReader:
     def __init__(self, source_path: str | Path) -> None:
-        self.source_path = Path(source_path).expanduser().resolve()
+        try:
+            self.source_path = Path(source_path).expanduser().resolve()
+        except (OSError, TypeError, ValueError) as exc:
+            raise docx_error(
+                PreviewErrorCode.SOURCE_INVALID,
+                Path.cwd() / ".invalid-docx-source",
+                "docx_source",
+                f"Invalid DOCX source path {source_path!r}: {exc}",
+            ) from exc
 
     def load_document(self) -> Document:
         self._require_source()
@@ -26,6 +36,7 @@ class DocxPackageReader:
             return load_docx_document(str(self.source_path))
         except (
             PackageNotFoundError,
+            PythonDocxError,
             zipfile.BadZipFile,
             zipfile.LargeZipFile,
             KeyError,
@@ -33,6 +44,7 @@ class DocxPackageReader:
             OSError,
             TypeError,
             ValueError,
+            XmlchemyError,
         ) as exc:
             raise docx_error(
                 PreviewErrorCode.SOURCE_ARCHIVE_INVALID,
