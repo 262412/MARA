@@ -64,6 +64,10 @@ class _PanelPage:
         self.knowledge_graph: Any = None
         self.expected_artifact_payload = None
 
+    @staticmethod
+    def _resolve_persist_user_id(user_id, _request):
+        return user_id
+
     def _build_selected_input_map(self, *selecteds):
         return {7: list(selecteds)}
 

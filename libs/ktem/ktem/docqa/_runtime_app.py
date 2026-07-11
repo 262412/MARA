@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -94,49 +92,23 @@ class _RuntimeAppContext:
 
 class _DocQAPreviewService:
     def __init__(self, app):
-        from ktem.docqa.preview_support import (
-            OfficePreviewConversionService,
-            PresentationTextService,
-            PreviewFileResolver,
-        )
+        from ktem.docqa.preview_support import PreviewSupportService
 
-        self._app = app
-        self._file_name_cache: dict[str, str] = {}
-        self._non_pdf_preview_cache: dict[str, list[str]] = {}
-        self._total_pages_cache: dict[str, int] = {}
-        self._resolver = PreviewFileResolver(app, self._file_name_cache)
-        self._office_conversion = OfficePreviewConversionService(logger=logger)
-        self._presentation_preview_service = PresentationTextService()
+        self._support = PreviewSupportService(app)
 
     def resolve_selected_file(
-        self, selected_file_ids: list[str] | None
+        self, selected_file_ids: list[str] | None, *, user_id=None
     ) -> tuple[str, str, str]:
-        return self._resolver.resolve_selected_file(selected_file_ids or [])
+        return self._support.resolve_selected_file(selected_file_ids, user_id=user_id)
 
-    def resolve_file_path(self, file_id: str) -> str:
-        return self._resolver.resolve_file_path_by_id(file_id)
+    def resolve_file_path(self, file_id: str, *, user_id=None) -> str:
+        return self._support.resolve_file_path(file_id, user_id=user_id)
 
-    def resolve_file_name(self, file_id: str) -> str:
-        return self._resolver.resolve_file_name_by_id(file_id)
+    def resolve_file_name(self, file_id: str, *, user_id=None) -> str:
+        return self._support.resolve_file_name(file_id, user_id=user_id)
 
-    @staticmethod
-    def _extract_pdf_page_text(
-        pdf_path: str, page_number: int, max_chars: int = 7000
-    ) -> str:
-        if not pdf_path or not os.path.isfile(pdf_path):
-            return ""
-        from pypdf import PdfReader
-
-        try:
-            reader = PdfReader(pdf_path)
-            if not reader.pages:
-                return ""
-            page_idx = max(0, min(len(reader.pages) - 1, int(page_number or 1) - 1))
-            text = reader.pages[page_idx].extract_text() or ""
-            text = " ".join(str(text).split())
-            return text[:max_chars]
-        except Exception:
-            return ""
+    def resolve_sources(self, file_ids, *, user_id=None, strict: bool = True):
+        return self._support.resolve_sources(file_ids, user_id=user_id, strict=strict)
 
     def get_page_context_text(
         self,
@@ -144,52 +116,13 @@ class _DocQAPreviewService:
         file_name: str,
         page_number: int,
         max_chars: int = 7000,
+        *,
+        user_id=None,
     ) -> str:
-        from ktem.docqa.preview_support import (
-            detect_office_extension,
-            extract_docx_text,
-            extract_xlsx_text,
-            read_text_file,
+        return self._support.get_page_context_text(
+            file_id,
+            file_name,
+            page_number,
+            max_chars,
+            user_id=user_id,
         )
-
-        if not file_id or not file_name:
-            return ""
-
-        source_path = self.resolve_file_path(file_id)
-        if not source_path:
-            return ""
-
-        source_extension = detect_office_extension(file_name, source_path)
-        file_extension = (Path(file_name).suffix or Path(source_path).suffix).lower()
-
-        if file_extension == ".pdf":
-            return self._extract_pdf_page_text(
-                source_path, page_number, max_chars=max_chars
-            )
-
-        if source_extension in {".pptx", ".ppt"}:
-            return self._presentation_preview_service.extract_slide_text(
-                source_path,
-                page_number,
-                max_chars=max_chars,
-            )
-
-        if source_extension in {".docx", ".doc", ".xlsx", ".xls"}:
-            cached_pdf = self._office_conversion.get_cached_pdf_preview(source_path)
-            if not cached_pdf:
-                cached_pdf = self._office_conversion.convert_to_pdf_preview(
-                    source_path, file_name
-                )
-            if cached_pdf and os.path.isfile(cached_pdf):
-                return self._extract_pdf_page_text(
-                    cached_pdf, page_number, max_chars=max_chars
-                )
-
-        if file_extension in {".docx", ".doc"}:
-            return extract_docx_text(source_path, max_chars=max_chars)
-        if file_extension in {".xlsx", ".xls", ".csv"}:
-            return extract_xlsx_text(source_path, max_chars=max_chars)
-        if file_extension in {".txt", ".md", ".html", ".mhtml"}:
-            return read_text_file(source_path, max_chars=max_chars)
-
-        return ""

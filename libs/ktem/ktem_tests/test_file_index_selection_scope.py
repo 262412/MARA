@@ -6,8 +6,11 @@ from typing import Any, cast
 from ktem.index.file import FileIndex
 
 
-def _index(*, private: bool, visible_ids: list[str]) -> FileIndex:
+def _index(
+    *, private: bool, visible_ids: list[str], managed_users: bool = False
+) -> FileIndex:
     index = cast(Any, object.__new__(FileIndex))
+    index._app = SimpleNamespace(f_user_management=managed_users)
     index.config = {"private": private}
     index._selector_ui = None
     index.list_source_ids = lambda user_id: (
@@ -74,3 +77,16 @@ def test_public_selection_preserves_explicit_ids():
         "server-user",
         ["select", ["public-2", "public-1"], "ignored-user"],
     ) == ["public-2", "public-1"]
+
+
+def test_managed_public_selection_intersects_authenticated_scope():
+    index = _index(
+        private=False,
+        visible_ids=["own-1"],
+        managed_users=True,
+    )
+
+    assert index.resolve_selected_ids(
+        "server-user",
+        ["select", ["victim-file", "own-1"], "victim-user"],
+    ) == ["own-1"]

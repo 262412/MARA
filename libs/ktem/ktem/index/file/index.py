@@ -15,7 +15,7 @@ from tzlocal import get_localzone
 
 from kotaemon.storages import BaseDocumentStore, BaseVectorStore
 
-from ._selection import normalize_selected_values
+from ._selection import normalize_selected_values, owner_scope_required
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
 
 
@@ -513,9 +513,7 @@ class FileIndex(BaseIndex):
         self._ensure_resources()
         source_table = cast(Any, self._resources["Source"])
         statement = select(source_table)
-        if self.config.get("private", False) or getattr(
-            self._app, "f_user_management", False
-        ):
+        if owner_scope_required(self._app, self.config):
             statement = statement.where(source_table.user == user_id)
 
         rows: list[dict[str, Any]] = []
@@ -589,10 +587,7 @@ class FileIndex(BaseIndex):
         selected_ids: Any,
     ) -> list[str]:
         normalized = self._normalize_selected_values(selected_ids)
-        if not (
-            self.config.get("private", False)
-            or getattr(self._app, "f_user_management", False)
-        ):
+        if not owner_scope_required(self._app, self.config):
             return normalized
         visible_ids = set(self.list_source_ids(user_id))
         return [file_id for file_id in normalized if file_id in visible_ids]

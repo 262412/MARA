@@ -16,6 +16,10 @@ def normalize_selected_values(selected: Any) -> list[str]:
     return normalized
 
 
+def owner_scope_required(app: Any, config: dict[str, Any]) -> bool:
+    return bool(config.get("private") or getattr(app, "f_user_management", False))
+
+
 def _append_selected_value(
     value: Any,
     normalized: list[str],
@@ -53,4 +57,4 @@ def _append_unique(
         normalized.append(item)
 
 
-__all__ = ["normalize_selected_values"]
+__all__ = ["normalize_selected_values", "owner_scope_required"]

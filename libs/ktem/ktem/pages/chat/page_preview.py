@@ -4,11 +4,8 @@ from pathlib import Path
 from typing import cast
 
 import gradio as gr
-from ktem.auth.service import resolve_request_user_id
-from ktem.preview.context import PreviewAccess, preview_access_for_user
-from ktem.preview.errors import PreviewAccessError, PreviewErrorCode
+from ktem.preview.context import PreviewAccess
 from sqlmodel import Session, select
-from theflow.settings import settings as flowsettings
 
 from kotaemon.loaders.pdf_loader import get_page_thumbnails
 
@@ -23,6 +20,11 @@ from .page_preview_document import (
     paginate_docx_html,
 )
 from .page_preview_models import PreviewPayloadRequest
+from .page_preview_callbacks import (
+    normalize_preview_tick,
+    poll_office_conversion,
+    resolve_preview_access,
+)
 from .page_preview_non_pdf import NonPdfPreviewService
 from .page_preview_office import OfficePreviewConversionService
 from .page_preview_presentation import PresentationPreviewService, extract_pptx_text
@@ -335,22 +337,10 @@ class ChatPagePreviewController:
             file_ids, access=access, strict=strict
         )
 
-    def _request_access(self, request: gr.Request) -> PreviewAccess:
-        auth_mode = str(getattr(flowsettings, "MARA_AUTH_MODE", "auto")).lower()
-        if auth_mode not in {"password", "sso"}:
-            return preview_access_for_user(self._app, "default")
-        resolved = (
-            None
-            if request is _DIRECT_CALL_REQUEST
-            else resolve_request_user_id(request, auth_mode=auth_mode)
-        )
-        if not resolved:
-            raise _preview_access_error()
-        return PreviewAccess(user_id=str(resolved), owner_required=True)
-
     def _resolve_callback_source(self, file_id: str, request: gr.Request):
         source = self._file_resolver.resolve_source(
-            file_id, access=self._request_access(request)
+            file_id,
+            access=resolve_preview_access(self._app, request, _DIRECT_CALL_REQUEST),
         )
         preview_path = ensure_pdf_preview_copy(str(source.path), source.name)
         return source.name, preview_path
@@ -457,7 +447,7 @@ class ChatPagePreviewController:
         file_id, file_name, file_path = self.resolve_pdf_source(
             first_selector_choices,
             selected_file_ids,
-            access=self._request_access(request),
+            access=resolve_preview_access(self._app, request, _DIRECT_CALL_REQUEST),
         )
         self._force_first_page_file_id = file_id or ""
         if file_id:
@@ -716,7 +706,7 @@ class ChatPagePreviewController:
         file_id, file_name, file_path = self.resolve_pdf_source(
             first_selector_choices,
             selected_file_ids,
-            access=self._request_access(request),
+            access=resolve_preview_access(self._app, request, _DIRECT_CALL_REQUEST),
         )
         next_file_id, must_force_first, target_page = self._resolve_target_page(
             file_id, current_page
@@ -755,8 +745,8 @@ class ChatPagePreviewController:
         current_preview_notice=None,
         request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
-        if not _is_request_value(request):
-            values = [
+        values, request = normalize_preview_tick(
+            [
                 file_id,
                 file_name,
                 file_path,
@@ -764,18 +754,19 @@ class ChatPagePreviewController:
                 total_pages,
                 current_preview_src,
                 current_preview_notice,
-                request,
-            ][-7:]
-            (
-                file_id,
-                file_name,
-                file_path,
-                current_page,
-                total_pages,
-                current_preview_src,
-                current_preview_notice,
-            ) = values
-            request = _DIRECT_CALL_REQUEST
+            ],
+            request,
+            _DIRECT_CALL_REQUEST,
+        )
+        (
+            file_id,
+            file_name,
+            file_path,
+            current_page,
+            total_pages,
+            current_preview_src,
+            current_preview_notice,
+        ) = values
 
         if not file_id:
             return gr.skip(), gr.skip(), gr.skip(), gr.skip()
@@ -792,25 +783,7 @@ class ChatPagePreviewController:
         ):
             return gr.skip(), gr.skip(), gr.skip(), gr.skip()
 
-        # Check Office conversion status, but still update if PDF is ready
-        # Don't skip just because conversion is done - we need to check if preview has been updated to PDF
-        is_office_file = file_name and file_name.lower().endswith(
-            (".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx")
-        )
-        if is_office_file and file_path:
-            try:
-                job_status = self._get_office_job_status(file_path)
-                if job_status == "done":
-                    # Check if we already have the converted PDF
-                    cached_pdf = self._get_cached_office_pdf_preview(file_path)
-                    if cached_pdf and os.path.isfile(cached_pdf):
-                        pass
-                        # Continue to build preview payload with the PDF
-                    else:
-                        # Conversion done but PDF not found, continue checking
-                        pass
-            except Exception:
-                pass  # Continue processing if status check fails
+        poll_office_conversion(self, file_name, file_path)
 
         next_file_id, must_force_first, target_page = self._resolve_target_page(
             file_id, current_page
@@ -853,22 +826,3 @@ class ChatPagePreviewController:
         if must_force_first and int(page_number or 1) == 1:
             self._force_first_page_file_id = ""
         self._last_preview_file_id = next_file_id
-
-
-def _is_request_value(value) -> bool:
-    return bool(
-        value is _DIRECT_CALL_REQUEST
-        or isinstance(value, gr.Request)
-        or hasattr(value, "username")
-        or hasattr(value, "session_hash")
-    )
-
-
-def _preview_access_error() -> PreviewAccessError:
-    return PreviewAccessError(
-        PreviewErrorCode.SOURCE_UNAVAILABLE,
-        stage="source_resolution",
-        source_path="source-unavailable",
-        converter="database",
-        details="The requested source is unavailable.",
-    )

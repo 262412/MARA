@@ -7,10 +7,10 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
-from ktem.db.models import engine
 from ktem.preview.docx import extract_docx_text
+from ktem.preview.context import PreviewPurpose, preview_access_for_user
 from ktem.preview.office import OfficePreviewConversionService
-from sqlmodel import Session, select
+from ktem.preview.service import PreviewService
 
 try:
     from pptx import Presentation
@@ -47,7 +47,7 @@ def detect_office_extension(file_name: str, file_path: str) -> str:
         try:
             with open(file_path, "rb") as file_obj:
                 header = file_obj.read(8)
-            if header.startswith(b"\xD0\xCF\x11\xE0"):
+            if header.startswith(b"\xd0\xcf\x11\xe0"):
                 return ".doc"
         except Exception:
             pass
@@ -175,6 +175,7 @@ class PreviewFileResolver:
     def __init__(self, app, file_name_cache: dict[str, str]):
         self._app = app
         self._file_name_cache = file_name_cache
+        self._service = PreviewService(app)
 
     @staticmethod
     def extract_first_selected_file_id(selected_file_ids):
@@ -193,87 +194,39 @@ class PreviewFileResolver:
 
         return selected
 
-    def resolve_file_path_by_id(self, file_id: str) -> str:
+    def _access(self, user_id=None):
+        return preview_access_for_user(self._app, user_id)
+
+    def resolve_source(self, file_id: str, *, user_id=None):
+        source = self._service.resolve_source(file_id, access=self._access(user_id))
+        self._file_name_cache[file_id] = source.name
+        return source
+
+    def resolve_sources(self, file_ids, *, user_id=None, strict: bool = True):
+        sources = self._service.resolve_sources(
+            file_ids, access=self._access(user_id), strict=strict
+        )
+        self._file_name_cache.update(
+            {source.file_id: source.name for source in sources}
+        )
+        return sources
+
+    def resolve_file_path_by_id(self, file_id: str, *, user_id=None) -> str:
         if not file_id:
             return ""
-        for index in self._app.index_manager.indices:
-            resources = getattr(index, "_resources", {}) or {}
-            source_table = resources.get("Source")
-            file_storage_path = resources.get("FileStoragePath")
-            if source_table is None:
-                continue
+        return str(self.resolve_source(file_id, user_id=user_id).path)
 
-            with Session(engine) as session:
-                statement = select(source_table).where(source_table.id == file_id)
-                source_obj = session.exec(statement).first()
-            if not source_obj:
-                continue
-
-            self._file_name_cache[file_id] = getattr(source_obj, "name", "") or ""
-            stored_path = getattr(source_obj, "path", "") or ""
-            if not stored_path:
-                continue
-
-            if file_storage_path:
-                candidate_storage_path = os.path.join(
-                    str(file_storage_path), stored_path
-                )
-                if os.path.isfile(candidate_storage_path):
-                    return candidate_storage_path
-            if os.path.isfile(stored_path):
-                return stored_path
-        return ""
-
-    def resolve_file_name_by_id(self, file_id: str) -> str:
+    def resolve_file_name_by_id(self, file_id: str, *, user_id=None) -> str:
         if not file_id:
             return ""
-        if file_id in self._file_name_cache:
-            return self._file_name_cache[file_id]
-        _ = self.resolve_file_path_by_id(file_id)
-        return self._file_name_cache.get(file_id, "")
+        return self.resolve_source(file_id, user_id=user_id).name
 
-    def resolve_selected_file(self, selected_file_ids):
+    def resolve_selected_file(self, selected_file_ids, *, user_id=None):
         file_id = self.extract_first_selected_file_id(selected_file_ids)
         if not file_id:
             return "", "", ""
-
-        file_name = ""
-        resolved_path = ""
-        for index in self._app.index_manager.indices:
-            resources = getattr(index, "_resources", {}) or {}
-            source_table = resources.get("Source")
-            file_storage_path = resources.get("FileStoragePath")
-            if source_table is None:
-                continue
-
-            with Session(engine) as session:
-                statement = select(source_table).where(source_table.id == file_id)
-                source_obj = session.exec(statement).first()
-
-            if not source_obj:
-                continue
-
-            file_name = getattr(source_obj, "name", "") or ""
-            stored_path = getattr(source_obj, "path", "") or ""
-
-            if stored_path and file_storage_path:
-                candidate_storage_path = os.path.join(
-                    str(file_storage_path), stored_path
-                )
-                if os.path.isfile(candidate_storage_path):
-                    resolved_path = candidate_storage_path
-                    break
-
-            if stored_path and os.path.isfile(stored_path):
-                resolved_path = stored_path
-                break
-
-        if not file_name:
-            file_name = self.resolve_file_name_by_id(file_id)
-        if not resolved_path:
-            resolved_path = self.resolve_file_path_by_id(file_id)
-
-        return file_id, file_name, resolved_path
+        source = self.resolve_source(str(file_id), user_id=user_id)
+        return source.file_id, source.name, str(source.path)
 
 
 class PreviewSupportService:
@@ -285,15 +238,20 @@ class PreviewSupportService:
         self._presentation_service = PresentationTextService()
 
     def resolve_selected_file(
-        self, selected_file_ids: list[str] | None
+        self, selected_file_ids: list[str] | None, *, user_id=None
     ) -> tuple[str, str, str]:
-        return self._resolver.resolve_selected_file(selected_file_ids or [])
+        return self._resolver.resolve_selected_file(
+            selected_file_ids or [], user_id=user_id
+        )
 
-    def resolve_file_path(self, file_id: str) -> str:
-        return self._resolver.resolve_file_path_by_id(file_id)
+    def resolve_file_path(self, file_id: str, *, user_id=None) -> str:
+        return self._resolver.resolve_file_path_by_id(file_id, user_id=user_id)
 
-    def resolve_file_name(self, file_id: str) -> str:
-        return self._resolver.resolve_file_name_by_id(file_id)
+    def resolve_file_name(self, file_id: str, *, user_id=None) -> str:
+        return self._resolver.resolve_file_name_by_id(file_id, user_id=user_id)
+
+    def resolve_sources(self, file_ids, *, user_id=None, strict: bool = True):
+        return self._resolver.resolve_sources(file_ids, user_id=user_id, strict=strict)
 
     @staticmethod
     def extract_pdf_page_text(
@@ -320,45 +278,39 @@ class PreviewSupportService:
         file_name: str,
         page_number: int,
         max_chars: int = 7000,
+        *,
+        user_id=None,
     ) -> str:
         if not file_id or not file_name:
             return ""
 
-        source_path = self.resolve_file_path(file_id)
-        if not source_path:
-            return ""
+        source = self._resolver.resolve_source(file_id, user_id=user_id)
+        source_path = str(source.path)
+        file_name = source.name
 
         source_extension = detect_office_extension(file_name, source_path)
         file_extension = (Path(file_name).suffix or Path(source_path).suffix).lower()
 
-        if file_extension == ".pdf":
-            return self.extract_pdf_page_text(
-                source_path, page_number, max_chars=max_chars
-            )
-
+        fallback_text = ""
         if source_extension in {".pptx", ".ppt"}:
-            return self._presentation_service.extract_slide_text(
+            fallback_text = self._presentation_service.extract_slide_text(
                 source_path,
                 page_number,
                 max_chars=max_chars,
             )
+        elif file_extension in {".docx", ".doc"}:
+            fallback_text = extract_docx_text(source_path, max_chars=max_chars)
+        elif file_extension in {".xlsx", ".xls", ".csv"}:
+            fallback_text = extract_xlsx_text(source_path, max_chars=max_chars)
+        elif file_extension in {".txt", ".md", ".html", ".mhtml"}:
+            fallback_text = read_text_file(source_path, max_chars=max_chars)
 
-        if source_extension in {".docx", ".doc", ".xlsx", ".xls"}:
-            cached_pdf = self._office_conversion.get_cached_pdf_preview(source_path)
-            if not cached_pdf:
-                cached_pdf = self._office_conversion.convert_to_pdf_preview(
-                    source_path, file_name
-                )
-            if cached_pdf and os.path.isfile(cached_pdf):
-                return self.extract_pdf_page_text(
-                    cached_pdf, page_number, max_chars=max_chars
-                )
-
-        if file_extension in {".docx", ".doc"}:
-            return extract_docx_text(source_path, max_chars=max_chars)
-        if file_extension in {".xlsx", ".xls", ".csv"}:
-            return extract_xlsx_text(source_path, max_chars=max_chars)
-        if file_extension in {".txt", ".md", ".html", ".mhtml"}:
-            return read_text_file(source_path, max_chars=max_chars)
-
-        return ""
+        context = self._resolver._service.page_context(
+            file_id,
+            page=page_number,
+            access=self._resolver._access(user_id),
+            purpose=PreviewPurpose.DOCQA,
+            max_chars=max_chars,
+            fallback_text=fallback_text,
+        )
+        return context.text

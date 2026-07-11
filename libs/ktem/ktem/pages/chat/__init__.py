@@ -13,7 +13,6 @@ from ktem.auth.service import resolve_request_user_id
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARuntime
 from ktem.preview.context import preview_access_for_user
-from ktem.preview.errors import PreviewAccessError
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
     SuggestConvNamePipeline,
 )
@@ -41,6 +40,7 @@ from .chat_conversation_events import bind_chat_conversation_events
 from .chat_docqa_runtime import build_web_docqa_request
 from .chat_gradio_adapters import chat_app_load_ports, chat_conversation_ports
 from .chat_knowledge_graph_bindings import subscribe_public_knowledge_graph_events
+from .chat_knowledge_graph_runtime import generate_graph, refresh_graph
 from .chat_layout import render_chat_workbench_layout
 from .chat_message_events import bind_chat_submit_events
 from .chat_preview_events import bind_chat_preview_events
@@ -1350,50 +1350,14 @@ class ChatPage(BasePage):
         selected_file_ids=None,
         request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
-        if not self.knowledge_graph:
-            return gr.update(value=""), None, "Status: knowledge graph unavailable.", []
-        source_scope = self._merge_unique_file_ids(
-            self._normalize_selected_file_ids(graph_source_ids),
-            self._normalize_selected_file_ids(selected_file_ids),
-            [focus_file_id] if focus_file_id else [],
+        return refresh_graph(
+            self,
+            conversation_id,
+            graph_source_ids,
+            focus_file_id,
+            selected_file_ids,
+            request,
         )
-        user_id = self._resolve_persist_user_id("default", request)
-        try:
-            graph_view = self.knowledge_graph.get_graph_view(
-                conversation_id=conversation_id,
-                graph_source_ids=source_scope,
-                focus_file_id=focus_file_id,
-                force_rebuild=False,
-                user_id=user_id,
-            )
-
-            # Auto-heal stale cache during normal refresh so file add/delete events
-            # immediately reflect in the graph without requiring manual button click.
-            if graph_view.get("status") == "stale":
-                graph_view = self.knowledge_graph.get_graph_view(
-                    conversation_id=conversation_id,
-                    graph_source_ids=source_scope,
-                    focus_file_id=focus_file_id,
-                    force_rebuild=True,
-                    user_id=user_id,
-                )
-
-            return (
-                self._json_to_plot(graph_view),
-                graph_view,
-                f"Status: {graph_view.get('status_message', 'ready')}",
-                graph_view.get("graph_source_ids", []),
-            )
-        except PreviewAccessError:
-            raise
-        except Exception as exc:
-            logger.warning("Failed to refresh knowledge graph: %s", exc)
-            return (
-                gr.update(value=""),
-                None,
-                "Status: failed to load knowledge graph.",
-                self._normalize_selected_file_ids(source_scope),
-            )
 
     def auto_refresh_knowledge_graph(
         self,
@@ -1403,8 +1367,6 @@ class ChatPage(BasePage):
         selected_file_ids=None,
         request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
-        # Keep backward compatibility with existing event wiring without
-        # forcing a rebuild.
         return self.refresh_knowledge_graph(
             conversation_id=conversation_id,
             graph_source_ids=graph_source_ids,
@@ -1421,38 +1383,14 @@ class ChatPage(BasePage):
         selected_file_ids=None,
         request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
-        if not self.knowledge_graph:
-            return gr.update(value=""), None, "Status: knowledge graph unavailable.", []
-        source_scope = self._merge_unique_file_ids(
-            self._normalize_selected_file_ids(graph_source_ids),
-            self._normalize_selected_file_ids(selected_file_ids),
-            [focus_file_id] if focus_file_id else [],
+        return generate_graph(
+            self,
+            conversation_id,
+            graph_source_ids,
+            focus_file_id,
+            selected_file_ids,
+            request,
         )
-        user_id = self._resolve_persist_user_id("default", request)
-        try:
-            graph_view = self.knowledge_graph.get_graph_view(
-                conversation_id=conversation_id,
-                graph_source_ids=source_scope,
-                focus_file_id=focus_file_id,
-                force_rebuild=True,
-                user_id=user_id,
-            )
-            return (
-                self._json_to_plot(graph_view),
-                graph_view,
-                f"Status: {graph_view.get('status_message', 'ready')}",
-                graph_view.get("graph_source_ids", []),
-            )
-        except PreviewAccessError:
-            raise
-        except Exception as exc:
-            logger.warning("Failed to generate knowledge graph: %s", exc)
-            return (
-                gr.update(value=""),
-                None,
-                "Status: failed to generate knowledge graph.",
-                self._normalize_selected_file_ids(source_scope),
-            )
 
     def _format_chat_message(self, content: str, role: str) -> str:
         """Format a chat message as a bubble"""

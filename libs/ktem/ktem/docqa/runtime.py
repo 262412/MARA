@@ -16,7 +16,6 @@ from ktem.embeddings.manager import embedding_models_manager
 from ktem.index.file import FileIndex
 from ktem.index.file.deletion import DeletionCoordinator
 from ktem.llms.manager import llms
-from ktem.preview.errors import PreviewContextError, PreviewErrorCode
 from ktem.rerankings.manager import reranking_models_manager
 from ktem.utils.commands import WEB_SEARCH_COMMAND
 from sqlmodel import Session, select
@@ -24,7 +23,7 @@ from theflow.settings import settings as flowsettings
 from theflow.utils.modules import import_dotted_string
 
 from . import _runtime_doctor as _doctor
-from . import _runtime_elements, _runtime_graph
+from . import _runtime_elements, _runtime_graph, _runtime_preview
 from . import _runtime_mara as _mara
 from . import _runtime_notebook as _nb
 from . import _runtime_pipeline as _pipeline
@@ -94,25 +93,6 @@ def _build_turn_response(
                 references_text=_html_to_text(stream_result.refs),
             )
         ),
-    )
-
-
-def _preview_value(
-    preview: Any, method_name: str, file_id: str, *, user_id: Any
-) -> str:
-    method = getattr(preview, method_name, None)
-    if method is None:
-        return ""
-    return str(method(file_id, user_id=user_id) or "")
-
-
-def _empty_page_context_error() -> PreviewContextError:
-    return PreviewContextError(
-        PreviewErrorCode.CONTEXT_TEXT_UNAVAILABLE,
-        stage="page_context",
-        source_path="source-unavailable",
-        converter="preview",
-        details="No text is available for the requested DocQA page.",
     )
 
 
@@ -502,36 +482,26 @@ class DocQARuntime(RuntimeSessionMutationFacade):
                 resolved_user_id, selected_input
             )
 
-            if active_file_id and not active_file_name:
-                active_file_name = self._preview.resolve_file_name(
-                    active_file_id, user_id=resolved_user_id
-                )
-
-            if not active_file_name:
-                inferred_id, inferred_name, _ = self._preview.resolve_selected_file(
-                    selected_file_ids, user_id=resolved_user_id
-                )
-                active_file_id = active_file_id or inferred_id
-                active_file_name = active_file_name or inferred_name
+            active_file_id, active_file_name = _runtime_preview.resolve_active_source(
+                self._preview,
+                selected_file_ids,
+                active_file_id,
+                active_file_name,
+                user_id=resolved_user_id,
+            )
 
         normalized_page_number = self._normalize_page_number(request.page_number)
         qa_scope = self._normalize_qa_scope(request.qa_scope, normalized_page_number)
         selected_text = str(request.selected_text or "").strip()
-        if (
-            qa_scope == "page"
-            and (not selected_text)
-            and normalized_page_number is not None
-            and active_file_id
-            and active_file_name
-        ):
-            selected_text = self._preview.get_page_context_text(
-                active_file_id,
-                active_file_name,
-                normalized_page_number,
-                user_id=resolved_user_id,
-            )
-        if qa_scope == "page" and not selected_text:
-            raise _empty_page_context_error()
+        selected_text = _runtime_preview.resolve_page_text(
+            self._preview,
+            qa_scope,
+            normalized_page_number,
+            active_file_id,
+            active_file_name,
+            selected_text,
+            user_id=resolved_user_id,
+        )
 
         graph_context = (
             request.graph_context if isinstance(request.graph_context, dict) else {}
@@ -554,8 +524,8 @@ class DocQARuntime(RuntimeSessionMutationFacade):
         )
         _apply_request_page_image_records(pipeline, request)
         graph_source_ids = self._normalize_selected_file_ids(request.graph_source_ids)
-        self._preview.resolve_sources(
-            graph_source_ids, user_id=resolved_user_id, strict=True
+        _runtime_preview.validate_sources(
+            self._preview, graph_source_ids, user_id=resolved_user_id
         )
         graph_context = _apply_multimodal_runtime_indexes(
             pipeline,

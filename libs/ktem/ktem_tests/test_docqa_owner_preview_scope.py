@@ -55,6 +55,13 @@ class _PreviewSpy:
         self._record("resolve_file_path", file_id, user_id=user_id)
         return "/owned/path"
 
+    def resolve_sources(self, file_ids, *, user_id=None, strict=True):
+        self._record("resolve_sources", list(file_ids), strict, user_id=user_id)
+        return [
+            SimpleNamespace(file_id=file_id, name="Owned.pdf", path="/owned/path")
+            for file_id in file_ids
+        ]
+
     def get_page_context_text(
         self, file_id, file_name, page_number, *, user_id=None
     ) -> str:

@@ -125,13 +125,14 @@ def test_preview_service_strict_batch_rejects_before_consumer_reads(owned_previe
 
 def _managed_preview_controller(monkeypatch, owned_preview_app):
     import ktem.pages.chat.page_preview as preview_module
+    import ktem.pages.chat.page_preview_callbacks as callback_module
     import ktem.pages.chat.page_preview_resolver as resolver_module
 
     app, db_engine, storage = owned_preview_app
     monkeypatch.setattr(resolver_module, "engine", db_engine)
-    monkeypatch.setattr(preview_module.flowsettings, "MARA_AUTH_MODE", "password")
+    monkeypatch.setattr(callback_module.flowsettings, "MARA_AUTH_MODE", "password")
     monkeypatch.setattr(
-        preview_module,
+        callback_module,
         "resolve_request_user_id",
         lambda _request, *, auth_mode: "attacker",
         raising=False,
@@ -302,13 +303,14 @@ def test_preview_callbacks_receive_exact_injected_gradio_request(owned_preview_a
 
 def test_preview_direct_call_abi_keeps_shapes(monkeypatch, owned_preview_app):
     import ktem.pages.chat.page_preview as preview_module
+    import ktem.pages.chat.page_preview_callbacks as callback_module
     import ktem.pages.chat.page_preview_resolver as resolver_module
 
     app, db_engine, storage = owned_preview_app
     app.f_user_management = False
     app.index_manager.indices[0].config = {"private": False}
     monkeypatch.setattr(resolver_module, "engine", db_engine)
-    monkeypatch.setattr(preview_module.flowsettings, "MARA_AUTH_MODE", "local")
+    monkeypatch.setattr(callback_module.flowsettings, "MARA_AUTH_MODE", "local")
     controller = preview_module.ChatPagePreviewController(app)
     controller._build_preview_payload = lambda *_args: (1, 1, "preview", "notice")
     controller._get_office_job_status = lambda _path: "pending"

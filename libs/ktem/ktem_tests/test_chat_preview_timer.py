@@ -1,4 +1,7 @@
 from pathlib import Path
+from types import SimpleNamespace
+
+from ktem.pages.chat.page_preview_callbacks import poll_office_conversion
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "ktem"
 CHAT_PAGE_FILE = PACKAGE_ROOT / "pages" / "chat" / "__init__.py"
@@ -31,3 +34,13 @@ def test_preview_timer_does_not_repaint_thumbnail_strip_by_default():
     assert "fn=page.page_preview.on_preview_tick" in timer_chain
     assert "fn=refresh_page_context_view" not in timer_chain
     assert "self.page_thumbnail_strip" not in timer_chain
+
+
+def test_office_poll_skips_incomplete_legacy_preview_state():
+    controller = SimpleNamespace(
+        _get_office_job_status=lambda _path: (_ for _ in ()).throw(
+            AssertionError("empty legacy state must not poll conversion")
+        )
+    )
+
+    poll_office_conversion(controller, None, "")

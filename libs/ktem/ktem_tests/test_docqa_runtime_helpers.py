@@ -466,21 +466,34 @@ def test_runtime_prepare_pipeline_sets_configured_visual_backends(monkeypatch):
 
 class _PreviewForFileRecords:
     @staticmethod
-    def resolve_file_path(file_id: str) -> str:
+    def resolve_file_path(file_id: str, *, user_id=None) -> str:
         return f"/resolved/{file_id}.pdf"
 
     @staticmethod
-    def resolve_file_name(file_id: str) -> str:
+    def resolve_file_name(file_id: str, *, user_id=None) -> str:
         return f"{file_id}.pdf"
 
     @staticmethod
-    def resolve_selected_file(file_ids: list[str]):
+    def resolve_selected_file(file_ids: list[str], *, user_id=None):
         file_id = file_ids[0] if file_ids else ""
         return file_id, f"{file_id}.pdf" if file_id else "", ""
 
     @staticmethod
-    def get_page_context_text(_file_id: str, _file_name: str, _page_number: int) -> str:
+    def get_page_context_text(
+        _file_id: str, _file_name: str, _page_number: int, *, user_id=None
+    ) -> str:
         return ""
+
+    @staticmethod
+    def resolve_sources(file_ids, *, user_id=None, strict=True):
+        return [
+            SimpleNamespace(
+                file_id=file_id,
+                name=f"{file_id}.pdf",
+                path=f"/resolved/{file_id}.pdf",
+            )
+            for file_id in file_ids
+        ]
 
 
 class _PreparePipelineFileIndex:

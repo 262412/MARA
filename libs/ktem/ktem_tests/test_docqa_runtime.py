@@ -38,15 +38,29 @@ def _make_scope_runtime(monkeypatch):
         def __init__(self):
             self.page_context_calls = []
 
-        def resolve_file_name(self, _file_id):
+        def resolve_file_name(self, _file_id, *, user_id=None):
+            assert user_id == "user-1"
             return "alpha.pdf"
 
-        def resolve_selected_file(self, _selected_file_ids):
+        def resolve_selected_file(self, _selected_file_ids, *, user_id=None):
+            assert user_id == "user-1"
             return "file-1", "alpha.pdf", None
 
-        def get_page_context_text(self, file_id, file_name, page_number):
+        def get_page_context_text(
+            self, file_id, file_name, page_number, *, user_id=None
+        ):
+            assert user_id == "user-1"
             self.page_context_calls.append((file_id, file_name, page_number))
             return "page-only context"
+
+        @staticmethod
+        def resolve_sources(file_ids, *, user_id=None, strict=True):
+            assert user_id == "user-1"
+            assert strict is True
+            return [
+                SimpleNamespace(file_id=file_id, name="alpha.pdf", path="")
+                for file_id in file_ids
+            ]
 
     monkeypatch.setattr(runtime_module, "reasonings", {"simple": _FakeReasoning})
 
@@ -117,25 +131,13 @@ class _FakeMaraReasoning:
         return _FakeMaraPipeline()
 
 
-def _make_mara_runtime():
-    runtime = cast(Any, object.__new__(DocQARuntime))
-    runtime._resolve_user_id = lambda user_id=None: "user-1"
-    runtime.load_settings = lambda user_id=None: {"reasoning.use": "mara"}
-    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
-    runtime._web_search_cls = None
-    runtime.file_index = None
-    runtime._preview = SimpleNamespace(
-        resolve_file_name=lambda _file_id: "alpha.pdf",
-        resolve_file_path=lambda _file_id: "",
-    )
-    runtime.knowledge_graph = None
-
-    session_info = runtime_module.DocQASession(
-        conversation_id="conv-1",
+def _make_docqa_session(conversation_id="conv-1", data_source=None):
+    return runtime_module.DocQASession(
+        conversation_id=conversation_id,
         name="Conversation",
         user_id="user-1",
         is_public=False,
-        data_source={},
+        data_source=dict(data_source or {}),
         messages=[],
         retrieval_messages=[],
         plot_history=[],
@@ -146,7 +148,27 @@ def _make_mara_runtime():
         date_created=None,
         date_updated=None,
     )
-    runtime.load_session = lambda _conversation_id: None
+
+
+def _make_mara_runtime():
+    runtime = cast(Any, object.__new__(DocQARuntime))
+    runtime._resolve_user_id = lambda user_id=None: "user-1"
+    runtime.load_settings = lambda user_id=None: {"reasoning.use": "mara"}
+    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
+    runtime._web_search_cls = None
+    runtime.file_index = None
+    runtime._preview = SimpleNamespace(
+        resolve_file_name=lambda _file_id, **_kwargs: "alpha.pdf",
+        resolve_file_path=lambda _file_id, **_kwargs: "",
+        resolve_sources=lambda file_ids, **_kwargs: [
+            SimpleNamespace(file_id=file_id, name="alpha.pdf", path="")
+            for file_id in file_ids
+        ],
+    )
+    runtime.knowledge_graph = None
+
+    session_info = _make_docqa_session()
+    runtime.load_session = lambda _conversation_id, user_id=None: None
     runtime.create_session = lambda user_id=None: session_info
     runtime.persist_conversation_state = lambda **_kwargs: ([], [])
     return runtime
@@ -177,7 +199,6 @@ def test_runtime_response_preserves_mara_agent_outputs(monkeypatch):
 
 def test_runtime_persists_mara_artifact_to_notebook(monkeypatch):
     monkeypatch.setattr(runtime_module, "reasonings", {"mara": _FakeMaraReasoning})
-
     conversation = Conversation(user="user-1")
     conversation.data_source = {"origin": "cli"}
     with Session(engine) as session:
@@ -186,33 +207,10 @@ def test_runtime_persists_mara_artifact_to_notebook(monkeypatch):
         session.refresh(conversation)
         conversation_id = conversation.id
 
-    runtime = cast(Any, object.__new__(DocQARuntime))
-    runtime._resolve_user_id = lambda user_id=None: "user-1"
-    runtime.load_settings = lambda user_id=None: {"reasoning.use": "mara"}
-    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
-    runtime._web_search_cls = None
-    runtime.file_index = None
-    runtime._preview = SimpleNamespace(
-        resolve_file_name=lambda _file_id: "alpha.pdf",
-        resolve_file_path=lambda _file_id: "",
-    )
-    runtime.knowledge_graph = None
+    runtime = _make_mara_runtime()
     runtime.get_conversation_graph_cache = lambda _conversation_id: {}
-    runtime.load_session = lambda _conversation_id: runtime_module.DocQASession(
-        conversation_id=conversation_id,
-        name="Conversation",
-        user_id="user-1",
-        is_public=False,
-        data_source={"origin": "cli"},
-        messages=[],
-        retrieval_messages=[],
-        plot_history=[],
-        state={"app": {"regen": False}},
-        selected_mapping={},
-        graph_source_ids=[],
-        origin="cli",
-        date_created=None,
-        date_updated=None,
+    runtime.load_session = lambda _conversation_id, user_id=None: _make_docqa_session(
+        conversation_id, {"origin": "cli"}
     )
 
     try:

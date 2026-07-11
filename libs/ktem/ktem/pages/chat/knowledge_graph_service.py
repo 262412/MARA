@@ -562,7 +562,6 @@ class GlobalKnowledgeGraphService:
     ) -> dict[str, Any]:
         conversation_id = str(conversation_id or "draft")
         source_ids = self._normalize_source_ids(graph_source_ids)
-
         with self._lock:
             sources = self._load_sources(source_ids, user_id=user_id)
             valid_source_ids = list(sources.keys())
@@ -579,7 +578,6 @@ class GlobalKnowledgeGraphService:
                 or 0
             )
             missing_count = max(0, len(source_ids) - len(valid_source_ids))
-
             if not valid_source_ids:
                 html_content = self._render_empty_html(
                     "No graph sources in this conversation yet.",
