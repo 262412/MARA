@@ -112,7 +112,8 @@ class _DummyRuntime:
             page_number=request.page_number,
         )
 
-    def load_session(self, conversation_id):
+    def load_session(self, conversation_id, user_id=None):
+        del user_id
         messages = self.sessions.get(conversation_id)
         if messages is None:
             return None
@@ -122,7 +123,8 @@ class _DummyRuntime:
             messages=list(messages),
         )
 
-    def create_session(self):
+    def create_session(self, user_id=None):
+        del user_id
         conversation_id = f"conv-{len(self.sessions) + 1}"
         self.sessions[conversation_id] = []
         return SimpleNamespace(conversation_id=conversation_id)

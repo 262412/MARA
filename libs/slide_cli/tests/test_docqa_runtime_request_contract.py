@@ -28,7 +28,8 @@ class _RuntimeProbe:
     def _resolve_user_id(self, user_id):
         return user_id or "user-1"
 
-    def load_session(self, conversation_id):
+    def load_session(self, conversation_id, user_id=None):
+        del user_id
         return self.sessions.get(conversation_id)
 
     def create_session(self, user_id=None):
