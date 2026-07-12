@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import gradio as gr
 import pytest
 from ktem.auth import authorization
 from ktem.db.models import Settings, User, engine
@@ -63,8 +64,10 @@ def test_managed_callback_uses_request_principal_not_state(
 def test_managed_callback_without_request_identity_fails_closed(monkeypatch):
     monkeypatch.setattr(authorization.flowsettings, "MARA_AUTH_MODE", "sso")
 
-    with pytest.raises(authorization.CallbackAuthorizationError):
+    with pytest.raises(authorization.CallbackAuthorizationError) as caught:
         authorization.resolve_callback_user_id("forged")
+    assert isinstance(caught.value, gr.Error)
+    assert str(caught.value) == "This operation is unavailable."
 
 
 def test_local_callback_retains_state_user_and_rechecks_admin(
