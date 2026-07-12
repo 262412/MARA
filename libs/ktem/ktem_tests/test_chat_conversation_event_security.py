@@ -143,3 +143,14 @@ def test_public_and_like_events_include_local_user_identity():
         "user-id",
     ]
     assert chatbot.calls[0][1]["inputs"] == ["conversation-id", "user-id"]
+    assert report_btn.calls[-1][1]["inputs"] == [
+        "correctness",
+        "issues",
+        "detail",
+        "conversation-id",
+        chatbot,
+        "settings",
+        "user-id",
+        "info",
+        "chat-state",
+    ]
