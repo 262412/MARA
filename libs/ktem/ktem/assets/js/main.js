@@ -117,6 +117,22 @@ function run() {
       return false;
     }
     try {
+      const viewerApplication = targetIframe.contentWindow.PDFViewerApplication;
+      if (viewerApplication?.initializedPromise) {
+        viewerApplication.initializedPromise.then(() => {
+          viewerApplication.page = targetPage;
+          try {
+            const viewerUrl = new URL(targetIframe.contentWindow.location.href);
+            viewerUrl.searchParams.set("ktempage", String(targetPage));
+            viewerUrl.hash = `page=${targetPage}`;
+            targetIframe.contentWindow.history.replaceState(null, "", viewerUrl);
+          } catch (error) {
+            // Page navigation remains valid when URL decoration is unavailable.
+          }
+        });
+        updateLastPostedPageSync(normalizedDocKey, targetPage);
+        return true;
+      }
       targetIframe.contentWindow.postMessage(
         { type: "ktem-pdf-page-change", page: targetPage },
         window.location.origin
@@ -227,6 +243,42 @@ function run() {
       return;
     }
     officeZoomControl.style.display = visible ? "inline-flex" : "none";
+  }
+
+  function bindPptxPreviewControls(iframe) {
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      const shell = doc?.querySelector(".pptx-preview-shell");
+      const canvas = doc?.querySelector(".pptx-preview-canvas-scale");
+      const stage = doc?.querySelector(".pptx-preview-stage");
+      if (!shell || !canvas || !stage || shell.dataset.ktemZoomBound === "true") {
+        return;
+      }
+      shell.dataset.ktemZoomBound = "true";
+      let zoom = 1;
+      const applyZoom = (value) => {
+        zoom = Math.max(0.35, Math.min(3, value));
+        canvas.style.zoom = String(zoom);
+        canvas.setAttribute("data-pptx-scale", zoom.toFixed(2));
+      };
+      const fit = () => {
+        const stageWidth = parseFloat(stage.getAttribute("data-stage-width") || "0");
+        const viewportWidth = shell.clientWidth - 24;
+        applyZoom(stageWidth > viewportWidth ? viewportWidth / stageWidth : 1);
+      };
+      shell.addEventListener(
+        "wheel",
+        (event) => {
+          if (!event.ctrlKey) return;
+          event.preventDefault();
+          applyZoom(zoom * (event.deltaY < 0 ? 1.08 : 0.92));
+        },
+        { passive: false }
+      );
+      fit();
+    } catch (error) {
+      // The source allowlist and iframe policy remain the security boundary.
+    }
   }
 
   function updateOfficeZoomControl(scaleValue) {
@@ -427,6 +479,7 @@ function run() {
       iframe.style.height = "100%";
       iframe.onload = () => {
         bindIframeSelectionFallback(iframe);
+        bindPptxPreviewControls(iframe);
       };
       const htmlSrcdoc = dataHtmlToSrcdoc(nextSrc);
       if (htmlSrcdoc) {
@@ -439,6 +492,7 @@ function run() {
         iframe.removeAttribute("src");
       }
       bindIframeSelectionFallback(iframe);
+      bindPptxPreviewControls(iframe);
       updateLastPostedPageSync("", 0);
       updateLastAssignedPreviewSrc(nextSrc);
       updateLastStablePreviewSrc(nextSrc);
