@@ -310,6 +310,48 @@ def test_global_scan_limit_is_shared_across_the_download_tree(roots, monkeypatch
     assert _server_download_dirs(roots) == []
 
 
+def test_shared_scan_budget_reuses_ready_enumeration_during_pruning(
+    roots,
+    monkeypatch,
+):
+    existing = [
+        _ready_workspace(
+            roots.zip,
+            FILE_ID,
+            f"stale-{index:02d}",
+            marker_age=READY_FETCH_WINDOW_SECONDS + 1,
+        )
+        for index in range(8)
+    ]
+    monkeypatch.setattr(retention_module, "READY_OUTPUT_LIMIT", 2)
+    monkeypatch.setattr(retention_module, "READY_OUTPUT_HARD_LIMIT", 8)
+    monkeypatch.setattr(retention_module, "MAX_GLOBAL_SCAN_ENTRIES", 27)
+
+    _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+
+    assert sum(path.exists() for path in existing) == 2
+    assert len(_server_download_dirs(roots)) == 3
+
+
+@pytest.mark.parametrize("level", ["file-id", "request"])
+def test_corrupted_download_tree_entry_fails_closed(roots, level):
+    downloads = roots.zip / "downloads"
+    downloads.mkdir()
+    if level == "file-id":
+        corrupt = downloads / "corrupt-file-id"
+    else:
+        parent = downloads / "file-other"
+        parent.mkdir()
+        corrupt = parent / "corrupt-request"
+    corrupt.write_text("not a directory", encoding="utf-8")
+
+    with pytest.raises(gr.Error, match="reindex"):
+        _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+
+    assert corrupt.exists()
+    assert _server_download_dirs(roots) == []
+
+
 @pytest.mark.parametrize("kind", ["stale-active", "expired-ready"])
 def test_failed_pruning_residue_remains_capacity_accounted(
     roots,
