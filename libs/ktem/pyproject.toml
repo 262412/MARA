@@ -40,6 +40,7 @@ dependencies = [
     "tzlocal>=5.0",
     "mcp>=1.0.0",
     "docx2pdf>=0.1.8,<0.2",
+    "filelock>=3.19.1,<4",
 ]
 authors = [
     { name = "Chenghao Zhang", email = "tbczhang@liverpool.ac.uk" },
