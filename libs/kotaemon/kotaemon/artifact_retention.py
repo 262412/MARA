@@ -28,7 +28,8 @@ READY_OUTPUT_HARD_LIMIT = 128
 READY_OUTPUT_TTL_SECONDS = 24 * 60 * 60
 READY_FETCH_WINDOW_SECONDS = 60
 ACTIVE_WORKSPACE_TTL_SECONDS = 10 * 60
-MAX_GLOBAL_SCAN_ENTRIES = 512
+# Lifecycle lock plus file-id, request, marker, and payload for every valid record.
+MAX_GLOBAL_SCAN_ENTRIES = 1 + (4 * READY_OUTPUT_HARD_LIMIT)
 _LIFECYCLE_LOCK_NAME = ".lifecycle.lock"
 
 
@@ -47,6 +48,12 @@ class _WorkspaceRecord:
     request_name: str
     kind: str
     modified: float
+    entry_names: tuple[str, ...] | None = None
+
+
+@dataclass
+class _ScanBudget:
+    remaining: int
 
 
 def allocate_workspace(
@@ -62,8 +69,9 @@ def allocate_workspace(
     )
     lock_fd = _acquire_lifecycle_lock(downloads_fd)
     try:
-        records = _scan_and_prune(downloads_fd)
-        records = _prune_ready_limits(downloads_fd, records)
+        scan_budget = _ScanBudget(MAX_GLOBAL_SCAN_ENTRIES)
+        records = _scan_and_prune(downloads_fd, scan_budget)
+        records = _prune_ready_limits(downloads_fd, records, scan_budget)
         if len(records) >= READY_OUTPUT_HARD_LIMIT:
             raise ArtifactNamespaceError(
                 "Download capacity is full; retry after active fetches complete"
@@ -163,24 +171,32 @@ def _create_active_lease(directory_fd: int) -> int:
         raise
 
 
-def _scan_and_prune(downloads_fd: int) -> list[_WorkspaceRecord]:
+def _scan_and_prune(
+    downloads_fd: int,
+    scan_budget: _ScanBudget,
+) -> list[_WorkspaceRecord]:
     now = time.time()
     records: list[_WorkspaceRecord] = []
     file_ids = [
-        name for name in _bounded_names(downloads_fd) if name != _LIFECYCLE_LOCK_NAME
+        name
+        for name in _bounded_names(downloads_fd, scan_budget)
+        if name != _LIFECYCLE_LOCK_NAME
     ]
     for file_id in file_ids:
         try:
             file_fd = open_child_directory(downloads_fd, file_id, create=False)
-        except ArtifactNamespaceError:
-            continue
+        except ArtifactNamespaceError as exc:
+            if _namespace_disappeared(exc):
+                continue
+            raise
         try:
-            for request_name in _bounded_names(file_fd):
+            for request_name in _bounded_names(file_fd, scan_budget):
                 record = _inspect_workspace(
                     file_fd,
                     file_id,
                     request_name,
                     now,
+                    scan_budget,
                 )
                 if record is not None:
                     records.append(record)
@@ -195,43 +211,101 @@ def _inspect_workspace(
     file_id: str,
     request_name: str,
     now: float,
+    scan_budget: _ScanBudget,
 ) -> _WorkspaceRecord | None:
     try:
         request_fd = open_child_directory(parent_fd, request_name, create=False)
-    except ArtifactNamespaceError:
-        return None
+    except ArtifactNamespaceError as exc:
+        if _namespace_disappeared(exc):
+            return None
+        raise
     try:
         active = _inspect_active(request_fd, now)
         if active is not None:
             state, modified, active_fd = active
             if state == "stale":
-                _remove_workspace(parent_fd, request_name, request_fd, active_fd)
+                record = _remove_or_retain_workspace(
+                    parent_fd,
+                    file_id,
+                    request_name,
+                    request_fd,
+                    modified,
+                    scan_budget,
+                    active_fd=active_fd,
+                )
                 request_fd = -1
-                return None
+                return record
             os.close(active_fd)
             return _WorkspaceRecord(file_id, request_name, "active", modified)
         ready = _regular_entry(request_fd, ".ready")
         if ready is not None:
             age = max(0.0, now - ready.st_mtime)
-            if age > READY_OUTPUT_TTL_SECONDS or not _has_download_payload(request_fd):
-                _remove_workspace(parent_fd, request_name, request_fd)
+            entry_names = None
+            has_payload = True
+            if age <= READY_OUTPUT_TTL_SECONDS:
+                has_payload, entry_names = _download_payload_entries(
+                    request_fd,
+                    scan_budget,
+                )
+            if age > READY_OUTPUT_TTL_SECONDS or not has_payload:
+                record = _remove_or_retain_workspace(
+                    parent_fd,
+                    file_id,
+                    request_name,
+                    request_fd,
+                    ready.st_mtime,
+                    scan_budget,
+                    known_names=entry_names,
+                )
                 request_fd = -1
-                return None
-            return _WorkspaceRecord(file_id, request_name, "ready", ready.st_mtime)
+                return record
+            return _WorkspaceRecord(
+                file_id,
+                request_name,
+                "ready",
+                ready.st_mtime,
+                entry_names,
+            )
         modified = os.fstat(request_fd).st_mtime
         if max(0.0, now - modified) > ACTIVE_WORKSPACE_TTL_SECONDS:
-            _remove_workspace(parent_fd, request_name, request_fd)
+            record = _remove_or_retain_workspace(
+                parent_fd,
+                file_id,
+                request_name,
+                request_fd,
+                modified,
+                scan_budget,
+            )
             request_fd = -1
-            return None
-        return _WorkspaceRecord(
-            file_id,
-            request_name,
-            "pending",
-            modified,
-        )
+            return record
+        return _WorkspaceRecord(file_id, request_name, "pending", modified)
     finally:
         if request_fd >= 0:
             os.close(request_fd)
+
+
+def _remove_or_retain_workspace(
+    parent_fd: int,
+    file_id: str,
+    request_name: str,
+    request_fd: int,
+    modified: float,
+    scan_budget: _ScanBudget,
+    *,
+    active_fd: int | None = None,
+    known_names: tuple[str, ...] | None = None,
+) -> _WorkspaceRecord | None:
+    removed = _remove_workspace(
+        parent_fd,
+        request_name,
+        request_fd,
+        scan_budget,
+        active_fd=active_fd,
+        known_names=known_names,
+    )
+    if removed:
+        return None
+    return _WorkspaceRecord(file_id, request_name, "retained", modified)
 
 
 def _inspect_active(
@@ -255,6 +329,7 @@ def _inspect_active(
 def _prune_ready_limits(
     downloads_fd: int,
     records: list[_WorkspaceRecord],
+    scan_budget: _ScanBudget,
 ) -> list[_WorkspaceRecord]:
     now = time.time()
     remaining = list(records)
@@ -264,20 +339,22 @@ def _prune_ready_limits(
             by_file.setdefault(record.file_id, []).append(record)
     for ready in by_file.values():
         ready.sort(key=lambda item: (item.modified, item.request_name))
-        while len(ready) > READY_OUTPUT_LIMIT:
-            candidate = ready[0]
+        for candidate in list(ready):
+            if len(ready) <= READY_OUTPUT_LIMIT:
+                break
             if now - candidate.modified < READY_FETCH_WINDOW_SECONDS:
                 break
-            _delete_record(downloads_fd, candidate)
-            ready.pop(0)
-            remaining.remove(candidate)
-    return _prune_global_capacity(downloads_fd, remaining, now)
+            if _delete_record(downloads_fd, candidate, scan_budget):
+                ready.remove(candidate)
+                remaining.remove(candidate)
+    return _prune_global_capacity(downloads_fd, remaining, now, scan_budget)
 
 
 def _prune_global_capacity(
     downloads_fd: int,
     records: list[_WorkspaceRecord],
     now: float,
+    scan_budget: _ScanBudget,
 ) -> list[_WorkspaceRecord]:
     remaining = list(records)
     eligible = sorted(
@@ -291,16 +368,20 @@ def _prune_global_capacity(
     )
     while len(remaining) >= READY_OUTPUT_HARD_LIMIT and eligible:
         candidate = eligible.pop(0)
-        _delete_record(downloads_fd, candidate)
-        remaining.remove(candidate)
+        if _delete_record(downloads_fd, candidate, scan_budget):
+            remaining.remove(candidate)
     return remaining
 
 
-def _delete_record(downloads_fd: int, record: _WorkspaceRecord) -> None:
+def _delete_record(
+    downloads_fd: int,
+    record: _WorkspaceRecord,
+    scan_budget: _ScanBudget,
+) -> bool:
     try:
         parent_fd = open_child_directory(downloads_fd, record.file_id, create=False)
-    except ArtifactNamespaceError:
-        return
+    except ArtifactNamespaceError as exc:
+        return isinstance(exc.__cause__, FileNotFoundError)
     try:
         try:
             request_fd = open_child_directory(
@@ -308,28 +389,43 @@ def _delete_record(downloads_fd: int, record: _WorkspaceRecord) -> None:
                 record.request_name,
                 create=False,
             )
-        except ArtifactNamespaceError:
-            return
-        _remove_workspace(parent_fd, record.request_name, request_fd)
+        except ArtifactNamespaceError as exc:
+            return isinstance(exc.__cause__, FileNotFoundError)
+        removed = _remove_workspace(
+            parent_fd,
+            record.request_name,
+            request_fd,
+            scan_budget,
+            known_names=record.entry_names,
+        )
     finally:
         os.close(parent_fd)
-    _remove_empty_file_namespace(downloads_fd, record.file_id)
+    if removed:
+        _remove_empty_file_namespace(downloads_fd, record.file_id)
+    return removed
 
 
 def _remove_workspace(
     parent_fd: int,
     request_name: str,
     request_fd: int,
+    scan_budget: _ScanBudget,
     active_fd: int | None = None,
-) -> None:
+    known_names: tuple[str, ...] | None = None,
+) -> bool:
     try:
         if active_fd is None and _entry_exists(request_fd, ".active"):
-            return
-        for name in _bounded_names(request_fd):
+            return False
+        names = (
+            known_names
+            if known_names is not None
+            else tuple(_bounded_names(request_fd, scan_budget))
+        )
+        for name in names:
             metadata = os.stat(name, dir_fd=request_fd, follow_symlinks=False)
             if stat.S_ISDIR(metadata.st_mode):
-                return
-        for name in _bounded_names(request_fd):
+                return False
+        for name in names:
             unlink_at(request_fd, name)
     finally:
         if active_fd is not None:
@@ -338,15 +434,19 @@ def _remove_workspace(
     try:
         os.rmdir(request_name, dir_fd=parent_fd)
     except FileNotFoundError:
-        pass
+        return True
+    except OSError:
+        return False
+    return True
 
 
-def _bounded_names(directory_fd: int) -> list[str]:
+def _bounded_names(directory_fd: int, scan_budget: _ScanBudget) -> list[str]:
     names: list[str] = []
     with os.scandir(directory_fd) as entries:
         for entry in entries:
-            if len(names) >= MAX_GLOBAL_SCAN_ENTRIES:
+            if scan_budget.remaining <= 0:
                 raise ArtifactNamespaceError("Download lifecycle scan limit exceeded")
+            scan_budget.remaining -= 1
             names.append(entry.name)
     return names
 
@@ -380,12 +480,21 @@ def _entry_exists(directory_fd: int, name: str) -> bool:
         return False
 
 
-def _has_download_payload(directory_fd: int) -> bool:
-    return any(
+def _download_payload_entries(
+    directory_fd: int,
+    scan_budget: _ScanBudget,
+) -> tuple[bool, tuple[str, ...]]:
+    names = tuple(_bounded_names(directory_fd, scan_budget))
+    has_payload = any(
         name.endswith((".zip", ".html"))
         and _regular_entry(directory_fd, name) is not None
-        for name in _bounded_names(directory_fd)
+        for name in names
     )
+    return has_payload, names
+
+
+def _namespace_disappeared(exc: ArtifactNamespaceError) -> bool:
+    return isinstance(exc.__cause__, FileNotFoundError)
 
 
 def _remove_empty_file_namespace(downloads_fd: int, file_id: str) -> None:

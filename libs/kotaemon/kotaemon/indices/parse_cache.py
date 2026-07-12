@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mimetypes
 import os
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -10,7 +11,10 @@ from kotaemon.base import Document
 
 from .performance_cache import JsonDiskCache, content_hash, file_hash, stable_cache_key
 
-PARSE_CACHE_PAYLOAD_VERSION = 2
+PARSE_CACHE_PAYLOAD_VERSION = 3
+
+_PATH_NAME_METADATA_KEYS = {"file_name", "filename"}
+_PATH_VALUE_METADATA_KEYS = {"file_path", "source"}
 
 
 @dataclass
@@ -53,6 +57,7 @@ def load_data_with_parse_cache(
         if decoded is not None:
             payload, artifact_sidecar = decoded
             documents = documents_from_cache_payload(payload)
+            documents = _apply_path_metadata(documents, payload, Path(file_path))
             documents = _apply_extra_info(documents, extra_info)
             _write_cached_artifact(
                 loader,
@@ -76,6 +81,7 @@ def load_data_with_parse_cache(
         _cache_payload(
             parsed_documents,
             artifact_sidecar=artifact_sidecar,
+            file_path=Path(file_path),
             runtime_metadata_keys=(),
         ),
     )
@@ -106,6 +112,7 @@ def build_parse_cache_key(
         "file_hash": file_hash(path),
         "parser": f"{loader.__class__.__module__}.{loader.__class__.__name__}",
         "parser_version": _parser_version(loader),
+        "path_context": _path_parse_context(path),
         "reader_policy": _json_safe(
             {
                 **_loader_policy(loader),
@@ -119,6 +126,7 @@ def build_parse_cache_key(
 def documents_to_cache_payload(
     documents: list[Document],
     *,
+    file_path: Path | None = None,
     runtime_metadata_keys: Iterable[str] = (),
 ) -> list[dict[str, Any]]:
     excluded = set(runtime_metadata_keys)
@@ -127,14 +135,16 @@ def documents_to_cache_payload(
         metadata = dict(document.metadata or {})
         for key in excluded:
             metadata.pop(key, None)
-        payload.append(
-            {
-                "doc_id": document.doc_id,
-                "text": str(getattr(document, "text", "") or ""),
-                "content": _json_safe(getattr(document, "content", None)),
-                "metadata": _json_safe(metadata),
-            }
-        )
+        path_metadata = _pop_path_metadata(metadata, file_path)
+        item = {
+            "doc_id": document.doc_id,
+            "text": str(getattr(document, "text", "") or ""),
+            "content": _json_safe(getattr(document, "content", None)),
+            "metadata": _json_safe(metadata),
+        }
+        if path_metadata:
+            item["path_metadata"] = path_metadata
+        payload.append(item)
     return payload
 
 
@@ -170,6 +180,32 @@ def _apply_extra_info(
     return applied
 
 
+def _apply_path_metadata(
+    documents: list[Document],
+    payload: list[dict[str, Any]],
+    file_path: Path,
+) -> list[Document]:
+    applied = []
+    values = {
+        "name": file_path.name,
+        "path": str(file_path),
+        "resolved_path": str(file_path.resolve()),
+    }
+    for document, item in zip(documents, payload):
+        roles = item.get("path_metadata")
+        if not isinstance(roles, dict):
+            applied.append(document)
+            continue
+        copied = Document(document)
+        metadata = dict(copied.metadata or {})
+        for key, role in roles.items():
+            if isinstance(key, str) and isinstance(role, str) and role in values:
+                metadata[key] = values[role]
+        copied.metadata = metadata
+        applied.append(copied)
+    return applied
+
+
 def _write_cached_artifact(
     loader: Any,
     file_path: Path,
@@ -191,12 +227,14 @@ def _cache_payload(
     documents: list[Document],
     *,
     artifact_sidecar: object,
+    file_path: Path,
     runtime_metadata_keys: Iterable[str],
 ) -> dict[str, Any]:
     return {
         "version": PARSE_CACHE_PAYLOAD_VERSION,
         "documents": documents_to_cache_payload(
             documents,
+            file_path=file_path,
             runtime_metadata_keys=runtime_metadata_keys,
         ),
         "artifact_sidecar": _json_safe(artifact_sidecar),
@@ -263,6 +301,37 @@ def _loader_policy(loader: Any) -> dict[str, Any]:
         for attr in policy_attrs
         if hasattr(loader, attr) and getattr(loader, attr) is not None
     }
+
+
+def _path_parse_context(path: Path) -> dict[str, str | None]:
+    content_type, _encoding = mimetypes.guess_type(str(path))
+    return {
+        "suffix": path.suffix.casefold(),
+        "effective_mime": content_type.casefold() if content_type else None,
+    }
+
+
+def _pop_path_metadata(
+    metadata: dict[str, Any],
+    file_path: Path | None,
+) -> dict[str, str]:
+    if file_path is None:
+        return {}
+    roles: dict[str, str] = {}
+    for key in _PATH_NAME_METADATA_KEYS:
+        if metadata.get(key) == file_path.name:
+            roles[key] = "name"
+    path_value = str(file_path)
+    resolved_value = str(file_path.resolve())
+    for key in _PATH_VALUE_METADATA_KEYS:
+        value = metadata.get(key)
+        if value == resolved_value:
+            roles[key] = "resolved_path"
+        elif value == path_value:
+            roles[key] = "path"
+    for key in roles:
+        metadata.pop(key)
+    return roles
 
 
 def _json_safe(value: Any) -> Any:
