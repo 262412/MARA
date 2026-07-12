@@ -150,6 +150,14 @@ def main() -> None:
     app_data = Path(os.environ["KH_APP_DATA_DIR"])
     pdfjs_dir = materialize_pdfjs(app_data_dir=app_data).path
     gradio_temp = Path(os.environ["GRADIO_TEMP_DIR"])
+    (app_data / "private.txt").write_text("private", encoding="utf-8")
+    other_version = app_data / "assets/pdfjs/other-version"
+    other_version.mkdir(parents=True, exist_ok=True)
+    (other_version / "secret.txt").write_text("other-version", encoding="utf-8")
+    gradio_temp.mkdir(parents=True, exist_ok=True)
+    file_storage = app_data / "files"
+    file_storage.mkdir(parents=True, exist_ok=True)
+    (file_storage / "victim.pdf").write_bytes(b"not-visible")
     docs = Path(__file__).resolve().parents[2] / "docs"
     create_app(pdfjs_dir).queue().launch(
         server_name="127.0.0.1",

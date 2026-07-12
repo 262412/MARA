@@ -41,6 +41,17 @@ function installSideEffectAudit(page) {
   return audit;
 }
 
+test("Gradio denies sibling runtime and source paths", async ({ request }) => {
+  for (const filePath of [
+    "/tmp/mara-preview-browser/app-data/private.txt",
+    "/tmp/mara-preview-browser/app-data/assets/pdfjs/other-version/secret.txt",
+    "/tmp/mara-preview-browser/app-data/files/victim.pdf",
+  ]) {
+    const response = await request.get(`http://127.0.0.1:8767/file=${filePath}`);
+    expect(response.status(), filePath).not.toBe(200);
+  }
+});
+
 test("hostile PDF upload renders in pinned PDF.js without active content", async ({
   page,
 }) => {
