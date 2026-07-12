@@ -319,12 +319,12 @@ def _pop_path_metadata(
         return {}
     roles: dict[str, str] = {}
     for key in _PATH_NAME_METADATA_KEYS:
-        if metadata.get(key) == file_path.name:
+        if _normalized_path_metadata(metadata.get(key)) == file_path.name:
             roles[key] = "name"
     path_value = str(file_path)
     resolved_value = str(file_path.resolve())
     for key in _PATH_VALUE_METADATA_KEYS:
-        value = metadata.get(key)
+        value = _normalized_path_metadata(metadata.get(key))
         if value == resolved_value:
             roles[key] = "resolved_path"
         elif value == path_value:
@@ -332,6 +332,12 @@ def _pop_path_metadata(
     for key in roles:
         metadata.pop(key)
     return roles
+
+
+def _normalized_path_metadata(value: Any) -> str | None:
+    if isinstance(value, (str, bytes, os.PathLike)):
+        return os.fsdecode(value)
+    return None
 
 
 def _json_safe(value: Any) -> Any:
