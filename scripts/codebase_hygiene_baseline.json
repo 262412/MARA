@@ -480,15 +480,15 @@
       "non_actionable_broad_exceptions": 5
     },
     "libs/ktem/ktem/pages/chat/page_preview.py": {
-      "module_lines": 844,
+      "module_lines": 828,
       "functions": {
-        "ChatPagePreviewController.on_page_change": 97,
-        "ChatPagePreviewController.on_page_set": 86
+        "ChatPagePreviewController.on_page_change": 94,
+        "ChatPagePreviewController.on_page_set": 83
       },
       "classes": {
-        "ChatPagePreviewController": 790
+        "ChatPagePreviewController": 772
       },
-      "non_actionable_broad_exceptions": 1
+      "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/pages/chat/page_preview_handlers.py": {
       "module_lines": 236,
@@ -498,51 +498,13 @@
       "classes": {},
       "non_actionable_broad_exceptions": 0
     },
-    "libs/ktem/ktem/pages/chat/page_preview_office.py": {
-      "module_lines": 280,
-      "functions": {
-        "OfficePreviewConversionService.convert_to_pdf_preview": 106
-      },
-      "classes": {},
-      "non_actionable_broad_exceptions": 4
-    },
     "libs/ktem/ktem/pages/chat/page_preview_presentation.py": {
-      "module_lines": 524,
+      "module_lines": 495,
       "functions": {},
       "classes": {
-        "PresentationPreviewService": 483
+        "PresentationPreviewService": 453
       },
-      "non_actionable_broad_exceptions": 17
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_resolver.py": {
-      "module_lines": 114,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 1
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_runtime.py": {
-      "module_lines": 186,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 3
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_spreadsheet.py": {
-      "module_lines": 53,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 2
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_text.py": {
-      "module_lines": 87,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 1
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_types.py": {
-      "module_lines": 116,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 2
+      "non_actionable_broad_exceptions": 15
     },
     "libs/ktem/ktem/pages/help.py": {
       "module_lines": 119,
