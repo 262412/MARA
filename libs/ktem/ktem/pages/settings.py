@@ -1,5 +1,6 @@
 import gradio as gr
 from ktem.app import BasePage
+from ktem.auth.authorization import CALLBACK_REQUEST, resolve_callback_user_id
 from ktem.auth.passwords import hash_password
 from ktem.components import reasonings
 from ktem.db.models import Settings, User, engine
@@ -30,6 +31,36 @@ gr_cls_choices = {
     "radio": gr.Radio,
     "checkboxgroup": gr.CheckboxGroup,
 }
+
+
+def _is_request_value(value):
+    return bool(
+        value is CALLBACK_REQUEST
+        or isinstance(value, gr.Request)
+        or hasattr(value, "username")
+        or hasattr(value, "session_hash")
+    )
+
+
+def _change_password(user_id, password, password_confirm, request):
+    from ktem.pages.resources.user import validate_password
+
+    resolved_user_id = resolve_callback_user_id(user_id, request)
+    errors = validate_password(password, password_confirm)
+    if errors:
+        gr.Warning(errors)
+        return password, password_confirm
+
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.id == resolved_user_id)).first()
+        if user is None:
+            gr.Warning("User not found")
+            return password, password_confirm
+        user.password = hash_password(password)
+        session.add(user)
+        session.commit()
+    gr.Info("Password changed")
+    return "", ""
 
 
 def render_setting_item(setting_item, value):
@@ -163,7 +194,8 @@ class SettingsPage(BasePage):
                 },
             )
 
-            def get_name(user_id):
+            def get_name(user_id, request: gr.Request = CALLBACK_REQUEST):
+                user_id = resolve_callback_user_id(user_id, request)
                 name = "Current user: "
                 if user_id:
                     with Session(engine) as session:
@@ -222,8 +254,7 @@ class SettingsPage(BasePage):
                 show_progress="hidden",
                 js=signout_js,
             ).then(
-                self.load_setting,
-                inputs=self._user_id,
+                self.load_default_setting,
                 outputs=[self._settings_state] + self.components(),
                 show_progress="hidden",
             )
@@ -249,28 +280,14 @@ class SettingsPage(BasePage):
             )
             self.password_change_btn = gr.Button("Change password", interactive=True)
 
-    def change_password(self, user_id, password, password_confirm):
-        from ktem.pages.resources.user import validate_password
-
-        errors = validate_password(password, password_confirm)
-        if errors:
-            print(errors)
-            gr.Warning(errors)
-            return password, password_confirm
-
-        with Session(engine) as session:
-            statement = select(User).where(User.id == user_id)
-            result = session.exec(statement).all()
-            if result:
-                user = result[0]
-                user.password = hash_password(password)
-                session.add(user)
-                session.commit()
-                gr.Info("Password changed")
-            else:
-                gr.Warning("User not found")
-
-        return "", ""
+    def change_password(
+        self,
+        user_id,
+        password,
+        password_confirm,
+        request: gr.Request = CALLBACK_REQUEST,
+    ):
+        return _change_password(user_id, password, password_confirm, request)
 
     def app_tab(self):
         with gr.Tab("General", visible=self._render_app_tab):
@@ -351,7 +368,16 @@ class SettingsPage(BasePage):
                 output.append(gr.update(visible=False))
         return output
 
-    def load_setting(self, user_id=None):
+    def load_default_setting(self):
+        settings = dict(self._settings_dict)
+        return [settings, *(settings[name] for name in self.component_names())]
+
+    def load_setting(
+        self,
+        user_id=None,
+        request: gr.Request = CALLBACK_REQUEST,
+    ):
+        user_id = resolve_callback_user_id(user_id, request)
         settings = dict(self._settings_dict)
         with Session(engine) as session:
             statement = select(Settings).where(Settings.user == user_id)
@@ -366,25 +392,31 @@ class SettingsPage(BasePage):
         output += tuple(settings[name] for name in self.component_names())
         return output
 
-    def save_setting(self, user_id: int, *args):
+    def save_setting(
+        self,
+        user_id: int,
+        request: gr.Request = CALLBACK_REQUEST,
+        *args,
+    ):
         """Save the setting to disk and persist the setting to session state
 
         Args:
             user_id: the user id
             args: all the values from the settings
         """
+        if not _is_request_value(request):
+            args = (request, *args)
+            request = CALLBACK_REQUEST
+        resolved_user_id = resolve_callback_user_id(user_id, request)
         setting = {key: value for key, value in zip(self.component_names(), args)}
-        if user_id is None:
-            gr.Warning("Need to login before saving settings")
-            return setting
 
         with Session(engine) as session:
-            statement = select(Settings).where(Settings.user == user_id)
+            statement = select(Settings).where(Settings.user == resolved_user_id)
             try:
                 user_setting = session.exec(statement).one()
             except Exception:
                 user_setting = Settings()
-                user_setting.user = user_id
+                user_setting.user = resolved_user_id
             user_setting.setting = setting
             session.add(user_setting)
             session.commit()

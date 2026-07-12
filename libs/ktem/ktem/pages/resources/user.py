@@ -3,6 +3,7 @@ import logging
 import gradio as gr
 import pandas as pd
 from ktem.app import BasePage
+from ktem.auth.authorization import CALLBACK_REQUEST, require_admin
 from ktem.auth.passwords import hash_password, validate_password
 from ktem.db.models import User, engine
 from sqlmodel import Session, select
@@ -70,6 +71,17 @@ def create_user(usn, pwd, user_id=None, is_admin=True) -> bool:
             session.commit()
 
             return True
+
+
+def _delete_button_updates(selected_user_id):
+    if selected_user_id is None:
+        gr.Warning("No user is selected")
+        return None
+    return (
+        gr.update(visible=False),
+        gr.update(visible=True),
+        gr.update(visible=True),
+    )
 
 
 class UserManagement(BasePage):
@@ -229,7 +241,17 @@ class UserManagement(BasePage):
             },
         )
 
-    def create_user(self, usn, pwd, pwd_cnf):
+    def _state_user_id(self):
+        return getattr(self._app.user_id, "value", self._app.user_id)
+
+    def create_user(
+        self,
+        usn,
+        pwd,
+        pwd_cnf,
+        request: gr.Request = CALLBACK_REQUEST,
+    ):
+        require_admin(self._state_user_id(), request)
         errors = validate_username(usn)
         if errors:
             gr.Warning(errors)
@@ -259,20 +281,9 @@ class UserManagement(BasePage):
 
         return "", "", ""
 
-    def list_users(self, user_id):
-        if user_id is None:
-            return [], pd.DataFrame.from_records(
-                [{"id": "-", "username": "-", "admin": "-"}]
-            )
-
+    def list_users(self, user_id, request: gr.Request = CALLBACK_REQUEST):
+        require_admin(user_id, request)
         with Session(engine) as session:
-            statement = select(User).where(User.id == user_id)
-            user = session.exec(statement).one()
-            if not user.admin:
-                return [], pd.DataFrame.from_records(
-                    [{"id": "-", "username": "-", "admin": "-"}]
-                )
-
             statement = select(User)
             results = [
                 {"id": user.id, "username": user.username, "admin": user.admin}
@@ -297,7 +308,12 @@ class UserManagement(BasePage):
 
         return user_list["id"][ev.index[0]]
 
-    def on_selected_user_change(self, selected_user_id):
+    def on_selected_user_change(
+        self,
+        selected_user_id,
+        request: gr.Request = CALLBACK_REQUEST,
+    ):
+        require_admin(self._state_user_id(), request)
         if selected_user_id == -1:
             _selected_panel = gr.update(visible=False)
             _selected_panel_btn = gr.update(visible=False)
@@ -337,20 +353,18 @@ class UserManagement(BasePage):
         )
 
     def on_btn_delete_click(self, selected_user_id):
-        if selected_user_id is None:
-            gr.Warning("No user is selected")
-            btn_delete = gr.update(visible=True)
-            btn_delete_yes = gr.update(visible=False)
-            btn_delete_no = gr.update(visible=False)
-            return
+        return _delete_button_updates(selected_user_id)
 
-        btn_delete = gr.update(visible=False)
-        btn_delete_yes = gr.update(visible=True)
-        btn_delete_no = gr.update(visible=True)
-
-        return btn_delete, btn_delete_yes, btn_delete_no
-
-    def save_user(self, selected_user_id, usn, pwd, pwd_cnf, admin):
+    def save_user(
+        self,
+        selected_user_id,
+        usn,
+        pwd,
+        pwd_cnf,
+        admin,
+        request: gr.Request = CALLBACK_REQUEST,
+    ):
+        require_admin(self._state_user_id(), request)
         errors = validate_username(usn)
         if errors:
             gr.Warning(errors)
@@ -387,8 +401,14 @@ class UserManagement(BasePage):
 
         return "", ""
 
-    def delete_user(self, current_user, selected_user_id):
-        if current_user == selected_user_id:
+    def delete_user(
+        self,
+        current_user,
+        selected_user_id,
+        request: gr.Request = CALLBACK_REQUEST,
+    ):
+        admin_user_id = require_admin(current_user, request)
+        if admin_user_id == selected_user_id:
             gr.Warning("You cannot delete yourself")
             return selected_user_id
 

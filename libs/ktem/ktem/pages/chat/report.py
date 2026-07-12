@@ -1,9 +1,15 @@
-from typing import Optional
+from typing import Any, Optional
 
 import gradio as gr
 from ktem.app import BasePage
-from ktem.db.models import IssueReport, engine
-from sqlmodel import Session
+from ktem.auth.authorization import (
+    CALLBACK_REQUEST,
+    CallbackAuthorizationError,
+    resolve_callback_user_id,
+)
+from ktem.db.models import Conversation, IssueReport, engine
+from sqlalchemy import or_
+from sqlmodel import Session, select
 
 
 class ReportIssue(BasePage):
@@ -56,11 +62,31 @@ class ReportIssue(BasePage):
         conv_id: str,
         chat_history: list,
         settings: dict,
-        user_id: Optional[int],
+        user_id: Any,
         info_panel: str,
         chat_state: dict,
+        request: gr.Request = CALLBACK_REQUEST,
         *selecteds,
     ):
+        if not _is_request_value(request):
+            selecteds = (request, *selecteds)
+            request = CALLBACK_REQUEST
+        principal = resolve_callback_user_id(user_id, request)
+        normalized_conversation_id = str(conv_id or "").strip()
+        if normalized_conversation_id:
+            with Session(engine) as session:
+                authorized_id = session.exec(
+                    select(Conversation.id).where(
+                        Conversation.id == normalized_conversation_id,
+                        or_(
+                            Conversation.user == principal,
+                            Conversation.is_public.is_(True),
+                        ),
+                    )
+                ).first()
+            if authorized_id is None:
+                raise CallbackAuthorizationError()
+
         selecteds_ = {}
         for index in self._app.index_manager.indices:
             if index.selector is not None:
@@ -86,8 +112,17 @@ class ReportIssue(BasePage):
                     "selecteds": selecteds_,
                 },
                 settings=settings,
-                user=user_id,
+                user=principal,
             )
             session.add(issue)
             session.commit()
         gr.Info("Thank you for your feedback")
+
+
+def _is_request_value(value):
+    return bool(
+        value is CALLBACK_REQUEST
+        or isinstance(value, gr.Request)
+        or hasattr(value, "username")
+        or hasattr(value, "session_hash")
+    )
