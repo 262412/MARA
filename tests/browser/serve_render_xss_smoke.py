@@ -8,13 +8,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ktem.pages.chat.answer_rendering import format_chat_message_html
 from ktem.utils.render import Render
 
-HOSTILE_HTML = (
-    '<img src="x" onerror="window.__maraRenderXss += 1">'
-    "<script>window.__maraRenderXss += 10</script>"
-    '<a href="javascript:window.__maraRenderXss += 100">script URL</a>'
-    '<a href="data:text/html,<script>window.__maraRenderXss += 1000</script>">'
-    "data URL</a></summary></details>"
-)
+HOSTILE_HTML = r"""<img src=x onerror="window.__maraRenderXss+=1">
+<script>window.__maraRenderXss+=10</script>
+[JS LINK](javascript:window.__maraRenderXss+=100)
+![SVG IMAGE](data:image/svg+xml,<svg onload="window.__maraRenderXss+=1000"></svg>)
+[DATA HTML](data:text/html,<script>window.__maraRenderXss+=10000</script>)
+</summary></details><form action="https://attacker.invalid/answer-form"><button autofocus onfocus="window.__maraRenderXss+=100000">submit</button></form>
+Math: $\href{javascript:window.__maraRenderXss+=1000000}{click}$"""
 
 
 def build_page() -> str:
@@ -38,7 +38,7 @@ def build_page() -> str:
         setTimeout(() => {{
           const output = document.getElementById("render-output");
           const activeNodes = output.querySelectorAll(
-            "script, [onerror], [onload], [onclick], [href^='javascript:'], [href^='data:text/html']"
+            "script, form, [onerror], [onload], [onfocus], [onclick], [href^='javascript:'], [href^='data:text/html'], [src^='data:image/svg']"
           );
           if (window.__maraRenderXss !== 0 || activeNodes.length !== 0) {{
             document.body.dataset.testStatus = "failed";

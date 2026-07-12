@@ -5,7 +5,7 @@ const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 export default defineConfig({
   testDir: ".",
-  testMatch: "security_smoke.spec.mjs",
+  testMatch: ["security_smoke.spec.mjs", "preview_flow.spec.mjs"],
   fullyParallel: false,
   retries: 0,
   workers: 1,
@@ -29,6 +29,18 @@ export default defineConfig({
       cwd: repoRoot,
       reuseExistingServer: false,
       timeout: 30_000,
+    },
+    {
+      command:
+        "uv run --no-sync python tests/browser/serve_preview_flow.py --port 8767",
+      url: "http://127.0.0.1:8767/",
+      cwd: repoRoot,
+      env: {
+        KH_APP_DATA_DIR: "/tmp/mara-preview-browser/app-data",
+        GRADIO_TEMP_DIR: "/tmp/mara-preview-browser/gradio",
+      },
+      reuseExistingServer: false,
+      timeout: 60_000,
     },
   ],
 });
