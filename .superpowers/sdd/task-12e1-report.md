@@ -1,10 +1,10 @@
 # Task 12E1 Artifact Production and Single-File Download Report
 
-> Checkpoint status (2026-07-11): **IN PROGRESS / NEEDS FIXES** at code
-> commit `448632d`. The implementation evidence below is retained for recovery,
-> but the final dual review found two Important security/availability gaps and a
-> blocking mypy failure. See section 8 before treating any earlier GREEN result
-> or wording as a completion claim.
+> Resolution status (2026-07-12): **IMPLEMENTATION GREEN / READY FOR DUAL
+> RE-REVIEW** at code commit `baa55b5`. All three checkpoint blockers are fixed,
+> the complete changed-file gates are green, and the kotaemon package suite passes.
+> Task 12E1 is not marked complete in `progress.md` until the frozen review package
+> receives clean spec/code-quality and security re-reviews; see section 8.
 
 ## 1. Status and commits
 
@@ -24,6 +24,10 @@ tests-first/production/verification commits on base
 - `2af5106 test: expose artifact retention and identity gaps`
 - `dbe9bca test: cover lifecycle platform and pending leases`
 - `448632d security: bind artifact identity and retention`
+- `59b2756 test: expose remaining artifact isolation gaps`
+- `751bddf test: bound valid retention traversal`
+- `398c40f test: distinguish retention capacity rejection`
+- `baa55b5 security: isolate parse context and bound retention`
 
 This slice covers artifact production/publication and single-file ZIP/simple-HTML
 consumption only. It does not change shared physical-source deletion or `Source.path`
@@ -103,6 +107,49 @@ After `448632d`, the expanded six-file Task 12E1 gate produced:
 84 passed, 6 warnings in 6.62s
 ```
 
+The 2026-07-11 checkpoint first preserved the existing type-check failure with the
+same dependency-visible file set used by the changed-file hook:
+
+```text
+uv run --python 3.10 pre-commit run mypy --files \
+  libs/kotaemon/kotaemon/artifact_types.py \
+  libs/kotaemon/kotaemon/artifact_namespace.py \
+  libs/ktem/ktem_tests/test_file_artifact_manifest_bounds.py
+
+test_file_artifact_manifest_bounds.py:95: error: Unexpected keyword argument "path"
+Found 1 error in 1 file (checked 3 source files)
+```
+
+Passing only the test file made the imported implementation an ignored import and
+therefore did not reproduce the error; including the two defining modules exposed the
+stale `ManifestArtifact(path=...)` constructor exactly. Commit `59b2756` replaced it
+with a type-correct fail-if-called sentinel and added the remaining regressions. The
+focused RED command covered the new parse-context file, the shared lifecycle budget,
+failed-removal capacity accounting, and the manifest sentinel. It produced:
+
+```text
+5 failed, 1 passed in 6.33s
+```
+
+The intended failures were: equal-byte `.html`/`.txt` cache collision; same-context
+reuse leaking the first `file_name`; a per-directory rather than tree-wide scan
+budget; and stale-active plus expired-ready child-directory residue disappearing from
+capacity. The manifest count sentinel was the one passing case.
+
+Controller self-review then found two adjacent boundary cases without weakening the
+original assertions. With the first partial production diff present, the next RED
+command still produced `3 failed in 6.29s`: valid ready entries were enumerated again
+during pruning, and regular-file corruption at the file-id and request levels was
+silently skipped. The strengthened distributed 128-output capacity test separately
+produced `1 failed in 6.12s` because the underlying cause was `Download lifecycle scan limit exceeded` rather than the required capacity rejection.
+
+After `baa55b5`, the unchanged focused assertions produced `9 passed in 5.38s`. The
+expanded eight-file Task 12E1 plus parse-cache gate then produced:
+
+```text
+97 passed, 6 warnings in 5.99s
+```
+
 ## 3. Artifact and manifest layout
 
 The database `file_id` is now the sole artifact namespace token. The original
@@ -144,12 +191,21 @@ The version-1 manifest contains exactly:
 ```
 
 Each stream assigns a fresh generation before parse-cache lookup. When a parse cache
-is configured, reusable parsing runs with `extra_info=None`; runtime identity, user,
-filename, layout, and generation values therefore cannot affect cached text/content
-or parse policy. Current `extra_info` is applied only after neutral materialization.
-The generation token is then removed before docstore/vector persistence and passed
-explicitly to the chunk writer. The no-cache loader path preserves its existing
-runtime-context behavior.
+is configured, reusable parsing runs with `extra_info=None`; user, layout, and
+generation values therefore cannot affect cached text/content or parse policy. The
+key now also binds the normalized pathname-derived parse context: case-folded suffix
+and the effective MIME inferred through the same `mimetypes` policy used by the shared
+`UnstructuredReader`. It intentionally does not bind the full pathname, so equal bytes
+with the same parse context remain reusable while equal bytes under different
+extensions cannot share text, content, or artifact sidecars.
+
+Internal parse payload version 3 removes only metadata values proven to derive from
+the miss pathname (`file_name`/`filename` and `file_path`/`source` roles), then replays
+those roles from the current path on a hit before current `extra_info` is applied.
+Same-context reuse therefore cannot disclose the first request's path identity. The
+generation token is removed before docstore/vector persistence and passed explicitly
+to the chunk writer. The no-cache loader path preserves its existing runtime-context
+behavior.
 
 Versioned internal cache sidecars preserve the exact MHTML first-part and Azure
 pre-span-removal markdown bytes. MHTML and Azure artifacts are identical on misses and
@@ -209,13 +265,22 @@ workspace, unpredictable exclusive temporary file, atomic final replacement, and
 durable `.ready` marker. Failures remove the temporary/request directory. Bounded/TTL
 retention now holds a POSIX `flock` lease on each live `.active` marker and one global
 cross-process lifecycle lock around scan/prune/count/admission. Any download activity
-performs a bounded scan across every file ID, reclaims expired ready outputs and
-unlocked stale active/markerless crash residue, and preserves old-but-locked live
-workspaces. Per-file and global limits prune only ready paths outside the 60-second
-browser fetch window; if protected/live paths fill the global capacity, admission
-fails without revoking a returned path. Toggling an already-enabled download off
-authorizes, returns the existing two-output shape, and creates no unreturned server
-output. Its positional inputs and labels remain unchanged.
+performs one traversal-budgeted scan across every file ID, reclaims expired ready
+outputs and unlocked stale active/markerless crash residue, and preserves
+old-but-locked live workspaces. The `513`-entry default is the explicit valid-tree
+bound: one lifecycle lock plus file-id, request, marker, and payload for each of the
+128 hard-cap records. Already enumerated ready entries are reused during pruning, so
+cleanup does not spend the same budget twice.
+
+Removal returns an explicit removed/retained result. Child-directory or other
+non-removable residue stays in the record set and counts against the hard cap;
+corrupted non-directory entries at either the file-id or request level fail closed
+instead of disappearing from accounting. Per-file and global limits prune only ready
+paths outside the 60-second browser fetch window; if protected/live/retained paths
+fill global capacity, admission fails without revoking a returned path. Toggling an
+already-enabled download off authorizes, returns the existing two-output shape, and
+creates no unreturned server output. Its positional inputs and labels remain
+unchanged.
 
 Producer writes likewise open configured roots and namespace chains without following
 any ancestor symlink, write unpredictable `O_EXCL` temporaries through held generation
@@ -255,26 +320,26 @@ The implementation files are grouped by responsibility:
 The focused test files are `test_file_export_isolation.py`,
 `test_file_artifact_security_fs.py`, `test_file_artifact_manifest_bounds.py`,
 `test_file_artifact_generation.py`, `test_file_artifact_quick_index.py`, and
-`test_file_download_lifecycle.py`.
+`test_file_download_lifecycle.py`; the focused kotaemon parse-context coverage is
+`tests/test_parse_cache_path_context.py`.
 
 `_download_events.py` was characterized but not modified, preserving component inputs,
 two outputs, labels, branches, and event order.
 
 ## 6. Hygiene and verification
 
-Implementation commands and results recorded before the final dual review:
+Fresh implementation commands and results at `baa55b5`:
 
-- original focused ktem+kotaemon pytest gate: `61 passed, 1 skipped`, exit 0
-- complete review/re-review regression gate: `84 passed`, exit 0
-- broader FileIndex service/event/scope gate: `47 passed`, exit 0
-- reader/multimodal/performance/parse-cache/vector gate: `27 passed, 1 skipped`,
-  exit 0
-- safe ZIP extraction gate: `30 passed`, exit 0
-- `scripts/check_codebase_hygiene.py <changed-files>`:
-  `No codebase hygiene ratchet violations.`, exit 0
-- an earlier production-file pre-commit run passed, but the fresh full changed-file
-  run at the checkpoint failed mypy; section 8 supersedes the earlier result
-- base-to-HEAD `git diff --check`: exit 0
+- expanded eight-file Task 12E1/cache pytest gate: `97 passed, 6 warnings`, exit 0
+- kotaemon package gate, run from `libs/kotaemon`:
+  `344 passed, 8 skipped, 92 warnings in 89.70s`, exit 0
+- `scripts/check_codebase_hygiene.py` over all 25 changed Python files in
+  `239f7df..baa55b5`: `No codebase hygiene ratchet violations.`, exit 0
+- full pre-commit over all 28 changed files in `239f7df..baa55b5`: hygiene, file
+  checks, secret/large-file checks, black, isort, flake8, autoflake, prettier, mypy,
+  and codespell all passed, exit 0
+- `git diff --check 239f7df..baa55b5` and the current working-tree
+  `git diff --check`: exit 0
 - negative single-download callback scan: `_scoped_page.py` has no legacy
   `_download_outputs_for`, artifact-root `os.listdir`, stem, prefix, or substring
   discovery; the separate retention service intentionally performs a bounded global
@@ -289,7 +354,7 @@ and `pipelines.py`). The review implementation also initially detected growth in
 pipeline-coordination boundary. The final `pipelines.py` is 986 lines versus its
 990-line baseline, the former 357-line `artifact_namespace.py` is now a 125-line facade,
 and every new responsibility module/function remains within the 600/80 budgets. The
-415-line retention module is below its 600-line budget, and the expanded security
+524-line retention module is below its 600-line budget, and the expanded security
 fixtures remain readable legitimate test code rather than being compressed to satisfy
 line counts.
 
@@ -320,6 +385,16 @@ Non-final errors and remediation:
   and fetch-window hard-cap issues; `2af5106`/`dbe9bca` locked these in RED before
   `448632d` added digest binding, trusted-anchor descriptor walking, neutral parsing,
   POSIX live leases, global backpressure, and the low-cost review minor fixes
+- checkpoint re-review found pathname-derived cache policy was still absent, the
+  lifecycle budget reset per directory, failed removals vanished from capacity, and
+  the manifest resolver double was stale; `59b2756` captured all four behaviors before
+  `baa55b5` bound suffix/MIME, replayed current path metadata, shared the budget, and
+  retained removal residue
+- controller self-review found valid pruning could enumerate ready workspaces twice,
+  corrupt tree entries could be skipped, and the original `512` default was one entry
+  short for 128 distributed valid outputs; `751bddf`/`398c40f` preserved these as RED
+  before enumeration reuse, non-missing corruption fail-closed, and the explicit
+  `1 + 4 * 128 = 513` bound were committed
 
 Durability ledger: `os.replace` makes the new leaf visible before the following parent
 directory `fsync`. If that `fsync` fails, the operation reports failure even though the
@@ -328,8 +403,9 @@ after an I/O durability failure, so the implementation fails the indexing/downlo
 operation and never claims publication success; this residual visibility ambiguity is
 recorded rather than hidden behind an unsafe rollback.
 
-Warnings are dependency deprecations from BeautifulSoup/lxml, pypdf cryptography
-ARC4, and do not originate in this slice.
+Warnings are existing dependency deprecations/user warnings from Pydantic,
+BeautifulSoup/lxml, pypdf cryptography, LangChain, Gradio/FastAPI, Milvus/Qdrant, and
+related test doubles; none is a new failure from this slice.
 
 ## 7. Storage and residual risk
 
@@ -345,14 +421,14 @@ inspection, `printenv` for cache/runtime variables, repository-root checks for
 - Python: fastscratch CPython 3.10.20
 - cache/runtime variables: fastscratch; pre-commit cache: scratch
 - repo root: no `data/`, `datasets/`, or `outputs/`
-- fastscratch: `295.8G`, `471893 / 500000` soft inode quota
-- scratch: `71.92G`, `473370 / 300000` soft and `500000` hard inode quota; still in
+- fastscratch: approximately `295.8 GiB`, `471791 / 500000` soft inode quota
+- scratch: approximately `71.9 GiB`, `473377 / 300000` soft and `500000` hard inode quota; still in
   grace
 
 Tests used the configured temporary pytest runtime. No dependency install, model call,
 dataset sync, indexing of user data, or large download occurred.
 
-Residual/blocking work:
+Residual/follow-up work:
 
 - Task 12E2 must implement the shared `Source.path` lifetime lock/refcount/quarantine
   sequence and file-id artifact deletion. E1 does not make physical blob deletion safe
@@ -361,10 +437,11 @@ Residual/blocking work:
   consumed by the single-file download path.
 - A failed producer/index run can leave an unmanifested file-id namespace; it is not
   downloadable. Cleanup belongs with E2 deletion or a later orphan-GC audit.
-- Ready/stale workspace expiry is intentionally lazy. The final review found that the
-  current `512` scan limit is reset independently at each directory level and that a
-  stale workspace containing a directory can be omitted from capacity accounting.
-  This is a blocking availability gap, not an accepted residual.
+- Ready/stale workspace expiry is intentionally lazy. The lifecycle scan now has one
+  `513`-entry traversal budget sized for the full valid hard-cap tree. Trees beyond
+  that bound and non-missing corrupt entries fail closed. A child-directory residue
+  is not recursively deleted; it remains capacity-accounted until external/operator
+  cleanup, avoiding an unsafe recursive deletion policy.
 - Secure descriptor traversal requires POSIX `dir_fd`/`O_NOFOLLOW`; cross-process
   retention additionally requires `fcntl.flock`. Windows or unsupported runtimes keep
   the modules/UI importable but file export fails closed at invocation. Adding a safe
@@ -372,44 +449,44 @@ Residual/blocking work:
 - Artifact identity hashing adds a full validation pass (and a post-copy pass) over
   downloadable artifacts. The 2 GiB total bound limits abuse, but very large exports
   trade additional I/O for byte-identity guarantees.
-- The focused gate did not run browser/live Gradio, model, LibreOffice, or full
-  repository suites; event ABI/order is protected by existing browser-free contracts.
+- The focused and kotaemon package gates did not run browser/live Gradio, model, or
+  LibreOffice integration; event ABI/order is protected by existing browser-free
+  contracts.
 - Both scratch and fastscratch inode pressure remain operational risks for future large
   runs.
 
-## 8. 2026-07-11 checkpoint and blocking findings
+## 8. 2026-07-12 checkpoint resolution and re-review state
 
-Fresh controller verification at code commit `448632d` produced:
+The `448632d` checkpoint's three blocking findings are resolved at `baa55b5`:
 
-- six-file Task 12E1 pytest gate: `84 passed, 6 warnings`, exit 0
-- changed-Python hygiene gate: `No codebase hygiene ratchet violations.`, exit 0
-- base/current `git diff --check`: exit 0
-- full changed-file pre-commit: exit 1 because mypy reports
-  `test_file_artifact_manifest_bounds.py:95: Unexpected keyword argument "path"`
-  for the stale `ManifestArtifact` test double
+1. Parse keys bind normalized suffix and effective MIME. Equal bytes under different
+   extensions miss independently, including text/content/artifact sidecars. Equal
+   bytes with the same parse context may hit, but cached pathname metadata is removed
+   and replayed from the current path before runtime metadata is applied.
+2. Retention creates one shared budget for root/file-id/request/workspace enumeration
+   and reuses ready-entry names during pruning. The default `513` bound admits a full
+   valid 128-record distributed tree to the capacity decision. Removal returns success
+   or retained; child-directory residue remains in the record/capacity set, while
+   non-missing corrupt file-id/request entries fail closed.
+3. The manifest-count resolver is a type-correct sentinel that fails if resolution is
+   reached. The dependency-visible mypy command and the complete changed-file hook are
+   green.
 
-Both independent reviewers returned **Needs fixes**, with no Critical findings and
-these blocking items:
+The review package was generated with ordinary Git commands from the frozen checkpoint
+review base through the final production commit:
 
-1. The parse-cache key binds bytes/parser/policy but not pathname-derived parsing
-   inputs. Default routing shares one `UnstructuredReader` across multiple extensions,
-   while that reader derives MIME/partition behavior from the current suffix. Equal
-   bytes under different extensions can therefore reuse the wrong text/content.
-2. Download retention applies the `512` enumeration budget separately per directory
-   instead of once across the full tree. A corrupted tree can force roughly
-   `512 x 512` workspace visits while holding the global lock. Failed removal of a
-   stale workspace containing a directory is currently treated as success and omitted
-   from the hard-cap record set.
-3. The 2,001-entry manifest test contains a resolver double using the obsolete
-   `ManifestArtifact(path=...)` constructor. Pytest never calls it, but mypy correctly
-   rejects it, so the mandatory pre-commit exit gate is not green.
+```text
+.superpowers/sdd/review-239f7df..baa55b5.diff
+SHA-256 733bcdc49532577852f295db1b6a1ac153b8078ce98840579770d3c2631b3c0b
+5,352 lines; 195,202 bytes
+```
 
-Already confirmed closed by both reviewers: configured-root ancestor symlinks,
-hardlink/path-swap and equal-length same-inode mutations, manifest bounds and exact
-three-level layout, producer overwrite races, normal active/pending/ready leases,
-global 128 admission with a 60-second fetch window, unsupported-platform fail-closed,
-background `BaseException` propagation, cleanup error masking, and the Gradio
-two-output/event ABI.
+The package is ignored mechanical review output and is not part of the source commit.
+The report update is documentation-only; `progress.md` is intentionally unchanged.
 
-Task 12E1 verdict at this checkpoint: **IN PROGRESS / NEEDS FIXES**. Task 12E2 has not
-started and remains the next task only after E1 receives a clean dual re-review.
+Task 12E1 implementation verdict: **GREEN / READY FOR DUAL RE-REVIEW**. No known
+Critical or Important E1 implementation finding remains after controller self-review,
+the expanded gate, the full changed-file hooks, and the package-level test run. A clean
+spec/code-quality review and a clean security review remain the explicit prerequisite
+for marking Task 12E1 complete. Task 12E2 shared `Source.path` lifetime work has not
+started.
