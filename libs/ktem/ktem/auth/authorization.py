@@ -13,7 +13,7 @@ from theflow.settings import settings as flowsettings
 CALLBACK_REQUEST = cast(gr.Request, object())
 
 
-class CallbackAuthorizationError(RuntimeError):
+class CallbackAuthorizationError(gr.Error):
     """A callback principal or required role is unavailable."""
 
     def __init__(self) -> None:

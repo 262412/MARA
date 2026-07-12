@@ -67,7 +67,7 @@ def test_managed_callback_without_request_identity_fails_closed(monkeypatch):
     with pytest.raises(authorization.CallbackAuthorizationError) as caught:
         authorization.resolve_callback_user_id("forged")
     assert isinstance(caught.value, gr.Error)
-    assert str(caught.value) == "This operation is unavailable."
+    assert caught.value.message == "This operation is unavailable."
 
 
 def test_local_callback_retains_state_user_and_rechecks_admin(
