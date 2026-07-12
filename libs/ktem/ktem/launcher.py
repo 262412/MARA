@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Callable
 
 from ktem.app_server import resolve_gradio_server_port
-from ktem.assets import ASSETS_DIR
 from ktem.auth.policy import (
     AuthConfigurationError,
     resolve_auth_mode,
@@ -14,6 +13,7 @@ from ktem.auth.policy import (
 )
 from ktem.auth.service import authenticate_password, validate_password_admin_readiness
 from ktem.main import App
+from ktem.preview.allowed_paths import build_gradio_allowed_paths
 from theflow.settings import settings as flowsettings
 
 
@@ -149,13 +149,11 @@ def launch_app(
     demo.queue().launch(
         favicon_path=app._favicon,
         inbrowser=inbrowser,
-        allowed_paths=[
-            str(ASSETS_DIR),
-            str(pdfjs_dir),
-            str(doc_dir),
-            gradio_temp_dir,
-            str(file_storage_path),
-        ],
+        allowed_paths=build_gradio_allowed_paths(
+            pdfjs_dir=pdfjs_dir,
+            gradio_temp_dir=gradio_temp_dir,
+            doc_dir=doc_dir,
+        ),
         share=launch_config.share,
         server_name=launch_config.host,
         server_port=resolve_gradio_server_port(port),

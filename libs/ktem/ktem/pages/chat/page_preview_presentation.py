@@ -4,13 +4,14 @@ import re
 import xml.etree.ElementTree as ET
 import zipfile
 from html import escape
+from urllib.parse import urlsplit
 
 from .page_preview_text import build_html_pages
 
 try:
     from pptx import Presentation
     from pptx.enum.shapes import MSO_SHAPE_TYPE
-except Exception:
+except ImportError:
     Presentation = None
     MSO_SHAPE_TYPE = None
 
@@ -103,7 +104,6 @@ class PresentationPreviewService:
         return build_html_pages(
             page_contents,
             body_class="pptx-preview-body",
-            inline_script=self._build_preview_script(),
         )
 
     def _render_slide(
@@ -223,9 +223,15 @@ class PresentationPreviewService:
     ) -> str:
         try:
             image = shape.image
-            mime_type = getattr(image, "content_type", "") or "image/png"
-            encoded = base64.b64encode(image.blob).decode("ascii")
-        except Exception:
+            blob = image.blob
+            mime_type = self._safe_image_mime(
+                blob,
+                getattr(image, "content_type", ""),
+            )
+            if not mime_type:
+                return ""
+            encoded = base64.b64encode(blob).decode("ascii")
+        except (AttributeError, TypeError, ValueError):
             return ""
 
         box_style = self._build_shape_box_style(
@@ -373,7 +379,11 @@ class PresentationPreviewService:
             hyperlink = ""
 
         style_attr = "".join(style_tokens)
-        if hyperlink:
+        if hyperlink and urlsplit(hyperlink).scheme.lower() in {
+            "http",
+            "https",
+            "mailto",
+        }:
             return (
                 f"<a class='pptx-preview-link' href='{escape(hyperlink)}' target='_blank' rel='noopener noreferrer' style='{style_attr}'>"
                 f"{text}</a>"
@@ -459,55 +469,16 @@ class PresentationPreviewService:
             color_format = None
         return self._extract_color_value(color_format)
 
-    def _build_preview_script(self) -> str:
-        return """
-(function () {
-    const shell = document.querySelector('.pptx-preview-shell');
-    const canvas = document.querySelector('.pptx-preview-canvas-scale');
-    const stage = document.querySelector('.pptx-preview-stage');
-    if (!shell || !canvas || !stage) {
-        return;
-    }
-
-    let zoom = 1;
-
-    function clamp(value, min, max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
-    function applyZoom(nextZoom) {
-        zoom = clamp(nextZoom, 0.35, 3);
-        canvas.style.zoom = String(zoom);
-        canvas.setAttribute('data-pptx-scale', zoom.toFixed(2));
-    }
-
-    function fitIfNeeded() {
-        const stageWidth = parseFloat(stage.getAttribute('data-stage-width') || '0');
-        const viewportWidth = shell.clientWidth - 24;
-        if (!stageWidth || !viewportWidth) {
-            applyZoom(1);
-            return;
+    @staticmethod
+    def _safe_image_mime(blob: bytes, declared: str) -> str:
+        mime = str(declared or "").lower()
+        signatures = {
+            "image/png": blob.startswith(b"\x89PNG\r\n\x1a\n"),
+            "image/jpeg": blob.startswith(b"\xff\xd8\xff"),
+            "image/gif": blob.startswith((b"GIF87a", b"GIF89a")),
+            "image/webp": blob.startswith(b"RIFF") and blob[8:12] == b"WEBP",
         }
-        if (stageWidth <= viewportWidth) {
-            applyZoom(1);
-            return;
-        }
-        applyZoom(viewportWidth / stageWidth);
-    }
-
-    shell.addEventListener('wheel', function (event) {
-        if (!event.ctrlKey) {
-            return;
-        }
-        event.preventDefault();
-        const factor = event.deltaY < 0 ? 1.08 : 0.92;
-        applyZoom(zoom * factor);
-    }, { passive: false });
-
-    window.addEventListener('resize', fitIfNeeded);
-    fitIfNeeded();
-})();
-        """.strip()
+        return mime if signatures.get(mime, False) else ""
 
     @staticmethod
     def _get_paragraph_alignment_style(paragraph) -> str:

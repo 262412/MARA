@@ -151,73 +151,24 @@ function run() {
   }
 
   function isLikelyPreviewSrc(src) {
-    if (!src || typeof src !== "string") {
-      return false;
-    }
-    const trimmed = src.trim();
-    if (!trimmed) {
-      return false;
-    }
-    if (isDataHtmlPreviewSrc(trimmed)) {
-      return true;
-    }
-    if (isInlineHtmlPreviewSrc(trimmed)) {
-      return true;
-    }
-    if (
-      trimmed.startsWith("data:image") ||
-      /\.(png|jpg|jpeg|gif|webp|svg)(\?|#|$)/i.test(trimmed)
-    ) {
-      return true;
-    }
-    if (trimmed.includes("/file=")) {
-      return true;
-    }
-    try {
-      const url = new URL(trimmed, window.location.origin);
-      return (url.pathname || "").includes("/file=");
-    } catch (error) {
-      return false;
-    }
+    return (
+      KtemSafeDom.previewModeForSource(
+        src,
+        window.location.origin,
+        trustedPdfJsViewerPath
+      ) !== "invalid"
+    );
   }
 
   function isDataHtmlPreviewSrc(src) {
     if (!src || typeof src !== "string") {
       return false;
     }
-    return /^data:text\/html/i.test(src.trim());
-  }
-
-  function isInlineHtmlPreviewSrc(src) {
-    if (!src || typeof src !== "string") {
-      return false;
-    }
-    const trimmed = src.trim();
-    if (!trimmed) {
-      return false;
-    }
-    return trimmed.startsWith("<");
+    return /^data:text\/html;charset=utf-8,/i.test(src.trim());
   }
 
   function dataHtmlToSrcdoc(dataUri) {
-    try {
-      const value = (dataUri || "").trim();
-      if (!/^data:text\/html/i.test(value)) {
-        return "";
-      }
-      const commaPos = value.indexOf(",");
-      if (commaPos < 0) {
-        return "";
-      }
-      const meta = value.slice(0, commaPos).toLowerCase();
-      const body = value.slice(commaPos + 1);
-      if (meta.includes(";base64")) {
-        return atob(body);
-      }
-      return decodeURIComponent(body);
-    } catch (error) {
-      return "";
-    }
+    return KtemSafeDom.lockedDocumentSrcdoc(dataUri);
   }
 
   function ensureOfficeZoomControl() {
@@ -404,14 +355,13 @@ function run() {
       }
     }
 
-    const inlineHtmlPreview = isInlineHtmlPreviewSrc(nextSrc);
-    const dataHtmlPreview = isDataHtmlPreviewSrc(nextSrc);
-    const passthroughPreview = inlineHtmlPreview || dataHtmlPreview;
     const iframePolicyMode = KtemSafeDom.previewModeForSource(
       nextSrc,
       window.location.origin,
       trustedPdfJsViewerPath
     );
+    const dataHtmlPreview = iframePolicyMode === "document";
+    const passthroughPreview = dataHtmlPreview;
     KtemSafeDom.setIframePolicy(iframe, iframePolicyMode);
     const nextDocKey = passthroughPreview ? "" : getPreviewDocKey(nextSrc);
     const currentDocKey = passthroughPreview ? "" : getPreviewDocKey(currentIframeSrc);
@@ -420,9 +370,9 @@ function run() {
     const normalizedNextSrc = passthroughPreview
       ? nextSrc
       : toAbsolutePreviewSrc(withPreviewPageHash(nextSrc, desiredPage));
-    const normalizedCurrentSrc = inlineHtmlPreview
-      ? (iframe.srcdoc || "")
-      : (passthroughPreview ? currentIframeSrc : toAbsolutePreviewSrc(currentIframeSrc));
+    const normalizedCurrentSrc = passthroughPreview
+      ? iframe.srcdoc || currentIframeSrc
+      : toAbsolutePreviewSrc(currentIframeSrc);
     const sameDoc =
       !!nextDocKey &&
       !!currentDocKey &&
@@ -442,7 +392,7 @@ function run() {
     lastPreviewSrc = nextSrc;
     globalThis._ktemLastPreviewSrc = nextSrc;
 
-    if (!isLikelyPreviewSrc(nextSrc)) {
+    if (!isLikelyPreviewSrc(nextSrc) || iframePolicyMode === "invalid") {
       isOfficePreview = false;
       setOfficeZoomControlVisible(false);
       iframe.style.display = "none";
@@ -455,7 +405,7 @@ function run() {
       return;
     }
 
-    const isImage = nextSrc.startsWith("data:image") || /\.(png|jpg|jpeg|gif|webp|svg)(\?|#|$)/i.test(nextSrc);
+    const isImage = iframePolicyMode === "image";
     if (isImage) {
       isOfficePreview = false;
       setOfficeZoomControlVisible(false);
@@ -467,7 +417,7 @@ function run() {
       return;
     }
 
-    if (inlineHtmlPreview || dataHtmlPreview) {
+    if (dataHtmlPreview) {
       isOfficePreview = false;
       setOfficeZoomControlVisible(false);
       image.style.display = "none";
@@ -478,16 +428,15 @@ function run() {
       iframe.onload = () => {
         bindIframeSelectionFallback(iframe);
       };
-      const htmlSrcdoc = inlineHtmlPreview ? nextSrc : dataHtmlToSrcdoc(nextSrc);
+      const htmlSrcdoc = dataHtmlToSrcdoc(nextSrc);
       if (htmlSrcdoc) {
         if (iframe.srcdoc !== htmlSrcdoc) {
           iframe.srcdoc = htmlSrcdoc;
         }
         iframe.removeAttribute("src");
       } else {
-        const fallbackSrc = dataHtmlPreview ? nextSrc : "about:blank";
         iframe.removeAttribute("srcdoc");
-        iframe.setAttribute("src", fallbackSrc);
+        iframe.removeAttribute("src");
       }
       bindIframeSelectionFallback(iframe);
       updateLastPostedPageSync("", 0);

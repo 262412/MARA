@@ -76,9 +76,7 @@ class ChatPanel(BasePage):
         self.pdf_preview_src = gr.Textbox(
             value="", visible=False, elem_id="main-pdf-preview-src"
         )
-        # Keep timer available for explicit preview polling without starting
-        # a background Gradio queue loop as soon as the app loads.
-        self.preview_refresh_timer = gr.Timer(value=2.0, active=False)
+        self.preview_refresh_timer = gr.Timer(value=2.0, active=True)
 
     def render_notice_and_pager(self):
         """Render PDF preview notice message and page navigation controls."""

@@ -6,6 +6,9 @@
   root.KtemSafeDom = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   const HIGHLIGHT_ATTRIBUTE = "data-ktem-search-highlight";
+  const DOCUMENT_DATA_PREFIX = "data:text/html;charset=utf-8,";
+  const DOCUMENT_CSP =
+    "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'";
   const BLOCKED_POPUP_ELEMENTS = new Set([
     "base",
     "button",
@@ -40,12 +43,6 @@
   }
 
   function previewPolicy(mode) {
-    if (mode === "scripted-document") {
-      return {
-        sandbox: "allow-scripts",
-        referrerPolicy: "no-referrer",
-      };
-    }
     const scriptsRequired = mode === "pdf";
     return {
       sandbox: scriptsRequired
@@ -58,12 +55,12 @@
   function previewModeForSource(source, origin, trustedPdfViewerPath) {
     const value = String(source || "").trim();
     if (!value) {
-      return "document";
+      return "invalid";
     }
-    if (/^data:text\/html;ktem-scripted=1(?:;|,)/i.test(value)) {
-      return "scripted-document";
+    if (/^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/]+={0,2}$/i.test(value)) {
+      return "image";
     }
-    if (/^data:text\/html/i.test(value) || value.startsWith("<")) {
+    if (value.toLowerCase().startsWith(DOCUMENT_DATA_PREFIX)) {
       return "document";
     }
     try {
@@ -72,14 +69,73 @@
       if (
         candidate.origin === origin &&
         trustedViewer.origin === origin &&
-        candidate.pathname === trustedViewer.pathname
+        candidate.pathname === trustedViewer.pathname &&
+        isSafePdfFileParameter(candidate, origin, value)
       ) {
         return "pdf";
       }
     } catch (error) {
-      return "document";
+      return "invalid";
     }
-    return "document";
+    return "invalid";
+  }
+
+  function isSafePdfFileParameter(candidate, origin, rawSource) {
+    if (
+      candidate.username ||
+      candidate.password ||
+      String(rawSource).includes("\\") ||
+      candidate.searchParams.getAll("file").length !== 1
+    ) {
+      return false;
+    }
+    const fileValue = candidate.searchParams.get("file") || "";
+    if (!fileValue || fileValue.startsWith("//") || fileValue.includes("\\")) {
+      return false;
+    }
+    let decoded = fileValue;
+    try {
+      for (let index = 0; index < 2; index += 1) {
+        decoded = decodeURIComponent(decoded);
+      }
+    } catch (error) {
+      return false;
+    }
+    if (/(?:^|[=/])\.\.(?:[/]|$)/.test(decoded)) {
+      return false;
+    }
+    try {
+      const fileUrl = new URL(fileValue, origin);
+      return (
+        !fileUrl.username &&
+        !fileUrl.password &&
+        fileUrl.origin === origin &&
+        /\/(?:gradio_api\/)?file=/.test(fileUrl.pathname)
+      );
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function lockedDocumentSrcdoc(source) {
+    const value = String(source || "").trim();
+    if (!value.toLowerCase().startsWith(DOCUMENT_DATA_PREFIX)) {
+      return "";
+    }
+    let content = "";
+    try {
+      content = decodeURIComponent(value.slice(DOCUMENT_DATA_PREFIX.length));
+    } catch (error) {
+      return "";
+    }
+    return (
+      "<!doctype html><html><head><meta charset='utf-8'>" +
+      '<meta http-equiv="Content-Security-Policy" content="' +
+      DOCUMENT_CSP +
+      '"></head><body>' +
+      content +
+      "</body></html>"
+    );
   }
 
   function setIframePolicy(iframe, mode) {
@@ -295,6 +351,7 @@
   return {
     clearHighlights,
     highlightText,
+    lockedDocumentSrcdoc,
     normalizeSearchText,
     openSvgDocument,
     previewPolicy,

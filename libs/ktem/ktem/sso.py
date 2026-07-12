@@ -10,7 +10,6 @@ import gradiologin
 from decouple import config
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
-from ktem.assets import ASSETS_DIR
 from ktem.auth.policy import AuthConfigurationError
 from ktem.launcher import (
     ensure_gradio_temp_dir,
@@ -18,6 +17,7 @@ from ktem.launcher import (
     prepare_launch,
 )
 from ktem.main import App
+from ktem.preview.allowed_paths import build_gradio_allowed_paths
 from theflow.settings import settings as flowsettings
 
 _GENERATED_SESSION_SECRET = secrets.token_urlsafe(48)
@@ -120,11 +120,9 @@ def create_sso_app(
         "/app",
         secret_key=_session_secret(),
         auth_dependency=sso_auth_dependency,
-        allowed_paths=[
-            str(ASSETS_DIR),
-            str(pdfjs_dir),
-            str(doc_dir),
-            gradio_temp_dir,
-            str(file_storage_path),
-        ],
+        allowed_paths=build_gradio_allowed_paths(
+            pdfjs_dir=pdfjs_dir,
+            gradio_temp_dir=gradio_temp_dir,
+            doc_dir=doc_dir,
+        ),
     )
