@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -57,16 +56,15 @@ def test_plain_document_preview_csp_blocks_scripts_and_remote_content():
     assert "img-src data: blob:" in html
 
 
-def test_scripted_preview_uses_per_document_csp_nonce():
-    uri = build_html_pages(
-        ["<p>presentation text</p>"],
-        inline_script="window.__ktemTrustedPreview = true;",
-    )[0]
+def test_document_preview_never_embeds_inline_script_capability():
+    uri = build_html_pages(["<p>presentation text</p>"])[0]
     html = _decode_data_html(uri)
 
-    assert uri.startswith("data:text/html;ktem-scripted=1;")
-    csp_nonce = re.search(r"script-src 'nonce-([^']+)'", html)
-    script_nonce = re.search(r"<script nonce='([^']+)'", html)
-    assert csp_nonce is not None
-    assert script_nonce is not None
-    assert csp_nonce.group(1) == script_nonce.group(1)
+    assert uri.startswith("data:text/html;charset=utf-8,")
+    assert "ktem-scripted" not in uri
+    assert "script-src 'none'" in html
+    assert "<script" not in html
+    presentation_source = (
+        PACKAGE_ROOT / "pages" / "chat" / "page_preview_presentation.py"
+    ).read_text(encoding="utf-8")
+    assert "_build_preview_script" not in presentation_source

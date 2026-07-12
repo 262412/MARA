@@ -26,7 +26,7 @@ def test_preview_timer_does_not_repaint_thumbnail_strip_by_default():
     chat_panel = _read_chat_panel()
     preview_events = _read_chat_preview_events()
 
-    assert "gr.Timer(value=2.0, active=False)" in chat_panel
+    assert "gr.Timer(value=2.0, active=True)" in chat_panel
     assert "bind_chat_preview_events(" in chat_page
     timer_chain = preview_events.split(
         "page.chat_panel.preview_refresh_timer.tick(", 1

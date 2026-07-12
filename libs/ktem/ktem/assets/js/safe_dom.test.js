@@ -28,7 +28,7 @@ test("splitTextForHighlight keeps hostile markup as inert text", () => {
 });
 
 test("preview sandbox policies never grant navigation, forms, or popup powers", () => {
-  for (const mode of ["document", "pdf", "scripted-document"]) {
+  for (const mode of ["document", "pdf", "invalid"]) {
     const policy = safeDom.previewPolicy(mode);
     const tokens = new Set(policy.sandbox.split(/\s+/).filter(Boolean));
 
@@ -41,22 +41,14 @@ test("preview sandbox policies never grant navigation, forms, or popup powers", 
   }
 });
 
-test("scripted document previews run with an opaque origin", () => {
-  const policy = safeDom.previewPolicy("scripted-document");
-  const tokens = new Set(policy.sandbox.split(/\s+/).filter(Boolean));
-
-  assert.equal(tokens.has("allow-scripts"), true);
-  assert.equal(tokens.has("allow-same-origin"), false);
-});
-
-test("only the exact same-origin PDF.js viewer receives the PDF policy", () => {
+test("only exact safe preview sources are classified as renderable", () => {
   const origin = "https://mara.example.test";
   const trustedViewer =
     "https://mara.example.test/gradio_api/file=/runtime/pdfjs/web/viewer.html";
 
   assert.equal(
     safeDom.previewModeForSource(
-      `${trustedViewer}?embed=1&file=%2Fgradio_api%2Ffile%3Dreport.pdf`,
+      `${trustedViewer}?embed=1&file=%2Fgradio_api%2Ffile%3D%2Ftmp%2Freport.pdf`,
       origin,
       trustedViewer
     ),
@@ -64,19 +56,38 @@ test("only the exact same-origin PDF.js viewer receives the PDF policy", () => {
   );
   assert.equal(
     safeDom.previewModeForSource(
-      "data:text/html;ktem-scripted=1,<script>parent.__xss=1</script>",
+      "data:text/html;charset=utf-8,%3Cp%3Esafe%3C%2Fp%3E",
       origin,
       trustedViewer
     ),
-    "scripted-document"
+    "document"
   );
+  assert.equal(
+    safeDom.previewModeForSource(
+      "data:image/png;base64,iVBORw0KGgo=",
+      origin,
+      trustedViewer
+    ),
+    "image"
+  );
+  for (const unsafe of [
+    "<p>raw html</p>",
+    "data:text/html;ktem-scripted=1,<script>parent.__xss=1</script>",
+    "data:image/svg+xml;base64,PHN2Zy8+",
+    "https://attacker.invalid/image.png",
+    `${trustedViewer}?file=https%3A%2F%2Fattacker.invalid%2Freport.pdf`,
+    `${trustedViewer}?file=%2Fgradio_api%2Ffile%3D..%252Fsecret.pdf`,
+    `${trustedViewer}?file=%2Fgradio_api%2Ffile%3D%2Ftmp%2Fa.pdf&file=%2Fgradio_api%2Ffile%3D%2Ftmp%2Fb.pdf`,
+  ]) {
+    assert.equal(safeDom.previewModeForSource(unsafe, origin, trustedViewer), "invalid");
+  }
   assert.equal(
     safeDom.previewModeForSource(
       "https://mara.example.test/gradio_api/file=/uploads/viewer.html",
       origin,
       trustedViewer
     ),
-    "document"
+    "invalid"
   );
   assert.equal(
     safeDom.previewModeForSource(
@@ -84,7 +95,7 @@ test("only the exact same-origin PDF.js viewer receives the PDF policy", () => {
       origin,
       trustedViewer
     ),
-    "document"
+    "invalid"
   );
 });
 
