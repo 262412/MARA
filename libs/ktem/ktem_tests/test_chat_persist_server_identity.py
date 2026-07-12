@@ -191,6 +191,13 @@ def test_chat_session_metadata_callbacks_delegate_server_identity(monkeypatch):
     runtime = _SessionRuntimeSpy()
     page.docqa = runtime
     page._normalize_selected_file_ids = lambda values: list(values or [])
+    available_scope_users: list[str] = []
+
+    def available_source_map(user_id: str) -> dict[str, str]:
+        available_scope_users.append(user_id)
+        return {"file-1": "report.pdf"}
+
+    page._load_available_source_map = available_source_map
     request = cast(gr.Request, SimpleNamespace(username="alice"))
     monkeypatch.setattr(chat_module.flowsettings, "MARA_AUTH_MODE", "password")
     monkeypatch.setattr(
@@ -217,6 +224,7 @@ def test_chat_session_metadata_callbacks_delegate_server_identity(monkeypatch):
         ("persist_graph", "conversation-1", ["file-1"], "server-user"),
         ("like", "conversation-1", [0, 1], "answer", True, "server-user"),
     ]
+    assert available_scope_users == ["server-user", "server-user"]
 
 
 def test_chat_session_metadata_callbacks_reject_missing_server_identity(monkeypatch):

@@ -129,7 +129,11 @@ def test_chat_page_binds_studio_generate_after_notebook_refresh():
         "            *page._indices_input,\n"
         "        ]" in controls
     )
-    assert ".then(\n        partial(generate_studio_artifact_panel_update" in controls
+    assert (
+        ".then(\n"
+        "        _bind_page_callback(generate_studio_artifact_panel_update, page)"
+        in controls
+    )
     assert "generate_studio_artifact_panel_update" in controls
     assert "inputs=studio_generate_inputs(page)" in controls
     assert "outputs=studio_generate_outputs(page)" in controls
@@ -216,8 +220,9 @@ def test_chat_page_binds_studio_regenerate_without_moving_notebook_refresh():
     assert "inputs=[page.chat_control.conversation_id]" in controls
     assert "regenerate_latest_studio_artifact_panel_update" in controls
     assert (
-        ".then(\n        partial(regenerate_latest_studio_artifact_panel_update"
-        in controls
+        ".then(\n"
+        "        _bind_page_callback("
+        "regenerate_latest_studio_artifact_panel_update, page)" in controls
     )
     assert "inputs=studio_regenerate_inputs(page)" in controls
     assert "outputs=studio_generate_outputs(page)" in controls
