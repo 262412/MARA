@@ -1,8 +1,9 @@
 # Task 12E1 Artifact Production and Single-File Download Report
 
 > Resolution status (2026-07-12): **IMPLEMENTATION GREEN / READY FOR DUAL
-> RE-REVIEW** at code commit `baa55b5`. All three checkpoint blockers are fixed,
-> the complete changed-file gates are green, and the kotaemon package suite passes.
+> RE-REVIEW** at code commit `b1a4fc9`. All three checkpoint blockers and the
+> subsequent PathLike-metadata Important finding are fixed, the complete changed-file
+> gates are green, and the kotaemon package suite passes.
 > Task 12E1 is not marked complete in `progress.md` until the frozen review package
 > receives clean spec/code-quality and security re-reviews; see section 8.
 
@@ -28,6 +29,8 @@ tests-first/production/verification commits on base
 - `751bddf test: bound valid retention traversal`
 - `398c40f test: distinguish retention capacity rejection`
 - `baa55b5 security: isolate parse context and bound retention`
+- `632ff17 test: expose pathlike parse metadata leak`
+- `b1a4fc9 security: replay pathlike parse metadata`
 
 This slice covers artifact production/publication and single-file ZIP/simple-HTML
 consumption only. It does not change shared physical-source deletion or `Source.path`
@@ -150,6 +153,26 @@ expanded eight-file Task 12E1 plus parse-cache gate then produced:
 97 passed, 6 warnings in 5.99s
 ```
 
+The next spec re-review identified one remaining Important metadata shape: Azure and
+Docling-style readers can store `Path`/`os.PathLike` values in `file_path` or `source`.
+The cache role detector compared only strings, while `_json_safe` serialized the miss
+path to a string, so a same-context hit could expose the first pathname. Commit
+`632ff17` added one parameterized production-shaped regression for both keys. The RED
+command produced:
+
+```text
+2 failed in 2.60s
+```
+
+Both cases confirmed a real cache hit (`reader.calls == 1`) but received `first.txt`
+instead of the current `second.txt`. After `b1a4fc9`, the parameterized test produced
+`2 passed in 2.16s`, the complete path-context file produced `4 passed in 1.95s`, and
+the expanded eight-file gate produced:
+
+```text
+99 passed, 6 warnings in 5.77s
+```
+
 ## 3. Artifact and manifest layout
 
 The database `file_id` is now the sole artifact namespace token. The original
@@ -202,6 +225,8 @@ extensions cannot share text, content, or artifact sidecars.
 Internal parse payload version 3 removes only metadata values proven to derive from
 the miss pathname (`file_name`/`filename` and `file_path`/`source` roles), then replays
 those roles from the current path on a hit before current `extra_info` is applied.
+Role comparison normalizes strings, bytes, and `os.PathLike` values with
+`os.fsdecode`, covering production `Path` metadata without changing string behavior.
 Same-context reuse therefore cannot disclose the first request's path identity. The
 generation token is removed before docstore/vector persistence and passed explicitly
 to the chunk writer. The no-cache loader path preserves its existing runtime-context
@@ -328,18 +353,18 @@ two outputs, labels, branches, and event order.
 
 ## 6. Hygiene and verification
 
-Fresh implementation commands and results at `baa55b5`:
+Fresh post-review commands and results at `b1a4fc9`:
 
-- expanded eight-file Task 12E1/cache pytest gate: `97 passed, 6 warnings`, exit 0
-- kotaemon package gate, run from `libs/kotaemon`:
-  `344 passed, 8 skipped, 92 warnings in 89.70s`, exit 0
+- expanded eight-file Task 12E1/cache pytest gate: `99 passed, 6 warnings`, exit 0
 - `scripts/check_codebase_hygiene.py` over all 25 changed Python files in
-  `239f7df..baa55b5`: `No codebase hygiene ratchet violations.`, exit 0
-- full pre-commit over all 28 changed files in `239f7df..baa55b5`: hygiene, file
+  `239f7df..b1a4fc9`: `No codebase hygiene ratchet violations.`, exit 0
+- full pre-commit over all 28 changed files in `239f7df..b1a4fc9`: hygiene, file
   checks, secret/large-file checks, black, isort, flake8, autoflake, prettier, mypy,
   and codespell all passed, exit 0
-- `git diff --check 239f7df..baa55b5` and the current working-tree
+- `git diff --check 239f7df..b1a4fc9` and the current working-tree
   `git diff --check`: exit 0
+- the unchanged kotaemon package gate from `baa55b5` was not repeated for the narrow
+  metadata-type normalization: `344 passed, 8 skipped, 92 warnings`, exit 0
 - negative single-download callback scan: `_scoped_page.py` has no legacy
   `_download_outputs_for`, artifact-root `os.listdir`, stem, prefix, or substring
   discovery; the separate retention service intentionally performs a bounded global
@@ -395,6 +420,10 @@ Non-final errors and remediation:
   short for 128 distributed valid outputs; `751bddf`/`398c40f` preserved these as RED
   before enumeration reuse, non-missing corruption fail-closed, and the explicit
   `1 + 4 * 128 = 513` bound were committed
+- spec re-review found `Path`/`os.PathLike` metadata bypassed string-only path-role
+  comparison and serialized the first request path into same-context hits; `632ff17`
+  reproduced both `file_path` and `source` leaks before `b1a4fc9` normalized path-like
+  values with `os.fsdecode`
 
 Durability ledger: `os.replace` makes the new leaf visible before the following parent
 directory `fsync`. If that `fsync` fails, the operation reports failure even though the
@@ -437,6 +466,10 @@ Residual/follow-up work:
   consumed by the single-file download path.
 - A failed producer/index run can leave an unmanifested file-id namespace; it is not
   downloadable. Cleanup belongs with E2 deletion or a later orphan-GC audit.
+- Explicit parse-affecting `load_kwargs` overrides are not introspected automatically
+  by the cache key; a caller using them must mirror their stable values into
+  `reader_policy`. Current E1 callers do not pass such overrides, so the reviewer
+  classified this as a non-blocking API-hardening Minor.
 - Ready/stale workspace expiry is intentionally lazy. The lifecycle scan now has one
   `513`-entry traversal budget sized for the full valid hard-cap tree. Trees beyond
   that bound and non-missing corrupt entries fail closed. A child-directory residue
@@ -457,7 +490,7 @@ Residual/follow-up work:
 
 ## 8. 2026-07-12 checkpoint resolution and re-review state
 
-The `448632d` checkpoint's three blocking findings are resolved at `baa55b5`:
+The `448632d` checkpoint's three blocking findings were resolved at `baa55b5`:
 
 1. Parse keys bind normalized suffix and effective MIME. Equal bytes under different
    extensions miss independently, including text/content/artifact sidecars. Equal
@@ -472,13 +505,20 @@ The `448632d` checkpoint's three blocking findings are resolved at `baa55b5`:
    reached. The dependency-visible mypy command and the complete changed-file hook are
    green.
 
+The subsequent spec re-review's sole Important finding is resolved at `b1a4fc9`:
+`file_path`/`source` role detection now normalizes strings, bytes, and `os.PathLike`
+values before comparing them with the current path. Both production-shaped Path
+metadata cases preserve the same-context cache hit and replay the second request path.
+Suffix/MIME keying and payload version 3 are unchanged; the full pathname is still not
+part of the key.
+
 The review package was generated with ordinary Git commands from the frozen checkpoint
 review base through the final production commit:
 
 ```text
-.superpowers/sdd/review-239f7df..baa55b5.diff
-SHA-256 733bcdc49532577852f295db1b6a1ac153b8078ce98840579770d3c2631b3c0b
-5,352 lines; 195,202 bytes
+.superpowers/sdd/review-239f7df..b1a4fc9.diff
+SHA-256 da5347b7d581cca6278d21823433949dd247d67e8c705572e88a331f646a93cc
+5,498 lines; 201,981 bytes
 ```
 
 The package is ignored mechanical review output and is not part of the source commit.
