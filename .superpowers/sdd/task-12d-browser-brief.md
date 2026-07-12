@@ -311,8 +311,7 @@ exceptions. Required stages/converters are:
 At the Web compatibility boundary, catch `PreviewError` only, log
 `code/stage/source_path/converter/details`, and return an escaped actionable
 notice. Filenames, paths, converter stderr, relationship targets, and parse
-reasons are attacker-controlled and must pass through `html.escape(...,
-quote=True)` before notice HTML.
+reasons are attacker-controlled and must pass through `html.escape(..., quote=True)` before notice HTML.
 
 Split by responsibility while preserving import paths:
 

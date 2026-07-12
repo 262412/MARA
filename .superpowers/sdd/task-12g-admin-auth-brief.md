@@ -111,8 +111,7 @@ callback functions; Gradio injects them as special arguments.
     metadata or opening an IssueReport write session; set `IssueReport.user` to
     that principal.
   - for non-empty `conv_id`, authorize with a predicate on
-    `Conversation.id` and `(Conversation.user == principal) |
-    Conversation.is_public`; do not fetch server chat history.
+    `Conversation.id` and `(Conversation.user == principal) | Conversation.is_public`; do not fetch server chat history.
   - place exact `request: gr.Request` before `*selecteds` so Gradio 4.39 scans
     it. Keep dynamic index selections in their existing order.
 - `libs/ktem/ktem/pages/chat/chat_auxiliary_events.py`
