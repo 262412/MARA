@@ -60,7 +60,7 @@ def read_text_file(file_path: str, max_chars: int = 9000) -> str:
             with open(file_path, "r", encoding=enc, errors="ignore") as file_obj:
                 content = file_obj.read(max_chars * 2)
             return content[:max_chars]
-        except Exception:
+        except (OSError, UnicodeError):
             continue
     return ""
 
