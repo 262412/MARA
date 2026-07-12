@@ -5,10 +5,7 @@ from types import SimpleNamespace
 
 from ktem.assets import ICONS_DIR
 from ktem.pages.chat.page_preview_presentation import PresentationPreviewService
-from ktem.pages.chat.page_preview_runtime import (
-    ensure_pdf_preview_copy,
-    notice_html,
-)
+from ktem.pages.chat.page_preview_runtime import ensure_pdf_preview_copy, notice_html
 from ktem.preview.allowed_paths import build_gradio_allowed_paths
 
 

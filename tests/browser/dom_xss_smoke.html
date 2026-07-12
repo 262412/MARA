@@ -9,7 +9,7 @@
     <p id="evidence">prefix <em>nested evidence</em> suffix</p>
     <span id="pdf-text"></span>
     <iframe id="document-preview" title="malicious document preview"></iframe>
-    <iframe id="scripted-document-preview" title="forged scripted preview"></iframe>
+    <iframe id="forged-document-preview" title="forged scripted preview"></iframe>
     <script>
       window.__maraXssExecuted = 0;
       const payload =
@@ -53,25 +53,20 @@
           throw new Error("sandboxed document payload executed");
         }
 
-        const scriptedIframe = document.getElementById("scripted-document-preview");
-        KtemSafeDom.setIframePolicy(scriptedIframe, "scripted-document");
-        const scriptedTokens = new Set(
-          scriptedIframe.getAttribute("sandbox").split(/\s+/).filter(Boolean)
+        const forgedIframe = document.getElementById("forged-document-preview");
+        const forgedSource =
+          "data:text/html;ktem-scripted=1,<script>parent.__maraXssExecuted = 1337<\/script>";
+        const forgedMode = KtemSafeDom.previewModeForSource(
+          forgedSource,
+          window.location.origin,
+          "/trusted/pdfjs/viewer.html"
         );
-        const scriptedPolicyIsOpaque =
-          scriptedTokens.has("allow-scripts") && !scriptedTokens.has("allow-same-origin");
-        const scriptedLoaded = new Promise((resolve) =>
-          scriptedIframe.addEventListener("load", resolve)
+        KtemSafeDom.setIframePolicy(forgedIframe, forgedMode);
+        const forgedTokens = new Set(
+          forgedIframe.getAttribute("sandbox").split(/\s+/).filter(Boolean)
         );
-        scriptedIframe.srcdoc =
-          "<!doctype html><script>parent.__maraXssExecuted = 1337<\/script>";
-        await scriptedLoaded;
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        if (window.__maraXssExecuted !== 0) {
-          throw new Error("forged scripted preview reached its parent");
-        }
-        if (!scriptedPolicyIsOpaque) {
-          throw new Error("scripted document did not receive an opaque origin");
+        if (forgedMode !== "invalid" || forgedTokens.has("allow-scripts")) {
+          throw new Error("forged scripted preview received script capability");
         }
 
         document.body.dataset.testStatus = "passed";

@@ -14,6 +14,7 @@ import uvicorn
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
 from ktem import launcher
+from ktem.assets import ASSETS_DIR, ICONS_DIR
 from ktem.auth.policy import AuthConfigurationError
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -109,7 +110,16 @@ def test_packaged_sso_factory_uses_gradiologin_mount(monkeypatch, tmp_path):
     assert app is mounted["app"]
     assert mounted["blocks"] is not None
     assert mounted["path"] == "/app"
-    assert str(sso.ASSETS_DIR) in mounted["kwargs"]["allowed_paths"]
+    allowed_paths = mounted["kwargs"]["allowed_paths"]
+    assert str(ICONS_DIR.resolve()) in allowed_paths
+    assert str(ASSETS_DIR.resolve()) not in allowed_paths
+    assert (
+        str(Path(sso.flowsettings.KH_FILESTORAGE_PATH).resolve()) not in allowed_paths
+    )
+    assert (
+        str((Path(sso.ensure_gradio_temp_dir()) / "pdf_previews").resolve())
+        in allowed_paths
+    )
     assert mounted["kwargs"]["secret_key"] != "some-secret-string"
     assert mounted["kwargs"]["auth_dependency"] is sso.sso_auth_dependency
     assert registered[0]["name"] == "google"
