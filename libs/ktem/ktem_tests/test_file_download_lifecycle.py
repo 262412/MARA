@@ -289,9 +289,10 @@ def test_global_capacity_rejects_new_output_without_revoking_fresh_paths(roots):
         for index in range(READY_OUTPUT_HARD_LIMIT)
     ]
 
-    with pytest.raises(gr.Error, match="reindex"):
+    with pytest.raises(gr.Error, match="reindex") as error:
         _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
 
+    assert "capacity" in str(error.value.__cause__)
     assert all(path.exists() for path in existing)
 
 
