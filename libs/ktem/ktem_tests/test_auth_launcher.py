@@ -215,7 +215,6 @@ def test_gradio_launch_receives_selected_password_auth(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(launcher, "prepare_launch", lambda **_kwargs: config)
     monkeypatch.setattr(launcher, "App", _App)
-    monkeypatch.setattr(launcher, "ASSETS_DIR", tmp_path)
     monkeypatch.setattr(launcher, "ensure_gradio_temp_dir", lambda: str(tmp_path))
     monkeypatch.setattr(
         launcher,
