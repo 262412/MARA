@@ -41,13 +41,13 @@ def extract_xlsx_text(file_path: str, max_chars: int = 9000) -> str:
                             idx = int(value)
                             if 0 <= idx < len(shared_strings):
                                 value = shared_strings[idx]
-                        except Exception:
+                        except ValueError:
                             pass
                     cells.append(value)
                     if sum(len(text) for text in cells) >= max_chars:
                         break
                 if sum(len(text) for text in cells) >= max_chars:
                     break
-    except Exception:
+    except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile, ET.ParseError):
         return ""
     return " ".join(cells)[:max_chars]

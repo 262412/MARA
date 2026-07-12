@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 
 from ktem.runtime_bootstrap import get_runtime_paths, load_packaged_runtime_env
@@ -23,11 +24,14 @@ def _load_user_overrides(path: Path) -> dict[str, object]:
 
 runtime_paths = get_runtime_paths()
 load_packaged_runtime_env()
+app_data_dir = Path(
+    os.environ.get("KH_APP_DATA_DIR", runtime_paths.data_dir)
+).expanduser()
 
 globals().update(
     build_kotaemon_settings(
         base_dir=runtime_paths.config_dir,
-        app_data_dir=runtime_paths.data_dir,
+        app_data_dir=app_data_dir,
         docs_dir=runtime_paths.config_dir / "docs",
         mode="package",
     )

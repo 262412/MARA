@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from ktem.db.engine import engine
+from ktem.preview.context import preview_access_for_user
+from ktem.preview.service import PreviewService
 from sqlalchemy import select
 from sqlmodel import Session
 from theflow.settings import settings as flowsettings
@@ -92,6 +94,7 @@ class GlobalKnowledgeGraphService:
     def __init__(self, app, index):
         self._app = app
         self._index = index
+        self._preview = PreviewService(app, engine=engine)
 
         root_dir = Path(getattr(flowsettings, "KH_APP_DATA_DIR", Path.cwd()))
         self._storage_dir = root_dir / "knowledge_graph" / "conversations"
@@ -167,35 +170,27 @@ class GlobalKnowledgeGraphService:
         with path.open("w", encoding="utf-8") as file_obj:
             json.dump(state, file_obj, ensure_ascii=False, indent=2)
 
-    def _load_sources(self, source_ids: list[str]) -> dict[str, dict[str, Any]]:
+    def _load_sources(
+        self, source_ids: list[str], *, user_id: Any = None
+    ) -> dict[str, dict[str, Any]]:
         source_ids = self._normalize_source_ids(source_ids)
         if not source_ids or self._index is None:
             return {}
-
-        source_table = self._index._resources["Source"]
-        with Session(engine) as session:
-            rows = session.execute(
-                select(source_table).where(source_table.id.in_(source_ids))
-            ).all()
-
-        sources_by_id: dict[str, dict[str, Any]] = {}
-        for (row,) in rows:
-            file_id = str(getattr(row, "id", "") or "")
-            if not file_id:
-                continue
-            sources_by_id[file_id] = {
-                "id": file_id,
-                "name": str(getattr(row, "name", "") or file_id),
-                "path": str(getattr(row, "path", "") or ""),
-                "size": int(getattr(row, "size", 0) or 0),
-                "date_created": str(getattr(row, "date_created", "") or ""),
+        sources = self._preview.resolve_sources(
+            source_ids,
+            access=preview_access_for_user(self._app, user_id),
+            strict=True,
+        )
+        return {
+            source.file_id: {
+                "id": source.file_id,
+                "name": source.name or source.file_id,
+                "path": source.stored_path,
+                "size": source.size,
+                "date_created": str(source.date_created or ""),
             }
-
-        ordered_sources: dict[str, dict[str, Any]] = {}
-        for source_id in source_ids:
-            if source_id in sources_by_id:
-                ordered_sources[source_id] = sources_by_id[source_id]
-        return ordered_sources
+            for source in sources
+        }
 
     @staticmethod
     def _make_signature(source: dict[str, Any]) -> str:
@@ -253,9 +248,10 @@ class GlobalKnowledgeGraphService:
         return f"{trimmed}..."
 
     def _build_nodes_and_edges(
-        self, source_ids: list[str]
+        self, source_ids: list[str], *, user_id: Any = None, sources: Any = None
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        sources = self._load_sources(source_ids)
+        if sources is None:
+            sources = self._load_sources(source_ids, user_id=user_id)
         if not sources:
             return {"nodes": [], "edges": [], "clusters": {}}, {}
 
@@ -280,7 +276,6 @@ class GlobalKnowledgeGraphService:
                 if not normalized:
                     continue
                 keyword_files[normalized].add(file_id)
-                display = keyword
                 for sentence in self._split_sentences(combined_text):
                     sentence_norm = sentence.lower()
                     if keyword.lower() in sentence_norm:
@@ -289,7 +284,7 @@ class GlobalKnowledgeGraphService:
                                 "file_id": file_id,
                                 "file_name": source.get("name", file_id),
                                 "sentence": self._trim_sentence(sentence),
-                                "keyword": display,
+                                "keyword": keyword,
                             }
                         )
                         if len(evidence_by_keyword[normalized]) >= 5:
@@ -358,11 +353,16 @@ class GlobalKnowledgeGraphService:
         return graph, manifest
 
     def build_graph(
-        self, conversation_id: str, source_ids: list[str] | str | None
+        self,
+        conversation_id: str,
+        source_ids: list[str] | str | None,
+        *,
+        user_id: Any = None,
     ) -> dict[str, Any]:
         source_ids = self._normalize_source_ids(source_ids)
+        sources = self._load_sources(source_ids, user_id=user_id)
         cached_state = self._load_cached_state(conversation_id)
-        graph, manifest = self._build_nodes_and_edges(source_ids)
+        graph, manifest = self._build_nodes_and_edges(source_ids, sources=sources)
         cached_state["conversation_id"] = conversation_id
         cached_state["manifest"] = manifest
         cached_state["graph"] = graph

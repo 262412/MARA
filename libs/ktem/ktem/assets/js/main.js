@@ -1,4 +1,5 @@
 function run() {
+  const trustedPdfJsViewerPath = KTEM_PDFJS_VIEWER_PATH;
   let answerPanelObserver = globalThis._ktemAnswerPanelObserver || null;
   let answerMathRetry = globalThis._ktemAnswerMathRetry || null;
   let answerMathRetryCount = Number(globalThis._ktemAnswerMathRetryCount || 0);
@@ -116,6 +117,22 @@ function run() {
       return false;
     }
     try {
+      const viewerApplication = targetIframe.contentWindow.PDFViewerApplication;
+      if (viewerApplication?.initializedPromise) {
+        viewerApplication.initializedPromise.then(() => {
+          viewerApplication.page = targetPage;
+          try {
+            const viewerUrl = new URL(targetIframe.contentWindow.location.href);
+            viewerUrl.searchParams.set("ktempage", String(targetPage));
+            viewerUrl.hash = `page=${targetPage}`;
+            targetIframe.contentWindow.history.replaceState(null, "", viewerUrl);
+          } catch (error) {
+            // Page navigation remains valid when URL decoration is unavailable.
+          }
+        });
+        updateLastPostedPageSync(normalizedDocKey, targetPage);
+        return true;
+      }
       targetIframe.contentWindow.postMessage(
         { type: "ktem-pdf-page-change", page: targetPage },
         window.location.origin
@@ -150,73 +167,24 @@ function run() {
   }
 
   function isLikelyPreviewSrc(src) {
-    if (!src || typeof src !== "string") {
-      return false;
-    }
-    const trimmed = src.trim();
-    if (!trimmed) {
-      return false;
-    }
-    if (isDataHtmlPreviewSrc(trimmed)) {
-      return true;
-    }
-    if (isInlineHtmlPreviewSrc(trimmed)) {
-      return true;
-    }
-    if (
-      trimmed.startsWith("data:image") ||
-      /\.(png|jpg|jpeg|gif|webp|svg)(\?|#|$)/i.test(trimmed)
-    ) {
-      return true;
-    }
-    if (trimmed.includes("/file=")) {
-      return true;
-    }
-    try {
-      const url = new URL(trimmed, window.location.origin);
-      return (url.pathname || "").includes("/file=");
-    } catch (error) {
-      return false;
-    }
+    return (
+      KtemSafeDom.previewModeForSource(
+        src,
+        window.location.origin,
+        trustedPdfJsViewerPath
+      ) !== "invalid"
+    );
   }
 
   function isDataHtmlPreviewSrc(src) {
     if (!src || typeof src !== "string") {
       return false;
     }
-    return /^data:text\/html/i.test(src.trim());
-  }
-
-  function isInlineHtmlPreviewSrc(src) {
-    if (!src || typeof src !== "string") {
-      return false;
-    }
-    const trimmed = src.trim();
-    if (!trimmed) {
-      return false;
-    }
-    return trimmed.startsWith("<");
+    return /^data:text\/html;charset=utf-8,/i.test(src.trim());
   }
 
   function dataHtmlToSrcdoc(dataUri) {
-    try {
-      const value = (dataUri || "").trim();
-      if (!/^data:text\/html/i.test(value)) {
-        return "";
-      }
-      const commaPos = value.indexOf(",");
-      if (commaPos < 0) {
-        return "";
-      }
-      const meta = value.slice(0, commaPos).toLowerCase();
-      const body = value.slice(commaPos + 1);
-      if (meta.includes(";base64")) {
-        return atob(body);
-      }
-      return decodeURIComponent(body);
-    } catch (error) {
-      return "";
-    }
+    return KtemSafeDom.lockedDocumentSrcdoc(dataUri);
   }
 
   function ensureOfficeZoomControl() {
@@ -275,6 +243,42 @@ function run() {
       return;
     }
     officeZoomControl.style.display = visible ? "inline-flex" : "none";
+  }
+
+  function bindPptxPreviewControls(iframe) {
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      const shell = doc?.querySelector(".pptx-preview-shell");
+      const canvas = doc?.querySelector(".pptx-preview-canvas-scale");
+      const stage = doc?.querySelector(".pptx-preview-stage");
+      if (!shell || !canvas || !stage || shell.dataset.ktemZoomBound === "true") {
+        return;
+      }
+      shell.dataset.ktemZoomBound = "true";
+      let zoom = 1;
+      const applyZoom = (value) => {
+        zoom = Math.max(0.35, Math.min(3, value));
+        canvas.style.zoom = String(zoom);
+        canvas.setAttribute("data-pptx-scale", zoom.toFixed(2));
+      };
+      const fit = () => {
+        const stageWidth = parseFloat(stage.getAttribute("data-stage-width") || "0");
+        const viewportWidth = shell.clientWidth - 24;
+        applyZoom(stageWidth > viewportWidth ? viewportWidth / stageWidth : 1);
+      };
+      shell.addEventListener(
+        "wheel",
+        (event) => {
+          if (!event.ctrlKey) return;
+          event.preventDefault();
+          applyZoom(zoom * (event.deltaY < 0 ? 1.08 : 0.92));
+        },
+        { passive: false }
+      );
+      fit();
+    } catch (error) {
+      // The source allowlist and iframe policy remain the security boundary.
+    }
   }
 
   function updateOfficeZoomControl(scaleValue) {
@@ -403,9 +407,14 @@ function run() {
       }
     }
 
-    const inlineHtmlPreview = isInlineHtmlPreviewSrc(nextSrc);
-    const dataHtmlPreview = isDataHtmlPreviewSrc(nextSrc);
-    const passthroughPreview = inlineHtmlPreview || dataHtmlPreview;
+    const iframePolicyMode = KtemSafeDom.previewModeForSource(
+      nextSrc,
+      window.location.origin,
+      trustedPdfJsViewerPath
+    );
+    const dataHtmlPreview = iframePolicyMode === "document";
+    const passthroughPreview = dataHtmlPreview;
+    KtemSafeDom.setIframePolicy(iframe, iframePolicyMode);
     const nextDocKey = passthroughPreview ? "" : getPreviewDocKey(nextSrc);
     const currentDocKey = passthroughPreview ? "" : getPreviewDocKey(currentIframeSrc);
     const chosenPage = getPageFromPreviewSrc(nextSrc);
@@ -413,9 +422,9 @@ function run() {
     const normalizedNextSrc = passthroughPreview
       ? nextSrc
       : toAbsolutePreviewSrc(withPreviewPageHash(nextSrc, desiredPage));
-    const normalizedCurrentSrc = inlineHtmlPreview
-      ? (iframe.srcdoc || "")
-      : (passthroughPreview ? currentIframeSrc : toAbsolutePreviewSrc(currentIframeSrc));
+    const normalizedCurrentSrc = passthroughPreview
+      ? iframe.srcdoc || currentIframeSrc
+      : toAbsolutePreviewSrc(currentIframeSrc);
     const sameDoc =
       !!nextDocKey &&
       !!currentDocKey &&
@@ -435,7 +444,7 @@ function run() {
     lastPreviewSrc = nextSrc;
     globalThis._ktemLastPreviewSrc = nextSrc;
 
-    if (!isLikelyPreviewSrc(nextSrc)) {
+    if (!isLikelyPreviewSrc(nextSrc) || iframePolicyMode === "invalid") {
       isOfficePreview = false;
       setOfficeZoomControlVisible(false);
       iframe.style.display = "none";
@@ -448,7 +457,7 @@ function run() {
       return;
     }
 
-    const isImage = nextSrc.startsWith("data:image") || /\.(png|jpg|jpeg|gif|webp|svg)(\?|#|$)/i.test(nextSrc);
+    const isImage = iframePolicyMode === "image";
     if (isImage) {
       isOfficePreview = false;
       setOfficeZoomControlVisible(false);
@@ -460,7 +469,7 @@ function run() {
       return;
     }
 
-    if (inlineHtmlPreview || dataHtmlPreview) {
+    if (dataHtmlPreview) {
       isOfficePreview = false;
       setOfficeZoomControlVisible(false);
       image.style.display = "none";
@@ -470,19 +479,20 @@ function run() {
       iframe.style.height = "100%";
       iframe.onload = () => {
         bindIframeSelectionFallback(iframe);
+        bindPptxPreviewControls(iframe);
       };
-      const htmlSrcdoc = inlineHtmlPreview ? nextSrc : dataHtmlToSrcdoc(nextSrc);
+      const htmlSrcdoc = dataHtmlToSrcdoc(nextSrc);
       if (htmlSrcdoc) {
         if (iframe.srcdoc !== htmlSrcdoc) {
           iframe.srcdoc = htmlSrcdoc;
         }
         iframe.removeAttribute("src");
       } else {
-        const fallbackSrc = dataHtmlPreview ? nextSrc : "about:blank";
         iframe.removeAttribute("srcdoc");
-        iframe.setAttribute("src", fallbackSrc);
+        iframe.removeAttribute("src");
       }
       bindIframeSelectionFallback(iframe);
+      bindPptxPreviewControls(iframe);
       updateLastPostedPageSync("", 0);
       updateLastAssignedPreviewSrc(nextSrc);
       updateLastStablePreviewSrc(nextSrc);
@@ -2655,9 +2665,7 @@ function run() {
 
       // convert all <mark> in evidences to normal text
       evidences.forEach((evidence) => {
-        evidence.querySelectorAll("mark").forEach((mark) => {
-          mark.outerHTML = mark.innerText;
-        });
+        KtemSafeDom.clearHighlights(evidence);
       });
 
       // highlight matched_text in evidences
@@ -2669,10 +2677,10 @@ function run() {
           for (var p of paragraphs) {
             var p_content = p.textContent.replace(/[\r\n]+/g, " ");
             if (p_content.includes(matched_text)) {
-              p.innerHTML = p_content.replace(
-                matched_text,
-                "<mark>" + matched_text + "</mark>"
-              );
+              const highlight = KtemSafeDom.highlightText(p, matched_text);
+              if (!highlight) {
+                continue;
+              }
               if (modal.style.display == "block") {
                 // trigger on click event of PDF Preview link
                 var detail_elem = p;
@@ -2696,23 +2704,7 @@ function run() {
   };
 
   globalThis.spawnDocument = (content, options) => {
-    let opt = {
-      window: "",
-      closeChild: true,
-      childId: "_blank",
-    };
-    Object.assign(opt, options);
-    // minimal error checking
-    if (
-      content &&
-      typeof content.toString == "function" &&
-      content.toString().length
-    ) {
-      let child = window.open("", opt.childId, opt.window);
-      child.document.write(content.toString());
-      if (opt.closeChild) child.document.close();
-      return child;
-    }
+    return KtemSafeDom.openSvgDocument(content, options);
   };
 
   globalThis.fillChatInput = (event) => {

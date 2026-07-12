@@ -6,6 +6,7 @@ from typing import Any
 
 import gradio as gr
 from ktem.docqa import DocQARequest
+from ktem.docqa.request_policies import WEB_REQUEST_POLICY
 
 from .studio_artifacts import render_controller_trace_html
 
@@ -29,16 +30,16 @@ def build_web_docqa_request(
     active_file_id: str = "",
     active_file_name: str = "",
     page_number: Any = None,
-    qa_scope: str = "page",
+    qa_scope: str = WEB_REQUEST_POLICY.qa_scope_default,
     selected_text: str = "",
     selected_graph_context: str = "",
     task_type: str | None = None,
     agent_mode: str | None = None,
     artifact_type: str | None = None,
     note_ids: list[str] | None = None,
-    controller_mode: str = "llm",
-    route_policy: str = "auto",
-    verification_mode: str = "light",
+    controller_mode: str = WEB_REQUEST_POLICY.controller_mode_default or "llm",
+    route_policy: str = WEB_REQUEST_POLICY.route_policy_default or "auto",
+    verification_mode: str = WEB_REQUEST_POLICY.verification_mode_default or "light",
     verification_domain: str | None = None,
     max_context_length: int | None = None,
     page_image_records: list[dict[str, Any]] | None = None,
@@ -49,12 +50,12 @@ def build_web_docqa_request(
     return DocQARequest(
         prompt=str(prompt or ""),
         conversation_id=str(conversation_id or ""),
-        selected_file_ids=list(selected_file_ids) if selected_file_ids else None,
+        selected_file_ids=_web_selected_file_ids(selected_file_ids),
         selected_inputs=dict(selected_inputs or {}),
         active_file_id=str(active_file_id or ""),
         active_file_name=str(active_file_name or ""),
-        qa_scope=str(qa_scope or "page").replace("-", "_"),
-        page_number=max(1, int(page_number or 1)),
+        qa_scope=str(qa_scope or WEB_REQUEST_POLICY.qa_scope_default).replace("-", "_"),
+        page_number=_web_page_number(page_number),
         selected_text=str(selected_text or "").strip(),
         graph_context=_parse_graph_context(selected_graph_context),
         settings=deepcopy(settings),
@@ -65,12 +66,18 @@ def build_web_docqa_request(
         agent_mode=agent_mode,
         artifact_type=artifact_type,
         note_ids=list(note_ids or []),
-        controller_mode=str(controller_mode or "llm"),
-        route_policy=str(route_policy or "auto"),
+        controller_mode=_policy_text(
+            controller_mode, WEB_REQUEST_POLICY.controller_mode_default, "llm"
+        ),
+        route_policy=_policy_text(
+            route_policy, WEB_REQUEST_POLICY.route_policy_default, "auto"
+        ),
         planner_backend=planner_backend,
         planner_model=planner_model,
         allowed_routes=list(allowed_routes or []),
-        verification_mode=str(verification_mode or "light"),
+        verification_mode=_policy_text(
+            verification_mode, WEB_REQUEST_POLICY.verification_mode_default, "light"
+        ),
         verification_domain=verification_domain,
         max_context_length=max_context_length,
         page_image_records=list(page_image_records or []),
@@ -80,8 +87,20 @@ def build_web_docqa_request(
         language=language,
         command_state=command_state,
         user_id=user_id,
-        origin="web",
+        origin=WEB_REQUEST_POLICY.origin,
     )
+
+
+def _web_selected_file_ids(value: list[str] | None) -> list[str] | None:
+    return None if value is None else list(value)
+
+
+def _web_page_number(value: Any) -> int:
+    return max(1, int(value or WEB_REQUEST_POLICY.page_number_default or 1))
+
+
+def _policy_text(value: Any, default: str | None, fallback: str) -> str:
+    return str(value or default or fallback)
 
 
 def _parse_graph_context(value: str) -> dict[str, Any]:

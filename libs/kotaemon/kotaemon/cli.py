@@ -8,6 +8,13 @@ import click
 import yaml
 from trogon import tui
 
+from kotaemon.app_init import acquire_admin_password as _acquire_admin_password
+from kotaemon.app_init import initialize_password_app as _initialize_password_app
+from kotaemon.app_init import write_app_init_files as _write_app_init_files
+from kotaemon.docqa_request_adapters import (
+    build_legacy_docqa_request as _build_legacy_docqa_request,
+)
+
 PLATFORM_CHOICES = ("claude-code", "codex")
 
 
@@ -230,40 +237,6 @@ def _collect_app_doctor_payload():
     return payload
 
 
-def _write_app_init_files(*, force=False):
-    from ktem.runtime_bootstrap import (
-        build_user_env_example,
-        build_user_flowsettings_template,
-    )
-
-    runtime_paths = _get_runtime_paths()
-    runtime_paths.config_dir.mkdir(parents=True, exist_ok=True)
-    runtime_paths.data_dir.mkdir(parents=True, exist_ok=True)
-    runtime_paths.cache_dir.mkdir(parents=True, exist_ok=True)
-
-    if runtime_paths.flowsettings_path.exists() and not force:
-        raise click.ClickException(
-            f"Config file already exists: {runtime_paths.flowsettings_path}"
-        )
-
-    runtime_paths.flowsettings_path.write_text(
-        build_user_flowsettings_template(),
-        encoding="utf-8",
-    )
-    runtime_paths.env_path.write_text(build_user_env_example(), encoding="utf-8")
-    env_example_path = runtime_paths.config_dir / ".env.example"
-    env_example_path.write_text(build_user_env_example(), encoding="utf-8")
-
-    return {
-        "config_dir": str(runtime_paths.config_dir),
-        "data_dir": str(runtime_paths.data_dir),
-        "cache_dir": str(runtime_paths.cache_dir),
-        "flowsettings_path": str(runtime_paths.flowsettings_path),
-        "env_path": str(runtime_paths.env_path),
-        "env_example_path": str(env_example_path),
-    }
-
-
 def _print_docqa_response(response):
     _echo_text(f"Conversation: {response.conversation_id}")
     if response.active_file_name:
@@ -317,6 +290,19 @@ def _print_docqa_acceptance_summary(payload):
 
 @app.command("init")
 @click.option(
+    "--auth-mode",
+    type=click.Choice(("auto", "local", "password", "sso")),
+    default="auto",
+    show_default=True,
+    help="Write the canonical application authentication mode.",
+)
+@click.option(
+    "--admin-user",
+    default="admin",
+    show_default=True,
+    help="Administrator username to create or reset in password mode.",
+)
+@click.option(
     "--force",
     is_flag=True,
     default=False,
@@ -331,12 +317,23 @@ def _print_docqa_acceptance_summary(payload):
     show_default=True,
     help="Emit structured JSON output.",
 )
-def app_init(force, json_output):
+def app_init(auth_mode, admin_user, force, json_output):
     """Initialize the packaged user config directory with editable templates.
 
     Platform skill: MARA-app-init
     """
-    payload = _write_app_init_files(force=force)
+    password = None
+    if auth_mode == "password":
+        password = _acquire_admin_password(json_output=json_output)
+
+    if password is not None:
+        payload = _initialize_password_app(
+            username=admin_user,
+            password=password,
+            force=force,
+        )
+    else:
+        payload = _write_app_init_files(force=force, auth_mode=auth_mode)
     if json_output:
         _echo_json(payload)
         return
@@ -532,8 +529,6 @@ def _run_docqa_repl(
     mindmap=None,
     json_output=False,
 ):
-    from ktem.docqa import DocQARequest
-
     session = runtime.load_session(conversation_id)
     if session is None:
         raise click.ClickException(f"Conversation '{conversation_id}' does not exist.")
@@ -628,7 +623,7 @@ def _run_docqa_repl(
             continue
 
         response = runtime.run_turn(
-            DocQARequest(
+            _build_legacy_docqa_request(
                 prompt=prompt,
                 conversation_id=conversation_id,
                 selected_file_ids=selected_file_ids_override,
@@ -830,7 +825,12 @@ def docqa_delete(refs, json_output):
     Use file ids or names from `MARA docqa files`.
     """
     runtime = _create_docqa_runtime()
-    deleted = runtime.delete_files(list(refs))
+    from ktem.index.file.deletion import DeletionError
+
+    try:
+        deleted = runtime.delete_files(list(refs))
+    except DeletionError as exc:
+        raise click.ClickException(str(exc)) from exc
 
     if json_output:
         _echo_json([record.as_dict() for record in deleted])
@@ -902,19 +902,17 @@ def docqa_ask(
     Text-focused QA:
     `MARA docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"`
     """
-    from ktem.docqa import DocQARequest
-
     runtime = _create_docqa_runtime()
     selected_records = _resolve_cli_files(runtime, file_refs)
     active_record = _resolve_cli_active_file(runtime, active_file)
 
     response = runtime.run_turn(
-        DocQARequest(
+        _build_legacy_docqa_request(
             prompt=prompt,
             conversation_id=conversation or "",
-            selected_file_ids=[record.file_id for record in selected_records]
-            if file_refs
-            else None,
+            selected_file_ids=(
+                [record.file_id for record in selected_records] if file_refs else None
+            ),
             active_file_id=active_record.file_id if active_record else "",
             active_file_name=active_record.name if active_record else "",
             qa_scope=str(qa_scope or "auto").replace("-", "_"),

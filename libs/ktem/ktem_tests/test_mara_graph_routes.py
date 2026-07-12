@@ -14,7 +14,7 @@ def _fail_if_text_rag_runs(route_name: str):
     return fail
 
 
-def test_mara_graph_route_without_graph_context_abstains_before_text_rag(monkeypatch):
+def test_graph_planner_without_graph_context_falls_back_and_abstains(monkeypatch):
     monkeypatch.setattr(FullQAPipeline, "stream", _fail_if_text_rag_runs("Graph"))
     pipeline = MaraAgentPipeline(retrievers=[])
     pipeline.planner = lambda _payload: json.dumps(
@@ -33,9 +33,14 @@ def test_mara_graph_route_without_graph_context_abstains_before_text_rag(monkeyp
         if event.channel == "debug"
         and event.content.get("mara_channel") == "agent_trace"
     ]
+    planner_event = next(
+        event for event in trace_events if event.get("event") == "planner_output"
+    )
+    assert planner_event["decision"]["planner_route"] == "graph_global"
+    assert planner_event["decision"]["route"] == "doc_text"
     assert any(
         event.get("event") == "guardrail"
-        and event.get("route") == "graph_rag"
+        and event.get("route") == "text_rag"
         and event.get("action") == "abstain"
         for event in trace_events
     )

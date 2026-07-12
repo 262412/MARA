@@ -7,6 +7,10 @@ kotaemon-env*
 .env
 .superpowers/
 /.codex/skills/ui-ux-pro-max/
+node_modules/
+test-results/
+playwright-report/
+coverage-artifacts/
 
 # LaTeX build artifacts
 *.aux

@@ -123,6 +123,14 @@ def bootstrap_runtime_settings() -> str:
     return PACKAGE_FLOWSETTINGS_MODULE
 
 
+def bootstrap_packaged_runtime_settings() -> str:
+    """Force the packaged user-XDG runtime regardless of workspace files."""
+    os.environ["THEFLOW_SETTINGS_MODULE"] = PACKAGE_FLOWSETTINGS_MODULE
+    os.environ[BOOTSTRAP_MARKER_ENV] = "1"
+    _synchronize_theflow_settings(PACKAGE_FLOWSETTINGS_MODULE)
+    return PACKAGE_FLOWSETTINGS_MODULE
+
+
 def load_packaged_runtime_env() -> Path:
     runtime_paths = get_runtime_paths()
     runtime_paths.config_dir.mkdir(parents=True, exist_ok=True)
@@ -173,10 +181,19 @@ def build_user_flowsettings_template() -> str:
 """
 
 
-def build_user_env_example() -> str:
-    return """# Kotaemon runtime environment example
+def _build_user_env_template(
+    *,
+    auth_mode: str,
+    include_password_file_setting: bool,
+) -> str:
+    password_file_setting = (
+        "MARA_ADMIN_PASSWORD_FILE=\n" if include_password_file_setting else ""
+    )
+    return f"""# Kotaemon runtime environment example
 # Copy the keys you need into `.env` in this same directory.
 
+MARA_AUTH_MODE={auth_mode}
+{password_file_setting}
 OPENAI_API_BASE=https://api.openai.com/v1
 OPENAI_API_KEY=<YOUR_OPENAI_KEY>
 OPENAI_CHAT_MODEL=gpt-4o-mini
@@ -195,3 +212,20 @@ VOYAGE_API_KEY=
 LOCAL_MODEL=
 LOCAL_MODEL_EMBEDDINGS=
 """
+
+
+def build_user_env(*, auth_mode: str) -> str:
+    """Build the real user env without password acquisition settings."""
+    from ktem.auth.policy import resolve_auth_mode
+
+    return _build_user_env_template(
+        auth_mode=resolve_auth_mode(configured_mode=auth_mode),
+        include_password_file_setting=False,
+    )
+
+
+def build_user_env_example() -> str:
+    return _build_user_env_template(
+        auth_mode="auto",
+        include_password_file_setting=True,
+    )

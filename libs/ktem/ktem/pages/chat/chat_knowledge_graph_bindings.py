@@ -94,7 +94,7 @@ def bind_knowledge_graph_events(page) -> None:
     _sync_scope_then_refresh_file_list(
         page.chat_control.conversation_id.change(
             fn=page.load_conversation_graph_state,
-            inputs=[page.chat_control.conversation_id],
+            inputs=[page.chat_control.conversation_id, page._app.user_id],
             outputs=_graph_scope_sync_outputs(page),
             show_progress="hidden",
         ).then(

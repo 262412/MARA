@@ -1,6 +1,6 @@
 # build backand and build dependencies
 [build-system]
-requires = ["setuptools >= 61.0", "wheel", "setuptools-git-versioning>=2.0,<3"]
+requires = ["setuptools==80.9.0", "wheel==0.45.1", "setuptools-git-versioning==2.1.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -67,6 +67,8 @@ dependencies = [
     "pydantic<=2.10.6",
 ]
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE.txt", "NOTICE"]
 authors = [
     { name = "@trducng", email = "john@cinnamon.is" },
     { name = "@lone17", email = "ian@cinnamon.is" },
@@ -79,13 +81,12 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-adv = [
+mara-runtime = [
     "duckduckgo-search>=6.1.0,<6.2",
     "elasticsearch>=8.13.0,<8.14",
     "fastembed",
     "onnxruntime<v1.20",
     "googlesearch-python>=1.2.4,<1.3",
-    "llama-cpp-python<0.2.8",
     "llama-index>=0.10.40,<0.11.0",
     "llama-index-vector-stores-milvus",
     "milvus-lite>=2.4.0; sys_platform != \"win32\"",
@@ -97,6 +98,7 @@ adv = [
     "wikipedia>=1.4.0,<1.5",
     "voyageai>=0.3.0",
 ]
+llama-cpp = ["llama-cpp-python<0.2.8"]
 dev = [
     "black",
     "coverage",
@@ -107,4 +109,5 @@ dev = [
     "pytest-mock",
     "sphinx",
 ]
-all = ["kotaemon[adv,dev]"]
+adv = ["kotaemon[llama-cpp,mara-runtime]"]
+all = ["kotaemon[dev,llama-cpp,mara-runtime]"]

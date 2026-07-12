@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
-import threading
 import time
 import warnings
 from collections import defaultdict
@@ -34,11 +32,13 @@ from llama_index.core.vector_stores import (
     MetadataFilters,
 )
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from theflow.settings import settings
 from theflow.utils.modules import import_dotted_string
 
+from kotaemon import artifact_pipeline as artifacts
+from kotaemon.artifact_namespace import finish_and_publish_artifacts
 from kotaemon.base import BaseComponent, Document, Node, Param, RetrievedDocument
 from kotaemon.embeddings import BaseEmbeddings
 from kotaemon.indices import VectorIndexing, VectorRetrieval
@@ -56,8 +56,12 @@ from kotaemon.indices.rankings import BaseReranking, LLMReranking, LLMTrulensSco
 from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
 from kotaemon.loaders import MathpixPDFReader
 
+from .artifact_cleanup import FileArtifactCleaner
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
-from .element_index import docstore_batches_and_index_rows, is_docstore_relation_type
+from .deletion import DeletionCoordinator
+from .element_index import docstore_batches_and_index_rows
+from .office_policy import prepare_office_parse_file
+from .source_storage import store_source_file
 
 logger = logging.getLogger(__name__)
 _office_pdf_converter: OfficeToPdfConversionService | None = None
@@ -402,7 +406,9 @@ class IndexPipeline(BaseComponent):
             ),
         }
 
-    def handle_docs(self, docs, file_id, file_name) -> Generator[Document, None, int]:
+    def handle_docs(
+        self, docs, file_id, file_name, artifact_generation=None
+    ) -> Generator[Document, None, int]:
         s_time = time.time()
         status_tracker = IndexingStatusTracker()
         text_docs = []
@@ -469,7 +475,7 @@ class IndexPipeline(BaseComponent):
             status_tracker.start("vector_write", count=len(to_index_chunks))
             for start_idx in range(0, len(to_index_chunks), chunk_size):
                 chunks = to_index_chunks[start_idx : start_idx + chunk_size]
-                self.handle_chunks_vectorstore(chunks, file_id)
+                self.handle_chunks_vectorstore(chunks, file_id, artifact_generation)
                 n_chunks += len(chunks)
                 if self.VS:
                     cache_stats = self.vector_indexing.last_embedding_cache_stats
@@ -498,14 +504,7 @@ class IndexPipeline(BaseComponent):
                     channel="debug",
                 )
 
-        # run vector indexing in thread if specified
-        if self.run_embedding_in_thread:
-            logger.debug("Running embedding in background thread")
-            threading.Thread(
-                target=lambda: list(insert_chunks_to_vectorstore())
-            ).start()
-        else:
-            yield from insert_chunks_to_vectorstore()
+        yield from artifacts.schedule_writer(self, insert_chunks_to_vectorstore)
 
         logger.debug("Indexing step took %.3fs", time.time() - s_time)
         return n_chunks
@@ -522,11 +521,11 @@ class IndexPipeline(BaseComponent):
             session.add_all(nodes)
             session.commit()
 
-    def handle_chunks_vectorstore(self, chunks, file_id):
+    def handle_chunks_vectorstore(self, chunks, file_id, artifact_generation=None):
         """Run chunks"""
         # run embedding, add to both vector store and doc store
         self.vector_indexing.add_to_vectorstore(chunks)
-        self.vector_indexing.write_chunk_to_file(chunks)
+        self.vector_indexing.write_chunk_to_file(chunks, file_id, artifact_generation)
 
         if self.VS:
             # record in the index
@@ -601,22 +600,14 @@ class IndexPipeline(BaseComponent):
         Returns:
             the file id
         """
-        with file_path.open("rb") as fi:
-            file_hash = sha256(fi.read()).hexdigest()
-
-        shutil.copy(file_path, self.FSPath / file_hash)
-        source = self.Source(
-            name=file_path.name,
-            path=file_hash,
-            size=file_path.stat().st_size,
-            user=self.user_id,  # type: ignore
+        return store_source_file(
+            file_path,
+            storage_root=self.FSPath,
+            source_table=self.Source,
+            user_id=self.user_id,
+            session_factory=lambda: Session(engine),
+            storage_lifetime=getattr(self, "_storage_lifetime", None),
         )
-        with Session(engine) as session:
-            session.add(source)
-            session.commit()
-            file_id = source.id
-
-        return file_id
 
     def finish(self, file_id: str, file_path: str | Path) -> str:
         """Finish the indexing"""
@@ -657,24 +648,16 @@ class IndexPipeline(BaseComponent):
         Args:
             file_id: the file id
         """
-        with Session(engine) as session:
-            session.execute(delete(self.Source).where(self.Source.id == file_id))
-            vs_ids, ds_ids = [], []
-            index = session.execute(
-                select(self.Index).where(self.Index.source_id == file_id)
-            ).all()
-            for each in index:
-                if each[0].relation_type == "vector":
-                    vs_ids.append(each[0].target_id)
-                elif is_docstore_relation_type(each[0].relation_type):
-                    ds_ids.append(each[0].target_id)
-                session.delete(each[0])
-            session.commit()
-
-        if vs_ids and self.VS:
-            self.VS.delete(vs_ids)
-        if ds_ids:
-            self.DS.delete(ds_ids)
+        coordinator = DeletionCoordinator(
+            engine=engine,
+            source_table=self.Source,
+            index_table=self.Index,
+            vector_store=self.VS,
+            doc_store=self.DS,
+            file_storage_path=self.FSPath,
+            artifact_cleaner=FileArtifactCleaner.from_settings(settings).clean,
+        )
+        coordinator.delete(file_id, user_id=self.user_id)
 
     def run(
         self, file_path: str | Path, reindex: bool, **kwargs
@@ -731,15 +714,15 @@ class IndexPipeline(BaseComponent):
         else:
             extra_info = {"file_name": stored_file_path}
             file_name = source_file_name or stored_file_path
-        if layout_metadata:
-            extra_info.update(layout_metadata)
+        extra_info.update(layout_metadata or {})
 
         extra_info["file_id"] = file_id
         extra_info["collection_name"] = self.collection_name
+        artifact_generation = artifacts.begin_artifact_generation(self, extra_info)
 
         yield Document(f" => Converting {file_name} to text", channel="debug")
         parse_result = self.load_docs_with_parse_cache(file_path, extra_info)
-        docs = parse_result.documents
+        docs = artifacts.strip_artifact_generation(parse_result.documents)
         cache_status = "hit" if parse_result.cache_hit else "miss"
         yield Document(
             f" => Converted {file_name} to text"
@@ -749,9 +732,9 @@ class IndexPipeline(BaseComponent):
             f"writes={parse_result.stats.get('writes', 0)})",
             channel="debug",
         )
-        yield from self.handle_docs(docs, file_id, file_name)
+        yield from self.handle_docs(docs, file_id, file_name, artifact_generation)
 
-        self.finish(file_id, stored_file_path)
+        finish_and_publish_artifacts(self, file_id, stored_file_path, settings)
 
         yield Document(f" => Finished indexing {file_name}", channel="debug")
         return file_id, docs
@@ -893,39 +876,13 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
         if not ext or not getattr(settings, "KH_OFFICE_TO_PDF_INDEXING", True):
             return file_path, None
 
-        converted_pdf = get_office_pdf_converter().convert_to_pdf(
-            file_path, file_path.name
+        return prepare_office_parse_file(
+            file_path,
+            ext,
+            converter=get_office_pdf_converter(),
+            strict=getattr(settings, "KH_OFFICE_TO_PDF_INDEXING_STRICT", True),
+            pdf_validator=is_valid_pdf,
         )
-        if converted_pdf and is_valid_pdf(converted_pdf):
-            converted_path = Path(converted_pdf).resolve()
-            return converted_path, {
-                "source_file_name": file_path.name,
-                "source_file_path": str(file_path),
-                "source_file_extension": ext,
-                "converted_from_office": True,
-                "converted_pdf_path": str(converted_path),
-                "layout_preserving_parse": True,
-            }
-
-        message = (
-            f"Failed to convert {file_path.name} to PDF for layout-preserving "
-            "indexing. Install LibreOffice or set KH_OFFICE_TO_PDF_INDEXING=false "
-            "to use direct Office text extraction."
-        )
-        strict_indexing = getattr(settings, "KH_OFFICE_TO_PDF_INDEXING_STRICT", True)
-        if strict_indexing and ext != ".docx":
-            raise RuntimeError(message)
-
-        logger.warning(message)
-        return file_path, {
-            "source_file_name": file_path.name,
-            "source_file_path": str(file_path),
-            "source_file_extension": ext,
-            "converted_from_office": False,
-            "layout_preserving_parse": False,
-            "direct_office_text_fallback": ext == ".docx",
-            "office_pdf_conversion_error": message,
-        }
 
     def run(
         self, file_paths: str | Path | list[str | Path], *args, **kwargs

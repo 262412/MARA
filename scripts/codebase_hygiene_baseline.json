@@ -274,13 +274,13 @@
       "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/docqa/acceptance.py": {
-      "module_lines": 862,
+      "module_lines": 851,
       "functions": {
         "AcceptanceMatrix.prepare_sample_files": 116,
         "AcceptanceMatrix.run_cli_to_web_restore_matrix": 143
       },
       "classes": {
-        "AcceptanceMatrix": 745
+        "AcceptanceMatrix": 732
       },
       "non_actionable_broad_exceptions": 0
     },
@@ -293,23 +293,20 @@
       "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/docqa/preview_support.py": {
-      "module_lines": 561,
-      "functions": {
-        "OfficePreviewConversionService.convert_to_pdf_preview": 95
-      },
+      "module_lines": 364,
+      "functions": {},
       "classes": {},
-      "non_actionable_broad_exceptions": 18
+      "non_actionable_broad_exceptions": 11
     },
     "libs/ktem/ktem/docqa/runtime.py": {
-      "module_lines": 1067,
+      "module_lines": 816,
       "functions": {
-        "DocQARuntime._prepare_pipeline": 117,
-        "DocQARuntime.run_turn": 153
+        "DocQARuntime._prepare_pipeline": 116
       },
       "classes": {
-        "DocQARuntime": 1023
+        "DocQARuntime": 618
       },
-      "non_actionable_broad_exceptions": 6
+      "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/embeddings/ui.py": {
       "module_lines": 413,
@@ -320,15 +317,6 @@
       "classes": {
         "EmbeddingManagement": 391
       },
-      "non_actionable_broad_exceptions": 0
-    },
-    "libs/ktem/ktem/index/file/_events.py": {
-      "module_lines": 597,
-      "functions": {
-        "register_file_index_events": 310,
-        "register_quick_upload_events": 113
-      },
-      "classes": {},
       "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/index/file/graph/lightrag_pipelines.py": {
@@ -354,14 +342,14 @@
       "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/index/file/index.py": {
-      "module_lines": 662,
+      "module_lines": 631,
       "functions": {
         "FileIndex._setup_resources": 116
       },
       "classes": {
-        "FileIndex": 637
+        "FileIndex": 606
       },
-      "non_actionable_broad_exceptions": 2
+      "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/index/file/knet/pipelines.py": {
       "module_lines": 172,
@@ -370,24 +358,24 @@
       "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/index/file/pipelines.py": {
-      "module_lines": 1027,
+      "module_lines": 990,
       "functions": {
         "DocumentRetrievalPipeline.run": 99,
         "IndexDocumentPipeline.stream": 89,
         "IndexPipeline.handle_docs": 107
       },
       "classes": {
-        "IndexPipeline": 417
+        "IndexPipeline": 401
       },
       "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/index/file/ui.py": {
-      "module_lines": 1284,
+      "module_lines": 630,
       "functions": {},
       "classes": {
-        "FileIndexPage": 976
+        "FileIndexPage": 508
       },
-      "non_actionable_broad_exceptions": 1
+      "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/index/ui.py": {
       "module_lines": 348,
@@ -428,19 +416,15 @@
       "non_actionable_broad_exceptions": 1
     },
     "libs/ktem/ktem/pages/chat/__init__.py": {
-      "module_lines": 3664,
+      "module_lines": 2075,
       "functions": {
         "ChatPage._render_chat_file_list_html": 86,
-        "ChatPage.chat_fn": 266,
-        "ChatPage.on_building_ui": 318,
-        "ChatPage.on_register_events": 899,
-        "ChatPage.rerun_page_answer": 81,
-        "ChatPage.submit_msg": 132
+        "ChatPage.rerun_page_answer": 81
       },
       "classes": {
-        "ChatPage": 3189
+        "ChatPage": 1609
       },
-      "non_actionable_broad_exceptions": 10
+      "non_actionable_broad_exceptions": 6
     },
     "libs/ktem/ktem/pages/chat/chat_knowledge_graph_bindings.py": {
       "module_lines": 230,
@@ -451,12 +435,12 @@
       "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/pages/chat/control.py": {
-      "module_lines": 453,
+      "module_lines": 448,
       "functions": {
-        "ConversationControl.on_building_ui": 133
+        "ConversationControl.on_building_ui": 124
       },
       "classes": {
-        "ConversationControl": 413
+        "ConversationControl": 404
       },
       "non_actionable_broad_exceptions": 0
     },
@@ -496,24 +480,15 @@
       "non_actionable_broad_exceptions": 5
     },
     "libs/ktem/ktem/pages/chat/page_preview.py": {
-      "module_lines": 844,
+      "module_lines": 828,
       "functions": {
-        "ChatPagePreviewController.on_page_change": 97,
-        "ChatPagePreviewController.on_page_set": 86
+        "ChatPagePreviewController.on_page_change": 94,
+        "ChatPagePreviewController.on_page_set": 83
       },
       "classes": {
-        "ChatPagePreviewController": 790
+        "ChatPagePreviewController": 772
       },
-      "non_actionable_broad_exceptions": 1
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_document.py": {
-      "module_lines": 394,
-      "functions": {
-        "extract_docx_html": 277,
-        "paginate_docx_html": 89
-      },
-      "classes": {},
-      "non_actionable_broad_exceptions": 11
+      "non_actionable_broad_exceptions": 0
     },
     "libs/ktem/ktem/pages/chat/page_preview_handlers.py": {
       "module_lines": 236,
@@ -523,51 +498,13 @@
       "classes": {},
       "non_actionable_broad_exceptions": 0
     },
-    "libs/ktem/ktem/pages/chat/page_preview_office.py": {
-      "module_lines": 280,
-      "functions": {
-        "OfficePreviewConversionService.convert_to_pdf_preview": 106
-      },
-      "classes": {},
-      "non_actionable_broad_exceptions": 4
-    },
     "libs/ktem/ktem/pages/chat/page_preview_presentation.py": {
-      "module_lines": 524,
+      "module_lines": 495,
       "functions": {},
       "classes": {
-        "PresentationPreviewService": 483
+        "PresentationPreviewService": 453
       },
-      "non_actionable_broad_exceptions": 17
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_resolver.py": {
-      "module_lines": 114,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 1
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_runtime.py": {
-      "module_lines": 186,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 3
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_spreadsheet.py": {
-      "module_lines": 53,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 2
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_text.py": {
-      "module_lines": 87,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 1
-    },
-    "libs/ktem/ktem/pages/chat/page_preview_types.py": {
-      "module_lines": 116,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 2
+      "non_actionable_broad_exceptions": 15
     },
     "libs/ktem/ktem/pages/help.py": {
       "module_lines": 119,
@@ -660,12 +597,6 @@
       "functions": {},
       "classes": {},
       "non_actionable_broad_exceptions": 2
-    },
-    "libs/ktem/ktem/utils/office_conversion.py": {
-      "module_lines": 211,
-      "functions": {},
-      "classes": {},
-      "non_actionable_broad_exceptions": 6
     },
     "libs/ktem/ktem_tests/test_file_index_page_extraction.py": {
       "module_lines": 485,

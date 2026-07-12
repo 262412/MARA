@@ -1,0 +1,91 @@
+name: Signed provenance
+
+"on":
+  workflow_run:
+    workflows: [Quality gates]
+    types: [completed]
+    branches: [main, Dev]
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  python:
+    name: Sign trusted Python artifacts
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download trusted Python artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: python-distribution-supply-chain
+          path: trusted-python
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Sign distributions and evidence
+        id: attest-python
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: |
+            trusted-python/dist/supply-chain/**/*.whl
+            trusted-python/dist/supply-chain/**/*.tar.gz
+            trusted-python/distribution-evidence/*.json
+      - name: Upload signed Python bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: signed-python-provenance
+          path: ${{ steps.attest-python.outputs.bundle-path }}
+          if-no-files-found: error
+          retention-days: 30
+
+  container:
+    name: Sign trusted ${{ matrix.target }} container digest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [lite, full, ollama]
+    steps:
+      - name: Download trusted container evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: container-supply-chain-${{ matrix.target }}
+          path: trusted-container
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Read the validated container subject
+        id: subject
+        env:
+          PROVENANCE_PATH: trusted-container/${{ matrix.target }}.provenance.json
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+
+          with open(os.environ["PROVENANCE_PATH"], encoding="utf-8") as source:
+              statement = json.load(source)
+          [subject] = statement["subject"]
+          digest = subject["digest"]["sha256"]
+          if not re.fullmatch(r"[0-9a-f]{64}", digest):
+              raise SystemExit("Container provenance has no valid SHA-256 subject")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"digest=sha256:{digest}\n")
+          PY
+      - name: Sign container digest
+        id: attest-container
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-name: mara-quality:${{ matrix.target }}
+          subject-digest: ${{ steps.subject.outputs.digest }}
+      - name: Upload signed container bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: signed-container-provenance-${{ matrix.target }}
+          path: ${{ steps.attest-container.outputs.bundle-path }}
+          if-no-files-found: error
+          retention-days: 30

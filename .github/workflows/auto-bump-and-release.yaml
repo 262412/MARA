@@ -6,16 +6,26 @@ on:
       - main
 
 jobs:
+  quality:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/quality-gates.yaml
+    with:
+      base_ref: ${{ github.event.before }}
+
   auto-bump-and-release:
-    runs-on: ubuntu-latest
+    needs: quality
+    # P0 release containment remains in force until P3 supply-chain gates pass.
+    if: ${{ false }}
+    runs-on: ubuntu-24.04
     steps:
       - name: Clone the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
       - name: Update Application Version
         id: update-version
-        uses: anothrNick/github-tag-action@v1
+        uses: anothrNick/github-tag-action@4ed44965e0db8dab2b466a16da04aec3cc312fd8 # 1.75.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WITH_V: true
@@ -34,7 +44,7 @@ jobs:
           cp LICENSE.txt slide-app/
           cp flowsettings.py slide-app/
           cp app.py slide-app/
-          cp .env.example slide-app/.env
+          cp .env.example slide-app/.env.example
           cp -r scripts slide-app/
           mkdir -p slide-app/libs/ktem/ktem/
           cp -r libs/ktem/ktem/assets slide-app/libs/ktem/ktem/
@@ -43,16 +53,10 @@ jobs:
           zip -r slide-app.zip slide-app
       - name: Release ${{ steps.update-version.outputs.new_tag }}
         if: ${{ steps.update-version.outputs.new_tag != steps.update-version.outputs.old_tag }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: slide-app.zip
           fail_on_unmatched_files: true
           token: ${{ secrets.GITHUB_TOKEN }}
           generate_release_notes: true
           tag_name: ${{ steps.update-version.outputs.new_tag }}
-          make_latest: true
-      - name: Update latest branch
-        if: ${{ steps.update-version.outputs.new_tag != steps.update-version.outputs.old_tag }}
-        run: >
-          git push -f origin
-          refs/tags/${{ steps.update-version.outputs.new_tag }}:refs/heads/latest

@@ -1,0 +1,10 @@
+MARA ktem application runtime
+
+This distribution is a modified and branded fork of Cinnamon/kotaemon:
+https://github.com/Cinnamon/kotaemon
+
+The upstream project and this fork are distributed under the Apache License,
+Version 2.0. This distribution also bundles the official Mozilla PDF.js
+v6.1.200 compressed distribution from https://github.com/mozilla/pdf.js.
+PDF.js is licensed under the Apache License, Version 2.0; its license is included at
+ktem/assets/vendor/pdfjs/LICENSE.pdfjs.

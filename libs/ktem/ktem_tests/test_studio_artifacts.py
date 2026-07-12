@@ -302,7 +302,10 @@ def test_render_conversation_notebook_panel_html_reads_saved_notebook_state():
         conversation_id = conversation.id
 
     try:
-        html = render_conversation_notebook_panel_html(conversation_id)
+        html = render_conversation_notebook_panel_html(
+            conversation_id,
+            user_id="user-1",
+        )
 
         assert "1 selected" in html
         assert "Saved answer" in html
@@ -346,7 +349,7 @@ def test_delete_latest_artifact_update_removes_latest_artifact_and_refreshes_pan
         conversation_id = conversation.id
 
     try:
-        html = delete_latest_artifact_update(conversation_id)
+        html = delete_latest_artifact_update(conversation_id, user_id="user-1")
 
         assert "1 saved" in html
         assert "Study Guide" in html
@@ -390,7 +393,11 @@ def test_export_latest_artifact_update_writes_markdown_and_records_export(tmp_pa
         conversation_id = conversation.id
 
     try:
-        html = export_latest_artifact_update(conversation_id, root_dir=tmp_path)
+        html = export_latest_artifact_update(
+            conversation_id,
+            root_dir=tmp_path,
+            user_id="user-1",
+        )
 
         exported_path = tmp_path / conversation_id / "artifact-1.md"
         assert exported_path.exists()
@@ -443,6 +450,7 @@ def test_export_latest_artifact_update_writes_selected_format_and_records_export
             conversation_id,
             export_format="html",
             root_dir=tmp_path,
+            user_id="user-1",
         )
 
         exported_path = tmp_path / conversation_id / "artifact-1.html"
@@ -506,6 +514,7 @@ def test_export_latest_artifact_update_uses_configured_media_adapter(
             conversation_id,
             export_format="mp3",
             root_dir=tmp_path,
+            user_id="user-1",
         )
 
         exported_path = tmp_path / conversation_id / "artifact-1.mp3"

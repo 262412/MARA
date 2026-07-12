@@ -88,11 +88,8 @@ def sync_graph_source_ids(
     if not current_ids:
         return []
 
-    source_map = available_source_map or selector_source_map
-    if not source_map:
-        return current_ids
-
-    available_ids = set(source_map.keys())
+    del selector_source_map
+    available_ids = set(available_source_map.keys())
     return [file_id for file_id in current_ids if file_id in available_ids]
 
 

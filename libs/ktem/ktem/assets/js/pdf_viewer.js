@@ -50,17 +50,29 @@ function onBlockLoad() {
 
     modal.id = "pdf-modal";
     modal.className = "modal";
-    modal.innerHTML = `
-            <div class="modal-content">
-              <div class="modal-header">
-                <span class="close" id="modal-close">&times;</span>
-                <span class="close" id="modal-expand">&#x26F6;</span>
-              </div>
-              <div class="modal-body">
-                <iframe id="pdf-viewer" title="PDF preview" src="about:blank"></iframe>
-              </div>
-            </div>
-          `;
+    var modalContent = document.createElement("div");
+    modalContent.className = "modal-content";
+    var modalHeader = document.createElement("div");
+    modalHeader.className = "modal-header";
+    var closeButton = document.createElement("span");
+    closeButton.className = "close";
+    closeButton.id = "modal-close";
+    closeButton.textContent = "×";
+    var expandButton = document.createElement("span");
+    expandButton.className = "close";
+    expandButton.id = "modal-expand";
+    expandButton.textContent = "⛶";
+    var modalBody = document.createElement("div");
+    modalBody.className = "modal-body";
+    var pdfViewer = document.createElement("iframe");
+    pdfViewer.id = "pdf-viewer";
+    pdfViewer.title = "PDF preview";
+    KtemSafeDom.setIframePolicy(pdfViewer, "pdf");
+    pdfViewer.setAttribute("src", "about:blank");
+    modalHeader.append(closeButton, expandButton);
+    modalBody.appendChild(pdfViewer);
+    modalContent.append(modalHeader, modalBody);
+    modal.replaceChildren(modalContent);
 
     modal.querySelector("#modal-close").onclick = function () {
       modal.style.display = "none";
@@ -148,12 +160,11 @@ function onBlockLoad() {
           (phrase) => matchRatio(phrase, span.textContent) > 0.5
         )
       ) {
-        span.innerHTML =
-          "<span class='highlight selected'>" + span.textContent + "</span>";
+        KtemSafeDom.setTextHighlight(span, true);
       } else {
         // if span is already highlighted, remove it
         if (span.querySelector(".highlight")) {
-          span.innerHTML = span.textContent;
+          KtemSafeDom.setTextHighlight(span, false);
         }
       }
     }

@@ -61,7 +61,9 @@ class ChatPanel(BasePage):
         self.pdf_preview = gr.HTML(
             value=(
                 "<div class='pdf-preview-shell'>"
-                "<iframe id='main-pdf-preview-frame' title='PDF Preview' loading='lazy'></iframe>"
+                "<iframe id='main-pdf-preview-frame' title='PDF Preview' "
+                "loading='lazy' sandbox='allow-same-origin' "
+                "referrerpolicy='no-referrer'></iframe>"
                 "<img id='main-pdf-preview-image' class='pdf-preview-image' alt='PDF page preview' />"
                 "<div id='main-pdf-preview-empty' class='pdf-preview-empty pdf-preview-empty--prototype'>"
                 "<div class='preview-empty-state'>Select a file and page to preview.</div>"
@@ -74,9 +76,7 @@ class ChatPanel(BasePage):
         self.pdf_preview_src = gr.Textbox(
             value="", visible=False, elem_id="main-pdf-preview-src"
         )
-        # Keep timer available for explicit preview polling without starting
-        # a background Gradio queue loop as soon as the app loads.
-        self.preview_refresh_timer = gr.Timer(value=2.0, active=False)
+        self.preview_refresh_timer = gr.Timer(value=2.0, active=True)
 
     def render_notice_and_pager(self):
         """Render PDF preview notice message and page navigation controls."""

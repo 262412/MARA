@@ -1,96 +1,79 @@
 param(
     [string]$VenvPath = ".venv",
+    [string]$Python = "3.10",
     [switch]$SkipInit,
     [switch]$InstallCodex,
     [switch]$InstallClaudeCode
 )
 
 $ErrorActionPreference = "Stop"
-
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $venvDir = Join-Path $scriptRoot $VenvPath
 
-function Get-PythonCommand {
-    $py = Get-Command py -ErrorAction SilentlyContinue
-    if ($py) {
-        return @("py", "-3.10")
-    }
-
-    $python = Get-Command python -ErrorAction SilentlyContinue
-    if ($python) {
-        return @("python")
-    }
-
-    throw "Python 3.10+ was not found on PATH."
+if (-not (Test-Path (Join-Path $scriptRoot "pyproject.toml")) -or
+    -not (Test-Path (Join-Path $scriptRoot "uv.lock"))) {
+    Write-Error "install.ps1 supports a verified MARA source checkout with uv.lock."
+    exit 64
+}
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Error "uv is required. Install a verified uv release with your package manager."
+    exit 69
+}
+$env:UV_PYTHON_DOWNLOADS = "never"
+& uv python find $Python *> $null
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "A local Python $Python interpreter is required; automatic downloads are disabled."
+    exit 69
 }
 
-$pythonCmd = Get-PythonCommand
-
-if (-not (Test-Path $venvDir)) {
-    if ($pythonCmd.Length -gt 1) {
-        & $pythonCmd[0] $pythonCmd[1] -m venv $venvDir
-    } else {
-        & $pythonCmd[0] -m venv $venvDir
-    }
+$env:UV_PROJECT_ENVIRONMENT = $venvDir
+& uv sync --project $scriptRoot --frozen --no-dev --extra mara --python $Python
+$syncExit = $LASTEXITCODE
+if ($syncExit -ne 0) {
+    [Console]::Error.WriteLine("The frozen uv sync failed with exit code $syncExit.")
+    exit $syncExit
 }
 
-$venvPython = Join-Path $venvDir "Scripts\\python.exe"
-$venvKotaemon = Join-Path $venvDir "Scripts\\kotaemon.exe"
-$venvMARA = Join-Path $venvDir "Scripts\\MARA.exe"
-
-& $venvPython -m pip install --upgrade pip
-
-$localKtem = Join-Path $scriptRoot "libs\\ktem\\pyproject.toml"
-$localKotaemon = Join-Path $scriptRoot "libs\\kotaemon\\pyproject.toml"
-$localSlideCli = Join-Path $scriptRoot "libs\\slide_cli\\pyproject.toml"
-if ((Test-Path $localKtem) -and (Test-Path $localKotaemon)) {
-    & $venvPython -m pip install (Join-Path $scriptRoot "libs\\ktem")
-    & $venvPython -m pip install ((Join-Path $scriptRoot "libs\\kotaemon") + "[all]")
-    if (Test-Path $localSlideCli) {
-        & $venvPython -m pip install (Join-Path $scriptRoot "libs\\slide_cli")
-    }
-} else {
-    & $venvPython -m pip install "mara-app[mara]"
+$venvMARA = Join-Path $venvDir "Scripts\MARA.exe"
+if (-not (Test-Path $venvMARA)) {
+    Write-Error "The frozen sync did not create $venvMARA."
+    exit 70
 }
 
 if (-not $SkipInit) {
-    if (Test-Path $venvMARA) {
-        & $venvMARA app init
-    } else {
-        & $venvKotaemon app init
+    & $venvMARA app init
+    $initExit = $LASTEXITCODE
+    if ($initExit -ne 0) {
+        [Console]::Error.WriteLine("MARA app init failed with exit code $initExit.")
+        exit $initExit
     }
 }
-
-if (Test-Path $venvMARA) {
-    & $venvMARA app doctor
-} else {
-    & $venvKotaemon app doctor
+& $venvMARA app doctor
+$doctorExit = $LASTEXITCODE
+if ($doctorExit -ne 0) {
+    [Console]::Error.WriteLine("MARA app doctor failed with exit code $doctorExit.")
+    exit $doctorExit
 }
 
 if ($InstallCodex) {
-    if (Test-Path $venvMARA) {
-        & $venvMARA platform install --platform codex --mode full --yes
-    } else {
-        & $venvKotaemon platform install --platform codex --mode full --yes
+    & $venvMARA platform install --platform codex --mode full --yes
+    $codexExit = $LASTEXITCODE
+    if ($codexExit -ne 0) {
+        [Console]::Error.WriteLine("Codex platform install failed with exit code $codexExit.")
+        exit $codexExit
     }
 }
-
 if ($InstallClaudeCode) {
-    if (Test-Path $venvMARA) {
-        & $venvMARA platform install --platform claude-code --mode full --yes
-    } else {
-        & $venvKotaemon platform install --platform claude-code --mode full --yes
+    & $venvMARA platform install --platform claude-code --mode full --yes
+    $claudeExit = $LASTEXITCODE
+    if ($claudeExit -ne 0) {
+        [Console]::Error.WriteLine("Claude Code platform install failed with exit code $claudeExit.")
+        exit $claudeExit
     }
 }
 
 Write-Host ""
-if (Test-Path $venvMARA) {
-    Write-Host "MARA is ready."
-    Write-Host "Run '$venvMARA app run' to launch the Web UI."
-    Write-Host "Run '$venvMARA docqa doctor' to validate the shared DocQA runtime."
-    Write-Host "Run '$venvMARA doctor' to validate the MARA runtime."
-} else {
-    Write-Host "Kotaemon is ready."
-    Write-Host "Run '$venvKotaemon app run' to launch the Web UI."
-    Write-Host "Run '$venvKotaemon docqa doctor' to validate the shared DocQA runtime."
-}
+Write-Host "MARA is ready."
+Write-Host "Run '$venvMARA app run' to launch the Web UI."
+Write-Host "Run '$venvMARA docqa doctor' to validate the shared DocQA runtime."
+Write-Host "Run '$venvMARA doctor' to validate the MARA runtime."

@@ -29,6 +29,8 @@ def test_importing_cli_module_does_not_eagerly_import_heavy_modules():
             "'slide_cli.docqa_cli', "
             "'slide_cli.runtime', "
             "'ktem.docqa', "
+            "'ktem.auth.service', "
+            "'ktem.db.models', "
             "'kotaemon.agents'"
             "]; "
             "print(json.dumps({name: (name in sys.modules) for name in targets}))"
@@ -49,6 +51,8 @@ def test_importing_cli_module_does_not_eagerly_import_heavy_modules():
         "slide_cli.docqa_cli": False,
         "slide_cli.runtime": False,
         "ktem.docqa": False,
+        "ktem.auth.service": False,
+        "ktem.db.models": False,
         "kotaemon.agents": False,
     }
 
@@ -163,7 +167,7 @@ def test_building_docqa_request_does_not_import_ktem_docqa():
 
 
 def test_create_docqa_runtime_bootstraps_before_import(monkeypatch):
-    from slide_cli import docqa_runtime as module
+    import slide_cli.docqa_runtime as module
 
     events: list[str] = []
 
@@ -196,7 +200,7 @@ def test_create_docqa_runtime_bootstraps_before_import(monkeypatch):
 def test_ensure_llama_index_nltk_cache_sets_bundled_cache_without_heavy_imports(
     monkeypatch, tmp_path
 ):
-    from slide_cli import docqa_runtime as module
+    import slide_cli.docqa_runtime as module
 
     cache_dir = tmp_path / "llama_index" / "core" / "_static" / "nltk_cache"
     cache_dir.mkdir(parents=True)

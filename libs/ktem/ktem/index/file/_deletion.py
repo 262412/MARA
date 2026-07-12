@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from typing import TypeAlias
+
 import gradio as gr
 from ktem.db.engine import engine
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from theflow.settings import settings as flowsettings
 
-from .element_index import is_docstore_relation_type
+from ._identity import resolve_file_index_user_id
+from .artifact_cleanup import FileArtifactCleaner
+from .deletion import DeletionCoordinator, DeletionError
+
+Request: TypeAlias = gr.Request | None
 
 
 class FileIndexDeletionController:
@@ -13,46 +18,35 @@ class FileIndexDeletionController:
         self._index = index
         self._selected_panel_false = selected_panel_false
 
-    def delete_event(self, file_id):
-        file_name = ""
-        with Session(engine) as session:
-            source = session.execute(
-                select(self._index._resources["Source"]).where(
-                    self._index._resources["Source"].id == file_id
-                )
-            ).first()
-            if source:
-                file_name = source[0].name
-                session.delete(source[0])
+    def delete_event(self, file_id, user_id=None, request: Request = None):
+        scoped_user_id = self._resolve_user_id(user_id, request)
+        resources = self._index._resources
+        coordinator = DeletionCoordinator(
+            engine=engine,
+            source_table=resources["Source"],
+            index_table=resources["Index"],
+            vector_store=resources["VectorStore"],
+            doc_store=resources["DocStore"],
+            file_storage_path=resources.get("FileStoragePath"),
+            artifact_cleaner=FileArtifactCleaner.from_settings(flowsettings).clean,
+        )
+        try:
+            result = coordinator.delete(file_id, user_id=scoped_user_id)
+        except DeletionError as exc:
+            raise gr.Error(str(exc)) from exc
 
-            vs_ids: list[str] = []
-            ds_ids: list[str] = []
-            index_rows = session.execute(
-                select(self._index._resources["Index"]).where(
-                    self._index._resources["Index"].source_id == file_id
-                )
-            ).all()
-            for each in index_rows:
-                if each[0].relation_type == "vector":
-                    vs_ids.append(each[0].target_id)
-                elif is_docstore_relation_type(each[0].relation_type):
-                    ds_ids.append(each[0].target_id)
-                session.delete(each[0])
-            session.commit()
-
-        if vs_ids:
-            self._index._vs.delete(vs_ids)
-        if ds_ids:
-            self._index._docstore.delete(ds_ids)
-
-        gr.Info(f"File {file_name} has been deleted")
+        gr.Info(f"File {result.name} has been deleted")
         return None, self._selected_panel_false
 
-    def delete_all_files(self, file_list):
+    @staticmethod
+    def _resolve_user_id(user_id, request: Request):
+        return resolve_file_index_user_id(user_id, request)
+
+    def delete_all_files(self, file_list, user_id=None, request: Request = None):
         for file_id in file_list.id.values:
             if not file_id or str(file_id) == "-":
                 continue
-            self.delete_event(file_id)
+            self.delete_event(file_id, user_id, request=request)
 
     @staticmethod
     def set_file_id_selector(selected_file_id):

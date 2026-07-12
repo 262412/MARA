@@ -259,9 +259,9 @@ The repository includes a multi-stage [Dockerfile](Dockerfile):
 
 | Target   | Purpose                                                                                 |
 | -------- | --------------------------------------------------------------------------------------- |
-| `lite`   | Baseline Web UI / DocQA runtime                                                         |
-| `full`   | Adds LibreOffice, Tesseract, `unstructured`, and other document-processing dependencies |
-| `ollama` | Extends `full` with Ollama and pulls `nomic-embed-text`                                 |
+| `lite`   | Baseline Web UI / DocQA runtime with the locked CPU dependency set                     |
+| `full`   | Adds LibreOffice, Tesseract, and other OS document-processing tools                    |
+| `ollama` | Extends `full` with a pinned Ollama runtime; no model is pulled during the image build |
 
 Build:
 
@@ -272,20 +272,57 @@ docker build --target full -t mara:full .
 Run:
 
 ```shell
+docker volume create mara-data
+MARA_SECRET_DIR="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/mara-secret.XXXXXX")"
+MARA_SECRET_FILE="$MARA_SECRET_DIR/admin-password"
+trap 'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"' EXIT
+install -m 0600 /dev/null "$MARA_SECRET_FILE"
+read -rsp 'MARA admin password: ' MARA_ADMIN_PASSWORD
+printf '\n'
+printf '%s\n' "$MARA_ADMIN_PASSWORD" >"$MARA_SECRET_FILE"
+unset MARA_ADMIN_PASSWORD
+chmod 0444 "$MARA_SECRET_FILE"
 docker run \
-  -e GRADIO_SERVER_NAME=0.0.0.0 \
-  -e GRADIO_SERVER_PORT=7860 \
-  -v ./ktem_app_data:/app/ktem_app_data \
+  -e MARA_AUTH_MODE=password \
+  --mount type=bind,src="$MARA_SECRET_FILE",dst=/run/secrets/mara_admin_password,readonly \
+  --mount type=volume,src=mara-data,dst=/var/lib/mara \
   -p 7860:7860 \
   --rm -it \
   mara:full
 ```
 
-Optional startup modes:
+The image runs as fixed user `10001:10001`, and `/var/lib/mara` is its only
+application-data root. The named volume inherits the image directory ownership,
+so first-run initialization remains writable without making the source tree
+writable. A plain bind-mounted secret must be readable by UID 10001; the example
+uses mode `0444` and keeps it outside the repository/build context. On shared
+hosts, prefer a Docker/Kubernetes secret configured for UID 10001 with mode
+`0440`; the temporary directory and file above are removed automatically when
+the shell exits. `.dockerignore` also excludes common secret names as a second
+line of defense. For SSO, set `MARA_AUTH_MODE=sso`,
+configure the SSO environment, and omit the password mount.
 
-- `KH_SSO_ENABLED=true`: start through `sso_app.py`.
-- `KH_DEMO_MODE=true`: start through `sso_app_demo.py`.
-- `INSTALL_LEGACY_GRAPHRAG=true`: install extra legacy GraphRAG dependencies during the `full` build.
+Supply-chain scope:
+
+- All Python dependencies come from `uv.lock`; Linux containers select the
+  hash-locked PyTorch 2.8.0 CPU artifact.
+- Legacy Microsoft GraphRAG is not preinstalled because its Tenacity requirement
+  conflicts with the locked MARA runtime. The local lightweight graph route is
+  unchanged.
+- Adobe PDF Services SDK 2.3.1 is not preinstalled because its urllib3 constraint
+  conflicts with Gradio. Select the built-in PDF reader instead.
+- `docling` and `unstructured[all-docs]` are not injected after lock resolution;
+  `full` provides LibreOffice and Tesseract without weakening `pip check`.
+- The Ollama target contains the pinned binary and libraries but no implicitly
+  mutable model. Pull an explicitly selected model into the mounted
+  `/var/lib/mara/ollama` directory after deployment.
+- Package and image publishing remains hard-frozen until the required security
+  gates and external credential rotation are complete.
+- Supply-chain policy, pins, locks, build definitions, and scanner exclusions
+  require a current-head approval from another owner, member, or invited
+  collaborator. This
+  intentional two-person control means a sole owner cannot approve their own PR;
+  the repository must add a second trusted reviewer before changing these files.
 
 ### CLI Usage
 
@@ -784,9 +821,9 @@ python app.py
 
 | Target   | 用途                                                           |
 | -------- | -------------------------------------------------------------- |
-| `lite`   | 基础 Web UI / DocQA 运行环境                                   |
-| `full`   | 额外包含 LibreOffice、Tesseract、`unstructured` 等文档处理依赖 |
-| `ollama` | 在 `full` 基础上安装 Ollama 并预拉取 `nomic-embed-text`        |
+| `lite`   | 使用锁定 CPU 依赖集的基础 Web UI / DocQA 运行环境              |
+| `full`   | 额外包含 LibreOffice、Tesseract 等系统级文档处理工具            |
+| `ollama` | 在 `full` 基础上加入固定版本 Ollama；构建时不拉取任何模型       |
 
 构建：
 
@@ -797,20 +834,48 @@ docker build --target full -t mara:full .
 运行：
 
 ```shell
+docker volume create mara-data
+MARA_SECRET_DIR="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/mara-secret.XXXXXX")"
+MARA_SECRET_FILE="$MARA_SECRET_DIR/admin-password"
+trap 'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"' EXIT
+install -m 0600 /dev/null "$MARA_SECRET_FILE"
+read -rsp 'MARA 管理员密码: ' MARA_ADMIN_PASSWORD
+printf '\n'
+printf '%s\n' "$MARA_ADMIN_PASSWORD" >"$MARA_SECRET_FILE"
+unset MARA_ADMIN_PASSWORD
+chmod 0444 "$MARA_SECRET_FILE"
 docker run \
-  -e GRADIO_SERVER_NAME=0.0.0.0 \
-  -e GRADIO_SERVER_PORT=7860 \
-  -v ./ktem_app_data:/app/ktem_app_data \
+  -e MARA_AUTH_MODE=password \
+  --mount type=bind,src="$MARA_SECRET_FILE",dst=/run/secrets/mara_admin_password,readonly \
+  --mount type=volume,src=mara-data,dst=/var/lib/mara \
   -p 7860:7860 \
   --rm -it \
   mara:full
 ```
 
-可选启动模式：
+镜像使用固定用户 `10001:10001`，`/var/lib/mara` 是唯一应用数据根目录。命名
+volume 会继承镜像目录的 ownership，因此首次初始化可写，同时源码仍保持只读。
+普通 bind secret 必须允许 UID 10001 读取；示例使用 `0444`，并把临时文件放在
+仓库和构建上下文之外。多用户主机优先使用 Docker/Kubernetes secret，将 UID
+设为 10001、mode 设为 `0440`；上例临时目录和文件会在 shell 退出时自动清理，
+`.dockerignore` 也会作为第二层防线排除常见 secret 文件名。SSO 部署应设置
+`MARA_AUTH_MODE=sso` 和对应 SSO 环境变量，并省略密码挂载。
 
-- `KH_SSO_ENABLED=true`：使用 `sso_app.py`。
-- `KH_DEMO_MODE=true`：使用 `sso_app_demo.py`。
-- `INSTALL_LEGACY_GRAPHRAG=true`：在 `full` 构建阶段安装额外 legacy GraphRAG 依赖。
+供应链范围：
+
+- 所有 Python 依赖来自 `uv.lock`；Linux 容器使用带哈希的 PyTorch 2.8.0 CPU 制品。
+- 旧 Microsoft GraphRAG 的 Tenacity 要求与当前锁冲突，因此容器不再预装；
+  MARA 的本地轻量图路由不受影响。
+- Adobe PDF Services SDK 2.3.1 的 urllib3 约束与 Gradio 冲突，因此容器不再预装；
+  请选择内置 PDF reader。
+- 不再在锁解析后注入 `docling` 或 `unstructured[all-docs]`；`full` 通过
+  LibreOffice 和 Tesseract 提供文档处理能力，同时保持 `pip check` 一致。
+- Ollama 镜像包含固定版本的二进制和库，但不隐式拉取可变模型；部署后请将
+  明确选择的模型拉取到挂载的 `/var/lib/mara/ollama`。
+- 在安全门禁完成并确认外部凭据轮换前，包和镜像发布继续保持硬冻结。
+- 供应链策略、固定版本、锁文件、构建定义和扫描器排除项必须由另一位仓库 owner、
+  member 或受邀 collaborator 对当前 PR head 批准。这是有意的双人控制；单一 owner 无法批准自己的
+  PR，修改这些文件前必须加入第二位可信 reviewer。
 
 ### CLI 使用
 

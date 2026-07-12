@@ -1,3 +1,4 @@
+import benchmark.system as system_module
 from benchmark.schemas import BenchmarkConfig, BenchmarkDocument, BenchmarkExample
 from benchmark.system import KotaemonTextRAGSystem, _evidence_metadata
 from kotaemon.base import Document, RetrievedDocument
@@ -84,6 +85,113 @@ def test_text_rag_system_bypasses_parse_cache_when_requested(monkeypatch, tmp_pa
     assert second.parse_cache_hit is False
     assert first.parse_cache_stats == {"hits": 0, "misses": 0, "writes": 0}
     assert second.parse_cache_stats == {"hits": 0, "misses": 0, "writes": 0}
+
+
+def test_text_rag_system_runs_multi_document_text_retrieval(monkeypatch, tmp_path):
+    first_path = tmp_path / "first.txt"
+    second_path = tmp_path / "second.txt"
+    first_path.write_text("alpha", encoding="utf-8")
+    second_path.write_text("beta", encoding="utf-8")
+    readers = {
+        first_path: _CountingReader(),
+        second_path: _CountingReader(),
+    }
+    system = KotaemonTextRAGSystem(
+        BenchmarkConfig(
+            suite_name="coverage",
+            output_dir=tmp_path / "out",
+            retrieval_mode="text",
+            use_generation=False,
+            cache_mode="warm",
+            top_k=2,
+        )
+    )
+    monkeypatch.setattr(system, "_get_reader", readers.__getitem__)
+    documents = [
+        BenchmarkDocument(document_id="doc-a", path=first_path, format_type="txt"),
+        BenchmarkDocument(document_id="doc-b", path=second_path, format_type="txt"),
+    ]
+    example = BenchmarkExample(
+        example_id="example-a",
+        document_id="doc-a",
+        question="Where is cached alpha text?",
+        answers=["cached alpha text"],
+        evidence_pages=["1"],
+    )
+
+    result = system.run_example_documents(documents, example)
+
+    assert result["example_id"] == "example-a"
+    assert result["predicted_answer"] == "cached alpha text"
+    assert result["predicted_pages"] == ["1", "1"]
+    assert result["predicted_sources"] == [
+        "first.txt#page:1",
+        "first.txt#page:1",
+    ]
+    assert result["performance"]["num_documents"] == 2
+    assert result["performance"]["num_chunks"] == 2
+    assert result["cache"]["parse"] == {"hits": 0, "misses": 2, "writes": 2}
+    assert [item["document_id"] for item in system.document_reports()] == [
+        "doc-a",
+        "doc-b",
+    ]
+    assert all(reader.calls == 1 for reader in readers.values())
+
+
+def test_text_rag_system_lexical_helpers_cover_empty_and_ranked_queries(tmp_path):
+    system = KotaemonTextRAGSystem(
+        BenchmarkConfig(
+            suite_name="coverage",
+            output_dir=tmp_path / "out",
+            retrieval_mode="text",
+            use_generation=False,
+            top_k=1,
+        )
+    )
+    documents = [
+        Document("alpha alpha beta", doc_id="one"),
+        Document("beta gamma", doc_id="two"),
+        Document("", doc_id="empty"),
+    ]
+
+    assert system._lexical_hits("", documents, 3) == []
+    assert system._lexical_hits("missing", documents, 3) == []
+    hits = system._lexical_hits("alpha beta", documents, 3)
+
+    assert [hit.doc_id for hit in hits] == ["one", "two"]
+    assert system._combine_hits("alpha beta", [], hits) == [hits[0]]
+
+
+def test_text_rag_system_selects_configured_pdf_reader_and_cold_cache(tmp_path):
+    expected_readers = {
+        "adobe": system_module.adobe_reader,
+        "azure-di": system_module.azure_reader,
+        "docling": system_module.docling_reader,
+    }
+
+    for reader_mode, expected_reader in expected_readers.items():
+        system = KotaemonTextRAGSystem(
+            BenchmarkConfig(
+                suite_name="reader coverage",
+                route="text route",
+                output_dir=tmp_path / "out",
+                retrieval_mode="text",
+                use_generation=False,
+                reader_mode=reader_mode,
+                cache_mode="cold",
+            )
+        )
+
+        assert system._get_reader(tmp_path / "document.pdf") is expected_reader
+        assert (
+            system._get_reader(tmp_path / "document.unknown")
+            is system_module.unstructured
+        )
+        cache_dir = system._embedding_cache_dir()
+        assert cache_dir is not None
+        assert cache_dir.name == "embedding"
+        assert cache_dir.parent.name.startswith("cold-")
+        assert cache_dir.parent.parent.name == "text-route"
 
 
 def test_text_rag_generation_uses_benchmark_prompt_not_user_template(

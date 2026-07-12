@@ -1,4 +1,3 @@
-import json
 import uuid
 from datetime import datetime
 from typing import Any, Optional, Type, cast
@@ -16,6 +15,7 @@ from tzlocal import get_localzone
 
 from kotaemon.storages import BaseDocumentStore, BaseVectorStore
 
+from ._selection import normalize_selected_values, owner_scope_required
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
 
 
@@ -507,54 +507,13 @@ class FileIndex(BaseIndex):
 
     @staticmethod
     def _normalize_selected_values(selected: Any) -> list[str]:
-        if selected in (None, ""):
-            return []
-
-        values = selected if isinstance(selected, (list, tuple, set)) else [selected]
-        normalized: list[str] = []
-        seen: set[str] = set()
-
-        for value in values:
-            if value in (None, ""):
-                continue
-            if isinstance(value, (list, tuple, set)):
-                nested = FileIndex._normalize_selected_values(list(value))
-                for item in nested:
-                    if item not in seen:
-                        seen.add(item)
-                        normalized.append(item)
-                continue
-            if isinstance(value, dict):
-                continue
-
-            item = str(value).strip()
-            if not item:
-                continue
-
-            if item.startswith("[") and item.endswith("]"):
-                try:
-                    decoded = json.loads(item)
-                except Exception:
-                    decoded = None
-                if isinstance(decoded, list):
-                    nested = FileIndex._normalize_selected_values(decoded)
-                    for nested_item in nested:
-                        if nested_item not in seen:
-                            seen.add(nested_item)
-                            normalized.append(nested_item)
-                    continue
-
-            if item not in seen:
-                seen.add(item)
-                normalized.append(item)
-
-        return normalized
+        return normalize_selected_values(selected)
 
     def list_source_rows(self, user_id: int | str | None) -> list[dict[str, Any]]:
         self._ensure_resources()
         source_table = cast(Any, self._resources["Source"])
         statement = select(source_table)
-        if self.config.get("private", False):
+        if owner_scope_required(self._app, self.config):
             statement = statement.where(source_table.user == user_id)
 
         rows: list[dict[str, Any]] = []
@@ -598,30 +557,40 @@ class FileIndex(BaseIndex):
         if isinstance(selected, list) and len(selected) == 0:
             return []
 
+        if isinstance(selected, (list, tuple)) and len(selected) >= 3:
+            mode = selected[0]
+            selected_value = selected[1]
+            if mode == "disabled":
+                return []
+            if mode == "select":
+                return self._scope_selected_ids(user_id, selected_value)
+            if mode == "all":
+                return self.list_source_ids(user_id)
+
         if self._selector_ui is not None:
             try:
                 resolved = self._selector_ui.get_selected_ids(selected)
             except Exception:
                 resolved = None
             if resolved is not None:
-                return self._normalize_selected_values(resolved)
-
-        if isinstance(selected, (list, tuple)) and len(selected) >= 3:
-            mode = selected[0]
-            selected_value = selected[1]
-            selected_user_id = selected[2]
-            if mode == "disabled":
-                return []
-            if mode == "select":
-                return self._normalize_selected_values(selected_value)
-            if mode == "all":
-                return self.list_source_ids(selected_user_id)
+                return self._scope_selected_ids(user_id, resolved)
 
         normalized = self._normalize_selected_values(selected)
         if normalized:
-            return normalized
+            return self._scope_selected_ids(user_id, normalized)
 
         return self.list_source_ids(user_id)
+
+    def _scope_selected_ids(
+        self,
+        user_id: int | str | None,
+        selected_ids: Any,
+    ) -> list[str]:
+        normalized = self._normalize_selected_values(selected_ids)
+        if not owner_scope_required(self._app, self.config):
+            return normalized
+        visible_ids = set(self.list_source_ids(user_id))
+        return [file_id for file_id in normalized if file_id in visible_ids]
 
     def get_retriever_pipelines_for_ids(
         self, settings: dict, user_id: int | str | None, selected_ids: Any = None

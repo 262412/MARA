@@ -32,7 +32,14 @@ def test_convert_note_to_source_update_indexes_note_and_refreshes_panel(
         failures=[],
         as_dict=lambda: {"successes": [{"source_id": "file-note-1"}], "failures": []},
     )
-    runtime = SimpleNamespace(index_paths=lambda _paths, reindex=False: index_result)
+    runtime = SimpleNamespace(
+        _resolve_user_id=lambda: "user-1",
+        index_paths=lambda _paths, reindex=False, user_id=None: index_result,
+    )
+    page = SimpleNamespace(
+        docqa=runtime,
+        _resolve_persist_user_id=lambda user_id, _request: user_id,
+    )
     with Session(engine) as session:
         session.add(conversation)
         session.commit()
@@ -40,7 +47,7 @@ def test_convert_note_to_source_update_indexes_note_and_refreshes_panel(
         conversation_id = conversation.id
 
     try:
-        html = convert_note_to_source_update(runtime, conversation_id, "note-1")
+        html = convert_note_to_source_update(page, conversation_id, "note-1")
 
         assert "1 selected" in html
         with Session(engine) as session:

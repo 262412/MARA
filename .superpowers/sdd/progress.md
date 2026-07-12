@@ -1,0 +1,28 @@
+# SDD Progress
+
+Branch base: `f72a9a3f609186eba6ff2f9153f0ae7cc43d1a24`
+
+Task 1: complete (commits f72a9a3..ac871c9, review clean; minor: real Docker/Trivy run awaits CI)
+Task 2: complete (commits ac871c9..d885636, review clean)
+Task 3A: complete (commits d885636..d7eee97, review clean; browser smoke deferred to Task 4/CI)
+Task 3B: complete (commits d7eee97..da60308, review clean; OS-specific TTY/Windows smoke remains a CI follow-up)
+Task 4: complete (commits da60308..dabef3c, three review rounds clean; full binary upload E2E remains Task 7/13)
+Task 5: complete (commits dabef3c..8b026c5, three review rounds clean; cross-process locking remains residual)
+Task 6: complete (commits 8b026c5..0f25fb3, two review rounds clean; 1488 collected and live runtime fingerprints unchanged)
+Task 7: complete (commits 0f25fb3..c256292, two review rounds; 1516 unified collection, 90.80% production diff coverage, required secret/history/image scan, release bases fail closed; publish remains frozen)
+Task 8A1: complete (commits c256292..49929b5, two review rounds; verified offline PDF.js materialization, full 406-file runtime integrity, ktem icons/help/legal artifacts; Docker build/scan remains Task 8B)
+Task 8A2: complete (commits 49929b5..4232760, two review rounds; four PEP 639 distributions, runtime-only extra, exact lock constraints, actual 8-artifact/twine validation, isolated polluted-env and cold offline clean-wheel smoke; NLTK first-index-import networking remains explicit residual for Task 8B/follow-up)
+Task 8B: complete (commits 4232760..688ea0a, independent review approved; immutable supply-chain pins, container/runtime policy, SBOM/provenance, 8 verified artifacts; external token rotation and real Docker/Trivy remain operator/CI actions)
+Task 9: complete (commits 688ea0a..b1112cc, integration review clean; canonical 42-field DocQA request contract and named policies)
+Task 10: complete (commits b1112cc..030af8a, integration review clean; named Gradio ports preserve tuple and event-chain ordering)
+Task 11: complete (commits 030af8a..0a2002f, integration review approved; runtime/FileIndex services extracted, identity scoping tightened, baseline ratcheted down; checkpoint codex/checkpoint-p3b-p4-task11)
+Task 12A: complete (commits 0a2002f..83e1c2a, three review rounds approved; typed source/Office preview core, bounded concurrency, cleanup, atomic cache, CFB/OOXML validation; report head 7217a94)
+Task 12B: complete (commits 7217a94..13ba62b, four review rounds approved; DOCX core decomposition, safe rendering, archive/image/HTML bounds, typed compat errors, same-handle validation; report head 13d20fc)
+Task 12C1: complete (commits 13d20fc..fc703ae, three review rounds approved; shared PDF/context/Office consumers, stable lazy bounded PDF cache, symlink-safe artifact publication, HMAC-attested canonical Office cache, bounded manifest reads; relevant 268 passed; no remaining Critical/Important)
+Task 12C2: complete (commits 5d46005..bfb6193, three review rounds approved; owner-scoped preview/KG/Studio boundary, exact Gradio Request injection, tampered State rejection, selector/persist intersection, DocQA empty-page/session identity, pre-auth graph cache ordering; focused 163 plus review gates 44 passed; notebook artifact authorization carried as blocking Task 12F item)
+Task 12E1: complete (commits e9f12e7..b1a4fc9, final spec/code-quality/security reviews approved; controller 99 passed, kotaemon 344 passed/8 skipped, hygiene and full hooks green; non-blocking load_kwargs/TTL/durability residuals recorded in report)
+Task 12E2: complete (commits 1af0422..ef216a7; cross-process shared Source.path lease, global refcount/quarantine/restore/purge, exact file-id artifact cleanup, deterministic upload/delete interleavings; focused 40, ktem 1150, kotaemon 346 passed/8 skipped; hygiene, lock, and full changed-file hooks green)
+Task 12F: complete (commits 840df56..f55170e; centralized owner/public Notebook SQL authorization, explicit user_id on every DB entry, request-principal Studio roots, side-effect-before-auth regressions, preserved Gradio ports/order; focused 88 and ktem 1172 passed; hygiene and changed-file hooks green)
+Task 12G: complete (commits d3e5d39..d8fcff8; shared request-principal/admin callback boundary for Settings, UserManagement, Resources visibility, and issue reports; forged State and unknown targets fail closed with neutral Gradio errors; focused 26 and ktem 1196 passed; hygiene and changed-file hooks green)
+Task 12D: complete with residuals (commits 32eaac8..0f02dc9; exact preview-source/iframe/file-serving boundary, signed PDF copies, inert PPTX links/images, active timer, generated hostile binary fixtures and focused real-Gradio Chromium harness; Node 18, focused Python 151, browser 8, ktem 1200 passed; six stale baseline entries removed and remaining preview allowances lowered; Gradio upload-root visibility plus two oversized preview classes recorded as residuals)
+Task 13: blocked at final acceptance (local collection 2094; package suites and floors green; Node 18/browser 8; full pre-commit/Ruff/hygiene/locks/package build/clean-wheel/attestations/npm audit green; diff coverage 86.76% < 90%; uv audit 319 root/321 docker findings with 292 fixable; Docker/Trivy/Gitleaks/Python 3.11 unavailable; release remains frozen; report head 1edc0bc)

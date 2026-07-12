@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
-from pathlib import Path
 from time import perf_counter
 from typing import Optional, Sequence, cast
 
 from theflow.settings import settings as flowsettings
 
+from kotaemon.artifact_namespace import write_chunk_artifacts
 from kotaemon.base import (
     BaseComponent,
     Document,
@@ -45,6 +45,7 @@ class VectorIndexing(BaseIndexing):
     doc_store: Optional[BaseDocumentStore] = None
     embedding: BaseEmbeddings
     count_: int = 0
+    artifact_count_namespace_: tuple[object, object] | None = None
     embedding_cache_dir: Optional[str] = getattr(
         flowsettings, "KH_EMBEDDING_CACHE_DIR", None
     )
@@ -63,39 +64,31 @@ class VectorIndexing(BaseIndexing):
             **kwargs,
         )
 
-    def write_chunk_to_file(self, docs: list[Document]):
+    def write_chunk_to_file(
+        self,
+        docs: list[Document],
+        file_id: object | None = None,
+        artifact_generation: object | None = None,
+    ):
         # save the chunks content into markdown format
+        if docs:
+            file_id = file_id or docs[0].metadata.get("file_id")
+            artifact_generation = artifact_generation or docs[0].metadata.get(
+                "artifact_generation"
+            )
+        namespace = (file_id, artifact_generation)
+        if getattr(self, "artifact_count_namespace_", None) != namespace:
+            self.count_ = 0
+            self.artifact_count_namespace_ = namespace
         if self.cache_dir:
-            file_name = docs[0].metadata.get("file_name")
-            if not file_name:
-                return
-
-            file_name = Path(file_name)
-            for i in range(len(docs)):
-                markdown_content = ""
-                if "page_label" in docs[i].metadata:
-                    page_label = str(docs[i].metadata["page_label"])
-                    markdown_content += f"Page label: {page_label}"
-                if "file_name" in docs[i].metadata:
-                    filename = docs[i].metadata["file_name"]
-                    markdown_content += f"\nFile name: {filename}"
-                if "section" in docs[i].metadata:
-                    section = docs[i].metadata["section"]
-                    markdown_content += f"\nSection: {section}"
-                if "type" in docs[i].metadata:
-                    if docs[i].metadata["type"] == "image":
-                        image_origin = docs[i].metadata["image_origin"]
-                        image_origin = f'<p><img src="{image_origin}"></p>'
-                        markdown_content += f"\nImage origin: {image_origin}"
-                if docs[i].text:
-                    markdown_content += f"\ntext:\n{docs[i].text}"
-
-                with open(
-                    Path(self.cache_dir) / f"{file_name.stem}_{self.count_+i}.md",
-                    "w",
-                    encoding="utf-8",
-                ) as f:
-                    f.write(markdown_content)
+            write_chunk_artifacts(
+                self.cache_dir,
+                docs,
+                self.count_,
+                file_id=file_id,
+                artifact_generation=artifact_generation,
+            )
+        self.count_ += len(docs)
 
     def add_to_docstore(self, docs: list[Document]):
         if self.doc_store:
@@ -238,7 +231,6 @@ class VectorIndexing(BaseIndexing):
             tracker.finish("refresh", count=1 if self.vector_store else 0)
 
             self.write_chunk_to_file(input_)
-            self.count_ += len(input_)
         except Exception as exc:
             for stage_name, stage in tracker.stages.items():
                 if stage.status == "running":

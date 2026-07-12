@@ -216,3 +216,32 @@ def test_public_support_group_help_contracts(monkeypatch):
         assert result.exit_code == 0, result.output
         assert summary in result.output
         assert _listed_commands(result.output) == commands
+
+
+def test_mara_aliases_expose_identical_app_init_auth_help(monkeypatch):
+    _install_trogon_stub(monkeypatch)
+    runner = CliRunner()
+
+    mara_result = runner.invoke(
+        main,
+        ["app", "init", "--help"],
+        prog_name="MARA",
+        terminal_width=300,
+    )
+    alias_result = runner.invoke(
+        main,
+        ["app", "init", "--help"],
+        prog_name="MARA-cli",
+        terminal_width=300,
+    )
+
+    assert mara_result.exit_code == 0, mara_result.output
+    assert alias_result.exit_code == 0, alias_result.output
+    assert mara_result.output.replace("MARA ", "MARA-cli ", 1) == alias_result.output
+    for option in [
+        "--auth-mode [auto|local|password|sso]",
+        "--admin-user TEXT",
+    ]:
+        assert option in mara_result.output
+        assert option in alias_result.output
+    assert "--admin-password" not in mara_result.output + alias_result.output

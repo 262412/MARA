@@ -54,7 +54,7 @@ def detect_office_extension(file_name: str, file_path: str) -> str:
                     return ".pptx"
                 if "xl/workbook.xml" in names:
                     return ".xlsx"
-        except Exception:
+        except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile):
             pass
 
         try:
@@ -63,7 +63,7 @@ def detect_office_extension(file_name: str, file_path: str) -> str:
             if header.startswith(b"\xD0\xCF\x11\xE0"):
                 # Legacy binary Office container (doc/ppt/xls).
                 return ".doc"
-        except Exception:
+        except OSError:
             pass
 
     return ""

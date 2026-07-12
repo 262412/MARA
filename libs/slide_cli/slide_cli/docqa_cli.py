@@ -137,9 +137,21 @@ def _resolve_cli_active_file(runtime, active_file_ref):
 
 
 def _run_docqa_turn(runtime, **request_kwargs):
-    request_kwargs["qa_scope"] = str(request_kwargs.get("qa_scope") or "auto").replace(
-        "-", "_"
+    from kotaemon.docqa_request_policies import MARA_CLI_REQUEST_POLICY
+
+    policy = MARA_CLI_REQUEST_POLICY
+    request_kwargs["qa_scope"] = str(
+        request_kwargs.get("qa_scope") or policy.qa_scope_default
+    ).replace("-", "_")
+    request_kwargs.setdefault("page_number", policy.page_number_default)
+    request_kwargs.setdefault("controller_mode", policy.controller_mode_default)
+    request_kwargs.setdefault("route_policy", policy.route_policy_default)
+    request_kwargs.setdefault("verification_mode", policy.verification_mode_default)
+    request_kwargs.setdefault(
+        "allowed_routes", list(policy.allowed_routes_default or ())
     )
+    request_kwargs.setdefault("max_context_length", policy.max_context_length_default)
+    request_kwargs.setdefault("origin", policy.origin)
     request = _create_docqa_request(**request_kwargs)
     return runtime.run_turn(to_runtime_docqa_request(request))
 
@@ -152,9 +164,11 @@ def _run_docqa_ask_turn(runtime, options):
         runtime,
         prompt=options["prompt"],
         conversation_id=options["conversation"] or "",
-        selected_file_ids=[record.file_id for record in selected_records]
-        if options["file_refs"]
-        else None,
+        selected_file_ids=(
+            [record.file_id for record in selected_records]
+            if options["file_refs"]
+            else None
+        ),
         active_file_id=active_record.file_id if active_record else "",
         active_file_name=active_record.name if active_record else "",
         qa_scope=options["qa_scope"],
@@ -497,7 +511,12 @@ def docqa_files(json_output):
 )
 def docqa_delete(refs, json_output):
     runtime = create_docqa_runtime()
-    deleted = runtime.delete_files(list(refs))
+    from ktem.index.file.deletion import DeletionError
+
+    try:
+        deleted = runtime.delete_files(list(refs))
+    except DeletionError as exc:
+        raise click.ClickException(str(exc)) from exc
 
     if json_output:
         _echo_payload_json([record.as_dict() for record in deleted])

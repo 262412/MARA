@@ -1,67 +1,10 @@
-name: unit-test
+name: Legacy unit-test entry point
 
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-env:
-  THEFLOW_TEMP_PATH: ./tmp
+"on":
+  workflow_dispatch:
 
 jobs:
-  unit-test:
-    # if: false # temporary disable this job due to legacy interface
-    #TODO: enable this job after the new interface is ready
-    if: ${{ !cancelled() }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    defaults:
-      run:
-        shell: ${{ matrix.shell }}
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11"]
-        include:
-          - os: ubuntu-latest
-            shell: bash
-            ACTIVATE_ENV: ". env/bin/activate"
-            GITHUB_OUTPUT: "$GITHUB_OUTPUT"
-          # - os: windows-latest
-          #   shell: pwsh
-          #   ACTIVATE_ENV: env/Scripts/activate.ps1
-          #   GITHUB_OUTPUT: "$env:GITHUB_OUTPUT"
-
-    name: unit testing with python ${{ matrix.python-version }}
-    steps:
-      - name: Clone the repo
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }} on ${{ runner.os }}
-        uses: actions/setup-python@v4
-        id: setup_python
-        with:
-          python-version: ${{ matrix.python-version }}
-          architecture: x64
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
-
-      - name: Install additional dependencies (if any)
-        run: |
-          uv sync --frozen --no-cache
-
-      - name: Install OS-based packages
-        run: |
-          sudo apt update -qqy
-          sudo apt install -y poppler-utils libpoppler-dev tesseract-ocr
-
-      - name: Test kotaemon with pytest
-        run: |
-          source .venv/bin/activate
-          uv pip show pytest
-          cd libs/kotaemon
-          pytest
+  quality:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/quality-gates.yaml

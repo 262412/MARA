@@ -33,6 +33,14 @@ from .multimodal_index import (
     element_records_from_documents,
     page_image_records_from_documents,
 )
+from .request_policies import (
+    BENCHMARK_REQUEST_POLICY,
+    DOCQA_REQUEST_POLICIES,
+    LEGACY_CLI_REQUEST_POLICY,
+    MARA_CLI_REQUEST_POLICY,
+    WEB_REQUEST_POLICY,
+    DocQARequestPolicy,
+)
 from .runtime import (
     DocQADoctorResult,
     DocQAFileRecord,
@@ -56,6 +64,12 @@ __all__ = [
     "DocQASession",
     "DocQASessionSummary",
     "DocQATurnUpdate",
+    "DocQARequestPolicy",
+    "DOCQA_REQUEST_POLICIES",
+    "WEB_REQUEST_POLICY",
+    "MARA_CLI_REQUEST_POLICY",
+    "LEGACY_CLI_REQUEST_POLICY",
+    "BENCHMARK_REQUEST_POLICY",
     "RouteDecision",
     "RetrieveDecision",
     "EvidenceBundle",

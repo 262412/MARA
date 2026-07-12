@@ -198,7 +198,7 @@ class FullQAPipeline(BaseReasoning):
     def prepare_mindmap(self, answer) -> Document | None:
         mindmap = answer.metadata["mindmap"]
         if mindmap:
-            mindmap_text = mindmap.text
+            mindmap_text = Render.escape_text(mindmap.text, quote=False)
             mindmap_svg = dedent(
                 """
                 <div class="markmap">
@@ -223,15 +223,15 @@ class FullQAPipeline(BaseReasoning):
 
             mindmap_content = Document(
                 channel="info",
-                content=Render.collapsible(
-                    header="""
+                content=(
+                    "<details class='evidence' open><summary>"
+                    """
                     <i>Mindmap</i>
                     <a href="#" id='mindmap-toggle'>
                         [Expand]</a>
                     <a href="#" id='mindmap-export'>
-                        [Export]</a>""",
-                    content=mindmap_svg,
-                    open=True,
+                        [Export]</a>"""
+                    f"</summary>{mindmap_svg}</details><br>"
                 ),
             )
         else:

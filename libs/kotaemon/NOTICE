@@ -1,0 +1,11 @@
+MARA kotaemon core distribution
+
+This distribution is a modified and branded fork of Cinnamon/kotaemon:
+https://github.com/Cinnamon/kotaemon
+
+The upstream project and this fork are distributed under the Apache License,
+Version 2.0.
+
+MARA also distributes the official Mozilla PDF.js v6.1.200 compressed runtime
+from https://github.com/mozilla/pdf.js through the companion ktem package.
+PDF.js is licensed under the Apache License, Version 2.0.

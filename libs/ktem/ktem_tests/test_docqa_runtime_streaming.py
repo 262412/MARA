@@ -110,11 +110,12 @@ def _make_runtime():
 
 
 def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch):
+    saved_metadata = []
     monkeypatch.setattr(runtime_module, "reasonings", {"mara": _StreamingMaraReasoning})
     monkeypatch.setattr(
         runtime_module._nb,
         "save_captured_artifact",
-        lambda _conversation_id, _artifact, **_metadata: None,
+        lambda _conversation_id, _artifact, **metadata: saved_metadata.append(metadata),
     )
 
     runtime = _make_runtime()
@@ -128,6 +129,7 @@ def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch)
     )
 
     event_updates = [update for update in updates if not update.is_final]
+    assert saved_metadata[0]["user_id"] == "user-1"
     assert [update.event["channel"] for update in event_updates] == [
         "debug",
         "chat",

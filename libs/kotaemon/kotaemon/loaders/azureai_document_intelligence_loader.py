@@ -6,6 +6,8 @@ from typing import Optional
 
 from PIL import Image
 
+from kotaemon.artifact_cache import ArtifactDocuments
+from kotaemon.artifact_namespace import write_markdown_artifact
 from kotaemon.base import Document, Param
 
 from .base import BaseReader
@@ -64,6 +66,7 @@ class AzureAIDocumentIntelligenceLoader(BaseReader):
     """
 
     _dependencies = ["azure-ai-documentintelligence", "PyMuPDF", "Pillow"]
+    artifact_cache_version = 1
 
     endpoint: str = Param(
         os.environ.get("AZUREAI_DOCUMENT_INTELLIGENT_ENDPOINT", None),
@@ -230,11 +233,8 @@ class AzureAIDocumentIntelligenceLoader(BaseReader):
             )
             removed_spans += table_desc["spans"]
         # save the text content into markdown format
-        if self.cache_dir is not None:
-            with open(
-                Path(self.cache_dir) / f"{file_name.stem}.md", "w", encoding="utf-8"
-            ) as f:
-                f.write(text_content)
+        write_markdown_artifact(self.cache_dir, file_name, metadata, text_content)
+        artifact_content = text_content
 
         removed_spans = sorted(removed_spans, key=lambda x: x["offset"], reverse=True)
         for span in removed_spans:
@@ -243,7 +243,29 @@ class AzureAIDocumentIntelligenceLoader(BaseReader):
                 + text_content[span["offset"] + span["length"] :]
             )
 
-        return [Document(content=text_content, metadata=metadata)] + figures + tables
+        return ArtifactDocuments(
+            [Document(content=text_content, metadata=metadata)] + figures + tables,
+            artifact_sidecar={"markdown": artifact_content},
+        )
+
+    def write_cached_artifact(
+        self,
+        file_path: Path,
+        *,
+        extra_info: Optional[dict],
+        documents: list[Document],
+        artifact_sidecar: dict,
+    ) -> None:
+        del documents
+        content = artifact_sidecar.get("markdown")
+        if not isinstance(content, str):
+            raise ValueError("Azure parse-cache artifact sidecar is invalid")
+        write_markdown_artifact(
+            self.cache_dir,
+            file_path,
+            extra_info or {},
+            content,
+        )
 
     def _analyze_document(self, file_path: Path):
         with open(file_path, "rb") as fi:

@@ -1,16 +1,74 @@
 import importlib
+import json
+import subprocess
 import sys
 
 
-def test_docqa_preview_modules_do_not_import_pypdf_on_import(monkeypatch):
-    monkeypatch.delitem(sys.modules, "pypdf", raising=False)
-    monkeypatch.delitem(sys.modules, "ktem.docqa._runtime_app", raising=False)
-    monkeypatch.delitem(sys.modules, "ktem.docqa.preview_support", raising=False)
+def _run_import_probe(source: str) -> dict:
+    completed = subprocess.run(
+        [sys.executable, "-c", source],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(completed.stdout.strip().splitlines()[-1])
 
-    importlib.import_module("ktem.docqa._runtime_app")
-    importlib.import_module("ktem.docqa.preview_support")
 
-    assert "pypdf" not in sys.modules
+def test_preview_package_cold_import_defers_pdf_stack_and_exports():
+    result = _run_import_probe(
+        """
+import json
+import sys
+import ktem.preview as preview
+before = {
+    "pypdf": "pypdf" in sys.modules,
+    "pdf": "ktem.preview.pdf" in sys.modules,
+    "office": "ktem.preview.office" in sys.modules,
+    "service": "ktem.preview.service" in sys.modules,
+}
+_ = preview.PdfService
+after = {
+    "pypdf": "pypdf" in sys.modules,
+    "pdf": "ktem.preview.pdf" in sys.modules,
+}
+print(json.dumps({"before": before, "after": after}))
+"""
+    )
+
+    assert result["before"] == {
+        "pypdf": False,
+        "pdf": False,
+        "office": False,
+        "service": False,
+    }
+    assert result["after"] == {"pypdf": False, "pdf": True}
+
+
+def test_docqa_preview_modules_remain_lazy_after_clearing_whole_family():
+    result = _run_import_probe(
+        """
+import json
+import sys
+import ktem.preview
+for name in list(sys.modules):
+    if (
+        name == "pypdf"
+        or name.startswith("pypdf.")
+        or name == "ktem.preview"
+        or name.startswith("ktem.preview.")
+        or name in {"ktem.docqa._runtime_app", "ktem.docqa.preview_support"}
+    ):
+        sys.modules.pop(name, None)
+import ktem.docqa._runtime_app
+import ktem.docqa.preview_support
+print(json.dumps({
+    "pypdf": "pypdf" in sys.modules,
+    "pdf": "ktem.preview.pdf" in sys.modules,
+}))
+"""
+    )
+
+    assert result == {"pypdf": False, "pdf": False}
 
 
 def test_model_managers_start_lazy(monkeypatch):

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from functools import partial
 from typing import Any
 
 import gradio as gr
 
+from .studio_callback_identity import bind_page_callback
 from .studio_note_actions import (
     convert_note_to_source_update,
     save_latest_answer_note_update,
@@ -63,7 +63,7 @@ def render_studio_note_controls(page: Any) -> None:
 
 def bind_studio_note_events(page: Any) -> None:
     page.studio_save_answer_note_button.click(
-        save_latest_answer_note_update,
+        bind_page_callback(save_latest_answer_note_update, page),
         inputs=[
             page.chat_control.conversation_id,
             page.chat_panel.chatbot,
@@ -73,13 +73,13 @@ def bind_studio_note_events(page: Any) -> None:
         show_progress="hidden",
     )
     page.studio_save_note_button.click(
-        save_latest_artifact_note_update,
+        bind_page_callback(save_latest_artifact_note_update, page),
         inputs=[page.chat_control.conversation_id],
         outputs=[page.notebook_panel],
         show_progress="hidden",
     )
     page.studio_save_manual_note_button.click(
-        save_manual_note_update,
+        bind_page_callback(save_manual_note_update, page),
         inputs=[
             page.chat_control.conversation_id,
             page.studio_manual_note_title,
@@ -89,7 +89,7 @@ def bind_studio_note_events(page: Any) -> None:
         show_progress="hidden",
     )
     page.studio_convert_note_source_button.click(
-        partial(convert_note_to_source_update, page.docqa),
+        bind_page_callback(convert_note_to_source_update, page),
         inputs=[page.chat_control.conversation_id, page.studio_convert_note_id],
         outputs=[page.notebook_panel],
         show_progress="hidden",

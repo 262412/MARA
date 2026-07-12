@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import logging
-from functools import partial
-from typing import Any
+from typing import Any, cast
 
 import gradio as gr
 
@@ -33,9 +32,15 @@ from .studio_artifacts import (
     delete_latest_artifact_update,
     export_latest_artifact_update,
 )
+from .studio_callback_identity import (
+    DIRECT_CALL_REQUEST,
+    bind_page_callback,
+    resolve_page_user_id,
+)
 from .studio_note_controls import bind_studio_note_events
 
 LOGGER = logging.getLogger(__name__)
+_DIRECT_CALL_REQUEST = cast(gr.Request, object())
 
 
 def bind_studio_artifact_events(page: Any) -> None:
@@ -63,31 +68,31 @@ def bind_studio_artifact_events(page: Any) -> None:
         ],
         show_progress="hidden",
     ).then(
-        partial(generate_studio_artifact_panel_update, page),
+        bind_page_callback(generate_studio_artifact_panel_update, page),
         inputs=studio_generate_inputs(page),
         outputs=studio_generate_outputs(page),
         show_progress="minimal",
     )
     bind_studio_note_events(page)
     page.studio_delete_artifact_button.click(
-        delete_latest_artifact_update,
+        bind_page_callback(delete_latest_artifact_root, page),
         inputs=[page.chat_control.conversation_id],
         outputs=[page.notebook_panel],
         show_progress="hidden",
     )
     page.studio_export_artifact_button.click(
-        export_latest_artifact_update,
+        bind_page_callback(export_latest_artifact_root, page),
         inputs=[page.chat_control.conversation_id, page.studio_export_format],
         outputs=[page.notebook_panel],
         show_progress="hidden",
     )
     page.studio_regenerate_artifact_button.click(
-        render_studio_artifact_regenerating_update,
+        bind_page_callback(render_studio_artifact_regenerating_root, page),
         inputs=[page.chat_control.conversation_id],
         outputs=[page.reasoning_trace_panel, page.plot_panel],
         show_progress="hidden",
     ).then(
-        partial(regenerate_latest_studio_artifact_panel_update, page),
+        bind_page_callback(regenerate_latest_studio_artifact_panel_update, page),
         inputs=studio_regenerate_inputs(page),
         outputs=studio_generate_outputs(page),
         show_progress="minimal",
@@ -103,6 +108,41 @@ def update_studio_artifact_dependent_parameters(
         output_format,
     )
     return gr.update(**prompt_update), gr.update(**explanation_update)
+
+
+def render_studio_artifact_regenerating_root(
+    page: Any,
+    conversation_id: str,
+    request: gr.Request = DIRECT_CALL_REQUEST,
+) -> tuple[Any, Any]:
+    user_id = resolve_page_user_id(page, request)
+    return render_studio_artifact_regenerating_update(
+        conversation_id,
+        user_id=user_id,
+    )
+
+
+def delete_latest_artifact_root(
+    page: Any,
+    conversation_id: str | None,
+    request: gr.Request = DIRECT_CALL_REQUEST,
+) -> str:
+    user_id = resolve_page_user_id(page, request)
+    return delete_latest_artifact_update(conversation_id, user_id=user_id)
+
+
+def export_latest_artifact_root(
+    page: Any,
+    conversation_id: str | None,
+    export_format: str = "md",
+    request: gr.Request = DIRECT_CALL_REQUEST,
+) -> str:
+    user_id = resolve_page_user_id(page, request)
+    return export_latest_artifact_update(
+        conversation_id,
+        export_format,
+        user_id=user_id,
+    )
 
 
 def studio_generate_inputs(page: Any) -> list[Any]:
@@ -204,8 +244,13 @@ def generate_studio_artifact_panel_update(
     verification_mode: str,
     planner_model: str,
     note_ids: str = "",
+    request: gr.Request = _DIRECT_CALL_REQUEST,
     *selecteds: Any,
 ):
+    if not _is_request_value(request):
+        selecteds = (request, *selecteds)
+        request = _DIRECT_CALL_REQUEST
+    user_id = page._resolve_persist_user_id(user_id, request)
     values = locals()
     if not str(conversation_id or "").strip():
         return failed_generation_studio_artifact_outputs(
@@ -242,6 +287,7 @@ def generate_studio_artifact_panel_update(
         fallback_conversation_id=conversation_id,
         fallback_active_file_id=active_file_id,
         fallback_page_number=page_number,
+        user_id=user_id,
     )
 
 
@@ -282,6 +328,7 @@ def _generation_turn_kwargs(values: dict[str, Any]) -> dict[str, Any]:
 def _generation_failure_kwargs(values: dict[str, Any], error: str) -> dict[str, Any]:
     keys = [
         "conversation_id",
+        "user_id",
         "artifact_type",
         "prompt",
         "qa_scope",
@@ -325,11 +372,16 @@ def regenerate_latest_studio_artifact_panel_update(
     verification_mode: str,
     planner_model: str,
     graph_source_ids: list[str],
+    request: gr.Request = _DIRECT_CALL_REQUEST,
     *selecteds: Any,
 ):
+    if not _is_request_value(request):
+        selecteds = (request, *selecteds)
+        request = _DIRECT_CALL_REQUEST
+    user_id = page._resolve_persist_user_id(user_id, request)
     if not str(conversation_id or "").strip():
         raise ValueError("Select a conversation before regenerating artifacts.")
-    artifact = _latest_notebook_artifact(conversation_id)
+    artifact = _latest_notebook_artifact(conversation_id, user_id=user_id)
     if artifact is None:
         raise ValueError("No saved Studio artifact to regenerate.")
     try:
@@ -360,15 +412,7 @@ def regenerate_latest_studio_artifact_panel_update(
         )
     except Exception as exc:
         LOGGER.exception("Studio artifact regeneration failed")
-        return failed_regeneration_studio_artifact_outputs(
-            page,
-            conversation_id=conversation_id,
-            artifact=artifact,
-            active_file_id=active_file_id,
-            error=str(exc),
-            chat_history=chat_history,
-            chat_state=chat_state,
-        )
+        return _failed_regeneration_outputs(page, locals(), artifact, exc)
     return generation_panel_outputs(
         page,
         response,
@@ -376,6 +420,25 @@ def regenerate_latest_studio_artifact_panel_update(
         fallback_conversation_id=conversation_id,
         fallback_active_file_id=active_file_id,
         fallback_page_number=1,
+        user_id=user_id,
+    )
+
+
+def _failed_regeneration_outputs(
+    page: Any,
+    values: dict[str, Any],
+    artifact: dict[str, Any],
+    error: Exception,
+) -> tuple[Any, ...]:
+    return failed_regeneration_studio_artifact_outputs(
+        page,
+        conversation_id=values["conversation_id"],
+        user_id=values["user_id"],
+        artifact=artifact,
+        active_file_id=values["active_file_id"],
+        error=str(error),
+        chat_history=values["chat_history"],
+        chat_state=values["chat_state"],
     )
 
 
@@ -494,4 +557,13 @@ def _run_regeneration_turn(
         route_policy=route_policy,
         verification_mode=verification_mode,
         planner_model=planner_model,
+    )
+
+
+def _is_request_value(value: Any) -> bool:
+    return bool(
+        value is _DIRECT_CALL_REQUEST
+        or isinstance(value, gr.Request)
+        or hasattr(value, "username")
+        or hasattr(value, "session_hash")
     )
