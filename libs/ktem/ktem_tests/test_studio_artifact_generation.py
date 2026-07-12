@@ -120,10 +120,10 @@ def test_regenerating_update_without_conversation_uses_running_placeholder(
 ):
     monkeypatch.setattr(
         "ktem.pages.chat.studio_artifact_controls._latest_notebook_artifact",
-        lambda _conversation_id: (_ for _ in ()).throw(AssertionError()),
+        lambda _conversation_id, *, user_id: (_ for _ in ()).throw(AssertionError()),
     )
 
-    html, plot_update = render_studio_artifact_regenerating_update("")
+    html, plot_update = render_studio_artifact_regenerating_update("", user_id="user-1")
 
     assert "studio-artifacts-card--running" in html
     assert "Study Guide" in html
@@ -217,7 +217,7 @@ def test_run_studio_artifact_turn_uses_selected_notebook_notes(monkeypatch):
     runtime = _Runtime()
     monkeypatch.setattr(
         "ktem.pages.chat.studio_artifact_generation._notebook_note_records",
-        lambda _conversation_id, _note_ids: [
+        lambda _conversation_id, _note_ids, _user_id: [
             {
                 "note_id": "note-1",
                 "title": "Manual note",
@@ -491,6 +491,7 @@ def test_save_failed_studio_artifact_persists_failed_metadata():
     try:
         artifact = save_failed_studio_artifact(
             conversation_id=conversation_id,
+            user_id="user-1",
             artifact_type="quiz",
             prompt="Generate a quiz.",
             qa_scope="page",
@@ -499,7 +500,7 @@ def test_save_failed_studio_artifact_persists_failed_metadata():
             note_ids=["note-1"],
             error="artifact adapter down",
         )
-        notebook = get_notebook(conversation_id)
+        notebook = get_notebook(conversation_id, user_id="user-1")
 
         assert artifact["status"] == "failed"
         assert artifact["generation"]["error"] == "artifact adapter down"
@@ -525,7 +526,7 @@ def test_regenerate_latest_studio_artifact_panel_update_uses_latest_artifact(
     page.expected_artifact_payload = {"type": "quiz"}
     monkeypatch.setattr(
         "ktem.pages.chat.studio_artifact_controls._latest_notebook_artifact",
-        lambda _conversation_id: {
+        lambda _conversation_id, *, user_id: {
             "type": "quiz",
             "prompt": "Original quiz prompt.",
             "source_scope": {"mode": "document", "source_ids": ["file-1"]},

@@ -60,9 +60,10 @@ from .source_scope import (
 )
 from .studio_artifact_controls import bind_studio_artifact_events
 from .studio_artifacts import (
-    render_conversation_notebook_update,
+    render_conversation_notebook_root,
     render_studio_trace_panel,
 )
+from .studio_callback_identity import bind_page_callback
 
 KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
@@ -1552,7 +1553,7 @@ class ChatPage(BasePage):
             pdfview_js=pdfview_js,
         )
         self.chat_control.conversation_id.change(
-            render_conversation_notebook_update,
+            bind_page_callback(render_conversation_notebook_root, self),
             [self.chat_control.conversation_id],
             [self.plot_panel, self.notebook_panel],
         )

@@ -12,10 +12,10 @@ from ktem.pages.chat.knowledge_graph_service import (
     GlobalKnowledgeGraphService as WebKnowledgeGraphService,
 )
 from ktem.pages.chat.studio_artifact_controls import (
-    _bind_page_callback,
     generate_studio_artifact_panel_update,
 )
 from ktem.pages.chat.studio_artifact_mindmap import _build_graph_view
+from ktem.pages.chat.studio_callback_identity import bind_page_callback
 from sqlalchemy import Column, DateTime, Integer, String, create_engine
 from sqlalchemy.orm import Session, declarative_base
 
@@ -250,7 +250,7 @@ def test_studio_mindmap_passes_resolved_user_to_strict_graph_boundary():
 
 
 def test_studio_root_receives_request_before_variable_selector_tail():
-    callback = _bind_page_callback(generate_studio_artifact_panel_update, object())
+    callback = bind_page_callback(generate_studio_artifact_panel_update, object())
     component_inputs = [
         "mindmap",
         "Build a map.",

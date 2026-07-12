@@ -9,7 +9,10 @@ import pytest
 from gradio.helpers import special_args
 from ktem.db.models import Conversation, engine
 from ktem.docqa import _runtime_notebook as notebook
-from ktem.pages.chat.studio_artifacts import export_latest_artifact_update
+from ktem.pages.chat.studio_artifacts import (
+    export_latest_artifact_update,
+    render_conversation_notebook_panel_html,
+)
 from ktem.pages.chat.studio_callback_identity import bind_page_callback
 from ktem.pages.chat.studio_note_actions import (
     convert_note_to_source_update,
@@ -137,3 +140,25 @@ def test_denied_export_precedes_output_file_creation(private_notebook, tmp_path)
 
     assert not list(tmp_path.rglob("*"))
     assert _data_source(private_notebook) == before
+
+
+def test_public_render_is_explicit_and_private_render_is_neutral(private_notebook):
+    hidden = render_conversation_notebook_panel_html(
+        private_notebook,
+        user_id="reader",
+    )
+    assert "owner only" not in hidden
+
+    with Session(engine) as session:
+        row = session.exec(
+            select(Conversation).where(Conversation.id == private_notebook)
+        ).one()
+        row.is_public = True
+        session.add(row)
+        session.commit()
+
+    visible = render_conversation_notebook_panel_html(
+        private_notebook,
+        user_id="reader",
+    )
+    assert "Private note" in visible

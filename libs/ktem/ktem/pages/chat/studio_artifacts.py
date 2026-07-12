@@ -4,9 +4,11 @@ import html
 from pathlib import Path
 from typing import Any
 
+import gradio as gr
 from ktem.docqa.artifact_models import ARTIFACT_LABELS
 
 from . import studio_artifact_results as _artifact_results
+from .studio_callback_identity import DIRECT_CALL_REQUEST, resolve_page_user_id
 
 _ARTIFACT_LABELS = ARTIFACT_LABELS
 _ROUTE_LABELS = {
@@ -39,10 +41,13 @@ def render_studio_artifacts_html(artifact: dict[str, Any] | None = None) -> str:
 def render_conversation_studio_results_html(
     conversation_id: str | None,
     fallback_artifact: dict[str, Any] | None = None,
+    *,
+    user_id: Any,
 ) -> str:
     return _artifact_results.render_conversation_studio_results_html(
         conversation_id,
         fallback_artifact,
+        user_id=user_id,
     )
 
 
@@ -78,42 +83,62 @@ def render_notebook_panel_html(notebook: dict[str, Any] | None = None) -> str:
     )
 
 
-def render_conversation_notebook_panel_html(conversation_id: str | None) -> str:
+def render_conversation_notebook_panel_html(
+    conversation_id: str | None,
+    *,
+    user_id: Any,
+    allow_public: bool = True,
+) -> str:
     conversation_id = str(conversation_id or "").strip()
     if not conversation_id:
         return render_notebook_panel_html()
-    from ktem.db.models import Conversation, engine
-    from ktem.docqa._runtime_notebook import NOTEBOOK_KEY
-    from sqlmodel import Session, select
+    from ktem.docqa import _runtime_notebook as notebook_service
 
-    with Session(engine) as session:
-        row = session.exec(
-            select(Conversation).where(Conversation.id == conversation_id)
-        ).one_or_none()
-    if row is None:
+    try:
+        notebook = notebook_service.get_notebook(
+            conversation_id,
+            user_id=user_id,
+            allow_public=allow_public,
+        )
+    except notebook_service.NotebookAccessError:
         return render_notebook_panel_html()
-    data_source = row.data_source if isinstance(row.data_source, dict) else {}
-    notebook = data_source.get(NOTEBOOK_KEY, {})
-    return render_notebook_panel_html(notebook if isinstance(notebook, dict) else {})
+    return render_notebook_panel_html(notebook)
 
 
-def render_conversation_notebook_update(conversation_id: str | None):
+def render_conversation_notebook_update(
+    conversation_id: str | None,
+    *,
+    user_id: Any,
+):
     import gradio as gr
 
     return (
         gr.update(visible=False),
-        render_conversation_notebook_panel_html(conversation_id),
+        render_conversation_notebook_panel_html(conversation_id, user_id=user_id),
     )
 
 
-def delete_latest_artifact_update(conversation_id: str | None) -> str:
+def render_conversation_notebook_root(
+    page: Any,
+    conversation_id: str | None,
+    request: gr.Request = DIRECT_CALL_REQUEST,
+):
+    user_id = resolve_page_user_id(page, request)
+    return render_conversation_notebook_update(conversation_id, user_id=user_id)
+
+
+def delete_latest_artifact_update(
+    conversation_id: str | None,
+    *,
+    user_id: Any,
+) -> str:
     conversation_id = str(conversation_id or "").strip()
     if not conversation_id:
         return render_notebook_panel_html()
 
     from ktem.docqa import _runtime_notebook as notebook_service
 
-    notebook = notebook_service.get_notebook(conversation_id)
+    notebook = notebook_service.get_notebook(conversation_id, user_id=user_id)
     artifacts = [
         item for item in notebook.get("artifacts", []) if isinstance(item, dict)
     ]
@@ -122,14 +147,20 @@ def delete_latest_artifact_update(conversation_id: str | None) -> str:
 
     artifact_id = str(artifacts[-1].get("artifact_id") or "").strip()
     if artifact_id:
-        notebook_service.delete_artifact_from_conversation(conversation_id, artifact_id)
-    return render_conversation_notebook_panel_html(conversation_id)
+        notebook_service.delete_artifact_from_conversation(
+            conversation_id,
+            artifact_id,
+            user_id=user_id,
+        )
+    return render_conversation_notebook_panel_html(conversation_id, user_id=user_id)
 
 
 def export_latest_artifact_update(
     conversation_id: str | None,
     export_format: str = "md",
     root_dir: str | Path | None = None,
+    *,
+    user_id: Any,
 ) -> str:
     conversation_id = str(conversation_id or "").strip()
     if not conversation_id:
@@ -138,7 +169,7 @@ def export_latest_artifact_update(
     from ktem.docqa import _runtime_notebook as notebook_service
     from ktem.docqa.artifact_exports import export_artifact_to_path
 
-    notebook = notebook_service.get_notebook(conversation_id)
+    notebook = notebook_service.get_notebook(conversation_id, user_id=user_id)
     artifacts = [
         item for item in notebook.get("artifacts", []) if isinstance(item, dict)
     ]
@@ -158,10 +189,11 @@ def export_latest_artifact_update(
     notebook_service.record_artifact_export_to_conversation(
         conversation_id,
         artifact_id,
+        user_id=user_id,
         export_format=normalized_format,
         path=str(exported_path),
     )
-    return render_conversation_notebook_panel_html(conversation_id)
+    return render_conversation_notebook_panel_html(conversation_id, user_id=user_id)
 
 
 def render_studio_trace_panel(

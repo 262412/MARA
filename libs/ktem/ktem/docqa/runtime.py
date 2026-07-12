@@ -190,6 +190,25 @@ def _artifact_source_scope(
     return scope
 
 
+def _save_turn_artifact(
+    conversation_id: str,
+    request: DocQARequest,
+    prepared: _PreparedPipeline,
+    graph_source_ids: list[str],
+    stream_result: _turn.TurnStreamResult,
+    *,
+    user_id: Any,
+) -> None:
+    _nb.save_captured_artifact(
+        conversation_id,
+        stream_result.capture.artifact,
+        user_id=user_id,
+        artifact_type=request.artifact_type or request.task_type,
+        prompt=request.prompt,
+        source_scope=_artifact_source_scope(request, prepared, graph_source_ids),
+    )
+
+
 class DocQARuntime(RuntimeSessionMutationFacade):
     def __init__(self, app=None, user_id: Any = None):
         self._app = app or _RuntimeAppContext()
@@ -716,12 +735,13 @@ class DocQARuntime(RuntimeSessionMutationFacade):
             selected_file_ids=prepared.selected_file_ids,
             origin=original_request.origin,
         )
-        self._save_turn_artifact(
+        _save_turn_artifact(
             session_info.conversation_id,
             request_to_run,
             prepared,
             graph_source_ids,
             stream_result,
+            user_id=resolved_user_id,
         )
 
         selected_mapping = self._build_selected_mapping(
@@ -743,22 +763,6 @@ class DocQARuntime(RuntimeSessionMutationFacade):
             graph_source_ids=graph_source_ids,
         )
         return response
-
-    @staticmethod
-    def _save_turn_artifact(
-        conversation_id: str,
-        request: DocQARequest,
-        prepared: _PreparedPipeline,
-        graph_source_ids: list[str],
-        stream_result: _turn.TurnStreamResult,
-    ) -> None:
-        _nb.save_captured_artifact(
-            conversation_id,
-            stream_result.capture.artifact,
-            artifact_type=request.artifact_type or request.task_type,
-            prompt=request.prompt,
-            source_scope=_artifact_source_scope(request, prepared, graph_source_ids),
-        )
 
     @staticmethod
     def _empty_chat_message() -> str:
