@@ -3,7 +3,11 @@ import logging
 import gradio as gr
 import pandas as pd
 from ktem.app import BasePage
-from ktem.auth.authorization import CALLBACK_REQUEST, require_admin
+from ktem.auth.authorization import (
+    CALLBACK_REQUEST,
+    CallbackAuthorizationError,
+    require_admin,
+)
 from ktem.auth.passwords import hash_password, validate_password
 from ktem.db.models import User, engine
 from sqlmodel import Session, select
@@ -82,6 +86,13 @@ def _delete_button_updates(selected_user_id):
         gr.update(visible=True),
         gr.update(visible=True),
     )
+
+
+def _get_user_or_authorization_error(session, user_id):
+    user = session.exec(select(User).where(User.id == user_id)).first()
+    if user is None:
+        raise CallbackAuthorizationError()
+    return user
 
 
 class UserManagement(BasePage):
@@ -332,8 +343,7 @@ class UserManagement(BasePage):
             btn_delete_no = gr.update(visible=False)
 
             with Session(engine) as session:
-                statement = select(User).where(User.id == selected_user_id)
-                user = session.exec(statement).one()
+                user = _get_user_or_authorization_error(session, selected_user_id)
 
             usn_edit = gr.update(value=user.username)
             pwd_edit = gr.update(value="")
@@ -365,18 +375,19 @@ class UserManagement(BasePage):
         request: gr.Request = CALLBACK_REQUEST,
     ):
         require_admin(self._state_user_id(), request)
-        errors = validate_username(usn)
-        if errors:
-            gr.Warning(errors)
-            return pwd, pwd_cnf
-
-        if pwd:
-            errors = validate_password(pwd, pwd_cnf)
+        with Session(engine) as session:
+            user = _get_user_or_authorization_error(session, selected_user_id)
+            errors = validate_username(usn)
             if errors:
                 gr.Warning(errors)
                 return pwd, pwd_cnf
 
-        with Session(engine) as session:
+            if pwd:
+                errors = validate_password(pwd, pwd_cnf)
+                if errors:
+                    gr.Warning(errors)
+                    return pwd, pwd_cnf
+
             # Check username uniqueness (excluding current user)
             statement = select(User).where(
                 User.username_lower == usn.lower(),
@@ -389,8 +400,6 @@ class UserManagement(BasePage):
                 )
                 return pwd, pwd_cnf
 
-            statement = select(User).where(User.id == selected_user_id)
-            user = session.exec(statement).one()
             user.username = usn
             user.username_lower = usn.lower()
             user.admin = admin
@@ -413,8 +422,7 @@ class UserManagement(BasePage):
             return selected_user_id
 
         with Session(engine) as session:
-            statement = select(User).where(User.id == selected_user_id)
-            user = session.exec(statement).one()
+            user = _get_user_or_authorization_error(session, selected_user_id)
             session.delete(user)
             session.commit()
             gr.Info(f'User "{user.username}" deleted successfully')

@@ -412,9 +412,8 @@ class SettingsPage(BasePage):
 
         with Session(engine) as session:
             statement = select(Settings).where(Settings.user == resolved_user_id)
-            try:
-                user_setting = session.exec(statement).one()
-            except Exception:
+            user_setting = session.exec(statement).first()
+            if user_setting is None:
                 user_setting = Settings()
                 user_setting.user = resolved_user_id
             user_setting.setting = setting
