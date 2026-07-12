@@ -15,6 +15,7 @@ from theflow.settings import settings as flowsettings
 
 import kotaemon.artifact_retention as retention_module
 from kotaemon.artifact_downloads import (
+    ACTIVE_WORKSPACE_TTL_SECONDS,
     READY_FETCH_WINDOW_SECONDS,
     READY_OUTPUT_HARD_LIMIT,
     READY_OUTPUT_TTL_SECONDS,
@@ -292,6 +293,50 @@ def test_global_capacity_rejects_new_output_without_revoking_fresh_paths(roots):
         _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
 
     assert all(path.exists() for path in existing)
+
+
+def test_global_scan_limit_is_shared_across_the_download_tree(roots, monkeypatch):
+    existing = _ready_workspace(
+        roots.zip,
+        "file-other",
+        "fresh-request",
+    )
+    monkeypatch.setattr(retention_module, "MAX_GLOBAL_SCAN_ENTRIES", 4)
+
+    with pytest.raises(gr.Error, match="reindex"):
+        _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+
+    assert existing.exists()
+    assert _server_download_dirs(roots) == []
+
+
+@pytest.mark.parametrize("kind", ["stale-active", "expired-ready"])
+def test_failed_pruning_residue_remains_capacity_accounted(
+    roots,
+    monkeypatch,
+    kind,
+):
+    request = roots.zip / "downloads" / "file-other" / kind
+    request.mkdir(parents=True)
+    (request / "nested").mkdir()
+    if kind == "stale-active":
+        marker = request / ".active"
+        marker.write_text("0", encoding="utf-8")
+        age = ACTIVE_WORKSPACE_TTL_SECONDS + 1
+    else:
+        marker = request / ".ready"
+        marker.write_text("0", encoding="utf-8")
+        (request / "download.html").write_text("EXPIRED", encoding="utf-8")
+        age = READY_OUTPUT_TTL_SECONDS + 1
+    modified = time.time() - age
+    os.utime(marker, (modified, modified))
+    monkeypatch.setattr(retention_module, "READY_OUTPUT_HARD_LIMIT", 1)
+
+    with pytest.raises(gr.Error, match="reindex"):
+        _Page().download_single_file_simple(False, "OWNER", FILE_ID, "owner")
+
+    assert request.exists()
+    assert _server_download_dirs(roots) == []
 
 
 def test_missing_fcntl_keeps_module_importable_and_download_fails_closed(

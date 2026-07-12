@@ -7,11 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 import kotaemon.artifact_namespace as artifact_module
-from kotaemon.artifact_namespace import (
-    ArtifactNamespaceError,
-    ManifestArtifact,
-    load_manifest_artifacts,
-)
+from kotaemon.artifact_namespace import ArtifactNamespaceError, load_manifest_artifacts
 
 FILE_ID = "file-owner"
 GENERATION = "generation-a"
@@ -91,13 +87,10 @@ def test_manifest_rejects_entry_count_before_entry_resolution(roots, monkeypatch
     ]
     _write_record(roots, _record(entries))
 
-    def fake_resolve(entry, *_args):
-        return ManifestArtifact(
-            path=roots.markdown / "unused",
-            archive_name=entry["relative_path"],
-        )
+    def fail_resolve(*_args, **_kwargs):
+        pytest.fail("manifest entries must be bounded before resolution")
 
-    monkeypatch.setattr(artifact_module, "_resolve_manifest_entry", fake_resolve)
+    monkeypatch.setattr(artifact_module, "_resolve_manifest_entry", fail_resolve)
 
     with pytest.raises(ArtifactNamespaceError, match="entries"):
         _load(roots)
