@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 import time
 import warnings
 from collections import defaultdict
@@ -57,10 +56,12 @@ from kotaemon.indices.rankings import BaseReranking, LLMReranking, LLMTrulensSco
 from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
 from kotaemon.loaders import MathpixPDFReader
 
+from .artifact_cleanup import FileArtifactCleaner
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
 from .deletion import DeletionCoordinator
 from .element_index import docstore_batches_and_index_rows
 from .office_policy import prepare_office_parse_file
+from .source_storage import store_source_file
 
 logger = logging.getLogger(__name__)
 _office_pdf_converter: OfficeToPdfConversionService | None = None
@@ -599,22 +600,14 @@ class IndexPipeline(BaseComponent):
         Returns:
             the file id
         """
-        with file_path.open("rb") as fi:
-            file_hash = sha256(fi.read()).hexdigest()
-
-        shutil.copy(file_path, self.FSPath / file_hash)
-        source = self.Source(
-            name=file_path.name,
-            path=file_hash,
-            size=file_path.stat().st_size,
-            user=self.user_id,  # type: ignore
+        return store_source_file(
+            file_path,
+            storage_root=self.FSPath,
+            source_table=self.Source,
+            user_id=self.user_id,
+            session_factory=lambda: Session(engine),
+            storage_lifetime=getattr(self, "_storage_lifetime", None),
         )
-        with Session(engine) as session:
-            session.add(source)
-            session.commit()
-            file_id = source.id
-
-        return file_id
 
     def finish(self, file_id: str, file_path: str | Path) -> str:
         """Finish the indexing"""
@@ -662,6 +655,7 @@ class IndexPipeline(BaseComponent):
             vector_store=self.VS,
             doc_store=self.DS,
             file_storage_path=self.FSPath,
+            artifact_cleaner=FileArtifactCleaner.from_settings(settings).clean,
         )
         coordinator.delete(file_id, user_id=self.user_id)
 

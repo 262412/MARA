@@ -50,6 +50,32 @@ def test_storage_lease_missing_blob_is_idempotent(tmp_path):
         assert lease.quarantine() is None
 
 
+def test_quarantine_sync_failure_restores_original_blob(tmp_path):
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    blob = storage / "shared.bin"
+    blob.write_bytes(b"document")
+    sync_calls = 0
+
+    def fail_first_sync(_path) -> None:
+        nonlocal sync_calls
+        sync_calls += 1
+        if sync_calls == 1:
+            raise OSError("directory sync unavailable")
+
+    lifetime = _storage_api().StorageLifetime(
+        storage,
+        directory_syncer=fail_first_sync,
+    )
+
+    with lifetime.hold("shared.bin") as lease:
+        with pytest.raises(OSError, match="directory sync unavailable"):
+            lease.quarantine()
+
+    assert blob.read_bytes() == b"document"
+    assert not list(storage.glob(".shared.bin.quarantine-*"))
+
+
 def test_storage_lease_publish_is_atomic_and_idempotent(tmp_path):
     storage = tmp_path / "storage"
     source = tmp_path / "upload.bin"

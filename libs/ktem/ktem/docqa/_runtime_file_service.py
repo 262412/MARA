@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, cast
 
+from ktem.index.file.artifact_cleanup import FileArtifactCleaner
 from ktem.index.file.deletion import DeletionCoordinator
+from theflow.settings import settings as flowsettings
 
 from . import _runtime_indexing as _indexing
 from . import _runtime_selection as _selection
@@ -105,6 +107,7 @@ class RuntimeFileService:
             vector_store=resources["VectorStore"],
             doc_store=resources["DocStore"],
             file_storage_path=resources.get("FileStoragePath"),
+            artifact_cleaner=FileArtifactCleaner.from_settings(flowsettings).clean,
         )
         for match in matches:
             coordinator.delete(match.file_id, user_id=resolved_user_id)

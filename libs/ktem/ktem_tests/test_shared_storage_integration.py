@@ -145,6 +145,76 @@ def test_upload_commit_under_same_lock_wins_against_waiting_delete(
     assert (storage / "shared.bin").read_bytes() == b"document"
 
 
+def test_delete_commit_before_waiting_upload_republishes_blob(
+    shared_storage_db,
+    tmp_path,
+):
+    _add_source(shared_storage_db, "file-old", "user-old")
+    engine, source_table, _index_table, storage = shared_storage_db
+    lifetime = StorageLifetime(storage)
+    quarantined = threading.Event()
+    release_delete = threading.Event()
+    upload_attempted = threading.Event()
+    upload_entered = threading.Event()
+    upload_source = tmp_path / "new-upload.bin"
+    upload_source.write_bytes(b"document")
+
+    class _PausingLease:
+        def __init__(self, lease):
+            self._lease = lease
+
+        def quarantine(self):
+            move = self._lease.quarantine()
+            quarantined.set()
+            assert release_delete.wait(5)
+            return move
+
+        def restore(self, move):
+            return self._lease.restore(move)
+
+        def purge(self, move):
+            return self._lease.purge(move)
+
+    class _PausingLifetime:
+        @contextmanager
+        def hold(self, stored_path):
+            with lifetime.hold(stored_path) as lease:
+                yield _PausingLease(lease)
+
+    def upload() -> None:
+        upload_attempted.set()
+        with StorageLifetime(storage).hold("shared.bin") as lease:
+            upload_entered.set()
+            lease.publish_from(upload_source)
+            with Session(engine) as session:
+                session.add(
+                    source_table(
+                        id="file-new",
+                        name="new.pdf",
+                        path="shared.bin",
+                        user="user-new",
+                    )
+                )
+                session.commit()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        deleted = executor.submit(
+            _coordinator(shared_storage_db, _PausingLifetime()).delete,
+            "file-old",
+            user_id="user-old",
+        )
+        assert quarantined.wait(5)
+        uploaded = executor.submit(upload)
+        assert upload_attempted.wait(5)
+        assert not upload_entered.wait(0.1)
+        release_delete.set()
+        assert deleted.result(timeout=10).file_id == "file-old"
+        uploaded.result(timeout=10)
+
+    assert _source_ids(shared_storage_db) == {"file-new"}
+    assert (storage / "shared.bin").read_bytes() == b"document"
+
+
 def test_store_file_holds_shared_path_lock_through_source_commit(
     monkeypatch,
     tmp_path,

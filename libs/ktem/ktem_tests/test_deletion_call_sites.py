@@ -50,6 +50,7 @@ def test_pipeline_delete_uses_shared_coordinator_and_pipeline_user(monkeypatch):
 
     assert len(_CoordinatorSpy.instances) == 1
     assert _CoordinatorSpy.instances[0].deleted == [("file-1", "pipeline-user")]
+    assert callable(_CoordinatorSpy.instances[0].kwargs["artifact_cleaner"])
 
 
 def test_web_delete_uses_server_identity_in_password_mode(monkeypatch):
@@ -74,6 +75,7 @@ def test_web_delete_uses_server_identity_in_password_mode(monkeypatch):
 
     assert result == (None, "Selected")
     assert _CoordinatorSpy.instances[0].deleted == [("file-1", "server-user")]
+    assert callable(_CoordinatorSpy.instances[0].kwargs["artifact_cleaner"])
 
 
 def test_runtime_delete_uses_shared_coordinator_and_resolved_user(monkeypatch):
@@ -103,3 +105,4 @@ def test_runtime_delete_uses_shared_coordinator_and_resolved_user(monkeypatch):
         ("file-1", "report.pdf")
     ]
     assert _CoordinatorSpy.instances[0].deleted == [("file-1", "runtime-user")]
+    assert callable(_CoordinatorSpy.instances[0].kwargs["artifact_cleaner"])

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 from pathlib import Path
+from typing import Any
 
 from kotaemon.artifact_paths import validate_portable_component
 from kotaemon.artifact_types import ArtifactNamespaceError
@@ -27,6 +29,15 @@ class FileArtifactCleaner:
         self._chunks_root = Path(chunks_root)
         self._markdown_root = Path(markdown_root)
         self._download_root = Path(download_root)
+
+    @classmethod
+    def from_settings(cls, settings: Any) -> FileArtifactCleaner:
+        """Build the cleaner from the stable MARA artifact-root settings."""
+        return cls(
+            chunks_root=settings.KH_CHUNKS_OUTPUT_DIR,
+            markdown_root=settings.KH_MARKDOWN_OUTPUT_DIR,
+            download_root=settings.KH_ZIP_OUTPUT_DIR,
+        )
 
     def clean(self, file_id: str) -> None:
         """Validate every exact namespace before removing any of them."""
@@ -92,13 +103,7 @@ def _validate_prefix(target: Path) -> bool:
 
 
 def _remove_tree(target: Path) -> None:
-    for root, directories, files in os.walk(target, topdown=False, followlinks=False):
-        root_path = Path(root)
-        for name in files:
-            (root_path / name).unlink()
-        for name in directories:
-            (root_path / name).rmdir()
-    target.rmdir()
+    shutil.rmtree(target)
 
 
 __all__ = ["ArtifactCleanupError", "FileArtifactCleaner"]

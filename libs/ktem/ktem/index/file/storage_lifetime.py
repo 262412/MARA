@@ -45,11 +45,13 @@ class StorageLease:
         target: Path,
         mover: Callable[[Path, Path], None],
         unlinker: Callable[[Path], None],
+        directory_syncer: Callable[[Path], None],
     ) -> None:
         self._root = root
         self._target = target
         self._mover = mover
         self._unlinker = unlinker
+        self._directory_syncer = directory_syncer
 
     def publish_from(self, source: str | Path) -> None:
         """Atomically publish a regular file, accepting identical retries."""
@@ -65,7 +67,7 @@ class StorageLease:
         temporary = self._copy_to_temporary(source_path)
         try:
             self._mover(temporary, self._target)
-            _fsync_directory(self._target.parent)
+            self._directory_syncer(self._target.parent)
         finally:
             if _path_exists(temporary):
                 temporary.unlink()
@@ -79,7 +81,12 @@ class StorageLease:
             f".{self._target.name}.quarantine-{uuid.uuid4().hex}"
         )
         self._mover(self._target, quarantine)
-        _fsync_directory(self._target.parent)
+        try:
+            self._directory_syncer(self._target.parent)
+        except Exception:
+            self._mover(quarantine, self._target)
+            self._directory_syncer(self._target.parent)
+            raise
         return QuarantineMove(original=self._target, quarantine=quarantine)
 
     def restore(self, move: QuarantineMove) -> None:
@@ -91,7 +98,7 @@ class StorageLease:
         if _path_exists(move.original):
             raise StorageLifetimeError("stored file already exists during restore")
         self._mover(move.quarantine, move.original)
-        _fsync_directory(move.original.parent)
+        self._directory_syncer(move.original.parent)
 
     def purge(self, move: QuarantineMove) -> None:
         """Permanently remove a quarantined file after SQL commit."""
@@ -100,7 +107,7 @@ class StorageLease:
             return
         _require_regular(move.quarantine, "quarantined file")
         self._unlinker(move.quarantine)
-        _fsync_directory(move.quarantine.parent)
+        self._directory_syncer(move.quarantine.parent)
 
     def _copy_to_temporary(self, source: Path) -> Path:
         descriptor, raw_path = tempfile.mkstemp(
@@ -136,11 +143,13 @@ class StorageLifetime:
         lock_factory: Callable[[str], _Lock] | None = None,
         mover: Callable[[Path, Path], None] | None = None,
         unlinker: Callable[[Path], None] | None = None,
+        directory_syncer: Callable[[Path], None] | None = None,
     ) -> None:
         self._root = Path(storage_root)
         self._lock_factory = lock_factory or FileLock
         self._mover = mover or os.replace
         self._unlinker = unlinker or Path.unlink
+        self._directory_syncer = directory_syncer or _fsync_directory
 
     @contextmanager
     def hold(self, stored_path: str | Path) -> Iterator[StorageLease]:
@@ -154,7 +163,13 @@ class StorageLifetime:
         target = self._root.joinpath(relative)
         with self._lock_factory(str(lock_root / lock_name)):
             _validate_ancestors(self._root, target)
-            yield StorageLease(self._root, target, self._mover, self._unlinker)
+            yield StorageLease(
+                self._root,
+                target,
+                self._mover,
+                self._unlinker,
+                self._directory_syncer,
+            )
 
 
 def _validate_relative(stored_path: str | Path) -> Path:

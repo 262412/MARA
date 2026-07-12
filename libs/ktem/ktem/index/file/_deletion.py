@@ -4,8 +4,10 @@ from typing import TypeAlias
 
 import gradio as gr
 from ktem.db.engine import engine
+from theflow.settings import settings as flowsettings
 
 from ._identity import resolve_file_index_user_id
+from .artifact_cleanup import FileArtifactCleaner
 from .deletion import DeletionCoordinator, DeletionError
 
 Request: TypeAlias = gr.Request | None
@@ -26,6 +28,7 @@ class FileIndexDeletionController:
             vector_store=resources["VectorStore"],
             doc_store=resources["DocStore"],
             file_storage_path=resources.get("FileStoragePath"),
+            artifact_cleaner=FileArtifactCleaner.from_settings(flowsettings).clean,
         )
         try:
             result = coordinator.delete(file_id, user_id=scoped_user_id)
