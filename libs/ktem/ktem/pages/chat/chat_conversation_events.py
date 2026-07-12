@@ -19,7 +19,7 @@ def bind_chat_conversation_events(
     clear_bot_message_selection_js: str,
     pdfview_js: str,
 ) -> None:
-    ports = chat_conversation_ports(page)
+    ports = chat_conversation_ports(page, demo_mode=demo_mode)
     page.chat_control.btn_chat_expand.click(
         fn=None, inputs=None, js="function() {toggleChatColumn();}"
     )

@@ -30,7 +30,7 @@ def _fn_name(call):
 def test_conversation_ports_preserve_fixed_outputs_and_every_index_component():
     page = build_chat_page(EventGraphSpy(), index_count=7)
 
-    ports = chat_conversation_ports(page)
+    ports = chat_conversation_ports(page, demo_mode=False)
 
     assert ports.selection.outputs == (
         page.chat_control.conversation_id,
@@ -135,6 +135,16 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
     assert select_chain[0].params["outputs"][-6:] == page._indices_input
 
 
+def test_standard_conversation_registration_does_not_require_demo_paper_list():
+    graph = EventGraphSpy()
+    page = build_chat_page(graph)
+    del page.paper_list
+
+    _bind_conversation(page, demo_mode=False)
+
+    assert graph.roots("chat_control.btn_new")
+
+
 def test_demo_conversation_adds_only_visibility_branch_and_keeps_root_order():
     graph = EventGraphSpy()
     page = build_chat_page(graph, index_count=5)
@@ -189,7 +199,9 @@ def test_sign_out_uses_named_conversation_outputs_and_clear_adapter():
 
     assert [item["name"] for item in subscriptions] == ["onSignIn", "onSignOut"]
     sign_out = subscriptions[1]["definition"]
-    assert sign_out["outputs"] == list(chat_conversation_ports(page).selection.outputs)
+    assert sign_out["outputs"] == list(
+        chat_conversation_ports(page, demo_mode=False).selection.outputs
+    )
     assert sign_out["fn"]() == "signed-out"
     assert clear_calls == [True]
     assert sign_out["show_progress"] == "hidden"

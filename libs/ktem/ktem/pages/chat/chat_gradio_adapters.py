@@ -213,7 +213,7 @@ def _persist_ports(page: Any) -> EventPorts:
     )
 
 
-def chat_conversation_ports(page: Any) -> ChatConversationPorts:
+def chat_conversation_ports(page: Any, *, demo_mode: bool) -> ChatConversationPorts:
     selection = _conversation_selection_ports(page)
     return ChatConversationPorts(
         selection=selection,
@@ -231,8 +231,10 @@ def chat_conversation_ports(page: Any) -> ChatConversationPorts:
         ),
         suggestions=_suggestion_ports(page),
         plot=EventPorts(inputs=page.state_plot_panel, outputs=page.plot_panel),
-        demo_visibility=EventPorts(
-            outputs=(page.paper_list.accordion, page.chat_settings)
+        demo_visibility=(
+            EventPorts(outputs=(page.paper_list.accordion, page.chat_settings))
+            if demo_mode
+            else EventPorts()
         ),
         clear_answer=EventPorts(outputs=(page.answer_panel,)),
         citations=EventPorts(

@@ -1690,7 +1690,9 @@ class ChatPage(BasePage):
                 name="onSignOut",
                 definition={
                     "fn": self.chat_control.clear_conv,
-                    "outputs": chat_conversation_ports(self).selection.gradio_outputs,
+                    "outputs": chat_conversation_ports(
+                        self, demo_mode=KH_DEMO_MODE
+                    ).selection.gradio_outputs,
                     "show_progress": "hidden",
                 },
             )
