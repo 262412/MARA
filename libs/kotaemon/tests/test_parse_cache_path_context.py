@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from kotaemon.artifact_cache import ArtifactDocuments
 from kotaemon.base import Document
 from kotaemon.indices.parse_cache import load_data_with_parse_cache
@@ -47,6 +49,22 @@ class _PathSensitiveArtifactReader:
     ):
         del extra_info, documents
         self.published_sidecars.append(artifact_sidecar["markdown"])
+
+
+class _PathLikeMetadataReader:
+    def __init__(self, metadata_key: str):
+        self.metadata_key = metadata_key
+        self.calls = 0
+
+    def load_data(self, file_path: Path, extra_info=None):
+        del extra_info
+        self.calls += 1
+        return [
+            Document(
+                text="path-like metadata",
+                metadata={self.metadata_key: file_path},
+            )
+        ]
 
 
 def test_parse_cache_separates_path_derived_suffix_and_mime_context(tmp_path):
@@ -114,3 +132,31 @@ def test_parse_cache_replays_current_path_metadata_for_same_parse_context(tmp_pa
     assert second.documents[0].metadata["file_id"] == "second-source"
     assert second.documents[0].metadata["file_name"] == "second.txt"
     assert second.documents[0].metadata["file_path"] == str(second_source.resolve())
+
+
+@pytest.mark.parametrize("metadata_key", ["file_path", "source"])
+def test_parse_cache_replays_current_path_for_pathlike_metadata(
+    tmp_path,
+    metadata_key,
+):
+    first_source = tmp_path / "first.txt"
+    second_source = tmp_path / "second.txt"
+    first_source.write_bytes(b"identical bytes")
+    second_source.write_bytes(b"identical bytes")
+    reader = _PathLikeMetadataReader(metadata_key)
+
+    first = load_data_with_parse_cache(
+        reader,
+        first_source,
+        cache_dir=tmp_path / "parse-cache",
+    )
+    second = load_data_with_parse_cache(
+        reader,
+        second_source,
+        cache_dir=tmp_path / "parse-cache",
+    )
+
+    assert first.cache_hit is False
+    assert second.cache_hit is True
+    assert reader.calls == 1
+    assert second.documents[0].metadata[metadata_key] == str(second_source.resolve())
