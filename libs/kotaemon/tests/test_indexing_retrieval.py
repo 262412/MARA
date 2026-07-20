@@ -110,6 +110,24 @@ def _retrieved_doc(doc_id: str, score: float = 0.0) -> RetrievedDocument:
     return RetrievedDocument(text=f"Document {doc_id}", id_=doc_id, score=score)
 
 
+def _structured_retrieved_doc(
+    doc_id: str,
+    *,
+    source_id: str = "report",
+    page_label: str = "4",
+) -> RetrievedDocument:
+    return RetrievedDocument(
+        text="Revenue was $10 million.",
+        id_=doc_id,
+        score=0.5,
+        metadata={
+            "file_id": source_id,
+            "page_label": page_label,
+            "element_id": "revenue-cell",
+        },
+    )
+
+
 def test_rrf_fusion_deduplicates_and_sums_rank_signals():
     fused = VectorRetrieval._reciprocal_rank_fuse(
         vector_docs=[_retrieved_doc("shared", score=0.91)],
@@ -143,6 +161,37 @@ def test_rrf_fusion_keeps_single_path_modes_unchanged():
 
     assert VectorRetrieval._reciprocal_rank_fuse(vector_docs, []) == vector_docs
     assert VectorRetrieval._reciprocal_rank_fuse([], text_docs) == text_docs
+
+
+def test_rrf_canonicalizes_structure_before_adding_rank_signals():
+    fused = VectorRetrieval._reciprocal_rank_fuse(
+        vector_docs=[
+            _structured_retrieved_doc("dense-primary"),
+            _structured_retrieved_doc("dense-overlap"),
+        ],
+        text_docs=[_structured_retrieved_doc("sparse-primary")],
+    )
+
+    assert len(fused) == 1
+    assert fused[0].score == (1 / 61) + (1 / 61)
+    assert fused[0].retrieval_metadata["canonical_id"].startswith("element:")
+    assert fused[0].retrieval_metadata["duplicate_doc_ids"] == [
+        "dense-overlap",
+        "sparse-primary",
+    ]
+
+
+def test_rrf_canonical_text_merge_preserves_cross_source_backrefs():
+    dense = _structured_retrieved_doc("dense-source-a", source_id="source-a")
+    sparse = _structured_retrieved_doc("sparse-source-b", source_id="source-b")
+    sparse.metadata["element_id"] = "different-cell-id"
+
+    [fused] = VectorRetrieval._reciprocal_rank_fuse([dense], [sparse])
+
+    assert fused.retrieval_metadata["source_backrefs"] == [
+        "source-a#page:4",
+        "source-b#page:4",
+    ]
 
 
 class _RecordingEmbedding:
@@ -203,6 +252,19 @@ class _RecordingReranker(BaseReranking):
     @property
     def received_doc_ids(self):
         return self._received_doc_ids
+
+
+def test_hybrid_retrieval_defaults_match_wide_recall_contract():
+    retrieval = VectorRetrieval(
+        vector_store=_RecordingVectorStore([]),
+        doc_store=_RecordingDocStore([]),
+        embedding=_RecordingEmbedding(),
+    )
+
+    assert retrieval.dense_top_k == 50
+    assert retrieval.sparse_top_k == 50
+    assert retrieval.rerank_top_k == 80
+    assert retrieval.rrf_k == 60
 
 
 def test_hybrid_retrieval_uses_configured_dense_and_sparse_first_round_limits():

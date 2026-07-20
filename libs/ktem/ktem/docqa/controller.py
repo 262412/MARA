@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .evidence import build_evidence_bundle
+from .query_planning import build_query_plan
 from .retrieval_adequacy import retrieval_adequacy_issue
 from .verification import VerifyDecision, verify_decision
 from .workflow import build_workflow_plan
@@ -331,7 +332,7 @@ def _route_decision(
             allowed_routes=getattr(request, "allowed_routes", None),
         )
 
-    route = _resolve_route(policy)
+    route = _auto_route(request) if policy == "auto" else _resolve_route(policy)
     route = _constrain_route(route, getattr(request, "allowed_routes", None))
     return RouteDecision(
         route=route,
@@ -405,6 +406,15 @@ def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
         "requested_modalities",
         "retrieval_attempts",
         "retrieval_info_count",
+        "schema_version",
+        "dedupe_trace",
+        "query_plan",
+        "evidence_selection_trace",
+        "structure_metadata_coverage",
+        "slot_coverage",
+        "missing_required_slot_count",
+        "second_round_queries",
+        "retrieval_rounds",
     }
     ignored_empty_keys = {"evidence", "evidence_ids", "modality_counts"}
     for key, value in evidence_metadata.items():
@@ -435,6 +445,11 @@ def _constrain_route(route: str, allowed_routes: Any) -> str:
 
 def _route_reason(policy: str, route: str) -> str:
     if policy == "auto":
+        if route == "hybrid":
+            return (
+                "Automatic risk routing selected hybrid evidence for a numeric, "
+                "multi-page, multi-table, or visual question."
+            )
         return "Automatic route policy selected the document text route."
     labels = {
         "direct": "direct",
@@ -446,6 +461,27 @@ def _route_reason(policy: str, route: str) -> str:
         "abstain": "abstain",
     }
     return f"Requested {labels.get(route, route)} route."
+
+
+def _auto_route(request: Any) -> str:
+    plan = build_query_plan(
+        str(getattr(request, "prompt", "") or ""),
+        answer_type=str(
+            getattr(request, "answer_type", None)
+            or getattr(request, "task_type", None)
+            or ""
+        ),
+        verification_domain=str(getattr(request, "verification_domain", None) or ""),
+        planner_payload=getattr(request, "query_plan", None),
+    )
+    if plan.answer_type == "numeric" or plan.question_type in {
+        "cross_page",
+        "multi_period_numeric",
+        "numeric",
+        "visual",
+    }:
+        return "hybrid"
+    return "doc_text"
 
 
 def _controller_decision_payload(route_decision: RouteDecision) -> dict[str, Any]:

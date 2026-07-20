@@ -219,7 +219,7 @@ def test_hybrid_fusion_does_not_apply_finance_statement_boost_by_default():
     assert components["finance_statement_match"] == 0.0
 
 
-def test_hybrid_fusion_keeps_top_text_and_limits_noisy_visual_pages():
+def test_hybrid_fusion_keeps_wide_candidates_for_downstream_mmr_selection():
     fused, trace = fuse_hybrid_evidence(
         "What were the revenue growth risks?",
         [
@@ -260,9 +260,14 @@ def test_hybrid_fusion_keeps_top_text_and_limits_noisy_visual_pages():
         "text-risk",
         "text-summary",
         "page-image:mmdoc:4",
+        "page-image:mmdoc:99",
     ]
-    assert trace["dropped_noise_count"] == 1
-    assert trace["selected_top_k"] == {"text": 2, "page_image": 1, "element": 2}
+    assert trace["dropped_noise_count"] == 0
+    assert trace["selected_top_k"] == {
+        "text": 30,
+        "page_image": 20,
+        "element": 20,
+    }
 
 
 def test_hybrid_bundle_falls_back_to_text_when_visual_page_degrades_locator():

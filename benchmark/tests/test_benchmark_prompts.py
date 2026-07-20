@@ -87,7 +87,10 @@ def test_gold_answer_policy_truncates_overlong_ragtruth_prompt_question(tmp_path
     assert len(prompt.retrieval_query) <= 1200
     assert "[truncated to fit benchmark prompt budget]" in prompt.benchmark_question
     assert prompt.runtime_prompt.startswith("/no_think\n")
-    assert "For RAGTruth-style examples" in prompt.runtime_prompt
+    assert "Below are related passages:" in prompt.runtime_prompt
+    assert "Below is an answer:" in prompt.runtime_prompt
+    assert '"hallucination list"' in prompt.runtime_prompt
+    assert len(prompt.runtime_prompt.removeprefix("/no_think\n")) <= 1200
     assert "Original source prompt." in prompt.runtime_prompt
     assert "UNIQUE_RAGTRUTH_TAIL_SHOULD_BE_TRUNCATED" not in prompt.runtime_prompt
     assert prompt.runtime_prompt.rstrip().endswith("Answer:")
@@ -286,3 +289,30 @@ def test_auto_profile_selects_dataset_specific_generic_contracts(tmp_path):
         ).profile
         == "visual_grounded_qa"
     )
+
+
+def test_ragtruth_gold_answer_policy_keeps_source_and_response(tmp_path):
+    config = BenchmarkConfig(
+        suite_name="ragtruth",
+        output_dir=tmp_path / "out",
+        benchmark_prompt_policy="gold_answer_v1",
+    )
+    example = _example(
+        question="What happened to revenue?",
+        answer_type="verification",
+        metadata={
+            "dataset_family": "hallucination_verification",
+            "task_type": "QA",
+            "source_info": "Revenue increased from 10 to 12.",
+            "response": "Revenue doubled.",
+        },
+    )
+
+    prompt = build_benchmark_prompt(example, config, dataset_name="ragtruth")
+
+    assert prompt.prompt_source == "ParticleMedia/RAGTruth baseline/dataset.py"
+    assert "Below are related passages:" in prompt.runtime_prompt
+    assert "Revenue increased from 10 to 12." in prompt.runtime_prompt
+    assert "Below is an answer:" in prompt.runtime_prompt
+    assert "Revenue doubled." in prompt.runtime_prompt
+    assert '"hallucination list"' in prompt.runtime_prompt

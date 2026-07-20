@@ -28,6 +28,7 @@ from .metrics import (
     token_f1_score,
 )
 from .page_alignment import evidence_aligned_page_hit_score
+from .semantic_answer import SemanticJudge, semantic_answer_metrics
 from .verification_metrics import verification_metrics
 
 _TABLE_FORMATS = {"markdown_table", "markdown-table", "table"}
@@ -45,6 +46,7 @@ def score_prediction(
     prediction: dict[str, Any],
     *,
     answer_key: str | None = None,
+    semantic_judge: SemanticJudge | None = None,
 ) -> dict[str, float | None]:
     gold_answers = prediction["gold_answers"]
     expected_formats = _normalized_expected_formats(prediction)
@@ -104,6 +106,13 @@ def score_prediction(
     _add_modality_metrics(metrics, prediction)
     metrics.update(verification_metrics(prediction))
     _add_gold_evidence_metrics(metrics, prediction, predicted_answer)
+    if answer_key in {None, "answer_for_scoring"}:
+        semantic_metrics, semantic_metadata = semantic_answer_metrics(
+            prediction,
+            judge=semantic_judge,
+        )
+        metrics.update(semantic_metrics)
+        prediction["semantic_answer_evaluation"] = semantic_metadata
     return metrics
 
 

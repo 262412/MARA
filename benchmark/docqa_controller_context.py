@@ -4,7 +4,7 @@ from typing import Any
 
 from . import controller_fields as cf
 from .benchmark_prompts import build_benchmark_prompt
-from .engine_accessors import config_value
+from .engine_accessors import config_value, field_value
 from .schemas import BenchmarkConfig
 
 
@@ -19,6 +19,8 @@ def controller_request_context(example: Any, config: BenchmarkConfig, config_get
         "controller_question": prompt.retrieval_query,
         "retrieval_query": prompt.retrieval_query,
         "dataset_family": controller_domain,
+        "task_type": config_getter("task_type")
+        or field_value(example, "answer_type", None),
         **controller_kwargs,
     }
 

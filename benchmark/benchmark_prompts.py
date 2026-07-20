@@ -64,12 +64,21 @@ def build_benchmark_prompt(
     )
     profile = _profile_for_example(example, config, dataset_name=dataset_name)
     if policy == "gold_answer_v1":
-        prompt_source = GOLD_ANSWER_PROMPT_SOURCE
-        runtime_prompt = _gold_answer_prompt(
-            benchmark_question,
-            profile,
-            dataset_name=dataset_name or config.suite_name,
-        )
+        dataset = str(dataset_name or config.suite_name or "").strip().lower()
+        if "ragtruth" in dataset:
+            prompt_source = RAGTRUTH_PROMPT_SOURCE
+            runtime_prompt = _ragtruth_prompt(
+                example,
+                benchmark_question,
+                prompt_budget_chars=prompt_budget_chars,
+            )
+        else:
+            prompt_source = GOLD_ANSWER_PROMPT_SOURCE
+            runtime_prompt = _gold_answer_prompt(
+                benchmark_question,
+                profile,
+                dataset_name=dataset,
+            )
     else:
         prompt_source, runtime_prompt = _runtime_prompt(
             example,
@@ -334,52 +343,77 @@ def _ragtruth_prompt(
     prompt_budget_chars: int,
 ) -> str:
     metadata = _metadata(example)
-    source_info = _truncate_prompt_text(
-        _first_present(
-            metadata.get("source_info"),
-            metadata.get("reference"),
-            metadata.get("related_passages"),
-            _first_gold_evidence_span(example),
-        ),
-        prompt_budget_chars,
+    source_info = _first_present(
+        metadata.get("source_info"),
+        metadata.get("reference"),
+        metadata.get("related_passages"),
+        _first_gold_evidence_span(example),
     )
-    response = _truncate_prompt_text(
-        _first_present(metadata.get("response"), _first_answer(example)),
-        prompt_budget_chars,
+    response = _first_present(metadata.get("response"), _first_answer(example))
+    task_type = str(metadata.get("task_type") or "QA").strip().lower() or "qa"
+    labels = _ragtruth_block_labels(task_type)
+    instruction = (
+        "Detect exact response spans that conflict with the source or add "
+        "baseless information. Use only the source. Return JSON only as "
+        '{"hallucination list": ["exact unsupported span"]}; return an empty '
+        "list when every response claim is supported."
     )
-    task_type = str(metadata.get("task_type") or "QA").strip() or "QA"
-    if task_type.lower() == "qa":
-        source_block = (
-            f"Below is a question:\n{question}\n\n"
-            f"Below are related passages:\n{source_info}\n\n"
-            f"Below is an answer:\n{response}\n\n"
+    fixed = (
+        _prompt_header(RAGTRUTH_PROMPT_SOURCE)
+        + f"{labels[0]}\n\n{labels[1]}\n\n{labels[2]}\n\n"
+        + instruction
+        + "\nAnswer:"
+    )
+    available = max(0, prompt_budget_chars - len(fixed))
+    question_budget = int(available * 0.15)
+    source_budget = int(available * 0.55)
+    response_budget = max(0, available - question_budget - source_budget)
+    blocks = (
+        _truncate_ragtruth_block(question, question_budget),
+        _truncate_ragtruth_block(source_info, source_budget),
+        _truncate_ragtruth_block(response, response_budget),
+    )
+    prompt = (
+        _prompt_header(RAGTRUTH_PROMPT_SOURCE)
+        + f"{labels[0]}{blocks[0]}\n\n"
+        + f"{labels[1]}{blocks[1]}\n\n"
+        + f"{labels[2]}{blocks[2]}\n\n"
+        + instruction
+        + "\nAnswer:"
+    )
+    return prompt[:prompt_budget_chars]
+
+
+def _ragtruth_block_labels(task_type: str) -> tuple[str, str, str]:
+    if task_type == "data2txt":
+        return (
+            "Below is a question:\n",
+            "Below is the structured JSON data:\n",
+            "Below is an overview of the data:\n",
         )
-    elif task_type.lower() == "data2txt":
-        source_block = (
-            f"Below is the structured JSON data:\n{source_info}\n\n"
-            f"Below is an overview of the data:\n{response}\n\n"
-        )
-    else:
-        source_block = (
-            f"Below is the original source:\n{source_info}\n\n"
-            f"Below is a summary or response:\n{response}\n\n"
+    if task_type == "qa":
+        return (
+            "Below is a question:\n",
+            "Below are related passages:\n",
+            "Below is an answer:\n",
         )
     return (
-        _prompt_header(RAGTRUTH_PROMPT_SOURCE)
-        + source_block
-        + "Your task is to determine whether the response contains either or "
-        "both of the following two types of hallucinations:\n"
-        "1. conflict: instances where the response presents direct "
-        "contradiction or opposition to the source;\n"
-        "2. baseless info: instances where the response includes information "
-        "which is not substantiated by or inferred from the source.\n"
-        "Then, compile the labeled hallucinated spans into a JSON dict with "
-        'a key "hallucination list" and its value as a list of hallucinated '
-        'spans. If hallucinations exist, output {"hallucination list": '
-        "[hallucination span1, hallucination span2, ...]}. Otherwise, output "
-        '{"hallucination list": []}.\n'
-        "Output:"
+        "Below is a question:\n",
+        "Below is the original source:\n",
+        "Below is a summary or response:\n",
     )
+
+
+def _truncate_ragtruth_block(value: Any, budget: int) -> str:
+    text = str(value or "").strip()
+    if budget <= 0:
+        return ""
+    if len(text) <= budget:
+        return text
+    notice = PROMPT_TEXT_TRUNCATION_NOTICE
+    if budget <= len(notice):
+        return text[:budget]
+    return f"{text[: budget - len(notice)].rstrip()}{notice}"
 
 
 def _qasper_prompt(question: str) -> str:

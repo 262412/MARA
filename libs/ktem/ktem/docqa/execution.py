@@ -4,6 +4,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
+from .claim_aggregation import aggregate_answer_claims
 from .controller import (
     RetrieveDecision,
     RouteDecision,
@@ -14,6 +15,7 @@ from .controller import (
 )
 from .evidence import EvidenceBundle, build_evidence_bundle
 from .evidence_text import extract_final_answer_text
+from .retrieval_rounds import retrieve_with_rounds
 from .route_selection import (
     ControllerDecision,
     controller_decision_from_route,
@@ -177,34 +179,17 @@ def _retrieve_and_evaluate(
     request: Any,
     decision: ControllerDecision,
     retrieve: RetrieveFn,
+    *,
+    max_rounds: int = 2,
 ) -> tuple[EvidenceBundle, RetrieveDecision]:
-    evidence_metadata = retrieve(request, decision)
-    evidence_bundle = build_evidence_bundle(
-        decision.legacy_route, request, evidence_metadata
+    return retrieve_with_rounds(
+        request,
+        decision,
+        retrieve,
+        evaluate=evaluate_retrieval_quality,
+        retry_poor=not _route_switch_candidates(request, decision.legacy_route),
+        max_rounds=max_rounds,
     )
-    retrieve_decision = evaluate_retrieval_quality(
-        decision.legacy_route,
-        evidence_bundle.metadata,
-        prompt=str(getattr(request, "prompt", "") or ""),
-        verification_domain=getattr(request, "verification_domain", None),
-        origin=getattr(request, "origin", None),
-    )
-    if retrieve_decision.status != "ambiguous" or not retrieve_decision.retry:
-        return evidence_bundle, retrieve_decision
-
-    evidence_metadata = retrieve(request, decision)
-    evidence_bundle = build_evidence_bundle(
-        decision.legacy_route, request, evidence_metadata
-    )
-    retrieve_decision = evaluate_retrieval_quality(
-        decision.legacy_route,
-        evidence_bundle.metadata,
-        attempted_retry=True,
-        prompt=str(getattr(request, "prompt", "") or ""),
-        verification_domain=getattr(request, "verification_domain", None),
-        origin=getattr(request, "origin", None),
-    )
-    return evidence_bundle, retrieve_decision
 
 
 def _controller_decision(
@@ -254,6 +239,7 @@ def _switch_after_failed_retrieval(
             request,
             switched_decision,
             retrieve,
+            max_rounds=1,
         )
         switch_event = {
             "stage": "route_switch",
@@ -379,9 +365,21 @@ def _verified_result(
             ABSTAIN_MESSAGE,
             trace_prefix,
         )
+    answer, aggregation_trace = aggregate_answer_claims(answer)
+    trace_prefix = list(trace_prefix or []) + [
+        {"stage": "claim_aggregation", **aggregation_trace}
+    ]
     verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
     if verify_decision.action == "revise" and rewrite is not None:
         answer = rewrite(request, decision, bundle, answer)
+        answer, rewrite_aggregation_trace = aggregate_answer_claims(answer)
+        trace_prefix.append(
+            {
+                "stage": "claim_aggregation",
+                "rewrite": True,
+                **rewrite_aggregation_trace,
+            }
+        )
         verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
     guardrail = _verification_guardrail(verify_decision, request)
     if guardrail.action == "abstain":
@@ -475,6 +473,16 @@ def _result(
     answer: str,
     trace_prefix: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
+    prefix = [
+        item
+        for item in list(trace_prefix or [])
+        if item.get("stage") != "claim_aggregation"
+    ]
+    suffix = [
+        item
+        for item in list(trace_prefix or [])
+        if item.get("stage") == "claim_aggregation"
+    ]
     return RouteExecutionResult(
         controller_decision=decision,
         retrieve_decision=retrieve_decision,
@@ -483,14 +491,15 @@ def _result(
         evidence_bundle=bundle,
         workflow_plan=workflow_plan,
         answer=answer,
-        controller_trace=list(trace_prefix or [])
+        controller_trace=prefix
         + _trace(
             decision,
             workflow_plan,
             retrieve_decision,
             guardrail_decision,
             verify_decision,
-        ),
+        )
+        + suffix,
     )
 
 

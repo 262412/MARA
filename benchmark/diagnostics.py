@@ -17,6 +17,17 @@ DIAGNOSTIC_AVERAGE_KEYS = (
     "gold_span_hit",
     "answer_nonempty_after_cleaning",
 )
+PIPELINE_FAILURE_CLASSES = {
+    "task_contract_error",
+    "retrieval_miss",
+    "ranking_miss",
+    "coverage_miss",
+    "generation_error",
+    "calculation_error",
+    "verification_error",
+    "judge_error",
+    "none",
+}
 
 
 def prediction_diagnostics(prediction: dict[str, Any]) -> dict[str, Any]:
@@ -39,7 +50,7 @@ def prediction_diagnostics(prediction: dict[str, Any]) -> dict[str, Any]:
         gold_span_hit,
     )
     citation_failure_type = _citation_failure_type(prediction, gold_evidence)
-    return {
+    diagnostics = {
         "retrieved_count": len(retrieved_hits),
         "evidence_item_count": len(evidence_items),
         "gold_document_hit": gold_document_hit,
@@ -64,6 +75,68 @@ def prediction_diagnostics(prediction: dict[str, Any]) -> dict[str, Any]:
         if selected_route and recommended_routes
         else None,
     }
+    diagnostics["pipeline_failure_class"] = _pipeline_failure_class(
+        prediction,
+        diagnostics,
+    )
+    return diagnostics
+
+
+def _pipeline_failure_class(
+    prediction: dict[str, Any],
+    diagnostics: dict[str, Any],
+) -> str:
+    finalization = dict(prediction.get("answer_finalization") or {})
+    if finalization.get("task_contract_status") == "error":
+        return "task_contract_error"
+    semantic = dict(prediction.get("semantic_answer_evaluation") or {})
+    if semantic.get("judge_status") == "error":
+        return "judge_error"
+    finance_trace = _finance_numeric_trace(prediction)
+    execution = dict(finance_trace.get("calculation_execution") or {})
+    verification = dict(finance_trace.get("calculation_verification") or {})
+    if execution.get("status") == "error" and execution.get("error") not in {
+        "",
+        "verification_failed",
+    }:
+        return "calculation_error"
+    if verification and verification.get("valid") is False:
+        return "verification_error"
+    retrieval_failure = str(diagnostics.get("retrieval_failure_type") or "")
+    if retrieval_failure in {
+        "raw_retriever_zero",
+        "no_retrieved_hits",
+        "wrong_source",
+    }:
+        return "retrieval_miss"
+    if retrieval_failure in {"wrong_page", "missing_page_metadata"}:
+        return "ranking_miss"
+    if retrieval_failure == "gold_span_missing":
+        return "coverage_miss"
+    if retrieval_failure in {"execution_error", "route_timeout"}:
+        return "generation_error"
+    if diagnostics.get("retrieved_count", 0) > 0 and not diagnostics.get(
+        "answer_nonempty_after_cleaning"
+    ):
+        return "generation_error"
+    verify_status = str(diagnostics.get("verifier_status") or "")
+    citation_failure = str(diagnostics.get("citation_failure_type") or "")
+    if verify_status in {"unsupported", "error", "not_enough_evidence"} or (
+        citation_failure in {"citation_miss", "missing_citation_metadata"}
+    ):
+        return "verification_error"
+    return "none"
+
+
+def _finance_numeric_trace(prediction: dict[str, Any]) -> dict[str, Any]:
+    evidence_metadata = dict(prediction.get("evidence_metadata") or {})
+    trace = evidence_metadata.get("finance_numeric_trace")
+    if isinstance(trace, dict):
+        return trace
+    bundle = dict(prediction.get("evidence_bundle") or {})
+    metadata = dict(bundle.get("metadata") or {})
+    trace = metadata.get("finance_numeric_trace")
+    return dict(trace) if isinstance(trace, dict) else {}
 
 
 def recommended_routes_for_prediction(prediction: dict[str, Any]) -> list[str]:

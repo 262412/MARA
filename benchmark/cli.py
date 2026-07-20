@@ -5,13 +5,19 @@ import json
 from pathlib import Path
 
 from .answer_modes import BENCHMARK_ANSWER_MODES
+from .external_evaluator_cli import (
+    add_external_evaluator_options,
+    external_evaluator_map,
+)
 from .format_smoke_cli import add_format_smoke_commands, handle_format_smoke_command
+from .repair_plan_cli import add_repair_gate_command, handle_repair_gate_command
 from .schemas import (
     BENCHMARK_PROMPT_POLICIES,
     BENCHMARK_PROMPT_PROFILES,
     CLI_ENGINE_CHOICES,
     normalize_scope,
 )
+from .semantic_cli import add_semantic_evaluator_options
 
 
 def _add_docqa_runtime_options(run_parser: argparse.ArgumentParser) -> None:
@@ -81,36 +87,6 @@ def _add_benchmark_prompt_options(run_parser: argparse.ArgumentParser) -> None:
         help=(
             "Prefix benchmark runtime prompts with /no_think for reasoning "
             "models. The gold_answer_v1 policy enables this automatically."
-        ),
-    )
-
-
-def _external_evaluator_arg(value: str) -> tuple[str, str]:
-    adapter_name, separator, backend = str(value or "").partition("=")
-    adapter_name = adapter_name.strip()
-    backend = backend.strip()
-    if not separator or not adapter_name or not backend:
-        raise argparse.ArgumentTypeError(
-            "--external-evaluator must use ADAPTER=PYTHON_PATH_OR_BUILTIN_ALIAS"
-        )
-    return adapter_name, backend
-
-
-def _external_evaluator_map(values: list[tuple[str, str]] | None) -> dict[str, str]:
-    return {adapter_name: backend for adapter_name, backend in values or []}
-
-
-def _add_external_evaluator_options(run_parser: argparse.ArgumentParser) -> None:
-    run_parser.add_argument(
-        "--external-evaluator",
-        action="append",
-        default=[],
-        type=_external_evaluator_arg,
-        metavar="ADAPTER=BACKEND",
-        help=(
-            "Configure an external research evaluator backend for this run. "
-            "May be repeated, for example alce=package.module.evaluator or "
-            "alce=builtin:alce_proxy."
         ),
     )
 
@@ -212,7 +188,8 @@ def _add_run_command(subparsers: argparse._SubParsersAction) -> None:
     run_parser = subparsers.add_parser("run", help="Run a benchmark suite")
     _add_run_core_options(run_parser)
     _add_benchmark_prompt_options(run_parser)
-    _add_external_evaluator_options(run_parser)
+    add_external_evaluator_options(run_parser)
+    add_semantic_evaluator_options(run_parser)
     _add_run_retrieval_options(run_parser)
     _add_run_sampling_options(run_parser)
     _add_docqa_runtime_options(run_parser)
@@ -238,7 +215,8 @@ def _add_rescore_command(subparsers: argparse._SubParsersAction) -> None:
         choices=BENCHMARK_ANSWER_MODES,
         help="Answer finalization mode to apply while rescoring artifacts.",
     )
-    _add_external_evaluator_options(rescore_parser)
+    add_external_evaluator_options(rescore_parser)
+    add_semantic_evaluator_options(rescore_parser)
 
     batch_parser = subparsers.add_parser(
         "rescore-artifacts",
@@ -254,7 +232,8 @@ def _add_rescore_command(subparsers: argparse._SubParsersAction) -> None:
         choices=BENCHMARK_ANSWER_MODES,
         help="Answer finalization mode to apply while rescoring artifacts.",
     )
-    _add_external_evaluator_options(batch_parser)
+    add_external_evaluator_options(batch_parser)
+    add_semantic_evaluator_options(batch_parser)
 
 
 def _add_existing_normalizer_commands(
@@ -371,6 +350,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_thesis_converter_commands(subparsers)
     _add_manifest_template_commands(subparsers)
     _add_multimodal_backend_commands(subparsers)
+    add_repair_gate_command(subparsers)
     add_format_smoke_commands(subparsers)
     return parser
 
@@ -388,7 +368,12 @@ def _handle_rescore_command(args: argparse.Namespace) -> int | None:
             suite_prefix=args.suite_prefix,
             artifact_detail=args.artifact_detail,
             benchmark_answer_mode=args.benchmark_answer_mode,
-            external_evaluators=_external_evaluator_map(args.external_evaluator),
+            external_evaluators=external_evaluator_map(args.external_evaluator),
+            semantic_evaluator=args.semantic_evaluator,
+            semantic_evaluator_model=args.semantic_evaluator_model,
+            semantic_evaluator_timeout_seconds=(
+                args.semantic_evaluator_timeout_seconds
+            ),
         )
         print(f"Rescored {len(run_dirs)} artifact runs into {args.output_dir}")
         return 0
@@ -399,7 +384,10 @@ def _handle_rescore_command(args: argparse.Namespace) -> int | None:
         suite_name=args.suite_name,
         artifact_detail=args.artifact_detail,
         benchmark_answer_mode=args.benchmark_answer_mode,
-        external_evaluators=_external_evaluator_map(args.external_evaluator),
+        external_evaluators=external_evaluator_map(args.external_evaluator),
+        semantic_evaluator=args.semantic_evaluator,
+        semantic_evaluator_model=args.semantic_evaluator_model,
+        semantic_evaluator_timeout_seconds=args.semantic_evaluator_timeout_seconds,
     )
     print(f"Rescored artifact written to {run_dir}")
     return 0
@@ -543,7 +531,10 @@ def _run_benchmark_command(args: argparse.Namespace) -> int:
         benchmark_no_think=args.benchmark_no_think,
         route_timeout_seconds=args.route_timeout_seconds,
         backend_health_json=args.backend_health_json,
-        external_evaluators=_external_evaluator_map(args.external_evaluator),
+        external_evaluators=external_evaluator_map(args.external_evaluator),
+        semantic_evaluator=args.semantic_evaluator,
+        semantic_evaluator_model=args.semantic_evaluator_model,
+        semantic_evaluator_timeout_seconds=args.semantic_evaluator_timeout_seconds,
         limit=args.limit,
         sample_seed=args.sample_seed,
         shard_index=args.shard_index,
@@ -581,6 +572,9 @@ def main(argv: list[str] | None = None) -> int:
     backend_result = _handle_multimodal_backend_command(args)
     if backend_result is not None:
         return backend_result
+    repair_gate_result = handle_repair_gate_command(args)
+    if repair_gate_result is not None:
+        return repair_gate_result
     format_smoke_result = handle_format_smoke_command(args)
     if format_smoke_result is not None:
         return format_smoke_result

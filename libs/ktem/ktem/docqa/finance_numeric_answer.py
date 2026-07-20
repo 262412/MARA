@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 from .evidence_text import evidence_text
+from .finance_calculation_adapter import finance_calculation_audit
 
 
 @dataclass(frozen=True)
@@ -14,12 +15,45 @@ class FinanceNumericAnswer:
     question_type: str
     inputs: dict[str, float]
     formula: str
+    calculation_plan: dict[str, Any] = field(default_factory=dict)
+    calculation_verification: dict[str, Any] = field(default_factory=dict)
+    calculation_execution: dict[str, Any] = field(default_factory=dict)
 
     def as_trace(self) -> dict[str, Any]:
         return asdict(self)
 
 
 def finance_numeric_answer(
+    prompt: str,
+    evidence_items: list[dict[str, Any]],
+) -> FinanceNumericAnswer | None:
+    answer = _finance_numeric_answer_from_text(prompt, evidence_items)
+    if answer is None:
+        return None
+    audit = finance_calculation_audit(
+        prompt,
+        evidence_items,
+        question_type=answer.question_type,
+        inputs=answer.inputs,
+    )
+    if not audit.verification.valid or audit.execution.status != "ok":
+        return replace(
+            answer,
+            answer="",
+            confidence=0.0,
+            calculation_plan=audit.plan.as_dict(),
+            calculation_verification=audit.verification.as_dict(),
+            calculation_execution=audit.execution.as_dict(),
+        )
+    return replace(
+        answer,
+        calculation_plan=audit.plan.as_dict(),
+        calculation_verification=audit.verification.as_dict(),
+        calculation_execution=audit.execution.as_dict(),
+    )
+
+
+def _finance_numeric_answer_from_text(
     prompt: str,
     evidence_items: list[dict[str, Any]],
 ) -> FinanceNumericAnswer | None:

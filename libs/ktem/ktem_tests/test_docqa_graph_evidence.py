@@ -54,24 +54,18 @@ def test_graph_route_builds_graph_level_evidence_with_source_backrefs():
 
     bundle = build_evidence_bundle("graph_global", request, {})
 
-    assert bundle.items == [
-        {
-            "evidence_id": "graph:theme-1",
-            "source_id": "",
-            "source_name": "Revenue",
-            "page_label": "",
-            "modality": "graph",
-            "element_id": "theme-1",
-            "bbox": None,
-            "caption": "Revenue",
-            "text": "Revenue links report A and report B.",
-            "ocr_text": "",
-            "vlm_text": "",
-            "source_backrefs": ["file-a", "file-b"],
-            "evidence_level": "graph",
-            "metadata": {"route": "graph_global"},
-        }
-    ]
+    [item] = bundle.items
+    assert item["evidence_id"] == "graph:theme-1"
+    assert item["source_name"] == "Revenue"
+    assert item["modality"] == "graph"
+    assert item["element_id"] == "theme-1"
+    assert item["text"] == "Revenue links report A and report B."
+    assert item["source_backrefs"] == ["file-a", "file-b"]
+    assert item["evidence_level"] == "graph"
+    assert item["metadata"] == {"route": "graph_global"}
+    assert item["canonical_id"].startswith("text:")
+    assert item["normalized_text_hash"]
+    assert bundle.metadata["schema_version"] == "evidence_bundle.v2"
 
 
 def test_graph_evidence_uses_page_level_backrefs_when_available():

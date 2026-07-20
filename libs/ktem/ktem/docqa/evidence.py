@@ -5,11 +5,18 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .evidence_identity import (
+    EVIDENCE_BUNDLE_SCHEMA_VERSION,
+    canonicalize_and_dedupe_evidence,
+)
+from .evidence_locators import merged_locator_metadata
+from .evidence_planning import select_planned_evidence
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
 
-MAX_PAGE_IMAGE_EVIDENCE_ITEMS = 10
-MAX_ELEMENT_EVIDENCE_ITEMS = 10
+MAX_PAGE_IMAGE_EVIDENCE_ITEMS = 20
+MAX_ELEMENT_EVIDENCE_ITEMS = 20
+MAX_RERANK_CANDIDATES = 80
 
 
 @dataclass(frozen=True)
@@ -20,6 +27,18 @@ class EvidenceElement:
     page_label: str = ""
     modality: str = "text"
     element_id: str = ""
+    canonical_id: str = ""
+    parent_element_id: str = ""
+    neighbor_element_ids: list[str] = field(default_factory=list)
+    section_id: str = ""
+    table_id: str = ""
+    row_index: int | None = None
+    column_index: int | None = None
+    continuation_id: str = ""
+    chunk_start: int | None = None
+    chunk_end: int | None = None
+    normalized_text_hash: str = ""
+    duplicate_evidence_ids: list[str] = field(default_factory=list)
     bbox: Any = None
     caption: str = ""
     text: str = ""
@@ -81,7 +100,8 @@ def build_evidence_bundle(
     if route in {"graph_global", "hybrid"}:
         items.extend(_graph_items(request, evidence_metadata))
 
-    deduped = _dedupe_items(items)
+    deduped, dedupe_trace = canonicalize_and_dedupe_evidence(items)
+    canonical_candidates = list(deduped[:MAX_RERANK_CANDIDATES])
     m3docrag_trace: dict[str, Any] | None = None
     hybrid_fusion_trace: dict[str, Any] | None = None
     if route == "doc_page_image":
@@ -98,10 +118,19 @@ def build_evidence_bundle(
             str(getattr(request, "prompt", "") or ""),
             deduped,
         )
+    reranked_candidates = list(deduped[:30])
+    deduped, planning_metadata = select_planned_evidence(request, deduped)
     metadata = dict(evidence_metadata)
-    metadata.update(_merged_locator_metadata(metadata, deduped))
+    metadata["schema_version"] = EVIDENCE_BUNDLE_SCHEMA_VERSION
+    metadata["dedupe_trace"] = dedupe_trace
+    metadata["canonical_candidate_count"] = len(canonical_candidates)
+    metadata["candidate_evidence"] = canonical_candidates
+    metadata["reranked_candidate_count"] = len(reranked_candidates)
+    metadata["reranked_evidence"] = reranked_candidates
+    metadata.update(merged_locator_metadata(metadata, deduped))
     metadata["modality_counts"] = dict(Counter(item["modality"] for item in deduped))
     metadata["evidence"] = deduped
+    metadata.update(planning_metadata)
     if m3docrag_trace is not None:
         metadata["m3docrag_trace"] = m3docrag_trace
     if hybrid_fusion_trace is not None:
@@ -129,74 +158,6 @@ def _limit_page_image_evidence(items: list[dict[str, Any]]) -> list[dict[str, An
         selected.append(item)
         page_image_count += 1
     return selected
-
-
-def _selected_locator_metadata(items: list[dict[str, Any]]) -> dict[str, list[str]]:
-    return {
-        "page_coverage": _unique_selected(_item_page_labels(item) for item in items),
-        "source_ids": _unique_selected(_item_source_ids(item) for item in items),
-        "evidence_ids": _unique_selected(
-            [[str(item.get("evidence_id") or "").strip()] for item in items]
-        ),
-    }
-
-
-def _merged_locator_metadata(
-    evidence_metadata: dict[str, Any], items: list[dict[str, Any]]
-) -> dict[str, list[str]]:
-    derived = _selected_locator_metadata(items)
-    return {
-        key: values or _coerce_locator_values(evidence_metadata.get(key))
-        for key, values in derived.items()
-    }
-
-
-def _coerce_locator_values(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value.strip()] if value.strip() else []
-    if not isinstance(value, (list, tuple, set)):
-        return []
-    return _unique_selected([value])
-
-
-def _unique_selected(values: Any) -> list[str]:
-    output: list[str] = []
-    for group in values:
-        for value in group:
-            item = str(value or "").strip()
-            if item and item not in output:
-                output.append(item)
-    return output
-
-
-def _item_page_labels(item: dict[str, Any]) -> list[str]:
-    labels = [str(item.get("page_label") or "").strip()]
-    labels.extend(
-        _page_label_from_backref(ref) for ref in item.get("source_backrefs") or []
-    )
-    return labels
-
-
-def _item_source_ids(item: dict[str, Any]) -> list[str]:
-    source_ids = [str(item.get("source_id") or "").strip()]
-    source_ids.extend(
-        _source_id_from_backref(ref) for ref in item.get("source_backrefs") or []
-    )
-    return source_ids
-
-
-def _page_label_from_backref(ref: Any) -> str:
-    value = str(ref or "")
-    if "#page:" not in value:
-        return ""
-    return value.split("#page:", 1)[1].split("#", 1)[0].strip()
-
-
-def _source_id_from_backref(ref: Any) -> str:
-    value = str(ref or "")
-    if "#" not in value:
-        return ""
-    return value.split("#", 1)[0].strip()
 
 
 def _with_visual_retriever_score(
@@ -227,6 +188,65 @@ def _with_element_retriever_score(
 
 def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
     metadata = _merged_item_metadata(item)
+    file_id, page_label, modality, backrefs = _coerced_locator_fields(
+        item,
+        metadata,
+    )
+    return EvidenceElement(
+        evidence_id=str(item.get("evidence_id") or item.get("doc_id") or "").strip(),
+        source_id=file_id,
+        source_name=str(
+            item.get("file_name")
+            or item.get("source_name")
+            or metadata.get("file_name")
+            or metadata.get("source_name")
+            or ""
+        ).strip(),
+        page_label=page_label,
+        modality=modality or "text",
+        element_id=str(item.get("element_id") or "").strip(),
+        canonical_id=str(item.get("canonical_id") or "").strip(),
+        parent_element_id=str(
+            item.get("parent_element_id") or metadata.get("parent_element_id") or ""
+        ).strip(),
+        neighbor_element_ids=_string_values(
+            item.get("neighbor_element_ids")
+            or metadata.get("neighbor_element_ids")
+            or metadata.get("neighbors")
+        ),
+        section_id=str(
+            item.get("section_id") or metadata.get("section_id") or ""
+        ).strip(),
+        table_id=str(item.get("table_id") or metadata.get("table_id") or "").strip(),
+        row_index=_optional_int(item.get("row_index", metadata.get("row_index"))),
+        column_index=_optional_int(
+            item.get("column_index", metadata.get("column_index"))
+        ),
+        continuation_id=str(
+            item.get("continuation_id")
+            or metadata.get("continuation_id")
+            or metadata.get("table_continuation_id")
+            or ""
+        ).strip(),
+        chunk_start=_optional_int(item.get("chunk_start", metadata.get("chunk_start"))),
+        chunk_end=_optional_int(item.get("chunk_end", metadata.get("chunk_end"))),
+        normalized_text_hash=str(item.get("normalized_text_hash") or "").strip(),
+        duplicate_evidence_ids=_string_values(item.get("duplicate_evidence_ids")),
+        bbox=item.get("bbox"),
+        caption=str(item.get("caption") or "").strip(),
+        text=str(item.get("text") or item.get("content") or "").strip(),
+        ocr_text=str(item.get("ocr_text") or "").strip(),
+        vlm_text=str(item.get("vlm_text") or "").strip(),
+        source_backrefs=backrefs,
+        evidence_level=str(item.get("evidence_level") or "page").strip(),
+        metadata=metadata,
+    ).as_dict()
+
+
+def _coerced_locator_fields(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+) -> tuple[str, str, str, list[str]]:
     file_id = str(
         item.get("file_id")
         or item.get("source_id")
@@ -253,28 +273,7 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
     backrefs = _source_backrefs_from_item(item, metadata)
     if not backrefs and file_id and page_label:
         backrefs = [f"{file_id}#page:{page_label}"]
-    return EvidenceElement(
-        evidence_id=str(item.get("evidence_id") or item.get("doc_id") or "").strip(),
-        source_id=file_id,
-        source_name=str(
-            item.get("file_name")
-            or item.get("source_name")
-            or metadata.get("file_name")
-            or metadata.get("source_name")
-            or ""
-        ).strip(),
-        page_label=page_label,
-        modality=modality or "text",
-        element_id=str(item.get("element_id") or "").strip(),
-        bbox=item.get("bbox"),
-        caption=str(item.get("caption") or "").strip(),
-        text=str(item.get("text") or item.get("content") or "").strip(),
-        ocr_text=str(item.get("ocr_text") or "").strip(),
-        vlm_text=str(item.get("vlm_text") or "").strip(),
-        source_backrefs=backrefs,
-        evidence_level=str(item.get("evidence_level") or "page").strip(),
-        metadata=metadata,
-    ).as_dict()
+    return file_id, page_label, modality, backrefs
 
 
 def _merged_item_metadata(item: dict[str, Any]) -> dict[str, Any]:
@@ -404,19 +403,30 @@ def _graph_page_backrefs(support_pages: Any) -> list[str]:
 
 
 def _dedupe_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    deduped: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str]] = set()
-    for item in items:
-        key = (
-            str(item.get("evidence_id") or ""),
-            str(item.get("modality") or ""),
-            str(item.get("element_id") or ""),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(item)
-    return deduped
+    return canonicalize_and_dedupe_evidence(items)[0]
+
+
+def _string_values(value: Any) -> list[str]:
+    if isinstance(value, dict):
+        values: list[Any] = list(value.values())
+    elif isinstance(value, (list, tuple, set)):
+        values = list(value)
+    elif value is None:
+        return []
+    else:
+        values = [value]
+    return list(
+        dict.fromkeys(str(item).strip() for item in values if str(item).strip())
+    )
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 _MODALITY_TERMS = {

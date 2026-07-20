@@ -17,10 +17,19 @@ def route_finance_numeric_answer(
         str(getattr(request, "prompt", "") or ""),
         [item for item in getattr(bundle, "items", []) or [] if isinstance(item, dict)],
     )
-    if result is None or result.confidence < 0.70:
-        if result is not None:
-            bundle.metadata["finance_numeric_trace"] = result.as_trace()
+    if result is None:
+        return None
+    bundle.metadata["finance_numeric_trace"] = result.as_trace()
+    verification = dict(result.calculation_verification or {})
+    execution = dict(result.calculation_execution or {})
+    if verification and (
+        not verification.get("valid") or execution.get("status") != "ok"
+    ):
+        bundle.metadata[
+            "generation_backend"
+        ] = "finance_calculation_verification_failed"
+        return ""
+    if result.confidence < 0.70:
         return None
     bundle.metadata["generation_backend"] = "finance_numeric_answerer"
-    bundle.metadata["finance_numeric_trace"] = result.as_trace()
     return result.answer

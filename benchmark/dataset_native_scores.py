@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import string
 from typing import Any
@@ -10,10 +9,18 @@ from ktem.docqa.evidence_text import extract_final_answer_text
 from .dataset_profiles import profile_for_dataset
 from .metrics import normalize_text, round_metric, token_f1_score
 from .qasper_evidence import qasper_paragraph_f1
+from .ragtruth_native_scores import ragtruth_native_metrics
 
 _INLINE_CITATION_RE = re.compile(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]")
 _ARTICLE_RE = re.compile(r"\b(a|an|the)\b")
 _PUNCT_TABLE = str.maketrans("", "", string.punctuation)
+_QASPER_BOOLEAN_ALIASES = {"true": "yes", "yes": "yes", "false": "no", "no": "no"}
+_QASPER_UNANSWERABLE_ALIASES = {
+    "unanswerable",
+    "not answerable",
+    "insufficient evidence",
+    "not enough evidence",
+}
 
 
 def dataset_native_score_metadata(dataset_name: str) -> dict[str, Any]:
@@ -34,7 +41,11 @@ def dataset_native_score_metadata(dataset_name: str) -> dict[str, Any]:
         "qasper": {
             "contract_id": "qasper_answer_evidence_f1_v1",
             "primary_metric": "qasper_f1",
-            "native_metrics": ("qasper_f1", "qasper_evidence_f1"),
+            "native_metrics": (
+                "qasper_f1",
+                "qasper_evidence_f1",
+                "qasper_structure_valid",
+            ),
         },
         "alce": {
             "contract_id": "alce_correctness_citation_v1",
@@ -48,6 +59,9 @@ def dataset_native_score_metadata(dataset_name: str) -> dict[str, Any]:
                 "ragtruth_hallucination_span_precision",
                 "ragtruth_hallucination_span_recall",
                 "ragtruth_hallucination_span_f1",
+                "ragtruth_json_valid",
+                "ragtruth_positive_detected",
+                "ragtruth_clean_specificity",
             ),
         },
     }
@@ -86,7 +100,7 @@ def native_metrics_for_prediction(
     elif family == "alce":
         metrics = _alce_metrics(prediction)
     elif family == "ragtruth":
-        metrics = _ragtruth_metrics(prediction)
+        metrics = ragtruth_native_metrics(prediction)
     else:
         metrics = _generic_metrics(prediction)
 
@@ -139,10 +153,33 @@ def _financebench_metrics(prediction: dict[str, Any]) -> dict[str, float | None]
 
 
 def _qasper_metrics(prediction: dict[str, Any]) -> dict[str, float | None]:
+    predicted_answer = _normalize_qasper_answer(_final_answer_text(prediction))
+    gold_answers = [
+        _normalize_qasper_answer(answer) for answer in _qasper_gold_answers(prediction)
+    ]
     return {
-        "qasper_f1": _token_f1_against(prediction, _qasper_gold_answers(prediction)),
+        "qasper_f1": (
+            round_metric(token_f1_score(predicted_answer, gold_answers))
+            if gold_answers
+            else None
+        ),
         "qasper_evidence_f1": _qasper_evidence_f1(prediction),
+        "qasper_structure_valid": _qasper_structure_valid(
+            predicted_answer,
+            gold_answers,
+        ),
     }
+
+
+def _qasper_structure_valid(
+    predicted_answer: str,
+    gold_answers: list[str],
+) -> float | None:
+    contract_values = {"yes", "no", "unanswerable"}
+    normalized_gold = {normalize_text(answer) for answer in gold_answers}
+    if not normalized_gold or not normalized_gold <= contract_values:
+        return None
+    return float(normalize_text(predicted_answer) in contract_values)
 
 
 def _alce_metrics(prediction: dict[str, Any]) -> dict[str, float | None]:
@@ -191,17 +228,6 @@ def _alce_qampari_metrics(prediction: dict[str, Any]) -> dict[str, float | None]
     }
 
 
-def _ragtruth_metrics(prediction: dict[str, Any]) -> dict[str, float | None]:
-    predicted_spans = _predicted_hallucination_spans(prediction)
-    gold_spans = _gold_hallucination_spans(prediction)
-    precision, recall, span_f1 = _span_set_scores(predicted_spans, gold_spans)
-    return {
-        "ragtruth_hallucination_span_precision": precision,
-        "ragtruth_hallucination_span_recall": recall,
-        "ragtruth_hallucination_span_f1": span_f1,
-    }
-
-
 def _generic_metrics(prediction: dict[str, Any]) -> dict[str, float | None]:
     return {"generic_f1": _answer_token_f1(prediction)}
 
@@ -225,119 +251,6 @@ def _answer_correctness_score(prediction: dict[str, Any]) -> float | None:
         metrics.get("numeric_match"),
         metrics.get("formula_match"),
     )
-
-
-def _predicted_hallucination_spans(prediction: dict[str, Any]) -> list[str]:
-    parsed = _parse_json_answer(_final_answer_text(prediction))
-    if isinstance(parsed, dict):
-        for key in ("hallucination list", "hallucinations", "hallucination_spans"):
-            values = parsed.get(key)
-            if isinstance(values, list):
-                return _normalized_nonempty_strings(values)
-    if isinstance(parsed, list):
-        return _normalized_nonempty_strings(parsed)
-    return []
-
-
-def _gold_hallucination_spans(prediction: dict[str, Any]) -> list[str]:
-    metadata = dict(prediction.get("example_metadata") or {})
-    labels = metadata.get("labels") or metadata.get("hallucination_labels") or []
-    spans: list[str] = []
-    if isinstance(labels, list):
-        for label in labels:
-            if not isinstance(label, dict):
-                continue
-            if not _is_hallucination_label(label):
-                continue
-            span = _first_text_value(
-                label,
-                ("text", "span", "hallucination_span", "value", "label_text"),
-            )
-            if span:
-                spans.append(span)
-    return _normalized_nonempty_strings(spans)
-
-
-def _is_hallucination_label(label: dict[str, Any]) -> bool:
-    label_kind = normalize_text(
-        label.get("label_type")
-        or label.get("type")
-        or label.get("category")
-        or label.get("label")
-        or ""
-    )
-    if not label_kind:
-        return True
-    if any(term in label_kind for term in ("supported", "nonhallucination")):
-        return False
-    return any(
-        term in label_kind
-        for term in ("hallucination", "baseless", "conflict", "unsupported")
-    )
-
-
-def _first_text_value(item: dict[str, Any], keys: tuple[str, ...]) -> str:
-    for key in keys:
-        value = str(item.get(key) or "").strip()
-        if value:
-            return value
-    return ""
-
-
-def _span_set_scores(
-    predicted_spans: list[str],
-    gold_spans: list[str],
-) -> tuple[float, float, float]:
-    if not predicted_spans and not gold_spans:
-        return 1.0, 1.0, 1.0
-    if not gold_spans:
-        return 0.0, 1.0, 0.0
-    if not predicted_spans:
-        return 1.0, 0.0, 0.0
-
-    matches = _count_span_matches(predicted_spans, gold_spans)
-    precision = matches / len(predicted_spans)
-    recall = matches / len(gold_spans)
-    span_f1 = 0.0
-    if precision + recall:
-        span_f1 = 2 * precision * recall / (precision + recall)
-    return (
-        round_metric(precision) or 0.0,
-        round_metric(recall) or 0.0,
-        (round_metric(span_f1) or 0.0),
-    )
-
-
-def _count_span_matches(predicted_spans: list[str], gold_spans: list[str]) -> int:
-    used_gold_indexes: set[int] = set()
-    matches = 0
-    for predicted_span in predicted_spans:
-        for index, gold_span in enumerate(gold_spans):
-            if index in used_gold_indexes:
-                continue
-            if _spans_match(predicted_span, gold_span):
-                used_gold_indexes.add(index)
-                matches += 1
-                break
-    return matches
-
-
-def _spans_match(predicted_span: str, gold_span: str) -> bool:
-    if predicted_span == gold_span:
-        return True
-    if predicted_span in gold_span or gold_span in predicted_span:
-        return True
-    return token_f1_score(predicted_span, [gold_span]) >= 0.5
-
-
-def _parse_json_answer(answer: str) -> Any:
-    text = str(answer or "").strip()
-    if not text:
-        return None
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return None
 
 
 def _final_answer_text(prediction: dict[str, Any]) -> str:
@@ -448,7 +361,7 @@ def _qasper_annotation_answers(annotation: dict[str, Any]) -> list[str]:
         return ["unanswerable"]
     yes_no = annotation.get("yes_no")
     if yes_no is not None:
-        return [str(yes_no).lower()]
+        return ["yes" if bool(yes_no) else "no"]
     answers = [
         str(item).strip()
         for item in annotation.get("extractive_spans", [])
@@ -458,6 +371,13 @@ def _qasper_annotation_answers(annotation: dict[str, Any]) -> list[str]:
     if free_form:
         answers.append(free_form)
     return answers
+
+
+def _normalize_qasper_answer(answer: str) -> str:
+    normalized = normalize_text(answer)
+    if normalized in _QASPER_UNANSWERABLE_ALIASES:
+        return "unanswerable"
+    return _QASPER_BOOLEAN_ALIASES.get(normalized, str(answer or ""))
 
 
 def _qasper_evidence_f1(prediction: dict[str, Any]) -> float | None:

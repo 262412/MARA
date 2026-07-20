@@ -144,6 +144,42 @@ def test_finalizer_extracts_ragtruth_json_from_markdown_answer():
     )
 
 
+def test_finalizer_repairs_ragtruth_python_dict_once_without_changing_spans():
+    prediction: dict[str, Any] = {
+        "predicted_answer": "{'hallucination list': ['profit doubled']}",
+        "gold_evidence": [],
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="ragtruth",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_scoring"] == (
+        '{"hallucination list": ["profit doubled"]}'
+    )
+    assert prediction["answer_finalization"]["ragtruth_json_repair_attempted"] is True
+    assert prediction["answer_finalization"]["ragtruth_json_repair_succeeded"] is True
+
+
+def test_finalizer_does_not_coerce_ragtruth_prose_to_clean_json():
+    prediction: dict[str, Any] = {
+        "predicted_answer": "The response is fully supported.",
+        "gold_evidence": [],
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="ragtruth",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_scoring"] == "The response is fully supported"
+    assert prediction["answer_finalization"]["ragtruth_json_repair_attempted"] is True
+    assert prediction["answer_finalization"]["ragtruth_json_repair_succeeded"] is False
+
+
 def test_finalizer_extracts_structured_answer_and_renders_inline_citation():
     prediction: dict[str, Any] = {
         "predicted_answer": (

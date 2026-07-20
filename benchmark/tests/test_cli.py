@@ -162,6 +162,44 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     assert captured["config"].num_shards == 4
 
 
+def test_evaluate_repair_gates_cli_writes_stage_specific_report(tmp_path):
+    phase_b = tmp_path / "phase-b.json"
+    phase_g = tmp_path / "phase-g.json"
+    output = tmp_path / "repair-gates.json"
+    phase_b.write_text(json.dumps({"avg_semantic_answer_f1": 0.40}), encoding="utf-8")
+    phase_g.write_text(
+        json.dumps(
+            {
+                "avg_semantic_answer_f1": 0.49,
+                "semantic_judge_coverage": 0.997,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "evaluate-repair-gates",
+            "--phase-b-summary",
+            str(phase_b),
+            "--phase-g-summary",
+            str(phase_g),
+            "--paired-semantic-ci-low",
+            "0.01",
+            "--token-f1-rescore-delta",
+            "0",
+            "--output",
+            str(output),
+        ]
+    )
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert exit_code == 2
+    assert payload["release_gate"] is False
+    assert payload["gates"]["semantic_f1_delta_pp"]["passed"] is True
+    assert payload["gates"]["ragtruth_positive_recall"]["status"] == "missing"
+
+
 def test_rescore_artifact_cli_writes_mara_scores_without_mutating_source(tmp_path):
     source_run, source_summary = _write_long_answer_rescore_source_run(
         tmp_path / "source-run"

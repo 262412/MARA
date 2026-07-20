@@ -149,6 +149,9 @@ class BenchmarkConfig:
     backend_health_json: Path | None = None
     prompt_template: str | None = None
     external_evaluators: dict[str, str] = field(default_factory=dict)
+    semantic_evaluator: str | None = None
+    semantic_evaluator_model: str = "Qwen/Qwen3-8B"
+    semantic_evaluator_timeout_seconds: float = 60.0
 
     def __post_init__(self) -> None:
         self.engine = normalize_engine_name(self.engine)

@@ -129,7 +129,7 @@ def _answer_texts(answer: dict[str, Any]) -> list[str]:
         return ["unanswerable"]
     yes_no = answer.get("yes_no")
     if yes_no is not None:
-        return [str(yes_no).lower()]
+        return ["yes" if bool(yes_no) else "no"]
     values = [
         str(item).strip()
         for item in ensure_list(answer.get("extractive_spans"))

@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from benchmark.diagnostics import prediction_diagnostics
 from benchmark.runner import run_benchmark
@@ -132,6 +133,59 @@ def test_prediction_diagnostics_classifies_raw_retriever_zero():
     assert diagnostics["retrieval_failure_type"] == "raw_retriever_zero"
     assert diagnostics["citation_failure_type"] == "missing_citation_metadata"
     assert diagnostics["failure_class"] == "no_retrieved_hits"
+    assert diagnostics["pipeline_failure_class"] == "retrieval_miss"
+
+
+def test_prediction_diagnostics_uses_stage_failure_taxonomy():
+    cases: list[tuple[dict[str, Any], str]] = [
+        (
+            {
+                "answer_finalization": {"task_contract_status": "error"},
+                "predicted_answer": "bad json",
+            },
+            "task_contract_error",
+        ),
+        (
+            {
+                "semantic_answer_evaluation": {"judge_status": "error"},
+                "predicted_answer": "answer",
+            },
+            "judge_error",
+        ),
+        (
+            {
+                "evidence_metadata": {
+                    "finance_numeric_trace": {
+                        "calculation_execution": {"status": "error"}
+                    }
+                },
+                "predicted_answer": "",
+            },
+            "calculation_error",
+        ),
+        (
+            {
+                "retrieved_hits": [{"document_id": "doc", "text": "evidence"}],
+                "gold_evidence": [{"document_id": "doc", "text": "gold span"}],
+                "predicted_answer": "",
+            },
+            "coverage_miss",
+        ),
+        (
+            {
+                "retrieved_hits": [{"document_id": "doc", "text": "gold span"}],
+                "gold_evidence": [{"document_id": "doc", "text": "gold span"}],
+                "verify_decision": {"status": "unsupported"},
+                "predicted_answer": "answer",
+            },
+            "verification_error",
+        ),
+    ]
+
+    assert [
+        prediction_diagnostics(prediction)["pipeline_failure_class"]
+        for prediction, _expected in cases
+    ] == [expected for _prediction, expected in cases]
 
 
 def test_prediction_diagnostics_classifies_runtime_error_before_retrieval():

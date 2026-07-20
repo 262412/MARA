@@ -8,7 +8,7 @@ from .retrieval_adequacy import financial_statement_match_count
 FUSION_RANKER = "modality_normalized_rrf_v1"
 WEIGHTED_RANKER = "weighted_cross_modal_v1"
 RRF_RANKER = "reciprocal_rank_fusion_v1"
-MODALITY_TOP_K = {"text": 2, "page_image": 1, "element": 2, "graph": 1}
+MODALITY_TOP_K = {"text": 30, "page_image": 20, "element": 20, "graph": 20}
 MODALITY_WEIGHTS = {
     "text": 1.0,
     "page_image": 1.2,

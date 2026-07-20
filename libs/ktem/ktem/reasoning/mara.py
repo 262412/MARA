@@ -25,7 +25,7 @@ from .mara_route_probe import (
     dataset_family,
     page_image_route_available,
 )
-from .mara_route_retrieval import route_retrieval_metadata
+from .mara_route_retrieval import controller_text_retrieve, route_retrieval_metadata
 from .mara_visual_answering import route_visual_answer as _route_visual_answer
 from .mara_visual_gate import hybrid_should_use_visual_generator
 from .simple import FullQAPipeline
@@ -375,6 +375,14 @@ class MaraAgentPipeline(FullQAPipeline):
         pipeline = super().prepare_pipeline_instance(settings, retrievers)
         prefix = f"reasoning.options.{cls.get_info()['id']}"
         pipeline.agent_mode = settings.get(f"{prefix}.agent_mode", "auto")
+        pipeline.retrieval_candidate_kwargs = {
+            "top_k": 30,
+            "do_extend": True,
+            "dense_top_k": 50,
+            "sparse_top_k": 50,
+            "rerank_top_k": 80,
+            "rrf_k": 60,
+        }
         return pipeline
 
     @classmethod
@@ -420,7 +428,12 @@ class MaraAgentPipeline(FullQAPipeline):
             history,
         )
         attempts = [{"attempt": 1, "evidence_count": len(docs), "retry_reason": ""}]
-        if _should_retry_retrieval(getattr(self, "agent_mode", None), docs):
+        retry_disabled = bool(
+            getattr(self, "_mara_disable_nested_retrieval_retry", False)
+        )
+        if not retry_disabled and _should_retry_retrieval(
+            getattr(self, "agent_mode", None), docs
+        ):
             docs, info = super().retrieve(
                 retrieval_query(message, domain=_retrieval_domain(self)),
                 history,
@@ -452,13 +465,18 @@ class MaraAgentPipeline(FullQAPipeline):
         retrieval_message = str(routing_message or message)
 
         def retrieve(_request: Any, _decision: Any) -> dict[str, Any]:
+            query = str(getattr(_request, "retrieval_query", "") or retrieval_message)
             return route_retrieval_metadata(
                 self,
                 _decision.route,
-                retrieval_message,
+                query,
                 history,
                 understanding,
-                text_retrieve=lambda: self.retrieve(retrieval_message, history),
+                text_retrieve=lambda: controller_text_retrieve(
+                    self,
+                    query,
+                    history,
+                ),
                 metadata_builder=self.build_evidence_metadata,
             )
 

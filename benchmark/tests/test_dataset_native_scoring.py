@@ -35,7 +35,47 @@ def test_ragtruth_native_score_uses_hallucination_spans_not_gold_answer_f1():
     assert metrics["ragtruth_hallucination_span_precision"] == 1.0
     assert metrics["ragtruth_hallucination_span_recall"] == 1.0
     assert metrics["ragtruth_hallucination_span_f1"] == 1.0
+    assert metrics["ragtruth_json_valid"] == 1.0
+    assert metrics["ragtruth_positive_detected"] == 1.0
+    assert metrics["ragtruth_clean_specificity"] is None
     assert metrics["native_score"] == 1.0
+
+
+def test_ragtruth_native_score_reports_invalid_json_separately_from_empty_list():
+    prediction: dict[str, Any] = {
+        "predicted_answer": "The response looks supported.",
+        "gold_answers": ["The response being verified."],
+        "metrics": {"f1": 0.0},
+        "example_metadata": {"labels": []},
+    }
+
+    metrics, _metadata = native_metrics_for_prediction(
+        prediction,
+        dataset_name="ragtruth-plan5",
+    )
+
+    assert metrics["ragtruth_json_valid"] == 0.0
+    assert metrics["ragtruth_positive_detected"] is None
+    assert metrics["ragtruth_clean_specificity"] == 0.0
+    assert metrics["ragtruth_hallucination_span_f1"] == 0.0
+    assert metrics["native_score"] == 0.0
+
+
+def test_ragtruth_clean_specificity_accepts_valid_empty_hallucination_list():
+    prediction: dict[str, Any] = {
+        "predicted_answer": '{"hallucination list": []}',
+        "gold_answers": ["The response being verified."],
+        "metrics": {"f1": 0.0},
+        "example_metadata": {"labels": []},
+    }
+
+    metrics, _metadata = native_metrics_for_prediction(
+        prediction,
+        dataset_name="ragtruth-plan5",
+    )
+
+    assert metrics["ragtruth_json_valid"] == 1.0
+    assert metrics["ragtruth_clean_specificity"] == 1.0
 
 
 def test_ragtruth_native_score_accepts_official_baseless_label_types():
@@ -87,13 +127,41 @@ def test_qasper_native_score_computes_dataset_token_f1_as_mara_score():
 
     assert prediction["mara_scoring_contract"] == "qasper_answer_evidence_f1_v1"
     assert prediction["mara_primary_metric"] == "qasper_f1"
-    assert prediction["mara_native_metrics"] == ["qasper_f1", "qasper_evidence_f1"]
+    assert prediction["mara_native_metrics"] == [
+        "qasper_f1",
+        "qasper_evidence_f1",
+        "qasper_structure_valid",
+    ]
     assert prediction["metrics"]["qasper_f1"] == 1.0
     assert prediction["metrics"]["native_score"] == 1.0
     assert prediction["metrics"]["mara_score"] == 1.0
     assert (
         prediction["metrics"]["mara_proxy_score"] != prediction["metrics"]["mara_score"]
     )
+
+
+def test_qasper_native_score_normalizes_boolean_aliases_and_unanswerable():
+    boolean_metrics, _ = native_metrics_for_prediction(
+        {
+            "predicted_answer": "yes",
+            "gold_answers": ["true"],
+            "metrics": {},
+        },
+        dataset_name="qasper-dev",
+    )
+    unanswerable_metrics, _ = native_metrics_for_prediction(
+        {
+            "predicted_answer": "insufficient evidence",
+            "gold_answers": ["unanswerable"],
+            "metrics": {},
+        },
+        dataset_name="qasper-dev",
+    )
+
+    assert boolean_metrics["qasper_f1"] == 1.0
+    assert boolean_metrics["qasper_structure_valid"] == 1.0
+    assert unanswerable_metrics["qasper_f1"] == 1.0
+    assert unanswerable_metrics["qasper_structure_valid"] == 1.0
 
 
 def test_qasper_native_score_computes_token_f1_when_metric_is_missing():
@@ -153,7 +221,11 @@ def test_qasper_native_score_reports_official_paragraph_evidence_f1():
         dataset_name="qasper-dev",
     )
 
-    assert metadata["native_metrics"] == ("qasper_f1", "qasper_evidence_f1")
+    assert metadata["native_metrics"] == (
+        "qasper_f1",
+        "qasper_evidence_f1",
+        "qasper_structure_valid",
+    )
     assert metrics["qasper_f1"] == 1.0
     assert metrics["qasper_evidence_f1"] == 0.5
     assert metrics["native_score"] == 1.0

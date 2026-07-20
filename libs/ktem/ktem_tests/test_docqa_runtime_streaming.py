@@ -169,7 +169,21 @@ def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch)
     }
     assert final.response.retrieve_decision["status"] == "good"
     assert final.response.verify_decision["status"] == "supported"
-    assert final.response.evidence_bundle["items"] == [expected_reference_evidence]
+    [bundle_item] = final.response.evidence_bundle["items"]
+    expected_bundle_fields = {
+        key: value
+        for key, value in expected_reference_evidence.items()
+        if key != "source_backrefs"
+    }
+    assert {
+        key: bundle_item[key] for key in expected_bundle_fields
+    } == expected_bundle_fields
+    assert bundle_item["source_backrefs"] == ["refs#source"]
+    assert bundle_item["canonical_id"].startswith("text:")
+    assert bundle_item["normalized_text_hash"]
+    assert final.response.evidence_bundle["metadata"]["schema_version"] == (
+        "evidence_bundle.v2"
+    )
     assert final.stream_events[-1]["channel"] == "info"
 
 

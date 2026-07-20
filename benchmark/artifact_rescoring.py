@@ -14,6 +14,8 @@ from .mara_oriented_scores import (
 from .reports import write_reports
 from .research_evaluators import external_research_adapter_metrics
 from .scoring import normalize_operational_fields, score_prediction
+from .semantic_answer import semantic_judge_backend
+from .stage_metrics import prediction_stage_metrics
 from .summary import add_mara_summary_fields
 from .verifier_observability import prediction_verifier_observability
 
@@ -26,19 +28,29 @@ def rescore_artifact_run(
     artifact_detail: str = "compact",
     benchmark_answer_mode: str = "scoring_adapter_v1",
     external_evaluators: dict[str, str] | None = None,
+    semantic_evaluator: str | None = None,
+    semantic_evaluator_model: str = "Qwen/Qwen3-8B",
+    semantic_evaluator_timeout_seconds: float = 60.0,
 ) -> Path:
     source_dir = Path(run_dir).resolve()
     summary = _read_json(source_dir / "summary.json")
     dataset_name = str(summary.get("dataset_name") or "unknown")
     predictions = _read_jsonl(source_dir / "predictions.jsonl")
     evaluator_route = _external_evaluator_route(external_evaluators)
+    semantic_judge = semantic_judge_backend(
+        semantic_evaluator,
+        model=semantic_evaluator_model,
+        timeout_seconds=semantic_evaluator_timeout_seconds,
+    )
     for prediction in predictions:
         _rescore_prediction_base_metrics(
             prediction,
             dataset_name=dataset_name,
             benchmark_answer_mode=benchmark_answer_mode,
+            semantic_judge=semantic_judge,
         )
         add_mara_oriented_metrics(prediction, dataset_name=dataset_name)
+        prediction["stage_metrics"] = prediction_stage_metrics(prediction)
         if evaluator_route:
             (
                 prediction["external_adapter_metrics"],
@@ -73,6 +85,7 @@ def _rescore_prediction_base_metrics(
     *,
     dataset_name: str,
     benchmark_answer_mode: str,
+    semantic_judge=None,
 ) -> None:
     _prepare_prediction_defaults(prediction)
     _refresh_indexed_inline_citations(prediction)
@@ -87,7 +100,10 @@ def _rescore_prediction_base_metrics(
         prediction,
         answer_key="predicted_answer",
     )
-    prediction["metrics"] = score_prediction(prediction)
+    prediction["metrics"] = score_prediction(
+        prediction,
+        semantic_judge=semantic_judge,
+    )
     prediction["diagnostics"] = prediction_diagnostics(prediction)
     prediction["verifier_observability"] = prediction_verifier_observability(prediction)
 
@@ -131,6 +147,9 @@ def rescore_artifact_runs(
     artifact_detail: str = "compact",
     benchmark_answer_mode: str = "scoring_adapter_v1",
     external_evaluators: dict[str, str] | None = None,
+    semantic_evaluator: str | None = None,
+    semantic_evaluator_model: str = "Qwen/Qwen3-8B",
+    semantic_evaluator_timeout_seconds: float = 60.0,
 ) -> list[Path]:
     runs = _discover_rescorable_runs(Path(input_dir))
     return [
@@ -141,6 +160,9 @@ def rescore_artifact_runs(
             artifact_detail=artifact_detail,
             benchmark_answer_mode=benchmark_answer_mode,
             external_evaluators=external_evaluators,
+            semantic_evaluator=semantic_evaluator,
+            semantic_evaluator_model=semantic_evaluator_model,
+            semantic_evaluator_timeout_seconds=(semantic_evaluator_timeout_seconds),
         )
         for run_dir in runs
     ]

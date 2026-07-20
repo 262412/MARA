@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .baseline_registry import assert_writable_benchmark_output
 from .dataset_decision_report import (
     phase2_failure_counts_markdown,
     phase2_summary_markdown,
@@ -24,6 +25,7 @@ from .report_external_evaluators import (
 from .report_headline import headline_score_lines
 from .report_route_metrics import route_metrics_markdown
 from .report_route_rankings import route_ranking_markdown
+from .report_summary_metrics import diagnostic_metric_lines
 from .report_verifier_observability import verifier_observability_markdown
 
 ARTIFACT_LIMITS = {
@@ -39,11 +41,13 @@ _TRACE_FIELDS = {
     "events",
 }
 _EVIDENCE_LIST_FIELDS = {
+    "candidate_evidence",
     "element_index",
     "evidence",
     "graph_evidence",
     "items",
     "page_image_index",
+    "reranked_evidence",
     "retrieved_hits",
 }
 _SCORE_MAP_FIELDS = {
@@ -73,6 +77,7 @@ _CSV_FIELD_ORDER = [
     "avg_mara_proxy_score",
     "avg_em",
     "avg_f1",
+    "avg_semantic_answer_f1",
     "product_avg_em",
     "product_avg_f1",
     "avg_answer_for_user_tokens",
@@ -187,6 +192,8 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         [
             f"- Diagnostic EM: `{summary.get('avg_em')}`",
             f"- Diagnostic F1: `{summary.get('avg_f1')}`",
+            f"- Semantic Answer F1: `{summary.get('avg_semantic_answer_f1')}`",
+            f"- Semantic Judge Coverage: `{summary.get('semantic_judge_coverage')}`",
             f"- Product Diagnostic EM: `{summary.get('product_avg_em')}`",
             f"- Product Diagnostic F1: `{summary.get('product_avg_f1')}`",
             "- Avg Answer Tokens User/Scoring: "
@@ -212,47 +219,7 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         )
     lines.extend(phase2_summary_markdown(summary))
     lines.extend(phase3_summary_markdown(summary))
-    lines.extend(
-        [
-            f"- ANLS: `{summary.get('avg_anls')}`",
-            f"- Page Hit: `{summary.get('avg_page_hit')}`",
-            f"- Citation Recall: `{summary.get('avg_citation_recall')}`",
-            "- Citation Metadata Recall: "
-            f"`{summary.get('avg_citation_metadata_recall')}`",
-            "- Citation Metadata Precision: "
-            f"`{summary.get('avg_citation_metadata_precision')}`",
-            "- Citation Inline Recall: "
-            f"`{summary.get('avg_citation_inline_recall')}`",
-            "- Citation Inline Precision: "
-            f"`{summary.get('avg_citation_inline_precision')}`",
-            f"- Element Hit: `{summary.get('avg_element_hit')}`",
-            f"- Element Locator Hit: `{summary.get('avg_element_locator_hit')}`",
-            f"- Table Hit: `{summary.get('avg_table_hit')}`",
-            f"- Figure Hit: `{summary.get('avg_figure_hit')}`",
-            f"- Formula Hit: `{summary.get('avg_formula_hit')}`",
-            f"- Slide Hit: `{summary.get('avg_slide_hit')}`",
-            f"- Span Recall: `{summary.get('avg_span_recall')}`",
-            f"- Formula Match: `{summary.get('avg_formula_match')}`",
-            f"- Numeric Match: `{summary.get('avg_numeric_match')}`",
-            f"- Abstention Rate: `{summary.get('avg_abstention_rate')}`",
-            f"- False Abstention: `{summary.get('avg_false_abstention')}`",
-            "- Markdown Table Renderable: "
-            f"`{summary.get('avg_markdown_table_renderable')}`",
-            f"- LaTeX Renderable: `{summary.get('avg_latex_renderable')}`",
-            f"- Rewrite Skipped: `{summary.get('avg_rewrite_skipped')}`",
-            "- Guardrail Expectation Match: "
-            f"`{summary.get('avg_guardrail_expectation_match')}`",
-            f"- Avg Parse Seconds: `{summary.get('avg_parse_seconds')}`",
-            f"- Avg Index Seconds: `{summary.get('avg_index_seconds')}`",
-            f"- Avg Retrieval Seconds: `{summary.get('avg_retrieval_seconds')}`",
-            f"- Avg Generation Seconds: `{summary.get('avg_generation_seconds')}`",
-            f"- Cache Mode: `{summary.get('cache_mode')}`",
-            f"- Parse Cache Hit Rate: `{summary.get('parse_cache_hit_rate')}`",
-            f"- Embedding Cache Hit Rate: `{summary.get('embedding_cache_hit_rate')}`",
-            f"- Executed Routes: `{summary.get('num_executed_routes')}`",
-            f"- Skipped Routes: `{summary.get('num_skipped_routes')}`",
-        ]
-    )
+    lines.extend(diagnostic_metric_lines(summary))
     return lines
 
 
@@ -265,9 +232,12 @@ def write_reports(
 ) -> Path:
     artifact_detail = _normalize_artifact_detail(artifact_detail)
     output_dir = Path(output_dir).resolve()
+    assert_writable_benchmark_output(output_dir)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = output_dir / f"{timestamp}_{_to_slug(suite_name)}"
-    run_dir.mkdir(parents=True, exist_ok=True)
+    if run_dir.exists():
+        raise FileExistsError(f"Benchmark report directory already exists: {run_dir}")
+    run_dir.mkdir(parents=True)
 
     summary_path = run_dir / "summary.json"
     predictions_path = run_dir / "predictions.jsonl"

@@ -23,6 +23,7 @@ from .elements import annotate_document_with_element_metadata
 from .indexing_status import IndexingStatusTracker, refresh_vector_store
 from .performance_cache import JsonDiskCache, content_hash, stable_cache_key
 from .rankings import BaseReranking, LLMReranking
+from .retrieval_identity import reciprocal_rank_fuse
 from .retrieval_quality import QueryRoute, route_query
 from .retrieval_trace import RetrievalCostStats, RetrievalTrace
 
@@ -254,13 +255,14 @@ class VectorRetrieval(BaseRetrieval):
     rerankers: Sequence[BaseReranking] = []
     top_k: int = 5
     first_round_top_k_mult: int = 10
-    dense_top_k: int = 100
-    sparse_top_k: int = 100
-    rerank_top_k: int = 50
+    dense_top_k: int = 50
+    sparse_top_k: int = 50
+    rerank_top_k: int = 80
     rrf_k: int = 60
     modality_boost: float = 0.05
     retrieval_mode: str = "hybrid"  # vector, text, hybrid
     last_trace: dict | None = None
+    _reciprocal_rank_fuse = staticmethod(reciprocal_rank_fuse)
 
     def _filter_docs(
         self, documents: list[RetrievedDocument], top_k: int | None = None
@@ -268,51 +270,6 @@ class VectorRetrieval(BaseRetrieval):
         if top_k:
             documents = documents[:top_k]
         return documents
-
-    @staticmethod
-    def _reciprocal_rank_fuse(
-        vector_docs: list[RetrievedDocument],
-        text_docs: list[RetrievedDocument],
-        k: int = 60,
-    ) -> list[RetrievedDocument]:
-        if not vector_docs:
-            return text_docs
-        if not text_docs:
-            return vector_docs
-
-        fused_scores: dict[str, float] = {}
-        fused_docs: dict[str, RetrievedDocument] = {}
-        best_ranks: dict[str, int] = {}
-
-        for docs in (vector_docs, text_docs):
-            for rank, doc in enumerate(docs, start=1):
-                doc_id = doc.doc_id
-                fused_scores[doc_id] = fused_scores.get(doc_id, 0.0) + 1 / (k + rank)
-
-                current_best_rank = best_ranks.get(doc_id)
-                current_doc = fused_docs.get(doc_id)
-                keep_doc = current_doc is None or (
-                    current_best_rank is not None and rank < current_best_rank
-                )
-                if (
-                    current_doc is not None
-                    and rank == current_best_rank
-                    and len(doc.metadata) > len(current_doc.metadata)
-                ):
-                    keep_doc = True
-
-                if keep_doc:
-                    fused_docs[doc_id] = doc
-                    best_ranks[doc_id] = rank
-
-        result = []
-        for doc_id, score in fused_scores.items():
-            doc = fused_docs[doc_id]
-            doc_dict = doc.to_dict()
-            doc_dict["score"] = score
-            result.append(RetrievedDocument(**doc_dict))
-
-        return sorted(result, key=lambda doc: doc.score, reverse=True)
 
     def _apply_query_route_boost(
         self, documents: list[RetrievedDocument], route: QueryRoute

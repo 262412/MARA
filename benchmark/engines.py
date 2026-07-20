@@ -334,7 +334,6 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             "max_context_length": self.max_context_length,
             "reasoning_type": config_value(self.config, "reasoning_type", None),
             "agent_mode": config_value(self.config, "agent_mode", None),
-            "task_type": config_value(self.config, "task_type", None),
             "artifact_type": config_value(self.config, "artifact_type", None),
             "graph_mode": config_value(self.config, "graph_mode", None),
             "visual_retriever_backend": config_value(

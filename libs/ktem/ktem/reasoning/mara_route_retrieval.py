@@ -36,6 +36,23 @@ _QUERY_STOPWORDS = {
 }
 
 
+def controller_text_retrieve(
+    pipeline: Any,
+    query: str,
+    history: list,
+) -> tuple[list[Any], list[Any]]:
+    marker = "_mara_disable_nested_retrieval_retry"
+    previous = getattr(pipeline, marker, None)
+    setattr(pipeline, marker, True)
+    try:
+        return pipeline.retrieve(query, history)
+    finally:
+        if previous is None:
+            delattr(pipeline, marker)
+        else:
+            setattr(pipeline, marker, previous)
+
+
 def route_retrieval_metadata(
     pipeline: Any,
     route: str,

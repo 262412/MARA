@@ -412,3 +412,55 @@ def test_normalize_slidevqa_parquet_manifest_materializes_page_images(tmp_path):
             "citation": "deck_A_page_2#page:2",
         }
     ]
+
+
+def test_normalize_qasper_manifest_uses_yes_no_not_python_booleans(tmp_path):
+    source_path = tmp_path / "qasper_boolean.json"
+    source_path.write_text(
+        json.dumps(
+            {
+                "paper-1": {
+                    "title": "Paper title",
+                    "abstract": "Paper abstract.",
+                    "full_text": [],
+                    "qas": [
+                        {
+                            "question_id": "yes",
+                            "question": "Was retrieval used?",
+                            "answers": [
+                                {
+                                    "answer": {
+                                        "extractive_spans": [],
+                                        "free_form_answer": "",
+                                        "yes_no": True,
+                                        "evidence": ["Retrieval was used."],
+                                    }
+                                }
+                            ],
+                        },
+                        {
+                            "question_id": "no",
+                            "question": "Was retrieval omitted?",
+                            "answers": [
+                                {
+                                    "answer": {
+                                        "extractive_spans": [],
+                                        "free_form_answer": "",
+                                        "yes_no": False,
+                                        "evidence": ["Retrieval was used."],
+                                    }
+                                }
+                            ],
+                        },
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest_path = tmp_path / "qasper_boolean_manifest.json"
+    normalize_qasper_manifest(source_path, manifest_path)
+    bundle = load_manifest(manifest_path)
+
+    assert [example.answers for example in bundle.examples] == [["yes"], ["no"]]

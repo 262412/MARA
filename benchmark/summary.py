@@ -22,7 +22,11 @@ from .score_authority import (
     primary_score_label,
     score_authority_level,
 )
+from .semantic_answer import SEMANTIC_ANSWER_CONTRACT
+from .semantic_summary import semantic_answer_coverage
+from .stage_metrics import stage_metric_summary
 from .summary_diagnostics import diagnostic_summary_fields
+from .summary_rankings import route_rankings
 from .verification_metrics import verification_summary
 from .verifier_observability import (
     route_verifier_observability_fields,
@@ -61,6 +65,7 @@ def build_benchmark_summary(
         **_primary_score_summary(predictions),
         **_quality_summary(predictions),
         **_native_detail_metric_summary(predictions),
+        **stage_metric_summary(predictions),
         **benchmark_prompt_summary(predictions),
         **answer_finalization_summary(predictions),
         **_format_guardrail_summary(predictions),
@@ -95,7 +100,10 @@ def build_benchmark_summary(
             _role_predictions(predictions, {"diagnostic", "prototype"}),
         ),
         **_quality_route_summary(predictions),
-        "route_rankings": _route_rankings(bundle.dataset_name, predictions),
+        "route_rankings": route_rankings(
+            bundle.dataset_name,
+            _route_metric_table(bundle.dataset_name, predictions),
+        ),
         "mara_score_metadata": _headline_score_metadata(
             bundle.dataset_name,
             predictions,
@@ -121,6 +129,7 @@ def add_mara_summary_fields(
         **_primary_score_summary(predictions),
         **_quality_summary(predictions),
         **_native_detail_metric_summary(predictions),
+        **stage_metric_summary(predictions),
         **answer_finalization_summary(predictions),
         "phase2_dataset_decision": phase2_dataset_decision(dataset_name),
         "phase2_failure_counts": phase2_failure_counts(dataset_name, predictions),
@@ -140,7 +149,10 @@ def add_mara_summary_fields(
             _role_predictions(predictions, {"diagnostic", "prototype"}),
         ),
         **_quality_route_summary(predictions),
-        "route_rankings": _route_rankings(dataset_name, predictions),
+        "route_rankings": route_rankings(
+            dataset_name,
+            _route_metric_table(dataset_name, predictions),
+        ),
         "mara_score_metadata": _headline_score_metadata(dataset_name, predictions),
         "mara_proxy_score_metadata": mara_proxy_score_metadata(dataset_name),
     }
@@ -178,8 +190,17 @@ def _identity_summary(
 
 def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
+        "answer_quality_contract": SEMANTIC_ANSWER_CONTRACT,
         "avg_em": _avg_metric(predictions, "em"),
         "avg_f1": _avg_metric(predictions, "f1"),
+        "avg_semantic_answer_precision": _avg_metric(
+            predictions, "semantic_answer_precision"
+        ),
+        "avg_semantic_answer_recall": _avg_metric(
+            predictions, "semantic_answer_recall"
+        ),
+        "avg_semantic_answer_f1": _avg_metric(predictions, "semantic_answer_f1"),
+        **semantic_answer_coverage(predictions),
         "product_avg_em": avg_product_metric(predictions, "em"),
         "product_avg_f1": avg_product_metric(predictions, "f1"),
         "avg_anls": _avg_metric(predictions, "anls"),
@@ -247,6 +268,9 @@ def _quality_route_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "quality_avg_em": _avg_metric(quality_predictions, "em"),
         "quality_avg_f1": _avg_metric(quality_predictions, "f1"),
+        "quality_avg_semantic_answer_f1": _avg_metric(
+            quality_predictions, "semantic_answer_f1"
+        ),
         "quality_product_avg_em": avg_product_metric(quality_predictions, "em"),
         "quality_product_avg_f1": avg_product_metric(quality_predictions, "f1"),
         "quality_avg_mara_score": _avg_metric(quality_predictions, "mara_score"),
@@ -471,6 +495,9 @@ def _route_metric_table(
                 "num_predictions": len(route_predictions),
                 "avg_em": _avg_metric(route_predictions, "em"),
                 "avg_f1": _avg_metric(route_predictions, "f1"),
+                "avg_semantic_answer_f1": _avg_metric(
+                    route_predictions, "semantic_answer_f1"
+                ),
                 "product_avg_em": avg_product_metric(route_predictions, "em"),
                 "product_avg_f1": avg_product_metric(route_predictions, "f1"),
                 "avg_answer_for_user_tokens": avg_answer_tokens(
@@ -517,45 +544,6 @@ def _route_metric_table(
             }
         )
     return rows
-
-
-def _route_rankings(
-    dataset_name: str,
-    predictions: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    rows = _route_metric_table(dataset_name, predictions)
-    return [
-        ranking
-        for metric in (
-            "avg_native_score",
-            "avg_mara_proxy_score",
-            "avg_mara_score",
-            "avg_f1",
-        )
-        for ranking in [_route_ranking(dataset_name, rows, metric)]
-        if ranking is not None
-    ]
-
-
-def _route_ranking(
-    dataset_name: str,
-    rows: list[dict[str, Any]],
-    metric: str,
-) -> dict[str, Any] | None:
-    ranked = [
-        (row["route"], row[metric]) for row in rows if row.get(metric) is not None
-    ]
-    ranked.sort(key=lambda item: (-float(item[1]), item[0]))
-    if not ranked:
-        return None
-    return {
-        "dataset_name": dataset_name,
-        "rank_metric": metric,
-        "routes": [
-            {"rank": index, "route": route, "score": score}
-            for index, (route, score) in enumerate(ranked, start=1)
-        ],
-    }
 
 
 def _ordered_routes(predictions: list[dict[str, Any]]) -> list[str]:

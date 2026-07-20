@@ -30,6 +30,8 @@ from .route_timeout import RouteExecutionTimeout, run_with_route_timeout
 from .sampling import select_examples_for_config, selection_summary
 from .schemas import BenchmarkConfig, ManifestBundle
 from .scoring import normalize_operational_fields, score_prediction
+from .semantic_answer import semantic_judge_backend
+from .stage_metrics import prediction_stage_metrics
 from .summary import build_benchmark_summary
 from .verifier_observability import prediction_verifier_observability
 
@@ -385,6 +387,11 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         if engine_key not in engines:
             engines[engine_key] = get_engine(route_config.engine, route_config)
         engine = engines[engine_key]
+        semantic_judge = semantic_judge_backend(
+            route_config.semantic_evaluator,
+            model=route_config.semantic_evaluator_model,
+            timeout_seconds=route_config.semantic_evaluator_timeout_seconds,
+        )
         _prepare_engine_examples(engine, selected_bundle, selected_bundle.examples)
 
         for example in selected_bundle.examples:
@@ -425,13 +432,17 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                 prediction,
                 answer_key="predicted_answer",
             )
-            prediction["metrics"] = score_prediction(prediction)
+            prediction["metrics"] = score_prediction(
+                prediction,
+                semantic_judge=semantic_judge,
+            )
             prediction["diagnostics"] = prediction_diagnostics(prediction)
             prediction["verifier_observability"] = prediction_verifier_observability(
                 prediction
             )
             add_prediction_taxonomy(prediction)
             add_mara_oriented_metrics(prediction, dataset_name=bundle.dataset_name)
+            prediction["stage_metrics"] = prediction_stage_metrics(prediction)
             prediction["adapter_metrics"] = research_adapter_metrics(prediction)
             prediction["adapter_metric_metadata"] = research_adapter_metric_metadata()
             (
