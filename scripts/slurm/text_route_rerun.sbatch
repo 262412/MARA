@@ -24,6 +24,9 @@ ROUTE="${MARA_TEXT_ROUTE:-${MARA_FINAL_ROUTE:-all}}"
 LIMIT="${MARA_TEXT_LIMIT:-${MARA_FINAL_LIMIT:-10}}"
 SAMPLE_SEED="${MARA_TEXT_SAMPLE_SEED:-${MARA_FINAL_SAMPLE_SEED:-20260615}}"
 ROUTE_TIMEOUT_SECONDS="${MARA_TEXT_ROUTE_TIMEOUT_SECONDS:-${MARA_FINAL_ROUTE_TIMEOUT_SECONDS:-240}}"
+SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"
+SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"
+SEMANTIC_EVALUATOR_TIMEOUT_SECONDS="${MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS:-60}"
 SUITE_NAME="${NAME}-${RUN_ID}"
 LOG_ROOT="${OUT_ROOT}/logs/${RUN_ID}"
 BENCHMARK_LOG="${LOG_ROOT}/benchmark.log"
@@ -187,6 +190,9 @@ uv run --python 3.10 python -m benchmark run \
   --benchmark-prompt-profile auto \
   --benchmark-answer-mode scoring_adapter_v1 \
   --benchmark-no-think \
+  --semantic-evaluator "$SEMANTIC_EVALUATOR" \
+  --semantic-evaluator-model "$SEMANTIC_EVALUATOR_MODEL" \
+  --semantic-evaluator-timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS" \
   --route-timeout-seconds "$ROUTE_TIMEOUT_SECONDS" \
   --docqa-citation-mode inline | tee "$BENCHMARK_LOG"
 
@@ -198,3 +204,4 @@ test -f "$RUN_DIR/predictions.jsonl"
 test -f "$RUN_DIR/report.md"
 
 log "outputs=${RUN_DIR}"
+mara_cleanup_benchmark_runtime

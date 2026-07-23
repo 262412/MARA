@@ -158,13 +158,41 @@ class DeletionCoordinator:
     ) -> None:
         if not target_ids or store is None:
             return
+        refresh_docstore_index = False
         for target_id in target_ids:
             try:
-                store.delete([target_id])
+                if stage == "docstore":
+                    self._delete_docstore_entry(store, target_id)
+                    refresh_docstore_index = True
+                else:
+                    store.delete([target_id])
             except Exception as exc:
                 if _is_missing_error(exc):
                     continue
                 raise _stage_error(stage, file_id, exc) from exc
+        if stage == "docstore" and refresh_docstore_index:
+            self._refresh_docstore_index(store, file_id)
+
+    def _delete_docstore_entry(self, store: Any, target_id: str) -> None:
+        try:
+            store.delete([target_id], refresh_indices=False)
+        except TypeError as exc:
+            if "refresh_indices" not in str(exc):
+                raise
+            store.delete([target_id])
+
+    def _refresh_docstore_index(self, store: Any, file_id: str) -> None:
+        create_fts_index = getattr(store, "create_fts_index", None)
+        if create_fts_index is None:
+            return
+        try:
+            create_fts_index(
+                "text",
+                tokenizer_name="en_stem",
+                replace=True,
+            )
+        except Exception as exc:
+            raise _stage_error("docstore", file_id, exc) from exc
 
     def _delete_artifacts(self, file_id: str) -> None:
         if self._artifact_cleaner is None:

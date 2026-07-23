@@ -140,6 +140,17 @@ def test_text_route_slurm_script_requires_isolated_benchmark_runtime():
         "configure_mara_local_models.py"
     )
     assert "--docqa-citation-mode inline" in text
+    assert 'SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"' in text
+    assert (
+        'SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"'
+        in text
+    )
+    assert '--semantic-evaluator "$SEMANTIC_EVALUATOR"' in text
+    assert '--semantic-evaluator-model "$SEMANTIC_EVALUATOR_MODEL"' in text
+    assert (
+        '--semantic-evaluator-timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS"'
+        in text
+    )
     assert (
         'KH_APP_DATA_DIR="${KH_APP_DATA_DIR:-/users/tbczhang/fastscratch/mara_runtime/ktem_app_data}"'
         not in text
@@ -147,12 +158,67 @@ def test_text_route_slurm_script_requires_isolated_benchmark_runtime():
     assert "${MARA_RUNTIME_DIR}/ktem_app_data" not in text
 
 
+def test_multimodal_slurm_script_forwards_offline_semantic_evaluator_contract():
+    text = SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert 'SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"' in text
+    assert (
+        'SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"'
+        in text
+    )
+    assert '--semantic-evaluator "$SEMANTIC_EVALUATOR"' in text
+    assert '--semantic-evaluator-model "$SEMANTIC_EVALUATOR_MODEL"' in text
+    assert (
+        '--semantic-evaluator-timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS"'
+        in text
+    )
+
+
 def test_benchmark_runtime_isolation_helper_bootstraps_empty_runtime():
     text = RUNTIME_HELPER.read_text(encoding="utf-8")
 
     assert "mara_bootstrap_benchmark_runtime" in text
+    assert "mara_cleanup_benchmark_runtime" in text
     assert "create_docqa_runtime" in text
     assert "mara_assert_isolated_kh_app_data" in text
+
+
+def test_benchmark_runtime_cleanup_removes_only_configured_job_runtime(tmp_path):
+    _require_posix_bash()
+    runtime_root = tmp_path / "benchmark_runs_test"
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            (
+                "set -euo pipefail; "
+                f"source {RUNTIME_HELPER}; "
+                f"MARA_BENCHMARK_RUNTIME_ROOT={runtime_root} "
+                "mara_configure_benchmark_runtime 'cleanup suite'; "
+                'touch "$KH_APP_DATA_DIR/sentinel"; '
+                "mara_cleanup_benchmark_runtime; "
+                'test ! -e "$MARA_BENCHMARK_RUNTIME_DIR"'
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_slurm_scripts_cleanup_runtime_only_after_artifact_validation():
+    validation_markers = {
+        TEXT_SLURM_SCRIPT: 'test -f "$RUN_DIR/summary.json"',
+        SLURM_SCRIPT: '! -f "$RUN_DIR/summary.json"',
+    }
+    for script, validation_marker in validation_markers.items():
+        text = script.read_text(encoding="utf-8")
+        assert "mara_cleanup_benchmark_runtime" in text
+        assert text.index(validation_marker) < text.index(
+            "mara_cleanup_benchmark_runtime"
+        )
 
 
 def test_multimodal_runbook_documents_submission_and_evidence_locations():

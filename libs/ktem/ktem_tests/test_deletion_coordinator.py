@@ -15,12 +15,18 @@ class _Store:
         self.values = set(values)
         self.failure = failure
         self.calls: list[list[str]] = []
+        self.delete_kwargs: list[dict[str, Any]] = []
+        self.refresh_calls = 0
 
-    def delete(self, values: list[str]) -> None:
+    def delete(self, values: list[str], **kwargs) -> None:
         self.calls.append(list(values))
+        self.delete_kwargs.append(dict(kwargs))
         if self.failure is not None:
             raise self.failure
         self.values.difference_update(values)
+
+    def create_fts_index(self, *_args, **_kwargs) -> None:
+        self.refresh_calls += 1
 
 
 @pytest.fixture()
@@ -191,6 +197,12 @@ def test_deletes_all_docstore_relations_then_sql(deletion_db):
     assert (result.file_id, result.name) == ("file-1", "report.pdf")
     assert vectors.calls == [["vector-1"]]
     assert documents.calls == [["document-1"], ["element-1"], ["graph-1"]]
+    assert documents.delete_kwargs == [
+        {"refresh_indices": False},
+        {"refresh_indices": False},
+        {"refresh_indices": False},
+    ]
+    assert documents.refresh_calls == 1
     assert not (deletion_db[3] / "stored.bin").exists()
     assert _row_counts(deletion_db) == (0, 0)
 

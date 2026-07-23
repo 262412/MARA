@@ -196,6 +196,9 @@ ROUTE="${MARA_MULTIMODAL_ROUTE:-${MARA_PHASE3_ROUTE:-all}}"
 LIMIT="${MARA_MULTIMODAL_LIMIT:-${MARA_PHASE3_LIMIT:-20}}"
 SAMPLE_SEED="${MARA_MULTIMODAL_SAMPLE_SEED:-${MARA_PHASE3_SAMPLE_SEED:-0}}"
 ROUTE_TIMEOUT_SECONDS="${MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS:-${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-240}}"
+SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"
+SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"
+SEMANTIC_EVALUATOR_TIMEOUT_SECONDS="${MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS:-60}"
 
 uv run --python 3.10 python -m benchmark run \
   --manifest "$MANIFEST" \
@@ -209,6 +212,9 @@ uv run --python 3.10 python -m benchmark run \
   --benchmark-prompt-policy gold_answer_v1 \
   --benchmark-prompt-profile auto \
   --benchmark-no-think \
+  --semantic-evaluator "$SEMANTIC_EVALUATOR" \
+  --semantic-evaluator-model "$SEMANTIC_EVALUATOR_MODEL" \
+  --semantic-evaluator-timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS" \
   --route-timeout-seconds "$ROUTE_TIMEOUT_SECONDS" \
   --backend-health-json "$BACKEND_HEALTH_JSON" \
   --docqa-citation-mode inline | tee "$BENCHMARK_LOG"
@@ -237,3 +243,5 @@ print("page_image=", phase3.get("page_image"))
 print("element=", phase3.get("element"))
 print("hybrid=", phase3.get("hybrid"))
 PY
+
+mara_cleanup_benchmark_runtime

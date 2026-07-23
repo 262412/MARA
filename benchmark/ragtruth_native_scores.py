@@ -107,6 +107,8 @@ def _span_set_scores(
         return 1.0, 0.0, 0.0
 
     matches = _count_span_matches(predicted_spans, gold_spans)
+    if matches == 0:
+        return 0.0, 0.0, 0.0
     precision = matches / len(predicted_spans)
     recall = matches / len(gold_spans)
     span_f1 = 2 * precision * recall / (precision + recall)

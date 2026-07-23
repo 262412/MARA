@@ -79,3 +79,35 @@ runtime = create_docqa_runtime()
 print(f"bootstrapped_runtime={type(runtime).__name__}")
 PY
 }
+
+mara_cleanup_benchmark_runtime() {
+  mara_assert_isolated_kh_app_data
+
+  local runtime_dir
+  local suite_dir
+  local runtime_root
+  local runtime_root_name
+
+  runtime_dir="$(realpath -m "$MARA_BENCHMARK_RUNTIME_DIR")"
+  suite_dir="$(dirname "$runtime_dir")"
+  runtime_root="$(dirname "$suite_dir")"
+  runtime_root_name="$(basename "$runtime_root")"
+
+  case "$runtime_root_name" in
+    benchmark_*) ;;
+    *)
+      printf 'Refusing benchmark cleanup outside a benchmark_* root: %s\n' \
+        "$runtime_root" >&2
+      return 2
+      ;;
+  esac
+
+  if [[ "$runtime_dir" != "$runtime_root"/*/* ]]; then
+    printf 'Refusing malformed benchmark runtime cleanup path: %s\n' \
+      "$runtime_dir" >&2
+    return 2
+  fi
+
+  rm -rf -- "$runtime_dir"
+  rmdir -- "$suite_dir" 2>/dev/null || true
+}
