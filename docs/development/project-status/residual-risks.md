@@ -34,6 +34,10 @@ The strict artifact validator confirmed 159/159 usable QASPER predictions,
 80/80 FinanceBench predictions, and 60/60 ALCE predictions. All three runs had
 zero route timeouts and zero execution-error rows.
 
+Replacement validation jobs `9914581` (QASPER v13) and `9914582` (Finance v12)
+were submitted from commit `239ee6b`. They have no dependency chain; submission
+alone is not closure evidence.
+
 The implementation before this remediation is commit `ccb6197`
 (`fix: repair focused benchmark failure chains`). The new failing-first
 protection tests are commits `e16a737`, `ebe9de8`, and `1c3e0f0`. The current
@@ -158,8 +162,8 @@ boundary.
 
 ### Still open
 
-The replacement Finance run has not completed on a manifest whose controller
-and CRAG routes configure `colqwen` plus `local_qwen3_vl`. Page hit,
+Finance job `9914582` has not completed on its replacement manifest, whose
+controller and CRAG routes configure `colqwen` plus `local_qwen3_vl`. Page hit,
 all-gold-pages hit, candidate recall, reranked recall, and false abstention
 therefore have no new evidence. This item remains P0 even though a text-only
 false closure is now prevented.
@@ -354,7 +358,7 @@ answer quality.
 
 ### Still open
 
-No v6 frozen QASPER run exists yet. It must show whether evidence-quote
+QASPER v6 job `9914581` has not completed. It must show whether evidence-quote
 validation removes unsupported free-form answers without inducing paired
 regressions. The v12 semantic F1 of 42.14% remains far below the 80% closure
 threshold, so `CONTRACT-002` remains open.
