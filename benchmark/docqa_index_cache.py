@@ -223,8 +223,25 @@ class DocQAIndexCache:
 def route_requires_element(config: Any) -> bool:
     route_policy = str(config_value(config, "route_policy", "") or "")
     route_id = str(config_value(config, "route", "") or "")
-    return route_policy.replace("-", "_") in {
-        "element",
-        "doc_element",
-        "element_rag",
-    } or route_id.replace("-", "_") in {"element", "element_rag"}
+    allowed_routes = {
+        str(route or "").replace("-", "_")
+        for route in config_value(config, "allowed_routes", []) or []
+    }
+    return (
+        route_policy.replace("-", "_")
+        in {
+            "element",
+            "doc_element",
+            "element_rag",
+            "hybrid",
+            "hybrid_rag",
+        }
+        or route_id.replace("-", "_")
+        in {
+            "element",
+            "element_rag",
+            "hybrid",
+            "hybrid_rag",
+        }
+        or "doc_element" in allowed_routes
+    )

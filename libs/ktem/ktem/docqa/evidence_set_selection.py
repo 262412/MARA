@@ -80,7 +80,7 @@ def select_evidence_for_plan(
     *,
     mmr_lambda: float = MMR_LAMBDA,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], QueryPlan]:
-    candidates = list(items[:RERANK_CANDIDATE_LIMIT])
+    candidates, restored_required = _required_slot_rerank_shortlist(items, plan)
     budget = retrieval_budget(plan)
     selected: list[dict[str, Any]] = []
     selected_ids: set[str] = set()
@@ -142,8 +142,51 @@ def select_evidence_for_plan(
         continuation_count=continuation_count,
         page_modality_count=page_modality_count,
         mmr_lambda=mmr_lambda,
+        required_slot_candidates_restored=restored_required,
     )
     return selected, trace, bound
+
+
+def _required_slot_rerank_shortlist(
+    items: list[dict[str, Any]],
+    plan: QueryPlan,
+) -> tuple[list[dict[str, Any]], int]:
+    candidates = list(items[:RERANK_CANDIDATE_LIMIT])
+    restored = 0
+    required_slots = [slot for slot in plan.evidence_slots if slot.required]
+    for slot in required_slots:
+        if any(score_evidence_for_slot(slot, item) > 0 for item in candidates):
+            continue
+        ranked_tail = sorted(
+            (
+                (score_evidence_for_slot(slot, item), index, item)
+                for index, item in enumerate(
+                    items[RERANK_CANDIDATE_LIMIT:],
+                    start=RERANK_CANDIDATE_LIMIT,
+                )
+            ),
+            key=lambda row: (-row[0], row[1]),
+        )
+        match = next((item for score, _index, item in ranked_tail if score > 0), None)
+        if match is None:
+            continue
+        removable = next(
+            (
+                index
+                for index in range(len(candidates) - 1, -1, -1)
+                if not any(
+                    score_evidence_for_slot(required_slot, candidates[index]) > 0
+                    for required_slot in required_slots
+                )
+            ),
+            None,
+        )
+        if removable is None:
+            candidates.append(match)
+        else:
+            candidates[removable] = match
+        restored += 1
+    return candidates, restored
 
 
 def _select_required_slot_evidence(
@@ -189,6 +232,7 @@ def _selection_trace(
     continuation_count: int,
     page_modality_count: int,
     mmr_lambda: float,
+    required_slot_candidates_restored: int,
 ) -> dict[str, Any]:
     pages = _pages(selected)
     return {
@@ -210,6 +254,7 @@ def _selection_trace(
         "structure_expansion_enabled": structure_expansion_enabled,
         "mmr_lambda": mmr_lambda,
         "structure_metadata_coverage": structure_coverage,
+        "required_slot_candidates_restored": required_slot_candidates_restored,
     }
 
 

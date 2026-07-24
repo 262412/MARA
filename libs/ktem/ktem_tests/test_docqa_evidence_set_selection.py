@@ -28,6 +28,40 @@ def test_selection_keeps_similar_evidence_when_each_fills_required_period_slot()
     assert not [slot for slot in bound.evidence_slots if slot.status == "missing"]
 
 
+def test_selection_restores_required_slot_evidence_below_rerank_cutoff():
+    plan = build_query_plan(
+        "What were total current assets in FY2021?",
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    distractors = [
+        _item(
+            f"distractor-{index}",
+            str(index + 1),
+            f"General financial discussion {index}.",
+            1.0 - index / 100,
+        )
+        for index in range(30)
+    ]
+    required = _item(
+        "current-assets-2021",
+        "31",
+        "Total current assets were $19,815 million in 2021.",
+        0.1,
+    )
+
+    selected, trace, bound = select_evidence_for_plan(
+        "total current assets 2021",
+        [*distractors, required],
+        plan,
+    )
+
+    assert "current-assets-2021" in {item["evidence_id"] for item in selected}
+    assert trace["required_slot_candidates_restored"] == 1
+    assert trace["slot_coverage"] == 1.0
+    assert all(slot.status == "filled" for slot in bound.evidence_slots)
+
+
 def test_selection_expands_table_continuation_and_respects_page_budget():
     plan = build_query_plan(
         "Compare the revenue table across the report pages.",

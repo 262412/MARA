@@ -28,6 +28,7 @@ class ControllerDecision:
     expected_route_cost: dict[str, Any] = field(default_factory=dict)
     skipped_expensive_routes: list[str] = field(default_factory=list)
     cost_gate_decision: str = ""
+    required_evidence_route_available: bool | None = None
     route_probe: dict[str, Any] = field(default_factory=dict)
     route_switch_candidates: list[str] = field(default_factory=list)
     override_reason: str = ""
@@ -72,6 +73,10 @@ class ControllerDecision:
                 self.skipped_expensive_routes,
             )
             _put_if_present(payload, "cost_gate_decision", self.cost_gate_decision)
+            if self.required_evidence_route_available is not None:
+                payload[
+                    "required_evidence_route_available"
+                ] = self.required_evidence_route_available
             _put_if_present(payload, "route_probe", self.route_probe)
             _put_if_present(
                 payload, "route_switch_candidates", self.route_switch_candidates
@@ -85,6 +90,7 @@ class ControllerDecision:
             or self.route_switch_used
             or self.routing_features
             or self.route_confidences
+            or self.required_evidence_route_available is not None
         )
 
 
@@ -130,6 +136,9 @@ def mark_route_switch_recovery(
         expected_route_cost=initial_decision.expected_route_cost,
         skipped_expensive_routes=initial_decision.skipped_expensive_routes,
         cost_gate_decision=initial_decision.cost_gate_decision,
+        required_evidence_route_available=(
+            initial_decision.required_evidence_route_available
+        ),
         route_probe=initial_decision.route_probe,
         route_switch_candidates=list(candidates),
         override_reason="Route switch used only after retrieval failure.",
@@ -175,6 +184,11 @@ def _route_selection_metadata(
             if str(route).strip()
         ],
         "cost_gate_decision": str(payload.get("cost_gate_decision") or ""),
+        "required_evidence_route_available": (
+            payload.get("required_evidence_route_available")
+            if isinstance(payload.get("required_evidence_route_available"), bool)
+            else None
+        ),
         "route_probe": dict(payload.get("route_probe") or {}),
         "override_reason": str(payload.get("override_reason") or ""),
     }

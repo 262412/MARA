@@ -337,13 +337,15 @@ def test_qasper_text_rag_runs_answerability_verifier_after_generation(
     assert answer == "unanswerable"
     assert len(llm.calls) == 2
     assert metadata["qasper_answerability"] == {
-        "contract_id": "qasper_answerability.v6",
+        "contract_id": "qasper_answerability.v7",
         "status": "ok",
         "verdict": "unsupported",
         "action": "abstained_unsupported_candidate",
         "evidence_quote": "The proposed system reports NDCG 55.46.",
         "quote_grounded": "true",
         "quote_supports_relation": "false",
+        "parser_status": "ok",
+        "repair_attempted": "false",
     }
 
 

@@ -207,6 +207,12 @@ def verify_calculation_plan(
         if operand.evidence_id not in citations:
             citations.append(operand.evidence_id)
     errors.extend(_compatibility_errors(plan))
+    if plan.answer_scale and plan.answer_unit.lower() not in {"percent", "%", "ratio"}:
+        errors.extend(
+            f"operand_scale_missing_for_conversion:{operand.operand_id}"
+            for operand in plan.operands
+            if operand.source == "evidence" and not operand.scale
+        )
     required_ids, verified_required_ids, required_errors = _verify_required_slots(
         plan,
         evidence_by_id,

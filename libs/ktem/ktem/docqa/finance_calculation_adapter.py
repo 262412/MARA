@@ -14,6 +14,7 @@ from .calculation_plan import (
     execute_calculation_plan,
     verify_calculation_plan,
 )
+from .finance_query_planning import FINANCE_METRIC_ALIASES
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ def finance_calculation_audit(
             name,
             value,
             question=question,
+            question_type=question_type,
             evidence_items=evidence_items,
             excluded_evidence_ids=used_evidence_ids,
         )
@@ -62,6 +64,8 @@ def finance_calculation_audit(
         "net_sales",
         "operating_income",
         "property_plant_equipment",
+        "current_assets",
+        "revolving_credit_capacity",
         "total_assets",
         "working_capital",
     }
@@ -101,15 +105,19 @@ def _operand_from_input(
     value: float,
     *,
     question: str,
+    question_type: str,
     evidence_items: list[dict[str, Any]],
     excluded_evidence_ids: set[str],
 ) -> CalculationOperand:
     decimal_value = Decimal(str(value))
     period = _operand_period(name, question)
     item = _matching_item(
+        name,
         decimal_value,
         period,
-        evidence_items,
+        question=question,
+        question_type=question_type,
+        evidence_items=evidence_items,
         excluded_evidence_ids=excluded_evidence_ids,
     )
     text = _item_text(item) if item is not None else ""
@@ -118,7 +126,8 @@ def _operand_from_input(
         evidence_id=_item_id(item),
         value=decimal_value,
         unit=_item_dimension(item, "unit"),
-        scale=_item_dimension(item, "scale") or _scale(text),
+        scale=_item_dimension(item, "scale")
+        or _scale(text, aliases=_operand_aliases(name, question, question_type)),
         currency=(
             _item_dimension(item, "currency")
             or ("USD" if "$" in text or "usd" in text.lower() else "")
@@ -295,10 +304,13 @@ def _multi_period_ratio_average_steps(
 
 
 def _matching_item(
+    name: str,
     value: Decimal,
     period: str,
-    evidence_items: list[dict[str, Any]],
     *,
+    question: str,
+    question_type: str,
+    evidence_items: list[dict[str, Any]],
     excluded_evidence_ids: set[str],
 ) -> dict[str, Any] | None:
     matches = [
@@ -312,7 +324,49 @@ def _matching_item(
         if not period_matches:
             return None
         matches = period_matches
-    return matches[0] if matches else None
+    aliases = _operand_aliases(name, question, question_type)
+    ranked = sorted(
+        enumerate(matches),
+        key=lambda row: (
+            -_metric_support(row[1], aliases),
+            -bool(_item_dimension(row[1], "scale") or _scale(_item_text(row[1]))),
+            row[0],
+        ),
+    )
+    return ranked[0][1] if ranked else None
+
+
+def _operand_aliases(
+    name: str,
+    question: str,
+    question_type: str,
+) -> tuple[str, ...]:
+    if question_type == "working_capital":
+        metric = "current assets" if name == "left" else "current liabilities"
+        return FINANCE_METRIC_ALIASES[metric]
+    formula_metrics = {
+        "current_ratio": ("current assets", "current liabilities"),
+        "debt_to_equity": ("total debt", "shareholders equity"),
+        "gross_margin": ("gross profit", "net sales"),
+        "operating_margin": ("operating income", "net sales"),
+    }
+    if question_type in formula_metrics and name in {"numerator", "denominator"}:
+        metric = formula_metrics[question_type][name == "denominator"]
+        return FINANCE_METRIC_ALIASES[metric]
+    canonical = re.sub(r"_(?:19|20)\d{2}$", "", name).replace("_", " ")
+    if canonical == "inventories":
+        canonical = "inventory"
+    aliases = FINANCE_METRIC_ALIASES.get(canonical)
+    if aliases:
+        return aliases
+    from .finance_numeric_values import metric_labels_for_question
+
+    return metric_labels_for_question(question.lower())
+
+
+def _metric_support(item: dict[str, Any], aliases: tuple[str, ...]) -> int:
+    lowered = _item_text(item).lower()
+    return int(any(alias.lower() in lowered for alias in aliases))
 
 
 def _operand_period(name: str, question: str) -> str:
@@ -330,6 +384,8 @@ def _operand_period(name: str, question: str) -> str:
         return years[1]
     if name == "value" and len(years) == 1:
         return years[0]
+    if len(years) == 1 and name in {"left", "right"}:
+        return years[0]
     return ""
 
 
@@ -346,11 +402,22 @@ def _requested_scale(question: str) -> str:
     return ""
 
 
-def _scale(text: str) -> str:
+def _scale(text: str, *, aliases: tuple[str, ...] = ()) -> str:
     lowered = text.lower()
-    for scale in ("billion", "million", "thousand"):
-        if scale in lowered:
-            return scale
+    header = re.search(
+        r"\(\s*in\s+(thousands?|millions?|billions?)\b",
+        lowered,
+    )
+    if header is not None:
+        return header.group(1).rstrip("s")
+    for alias in aliases:
+        match = re.search(
+            rf"{re.escape(alias.lower())}.{{0,100}}?"
+            r"(thousands?|millions?|billions?)\b",
+            lowered,
+        )
+        if match is not None:
+            return match.group(1).rstrip("s")
     return ""
 
 

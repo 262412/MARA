@@ -126,6 +126,8 @@ def _config_for_route(
     updates.setdefault("scope", route.get("scope", config.scope))
     if config.docqa_citation_mode is not None:
         updates["docqa_citation_mode"] = config.docqa_citation_mode
+    if config.route_timeout_seconds is not None:
+        updates["route_timeout_seconds"] = config.route_timeout_seconds
     _set_visual_generator_backend(updates, route)
     return replace(config, **updates)
 

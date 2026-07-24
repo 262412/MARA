@@ -21,126 +21,101 @@ The latest focused artifacts are:
 
 ```text
 04_residual_validation/
-├── residual-qasper-typed-v12-advisory-verifier-semantic-strict-single-a100/
-│   └── outputs/20260724_170344_...-9914329
-├── residual-finance-v11-required-hybrid-semantic-strict-single-a100/
-│   └── outputs/20260724_171505_...-9914330
+├── residual-qasper-typed-v13-answerability-v6-semantic-single-a100/
+│   └── 01_core_text/20260724_183633_...-9914581
+├── residual-finance-v12-hybrid-eligible-calculation-v1-l40s/
+│   └── outputs/20260724_221924_...-9914582
 └── residual-alce-v9-safe-grounding-strict-single-a100/
     └── outputs/20260724_172225_...-9914331
 ```
 
-Jobs `9914329`, `9914330`, and `9914331` all completed with exit code `0:0`.
-The strict artifact validator confirmed 159/159 usable QASPER predictions,
-80/80 FinanceBench predictions, and 60/60 ALCE predictions. All three runs had
-zero route timeouts and zero execution-error rows.
-
-Replacement validation jobs `9914581` (QASPER v13) and `9914582` (Finance v12)
-were submitted from commit `239ee6b`. They have no dependency chain; submission
-alone is not closure evidence.
+QASPER job `9914581` completed with exit code `0:0`; its artifact contains
+159/159 usable predictions and zero route timeouts. Finance job `9914582`
+generated 80 predictions, but only 78 are usable: controller and CRAG both
+timed out on `financebench_id_10499` after the route manifest's 90-second
+budget. The formal wrapper therefore rejected Finance v12 with exit code
+`1:0`. Finance v12 is diagnostic evidence, not a closure artifact.
 
 The implementation before this remediation is commit `ccb6197`
 (`fix: repair focused benchmark failure chains`). The new failing-first
-protection tests are commits `e16a737`, `ebe9de8`, and `1c3e0f0`. The current
-working implementation passes the protected unit and package-level gates, but
-the P0/P1 items below remain open until replacement artifacts meet their
-closure thresholds.
-
-## Closed Problems Removed From The Active Register
-
-The following items now have formal closure evidence and are no longer active
-sections in this document:
-
-- Per-job ports, single-GPU service co-location, and semantic evaluator alias
-  startup. The latest jobs reached healthy local Qwen and retrieval services.
-- RAGTruth global task contract. V17 retains 100% valid JSON, zero execution
-  errors, 70.29% positive recall, 91.98% clean specificity, and 68.58% span F1.
-- MMDocRAG element identity and structure expansion for the focused v6 gate.
-- Semantic score integrity (`EVAL-003`). The live v12/v11/v9 artifacts contain
-  no zero-claim perfect score, no scored execution-error row, and no semantic
-  judge failure. Finance semantic F1 falling from the invalid 63.75% to 21% is
-  a score-contract correction, not a system regression.
-- Artifact completeness (`VALIDATION-002`). Formal wrappers now reject missing
-  or unusable required rows, and the replacement ALCE artifact has 60/60 usable
-  predictions.
-- ALCE grounding authority (`ALCE-001`). V9 reaches 77.28% native score and
-  95% citation F1 with 60/60 usable rows. Grounding changed none of the 60
-  answers: 30 unsafe corrections, 21 inconsistent supported answers, and nine
-  ungrounded answers remained telemetry instead of overwriting the candidate.
-  Relative to complete v5, native score improves from 65.59% and citation F1
-  from 80%.
-- Duplicate-gain nDCG, parse-cache full-text preservation, shared index reuse,
-  and timeout diagnostics retain their existing regression evidence.
-
-RAGTruth Summary positive recall (37.04%) and Data2txt specificity (88.89%)
-remain monitoring diagnostics, not blockers for the already passed global
-contract.
+protection tests are commits `e16a737`, `ebe9de8`, and `1c3e0f0`; implementation
+commit `239ee6b` produced the v13/v12 artifacts. The current remediation adds
+failing-first coverage for the newly observed artifact projection, timeout,
+element-index, rerank cutoff, QASPER JSON, direct-value, period-binding, and
+scale-provenance failures. The P0/P1 items below remain open until replacement
+artifacts meet their closure thresholds.
 
 ## Open Problem Summary
 
-| ID           | Priority | Area                                   | Current evidence                                                                                                                  | Completion gate                                                                                                                                       |
-| ------------ | -------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FINANCE-001  | P0       | Retrieval and hybrid eligibility       | V11 page hit 33.75%, all pages 15%, Candidate Recall@50 27.5%, Reranked Recall@10 17.5%; every controller route fell back to text | A hybrid-eligible frozen run reaches page hit >=70%, all pages >=35%, and no required-hybrid question is silently evaluated as text-only              |
-| FINANCE-002  | P0       | Slot binding and calculation semantics | Native 0%; one wrong-page plan produced 23002% while all execution metrics reported success                                       | Required slots are semantically bound, plans cover every slot, native >=20%, all operands >=50%, conditional execution >=95%, unit accuracy >=98%     |
-| CONTRACT-002 | P1       | QASPER answer and scoring contract     | V12 native 46.05%, semantic 42.14%, current structure metric 62.89%, evidence F1 21.46%                                           | Gold-independent structure validity 100%, no verifier-induced regression, semantic F1 >=80%, and class diagnostics close yes/no/unanswerable failures |
-| PERF-001     | P1       | Quality-preserving latency             | No timeouts, but Finance quality is invalid and P95 rose to 12.67 seconds                                                         | Quality gates pass with zero required-row error; simple median increase <=20%, multipage/numeric <=50%, with P95 reported                             |
-| EVAL-001     | P1       | Global release gate                    | Calibration and G-minus-B paired evidence remain incomplete                                                                       | Judge coverage >=99.5%, agreement >=90%, semantic gain >=8 points, paired CI lower bound >0                                                           |
-| EVAL-002     | P2       | External evaluator                     | No fixed paper-grade external evaluator artifact                                                                                  | Frozen evaluator/provider contract and complete formal artifact                                                                                       |
-| FORMAT-001   | P2       | Production formats                     | Loader smoke exists; preview/OCR/formula/chart E2E matrix remains incomplete                                                      | Required production-format matrix passes                                                                                                              |
+| ID           | Priority | Area                                   | Current evidence                                                                                                                                                                | Completion gate                                                                                                                                       |
+| ------------ | -------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FINANCE-001  | P0       | Retrieval and hybrid eligibility       | V12 page hit 46.25%, all pages 23.75%, Candidate Recall@50 49.14%, Reranked Recall@10 40.52%; hybrid ran, but the formal field was dropped and element candidates remained zero | A complete hybrid-eligible frozen run reaches page hit >=70%, all pages >=35%, and no required-hybrid question is silently evaluated as text-only     |
+| FINANCE-002  | P0       | Slot binding and calculation semantics | V12 native 0%, all-operands 13.64%; correct Lockheed inputs were rejected, while PepsiCo source scale was inferred from unrelated page text                                     | Required slots are semantically bound, plans cover every slot, native >=20%, all operands >=50%, conditional execution >=95%, unit accuracy >=98%     |
+| CONTRACT-002 | P1       | QASPER answer and scoring contract     | V13 native 55.92%, semantic 52.20%, structure 90.57%, evidence F1 21.66%; 24 verifier parse errors and one paired regression remain                                             | Gold-independent structure validity 100%, no verifier-induced regression, semantic F1 >=80%, and class diagnostics close yes/no/unanswerable failures |
+| PERF-001     | P1       | Quality-preserving latency             | Finance v12 has two 90-second route timeouts and P95 generation latency 62.22 seconds                                                                                           | Quality gates pass with zero required-row error; simple median increase <=20%, multipage/numeric <=50%, with P95 reported                             |
+| EVAL-001     | P1       | Global release gate                    | Calibration and G-minus-B paired evidence remain incomplete                                                                                                                     | Judge coverage >=99.5%, agreement >=90%, semantic gain >=8 points, paired CI lower bound >0                                                           |
+| EVAL-002     | P2       | External evaluator                     | No fixed paper-grade external evaluator artifact                                                                                                                                | Frozen evaluator/provider contract and complete formal artifact                                                                                       |
+| FORMAT-001   | P2       | Production formats                     | Loader smoke exists; preview/OCR/formula/chart E2E matrix remains incomplete                                                                                                    | Required production-format matrix passes                                                                                                              |
 
 Do not launch another full 3,540-prediction benchmark until `FINANCE-001`,
 `FINANCE-002`, and `CONTRACT-002` pass their frozen focused subsets.
 
-## FINANCE-001: The Focused Run Did Not Exercise Required Hybrid Evidence
+## FINANCE-001: Hybrid Ran But Its Formal Proof And Element Evidence Were Lost
 
 ### Evidence
 
-Finance v11 reports:
+Finance v12 reports:
 
 - native numeric score: 0%;
-- page hit: 33.75%;
-- all-gold-pages hit: 15%;
-- Candidate Recall@50: 27.5%;
-- Reranked Recall@10: 17.5%;
-- false abstention: 22.5%;
-- median generation latency: 1.25 seconds;
-- P95 generation latency: 12.67 seconds.
+- page hit: 46.25%;
+- all-gold-pages hit: 23.75%;
+- Candidate Recall@50: 49.14%;
+- Reranked Recall@10: 40.52%;
+- false abstention: 23.75%;
+- median generation latency: 14.44 seconds;
+- P95 generation latency: 62.22 seconds;
+- two route timeouts, leaving 78/80 usable predictions.
 
-Page hit is unchanged from v10, while all-pages hit falls from 22.5%,
-Candidate Recall@50 from 39.17%, and Reranked Recall@10 from 34.17%.
-
-The planner identifies seven of the twenty examples as structured calculations
-and initially selects `hybrid`. The focused wrapper, however, configures File
-Collection retrieval mode as `text`; every prediction records
-`available_modalities=[]`. Cost-aware routing therefore normalizes all hybrid
-and page-image decisions to `doc_text`. `text_rag`, `controller_auto`, and
-`crag_guarded` consequently produce the same retrieval failures and answers.
+Controller and CRAG each selected hybrid for five examples. Their full
+`agent_trace.planner_output.decision` records
+`required_evidence_route_available=true`, and the Nike trace contains both
+text and visual candidates. The top-level benchmark `controller_decision`
+omits the field, so `--require-hybrid-eligible` observes `0/0` and cannot
+certify the route. Element candidate count is zero on every Finance row, so
+the exercised hybrid route is text plus page image rather than the required
+text/page/element path.
 
 ### Root cause
 
-The production fallback is correct when visual and element backends are truly
-unavailable. The validation design is not: a text-only focused wrapper cannot
-prove that required-hybrid preservation, page retrieval, element retrieval, or
-cross-modal fusion works.
+There are four independent failures:
 
-The trace currently labels this condition `normalized_from_hybrid`, which
-looks like an ordinary cost decision rather than a missing validation
-capability. This allowed a run that never exercised hybrid evidence to be
-interpreted as a required-hybrid test.
-
-Retrieval quality also regressed before calculation. The correct gold-like
-items are absent from the candidate set for several examples, and the top
-reranked set loses additional recall. Calculation changes cannot repair this
-boundary.
+1. `mara_route_scorer` creates the eligibility field, but
+   `ControllerDecision` neither stores nor serializes it. Artifact projection
+   therefore drops an additive contract field that the formal validator needs.
+2. `DocQAIndexCache.route_requires_element` recognizes only explicit element
+   routes. Controller/CRAG configurations that allow `doc_element` reuse an
+   index without requiring element records.
+3. Required-slot selection starts after truncation to the first 30 reranked
+   candidates. A necessary item at candidate rank 31-80 cannot be restored,
+   even though the later MMR stage protects already-selected slots.
+4. An explicit 240-second focused-run timeout is overwritten by each manifest
+   route's 90-second value. Both timeout rows are the same multi-step inventory
+   turnover example.
 
 ### Required remediation
 
 - Record a distinct `required_hybrid_unavailable` route decision and an
   explicit eligibility field whenever a structured calculation requires
   hybrid evidence but no complementary modality has usable candidates.
-- Formal Finance hybrid validation must refuse to close the gate when that
-  eligibility field is false.
-- Re-run the frozen subset through the full-system page/element-capable
-  runtime, not `text_route_rerun.sbatch`.
+- Preserve the eligibility field through `ControllerDecision`, runtime
+  response, benchmark prediction, and the formal validator.
+- Treat controller/CRAG routes that allow `doc_element` as requiring an element
+  index during shared-index readiness checks.
+- Build the final 30-candidate shortlist from the strong rerank plus one
+  protected best match for every required slot. Protection must be based only
+  on query/slot semantics, never gold pages.
+- Make an explicit run-level timeout override a lower template timeout; retain
+  the route template value only when no run-level value is supplied.
 - Report retrieval by stage and by eligible route. Do not average the
   retrieval-free `direct_answer` diagnostic into QA retrieval claims.
 - Inspect the candidate-to-reranked losses on the frozen examples. Preserve
@@ -159,14 +134,19 @@ boundary.
 - `multimodal_route_rerun.sbatch` can enable this gate with
   `MARA_MULTIMODAL_REQUIRE_HYBRID_ELIGIBLE=1` and validates every prediction
   before deleting its isolated runtime.
+- The current implementation carries
+  `required_evidence_route_available` through `ControllerDecision`, requires
+  an element-ready index whenever controller/CRAG allows `doc_element`,
+  restores required-slot matches from candidate ranks 31-80 before MMR, and
+  makes an explicit run timeout override template route timeouts.
 
 ### Still open
 
-Finance job `9914582` has not completed on its replacement manifest, whose
-controller and CRAG routes configure `colqwen` plus `local_qwen3_vl`. Page hit,
-all-gold-pages hit, candidate recall, reranked recall, and false abstention
-therefore have no new evidence. This item remains P0 even though a text-only
-false closure is now prevented.
+The v12 artifact is incomplete and its top-level eligibility proof is absent.
+Retrieval improved substantially but remains below the fixed page thresholds,
+and the candidate-to-reranked loss still removes the only Nike operand
+evidence. This item remains P0 until a complete replacement artifact proves
+element availability, hybrid eligibility, and the frozen retrieval gates.
 
 ### Closure evidence
 
@@ -176,66 +156,67 @@ must reach 70%, all-gold-pages hit 35%, and Reranked Recall@10 must not regress
 from the last valid pre-v11 focused baseline. Text-only fallback rows must be
 reported separately and cannot close this item.
 
-## FINANCE-002: Slot And Program Verification Accept Semantically Wrong Inputs
+## FINANCE-002: Source Dimensions And Direct Numeric Intents Remain Incomplete
 
 ### Evidence
 
-Finance v11 exposes more trace data but still has 0% native numeric score.
-Aggregate all-operands and execution accuracy both report 25%, yet their
-coverage is only 30%; operand accuracy covers only 7.5% of predictions.
+Finance v12 still has 0% native numeric score. All-operands and program/
+execution accuracy fall to 13.64%; unit accuracy is 86.36%.
 
-For the three-year Nike cost-of-goods-sold percentage question:
+The prior Nike `23002%` false success is now rejected as missing operands, so
+the incomplete-plan verifier repair is effective. The replacement artifact
+exposes new downstream failures:
 
-- QueryPlan correctly creates required 2016, 2017, and 2018 slots.
-- The same unrelated evidence can fill several slots merely because it
-  contains the requested years and some numbers.
-- The calculation plan contains only 2017 and 2018 operands.
-- One operand has scale `thousand`; the other has no scale.
-- The executor averages the scaled values and returns `23002%`.
-- Slot coverage, operand accuracy, operator accuracy, program accuracy,
-  execution accuracy, and unit accuracy are all recorded as 1.
-
-The question actually asks for the average of annual
-`cost of goods sold / revenue` percentages. The current QueryPlan creates only
-cost-of-goods-sold slots, and the numeric adapter averages raw values instead
-of constructing the two operands and ratio step for each year.
-
-The PepsiCo capital-spending alias now activates the numeric executor, but
-retrieval selects pages 52 and 114 instead of gold page 63 and returns
-`$4.5 billion` instead of `$4.6 billion`. This confirms that trace activation
-is fixed while semantic evidence correctness is not.
+- PepsiCo binds raw `-4625` from a free-cash-flow table. The evidence page also
+  mentions unrelated debt amounts in billions, so whole-page scale scanning
+  assigns the operand scale `billion`. The executor then renders
+  `$4,625 billion` instead of converting source millions to approximately
+  `$4.625 billion`.
+- Lockheed binds the correct 19,815 and 13,997 values from a page headed
+  `(In millions)`. The generic operand names `left` and `right` do not inherit
+  FY2021, so required-slot verification rejects both despite correct evidence.
+- General Mills selects one operand from the cash-flow statement with an
+  explicit million scale and another repeated value from a summary table with
+  no local scale, producing a safe but avoidable scale mismatch.
+- Direct total-current-assets and net-property-plant-equipment questions are
+  classified as `unsupported_formula`, although each requires one traceable
+  value rather than a formula.
 
 ### Root cause
 
-There are four independent validation gaps:
+There are five remaining validation gaps:
 
-1. Slot scoring accepts a period match plus any numeric value even when no
-   metric alias matches the evidence.
-2. Calculation verification checks only the operands present in the generated
-   plan. It does not compare the plan against every required QueryPlan slot.
-3. Compatibility checks ignore missing dimensions when a peer operand has an
-   explicit scale, unit, or currency.
-4. Stage metrics equate internally reproducible execution with a complete and
-   semantically valid program. Coverage is reported separately but the headline
-   average can still look successful.
+1. Source scale extraction scans the entire evidence page and prefers
+   `billion` by fixed order, so unrelated narrative can override a table's
+   actual or missing scale.
+2. A plan that requests conversion to an explicit answer scale remains valid
+   when the source operand scale is unknown.
+3. Generic formula operand names do not consistently inherit the single
+   target period from the question.
+4. Evidence matching ranks by value and period only. It does not prefer the
+   candidate that also provides the operand metric and explicit table scale.
+5. Finance metric aliases and direct-value handlers do not cover current
+   assets, serial-comma property/plant/equipment variants, and similar
+   one-cell questions.
 
 ### Required remediation
 
-- A numeric slot with a metric must require a supported canonical alias, the
-  requested period, a traceable evidence identity, and a numeric value.
-- Build explicit numerator and denominator slots for multi-period
-  “metric as percentage of metric” questions.
-- Pass the bound QueryPlan into the numeric adapter. Verification must match
-  each required slot to a distinct plan operand with compatible period,
-  metric, and allowed evidence identity.
-- Reject a plan when any required slot is missing, even when every operand
-  present in the incomplete plan is traceable.
-- Treat explicit-versus-missing scale/unit/currency as incompatible for
-  arithmetic that requires comparable dimensions.
-- `all_operands_bound` must require a valid complete plan; failed plan
-  verification cannot receive full operand credit.
-- Keep arithmetic execution separate from answer correctness. Native numeric
-  match remains the final answer-quality authority.
+- Treat `CalculationOperand.scale` strictly as source scale and
+  `CalculationPlan.answer_scale` as target scale.
+- Infer source scale only from structured metadata, explicit table headers, or
+  the local metric/value clause. Never infer it from unrelated page text or
+  from the question's requested answer scale.
+- Reject explicit scale conversion when any contributing evidence operand has
+  unknown source scale.
+- Rank value matches by metric support, period, and explicit source dimension;
+  prefer one evidence item that contains all operands of the same table when
+  available.
+- Propagate a single question period to formula operands such as `left/right`
+  and direct `value`.
+- Extend canonical aliases and direct-value execution for current assets,
+  property/plant/equipment variants, and other one-value Finance intents.
+- Keep native numeric match as the final answer-quality authority; a safe
+  verifier rejection is not counted as correctness.
 
 ### Implemented in this remediation
 
@@ -253,14 +234,24 @@ There are four independent validation gaps:
 - Annual value parsing no longer crosses sentence boundaries and binds the
   next year's number to the prior year. A fallback remains only when no
   sentence-level annual fact exists, preserving horizontal financial rows.
+- The current implementation treats operand scale as source scale, recognizes
+  explicit table headers before local metric clauses, and refuses explicit
+  scale conversion when source scale is missing. Unrelated page-level scale
+  words can no longer authorize a conversion.
+- Evidence binding now prefers candidates with the requested metric and an
+  explicit source scale. Single-period working-capital operands inherit the
+  question period.
+- Direct current-assets, property/plant/equipment, and revolving-credit
+  capacity intents now have canonical aliases and deterministic one-value
+  execution paths.
 
 ### Still open
 
-Local regression fixtures now reject the exact incomplete/mixed-scale program
-and reproduce the correct multi-period ratio plan. No replacement frozen
-artifact has yet shown native numeric >=20%, all-operands >=50%, or the
-conditional execution and unit thresholds. Retrieval remains an upstream
-blocker for those gates.
+V12 proves that incomplete plans are no longer reported as successful, but no
+formal artifact has yet met native numeric, all-operands, conditional
+execution, unit, or false-abstention thresholds. The new source-scale and
+direct-value regressions must pass locally, then a complete frozen run must
+show that safety fixes also improve answer quality.
 
 ### Closure evidence
 
@@ -274,94 +265,89 @@ reach all-operands 50%, native numeric 20%, false abstention at most 15%, and,
 conditional on a valid complete plan, execution accuracy 95% and unit accuracy
 98%.
 
-## CONTRACT-002: QASPER Primary Answers And Structure Metrics Remain Invalid
+## CONTRACT-002: QASPER Verifier Parsing And Primary Polarity Remain Unresolved
 
 ### Evidence
 
-QASPER v12 improves over verifier-authority v11:
+QASPER v13 contains 159/159 usable predictions and reports:
 
-- native/token F1: 37.88% to 46.05%;
-- semantic F1: 28.30% to 42.14%;
-- structure validity: 35.22% to 62.89%;
-- evidence F1: unchanged at 21.46%.
+- native/token F1: 55.92%, up 9.87 points from v12;
+- semantic F1: 52.20%, up 10.06 points;
+- gold-independent structure validity: 90.57%;
+- evidence F1: 21.66%, up only 0.20 points;
+- 17 paired improvements, one regression, and 141 unchanged rows.
 
-Paired v11-to-v12 comparison has 26 exact improvements and four regressions.
-Relative to v9, native and semantic F1 improve only 0.63 points and structure
-validity is unchanged.
+All 17 improvements are gold-unanswerable questions whose unsupported
+free-text answer became `unanswerable`. The remaining 15 structurally invalid
+free-text outputs are all gold-unanswerable. Thirteen are associated with
+verifier `status=error`; the other two contain exact grounded quotes that
+directly support the question-candidate relation even though the benchmark
+annotation is unanswerable.
 
-The advisory verifier behaves as intended:
+The remaining class confusion, using the first canonical gold label only, is:
 
-- 52 `insufficient_evidence` candidates are preserved; 25 are exact answers.
-- The one conflicting boolean verdict is preserved and the primary answer is
-  correct.
-- Nine unsupported free-form candidates become `unanswerable`; all nine match
-  the frozen gold.
-
-The remaining primary-answer confusion is large:
-
-- gold `no`: 17/50 exact, 21 predicted `yes`, 12 `unanswerable`;
-- gold `yes`: 25/49 exact, 16 predicted `no`, eight `unanswerable`;
-- gold `unanswerable`: 21/60 exact, 39 unsupported concrete answers.
-
-The pre-remediation `qasper_structure_valid` implementation uses the gold answer
-category. It rejects `unanswerable` for a gold boolean and rejects `yes/no` for
-a gold-unanswerable example. This measures type correctness, not response
-structure, and makes the 100% structure gate incompatible with the requirement
-that runtime behavior cannot derive the gold type.
+- gold `yes`: 25 predicted yes, 16 no, eight unanswerable;
+- gold `no`: 21 predicted yes, 17 no, 12 unanswerable;
+- gold `unanswerable`: four yes, four no, 37 unanswerable, 15 free text.
 
 ### Root cause
 
-Verifier authority is no longer the dominant problem. The primary generator
-still confuses polarity and converts related paper facts into answers to
-unanswered questions.
+The v6 quote contract and structure metric work as designed. The remaining
+failures have three causes:
 
-The secondary verifier returns a bare verdict. A `supported` decision has no
-machine-checkable evidence quote, so a hallucinated relation can be accepted
-when the paper contains the candidate phrase in unrelated context.
-
-The structure metric conflates format validity with knowledge of the gold
-answer subtype. This obscures whether a failure is malformed output or an
-incorrect but well-formed answer.
+1. Verifier output parsing fails on 24/159 rows. The error path immediately
+   preserves the primary answer and does not retain the raw verifier response,
+   so 13 unsupported free-text outputs survive and the parser failure cannot
+   be audited.
+2. The primary generator still confuses boolean polarity. The advisory
+   verifier intentionally cannot flip a non-empty yes/no candidate because
+   earlier authority-based versions introduced regressions.
+3. The two accepted free-text/gold-unanswerable rows are not safely fixable by
+   stricter lexical quote rules: their exact evidence quotes state the tested
+   relation. Treat them as annotation/contract disagreement unless an
+   independent human calibration changes the frozen label.
 
 ### Required remediation
 
-- Define structure validity independently of the gold subtype. For the frozen
-  typed subset, `yes`, `no`, and `unanswerable` are all canonical structures;
-  a rationale or arbitrary span is not.
-- Keep correctness in QASPER F1 and semantic F1 rather than hiding it in the
-  format metric.
-- Require the answerability verifier to return an evidence quote. A supported
-  verdict without a normalized quote found in the supplied evidence must be
-  treated as unsupported telemetry.
-- The quote must support the question-candidate relation, not merely contain a
-  candidate token. Keep verifier action and quote-validity diagnostics.
+- Add one repair attempt that is explicitly limited to JSON structure. The
+  repair prompt must preserve the original verdict and quote and must not
+  reconsider evidence or answer correctness.
+- Persist the initial verifier response, repair response, repair status, and
+  parser status for failures. Never silently fall back to token F1 or hide a
+  verifier error.
+- Keep the existing grounded-quote and question-relation checks after repair.
 - Do not restore secondary authority over non-empty boolean candidates.
-- Report yes, no, and unanswerable confusion separately.
+- Improve boolean polarity at the primary prompt/model boundary and evaluate it
+  on a frozen calibration set rather than using gold-aware post-processing.
+- Report annotation-disagreement rows separately from parser failures.
 
 ### Implemented in this remediation
 
 - For the frozen typed subset, `yes`, `no`, and `unanswerable` are now all
   accepted canonical structures regardless of which typed gold value is
   present. Free-form spans remain invalid for this format gate.
-- The answerability contract is now `qasper_answerability.v6`. Both boolean and
+- The answerability contract is now `qasper_answerability.v7`. Both boolean and
   free-text verifier schemas require an exact `evidence_quote`.
 - A free-text `supported` verdict is rejected when its normalized quote is not
   present in retrieved evidence, fails candidate coverage, or lacks enough
   question-relation anchors. Boolean candidates remain advisory and cannot be
   flipped or erased by the secondary verifier.
 - Traces distinguish quote grounding from question-relation support.
+- Invalid verifier JSON receives at most one structure-only repair call. The
+  prompt forbids reconsidering evidence or semantics, and traces retain the
+  initial response, repair response, parser status, and repair status.
 
-Artifact replay on the unchanged v12 predictions raises structure validity
-from 62.89% to 80.50% (128/159), not 100%. The remaining 31 predictions are
-free-form answers on the typed subset, so this metric correction does not close
-answer quality.
+Artifact replay on the unchanged v12 predictions raised structure validity
+from 62.89% to 80.50% (128/159). V13 subsequently reached 90.57%; neither
+artifact closes answer quality.
 
 ### Still open
 
-QASPER v6 job `9914581` has not completed. It must show whether evidence-quote
-validation removes unsupported free-form answers without inducing paired
-regressions. The v12 semantic F1 of 42.14% remains far below the 80% closure
-threshold, so `CONTRACT-002` remains open.
+V13 improves answerability materially but still misses all closure thresholds:
+structure is below 100%, semantic F1 is below 80%, and one paired regression
+remains. JSON repair can remove the dominant structural error path, but primary
+boolean capability and the two annotation disagreements require separate
+evidence. `CONTRACT-002` remains P1.
 
 ### Closure evidence
 
@@ -377,10 +363,10 @@ than repaired by gold-aware post-processing.
 
 ## PERF-001: Latency Evidence Must Remain Quality-Preserving
 
-The latest runs have zero timeout and execution-error rows. QASPER median total
-latency is 1.01 seconds with P95 1.42 seconds. ALCE median is 4.61 seconds with
-P95 5.34 seconds. Finance median generation latency is 1.25 seconds, but P95 is
-12.67 seconds and answer quality remains invalid.
+QASPER v13 median generation latency is 0.93 seconds with P95 1.45 seconds.
+ALCE v9 median is 4.61 seconds with P95 5.34 seconds. Finance v12 median
+generation latency is 14.44 seconds, P95 is 62.22 seconds, and two controller
+routes hit an incorrectly effective 90-second budget.
 
 Do not interpret text-only fallback, abstention, incomplete plans, or rejected
 execution as a latency gain. Close this item only after the corrected focused

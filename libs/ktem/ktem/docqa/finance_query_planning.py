@@ -28,6 +28,19 @@ FINANCE_METRIC_ALIASES = {
         "net cash provided by operating activities",
     ),
     "operating income": ("operating income", "operating profit"),
+    "property plant and equipment": (
+        "property plant and equipment",
+        "property, plant and equipment",
+        "property, plant, and equipment",
+        "property and equipment",
+    ),
+    "revolving credit capacity": (
+        "revolving credit agreement",
+        "revolving credit agreements",
+        "credit facility",
+        "credit facilities",
+        "may borrow",
+    ),
     "shareholders equity": (
         "shareholders equity",
         "shareholders' equity",

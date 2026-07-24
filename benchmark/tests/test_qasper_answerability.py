@@ -5,13 +5,13 @@ from benchmark.qasper_answerability import verify_qasper_answerability
 
 
 class _VerifierLLM:
-    def __init__(self, response: str):
-        self.response = response
+    def __init__(self, response: str | list[str]):
+        self.responses = [response] if isinstance(response, str) else list(response)
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
     def __call__(self, prompt: str, **kwargs):
         self.calls.append((prompt, kwargs))
-        return SimpleNamespace(text=self.response)
+        return SimpleNamespace(text=self.responses.pop(0))
 
 
 def test_qasper_answerability_rejects_related_but_unsupported_candidate():
@@ -189,3 +189,49 @@ def test_qasper_answerability_rejects_boolean_candidate_when_question_is_unresol
     assert result.trace["status"] == "ok"
     assert result.trace["verdict"] == "insufficient_evidence"
     assert result.trace["action"] == "preserved_insufficient_candidate"
+
+
+def test_qasper_answerability_repairs_only_invalid_json_structure_once():
+    llm = _VerifierLLM(
+        [
+            (
+                "```json\n"
+                '{"verdict":"unsupported","evidence_quote":""}\n'
+                "trailing prose"
+            ),
+            '{"verdict":"unsupported","evidence_quote":""}',
+        ]
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="What algorithm creates the embeddings?",
+        evidence="The paper does not state how the embeddings are created.",
+        candidate_answer="SGNS",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["status"] == "ok"
+    assert result.trace["repair_attempted"] == "true"
+    assert result.trace["repair_status"] == "ok"
+    assert result.trace["initial_response"].startswith("```json")
+    assert len(llm.calls) == 2
+    assert "Do not reconsider the evidence" in llm.calls[1][0]
+
+
+def test_qasper_answerability_does_not_repair_response_without_verdict():
+    llm = _VerifierLLM("not json")
+
+    result = verify_qasper_answerability(
+        llm,
+        question="What algorithm creates the embeddings?",
+        evidence="The paper discusses embeddings.",
+        candidate_answer="SGNS",
+    )
+
+    assert result.answer == "SGNS"
+    assert result.trace["status"] == "error"
+    assert result.trace["repair_attempted"] == "false"
+    assert result.trace["repair_status"] == "not_repairable"
+    assert result.trace["initial_response"] == "not json"
+    assert len(llm.calls) == 1

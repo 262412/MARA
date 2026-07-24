@@ -6,6 +6,7 @@ from typing import Any
 
 from .evidence_text import evidence_text
 from .finance_calculation_adapter import finance_calculation_audit
+from .finance_numeric_values import DIRECT_VALUE_METRICS
 from .finance_numeric_values import amount_after as _amount_after
 from .finance_numeric_values import amount_unit as _amount_unit
 from .finance_numeric_values import (
@@ -523,21 +524,7 @@ def _difference_answer(
 def _direct_value_answer(
     lowered_question: str, text: str
 ) -> FinanceNumericAnswer | None:
-    candidates = [
-        (
-            "capital_expenditure",
-            ("capital expenditures", "capital expenditure", "capital spending"),
-        ),
-        (
-            "property_plant_equipment",
-            ("property, plant and equipment", "property and equipment"),
-        ),
-        ("net_sales", ("net sales", "net revenue", "net revenues", "revenue")),
-        ("operating_income", ("operating income", "operating profit")),
-        ("total_assets", ("total assets",)),
-        ("dividend", ("dividend", "dividends")),
-    ]
-    for question_type, labels in candidates:
+    for question_type, labels in DIRECT_VALUE_METRICS:
         if not any(label in lowered_question for label in labels):
             continue
         years = _question_years(lowered_question)

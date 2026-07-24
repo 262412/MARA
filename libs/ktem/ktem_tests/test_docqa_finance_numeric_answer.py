@@ -371,6 +371,122 @@ def test_finance_numeric_answer_executes_direct_capex_from_horizontal_cash_flow_
     assert answer.calculation_execution["citation_ids"] == ["pepsico-page-63"]
 
 
+def test_finance_numeric_answer_rejects_target_scale_inferred_from_unrelated_text():
+    answer = finance_numeric_answer(
+        "What is the FY2021 capital expenditure amount in USD billions?",
+        [
+            {
+                "element_id": "pepsico-page-53",
+                "text": (
+                    "Debt issuances were $4.1 billion. "
+                    "2021 2020 Change. Net cash provided by operating "
+                    "activities $11,616 $10,613. Capital spending "
+                    "(4,625) (4,240)."
+                ),
+            }
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == ""
+    assert answer.attempt_status == "verification_failed"
+    assert (
+        "operand_scale_missing_for_conversion:value"
+        in answer.calculation_verification["errors"]
+    )
+
+
+def test_finance_numeric_answer_supports_direct_current_assets():
+    answer = finance_numeric_answer(
+        "How much total current assets did Nike have at the end of FY2019?",
+        [
+            {
+                "element_id": "nike-balance-sheet",
+                "text": (
+                    "Consolidated Balance Sheets (in millions). "
+                    "2019 2018. Total current assets 16,525 15,134."
+                ),
+            }
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "$16,525 million"
+    assert answer.question_type == "current_assets"
+    assert answer.calculation_verification["valid"] is True
+
+
+def test_finance_numeric_answer_supports_direct_net_ppe_with_serial_comma():
+    answer = finance_numeric_answer(
+        (
+            "What is Boeing's year end FY2018 net property, plant, and "
+            "equipment in USD millions?"
+        ),
+        [
+            {
+                "element_id": "boeing-balance-sheet",
+                "text": (
+                    "Consolidated Statements (in millions). 2018 2017. "
+                    "Property, plant and equipment, net 12,645 12,211."
+                ),
+            }
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "$12,645 million"
+    assert answer.question_type == "property_plant_equipment"
+    assert answer.calculation_verification["valid"] is True
+
+
+def test_finance_working_capital_operands_inherit_single_question_period():
+    answer = finance_numeric_answer(
+        (
+            "What is FY2021 net working capital, defined as total current "
+            "assets less total current liabilities? Answer in USD millions."
+        ),
+        [
+            {
+                "element_id": "balance-sheet-2021",
+                "text": (
+                    "Balance sheet (in millions). 2021 2020. Total current "
+                    "assets 19,815 19,378. Total current liabilities "
+                    "13,997 13,933."
+                ),
+            }
+        ],
+        query_plan={
+            "evidence_slots": [
+                {
+                    "slot_id": "operand:current_assets",
+                    "role": "operand",
+                    "metric": "current assets",
+                    "period": "2021",
+                    "required": True,
+                    "status": "filled",
+                    "evidence_ids": ["balance-sheet-2021"],
+                },
+                {
+                    "slot_id": "operand:current_liabilities",
+                    "role": "operand",
+                    "metric": "current liabilities",
+                    "period": "2021",
+                    "required": True,
+                    "status": "filled",
+                    "evidence_ids": ["balance-sheet-2021"],
+                },
+            ]
+        },
+    )
+
+    assert answer is not None
+    assert answer.answer == "$5,818.0 million"
+    assert answer.calculation_verification["valid"] is True
+    assert {operand["period"] for operand in answer.calculation_plan["operands"]} == {
+        "2021"
+    }
+
+
 def test_finance_numeric_answer_selects_requested_period_from_labeled_values():
     answer = finance_numeric_answer(
         "What is the FY2021 capital expenditure amount in USD millions?",

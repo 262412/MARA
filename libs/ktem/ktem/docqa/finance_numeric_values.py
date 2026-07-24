@@ -3,6 +3,36 @@ from __future__ import annotations
 import re
 from typing import Any
 
+DIRECT_VALUE_METRICS = (
+    (
+        "capital_expenditure",
+        ("capital expenditures", "capital expenditure", "capital spending"),
+    ),
+    (
+        "property_plant_equipment",
+        (
+            "property, plant and equipment",
+            "property, plant, and equipment",
+            "property and equipment",
+        ),
+    ),
+    ("current_assets", ("total current assets", "current assets")),
+    (
+        "revolving_credit_capacity",
+        (
+            "revolving credit agreements",
+            "revolving credit agreement",
+            "credit facilities",
+            "credit facility",
+            "may borrow",
+        ),
+    ),
+    ("net_sales", ("net sales", "net revenue", "net revenues", "revenue")),
+    ("operating_income", ("operating income", "operating profit")),
+    ("total_assets", ("total assets",)),
+    ("dividend", ("dividend", "dividends")),
+)
+
 
 def metric_labels_for_question(lowered_question: str) -> tuple[str, ...]:
     metric_aliases = (
@@ -10,7 +40,25 @@ def metric_labels_for_question(lowered_question: str) -> tuple[str, ...]:
         ("operating_income", ("operating income", "operating profit")),
         ("revenue", ("net sales", "net revenue", "net revenues", "revenue")),
         ("gross_profit", ("gross profit",)),
+        ("current_assets", ("total current assets", "current assets")),
         ("total_assets", ("total assets",)),
+        (
+            "property_plant_equipment",
+            (
+                "property, plant and equipment",
+                "property, plant, and equipment",
+                "property and equipment",
+            ),
+        ),
+        (
+            "revolving_credit_capacity",
+            (
+                "revolving credit agreements",
+                "revolving credit agreement",
+                "credit facilities",
+                "credit facility",
+            ),
+        ),
         (
             "capital_expenditure",
             ("capital expenditures", "capital expenditure", "capital spending"),
@@ -130,6 +178,15 @@ def asks_for_direct_finance_value(lowered_question: str) -> bool:
             "operating income",
             "operating profit",
             "property, plant and equipment",
+            "property, plant, and equipment",
+            "property and equipment",
+            "total current assets",
+            "current assets",
+            "revolving credit agreement",
+            "revolving credit agreements",
+            "credit facility",
+            "credit facilities",
+            "may borrow",
             "total assets",
         )
     )
@@ -248,6 +305,8 @@ def render_execution_answer(
         "net_sales",
         "operating_income",
         "property_plant_equipment",
+        "current_assets",
+        "revolving_credit_capacity",
         "total_assets",
     }:
         if question_type == "capital_expenditure":

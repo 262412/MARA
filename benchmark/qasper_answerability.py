@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v6"
+QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v7"
 QASPER_ANSWERABILITY_SEED = 20260724
 QASPER_ANSWERABILITY_RESPONSE_FORMAT = {
     "type": "json_schema",
@@ -134,18 +134,22 @@ def _verify_boolean_candidate(
     candidate: str,
 ) -> QasperAnswerabilityResult:
     candidate_polarity = "yes" if candidate.lower() in {"yes", "true"} else "no"
-    response = llm(
+    verdict, quote, parse_trace = _call_verifier(
+        llm,
         _boolean_answerability_prompt(question=question, evidence=evidence),
-        max_tokens=64,
         response_format=QASPER_BOOLEAN_ANSWERABILITY_RESPONSE_FORMAT,
-        temperature=0,
-        seed=QASPER_ANSWERABILITY_SEED,
+        parser=_boolean_verdict,
+        allowed_values=("yes", "no", "insufficient_evidence"),
     )
-    verdict, quote = _boolean_verdict(getattr(response, "text", "") or str(response))
     if not verdict:
         return QasperAnswerabilityResult(
             answer=candidate_answer,
-            trace=_trace("error", "", action="preserved_primary_answer"),
+            trace=_trace(
+                "error",
+                "",
+                action="preserved_primary_answer",
+                parse_trace=parse_trace,
+            ),
         )
     quote_grounded = _quote_is_grounded(quote, evidence)
     if verdict != "insufficient_evidence" and not quote_grounded:
@@ -164,6 +168,7 @@ def _verify_boolean_candidate(
             action=action,
             evidence_quote=quote,
             quote_grounded=quote_grounded,
+            parse_trace=parse_trace,
         ),
     )
 
@@ -176,22 +181,26 @@ def _verify_free_text_candidate(
     candidate_answer: str,
     candidate: str,
 ) -> QasperAnswerabilityResult:
-    response = llm(
+    verdict, quote, parse_trace = _call_verifier(
+        llm,
         _answerability_prompt(
             question=question,
             evidence=evidence,
             candidate_answer=candidate,
         ),
-        max_tokens=64,
         response_format=QASPER_ANSWERABILITY_RESPONSE_FORMAT,
-        temperature=0,
-        seed=QASPER_ANSWERABILITY_SEED,
+        parser=_verdict,
+        allowed_values=("supported", "unsupported"),
     )
-    verdict, quote = _verdict(getattr(response, "text", "") or str(response))
     if not verdict:
         return QasperAnswerabilityResult(
             answer=candidate_answer,
-            trace=_trace("error", "", action="preserved_primary_answer"),
+            trace=_trace(
+                "error",
+                "",
+                action="preserved_primary_answer",
+                parse_trace=parse_trace,
+            ),
         )
     quote_grounded = _quote_is_grounded(quote, evidence)
     quote_supports_relation = quote_grounded and _quote_supports_relation(
@@ -209,6 +218,7 @@ def _verify_free_text_candidate(
                 evidence_quote=quote,
                 quote_grounded=quote_grounded,
                 quote_supports_relation=False,
+                parse_trace=parse_trace,
             ),
         )
     return QasperAnswerabilityResult(
@@ -224,7 +234,100 @@ def _verify_free_text_candidate(
             evidence_quote=quote,
             quote_grounded=quote_grounded,
             quote_supports_relation=quote_supports_relation,
+            parse_trace=parse_trace,
         ),
+    )
+
+
+def _call_verifier(
+    llm: Any,
+    prompt: str,
+    *,
+    response_format: dict[str, Any],
+    parser: Any,
+    allowed_values: tuple[str, ...],
+) -> tuple[str, str, dict[str, str]]:
+    response = llm(
+        prompt,
+        max_tokens=64,
+        response_format=response_format,
+        temperature=0,
+        seed=QASPER_ANSWERABILITY_SEED,
+    )
+    initial_response = getattr(response, "text", "") or str(response)
+    verdict, quote = parser(initial_response)
+    if verdict:
+        return (
+            verdict,
+            quote,
+            {
+                "parser_status": "ok",
+                "repair_attempted": "false",
+            },
+        )
+    if not _has_repairable_verdict(initial_response, allowed_values):
+        return (
+            "",
+            "",
+            {
+                "parser_status": "error",
+                "repair_attempted": "false",
+                "repair_status": "not_repairable",
+                "initial_response": str(initial_response),
+            },
+        )
+
+    repair_response = llm(
+        _json_structure_repair_prompt(
+            initial_response,
+            allowed_values=allowed_values,
+        ),
+        max_tokens=64,
+        response_format=response_format,
+        temperature=0,
+        seed=QASPER_ANSWERABILITY_SEED,
+    )
+    repaired_text = getattr(repair_response, "text", "") or str(repair_response)
+    verdict, quote = parser(repaired_text)
+    return (
+        verdict,
+        quote,
+        {
+            "parser_status": "ok" if verdict else "error",
+            "repair_attempted": "true",
+            "repair_status": "ok" if verdict else "error",
+            "initial_response": str(initial_response),
+            "repair_response": str(repaired_text),
+        },
+    )
+
+
+def _has_repairable_verdict(
+    response: str,
+    allowed_values: tuple[str, ...],
+) -> bool:
+    lowered = str(response or "").lower()
+    return any(
+        re.search(rf'["\']?verdict["\']?\s*[:=]\s*["\']?{re.escape(value)}\b', lowered)
+        for value in allowed_values
+    )
+
+
+def _json_structure_repair_prompt(
+    response: str,
+    *,
+    allowed_values: tuple[str, ...],
+) -> str:
+    values = ", ".join(f'"{value}"' for value in allowed_values)
+    return (
+        "/no_think\n"
+        "Repair only the JSON structure of the verifier response below. "
+        "Do not reconsider the evidence, question, candidate, verdict, or "
+        "evidence quote. Preserve the original verdict and quote exactly when "
+        "they are present. Return one JSON object with exactly the keys "
+        '"verdict" and "evidence_quote". The allowed verdict values are: '
+        f"{values}.\n\n"
+        f"VERIFIER RESPONSE:\n{response}"
     )
 
 
@@ -343,6 +446,7 @@ def _trace(
     evidence_quote: str = "",
     quote_grounded: bool | None = None,
     quote_supports_relation: bool | None = None,
+    parse_trace: dict[str, str] | None = None,
 ) -> dict[str, str]:
     trace = {
         "contract_id": QASPER_ANSWERABILITY_CONTRACT,
@@ -356,4 +460,5 @@ def _trace(
         trace["quote_grounded"] = str(quote_grounded).lower()
     if quote_supports_relation is not None:
         trace["quote_supports_relation"] = str(quote_supports_relation).lower()
+    trace.update(parse_trace or {})
     return trace

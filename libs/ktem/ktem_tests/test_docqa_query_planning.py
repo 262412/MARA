@@ -186,6 +186,22 @@ def test_direct_finance_value_plan_has_one_metric_slot():
     assert plan.subqueries == ("capital expenditure 2021",)
 
 
+def test_direct_net_ppe_plan_uses_canonical_finance_metric():
+    plan = build_query_plan(
+        (
+            "What is Boeing's year end FY2018 net property, plant, and "
+            "equipment in USD millions?"
+        ),
+        answer_type="extractive",
+        verification_domain="finance",
+    )
+
+    assert plan.answer_type == "numeric"
+    assert [(slot.metric, slot.period) for slot in plan.evidence_slots] == [
+        ("property plant and equipment", "2018")
+    ]
+
+
 def test_free_cash_flow_plan_retrieves_both_formula_operands():
     plan = build_query_plan(
         "What was free cash flow in FY2022?",
