@@ -28,7 +28,30 @@ def metric_labels_for_question(lowered_question: str) -> tuple[str, ...]:
 
 
 def yearly_amounts(text: str, labels: tuple[str, ...]) -> dict[str, float]:
-    values: dict[str, float] = {}
+    candidates: dict[str, tuple[int, int, float]] = {}
+    for clause in _yearly_fact_clauses(text):
+        _collect_yearly_candidates(clause, labels, candidates)
+    if not candidates:
+        _collect_yearly_candidates(text, labels, candidates)
+    return {year: candidate[2] for year, candidate in candidates.items()}
+
+
+def _yearly_fact_clauses(text: str) -> list[str]:
+    return [
+        clause
+        for clause in re.split(
+            r"(?:[\n\r;]+|(?<=[A-Za-z0-9)%])\.\s+(?=[A-Z]))",
+            str(text or ""),
+        )
+        if clause.strip()
+    ]
+
+
+def _collect_yearly_candidates(
+    text: str,
+    labels: tuple[str, ...],
+    candidates: dict[str, tuple[int, int, float]],
+) -> None:
     for label in labels:
         label_pattern = re.escape(label)
         label_first = (
@@ -41,17 +64,27 @@ def yearly_amounts(text: str, labels: tuple[str, ...]) -> dict[str, float]:
             rf"{label_pattern}[^\n\r]{{0,140}}?"
             rf"([(+\-]?\$?\s*\d[\d,]*(?:\.\d+)?\)?)"
         )
-        for match in re.finditer(label_first, text, flags=re.IGNORECASE):
-            value = parse_amount(match.group(1))
-            year = match.group(2)
-            if value is not None and year not in values:
-                values[year] = value
         for match in re.finditer(year_first, text, flags=re.IGNORECASE):
             year = match.group(1)
             value = parse_amount(match.group(2))
-            if value is not None and year not in values:
-                values[year] = value
-    return values
+            _record_yearly_candidate(candidates, year, value, match)
+        for match in re.finditer(label_first, text, flags=re.IGNORECASE):
+            value = parse_amount(match.group(1))
+            year = match.group(2)
+            _record_yearly_candidate(candidates, year, value, match)
+
+
+def _record_yearly_candidate(
+    candidates: dict[str, tuple[int, int, float]],
+    year: str,
+    value: float | None,
+    match: re.Match[str],
+) -> None:
+    if value is None:
+        return
+    candidate = (match.end() - match.start(), match.start(), value)
+    if year not in candidates or candidate[:2] < candidates[year][:2]:
+        candidates[year] = candidate
 
 
 def question_years(lowered_question: str) -> list[str]:
@@ -195,6 +228,7 @@ def render_execution_answer(
         return format_decimal(value)
     if question_type in {
         "gross_margin",
+        "multi_period_ratio_average",
         "multi_period_percentage_average",
         "operating_margin",
         "percentage_change",

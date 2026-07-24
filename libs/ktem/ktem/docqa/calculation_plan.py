@@ -5,6 +5,8 @@ from dataclasses import asdict, dataclass, field
 from decimal import Decimal, DivisionByZero, InvalidOperation, localcontext
 from typing import Any
 
+from .finance_query_planning import FINANCE_METRIC_ALIASES
+
 CALCULATION_PLAN_CONTRACT = "calculation_plan.v1"
 ALLOWED_OPERATORS = {
     "add",
@@ -107,6 +109,8 @@ class CalculationVerification:
     errors: tuple[str, ...] = ()
     verified_operand_ids: tuple[str, ...] = ()
     citation_ids: tuple[str, ...] = ()
+    required_slot_ids: tuple[str, ...] = ()
+    verified_required_slot_ids: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -174,6 +178,7 @@ def verify_calculation_plan(
     evidence_items: list[dict[str, Any]],
     *,
     question: str,
+    required_slots: list[dict[str, Any]] | None = None,
 ) -> CalculationVerification:
     errors = _structural_errors(plan, question=question)
     evidence_by_id = _evidence_lookup(evidence_items)
@@ -202,11 +207,19 @@ def verify_calculation_plan(
         if operand.evidence_id not in citations:
             citations.append(operand.evidence_id)
     errors.extend(_compatibility_errors(plan))
+    required_ids, verified_required_ids, required_errors = _verify_required_slots(
+        plan,
+        evidence_by_id,
+        required_slots or [],
+    )
+    errors.extend(required_errors)
     return CalculationVerification(
         valid=not errors,
         errors=tuple(dict.fromkeys(errors)),
         verified_operand_ids=tuple(verified_operands),
         citation_ids=tuple(citations),
+        required_slot_ids=tuple(required_ids),
+        verified_required_slot_ids=tuple(verified_required_ids),
     )
 
 
@@ -300,14 +313,81 @@ def _compatibility_errors(plan: CalculationPlan) -> list[str]:
             continue
         if step.operator in {"add", "subtract", "average", "percent_change", "ratio"}:
             for field_name in ("unit", "scale", "currency"):
-                values = {
+                values = [
                     str(getattr(operand, field_name) or "").lower()
                     for operand in direct
-                    if getattr(operand, field_name)
-                }
-                if len(values) > 1:
+                ]
+                if any(values) and len(set(values)) > 1:
                     errors.append(f"{field_name}_mismatch:{step.step_id}")
     return errors
+
+
+def _verify_required_slots(
+    plan: CalculationPlan,
+    evidence_by_id: dict[str, dict[str, Any]],
+    required_slots: list[dict[str, Any]],
+) -> tuple[list[str], list[str], list[str]]:
+    slots = [
+        slot
+        for slot in required_slots
+        if bool(slot.get("required", True))
+        and str(slot.get("role") or "support") == "operand"
+    ]
+    required_ids = [str(slot.get("slot_id") or "") for slot in slots]
+    verified_ids: list[str] = []
+    errors: list[str] = []
+    used_operands: set[str] = set()
+    for slot, slot_id in zip(slots, required_ids):
+        if str(slot.get("status") or "") == "missing":
+            errors.append(f"required_slot_missing:{slot_id}")
+            continue
+        operand = next(
+            (
+                candidate
+                for candidate in plan.operands
+                if candidate.operand_id not in used_operands
+                and _operand_matches_slot(candidate, slot, evidence_by_id)
+            ),
+            None,
+        )
+        if operand is None:
+            errors.append(f"required_slot_missing:{slot_id}")
+            continue
+        used_operands.add(operand.operand_id)
+        verified_ids.append(slot_id)
+    return required_ids, verified_ids, errors
+
+
+def _operand_matches_slot(
+    operand: CalculationOperand,
+    slot: dict[str, Any],
+    evidence_by_id: dict[str, dict[str, Any]],
+) -> bool:
+    period = str(slot.get("period") or "").strip()
+    if period and operand.period != period:
+        return False
+    item = evidence_by_id.get(operand.evidence_id)
+    if item is None:
+        return False
+    allowed_ids = [str(value or "").strip() for value in slot.get("evidence_ids") or []]
+    if allowed_ids and not any(
+        evidence_by_id.get(value) is item for value in allowed_ids
+    ):
+        return False
+    metric = str(slot.get("metric") or "").strip().lower()
+    if metric and not _item_supports_metric(item, metric):
+        return False
+    return True
+
+
+def _item_supports_metric(item: dict[str, Any], metric: str) -> bool:
+    text_tokens = set(re.findall(r"[a-z0-9]+", _evidence_text(item).lower()))
+    aliases = FINANCE_METRIC_ALIASES.get(metric, (metric,))
+    return any(
+        tokens and len(tokens & text_tokens) / len(tokens) >= 0.75
+        for alias in aliases
+        if (tokens := set(re.findall(r"[a-z0-9]+", alias.lower())))
+    )
 
 
 def _evidence_lookup(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

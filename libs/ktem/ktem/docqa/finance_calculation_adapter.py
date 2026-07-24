@@ -29,6 +29,7 @@ def finance_calculation_audit(
     *,
     question_type: str,
     inputs: dict[str, float],
+    query_plan: dict[str, Any] | None = None,
 ) -> FinanceCalculationAudit:
     operands: list[CalculationOperand] = []
     used_evidence_ids: set[str] = set()
@@ -41,8 +42,11 @@ def finance_calculation_audit(
             excluded_evidence_ids=used_evidence_ids,
         )
         operands.append(operand)
-        if operand.evidence_id and _atomic_evidence_id(
-            operand.evidence_id, evidence_items
+        repeated_value = list(inputs.values()).count(value) > 1
+        if (
+            repeated_value
+            and operand.evidence_id
+            and _atomic_evidence_id(operand.evidence_id, evidence_items)
         ):
             used_evidence_ids.add(operand.evidence_id)
     operand_tuple = tuple(operands)
@@ -76,6 +80,9 @@ def finance_calculation_audit(
         plan,
         evidence_items,
         question=question,
+        required_slots=[
+            dict(slot) for slot in (query_plan or {}).get("evidence_slots") or []
+        ],
     )
     execution = (
         execute_calculation_plan(plan)
@@ -155,6 +162,8 @@ def _steps(
             "result",
             "percent" if question_type == "multi_period_percentage_average" else "",
         )
+    if question_type == "multi_period_ratio_average":
+        return _multi_period_ratio_average_steps(input_ids)
     if question_type == "inventory_turnover_average":
         return _inventory_turnover_average_steps(input_ids)
     if question_type in {"difference", "working_capital"}:
@@ -244,6 +253,47 @@ def _inventory_turnover_average_steps(
     )
 
 
+def _multi_period_ratio_average_steps(
+    input_ids: tuple[str, ...],
+) -> tuple[tuple[CalculationStep, ...], str, str]:
+    years = list(
+        dict.fromkeys(
+            match.group(0)
+            for input_id in input_ids
+            if (match := re.search(r"(?:19|20)\d{2}", input_id))
+        )
+    )
+    steps: list[CalculationStep] = []
+    percentage_ids: list[str] = []
+    for year in years:
+        numerator = next(
+            input_id
+            for input_id in input_ids
+            if input_id.endswith(year) and input_id.startswith("cost_of_goods_sold")
+        )
+        denominator = next(
+            input_id
+            for input_id in input_ids
+            if input_id.endswith(year) and input_id.startswith("revenue")
+        )
+        ratio_id = f"ratio_{year}"
+        percentage_id = f"percentage_{year}"
+        steps.extend(
+            (
+                CalculationStep(ratio_id, "ratio", (numerator, denominator)),
+                CalculationStep(
+                    percentage_id,
+                    "multiply",
+                    (ratio_id,),
+                    constant=Decimal("100"),
+                ),
+            )
+        )
+        percentage_ids.append(percentage_id)
+    steps.append(CalculationStep("result", "average", tuple(percentage_ids)))
+    return tuple(steps), "result", "percent"
+
+
 def _matching_item(
     value: Decimal,
     period: str,
@@ -259,8 +309,9 @@ def _matching_item(
     ]
     if period:
         period_matches = [item for item in matches if period in _item_text(item)]
-        if period_matches:
-            matches = period_matches
+        if not period_matches:
+            return None
+        matches = period_matches
     return matches[0] if matches else None
 
 

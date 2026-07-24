@@ -167,7 +167,15 @@ def _calculation_metrics(
         }
     verified = set(verification.get("verified_operand_ids") or [])
     errors = [str(error) for error in verification.get("errors") or []]
-    operand_accuracy = len(verified) / len(operands) if operands else None
+    required_slots = list(verification.get("required_slot_ids") or [])
+    verified_required = set(verification.get("verified_required_slot_ids") or [])
+    operand_accuracy = (
+        len(verified_required) / len(required_slots)
+        if required_slots
+        else len(verified) / len(operands)
+        if operands
+        else None
+    )
     cell_errors = [error for error in errors if "evidence_missing" in error]
     operator_errors = [
         error
@@ -181,7 +189,12 @@ def _calculation_metrics(
     ]
     return {
         "executor_activation_rate": 1.0,
-        "all_operands_bound": float(bool(operands) and len(verified) == len(operands)),
+        "all_operands_bound": float(
+            bool(operands)
+            and bool(verification.get("valid"))
+            and len(verified) == len(operands)
+            and (not required_slots or len(verified_required) == len(required_slots))
+        ),
         "operand_accuracy": operand_accuracy,
         "cell_accuracy": 1.0 - len(cell_errors) / len(operands) if operands else None,
         "operator_accuracy": 1.0 - len(operator_errors) / len(steps) if steps else 1.0,

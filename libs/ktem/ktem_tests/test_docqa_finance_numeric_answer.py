@@ -1,5 +1,4 @@
 from types import SimpleNamespace
-from typing import Any, cast
 
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 from ktem.reasoning.mara_finance_answering import (
@@ -269,7 +268,7 @@ def test_finance_numeric_answer_computes_multi_period_percentage_of_revenue():
 
 
 def test_finance_numeric_answer_rejects_plan_missing_required_period_slot():
-    answer = cast(Any, finance_numeric_answer)(
+    answer = finance_numeric_answer(
         "What was the average adjusted EBITDA from 2020 through 2022?",
         [
             {

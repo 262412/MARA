@@ -166,11 +166,16 @@ def _adaptive_route_payload(
         planner_reason=planner_reason,
         latency_reason=latency_reason,
     )
-    cost_gate_decision = (
-        "required_evidence_preserved"
-        if preserve_required_evidence
-        else route_cost_gate_decision(selected_route, planner_route)
+    required_hybrid = features["structured_calculation"] and planner_route == "hybrid"
+    required_evidence_route_available = (
+        preserve_required_evidence if required_hybrid else None
     )
+    if preserve_required_evidence:
+        cost_gate_decision = "required_evidence_preserved"
+    elif required_hybrid:
+        cost_gate_decision = "required_hybrid_unavailable"
+    else:
+        cost_gate_decision = route_cost_gate_decision(selected_route, planner_route)
     return {
         "route": selected_route,
         "reason": reason,
@@ -190,6 +195,7 @@ def _adaptive_route_payload(
         "latency_budget": dict(latency_budget),
         "latency_budget_reason": latency_reason,
         "cost_gate_decision": cost_gate_decision,
+        "required_evidence_route_available": required_evidence_route_available,
         "selected_route_reason": reason,
         "route_selection_reason": reason,
         "route_selection_policy": "cost_aware_initial",

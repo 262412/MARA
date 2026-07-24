@@ -23,6 +23,7 @@ BACKEND_HEALTH_JSON="${LOG_ROOT}/backend-health.json"
 SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"
 SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"
 SEMANTIC_EVALUATOR_TIMEOUT_SECONDS="${MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS:-60}"
+REQUIRE_HYBRID_ELIGIBLE="${MARA_MULTIMODAL_REQUIRE_HYBRID_ELIGIBLE:-0}"
 
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/users/tbczhang/fastscratch/cache/uv}"
 export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/users/tbczhang/fastscratch/cache/uv/python}"
@@ -227,10 +228,19 @@ uv run --python 3.10 python -m benchmark run \
   --docqa-citation-mode inline | tee "$BENCHMARK_LOG"
 
 RUN_DIR="$(awk '/Outputs written to/ {print $NF}' "$BENCHMARK_LOG" | tail -n 1)"
-if [[ -z "$RUN_DIR" || ! -f "$RUN_DIR/summary.json" ]]; then
+if [[ -z "$RUN_DIR" || ! -f "$RUN_DIR/summary.json" || ! -f "$RUN_DIR/predictions.jsonl" ]]; then
   log "benchmark finished but summary.json was not found; run_dir=${RUN_DIR:-missing}"
   exit 1
 fi
+
+VALIDATION_ARGS=(--require-all-usable)
+if [[ "$REQUIRE_HYBRID_ELIGIBLE" == "1" ]]; then
+  VALIDATION_ARGS+=(--require-hybrid-eligible)
+fi
+uv run --python 3.10 python \
+  "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \
+  "$RUN_DIR/predictions.jsonl" \
+  "${VALIDATION_ARGS[@]}"
 
 uv run --python 3.10 python - "$RUN_DIR" <<'PY'
 import json

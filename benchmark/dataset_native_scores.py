@@ -177,10 +177,9 @@ def _qasper_structure_valid(
 ) -> float | None:
     normalized_gold = {normalize_text(answer) for answer in gold_answers}
     normalized_prediction = normalize_text(predicted_answer)
-    if normalized_gold == {"unanswerable"}:
-        return float(normalized_prediction == "unanswerable")
-    if normalized_gold and normalized_gold <= {"yes", "no"}:
-        return float(normalized_prediction in {"yes", "no"})
+    typed_values = {"yes", "no", "unanswerable"}
+    if normalized_gold and normalized_gold <= typed_values:
+        return float(normalized_prediction in typed_values)
     return None
 
 

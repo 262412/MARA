@@ -75,6 +75,9 @@ def _named_formula_specs(
     periods: list[str],
     current_period: str,
 ) -> FinanceOperandSpecs:
+    multi_period_ratio = _multi_period_ratio_specs(question, periods)
+    if multi_period_ratio:
+        return multi_period_ratio
     if "quick ratio" in question:
         return same_period_specs(
             current_period,
@@ -115,6 +118,28 @@ def _named_formula_specs(
             ("shareholders_equity", "shareholders equity"),
         )
     return ()
+
+
+def _multi_period_ratio_specs(
+    question: str,
+    periods: list[str],
+) -> FinanceOperandSpecs:
+    percentage_of = bool(
+        re.search(r"\bas\s+(?:a\s+)?(?:%|percent(?:age)?)\s+of\b", question)
+    )
+    metrics = finance_metrics_in_question(question)
+    if not percentage_of or len(periods) < 2 or len(metrics) < 2:
+        return ()
+    numerator, denominator = metrics[:2]
+    return tuple(
+        (
+            f"{metric.replace(' ', '_')}:{period}",
+            metric,
+            period,
+        )
+        for period in periods
+        for metric in (numerator, denominator)
+    )
 
 
 def _inventory_turnover_specs(

@@ -17,6 +17,7 @@ def route_finance_numeric_answer(
     result = finance_numeric_answer(
         request_planning_question(request),
         [item for item in getattr(bundle, "items", []) or [] if isinstance(item, dict)],
+        query_plan=dict(getattr(bundle, "metadata", {}).get("query_plan") or {}),
     )
     if result is None:
         return None
@@ -46,6 +47,7 @@ def ensure_finance_numeric_trace(request: Any, bundle: Any) -> None:
     result = finance_numeric_answer(
         request_planning_question(request),
         [item for item in getattr(bundle, "items", []) or [] if isinstance(item, dict)],
+        query_plan=dict(metadata.get("query_plan") or {}),
     )
     if result is not None:
         metadata["finance_numeric_trace"] = result.as_trace()

@@ -301,7 +301,8 @@ def test_qasper_text_rag_runs_answerability_verifier_after_generation(
     llm = _SequenceLLM(
         [
             "The baseline was NDCG 55.46.",
-            '{"verdict":"unsupported"}',
+            '{"verdict":"unsupported","evidence_quote":'
+            '"The proposed system reports NDCG 55.46."}',
         ]
     )
     monkeypatch.setattr(KotaemonTextRAGSystem, "_resolve_llm", lambda *_args: llm)
@@ -336,10 +337,13 @@ def test_qasper_text_rag_runs_answerability_verifier_after_generation(
     assert answer == "unanswerable"
     assert len(llm.calls) == 2
     assert metadata["qasper_answerability"] == {
-        "contract_id": "qasper_answerability.v5",
+        "contract_id": "qasper_answerability.v6",
         "status": "ok",
         "verdict": "unsupported",
         "action": "abstained_unsupported_candidate",
+        "evidence_quote": "The proposed system reports NDCG 55.46.",
+        "quote_grounded": "true",
+        "quote_supports_relation": "false",
     }
 
 

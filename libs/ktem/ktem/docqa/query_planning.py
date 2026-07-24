@@ -41,6 +41,7 @@ _CAUSAL_TERMS = {
     "why",
 }
 _CROSS_PAGE_TERMS = {"across", "between", "compare", "comparison", "from"}
+_MIN_OPERAND_METRIC_COVERAGE = 0.75
 _VISUAL_TERMS = {
     "chart",
     "diagram",
@@ -238,12 +239,15 @@ def score_evidence_for_slot(slot: EvidenceSlot, item: dict[str, Any]) -> float:
         for alias in FINANCE_METRIC_ALIASES.get(slot.metric, (slot.metric,))
         if alias
     ]
+    metric_coverage = _metric_coverage(metric_token_sets, text_tokens)
+    if (
+        slot.role == "operand"
+        and slot.metric
+        and metric_coverage < _MIN_OPERAND_METRIC_COVERAGE
+    ):
+        return 0.0
     if metric_token_sets:
-        score += max(
-            len(metric_tokens & text_tokens) / len(metric_tokens)
-            for metric_tokens in metric_token_sets
-            if metric_tokens
-        )
+        score += metric_coverage
     if slot.period:
         score += 1.0
     if slot.entity and slot.entity.lower() in text:
@@ -253,6 +257,18 @@ def score_evidence_for_slot(slot: EvidenceSlot, item: dict[str, Any]) -> float:
     if modality in {"table", "formula"} and slot.role == "operand":
         score += 0.25
     return score
+
+
+def _metric_coverage(
+    metric_token_sets: list[set[str]],
+    text_tokens: set[str],
+) -> float:
+    coverages = [
+        len(metric_tokens & text_tokens) / len(metric_tokens)
+        for metric_tokens in metric_token_sets
+        if metric_tokens
+    ]
+    return max(coverages, default=0.0)
 
 
 def _bound_numeric_value(

@@ -49,6 +49,8 @@ class FinanceNumericAnswer:
 def finance_numeric_answer(
     prompt: str,
     evidence_items: list[dict[str, Any]],
+    *,
+    query_plan: dict[str, Any] | None = None,
 ) -> FinanceNumericAnswer | None:
     answer = _finance_numeric_answer_from_text(prompt, evidence_items)
     if answer is None:
@@ -59,6 +61,7 @@ def finance_numeric_answer(
         evidence_items,
         question_type=answer.question_type,
         inputs=answer.inputs,
+        query_plan=query_plan,
     )
     if not audit.verification.valid or audit.execution.status != "ok":
         return replace(
@@ -132,6 +135,8 @@ def _finance_numeric_answer_from_text(
     margin_or_leverage = _margin_or_leverage_answer(lowered, text)
     if margin_or_leverage is not None:
         return margin_or_leverage
+    if _is_multi_period_ratio_average(lowered):
+        return _multi_period_ratio_average_answer(lowered, text)
     if "average" in lowered and len(_question_years(lowered)) >= 2:
         return _multi_period_average_answer(lowered, text)
     if "percentage change" in lowered or "percent change" in lowered:
@@ -335,6 +340,52 @@ def _multi_period_average_answer(
         ),
         inputs=inputs,
         formula="average(" + ", ".join(inputs) + ")",
+    )
+
+
+def _is_multi_period_ratio_average(question: str) -> bool:
+    return (
+        "average" in question
+        and len(_question_years(question)) >= 2
+        and bool(
+            re.search(
+                r"\bas\s+(?:a\s+)?(?:%|percent(?:age)?)\s+of\b",
+                question,
+            )
+        )
+    )
+
+
+def _multi_period_ratio_average_answer(
+    lowered_question: str,
+    text: str,
+) -> FinanceNumericAnswer | None:
+    years = _question_years(lowered_question)
+    cogs = _yearly_amounts(
+        text,
+        ("cost of goods sold", "cost of sales", "cogs"),
+    )
+    revenue = _yearly_amounts(
+        text,
+        ("net sales", "net revenue", "net revenues", "revenue"),
+    )
+    if any(year not in cogs or year not in revenue for year in years):
+        return None
+    inputs: dict[str, float] = {}
+    percentages: list[float] = []
+    for year in years:
+        if revenue[year] == 0:
+            return None
+        inputs[f"cost_of_goods_sold_{year}"] = cogs[year]
+        inputs[f"revenue_{year}"] = revenue[year]
+        percentages.append(cogs[year] / revenue[year] * 100)
+    average = sum(percentages) / len(percentages)
+    return FinanceNumericAnswer(
+        answer=_format_percentage(average),
+        confidence=0.9,
+        question_type="multi_period_ratio_average",
+        inputs=inputs,
+        formula="average(cost_of_goods_sold_year / revenue_year * 100)",
     )
 
 
