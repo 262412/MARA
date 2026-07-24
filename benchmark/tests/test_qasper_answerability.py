@@ -72,6 +72,27 @@ def test_qasper_answerability_rejects_supported_verdict_without_grounded_quote()
     assert result.trace["action"] == "abstained_ungrounded_quote"
 
 
+def test_qasper_answerability_rejects_grounded_quote_without_question_relation():
+    llm = _VerifierLLM(
+        '{"verdict":"supported","evidence_quote":'
+        '"Cosine similarity compares unrelated embedding vectors."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Which metric evaluates the PolyResponse system?",
+        evidence=(
+            "Cosine similarity compares unrelated embedding vectors. "
+            "PolyResponse is discussed in a separate experiment."
+        ),
+        candidate_answer="cosine similarity",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["verdict"] == "unsupported"
+    assert result.trace["action"] == "abstained_ungrounded_quote"
+
+
 def test_qasper_answerability_does_not_rejudge_explicit_unanswerable():
     llm = _VerifierLLM(
         '{"verdict":"supported","evidence_quote":"No baseline is described."}'
