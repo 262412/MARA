@@ -19,6 +19,8 @@ def main() -> None:
         description="Reject benchmark artifacts that contain no usable predictions."
     )
     parser.add_argument("predictions", type=Path)
+    parser.add_argument("--expected-count", type=int)
+    parser.add_argument("--require-all-usable", action="store_true")
     args = parser.parse_args()
 
     predictions_path = args.predictions
@@ -32,8 +34,17 @@ def main() -> None:
     print(f"usable_predictions={usable_count}")
     if not predictions:
         raise SystemExit("benchmark artifact contains zero predictions")
+    if args.expected_count is not None and len(predictions) != args.expected_count:
+        raise SystemExit(
+            f"expected {args.expected_count} predictions but found {len(predictions)}"
+        )
     if usable_count == 0:
         raise SystemExit("benchmark artifact contains zero usable predictions")
+    if args.require_all_usable and usable_count != len(predictions):
+        raise SystemExit(
+            "formal benchmark artifact requires every prediction to be usable: "
+            f"{usable_count}/{len(predictions)} usable"
+        )
 
 
 if __name__ == "__main__":

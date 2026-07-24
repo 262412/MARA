@@ -34,3 +34,18 @@ def route_finance_numeric_answer(
         return None
     bundle.metadata["generation_backend"] = "finance_numeric_answerer"
     return result.answer
+
+
+def ensure_finance_numeric_trace(request: Any, bundle: Any) -> None:
+    metadata = getattr(bundle, "metadata", None)
+    if not isinstance(metadata, dict) or metadata.get("finance_numeric_trace"):
+        return
+    domain = str(getattr(request, "verification_domain", "") or "").strip().lower()
+    if domain not in {"finance", "financial", "financebench"}:
+        return
+    result = finance_numeric_answer(
+        request_planning_question(request),
+        [item for item in getattr(bundle, "items", []) or [] if isinstance(item, dict)],
+    )
+    if result is not None:
+        metadata["finance_numeric_trace"] = result.as_trace()

@@ -19,7 +19,10 @@ from .mara_controller_request import (
 )
 from .mara_element_answer import element_evidence_answer
 from .mara_evidence import build_mara_evidence_metadata
-from .mara_finance_answering import route_finance_numeric_answer
+from .mara_finance_answering import (
+    ensure_finance_numeric_trace,
+    route_finance_numeric_answer,
+)
 from .mara_query_planning import plan_steps as build_mara_plan_steps
 from .mara_query_planning import understand_query as understand_mara_query
 from .mara_query_planning import with_selected_source_context
@@ -475,6 +478,10 @@ class MaraAgentPipeline(FullQAPipeline):
             generate=generate,
             rewrite=rewrite,
             agent_trace=[planner_payload],
+        )
+        ensure_finance_numeric_trace(
+            _controller_execution_request(self, message),
+            execution.evidence_bundle,
         )
         if generation_events and execution.answer != generated_answer:
             generation_events = []

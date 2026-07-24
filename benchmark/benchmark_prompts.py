@@ -436,7 +436,11 @@ def _qasper_prompt(question: str) -> str:
         + "Answer the question using only the provided research paper context "
         "or evidence. Return only the answer span, yes/no value, or "
         '"unanswerable" when the evidence does not answer the question. Keep '
-        "free-form answers short and do not add background commentary.\n\n"
+        "free-form answers short and do not add background commentary. For a "
+        "yes/no question, do not default to yes: choose either polarity only "
+        "when an explicit paper statement entails it. Phrases such as no, not, "
+        "without, failed to, or did not can directly support a no answer; mere "
+        "absence from the retrieved excerpt cannot.\n\n"
         f"Question: {question}\n\n"
         f"{_concise_answer_contract()}\n\n"
         "Answer:"

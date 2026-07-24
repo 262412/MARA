@@ -77,10 +77,11 @@ _FINANCE_FOCUS_RULES: tuple[
     ),
     (
         (),
-        ("capital expenditure", "capex", "cash flow"),
+        ("capital expenditure", "capital spending", "capex", "cash flow"),
         (
             "Consolidated Statement of Cash Flows",
             "Capital expenditures",
+            "Capital spending",
             "Purchases of property, plant and equipment",
             "Net cash provided by operating activities",
         ),

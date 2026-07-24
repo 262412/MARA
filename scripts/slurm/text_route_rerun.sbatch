@@ -230,7 +230,8 @@ test -f "$RUN_DIR/predictions.jsonl"
 test -f "$RUN_DIR/report.md"
 uv run --python 3.10 python \
   "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \
-  "$RUN_DIR/predictions.jsonl"
+  "$RUN_DIR/predictions.jsonl" \
+  --require-all-usable
 
 log "outputs=${RUN_DIR}"
 mara_cleanup_benchmark_runtime

@@ -5,11 +5,16 @@ from typing import Any
 
 from ktem.docqa.controller import ROUTE_EVIDENCE_TYPES
 from ktem.reasoning.mara_route_costing import (
+    cost_gate_decision as route_cost_gate_decision,
+)
+from ktem.reasoning.mara_route_costing import (
     dataset_text,
     effective_route_confidences,
     is_mmdocrag_dataset,
+    latency_budget_reason,
     route_confidence_trace_fields,
-    select_route,
+    select_route_preserving_required_evidence,
+    selection_reason,
 )
 from ktem.reasoning.mara_visual_intent import has_explicit_visual_intent
 
@@ -23,6 +28,7 @@ ELEMENT_INTENT_TERMS = {
 }
 ELEMENT_MODALITIES = {"formula", "table"}
 CALCULATION_TERMS = {
+    "amount",
     "average",
     "calculate",
     "calculation",
@@ -35,6 +41,7 @@ CALCULATION_TERMS = {
     "ratio",
     "sum",
     "total",
+    "value",
 }
 SUMMARY_TASK_TYPES = {"compare", "study_guide", "summary"}
 
@@ -106,15 +113,64 @@ def score_adaptive_route(
         expected_cost,
     )
     route_scores = _route_scores(expected_quality, expected_cost)
-    selected_route = select_route(route_scores, allowed, skipped_expensive_routes)
-    latency_reason = _latency_budget_reason(selected_route, features, confidences)
-    reason = _selection_reason(
+    (
+        selected_route,
+        preserve_required_evidence,
+    ) = select_route_preserving_required_evidence(
+        features=features,
+        planner_route=planner_route,
+        allowed_routes=allowed,
+        skipped_routes=skipped_expensive_routes,
+        expected_quality=expected_quality,
+        route_scores=route_scores,
+    )
+    return _adaptive_route_payload(
+        selected_route=selected_route,
+        preserve_required_evidence=preserve_required_evidence,
+        planner_route=planner_route,
+        planner_reason=planner_reason,
+        features=features,
+        probe=probe,
+        raw_confidences=raw_confidences,
+        confidences=confidences,
+        expected_quality=expected_quality,
+        expected_cost=expected_cost,
+        skipped_expensive_routes=skipped_expensive_routes,
+        allowed=allowed,
+        route_scores=route_scores,
+        latency_budget=latency_budget or {},
+    )
+
+
+def _adaptive_route_payload(
+    *,
+    selected_route: str,
+    preserve_required_evidence: bool,
+    planner_route: str,
+    planner_reason: str,
+    features: dict[str, Any],
+    probe: dict[str, Any],
+    raw_confidences: dict[str, float],
+    confidences: dict[str, float],
+    expected_quality: dict[str, float],
+    expected_cost: dict[str, float],
+    skipped_expensive_routes: list[str],
+    allowed: list[str],
+    route_scores: dict[str, float],
+    latency_budget: dict[str, Any],
+) -> dict[str, Any]:
+    latency_reason = latency_budget_reason(selected_route, features, confidences)
+    reason = selection_reason(
         selected_route,
         planner_route=planner_route,
         planner_reason=planner_reason,
         latency_reason=latency_reason,
     )
-    cost_gate_decision = _cost_gate_decision(selected_route, planner_route)
+    cost_gate_decision = (
+        "required_evidence_preserved"
+        if preserve_required_evidence
+        else route_cost_gate_decision(selected_route, planner_route)
+    )
     return {
         "route": selected_route,
         "reason": reason,
@@ -131,7 +187,7 @@ def score_adaptive_route(
             allowed,
             selected_route,
         ),
-        "latency_budget": dict(latency_budget or {}),
+        "latency_budget": dict(latency_budget),
         "latency_budget_reason": latency_reason,
         "cost_gate_decision": cost_gate_decision,
         "selected_route_reason": reason,
@@ -502,52 +558,6 @@ def _hybrid_allowed(confidences: dict[str, float], features: dict[str, Any]) -> 
     return confidences["text"] >= 0.45 and (
         confidences["visual"] >= 0.45 or confidences["element"] >= 0.45
     )
-
-
-def _latency_budget_reason(
-    route: str,
-    features: dict[str, Any],
-    confidences: dict[str, float],
-) -> str:
-    if route == "doc_text":
-        return "text_route_avoids_visual_latency"
-    if route == "doc_page_image":
-        return "visual_intent_justifies_visual_route"
-    if route == "doc_element":
-        return "element_confidence_justifies_element_route"
-    if route == "graph_global":
-        return "graph_context_justifies_global_route"
-    if route == "hybrid":
-        return "complementary_evidence_justifies_hybrid_route"
-    if features["visual_intent"] and confidences["visual"] < 0.6:
-        return "visual_confidence_below_vlm_gate"
-    return "route_score_selected"
-
-
-def _selection_reason(
-    route: str,
-    *,
-    planner_route: str,
-    planner_reason: str,
-    latency_reason: str,
-) -> str:
-    prefix = planner_reason.strip() or "Controller selected an initial route."
-    if planner_route and planner_route != route:
-        return (
-            f"{prefix} Cost-aware scoring selected {route} before retrieval "
-            f"execution ({latency_reason})."
-        )
-    return f"{prefix} Cost-aware scoring selected {route} ({latency_reason})."
-
-
-def _cost_gate_decision(route: str, planner_route: str) -> str:
-    if planner_route and planner_route != route:
-        return f"normalized_from_{planner_route}"
-    if route == "doc_text":
-        return "text_cost_gate_passed"
-    if route == "doc_page_image":
-        return "visual_cost_gate_passed"
-    return f"{route}_cost_gate_passed"
 
 
 def _allowed_routes(value: Any) -> list[str]:

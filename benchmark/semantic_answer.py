@@ -45,6 +45,12 @@ _DATE_RE = re.compile(
     r"october|november|december)\s+\d{1,2},?\s+(?:19|20)\d{2}\b",
     re.IGNORECASE,
 )
+_DATE_ONLY_RE = re.compile(
+    r"^(?:(?:19|20)\d{2}(?:[-/]\d{1,2}(?:[-/]\d{1,2})?)?|"
+    r"(?:january|february|march|april|may|june|july|august|september|"
+    r"october|november|december)\s+\d{1,2},?\s+(?:19|20)\d{2})$",
+    re.IGNORECASE,
+)
 _LIST_TYPES = {"list", "list_qa", "multi_answer", "multiple_answers"}
 _FORMULA_TYPES = {"formula", "math", "math_formula", "equation"}
 _NUMERIC_TYPES = {
@@ -151,6 +157,14 @@ def semantic_answer_metrics(
         metadata.update(method="dataset_native", judge_status="not_applicable")
         return _empty_metrics(), metadata
 
+    if prediction.get("error"):
+        metadata.update(
+            method="invalid_prediction",
+            judge_status="error",
+            error=str(prediction.get("error") or "prediction execution failed"),
+        )
+        return _empty_metrics(), metadata
+
     deterministic = _deterministic_score(prediction, answer_type)
     if deterministic is not None:
         method, score = deterministic
@@ -184,20 +198,34 @@ def semantic_answer_metrics(
         metadata.update(judge_status="error", error=str(exc))
         return _empty_metrics(), metadata
 
-    precision = _ratio(
-        result["supported_predicted_claim_count"],
-        result["predicted_relevant_claim_count"],
+    return _claim_metrics(result, metadata)
+
+
+def _claim_metrics(
+    result: dict[str, Any],
+    metadata: dict[str, Any],
+) -> tuple[dict[str, float | None], dict[str, Any]]:
+    zero_predicted_claims = (
+        result["predicted_relevant_claim_count"] == 0 and result["gold_claim_count"] > 0
     )
-    recall = _ratio(
-        result["supported_gold_claim_count"],
-        result["gold_claim_count"],
-    )
-    f1 = _harmonic_mean(precision, recall)
+    if zero_predicted_claims:
+        precision = recall = f1 = 0.0
+    else:
+        precision = _ratio(
+            result["supported_predicted_claim_count"],
+            result["predicted_relevant_claim_count"],
+        )
+        recall = _ratio(
+            result["supported_gold_claim_count"],
+            result["gold_claim_count"],
+        )
+        f1 = _harmonic_mean(precision, recall)
     if result["core_contradiction"]:
         precision = recall = f1 = 0.0
     metadata.update(
         judge_status="ok",
         core_contradiction=result["core_contradiction"],
+        zero_predicted_claims=zero_predicted_claims,
         claim_counts={key: result[key] for key in _COUNT_FIELDS},
     )
     return {
@@ -225,10 +253,13 @@ def _answer_type(prediction: dict[str, Any]) -> str:
         return "formula"
     if configured in _NUMERIC_TYPES:
         return "numeric"
+    if str(metadata.get("question_type") or "").strip().lower() == "metrics-generated":
+        return "numeric"
     if configured in _LIST_TYPES:
         return "list"
     if configured == "date" or (
-        gold_answers and all(_DATE_RE.search(answer) for answer in gold_answers)
+        gold_answers
+        and all(_DATE_ONLY_RE.fullmatch(answer.strip()) for answer in gold_answers)
     ):
         return "date"
     return "free_text"
@@ -433,7 +464,7 @@ def _list_items(text: str) -> set[str]:
 
 def _ratio(numerator: int, denominator: int) -> float:
     if denominator <= 0:
-        return 1.0 if numerator == 0 else 0.0
+        return 0.0
     return numerator / denominator
 
 
@@ -466,7 +497,9 @@ Compare the predicted answer with the question, gold answers, and gold evidence.
 Decompose both answers into atomic relevant factual claims. A predicted claim is
 supported only when it is entailed by a gold answer or gold evidence. Extra
 unsupported relevant facts reduce precision. A wrong core value, direction,
-time, unit, or polarity is a core contradiction. Return JSON only with exactly:
+time, unit, or polarity is a core contradiction. If the predicted answer has no
+relevant factual claim, both supported claim counts must be zero. Return JSON
+only with exactly:
 {"gold_claim_count": int, "supported_gold_claim_count": int,
  "predicted_relevant_claim_count": int,
  "supported_predicted_claim_count": int, "core_contradiction": bool}.

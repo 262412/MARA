@@ -489,7 +489,12 @@ def _direct_value_answer(
     for question_type, labels in candidates:
         if not any(label in lowered_question for label in labels):
             continue
-        value = _amount_after(text, labels)
+        years = _question_years(lowered_question)
+        values_by_year = _yearly_amounts(text, labels)
+        requested_year = _target_year(lowered_question, years) if years else ""
+        value = values_by_year.get(requested_year)
+        if value is None:
+            value = _amount_after(text, labels)
         if value is None:
             continue
         return FinanceNumericAnswer(

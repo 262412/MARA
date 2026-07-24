@@ -128,7 +128,7 @@ def _turnover_and_receivable_requirements(
 
 
 def _capital_asset_requirements(value: str) -> list[tuple[str, tuple[str, ...]]]:
-    if _has_any(value, ("capital expenditure", "capex")):
+    if _has_any(value, ("capital expenditure", "capital spending", "capex")):
         return [
             (
                 "cash flow statement",
@@ -143,6 +143,7 @@ def _capital_asset_requirements(value: str) -> list[tuple[str, tuple[str, ...]]]
                 (
                     "capital expenditures",
                     "capital expenditure",
+                    "capital spending",
                     "purchases of property, plant and equipment",
                     "purchase of property, plant and equipment",
                 ),
@@ -164,6 +165,7 @@ def _capital_asset_requirements(value: str) -> list[tuple[str, tuple[str, ...]]]
                 (
                     "capital expenditures",
                     "capital expenditure",
+                    "capital spending",
                     "purchases of property, plant and equipment",
                     "purchase of property, plant and equipment",
                 ),

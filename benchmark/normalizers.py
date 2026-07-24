@@ -214,10 +214,12 @@ def normalize_financebench_manifest(
                 "format_type": "pdf",
                 "question": str(_pick(record, "question", default="")).strip(),
                 "answers": answers,
+                "answer_type": _financebench_answer_type(record),
                 "evidence_pages": evidence_pages,
                 "evidence_sources": evidence_sources,
                 "gold_evidence": gold_evidence,
                 "metadata": {
+                    "dataset_family": "financebench",
                     "doc_name": document_name,
                     "company": record.get("company"),
                     "doc_type": record.get("doc_type"),
@@ -229,6 +231,13 @@ def normalize_financebench_manifest(
         )
 
     return write_manifest(output_path, "financebench", records)
+
+
+def _financebench_answer_type(record: dict[str, Any]) -> str:
+    question_type = str(record.get("question_type") or "").strip().lower()
+    if question_type == "metrics-generated":
+        return "numeric"
+    return "extractive"
 
 
 def normalize_slidevqa_manifest(

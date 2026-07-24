@@ -42,6 +42,30 @@ def select_route(
     return max(candidates, key=lambda item: (item[0], route_tie_breaker(item[1])))[1]
 
 
+def select_route_preserving_required_evidence(
+    *,
+    features: dict[str, Any],
+    planner_route: str,
+    allowed_routes: list[str],
+    skipped_routes: list[str],
+    expected_quality: dict[str, float],
+    route_scores: dict[str, float],
+) -> tuple[str, bool]:
+    preserve_required_evidence = (
+        features["structured_calculation"]
+        and planner_route == "hybrid"
+        and (not allowed_routes or "hybrid" in allowed_routes)
+        and "hybrid" not in skipped_routes
+        and expected_quality.get("hybrid", 0.0) > 0.0
+    )
+    route = (
+        "hybrid"
+        if preserve_required_evidence
+        else select_route(route_scores, allowed_routes, skipped_routes)
+    )
+    return route, preserve_required_evidence
+
+
 def cost_gate_enforced_routes(
     skipped_routes: list[str],
     allowed_routes: list[str],
@@ -92,3 +116,49 @@ def dataset_text(dataset_family: str, latency_budget: dict[str, Any]) -> str:
 
 def is_mmdocrag_dataset(dataset: str) -> bool:
     return "mmdocrag" in dataset or "multimodal_doc_qa" in dataset
+
+
+def latency_budget_reason(
+    route: str,
+    features: dict[str, Any],
+    confidences: dict[str, float],
+) -> str:
+    if route == "doc_text":
+        return "text_route_avoids_visual_latency"
+    if route == "doc_page_image":
+        return "visual_intent_justifies_visual_route"
+    if route == "doc_element":
+        return "element_confidence_justifies_element_route"
+    if route == "graph_global":
+        return "graph_context_justifies_global_route"
+    if route == "hybrid":
+        return "complementary_evidence_justifies_hybrid_route"
+    if features["visual_intent"] and confidences["visual"] < 0.6:
+        return "visual_confidence_below_vlm_gate"
+    return "route_score_selected"
+
+
+def selection_reason(
+    route: str,
+    *,
+    planner_route: str,
+    planner_reason: str,
+    latency_reason: str,
+) -> str:
+    prefix = planner_reason.strip() or "Controller selected an initial route."
+    if planner_route and planner_route != route:
+        return (
+            f"{prefix} Cost-aware scoring selected {route} before retrieval "
+            f"execution ({latency_reason})."
+        )
+    return f"{prefix} Cost-aware scoring selected {route} ({latency_reason})."
+
+
+def cost_gate_decision(route: str, planner_route: str) -> str:
+    if planner_route and planner_route != route:
+        return f"normalized_from_{planner_route}"
+    if route == "doc_text":
+        return "text_cost_gate_passed"
+    if route == "doc_page_image":
+        return "visual_cost_gate_passed"
+    return f"{route}_cost_gate_passed"

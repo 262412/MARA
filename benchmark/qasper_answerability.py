@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v4"
+QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v5"
 QASPER_ANSWERABILITY_SEED = 20260724
 QASPER_ANSWERABILITY_RESPONSE_FORMAT = {
     "type": "json_schema",
@@ -69,9 +69,14 @@ def verify_qasper_answerability(
     if not candidate or _UNANSWERABLE_RE.match(candidate):
         return QasperAnswerabilityResult(
             answer="unanswerable" if candidate else "",
-            trace=_trace("not_required", "unanswerable" if candidate else ""),
+            trace=_trace(
+                "not_required",
+                "unanswerable" if candidate else "",
+                action="preserved_primary_answer",
+            ),
         )
     if candidate.lower() in {"yes", "no", "true", "false"}:
+        candidate_polarity = "yes" if candidate.lower() in {"yes", "true"} else "no"
         response = llm(
             _boolean_answerability_prompt(
                 question=question,
@@ -86,11 +91,17 @@ def verify_qasper_answerability(
         if not verdict:
             return QasperAnswerabilityResult(
                 answer=candidate_answer,
-                trace=_trace("error", ""),
+                trace=_trace("error", "", action="preserved_primary_answer"),
             )
+        if verdict == candidate_polarity:
+            action = "confirmed_candidate"
+        elif verdict == "insufficient_evidence":
+            action = "preserved_insufficient_candidate"
+        else:
+            action = "preserved_conflicting_candidate"
         return QasperAnswerabilityResult(
-            answer=(verdict if verdict in {"yes", "no"} else "unanswerable"),
-            trace=_trace("ok", verdict),
+            answer=candidate_polarity,
+            trace=_trace("ok", verdict, action=action),
         )
 
     response = llm(
@@ -108,11 +119,19 @@ def verify_qasper_answerability(
     if not verdict:
         return QasperAnswerabilityResult(
             answer=candidate_answer,
-            trace=_trace("error", ""),
+            trace=_trace("error", "", action="preserved_primary_answer"),
         )
     return QasperAnswerabilityResult(
         answer=candidate_answer if verdict == "supported" else "unanswerable",
-        trace=_trace("ok", verdict),
+        trace=_trace(
+            "ok",
+            verdict,
+            action=(
+                "confirmed_candidate"
+                if verdict == "supported"
+                else "abstained_unsupported_candidate"
+            ),
+        ),
     )
 
 
@@ -181,9 +200,10 @@ def _boolean_verdict(answer: str) -> str:
     return value if value in {"yes", "no", "insufficient_evidence"} else ""
 
 
-def _trace(status: str, verdict: str) -> dict[str, str]:
+def _trace(status: str, verdict: str, *, action: str = "") -> dict[str, str]:
     return {
         "contract_id": QASPER_ANSWERABILITY_CONTRACT,
         "status": status,
         "verdict": verdict,
+        "action": action,
     }

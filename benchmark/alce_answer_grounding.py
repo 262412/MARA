@@ -7,10 +7,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-ALCE_ANSWER_GROUNDING_CONTRACT = "alce_short_answer_grounding.v1"
+ALCE_ANSWER_GROUNDING_CONTRACT = "alce_short_answer_grounding.v2"
 ALCE_ANSWER_GROUNDING_SEED = 20260724
 ALCE_MAX_GROUNDING_EVIDENCE = 8
 ALCE_MAX_EVIDENCE_CHARS = 1800
+ALCE_MAX_GROUNDING_PROMPT_CHARS = 12000
 
 ALCE_ANSWER_GROUNDING_RESPONSE_FORMAT = {
     "type": "json_schema",
@@ -126,8 +127,24 @@ def ground_alce_short_answer(
             answer=candidate_answer,
             trace=_trace("error"),
         )
+    return _result_from_grounding_payload(payload, candidate_answer, evidence)
+
+
+def _result_from_grounding_payload(
+    payload: dict[str, Any],
+    candidate_answer: str,
+    evidence: list[dict[str, Any]],
+) -> AlceGroundingResult:
     verdict = str(payload["verdict"])
     if verdict == "insufficient_evidence":
+        if not _is_abstention(candidate_answer):
+            return AlceGroundingResult(
+                answer=candidate_answer,
+                trace=_trace(
+                    "advisory_insufficient_evidence",
+                    verdict=verdict,
+                ),
+            )
         return AlceGroundingResult(
             answer="unanswerable",
             trace=_trace(
@@ -155,8 +172,28 @@ def ground_alce_short_answer(
         or evidence[evidence_index].get("canonical_id")
         or ""
     )
+    if verdict == "supported" and _normalized(grounded_answer) != _normalized(
+        candidate_answer
+    ):
+        return AlceGroundingResult(
+            answer=candidate_answer,
+            trace=_trace(
+                "rejected_inconsistent_supported_answer",
+                verdict=verdict,
+                evidence_id=evidence_id,
+            ),
+        )
+    if verdict == "corrected" and not _is_abstention(candidate_answer):
+        return AlceGroundingResult(
+            answer=candidate_answer,
+            trace=_trace(
+                "rejected_unsafe_correction",
+                verdict=verdict,
+                evidence_id=evidence_id,
+            ),
+        )
     return AlceGroundingResult(
-        answer=grounded_answer,
+        answer=(candidate_answer if verdict == "supported" else grounded_answer),
         trace=_trace(
             "ok",
             verdict=verdict,
@@ -173,11 +210,7 @@ def _grounding_prompt(
     candidate_answer: str,
     evidence_items: list[dict[str, Any]],
 ) -> str:
-    evidence = "\n\n".join(
-        f"[{index}] {_evidence_text(item)[:ALCE_MAX_EVIDENCE_CHARS]}"
-        for index, item in enumerate(evidence_items)
-    )
-    return (
+    prefix = (
         "/no_think\n"
         "You are a short factual answer grounding verifier. Resolve every "
         "entity, role, date range, episode, location, quantity, qualifier, and "
@@ -190,10 +223,35 @@ def _grounding_prompt(
         "answer must be the shortest complete value copied or directly "
         "extractable from the chosen evidence item. evidence_index is zero "
         "based; use -1 only for insufficient_evidence.\n\n"
-        f"QUESTION:\n{question}\n\n"
-        f"CANDIDATE ANSWER:\n{candidate_answer}\n\n"
-        f"SELECTED EVIDENCE:\n{evidence}\n\n"
-        "Return only the required JSON object."
+        f"QUESTION:\n{str(question or '')[:1200]}\n\n"
+        f"CANDIDATE ANSWER:\n{str(candidate_answer or '')[:600]}\n\n"
+        "SELECTED EVIDENCE:\n"
+    )
+    suffix = "\n\nReturn only the required JSON object."
+    evidence_budget = max(
+        0,
+        ALCE_MAX_GROUNDING_PROMPT_CHARS - len(prefix) - len(suffix),
+    )
+    evidence = _bounded_evidence_text(evidence_items, evidence_budget)
+    return prefix + evidence + suffix
+
+
+def _bounded_evidence_text(
+    evidence_items: list[dict[str, Any]],
+    budget: int,
+) -> str:
+    if not evidence_items or budget <= 0:
+        return ""
+    separator_chars = len("\n\n") * (len(evidence_items) - 1)
+    label_chars = sum(len(f"[{index}] ") for index in range(len(evidence_items)))
+    content_budget = max(0, budget - separator_chars - label_chars)
+    item_budget = min(
+        ALCE_MAX_EVIDENCE_CHARS,
+        content_budget // len(evidence_items),
+    )
+    return "\n\n".join(
+        f"[{index}] {_evidence_text(item)[:item_budget]}"
+        for index, item in enumerate(evidence_items)
     )
 
 
@@ -234,6 +292,15 @@ def _tokens(text: str) -> list[str]:
 
 def _normalized(text: str) -> str:
     return " ".join(_tokens(text))
+
+
+def _is_abstention(text: str) -> bool:
+    return _normalized(text) in {
+        "",
+        "unanswerable",
+        "insufficient evidence",
+        "not enough evidence",
+    }
 
 
 def _trace(
