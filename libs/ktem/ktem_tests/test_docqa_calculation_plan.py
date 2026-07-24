@@ -132,6 +132,53 @@ def test_verifier_rejects_unsupported_operator_and_unbound_input():
     assert "unbound_step_input:result:not-bound" in verification.errors
 
 
+def test_verifier_rejects_missing_scale_when_peer_operand_has_explicit_scale():
+    plan = CalculationPlan(
+        operands=(
+            CalculationOperand(
+                operand_id="value_2017",
+                evidence_id="cell-2017",
+                value=Decimal("46"),
+                scale="thousand",
+                period="2017",
+            ),
+            CalculationOperand(
+                operand_id="value_2018",
+                evidence_id="cell-2018",
+                value=Decimal("4"),
+                period="2018",
+            ),
+        ),
+        steps=(
+            CalculationStep(
+                step_id="result",
+                operator="average",
+                input_ids=("value_2017", "value_2018"),
+            ),
+        ),
+        result_step_id="result",
+        answer_unit="percent",
+    )
+
+    verification = verify_calculation_plan(
+        plan,
+        evidence_items=[
+            {
+                "evidence_id": "cell-2017",
+                "text": "An unrelated value was 46 thousand in 2017.",
+            },
+            {
+                "evidence_id": "cell-2018",
+                "text": "An unrelated value was 4 in 2018.",
+            },
+        ],
+        question="What was the average percentage from 2017 to 2018?",
+    )
+
+    assert not verification.valid
+    assert "scale_mismatch:result" in verification.errors
+
+
 def _operand(
     operand_id,
     evidence_id,

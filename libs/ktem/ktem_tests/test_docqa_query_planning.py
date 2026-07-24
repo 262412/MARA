@@ -68,6 +68,50 @@ def test_numeric_slot_rejects_topical_text_without_bound_value():
     assert missing_slot_queries(bound) == ["revenue 2021", "revenue 2022"]
 
 
+def test_numeric_slot_rejects_period_values_without_metric_support():
+    plan = build_query_plan(
+        (
+            "What was the average cost of goods sold as a percent of revenue "
+            "from 2016 through 2018?"
+        ),
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "unrelated-period-table",
+                "text": "Headcount was 46 in 2016, 4 in 2017, and 25 in 2018.",
+                "page_label": "16",
+                "modality": "table",
+            }
+        ],
+    )
+
+    assert all(slot.status == "missing" for slot in bound.evidence_slots)
+
+
+def test_multi_period_percentage_of_revenue_plan_requires_both_metrics():
+    plan = build_query_plan(
+        (
+            "What was the three year average of cost of goods sold as a % of "
+            "revenue from FY2016 to FY2018?"
+        ),
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+
+    assert [(slot.metric, slot.period) for slot in plan.evidence_slots] == [
+        ("cost of goods sold", "2016"),
+        ("revenue", "2016"),
+        ("cost of goods sold", "2017"),
+        ("revenue", "2017"),
+        ("cost of goods sold", "2018"),
+        ("revenue", "2018"),
+    ]
+
+
 def test_long_form_plan_uses_long_answer_budget_without_numeric_slots():
     plan = build_query_plan(
         "Explain why the paper introduces a retrieval reranker.",

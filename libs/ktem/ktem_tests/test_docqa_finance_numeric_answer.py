@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Any, cast
 
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 from ktem.reasoning.mara_finance_answering import (
@@ -227,6 +228,98 @@ def test_finance_numeric_answer_computes_three_period_average():
         "ebitda-2021",
         "ebitda-2022",
     ]
+
+
+def test_finance_numeric_answer_computes_multi_period_percentage_of_revenue():
+    answer = finance_numeric_answer(
+        (
+            "What was the three year average of cost of goods sold as a % of "
+            "revenue from FY2016 to FY2018?"
+        ),
+        [
+            {
+                "element_id": "cogs-revenue-2016",
+                "text": (
+                    "In 2016, cost of goods sold was $55 million and revenue "
+                    "was $100 million."
+                ),
+            },
+            {
+                "element_id": "cogs-revenue-2017",
+                "text": (
+                    "In 2017, cost of goods sold was $60 million and revenue "
+                    "was $100 million."
+                ),
+            },
+            {
+                "element_id": "cogs-revenue-2018",
+                "text": (
+                    "In 2018, cost of goods sold was $66 million and revenue "
+                    "was $100 million."
+                ),
+            },
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "60.3%"
+    assert answer.question_type == "multi_period_ratio_average"
+    assert answer.calculation_verification["valid"] is True
+    assert len(answer.calculation_plan["operands"]) == 6
+
+
+def test_finance_numeric_answer_rejects_plan_missing_required_period_slot():
+    answer = cast(Any, finance_numeric_answer)(
+        "What was the average adjusted EBITDA from 2020 through 2022?",
+        [
+            {
+                "element_id": "ebitda-2020",
+                "text": "Adjusted EBITDA was $100 million in 2020.",
+            },
+            {
+                "element_id": "ebitda-2021",
+                "text": "Adjusted EBITDA was $120 million in 2021.",
+            },
+        ],
+        query_plan={
+            "evidence_slots": [
+                {
+                    "slot_id": "operand:adjusted_ebitda:2020",
+                    "role": "operand",
+                    "metric": "adjusted ebitda",
+                    "period": "2020",
+                    "required": True,
+                    "status": "filled",
+                    "evidence_ids": ["ebitda-2020"],
+                },
+                {
+                    "slot_id": "operand:adjusted_ebitda:2021",
+                    "role": "operand",
+                    "metric": "adjusted ebitda",
+                    "period": "2021",
+                    "required": True,
+                    "status": "filled",
+                    "evidence_ids": ["ebitda-2021"],
+                },
+                {
+                    "slot_id": "operand:adjusted_ebitda:2022",
+                    "role": "operand",
+                    "metric": "adjusted ebitda",
+                    "period": "2022",
+                    "required": True,
+                    "status": "missing",
+                    "evidence_ids": [],
+                },
+            ]
+        },
+    )
+
+    assert answer is not None
+    assert answer.answer == ""
+    assert answer.attempt_status == "verification_failed"
+    assert "required_slot_missing:operand:adjusted_ebitda:2022" in (
+        answer.calculation_verification["errors"]
+    )
 
 
 def test_finance_numeric_answer_computes_free_cash_flow():

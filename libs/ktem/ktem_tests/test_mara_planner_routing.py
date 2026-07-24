@@ -93,6 +93,42 @@ def test_cost_aware_scoring_preserves_required_hybrid_finance_route():
     assert decision["cost_gate_decision"] == "required_evidence_preserved"
 
 
+def test_cost_aware_scoring_reports_required_hybrid_as_unavailable():
+    decision = planner_decision(
+        {
+            "task_type": "qa",
+            "modalities": ["text"],
+            "available_modalities": [],
+            "scope": "document",
+        },
+        question=(
+            "What is the FY2021 capital expenditure amount in USD billions "
+            "for PepsiCo? Use the statement of cash flows."
+        ),
+        allowed_routes=[
+            "doc_text",
+            "hybrid",
+            "doc_page_image",
+            "doc_element",
+        ],
+        route_probe={
+            "text": {
+                "evidence_count": 3,
+                "top_score": 0.95,
+                "top_margin": 0.2,
+                "locator_quality": 1.0,
+                "has_text_or_ocr": True,
+            }
+        },
+        dataset_family="financebench",
+    )
+
+    assert decision["planner_route"] == "hybrid"
+    assert decision["route"] == "doc_text"
+    assert decision["cost_gate_decision"] == "required_hybrid_unavailable"
+    assert decision["required_evidence_route_available"] is False
+
+
 def test_mara_planner_does_not_report_alias_normalization_as_constraint():
     decision = planner_decision(
         {"task_type": "qa", "modalities": ["text"], "scope": "multi_document"},

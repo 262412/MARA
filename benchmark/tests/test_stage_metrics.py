@@ -123,6 +123,38 @@ def test_finance_stage_metrics_read_numeric_applicability_from_query_plan():
     }
 
 
+def test_finance_stage_metrics_do_not_report_all_operands_for_invalid_plan():
+    prediction = {
+        "evidence_metadata": {
+            "query_plan": {
+                "answer_type": "numeric",
+                "constraints": {"verification_domain": "finance"},
+            },
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [{"operand_id": "a"}, {"operand_id": "b"}],
+                    "steps": [{"step_id": "result", "operator": "average"}],
+                },
+                "calculation_verification": {
+                    "valid": False,
+                    "verified_operand_ids": ["a", "b"],
+                    "errors": ["required_slot_missing:operand:value:2022"],
+                },
+                "calculation_execution": {
+                    "status": "error",
+                    "error": "verification_failed",
+                },
+            },
+        }
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["all_operands_bound"] == 0.0
+    assert metrics["program_accuracy"] == 0.0
+    assert metrics["execution_accuracy"] == 0.0
+
+
 def test_finance_stage_metrics_do_not_measure_long_form_query_plan_as_numeric():
     prediction = {
         "dataset_name": "financebench",

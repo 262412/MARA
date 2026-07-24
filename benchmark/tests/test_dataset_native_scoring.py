@@ -66,7 +66,7 @@ def test_qasper_native_score_normalizes_boolean_aliases_and_unanswerable():
     assert unanswerable_metrics["qasper_structure_valid"] == 1.0
 
 
-def test_qasper_structure_valid_rejects_cross_type_contract_values():
+def test_qasper_structure_valid_accepts_all_canonical_typed_answers():
     predicted_no_for_unanswerable, _ = native_metrics_for_prediction(
         {
             "predicted_answer": "no",
@@ -84,8 +84,21 @@ def test_qasper_structure_valid_rejects_cross_type_contract_values():
         dataset_name="qasper-dev",
     )
 
-    assert predicted_no_for_unanswerable["qasper_structure_valid"] == 0.0
-    assert predicted_unanswerable_for_boolean["qasper_structure_valid"] == 0.0
+    assert predicted_no_for_unanswerable["qasper_structure_valid"] == 1.0
+    assert predicted_unanswerable_for_boolean["qasper_structure_valid"] == 1.0
+
+
+def test_qasper_structure_valid_rejects_noncanonical_typed_answer():
+    metrics, _ = native_metrics_for_prediction(
+        {
+            "predicted_answer": "The paper probably implies yes.",
+            "gold_answers": ["unanswerable"],
+            "metrics": {},
+        },
+        dataset_name="qasper-dev",
+    )
+
+    assert metrics["qasper_structure_valid"] == 0.0
 
 
 def test_qasper_native_score_computes_token_f1_when_metric_is_missing():

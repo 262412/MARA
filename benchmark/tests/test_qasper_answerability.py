@@ -15,7 +15,9 @@ class _VerifierLLM:
 
 
 def test_qasper_answerability_rejects_related_but_unsupported_candidate():
-    llm = _VerifierLLM('{"verdict":"unsupported"}')
+    llm = _VerifierLLM(
+        '{"verdict":"unsupported","evidence_quote":"The paper reports NDCG 55.46."}'
+    )
 
     result = verify_qasper_answerability(
         llm,
@@ -36,7 +38,10 @@ def test_qasper_answerability_rejects_related_but_unsupported_candidate():
 
 
 def test_qasper_answerability_preserves_supported_candidate():
-    llm = _VerifierLLM('{"verdict":"supported"}')
+    llm = _VerifierLLM(
+        '{"verdict":"supported","evidence_quote":'
+        '"The system is evaluated using cosine similarity."}'
+    )
 
     result = verify_qasper_answerability(
         llm,
@@ -49,8 +54,28 @@ def test_qasper_answerability_preserves_supported_candidate():
     assert result.trace["verdict"] == "supported"
 
 
+def test_qasper_answerability_rejects_supported_verdict_without_grounded_quote():
+    llm = _VerifierLLM(
+        '{"verdict":"supported","evidence_quote":'
+        '"The system is evaluated using BLEU."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Which metric evaluates the system?",
+        evidence="The system is evaluated using cosine similarity.",
+        candidate_answer="BLEU",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["verdict"] == "unsupported"
+    assert result.trace["action"] == "abstained_ungrounded_quote"
+
+
 def test_qasper_answerability_does_not_rejudge_explicit_unanswerable():
-    llm = _VerifierLLM('{"verdict":"supported"}')
+    llm = _VerifierLLM(
+        '{"verdict":"supported","evidence_quote":"No baseline is described."}'
+    )
 
     result = verify_qasper_answerability(
         llm,
@@ -65,7 +90,10 @@ def test_qasper_answerability_does_not_rejudge_explicit_unanswerable():
 
 
 def test_qasper_answerability_checks_boolean_question_sufficiency_not_token_support():
-    llm = _VerifierLLM('{"verdict":"no"}')
+    llm = _VerifierLLM(
+        '{"verdict":"no","evidence_quote":'
+        '"The embeddings can be used as a drop-in replacement in existing models."}'
+    )
 
     result = verify_qasper_answerability(
         llm,
@@ -84,7 +112,10 @@ def test_qasper_answerability_checks_boolean_question_sufficiency_not_token_supp
 
 
 def test_qasper_answerability_does_not_let_secondary_verifier_flip_candidate():
-    llm = _VerifierLLM('{"verdict":"no"}')
+    llm = _VerifierLLM(
+        '{"verdict":"no","evidence_quote":'
+        '"The method is used as a drop-in replacement and requires no fine-tuning."}'
+    )
 
     result = verify_qasper_answerability(
         llm,
@@ -103,7 +134,10 @@ def test_qasper_answerability_does_not_let_secondary_verifier_flip_candidate():
 
 
 def test_qasper_answerability_preserves_no_candidate_on_conflicting_yes_verdict():
-    llm = _VerifierLLM('{"verdict":"yes"}')
+    llm = _VerifierLLM(
+        '{"verdict":"yes","evidence_quote":'
+        '"The authors released their source code with the paper."}'
+    )
 
     result = verify_qasper_answerability(
         llm,
@@ -118,7 +152,7 @@ def test_qasper_answerability_preserves_no_candidate_on_conflicting_yes_verdict(
 
 
 def test_qasper_answerability_rejects_boolean_candidate_when_question_is_unresolved():
-    llm = _VerifierLLM('{"verdict":"insufficient_evidence"}')
+    llm = _VerifierLLM('{"verdict":"insufficient_evidence","evidence_quote":""}')
 
     result = verify_qasper_answerability(
         llm,
