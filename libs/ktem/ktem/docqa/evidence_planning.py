@@ -3,14 +3,18 @@ from __future__ import annotations
 from typing import Any
 
 from .evidence_set_selection import select_evidence_for_plan
-from .query_planning import build_query_plan, missing_slot_queries
+from .query_planning import (
+    build_query_plan,
+    missing_slot_queries,
+    request_planning_question,
+)
 
 
 def select_planned_evidence(
     request: Any,
     candidates: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    prompt = str(getattr(request, "prompt", "") or "")
+    prompt = request_planning_question(request)
     query_plan = build_query_plan(
         prompt,
         answer_type=str(

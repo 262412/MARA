@@ -13,6 +13,7 @@ from .evidence_locators import merged_locator_metadata
 from .evidence_planning import select_planned_evidence
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
+from .query_planning import request_planning_question
 
 MAX_PAGE_IMAGE_EVIDENCE_ITEMS = 20
 MAX_ELEMENT_EVIDENCE_ITEMS = 20
@@ -107,15 +108,16 @@ def build_evidence_bundle(
     if route == "doc_page_image":
         deduped = _limit_page_image_evidence(deduped)
     if route == "hybrid":
+        planning_question = request_planning_question(request)
         deduped, hybrid_fusion_trace = fuse_hybrid_evidence(
-            str(getattr(request, "prompt", "") or ""),
+            planning_question,
             deduped,
             strategy=str(evidence_metadata.get("hybrid_fusion_strategy") or ""),
             learned_ranker=evidence_metadata.get("hybrid_fusion_ranker"),
             domain=getattr(request, "verification_domain", None),
         )
         deduped, m3docrag_trace = select_page_first_evidence(
-            str(getattr(request, "prompt", "") or ""),
+            planning_question,
             deduped,
         )
     reranked_candidates = list(deduped[:30])

@@ -41,7 +41,13 @@ def prediction_diagnostics(prediction: dict[str, Any]) -> dict[str, Any]:
     )
     gold_document_hit = _gold_document_hit(gold_evidence, retrieved_hits)
     gold_page_hit = _gold_page_hit(prediction, gold_evidence)
-    gold_span_hit = _gold_span_hit(gold_evidence, retrieved_hits, evidence_items)
+    span_diagnostics = _gold_span_stage_diagnostics(
+        prediction,
+        gold_evidence,
+        retrieved_hits,
+        evidence_items,
+    )
+    gold_span_hit = span_diagnostics["gold_span_context_hit"]
     retrieval_failure_type = _retrieval_failure_type(
         prediction,
         retrieved_hits,
@@ -56,6 +62,7 @@ def prediction_diagnostics(prediction: dict[str, Any]) -> dict[str, Any]:
         "gold_document_hit": gold_document_hit,
         "gold_page_hit": gold_page_hit,
         "gold_span_hit": gold_span_hit,
+        **span_diagnostics,
         "retrieval_failure_type": retrieval_failure_type,
         "citation_failure_type": citation_failure_type,
         "failure_class": _failure_class(
@@ -313,21 +320,103 @@ def _gold_span_hit(
     retrieved_hits: list[dict[str, Any]],
     evidence_items: list[dict[str, Any]],
 ) -> float | None:
-    spans = [
+    spans = _normalized_gold_spans(gold_evidence)
+    if not spans:
+        return None
+    return _span_hit(spans, [*retrieved_hits, *evidence_items])
+
+
+def _gold_span_stage_diagnostics(
+    prediction: dict[str, Any],
+    gold_evidence: list[dict[str, Any]],
+    retrieved_hits: list[dict[str, Any]],
+    evidence_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    spans = _normalized_gold_spans(gold_evidence)
+    if not spans:
+        return {
+            "gold_span_candidate_hit": None,
+            "gold_span_reranked_hit": None,
+            "gold_span_context_hit": None,
+            "gold_span_preview_hit": None,
+            "gold_span_observability_stage": "not_applicable",
+        }
+    metadata = dict(prediction.get("evidence_metadata") or {})
+    candidate_hit = (
+        _span_hit(spans, _records(metadata.get("candidate_evidence")))
+        if "candidate_evidence" in metadata
+        else None
+    )
+    reranked_hit = (
+        _span_hit(spans, _records(metadata.get("reranked_evidence")))
+        if "reranked_evidence" in metadata
+        else None
+    )
+    context_hit = _gold_span_hit(gold_evidence, retrieved_hits, evidence_items)
+    assert context_hit is not None
+    preview_hit = (
+        _span_hit_text(spans, str(prediction.get("context_preview") or ""))
+        if "context_preview" in prediction
+        else None
+    )
+    return {
+        "gold_span_candidate_hit": candidate_hit,
+        "gold_span_reranked_hit": reranked_hit,
+        "gold_span_context_hit": context_hit,
+        "gold_span_preview_hit": preview_hit,
+        "gold_span_observability_stage": _gold_span_observability_stage(
+            candidate_hit,
+            reranked_hit,
+            context_hit,
+            preview_hit,
+        ),
+    }
+
+
+def _normalized_gold_spans(
+    gold_evidence: list[dict[str, Any]],
+) -> list[str]:
+    return [
         normalize_text(str(item.get("span") or item.get("text") or ""))
         for item in gold_evidence
         if str(item.get("span") or item.get("text") or "").strip()
     ]
-    if not spans:
-        return None
-    retrieved_text = normalize_text(
-        " ".join(
-            str(item.get(key) or "")
-            for item in [*retrieved_hits, *evidence_items]
-            for key in ("text", "snippet", "caption", "ocr_text", "vlm_text")
-        )
+
+
+def _span_hit(
+    spans: list[str],
+    records: list[dict[str, Any]],
+) -> float:
+    text = " ".join(
+        str(item.get(key) or "")
+        for item in records
+        for key in ("text", "snippet", "caption", "ocr_text", "vlm_text")
     )
-    return float(any(span and span in retrieved_text for span in spans))
+    return _span_hit_text(spans, text)
+
+
+def _span_hit_text(spans: list[str], text: str) -> float:
+    normalized_text = normalize_text(text)
+    return float(any(span and span in normalized_text for span in spans))
+
+
+def _gold_span_observability_stage(
+    candidate_hit: float | None,
+    reranked_hit: float | None,
+    context_hit: float,
+    preview_hit: float | None,
+) -> str:
+    if candidate_hit == 0.0:
+        return "candidate_retrieval"
+    if candidate_hit == 1.0 and reranked_hit == 0.0:
+        return "reranking"
+    if reranked_hit == 1.0 and context_hit == 0.0:
+        return "context_selection"
+    if context_hit == 1.0 and preview_hit == 0.0:
+        return "preview_projection"
+    if context_hit == 1.0:
+        return "none"
+    return "unavailable"
 
 
 def _retrieval_failure_type(

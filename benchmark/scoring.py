@@ -451,9 +451,10 @@ def _normalize_cache_stats(stats: dict[str, Any] | None) -> dict[str, int]:
     return {key: int(source.get(key, 0) or 0) for key in _CACHE_KEYS}
 
 
-def _normalize_cache(cache: dict[str, Any] | None) -> dict[str, dict[str, int]]:
+def _normalize_cache(cache: dict[str, Any] | None) -> dict[str, Any]:
     source = cache or {}
     return {
+        **source,
         "parse": _normalize_cache_stats(source.get("parse")),
         "embedding": _normalize_cache_stats(source.get("embedding")),
     }

@@ -102,6 +102,15 @@ def test_run_benchmark_summarizes_metrics_by_route(monkeypatch, tmp_path):
     assert metric_rows[1]["avg_mara_score"] is not None
     assert metric_rows[0]["avg_total_seconds"] == 0.33
     assert metric_rows[1]["avg_total_seconds"] == 0.33
+    assert metric_rows[0]["median_total_seconds"] == 0.33
+    assert metric_rows[0]["p95_total_seconds"] == 0.33
+    assert metric_rows[0]["num_route_timeouts"] == 0
+    assert report["summary"]["timing_distribution"]["total_seconds"] == {
+        "count": 2,
+        "coverage": 1.0,
+        "median": 0.33,
+        "p95": 0.33,
+    }
     assert {
         "avg_mara_score",
         "avg_mara_answer_score",
@@ -143,6 +152,41 @@ def test_run_benchmark_summarizes_metrics_by_route(monkeypatch, tmp_path):
     assert f1_ranking["routes"][1]["rank"] == 2
     assert f1_ranking["routes"][1]["route"] == "text_rag"
     assert f1_ranking["routes"][1]["score"] == metric_rows[0]["avg_f1"]
+
+
+def test_run_benchmark_reports_amortized_route_preparation_time(monkeypatch, tmp_path):
+    manifest_path = _write_route_summary_manifest(tmp_path)
+    preparation_clock = iter([10.0, 14.0, 30.0, 34.0])
+    route_clock = iter([20.0, 40.0])
+    monkeypatch.setattr(
+        "benchmark.performance_timing.perf_counter",
+        lambda: next(preparation_clock),
+    )
+    monkeypatch.setattr("benchmark.runner.perf_counter", lambda: next(route_clock))
+    monkeypatch.setattr(
+        "benchmark.runner.get_engine",
+        lambda engine_name, config: _FakeEngine(engine_name, config, []),
+    )
+
+    report = run_benchmark(
+        manifest_path,
+        BenchmarkConfig(
+            suite_name="route-preparation",
+            output_dir=tmp_path / "out",
+            use_generation=False,
+        ),
+    )
+
+    for prediction in report["predictions"]:
+        assert prediction["performance"]["preparation_seconds_amortized"] == 4.0
+        assert prediction["performance"]["total_seconds_including_preparation"] == 4.33
+    distribution = report["summary"]["timing_distribution"]
+    assert distribution["preparation_seconds_amortized"]["median"] == 4.0
+    assert distribution["total_seconds_including_preparation"]["p95"] == 4.33
+    for row in report["summary"]["route_metric_table"]:
+        assert row["avg_total_seconds_including_preparation"] == 4.33
+        assert row["median_total_seconds_including_preparation"] == 4.33
+        assert row["p95_total_seconds_including_preparation"] == 4.33
 
 
 def test_run_benchmark_splits_quality_and_diagnostic_route_summaries(

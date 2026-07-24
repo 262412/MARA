@@ -58,20 +58,26 @@ def _evidence_item(doc: RetrievedDocument) -> dict[str, Any]:
     metadata = _merged_doc_metadata(doc)
     file_id = str(metadata.get("file_id") or "").strip()
     file_name = str(metadata.get("file_name") or "").strip()
+    evidence_id = str(getattr(doc, "doc_id", "") or "").strip()
+    page_label = str(metadata.get("page_label") or "").strip()
+    element_type = str(
+        metadata.get("element_type")
+        or metadata.get("type")
+        or metadata.get("modality")
+        or "text"
+    )
+    element_id = str(metadata.get("element_id") or "").strip()
+    if not element_id and element_type == "text" and page_label:
+        element_id = evidence_id
     return {
-        "evidence_id": str(getattr(doc, "doc_id", "") or "").strip(),
+        "evidence_id": evidence_id,
         "file_id": file_id,
         "source_id": file_id,
         "file_name": file_name,
         "source_name": file_name,
-        "page_label": str(metadata.get("page_label") or "").strip(),
-        "element_type": str(
-            metadata.get("element_type")
-            or metadata.get("type")
-            or metadata.get("modality")
-            or "text"
-        ),
-        "element_id": str(metadata.get("element_id") or "").strip(),
+        "page_label": page_label,
+        "element_type": element_type,
+        "element_id": element_id,
         "bbox": metadata.get("bbox"),
         "caption": str(metadata.get("caption") or "").strip(),
         "text": str(getattr(doc, "text", "") or getattr(doc, "content", "") or ""),

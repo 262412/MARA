@@ -2,6 +2,7 @@ from __future__ import annotations
 
 ANSWER_FORMAT_MARKER = "\n\nAnswer formatting requirements:"
 _GENERIC_STRUCTURED_CALCULATION_TERMS = (
+    "amount",
     "average",
     "calculate",
     "calculation",
@@ -14,12 +15,18 @@ _GENERIC_STRUCTURED_CALCULATION_TERMS = (
     "ratio",
     "sum",
     "total",
+    "value",
 )
 _GENERIC_STRUCTURED_CALCULATION_CONTEXT_TERMS = (
     "based on",
+    "balance sheet",
+    "cash flow",
+    "financial statement",
     "from the table",
     "in the table",
+    "statement of",
     "using the",
+    "usd ",
 )
 _GENERIC_STRUCTURED_CALCULATION_FOCUS = (
     "source table",

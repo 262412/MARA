@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .evidence import build_evidence_bundle
-from .query_planning import build_query_plan
+from .query_planning import build_query_plan, request_planning_question
 from .retrieval_adequacy import retrieval_adequacy_issue
 from .verification import VerifyDecision, verify_decision
 from .workflow import build_workflow_plan
@@ -174,7 +174,7 @@ def build_controller_outputs(
     retrieve_decision = evaluate_retrieval_quality(
         route_decision.route,
         evidence_bundle.metadata,
-        prompt=str(getattr(request, "prompt", "") or ""),
+        prompt=request_planning_question(request),
         verification_domain=getattr(request, "verification_domain", None),
         origin=getattr(request, "origin", None),
     )
@@ -465,7 +465,7 @@ def _route_reason(policy: str, route: str) -> str:
 
 def _auto_route(request: Any) -> str:
     plan = build_query_plan(
-        str(getattr(request, "prompt", "") or ""),
+        request_planning_question(request),
         answer_type=str(
             getattr(request, "answer_type", None)
             or getattr(request, "task_type", None)

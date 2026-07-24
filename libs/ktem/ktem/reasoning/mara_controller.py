@@ -5,8 +5,10 @@ from typing import Any
 
 from ktem.docqa.controller import ROUTE_EVIDENCE_TYPES, parse_planner_decision
 from ktem.reasoning.mara_route_scorer import score_adaptive_route
+from ktem.reasoning.mara_visual_intent import has_explicit_visual_intent
 
 _STRUCTURED_CALCULATION_TERMS = (
+    "amount",
     "average",
     "calculate",
     "calculation",
@@ -19,26 +21,19 @@ _STRUCTURED_CALCULATION_TERMS = (
     "ratio",
     "sum",
     "total",
+    "value",
 )
 _STRUCTURED_CALCULATION_CONTEXT_TERMS = (
     "based on",
+    "balance sheet",
+    "cash flow",
+    "financial statement",
     "from the table",
     "in the table",
+    "statement of",
     "using the",
+    "usd ",
 )
-_VISUAL_INTENT_TERMS = {
-    "chart",
-    "diagram",
-    "figure",
-    "graph",
-    "image",
-    "layout",
-    "plot",
-    "shown",
-    "slide",
-    "visual",
-    "visible",
-}
 _VISUAL_MODALITIES = {"figure", "slide", "table", "formula", "page_image"}
 
 
@@ -304,10 +299,7 @@ def _page_image_available_decision(
 
 
 def _has_visual_intent(question_text: str) -> bool:
-    tokens = set(question_text.split())
-    return bool(tokens & _VISUAL_INTENT_TERMS) or any(
-        term in question_text for term in _VISUAL_INTENT_TERMS
-    )
+    return has_explicit_visual_intent(question_text)
 
 
 def _route_payload(

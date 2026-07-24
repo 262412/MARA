@@ -117,7 +117,7 @@ def semantic_judge_backend(
     value = str(backend or "off").strip()
     if value.lower() in {"", "off", "none"}:
         return None
-    if value.lower() in {"local_qwen3_8b", "builtin:local_qwen3_8b"}:
+    if value.lower() in {"local", "local_qwen3_8b", "builtin:local_qwen3_8b"}:
         return local_semantic_judge(
             model=model,
             timeout_seconds=timeout_seconds,

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
 from .claim_aggregation import aggregate_answer_claims
+from .claim_revision import revise_to_supported_claims
 from .controller import (
     RetrieveDecision,
     RouteDecision,
@@ -16,6 +16,11 @@ from .controller import (
 from .evidence import EvidenceBundle, build_evidence_bundle
 from .evidence_text import extract_final_answer_text
 from .retrieval_rounds import retrieve_with_rounds
+from .route_budget import optional_stage_allowed, route_budget_metadata
+from .route_capabilities import (
+    route_switch_candidate_evaluation as _route_switch_candidate_evaluation,
+)
+from .route_capabilities import route_switch_candidates as _route_switch_candidates
 from .route_selection import (
     ControllerDecision,
     controller_decision_from_route,
@@ -31,6 +36,7 @@ ABSTAIN_MESSAGE = (
     "MARA could not retrieve enough evidence to answer reliably. Select a "
     "relevant source or page, or ask with more source-specific context."
 )
+RAGTRUTH_EMPTY_ANSWER = '{"hallucination list": []}'
 
 RetrieveFn = Callable[[Any, "ControllerDecision"], dict[str, Any]]
 GenerateFn = Callable[[Any, "ControllerDecision", EvidenceBundle], str]
@@ -119,6 +125,7 @@ def execute_controller_turn(
             request,
             controller_decision,
             retrieve_decision,
+            evidence_bundle,
             retrieve,
         )
         if switched is not None:
@@ -187,7 +194,10 @@ def _retrieve_and_evaluate(
         decision,
         retrieve,
         evaluate=evaluate_retrieval_quality,
-        retry_poor=not _route_switch_candidates(request, decision.legacy_route),
+        retry_poor=(
+            decision.legacy_route == "doc_element"
+            or not _route_switch_candidates(request, decision.legacy_route)
+        ),
         max_rounds=max_rounds,
     )
 
@@ -214,9 +224,23 @@ def _switch_after_failed_retrieval(
     request: Any,
     decision: ControllerDecision,
     failed_decision: RetrieveDecision,
+    failed_bundle: EvidenceBundle,
     retrieve: RetrieveFn,
 ) -> tuple[ControllerDecision, EvidenceBundle, RetrieveDecision, dict[str, Any]] | None:
-    candidates = _route_switch_candidates(request, decision.legacy_route)
+    if not optional_stage_allowed(request):
+        failed_bundle.metadata.update(route_budget_metadata(request))
+        failed_bundle.metadata[
+            "route_switch_skipped_reason"
+        ] = "insufficient_remaining_time"
+        return None
+    candidates, rejected_candidates = _route_switch_candidate_evaluation(
+        request,
+        decision.legacy_route,
+    )
+    if rejected_candidates:
+        failed_bundle.metadata["rejected_route_switch_candidates"] = list(
+            rejected_candidates
+        )
     for route in candidates:
         switched_decision = _controller_decision(
             RouteDecision(
@@ -248,39 +272,19 @@ def _switch_after_failed_retrieval(
             "reason": failed_decision.reason,
             "route_switch_used": True,
             "route_switch_candidates": list(candidates),
+            "failed_retrieval_rounds": int(
+                failed_bundle.metadata.get("retrieval_rounds") or 1
+            ),
+            "failed_slot_coverage": failed_bundle.metadata.get("slot_coverage"),
+            "failed_missing_required_slot_count": failed_bundle.metadata.get(
+                "missing_required_slot_count"
+            ),
         }
+        if rejected_candidates:
+            switch_event["rejected_route_switch_candidates"] = list(rejected_candidates)
         if retrieve_decision.status == "good":
             return switched_decision, bundle, retrieve_decision, switch_event
     return None
-
-
-def _route_switch_candidates(request: Any, current_route: str) -> list[str]:
-    allowed_routes = list(getattr(request, "allowed_routes", []) or [])
-    preferred_order = _cost_aware_route_switch_order(request)
-    allowed = [route for route in preferred_order if route in allowed_routes]
-    allowed.extend(route for route in allowed_routes if route not in allowed)
-    return [
-        route
-        for route in allowed
-        if route in _CANONICAL_ROUTES
-        and route not in {current_route, "direct", "abstain"}
-    ]
-
-
-def _cost_aware_route_switch_order(request: Any) -> list[str]:
-    prompt = str(getattr(request, "prompt", "") or "").lower()
-    if _has_visual_route_intent(prompt):
-        return ["doc_page_image", "doc_text", "hybrid", "doc_element", "graph_global"]
-    return ["doc_text", "doc_page_image", "hybrid", "doc_element", "graph_global"]
-
-
-def _has_visual_route_intent(prompt: str) -> bool:
-    return bool(
-        re.search(
-            r"\b(chart|diagram|figure|graph|image|layout|plot|shown|slide|visual|visible)\b",
-            prompt,
-        )
-    )
 
 
 def _static_result(
@@ -311,6 +315,23 @@ def _guarded_result(
     workflow_plan: dict[str, Any],
     trace_prefix: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
+    if _ragtruth_contract_request(request):
+        bundle.metadata["task_contract_fallback"] = "ragtruth_empty_retrieval"
+        verify_decision = VerifyDecision(
+            mode="off",
+            status="not_required",
+            reason="RAGTruth task contract handled empty retrieval.",
+        )
+        return _result(
+            decision,
+            retrieve_decision,
+            verify_decision,
+            GuardrailDecision("ok", "return", verify_decision.reason),
+            bundle,
+            workflow_plan,
+            RAGTRUTH_EMPTY_ANSWER,
+            trace_prefix,
+        )
     verify_decision = _verify_decision(request, retrieve_decision, bundle, "")
     guardrail = GuardrailDecision(
         status="not_enough_evidence",
@@ -353,18 +374,22 @@ def _verified_result(
             trace_prefix,
         )
     if not extract_final_answer_text(answer).strip():
-        verify_decision = _empty_answer_verify_decision(request, bundle)
-        guardrail = _verification_guardrail(verify_decision, request)
-        return _result(
-            decision,
-            retrieve_decision,
-            verify_decision,
-            guardrail,
-            bundle,
-            workflow_plan,
-            ABSTAIN_MESSAGE,
-            trace_prefix,
-        )
+        if _ragtruth_contract_request(request):
+            bundle.metadata["task_contract_fallback"] = "ragtruth_empty_generation"
+            answer = RAGTRUTH_EMPTY_ANSWER
+        else:
+            verify_decision = _empty_answer_verify_decision(request, bundle)
+            guardrail = _verification_guardrail(verify_decision, request)
+            return _result(
+                decision,
+                retrieve_decision,
+                verify_decision,
+                guardrail,
+                bundle,
+                workflow_plan,
+                ABSTAIN_MESSAGE,
+                trace_prefix,
+            )
     answer, aggregation_trace = aggregate_answer_claims(answer)
     trace_prefix = list(trace_prefix or []) + [
         {"stage": "claim_aggregation", **aggregation_trace}
@@ -381,6 +406,17 @@ def _verified_result(
             }
         )
         verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
+    if verify_decision.action == "revise":
+        answer, verify_decision, revision_trace = revise_to_supported_claims(
+            request,
+            retrieve_decision,
+            bundle,
+            answer,
+            verify_decision,
+            verify=_verify_decision,
+        )
+        if revision_trace:
+            trace_prefix.append(revision_trace)
     guardrail = _verification_guardrail(verify_decision, request)
     if guardrail.action == "abstain":
         answer = ABSTAIN_MESSAGE
@@ -417,6 +453,13 @@ def _finance_benchmark_request(request: Any | None) -> bool:
     origin = str(getattr(request, "origin", "") or "").strip().lower()
     domain = str(getattr(request, "verification_domain", "") or "").strip().lower()
     return origin == "benchmark" and domain in {"finance", "financial"}
+
+
+def _ragtruth_contract_request(request: Any | None) -> bool:
+    if request is None:
+        return False
+    domain = str(getattr(request, "verification_domain", "") or "").strip().lower()
+    return domain == "ragtruth"
 
 
 def _evidence_only_verify_decision(

@@ -59,12 +59,13 @@ def _paper_text(paper: dict[str, Any]) -> str:
 
 def _example(document_id: str, qa: dict[str, Any], index: int) -> dict[str, Any]:
     answers, evidence, answer_annotations = _answers_evidence_and_annotations(qa)
+    answer_type = _qasper_answer_type(answers)
     return {
         "example_id": str(qa.get("question_id") or f"{document_id}_{index}"),
         "document_ids": [document_id],
         "scope": "document",
         "modality": "text",
-        "answer_type": "evidence_qa",
+        "answer_type": answer_type,
         "question": str(qa.get("question") or "").strip(),
         "answers": answers,
         "evidence_sources": evidence,
@@ -80,9 +81,19 @@ def _example(document_id: str, qa: dict[str, Any], index: int) -> dict[str, Any]
             "dataset_family": "scientific_qa",
             "nlp_background": qa.get("nlp_background"),
             "topic_background": qa.get("topic_background"),
+            "qasper_answer_type": answer_type,
             "qasper_answer_annotations": answer_annotations,
         },
     }
+
+
+def _qasper_answer_type(answers: list[str]) -> str:
+    normalized = {str(answer or "").strip().lower() for answer in answers}
+    if normalized == {"unanswerable"}:
+        return "unanswerable"
+    if normalized and normalized <= {"yes", "no"}:
+        return "boolean"
+    return "free_text"
 
 
 def _answers_evidence_and_annotations(

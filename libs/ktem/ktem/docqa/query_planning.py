@@ -4,10 +4,13 @@ import re
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
+from .finance_query_planning import FINANCE_METRIC_ALIASES, finance_operand_specs
+
 QUERY_PLAN_CONTRACT = "query_plan.v1"
 MAX_RETRIEVAL_ROUNDS = 2
 
-_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+_YEAR_RE = re.compile(r"\b(?:fy\s*)?((?:19|20)\d{2})\b", re.IGNORECASE)
+_VALUE_RE = re.compile(r"(?<![A-Za-z0-9])(?:[$€£¥]\s*)?\(?[+-]?\d[\d,]*(?:\.\d+)?%?\)?")
 _TOKEN_RE = re.compile(r"[a-z0-9%$€£¥]+", re.IGNORECASE)
 _NUMERIC_TERMS = {
     "amount",
@@ -24,6 +27,19 @@ _NUMERIC_TERMS = {
     "total",
 }
 _LONG_FORM_TERMS = {"describe", "explain", "how", "summarize", "why"}
+_CAUSAL_TERMS = {
+    "cause",
+    "caused",
+    "causes",
+    "driver",
+    "drivers",
+    "drove",
+    "factor",
+    "factors",
+    "reason",
+    "reasons",
+    "why",
+}
 _CROSS_PAGE_TERMS = {"across", "between", "compare", "comparison", "from"}
 _VISUAL_TERMS = {
     "chart",
@@ -114,15 +130,35 @@ def build_query_plan(
         )
     text = str(question or "").strip()
     tokens = _tokens(text)
-    normalized_answer_type = _normalized_answer_type(answer_type, tokens)
-    periods = list(dict.fromkeys(_YEAR_RE.findall(text)))
+    causal_intent = bool(tokens & _CAUSAL_TERMS)
+    normalized_answer_type = _normalized_answer_type(
+        answer_type,
+        tokens,
+        causal_intent=causal_intent,
+    )
+    periods = _periods_in_question(text)
     metric = _metric_phrase(tokens, periods)
-    question_type = _question_type(tokens, normalized_answer_type, periods)
-    slots = _heuristic_slots(
+    question_type = _question_type(
+        tokens,
         normalized_answer_type,
-        question_type,
         periods,
-        metric,
+        causal_intent=causal_intent,
+    )
+    finance_specs = (
+        finance_operand_specs(text, periods)
+        if normalized_answer_type == "numeric"
+        and "finance" in str(verification_domain or "").lower()
+        else ()
+    )
+    slots = (
+        _finance_slots(finance_specs)
+        if finance_specs
+        else _heuristic_slots(
+            normalized_answer_type,
+            question_type,
+            periods,
+            metric,
+        )
     )
     subqueries = tuple(slot.query for slot in slots if slot.query) or (text,)
     return QueryPlan(
@@ -139,11 +175,21 @@ def build_query_plan(
     )
 
 
+def request_planning_question(request: Any) -> str:
+    return str(
+        getattr(request, "controller_question", None)
+        or getattr(request, "retrieval_query", None)
+        or getattr(request, "prompt", "")
+        or ""
+    ).strip()
+
+
 def bind_evidence_slots(
     plan: QueryPlan,
     evidence_items: list[dict[str, Any]],
 ) -> QueryPlan:
     bound_slots = []
+    used_generic_operand_ids: set[str] = set()
     for slot in plan.evidence_slots:
         ranked = sorted(
             (
@@ -152,12 +198,20 @@ def bind_evidence_slots(
             ),
             key=lambda row: (-row[0], row[1]),
         )
-        evidence_ids = tuple(
+        candidate_ids = [
             str(item.get("evidence_id") or item.get("canonical_id") or "")
             for score, _index, item in ranked[:3]
             if score > 0
             and str(item.get("evidence_id") or item.get("canonical_id") or "")
-        )
+        ]
+        if slot.role == "operand" and not slot.period:
+            candidate_ids = [
+                evidence_id
+                for evidence_id in candidate_ids
+                if evidence_id not in used_generic_operand_ids
+            ][:1]
+            used_generic_operand_ids.update(candidate_ids)
+        evidence_ids = tuple(candidate_ids)
         bound_slots.append(
             replace(
                 slot,
@@ -172,14 +226,24 @@ def score_evidence_for_slot(slot: EvidenceSlot, item: dict[str, Any]) -> float:
     text = _evidence_text(item).lower()
     if slot.period and slot.period not in text:
         return 0.0
+    if slot.role == "operand" and not _bound_numeric_value(slot, item, text):
+        return 0.0
     modality = str(item.get("modality") or item.get("element_type") or "").lower()
     if slot.modality and slot.modality not in {"auto", modality}:
         return 0.0
     score = 0.0
-    metric_tokens = _tokens(slot.metric)
     text_tokens = _tokens(text)
-    if metric_tokens:
-        score += len(metric_tokens & text_tokens) / len(metric_tokens)
+    metric_token_sets = [
+        _tokens(alias)
+        for alias in FINANCE_METRIC_ALIASES.get(slot.metric, (slot.metric,))
+        if alias
+    ]
+    if metric_token_sets:
+        score += max(
+            len(metric_tokens & text_tokens) / len(metric_tokens)
+            for metric_tokens in metric_token_sets
+            if metric_tokens
+        )
     if slot.period:
         score += 1.0
     if slot.entity and slot.entity.lower() in text:
@@ -189,6 +253,26 @@ def score_evidence_for_slot(slot: EvidenceSlot, item: dict[str, Any]) -> float:
     if modality in {"table", "formula"} and slot.role == "operand":
         score += 0.25
     return score
+
+
+def _bound_numeric_value(
+    slot: EvidenceSlot,
+    item: dict[str, Any],
+    text: str,
+) -> bool:
+    evidence_id = str(
+        item.get("cell_id")
+        or item.get("element_id")
+        or item.get("evidence_id")
+        or item.get("canonical_id")
+        or ""
+    ).strip()
+    if not evidence_id:
+        return False
+    values = [match.group(0).strip("() ") for match in _VALUE_RE.finditer(text)]
+    if slot.period:
+        values = [value for value in values if value != slot.period]
+    return bool(values)
 
 
 def missing_required_slots(plan: QueryPlan) -> list[EvidenceSlot]:
@@ -265,8 +349,49 @@ def _heuristic_slots(
     return ()
 
 
-def _normalized_answer_type(answer_type: str, tokens: set[str]) -> str:
+def _finance_slots(
+    specs: tuple[tuple[str, str, str], ...],
+) -> tuple[EvidenceSlot, ...]:
+    return tuple(
+        EvidenceSlot(
+            slot_id=f"operand:{slot_id}",
+            role="operand",
+            metric=metric,
+            period=period,
+            modality="auto",
+            query=" ".join(value for value in (metric, period) if value),
+        )
+        for slot_id, metric, period in specs
+    )
+
+
+def _periods_in_question(question: str) -> list[str]:
+    periods = list(dict.fromkeys(_YEAR_RE.findall(question)))
+    if len(periods) != 2 or not re.search(
+        r"\b(?:from|between)\b.*\b(?:and|through|to)\b",
+        question,
+        flags=re.IGNORECASE,
+    ):
+        return periods
+    start, end = (int(value) for value in periods)
+    if start >= end or end - start > 10:
+        return periods
+    return [str(year) for year in range(start, end + 1)]
+
+
+def _normalized_answer_type(
+    answer_type: str,
+    tokens: set[str],
+    *,
+    causal_intent: bool = False,
+) -> str:
     value = str(answer_type or "").strip().lower()
+    if causal_intent:
+        return (
+            value
+            if value and value not in {"numeric", "number", "calculation"}
+            else "free_text"
+        )
     if value in {"numeric", "number", "calculation", "percentage", "ratio"}:
         return "numeric"
     if tokens & _NUMERIC_TERMS:
@@ -276,7 +401,15 @@ def _normalized_answer_type(answer_type: str, tokens: set[str]) -> str:
     return "free_text"
 
 
-def _question_type(tokens: set[str], answer_type: str, periods: list[str]) -> str:
+def _question_type(
+    tokens: set[str],
+    answer_type: str,
+    periods: list[str],
+    *,
+    causal_intent: bool = False,
+) -> str:
+    if causal_intent:
+        return "long_form"
     if answer_type == "numeric" and len(periods) >= 2:
         return "multi_period_numeric"
     if answer_type == "numeric":

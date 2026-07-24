@@ -219,7 +219,7 @@ def test_mara_text_evidence_metadata_exposes_standard_source_fields():
         "source_name": "annual-report.pdf",
         "page_label": "7",
         "element_type": "text",
-        "element_id": "",
+        "element_id": "doc-1",
         "bbox": None,
         "caption": "",
         "text": "Net sales were $10 million.",

@@ -20,6 +20,9 @@ SUITE_NAME="${MARA_MULTIMODAL_SUITE_NAME:-${MARA_PHASE3_SUITE_NAME:-slidevqa-mul
 LOG_ROOT="${OUT_ROOT}/logs/${RUN_ID}"
 BENCHMARK_LOG="${LOG_ROOT}/benchmark.log"
 BACKEND_HEALTH_JSON="${LOG_ROOT}/backend-health.json"
+SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"
+SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"
+SEMANTIC_EVALUATOR_TIMEOUT_SECONDS="${MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS:-60}"
 
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/users/tbczhang/fastscratch/cache/uv}"
 export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/users/tbczhang/fastscratch/cache/uv/python}"
@@ -128,6 +131,13 @@ log "suite=${SUITE_NAME}"
 log "node=${SLURMD_NODENAME:-$(hostname)}"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader || true
 
+SEMANTIC_EVALUATOR="$(
+  uv run --python 3.10 python \
+    "${PROJECT_ROOT}/scripts/slurm/normalize_semantic_evaluator.py" \
+    "$SEMANTIC_EVALUATOR"
+)"
+log "semantic_evaluator=${SEMANTIC_EVALUATOR}"
+
 mara_bootstrap_benchmark_runtime
 
 if ! http_ok "http://127.0.0.1:8000/v1/models"; then
@@ -196,9 +206,6 @@ ROUTE="${MARA_MULTIMODAL_ROUTE:-${MARA_PHASE3_ROUTE:-all}}"
 LIMIT="${MARA_MULTIMODAL_LIMIT:-${MARA_PHASE3_LIMIT:-20}}"
 SAMPLE_SEED="${MARA_MULTIMODAL_SAMPLE_SEED:-${MARA_PHASE3_SAMPLE_SEED:-0}}"
 ROUTE_TIMEOUT_SECONDS="${MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS:-${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-240}}"
-SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"
-SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"
-SEMANTIC_EVALUATOR_TIMEOUT_SECONDS="${MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS:-60}"
 
 uv run --python 3.10 python -m benchmark run \
   --manifest "$MANIFEST" \

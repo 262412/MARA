@@ -115,6 +115,12 @@ _CSV_FIELD_ORDER = [
     "total_route_switch_count",
     "avg_multimodal_answer_support",
     "avg_total_seconds",
+    "median_total_seconds",
+    "p95_total_seconds",
+    "avg_total_seconds_including_preparation",
+    "median_total_seconds_including_preparation",
+    "p95_total_seconds_including_preparation",
+    "num_route_timeouts",
     "benchmark_role",
 ]
 

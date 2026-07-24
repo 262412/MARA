@@ -30,6 +30,25 @@ def test_mara_planner_decision_routes_quick_ratio_as_structured_calculation():
     assert "compatibility_scope" not in decision
 
 
+def test_mara_planner_routes_direct_finance_amount_with_period_and_unit_as_numeric():
+    decision = planner_decision(
+        {
+            "task_type": "qa",
+            "modalities": ["text"],
+            "available_modalities": ["page_image"],
+            "scope": "document",
+        },
+        question=(
+            "What is the FY2021 capital expenditure amount in USD billions "
+            "for PepsiCo? Use the statement of cash flows."
+        ),
+    )
+
+    assert decision["route"] == "hybrid"
+    assert decision["routing_features"]["structured_calculation"] is True
+    assert decision["calculation_scope"] == "structured_document_calculation"
+
+
 def test_mara_planner_does_not_report_alias_normalization_as_constraint():
     decision = planner_decision(
         {"task_type": "qa", "modalities": ["text"], "scope": "multi_document"},

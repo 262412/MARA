@@ -22,7 +22,11 @@ def normalize_mmdocrag_manifest(
         document_id = str(
             pick(record, "doc_name", "document_id", default=f"doc_{index}")
         )
-        documents.setdefault(document_id, _document_record(document_id, documents_root))
+        document = documents.setdefault(
+            document_id,
+            _document_record(document_id, documents_root),
+        )
+        _merge_element_catalog(document, record)
         examples.append(_example(record, document_id, index))
 
     return write_v2_manifest(
@@ -104,6 +108,52 @@ def _quote_index(record: dict[str, Any]) -> dict[str, dict[str, Any]]:
             if isinstance(quote, dict) and quote.get("quote_id"):
                 quotes[str(quote["quote_id"])] = quote
     return quotes
+
+
+def _merge_element_catalog(
+    document: dict[str, Any],
+    record: dict[str, Any],
+) -> None:
+    metadata = document["metadata"]
+    elements = metadata.setdefault("element_index_records", [])
+    seen = {
+        (str(item.get("element_id") or ""), str(item.get("page_label") or ""))
+        for item in elements
+    }
+    for quote in _quote_index(record).values():
+        element = _catalog_element(quote)
+        if element is None:
+            continue
+        key = (
+            str(element["element_id"]),
+            str(element["page_label"]),
+        )
+        if key not in seen:
+            seen.add(key)
+            elements.append(element)
+
+
+def _catalog_element(quote: dict[str, Any]) -> dict[str, Any] | None:
+    element_id = str(quote.get("quote_id") or "").strip()
+    page_label = quote.get("page_id")
+    text = str(quote.get("text") or quote.get("img_description") or "").strip()
+    if not element_id or page_label is None or not text:
+        return None
+    element_metadata = {
+        "layout_id": quote.get("layout_id"),
+        "index_source": "mmdocrag_quote_catalog",
+    }
+    image_path = str(quote.get("img_path") or "").strip()
+    if image_path:
+        element_metadata["image_path"] = image_path
+    return {
+        "page_label": page_label,
+        "element_id": element_id,
+        "element_type": str(quote.get("type") or "text"),
+        "parent_element_id": f"page:{page_label}",
+        "text": text,
+        "metadata": element_metadata,
+    }
 
 
 def _evidence_item(document_id: str, quote: dict[str, Any]) -> dict[str, Any]:

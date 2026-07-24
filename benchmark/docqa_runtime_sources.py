@@ -47,6 +47,21 @@ def has_search_index(runtime: Any, file_id: str) -> bool:
     return index_ready
 
 
+def has_element_index(runtime: Any, file_id: str) -> bool:
+    file_index = getattr(runtime, "file_index", None)
+    if file_index is None:
+        return False
+    try:
+        resources = getattr(file_index, "_resources")
+        index_table = resources["Index"]
+        rows = _index_relation_rows(index_table, file_id)
+    except (AttributeError, ImportError, KeyError, RuntimeError, TypeError, ValueError):
+        return False
+    return any(
+        str(getattr(row, "relation_type", "") or "") == "element_index" for row in rows
+    )
+
+
 def _file_index_search_ready(file_index: Any, file_id: str) -> bool | None:
     try:
         resources = getattr(file_index, "_resources")

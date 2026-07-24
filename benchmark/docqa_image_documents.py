@@ -138,6 +138,30 @@ def _element_index_record_from_payload(
         "source_backrefs": _source_backrefs(payload, file_id, page_label),
         "metadata": dict(metadata),
     }
+    for field in (
+        "parent_element_id",
+        "section_id",
+        "table_id",
+        "continuation_id",
+        "normalized_text_hash",
+    ):
+        value = str(payload.get(field) or metadata.get(field) or "").strip()
+        if value:
+            output[field] = value
+    for field in ("row_index", "column_index", "chunk_start", "chunk_end"):
+        value = payload.get(field, metadata.get(field))
+        if value is not None:
+            output[field] = value
+    neighbor_element_ids = _alias_values(
+        payload.get("neighbor_element_ids")
+        or metadata.get("neighbor_element_ids")
+        or metadata.get("neighbors")
+    )
+    if neighbor_element_ids:
+        output["neighbor_element_ids"] = neighbor_element_ids
+    duplicate_evidence_ids = _alias_values(payload.get("duplicate_evidence_ids"))
+    if duplicate_evidence_ids:
+        output["duplicate_evidence_ids"] = duplicate_evidence_ids
     element_id_aliases = _alias_values(payload.get("element_id_aliases"))
     if element_id_aliases:
         output["element_id_aliases"] = element_id_aliases

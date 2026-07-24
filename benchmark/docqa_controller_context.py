@@ -14,13 +14,22 @@ def controller_request_context(example: Any, config: BenchmarkConfig, config_get
     controller_kwargs = cf.controller_config_kwargs(config_getter)
     if controller_domain and not controller_kwargs.get("verification_domain"):
         controller_kwargs["verification_domain"] = controller_domain
+    if controller_domain == "ragtruth":
+        controller_kwargs["allowed_routes"] = ["doc_text"]
+        controller_kwargs["verification_mode"] = "off"
+    configured_task_type = config_getter("task_type")
+    if configured_task_type:
+        runtime_task_type = configured_task_type
+    elif controller_domain == "qasper":
+        runtime_task_type = "qasper_qa"
+    else:
+        runtime_task_type = field_value(example, "answer_type", None)
     return {
         "prompt": prompt.runtime_prompt,
         "controller_question": prompt.retrieval_query,
         "retrieval_query": prompt.retrieval_query,
         "dataset_family": controller_domain,
-        "task_type": config_getter("task_type")
-        or field_value(example, "answer_type", None),
+        "task_type": runtime_task_type,
         **controller_kwargs,
     }
 

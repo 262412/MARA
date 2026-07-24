@@ -1,0 +1,185 @@
+from __future__ import annotations
+
+import re
+
+FinanceOperandSpecs = tuple[tuple[str, str, str], ...]
+
+FINANCE_METRIC_ALIASES = {
+    "adjusted ebitda": ("adjusted ebitda", "adj ebitda"),
+    "capital expenditure": (
+        "capital expenditure",
+        "capital expenditures",
+        "capital spending",
+        "capex",
+    ),
+    "cash and cash equivalents": (
+        "cash and cash equivalents",
+        "cash & cash equivalents",
+    ),
+    "cost of goods sold": ("cost of goods sold", "cost of sales", "cogs"),
+    "current assets": ("current assets", "total current assets"),
+    "current liabilities": ("current liabilities", "total current liabilities"),
+    "gross profit": ("gross profit",),
+    "inventory": ("inventory", "inventories"),
+    "net sales": ("net sales", "net revenue", "net revenues", "revenue"),
+    "operating cash flow": (
+        "operating cash flow",
+        "cash from operations",
+        "net cash provided by operating activities",
+    ),
+    "operating income": ("operating income", "operating profit"),
+    "shareholders equity": (
+        "shareholders equity",
+        "shareholders' equity",
+        "stockholders equity",
+        "stockholders' equity",
+    ),
+    "total assets": ("total assets",),
+    "total debt": ("total debt", "long term debt", "short term debt"),
+}
+
+
+def finance_operand_specs(
+    question: str,
+    periods: list[str],
+) -> FinanceOperandSpecs:
+    lowered = str(question or "").lower()
+    current_period = finance_target_period(lowered, periods)
+    named_specs = _named_formula_specs(lowered, periods, current_period)
+    if named_specs:
+        return named_specs
+
+    metrics = finance_metrics_in_question(lowered)
+    if "ratio" in lowered and len(metrics) >= 2:
+        return same_period_specs(
+            current_period,
+            *((metric.replace(" ", "_"), metric) for metric in metrics[:2]),
+        )
+    if len(periods) >= 2 and metrics:
+        metric = metrics[0]
+        return tuple(
+            (f"{metric.replace(' ', '_')}:{period}", metric, period)
+            for period in periods
+        )
+    if not metrics:
+        return ()
+    metric = metrics[0]
+    slot_id = metric.replace(" ", "_")
+    if current_period:
+        slot_id = f"{slot_id}:{current_period}"
+    return ((slot_id, metric, current_period),)
+
+
+def _named_formula_specs(
+    question: str,
+    periods: list[str],
+    current_period: str,
+) -> FinanceOperandSpecs:
+    if "quick ratio" in question:
+        return same_period_specs(
+            current_period,
+            ("current_assets", "current assets"),
+            ("inventory", "inventory"),
+            ("current_liabilities", "current liabilities"),
+        )
+    if "current ratio" in question or "working capital" in question:
+        return same_period_specs(
+            current_period,
+            ("current_assets", "current assets"),
+            ("current_liabilities", "current liabilities"),
+        )
+    if "free cash flow" in question or re.search(r"\bfcf\b", question):
+        return same_period_specs(
+            current_period,
+            ("operating_cash_flow", "operating cash flow"),
+            ("capital_expenditure", "capital expenditure"),
+        )
+    if "inventory turnover" in question:
+        return _inventory_turnover_specs(periods, current_period)
+    if "operating margin" in question:
+        return same_period_specs(
+            current_period,
+            ("operating_income", "operating income"),
+            ("net_sales", "net sales"),
+        )
+    if "gross margin" in question:
+        return same_period_specs(
+            current_period,
+            ("gross_profit", "gross profit"),
+            ("net_sales", "net sales"),
+        )
+    if "debt" in question and "equity" in question:
+        return same_period_specs(
+            current_period,
+            ("total_debt", "total debt"),
+            ("shareholders_equity", "shareholders equity"),
+        )
+    return ()
+
+
+def _inventory_turnover_specs(
+    periods: list[str],
+    current_period: str,
+) -> FinanceOperandSpecs:
+    inventory_periods = sorted(set(periods))
+    if len(inventory_periods) >= 2:
+        return (
+            ("cost_of_goods_sold", "cost of goods sold", current_period),
+            *(
+                (f"inventory:{period}", "inventory", period)
+                for period in inventory_periods
+            ),
+        )
+    return same_period_specs(
+        current_period,
+        ("cost_of_goods_sold", "cost of goods sold"),
+        ("average_inventory", "inventory"),
+    )
+
+
+def same_period_specs(
+    period: str,
+    *specs: tuple[str, str],
+) -> FinanceOperandSpecs:
+    return tuple((slot_id, metric, period) for slot_id, metric in specs)
+
+
+def finance_target_period(question: str, periods: list[str]) -> str:
+    explicit = re.search(
+        r"\b(?:as\s+of|during|for|in)\s+(?:fy\s*)?((?:19|20)\d{2})\b",
+        question,
+    )
+    if explicit is not None:
+        return explicit.group(1)
+    change = re.search(
+        r"\bfrom\s+(?:fy\s*)?((?:19|20)\d{2})\s+"
+        r"(?:through|to)\s+(?:fy\s*)?((?:19|20)\d{2})\b",
+        question,
+    )
+    if change is not None:
+        return change.group(2)
+    return periods[-1] if periods else ""
+
+
+def finance_metrics_in_question(question: str) -> list[str]:
+    matches: list[tuple[int, str]] = []
+    for canonical, aliases in FINANCE_METRIC_ALIASES.items():
+        alias_positions = [
+            (question.find(alias), alias)
+            for alias in aliases
+            if question.find(alias) >= 0
+        ]
+        if not alias_positions:
+            continue
+        position, matched_alias = min(alias_positions)
+        metric = (
+            "revenue"
+            if canonical == "net sales" and matched_alias == "revenue"
+            else canonical
+        )
+        matches.append((position, metric))
+    return [
+        metric
+        for _position, metric in sorted(matches)
+        if metric != "operating cash flow" or "free cash flow" not in question
+    ]

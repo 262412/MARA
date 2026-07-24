@@ -70,6 +70,7 @@ def test_normalize_qasper_manifest_materializes_paper_text(tmp_path):
         .startswith("# Paper title")
     )
     assert bundle.examples[0].answers == ["retrieval", "document retrieval"]
+    assert bundle.examples[0].answer_type == "free_text"
     assert bundle.examples[0].evidence_sources == ["The method uses retrieval."]
     assert bundle.examples[0].metadata["dataset_family"] == "scientific_qa"
     assert bundle.examples[0].metadata["qasper_answer_annotations"] == [
@@ -90,7 +91,7 @@ def test_normalize_qasper_manifest_materializes_paper_text(tmp_path):
     ]
 
 
-def test_normalize_mmdocrag_manifest_preserves_multimodal_gold_quotes(tmp_path):
+def _mmdocrag_fixture_manifest(tmp_path):
     source_path = tmp_path / "dev.jsonl"
     source_path.write_text(
         json.dumps(
@@ -117,7 +118,15 @@ def test_normalize_mmdocrag_manifest_preserves_multimodal_gold_quotes(tmp_path):
                         "img_description": "A revenue table.",
                         "page_id": 4,
                         "layout_id": 42,
-                    }
+                    },
+                    {
+                        "quote_id": "image2",
+                        "type": "figure",
+                        "img_path": "images/report_2025_chart.jpg",
+                        "img_description": "A chart not used by this question.",
+                        "page_id": 5,
+                        "layout_id": 51,
+                    },
                 ],
             }
         )
@@ -127,8 +136,12 @@ def test_normalize_mmdocrag_manifest_preserves_multimodal_gold_quotes(tmp_path):
 
     manifest_path = tmp_path / "mmdocrag_manifest.json"
     normalize_mmdocrag_manifest(source_path, manifest_path, documents_root=tmp_path)
+    return load_manifest(manifest_path)
 
-    example = load_manifest(manifest_path).examples[0]
+
+def test_normalize_mmdocrag_manifest_preserves_multimodal_gold_quotes(tmp_path):
+    bundle = _mmdocrag_fixture_manifest(tmp_path)
+    example = bundle.examples[0]
     assert example.modality == "multimodal"
     assert example.answers == ["Revenue rose"]
     assert example.evidence_pages == [3, 4]
@@ -148,6 +161,48 @@ def test_normalize_mmdocrag_manifest_preserves_multimodal_gold_quotes(tmp_path):
             "element_type": "table",
             "image_quote": "A revenue table.",
             "citation": "report_2025#page:4",
+        },
+    ]
+
+
+def test_normalize_mmdocrag_manifest_indexes_complete_quote_catalog(tmp_path):
+    bundle = _mmdocrag_fixture_manifest(tmp_path)
+
+    assert bundle.documents["report_2025"].metadata["element_index_records"] == [
+        {
+            "page_label": 3,
+            "element_id": "text1",
+            "element_type": "text",
+            "parent_element_id": "page:3",
+            "text": "Revenue rose in 2025.",
+            "metadata": {
+                "layout_id": 31,
+                "index_source": "mmdocrag_quote_catalog",
+            },
+        },
+        {
+            "page_label": 4,
+            "element_id": "image1",
+            "element_type": "table",
+            "parent_element_id": "page:4",
+            "text": "A revenue table.",
+            "metadata": {
+                "layout_id": 42,
+                "image_path": "images/report_2025_table.jpg",
+                "index_source": "mmdocrag_quote_catalog",
+            },
+        },
+        {
+            "page_label": 5,
+            "element_id": "image2",
+            "element_type": "figure",
+            "parent_element_id": "page:5",
+            "text": "A chart not used by this question.",
+            "metadata": {
+                "layout_id": 51,
+                "image_path": "images/report_2025_chart.jpg",
+                "index_source": "mmdocrag_quote_catalog",
+            },
         },
     ]
 
@@ -452,6 +507,21 @@ def test_normalize_qasper_manifest_uses_yes_no_not_python_booleans(tmp_path):
                                 }
                             ],
                         },
+                        {
+                            "question_id": "unanswerable",
+                            "question": "Was a graph retriever evaluated?",
+                            "answers": [
+                                {
+                                    "answer": {
+                                        "extractive_spans": [],
+                                        "free_form_answer": "",
+                                        "yes_no": None,
+                                        "unanswerable": True,
+                                        "evidence": [],
+                                    }
+                                }
+                            ],
+                        },
                     ],
                 }
             }
@@ -463,4 +533,18 @@ def test_normalize_qasper_manifest_uses_yes_no_not_python_booleans(tmp_path):
     normalize_qasper_manifest(source_path, manifest_path)
     bundle = load_manifest(manifest_path)
 
-    assert [example.answers for example in bundle.examples] == [["yes"], ["no"]]
+    assert [example.answers for example in bundle.examples] == [
+        ["yes"],
+        ["no"],
+        ["unanswerable"],
+    ]
+    assert [example.answer_type for example in bundle.examples] == [
+        "boolean",
+        "boolean",
+        "unanswerable",
+    ]
+    assert [example.metadata["qasper_answer_type"] for example in bundle.examples] == [
+        "boolean",
+        "boolean",
+        "unanswerable",
+    ]

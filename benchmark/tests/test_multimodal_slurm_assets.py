@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/multimodal_route_rerun.sbatch"
 TEXT_SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/text_route_rerun.sbatch"
 RUNTIME_HELPER = PROJECT_ROOT / "scripts/slurm/benchmark_runtime_isolation.sh"
+ARTIFACT_VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_benchmark_predictions.py"
+SEMANTIC_EVALUATOR_NORMALIZER = (
+    PROJECT_ROOT / "scripts/slurm/normalize_semantic_evaluator.py"
+)
 RUNBOOK = PROJECT_ROOT / "docs/development/multimodal_route_runbook.md"
 
 
@@ -151,11 +156,67 @@ def test_text_route_slurm_script_requires_isolated_benchmark_runtime():
         '--semantic-evaluator-timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS"'
         in text
     )
+    assert 'MAX_CONTEXT_LENGTH="${MARA_TEXT_MAX_CONTEXT_LENGTH:-3000}"' in text
+    assert '--max-context-length "$MAX_CONTEXT_LENGTH"' in text
     assert (
         'KH_APP_DATA_DIR="${KH_APP_DATA_DIR:-/users/tbczhang/fastscratch/mara_runtime/ktem_app_data}"'
         not in text
     )
     assert "${MARA_RUNTIME_DIR}/ktem_app_data" not in text
+
+
+def test_semantic_evaluator_normalizer_maps_local_alias_and_rejects_invalid_values():
+    local = subprocess.run(
+        [sys.executable, str(SEMANTIC_EVALUATOR_NORMALIZER), "local"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    invalid = subprocess.run(
+        [sys.executable, str(SEMANTIC_EVALUATOR_NORMALIZER), "not-a-backend"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert local.returncode == 0, local.stderr
+    assert local.stdout.strip() == "local_qwen3_8b"
+    assert invalid.returncode == 2
+    assert "semantic evaluator must be" in invalid.stderr
+
+
+def test_slurm_scripts_validate_semantic_evaluator_before_runtime_and_services():
+    for script in (TEXT_SLURM_SCRIPT, SLURM_SCRIPT):
+        text = script.read_text(encoding="utf-8")
+        assert "normalize_semantic_evaluator.py" in text
+        assert text.index("normalize_semantic_evaluator.py") < text.index(
+            "mara_bootstrap_benchmark_runtime"
+        )
+        assert text.index("normalize_semantic_evaluator.py") < text.index(
+            "start_service qwen3_8b"
+        )
+
+
+def test_text_route_slurm_script_uses_job_scoped_service_ports():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert "PORT_OFFSET=$((10#${SLURM_JOB_ID:-$$} % 10000))" in text
+    assert 'TEXT_LLM_PORT="${MARA_TEXT_LLM_PORT:-$((20000 + PORT_OFFSET))}"' in text
+    assert 'RETRIEVAL_PORT="${MARA_RETRIEVAL_PORT:-$((40000 + PORT_OFFSET))}"' in text
+    assert 'MARA_QWEN3_8B_PORT="$TEXT_LLM_PORT"' in text
+    assert 'MARA_RETRIEVAL_PORT="$RETRIEVAL_PORT"' in text
+    assert 'MARA_TEXT_LLM_BASE_URL="$TEXT_LLM_BASE_URL"' in text
+    assert 'MARA_RETRIEVAL_BASE_URL="$RETRIEVAL_BASE_URL"' in text
+    assert 'MARA_LLM_BASE_URL="$TEXT_LLM_BASE_URL"' in text
+
+
+def test_text_route_slurm_script_rejects_all_failed_artifacts():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert "validate_benchmark_predictions.py" in text
+    assert text.index("validate_benchmark_predictions.py") < text.index(
+        "mara_cleanup_benchmark_runtime"
+    )
 
 
 def test_multimodal_slurm_script_forwards_offline_semantic_evaluator_contract():

@@ -46,6 +46,84 @@ def test_finance_numeric_answer_computes_percentage_change():
     assert answer.question_type == "percentage_change"
 
 
+def test_finance_numeric_answer_binds_operand_dimensions_from_cell_metadata():
+    answer = finance_numeric_answer(
+        "What was the percentage change in Example Corp revenue from 2021 to 2022?",
+        [
+            {
+                "element_id": "cell-revenue-2021",
+                "text": "Example Corp revenue was $10.0 million in 2021.",
+                "metadata": {
+                    "entity": "Example Corp",
+                    "unit": "USD",
+                    "scale": "million",
+                    "currency": "USD",
+                    "period": "2021",
+                },
+            },
+            {
+                "element_id": "cell-revenue-2022",
+                "text": "Example Corp revenue was $12.5 million in 2022.",
+                "metadata": {
+                    "entity": "Example Corp",
+                    "unit": "USD",
+                    "scale": "million",
+                    "currency": "USD",
+                    "period": "2022",
+                },
+            },
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "25.0%"
+    operands = {
+        operand["operand_id"]: operand
+        for operand in answer.calculation_plan["operands"]
+    }
+    assert operands["prior"] == {
+        "operand_id": "prior",
+        "evidence_id": "cell-revenue-2021",
+        "value": "10.0",
+        "unit": "USD",
+        "scale": "million",
+        "currency": "USD",
+        "period": "2021",
+        "entity": "Example Corp",
+        "source": "evidence",
+    }
+    assert operands["current"]["evidence_id"] == "cell-revenue-2022"
+    assert operands["current"]["entity"] == "Example Corp"
+    assert answer.calculation_verification["valid"] is True
+    assert answer.calculation_execution["citation_ids"] == [
+        "cell-revenue-2021",
+        "cell-revenue-2022",
+    ]
+
+
+def test_finance_numeric_answer_does_not_reuse_one_cell_for_equal_operands():
+    answer = finance_numeric_answer(
+        "What was the current ratio in 2022?",
+        [
+            {
+                "element_id": "current-assets",
+                "text": "Current assets were $100 million in 2022.",
+            },
+            {
+                "element_id": "current-liabilities",
+                "text": "Current liabilities were $100 million in 2022.",
+            },
+        ],
+    )
+
+    assert answer is not None
+    assert answer.calculation_verification["valid"] is True
+    assert answer.calculation_execution["citation_ids"] == [
+        "current-assets",
+        "current-liabilities",
+    ]
+
+
 def test_finance_numeric_answer_parses_negative_parentheses_for_difference():
     answer = finance_numeric_answer(
         "What was the difference in operating income from 2021 to 2022?",
@@ -99,3 +177,160 @@ def test_finance_route_blocks_llm_fallback_after_calculation_verification_failur
     assert not bundle.metadata["finance_numeric_trace"]["calculation_verification"][
         "valid"
     ]
+
+
+def test_finance_numeric_answer_does_not_execute_causal_percent_question():
+    answer = finance_numeric_answer(
+        (
+            "What drove the reduction in SG&A expense as a percent of net "
+            "sales in FY2023?"
+        ),
+        [
+            {
+                "evidence_id": "sga-table",
+                "text": "SG&A expense was 37.6 percent of net sales in FY2023.",
+            }
+        ],
+    )
+
+    assert answer is None
+
+
+def test_finance_numeric_answer_computes_three_period_average():
+    answer = finance_numeric_answer(
+        "What was the average adjusted EBITDA from 2020 through 2022?",
+        [
+            {
+                "element_id": "ebitda-2020",
+                "text": "Adjusted EBITDA was $100 million in 2020.",
+            },
+            {
+                "element_id": "ebitda-2021",
+                "text": "Adjusted EBITDA was $120 million in 2021.",
+            },
+            {
+                "element_id": "ebitda-2022",
+                "text": "Adjusted EBITDA was $140 million in 2022.",
+            },
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "$120.0 million"
+    assert answer.question_type == "multi_period_average"
+    assert answer.calculation_verification["valid"] is True
+    assert answer.calculation_execution["citation_ids"] == [
+        "ebitda-2020",
+        "ebitda-2021",
+        "ebitda-2022",
+    ]
+
+
+def test_finance_numeric_answer_computes_free_cash_flow():
+    answer = finance_numeric_answer(
+        "What was free cash flow in 2022?",
+        [
+            {
+                "element_id": "operating-cash-flow",
+                "text": (
+                    "Net cash provided by operating activities was "
+                    "$10 million in 2022."
+                ),
+            },
+            {
+                "element_id": "capital-expenditure",
+                "text": "Capital expenditures were $4 million in 2022.",
+            },
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "$6.0 million"
+    assert answer.question_type == "free_cash_flow"
+    assert answer.calculation_verification["valid"] is True
+
+
+def test_finance_numeric_answer_executes_direct_capex_from_horizontal_cash_flow_row():
+    answer = finance_numeric_answer(
+        (
+            "What is the FY2021 capital expenditure amount in USD billions "
+            "for PepsiCo?"
+        ),
+        [
+            {
+                "element_id": "pepsico-page-63",
+                "page_label": "63",
+                "text": (
+                    "Consolidated Statement of Cash Flows (in millions) "
+                    "2021 2020 2019. Investing Activities. "
+                    "Capital spending (4,625) (4,240) (4,232)."
+                ),
+            }
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "$4.625 billion"
+    assert answer.question_type == "capital_expenditure"
+    assert answer.calculation_verification["valid"] is True
+    assert answer.calculation_execution["citation_ids"] == ["pepsico-page-63"]
+
+
+def test_finance_numeric_answer_uses_average_inventory_for_turnover():
+    answer = finance_numeric_answer(
+        (
+            "What was inventory turnover in 2022 using average inventory "
+            "from 2021 and 2022?"
+        ),
+        [
+            {
+                "element_id": "cogs-2022",
+                "text": "Cost of goods sold was $300 million in 2022.",
+            },
+            {
+                "element_id": "inventory-2021",
+                "text": "Inventory was $100 million in 2021.",
+            },
+            {
+                "element_id": "inventory-2022",
+                "text": "Inventory was $140 million in 2022.",
+            },
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "2.5"
+    assert answer.question_type == "inventory_turnover_average"
+    assert answer.calculation_verification["valid"] is True
+
+
+def test_finance_numeric_route_emits_failed_attempt_trace_for_unsupported_formula():
+    bundle = SimpleNamespace(
+        items=[
+            {
+                "element_id": "finance-cell",
+                "text": "A finance table contains several reported values.",
+            }
+        ],
+        metadata={
+            "query_plan": {
+                "answer_type": "numeric",
+                "constraints": {"verification_domain": "finance"},
+            }
+        },
+    )
+
+    answer = route_finance_numeric_answer(
+        SimpleNamespace(
+            prompt="Calculate the compound annual growth rate for the portfolio.",
+            verification_domain="finance",
+        ),
+        SimpleNamespace(route="hybrid_rag"),
+        bundle,
+    )
+
+    assert answer == ""
+    trace = bundle.metadata["finance_numeric_trace"]
+    assert trace["attempt_status"] == "unsupported_formula"
+    assert trace["calculation_verification"]["valid"] is False
+    assert trace["calculation_verification"]["errors"] == ["unsupported_formula"]

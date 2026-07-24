@@ -175,11 +175,13 @@ def _qasper_structure_valid(
     predicted_answer: str,
     gold_answers: list[str],
 ) -> float | None:
-    contract_values = {"yes", "no", "unanswerable"}
     normalized_gold = {normalize_text(answer) for answer in gold_answers}
-    if not normalized_gold or not normalized_gold <= contract_values:
-        return None
-    return float(normalize_text(predicted_answer) in contract_values)
+    normalized_prediction = normalize_text(predicted_answer)
+    if normalized_gold == {"unanswerable"}:
+        return float(normalized_prediction == "unanswerable")
+    if normalized_gold and normalized_gold <= {"yes", "no"}:
+        return float(normalized_prediction in {"yes", "no"})
+    return None
 
 
 def _alce_metrics(prediction: dict[str, Any]) -> dict[str, float | None]:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from types import SimpleNamespace
 from typing import Any, Generator
 
 from ktem.docqa.claim_filtering import clean_answer_text
@@ -12,12 +11,19 @@ from kotaemon.base import Document, RetrievedDocument
 
 from .mara_artifacts import build_artifact_for_pipeline
 from .mara_controller import planner_trace_payload
+from .mara_controller_request import (
+    controller_execution_request as _controller_execution_request,
+)
+from .mara_controller_request import (
+    controller_routing_message as _controller_routing_message,
+)
 from .mara_element_answer import element_evidence_answer
 from .mara_evidence import build_mara_evidence_metadata
 from .mara_finance_answering import route_finance_numeric_answer
 from .mara_query_planning import plan_steps as build_mara_plan_steps
 from .mara_query_planning import understand_query as understand_mara_query
 from .mara_query_planning import with_selected_source_context
+from .mara_ragtruth_answering import route_ragtruth_answer
 from .mara_retrieval_query import messages_share_retrieval_cache_key, retrieval_query
 from .mara_route_probe import (
     controller_latency_budget,
@@ -118,45 +124,6 @@ def _effective_route(pipeline: Any, planner_payload: dict[str, Any]) -> str:
         return _ROUTE_POLICY_ALIASES.get(policy, policy)
     planner_route = _planner_route(planner_payload)
     return _ROUTE_POLICY_ALIASES.get(planner_route, planner_route)
-
-
-def _controller_routing_message(pipeline: Any, message: str) -> str:
-    return str(
-        getattr(pipeline, "controller_question", None)
-        or getattr(pipeline, "retrieval_query", None)
-        or message
-    ).strip()
-
-
-def _controller_execution_request(
-    pipeline: Any,
-    message: str,
-) -> SimpleNamespace:
-    controller_mode = str(getattr(pipeline, "controller_mode", "") or "").strip()
-    docqa_request = getattr(pipeline, "docqa_request", None)
-    return SimpleNamespace(
-        prompt=message,
-        origin=str(
-            getattr(docqa_request, "origin", None)
-            or getattr(pipeline, "origin", "")
-            or ""
-        ),
-        controller_mode=controller_mode or "llm",
-        route_policy=getattr(pipeline, "route_policy", None) or "auto",
-        allowed_routes=list(getattr(pipeline, "allowed_routes", None) or []),
-        verification_mode=getattr(pipeline, "verification_mode", None) or "light",
-        verification_domain=(
-            getattr(pipeline, "verification_domain", None)
-            or getattr(pipeline, "dataset_family", None)
-            or ""
-        ),
-        active_file_id=getattr(pipeline, "active_file_id", "") or "",
-        active_file_name=getattr(pipeline, "active_file_name", "") or "",
-        page_number=getattr(pipeline, "page_number", None),
-        selected_text=getattr(pipeline, "selected_text", "") or "",
-        selected_file_ids=list(getattr(pipeline, "selected_file_ids", None) or []),
-        graph_context=getattr(pipeline, "graph_context", None) or {},
-    )
 
 
 def _with_available_modalities(
@@ -303,6 +270,9 @@ def _generate_controller_route_answer(
     history: list,
     kwargs: dict[str, Any],
 ) -> tuple[str, list[Document]]:
+    ragtruth_answer = route_ragtruth_answer(pipeline, request, bundle)
+    if ragtruth_answer is not None:
+        return ragtruth_answer, []
     if decision.route == "page_image_rag":
         visual_answer = _route_visual_answer(
             pipeline,

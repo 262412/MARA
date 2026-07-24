@@ -16,6 +16,11 @@ from .mara_oriented_scores import (
     add_mara_oriented_metrics,
     promote_external_primary_score,
 )
+from .performance_timing import (
+    add_amortized_preparation_timing,
+    apply_engine_failure_diagnostics,
+    measure_duration,
+)
 from .research_adapters import (
     research_adapter_metric_metadata,
     research_adapter_metrics,
@@ -26,12 +31,17 @@ from .research_evaluators import (
     external_research_adapter_metrics,
 )
 from .route_execution import route_skip_record
-from .route_timeout import RouteExecutionTimeout, run_with_route_timeout
+from .route_timeout import (
+    RouteExecutionTimeout,
+    raise_if_route_budget_exceeded,
+    route_timeout_seconds,
+    run_with_route_timeout,
+)
 from .sampling import select_examples_for_config, selection_summary
 from .schemas import BenchmarkConfig, ManifestBundle
 from .scoring import normalize_operational_fields, score_prediction
 from .semantic_answer import semantic_judge_backend
-from .stage_metrics import prediction_stage_metrics
+from .stage_metrics import prediction_stage_metric_status, prediction_stage_metrics
 from .summary import build_benchmark_summary
 from .verifier_observability import prediction_verifier_observability
 
@@ -271,7 +281,9 @@ def _error_prediction(
         "expected_guardrails": example.expected_guardrails,
         "error": str(exc),
         "error_type": _error_type(exc),
-        "route_timeout_seconds": _route_timeout_seconds(exc, route_config),
+        "route_timeout_seconds": route_timeout_seconds(
+            exc, route_config.route_timeout_seconds
+        ),
     }
 
 
@@ -392,7 +404,11 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
             model=route_config.semantic_evaluator_model,
             timeout_seconds=route_config.semantic_evaluator_timeout_seconds,
         )
-        _prepare_engine_examples(engine, selected_bundle, selected_bundle.examples)
+        preparation_seconds = measure_duration(
+            lambda: _prepare_engine_examples(
+                engine, selected_bundle, selected_bundle.examples
+            )
+        )
 
         for example in selected_bundle.examples:
             document = selected_bundle.documents[example.document_id]
@@ -402,7 +418,9 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                     route_config.route_timeout_seconds,
                     lambda: _run_engine_example(engine, selected_bundle, example),
                 )
-                _raise_if_route_budget_exceeded(route_started_at, route_config)
+                raise_if_route_budget_exceeded(
+                    route_started_at, route_config.route_timeout_seconds
+                )
                 prediction["error"] = None
             except Exception as exc:
                 prediction = _error_prediction(
@@ -411,6 +429,7 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                     route_config=route_config,
                     exc=exc,
                 )
+                apply_engine_failure_diagnostics(prediction, engine)
             _prepare_prediction_defaults(
                 prediction,
                 example=example,
@@ -420,6 +439,9 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                 dataset_name=bundle.dataset_name,
             )
             normalize_operational_fields(prediction)
+            add_amortized_preparation_timing(
+                prediction, preparation_seconds, len(selected_bundle.examples)
+            )
             prediction["modality"] = example.modality
             prediction["answer_type"] = example.answer_type
             prediction["gold_evidence"] = example.gold_evidence
@@ -443,6 +465,9 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
             add_prediction_taxonomy(prediction)
             add_mara_oriented_metrics(prediction, dataset_name=bundle.dataset_name)
             prediction["stage_metrics"] = prediction_stage_metrics(prediction)
+            prediction["stage_metric_status"] = prediction_stage_metric_status(
+                prediction
+            )
             prediction["adapter_metrics"] = research_adapter_metrics(prediction)
             prediction["adapter_metric_metadata"] = research_adapter_metric_metadata()
             (
@@ -519,26 +544,6 @@ def _error_type(exc: Exception) -> str:
     if isinstance(exc, RouteExecutionTimeout):
         return "route_timeout"
     return "execution_error"
-
-
-def _raise_if_route_budget_exceeded(
-    started_at: float,
-    route_config: BenchmarkConfig,
-) -> None:
-    timeout_seconds = route_config.route_timeout_seconds
-    if not timeout_seconds or timeout_seconds <= 0:
-        return
-    if perf_counter() - started_at > timeout_seconds:
-        raise RouteExecutionTimeout(timeout_seconds)
-
-
-def _route_timeout_seconds(
-    exc: Exception,
-    route_config: BenchmarkConfig,
-) -> float | None:
-    if isinstance(exc, RouteExecutionTimeout):
-        return exc.seconds
-    return route_config.route_timeout_seconds
 
 
 def _manifest_document_reports(bundle: ManifestBundle) -> list[dict[str, Any]]:

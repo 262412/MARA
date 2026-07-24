@@ -12,6 +12,7 @@ from .domain_verifiers import (
 )
 from .evidence import EvidenceBundle
 from .evidence_text import evidence_text, extract_final_answer_text
+from .query_planning import request_planning_question
 
 
 @dataclass(frozen=True)
@@ -46,7 +47,7 @@ def verify_decision(
             reason="Direct route does not require evidence verification.",
         )
     citations = verified_citations(evidence_bundle)
-    prompt = str(getattr(request, "prompt", "") or "")
+    prompt = request_planning_question(request)
     domain = normalize_verification_domain(
         getattr(request, "verification_domain", None)
     )
@@ -150,6 +151,8 @@ def claim_supported(
     if domain_supported is not None:
         return domain_supported
 
+    if _direct_evidence_supports_claim(claim, evidence_items):
+        return True
     if _claim_contradicts_evidence(claim, evidence_items):
         return False
     if _semantic_evidence_supports_claim(claim, evidence_items):
@@ -165,6 +168,25 @@ def claim_supported(
     if len(overlap) >= min(2, len(claim_tokens)):
         return True
     return _source_summary_supports_claim(prompt, overlap, evidence_tokens)
+
+
+def _direct_evidence_supports_claim(
+    claim: str,
+    evidence_items: list[dict[str, Any]],
+) -> bool:
+    claim_tokens = meaningful_tokens(claim)
+    if not claim_tokens:
+        return True
+    for item in evidence_items:
+        item_text = evidence_text([item])
+        if _text_contradicts_claim(claim, item_text):
+            continue
+        item_tokens = meaningful_tokens(item_text)
+        if _short_evidence_supports_claim(item_tokens, claim_tokens):
+            return True
+        if len(claim_tokens & item_tokens) >= min(2, len(claim_tokens)):
+            return True
+    return False
 
 
 def _claim_unsupported_after_calibration(

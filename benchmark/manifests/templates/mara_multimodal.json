@@ -52,7 +52,9 @@
       "controller_mode": "llm",
       "route_policy": "element",
       "allowed_routes": [
-        "doc_element"
+        "doc_element",
+        "doc_text",
+        "doc_page_image"
       ],
       "text_retriever_backend": "docqa_element_metadata",
       "generator_backend": "Qwen/Qwen3-8B",

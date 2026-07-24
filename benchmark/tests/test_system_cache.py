@@ -17,6 +17,18 @@ class _CountingReader:
         return [document]
 
 
+class _StaticReader:
+    def __init__(self, text):
+        self.text = text
+
+    def load_data(self, path, extra_info=None, **kwargs):
+        del path, kwargs
+        document = Document(self.text, metadata={"page_label": "1"})
+        if extra_info:
+            document.metadata.update(extra_info)
+        return [document]
+
+
 class _PromptRecordingLLM:
     def __init__(self):
         self.prompts: list[str] = []
@@ -24,6 +36,16 @@ class _PromptRecordingLLM:
     def __call__(self, prompt: str) -> str:
         self.prompts.append(prompt)
         return "alpha"
+
+
+class _SequenceLLM:
+    def __init__(self, responses):
+        self.responses = iter(responses)
+        self.calls = []
+
+    def __call__(self, prompt: str, **kwargs):
+        self.calls.append((prompt, kwargs))
+        return next(self.responses)
 
 
 def test_text_rag_system_uses_parse_cache_for_same_file_across_documents(
@@ -138,6 +160,40 @@ def test_text_rag_system_runs_multi_document_text_retrieval(monkeypatch, tmp_pat
     assert all(reader.calls == 1 for reader in readers.values())
 
 
+def test_text_rag_system_preserves_full_retrieved_text_for_diagnostics(
+    monkeypatch, tmp_path
+):
+    doc_path = tmp_path / "long.txt"
+    full_text = "alpha " + ("padding " * 100) + "gold evidence after preview"
+    doc_path.write_text(full_text, encoding="utf-8")
+    system = KotaemonTextRAGSystem(
+        BenchmarkConfig(
+            suite_name="diagnostic coverage",
+            output_dir=tmp_path / "out",
+            retrieval_mode="text",
+            use_generation=False,
+            top_k=1,
+        )
+    )
+    monkeypatch.setattr(system, "_get_reader", lambda _path: _StaticReader(full_text))
+
+    result = system.run_example(
+        BenchmarkDocument(document_id="doc", path=doc_path, format_type="txt"),
+        BenchmarkExample(
+            example_id="example",
+            document_id="doc",
+            question="Where is the gold evidence?",
+            answers=["gold evidence after preview"],
+            evidence_pages=["1"],
+        ),
+    )
+
+    hit = result["retrieved_hits"][0]
+    assert "gold evidence after preview" not in hit["text_preview"]
+    assert "gold evidence after preview" in hit["text"]
+    assert len(hit["text"]) > 400
+
+
 def test_text_rag_system_lexical_helpers_cover_empty_and_ranked_queries(tmp_path):
     system = KotaemonTextRAGSystem(
         BenchmarkConfig(
@@ -236,6 +292,54 @@ def test_text_rag_generation_uses_benchmark_prompt_not_user_template(
     assert "USER SIDE TEMPLATE" not in prompt
     assert "Use the following context" not in prompt
     assert "Return the final answer as Markdown" not in prompt
+
+
+def test_qasper_text_rag_runs_answerability_verifier_after_generation(
+    monkeypatch,
+    tmp_path,
+):
+    llm = _SequenceLLM(
+        [
+            "The baseline was NDCG 55.46.",
+            '{"verdict":"unsupported"}',
+        ]
+    )
+    monkeypatch.setattr(KotaemonTextRAGSystem, "_resolve_llm", lambda *_args: llm)
+    system = KotaemonTextRAGSystem(
+        BenchmarkConfig(
+            suite_name="qasper-typed",
+            output_dir=tmp_path / "out",
+            retrieval_mode="text",
+            use_generation=True,
+        )
+    )
+
+    answer, _evidence, _seconds, metadata = system._generate_answer(
+        BenchmarkExample(
+            example_id="ex",
+            document_id="paper",
+            question="What was the baseline?",
+            answer_type="unanswerable",
+            answers=["unanswerable"],
+        ),
+        [
+            RetrievedDocument(
+                text=(
+                    "The proposed system reports NDCG 55.46. No baseline is identified."
+                ),
+                metadata={"file_name": "paper.txt"},
+                score=1.0,
+            )
+        ],
+    )
+
+    assert answer == "unanswerable"
+    assert len(llm.calls) == 2
+    assert metadata["qasper_answerability"] == {
+        "contract_id": "qasper_answerability.v4",
+        "status": "ok",
+        "verdict": "unsupported",
+    }
 
 
 def test_evidence_metadata_marks_visual_and_formula_context():

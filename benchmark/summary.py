@@ -27,6 +27,7 @@ from .semantic_summary import semantic_answer_coverage
 from .stage_metrics import stage_metric_summary
 from .summary_diagnostics import diagnostic_summary_fields
 from .summary_rankings import route_rankings
+from .timing_summary import route_timing_fields, timing_summary
 from .verification_metrics import verification_summary
 from .verifier_observability import (
     route_verifier_observability_fields,
@@ -83,7 +84,7 @@ def build_benchmark_summary(
         ),
         **verification_summary(predictions),
         **verifier_observability_summary(predictions),
-        **_timing_summary(predictions),
+        **timing_summary(predictions),
         **_cache_summary(predictions, config.cache_mode),
         "route_metric_table": _route_metric_table(bundle.dataset_name, predictions),
         **diagnostic_summary_fields(
@@ -138,6 +139,7 @@ def add_mara_summary_fields(
             predictions,
         ),
         **verifier_observability_summary(predictions),
+        **timing_summary(predictions),
         "route_metric_table": _route_metric_table(dataset_name, predictions),
         **diagnostic_summary_fields(dataset_name, predictions),
         "quality_route_metric_table": _route_metric_table(
@@ -394,20 +396,6 @@ def _format_guardrail_summary(predictions: list[dict[str, Any]]) -> dict[str, An
     }
 
 
-def _timing_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        f"avg_{key}": round_metric(
-            safe_mean([item["timings"][key] for item in predictions])
-        )
-        for key in (
-            "retrieval_seconds",
-            "generation_seconds",
-            "parse_seconds",
-            "index_seconds",
-        )
-    }
-
-
 def _cache_summary(
     predictions: list[dict[str, Any]],
     cache_mode: str,
@@ -532,14 +520,7 @@ def _route_metric_table(
                 "avg_multimodal_answer_support": _avg_metric(
                     route_predictions, "multimodal_answer_support"
                 ),
-                "avg_total_seconds": round_metric(
-                    safe_mean(
-                        [
-                            (prediction.get("performance") or {}).get("total_seconds")
-                            for prediction in route_predictions
-                        ]
-                    )
-                ),
+                **route_timing_fields(route_predictions),
                 "benchmark_role": _route_role(route_predictions),
             }
         )

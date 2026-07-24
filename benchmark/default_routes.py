@@ -102,7 +102,11 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
             "reasoning_type": "mara",
             "controller_mode": "llm",
             "route_policy": "element",
-            "allowed_routes": ["doc_element"],
+            "allowed_routes": [
+                "doc_element",
+                "doc_text",
+                "doc_page_image",
+            ],
             "verification_mode": "light",
             "text_retriever_backend": "docqa_element_metadata",
             "planner_backend": "heuristic_local",

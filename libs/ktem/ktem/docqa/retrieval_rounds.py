@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from .evidence import EvidenceBundle, build_evidence_bundle
+from .query_planning import request_planning_question
+from .route_budget import optional_stage_allowed, route_budget_metadata
 
 EvaluateFn = Callable[..., Any]
 RetrieveFn = Callable[[Any, Any], dict[str, Any]]
@@ -38,6 +40,16 @@ def retrieve_with_rounds(
         retrieve_decision.status == "ambiguous" and retrieve_decision.retry
     ) or (retrieve_decision.status == "poor" and retrieve_decision.retry and retry_poor)
     if max_rounds < 2 or (not retry_for_slots and not retry_for_quality):
+        return _with_retrieval_rounds(evidence_bundle, 1), retrieve_decision
+    if not optional_stage_allowed(request):
+        metadata = dict(evidence_bundle.metadata)
+        metadata.update(route_budget_metadata(request))
+        metadata["second_round_skipped_reason"] = "insufficient_remaining_time"
+        evidence_bundle = EvidenceBundle(
+            route=evidence_bundle.route,
+            items=evidence_bundle.items,
+            metadata=metadata,
+        )
         return _with_retrieval_rounds(evidence_bundle, 1), retrieve_decision
 
     second_round_metadata = _retrieve_second_round(
@@ -93,7 +105,7 @@ def _evaluate(
         decision.legacy_route,
         bundle.metadata,
         attempted_retry=attempted_retry,
-        prompt=str(getattr(request, "prompt", "") or ""),
+        prompt=request_planning_question(request),
         verification_domain=getattr(request, "verification_domain", None),
         origin=getattr(request, "origin", None),
     )

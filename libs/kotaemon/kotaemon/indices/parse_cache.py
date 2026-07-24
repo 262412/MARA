@@ -172,7 +172,7 @@ def _apply_extra_info(
 
     applied = []
     for document in documents:
-        copied = Document(document)
+        copied = _copy_document(document)
         metadata = dict(copied.metadata or {})
         metadata.update(extra_info)
         copied.metadata = metadata
@@ -196,7 +196,7 @@ def _apply_path_metadata(
         if not isinstance(roles, dict):
             applied.append(document)
             continue
-        copied = Document(document)
+        copied = _copy_document(document)
         metadata = dict(copied.metadata or {})
         for key, role in roles.items():
             if isinstance(key, str) and isinstance(role, str) and role in values:
@@ -204,6 +204,16 @@ def _apply_path_metadata(
         copied.metadata = metadata
         applied.append(copied)
     return applied
+
+
+def _copy_document(document: Any) -> Document:
+    if isinstance(document, Document):
+        return Document(document)
+    return Document(
+        text=str(getattr(document, "text", "") or ""),
+        id_=str(getattr(document, "doc_id", "") or ""),
+        metadata=dict(getattr(document, "metadata", {}) or {}),
+    )
 
 
 def _write_cached_artifact(

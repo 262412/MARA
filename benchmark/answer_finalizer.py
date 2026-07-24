@@ -5,10 +5,10 @@ import re
 from typing import Any
 
 from .answer_modes import normalize_benchmark_answer_mode
+from .answer_repetition import deduplicate_final_answer as _deduplicate_final_answer
 from .answer_scoring_adapter import select_scoring_answer
 from .ragtruth_answer_contract import ragtruth_finalization_metadata
 
-_INLINE_CITATION_RE = re.compile(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]")
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
 _TRUNCATED_JSON_ANSWER_RE = re.compile(
     r'"answer"\s*:\s*"((?:\\.|[^"\\])*)"',
@@ -29,49 +29,35 @@ def finalize_prediction_answer(
 ) -> None:
     normalized_mode = normalize_benchmark_answer_mode(mode)
     raw_answer = str(prediction.get("predicted_answer") or "")
-    structured_answer = _extract_structured_answer(raw_answer)
-    truncated_answer = ""
-    answer_for_scoring_source = raw_answer
-    if structured_answer is not None:
-        answer_text_for_user = structured_answer["answer"]
-        answer_for_user = _render_structured_answer_for_user(structured_answer)
-        prediction["structured_citations"] = structured_answer["citations"]
-        prediction["predicted_citations"] = _citation_texts(
-            structured_answer["citations"]
-        )
-    else:
-        truncated_answer = _extract_truncated_structured_answer(raw_answer)
-        answer_for_user = truncated_answer or raw_answer
-        answer_text_for_user = answer_for_user
-        answer_for_scoring_source = answer_for_user
-        if normalized_mode != "product" and _should_attach_metadata_citations(
-            dataset_name,
+    if _is_ragtruth_dataset(dataset_name):
+        _finalize_ragtruth_prediction(
             prediction,
-        ):
-            citations = attach_structured_citations_from_evidence(
-                prediction,
-                span=answer_for_user,
-            )
-            if citations:
-                prediction["structured_citations"] = citations
-                prediction["predicted_citations"] = _citation_texts(citations)
-                answer_for_user = _render_structured_answer_for_user(
-                    {"answer": answer_for_user, "citations": citations}
-                )
-    if normalized_mode != "product" and _should_attach_metadata_citations(
-        dataset_name,
-        prediction,
-    ):
-        citations = _canonicalized_existing_citations(
-            prediction,
-            span=answer_text_for_user,
+            raw_answer=raw_answer,
+            mode=normalized_mode,
         )
-        if citations:
-            prediction["structured_citations"] = citations
-            prediction["predicted_citations"] = _citation_texts(citations)
-            answer_for_user = _render_structured_answer_for_user(
-                {"answer": answer_text_for_user, "citations": citations}
-            )
+        return
+    raw_answer, repetition_removed, repetition_kind = _deduplicate_final_answer(
+        raw_answer,
+        prediction=prediction,
+        dataset_name=dataset_name,
+    )
+    raw_answer, qasper_contract_normalized = _normalize_qasper_contract_answer(
+        raw_answer,
+        prediction=prediction,
+        dataset_name=dataset_name,
+    )
+    (
+        answer_for_user,
+        answer_text_for_user,
+        answer_for_scoring_source,
+        structured_answer,
+        truncated_answer,
+    ) = _prepare_standard_answer(
+        raw_answer,
+        prediction=prediction,
+        dataset_name=dataset_name,
+        mode=normalized_mode,
+    )
     answer_for_scoring, source = select_scoring_answer(
         answer_for_user=answer_for_user,
         answer_for_scoring_source=answer_for_scoring_source,
@@ -89,6 +75,68 @@ def finalize_prediction_answer(
         dataset_name=dataset_name,
         mode=normalized_mode,
         source=source,
+        repetition_removed=repetition_removed,
+        repetition_kind=repetition_kind,
+    )
+    prediction["answer_finalization"][
+        "qasper_contract_normalized"
+    ] = qasper_contract_normalized
+
+
+def _prepare_standard_answer(
+    raw_answer: str,
+    *,
+    prediction: dict[str, Any],
+    dataset_name: str,
+    mode: str,
+) -> tuple[str, str, str, dict[str, Any] | None, str]:
+    structured_answer = _extract_structured_answer(raw_answer)
+    truncated_answer = ""
+    answer_for_scoring_source = raw_answer
+    if structured_answer is not None:
+        answer_text_for_user = structured_answer["answer"]
+        answer_for_user = _render_structured_answer_for_user(structured_answer)
+        prediction["structured_citations"] = structured_answer["citations"]
+        prediction["predicted_citations"] = _citation_texts(
+            structured_answer["citations"]
+        )
+    else:
+        truncated_answer = _extract_truncated_structured_answer(raw_answer)
+        answer_for_user = truncated_answer or raw_answer
+        answer_text_for_user = answer_for_user
+        answer_for_scoring_source = answer_for_user
+        if mode != "product" and _should_attach_metadata_citations(
+            dataset_name, prediction
+        ):
+            citations = attach_structured_citations_from_evidence(
+                prediction,
+                span=answer_for_user,
+            )
+            if citations:
+                prediction["structured_citations"] = citations
+                prediction["predicted_citations"] = _citation_texts(citations)
+                answer_for_user = _render_structured_answer_for_user(
+                    {"answer": answer_for_user, "citations": citations}
+                )
+    if mode != "product" and _should_attach_metadata_citations(
+        dataset_name, prediction
+    ):
+        citations = _canonicalized_existing_citations(
+            prediction,
+            span=answer_text_for_user,
+        )
+        if citations:
+            prediction["structured_citations"] = citations
+            prediction["predicted_citations"] = _citation_texts(citations)
+            answer_for_user = _render_structured_answer_for_user(
+                {"answer": answer_text_for_user, "citations": citations}
+            )
+    return (
+        answer_for_user,
+        answer_text_for_user,
+        answer_for_scoring_source,
+        structured_answer,
+        truncated_answer,
     )
 
 
@@ -101,14 +149,75 @@ def _store_finalized_answers(
     dataset_name: str,
     mode: str,
     source: str,
+    repetition_removed: bool = False,
+    repetition_kind: str = "",
 ) -> None:
     prediction["answer_for_user"] = answer_for_user
     prediction["answer_for_scoring"] = answer_for_scoring
-    prediction["answer_finalization"] = {"mode": mode, "source": source}
+    prediction["answer_finalization"] = {
+        "mode": mode,
+        "source": source,
+        "repetition_removed": repetition_removed,
+        "repetition_kind": repetition_kind,
+    }
     if "ragtruth" in str(dataset_name or "").lower():
         prediction["answer_finalization"].update(
             ragtruth_finalization_metadata(answer_text_for_user)
         )
+
+
+def _finalize_ragtruth_prediction(
+    prediction: dict[str, Any],
+    *,
+    raw_answer: str,
+    mode: str,
+) -> None:
+    from .ragtruth_answer_contract import ragtruth_json_answer
+
+    json_answer, repair_attempted, repair_succeeded = ragtruth_json_answer(raw_answer)
+    source = "ragtruth_contract" if json_answer else "ragtruth_contract_error"
+    prediction["answer_for_user"] = json_answer
+    prediction["answer_for_scoring"] = json_answer
+    prediction["answer_finalization"] = {
+        "mode": mode,
+        "source": source,
+        "repetition_removed": False,
+        "repetition_kind": "",
+        "ragtruth_json_repair_attempted": repair_attempted,
+        "ragtruth_json_repair_succeeded": repair_succeeded,
+        "ragtruth_json_valid": bool(json_answer),
+        "task_contract_status": "ok" if json_answer else "error",
+    }
+
+
+def _is_ragtruth_dataset(dataset_name: str) -> bool:
+    return "ragtruth" in str(dataset_name or "").strip().lower()
+
+
+def _normalize_qasper_contract_answer(
+    answer: str,
+    *,
+    prediction: dict[str, Any],
+    dataset_name: str,
+) -> tuple[str, bool]:
+    if "qasper" not in str(dataset_name or "").lower():
+        return answer, False
+    answer_type = str(prediction.get("answer_type") or "").strip().lower()
+    normalized = " ".join(str(answer or "").strip().lower().split())
+    if answer_type == "boolean":
+        match = re.match(r"^(yes|no|true|false)\b", normalized)
+        if not match:
+            return answer, False
+        return ("yes" if match.group(1) in {"yes", "true"} else "no"), True
+    if (
+        normalized.startswith("unanswerable")
+        or normalized.startswith("insufficient evidence")
+        or normalized.startswith("not enough evidence")
+        or normalized.startswith("unable to answer")
+        or normalized.startswith("cannot answer")
+    ):
+        return "unanswerable", True
+    return answer, False
 
 
 def attach_structured_citations_from_evidence(

@@ -440,6 +440,9 @@ def test_execute_controller_turn_switches_route_after_poor_retrieval():
         "reason": "No retrieved evidence was captured for this turn.",
         "route_switch_candidates": ["hybrid"],
         "route_switch_used": True,
+        "failed_retrieval_rounds": 1,
+        "failed_slot_coverage": None,
+        "failed_missing_required_slot_count": 0,
     }
 
 

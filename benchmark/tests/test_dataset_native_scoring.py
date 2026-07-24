@@ -66,6 +66,28 @@ def test_qasper_native_score_normalizes_boolean_aliases_and_unanswerable():
     assert unanswerable_metrics["qasper_structure_valid"] == 1.0
 
 
+def test_qasper_structure_valid_rejects_cross_type_contract_values():
+    predicted_no_for_unanswerable, _ = native_metrics_for_prediction(
+        {
+            "predicted_answer": "no",
+            "gold_answers": ["unanswerable"],
+            "metrics": {},
+        },
+        dataset_name="qasper-dev",
+    )
+    predicted_unanswerable_for_boolean, _ = native_metrics_for_prediction(
+        {
+            "predicted_answer": "unanswerable",
+            "gold_answers": ["no"],
+            "metrics": {},
+        },
+        dataset_name="qasper-dev",
+    )
+
+    assert predicted_no_for_unanswerable["qasper_structure_valid"] == 0.0
+    assert predicted_unanswerable_for_boolean["qasper_structure_valid"] == 0.0
+
+
 def test_qasper_native_score_computes_token_f1_when_metric_is_missing():
     prediction: dict[str, Any] = {
         "predicted_answer": (

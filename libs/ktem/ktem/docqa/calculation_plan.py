@@ -337,6 +337,16 @@ def _evidence_text(item: dict[str, Any]) -> str:
             item.get("caption"),
             metadata.get("table_title"),
             metadata.get("section_title"),
+            item.get("unit"),
+            metadata.get("unit"),
+            item.get("scale"),
+            metadata.get("scale"),
+            item.get("currency"),
+            metadata.get("currency"),
+            item.get("period"),
+            metadata.get("period"),
+            item.get("entity"),
+            metadata.get("entity"),
         )
     )
 

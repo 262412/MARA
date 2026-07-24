@@ -28,6 +28,7 @@ from kotaemon.storages import InMemoryDocumentStore, InMemoryVectorStore
 
 from .benchmark_prompts import generation_prompt_for, retrieval_query_for
 from .evidence_metadata import _evidence_metadata
+from .qasper_answerability import verify_qasper_answerability
 from .schemas import BenchmarkConfig, BenchmarkDocument, BenchmarkExample
 
 TOKEN_RE = re.compile(r"[\w\u4e00-\u9fff]+", flags=re.UNICODE)
@@ -52,6 +53,26 @@ def _sum_cache_stats(items: list[dict[str, int]]) -> dict[str, int]:
         for key in total:
             total[key] += int(item.get(key, 0) or 0)
     return total
+
+
+def _retrieved_hit_report(
+    hit: RetrievedDocument,
+    *,
+    fallback_file_name: str,
+) -> dict[str, Any]:
+    return {
+        "doc_id": hit.doc_id,
+        "document_id": hit.metadata.get("file_id")
+        or hit.metadata.get("source_id")
+        or hit.metadata.get("file_name"),
+        "score": round(float(hit.score), 4) if hit.score is not None else None,
+        "page_label": hit.metadata.get("page_label"),
+        "element_id": hit.metadata.get("element_id"),
+        "element_type": hit.metadata.get("element_type") or hit.metadata.get("type"),
+        "file_name": hit.metadata.get("file_name", fallback_file_name),
+        "text": hit.text or "",
+        "text_preview": (hit.text or "")[:400],
+    }
 
 
 @dataclass(slots=True)
@@ -418,8 +439,9 @@ class KotaemonTextRAGSystem:
             context=evidence,
             dataset_name=self.config.suite_name,
         )
-        response = self.llm(prompt)
-        answer = getattr(response, "text", "") or str(response)
+        answer = _generate_benchmark_answer(
+            self, prompt, example, evidence, evidence_metadata
+        )
         return answer.strip(), evidence, time.perf_counter() - start, evidence_metadata
 
     def run_example(
@@ -519,21 +541,10 @@ class KotaemonTextRAGSystem:
             "predicted_sources": predicted_sources,
             "predicted_element_ids": predicted_element_ids,
             "retrieved_hits": [
-                {
-                    "doc_id": hit.doc_id,
-                    "document_id": hit.metadata.get("file_id")
-                    or hit.metadata.get("source_id")
-                    or hit.metadata.get("file_name"),
-                    "score": (
-                        round(float(hit.score), 4) if hit.score is not None else None
-                    ),
-                    "page_label": hit.metadata.get("page_label"),
-                    "element_id": hit.metadata.get("element_id"),
-                    "element_type": hit.metadata.get("element_type")
-                    or hit.metadata.get("type"),
-                    "file_name": hit.metadata.get("file_name", documents[0].path.name),
-                    "text_preview": (hit.text or "")[:400],
-                }
+                _retrieved_hit_report(
+                    hit,
+                    fallback_file_name=documents[0].path.name,
+                )
                 for hit in retrieval_hits
             ],
             "retrieval_trace": retrieval_trace,
@@ -547,3 +558,24 @@ class KotaemonTextRAGSystem:
 
     def document_reports(self) -> list[dict[str, Any]]:
         return [item.to_report_dict() for item in self._cache.values()]
+
+
+def _generate_benchmark_answer(
+    system: KotaemonTextRAGSystem,
+    prompt: str,
+    example: BenchmarkExample,
+    evidence: str,
+    evidence_metadata: dict[str, Any],
+) -> str:
+    response = system.llm(prompt)
+    answer = getattr(response, "text", "") or str(response)
+    if "qasper" not in str(system.config.suite_name or "").lower():
+        return answer
+    answerability = verify_qasper_answerability(
+        system.llm,
+        question=example.question,
+        evidence=evidence,
+        candidate_answer=answer,
+    )
+    evidence_metadata["qasper_answerability"] = answerability.trace
+    return answerability.answer

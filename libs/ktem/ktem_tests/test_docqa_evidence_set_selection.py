@@ -95,6 +95,124 @@ def test_selection_disables_structure_expansion_for_legacy_low_coverage_index():
     assert trace["continuation_expansion_count"] == 0
 
 
+def test_selection_prefers_complete_question_phrase_anchors_for_simple_fact():
+    query = 'Who sings a version of "I\'ll Be Seeing You" in The Notebook?'
+    plan = build_query_plan(
+        query,
+        answer_type="citation_qa",
+        verification_domain="alce",
+    )
+    items = [
+        _item(
+            "song-only",
+            "1",
+            'The song "I\'ll Be Seeing You" has been recorded by many artists.',
+            0.9,
+        ),
+        _item(
+            "notebook-answer",
+            "2",
+            "In The Notebook, a version of I'll Be Seeing You is sung by "
+            "Billie Holiday.",
+            0.05,
+        ),
+    ]
+
+    selected, _trace, _bound = select_evidence_for_plan(query, items, plan)
+
+    assert selected[0]["evidence_id"] == "notebook-answer"
+
+
+def test_selection_reads_runtime_reranking_score_field():
+    query = "When did the Bellagio in Las Vegas open?"
+    plan = build_query_plan(
+        query,
+        answer_type="citation_qa",
+        verification_domain="alce",
+    )
+    low_score = _item(
+        "low-score",
+        "1",
+        "The Bellagio in Las Vegas opened on October 15, 1998.",
+        0.0,
+    )
+    high_score = _item(
+        "high-score",
+        "2",
+        "The Bellagio in Las Vegas opened on October 15, 1998.",
+        0.0,
+    )
+    low_score["metadata"] = {"reranking_score": 0.1}
+    high_score["metadata"] = {"reranking_score": 0.9}
+
+    selected, _trace, _bound = select_evidence_for_plan(
+        query,
+        [low_score, high_score],
+        plan,
+    )
+
+    assert selected[0]["evidence_id"] == "high-score"
+
+
+def test_selection_prefers_evidence_matching_both_date_boundaries():
+    query = (
+        "Who was the US Speaker for the House of Representatives from "
+        "January 6, 2015 to October 29, 2015?"
+    )
+    plan = build_query_plan(
+        query,
+        answer_type="citation_qa",
+        verification_domain="alce",
+    )
+    items = [
+        _item(
+            "partial-date",
+            "1",
+            "Paul Ryan was Speaker after October 29, 2015.",
+            0.95,
+        ),
+        _item(
+            "complete-range",
+            "2",
+            "From January 6, 2015 to October 29, 2015, John Boehner was "
+            "Speaker of the US House.",
+            0.2,
+        ),
+    ]
+
+    selected, _trace, _bound = select_evidence_for_plan(query, items, plan)
+
+    assert selected[0]["evidence_id"] == "complete-range"
+
+
+def test_selection_preserves_lowercase_multiword_entity_anchors():
+    query = "What episode does jason gideon die in criminal minds as flashback?"
+    plan = build_query_plan(
+        query,
+        answer_type="citation_qa",
+        verification_domain="alce",
+    )
+    items = [
+        _item(
+            "series-distractor",
+            "1",
+            "An episode of Criminal Minds explains another character's death.",
+            0.9,
+        ),
+        _item(
+            "gideon-answer",
+            "2",
+            'In Criminal Minds episode "Nelson\'s Sparrow," Jason Gideon was '
+            "murdered off-screen.",
+            0.05,
+        ),
+    ]
+
+    selected, _trace, _bound = select_evidence_for_plan(query, items, plan)
+
+    assert selected[0]["evidence_id"] == "gideon-answer"
+
+
 def _item(evidence_id, page, text, score):
     return {
         "evidence_id": evidence_id,

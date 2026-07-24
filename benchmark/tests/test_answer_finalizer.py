@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 from benchmark.answer_finalizer import finalize_prediction_answer
@@ -122,6 +123,40 @@ def test_finalizer_keeps_yes_no_rationale_when_reason_starts_next_line():
     )
 
 
+def test_finalizer_emits_canonical_qasper_boolean_without_rationale():
+    prediction: dict[str, Any] = {
+        "question": "Was retrieval used?",
+        "predicted_answer": "True. The method section says retrieval was used.",
+        "answer_type": "boolean",
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper-dev",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_user"] == "yes"
+    assert prediction["answer_for_scoring"] == "yes"
+
+
+def test_finalizer_emits_canonical_qasper_unanswerable():
+    prediction: dict[str, Any] = {
+        "question": "Was a graph retriever evaluated?",
+        "predicted_answer": "Insufficient evidence in the paper.",
+        "answer_type": "unanswerable",
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper-dev",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_user"] == "unanswerable"
+    assert prediction["answer_for_scoring"] == "unanswerable"
+
+
 def test_finalizer_extracts_ragtruth_json_from_markdown_answer():
     prediction: dict[str, Any] = {
         "predicted_answer": (
@@ -142,6 +177,29 @@ def test_finalizer_extracts_ragtruth_json_from_markdown_answer():
     assert prediction["answer_for_scoring"] == (
         '{"hallucination list": ["profit doubled"]}'
     )
+    assert prediction["answer_for_user"] == prediction["answer_for_scoring"]
+
+
+def test_finalizer_extracts_first_valid_ragtruth_object_from_repeated_prose():
+    prediction: dict[str, Any] = {
+        "predicted_answer": (
+            "The response is supported.\n"
+            '{"hallucination list": []}'
+            "The response is supported.\n"
+            '{"hallucination list": []}'
+        ),
+        "answer_type": "verification",
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="ragtruth",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_user"] == '{"hallucination list": []}'
+    assert prediction["answer_for_scoring"] == '{"hallucination list": []}'
+    assert prediction["answer_finalization"]["task_contract_status"] == "ok"
 
 
 def test_finalizer_repairs_ragtruth_python_dict_once_without_changing_spans():
@@ -163,6 +221,52 @@ def test_finalizer_repairs_ragtruth_python_dict_once_without_changing_spans():
     assert prediction["answer_finalization"]["ragtruth_json_repair_succeeded"] is True
 
 
+def test_finalizer_repairs_unescaped_json_newline_without_changing_span():
+    prediction: dict[str, Any] = {
+        "predicted_answer": (
+            '{"hallucination list": ["first unsupported line\n'
+            'second unsupported line"]}'
+        ),
+        "gold_evidence": [],
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="ragtruth",
+        mode="scoring_adapter_v1",
+    )
+
+    assert json.loads(prediction["answer_for_scoring"]) == {
+        "hallucination list": ["first unsupported line\nsecond unsupported line"]
+    }
+    assert prediction["answer_finalization"]["ragtruth_json_repair_attempted"] is True
+    assert prediction["answer_finalization"]["ragtruth_json_repair_succeeded"] is True
+
+
+def test_finalizer_repairs_first_of_repeated_json_objects_with_raw_newlines():
+    prediction: dict[str, Any] = {
+        "predicted_answer": (
+            '{"hallucination list": ["first unsupported line\n'
+            'second unsupported line"]}'
+            '{"hallucination list": ["first unsupported line\n'
+            'second unsupported line"]}'
+        ),
+        "gold_evidence": [],
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="ragtruth",
+        mode="scoring_adapter_v1",
+    )
+
+    assert json.loads(prediction["answer_for_scoring"]) == {
+        "hallucination list": ["first unsupported line\nsecond unsupported line"]
+    }
+    assert prediction["answer_finalization"]["ragtruth_json_repair_attempted"] is True
+    assert prediction["answer_finalization"]["ragtruth_json_repair_succeeded"] is True
+
+
 def test_finalizer_does_not_coerce_ragtruth_prose_to_clean_json():
     prediction: dict[str, Any] = {
         "predicted_answer": "The response is fully supported.",
@@ -175,9 +279,95 @@ def test_finalizer_does_not_coerce_ragtruth_prose_to_clean_json():
         mode="scoring_adapter_v1",
     )
 
-    assert prediction["answer_for_scoring"] == "The response is fully supported"
+    assert prediction["answer_for_user"] == ""
+    assert prediction["answer_for_scoring"] == ""
     assert prediction["answer_finalization"]["ragtruth_json_repair_attempted"] is True
     assert prediction["answer_finalization"]["ragtruth_json_repair_succeeded"] is False
+    assert prediction["answer_finalization"]["task_contract_status"] == "error"
+
+
+def test_finalizer_removes_exact_repeated_visual_answer_halves():
+    examples = {
+        "4.54.5": "4.5",
+        "50%50%": "50%",
+        "Andreasen apparatusAndreasen apparatus": "Andreasen apparatus",
+        "1212": "12",
+        "66": "6",
+        "xx": "x",
+    }
+
+    for raw_answer, expected in examples.items():
+        prediction: dict[str, Any] = {
+            "question": "What value is shown?",
+            "predicted_answer": raw_answer,
+            "answer_type": "extractive",
+        }
+
+        finalize_prediction_answer(
+            prediction,
+            dataset_name="slidevqa",
+            mode="scoring_adapter_v1",
+        )
+
+        assert prediction["answer_for_user"] == expected
+        assert prediction["answer_for_scoring"] == expected
+        assert prediction["answer_finalization"]["repetition_removed"] is True
+
+
+def test_finalizer_preserves_repeated_digits_for_year_question():
+    prediction: dict[str, Any] = {
+        "question": "In what year was the charter signed?",
+        "predicted_answer": "1212",
+        "answer_type": "date",
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="slidevqa",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_user"] == "1212"
+    assert prediction["answer_for_scoring"] == "1212"
+    assert prediction["answer_finalization"]["repetition_removed"] is False
+
+
+def test_finalizer_deduplicates_list_items_and_unions_inline_citations():
+    prediction: dict[str, Any] = {
+        "question": "Which people were nominated?",
+        "predicted_answer": "Ada [1], Grace [2], Ada [3]",
+        "answer_type": "list_qa",
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="alce-qampari",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_user"] == "Ada [1][3], Grace [2]"
+    assert prediction["answer_for_scoring"] == "Ada, Grace"
+    assert prediction["answer_finalization"]["repetition_removed"] is True
+    assert (
+        prediction["answer_finalization"]["repetition_kind"] == "normalized_list_items"
+    )
+
+
+def test_finalizer_preserves_list_repetition_when_question_requests_it():
+    prediction: dict[str, Any] = {
+        "question": "Repeat each label exactly as shown.",
+        "predicted_answer": "A, A, B",
+        "answer_type": "list_qa",
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="alce-qampari",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_user"] == "A, A, B"
+    assert prediction["answer_finalization"]["repetition_removed"] is False
 
 
 def test_finalizer_extracts_structured_answer_and_renders_inline_citation():
@@ -384,7 +574,7 @@ def test_finalizer_canonicalizes_existing_financebench_uuid_citation():
     )
 
     assert prediction["answer_for_user"] == (
-        "The cash conversion cycle is not provided. " "GENERALMILLS_2019_10K#page:60"
+        "The cash conversion cycle is not provided. GENERALMILLS_2019_10K#page:60"
     )
     assert prediction["structured_citations"][0]["source_id"] == (
         "GENERALMILLS_2019_10K"

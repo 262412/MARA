@@ -48,6 +48,8 @@ class DocQARequest:
     use_citation: Optional[str] = None
     language: Optional[str] = None
     command_state: Optional[str] = None
+    route_timeout_seconds: Optional[float] = None
+    route_deadline_monotonic: Optional[float] = None
     user_id: Any = None
     origin: str = "cli"
 

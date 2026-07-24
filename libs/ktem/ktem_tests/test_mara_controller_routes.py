@@ -329,6 +329,8 @@ def test_mara_controller_off_ignores_planner_and_uses_route_policy(monkeypatch):
         "grounded answer"
     ]
     assert captured["request"].controller_mode == "off"
+    assert captured["request"].controller_question == "What changed?"
+    assert captured["request"].retrieval_query == "What changed?"
     assert captured["result"].controller_decision.legacy_route == "doc_text"
 
 

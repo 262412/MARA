@@ -15,6 +15,7 @@ from ktem.docqa.visual_retriever import rank_page_image_records
 TextRetrieveFn = Callable[[], tuple[list[Any], list[Any]]]
 MetadataBuilderFn = Callable[[list[Any], dict[str, Any]], dict[str, Any]]
 DEFAULT_PAGE_IMAGE_RANK_CANDIDATE_LIMIT = 48
+ELEMENT_RANK_CANDIDATE_LIMIT = 20
 _QUERY_STOPWORDS = {
     "and",
     "are",
@@ -349,6 +350,8 @@ def _element_metadata(
             "source_ids": [],
             "evidence_ids": [],
             "evidence": [],
+            "element_candidate_count": 0,
+            "element_selected_candidate_count": 0,
         }
     ranked, scores = rank_element_records(
         str(understanding.get("question") or ""),
@@ -356,15 +359,23 @@ def _element_metadata(
         retriever=getattr(pipeline, "element_retriever", None),
         evidence_hints=_element_evidence_hints(understanding, pipeline),
     )
+    selected = ranked[:ELEMENT_RANK_CANDIDATE_LIMIT]
+    selected_ids = {str(item.get("evidence_id") or "").strip() for item in selected}
     return {
         "requested_modalities": list(understanding.get("modalities", [])),
-        "modality_counts": _element_modality_counts(ranked),
-        "page_coverage": _unique(item.get("page_label") for item in ranked),
-        "source_ids": _unique(item.get("file_id") for item in ranked),
-        "evidence_ids": _unique(item.get("evidence_id") for item in ranked),
+        "modality_counts": _element_modality_counts(selected),
+        "page_coverage": _unique(item.get("page_label") for item in selected),
+        "source_ids": _unique(item.get("file_id") for item in selected),
+        "evidence_ids": _unique(item.get("evidence_id") for item in selected),
         "evidence": [],
-        "element_index": ranked,
-        "element_retriever_scores": scores,
+        "element_index": selected,
+        "element_retriever_scores": {
+            evidence_id: score
+            for evidence_id, score in scores.items()
+            if evidence_id in selected_ids
+        },
+        "element_candidate_count": len(records),
+        "element_selected_candidate_count": len(selected),
     }
 
 

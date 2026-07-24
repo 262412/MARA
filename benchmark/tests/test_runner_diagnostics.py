@@ -399,6 +399,83 @@ def test_prediction_diagnostics_classifies_missing_gold_span_after_source_hit():
     assert diagnostics["failure_class"] == "gold_span_missing"
 
 
+def test_prediction_diagnostics_tracks_full_chunk_gold_span_stage():
+    gold_span = (
+        "The proposed method improves recall by reranking complete paper "
+        "paragraphs with a cross encoder."
+    )
+    diagnostics = prediction_diagnostics(
+        {
+            "retrieved_hits": [
+                {
+                    "document_id": "paper-1",
+                    "source_id": "paper-1",
+                    "text": "The proposed method improves recall...",
+                }
+            ],
+            "evidence_metadata": {
+                "candidate_evidence": [
+                    {"source_id": "paper-1", "text": gold_span},
+                ],
+                "reranked_evidence": [
+                    {"source_id": "paper-1", "text": gold_span},
+                ],
+                "evidence": [
+                    {"source_id": "paper-1", "text": gold_span},
+                ],
+            },
+            "context_preview": "The proposed method improves recall...",
+            "gold_evidence": [
+                {
+                    "document_id": "paper-1",
+                    "span": gold_span,
+                }
+            ],
+            "predicted_answer": "cross encoder",
+        }
+    )
+
+    assert diagnostics["gold_span_candidate_hit"] == 1.0
+    assert diagnostics["gold_span_reranked_hit"] == 1.0
+    assert diagnostics["gold_span_context_hit"] == 1.0
+    assert diagnostics["gold_span_preview_hit"] == 0.0
+    assert diagnostics["gold_span_observability_stage"] == "preview_projection"
+    assert diagnostics["gold_span_hit"] == 1.0
+    assert diagnostics["retrieval_failure_type"] == "none"
+
+
+def test_prediction_diagnostics_identifies_reranking_span_loss():
+    gold_span = "The gold paragraph contains the complete answer."
+    diagnostics = prediction_diagnostics(
+        {
+            "retrieved_hits": [
+                {
+                    "document_id": "paper-1",
+                    "source_id": "paper-1",
+                    "text": "An unrelated selected paragraph.",
+                }
+            ],
+            "evidence_metadata": {
+                "candidate_evidence": [{"text": gold_span}],
+                "reranked_evidence": [{"text": "An unrelated paragraph."}],
+                "evidence": [{"text": "An unrelated selected paragraph."}],
+            },
+            "gold_evidence": [
+                {
+                    "document_id": "paper-1",
+                    "span": gold_span,
+                }
+            ],
+            "predicted_answer": "unanswerable",
+        }
+    )
+
+    assert diagnostics["gold_span_candidate_hit"] == 1.0
+    assert diagnostics["gold_span_reranked_hit"] == 0.0
+    assert diagnostics["gold_span_context_hit"] == 0.0
+    assert diagnostics["gold_span_observability_stage"] == "reranking"
+
+
 def _write_diagnostic_manifest(tmp_path):
     (tmp_path / "doc.txt").write_text("Revenue increased in 2026.", encoding="utf-8")
     manifest_path = tmp_path / "manifest.json"

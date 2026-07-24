@@ -1,11 +1,13 @@
 import sys
 import types
+from types import SimpleNamespace
 
 import pytest
 
 from benchmark.benchmark_direct_answer import BenchmarkDirectAnswerEngine
 from benchmark.engines import (
     DirectPasteEngine,
+    DocQARuntimeEngine,
     EngineRunResult,
     OraclePageEngine,
     get_engine,
@@ -255,6 +257,7 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
             verification_mode="strict",
             verification_domain="finance",
             graph_mode="global",
+            route_timeout_seconds=45,
         ),
     )
 
@@ -292,6 +295,7 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert fake_runtime.requests[0].verification_mode == "strict"
     assert fake_runtime.requests[0].verification_domain == "finance"
     assert fake_runtime.requests[0].graph_mode == "global"
+    assert fake_runtime.requests[0].route_timeout_seconds == 45
     assert result.answer == "runtime answer"
     assert result.predicted_pages == ["1"]
     assert result.predicted_sources == ["doc#page:1"]
@@ -310,6 +314,45 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     }
     assert result.claim_verification == {"rewrite_skipped": True}
     assert result.presentation == {"markdown_normalized": True}
+
+
+def test_docqa_runtime_engine_reuses_prepared_document_identity(monkeypatch, tmp_path):
+    doc_path = tmp_path / "prepared-doc.txt"
+    doc_path.write_text("runtime text", encoding="utf-8")
+    fake_runtime = _install_fake_docqa_runtime(monkeypatch, doc_path)
+    document = BenchmarkDocument(
+        document_id="prepared-doc",
+        path=doc_path,
+        format_type="txt",
+    )
+    example = BenchmarkExample(
+        example_id="ex",
+        document_id="prepared-doc",
+        document_ids=["prepared-doc"],
+        question="Question?",
+        answers=["runtime answer"],
+    )
+    engine = DocQARuntimeEngine(
+        BenchmarkConfig(
+            suite_name="prepared-runtime",
+            output_dir=tmp_path / "out",
+        )
+    )
+
+    engine.prepare_examples(
+        SimpleNamespace(documents={"prepared-doc": document}),
+        [example],
+    )
+    result = engine.run(example=example, documents=[document])
+
+    assert fake_runtime.indexed == [([str(doc_path)], False)]
+    assert result.cache["document_index"]["hits"] == 1
+    assert result.cache["document_index"]["misses"] == 0
+    assert result.cache["document_index"]["identities"][0]["document_id"] == (
+        "prepared-doc"
+    )
+    assert result.retrieval_trace[0]["stage"] == "document_index_resolution"
+    assert result.retrieval_trace[0]["status"] == "completed"
 
 
 def test_docqa_runtime_engine_passes_controller_question_and_dataset_family(
@@ -336,6 +379,7 @@ def test_docqa_runtime_engine_passes_controller_question_and_dataset_family(
             document_ids=["doc"],
             question="How did revenue change in 2020?",
             answers=["runtime answer"],
+            evidence_pages=[7],
             metadata={"dataset_family": "multimodal_doc_qa"},
         ),
         documents=[
@@ -349,6 +393,7 @@ def test_docqa_runtime_engine_passes_controller_question_and_dataset_family(
     assert request.retrieval_query == "How did revenue change in 2020?"
     assert request.dataset_family == "mmdocrag"
     assert request.verification_domain == "mmdocrag"
+    assert request.page_number is None
 
 
 def test_docqa_runtime_engine_passes_visual_backend_config(monkeypatch, tmp_path):

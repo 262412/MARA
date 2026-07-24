@@ -11,21 +11,8 @@ from ktem.reasoning.mara_route_costing import (
     route_confidence_trace_fields,
     select_route,
 )
+from ktem.reasoning.mara_visual_intent import has_explicit_visual_intent
 
-VISUAL_INTENT_TERMS = {
-    "chart",
-    "diagram",
-    "figure",
-    "graph",
-    "image",
-    "layout",
-    "picture",
-    "plot",
-    "shown",
-    "slide",
-    "visual",
-    "visible",
-}
 VISUAL_MODALITIES = {"figure", "image", "page_image", "slide"}
 ELEMENT_INTENT_TERMS = {
     "cell",
@@ -251,7 +238,7 @@ def _question_features(
     return {
         "question_type": _question_type(task_type, question_text, modalities),
         "task_type": task_type,
-        "visual_intent": _has_term(question_text, VISUAL_INTENT_TERMS)
+        "visual_intent": has_explicit_visual_intent(question_text)
         or bool(set(modalities) & VISUAL_MODALITIES),
         "element_intent": _has_term(question_text, ELEMENT_INTENT_TERMS)
         or bool(set(modalities) & ELEMENT_MODALITIES),
@@ -271,10 +258,7 @@ def _question_type(task_type: str, question_text: str, modalities: list[str]) ->
         or set(modalities) & ELEMENT_MODALITIES
     ):
         return "table_lookup"
-    if (
-        _has_term(question_text, VISUAL_INTENT_TERMS)
-        or set(modalities) & VISUAL_MODALITIES
-    ):
+    if has_explicit_visual_intent(question_text) or set(modalities) & VISUAL_MODALITIES:
         return "visual_lookup"
     if _has_term(question_text, CALCULATION_TERMS):
         return "calculation"

@@ -17,12 +17,18 @@ RUN_ROOT="${MARA_TEXT_RUN_ROOT:-${MARA_FINAL_RUN_ROOT:-/mnt/scratch/users/tbczha
 OUT_ROOT="${MARA_TEXT_OUTPUT_DIR:-${MARA_FINAL_OUTPUT_DIR:-${RUN_ROOT}/01_core_text}}"
 HEALTH_ROOT="${MARA_TEXT_HEALTH_DIR:-${RUN_ROOT}/00_health}"
 RUN_ID="${SLURM_JOB_ID:-manual-$(date +%Y%m%d_%H%M%S)}"
+PORT_OFFSET=$((10#${SLURM_JOB_ID:-$$} % 10000))
+TEXT_LLM_PORT="${MARA_TEXT_LLM_PORT:-$((20000 + PORT_OFFSET))}"
+RETRIEVAL_PORT="${MARA_RETRIEVAL_PORT:-$((40000 + PORT_OFFSET))}"
+TEXT_LLM_BASE_URL="http://127.0.0.1:${TEXT_LLM_PORT}/v1"
+RETRIEVAL_BASE_URL="http://127.0.0.1:${RETRIEVAL_PORT}"
 
 MANIFEST="${MARA_TEXT_MANIFEST:-${MARA_FINAL_MANIFEST:?Set MARA_TEXT_MANIFEST or MARA_FINAL_MANIFEST to a frozen manifest path}}"
 NAME="${MARA_TEXT_SUITE_NAME:-${MARA_FINAL_SUITE_NAME:?Set MARA_TEXT_SUITE_NAME or MARA_FINAL_SUITE_NAME}}"
 ROUTE="${MARA_TEXT_ROUTE:-${MARA_FINAL_ROUTE:-all}}"
 LIMIT="${MARA_TEXT_LIMIT:-${MARA_FINAL_LIMIT:-10}}"
 SAMPLE_SEED="${MARA_TEXT_SAMPLE_SEED:-${MARA_FINAL_SAMPLE_SEED:-20260615}}"
+MAX_CONTEXT_LENGTH="${MARA_TEXT_MAX_CONTEXT_LENGTH:-3000}"
 ROUTE_TIMEOUT_SECONDS="${MARA_TEXT_ROUTE_TIMEOUT_SECONDS:-${MARA_FINAL_ROUTE_TIMEOUT_SECONDS:-240}}"
 SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"
 SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"
@@ -38,6 +44,9 @@ export PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-/users/tbczhang/scratch/pre-commit-ca
 export HF_HOME="${HF_HOME:-/users/tbczhang/fastscratch/cache/huggingface}"
 export TIKTOKEN_CACHE_DIR="${TIKTOKEN_CACHE_DIR:-/users/tbczhang/fastscratch/cache/tiktoken}"
 export CODEX_HOME="${CODEX_HOME:-/users/tbczhang/fastscratch/.codex}"
+export MARA_TEXT_LLM_BASE_URL="$TEXT_LLM_BASE_URL"
+export MARA_RETRIEVAL_BASE_URL="$RETRIEVAL_BASE_URL"
+export MARA_LLM_BASE_URL="$TEXT_LLM_BASE_URL"
 
 SERVICE_PIDS=()
 
@@ -121,31 +130,45 @@ log "kh_app_data_dir=${KH_APP_DATA_DIR}"
 log "manifest=${MANIFEST}"
 log "output=${OUT_ROOT}"
 log "suite=${SUITE_NAME}"
-log "route=${ROUTE} limit=${LIMIT} sample_seed=${SAMPLE_SEED} route_timeout=${ROUTE_TIMEOUT_SECONDS}"
+log "route=${ROUTE} limit=${LIMIT} sample_seed=${SAMPLE_SEED} max_context=${MAX_CONTEXT_LENGTH} route_timeout=${ROUTE_TIMEOUT_SECONDS}"
+log "text_llm_base_url=${TEXT_LLM_BASE_URL}"
+log "retrieval_base_url=${RETRIEVAL_BASE_URL}"
 log "node=${SLURMD_NODENAME:-$(hostname)}"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader || true
 
+SEMANTIC_EVALUATOR="$(
+  uv run --python 3.10 python \
+    "${PROJECT_ROOT}/scripts/slurm/normalize_semantic_evaluator.py" \
+    "$SEMANTIC_EVALUATOR"
+)"
+log "semantic_evaluator=${SEMANTIC_EVALUATOR}"
+
 mara_bootstrap_benchmark_runtime
 
-if ! http_ok "http://127.0.0.1:8000/v1/models"; then
+if ! http_ok "${TEXT_LLM_BASE_URL}/models"; then
   start_service qwen3_8b \
     env CUDA_VISIBLE_DEVICES="${MARA_TEXT_GPU:-0}" \
+    MARA_QWEN3_8B_PORT="$TEXT_LLM_PORT" \
     "${HPC_HOME}/serve_qwen3_8b.sh"
 fi
 
-if ! http_ok "http://127.0.0.1:8002/health"; then
+if ! http_ok "${RETRIEVAL_BASE_URL}/health"; then
   start_service retrieval \
     env CUDA_VISIBLE_DEVICES="${MARA_RETRIEVAL_GPU:-1}" \
+    MARA_RETRIEVAL_PORT="$RETRIEVAL_PORT" \
     MARA_RETRIEVAL_DEVICES="${MARA_RETRIEVAL_DEVICES:-cuda}" \
     "${HPC_HOME}/serve_retrieval.sh"
 fi
 
-wait_http text_llm "http://127.0.0.1:8000/v1/models" 600
-wait_http retrieval "http://127.0.0.1:8002/health" 240
+wait_http text_llm "${TEXT_LLM_BASE_URL}/models" 600
+wait_http retrieval "${RETRIEVAL_BASE_URL}/health" 240
 
 uv run --python 3.10 python "${HPC_HOME}/configure_mara_local_models.py"
 
-uv run --python 3.10 python - "$HEALTH_JSON" <<'PY'
+uv run --python 3.10 python - \
+  "$HEALTH_JSON" \
+  "${TEXT_LLM_BASE_URL}/models" \
+  "${RETRIEVAL_BASE_URL}/health" <<'PY'
 import json
 import sys
 import urllib.request
@@ -153,6 +176,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 out = Path(sys.argv[1])
+text_llm_health_url = sys.argv[2]
+retrieval_health_url = sys.argv[3]
 
 def fetch_json(url: str) -> dict:
     with urllib.request.urlopen(url, timeout=5) as response:
@@ -160,8 +185,8 @@ def fetch_json(url: str) -> dict:
 
 payload = {
     "created_at": datetime.now(timezone.utc).isoformat(),
-    "text_llm": fetch_json("http://127.0.0.1:8000/v1/models"),
-    "retrieval": fetch_json("http://127.0.0.1:8002/health"),
+    "text_llm": fetch_json(text_llm_health_url),
+    "retrieval": fetch_json(retrieval_health_url),
 }
 out.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 print(f"health_json={out}")
@@ -190,6 +215,7 @@ uv run --python 3.10 python -m benchmark run \
   --benchmark-prompt-profile auto \
   --benchmark-answer-mode scoring_adapter_v1 \
   --benchmark-no-think \
+  --max-context-length "$MAX_CONTEXT_LENGTH" \
   --semantic-evaluator "$SEMANTIC_EVALUATOR" \
   --semantic-evaluator-model "$SEMANTIC_EVALUATOR_MODEL" \
   --semantic-evaluator-timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS" \
@@ -202,6 +228,9 @@ test -f "$RUN_DIR/summary.json"
 test -f "$RUN_DIR/route_metrics.csv"
 test -f "$RUN_DIR/predictions.jsonl"
 test -f "$RUN_DIR/report.md"
+uv run --python 3.10 python \
+  "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \
+  "$RUN_DIR/predictions.jsonl"
 
 log "outputs=${RUN_DIR}"
 mara_cleanup_benchmark_runtime

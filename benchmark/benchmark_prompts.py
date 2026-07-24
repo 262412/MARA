@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .ragtruth_source_context import ragtruth_source_context
 from .schemas import BenchmarkConfig, BenchmarkExample
 
 BENCHMARK_PROMPT_MARKER = "Benchmark prompt contract:"
@@ -11,11 +12,15 @@ GOLD_ANSWER_PROMPT_MARKER = "Benchmark gold-answer contract:"
 ALCE_PROMPT_SOURCE = "princeton-nlp/ALCE prompts/asqa_default.json"
 ALCE_QAMPARI_PROMPT_SOURCE = "princeton-nlp/ALCE prompts/qampari_default.json"
 RAGTRUTH_PROMPT_SOURCE = "ParticleMedia/RAGTruth baseline/dataset.py"
+RAGTRUTH_EVALUATION_QUESTION = (
+    "Which exact spans in the response are unsupported by the source?"
+)
 QASPER_PROMPT_SOURCE = "allenai/qasper-led-baseline dataset contract"
 FINANCEBENCH_PROMPT_SOURCE = "FinanceBench paper Table 3 prompt pattern"
 GENERIC_PROMPT_SOURCE = "MARA benchmark generic grounded QA contract"
 GOLD_ANSWER_PROMPT_SOURCE = "MARA benchmark gold-answer answer-only contract"
 MIN_PROMPT_TEXT_BUDGET_CHARS = 512
+RAGTRUTH_TASK_PROMPT_BUDGET_CHARS = 12000
 PROMPT_TEXT_TRUNCATION_NOTICE = "[truncated to fit benchmark prompt budget]"
 
 
@@ -342,6 +347,10 @@ def _ragtruth_prompt(
     *,
     prompt_budget_chars: int,
 ) -> str:
+    prompt_budget_chars = max(
+        prompt_budget_chars,
+        RAGTRUTH_TASK_PROMPT_BUDGET_CHARS,
+    )
     metadata = _metadata(example)
     source_info = _first_present(
         metadata.get("source_info"),
@@ -350,6 +359,9 @@ def _ragtruth_prompt(
         _first_gold_evidence_span(example),
     )
     response = _first_present(metadata.get("response"), _first_answer(example))
+    evaluation_question = str(
+        metadata.get("benchmark_question") or RAGTRUTH_EVALUATION_QUESTION
+    ).strip()
     task_type = str(metadata.get("task_type") or "QA").strip().lower() or "qa"
     labels = _ragtruth_block_labels(task_type)
     instruction = (
@@ -358,27 +370,34 @@ def _ragtruth_prompt(
         '{"hallucination list": ["exact unsupported span"]}; return an empty '
         "list when every response claim is supported."
     )
+    output_guard = 'Return exactly one JSON object with the key "hallucination list".'
     fixed = (
         _prompt_header(RAGTRUTH_PROMPT_SOURCE)
-        + f"{labels[0]}\n\n{labels[1]}\n\n{labels[2]}\n\n"
         + instruction
+        + f"\n\n{labels[0]}{evaluation_question}"
+        + f"\n\n{labels[1]}\n\n{labels[2]}\n\n"
+        + output_guard
         + "\nAnswer:"
     )
     available = max(0, prompt_budget_chars - len(fixed))
-    question_budget = int(available * 0.15)
-    source_budget = int(available * 0.55)
-    response_budget = max(0, available - question_budget - source_budget)
+    source_budget = int(available * 0.6)
+    response_budget = max(0, available - source_budget)
     blocks = (
-        _truncate_ragtruth_block(question, question_budget),
-        _truncate_ragtruth_block(source_info, source_budget),
+        ragtruth_source_context(
+            source_info,
+            response,
+            budget=source_budget,
+            structured=task_type == "data2txt",
+        ),
         _truncate_ragtruth_block(response, response_budget),
     )
     prompt = (
         _prompt_header(RAGTRUTH_PROMPT_SOURCE)
-        + f"{labels[0]}{blocks[0]}\n\n"
-        + f"{labels[1]}{blocks[1]}\n\n"
-        + f"{labels[2]}{blocks[2]}\n\n"
         + instruction
+        + f"\n\n{labels[0]}{evaluation_question}\n\n"
+        + f"{labels[1]}{blocks[0]}\n\n"
+        + f"{labels[2]}{blocks[1]}\n\n"
+        + output_guard
         + "\nAnswer:"
     )
     return prompt[:prompt_budget_chars]
@@ -408,12 +427,7 @@ def _truncate_ragtruth_block(value: Any, budget: int) -> str:
     text = str(value or "").strip()
     if budget <= 0:
         return ""
-    if len(text) <= budget:
-        return text
-    notice = PROMPT_TEXT_TRUNCATION_NOTICE
-    if budget <= len(notice):
-        return text[:budget]
-    return f"{text[: budget - len(notice)].rstrip()}{notice}"
+    return text[:budget].rstrip()
 
 
 def _qasper_prompt(question: str) -> str:

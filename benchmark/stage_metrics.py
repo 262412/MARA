@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from .answer_repetition import final_answer_has_duplicate
 from .metrics import round_metric, safe_mean
 
 STAGE_METRIC_KEYS = (
@@ -15,6 +16,8 @@ STAGE_METRIC_KEYS = (
     "slot_coverage",
     "unique_pages",
     "duplicate_ratio",
+    "executor_activation_rate",
+    "all_operands_bound",
     "operand_accuracy",
     "cell_accuracy",
     "operator_accuracy",
@@ -22,14 +25,24 @@ STAGE_METRIC_KEYS = (
     "execution_accuracy",
     "unit_accuracy",
     "claim_duplicate_rate",
+    "final_answer_duplicate_rate",
+    "final_answer_repetition_repair_rate",
     "judge_failure_rate",
 )
 
 
 def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | None]:
     metadata = dict(prediction.get("evidence_metadata") or {})
-    candidates = _records(metadata.get("candidate_evidence"))[:50]
-    reranked = _records(metadata.get("reranked_evidence"))[:10]
+    candidates = (
+        _records(metadata.get("candidate_evidence"))[:50]
+        if "candidate_evidence" in metadata
+        else None
+    )
+    reranked = (
+        _records(metadata.get("reranked_evidence"))[:10]
+        if "reranked_evidence" in metadata
+        else None
+    )
     gold_keys = _gold_keys(prediction)
     selection = dict(metadata.get("evidence_selection_trace") or {})
     dedupe = dict(metadata.get("dedupe_trace") or {})
@@ -44,14 +57,71 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
         "slot_coverage": _float_or_none(metadata.get("slot_coverage")),
         "unique_pages": _float_or_none(selection.get("unique_pages")),
         "duplicate_ratio": _float_or_none(dedupe.get("duplicate_ratio")),
-        **_calculation_metrics(finance),
+        **_calculation_metrics(
+            finance,
+            applicable=(
+                "finance_numeric_trace" in metadata
+                or _is_finance_numeric_prediction(prediction)
+            ),
+        ),
         "claim_duplicate_rate": _claim_duplicate_rate(prediction),
+        "final_answer_duplicate_rate": _final_answer_duplicate_rate(prediction),
+        "final_answer_repetition_repair_rate": (
+            _final_answer_repetition_repair_rate(prediction)
+        ),
         "judge_failure_rate": _judge_failure_rate(prediction),
     }
 
 
+def prediction_stage_metric_status(
+    prediction: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    metadata = dict(prediction.get("evidence_metadata") or {})
+    gold_count = len(_gold_keys(prediction))
+    candidate_count = len(_records(metadata.get("candidate_evidence")))
+    reranked_count = len(_records(metadata.get("reranked_evidence")))
+    candidate_status = _retrieval_metric_status(
+        gold_count=gold_count,
+        trace_available="candidate_evidence" in metadata,
+    )
+    reranked_status = _retrieval_metric_status(
+        gold_count=gold_count,
+        trace_available="reranked_evidence" in metadata,
+    )
+    status: dict[str, dict[str, Any]] = {
+        "candidate_recall_at_50": {
+            "status": candidate_status,
+            "gold_identity_count": gold_count,
+            "candidate_count": candidate_count,
+        },
+        "reranked_recall_at_10": {
+            "status": reranked_status,
+            "gold_identity_count": gold_count,
+            "candidate_count": reranked_count,
+        },
+        "retrieval_mrr": {
+            "status": reranked_status,
+            "gold_identity_count": gold_count,
+            "candidate_count": reranked_count,
+        },
+        "retrieval_ndcg": {
+            "status": reranked_status,
+            "gold_identity_count": gold_count,
+            "candidate_count": reranked_count,
+        },
+    }
+    status["calculation_pipeline"] = _calculation_status(
+        dict(metadata.get("finance_numeric_trace") or {}),
+        applicable=(
+            "finance_numeric_trace" in metadata
+            or _is_finance_numeric_prediction(prediction)
+        ),
+    )
+    return status
+
+
 def stage_metric_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
+    averages = {
         f"avg_{key}": round_metric(
             safe_mean(
                 [
@@ -62,9 +132,23 @@ def stage_metric_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         )
         for key in STAGE_METRIC_KEYS
     }
+    coverage = {
+        f"coverage_{key}": round_metric(
+            sum(_metric_is_available(prediction, key) for prediction in predictions)
+            / len(predictions)
+        )
+        if predictions
+        else None
+        for key in STAGE_METRIC_KEYS
+    }
+    return {**averages, **coverage}
 
 
-def _calculation_metrics(finance: dict[str, Any]) -> dict[str, float | None]:
+def _calculation_metrics(
+    finance: dict[str, Any],
+    *,
+    applicable: bool,
+) -> dict[str, float | None]:
     plan = dict(finance.get("calculation_plan") or {})
     verification = dict(finance.get("calculation_verification") or {})
     execution = dict(finance.get("calculation_execution") or {})
@@ -72,6 +156,8 @@ def _calculation_metrics(finance: dict[str, Any]) -> dict[str, float | None]:
     steps = _records(plan.get("steps"))
     if not plan:
         return {
+            "executor_activation_rate": 0.0 if applicable else None,
+            "all_operands_bound": 0.0 if applicable else None,
             "operand_accuracy": None,
             "cell_accuracy": None,
             "operator_accuracy": None,
@@ -94,12 +180,71 @@ def _calculation_metrics(finance: dict[str, Any]) -> dict[str, float | None]:
         if any(term in error for term in ("unit", "scale", "currency"))
     ]
     return {
+        "executor_activation_rate": 1.0,
+        "all_operands_bound": float(bool(operands) and len(verified) == len(operands)),
         "operand_accuracy": operand_accuracy,
         "cell_accuracy": 1.0 - len(cell_errors) / len(operands) if operands else None,
         "operator_accuracy": 1.0 - len(operator_errors) / len(steps) if steps else 1.0,
         "program_accuracy": float(bool(verification.get("valid"))),
         "execution_accuracy": float(execution.get("status") == "ok"),
         "unit_accuracy": float(not unit_errors),
+    }
+
+
+def _calculation_status(
+    finance: dict[str, Any],
+    *,
+    applicable: bool,
+) -> dict[str, str]:
+    if not applicable:
+        return {"status": "not_applicable", "failure_stage": "not_applicable"}
+    plan = dict(finance.get("calculation_plan") or {})
+    if not plan:
+        return {"status": "measured", "failure_stage": "retrieval_or_plan"}
+    verification = dict(finance.get("calculation_verification") or {})
+    errors = [str(error) for error in verification.get("errors") or []]
+    if any("evidence_missing" in error for error in errors):
+        failure_stage = "evidence_binding"
+    elif any(
+        term in error for error in errors for term in ("unit", "scale", "currency")
+    ):
+        failure_stage = "unit"
+    elif not verification.get("valid"):
+        failure_stage = "plan_verification"
+    elif dict(finance.get("calculation_execution") or {}).get("status") != "ok":
+        failure_stage = "execution"
+    else:
+        failure_stage = "none"
+    return {"status": "measured", "failure_stage": failure_stage}
+
+
+def _is_finance_numeric_prediction(prediction: dict[str, Any]) -> bool:
+    metadata = dict(prediction.get("evidence_metadata") or {})
+    query_plan = dict(metadata.get("query_plan") or {})
+    constraints = dict(query_plan.get("constraints") or {})
+    domains = (
+        constraints.get("verification_domain"),
+        prediction.get("verification_domain"),
+        prediction.get("dataset_name"),
+        prediction.get("dataset_family"),
+    )
+    if not any("finance" in str(value or "").lower() for value in domains):
+        return False
+    answer_type = (
+        str(query_plan.get("answer_type") or prediction.get("answer_type") or "")
+        .strip()
+        .lower()
+    )
+    if not answer_type:
+        return True
+    return answer_type in {
+        "calculation",
+        "currency",
+        "formula",
+        "number",
+        "numeric",
+        "percentage",
+        "ratio",
     }
 
 
@@ -115,7 +260,7 @@ def _gold_keys(prediction: dict[str, Any]) -> set[tuple[str, str, str]]:
             or ""
         )
         if source or page or element:
-            keys.add((source, page, element))
+            keys.add((source, page, "" if page else element))
     if not keys:
         for page in prediction.get("gold_pages") or []:
             keys.add(("", str(page), ""))
@@ -123,10 +268,7 @@ def _gold_keys(prediction: dict[str, Any]) -> set[tuple[str, str, str]]:
 
 
 def _item_keys(item: dict[str, Any]) -> set[tuple[str, str, str]]:
-    sources = {
-        str(item.get("source_id") or item.get("document_id") or ""),
-        "",
-    }
+    sources = _item_sources(item) | {""}
     pages = {str(item.get("page_label") or item.get("page") or ""), ""}
     elements = {
         str(
@@ -162,16 +304,21 @@ def _matched_gold(
 
 
 def _recall(
-    items: list[dict[str, Any]], gold: set[tuple[str, str, str]]
+    items: list[dict[str, Any]] | None, gold: set[tuple[str, str, str]]
 ) -> float | None:
-    if not items or not gold:
+    if items is None or not gold:
         return None
+    if not items:
+        return 0.0
     hits = set().union(*(_matched_gold(item, gold) for item in items))
     return len(hits) / len(gold)
 
 
-def _mrr(items: list[dict[str, Any]], gold: set[tuple[str, str, str]]) -> float | None:
-    if not items or not gold:
+def _mrr(
+    items: list[dict[str, Any]] | None,
+    gold: set[tuple[str, str, str]],
+) -> float | None:
+    if items is None or not gold:
         return None
     for rank, item in enumerate(items, start=1):
         if _matched_gold(item, gold):
@@ -179,10 +326,20 @@ def _mrr(items: list[dict[str, Any]], gold: set[tuple[str, str, str]]) -> float 
     return 0.0
 
 
-def _ndcg(items: list[dict[str, Any]], gold: set[tuple[str, str, str]]) -> float | None:
-    if not items or not gold:
+def _ndcg(
+    items: list[dict[str, Any]] | None,
+    gold: set[tuple[str, str, str]],
+) -> float | None:
+    if items is None or not gold:
         return None
-    gains = [1.0 if _matched_gold(item, gold) else 0.0 for item in items]
+    if not items:
+        return 0.0
+    seen_gold: set[tuple[str, str, str]] = set()
+    gains: list[float] = []
+    for item in items:
+        new_matches = _matched_gold(item, gold) - seen_gold
+        gains.append(1.0 if new_matches else 0.0)
+        seen_gold.update(new_matches)
     dcg = sum(gain / math.log2(rank + 1) for rank, gain in enumerate(gains, start=1))
     ideal_count = min(len(gold), len(items))
     ideal = sum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_count + 1))
@@ -227,6 +384,22 @@ def _judge_failure_rate(prediction: dict[str, Any]) -> float | None:
     return float(status == "error")
 
 
+def _final_answer_duplicate_rate(prediction: dict[str, Any]) -> float | None:
+    finalization = prediction.get("answer_finalization")
+    if not isinstance(finalization, dict) or "repetition_removed" not in finalization:
+        return None
+    return float(final_answer_has_duplicate(prediction))
+
+
+def _final_answer_repetition_repair_rate(
+    prediction: dict[str, Any],
+) -> float | None:
+    finalization = prediction.get("answer_finalization")
+    if not isinstance(finalization, dict) or "repetition_removed" not in finalization:
+        return None
+    return float(bool(finalization.get("repetition_removed")))
+
+
 def _records(value: Any) -> list[dict[str, Any]]:
     return [dict(item) for item in value or [] if isinstance(item, dict)]
 
@@ -238,3 +411,30 @@ def _float_or_none(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _item_sources(item: dict[str, Any]) -> set[str]:
+    sources = {
+        str(item.get("source_id") or ""),
+        str(item.get("document_id") or ""),
+    }
+    source_name = str(item.get("source_name") or item.get("file_name") or "")
+    if source_name:
+        filename = source_name.rsplit("/", 1)[-1]
+        sources.add(filename.rsplit(".", 1)[0])
+    for source_ref in item.get("source_backrefs") or []:
+        sources.add(str(source_ref or "").split("#", 1)[0])
+    return {source for source in sources if source}
+
+
+def _retrieval_metric_status(*, gold_count: int, trace_available: bool) -> str:
+    if gold_count == 0:
+        return "not_applicable"
+    return "measured" if trace_available else "unavailable"
+
+
+def _metric_is_available(prediction: dict[str, Any], key: str) -> bool:
+    status = dict(prediction.get("stage_metric_status") or {}).get(key)
+    if isinstance(status, dict):
+        return status.get("status") == "measured"
+    return (prediction.get("stage_metrics") or {}).get(key) is not None

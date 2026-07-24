@@ -1,3 +1,4 @@
+import ast
 from typing import Any
 
 from benchmark.benchmark_prompts import BENCHMARK_PROMPT_MARKER, build_benchmark_prompt
@@ -55,7 +56,7 @@ def test_gold_answer_policy_uses_no_think_answer_only_prompt(tmp_path):
     assert prompt.retrieval_query == "What did the filing say about revenue?"
 
 
-def test_gold_answer_policy_truncates_overlong_ragtruth_prompt_question(tmp_path):
+def test_gold_answer_policy_separates_ragtruth_task_and_retrieval_budgets(tmp_path):
     long_question = (
         "Original source prompt. "
         + ("This passage is intentionally long and repeats support text. " * 300)
@@ -90,10 +91,154 @@ def test_gold_answer_policy_truncates_overlong_ragtruth_prompt_question(tmp_path
     assert "Below are related passages:" in prompt.runtime_prompt
     assert "Below is an answer:" in prompt.runtime_prompt
     assert '"hallucination list"' in prompt.runtime_prompt
-    assert len(prompt.runtime_prompt.removeprefix("/no_think\n")) <= 1200
+    assert 1200 < len(prompt.runtime_prompt.removeprefix("/no_think\n")) <= 12000
     assert "Original source prompt." in prompt.runtime_prompt
     assert "UNIQUE_RAGTRUTH_TAIL_SHOULD_BE_TRUNCATED" not in prompt.runtime_prompt
     assert prompt.runtime_prompt.rstrip().endswith("Answer:")
+
+
+def test_ragtruth_task_prompt_keeps_complete_source_and_response_under_task_budget(
+    tmp_path,
+):
+    source = "Supported source sentence. " * 100
+    response = "Supported response sentence. " * 20
+    config = BenchmarkConfig(
+        suite_name="ragtruth",
+        output_dir=tmp_path / "out",
+        benchmark_prompt_policy="gold_answer_v1",
+        max_context_length=2000,
+    )
+
+    prompt = build_benchmark_prompt(
+        _example(
+            answer_type="verification",
+            metadata={"source_info": source, "response": response},
+        ),
+        config,
+        dataset_name="ragtruth",
+    )
+
+    assert len(prompt.runtime_prompt) > config.max_context_length
+    assert source.strip() in prompt.runtime_prompt
+    assert response.strip() in prompt.runtime_prompt
+
+
+def test_ragtruth_truncated_response_never_injects_non_response_span(tmp_path):
+    config = BenchmarkConfig(
+        suite_name="ragtruth",
+        output_dir=tmp_path / "out",
+        benchmark_prompt_policy="gold_answer_v1",
+        max_context_length=900,
+    )
+    prompt = build_benchmark_prompt(
+        _example(
+            answer_type="verification",
+            metadata={
+                "source_info": "Supported source text. " * 100,
+                "response": "Unsupported response text. " * 100,
+            },
+        ),
+        config,
+        dataset_name="ragtruth",
+    )
+
+    response_block = prompt.runtime_prompt.split("Below is an answer:\n", 1)[1]
+    response_block = response_block.split(
+        'Return exactly one JSON object with the key "hallucination list".',
+        1,
+    )[0]
+    assert "[truncated to fit benchmark prompt budget]" not in response_block
+
+
+def test_ragtruth_summary_source_budget_keeps_response_relevant_tail(tmp_path):
+    source = (
+        "Opening source fact. "
+        + ("Irrelevant middle material about unrelated topics. " * 250)
+        + (
+            "Joint U.S.-Mexican patrols along the Rio Grande could make the "
+            "border safer, and 2,500 migrants are encountered every weekend."
+        )
+    )
+    response = (
+        "Joint U.S.-Mexican patrols along the Rio Grande could make the border "
+        "safer, and 2,500 migrants are encountered every weekend."
+    )
+    config = BenchmarkConfig(
+        suite_name="ragtruth",
+        output_dir=tmp_path / "out",
+        benchmark_prompt_policy="gold_answer_v1",
+        max_context_length=900,
+    )
+
+    prompt = build_benchmark_prompt(
+        _example(
+            answer_type="verification",
+            metadata={
+                "task_type": "Summary",
+                "source_info": source,
+                "response": response,
+            },
+        ),
+        config,
+        dataset_name="ragtruth",
+    )
+
+    source_block = prompt.runtime_prompt.split("Below is the original source:\n", 1)[
+        1
+    ].split("Below is a summary or response:\n", 1)[0]
+    assert "2,500 migrants are encountered every weekend" in source_block
+    assert len(source_block) < len(source)
+
+
+def test_ragtruth_data2txt_source_truncation_preserves_valid_mapping(tmp_path):
+    source = {
+        "name": "Silvergreens",
+        "hours": {"Sunday": "9:0-21:0"},
+        "attributes": {
+            "WiFi": "free",
+            "RestaurantsGoodForGroups": True,
+            "RestaurantsReservations": False,
+        },
+        "review_info": [
+            {
+                "review_text": (
+                    "The restaurant provides free Wi-Fi and is good for groups. "
+                    + ("Long but irrelevant review details. " * 400)
+                )
+            }
+        ],
+    }
+    response = (
+        "The restaurant provides free Wi-Fi and is good for groups, but does "
+        "not take reservations."
+    )
+    config = BenchmarkConfig(
+        suite_name="ragtruth",
+        output_dir=tmp_path / "out",
+        benchmark_prompt_policy="gold_answer_v1",
+        max_context_length=900,
+    )
+
+    prompt = build_benchmark_prompt(
+        _example(
+            answer_type="verification",
+            metadata={
+                "task_type": "Data2txt",
+                "source_info": str(source),
+                "response": response,
+            },
+        ),
+        config,
+        dataset_name="ragtruth",
+    )
+
+    source_block = prompt.runtime_prompt.split(
+        "Below is the structured JSON data:\n", 1
+    )[1].split("Below is an overview of the data:\n", 1)[0]
+    parsed = ast.literal_eval(source_block.strip())
+    assert parsed["attributes"]["WiFi"] == "free"
+    assert parsed["attributes"]["RestaurantsReservations"] is False
+    assert parsed["hours"]["Sunday"] == "9:0-21:0"
 
 
 def test_benchmark_v1_uses_benchmark_prompt_contract_not_mara_marker(tmp_path):
@@ -190,6 +335,32 @@ def test_ragtruth_prompt_uses_official_hallucination_json_contract(tmp_path):
     assert '"hallucination list"' in prompt.runtime_prompt
     assert "Revenue increased from 10 to 12." in prompt.runtime_prompt
     assert "Revenue doubled." in prompt.runtime_prompt
+
+
+def test_ragtruth_prompt_does_not_repeat_source_generation_instruction(tmp_path):
+    config = BenchmarkConfig(
+        suite_name="ragtruth",
+        output_dir=tmp_path / "out",
+    )
+    example = _example(
+        question="Briefly answer the following question: benefits of cupping massage",
+        answer_type="verification",
+        metadata={
+            "task_type": "QA",
+            "source_info": "Cupping can improve circulation.",
+            "response": "Cupping cures every disease.",
+        },
+    )
+
+    prompt = build_benchmark_prompt(example, config, dataset_name="ragtruth")
+
+    assert "Briefly answer the following question" not in prompt.runtime_prompt
+    assert prompt.runtime_prompt.index("Detect exact response spans") < (
+        prompt.runtime_prompt.index("Below are related passages:")
+    )
+    assert prompt.runtime_prompt.rstrip().endswith(
+        'Return exactly one JSON object with the key "hallucination list".\nAnswer:'
+    )
 
 
 def test_qasper_prompt_uses_paper_context_short_answer_contract(tmp_path):

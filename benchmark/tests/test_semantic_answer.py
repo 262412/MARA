@@ -66,6 +66,12 @@ def test_local_qwen_judge_uses_fixed_deterministic_json_contract(monkeypatch):
     assert captured["timeout"] == 12
 
 
+def test_semantic_judge_backend_accepts_canonical_local_alias():
+    judge = semantic_module.semantic_judge_backend("local")
+
+    assert isinstance(judge, semantic_module.LocalSemanticJudge)
+
+
 def test_free_text_semantic_score_rewards_supported_explanation():
     def judge(_payload):
         return {

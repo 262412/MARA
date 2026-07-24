@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
+from ktem.docqa.query_planning import request_planning_question
 
 
 def route_finance_numeric_answer(
@@ -14,7 +15,7 @@ def route_finance_numeric_answer(
     if domain not in {"finance", "financial", "financebench"}:
         return None
     result = finance_numeric_answer(
-        str(getattr(request, "prompt", "") or ""),
+        request_planning_question(request),
         [item for item in getattr(bundle, "items", []) or [] if isinstance(item, dict)],
     )
     if result is None:

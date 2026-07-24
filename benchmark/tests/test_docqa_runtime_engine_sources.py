@@ -423,13 +423,9 @@ def _run_docqa_runtime(doc_path, tmp_path):
 
 def _install_reindex_runtime(monkeypatch, doc_path):
     fake_runtime = _ReindexRuntime(doc_path)
-    monkeypatch.setitem(
-        sys.modules,
-        "ktem.docqa",
-        types.SimpleNamespace(
-            DocQARuntime=lambda: fake_runtime,
-            DocQARequest=_FakeRequest,
-        ),
+    _install_fake_docqa_modules(
+        monkeypatch,
+        runtime=fake_runtime,
     )
     return fake_runtime
 
@@ -443,6 +439,11 @@ def _install_docqa_runtime_with_response(monkeypatch, tmp_path, response):
 
 def _install_response_runtime_for_path(monkeypatch, doc_path, response):
     runtime = _ResponseRuntime(doc_path, response)
+    _install_fake_docqa_modules(monkeypatch, runtime=runtime)
+    return runtime
+
+
+def _install_fake_docqa_modules(monkeypatch, *, runtime):
     monkeypatch.setitem(
         sys.modules,
         "ktem.docqa",
@@ -451,7 +452,11 @@ def _install_response_runtime_for_path(monkeypatch, doc_path, response):
             DocQARequest=_FakeRequest,
         ),
     )
-    return runtime
+    monkeypatch.setitem(
+        sys.modules,
+        "ktem.docqa.offline_layout_index",
+        types.SimpleNamespace(offline_element_records_for_file=lambda **_: []),
+    )
 
 
 class _FakeRequest:

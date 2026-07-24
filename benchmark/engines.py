@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -10,38 +9,25 @@ from kotaemon.base import RetrievedDocument
 from kotaemon.docqa_request_policies import BENCHMARK_REQUEST_POLICY
 
 from . import controller_fields as cf
-from .docqa_controller_context import controller_request_context
-from .docqa_evidence_projection import (
-    evidence_element_ids,
-    evidence_pages,
-    evidence_sources,
-    metadata_page_coverage,
-    metadata_page_coverage_sources,
-    retrieved_hits_from_docqa_evidence,
+from .alce_answer_grounding import (
+    alce_grounding_stage_event,
+    apply_alce_answer_grounding,
 )
+from .docqa_controller_context import controller_request_context
+from .docqa_evidence_projection import evidence_element_ids
 from .docqa_image_documents import (
     element_index_records_from_documents,
-    is_image_only_document,
     page_image_records_from_documents,
 )
-from .docqa_runtime_sources import (
-    canonicalize_docqa_citations,
-    canonicalize_docqa_hits,
-    document_paths,
-    has_search_index,
-    normalized_path,
-    selected_source_fallback_hits,
-    selected_source_fallback_text,
-    unindexed_document_paths,
-)
+from .docqa_index_cache import DocQAIndexCache
+from .docqa_response_projection import response_evidence_outputs
+from .docqa_runtime_sources import selected_source_fallback_text
 from .engine_accessors import active_runtime_record, config_value, field_value
 from .engine_context import (
     all_context_pages,
     document_pages,
     evidence_page_set,
-    extract_citations,
     extract_text,
-    first_evidence_page,
     join_document_texts,
     normalize_page,
     parsed_indexes_to_context,
@@ -49,7 +35,6 @@ from .engine_context import (
 from .engine_helpers import _parsed_indexes_cache, _performance_from_timings
 from .engine_result import EngineRunResult
 from .engine_result_adapters import prediction_to_result
-from .indexed_citations import indexed_inline_citations
 from .schemas import BenchmarkConfig, BenchmarkDocument
 from .system import KotaemonTextRAGSystem
 
@@ -197,12 +182,22 @@ class KotaemonTextRAGEngine(BaseBenchmarkEngine):
 
 class DocQARuntimeEngine(BaseBenchmarkEngine):
     name = "docqa_runtime"
-    _PAGE_RE = re.compile(r"(?:#page:|page[:\s]+)([\w.-]+)", flags=re.IGNORECASE)
+    _response_evidence_outputs = staticmethod(response_evidence_outputs)
+    _shared_prepared_file_ids: dict[tuple[Any, ...], str] = {}
 
     def __init__(self, config: Any) -> None:
         super().__init__(config)
         self._runtime: Any | None = None
-        self._indexed_paths: set[str] = set()
+        self._index_cache = DocQAIndexCache(
+            config,
+            shared_prepared_file_ids=self._shared_prepared_file_ids,
+        )
+        self._indexed_paths = self._index_cache.indexed_paths
+        self._prepared_file_ids = self._index_cache.prepared_file_ids
+        self._last_index_cache: dict[str, Any] = {}
+        self._active_route_trace: list[dict[str, Any]] = []
+        self._active_timings: dict[str, float] = {}
+        self._active_stage_started_at: float | None = None
 
     def _get_runtime(self) -> Any:
         if self._runtime is None:
@@ -211,79 +206,12 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             self._runtime = DocQARuntime()
         return self._runtime
 
-    def _resolve_indexed_file_id(
-        self, runtime: Any, document: BenchmarkDocument
-    ) -> str:
-        document_path = Path(document.path)
-        document_path_text = str(document_path)
-        normalized_document_path = normalized_path(document_path_text)
-
-        try:
-            records = list(runtime.list_files())
-        except Exception:
-            records = []
-
-        for record in records:
-            record_path = str(getattr(record, "path", "") or "")
-            if record_path and normalized_path(record_path) == normalized_document_path:
-                return str(getattr(record, "file_id", "") or "")
-
-        exact_name_matches = [
-            record
-            for record in records
-            if str(getattr(record, "name", "") or "").lower()
-            == document_path.name.lower()
-        ]
-        if len(exact_name_matches) == 1:
-            return str(getattr(exact_name_matches[0], "file_id", "") or "")
-
-        for ref in (document.document_id, document_path.name, document_path_text):
-            try:
-                resolved = runtime.resolve_file_refs([ref])
-            except Exception:
-                resolved = []
-            if len(resolved) == 1:
-                return str(getattr(resolved[0], "file_id", "") or "")
-
-        return ""
-
     def _index_documents(self, documents: list[BenchmarkDocument]) -> list[str]:
-        runtime = self._get_runtime()
-        selected_ids: list[str] = []
-        missing_documents: list[BenchmarkDocument] = []
-        reindex_documents: list[BenchmarkDocument] = []
-
-        for document in documents:
-            if is_image_only_document(document):
-                continue
-            file_id = self._resolve_indexed_file_id(runtime, document)
-            if file_id:
-                if has_search_index(runtime, file_id):
-                    if file_id not in selected_ids:
-                        selected_ids.append(file_id)
-                    self._indexed_paths.add(str(document.path))
-                else:
-                    reindex_documents.append(document)
-            else:
-                missing_documents.append(document)
-
-        missing_paths = unindexed_document_paths(
-            missing_documents,
-            indexed_paths=self._indexed_paths,
+        selected_ids = self._index_cache.index_documents(
+            self._get_runtime(),
+            documents,
         )
-        if missing_paths:
-            runtime.index_paths(missing_paths, reindex=False)
-            self._indexed_paths.update(missing_paths)
-
-        reindex_paths = document_paths(reindex_documents)
-        if reindex_paths:
-            runtime.index_paths(reindex_paths, reindex=True)
-            self._indexed_paths.update(reindex_paths)
-
-        for document in missing_documents + reindex_documents:
-            file_id = self._resolve_indexed_file_id(runtime, document)
-            if file_id and file_id not in selected_ids:
-                selected_ids.append(file_id)
+        self._last_index_cache = dict(self._index_cache.last_trace)
         return selected_ids
 
     def prepare_examples(self, bundle: Any, examples: list[Any]) -> None:
@@ -324,7 +252,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             ).replace("-", "_"),
             "active_file_id": getattr(active_record, "file_id", ""),
             "active_file_name": getattr(active_record, "name", ""),
-            "page_number": first_evidence_page(example),
+            "page_number": None,
             "selected_text": selected_source_fallback_text(
                 documents,
                 selected_file_ids,
@@ -332,6 +260,11 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             "llm": config_value(self.config, "llm_name", None),
             "use_citation": config_value(self.config, "docqa_citation_mode", None),
             "max_context_length": self.max_context_length,
+            "route_timeout_seconds": config_value(
+                self.config,
+                "route_timeout_seconds",
+                None,
+            ),
             "reasoning_type": config_value(self.config, "reasoning_type", None),
             "agent_mode": config_value(self.config, "agent_mode", None),
             "artifact_type": config_value(self.config, "artifact_type", None),
@@ -349,93 +282,74 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             "origin": policy.origin,
         }
 
-    def _response_evidence_outputs(
-        self,
-        *,
-        response: Any,
-        documents: list[BenchmarkDocument],
-        selected_file_ids: list[str],
-    ) -> tuple[
-        dict[str, Any],
-        list[dict[str, Any]],
-        list[str],
-        list[str],
-        list[int | str],
-    ]:
-        evidence_bundle = dict(getattr(response, "evidence_bundle", {}) or {})
-        evidence_metadata = dict(getattr(response, "evidence_metadata", {}) or {})
-        retrieved_hits = retrieved_hits_from_docqa_evidence(
-            evidence_bundle,
-            evidence_metadata,
-        )
-        reference_citations = canonicalize_docqa_citations(
-            extract_citations(response.references_text),
-            documents,
-            selected_file_ids,
-        )
-        answer_citations = canonicalize_docqa_citations(
-            extract_citations(getattr(response, "answer", "")),
-            documents,
-            selected_file_ids,
-        )
-        reference_pages = self._PAGE_RE.findall(response.references_text or "")
-        if not retrieved_hits and not reference_citations and not reference_pages:
-            retrieved_hits = selected_source_fallback_hits(documents, selected_file_ids)
-        retrieved_hits = canonicalize_docqa_hits(
-            retrieved_hits,
-            documents,
-            selected_file_ids,
-        )
-        predicted_citations = list(answer_citations)
-        predicted_citations.extend(
-            citation
-            for citation in indexed_inline_citations(response.answer, retrieved_hits)
-            if citation not in predicted_citations
-        )
-        predicted_sources = evidence_sources(retrieved_hits)
-        predicted_sources.extend(
-            source for source in reference_citations if source not in predicted_sources
-        )
-        predicted_sources.extend(
-            source
-            for source in metadata_page_coverage_sources(
-                evidence_metadata,
-                documents,
-                selected_file_ids,
-            )
-            if source not in predicted_sources
-        )
-        predicted_pages: list[int | str] = list(evidence_pages(retrieved_hits))
-        predicted_pages.extend(
-            page for page in reference_pages if page not in predicted_pages
-        )
-        predicted_pages.extend(
-            page
-            for page in metadata_page_coverage(evidence_metadata)
-            if page not in predicted_pages
-        )
-        return (
-            evidence_metadata,
-            retrieved_hits,
-            predicted_sources,
-            predicted_citations,
-            predicted_pages,
-        )
-
     def run(
         self,
         *,
         example: Any,
         documents: list[BenchmarkDocument],
     ) -> EngineRunResult:
-        from ktem.docqa import DocQARequest
-
         runtime = self._get_runtime()
+        selected_file_ids, index_seconds = self._prepare_runtime_documents(documents)
+        active_record = active_runtime_record(runtime, selected_file_ids)
+        response, generation_seconds = self._run_runtime_generation(
+            runtime,
+            example=example,
+            documents=documents,
+            selected_file_ids=selected_file_ids,
+            active_record=active_record,
+        )
+        return self._runtime_result(
+            response,
+            example=example,
+            documents=documents,
+            selected_file_ids=selected_file_ids,
+            index_seconds=index_seconds,
+            generation_seconds=generation_seconds,
+        )
+
+    def _prepare_runtime_documents(
+        self,
+        documents: list[BenchmarkDocument],
+    ) -> tuple[list[str], float]:
+        self._active_route_trace = [
+            {
+                "stage": "document_index_resolution",
+                "status": "started",
+            }
+        ]
+        self._active_timings = {}
+        self._active_stage_started_at = time.perf_counter()
         start = time.perf_counter()
         selected_file_ids = self._index_documents(documents)
         index_seconds = time.perf_counter() - start
-        active_record = active_runtime_record(runtime, selected_file_ids)
+        self._active_timings["index_seconds"] = index_seconds
+        self._active_route_trace[-1].update(
+            {
+                "status": "completed",
+                "seconds": round(index_seconds, 4),
+                "cache": dict(self._last_index_cache),
+            }
+        )
+        return selected_file_ids, index_seconds
 
+    def _run_runtime_generation(
+        self,
+        runtime: Any,
+        *,
+        example: Any,
+        documents: list[BenchmarkDocument],
+        selected_file_ids: list[str],
+        active_record: Any,
+    ) -> tuple[Any, float]:
+        from ktem.docqa import DocQARequest
+
+        self._active_route_trace.append(
+            {
+                "stage": "generation",
+                "status": "started",
+            }
+        )
+        self._active_stage_started_at = time.perf_counter()
         generation_start = time.perf_counter()
         response = runtime.run_turn(
             DocQARequest(
@@ -448,19 +362,52 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             )
         )
         generation_seconds = time.perf_counter() - generation_start
+        self._active_timings["generation_seconds"] = generation_seconds
+        self._active_route_trace[-1].update(
+            {
+                "status": "completed",
+                "seconds": round(generation_seconds, 4),
+            }
+        )
+        self._active_stage_started_at = None
+        return response, generation_seconds
+
+    def _runtime_result(
+        self,
+        response: Any,
+        *,
+        example: Any,
+        documents: list[BenchmarkDocument],
+        selected_file_ids: list[str],
+        index_seconds: float,
+        generation_seconds: float,
+    ) -> EngineRunResult:
         (
             evidence_metadata,
             retrieved_hits,
             predicted_sources,
             predicted_citations,
             predicted_pages,
-        ) = self._response_evidence_outputs(
+        ) = response_evidence_outputs(
             response=response,
             documents=documents,
             selected_file_ids=selected_file_ids,
         )
+        answer, grounding_trace, grounding_seconds = apply_alce_answer_grounding(
+            suite_name=str(config_value(self.config, "suite_name", "") or ""),
+            llm_factory=lambda: self._get_text_system().llm,
+            question=str(field_value(example, "question", "") or ""),
+            candidate_answer=response.answer,
+            evidence_items=list(evidence_metadata.get("evidence") or retrieved_hits),
+        )
+        if grounding_trace:
+            evidence_metadata["alce_answer_grounding"] = grounding_trace
+            self._active_route_trace.append(
+                alce_grounding_stage_event(grounding_trace, grounding_seconds)
+            )
+        total_generation_seconds = generation_seconds + grounding_seconds
         return EngineRunResult(
-            answer=response.answer,
+            answer=answer,
             predicted_pages=predicted_pages,
             predicted_sources=predicted_sources,
             predicted_citations=predicted_citations,
@@ -468,8 +415,19 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             retrieved_hits=retrieved_hits,
             timings={
                 "index_seconds": index_seconds,
-                "generation_seconds": generation_seconds,
+                "generation_seconds": total_generation_seconds,
+                "answer_grounding_seconds": grounding_seconds,
             },
+            performance={
+                "index_seconds": round(index_seconds, 4),
+                "generation_seconds": round(total_generation_seconds, 4),
+                "answer_grounding_seconds": round(grounding_seconds, 4),
+                "total_seconds": round(
+                    index_seconds + total_generation_seconds,
+                    4,
+                ),
+            },
+            cache={"document_index": dict(self._last_index_cache)},
             context_preview=response.references_text[: self.max_context_length],
             agent_trace=list(getattr(response, "agent_trace", []) or []),
             evidence_metadata=evidence_metadata,
@@ -477,15 +435,41 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             claim_verification=dict(getattr(response, "claim_verification", {}) or {}),
             presentation=dict(getattr(response, "presentation", {}) or {}),
             retrieval_trace=[
+                *self._active_route_trace,
                 {
                     "engine": self.name,
                     "selected_file_ids": selected_file_ids,
-                    "reasoning_type": config_value(self.config, "reasoning_type", None),
+                    "reasoning_type": config_value(
+                        self.config,
+                        "reasoning_type",
+                        None,
+                    ),
                     "agent_mode": config_value(self.config, "agent_mode", None),
                     "references_text": response.references_text[:2000],
-                }
+                },
             ],
         )
+
+    def route_timeout_diagnostics(self) -> dict[str, Any]:
+        trace = [dict(item) for item in self._active_route_trace]
+        timings = dict(self._active_timings)
+        if (
+            trace
+            and trace[-1].get("status") == "started"
+            and self._active_stage_started_at is not None
+        ):
+            elapsed = time.perf_counter() - self._active_stage_started_at
+            trace[-1]["elapsed_before_timeout_seconds"] = round(elapsed, 4)
+            stage = str(trace[-1].get("stage") or "")
+            if stage == "document_index_resolution":
+                timings["index_seconds"] = elapsed
+            elif stage == "generation":
+                timings["generation_seconds"] = elapsed
+        return {
+            "retrieval_trace": trace,
+            "timings": timings,
+            "cache": {"document_index": dict(self._last_index_cache)},
+        }
 
 
 class DirectPasteEngine(BaseBenchmarkEngine):

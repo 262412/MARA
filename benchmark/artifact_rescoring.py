@@ -15,7 +15,7 @@ from .reports import write_reports
 from .research_evaluators import external_research_adapter_metrics
 from .scoring import normalize_operational_fields, score_prediction
 from .semantic_answer import semantic_judge_backend
-from .stage_metrics import prediction_stage_metrics
+from .stage_metrics import prediction_stage_metric_status, prediction_stage_metrics
 from .summary import add_mara_summary_fields
 from .verifier_observability import prediction_verifier_observability
 
@@ -51,6 +51,7 @@ def rescore_artifact_run(
         )
         add_mara_oriented_metrics(prediction, dataset_name=dataset_name)
         prediction["stage_metrics"] = prediction_stage_metrics(prediction)
+        prediction["stage_metric_status"] = prediction_stage_metric_status(prediction)
         if evaluator_route:
             (
                 prediction["external_adapter_metrics"],

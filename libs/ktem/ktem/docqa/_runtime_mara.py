@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from time import monotonic
 from typing import Any
 
 from .controller import build_controller_outputs
@@ -256,6 +257,15 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
     if not pipeline.dataset_family:
         pipeline.dataset_family = pipeline.verification_domain
     pipeline.graph_mode = str(getattr(request, "graph_mode", "") or "").strip()
+    pipeline.route_timeout_seconds = getattr(
+        request,
+        "route_timeout_seconds",
+        None,
+    )
+    route_deadline = getattr(request, "route_deadline_monotonic", None)
+    if route_deadline is None and pipeline.route_timeout_seconds:
+        route_deadline = monotonic() + float(pipeline.route_timeout_seconds)
+    pipeline.route_deadline_monotonic = route_deadline
     _apply_visual_backends(pipeline, request)
     pipeline.docqa_request = request
 
@@ -347,6 +357,8 @@ def copy_request_fields(target: Any, source: Any) -> None:
     target.page_image_records = source.page_image_records
     target.element_index_records = source.element_index_records
     target.max_context_length = source.max_context_length
+    target.route_timeout_seconds = source.route_timeout_seconds
+    target.route_deadline_monotonic = source.route_deadline_monotonic
 
 
 def selected_ids(runtime: Any, user_id: Any, selected_inputs: dict[int, Any]):

@@ -18,6 +18,11 @@ _UNTAGGED_THOUGHT_PREFIX_RE = re.compile(
 )
 _INITIAL_PERIOD_TOKEN = "__MARA_INITIAL_PERIOD__"
 _INITIAL_PERIOD_RE = re.compile(r"\b([A-Z])\.")
+_ABBREVIATION_PERIOD_TOKEN = "__MARA_ABBREVIATION_PERIOD__"
+_ABBREVIATION_RE = re.compile(
+    r"\b(St|Mt|Mr|Mrs|Ms|Dr|Prof|Sr|Jr|vs|etc)\.",
+    re.IGNORECASE,
+)
 
 
 def answer_claims(answer: str) -> list[str]:
@@ -113,9 +118,19 @@ def _is_markdown_table_line(line: str) -> bool:
 
 
 def _split_sentences(text: str) -> list[str]:
-    protected = _INITIAL_PERIOD_RE.sub(rf"\1{_INITIAL_PERIOD_TOKEN}", text)
+    protected = _ABBREVIATION_RE.sub(
+        rf"\1{_ABBREVIATION_PERIOD_TOKEN}",
+        text,
+    )
+    protected = _INITIAL_PERIOD_RE.sub(rf"\1{_INITIAL_PERIOD_TOKEN}", protected)
     chunks = re.split(r"(?<=[.!?])\s+", protected)
-    return [chunk.replace(_INITIAL_PERIOD_TOKEN, ".") for chunk in chunks]
+    return [
+        chunk.replace(_INITIAL_PERIOD_TOKEN, ".").replace(
+            _ABBREVIATION_PERIOD_TOKEN,
+            ".",
+        )
+        for chunk in chunks
+    ]
 
 
 def _clean_claim(claim: str) -> str:

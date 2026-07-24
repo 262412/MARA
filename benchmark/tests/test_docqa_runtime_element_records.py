@@ -51,6 +51,51 @@ def test_element_index_records_from_documents_normalizes_layout_metadata(tmp_pat
     ]
 
 
+def test_element_record_normalization_preserves_v2_structure_fields(tmp_path):
+    image_path = tmp_path / "report_page_7.jpg"
+    image_path.write_bytes(b"\xff\xd8\xff\xe0jpeg")
+
+    records = element_index_records_from_documents(
+        [
+            BenchmarkDocument(
+                document_id="report",
+                path=image_path,
+                format_type="jpg",
+                modality="page_image",
+                metadata={
+                    "page": 7,
+                    "layout_elements": [
+                        {
+                            "element_id": "cell-7-2",
+                            "element_type": "table",
+                            "text": "Revenue 42 million",
+                            "parent_element_id": "table-7",
+                            "neighbor_element_ids": ["cell-7-1", "cell-7-3"],
+                            "section_id": "financial-results",
+                            "table_id": "table-7",
+                            "row_index": 2,
+                            "column_index": 1,
+                            "continuation_id": "revenue-table",
+                            "chunk_start": 120,
+                            "chunk_end": 138,
+                        }
+                    ],
+                },
+            )
+        ]
+    )
+
+    assert records[0]["parent_element_id"] == "table-7"
+    assert records[0]["neighbor_element_ids"] == ["cell-7-1", "cell-7-3"]
+    assert records[0]["section_id"] == "financial-results"
+    assert records[0]["table_id"] == "table-7"
+    assert records[0]["row_index"] == 2
+    assert records[0]["column_index"] == 1
+    assert records[0]["continuation_id"] == "revenue-table"
+    assert records[0]["chunk_start"] == 120
+    assert records[0]["chunk_end"] == 138
+
+
 def test_docqa_runtime_engine_passes_document_element_index_records(
     monkeypatch,
     tmp_path,
