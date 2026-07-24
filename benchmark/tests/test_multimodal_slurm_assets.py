@@ -235,6 +235,17 @@ def test_multimodal_slurm_script_forwards_offline_semantic_evaluator_contract():
     )
 
 
+def test_multimodal_slurm_script_can_enforce_required_hybrid_eligibility():
+    text = SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert "MARA_MULTIMODAL_REQUIRE_HYBRID_ELIGIBLE" in text
+    assert "--require-hybrid-eligible" in text
+    assert "validate_benchmark_predictions.py" in text
+    assert text.index("validate_benchmark_predictions.py") < text.index(
+        "mara_cleanup_benchmark_runtime"
+    )
+
+
 def test_benchmark_runtime_isolation_helper_bootstraps_empty_runtime():
     text = RUNTIME_HELPER.read_text(encoding="utf-8")
 

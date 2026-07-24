@@ -108,3 +108,72 @@ def test_validator_rejects_unexpected_prediction_count(tmp_path):
 
     assert result.returncode != 0
     assert "expected 2 predictions but found 1" in result.stderr
+
+
+def test_validator_rejects_unavailable_required_hybrid_route(tmp_path):
+    predictions = tmp_path / "predictions.jsonl"
+    _write_predictions(
+        predictions,
+        [
+            {
+                "example_id": "numeric",
+                "error": None,
+                "controller_decision": {
+                    "required_evidence_route_available": False,
+                },
+            }
+        ],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--require-hybrid-eligible",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "required hybrid evidence was unavailable" in result.stderr
+
+
+def test_validator_accepts_available_required_hybrid_route(tmp_path):
+    predictions = tmp_path / "predictions.jsonl"
+    _write_predictions(
+        predictions,
+        [
+            {
+                "example_id": "numeric",
+                "error": None,
+                "controller_decision": {
+                    "required_evidence_route_available": True,
+                },
+            },
+            {
+                "example_id": "simple",
+                "error": None,
+                "controller_decision": {
+                    "required_evidence_route_available": None,
+                },
+            },
+        ],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--require-hybrid-eligible",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "required_hybrid_eligible=1/1" in result.stdout
