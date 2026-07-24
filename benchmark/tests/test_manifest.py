@@ -96,6 +96,7 @@ def test_normalize_financebench_manifest(tmp_path):
         "doc_period": 2024,
         "question_type": None,
         "question_reasoning": None,
+        "dataset_family": "financebench",
     }
 
 

@@ -83,7 +83,7 @@ def test_qasper_answerability_checks_boolean_question_sufficiency_not_token_supp
     assert llm.calls[0][1]["response_format"]["json_schema"]["strict"] is True
 
 
-def test_qasper_answerability_corrects_boolean_candidate_polarity_from_evidence():
+def test_qasper_answerability_does_not_let_secondary_verifier_flip_candidate():
     llm = _VerifierLLM('{"verdict":"no"}')
 
     result = verify_qasper_answerability(
@@ -96,12 +96,13 @@ def test_qasper_answerability_corrects_boolean_candidate_polarity_from_evidence(
         candidate_answer="yes",
     )
 
-    assert result.answer == "no"
+    assert result.answer == "yes"
     assert result.trace["verdict"] == "no"
+    assert result.trace["action"] == "preserved_conflicting_candidate"
     assert "CANDIDATE ANSWER" not in llm.calls[0][0]
 
 
-def test_qasper_answerability_can_correct_no_candidate_to_yes():
+def test_qasper_answerability_preserves_no_candidate_on_conflicting_yes_verdict():
     llm = _VerifierLLM('{"verdict":"yes"}')
 
     result = verify_qasper_answerability(
@@ -111,8 +112,9 @@ def test_qasper_answerability_can_correct_no_candidate_to_yes():
         candidate_answer="no",
     )
 
-    assert result.answer == "yes"
+    assert result.answer == "no"
     assert result.trace["verdict"] == "yes"
+    assert result.trace["action"] == "preserved_conflicting_candidate"
 
 
 def test_qasper_answerability_rejects_boolean_candidate_when_question_is_unresolved():
@@ -128,6 +130,7 @@ def test_qasper_answerability_rejects_boolean_candidate_when_question_is_unresol
         candidate_answer="yes",
     )
 
-    assert result.answer == "unanswerable"
+    assert result.answer == "yes"
     assert result.trace["status"] == "ok"
     assert result.trace["verdict"] == "insufficient_evidence"
+    assert result.trace["action"] == "preserved_insufficient_candidate"

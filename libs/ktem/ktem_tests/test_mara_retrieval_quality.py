@@ -96,6 +96,7 @@ def test_finance_retrieval_query_expands_capex_cash_flow_questions():
 
     assert "Consolidated Statement of Cash Flows" in query
     assert "Capital expenditures" in query
+    assert "Capital spending" in query
     assert "Purchases of property, plant and equipment" in query
 
 

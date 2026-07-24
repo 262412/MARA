@@ -140,6 +140,116 @@ def test_free_text_semantic_score_rejects_core_contradiction():
     assert metadata["core_contradiction"] is True
 
 
+def test_free_text_zero_predicted_claims_cannot_receive_perfect_score():
+    def judge(_payload):
+        return {
+            "gold_claim_count": 1,
+            "supported_gold_claim_count": 1,
+            "predicted_relevant_claim_count": 0,
+            "supported_predicted_claim_count": 0,
+            "core_contradiction": False,
+        }
+
+    metrics, metadata = semantic_answer_metrics(
+        {
+            "question": "What happened to revenue?",
+            "answer_type": "free_text",
+            "predicted_answer": "unanswerable",
+            "gold_answers": ["Revenue increased."],
+        },
+        judge=judge,
+    )
+
+    assert metrics == {
+        "semantic_answer_precision": 0.0,
+        "semantic_answer_recall": 0.0,
+        "semantic_answer_f1": 0.0,
+    }
+    assert metadata["judge_status"] == "ok"
+    assert metadata["zero_predicted_claims"] is True
+
+
+def test_execution_error_prediction_is_not_semantically_scored():
+    calls = []
+
+    def judge(payload):
+        calls.append(payload)
+        return {}
+
+    metrics, metadata = semantic_answer_metrics(
+        {
+            "question": "Who was Speaker?",
+            "answer_type": "free_text",
+            "predicted_answer": "",
+            "gold_answers": ["John Boehner"],
+            "error": "maximum context length exceeded",
+            "error_type": "execution_error",
+        },
+        judge=judge,
+    )
+
+    assert metrics == {
+        "semantic_answer_precision": None,
+        "semantic_answer_recall": None,
+        "semantic_answer_f1": None,
+    }
+    assert metadata["judge_status"] == "error"
+    assert metadata["method"] == "invalid_prediction"
+    assert calls == []
+
+
+def test_finance_metrics_generated_example_uses_deterministic_numeric_score():
+    calls = []
+
+    def judge(payload):
+        calls.append(payload)
+        return {}
+
+    metrics, metadata = semantic_answer_metrics(
+        {
+            "question": "What was FY2021 capital expenditure?",
+            "answer_type": "extractive",
+            "predicted_answer": "$4.625 billion",
+            "gold_answers": ["$4.625 billion"],
+            "example_metadata": {
+                "dataset_family": "financebench",
+                "question_type": "metrics-generated",
+            },
+        },
+        judge=judge,
+    )
+
+    assert metrics["semantic_answer_f1"] == 1.0
+    assert metadata["answer_type"] == "numeric"
+    assert metadata["method"] == "deterministic_numeric"
+    assert calls == []
+
+
+def test_descriptive_answer_containing_year_is_not_inferred_as_date():
+    def judge(_payload):
+        return {
+            "gold_claim_count": 1,
+            "supported_gold_claim_count": 1,
+            "predicted_relevant_claim_count": 1,
+            "supported_predicted_claim_count": 1,
+            "core_contradiction": False,
+        }
+
+    metrics, metadata = semantic_answer_metrics(
+        {
+            "question": "Why did the margin change?",
+            "answer_type": "extractive",
+            "predicted_answer": "The margin declined in 2022 because of charges.",
+            "gold_answers": ["The margin declined in 2022 because of charges."],
+        },
+        judge=judge,
+    )
+
+    assert metrics["semantic_answer_f1"] == 1.0
+    assert metadata["answer_type"] == "free_text"
+    assert metadata["method"] == "local_claim_entailment"
+
+
 def test_free_text_judge_failure_is_null_not_token_f1_fallback():
     def judge(_payload):
         raise ValueError("invalid judge JSON")
@@ -197,3 +307,26 @@ def test_summary_reports_semantic_score_and_judge_coverage_without_replacing_f1(
     assert summary["semantic_judge_coverage"] == 0.5
     assert summary["quality_avg_semantic_answer_f1"] == 1.0
     assert summary["answer_quality_contract"] == "semantic_answer_claim_f1_v1"
+
+
+def test_summary_counts_execution_error_as_uncovered_semantic_row():
+    predictions = [
+        {
+            "route": "text_rag",
+            "benchmark_role": "qa_quality",
+            "metrics": {"semantic_answer_f1": 1.0},
+            "semantic_answer_evaluation": {"judge_status": "ok"},
+        },
+        {
+            "route": "text_rag",
+            "benchmark_role": "qa_quality",
+            "metrics": {"semantic_answer_f1": None},
+            "semantic_answer_evaluation": {"judge_status": "error"},
+            "error": "maximum context length exceeded",
+        },
+    ]
+
+    summary = add_mara_summary_fields({"dataset_name": "alce"}, predictions)
+
+    assert summary["semantic_answer_coverage"] == 0.5
+    assert summary["semantic_judge_coverage"] == 0.5

@@ -56,3 +56,55 @@ def test_validator_rejects_artifact_when_every_prediction_failed(tmp_path):
 
     assert result.returncode != 0
     assert "zero usable predictions" in result.stderr
+
+
+def test_validator_rejects_partial_formal_artifact_when_all_usable_is_required(
+    tmp_path,
+):
+    predictions = tmp_path / "predictions.jsonl"
+    _write_predictions(
+        predictions,
+        [
+            {"example_id": "usable", "answer": "yes", "error": None},
+            {"example_id": "failed", "error": "maximum context length exceeded"},
+        ],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--require-all-usable",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "requires every prediction to be usable" in result.stderr
+
+
+def test_validator_rejects_unexpected_prediction_count(tmp_path):
+    predictions = tmp_path / "predictions.jsonl"
+    _write_predictions(
+        predictions,
+        [{"example_id": "usable", "answer": "yes", "error": None}],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--expected-count",
+            "2",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "expected 2 predictions but found 1" in result.stderr

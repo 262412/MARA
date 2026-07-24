@@ -1,7 +1,10 @@
 from types import SimpleNamespace
 
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
-from ktem.reasoning.mara_finance_answering import route_finance_numeric_answer
+from ktem.reasoning.mara_finance_answering import (
+    ensure_finance_numeric_trace,
+    route_finance_numeric_answer,
+)
 
 
 def test_finance_numeric_answer_computes_quick_ratio_from_evidence_text():
@@ -276,6 +279,25 @@ def test_finance_numeric_answer_executes_direct_capex_from_horizontal_cash_flow_
     assert answer.calculation_execution["citation_ids"] == ["pepsico-page-63"]
 
 
+def test_finance_numeric_answer_selects_requested_period_from_labeled_values():
+    answer = finance_numeric_answer(
+        "What is the FY2021 capital expenditure amount in USD millions?",
+        [
+            {
+                "element_id": "cash-flow-row",
+                "text": (
+                    "Capital expenditures were $4,240 million in 2020. "
+                    "Capital expenditures were $4,625 million in 2021."
+                ),
+            }
+        ],
+    )
+
+    assert answer is not None
+    assert answer.answer == "$4,625 million"
+    assert answer.calculation_plan["operands"][0]["period"] == "2021"
+
+
 def test_finance_numeric_answer_uses_average_inventory_for_turnover():
     answer = finance_numeric_answer(
         (
@@ -334,3 +356,19 @@ def test_finance_numeric_route_emits_failed_attempt_trace_for_unsupported_formul
     assert trace["attempt_status"] == "unsupported_formula"
     assert trace["calculation_verification"]["valid"] is False
     assert trace["calculation_verification"]["errors"] == ["unsupported_formula"]
+
+
+def test_finance_numeric_trace_is_recorded_before_guarded_abstention():
+    bundle = SimpleNamespace(items=[], metadata={})
+    request = SimpleNamespace(
+        controller_question=(
+            "What is the FY2021 capital expenditure amount for PepsiCo?"
+        ),
+        verification_domain="finance",
+    )
+
+    ensure_finance_numeric_trace(request, bundle)
+
+    trace = bundle.metadata["finance_numeric_trace"]
+    assert trace["attempt_status"] == "missing_evidence"
+    assert trace["calculation_execution"]["status"] == "error"
