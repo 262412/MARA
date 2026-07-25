@@ -15,6 +15,7 @@ from .calculation_plan import (
     verify_calculation_plan,
 )
 from .finance_query_planning import FINANCE_METRIC_ALIASES
+from .financial_table import find_financial_cell
 
 
 @dataclass(frozen=True)
@@ -45,13 +46,17 @@ def finance_calculation_audit(
         )
         operands.append(operand)
         repeated_value = list(inputs.values()).count(value) > 1
+        binding_id = operand.cell_id or operand.evidence_id
         if (
             repeated_value
-            and operand.evidence_id
+            and binding_id
             and not name.startswith("revolving_credit_capacity_")
-            and _atomic_evidence_id(operand.evidence_id, evidence_items)
+            and (
+                bool(operand.cell_id)
+                or _atomic_evidence_id(operand.evidence_id, evidence_items)
+            )
         ):
-            used_evidence_ids.add(operand.evidence_id)
+            used_evidence_ids.add(binding_id)
     operand_tuple = tuple(operands)
     steps, result_step_id, answer_unit = _steps(question_type, tuple(inputs))
     scale = _shared_scale(operand_tuple)
@@ -118,6 +123,42 @@ def _operand_from_input(
         and not any(period in _item_text(item) for item in evidence_items)
     ):
         period = ""
+    aliases = _operand_aliases(name, question, question_type)
+    cell = find_financial_cell(
+        evidence_items,
+        aliases=aliases,
+        period=period,
+        expected_value=decimal_value,
+        excluded_cell_ids=excluded_evidence_ids,
+    )
+    semantic_cell = cell or find_financial_cell(
+        evidence_items,
+        aliases=aliases,
+        period=period,
+        excluded_cell_ids=excluded_evidence_ids,
+    )
+    if semantic_cell is not None:
+        item = next(
+            (
+                candidate
+                for candidate in evidence_items
+                if _item_id(candidate) == semantic_cell.evidence_id
+            ),
+            None,
+        )
+        return CalculationOperand(
+            operand_id=name,
+            evidence_id=semantic_cell.evidence_id,
+            value=decimal_value,
+            unit=semantic_cell.unit,
+            scale=semantic_cell.scale,
+            currency=semantic_cell.currency,
+            period=semantic_cell.period,
+            entity=_item_dimension(item, "entity"),
+            cell_id=semantic_cell.cell_id,
+            row_label=semantic_cell.row_label,
+            column_label=semantic_cell.column_label,
+        )
     item = _matching_item(
         name,
         decimal_value,
@@ -133,8 +174,7 @@ def _operand_from_input(
         evidence_id=_item_id(item),
         value=decimal_value,
         unit=_item_dimension(item, "unit"),
-        scale=_item_dimension(item, "scale")
-        or _scale(text, aliases=_operand_aliases(name, question, question_type)),
+        scale=_item_dimension(item, "scale") or _scale(text, aliases=aliases),
         currency=(
             _item_dimension(item, "currency")
             or ("USD" if "$" in text or "usd" in text.lower() else "")

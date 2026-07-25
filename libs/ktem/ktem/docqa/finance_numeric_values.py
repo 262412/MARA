@@ -76,12 +76,16 @@ def metric_labels_for_question(lowered_question: str) -> tuple[str, ...]:
 
 
 def yearly_amounts(text: str, labels: tuple[str, ...]) -> dict[str, float]:
+    from .financial_table import financial_table_yearly_amounts
+
+    structured = financial_table_yearly_amounts(text, labels)
     candidates: dict[str, tuple[int, int, float]] = {}
     for clause in _yearly_fact_clauses(text):
         _collect_yearly_candidates(clause, labels, candidates)
     if not candidates:
         _collect_yearly_candidates(text, labels, candidates)
-    return {year: candidate[2] for year, candidate in candidates.items()}
+    narrative = {year: candidate[2] for year, candidate in candidates.items()}
+    return {**narrative, **structured}
 
 
 def _yearly_fact_clauses(text: str) -> list[str]:
@@ -243,6 +247,41 @@ def amount_after(
                 if best is None or candidate[:2] < best[:2]:
                     best = candidate
     return None if best is None else best[2]
+
+
+def period_amount(
+    text: str,
+    labels: tuple[str, ...],
+    lowered_question: str,
+) -> float | None:
+    years = question_years(lowered_question)
+    period = target_year(lowered_question, years) if years else ""
+    value = yearly_amounts(text, labels).get(period)
+    return value if value is not None else amount_after(text, labels)
+
+
+def free_cash_flow_inputs(
+    lowered_question: str,
+    text: str,
+) -> tuple[float, float] | None:
+    operating_cash_flow = period_amount(
+        text,
+        (
+            "net cash provided by operating activities",
+            "cash provided by operating activities",
+            "operating cash flow",
+            "cash from operations",
+        ),
+        lowered_question,
+    )
+    capital_expenditure = period_amount(
+        text,
+        ("capital expenditures", "capital expenditure", "capital spending"),
+        lowered_question,
+    )
+    if operating_cash_flow is None or capital_expenditure is None:
+        return None
+    return operating_cash_flow, capital_expenditure
 
 
 def revolving_credit_capacities(text: str) -> list[float]:

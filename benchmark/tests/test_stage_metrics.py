@@ -193,6 +193,32 @@ def test_finance_stage_metrics_reject_rendered_scale_that_contradicts_plan():
     }
 
 
+def test_finance_stage_metrics_count_cell_binding_mismatch_as_cell_error():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "numeric",
+        "evidence_metadata": {
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [{"operand_id": "current_assets"}],
+                    "steps": [],
+                },
+                "calculation_verification": {
+                    "valid": False,
+                    "verified_operand_ids": [],
+                    "errors": ["operand_cell_mismatch:current_assets"],
+                },
+                "calculation_execution": {"status": "error"},
+            }
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["cell_accuracy"] == 0.0
+    assert metrics["program_accuracy"] == 0.0
+
+
 def test_finance_stage_metrics_do_not_measure_long_form_query_plan_as_numeric():
     prediction = {
         "dataset_name": "financebench",

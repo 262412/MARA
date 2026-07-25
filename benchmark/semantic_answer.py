@@ -19,7 +19,7 @@ from .metrics import (
 )
 
 SEMANTIC_ANSWER_CONTRACT = "semantic_answer_claim_f1_v1"
-SEMANTIC_JUDGE_PROMPT_CONTRACT = "semantic_claim_judge_prompt_v1"
+SEMANTIC_JUDGE_PROMPT_CONTRACT = "semantic_claim_judge_prompt_v2"
 DEFAULT_SEMANTIC_JUDGE_MODEL = "Qwen/Qwen3-8B"
 DEFAULT_SEMANTIC_JUDGE_BASE_URL = "http://localhost:8000/v1"
 
@@ -173,7 +173,11 @@ def semantic_answer_metrics(
             metadata["core_contradiction"] = bool(
                 _gold_answers(prediction)
                 and all(
-                    _core_numeric_conflict(_predicted_answer(prediction), answer)
+                    _core_numeric_conflict(
+                        _predicted_answer(prediction),
+                        answer,
+                        str(prediction.get("question") or ""),
+                    )
                     for answer in _gold_answers(prediction)
                 )
             )
@@ -282,8 +286,9 @@ def _deterministic_score(
         return "deterministic_unanswerable", score
     if answer_type == "numeric":
         score = float(numeric_tolerance_score(predicted, gold))
+        question = str(prediction.get("question") or "")
         if score > 0 and all(
-            _core_numeric_conflict(predicted, answer) for answer in gold
+            _core_numeric_conflict(predicted, answer, question) for answer in gold
         ):
             return "deterministic_numeric", 0.0
         return "deterministic_numeric", score
@@ -410,15 +415,40 @@ def _list_f1(predicted: str, gold_answers: list[str]) -> float:
     return best
 
 
-def _core_numeric_conflict(predicted: str, gold: str) -> bool:
+def _core_numeric_conflict(predicted: str, gold: str, question: str = "") -> bool:
     predicted_facts = _numeric_facts(predicted)
     gold_facts = _numeric_facts(gold)
+    question_facts = _unambiguous_question_numeric_facts(question)
     for key in ("scale", "currency", "percent"):
-        left = predicted_facts[key]
-        right = gold_facts[key]
+        left = predicted_facts[key] or question_facts[key]
+        right = gold_facts[key] or question_facts[key]
         if left != right and (left or right):
             return True
     return False
+
+
+def _unambiguous_question_numeric_facts(text: str) -> dict[str, str]:
+    lowered = str(text or "").lower()
+    scales = {
+        scale
+        for scale in ("thousand", "million", "billion")
+        if re.search(rf"\b{scale}s?\b", lowered)
+    }
+    currencies = {
+        code
+        for code, aliases in {
+            "usd": ("usd", "us$", "$"),
+            "eur": ("eur", "€"),
+            "gbp": ("gbp", "£"),
+            "jpy": ("jpy", "¥"),
+        }.items()
+        if any(alias in lowered for alias in aliases)
+    }
+    return {
+        "scale": next(iter(scales)) if len(scales) == 1 else "",
+        "currency": next(iter(currencies)) if len(currencies) == 1 else "",
+        "percent": "percent" if "%" in lowered or "percent" in lowered else "",
+    }
 
 
 def _numeric_facts(text: str) -> dict[str, str]:
@@ -494,12 +524,16 @@ def _empty_metrics() -> dict[str, float | None]:
 _JUDGE_SYSTEM_PROMPT = """/no_think
 You are a benchmark evaluator, not an answer generator.
 Compare the predicted answer with the question, gold answers, and gold evidence.
-Decompose both answers into atomic relevant factual claims. A predicted claim is
+Decompose both answers into atomic propositions keyed by subject, relation,
+value, unit, time, scope, and polarity. Count every distinct entity-value or
+entity-relation pair separately; never merge several rows, periods, entities, or
+numbers into one broad claim. A gold claim is covered only when every material
+field is entailed. Missing gold propositions reduce recall. A predicted claim is
 supported only when it is entailed by a gold answer or gold evidence. Extra
 unsupported relevant facts reduce precision. A wrong core value, direction,
-time, unit, or polarity is a core contradiction. If the predicted answer has no
-relevant factual claim, both supported claim counts must be zero. Return JSON
-only with exactly:
+time, unit, scope, entity, or polarity is a core contradiction. If the predicted
+answer has no relevant factual claim, both supported claim counts must be zero.
+Return JSON only with exactly:
 {"gold_claim_count": int, "supported_gold_claim_count": int,
  "predicted_relevant_claim_count": int,
  "supported_predicted_claim_count": int, "core_contradiction": bool}.

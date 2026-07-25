@@ -45,6 +45,8 @@ RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
     "use_citation",
     "language",
     "command_state",
+    "route_timeout_seconds",
+    "route_deadline_monotonic",
     "user_id",
     "origin",
 )
@@ -98,6 +100,8 @@ class DocQARequest:
     retrieval_query: str = ""
     dataset_family: str = ""
     element_index_records: list[dict[str, Any]] | None = None
+    route_timeout_seconds: float | None = None
+    route_deadline_monotonic: float | None = None
 
 
 def to_runtime_docqa_request(request: DocQARequest):
@@ -154,6 +158,8 @@ def to_runtime_docqa_request(request: DocQARequest):
         use_citation=deepcopy(request.use_citation),
         language=deepcopy(request.language),
         command_state=deepcopy(request.command_state),
+        route_timeout_seconds=deepcopy(request.route_timeout_seconds),
+        route_deadline_monotonic=deepcopy(request.route_deadline_monotonic),
         user_id=deepcopy(request.user_id),
         origin=deepcopy(request.origin),
     )

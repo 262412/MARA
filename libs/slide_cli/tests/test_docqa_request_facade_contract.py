@@ -53,6 +53,8 @@ CANONICAL_REQUEST_FIELDS = (
     "use_citation",
     "language",
     "command_state",
+    "route_timeout_seconds",
+    "route_deadline_monotonic",
     "user_id",
     "origin",
 )
@@ -103,6 +105,8 @@ APPENDED_FACADE_FIELDS = (
     "retrieval_query",
     "dataset_family",
     "element_index_records",
+    "route_timeout_seconds",
+    "route_deadline_monotonic",
 )
 
 
@@ -117,7 +121,7 @@ def test_facade_covers_canonical_request_without_breaking_positional_abi():
     assert set(facade_names) == set(runtime_names)
 
 
-def test_facade_defaults_match_canonical_defaults_for_all_42_fields():
+def test_facade_defaults_match_canonical_defaults_for_all_fields():
     facade_defaults = asdict(request_module.DocQARequest(prompt="question"))
     runtime_defaults = asdict(RuntimeDocQARequest(prompt="question"))
 

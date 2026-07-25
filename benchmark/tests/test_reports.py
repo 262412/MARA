@@ -8,6 +8,8 @@ EXPECTED_COMPACT_LIMITS = {
     "max_evidence_text_chars": 2000,
     "max_prediction_evidence_items": 10,
     "max_trace_events": 20,
+    "max_candidate_identity_items": 80,
+    "max_reranked_identity_items": 30,
 }
 
 

@@ -3,6 +3,35 @@ from __future__ import annotations
 from typing import Any
 
 
+def source_alias_values(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    source_id: str,
+) -> list[str]:
+    source_aliases = item.get("source_aliases") or metadata.get("source_aliases") or []
+    if isinstance(source_aliases, str):
+        source_aliases = [source_aliases]
+    values = [
+        source_id,
+        item.get("source_name"),
+        item.get("file_name"),
+        metadata.get("source_name"),
+        metadata.get("file_name"),
+        *source_aliases,
+    ]
+    aliases: list[str] = []
+    for raw in values:
+        value = str(raw or "").strip().split("#", 1)[0]
+        if not value:
+            continue
+        filename = value.rsplit("/", 1)[-1]
+        stem = filename.rsplit(".", 1)[0]
+        for alias in (value, filename, stem):
+            if alias and alias not in aliases:
+                aliases.append(alias)
+    return aliases
+
+
 def merged_locator_metadata(
     evidence_metadata: dict[str, Any],
     items: list[dict[str, Any]],

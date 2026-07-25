@@ -23,6 +23,10 @@ from .report_external_evaluators import (
     external_evaluator_markdown,
 )
 from .report_headline import headline_score_lines
+from .report_identity_compaction import (
+    IDENTITY_TRACE_LIMITS,
+    compact_identity_evidence_list,
+)
 from .report_route_metrics import route_metrics_markdown
 from .report_route_rankings import route_ranking_markdown
 from .report_summary_metrics import diagnostic_metric_lines
@@ -32,6 +36,7 @@ ARTIFACT_LIMITS = {
     "max_evidence_text_chars": 2000,
     "max_prediction_evidence_items": 10,
     "max_trace_events": 20,
+    **IDENTITY_TRACE_LIMITS,
 }
 _TRACE_FIELDS = {
     "agent_trace",
@@ -325,6 +330,9 @@ def _compact_value(value: Any, key: str = "") -> Any:
             if item_key not in _COMPACT_DROP_FIELDS
         }
     if isinstance(value, list):
+        identity_items = compact_identity_evidence_list(value, key)
+        if identity_items is not None:
+            return identity_items
         return [_compact_value(item) for item in _compact_list(value, key)]
     if key in TEXT_FIELDS and isinstance(value, str):
         return value[: ARTIFACT_LIMITS["max_evidence_text_chars"]]

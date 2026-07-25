@@ -21,6 +21,9 @@ def test_compact_artifact_preserves_complete_candidate_identity_lineage(tmp_path
         }
         for page in range(1, 61)
     ]
+    candidates[-1][
+        "text"
+    ] = "The audited table reports current assets of 20,991 million in 2021."
     report = {
         "summary": {
             "suite_name": "Candidate Identity Compact Suite",
@@ -31,7 +34,17 @@ def test_compact_artifact_preserves_complete_candidate_identity_lineage(tmp_path
         "predictions": [
             {
                 "example_id": "ex-1",
-                "gold_evidence": [{"document_id": "report", "page": 60}],
+                "gold_evidence": [
+                    {
+                        "document_id": "report",
+                        "page": 60,
+                        "span": (
+                            "The audited table reports current assets of "
+                            "20,991 million in 2021."
+                        ),
+                    }
+                ],
+                "stage_metrics": {"gold_evidence_support_recall": 1.0},
                 "evidence_metadata": {
                     "candidate_evidence": candidates,
                     "reranked_evidence": [candidates[-1]],
@@ -56,12 +69,14 @@ def test_compact_artifact_preserves_complete_candidate_identity_lineage(tmp_path
         "row_label": "Metric",
         "column_label": "60",
         "source_backrefs": ["runtime-report#page:60"],
+        "identity_projection": "evidence_identity_projection.v1",
     }
     metrics = prediction_stage_metrics(prediction)
     assert metrics["candidate_recall_at_50"] == 0.0
     assert metrics["candidate_pool_recall_at_80"] == 1.0
     assert metrics["reranked_recall_at_10"] == 1.0
     assert metrics["reranker_lineage_coverage"] == 1.0
+    assert metrics["gold_evidence_support_recall"] == 1.0
 
 
 def _read_jsonl(path):

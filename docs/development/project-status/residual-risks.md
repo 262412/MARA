@@ -3,12 +3,11 @@
 Last updated: 2026-07-25.
 
 This is the canonical register of unresolved MARA benchmark and engineering
-risks. It contains only work that still requires implementation or formal
-closure evidence. Completed scheduler jobs, locally passing tests, changed
-metric semantics, and arithmetically reproducible calculations are not by
-themselves evidence that an answer is correct.
+risks. It contains root causes, required corrections, and closure evidence.
+A completed job, a valid JSON response, a retrieved page, or a reproducible
+calculation does not by itself prove that the final answer is correct.
 
-## Current Evidence
+## Current Evidence And Release Verdict
 
 The frozen full-system baseline remains:
 
@@ -17,344 +16,346 @@ The frozen full-system baseline remains:
 final_thesis_benchmark_statistical_20260720_repair_g_fullsystem
 ```
 
-The latest focused artifacts are:
+The latest completed focused artifacts are:
 
 ```text
 04_residual_validation/
-├── residual-qasper-typed-v14-answerability-v7-semantic-single-l40s/
-│   └── 01_core_text/20260724_233837_...-9917283
-├── residual-finance-v13-slot-scale-direct-value-l40s/
-│   └── outputs/20260725_010012_...-9917284
-└── residual-alce-v9-safe-grounding-strict-single-a100/
-    └── outputs/20260724_172225_...-9914331
+├── residual-qasper-typed-v16-answerability-v8-semantic-single-l40s/
+│   └── 01_core_text/
+│       └── 20260725_121032_...-9918145
+└── residual-finance-v15-financial-elements-rendered-unit-l40s/
+    └── outputs/
+        └── 20260725_131322_...
 ```
 
-Jobs `9917283` and `9917284` both completed with exit code `0:0`. QASPER has
-159/159 usable predictions and Finance has 80/80; neither run has a route
-timeout. Finance's formal wrapper records
-`required_hybrid_eligible=12/12`, and its semantic judge has 100% coverage with
-zero judge failures.
+Jobs `9918145` and `9918146` completed with exit code `0:0`. QASPER has
+159/159 usable predictions; Finance has 80/80. The code used by these runs is
+commit `8f01db5`.
 
-The implementation that produced these artifacts is commit `bd44996`
-(`fix: close focused benchmark contract gaps`). The latest artifacts close the
-old timeout-override, hybrid-eligibility projection, semantic-judge coverage,
-and final-answer repetition concerns. Raw `predicted_answer` remains an
-auditable generator field, while `answer_for_user` and `answer_for_scoring`
-already remove repetition; the final duplicate rate is 0%. Those closed
-concerns are no longer active problems below.
+The result is improved but not release-ready:
 
-A current-code replay of the immutable Finance v13 predictions is stored at:
+- QASPER v16: token/native F1 62.02%, semantic F1 58.49%, structure validity
+  97.48%, evidence F1 21.66%, and verifier parser errors 0.
+- Finance v15 quality routes: native numeric 13.33%, semantic F1 29.00%, token
+  F1 14.68%, all-operands/execution 29.17%, unit accuracy 58.33%, and false
+  abstention 18.75%.
+- Finance v15 all routes: page hit 42.50%, all-gold-pages hit 32.50%,
+  Candidate Recall@50 40.83%, and Reranked Recall@10 38.33%.
+- Finance element-index availability is now 12/12 on the required hybrid
+  subset, but only 4/12 indexed elements contain the answer-bearing table;
+  8/12 point to a different page.
 
-```text
-/mnt/fastscratch/users/tbczhang/mara_validation/
-finance_v13_current_code_rescore_20260725/
-20260725_113507_finance-v13-current-code-rescore
-```
-
-This replay changes reporting, not generated answers. It confirms that all 12
-controller/CRAG hybrid selections are now visible, all 12 lack element-index
-records, and both `$5,818.0 billion` rows are classified as
-`failure_stage=rendered_unit`.
+Do not launch another full 3,540-prediction benchmark until `IDENTITY-001`,
+`EVAL-INVARIANT-001`, `FINANCE-001`, `FINANCE-002`, and `CONTRACT-002` pass
+their frozen focused gates.
 
 ## Open Problem Summary
 
-| ID           | Priority | Area                                       | Current evidence                                                                                                                                                  | Completion gate                                                                                                                                       |
-| ------------ | -------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FINANCE-001  | P0       | Retrieval, reranking, and route reporting  | V13 page hit 33.75%, all pages 23.75%, Candidate Recall@50 41.94%, Reranked Recall@10 25.83%; controller/CRAG hybrid selections are absent from Phase 3 reporting | Page hit >=70%, all pages >=35%, effective hybrid/element coverage is formally reported, and required-slot evidence survives reranking                |
-| FINANCE-002  | P0       | Value binding, rendering, and metric truth | V13 quality native 8.33%, all-operands/execution 16.67%, unit accuracy 58.33%; a year is accepted as an amount and a million result is rendered as billion        | Required slots are semantically bound, plans cover every slot, native >=20%, all operands >=50%, conditional execution >=95%, unit accuracy >=98%     |
-| CONTRACT-002 | P1       | QASPER answerability and boolean polarity  | V14 native 55.41%, semantic 51.57%, structure 90.57%, evidence F1 21.66%; all 24 JSON repairs fail and boolean polarity remains unstable                          | Gold-independent structure validity 100%, no verifier-induced regression, semantic F1 >=80%, and class diagnostics close yes/no/unanswerable failures |
-| PERF-001     | P1       | Quality-preserving latency                 | Timeout is closed, but Finance average generation latency is 21.38 seconds and the quality gates still fail                                                       | Quality gates pass with zero required-row error; simple median increase <=20%, multipage/numeric <=50%, with P95 reported                             |
-| EVAL-001     | P1       | Global release gate                        | Calibration and G-minus-B paired evidence remain incomplete                                                                                                       | Judge coverage >=99.5%, agreement >=90%, semantic gain >=8 points, paired CI lower bound >0                                                           |
-| EVAL-002     | P2       | External evaluator                         | No fixed paper-grade external evaluator artifact                                                                                                                  | Frozen evaluator/provider contract and complete formal artifact                                                                                       |
-| FORMAT-001   | P2       | Production formats                         | Loader smoke exists; preview/OCR/formula/chart E2E matrix remains incomplete                                                                                      | Required production-format matrix passes                                                                                                              |
+| ID                 | Priority | Area                            | Current evidence                                                                 | Completion gate                                                                       |
+| ------------------ | -------- | ------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| IDENTITY-001       | P0       | Evidence and artifact identity  | Dataset, parser, index, reranker, and cell IDs are not unified                   | Zero reranker-lineage violations; strict and equivalent support traced                |
+| EVAL-INVARIANT-001 | P0       | Metric contracts                | Candidate@50 and reranker pool semantics differ; question dimensions are ignored | Old metrics unchanged; additive invariant metrics measured on 100% of applicable rows |
+| FINANCE-001        | P0       | Retrieval relevance             | Page 42.50%, all pages 32.50%; only 4/12 element records answer-bearing          | Page >=70%, all pages >=35%, required evidence survives reranking                     |
+| FINANCE-002        | P0       | Table semantic binding          | Native 13.33%, operands 29.17%, unit 58.33%; wrong rows still bind               | Native >=20%, all operands >=50%, conditional execution >=95%, unit >=98%             |
+| CONTRACT-002       | P1       | QASPER proposition and polarity | Parser errors are closed, but only 41/99 boolean rows are correct                | Structure 100%, semantic >=80%, proposition/polarity diagnostics pass                 |
+| PERF-001           | P1       | Quality-preserving latency      | Finance quality gates fail despite zero timeout                                  | Quality gates pass and latency budgets remain satisfied                               |
+| EVAL-001           | P1       | Global release gate             | Judge calibration and G-minus-B paired evidence incomplete                       | Agreement >=90%, coverage >=99.5%, gain >=8 points, CI lower bound >0                 |
+| EVAL-002           | P2       | External evaluator              | No fixed paper-grade evaluator artifact                                          | Frozen evaluator contract and complete artifact                                       |
+| FORMAT-001         | P2       | Production formats              | Preview/OCR/formula/chart E2E matrix incomplete                                  | Required production-format matrix passes                                              |
 
-Do not launch another full 3,540-prediction benchmark until `FINANCE-001`,
-`FINANCE-002`, and `CONTRACT-002` pass their frozen focused subsets.
-
-## FINANCE-001: Retrieval Regressed And Effective Hybrid Routes Are Misreported
-
-### Evidence
-
-Finance v13 reports:
-
-- quality native numeric score: 8.33%;
-- page hit: 33.75%;
-- all-gold-pages hit: 23.75%;
-- Candidate Recall@50: 41.94%;
-- Reranked Recall@10: 25.83%;
-- false abstention: 25%;
-- zero route timeouts and 80/80 usable predictions;
-- formal hybrid eligibility: 12/12.
-
-The loss is already visible in the wide candidate pool and is compounded by
-reranking. Text has candidate/reranked recall 30.8%/22.5%; controller and CRAG
-each have 47.5%/27.5%. Phase 3 still reports both element and hybrid as
-`not_evaluated`, even though controller and CRAG diagnostics record selected
-hybrid routes.
-
-Current-code replay removes that observability error. The actual hybrid subset
-has Candidate Recall@50 8.33% and Reranked Recall@10 0%, and element-index
-coverage is 0/12. This makes the remaining retrieval/index deficit stricter
-than the old top-level controller averages suggested.
-
-### Root cause
-
-There are two unresolved failures:
-
-1. Retrieval recall is lost before final context construction. Required-slot
-   restoration can recover a candidate ranked 31-80 only when that evidence
-   entered the unique candidate pool and its slot binding is recognized. V13
-   shows both a broad-recall loss and a further candidate-to-reranker loss, so
-   MMR alone cannot repair it.
-2. `phase3_multimodal_summary` recognizes only the top-level route IDs
-   `element_rag` and `hybrid_rag`. It ignores the effective route selected
-   inside controller/CRAG diagnostics. Consequently, an exercised hybrid route
-   and its element-index coverage are reported as `not_evaluated`.
-3. Finance PDF table chunks often arrive as plain text or `type=image` records
-   without `element_type=table`, a `Table:` prefix, or Markdown pipes. The
-   local element parser therefore creates no persisted table relation even
-   when a page contains a clear financial statement.
-
-The previous eligibility-field and timeout causes are closed: the field now
-survives artifact projection, the formal validator observes all 12 required
-hybrid decisions, controller/CRAG index readiness requires element data, and
-the explicit run timeout is honored.
-
-### Required remediation
-
-- Derive an additive `effective_route` from controller/CRAG selected-route
-  diagnostics. Use it for Phase 3 hybrid participation and element-index
-  coverage while retaining the top-level benchmark route for route-level
-  quality comparisons.
-- Add selected-route coverage to the report so a controller/CRAG row cannot be
-  silently counted as text-only or disappear from modality diagnostics.
-- Preserve the best semantically bound candidate for each required slot across
-  reranking and final selection. This protection must be based only on query
-  and slot semantics, never on benchmark gold pages.
-- Publish candidate and reranked recall by top-level route and effective route,
-  then inspect every lost required-slot evidence ID in the frozen subset.
-- Keep retrieval-free `direct_answer` rows out of retrieval averages.
-- Infer a table element only for plain-text chunks that contain a recognized
-  financial-statement heading and at least two multi-value numeric rows.
-  Persist those records through the normal element-index relation; do not
-  classify arbitrary number-heavy prose as a table.
-
-### Implemented, pending focused artifact validation
-
-- Phase 3 derives the effective route from controller/CRAG decisions, includes
-  effective hybrid rows in the question-type breakdown, and publishes stable
-  effective-route counts.
-- Effective element/hybrid rows now participate in element-index coverage, so
-  missing element records are reported as a coverage gap instead of
-  `not_evaluated`.
-- The summary publishes candidate/reranked and downstream stage metrics grouped
-  by effective route; the existing route table now includes the same stage
-  metrics grouped by top-level benchmark route.
-- The local element parser recognizes conservatively structured plain-text
-  financial tables, allowing fresh isolated Finance indexes to persist and
-  expose table elements without benchmark labels or gold-page hints.
-- Required-slot shortlist restoration from the full reranked pool remains
-  active. The remaining broad candidate-recall deficit requires the next
-  artifact and per-route loss audit; it is not claimed closed by reporting.
-
-### Closure evidence
-
-Every structured numeric example must either execute a genuinely available
-hybrid route or explicitly fail hybrid eligibility. Phase 3 must report the
-effective route and element coverage for controller/CRAG rows. On eligible
-rows, page hit must reach 70%, all-gold-pages hit 35%, and Reranked Recall@10
-must not regress from the last valid pre-v11 focused baseline. Text-only
-fallback rows must be reported separately and cannot close this item.
-
-## FINANCE-002: Numeric Binding And Rendered Units Can Contradict The Plan
+## IDENTITY-001: Evidence Has No End-To-End Canonical Identity
 
 ### Evidence
 
-Finance v13 improves quality native score from 0% to 8.33% and semantic F1
-from 12.76% to 24.67%, but remains below every numeric closure threshold:
+Finance v15 exposes two cases that the old exact-page metric cannot express:
 
-- all-operands, program, and execution accuracy: 16.67%;
-- unit accuracy: 58.33%;
-- false abstention: 25% overall and 33.3% on quality routes;
-- slot coverage: 86.67%.
+1. A retrieved item can use a runtime UUID while the gold locator uses a
+   filename stem such as `LOCKHEEDMARTIN_2021_10K`.
+2. The same audited fact may appear in both an official statement and a
+   selected-financial-data table. For `financebench_id_03031`, the system uses
+   a semantically equivalent page 30 table while the dataset gold page is 68.
+   Strict page hit correctly remains zero, even though the calculation is
+   supported by an equivalent same-source table.
 
-Three quality-route answers for `financebench_id_01928` are genuinely correct.
-Two additional nominal native successes for `financebench_id_03031` render the
-correct calculated value as `$5,818.0 billion` even though both operands and
-the plan are in millions. Unit-aware audited native accuracy is therefore 5%,
-not the reported 8.33%.
-
-Current-code replay reduces reported unit accuracy from 58.33% to 50% by
-correctly rejecting those two rendered-unit contradictions. This is a metric
-truth correction only; the new renderer must be exercised in a fresh model run
-before answer quality can be credited.
-
-The artifact also exposes unsafe or avoidable binding failures:
-
-- `financebench_id_00882` accepts the reporting year `2023` as the revolving
-  credit amount and returns `$2,023`.
-- `financebench_id_03531` binds `31` rather than the requested current-assets
-  value, then safely abstains because source scale is missing.
-- `financebench_id_04854` finds both free-cash-flow operands, but generic
-  operand names do not inherit the single requested period and required-slot
-  verification rejects the plan.
+The existing table element is normally a whole-page or whole-table record.
+There is no stable cell identity tying the metric row, period column, value,
+source, and page together. The verifier can therefore prove only that a number
+and metric words occur somewhere in the same large text item.
 
 ### Root cause
 
-There are four concrete implementation defects:
+There are four incompatible identity domains:
 
-1. `amount_after` takes the first number within 80 characters after a metric
-   alias and does not exclude the requested period. A date such as
-   `May 26, 2023` can therefore become a monetary operand.
-   The direct-value path also treats revolving-credit capacity as one value,
-   even when the question asks for the total of two simultaneously active
-   agreements.
-2. `_operand_period` propagates a single question year only to `value`,
-   `left`, and `right`, not to evidence operands such as
-   `operating_cash_flow` and `capital_expenditure`.
-3. `render_execution_answer` ignores `CalculationPlan.answer_scale` for
-   difference, free-cash-flow, average, and working-capital templates and
-   rescans the combined evidence text. An unrelated word `billion` can
-   override a verified `million` plan after execution.
-4. Stage metrics infer `unit_accuracy` only from verifier errors. They do not
-   compare the rendered scoring answer with the plan's answer scale/unit, so
-   the artifact can report a successful program and unit while exposing a
-   dimensionally wrong final answer.
+- dataset identity: dataset example, source filename, annotated page, span;
+- parser identity: file UUID, parser page index/label, element ID;
+- retrieval identity: canonical/deduplicated evidence and source backrefs;
+- calculation identity: evidence ID plus a numeric value, with no mandatory
+  row/column locator.
+
+Each stage reconstructs aliases independently. No shared identity contract
+proves that a reranked item came from the canonical candidate pool or that a
+calculation operand refers to a unique table cell.
+
+Compact artifacts add a fifth identity break: stage metrics are calculated
+from up to 80 candidates, but the previous compact writer retained only the
+first 10 candidate records. A v15 replay therefore changes
+`candidate_recall_at_50` from 0.5 to 0 on the three non-direct
+`financebench_id_02024` routes. Those discarded candidate identities cannot be
+recovered from the immutable compact artifact.
 
 ### Required remediation
 
-- Exclude every question year from unlabeled monetary candidates and prefer
-  values with an adjacent currency/scale marker or a labeled financial row.
-  Reject rather than execute when the only candidate is a period.
-- For total revolving-credit capacity, extract each distinct active
-  `borrow up to` amount and add the operands through `calculation_plan.v1`.
-  Do not sum terminated agreements, commitment-increase options, or repeated
-  descriptions of the same capacity.
-- Propagate a single requested period to every evidence-backed operand. Keep
-  explicit operand-name years authoritative for multi-period programs.
-- Make the verified plan's `answer_scale` authoritative during rendering.
-  Evidence-text scale inference is allowed only when the plan has no scale.
-- Compare `answer_for_scoring` with `answer_scale` and `answer_unit` in stage
-  metrics. A rendered mismatch must set `unit_accuracy=0` and identify
-  `rendered_unit` as the failure stage.
-- Keep the verifier's source-dimension and required-slot checks. Add a
-  last-line rejection for an operand whose value is merely its period.
-- Keep native numeric match as the final answer-quality authority; a safe
-  verifier rejection is not counted as correctness.
-
-### Implemented, pending focused artifact validation
-
-- Direct-value fallback excludes all question years and prefers dimensioned
-  values. The calculation verifier rejects an operand equal to its period.
-- Total revolving-credit questions bind each explicit active
-  `borrow up to` capacity as a separate operand and execute a deterministic
-  addition.
-- A single question period is propagated to every evidence-backed operand when
-  that period is present in the evidence.
-- Result rendering uses the verified plan's answer scale before considering
-  evidence text.
-- Stage metrics compare the rendered scoring answer with the plan and expose
-  `rendered_unit` when they conflict.
+- Define one additive evidence identity projection containing source aliases,
+  dataset page, parser page, page aliases, canonical evidence ID, element ID,
+  table ID, cell ID, row label/index, column label/index, period, and complete
+  source backrefs.
+- Preserve strict dataset locator metrics. Add a separate same-source semantic
+  evidence-support metric; never convert an equivalent fact on a different
+  page into a strict page hit.
+- Compute reranker lineage from canonical evidence identity. Every reranked
+  item must be traceable to the full reranker input pool.
+- Carry cell identity into `calculation_plan.v1` operands and citations.
+  Whole-table evidence remains the citation container, but verification must
+  bind the operand to one row/column cell.
+- Keep all new fields optional and additive so old artifacts remain readable.
+- Compact artifacts must retain an identity-only projection of all 80
+  reranker-input candidates and 30 reranked candidates. Large text and
+  embeddings may be removed, but locator, canonical, element, cell, and
+  provenance fields must remain replayable.
 
 ### Closure evidence
 
-Regression fixtures must cover the exact `$5,818 million` render, the PepsiCo
-`2023` false amount, single-period free-cash-flow operands, the prior `23002%`
-false success, dimension mismatch, incorrect evidence IDs, and rendered-unit
-stage-metric coverage.
+- Candidate pool, reranked list, selected evidence, plan operands, and final
+  citations can be joined without text guessing.
+- `reranker_lineage_coverage=1.0` and violation count is zero on every row with
+  reranker traces.
+- Strict page metrics are bit-for-bit unchanged on every newly written
+  identity-complete artifact. The three known v15 compact rows remain marked
+  non-replayable rather than silently rewritten.
+- Equivalent fact support is reported independently with source and span
+  evidence.
+- Conflicting values, periods, units, or polarity never share a canonical
+  fact/cell identity.
 
-Every numeric example must emit a trace. All required slots must be represented
-in the plan and covered by final citations. The frozen eligible subset must
-reach all-operands 50%, native numeric 20%, false abstention at most 15%, and,
-conditional on a valid complete plan, execution accuracy 95% and unit accuracy
-98%.
-
-## CONTRACT-002: QASPER Verifier Output Truncates And Polarity Is Unstable
+## EVAL-INVARIANT-001: Metric Denominators And Dimensions Are Not Stable
 
 ### Evidence
 
-QASPER v14 contains 159/159 usable predictions and reports:
+Finance v15 reports Candidate Recall@50 40.83% and Reranked Recall@10 38.33%.
+An individual row can legitimately have Reranked Recall@10 greater than
+Candidate Recall@50 because the reranker consumes up to 80 unique candidates,
+not only the first 50. Treating that relationship as impossible would diagnose
+valid behavior as corruption.
 
-- native/token F1: 55.41%, down 0.51 points from v13;
-- semantic F1: 51.57%, down 0.63 points;
-- gold-independent structure validity: 90.57%;
-- evidence F1: 21.66%, unchanged;
-- answerability verifier: 103 `ok`, 32 `not_required`, 24 `error`;
-- JSON repair: 24 attempted, zero successful.
+The semantic numeric evaluator also marks a correct answer such as
+`$5,818 million` against gold `$5,818` as contradictory when the question
+explicitly states that values are in USD millions. It compares dimensions only
+inside prediction and gold strings and ignores the question contract.
 
-All 15 structurally invalid answers are free text on gold-unanswerable rows.
-The 24 parser errors split across ten boolean and fourteen unanswerable
-examples. A representative failed response already contains
-`"verdict":"supported"` and a long grounded quote but is cut off before the
-closing JSON delimiters; its repair response is truncated again.
+Free-text semantic scoring can over-credit an incomplete answer when a judge
+collapses multiple entity/value claims into one broad claim.
+
+The v15 compact writer also makes metric denominators non-replayable: it stores
+10 candidate records after calculating Candidate Recall@50 over as many as 50.
+This is an artifact contract failure, not a retrieval-quality change.
 
 ### Root cause
 
-The v7 trace and one-repair limit work, but two failures remain:
-
-1. `_call_verifier` gives both the initial verifier and the JSON repair only 64
-   output tokens, while the schema places no maximum length on
-   `evidence_quote`. The model can satisfy the semantic instruction with a long
-   quote but cannot close the JSON object. Repeating the same budget for repair
-   deterministically repeats the truncation.
-2. Boolean verification checks only whether the quote is a substring of the
-   evidence. It does not check whether the quote contains enough question
-   relation anchors or supports the returned polarity. The secondary verifier
-   correctly remains advisory, so primary yes/no errors survive rather than
-   being replaced by another model's unsupported guess.
+- The metric name encodes a top-K cutoff but not the actual reranker input
+  pool, and no lineage metric is emitted.
+- Numeric contradiction detection treats a missing unit/scale as conflicting
+  with an explicit one instead of inheriting an unambiguous question dimension.
+- The free-text judge contract does not require atomic entity, relation, value,
+  time, unit, scope, and polarity decomposition.
 
 ### Required remediation
 
-- Limit `evidence_quote` in both strict JSON schemas and instruct the verifier
-  to use at most 20 words.
-- Increase the bounded output allowance for the initial response and the
-  structure-only repair. Keep exactly one repair and retain both raw responses
-  in the trace.
-- Apply the same gold-independent question-relation anchor check to boolean
-  evidence quotes. If it fails, record `insufficient_evidence`; do not flip or
-  erase the primary candidate.
-- Do not restore secondary authority over non-empty boolean candidates.
-- Improve boolean polarity at the primary prompt/model boundary and evaluate it
-  on a frozen calibration set rather than using gold-aware post-processing.
-- Report annotation-disagreement rows separately from parser failures.
-
-### Implemented, pending focused artifact validation
-
-- `qasper_answerability.v8` caps quotes at 320 characters, asks for at most 20
-  words, and raises the bounded output allowance from 64 to 160 tokens for both
-  the initial verifier and its single structure-only repair.
-- Boolean quote traces now require either question-relation anchors or an
-  explicit negative implication cue. A failed relation check is recorded as
-  `insufficient_evidence` while preserving the primary candidate.
+- Keep `candidate_recall_at_50` and `reranked_recall_at_10` unchanged for
+  historical comparability.
+- Add `candidate_pool_recall_at_80`, `reranker_lineage_coverage`, violation
+  count, and same-source `gold_evidence_support_recall`.
+- Derive canonical identity before metric comparison and publish metric
+  coverage/status with pool sizes.
+- Persist all metric-input identities in compact artifacts; never recompute a
+  top-K metric from a shorter stored prefix.
+- In deterministic numeric scoring, inherit a missing currency, scale, or
+  percent dimension from an unambiguous question. An explicit prediction/gold
+  contradiction remains fatal.
+- Upgrade the free-text judge prompt contract so every distinct entity/value
+  proposition is counted separately and unsupported additions reduce
+  precision.
+- Judge errors remain `null`; do not silently fall back to token F1.
 
 ### Closure evidence
 
-Tests must prove that structure validity does not inspect the gold subtype,
-unsupported quotes cannot confirm candidates, boolean advisory behavior is
-unchanged, output budgets cannot truncate the bounded schema, and explicit
-`unanswerable` remains stable.
+- Old `avg_f1`, native metrics, Candidate Recall@50, Reranked Recall@10, MRR,
+  nDCG, and strict page metrics do not change on a newly produced compact
+  artifact replay. Historical rows with already-discarded identities are
+  explicitly reported as non-replayable.
+- The new invariant metrics have 100% coverage wherever the required trace is
+  present.
+- Correct question-inherited dimensions score 1; explicit million/billion,
+  currency, percent, direction, date, or polarity conflicts score 0.
+- A frozen free-text calibration set demonstrates atomic-claim agreement and
+  no incomplete-answer over-credit.
 
-The frozen subset must have 100% gold-independent structure validity, no net
-verifier-induced paired regression, and semantic F1 at least 80%. If the
-answer-quality target remains unreachable after evidence-quote validation,
-the remaining limitation must be reported as model/retrieval capability rather
-than repaired by gold-aware post-processing.
+## FINANCE-001: Retrieval Finds Table-Like Elements But Often The Wrong Table
+
+### Evidence
+
+Finance v15 improved page hit from 33.75% to 42.50%, all-gold-pages hit from
+23.75% to 32.50%, and Reranked Recall@10 from 25.83% to 38.33%. Candidate
+Recall@50 is essentially flat at 40.83% versus 41.94%.
+
+The newly persisted financial elements close the old availability failure:
+all 12 required hybrid examples now have element-index records. They do not
+close relevance: only 4/12 contain the answer-bearing table and 8/12 refer to
+another page. Effective-route reporting and element coverage are now visible;
+those old observability issues are closed.
+
+### Root cause
+
+- Element creation recognizes a table shape but does not rank whether the
+  table satisfies the query's metric, period, and required operand slots.
+- Whole-table embeddings blur row/column distinctions and favor nearby
+  statement headings or visually similar financial pages.
+- Slot restoration can only protect evidence that entered the canonical pool
+  and was semantically bound to the correct slot.
+- Strict gold-page metrics cannot distinguish a wrong table from an equivalent
+  same-source duplicate without the additive support identity in
+  `IDENTITY-001`.
+
+### Required remediation
+
+- Index table title, section, row labels, period headers, cells, and
+  continuation identity as structured fields while keeping whole-table text.
+- Score metric-row and period-column matches before generic semantic
+  similarity. Protect the best distinct candidate for each required operand.
+- Report retrieval stages by top-level and effective route, with strict locator
+  recall and equivalent semantic support shown separately.
+- Trace candidate loss at canonical pool, reranker, slot binding, MMR, and
+  final context boundaries.
+- Keep retrieval-free direct-answer rows out of retrieval averages.
+
+### Closure evidence
+
+Page hit reaches 70%, all-gold-pages hit reaches 35%, answer-bearing element
+hit@10 reaches 30%, and required-slot evidence does not disappear after
+reranking/MMR. Equivalent duplicate pages must improve the support metric, not
+the strict locator metric.
+
+## FINANCE-002: Numeric Values Are Not Bound To Table Semantics
+
+### Evidence
+
+Finance v15 improves quality native numeric score from 8.33% to 13.33%,
+semantic F1 from 24.67% to 29.00%, all-operands/execution from 16.67% to
+29.17%, slot coverage from 86.67% to 97.78%, and false abstention from 25% to
+18.75%. Token F1 regresses from 16.02% to 14.68%, and unit accuracy remains
+58.33%.
+
+`financebench_id_00882` and the rendered scale of `03031` are fixed.
+Remaining examples show the deeper defect:
+
+- `03531` and `10285` bind a number from the wrong row/cell.
+- `04854` has a requested period but can bind the result/distractor or the
+  wrong capital-expenditure value in a multi-column table.
+- `04302` and `10499` still produce no complete calculation plan.
+- `04980` calculates a plausible value but remains native-incorrect, showing
+  that arithmetic reproducibility is not answer correctness.
+
+### Root cause
+
+Numeric extraction is primarily prose-regex based. It flattens a financial
+table into text and scans near a metric alias. In a table, the meaning of a
+number is the intersection of a row label and column header; proximity in the
+flattened text is not enough. The adapter subsequently selects an evidence item
+containing the expected number, and the verifier checks the number and metric
+against the entire item, so a wrong cell can pass.
+
+### Required remediation
+
+- Parse a deterministic financial table IR before numeric planning:
+  `table -> headers -> metric rows -> typed cells`.
+- A cell must carry source/page/table identity, row label/index, column
+  label/index, period, Decimal value, unit, scale, and currency.
+- Bind operands by metric aliases plus requested period, then value. Do not
+  search the whole table for any occurrence of the expected value.
+- Carry `cell_id`, row label, and column label into the plan. The verifier must
+  reparse/reload that exact cell and reject a row, period, value, unit, scale,
+  or currency mismatch.
+- Use structured period values for working capital, free cash flow,
+  multi-period averages, ratios, and changes. Prose extraction remains only a
+  fallback when no table structure exists.
+- Keep all arithmetic in `Decimal`, preserve the verified plan scale during
+  rendering, and require citations for every operand.
+
+### Closure evidence
+
+Regression fixtures must cover multi-year headers, parenthesized negative
+values, repeated equal values in different rows, same metric across periods,
+wrong-row distractors, continuation tables, scale headers, and the exact
+`$5,818 million` and `$3,215.4 million` outputs.
+
+The frozen subset must reach native numeric 20%, all-operands 50%, false
+abstention at most 15%, and, conditional on a complete valid plan, execution
+accuracy 95% and unit accuracy 98%.
+
+## CONTRACT-002: QASPER Boolean Semantics Remain Unstable
+
+### Evidence
+
+QASPER v16 closes the output-truncation failure:
+
+- verifier parser errors fall from 24 to 0;
+- token/native F1 rises from 55.41% to 62.02%;
+- semantic F1 rises from 51.57% to 58.49%;
+- structure validity rises from 90.57% to 97.48%;
+- evidence F1 remains 21.66%.
+
+The parser/repair item is therefore closed. The remaining failure is semantic:
+only 41/99 boolean rows are correct. Four gold-unanswerable rows are incorrectly
+classified as `supported` because the relation check accepts lexical token
+overlap without proving the question proposition.
+
+### Root cause
+
+The verifier validates that a quote exists and shares relation anchors with the
+question. It does not represent the proposition as subject, relation, object,
+scope, time, and polarity. High lexical overlap can therefore validate a quote
+about a related but different claim. The verifier is correctly advisory, so it
+cannot safely repair a wrong primary yes/no answer.
+
+### Required remediation
+
+- Replace lexical relation overlap with a gold-independent proposition
+  contract containing subject, relation, object/scope, time, and polarity.
+- Require the evidence quote to entail the complete candidate proposition.
+  Contradiction and absence of evidence are distinct outcomes.
+- Keep the verifier advisory for non-empty primary candidates; improve boolean
+  polarity at the primary prompt/evidence boundary instead of flipping answers
+  after evaluation.
+- Report yes, no, and unanswerable confusion plus proposition failure reasons.
+- Freeze a calibration subset before changing thresholds or prompt contracts.
+
+### Closure evidence
+
+Structure validity reaches 100%, no correct primary candidate is damaged,
+unsupported lexical-neighbor quotes cannot confirm a candidate, and semantic
+F1 reaches 80% on the frozen 159-row subset.
 
 ## PERF-001: Latency Evidence Must Remain Quality-Preserving
 
-QASPER v14 average generation latency is 1.60 seconds and has zero timeouts.
-ALCE v9 median is 4.61 seconds with P95 5.34 seconds. Finance v13 average
-generation latency is 21.38 seconds and has zero timeouts.
-
-The timeout defect is closed. Do not interpret text-only fallback, abstention,
-incomplete plans, or rejected execution as a latency gain. Close this item only
-after the corrected focused subsets pass quality gates, publish median and P95,
-and stay within the fixed simple and multi-page/numeric latency budgets.
+The latest focused jobs have zero timeouts. Do not interpret text-only
+fallback, abstention, incomplete plans, or verifier rejection as a latency
+gain. Close this item only after the corrected focused subsets pass quality
+gates, publish median and P95, and stay within the fixed simple and
+multi-page/numeric latency budgets.
 
 ## EVAL-001: The Global Release Gate Is Not Measurable Yet
 
-The old frozen G-minus-B QA semantic improvement is only +0.38 percentage
-points and its confidence interval crosses zero.
+The frozen G-minus-B QA semantic improvement is still below the required
+release gain and lacks a positive paired confidence-interval lower bound.
 
 Required closure:
 
@@ -387,6 +388,30 @@ Closure requires frozen PDF, DOCX, PPTX, XLSX, CSV, Markdown, text, OCR, and
 chart fixtures with separate loader, conversion, preview, indexing, retrieval,
 citation, and QA results plus a format-specific failure taxonomy.
 
+## Current Remediation Wave
+
+The current wave intentionally repairs shared contracts before another model
+run:
+
+1. Protection tests for unified identity, metric invariants, and table-cell
+   binding are committed separately in `7687d71`, `54aed55`, and `bf91766`.
+2. Additive source/page/element/cell fields now survive `EvidenceBundle`; all
+   compact candidate and reranker identity inputs remain replayable.
+3. Candidate-pool recall, reranker lineage, and equivalent fact support are
+   separate additive metrics. Historical strict locator metrics are unchanged.
+4. Deterministic numeric scoring inherits only an unambiguous question
+   dimension; explicit conflicts remain fatal. Free-text judging uses atomic
+   subject/relation/value/unit/time/scope/polarity instructions.
+5. Financial tables are parsed into typed Decimal cells. Plans carry row,
+   column, and cell IDs; the verifier reloads that exact cell, and period-aware
+   formulas no longer default to the first table column.
+6. The public CLI gate exposed and closed a pre-existing facade drift:
+   `slide_cli.DocQARequest` now forwards the runtime-only route timeout and
+   deadline fields without adding or changing any CLI option.
+7. Focused unit, benchmark, DocQA, hygiene, and changed-files pre-commit gates
+   must pass before submitting the frozen QASPER 159 and FinanceBench 20x4
+   validations. A full benchmark remains blocked until the gates above are met.
+
 ## Tracked Code Debt
 
 These maintenance risks are not benchmark release claims:
@@ -397,7 +422,7 @@ These maintenance risks are not benchmark release claims:
   diagnostics.
 - File-index Gradio event-chain order remains behavior and needs
   characterization coverage.
-- Benchmark reporting metrics belong in focused helpers, not the runner.
+- Shared metric and identity helpers must remain outside the benchmark runner.
 - Shared artifact identity must remain the only controller, rescoring,
   synthesis, and cleanup matching rule.
 

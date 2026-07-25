@@ -9,7 +9,7 @@ from .evidence_identity import (
     EVIDENCE_BUNDLE_SCHEMA_VERSION,
     canonicalize_and_dedupe_evidence,
 )
-from .evidence_locators import merged_locator_metadata
+from .evidence_locators import merged_locator_metadata, source_alias_values
 from .evidence_planning import select_planned_evidence
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
@@ -25,9 +25,14 @@ class EvidenceElement:
     evidence_id: str
     source_id: str = ""
     source_name: str = ""
+    source_aliases: list[str] = field(default_factory=list)
     page_label: str = ""
+    dataset_page: str = ""
+    parser_page_index: int | None = None
+    page_aliases: list[str] = field(default_factory=list)
     modality: str = "text"
     element_id: str = ""
+    cell_id: str = ""
     canonical_id: str = ""
     parent_element_id: str = ""
     neighbor_element_ids: list[str] = field(default_factory=list)
@@ -35,6 +40,12 @@ class EvidenceElement:
     table_id: str = ""
     row_index: int | None = None
     column_index: int | None = None
+    row_label: str = ""
+    column_label: str = ""
+    period: str = ""
+    unit: str = ""
+    scale: str = ""
+    currency: str = ""
     continuation_id: str = ""
     chunk_start: int | None = None
     chunk_end: int | None = None
@@ -50,7 +61,23 @@ class EvidenceElement:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        for field_name in (
+            "source_aliases",
+            "dataset_page",
+            "parser_page_index",
+            "page_aliases",
+            "cell_id",
+            "row_label",
+            "column_label",
+            "period",
+            "unit",
+            "scale",
+            "currency",
+        ):
+            if payload[field_name] in ("", None, []):
+                payload.pop(field_name)
+        return payload
 
 
 @dataclass(frozen=True)
@@ -204,9 +231,20 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
             or metadata.get("source_name")
             or ""
         ).strip(),
+        source_aliases=source_alias_values(item, metadata, file_id),
         page_label=page_label,
+        dataset_page=str(
+            item.get("dataset_page") or metadata.get("dataset_page") or ""
+        ).strip(),
+        parser_page_index=_optional_int(
+            item.get("parser_page_index", metadata.get("parser_page_index"))
+        ),
+        page_aliases=_string_values(
+            item.get("page_aliases") or metadata.get("page_aliases")
+        ),
         modality=modality or "text",
         element_id=str(item.get("element_id") or "").strip(),
+        cell_id=str(item.get("cell_id") or metadata.get("cell_id") or "").strip(),
         canonical_id=str(item.get("canonical_id") or "").strip(),
         parent_element_id=str(
             item.get("parent_element_id") or metadata.get("parent_element_id") or ""
@@ -224,6 +262,14 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         column_index=_optional_int(
             item.get("column_index", metadata.get("column_index"))
         ),
+        row_label=str(item.get("row_label") or metadata.get("row_label") or "").strip(),
+        column_label=str(
+            item.get("column_label") or metadata.get("column_label") or ""
+        ).strip(),
+        period=str(item.get("period") or metadata.get("period") or "").strip(),
+        unit=str(item.get("unit") or metadata.get("unit") or "").strip(),
+        scale=str(item.get("scale") or metadata.get("scale") or "").strip(),
+        currency=str(item.get("currency") or metadata.get("currency") or "").strip(),
         continuation_id=str(
             item.get("continuation_id")
             or metadata.get("continuation_id")

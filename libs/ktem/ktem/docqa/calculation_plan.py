@@ -42,10 +42,16 @@ class CalculationOperand:
     period: str = ""
     entity: str = ""
     source: str = "evidence"
+    cell_id: str = ""
+    row_label: str = ""
+    column_label: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["value"] = str(self.value)
+        for field_name in ("cell_id", "row_label", "column_label"):
+            if not payload[field_name]:
+                payload.pop(field_name)
         return payload
 
 
@@ -190,6 +196,30 @@ def verify_calculation_plan(
             errors.append(f"operand_evidence_missing:{operand.operand_id}")
             continue
         text = _evidence_text(item)
+        if operand.cell_id:
+            from .financial_table import find_financial_cell_by_id
+
+            cell = find_financial_cell_by_id(item, operand.cell_id)
+            if (
+                cell is None
+                or cell.value != operand.value
+                or (
+                    operand.row_label
+                    and cell.row_label.lower() != operand.row_label.lower()
+                )
+                or (
+                    operand.column_label
+                    and cell.column_label.lower() != operand.column_label.lower()
+                )
+            ):
+                errors.append(f"operand_cell_mismatch:{operand.operand_id}")
+            elif cell is not None:
+                text = " ".join(
+                    (
+                        cell.verification_text(),
+                        _item_dimension_text(item, "entity"),
+                    )
+                )
         if not _value_appears(operand.value, text):
             errors.append(f"operand_value_mismatch:{operand.operand_id}")
         if _operand_value_is_period(operand):
@@ -392,7 +422,8 @@ def _operand_matches_slot(
     ):
         return False
     metric = str(slot.get("metric") or "").strip().lower()
-    if metric and not _item_supports_metric(item, metric):
+    metric_item = {"text": operand.row_label} if operand.row_label else item
+    if metric and not _item_supports_metric(metric_item, metric):
         return False
     return True
 
@@ -446,6 +477,11 @@ def _evidence_text(item: dict[str, Any]) -> str:
             metadata.get("entity"),
         )
     )
+
+
+def _item_dimension_text(item: dict[str, Any], field: str) -> str:
+    metadata = dict(item.get("metadata") or {})
+    return str(item.get(field) or metadata.get(field) or "")
 
 
 def _value_appears(expected: Decimal, text: str) -> bool:

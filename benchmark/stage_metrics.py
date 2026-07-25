@@ -5,11 +5,16 @@ import re
 from typing import Any
 
 from .answer_repetition import final_answer_has_duplicate
+from .evidence_identity_metrics import gold_evidence_support_recall, reranker_lineage
 from .metrics import round_metric, safe_mean
+from .report_identity_compaction import is_identity_only_projection
 
 STAGE_METRIC_KEYS = (
     "candidate_recall_at_50",
+    "candidate_pool_recall_at_80",
     "reranked_recall_at_10",
+    "reranker_lineage_coverage",
+    "gold_evidence_support_recall",
     "retrieval_mrr",
     "retrieval_ndcg",
     "all_gold_pages_hit",
@@ -34,23 +39,40 @@ STAGE_METRIC_KEYS = (
 
 def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | None]:
     metadata = dict(prediction.get("evidence_metadata") or {})
-    candidates = (
-        _records(metadata.get("candidate_evidence"))[:50]
+    candidate_pool = (
+        _records(metadata.get("candidate_evidence"))[:80]
         if "candidate_evidence" in metadata
         else None
     )
+    candidates = candidate_pool[:50] if candidate_pool is not None else None
     reranked = (
         _records(metadata.get("reranked_evidence"))[:10]
         if "reranked_evidence" in metadata
         else None
     )
     gold_keys = _gold_keys(prediction)
+    lineage_coverage = (
+        reranker_lineage(candidate_pool, reranked)[0]
+        if candidate_pool is not None and reranked is not None
+        else None
+    )
+    support_recall = gold_evidence_support_recall(
+        candidate_pool,
+        _records(prediction.get("gold_evidence")),
+    )
+    if candidate_pool and is_identity_only_projection(candidate_pool):
+        support_recall = (prediction.get("stage_metrics") or {}).get(
+            "gold_evidence_support_recall"
+        )
     selection = dict(metadata.get("evidence_selection_trace") or {})
     dedupe = dict(metadata.get("dedupe_trace") or {})
     finance = dict(metadata.get("finance_numeric_trace") or {})
     return {
         "candidate_recall_at_50": _recall(candidates, gold_keys),
+        "candidate_pool_recall_at_80": _recall(candidate_pool, gold_keys),
         "reranked_recall_at_10": _recall(reranked, gold_keys),
+        "reranker_lineage_coverage": lineage_coverage,
+        "gold_evidence_support_recall": support_recall,
         "retrieval_mrr": _mrr(reranked, gold_keys),
         "retrieval_ndcg": _ndcg(reranked, gold_keys),
         "all_gold_pages_hit": _all_gold_pages_hit(prediction),
@@ -82,6 +104,8 @@ def prediction_stage_metric_status(
     gold_count = len(_gold_keys(prediction))
     candidate_count = len(_records(metadata.get("candidate_evidence")))
     reranked_count = len(_records(metadata.get("reranked_evidence")))
+    candidate_pool = _records(metadata.get("candidate_evidence"))[:80]
+    reranked = _records(metadata.get("reranked_evidence"))[:10]
     candidate_status = _retrieval_metric_status(
         gold_count=gold_count,
         trace_available="candidate_evidence" in metadata,
@@ -95,6 +119,11 @@ def prediction_stage_metric_status(
             "status": candidate_status,
             "gold_identity_count": gold_count,
             "candidate_count": candidate_count,
+        },
+        "candidate_pool_recall_at_80": {
+            "status": candidate_status,
+            "gold_identity_count": gold_count,
+            "candidate_count": len(candidate_pool),
         },
         "reranked_recall_at_10": {
             "status": reranked_status,
@@ -112,6 +141,14 @@ def prediction_stage_metric_status(
             "candidate_count": reranked_count,
         },
     }
+    status.update(
+        _identity_metric_status(
+            prediction,
+            metadata=metadata,
+            candidate_pool=candidate_pool,
+            reranked=reranked,
+        )
+    )
     status["calculation_pipeline"] = _calculation_status(
         dict(metadata.get("finance_numeric_trace") or {}),
         applicable=(
@@ -121,6 +158,54 @@ def prediction_stage_metric_status(
         rendered_answer=str(prediction.get("answer_for_scoring") or ""),
     )
     return status
+
+
+def _identity_metric_status(
+    prediction: dict[str, Any],
+    *,
+    metadata: dict[str, Any],
+    candidate_pool: list[dict[str, Any]],
+    reranked: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    traces_available = (
+        "candidate_evidence" in metadata and "reranked_evidence" in metadata
+    )
+    violation_count = (
+        reranker_lineage(candidate_pool, reranked)[1] if traces_available else None
+    )
+    gold_support_count = sum(
+        any(
+            str(item.get(key) or "").strip()
+            for key in ("span", "text", "quote", "evidence")
+        )
+        for item in _records(prediction.get("gold_evidence"))
+    )
+    identity_only = is_identity_only_projection(candidate_pool)
+    preserved_support = (prediction.get("stage_metrics") or {}).get(
+        "gold_evidence_support_recall"
+    )
+    support_available = "candidate_evidence" in metadata and (
+        not identity_only or preserved_support is not None
+    )
+    return {
+        "reranker_lineage_coverage": {
+            "status": "measured" if traces_available else "unavailable",
+            "candidate_pool_count": len(candidate_pool),
+            "reranked_count": len(reranked),
+            "violation_count": violation_count,
+        },
+        "gold_evidence_support_recall": {
+            "status": (
+                "measured"
+                if gold_support_count and support_available
+                else "not_applicable"
+                if not gold_support_count
+                else "unavailable"
+            ),
+            "gold_identity_count": gold_support_count,
+            "candidate_count": len(candidate_pool),
+        },
+    }
 
 
 def stage_metric_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
@@ -180,7 +265,19 @@ def _calculation_metrics(
         if operands
         else None
     )
-    cell_errors = [error for error in errors if "evidence_missing" in error]
+    cell_errors = [
+        error
+        for error in errors
+        if any(
+            term in error
+            for term in (
+                "evidence_missing",
+                "cell_mismatch",
+                "value_mismatch",
+                "period_mismatch",
+            )
+        )
+    ]
     operator_errors = [
         error
         for error in errors

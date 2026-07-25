@@ -100,7 +100,7 @@ def test_free_text_semantic_score_rewards_supported_explanation():
     assert metrics["semantic_answer_f1"] == 1.0
     assert metadata["method"] == "local_claim_entailment"
     assert metadata["judge_status"] == "ok"
-    assert metadata["prompt_contract"] == "semantic_claim_judge_prompt_v1"
+    assert metadata["prompt_contract"] == "semantic_claim_judge_prompt_v2"
 
 
 def test_numeric_semantic_score_rejects_conflicting_unit_or_scale():

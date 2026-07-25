@@ -43,6 +43,26 @@ def test_financial_table_parser_emits_metric_period_cell_identity():
     assert current_assets.cell_id.endswith("#row:current-assets#column:2021")
 
 
+def test_financial_table_parser_skips_numeric_descriptor_columns():
+    item = _table_item(
+        """
+        PROPERTY, PLANT AND EQUIPMENT
+        At December 31, Lives (years) 2021 2020
+        Buildings and equipment 7 to 45 33,361 32,933
+        """
+    )
+
+    cell = find_financial_cell(
+        [item],
+        aliases=("buildings and equipment",),
+        period="2021",
+    )
+
+    assert cell is not None
+    assert cell.value == Decimal("33361")
+    assert cell.row_label == "Buildings and equipment"
+
+
 def test_working_capital_operands_bind_to_distinct_rows_and_requested_period():
     answer = finance_numeric_answer(
         "What was working capital in 2021, in USD millions?",
@@ -100,6 +120,24 @@ def test_free_cash_flow_uses_the_requested_period_column_not_result_distractor()
     assert operands["operating_cash_flow"]["row_label"].startswith("Net cash provided")
     assert operands["capital_expenditure"]["row_label"] == "Capital expenditures"
     assert operands["capital_expenditure"]["column_label"] == "2020"
+
+
+def test_ratio_uses_requested_period_instead_of_first_table_column():
+    answer = finance_numeric_answer(
+        "What was the current ratio in 2020?",
+        [_table_item()],
+    )
+
+    assert answer is not None
+    assert answer.answer == "1.22"
+    operands = {
+        operand["operand_id"]: operand
+        for operand in answer.calculation_plan["operands"]
+    }
+    assert operands["numerator"]["value"] == "19378.0"
+    assert operands["numerator"]["column_label"] == "2020"
+    assert operands["denominator"]["value"] == "15911.0"
+    assert operands["denominator"]["column_label"] == "2020"
 
 
 def _plan_from_answer(answer):

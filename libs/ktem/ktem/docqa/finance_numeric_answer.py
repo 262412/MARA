@@ -6,7 +6,6 @@ from typing import Any
 
 from .evidence_text import evidence_text
 from .finance_calculation_adapter import finance_calculation_audit
-from .finance_numeric_values import amount_after as _amount_after
 from .finance_numeric_values import amount_unit as _amount_unit
 from .finance_numeric_values import (
     asks_for_causal_explanation as _asks_for_causal_explanation,
@@ -22,9 +21,11 @@ from .finance_numeric_values import (
 from .finance_numeric_values import format_decimal as _format_decimal
 from .finance_numeric_values import format_number as _format_number
 from .finance_numeric_values import format_percentage as _format_percentage
+from .finance_numeric_values import free_cash_flow_inputs as _free_cash_flow_inputs
 from .finance_numeric_values import (
     metric_labels_for_question as _metric_labels_for_question,
 )
+from .finance_numeric_values import period_amount as _period_amount
 from .finance_numeric_values import question_years as _question_years
 from .finance_numeric_values import render_execution_answer as _render_execution_answer
 from .finance_numeric_values import target_year as _target_year
@@ -104,10 +105,11 @@ def _finance_numeric_answer_from_text(
     if "free cash flow" in lowered or re.search(r"\bfcf\b", lowered):
         return _free_cash_flow_answer(lowered, text)
     if "quick ratio" in lowered:
-        return _quick_ratio_answer(text)
+        return _quick_ratio_answer(lowered, text)
     if "current ratio" in lowered:
         return _ratio_answer(
             text,
+            lowered_question=lowered,
             question_type="current_ratio",
             numerator_labels=("total current assets", "current assets"),
             denominator_labels=("total current liabilities", "current liabilities"),
@@ -116,6 +118,7 @@ def _finance_numeric_answer_from_text(
     if "working capital" in lowered:
         return _difference_answer(
             text,
+            lowered_question=lowered,
             question_type="working_capital",
             left_labels=("total current assets", "current assets"),
             right_labels=("total current liabilities", "current liabilities"),
@@ -128,6 +131,7 @@ def _finance_numeric_answer_from_text(
             return average_answer
         return _ratio_answer(
             text,
+            lowered_question=lowered,
             question_type="inventory_turnover",
             numerator_labels=("cost of sales", "cost of goods sold", "cogs"),
             denominator_labels=("average inventories", "inventories", "inventory"),
@@ -156,6 +160,7 @@ def _margin_or_leverage_answer(
     if "operating margin" in lowered_question:
         return _percentage_ratio_answer(
             text,
+            lowered_question=lowered_question,
             question_type="operating_margin",
             numerator_labels=("operating income", "operating profit"),
             denominator_labels=("net sales", "net revenue", "net revenues", "revenue"),
@@ -164,6 +169,7 @@ def _margin_or_leverage_answer(
     if "gross margin" in lowered_question:
         return _percentage_ratio_answer(
             text,
+            lowered_question=lowered_question,
             question_type="gross_margin",
             numerator_labels=("gross profit", "gross margin"),
             denominator_labels=("net sales", "net revenue", "net revenues", "revenue"),
@@ -172,6 +178,7 @@ def _margin_or_leverage_answer(
     if "debt" in lowered_question and "equity" in lowered_question:
         return _ratio_answer(
             text,
+            lowered_question=lowered_question,
             question_type="debt_to_equity",
             numerator_labels=("total debt", "long-term debt", "short-term debt"),
             denominator_labels=(
@@ -267,25 +274,10 @@ def _free_cash_flow_answer(
     lowered_question: str,
     text: str,
 ) -> FinanceNumericAnswer | None:
-    operating_cash_flow = _amount_after(
-        text,
-        (
-            "net cash provided by operating activities",
-            "cash provided by operating activities",
-            "operating cash flow",
-            "cash from operations",
-        ),
-    )
-    capital_expenditure = _amount_after(
-        text,
-        (
-            "capital expenditures",
-            "capital expenditure",
-            "capital spending",
-        ),
-    )
-    if operating_cash_flow is None or capital_expenditure is None:
+    inputs = _free_cash_flow_inputs(lowered_question, text)
+    if inputs is None:
         return None
+    operating_cash_flow, capital_expenditure = inputs
     signed_capex = capital_expenditure < 0
     value = (
         operating_cash_flow + capital_expenditure
@@ -424,12 +416,24 @@ def _average_inventory_turnover_answer(
     )
 
 
-def _quick_ratio_answer(text: str) -> FinanceNumericAnswer | None:
-    assets = _amount_after(text, ("total current assets", "current assets"))
-    inventories = _amount_after(text, ("total inventories", "inventories", "inventory"))
-    liabilities = _amount_after(
+def _quick_ratio_answer(
+    lowered_question: str,
+    text: str,
+) -> FinanceNumericAnswer | None:
+    assets = _period_amount(
+        text,
+        ("total current assets", "current assets"),
+        lowered_question,
+    )
+    inventories = _period_amount(
+        text,
+        ("total inventories", "inventories", "inventory"),
+        lowered_question,
+    )
+    liabilities = _period_amount(
         text,
         ("total current liabilities", "current liabilities"),
+        lowered_question,
     )
     if assets is None or inventories is None or liabilities is None or liabilities == 0:
         return None
@@ -450,13 +454,14 @@ def _quick_ratio_answer(text: str) -> FinanceNumericAnswer | None:
 def _ratio_answer(
     text: str,
     *,
+    lowered_question: str = "",
     question_type: str,
     numerator_labels: tuple[str, ...],
     denominator_labels: tuple[str, ...],
     formula: str,
 ) -> FinanceNumericAnswer | None:
-    numerator = _amount_after(text, numerator_labels)
-    denominator = _amount_after(text, denominator_labels)
+    numerator = _period_amount(text, numerator_labels, lowered_question)
+    denominator = _period_amount(text, denominator_labels, lowered_question)
     if numerator is None or denominator is None or denominator == 0:
         return None
     value = numerator / float(denominator)
@@ -472,6 +477,7 @@ def _ratio_answer(
 def _percentage_ratio_answer(
     text: str,
     *,
+    lowered_question: str = "",
     question_type: str,
     numerator_labels: tuple[str, ...],
     denominator_labels: tuple[str, ...],
@@ -479,6 +485,7 @@ def _percentage_ratio_answer(
 ) -> FinanceNumericAnswer | None:
     ratio = _ratio_answer(
         text,
+        lowered_question=lowered_question,
         question_type=question_type,
         numerator_labels=numerator_labels,
         denominator_labels=denominator_labels,
@@ -501,14 +508,15 @@ def _percentage_ratio_answer(
 def _difference_answer(
     text: str,
     *,
+    lowered_question: str = "",
     question_type: str,
     left_labels: tuple[str, ...],
     right_labels: tuple[str, ...],
     formula: str,
     currency: bool,
 ) -> FinanceNumericAnswer | None:
-    left = _amount_after(text, left_labels)
-    right = _amount_after(text, right_labels)
+    left = _period_amount(text, left_labels, lowered_question)
+    right = _period_amount(text, right_labels, lowered_question)
     if left is None or right is None:
         return None
     value = left - right
