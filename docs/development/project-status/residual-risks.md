@@ -412,6 +412,17 @@ run:
    must pass before submitting the frozen QASPER 159 and FinanceBench 20x4
    validations. A full benchmark remains blocked until the gates above are met.
 
+The focused validations were submitted from commit `d5cfb70`:
+
+- QASPER 159: job `9926922`,
+  `residual-qasper-typed-v17-atomic-semantic-identity-l40s`;
+- FinanceBench 20x4: job `9926923`,
+  `residual-finance-v16-cell-binding-identity-l40s`.
+
+Both jobs entered `RUNNING` without a dependency or resource wait. Their
+results are pending and none of the open completion gates is claimed closed by
+submission alone.
+
 ## Tracked Code Debt
 
 These maintenance risks are not benchmark release claims:
