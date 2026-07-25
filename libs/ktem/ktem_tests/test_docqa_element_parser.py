@@ -65,6 +65,35 @@ def test_element_index_records_parse_formula_from_text_without_element_metadata(
     assert records[0]["metadata"]["element_schema_version"] == "1.0"
 
 
+def test_element_index_records_infer_plain_text_financial_table():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "Table of Contents\n"
+                "ITEM 6. Selected Financial Data (In millions)\n"
+                "2021 2020 2019\n"
+                "Net sales $ 67,044 $ 65,398 $ 59,812\n"
+                "Total current assets 19,815 19,378 17,095\n"
+                "Total current liabilities 13,997 13,933 13,972\n"
+            ),
+            id_="finance-page-30",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "annual-report.pdf",
+                "page_label": "30",
+                "type": "image",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+
+    assert len(records) == 1
+    assert records[0]["modality"] == "table"
+    assert records[0]["element_id"] == "table-finance-page-30"
+    assert records[0]["page_label"] == "30"
+
+
 def test_element_index_documents_round_trip_records_for_persistence():
     docs = [
         RetrievedDocument(
