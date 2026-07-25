@@ -1,3 +1,5 @@
+from ktem.docqa._runtime_models import DocQARequest
+from ktem.docqa.evidence import build_evidence_bundle
 from ktem.docqa.evidence_identity import canonicalize_and_dedupe_evidence
 
 
@@ -115,3 +117,47 @@ def test_overlapping_chunks_merge_when_same_parent_and_overlap_is_high():
 
     assert len(items) == 1
     assert trace["overlap_duplicate_count"] == 1
+
+
+def test_evidence_bundle_preserves_dataset_parser_and_cell_identity_fields():
+    bundle = build_evidence_bundle(
+        "doc",
+        DocQARequest(
+            prompt="What were current assets in 2021?",
+            route_policy="doc",
+            selected_file_ids=["runtime-file-id"],
+        ),
+        {
+            "evidence": [
+                {
+                    "evidence_id": "dense-1",
+                    "file_id": "runtime-file-id",
+                    "source_name": "LOCKHEEDMARTIN_2021_10K.pdf",
+                    "page_label": "68",
+                    "dataset_page": "68",
+                    "parser_page_index": 67,
+                    "page_aliases": ["68", "30"],
+                    "element_id": "balance-sheet",
+                    "table_id": "balance-sheet",
+                    "cell_id": "balance-sheet#row:current-assets#column:2021",
+                    "row_label": "Current assets",
+                    "column_label": "2021",
+                    "period": "2021",
+                    "scale": "million",
+                    "currency": "USD",
+                    "text": "Current assets 20,991",
+                }
+            ]
+        },
+    )
+
+    item = bundle.items[0]
+    assert item["dataset_page"] == "68"
+    assert item["parser_page_index"] == 67
+    assert item["page_aliases"] == ["68", "30"]
+    assert item["cell_id"].endswith("column:2021")
+    assert item["row_label"] == "Current assets"
+    assert item["column_label"] == "2021"
+    assert item["period"] == "2021"
+    assert item["scale"] == "million"
+    assert item["currency"] == "USD"
