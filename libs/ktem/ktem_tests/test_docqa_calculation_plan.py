@@ -179,6 +179,38 @@ def test_verifier_rejects_missing_scale_when_peer_operand_has_explicit_scale():
     assert "scale_mismatch:result" in verification.errors
 
 
+def test_verifier_rejects_period_bound_as_operand_value():
+    plan = CalculationPlan(
+        operands=(
+            CalculationOperand(
+                operand_id="value",
+                evidence_id="credit-agreement",
+                value=Decimal("2023"),
+                period="2023",
+            ),
+        ),
+        steps=(),
+        result_step_id="value",
+    )
+
+    verification = verify_calculation_plan(
+        plan,
+        evidence_items=[
+            {
+                "evidence_id": "credit-agreement",
+                "text": (
+                    "On May 26, 2023, the company entered into a revolving "
+                    "credit agreement of $4.2 billion."
+                ),
+            }
+        ],
+        question="What amount was available under the agreement in 2023?",
+    )
+
+    assert not verification.valid
+    assert "operand_value_is_period:value" in verification.errors
+
+
 def _operand(
     operand_id,
     evidence_id,

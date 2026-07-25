@@ -173,6 +173,55 @@ def test_phase3_summary_groups_hybrid_metrics_by_question_type():
     } in rows
 
 
+def test_phase3_summary_uses_controller_effective_hybrid_route():
+    prediction = {
+        "example_id": "finance-controller-hybrid",
+        "route": "controller_auto",
+        "benchmark_role": "qa_quality",
+        "question": "What revenue amount is reported in the table?",
+        "diagnostics": {"controller_selected_route": "hybrid"},
+        "controller_decision": {
+            "route": "hybrid_rag",
+            "legacy_route": "hybrid",
+        },
+        "evidence_metadata": {
+            "element_index": [
+                {
+                    "evidence_id": "element:finance:1:table1",
+                    "modality": "table",
+                }
+            ]
+        },
+        "retrieved_hits": [
+            {
+                "evidence_id": "element:finance:1:table1",
+                "modality": "table",
+            }
+        ],
+        "metrics": {"f1": 0.5, "native_score": 0.5, "page_hit": 1.0},
+        "performance": {},
+    }
+
+    summary = phase3_multimodal_summary("financebench", [prediction])
+
+    assert summary["hybrid"]["status"] == "question_type_breakdown_available"
+    assert summary["hybrid"]["effective_route_counts"] == {"hybrid_rag": 1}
+    assert summary["hybrid"]["question_type_route_metrics"] == [
+        {
+            "dataset_name": "financebench",
+            "question_type": "element_table",
+            "route": "controller_auto",
+            "count": 1,
+            "avg_f1": 0.5,
+            "avg_native_score": 0.5,
+            "avg_page_hit": 1.0,
+        }
+    ]
+    assert summary["element"]["status"] == "index_coverage_present"
+    assert summary["element"]["predictions_with_element_index"] == 1
+    assert summary["element"]["effective_route_counts"] == {"hybrid_rag": 1}
+
+
 def test_phase3_report_sections_include_element_coverage_report():
     sections = dict(
         phase3_report_sections(

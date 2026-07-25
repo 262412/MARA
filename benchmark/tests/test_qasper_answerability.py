@@ -217,6 +217,15 @@ def test_qasper_answerability_repairs_only_invalid_json_structure_once():
     assert result.trace["initial_response"].startswith("```json")
     assert len(llm.calls) == 2
     assert "Do not reconsider the evidence" in llm.calls[1][0]
+    assert all(call[1]["max_tokens"] >= 128 for call in llm.calls)
+    assert all(
+        call[1]["response_format"]["json_schema"]["schema"]["properties"][
+            "evidence_quote"
+        ]["maxLength"]
+        <= 320
+        for call in llm.calls
+    )
+    assert "at most 20 words" in llm.calls[0][0]
 
 
 def test_qasper_answerability_does_not_repair_response_without_verdict():
@@ -235,3 +244,26 @@ def test_qasper_answerability_does_not_repair_response_without_verdict():
     assert result.trace["repair_status"] == "not_repairable"
     assert result.trace["initial_response"] == "not json"
     assert len(llm.calls) == 1
+
+
+def test_qasper_boolean_verifier_requires_quote_to_support_question_relation():
+    llm = _VerifierLLM(
+        '{"verdict":"yes","evidence_quote":'
+        '"The paper reports model accuracy on three public benchmarks."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Did the authors release the training data?",
+        evidence=(
+            "The paper reports model accuracy on three public benchmarks. "
+            "It does not discuss access to training data."
+        ),
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["verdict"] == "insufficient_evidence"
+    assert result.trace["action"] == "preserved_insufficient_candidate"
+    assert result.trace["quote_grounded"] == "true"
+    assert result.trace["quote_supports_relation"] == "false"

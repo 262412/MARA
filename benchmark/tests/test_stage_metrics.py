@@ -155,6 +155,44 @@ def test_finance_stage_metrics_do_not_report_all_operands_for_invalid_plan():
     assert metrics["execution_accuracy"] == 0.0
 
 
+def test_finance_stage_metrics_reject_rendered_scale_that_contradicts_plan():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "numeric",
+        "answer_for_scoring": "$5,818.0 billion",
+        "evidence_metadata": {
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [
+                        {"operand_id": "left"},
+                        {"operand_id": "right"},
+                    ],
+                    "steps": [{"step_id": "result", "operator": "subtract"}],
+                    "answer_scale": "million",
+                    "answer_unit": "",
+                },
+                "calculation_verification": {
+                    "valid": True,
+                    "verified_operand_ids": ["left", "right"],
+                    "errors": [],
+                },
+                "calculation_execution": {"status": "ok", "value": "5818.0"},
+            }
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+    status = prediction_stage_metric_status(prediction)
+
+    assert metrics["program_accuracy"] == 1.0
+    assert metrics["execution_accuracy"] == 1.0
+    assert metrics["unit_accuracy"] == 0.0
+    assert status["calculation_pipeline"] == {
+        "status": "measured",
+        "failure_stage": "rendered_unit",
+    }
+
+
 def test_finance_stage_metrics_do_not_measure_long_form_query_plan_as_numeric():
     prediction = {
         "dataset_name": "financebench",
