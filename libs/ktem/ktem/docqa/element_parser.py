@@ -89,12 +89,32 @@ def _infer_modality(text: str) -> str:
         return "figure"
     if lowered.startswith("slide:"):
         return "slide"
+    if _looks_like_financial_table(text):
+        return "table"
     return ""
 
 
 def _looks_like_markdown_table(text: str) -> bool:
     lines = [line for line in str(text or "").splitlines() if line.strip()]
     return len([line for line in lines if "|" in line]) >= 2
+
+
+def _looks_like_financial_table(text: str) -> bool:
+    value = str(text or "")
+    if not re.search(
+        r"(?:selected financial data|balance sheets?|"
+        r"statements? of (?:income|operations|cash flows?|financial position)|"
+        r"\(\s*in\s+(?:thousands?|millions?|billions?)\b)",
+        value,
+        flags=re.IGNORECASE,
+    ):
+        return False
+    numeric_rows = 0
+    for line in value.splitlines():
+        numbers = re.findall(r"\(?\$?\s*\d[\d,]*(?:\.\d+)?\)?", line)
+        if len(numbers) >= 2:
+            numeric_rows += 1
+    return numeric_rows >= 2
 
 
 def _caption_from_text(text: str, modality: str) -> str:

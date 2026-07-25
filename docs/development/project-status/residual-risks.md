@@ -110,6 +110,10 @@ There are two unresolved failures:
    `element_rag` and `hybrid_rag`. It ignores the effective route selected
    inside controller/CRAG diagnostics. Consequently, an exercised hybrid route
    and its element-index coverage are reported as `not_evaluated`.
+3. Finance PDF table chunks often arrive as plain text or `type=image` records
+   without `element_type=table`, a `Table:` prefix, or Markdown pipes. The
+   local element parser therefore creates no persisted table relation even
+   when a page contains a clear financial statement.
 
 The previous eligibility-field and timeout causes are closed: the field now
 survives artifact projection, the formal validator observes all 12 required
@@ -130,6 +134,10 @@ the explicit run timeout is honored.
 - Publish candidate and reranked recall by top-level route and effective route,
   then inspect every lost required-slot evidence ID in the frozen subset.
 - Keep retrieval-free `direct_answer` rows out of retrieval averages.
+- Infer a table element only for plain-text chunks that contain a recognized
+  financial-statement heading and at least two multi-value numeric rows.
+  Persist those records through the normal element-index relation; do not
+  classify arbitrary number-heavy prose as a table.
 
 ### Implemented, pending focused artifact validation
 
@@ -142,6 +150,9 @@ the explicit run timeout is honored.
 - The summary publishes candidate/reranked and downstream stage metrics grouped
   by effective route; the existing route table now includes the same stage
   metrics grouped by top-level benchmark route.
+- The local element parser recognizes conservatively structured plain-text
+  financial tables, allowing fresh isolated Finance indexes to persist and
+  expose table elements without benchmark labels or gold-page hints.
 - Required-slot shortlist restoration from the full reranked pool remains
   active. The remaining broad candidate-recall deficit requires the next
   artifact and per-route loss audit; it is not claimed closed by reporting.
