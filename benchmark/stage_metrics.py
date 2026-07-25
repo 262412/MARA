@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from typing import Any
 
 from .answer_repetition import final_answer_has_duplicate
@@ -63,6 +64,7 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
                 "finance_numeric_trace" in metadata
                 or _is_finance_numeric_prediction(prediction)
             ),
+            rendered_answer=str(prediction.get("answer_for_scoring") or ""),
         ),
         "claim_duplicate_rate": _claim_duplicate_rate(prediction),
         "final_answer_duplicate_rate": _final_answer_duplicate_rate(prediction),
@@ -116,6 +118,7 @@ def prediction_stage_metric_status(
             "finance_numeric_trace" in metadata
             or _is_finance_numeric_prediction(prediction)
         ),
+        rendered_answer=str(prediction.get("answer_for_scoring") or ""),
     )
     return status
 
@@ -148,6 +151,7 @@ def _calculation_metrics(
     finance: dict[str, Any],
     *,
     applicable: bool,
+    rendered_answer: str,
 ) -> dict[str, float | None]:
     plan = dict(finance.get("calculation_plan") or {})
     verification = dict(finance.get("calculation_verification") or {})
@@ -187,6 +191,7 @@ def _calculation_metrics(
         for error in errors
         if any(term in error for term in ("unit", "scale", "currency"))
     ]
+    rendered_dimension_error = _rendered_dimension_error(plan, rendered_answer)
     return {
         "executor_activation_rate": 1.0,
         "all_operands_bound": float(
@@ -200,7 +205,7 @@ def _calculation_metrics(
         "operator_accuracy": 1.0 - len(operator_errors) / len(steps) if steps else 1.0,
         "program_accuracy": float(bool(verification.get("valid"))),
         "execution_accuracy": float(execution.get("status") == "ok"),
-        "unit_accuracy": float(not unit_errors),
+        "unit_accuracy": float(not unit_errors and not rendered_dimension_error),
     }
 
 
@@ -208,6 +213,7 @@ def _calculation_status(
     finance: dict[str, Any],
     *,
     applicable: bool,
+    rendered_answer: str,
 ) -> dict[str, str]:
     if not applicable:
         return {"status": "not_applicable", "failure_stage": "not_applicable"}
@@ -226,9 +232,34 @@ def _calculation_status(
         failure_stage = "plan_verification"
     elif dict(finance.get("calculation_execution") or {}).get("status") != "ok":
         failure_stage = "execution"
+    elif _rendered_dimension_error(plan, rendered_answer):
+        failure_stage = "rendered_unit"
     else:
         failure_stage = "none"
     return {"status": "measured", "failure_stage": failure_stage}
+
+
+def _rendered_dimension_error(
+    plan: dict[str, Any],
+    rendered_answer: str,
+) -> bool:
+    answer = str(rendered_answer or "").lower()
+    expected_scale = str(plan.get("answer_scale") or "").strip().lower()
+    if expected_scale:
+        rendered_scale = next(
+            (
+                scale
+                for scale in ("thousand", "million", "billion")
+                if re.search(rf"\b{scale}s?\b", answer)
+            ),
+            "",
+        )
+        if rendered_scale != expected_scale:
+            return True
+    expected_unit = str(plan.get("answer_unit") or "").strip().lower()
+    if expected_unit in {"percent", "%"}:
+        return "%" not in answer and "percent" not in answer
+    return False
 
 
 def _is_finance_numeric_prediction(prediction: dict[str, Any]) -> bool:

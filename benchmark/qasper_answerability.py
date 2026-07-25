@@ -5,8 +5,10 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v7"
+QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v8"
 QASPER_ANSWERABILITY_SEED = 20260724
+QASPER_ANSWERABILITY_MAX_TOKENS = 160
+QASPER_EVIDENCE_QUOTE_MAX_LENGTH = 320
 QASPER_ANSWERABILITY_RESPONSE_FORMAT = {
     "type": "json_schema",
     "json_schema": {
@@ -19,7 +21,10 @@ QASPER_ANSWERABILITY_RESPONSE_FORMAT = {
                     "type": "string",
                     "enum": ["supported", "unsupported"],
                 },
-                "evidence_quote": {"type": "string"},
+                "evidence_quote": {
+                    "type": "string",
+                    "maxLength": QASPER_EVIDENCE_QUOTE_MAX_LENGTH,
+                },
             },
             "required": ["verdict", "evidence_quote"],
             "additionalProperties": False,
@@ -38,7 +43,10 @@ QASPER_BOOLEAN_ANSWERABILITY_RESPONSE_FORMAT = {
                     "type": "string",
                     "enum": ["yes", "no", "insufficient_evidence"],
                 },
-                "evidence_quote": {"type": "string"},
+                "evidence_quote": {
+                    "type": "string",
+                    "maxLength": QASPER_EVIDENCE_QUOTE_MAX_LENGTH,
+                },
             },
             "required": ["verdict", "evidence_quote"],
             "additionalProperties": False,
@@ -152,7 +160,12 @@ def _verify_boolean_candidate(
             ),
         )
     quote_grounded = _quote_is_grounded(quote, evidence)
-    if verdict != "insufficient_evidence" and not quote_grounded:
+    quote_supports_relation = quote_grounded and _boolean_quote_supports_relation(
+        quote,
+        question,
+        verdict,
+    )
+    if verdict != "insufficient_evidence" and not quote_supports_relation:
         verdict = "insufficient_evidence"
     if verdict == candidate_polarity:
         action = "confirmed_candidate"
@@ -168,6 +181,7 @@ def _verify_boolean_candidate(
             action=action,
             evidence_quote=quote,
             quote_grounded=quote_grounded,
+            quote_supports_relation=quote_supports_relation,
             parse_trace=parse_trace,
         ),
     )
@@ -249,7 +263,7 @@ def _call_verifier(
 ) -> tuple[str, str, dict[str, str]]:
     response = llm(
         prompt,
-        max_tokens=64,
+        max_tokens=QASPER_ANSWERABILITY_MAX_TOKENS,
         response_format=response_format,
         temperature=0,
         seed=QASPER_ANSWERABILITY_SEED,
@@ -282,7 +296,7 @@ def _call_verifier(
             initial_response,
             allowed_values=allowed_values,
         ),
-        max_tokens=64,
+        max_tokens=QASPER_ANSWERABILITY_MAX_TOKENS,
         response_format=response_format,
         temperature=0,
         seed=QASPER_ANSWERABILITY_SEED,
@@ -346,7 +360,8 @@ def _answerability_prompt(
         "number in the candidate must be entailed. For yes/no candidates, the "
         "evidence must support that polarity. Return unsupported when the "
         "paper merely mentions related facts. For a supported verdict, quote "
-        "the shortest exact evidence span that states the question-candidate "
+        "the shortest exact evidence span, at most 20 words, that states the "
+        "question-candidate "
         "relation. If no such exact span exists, return unsupported with an "
         "empty evidence_quote.\n\n"
         f"QUESTION:\n{question}\n\n"
@@ -366,7 +381,8 @@ def _boolean_answerability_prompt(*, question: str, evidence: str) -> str:
         "entails no, and insufficient_evidence when neither polarity is "
         "established. Topic overlap, a related experiment, or the absence of "
         "a statement is insufficient evidence. For yes or no, include the "
-        "shortest exact evidence span that establishes the polarity. Use an "
+        "shortest exact evidence span, at most 20 words, that establishes the "
+        "polarity. Use an "
         "empty evidence_quote for insufficient evidence.\n\n"
         f"QUESTION:\n{question}\n\n"
         f"RETRIEVED PAPER EVIDENCE:\n{evidence}\n\n"
@@ -417,6 +433,33 @@ def _quote_supports_relation(quote: str, question: str, candidate: str) -> bool:
         candidate_coverage >= 0.5
         and required_anchors > 0
         and len(quote_tokens & question_anchors) >= required_anchors
+    )
+
+
+def _boolean_quote_supports_relation(
+    quote: str,
+    question: str,
+    verdict: str,
+) -> bool:
+    quote_tokens = _stemmed_content_tokens(quote)
+    question_anchors = _stemmed_content_tokens(question)
+    required_anchors = min(2, len(question_anchors))
+    if required_anchors and len(quote_tokens & question_anchors) >= required_anchors:
+        return True
+    if verdict != "no":
+        return False
+    lowered_quote = str(quote or "").lower()
+    return any(
+        cue in lowered_quote
+        for cue in (
+            "drop-in replacement",
+            "does not",
+            "do not",
+            "no ",
+            "not ",
+            "unnecessary",
+            "without",
+        )
     )
 
 

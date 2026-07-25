@@ -9,6 +9,7 @@ from .answer_summary import (
 )
 from .backend_health_summary import backend_health_summary
 from .dataset_decision_protocol import phase2_dataset_decision, phase2_failure_counts
+from .effective_route_metrics import effective_route_stage_metric_table
 from .mara_oriented_scores import (
     MARA_METRIC_KEYS,
     mara_proxy_score_metadata,
@@ -67,6 +68,10 @@ def build_benchmark_summary(
         **_quality_summary(predictions),
         **_native_detail_metric_summary(predictions),
         **stage_metric_summary(predictions),
+        "effective_route_stage_metric_table": effective_route_stage_metric_table(
+            bundle.dataset_name,
+            predictions,
+        ),
         **benchmark_prompt_summary(predictions),
         **answer_finalization_summary(predictions),
         **_format_guardrail_summary(predictions),
@@ -131,6 +136,10 @@ def add_mara_summary_fields(
         **_quality_summary(predictions),
         **_native_detail_metric_summary(predictions),
         **stage_metric_summary(predictions),
+        "effective_route_stage_metric_table": effective_route_stage_metric_table(
+            dataset_name,
+            predictions,
+        ),
         **answer_finalization_summary(predictions),
         "phase2_dataset_decision": phase2_dataset_decision(dataset_name),
         "phase2_failure_counts": phase2_failure_counts(dataset_name, predictions),
@@ -521,6 +530,7 @@ def _route_metric_table(
                     route_predictions, "multimodal_answer_support"
                 ),
                 **route_timing_fields(route_predictions),
+                **stage_metric_summary(route_predictions),
                 "benchmark_role": _route_role(route_predictions),
             }
         )

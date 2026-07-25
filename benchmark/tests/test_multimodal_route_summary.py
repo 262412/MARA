@@ -222,6 +222,39 @@ def test_phase3_summary_uses_controller_effective_hybrid_route():
     assert summary["element"]["effective_route_counts"] == {"hybrid_rag": 1}
 
 
+def test_rescored_summary_reports_stage_metrics_by_effective_route():
+    prediction = {
+        "route": "controller_auto",
+        "benchmark_role": "qa_quality",
+        "question": "What revenue amount is reported?",
+        "gold_pages": [2],
+        "gold_evidence": [{"document_id": "report", "page": 2}],
+        "controller_decision": {
+            "route": "hybrid_rag",
+            "legacy_route": "hybrid",
+        },
+        "evidence_metadata": {
+            "candidate_evidence": [
+                {"source_id": "report", "page_label": "2"},
+            ],
+            "reranked_evidence": [
+                {"source_id": "report", "page_label": "3"},
+            ],
+        },
+        "metrics": {"f1": 0.0, "native_score": 0.0},
+        "product_metrics": {"f1": 0.0, "em": 0.0},
+    }
+
+    rescored = add_mara_summary_fields({"dataset_name": "financebench"}, [prediction])
+
+    row = rescored["effective_route_stage_metric_table"][0]
+    assert row["dataset_name"] == "financebench"
+    assert row["effective_route"] == "hybrid_rag"
+    assert row["num_predictions"] == 1
+    assert row["avg_candidate_recall_at_50"] == 1.0
+    assert row["avg_reranked_recall_at_10"] == 0.0
+
+
 def test_phase3_report_sections_include_element_coverage_report():
     sections = dict(
         phase3_report_sections(

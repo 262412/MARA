@@ -201,21 +201,99 @@ def asks_for_causal_explanation(lowered_question: str) -> bool:
     )
 
 
-def amount_after(text: str, labels: tuple[str, ...]) -> float | None:
-    best: tuple[int, float] | None = None
+def amount_after(
+    text: str,
+    labels: tuple[str, ...],
+    *,
+    excluded_values: tuple[float, ...] = (),
+) -> float | None:
+    best: tuple[int, int, float] | None = None
+    excluded = set(excluded_values)
     for label in labels:
-        pattern = (
-            rf"{re.escape(label)}[^\n\r\d(+-]{{0,80}}"
-            rf"([(+\-]?\$?\s*\d[\d,]*(?:\.\d+)?\)?)"
-        )
-        for match in re.finditer(pattern, str(text or ""), flags=re.IGNORECASE):
-            value = parse_amount(match.group(1))
-            if value is None:
-                continue
-            candidate = (match.start(), value)
-            if best is None or candidate[0] < best[0]:
-                best = candidate
-    return None if best is None else best[1]
+        for label_match in re.finditer(
+            re.escape(label),
+            str(text or ""),
+            flags=re.IGNORECASE,
+        ):
+            window = str(text or "")[label_match.end() : label_match.end() + 100]
+            for amount_match in re.finditer(
+                r"[(-]?\$?\s*\d[\d,]*(?:\.\d+)?\)?",
+                window,
+            ):
+                raw_value = amount_match.group(0)
+                value = parse_amount(raw_value)
+                if value is None or value in excluded:
+                    continue
+                dimensioned = int(
+                    "$" in raw_value
+                    or "," in raw_value
+                    or bool(
+                        re.match(
+                            r"\s*(?:thousand|million|billion)s?\b",
+                            window[amount_match.end() :],
+                            flags=re.IGNORECASE,
+                        )
+                    )
+                )
+                candidate = (
+                    -dimensioned,
+                    label_match.start() + amount_match.start(),
+                    value,
+                )
+                if best is None or candidate[:2] < best[:2]:
+                    best = candidate
+    return None if best is None else best[2]
+
+
+def revolving_credit_capacities(text: str) -> list[float]:
+    capacities: list[float] = []
+    pattern = (
+        r"\b(?:borrow|borrowing)[^.:\n]{0,80}?\bup\s+to\s+"
+        r"(\$?\s*\d[\d,]*(?:\.\d+)?)"
+    )
+    for match in re.finditer(pattern, str(text or ""), flags=re.IGNORECASE):
+        value = parse_amount(match.group(1))
+        if value is not None:
+            capacities.append(value)
+    return capacities
+
+
+def direct_value_inputs(
+    lowered_question: str,
+    text: str,
+) -> tuple[str, float, dict[str, float], str, float] | None:
+    for question_type, labels in DIRECT_VALUE_METRICS:
+        if not any(label in lowered_question for label in labels):
+            continue
+        years = question_years(lowered_question)
+        if question_type == "revolving_credit_capacity" and "total" in (
+            lowered_question
+        ):
+            capacities = revolving_credit_capacities(text)
+            if len(capacities) >= 2:
+                inputs = {
+                    f"revolving_credit_capacity_{index}": value
+                    for index, value in enumerate(capacities, start=1)
+                }
+                return (
+                    question_type,
+                    sum(capacities),
+                    inputs,
+                    " + ".join(inputs),
+                    0.9,
+                )
+        values_by_year = yearly_amounts(text, labels)
+        requested_year = target_year(lowered_question, years) if years else ""
+        value = values_by_year.get(requested_year)
+        if value is None:
+            value = amount_after(
+                text,
+                labels,
+                excluded_values=tuple(float(year) for year in years),
+            )
+        if value is not None:
+            return question_type, value, {"value": value}, "direct_value", 0.78
+    return None
 
 
 def parse_amount(value: str) -> float | None:
@@ -298,7 +376,7 @@ def render_execution_answer(
         "multi_period_average",
         "working_capital",
     }:
-        return format_currency_with_unit(value, amount_unit(text))
+        return format_currency_with_unit(value, answer_scale or amount_unit(text))
     if question_type in {
         "capital_expenditure",
         "dividend",

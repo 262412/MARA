@@ -192,6 +192,8 @@ def verify_calculation_plan(
         text = _evidence_text(item)
         if not _value_appears(operand.value, text):
             errors.append(f"operand_value_mismatch:{operand.operand_id}")
+        if _operand_value_is_period(operand):
+            errors.append(f"operand_value_is_period:{operand.operand_id}")
         if operand.period and operand.period not in text:
             errors.append(f"operand_period_mismatch:{operand.operand_id}")
         if operand.unit and not _term_matches(operand.unit, text):
@@ -259,6 +261,15 @@ def _execute_step(step: CalculationStep, values: list[Decimal]) -> Decimal:
             Decimal("0"),
         ) / sum(weights, Decimal("0"))
     raise ValueError(operator)
+
+
+def _operand_value_is_period(operand: CalculationOperand) -> bool:
+    match = re.fullmatch(
+        r"(?:fy\s*)?((?:19|20)\d{2})",
+        str(operand.period or "").strip(),
+        flags=re.IGNORECASE,
+    )
+    return match is not None and operand.value == Decimal(match.group(1))
 
 
 def _structural_errors(plan: CalculationPlan, *, question: str) -> list[str]:

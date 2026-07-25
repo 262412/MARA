@@ -6,7 +6,6 @@ from typing import Any
 
 from .evidence_text import evidence_text
 from .finance_calculation_adapter import finance_calculation_audit
-from .finance_numeric_values import DIRECT_VALUE_METRICS
 from .finance_numeric_values import amount_after as _amount_after
 from .finance_numeric_values import amount_unit as _amount_unit
 from .finance_numeric_values import (
@@ -15,6 +14,7 @@ from .finance_numeric_values import (
 from .finance_numeric_values import (
     asks_for_direct_finance_value as _asks_for_direct_finance_value,
 )
+from .finance_numeric_values import direct_value_inputs as _direct_value_inputs
 from .finance_numeric_values import format_currency as _format_currency
 from .finance_numeric_values import (
     format_currency_with_unit as _format_currency_with_unit,
@@ -524,25 +524,17 @@ def _difference_answer(
 def _direct_value_answer(
     lowered_question: str, text: str
 ) -> FinanceNumericAnswer | None:
-    for question_type, labels in DIRECT_VALUE_METRICS:
-        if not any(label in lowered_question for label in labels):
-            continue
-        years = _question_years(lowered_question)
-        values_by_year = _yearly_amounts(text, labels)
-        requested_year = _target_year(lowered_question, years) if years else ""
-        value = values_by_year.get(requested_year)
-        if value is None:
-            value = _amount_after(text, labels)
-        if value is None:
-            continue
-        return FinanceNumericAnswer(
-            answer=_format_currency(value),
-            confidence=0.78,
-            question_type=question_type,
-            inputs={"value": value},
-            formula="direct_value",
-        )
-    return None
+    parsed = _direct_value_inputs(lowered_question, text)
+    if parsed is None:
+        return None
+    question_type, value, inputs, formula, confidence = parsed
+    return FinanceNumericAnswer(
+        answer=_format_currency(value),
+        confidence=confidence,
+        question_type=question_type,
+        inputs=inputs,
+        formula=formula,
+    )
 
 
 def _period_change_answer(

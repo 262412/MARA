@@ -48,6 +48,7 @@ def finance_calculation_audit(
         if (
             repeated_value
             and operand.evidence_id
+            and not name.startswith("revolving_credit_capacity_")
             and _atomic_evidence_id(operand.evidence_id, evidence_items)
         ):
             used_evidence_ids.add(operand.evidence_id)
@@ -111,6 +112,12 @@ def _operand_from_input(
 ) -> CalculationOperand:
     decimal_value = Decimal(str(value))
     period = _operand_period(name, question)
+    if (
+        period
+        and _single_question_period(question) == period
+        and not any(period in _item_text(item) for item in evidence_items)
+    ):
+        period = ""
     item = _matching_item(
         name,
         decimal_value,
@@ -175,6 +182,12 @@ def _steps(
         return _multi_period_ratio_average_steps(input_ids)
     if question_type == "inventory_turnover_average":
         return _inventory_turnover_average_steps(input_ids)
+    if question_type == "revolving_credit_capacity" and len(input_ids) > 1:
+        return (
+            (CalculationStep("result", "add", input_ids),),
+            "result",
+            "",
+        )
     if question_type in {"difference", "working_capital"}:
         names = (
             ("prior", "current") if question_type == "difference" else ("left", "right")
@@ -382,11 +395,22 @@ def _operand_period(name: str, question: str) -> str:
         return years[0]
     if name == "current" and len(years) >= 2:
         return years[1]
-    if name == "value" and len(years) == 1:
-        return years[0]
-    if len(years) == 1 and name in {"left", "right"}:
+    if len(years) == 1:
         return years[0]
     return ""
+
+
+def _single_question_period(question: str) -> str:
+    years = list(
+        dict.fromkeys(
+            re.findall(
+                r"\b(?:fy\s*)?((?:19|20)\d{2})\b",
+                str(question or ""),
+                flags=re.IGNORECASE,
+            )
+        )
+    )
+    return years[0] if len(years) == 1 else ""
 
 
 def _shared_scale(operands: tuple[CalculationOperand, ...]) -> str:

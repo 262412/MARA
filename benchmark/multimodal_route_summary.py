@@ -8,7 +8,14 @@ from .metrics import round_metric, safe_mean
 _PAGE_IMAGE_ROUTE = "page_image_rag_vlm"
 _ELEMENT_ROUTES = {"element_rag"}
 _HYBRID_ROUTES = {"hybrid_rag"}
+_ELEMENT_EFFECTIVE_ROUTES = {"element_rag", "hybrid_rag"}
 _GRAPH_ROUTE_TOKEN = "graph"
+_LEGACY_ROUTE_NAMES = {
+    "doc_element": "element_rag",
+    "doc_page_image": _PAGE_IMAGE_ROUTE,
+    "doc_text": "text_rag",
+    "hybrid": "hybrid_rag",
+}
 
 
 def phase3_multimodal_summary(
@@ -76,7 +83,7 @@ def _element_summary(
     element_predictions = [
         prediction
         for prediction in predictions
-        if str(prediction.get("route") or "") in _ELEMENT_ROUTES
+        if effective_prediction_route(prediction) in _ELEMENT_EFFECTIVE_ROUTES
     ]
     observed = bool(element_predictions or (route_ids & _ELEMENT_ROUTES))
     index_counts = [
@@ -89,6 +96,7 @@ def _element_summary(
         safe_mean([float(count) for count in index_counts])
     )
     avg_element_hit = _avg_metric(element_predictions, "element_hit")
+    effective_route_counts = _effective_route_counts(element_predictions)
     status = "not_evaluated"
     if observed:
         status = (
@@ -98,10 +106,11 @@ def _element_summary(
         )
     return {
         "status": status,
-        "routes": sorted(_ELEMENT_ROUTES & route_ids),
+        "routes": sorted(effective_route_counts or (_ELEMENT_ROUTES & route_ids)),
         "predictions_with_element_index": predictions_with_index,
         "avg_element_index_records": avg_index_records,
         "avg_element_hit": avg_element_hit,
+        "effective_route_counts": effective_route_counts,
         "coverage_report": coverage,
     }
 
@@ -110,17 +119,21 @@ def _hybrid_summary(
     dataset_name: str,
     predictions: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    if not any(
-        str(prediction.get("route") or "") in _HYBRID_ROUTES
+    hybrid_predictions = [
+        prediction
         for prediction in predictions
-    ):
+        if effective_prediction_route(prediction) in _HYBRID_ROUTES
+    ]
+    if not hybrid_predictions:
         return {
             "status": "not_evaluated",
+            "effective_route_counts": {},
             "question_type_route_metrics": [],
         }
-    rows = _question_type_route_metrics(dataset_name, predictions)
+    rows = _question_type_route_metrics(dataset_name, hybrid_predictions)
     return {
         "status": "question_type_breakdown_available" if rows else "not_evaluated",
+        "effective_route_counts": _effective_route_counts(hybrid_predictions),
         "question_type_route_metrics": rows,
     }
 
@@ -227,12 +240,53 @@ def _route_ids(routes: list[dict[str, Any]]) -> set[str]:
 
 
 def _prediction_routes(predictions: list[dict[str, Any]]) -> set[str]:
-    return {
+    top_level_routes = {
         route
         for prediction in predictions
         for route in [str(prediction.get("route") or "").strip()]
         if route
     }
+    return top_level_routes | {
+        route
+        for prediction in predictions
+        for route in [effective_prediction_route(prediction)]
+        if route
+    }
+
+
+def effective_prediction_route(prediction: dict[str, Any]) -> str:
+    top_level_route = str(prediction.get("route") or "").strip()
+    if top_level_route not in {"controller_auto", "crag_guarded"}:
+        return _canonical_route(top_level_route)
+    for field in ("controller_decision", "route_decision"):
+        decision = prediction.get(field)
+        if not isinstance(decision, dict):
+            continue
+        route = str(decision.get("route") or decision.get("legacy_route") or "")
+        if route.strip():
+            return _canonical_route(route)
+    diagnostics = prediction.get("diagnostics")
+    if isinstance(diagnostics, dict):
+        selected = str(diagnostics.get("controller_selected_route") or "")
+        if selected.strip():
+            return _canonical_route(selected)
+    return _canonical_route(top_level_route)
+
+
+def _canonical_route(route: str) -> str:
+    normalized = str(route or "").strip()
+    return _LEGACY_ROUTE_NAMES.get(normalized, normalized)
+
+
+def _effective_route_counts(
+    predictions: list[dict[str, Any]],
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for prediction in predictions:
+        route = effective_prediction_route(prediction)
+        if route:
+            counts[route] = counts.get(route, 0) + 1
+    return counts
 
 
 def _skipped_route(

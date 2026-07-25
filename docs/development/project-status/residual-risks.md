@@ -43,17 +43,30 @@ auditable generator field, while `answer_for_user` and `answer_for_scoring`
 already remove repetition; the final duplicate rate is 0%. Those closed
 concerns are no longer active problems below.
 
+A current-code replay of the immutable Finance v13 predictions is stored at:
+
+```text
+/mnt/fastscratch/users/tbczhang/mara_validation/
+finance_v13_current_code_rescore_20260725/
+20260725_113507_finance-v13-current-code-rescore
+```
+
+This replay changes reporting, not generated answers. It confirms that all 12
+controller/CRAG hybrid selections are now visible, all 12 lack element-index
+records, and both `$5,818.0 billion` rows are classified as
+`failure_stage=rendered_unit`.
+
 ## Open Problem Summary
 
-| ID           | Priority | Area                                       | Current evidence                                                                                                                                                       | Completion gate                                                                                                                                       |
-| ------------ | -------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FINANCE-001  | P0       | Retrieval, reranking, and route reporting  | V13 page hit 33.75%, all pages 23.75%, Candidate Recall@50 41.94%, Reranked Recall@10 25.83%; controller/CRAG hybrid selections are absent from Phase 3 reporting         | Page hit >=70%, all pages >=35%, effective hybrid/element coverage is formally reported, and required-slot evidence survives reranking                |
-| FINANCE-002  | P0       | Value binding, rendering, and metric truth | V13 quality native 8.33%, all-operands/execution 16.67%, unit accuracy 58.33%; a year is accepted as an amount and a million result is rendered as billion                | Required slots are semantically bound, plans cover every slot, native >=20%, all operands >=50%, conditional execution >=95%, unit accuracy >=98%     |
-| CONTRACT-002 | P1       | QASPER answerability and boolean polarity  | V14 native 55.41%, semantic 51.57%, structure 90.57%, evidence F1 21.66%; all 24 JSON repairs fail and boolean polarity remains unstable                                 | Gold-independent structure validity 100%, no verifier-induced regression, semantic F1 >=80%, and class diagnostics close yes/no/unanswerable failures |
-| PERF-001     | P1       | Quality-preserving latency                 | Timeout is closed, but Finance average generation latency is 21.38 seconds and the quality gates still fail                                                              | Quality gates pass with zero required-row error; simple median increase <=20%, multipage/numeric <=50%, with P95 reported                             |
-| EVAL-001     | P1       | Global release gate                        | Calibration and G-minus-B paired evidence remain incomplete                                                                                                             | Judge coverage >=99.5%, agreement >=90%, semantic gain >=8 points, paired CI lower bound >0                                                           |
-| EVAL-002     | P2       | External evaluator                         | No fixed paper-grade external evaluator artifact                                                                                                                         | Frozen evaluator/provider contract and complete formal artifact                                                                                       |
-| FORMAT-001   | P2       | Production formats                         | Loader smoke exists; preview/OCR/formula/chart E2E matrix remains incomplete                                                                                             | Required production-format matrix passes                                                                                                              |
+| ID           | Priority | Area                                       | Current evidence                                                                                                                                                  | Completion gate                                                                                                                                       |
+| ------------ | -------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FINANCE-001  | P0       | Retrieval, reranking, and route reporting  | V13 page hit 33.75%, all pages 23.75%, Candidate Recall@50 41.94%, Reranked Recall@10 25.83%; controller/CRAG hybrid selections are absent from Phase 3 reporting | Page hit >=70%, all pages >=35%, effective hybrid/element coverage is formally reported, and required-slot evidence survives reranking                |
+| FINANCE-002  | P0       | Value binding, rendering, and metric truth | V13 quality native 8.33%, all-operands/execution 16.67%, unit accuracy 58.33%; a year is accepted as an amount and a million result is rendered as billion        | Required slots are semantically bound, plans cover every slot, native >=20%, all operands >=50%, conditional execution >=95%, unit accuracy >=98%     |
+| CONTRACT-002 | P1       | QASPER answerability and boolean polarity  | V14 native 55.41%, semantic 51.57%, structure 90.57%, evidence F1 21.66%; all 24 JSON repairs fail and boolean polarity remains unstable                          | Gold-independent structure validity 100%, no verifier-induced regression, semantic F1 >=80%, and class diagnostics close yes/no/unanswerable failures |
+| PERF-001     | P1       | Quality-preserving latency                 | Timeout is closed, but Finance average generation latency is 21.38 seconds and the quality gates still fail                                                       | Quality gates pass with zero required-row error; simple median increase <=20%, multipage/numeric <=50%, with P95 reported                             |
+| EVAL-001     | P1       | Global release gate                        | Calibration and G-minus-B paired evidence remain incomplete                                                                                                       | Judge coverage >=99.5%, agreement >=90%, semantic gain >=8 points, paired CI lower bound >0                                                           |
+| EVAL-002     | P2       | External evaluator                         | No fixed paper-grade external evaluator artifact                                                                                                                  | Frozen evaluator/provider contract and complete formal artifact                                                                                       |
+| FORMAT-001   | P2       | Production formats                         | Loader smoke exists; preview/OCR/formula/chart E2E matrix remains incomplete                                                                                      | Required production-format matrix passes                                                                                                              |
 
 Do not launch another full 3,540-prediction benchmark until `FINANCE-001`,
 `FINANCE-002`, and `CONTRACT-002` pass their frozen focused subsets.
@@ -78,6 +91,11 @@ reranking. Text has candidate/reranked recall 30.8%/22.5%; controller and CRAG
 each have 47.5%/27.5%. Phase 3 still reports both element and hybrid as
 `not_evaluated`, even though controller and CRAG diagnostics record selected
 hybrid routes.
+
+Current-code replay removes that observability error. The actual hybrid subset
+has Candidate Recall@50 8.33% and Reranked Recall@10 0%, and element-index
+coverage is 0/12. This makes the remaining retrieval/index deficit stricter
+than the old top-level controller averages suggested.
 
 ### Root cause
 
@@ -113,6 +131,21 @@ the explicit run timeout is honored.
   then inspect every lost required-slot evidence ID in the frozen subset.
 - Keep retrieval-free `direct_answer` rows out of retrieval averages.
 
+### Implemented, pending focused artifact validation
+
+- Phase 3 derives the effective route from controller/CRAG decisions, includes
+  effective hybrid rows in the question-type breakdown, and publishes stable
+  effective-route counts.
+- Effective element/hybrid rows now participate in element-index coverage, so
+  missing element records are reported as a coverage gap instead of
+  `not_evaluated`.
+- The summary publishes candidate/reranked and downstream stage metrics grouped
+  by effective route; the existing route table now includes the same stage
+  metrics grouped by top-level benchmark route.
+- Required-slot shortlist restoration from the full reranked pool remains
+  active. The remaining broad candidate-recall deficit requires the next
+  artifact and per-route loss audit; it is not claimed closed by reporting.
+
 ### Closure evidence
 
 Every structured numeric example must either execute a genuinely available
@@ -140,6 +173,11 @@ correct calculated value as `$5,818.0 billion` even though both operands and
 the plan are in millions. Unit-aware audited native accuracy is therefore 5%,
 not the reported 8.33%.
 
+Current-code replay reduces reported unit accuracy from 58.33% to 50% by
+correctly rejecting those two rendered-unit contradictions. This is a metric
+truth correction only; the new renderer must be exercised in a fresh model run
+before answer quality can be credited.
+
 The artifact also exposes unsafe or avoidable binding failures:
 
 - `financebench_id_00882` accepts the reporting year `2023` as the revolving
@@ -157,6 +195,9 @@ There are four concrete implementation defects:
 1. `amount_after` takes the first number within 80 characters after a metric
    alias and does not exclude the requested period. A date such as
    `May 26, 2023` can therefore become a monetary operand.
+   The direct-value path also treats revolving-credit capacity as one value,
+   even when the question asks for the total of two simultaneously active
+   agreements.
 2. `_operand_period` propagates a single question year only to `value`,
    `left`, and `right`, not to evidence operands such as
    `operating_cash_flow` and `capital_expenditure`.
@@ -174,6 +215,10 @@ There are four concrete implementation defects:
 - Exclude every question year from unlabeled monetary candidates and prefer
   values with an adjacent currency/scale marker or a labeled financial row.
   Reject rather than execute when the only candidate is a period.
+- For total revolving-credit capacity, extract each distinct active
+  `borrow up to` amount and add the operands through `calculation_plan.v1`.
+  Do not sum terminated agreements, commitment-increase options, or repeated
+  descriptions of the same capacity.
 - Propagate a single requested period to every evidence-backed operand. Keep
   explicit operand-name years authoritative for multi-period programs.
 - Make the verified plan's `answer_scale` authoritative during rendering.
@@ -185,6 +230,20 @@ There are four concrete implementation defects:
   last-line rejection for an operand whose value is merely its period.
 - Keep native numeric match as the final answer-quality authority; a safe
   verifier rejection is not counted as correctness.
+
+### Implemented, pending focused artifact validation
+
+- Direct-value fallback excludes all question years and prefers dimensioned
+  values. The calculation verifier rejects an operand equal to its period.
+- Total revolving-credit questions bind each explicit active
+  `borrow up to` capacity as a separate operand and execute a deterministic
+  addition.
+- A single question period is propagated to every evidence-backed operand when
+  that period is present in the evidence.
+- Result rendering uses the verified plan's answer scale before considering
+  evidence text.
+- Stage metrics compare the rendered scoring answer with the plan and expose
+  `rendered_unit` when they conflict.
 
 ### Closure evidence
 
@@ -247,6 +306,15 @@ The v7 trace and one-repair limit work, but two failures remain:
 - Improve boolean polarity at the primary prompt/model boundary and evaluate it
   on a frozen calibration set rather than using gold-aware post-processing.
 - Report annotation-disagreement rows separately from parser failures.
+
+### Implemented, pending focused artifact validation
+
+- `qasper_answerability.v8` caps quotes at 320 characters, asks for at most 20
+  words, and raises the bounded output allowance from 64 to 160 tokens for both
+  the initial verifier and its single structure-only repair.
+- Boolean quote traces now require either question-relation anchors or an
+  explicit negative implication cue. A failed relation check is recorded as
+  `insufficient_evidence` while preserving the primary candidate.
 
 ### Closure evidence
 

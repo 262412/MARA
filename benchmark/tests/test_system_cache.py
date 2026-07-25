@@ -337,7 +337,7 @@ def test_qasper_text_rag_runs_answerability_verifier_after_generation(
     assert answer == "unanswerable"
     assert len(llm.calls) == 2
     assert metadata["qasper_answerability"] == {
-        "contract_id": "qasper_answerability.v7",
+        "contract_id": "qasper_answerability.v8",
         "status": "ok",
         "verdict": "unsupported",
         "action": "abstained_unsupported_candidate",
