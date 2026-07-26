@@ -157,9 +157,14 @@ QASPER v9 判定器确实覆盖了全部 99 条 boolean 样本，因此“判定
 
 ## 7. 下一步聚焦验证
 
+已按相同 manifest、route、seed 和模型配置提交：
+
+- QASPER v19，159 条：Slurm `9945264`，suite `residual-qasper-typed-v19-semantic-proposition-identity-l40s`。
+- FinanceBench v18，20 × 4：Slurm `9945265`，suite `residual-finance-v18-semantic-binding-lineage-l40s`。
+
 执行顺序固定为：
 
-1. 从干净的 `8d86034` 之后的文档状态提交新的 QASPER 159 与 FinanceBench 20 × 4。
+1. 从干净提交运行新的 QASPER 159 与 FinanceBench 20 × 4。
 2. QASPER 必须逐条复核 20 条旧 boolean abstention、4 条结构违例和 complete/partial verdict 分布。
 3. Finance 必须逐条复核 `00882`、`10499`、`04302`、`03531`、`10285`、`04980`，并检查 lineage violation 和完整 provenance。
 4. 用新 artifact 更新本表；不得用本地 mock 通过代替真实聚焦指标。
