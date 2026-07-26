@@ -14,6 +14,36 @@ class _VerifierLLM:
         return SimpleNamespace(text=self.responses.pop(0))
 
 
+class _ContextLimitedVerifierLLM(_VerifierLLM):
+    def __call__(self, prompt: str, **kwargs):
+        if len(prompt) > 7000:
+            raise RuntimeError("verifier prompt exceeds the local model budget")
+        return super().__call__(prompt, **kwargs)
+
+
+def test_qasper_answerability_bounds_long_retrieved_evidence_before_llm_call():
+    quote = "The authors released their source code with the paper."
+    llm = _ContextLimitedVerifierLLM(
+        '{"verdict":"yes_complete","evidence_quote":' f'"{quote}"}}'
+    )
+    evidence = "\n\n".join([quote, *(["unrelated evidence " * 120] * 80)])
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Did the authors release the code?",
+        evidence=evidence,
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "yes"
+    assert len(llm.calls) == 1
+    assert len(llm.calls[0][0]) <= 7000
+    assert result.trace["evidence_budget_status"] == "truncated"
+    assert int(result.trace["evidence_chars_used"]) < int(
+        result.trace["evidence_chars_original"]
+    )
+
+
 def test_qasper_answerability_rejects_related_but_unsupported_candidate():
     llm = _VerifierLLM(
         '{"verdict":"unsupported","evidence_quote":"The paper reports NDCG 55.46."}'

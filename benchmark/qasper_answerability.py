@@ -11,8 +11,9 @@ from .qasper_boolean import (
 from .qasper_boolean import boolean_relation_lemmas as _boolean_relation_lemmas
 from .qasper_boolean import is_boolean_question as _is_boolean_question
 from .qasper_boolean import stemmed_content_tokens as _stemmed_content_tokens
+from .qasper_prompt_budget import fit_qasper_verifier_prompt
 
-QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v10"
+QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v11"
 QASPER_ANSWERABILITY_SEED = 20260724
 QASPER_ANSWERABILITY_MAX_TOKENS = 192
 QASPER_EVIDENCE_QUOTE_MAX_LENGTH = 640
@@ -144,9 +145,16 @@ def _verify_boolean_candidate(
     candidate_polarity = (
         "yes" if candidate.lower() in {"yes", "true"} else "no" if candidate else ""
     )
+    prompt, evidence, budget_trace = fit_qasper_verifier_prompt(
+        evidence,
+        lambda bounded_evidence: _boolean_answerability_prompt(
+            question=question,
+            evidence=bounded_evidence,
+        ),
+    )
     verdict, quote, parse_trace = _call_verifier(
         llm,
-        _boolean_answerability_prompt(question=question, evidence=evidence),
+        prompt,
         response_format=QASPER_BOOLEAN_ANSWERABILITY_RESPONSE_FORMAT,
         parser=_boolean_verdict,
         allowed_values=(
@@ -157,6 +165,7 @@ def _verify_boolean_candidate(
             "insufficient_evidence",
         ),
     )
+    parse_trace = {**budget_trace, **parse_trace}
     if not verdict:
         return QasperAnswerabilityResult(
             answer=candidate_answer,
@@ -279,17 +288,22 @@ def _verify_free_text_candidate(
     candidate_answer: str,
     candidate: str,
 ) -> QasperAnswerabilityResult:
-    verdict, quote, parse_trace = _call_verifier(
-        llm,
-        _answerability_prompt(
+    prompt, evidence, budget_trace = fit_qasper_verifier_prompt(
+        evidence,
+        lambda bounded_evidence: _answerability_prompt(
             question=question,
-            evidence=evidence,
+            evidence=bounded_evidence,
             candidate_answer=candidate,
         ),
+    )
+    verdict, quote, parse_trace = _call_verifier(
+        llm,
+        prompt,
         response_format=QASPER_ANSWERABILITY_RESPONSE_FORMAT,
         parser=_verdict,
         allowed_values=("supported", "unsupported"),
     )
+    parse_trace = {**budget_trace, **parse_trace}
     if not verdict:
         return QasperAnswerabilityResult(
             answer=candidate_answer,

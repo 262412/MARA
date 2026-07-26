@@ -36,7 +36,7 @@ def test_qasper_answerability_contract_runs_after_engine_projection():
     assert prediction["predicted_answer"] == "yes"
     assert prediction["evidence_metadata"]["qasper_answerability"]["status"] == "ok"
     assert prediction["task_answer_contract"] == {
-        "contract_id": "qasper_answerability.v10",
+        "contract_id": "qasper_answerability.v11",
         "status": "applied",
     }
     assert len(llm.calls) == 1
@@ -49,7 +49,7 @@ def test_qasper_answerability_contract_does_not_run_twice():
         "answer_type": "boolean",
         "evidence_metadata": {
             "qasper_answerability": {
-                "contract_id": "qasper_answerability.v10",
+                "contract_id": "qasper_answerability.v11",
                 "status": "ok",
             }
         },
