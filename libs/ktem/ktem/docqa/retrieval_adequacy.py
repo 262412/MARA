@@ -194,6 +194,25 @@ def _operating_segment_requirements(value: str) -> list[tuple[str, tuple[str, ..
         ]
     if "segment" in value and _has_any(
         value,
+        ("increase", "decrease", "proportional", "proportionally"),
+    ):
+        return [
+            (
+                "reporting segment",
+                ("reporting segment", "business segment", "by segment"),
+            ),
+            (
+                "segment sales",
+                (
+                    "net sales by segment",
+                    "net revenue by segment",
+                    "net sales",
+                    "net revenue",
+                ),
+            ),
+        ]
+    if "segment" in value and _has_any(
+        value,
         ("m&a", "acquisition", "divestiture", "organic", "growth"),
     ):
         return [

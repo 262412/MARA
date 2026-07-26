@@ -157,6 +157,23 @@ def test_finalizer_emits_canonical_qasper_unanswerable():
     assert prediction["answer_for_scoring"] == "unanswerable"
 
 
+def test_finalizer_enforces_qasper_typed_label_contract():
+    prediction: dict[str, Any] = {
+        "question": "What absolute gain was reported?",
+        "predicted_answer": "The paper reports a 99.53% gain.",
+        "answer_type": "unanswerable",
+    }
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_typed_v2",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_user"] == "unanswerable"
+    assert prediction["answer_for_scoring"] == "unanswerable"
+    assert prediction["answer_finalization"]["qasper_contract_normalized"] is True
+
+
 def test_finalizer_extracts_ragtruth_json_from_markdown_answer():
     prediction: dict[str, Any] = {
         "predicted_answer": (

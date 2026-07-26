@@ -349,3 +349,78 @@ def test_inventory_turnover_plan_uses_distinct_average_inventory_periods():
         ("inventory", "2021"),
         ("inventory", "2022"),
     ]
+
+
+def test_inventory_slot_distinguishes_balance_from_cash_flow_change():
+    plan = build_query_plan(
+        "What was inventory turnover in FY2018 using cost of goods sold?",
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    cash_flow_bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "cash-flow-change",
+                "text": (
+                    "Consolidated Statements of Cash Flows (in millions). "
+                    "Changes in current assets and liabilities. "
+                    "Inventories (277) (251). 2019 2018."
+                ),
+                "modality": "table",
+            }
+        ],
+    )
+    balance_sheet_bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "balance-sheet-inventory",
+                "text": (
+                    "Consolidated Balance Sheets (in millions). "
+                    "Inventories 2,750 2,500. 2019 2018."
+                ),
+                "modality": "table",
+            }
+        ],
+    )
+
+    cash_flow_inventory = next(
+        slot for slot in cash_flow_bound.evidence_slots if slot.metric == "inventory"
+    )
+    balance_sheet_inventory = next(
+        slot
+        for slot in balance_sheet_bound.evidence_slots
+        if slot.metric == "inventory"
+    )
+    assert cash_flow_inventory.status == "missing"
+    assert balance_sheet_inventory.status == "filled"
+
+
+def test_finance_fact_plan_tracks_adjusted_non_gaap_ebitda_period():
+    plan = build_query_plan(
+        "What was adjusted non-GAAP EBITDA for the twelve months ended 2023?",
+        answer_type="extractive",
+        verification_domain="finance",
+    )
+
+    assert [(slot.role, slot.metric, slot.period) for slot in plan.evidence_slots] == [
+        ("support", "adjusted ebitda", "2023")
+    ]
+    assert plan.subqueries == ("adjusted ebitda 2023",)
+
+
+def test_finance_segment_fact_plan_normalizes_short_fiscal_years():
+    plan = build_query_plan(
+        (
+            "From FY21 to FY22, excluding Embedded, in which AMD reporting "
+            "segment did sales proportionally increase the most?"
+        ),
+        answer_type="extractive",
+        verification_domain="finance",
+    )
+
+    assert [(slot.role, slot.metric, slot.period) for slot in plan.evidence_slots] == [
+        ("support", "net sales", "2021"),
+        ("support", "net sales", "2022"),
+    ]

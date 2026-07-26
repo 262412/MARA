@@ -268,7 +268,7 @@ def _boolean_answer_action(candidate_polarity: str, verdict: str) -> tuple[str, 
         return "recovered_boolean_from_abstention", verdict
     if verdict == candidate_polarity:
         return "confirmed_candidate", verdict
-    return "corrected_primary_polarity", verdict
+    return "polarity_conflict_preserved", candidate_polarity
 
 
 def _verify_free_text_candidate(

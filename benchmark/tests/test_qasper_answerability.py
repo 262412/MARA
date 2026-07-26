@@ -132,7 +132,7 @@ def test_qasper_answerability_checks_boolean_question_sufficiency_not_token_supp
     assert llm.calls[0][1]["response_format"]["json_schema"]["strict"] is True
 
 
-def test_qasper_answerability_corrects_candidate_from_grounded_polarity():
+def test_qasper_answerability_preserves_yes_candidate_on_conflicting_verdict():
     llm = _VerifierLLM(
         '{"verdict":"no","evidence_quote":'
         '"The method is used as a drop-in replacement and requires no fine-tuning."}'
@@ -148,13 +148,13 @@ def test_qasper_answerability_corrects_candidate_from_grounded_polarity():
         candidate_answer="yes",
     )
 
-    assert result.answer == "no"
+    assert result.answer == "yes"
     assert result.trace["verdict"] == "no"
-    assert result.trace["action"] == "corrected_primary_polarity"
+    assert result.trace["action"] == "polarity_conflict_preserved"
     assert "CANDIDATE ANSWER" not in llm.calls[0][0]
 
 
-def test_qasper_answerability_corrects_no_candidate_on_grounded_yes_verdict():
+def test_qasper_answerability_preserves_no_candidate_on_conflicting_verdict():
     llm = _VerifierLLM(
         '{"verdict":"yes","evidence_quote":'
         '"The authors released their source code with the paper."}'
@@ -167,9 +167,29 @@ def test_qasper_answerability_corrects_no_candidate_on_grounded_yes_verdict():
         candidate_answer="no",
     )
 
-    assert result.answer == "yes"
+    assert result.answer == "no"
     assert result.trace["verdict"] == "yes"
-    assert result.trace["action"] == "corrected_primary_polarity"
+    assert result.trace["action"] == "polarity_conflict_preserved"
+
+
+def test_qasper_answerability_preserves_primary_on_conflicting_complete_verdict():
+    llm = _VerifierLLM(
+        '{"verdict":"no_complete","evidence_quote":'
+        '"The model uses attention over the encoded input sequence."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Do they use attention?",
+        evidence="The model uses attention over the encoded input sequence.",
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["verdict"] == "no"
+    assert result.trace["action"] == "polarity_conflict_preserved"
+    assert result.trace["primary_answer"] == "yes"
+    assert result.trace["adjudicated_polarity"] == "no"
 
 
 def test_qasper_boolean_question_reconsiders_primary_unanswerable():

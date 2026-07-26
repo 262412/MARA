@@ -220,6 +220,24 @@ _FINANCE_FOCUS_RULES: tuple[
         ),
     ),
     (
+        ("segment",),
+        ("increase", "decrease", "proportional", "proportionally"),
+        (
+            "Reporting Segment",
+            "Net sales by segment",
+            "Net revenue by segment",
+        ),
+    ),
+    (
+        (),
+        ("adjusted ebitda", "adjusted non-gaap ebitda"),
+        (
+            "Reconciliation of Non-GAAP Measures",
+            "Adjusted EBITDA",
+            "Twelve Months Ended",
+        ),
+    ),
+    (
         (),
         ("acquisition", "acquisitions", "acquired"),
         (

@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, field
 from decimal import Decimal, DivisionByZero, InvalidOperation, localcontext
 from typing import Any
 
-from .finance_query_planning import finance_metric_phrase_matches
+from .finance_query_planning import finance_metric_evidence_matches
 
 CALCULATION_PLAN_CONTRACT = "calculation_plan.v1"
 ALLOWED_OPERATORS = {
@@ -426,9 +426,6 @@ def _verify_required_slots(
     errors: list[str] = []
     used_operands: set[str] = set()
     for slot, slot_id in zip(slots, required_ids):
-        if str(slot.get("status") or "") == "missing":
-            errors.append(f"required_slot_missing:{slot_id}")
-            continue
         operand = next(
             (
                 candidate
@@ -458,14 +455,10 @@ def _operand_matches_slot(
     if item is None:
         return False
     metric = str(slot.get("metric") or "").strip().lower()
-    metric_item = {"text": operand.row_label} if operand.row_label else item
-    if metric and not _item_supports_metric(metric_item, metric):
+    metric_text = " ".join((operand.row_label, _evidence_text(item)))
+    if metric and not finance_metric_evidence_matches(metric, metric_text):
         return False
     return True
-
-
-def _item_supports_metric(item: dict[str, Any], metric: str) -> bool:
-    return finance_metric_phrase_matches(metric, _evidence_text(item))
 
 
 def _evidence_lookup(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

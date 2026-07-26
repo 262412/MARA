@@ -134,7 +134,7 @@ def test_required_slots_bind_semantically_to_final_selected_evidence():
             "metric": "revolving credit capacity",
             "period": "2023",
             "required": True,
-            "status": "filled",
+            "status": "missing",
             "evidence_ids": ["preliminary-page-85"],
         }
         for index in (1, 2)
@@ -152,6 +152,55 @@ def test_required_slots_bind_semantically_to_final_selected_evidence():
         "operand:revolving_credit_capacity:1",
         "operand:revolving_credit_capacity:2",
     )
+
+
+def test_required_slot_rejects_inventory_change_as_inventory_balance():
+    plan = CalculationPlan(
+        operands=(
+            CalculationOperand(
+                operand_id="inventory_2018",
+                evidence_id="cash-flow-inventory-change",
+                value=Decimal("251"),
+                period="2018",
+                unit="USD",
+                scale="million",
+                currency="USD",
+                row_label="Inventories",
+            ),
+        ),
+        steps=(),
+        result_step_id="inventory_2018",
+        answer_unit="USD",
+        answer_scale="million",
+    )
+
+    verification = verify_calculation_plan(
+        plan,
+        [
+            {
+                "evidence_id": "cash-flow-inventory-change",
+                "text": (
+                    "Consolidated Statements of Cash Flows (in millions). "
+                    "Changes in current assets and liabilities. "
+                    "Inventories (277) (251). 2019 2018."
+                ),
+            }
+        ],
+        question="What was the inventory balance in FY2018?",
+        required_slots=[
+            {
+                "slot_id": "operand:inventory:2018",
+                "role": "operand",
+                "metric": "inventory",
+                "period": "2018",
+                "required": True,
+                "status": "filled",
+            }
+        ],
+    )
+
+    assert verification.valid is False
+    assert "required_slot_missing:operand:inventory:2018" in verification.errors
 
 
 def test_required_slot_semantic_binding_still_rejects_wrong_metric():

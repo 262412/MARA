@@ -384,6 +384,44 @@ def test_qasper_prompt_uses_paper_context_short_answer_contract(tmp_path):
     assert "unanswerable" in prompt.runtime_prompt
 
 
+def test_qasper_typed_prompt_only_allows_canonical_labels(tmp_path):
+    config = BenchmarkConfig(
+        suite_name="qasper_typed_v2",
+        output_dir=tmp_path / "out",
+    )
+
+    prompt = build_benchmark_prompt(
+        _example(
+            question="Do they use attention?",
+            answer_type="boolean",
+        ),
+        config,
+        dataset_name="qasper_typed_v2",
+    )
+
+    assert 'Return exactly one label: "yes", "no", or "unanswerable".' in (
+        prompt.runtime_prompt
+    )
+    assert "Return only the answer span" not in prompt.runtime_prompt
+
+
+def test_qasper_typed_gold_prompt_only_allows_canonical_labels(tmp_path):
+    config = BenchmarkConfig(
+        suite_name="qasper_typed_v2",
+        output_dir=tmp_path / "out",
+        benchmark_prompt_policy="gold_answer_v1",
+    )
+
+    prompt = build_benchmark_prompt(
+        _example(question="Do they use attention?", answer_type="boolean"),
+        config,
+        dataset_name="qasper_typed_v2",
+    )
+
+    assert 'output exactly "yes", "no", or "unanswerable".' in (prompt.runtime_prompt)
+    assert "output only the answer span" not in prompt.runtime_prompt
+
+
 def test_benchmark_v1_requires_short_atomic_and_calculation_answers(tmp_path):
     config = BenchmarkConfig(
         suite_name="mixed-domain",

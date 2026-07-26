@@ -90,3 +90,70 @@ def test_paired_contract_check_rejects_mismatched_runs():
             {"run_provenance": {"contract_hash": "left"}},
             {"run_provenance": {"contract_hash": "right"}},
         )
+
+
+def test_paired_input_hash_allows_code_change_but_requires_frozen_index(
+    monkeypatch,
+    tmp_path,
+):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"dataset_name": "frozen"}), encoding="utf-8")
+    commits = iter((("baseline", False), ("candidate", False), ("candidate", False)))
+    monkeypatch.setattr(provenance, "_git_state", lambda _root: next(commits))
+    environment = {
+        "MARA_BENCHMARK_SERVICE_CONTRACT": "service-contract",
+        "MARA_BENCHMARK_INDEX_CONTRACT": f"sha256:{'a' * 64}",
+    }
+
+    baseline = provenance.benchmark_run_provenance(
+        manifest_path=manifest,
+        config={"route": "all", "sample_seed": 7},
+        repo_root=tmp_path,
+        environ=environment,
+    )
+    candidate = provenance.benchmark_run_provenance(
+        manifest_path=manifest,
+        config={"route": "all", "sample_seed": 7},
+        repo_root=tmp_path,
+        environ=environment,
+    )
+    changed_index = provenance.benchmark_run_provenance(
+        manifest_path=manifest,
+        config={"route": "all", "sample_seed": 7},
+        repo_root=tmp_path,
+        environ={
+            **environment,
+            "MARA_BENCHMARK_INDEX_CONTRACT": f"sha256:{'b' * 64}",
+        },
+    )
+
+    assert baseline["contract_hash"] != candidate["contract_hash"]
+    assert baseline["paired_input_hash"] == candidate["paired_input_hash"]
+    provenance.require_matching_paired_inputs(
+        {"run_provenance": baseline},
+        {"run_provenance": candidate},
+    )
+    with pytest.raises(ValueError, match="paired benchmark input mismatch"):
+        provenance.require_matching_paired_inputs(
+            {"run_provenance": baseline},
+            {"run_provenance": changed_index},
+        )
+
+
+def test_paired_input_check_requires_recorded_index_contract():
+    summary = {"run_provenance": {"paired_input_hash": "same"}}
+
+    with pytest.raises(ValueError, match="index contract missing"):
+        provenance.require_matching_paired_inputs(summary, summary)
+
+
+def test_paired_input_check_requires_content_digest_index_contract():
+    summary = {
+        "run_provenance": {
+            "index_contract": "frozen-index-v1",
+            "paired_input_hash": "same",
+        }
+    }
+
+    with pytest.raises(ValueError, match="must be a sha256 content digest"):
+        provenance.require_matching_paired_inputs(summary, summary)

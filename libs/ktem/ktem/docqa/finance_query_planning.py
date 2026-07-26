@@ -5,7 +5,12 @@ import re
 FinanceOperandSpecs = tuple[tuple[str, str, str], ...]
 
 FINANCE_METRIC_ALIASES = {
-    "adjusted ebitda": ("adjusted ebitda", "adj ebitda"),
+    "adjusted ebitda": (
+        "adjusted ebitda",
+        "adjusted non gaap ebitda",
+        "adjusted non-gaap ebitda",
+        "adj ebitda",
+    ),
     "capital expenditure": (
         "capital expenditure",
         "capital expenditures",
@@ -75,6 +80,23 @@ def finance_metric_phrase_matches(metric: str, text: str) -> bool:
     )
 
 
+def finance_metric_evidence_matches(metric: str, text: str) -> bool:
+    if not finance_metric_phrase_matches(metric, text):
+        return False
+    if metric != "inventory":
+        return True
+    normalized = _normalized_metric_phrase(text)
+    cash_flow_statement = (
+        "statement of cash flows" in normalized
+        or "statements of cash flows" in normalized
+    )
+    inventory_change = (
+        "changes in current assets and liabilities" in normalized
+        or "changes in operating assets and liabilities" in normalized
+    )
+    return not (cash_flow_statement and inventory_change)
+
+
 def _normalized_metric_phrase(value: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", str(value or "").lower()))
 
@@ -108,6 +130,28 @@ def finance_operand_specs(
     if current_period:
         slot_id = f"{slot_id}:{current_period}"
     return ((slot_id, metric, current_period),)
+
+
+def finance_fact_specs(
+    question: str,
+    periods: list[str],
+) -> FinanceOperandSpecs:
+    lowered = str(question or "").lower()
+    metrics = finance_metrics_in_question(lowered)
+    if not metrics and "segment" in lowered and re.search(r"\bsales?\b", lowered):
+        metrics = ["net sales"]
+    if not metrics:
+        return ()
+    metric = metrics[0]
+    target_periods = periods or [finance_target_period(lowered, periods)]
+    return tuple(
+        (
+            f"{metric.replace(' ', '_')}:{period}" if period else metric,
+            metric,
+            period,
+        )
+        for period in target_periods
+    )
 
 
 def _named_formula_specs(

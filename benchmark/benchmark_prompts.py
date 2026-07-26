@@ -237,7 +237,10 @@ def _runtime_prompt(
     if "alce" in dataset:
         return ALCE_PROMPT_SOURCE, _alce_prompt(question)
     if "qasper" in dataset:
-        return QASPER_PROMPT_SOURCE, _qasper_prompt(question)
+        return QASPER_PROMPT_SOURCE, _qasper_prompt(
+            question,
+            typed_only="qasper_typed" in dataset,
+        )
     if "financebench" in dataset:
         return FINANCEBENCH_PROMPT_SOURCE, _financebench_prompt(question)
     return GENERIC_PROMPT_SOURCE, _generic_prompt(question, profile)
@@ -284,6 +287,11 @@ def _gold_answer_prompt(
         parts.append(
             "For QAMPARI-style examples, output a comma-separated answer list "
             "without a paragraph."
+        )
+    elif "qasper_typed" in dataset:
+        parts.append(
+            'For this typed QASPER suite, output exactly "yes", "no", or '
+            '"unanswerable".'
         )
     elif "qasper" in dataset:
         parts.append(
@@ -430,17 +438,26 @@ def _truncate_ragtruth_block(value: Any, budget: int) -> str:
     return text[:budget].rstrip()
 
 
-def _qasper_prompt(question: str) -> str:
+def _qasper_prompt(question: str, *, typed_only: bool = False) -> str:
+    if typed_only:
+        answer_contract = (
+            'Return exactly one label: "yes", "no", or "unanswerable". '
+            "Do not return an answer span, number, list, or explanation."
+        )
+    else:
+        answer_contract = (
+            "Return only the answer span, yes/no value, or "
+            '"unanswerable" when the evidence does not answer the question. '
+            "Keep free-form answers short and do not add background commentary."
+        )
     return (
         _prompt_header(QASPER_PROMPT_SOURCE)
         + "Answer the question using only the provided research paper context "
-        "or evidence. Return only the answer span, yes/no value, or "
-        '"unanswerable" when the evidence does not answer the question. Keep '
-        "free-form answers short and do not add background commentary. For a "
-        "yes/no question, do not default to yes: choose either polarity only "
-        "when an explicit paper statement entails it. Phrases such as no, not, "
-        "without, failed to, or did not can directly support a no answer; mere "
-        "absence from the retrieved excerpt cannot.\n\n"
+        f"or evidence. {answer_contract} For a yes/no question, do not default "
+        "to yes: choose either polarity only when an explicit paper statement "
+        "entails it. Phrases such as no, not, without, failed to, or did not "
+        "can directly support a no answer; mere absence from the retrieved "
+        "excerpt cannot.\n\n"
         f"Question: {question}\n\n"
         f"{_concise_answer_contract()}\n\n"
         "Answer:"

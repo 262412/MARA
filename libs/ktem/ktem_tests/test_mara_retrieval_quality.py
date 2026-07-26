@@ -162,6 +162,31 @@ def test_finance_retrieval_query_expands_segment_growth_questions():
     assert "Divestitures" in query
 
 
+def test_finance_retrieval_query_expands_segment_proportional_change():
+    query = retrieval_query(
+        (
+            "From FY21 to FY22, excluding Embedded, in which AMD reporting "
+            "segment did sales proportionally increase the most?"
+        ),
+        domain="finance",
+    )
+
+    assert "Reporting Segment" in query
+    assert "Net sales by segment" in query
+    assert "Net revenue by segment" in query
+
+
+def test_finance_retrieval_query_expands_adjusted_non_gaap_ebitda():
+    query = retrieval_query(
+        "What was adjusted non-GAAP EBITDA for the twelve months ended 2023?",
+        domain="finance",
+    )
+
+    assert "Reconciliation of Non-GAAP Measures" in query
+    assert "Adjusted EBITDA" in query
+    assert "Twelve Months Ended" in query
+
+
 def test_finance_retrieval_query_expands_capital_intensity_questions():
     query = retrieval_query(
         "Is 3M a capital-intensive business based on FY2022 data?",

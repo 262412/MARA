@@ -200,24 +200,37 @@ def _normalize_qasper_contract_answer(
     prediction: dict[str, Any],
     dataset_name: str,
 ) -> tuple[str, bool]:
-    if "qasper" not in str(dataset_name or "").lower():
+    dataset = str(dataset_name or "").lower()
+    if "qasper" not in dataset:
         return answer, False
     answer_type = str(prediction.get("answer_type") or "").strip().lower()
     normalized = " ".join(str(answer or "").strip().lower().split())
+    boolean_match = re.match(r"^(yes|no|true|false)\b", normalized)
+    if "qasper_typed" in dataset:
+        if boolean_match:
+            return ("yes" if boolean_match.group(1) in {"yes", "true"} else "no"), True
+        if _is_unanswerable_text(normalized):
+            return "unanswerable", True
+        return "unanswerable", True
     if answer_type == "boolean":
-        match = re.match(r"^(yes|no|true|false)\b", normalized)
-        if not match:
+        if not boolean_match:
             return answer, False
-        return ("yes" if match.group(1) in {"yes", "true"} else "no"), True
-    if (
-        normalized.startswith("unanswerable")
-        or normalized.startswith("insufficient evidence")
-        or normalized.startswith("not enough evidence")
-        or normalized.startswith("unable to answer")
-        or normalized.startswith("cannot answer")
-    ):
+        return ("yes" if boolean_match.group(1) in {"yes", "true"} else "no"), True
+    if _is_unanswerable_text(normalized):
         return "unanswerable", True
     return answer, False
+
+
+def _is_unanswerable_text(answer: str) -> bool:
+    return answer.startswith(
+        (
+            "unanswerable",
+            "insufficient evidence",
+            "not enough evidence",
+            "unable to answer",
+            "cannot answer",
+        )
+    )
 
 
 def attach_structured_citations_from_evidence(

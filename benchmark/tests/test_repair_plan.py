@@ -74,16 +74,46 @@ def test_release_gates_report_metric_and_failure_stage_without_reweighting():
     assert result["ragtruth_positive_recall"]["failure_stage"] == "task_contract"
 
 
-def test_release_gates_reject_mismatched_run_contracts():
-    with pytest.raises(ValueError, match="run contract mismatch"):
+def test_release_gates_reject_mismatched_paired_inputs():
+    with pytest.raises(ValueError, match="paired benchmark input mismatch"):
         evaluate_release_gates(
             phase_b={
                 "avg_semantic_answer_f1": 0.40,
-                "run_provenance": {"contract_hash": "phase-b"},
+                "run_provenance": {
+                    "paired_input_hash": "phase-b",
+                    "index_contract": f"sha256:{'a' * 64}",
+                },
             },
             phase_g={
                 "avg_semantic_answer_f1": 0.49,
-                "run_provenance": {"contract_hash": "phase-g"},
+                "run_provenance": {
+                    "paired_input_hash": "phase-g",
+                    "index_contract": f"sha256:{'a' * 64}",
+                },
             },
             paired_semantic_ci_low=0.01,
         )
+
+
+def test_release_gates_allow_different_code_with_matching_paired_inputs():
+    result = evaluate_release_gates(
+        phase_b={
+            "avg_semantic_answer_f1": 0.40,
+            "run_provenance": {
+                "contract_hash": "baseline-code",
+                "paired_input_hash": "frozen-input",
+                "index_contract": f"sha256:{'a' * 64}",
+            },
+        },
+        phase_g={
+            "avg_semantic_answer_f1": 0.49,
+            "run_provenance": {
+                "contract_hash": "candidate-code",
+                "paired_input_hash": "frozen-input",
+                "index_contract": f"sha256:{'a' * 64}",
+            },
+        },
+        paired_semantic_ci_low=0.01,
+    )
+
+    assert result["semantic_f1_delta_pp"]["passed"] is True

@@ -6,14 +6,14 @@ from typing import Any
 
 from .finance_query_planning import (
     FINANCE_METRIC_ALIASES,
-    finance_metric_phrase_matches,
+    finance_fact_specs,
+    finance_metric_evidence_matches,
     finance_operand_specs,
 )
 
 QUERY_PLAN_CONTRACT = "query_plan.v1"
 MAX_RETRIEVAL_ROUNDS = 2
-
-_YEAR_RE = re.compile(r"\b(?:fy\s*)?((?:19|20)\d{2})\b", re.IGNORECASE)
+_YEAR_RE = re.compile(r"\b(?:fy\s*)?((?:19|20)\d{2})\b|\bfy\s*(\d{2})\b", re.IGNORECASE)
 _VALUE_RE = re.compile(r"(?<![A-Za-z0-9])(?:[$€£¥]\s*)?\(?[+-]?\d[\d,]*(?:\.\d+)?%?\)?")
 _TOKEN_RE = re.compile(r"[a-z0-9%$€£¥]+", re.IGNORECASE)
 _NUMERIC_TERMS = {
@@ -154,18 +154,23 @@ def build_query_plan(
         periods,
         causal_intent=causal_intent,
     )
+    finance_domain = "finance" in str(verification_domain or "").lower()
     finance_specs = (
         finance_operand_specs(text, periods)
-        if normalized_answer_type == "numeric"
-        and "finance" in str(verification_domain or "").lower()
+        if normalized_answer_type == "numeric" and finance_domain
         else ()
     )
+    finance_fact = (
+        finance_domain and normalized_answer_type != "numeric" and not causal_intent
+    )
+    finance_support_specs = finance_fact_specs(text, periods) if finance_fact else ()
     slots = (
         _finance_slots(
-            finance_specs,
-            require_scale=bool(_requested_scale(text)),
+            finance_specs or finance_support_specs,
+            require_scale=bool(finance_specs and _requested_scale(text)),
+            role="operand" if finance_specs else "support",
         )
-        if finance_specs
+        if finance_specs or finance_support_specs
         else _heuristic_slots(
             normalized_answer_type,
             question_type,
@@ -325,7 +330,7 @@ def _bound_numeric_value(
 
 
 def _slot_metric_supported(slot: EvidenceSlot, text: str) -> bool:
-    return finance_metric_phrase_matches(slot.metric, text)
+    return finance_metric_evidence_matches(slot.metric, text)
 
 
 def missing_required_slots(plan: QueryPlan) -> list[EvidenceSlot]:
@@ -406,11 +411,12 @@ def _finance_slots(
     specs: tuple[tuple[str, str, str], ...],
     *,
     require_scale: bool,
+    role: str = "operand",
 ) -> tuple[EvidenceSlot, ...]:
     slots = tuple(
         EvidenceSlot(
             slot_id=f"operand:{slot_id}",
-            role="operand",
+            role=role,
             metric=metric,
             period=period,
             modality="auto",
@@ -431,7 +437,11 @@ def _finance_slots(
 
 
 def _periods_in_question(question: str) -> list[str]:
-    periods = list(dict.fromkeys(_YEAR_RE.findall(question)))
+    periods = list(
+        dict.fromkeys(
+            full or f"20{short}" for full, short in _YEAR_RE.findall(question)
+        )
+    )
     if len(periods) != 2 or not re.search(
         r"\b(?:from|between)\b.*\b(?:and|through|to)\b",
         question,

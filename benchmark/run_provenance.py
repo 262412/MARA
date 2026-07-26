@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any, Mapping
@@ -20,6 +21,7 @@ _SERVICE_ENV_FIELDS = {
     "MARA_VLM_MODEL": "vlm_model",
     "MARA_COLVISION_ENDPOINT": "colvision_endpoint",
 }
+_INDEX_CONTRACT_ENV = "MARA_BENCHMARK_INDEX_CONTRACT"
 
 
 def benchmark_run_provenance(
@@ -37,9 +39,9 @@ def benchmark_run_provenance(
         for env_name, output_name in _SERVICE_ENV_FIELDS.items()
         if str(environment.get(env_name) or "")
     }
+    index_contract = str(environment.get(_INDEX_CONTRACT_ENV) or "")
     manifest_contract = {"sha256": _file_sha256(manifest)}
-    contract_payload: dict[str, Any] = {
-        "git": {"commit": commit, "dirty": dirty},
+    paired_input_payload = {
         "manifest": manifest_contract,
         "config": _semantic_config(config),
         "service": {
@@ -47,9 +49,19 @@ def benchmark_run_provenance(
             for key, value in service.items()
             if not key.endswith("_endpoint")
         },
+        "index_contract": index_contract,
+    }
+    contract_payload: dict[str, Any] = {
+        "git": {"commit": commit, "dirty": dirty},
+        **{
+            key: value
+            for key, value in paired_input_payload.items()
+            if key != "index_contract"
+        },
     }
     runtime_payload = {
         **contract_payload,
+        "index_contract": index_contract,
         "runtime_endpoints": {
             key: value for key, value in service.items() if key.endswith("_endpoint")
         },
@@ -61,6 +73,8 @@ def benchmark_run_provenance(
             **manifest_contract,
         },
         "service": service,
+        "index_contract": index_contract,
+        "paired_input_hash": _payload_hash(paired_input_payload),
         "contract_hash": _payload_hash(contract_payload),
         "execution_hash": _payload_hash(runtime_payload),
     }
@@ -79,6 +93,34 @@ def require_matching_run_contracts(
     if not left or not right or left != right:
         raise ValueError(
             f"benchmark run contract mismatch: left={left or 'missing'} "
+            f"right={right or 'missing'}"
+        )
+
+
+def require_matching_paired_inputs(
+    left_summary: Mapping[str, Any],
+    right_summary: Mapping[str, Any],
+) -> None:
+    left_provenance = dict(left_summary.get("run_provenance") or {})
+    right_provenance = dict(right_summary.get("run_provenance") or {})
+    left_index = str(left_provenance.get("index_contract") or "")
+    right_index = str(right_provenance.get("index_contract") or "")
+    if not left_index or not right_index:
+        raise ValueError(
+            "paired benchmark index contract missing: "
+            f"left={left_index or 'missing'} right={right_index or 'missing'}"
+        )
+    for side, index_contract in (("left", left_index), ("right", right_index)):
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", index_contract) is None:
+            raise ValueError(
+                "paired benchmark index contract must be a sha256 content digest: "
+                f"{side}={index_contract}"
+            )
+    left = str(left_provenance.get("paired_input_hash") or "")
+    right = str(right_provenance.get("paired_input_hash") or "")
+    if not left or not right or left != right:
+        raise ValueError(
+            f"paired benchmark input mismatch: left={left or 'missing'} "
             f"right={right or 'missing'}"
         )
 
