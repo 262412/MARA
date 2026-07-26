@@ -15,7 +15,9 @@ from .calculation_plan import (
     verify_calculation_plan,
 )
 from .finance_query_planning import FINANCE_METRIC_ALIASES
-from .financial_table import find_financial_cell
+from .finance_scale import scale_from_text as _scale
+from .finance_scale import source_scale_evidence as _source_scale_evidence
+from .financial_table import FinancialTableCell, find_financial_cell
 
 
 @dataclass(frozen=True)
@@ -138,26 +140,11 @@ def _operand_from_input(
         excluded_cell_ids=excluded_evidence_ids,
     )
     if semantic_cell is not None:
-        item = next(
-            (
-                candidate
-                for candidate in evidence_items
-                if _item_id(candidate) == semantic_cell.evidence_id
-            ),
-            None,
-        )
-        return CalculationOperand(
-            operand_id=name,
-            evidence_id=semantic_cell.evidence_id,
-            value=decimal_value,
-            unit=semantic_cell.unit,
-            scale=semantic_cell.scale,
-            currency=semantic_cell.currency,
-            period=semantic_cell.period,
-            entity=_item_dimension(item, "entity"),
-            cell_id=semantic_cell.cell_id,
-            row_label=semantic_cell.row_label,
-            column_label=semantic_cell.column_label,
+        return _operand_from_cell(
+            name,
+            decimal_value,
+            semantic_cell,
+            evidence_items,
         )
     item = _matching_item(
         name,
@@ -168,19 +155,76 @@ def _operand_from_input(
         evidence_items=evidence_items,
         excluded_evidence_ids=excluded_evidence_ids,
     )
+    return _operand_from_item(
+        name,
+        decimal_value,
+        period,
+        aliases,
+        item,
+        evidence_items,
+    )
+
+
+def _operand_from_cell(
+    name: str,
+    value: Decimal,
+    cell: FinancialTableCell,
+    evidence_items: list[dict[str, Any]],
+) -> CalculationOperand:
+    item = next(
+        (
+            candidate
+            for candidate in evidence_items
+            if _item_id(candidate) == cell.evidence_id
+        ),
+        None,
+    )
+    scale = cell.scale
+    scale_evidence_id = ""
+    if not scale:
+        scale, scale_evidence_id = _source_scale_evidence(item, evidence_items)
+    return CalculationOperand(
+        operand_id=name,
+        evidence_id=cell.evidence_id,
+        value=value,
+        unit=cell.unit,
+        scale=scale,
+        currency=cell.currency,
+        period=cell.period,
+        entity=_item_dimension(item, "entity"),
+        cell_id=cell.cell_id,
+        row_label=cell.row_label,
+        column_label=cell.column_label,
+        scale_evidence_id=scale_evidence_id,
+    )
+
+
+def _operand_from_item(
+    name: str,
+    value: Decimal,
+    period: str,
+    aliases: tuple[str, ...],
+    item: dict[str, Any] | None,
+    evidence_items: list[dict[str, Any]],
+) -> CalculationOperand:
     text = _item_text(item) if item is not None else ""
+    scale = _item_dimension(item, "scale") or _scale(text, aliases=aliases)
+    scale_evidence_id = ""
+    if not scale:
+        scale, scale_evidence_id = _source_scale_evidence(item, evidence_items)
     return CalculationOperand(
         operand_id=name,
         evidence_id=_item_id(item),
-        value=decimal_value,
+        value=value,
         unit=_item_dimension(item, "unit"),
-        scale=_item_dimension(item, "scale") or _scale(text, aliases=aliases),
+        scale=scale,
         currency=(
             _item_dimension(item, "currency")
             or ("USD" if "$" in text or "usd" in text.lower() else "")
         ),
         period=period or _item_dimension(item, "period"),
         entity=_item_dimension(item, "entity"),
+        scale_evidence_id=scale_evidence_id,
     )
 
 
@@ -394,6 +438,16 @@ def _operand_aliases(
     question: str,
     question_type: str,
 ) -> tuple[str, ...]:
+    lowered_question = question.lower()
+    if question_type == "current_assets" and "total current assets" in (
+        lowered_question
+    ):
+        return FINANCE_METRIC_ALIASES["total current assets"]
+    if question_type == "property_plant_equipment" and re.search(
+        r"\bnet\s+property\b",
+        lowered_question,
+    ):
+        return FINANCE_METRIC_ALIASES["net property plant and equipment"]
     if question_type == "working_capital":
         metric = "current assets" if name == "left" else "current liabilities"
         return FINANCE_METRIC_ALIASES[metric]
@@ -463,25 +517,6 @@ def _requested_scale(question: str) -> str:
     for scale in ("billion", "million", "thousand"):
         if re.search(rf"\b{scale}s?\b", lowered):
             return scale
-    return ""
-
-
-def _scale(text: str, *, aliases: tuple[str, ...] = ()) -> str:
-    lowered = text.lower()
-    header = re.search(
-        r"\(\s*in\s+(thousands?|millions?|billions?)\b",
-        lowered,
-    )
-    if header is not None:
-        return header.group(1).rstrip("s")
-    for alias in aliases:
-        match = re.search(
-            rf"{re.escape(alias.lower())}.{{0,100}}?"
-            r"(thousands?|millions?|billions?)\b",
-            lowered,
-        )
-        if match is not None:
-            return match.group(1).rstrip("s")
     return ""
 
 

@@ -88,13 +88,42 @@ _FINANCE_FOCUS_RULES: tuple[
     ),
     (
         (),
-        ("ppne", "pp&e", "ppe", "fixed asset"),
+        (
+            "ppne",
+            "pp&e",
+            "ppe",
+            "fixed asset",
+            "property, plant and equipment",
+            "property, plant, and equipment",
+            "property and equipment",
+        ),
         (
             "Consolidated Balance Sheet",
+            "Property, plant and equipment, net",
             "Property, plant and equipment",
             "Property and equipment",
             "Accumulated depreciation",
             "Total assets",
+        ),
+    ),
+    (
+        (),
+        ("total current assets", "current assets"),
+        (
+            "Consolidated Balance Sheet",
+            "Total current assets",
+            "Current assets",
+        ),
+    ),
+    (
+        (),
+        ("cost of goods sold", "cost of sales", "cogs"),
+        (
+            "Consolidated Statement of Income",
+            "Cost of goods sold",
+            "Cost of sales",
+            "Net revenues",
+            "Net sales",
         ),
     ),
     (

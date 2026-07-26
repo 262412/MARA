@@ -45,11 +45,17 @@ class CalculationOperand:
     cell_id: str = ""
     row_label: str = ""
     column_label: str = ""
+    scale_evidence_id: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["value"] = str(self.value)
-        for field_name in ("cell_id", "row_label", "column_label"):
+        for field_name in (
+            "cell_id",
+            "row_label",
+            "column_label",
+            "scale_evidence_id",
+        ):
             if not payload[field_name]:
                 payload.pop(field_name)
         return payload
@@ -166,9 +172,14 @@ def execute_calculation_plan(plan: CalculationPlan) -> CalculationExecution:
         result /= _scale_factor(plan.answer_scale)
     citations = tuple(
         dict.fromkeys(
-            operand.evidence_id
+            evidence_id
             for operand in plan.operands
-            if operand.evidence_id and operand.source == "evidence"
+            if operand.source == "evidence"
+            for evidence_id in (
+                operand.evidence_id,
+                operand.scale_evidence_id,
+            )
+            if evidence_id
         )
     )
     return CalculationExecution(
@@ -191,53 +202,16 @@ def verify_calculation_plan(
     verified_operands: list[str] = []
     citations: list[str] = []
     for operand in plan.operands:
-        item = evidence_by_id.get(operand.evidence_id)
-        if operand.source != "evidence" or not operand.evidence_id or item is None:
-            errors.append(f"operand_evidence_missing:{operand.operand_id}")
-            continue
-        text = _evidence_text(item)
-        if operand.cell_id:
-            from .financial_table import find_financial_cell_by_id
-
-            cell = find_financial_cell_by_id(item, operand.cell_id)
-            if (
-                cell is None
-                or cell.value != operand.value
-                or (
-                    operand.row_label
-                    and cell.row_label.lower() != operand.row_label.lower()
-                )
-                or (
-                    operand.column_label
-                    and cell.column_label.lower() != operand.column_label.lower()
-                )
-            ):
-                errors.append(f"operand_cell_mismatch:{operand.operand_id}")
-            elif cell is not None:
-                text = " ".join(
-                    (
-                        cell.verification_text(),
-                        _item_dimension_text(item, "entity"),
-                    )
-                )
-        if not _value_appears(operand.value, text):
-            errors.append(f"operand_value_mismatch:{operand.operand_id}")
-        if _operand_value_is_period(operand):
-            errors.append(f"operand_value_is_period:{operand.operand_id}")
-        if operand.period and operand.period not in text:
-            errors.append(f"operand_period_mismatch:{operand.operand_id}")
-        if operand.unit and not _term_matches(operand.unit, text):
-            errors.append(f"operand_unit_mismatch:{operand.operand_id}")
-        if operand.scale and not _term_matches(operand.scale, text):
-            errors.append(f"operand_scale_mismatch:{operand.operand_id}")
-        if operand.currency and not _currency_matches(operand.currency, text):
-            errors.append(f"operand_currency_mismatch:{operand.operand_id}")
-        if operand.entity and not _term_matches(operand.entity, text):
-            errors.append(f"operand_entity_mismatch:{operand.operand_id}")
+        operand_errors, operand_citations = _verify_operand(
+            operand,
+            evidence_by_id,
+        )
+        errors.extend(operand_errors)
+        citations.extend(
+            citation for citation in operand_citations if citation not in citations
+        )
         if not any(error.endswith(f":{operand.operand_id}") for error in errors):
             verified_operands.append(operand.operand_id)
-        if operand.evidence_id not in citations:
-            citations.append(operand.evidence_id)
     errors.extend(_compatibility_errors(plan))
     if plan.answer_scale and plan.answer_unit.lower() not in {"percent", "%", "ratio"}:
         errors.extend(
@@ -258,6 +232,73 @@ def verify_calculation_plan(
         citation_ids=tuple(citations),
         required_slot_ids=tuple(required_ids),
         verified_required_slot_ids=tuple(verified_required_ids),
+    )
+
+
+def _verify_operand(
+    operand: CalculationOperand,
+    evidence_by_id: dict[str, dict[str, Any]],
+) -> tuple[list[str], list[str]]:
+    item = evidence_by_id.get(operand.evidence_id)
+    if operand.source != "evidence" or not operand.evidence_id or item is None:
+        return [f"operand_evidence_missing:{operand.operand_id}"], []
+    errors: list[str] = []
+    citations = [operand.evidence_id]
+    text = _verified_cell_text(operand, item, errors)
+    scale_text = text
+    if not _value_appears(operand.value, text):
+        errors.append(f"operand_value_mismatch:{operand.operand_id}")
+    if _operand_value_is_period(operand):
+        errors.append(f"operand_value_is_period:{operand.operand_id}")
+    if operand.period and operand.period not in text:
+        errors.append(f"operand_period_mismatch:{operand.operand_id}")
+    if operand.unit and not _term_matches(operand.unit, text):
+        errors.append(f"operand_unit_mismatch:{operand.operand_id}")
+    if operand.scale_evidence_id:
+        scale_item = evidence_by_id.get(operand.scale_evidence_id)
+        if scale_item is None:
+            errors.append(f"operand_scale_evidence_missing:{operand.operand_id}")
+        elif not _same_source(item, scale_item):
+            errors.append(f"operand_scale_source_mismatch:{operand.operand_id}")
+        else:
+            scale_text = _evidence_text(scale_item)
+            citations.append(operand.scale_evidence_id)
+    if operand.scale and not _term_matches(operand.scale, scale_text):
+        errors.append(f"operand_scale_mismatch:{operand.operand_id}")
+    if operand.currency and not _currency_matches(operand.currency, text):
+        errors.append(f"operand_currency_mismatch:{operand.operand_id}")
+    if operand.entity and not _term_matches(operand.entity, text):
+        errors.append(f"operand_entity_mismatch:{operand.operand_id}")
+    return errors, citations
+
+
+def _verified_cell_text(
+    operand: CalculationOperand,
+    item: dict[str, Any],
+    errors: list[str],
+) -> str:
+    text = _evidence_text(item)
+    if not operand.cell_id:
+        return text
+    from .financial_table import find_financial_cell_by_id
+
+    cell = find_financial_cell_by_id(item, operand.cell_id)
+    if (
+        cell is None
+        or cell.value != operand.value
+        or (operand.row_label and cell.row_label.lower() != operand.row_label.lower())
+        or (
+            operand.column_label
+            and cell.column_label.lower() != operand.column_label.lower()
+        )
+    ):
+        errors.append(f"operand_cell_mismatch:{operand.operand_id}")
+        return text
+    return " ".join(
+        (
+            cell.verification_text(),
+            _item_dimension_text(item, "entity"),
+        )
     )
 
 
@@ -452,6 +493,26 @@ def _evidence_lookup(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             if value:
                 output[value] = item
     return output
+
+
+def _same_source(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> bool:
+    left_source = _source_id(left)
+    right_source = _source_id(right)
+    return bool(left_source and left_source == right_source)
+
+
+def _source_id(item: dict[str, Any]) -> str:
+    metadata = dict(item.get("metadata") or {})
+    return str(
+        item.get("source_id")
+        or item.get("file_id")
+        or item.get("document_id")
+        or metadata.get("source_id")
+        or ""
+    ).strip()
 
 
 def _evidence_text(item: dict[str, Any]) -> str:

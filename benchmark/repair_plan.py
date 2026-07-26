@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from .run_provenance import require_matching_run_contracts
+
 
 @dataclass(frozen=True, slots=True)
 class AblationPhase:
@@ -119,6 +121,8 @@ def evaluate_release_gates(
     paired_semantic_ci_low: float | None,
     token_f1_rescore_delta: float | None = None,
 ) -> dict[str, dict[str, Any]]:
+    if phase_b.get("run_provenance") or phase_g.get("run_provenance"):
+        require_matching_run_contracts(phase_b, phase_g)
     metrics = _summary_metric_aliases(phase_g)
     metrics["token_f1_rescore_delta"] = token_f1_rescore_delta
     results = {

@@ -35,6 +35,19 @@ DIRECT_VALUE_METRICS = (
 
 
 def metric_labels_for_question(lowered_question: str) -> tuple[str, ...]:
+    if "total current assets" in lowered_question:
+        return ("total current assets",)
+    if re.search(
+        r"\bnet\s+property,\s*plant(?:,\s*and| and)\s+equipment\b",
+        lowered_question,
+    ):
+        return (
+            "net property, plant and equipment",
+            "net property, plant, and equipment",
+            "property, plant and equipment, net",
+            "property, plant, and equipment, net",
+            "property and equipment, net",
+        )
     metric_aliases = (
         ("adjusted_ebitda", ("adjusted ebitda", "adj. ebitda", "adj ebitda")),
         ("operating_income", ("operating income", "operating profit")),
@@ -304,6 +317,11 @@ def direct_value_inputs(
     for question_type, labels in DIRECT_VALUE_METRICS:
         if not any(label in lowered_question for label in labels):
             continue
+        labels = _qualified_direct_value_labels(
+            question_type,
+            labels,
+            lowered_question,
+        )
         years = question_years(lowered_question)
         if question_type == "revolving_credit_capacity" and "total" in (
             lowered_question
@@ -333,6 +351,27 @@ def direct_value_inputs(
         if value is not None:
             return question_type, value, {"value": value}, "direct_value", 0.78
     return None
+
+
+def _qualified_direct_value_labels(
+    question_type: str,
+    labels: tuple[str, ...],
+    question: str,
+) -> tuple[str, ...]:
+    if question_type == "current_assets" and "total current assets" in question:
+        return ("total current assets",)
+    if question_type == "property_plant_equipment" and re.search(
+        r"\bnet\s+property\b",
+        question,
+    ):
+        return (
+            "net property, plant and equipment",
+            "net property, plant, and equipment",
+            "property, plant and equipment, net",
+            "property, plant, and equipment, net",
+            "property and equipment, net",
+        )
+    return labels
 
 
 def parse_amount(value: str) -> float | None:

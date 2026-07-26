@@ -222,7 +222,11 @@ def _parse_row(
     line: str,
     periods: tuple[str, ...],
 ) -> tuple[str, tuple[Decimal, ...]] | None:
-    matches = list(_VALUE_RE.finditer(line))
+    matches = [
+        match
+        for match in _VALUE_RE.finditer(line)
+        if not _bare_period_token(match.group(0), periods)
+    ]
     if len(matches) < len(periods):
         return None
     row_label = line[: matches[0].start()].strip(" :.|-\t")
@@ -236,6 +240,11 @@ def _parse_row(
     if len(values) != len(periods):
         return None
     return row_label, values
+
+
+def _bare_period_token(value: str, periods: tuple[str, ...]) -> bool:
+    token = str(value or "").strip()
+    return token in periods
 
 
 def _table_identity(item: dict[str, Any]) -> dict[str, str]:
@@ -298,7 +307,11 @@ def _dimension(item: dict[str, Any], field: str) -> str:
 
 def _scale(text: str) -> str:
     match = re.search(
-        r"(?:\(\s*in|dollars?\s+in)\s+(thousands?|millions?|billions?)\b",
+        r"(?:"
+        r"\(?\s*in|"
+        r"dollars?\s+(?:are\s+)?(?:presented\s+)?in|"
+        r"tabular\s+dollars?\s+(?:are\s+)?(?:presented\s+)?in"
+        r")\s+(thousands?|millions?|billions?)\b",
         text,
         flags=re.IGNORECASE,
     )

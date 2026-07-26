@@ -17,6 +17,7 @@ FINANCE_METRIC_ALIASES = {
         "cash & cash equivalents",
     ),
     "cost of goods sold": ("cost of goods sold", "cost of sales", "cogs"),
+    "total current assets": ("total current assets",),
     "current assets": ("current assets", "total current assets"),
     "current liabilities": ("current liabilities", "total current liabilities"),
     "gross profit": ("gross profit",),
@@ -28,6 +29,14 @@ FINANCE_METRIC_ALIASES = {
         "net cash provided by operating activities",
     ),
     "operating income": ("operating income", "operating profit"),
+    "net property plant and equipment": (
+        "net property plant and equipment",
+        "net property, plant and equipment",
+        "net property, plant, and equipment",
+        "property, plant and equipment, net",
+        "property, plant, and equipment, net",
+        "property and equipment, net",
+    ),
     "property plant and equipment": (
         "property plant and equipment",
         "property, plant and equipment",
@@ -216,8 +225,15 @@ def finance_metrics_in_question(question: str) -> list[str]:
             else canonical
         )
         matches.append((position, metric))
-    return [
+    ordered = [
         metric
         for _position, metric in sorted(matches)
         if metric != "operating cash flow" or "free cash flow" not in question
     ]
+    if "net property plant and equipment" in ordered:
+        ordered = [
+            metric for metric in ordered if metric != "property plant and equipment"
+        ]
+    if "total current assets" in ordered:
+        ordered = [metric for metric in ordered if metric != "current assets"]
+    return ordered

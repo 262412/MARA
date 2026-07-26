@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 from dataclasses import fields, replace
 from pathlib import Path
 from time import perf_counter
 from typing import Any
 
 from .answer_finalizer import finalize_prediction_answer
+from .backend_health_summary import load_backend_health
 from .benchmark_prompts import build_benchmark_prompt
 from .benchmark_taxonomy import add_prediction_taxonomy
 from .diagnostics import prediction_diagnostics
@@ -37,6 +37,7 @@ from .route_timeout import (
     route_timeout_seconds,
     run_with_route_timeout,
 )
+from .run_provenance import benchmark_run_provenance
 from .sampling import select_examples_for_config, selection_summary
 from .schemas import BenchmarkConfig, ManifestBundle
 from .scoring import normalize_operational_fields, score_prediction
@@ -496,7 +497,7 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         active_routes=active_routes,
         predictions=predictions,
         backend_metadata=backend_metadata,
-        backend_health=_load_backend_health(config.backend_health_json),
+        backend_health=load_backend_health(config.backend_health_json),
         skipped_routes=skipped_routes,
         adapter_metric_metadata=research_adapter_metric_metadata(),
         external_adapter_metric_metadata=_external_adapter_summary_metadata(
@@ -507,6 +508,11 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
             _external_adapter_summary_metadata_by_route(predictions, active_routes)
         ),
         selection=selection_summary(config, len(bundle.examples)),
+    )
+    summary["run_provenance"] = benchmark_run_provenance(
+        manifest_path=manifest_path,
+        config=config.to_dict(),
+        repo_root=Path(__file__).resolve().parents[1],
     )
 
     return {
@@ -519,12 +525,6 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         "predictions": predictions,
         "retrieval_traces": [_retrieval_trace_row(item) for item in predictions],
     }
-
-
-def _load_backend_health(path: Path | None) -> dict[str, Any] | None:
-    if path is None:
-        return None
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _benchmark_role(route: dict[str, Any], route_id: str) -> str:

@@ -85,6 +85,7 @@ class EvidenceSlot:
     metric: str = ""
     period: str = ""
     unit: str = ""
+    scale: str = ""
     modality: str = ""
     required: bool = True
     status: str = "missing"
@@ -156,7 +157,10 @@ def build_query_plan(
         else ()
     )
     slots = (
-        _finance_slots(finance_specs)
+        _finance_slots(
+            finance_specs,
+            require_scale=bool(_requested_scale(text)),
+        )
         if finance_specs
         else _heuristic_slots(
             normalized_answer_type,
@@ -229,6 +233,11 @@ def bind_evidence_slots(
 
 def score_evidence_for_slot(slot: EvidenceSlot, item: dict[str, Any]) -> float:
     text = _evidence_text(item).lower()
+    if slot.role == "dimension":
+        detected_scale = _evidence_scale(text, item)
+        if not detected_scale or (slot.scale and slot.scale != detected_scale):
+            return 0.0
+        return 2.0
     if slot.period and slot.period not in text:
         return 0.0
     if slot.role == "operand" and not _bound_numeric_value(slot, item, text):
@@ -289,10 +298,39 @@ def _bound_numeric_value(
     ).strip()
     if not evidence_id:
         return False
+    if not _slot_metric_supported(slot, text):
+        return False
+    from .financial_table import parse_financial_table_cells
+
+    cells = parse_financial_table_cells(item)
+    if cells:
+        aliases = FINANCE_METRIC_ALIASES.get(slot.metric, (slot.metric,))
+        return any(
+            (not slot.period or cell.period == slot.period)
+            and _metric_coverage(
+                [_tokens(alias) for alias in aliases if alias],
+                _tokens(cell.row_label),
+            )
+            >= _MIN_OPERAND_METRIC_COVERAGE
+            for cell in cells
+        )
     values = [match.group(0).strip("() ") for match in _VALUE_RE.finditer(text)]
     if slot.period:
         values = [value for value in values if value != slot.period]
     return bool(values)
+
+
+def _slot_metric_supported(slot: EvidenceSlot, text: str) -> bool:
+    aliases = FINANCE_METRIC_ALIASES.get(slot.metric, (slot.metric,))
+    if slot.metric == "total current assets":
+        return "total current assets" in text
+    if slot.metric == "net property plant and equipment":
+        normalized = " ".join(re.findall(r"[a-z0-9]+", text))
+        return any(
+            " ".join(re.findall(r"[a-z0-9]+", alias.lower())) in normalized
+            for alias in aliases
+        )
+    return True
 
 
 def missing_required_slots(plan: QueryPlan) -> list[EvidenceSlot]:
@@ -371,8 +409,10 @@ def _heuristic_slots(
 
 def _finance_slots(
     specs: tuple[tuple[str, str, str], ...],
+    *,
+    require_scale: bool,
 ) -> tuple[EvidenceSlot, ...]:
-    return tuple(
+    slots = tuple(
         EvidenceSlot(
             slot_id=f"operand:{slot_id}",
             role="operand",
@@ -382,6 +422,16 @@ def _finance_slots(
             query=" ".join(value for value in (metric, period) if value),
         )
         for slot_id, metric, period in specs
+    )
+    if not require_scale:
+        return slots
+    return (
+        *slots,
+        EvidenceSlot(
+            slot_id="dimension:scale",
+            role="dimension",
+            query="tabular dollars unit scale convention",
+        ),
     )
 
 
@@ -469,6 +519,7 @@ def _plan_from_payload(
             metric=str(item.get("metric") or ""),
             period=str(item.get("period") or ""),
             unit=str(item.get("unit") or ""),
+            scale=str(item.get("scale") or ""),
             modality=str(item.get("modality") or "auto"),
             required=bool(item.get("required", True)),
             query=str(item.get("query") or "").strip(),
@@ -515,3 +566,29 @@ def _evidence_text(item: dict[str, Any]) -> str:
             metadata.get("table_title"),
         )
     )
+
+
+def _requested_scale(question: str) -> str:
+    match = re.search(
+        r"\b(thousand|million|billion)s?\b",
+        str(question or ""),
+        flags=re.IGNORECASE,
+    )
+    return match.group(1).lower() if match else ""
+
+
+def _evidence_scale(text: str, item: dict[str, Any]) -> str:
+    metadata = dict(item.get("metadata") or {})
+    explicit = str(item.get("scale") or metadata.get("scale") or "").lower()
+    if explicit in {"thousand", "million", "billion"}:
+        return explicit
+    match = re.search(
+        r"(?:"
+        r"\(?\s*in|"
+        r"dollars?\s+(?:are\s+)?(?:presented\s+)?in|"
+        r"tabular\s+dollars?\s+(?:are\s+)?(?:presented\s+)?in"
+        r")\s+(thousands?|millions?|billions?)\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return match.group(1).lower().rstrip("s") if match else ""

@@ -19,7 +19,11 @@ from .engine_context import extract_citations
 from .indexed_citations import indexed_inline_citations
 from .schemas import BenchmarkDocument
 
-_PAGE_RE = re.compile(r"(?:#page:|page[:\s]+)([\w.-]+)", flags=re.IGNORECASE)
+_PAGE_RE = re.compile(
+    r"#page:(?P<explicit>[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?)"
+    r"|\bpage(?:\s+|:\s*)(?P<numeric>\d+(?:[.-]\d+)?)\b",
+    flags=re.IGNORECASE,
+)
 
 
 def response_evidence_outputs(
@@ -50,7 +54,7 @@ def response_evidence_outputs(
         documents,
         selected_file_ids,
     )
-    reference_pages = _PAGE_RE.findall(response.references_text or "")
+    reference_pages = _reference_pages(response.references_text or "")
     if not retrieved_hits and not reference_citations and not reference_pages:
         retrieved_hits = selected_source_fallback_hits(documents, selected_file_ids)
     retrieved_hits = canonicalize_docqa_hits(
@@ -93,3 +97,12 @@ def response_evidence_outputs(
         predicted_citations,
         predicted_pages,
     )
+
+
+def _reference_pages(value: str) -> list[str]:
+    pages: list[str] = []
+    for match in _PAGE_RE.finditer(str(value or "")):
+        page = str(match.group("explicit") or match.group("numeric") or "")
+        if page and page not in pages:
+            pages.append(page)
+    return pages

@@ -5,7 +5,14 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v8"
+from .qasper_boolean import (
+    boolean_quote_supports_relation as _boolean_quote_supports_relation,
+)
+from .qasper_boolean import boolean_relation_lemmas as _boolean_relation_lemmas
+from .qasper_boolean import is_boolean_question as _is_boolean_question
+from .qasper_boolean import stemmed_content_tokens as _stemmed_content_tokens
+
+QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v9"
 QASPER_ANSWERABILITY_SEED = 20260724
 QASPER_ANSWERABILITY_MAX_TOKENS = 160
 QASPER_EVIDENCE_QUOTE_MAX_LENGTH = 320
@@ -60,37 +67,6 @@ _UNANSWERABLE_RE = re.compile(
     r"unable to answer|cannot answer)\b",
     re.IGNORECASE,
 )
-_QUESTION_STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "by",
-    "did",
-    "do",
-    "does",
-    "for",
-    "from",
-    "how",
-    "in",
-    "is",
-    "of",
-    "on",
-    "or",
-    "the",
-    "to",
-    "was",
-    "were",
-    "what",
-    "when",
-    "where",
-    "which",
-    "who",
-    "why",
-    "with",
-}
 
 
 @dataclass(frozen=True)
@@ -107,13 +83,31 @@ def verify_qasper_answerability(
     candidate_answer: str,
 ) -> QasperAnswerabilityResult:
     candidate = _clean_candidate(candidate_answer)
-    if not candidate or _UNANSWERABLE_RE.match(candidate):
+    if not candidate:
         return QasperAnswerabilityResult(
-            answer="unanswerable" if candidate else "",
+            answer="",
             trace=_trace(
                 "not_required",
-                "unanswerable" if candidate else "",
+                "",
                 action="preserved_primary_answer",
+            ),
+        )
+    if _UNANSWERABLE_RE.match(candidate):
+        if _is_boolean_question(question):
+            return _verify_boolean_candidate(
+                llm,
+                question=question,
+                evidence=evidence,
+                candidate_answer="unanswerable",
+                candidate="",
+            )
+        return QasperAnswerabilityResult(
+            answer="unanswerable",
+            trace=_trace(
+                "not_required",
+                "unanswerable",
+                action="preserved_primary_answer",
+                primary_answer="unanswerable",
             ),
         )
     if candidate.lower() in {"yes", "no", "true", "false"}:
@@ -141,7 +135,9 @@ def _verify_boolean_candidate(
     candidate_answer: str,
     candidate: str,
 ) -> QasperAnswerabilityResult:
-    candidate_polarity = "yes" if candidate.lower() in {"yes", "true"} else "no"
+    candidate_polarity = (
+        "yes" if candidate.lower() in {"yes", "true"} else "no" if candidate else ""
+    )
     verdict, quote, parse_trace = _call_verifier(
         llm,
         _boolean_answerability_prompt(question=question, evidence=evidence),
@@ -157,8 +153,53 @@ def _verify_boolean_candidate(
                 "",
                 action="preserved_primary_answer",
                 parse_trace=parse_trace,
+                primary_answer=candidate_polarity or "unanswerable",
             ),
         )
+    (
+        verdict,
+        raw_verdict,
+        quote_grounded,
+        quote_supports_relation,
+        reason,
+        relation_trace,
+    ) = _ground_boolean_verdict(
+        question=question,
+        evidence=evidence,
+        verdict=verdict,
+        quote=quote,
+    )
+    action, answer = _boolean_answer_action(candidate_polarity, verdict)
+    return QasperAnswerabilityResult(
+        answer=answer,
+        trace=_trace(
+            "ok",
+            verdict,
+            action=action,
+            evidence_quote=quote,
+            quote_grounded=quote_grounded,
+            quote_supports_relation=quote_supports_relation,
+            parse_trace={**parse_trace, **relation_trace},
+            primary_answer=candidate_polarity or "unanswerable",
+            adjudicated_polarity=verdict,
+            raw_verifier_verdict=raw_verdict,
+            reason=reason,
+        ),
+    )
+
+
+def _ground_boolean_verdict(
+    *,
+    question: str,
+    evidence: str,
+    verdict: str,
+    quote: str,
+) -> tuple[str, str, bool, bool, str, dict[str, str]]:
+    raw_verdict = verdict
+    relation_trace = {
+        "question_relation_terms": ",".join(sorted(_boolean_relation_lemmas(question))),
+        "quote_relation_terms": ",".join(sorted(_boolean_relation_lemmas(quote))),
+    }
     quote_grounded = _quote_is_grounded(quote, evidence)
     quote_supports_relation = quote_grounded and _boolean_quote_supports_relation(
         quote,
@@ -167,24 +208,37 @@ def _verify_boolean_candidate(
     )
     if verdict != "insufficient_evidence" and not quote_supports_relation:
         verdict = "insufficient_evidence"
-    if verdict == candidate_polarity:
-        action = "confirmed_candidate"
-    elif verdict == "insufficient_evidence":
-        action = "preserved_insufficient_candidate"
+    if raw_verdict == "insufficient_evidence":
+        reason = "insufficient_evidence"
+    elif not quote_grounded:
+        reason = "ungrounded_quote"
+    elif not quote_supports_relation:
+        reason = "grounded_quote_incomplete_relation"
     else:
-        action = "preserved_conflicting_candidate"
-    return QasperAnswerabilityResult(
-        answer=candidate_polarity,
-        trace=_trace(
-            "ok",
-            verdict,
-            action=action,
-            evidence_quote=quote,
-            quote_grounded=quote_grounded,
-            quote_supports_relation=quote_supports_relation,
-            parse_trace=parse_trace,
-        ),
+        reason = "grounded_complete_relation"
+    return (
+        verdict,
+        raw_verdict,
+        quote_grounded,
+        quote_supports_relation,
+        reason,
+        relation_trace,
     )
+
+
+def _boolean_answer_action(candidate_polarity: str, verdict: str) -> tuple[str, str]:
+    if verdict not in {"yes", "no"}:
+        action = (
+            "preserved_insufficient_candidate"
+            if candidate_polarity
+            else "preserved_boolean_abstention"
+        )
+        return action, candidate_polarity or "unanswerable"
+    if not candidate_polarity:
+        return "recovered_boolean_from_abstention", verdict
+    if verdict == candidate_polarity:
+        return "confirmed_candidate", verdict
+    return "corrected_primary_polarity", verdict
 
 
 def _verify_free_text_candidate(
@@ -436,41 +490,6 @@ def _quote_supports_relation(quote: str, question: str, candidate: str) -> bool:
     )
 
 
-def _boolean_quote_supports_relation(
-    quote: str,
-    question: str,
-    verdict: str,
-) -> bool:
-    quote_tokens = _stemmed_content_tokens(quote)
-    question_anchors = _stemmed_content_tokens(question)
-    required_anchors = min(2, len(question_anchors))
-    if required_anchors and len(quote_tokens & question_anchors) >= required_anchors:
-        return True
-    if verdict != "no":
-        return False
-    lowered_quote = str(quote or "").lower()
-    return any(
-        cue in lowered_quote
-        for cue in (
-            "drop-in replacement",
-            "does not",
-            "do not",
-            "no ",
-            "not ",
-            "unnecessary",
-            "without",
-        )
-    )
-
-
-def _stemmed_content_tokens(value: str) -> set[str]:
-    return {
-        token[:5] if len(token) > 5 else token
-        for token in re.findall(r"[a-z0-9]+", str(value or "").lower())
-        if token not in _QUESTION_STOPWORDS
-    }
-
-
 def _quote_is_grounded(quote: str, evidence: str) -> bool:
     normalized_quote = _normalized_quote(quote)
     normalized_evidence = _normalized_quote(evidence)
@@ -490,6 +509,10 @@ def _trace(
     quote_grounded: bool | None = None,
     quote_supports_relation: bool | None = None,
     parse_trace: dict[str, str] | None = None,
+    primary_answer: str = "",
+    adjudicated_polarity: str = "",
+    raw_verifier_verdict: str = "",
+    reason: str = "",
 ) -> dict[str, str]:
     trace = {
         "contract_id": QASPER_ANSWERABILITY_CONTRACT,
@@ -503,5 +526,13 @@ def _trace(
         trace["quote_grounded"] = str(quote_grounded).lower()
     if quote_supports_relation is not None:
         trace["quote_supports_relation"] = str(quote_supports_relation).lower()
+    if primary_answer:
+        trace["primary_answer"] = primary_answer
+    if adjudicated_polarity:
+        trace["adjudicated_polarity"] = adjudicated_polarity
+    if raw_verifier_verdict:
+        trace["raw_verifier_verdict"] = raw_verifier_verdict
+    if reason:
+        trace["reason"] = reason
     trace.update(parse_trace or {})
     return trace

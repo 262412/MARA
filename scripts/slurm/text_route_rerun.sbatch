@@ -124,7 +124,21 @@ require_path runtime "$KH_APP_DATA_DIR" \
 mkdir -p "$OUT_ROOT" "$LOG_ROOT" "$HEALTH_ROOT" /mnt/scratch/users/tbczhang/outputs/MARA/slurm
 cd "$PROJECT_ROOT"
 
+GIT_COMMIT="$(git rev-parse HEAD)"
+GIT_STATUS="$(git status --porcelain --untracked-files=normal)"
+GIT_DIRTY=false
+if [[ -n "$GIT_STATUS" ]]; then
+  GIT_DIRTY=true
+fi
+if [[ -n "$GIT_STATUS" && "${MARA_ALLOW_DIRTY_BENCHMARK:-0}" != "1" ]]; then
+  log "refusing benchmark from dirty worktree; set MARA_ALLOW_DIRTY_BENCHMARK=1 only for an explicitly non-formal development run"
+  printf '%s\n' "$GIT_STATUS" >&2
+  exit 2
+fi
+export MARA_BENCHMARK_GIT_COMMIT="$GIT_COMMIT"
+
 log "repo=$(pwd)"
+log "git_commit=${GIT_COMMIT} git_dirty=${GIT_DIRTY}"
 log "run_root=${RUN_ROOT}"
 log "kh_app_data_dir=${KH_APP_DATA_DIR}"
 log "manifest=${MANIFEST}"
@@ -144,6 +158,15 @@ SEMANTIC_EVALUATOR="$(
 log "semantic_evaluator=${SEMANTIC_EVALUATOR}"
 
 mara_bootstrap_benchmark_runtime
+export MARA_BENCHMARK_SERVICE_CONTRACT="$(
+  sha256sum \
+    "${HPC_HOME}/serve_qwen3_8b.sh" \
+    "${HPC_HOME}/serve_retrieval.sh" \
+    "${HPC_HOME}/configure_mara_local_models.py" |
+    sha256sum |
+    awk '{print $1}'
+)"
+log "service_contract=${MARA_BENCHMARK_SERVICE_CONTRACT}"
 
 if ! http_ok "${TEXT_LLM_BASE_URL}/models"; then
   start_service qwen3_8b \
