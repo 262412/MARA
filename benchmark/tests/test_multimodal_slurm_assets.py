@@ -255,6 +255,15 @@ def test_benchmark_runtime_isolation_helper_bootstraps_empty_runtime():
     assert "mara_assert_isolated_kh_app_data" in text
 
 
+def test_text_route_slurm_script_records_and_enforces_clean_git_contract():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert "git rev-parse HEAD" in text
+    assert "git status --porcelain" in text
+    assert "MARA_ALLOW_DIRTY_BENCHMARK" in text
+    assert "MARA_BENCHMARK_SERVICE_CONTRACT" in text
+
+
 def test_benchmark_runtime_cleanup_removes_only_configured_job_runtime(tmp_path):
     _require_posix_bash()
     runtime_root = tmp_path / "benchmark_runs_test"

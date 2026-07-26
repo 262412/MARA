@@ -132,7 +132,7 @@ def test_qasper_answerability_checks_boolean_question_sufficiency_not_token_supp
     assert llm.calls[0][1]["response_format"]["json_schema"]["strict"] is True
 
 
-def test_qasper_answerability_does_not_let_secondary_verifier_flip_candidate():
+def test_qasper_answerability_corrects_candidate_from_grounded_polarity():
     llm = _VerifierLLM(
         '{"verdict":"no","evidence_quote":'
         '"The method is used as a drop-in replacement and requires no fine-tuning."}'
@@ -148,13 +148,13 @@ def test_qasper_answerability_does_not_let_secondary_verifier_flip_candidate():
         candidate_answer="yes",
     )
 
-    assert result.answer == "yes"
+    assert result.answer == "no"
     assert result.trace["verdict"] == "no"
-    assert result.trace["action"] == "preserved_conflicting_candidate"
+    assert result.trace["action"] == "corrected_primary_polarity"
     assert "CANDIDATE ANSWER" not in llm.calls[0][0]
 
 
-def test_qasper_answerability_preserves_no_candidate_on_conflicting_yes_verdict():
+def test_qasper_answerability_corrects_no_candidate_on_grounded_yes_verdict():
     llm = _VerifierLLM(
         '{"verdict":"yes","evidence_quote":'
         '"The authors released their source code with the paper."}'
@@ -167,9 +167,71 @@ def test_qasper_answerability_preserves_no_candidate_on_conflicting_yes_verdict(
         candidate_answer="no",
     )
 
-    assert result.answer == "no"
+    assert result.answer == "yes"
     assert result.trace["verdict"] == "yes"
-    assert result.trace["action"] == "preserved_conflicting_candidate"
+    assert result.trace["action"] == "corrected_primary_polarity"
+
+
+def test_qasper_boolean_question_reconsiders_primary_unanswerable():
+    llm = _VerifierLLM(
+        '{"verdict":"no","evidence_quote":'
+        '"The method requires no fine-tuning and is a drop-in replacement."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Did the method require fine-tuning?",
+        evidence=("The method requires no fine-tuning and is a drop-in replacement."),
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "no"
+    assert result.trace["action"] == "recovered_boolean_from_abstention"
+    assert result.trace["primary_answer"] == "unanswerable"
+    assert result.trace["adjudicated_polarity"] == "no"
+    assert result.trace["reason"] == "grounded_complete_relation"
+    assert len(llm.calls) == 1
+
+
+def test_qasper_boolean_question_allows_leading_discourse_marker():
+    llm = _VerifierLLM(
+        '{"verdict":"yes","evidence_quote":'
+        '"Parallel data improves semantic role induction across languages."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question=(
+            "Overall, does having parallel data improve semantic role induction "
+            "across multiple languages?"
+        ),
+        evidence=("Parallel data improves semantic role induction across languages."),
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["action"] == "recovered_boolean_from_abstention"
+    assert len(llm.calls) == 1
+
+
+def test_qasper_boolean_relation_does_not_equate_created_with_experimented():
+    llm = _VerifierLLM(
+        '{"verdict":"yes","evidence_quote":'
+        '"We recorded and preprocessed ZuCo 2.0, a new dataset."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Did they experiment with the new dataset?",
+        evidence="We recorded and preprocessed ZuCo 2.0, a new dataset.",
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["verdict"] == "insufficient_evidence"
+    assert result.trace["quote_supports_relation"] == "false"
+    assert result.trace["raw_verifier_verdict"] == "yes"
+    assert result.trace["reason"] == "grounded_quote_incomplete_relation"
 
 
 def test_qasper_answerability_rejects_boolean_candidate_when_question_is_unresolved():

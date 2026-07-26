@@ -4,6 +4,7 @@ import pytest
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.controller import build_controller_outputs
 from ktem.docqa.execution import execute_controller_turn
+from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 
 
 @pytest.mark.parametrize(
@@ -117,6 +118,68 @@ def test_second_round_targets_only_missing_evidence_slot():
 
     assert len(queries) == 2
     assert queries[1] == "revenue 2022"
+    assert result.evidence_bundle.metadata["retrieval_rounds"] == 2
+    assert result.evidence_bundle.metadata["slot_coverage"] == 1.0
+
+
+def test_second_round_retrieves_missing_same_source_scale_convention():
+    queries = []
+
+    def retrieve(request, _decision):
+        queries.append(request.retrieval_query)
+        if len(queries) == 1:
+            return {
+                "evidence": [
+                    {
+                        "evidence_id": "pepsico-capex",
+                        "file_id": "pepsico",
+                        "page_label": "53",
+                        "modality": "table",
+                        "text": "2021 2020\nCapital spending (4,625) (4,240)",
+                    }
+                ]
+            }
+        return {
+            "evidence": [
+                {
+                    "evidence_id": "pepsico-scale",
+                    "file_id": "pepsico",
+                    "page_label": "40",
+                    "text": (
+                        "Unless otherwise noted, tabular dollars are "
+                        "presented in millions."
+                    ),
+                }
+            ]
+        }
+
+    def generate(request, _decision, bundle):
+        result = finance_numeric_answer(
+            request.prompt,
+            bundle.items,
+            query_plan=bundle.metadata["query_plan"],
+        )
+        assert result is not None
+        assert result.answer == "$4.625 billion"
+        return result.answer
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt="What is FY2021 capital expenditure in USD billions?",
+            controller_question=("What is FY2021 capital expenditure in USD billions?"),
+            retrieval_query="FY2021 capital expenditure",
+            task_type="numeric",
+            verification_domain="finance",
+            route_policy="doc",
+        ),
+        retrieve=retrieve,
+        generate=generate,
+    )
+
+    assert queries == [
+        "FY2021 capital expenditure",
+        "tabular dollars unit scale convention",
+    ]
     assert result.evidence_bundle.metadata["retrieval_rounds"] == 2
     assert result.evidence_bundle.metadata["slot_coverage"] == 1.0
 

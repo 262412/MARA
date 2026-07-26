@@ -112,6 +112,43 @@ def test_finance_retrieval_query_expands_ppne_balance_sheet_questions():
     assert "Accumulated depreciation" in query
 
 
+def test_finance_retrieval_query_expands_full_net_ppe_phrase():
+    query = retrieval_query(
+        (
+            "What is Boeing's FY2018 net property, plant, and equipment? "
+            "Use the balance sheet."
+        ),
+        domain="finance",
+    )
+
+    assert "Consolidated Balance Sheet" in query
+    assert "Property, plant and equipment, net" in query
+
+
+def test_finance_retrieval_query_expands_total_current_assets_question():
+    query = retrieval_query(
+        "How much total current assets did Nike have in FY2019?",
+        domain="finance",
+    )
+
+    assert "Consolidated Balance Sheet" in query
+    assert "Total current assets" in query
+
+
+def test_finance_retrieval_query_expands_cogs_percentage_of_revenue():
+    query = retrieval_query(
+        (
+            "What was the average cost of goods sold as a percent of revenue "
+            "from FY2016 to FY2018?"
+        ),
+        domain="finance",
+    )
+
+    assert "Consolidated Statement of Income" in query
+    assert "Cost of goods sold" in query
+    assert "Net revenues" in query
+
+
 def test_finance_retrieval_query_expands_segment_growth_questions():
     query = retrieval_query(
         "If we exclude the impact of M&A, which segment dragged down "

@@ -72,3 +72,18 @@ def test_release_gates_report_metric_and_failure_stage_without_reweighting():
     assert result["ragtruth_positive_recall"]["passed"] is False
     assert result["ragtruth_positive_recall"]["status"] == "missing"
     assert result["ragtruth_positive_recall"]["failure_stage"] == "task_contract"
+
+
+def test_release_gates_reject_mismatched_run_contracts():
+    with pytest.raises(ValueError, match="run contract mismatch"):
+        evaluate_release_gates(
+            phase_b={
+                "avg_semantic_answer_f1": 0.40,
+                "run_provenance": {"contract_hash": "phase-b"},
+            },
+            phase_g={
+                "avg_semantic_answer_f1": 0.49,
+                "run_provenance": {"contract_hash": "phase-g"},
+            },
+            paired_semantic_ci_low=0.01,
+        )

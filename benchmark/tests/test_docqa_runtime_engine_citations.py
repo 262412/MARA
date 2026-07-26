@@ -110,3 +110,30 @@ def test_docqa_runtime_engine_maps_indexed_inline_citations_to_evidence_sources(
     )
 
     assert predicted_citations == ["doc#source", "doc#page:5", "doc#page:9"]
+
+
+def test_docqa_runtime_reference_pages_reject_natural_language_tokens(tmp_path):
+    doc_path = tmp_path / "doc.txt"
+    doc_path.write_text("runtime text", encoding="utf-8")
+    engine = DocQARuntimeEngine(
+        BenchmarkConfig(suite_name="runtime", output_dir=tmp_path / "out")
+    )
+    response = types.SimpleNamespace(
+        answer="Runtime answer.",
+        references_text=(
+            "This continues onto the next page from the appendix. "
+            "See page 12 and explicit#page:cover."
+        ),
+        evidence_metadata={},
+        evidence_bundle={"route": "doc_text", "items": []},
+    )
+
+    _, _, _, _, predicted_pages = engine._response_evidence_outputs(
+        response=response,
+        documents=[
+            BenchmarkDocument(document_id="doc", path=doc_path, format_type="txt")
+        ],
+        selected_file_ids=["file-1"],
+    )
+
+    assert predicted_pages == ["12", "cover"]

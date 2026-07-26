@@ -181,9 +181,22 @@ def test_direct_finance_value_plan_has_one_metric_slot():
 
     assert plan.answer_type == "numeric"
     assert [
-        (slot.slot_id, slot.metric, slot.period) for slot in plan.evidence_slots
-    ] == [("operand:capital_expenditure:2021", "capital expenditure", "2021")]
-    assert plan.subqueries == ("capital expenditure 2021",)
+        (slot.slot_id, slot.role, slot.metric, slot.period, slot.scale)
+        for slot in plan.evidence_slots
+    ] == [
+        (
+            "operand:capital_expenditure:2021",
+            "operand",
+            "capital expenditure",
+            "2021",
+            "",
+        ),
+        ("dimension:scale", "dimension", "", "", ""),
+    ]
+    assert plan.subqueries == (
+        "capital expenditure 2021",
+        "tabular dollars unit scale convention",
+    )
 
 
 def test_direct_net_ppe_plan_uses_canonical_finance_metric():
@@ -198,8 +211,60 @@ def test_direct_net_ppe_plan_uses_canonical_finance_metric():
 
     assert plan.answer_type == "numeric"
     assert [(slot.metric, slot.period) for slot in plan.evidence_slots] == [
-        ("property plant and equipment", "2018")
+        ("net property plant and equipment", "2018"),
+        ("", ""),
     ]
+
+
+def test_total_current_assets_slot_rejects_other_current_assets_prose():
+    plan = build_query_plan(
+        "How much total current assets did Nike have at the end of FY2019?",
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "other-current-assets",
+                "text": ("Other current assets increased by $95 million in FY2019."),
+                "modality": "text",
+            }
+        ],
+    )
+
+    operand = next(slot for slot in bound.evidence_slots if slot.role == "operand")
+    assert operand.metric == "total current assets"
+    assert operand.status == "missing"
+    assert "total current assets 2019" in missing_slot_queries(bound)
+
+
+def test_net_ppe_slot_rejects_cash_flow_additions():
+    plan = build_query_plan(
+        (
+            "What is Boeing's year end FY2018 net property, plant, and "
+            "equipment in USD millions?"
+        ),
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "cash-flow-additions",
+                "text": (
+                    "Additions to property, plant and equipment were "
+                    "$1,722 million in 2018."
+                ),
+                "modality": "table",
+            }
+        ],
+    )
+
+    operand = next(slot for slot in bound.evidence_slots if slot.role == "operand")
+    assert operand.metric == "net property plant and equipment"
+    assert operand.status == "missing"
 
 
 def test_free_cash_flow_plan_retrieves_both_formula_operands():

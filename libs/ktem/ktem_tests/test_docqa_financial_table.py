@@ -122,6 +122,98 @@ def test_free_cash_flow_uses_the_requested_period_column_not_result_distractor()
     assert operands["capital_expenditure"]["column_label"] == "2020"
 
 
+def test_free_cash_flow_preserves_table_boundary_before_numeric_source_name():
+    cash_flow = {
+        "evidence_id": "general-mills-page-17",
+        "source_id": "GENERALMILLS_2020_10K",
+        "page_label": "17",
+        "element_type": "table",
+        "text": """
+        In Millions, Except Per Share Data, Percentages and Ratios
+        2020 2019 2018 2017 2016
+        Net cash provided by operating activities 3,676.2 2,807.0 2,841.0 2,415.2 2,764.2
+        Capital expenditures 460.8 537.6 622.7 684.4 729.3
+        """.strip(),
+    }
+    numeric_source_name = {
+        "evidence_id": "general-mills-page-95",
+        "source_id": "GENERALMILLS_2020_10K",
+        "source_name": "GENERALMILLS_2020_10K.pdf",
+        "page_label": "95",
+        "text": "95 Glossary 2020 definitions.",
+    }
+
+    answer = finance_numeric_answer(
+        (
+            "What is FY2020 free cash flow, defined as operating cash flow "
+            "minus capital expenditures? Answer in USD millions."
+        ),
+        [cash_flow, numeric_source_name],
+    )
+
+    assert answer is not None
+    assert answer.answer == "$3,215.4 million"
+    assert answer.inputs["capital_expenditure"] == 460.8
+    assert answer.calculation_verification["valid"] is True
+
+
+def test_financial_table_parser_does_not_treat_bare_period_as_cell_value():
+    item = _table_item(
+        """
+        AS OF MAY 31, 2019 2018
+        An increase in prepaid expenses and other current assets on the
+        Consolidated Balance Sheets at May 31, 2019 95
+        """
+    )
+
+    cell = find_financial_cell(
+        [item],
+        aliases=("current assets",),
+        period="2019",
+    )
+
+    assert cell is None
+
+
+def test_finance_scale_can_be_proven_by_same_source_convention_evidence():
+    table = {
+        "evidence_id": "pepsico-free-cash-flow",
+        "canonical_id": "PEPSICO_2021_10K#table:free-cash-flow",
+        "source_id": "PEPSICO_2021_10K",
+        "page_label": "53",
+        "element_type": "table",
+        "text": """
+        2021 2020
+        Net cash provided by operating activities 11,616 10,613
+        Capital spending (4,625) (4,240)
+        """,
+    }
+    convention = {
+        "evidence_id": "pepsico-tabular-scale",
+        "source_id": "PEPSICO_2021_10K",
+        "page_label": "40",
+        "text": (
+            "Unless otherwise noted, tabular dollars are presented in "
+            "millions, except per share amounts."
+        ),
+    }
+
+    answer = finance_numeric_answer(
+        "What is FY2021 capital expenditure in USD billions?",
+        [table, convention],
+    )
+
+    assert answer is not None
+    assert answer.answer == "$4.625 billion"
+    operand = answer.calculation_plan["operands"][0]
+    assert operand["scale"] == "million"
+    assert operand["scale_evidence_id"] == "pepsico-tabular-scale"
+    assert answer.calculation_verification["citation_ids"] == (
+        "pepsico-free-cash-flow",
+        "pepsico-tabular-scale",
+    )
+
+
 def test_ratio_uses_requested_period_instead_of_first_table_column():
     answer = finance_numeric_answer(
         "What was the current ratio in 2020?",
