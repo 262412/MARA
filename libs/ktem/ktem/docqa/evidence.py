@@ -11,6 +11,7 @@ from .evidence_identity import (
 )
 from .evidence_locators import merged_locator_metadata, source_alias_values
 from .evidence_planning import select_planned_evidence
+from .evidence_ranking_trace import ranking_trace
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
 from .query_planning import request_planning_question
@@ -127,9 +128,7 @@ def build_evidence_bundle(
         )
     if route in {"graph_global", "hybrid"}:
         items.extend(_graph_items(request, evidence_metadata))
-
     deduped, dedupe_trace = canonicalize_and_dedupe_evidence(items)
-    canonical_candidates = list(deduped[:MAX_RERANK_CANDIDATES])
     m3docrag_trace: dict[str, Any] | None = None
     hybrid_fusion_trace: dict[str, Any] | None = None
     if route == "doc_page_image":
@@ -143,11 +142,13 @@ def build_evidence_bundle(
             learned_ranker=evidence_metadata.get("hybrid_fusion_ranker"),
             domain=getattr(request, "verification_domain", None),
         )
+    canonical_candidates = list(deduped[:MAX_RERANK_CANDIDATES])
+    reranked_candidates = list(canonical_candidates[:30])
+    if route == "hybrid":
         deduped, m3docrag_trace = select_page_first_evidence(
             planning_question,
-            deduped,
+            canonical_candidates,
         )
-    reranked_candidates = list(deduped[:30])
     deduped, planning_metadata = select_planned_evidence(request, deduped)
     metadata = dict(evidence_metadata)
     metadata["schema_version"] = EVIDENCE_BUNDLE_SCHEMA_VERSION
@@ -156,6 +157,11 @@ def build_evidence_bundle(
     metadata["candidate_evidence"] = canonical_candidates
     metadata["reranked_candidate_count"] = len(reranked_candidates)
     metadata["reranked_evidence"] = reranked_candidates
+    metadata["ranking_trace"] = ranking_trace(
+        candidate_limit=MAX_RERANK_CANDIDATES,
+        input_count=len(canonical_candidates),
+        output_count=len(reranked_candidates),
+    )
     metadata.update(merged_locator_metadata(metadata, deduped))
     metadata["modality_counts"] = dict(Counter(item["modality"] for item in deduped))
     metadata["evidence"] = deduped

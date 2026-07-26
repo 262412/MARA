@@ -12,10 +12,10 @@ from .qasper_boolean import boolean_relation_lemmas as _boolean_relation_lemmas
 from .qasper_boolean import is_boolean_question as _is_boolean_question
 from .qasper_boolean import stemmed_content_tokens as _stemmed_content_tokens
 
-QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v9"
+QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v10"
 QASPER_ANSWERABILITY_SEED = 20260724
-QASPER_ANSWERABILITY_MAX_TOKENS = 160
-QASPER_EVIDENCE_QUOTE_MAX_LENGTH = 320
+QASPER_ANSWERABILITY_MAX_TOKENS = 192
+QASPER_EVIDENCE_QUOTE_MAX_LENGTH = 640
 QASPER_ANSWERABILITY_RESPONSE_FORMAT = {
     "type": "json_schema",
     "json_schema": {
@@ -48,7 +48,13 @@ QASPER_BOOLEAN_ANSWERABILITY_RESPONSE_FORMAT = {
             "properties": {
                 "verdict": {
                     "type": "string",
-                    "enum": ["yes", "no", "insufficient_evidence"],
+                    "enum": [
+                        "yes_complete",
+                        "no_complete",
+                        "yes_partial",
+                        "no_partial",
+                        "insufficient_evidence",
+                    ],
                 },
                 "evidence_quote": {
                     "type": "string",
@@ -143,7 +149,13 @@ def _verify_boolean_candidate(
         _boolean_answerability_prompt(question=question, evidence=evidence),
         response_format=QASPER_BOOLEAN_ANSWERABILITY_RESPONSE_FORMAT,
         parser=_boolean_verdict,
-        allowed_values=("yes", "no", "insufficient_evidence"),
+        allowed_values=(
+            "yes_complete",
+            "no_complete",
+            "yes_partial",
+            "no_partial",
+            "insufficient_evidence",
+        ),
     )
     if not verdict:
         return QasperAnswerabilityResult(
@@ -201,21 +213,39 @@ def _ground_boolean_verdict(
         "quote_relation_terms": ",".join(sorted(_boolean_relation_lemmas(quote))),
     }
     quote_grounded = _quote_is_grounded(quote, evidence)
-    quote_supports_relation = quote_grounded and _boolean_quote_supports_relation(
-        quote,
-        question,
-        verdict,
-    )
-    if verdict != "insufficient_evidence" and not quote_supports_relation:
+    complete = {
+        "yes_complete": "yes",
+        "no_complete": "no",
+    }
+    if raw_verdict in complete:
+        quote_supports_relation = quote_grounded
+        verdict = complete[raw_verdict] if quote_grounded else "insufficient_evidence"
+        reason = (
+            "grounded_complete_proposition" if quote_grounded else "ungrounded_quote"
+        )
+    elif raw_verdict in {"yes_partial", "no_partial"}:
+        quote_supports_relation = False
         verdict = "insufficient_evidence"
-    if raw_verdict == "insufficient_evidence":
+        reason = (
+            "grounded_partial_proposition" if quote_grounded else "ungrounded_quote"
+        )
+    elif raw_verdict == "insufficient_evidence":
+        quote_supports_relation = False
         reason = "insufficient_evidence"
-    elif not quote_grounded:
-        reason = "ungrounded_quote"
-    elif not quote_supports_relation:
-        reason = "grounded_quote_incomplete_relation"
     else:
-        reason = "grounded_complete_relation"
+        quote_supports_relation = quote_grounded and _boolean_quote_supports_relation(
+            quote,
+            question,
+            verdict,
+        )
+        if not quote_supports_relation:
+            verdict = "insufficient_evidence"
+        if not quote_grounded:
+            reason = "ungrounded_quote"
+        elif not quote_supports_relation:
+            reason = "grounded_quote_incomplete_relation"
+        else:
+            reason = "grounded_complete_relation"
     return (
         verdict,
         raw_verdict,
@@ -429,19 +459,26 @@ def _answerability_prompt(
 def _boolean_answerability_prompt(*, question: str, evidence: str) -> str:
     return (
         "/no_think\n"
-        "You are a QASPER boolean evidence verifier. Use the retrieved paper "
-        "evidence to determine the supported polarity of the yes/no question. "
-        'Return "yes" only when the evidence entails yes, "no" only when it '
-        "entails no, and insufficient_evidence when neither polarity is "
-        "established. Topic overlap, a related experiment, or the absence of "
-        "a statement is insufficient evidence. For yes or no, include the "
-        "shortest exact evidence span, at most 20 words, that establishes the "
-        "polarity. Use an "
-        "empty evidence_quote for insufficient evidence.\n\n"
+        "You are a QASPER proposition verifier. Compare the complete yes/no "
+        "question proposition with the retrieved paper evidence. A complete "
+        "match requires the same subject, relation, object, scope, qualifiers, "
+        "and polarity. Distinguish a process from its outcome, mentioning from "
+        "performing, creating from experimenting, and controlling experimental "
+        "collection from validating the quality of the resulting data.\n\n"
+        "Return yes_complete or no_complete only when one polarity of that "
+        "complete proposition is explicitly established. Return yes_partial "
+        "or no_partial when the evidence supports that polarity only for a "
+        "related or incomplete proposition. Return insufficient_evidence when "
+        "neither polarity is established. Absence of a statement never proves "
+        "no. For complete or partial verdicts, include the shortest exact "
+        "contiguous evidence span, at most 60 words, that supports the verdict. "
+        "Use an empty evidence_quote only for insufficient_evidence.\n\n"
         f"QUESTION:\n{question}\n\n"
         f"RETRIEVED PAPER EVIDENCE:\n{evidence}\n\n"
-        'Return exactly {"verdict":"yes","evidence_quote":"..."}, '
-        '{"verdict":"no","evidence_quote":"..."}, or '
+        'Return exactly {"verdict":"yes_complete","evidence_quote":"..."}, '
+        '{"verdict":"no_complete","evidence_quote":"..."}, '
+        '{"verdict":"yes_partial","evidence_quote":"..."}, '
+        '{"verdict":"no_partial","evidence_quote":"..."}, or '
         '{"verdict":"insufficient_evidence","evidence_quote":""}.'
     )
 
@@ -471,7 +508,15 @@ def _boolean_verdict(answer: str) -> tuple[str, str]:
         return "", ""
     value = str(payload.get("verdict") or "")
     quote = str(payload.get("evidence_quote") or "").strip()
-    allowed = {"yes", "no", "insufficient_evidence"}
+    allowed = {
+        "yes_complete",
+        "no_complete",
+        "yes_partial",
+        "no_partial",
+        "yes",
+        "no",
+        "insufficient_evidence",
+    }
     return (value, quote) if value in allowed else ("", "")
 
 

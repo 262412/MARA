@@ -92,6 +92,59 @@ def test_numeric_slot_rejects_period_values_without_metric_support():
     assert all(slot.status == "missing" for slot in bound.evidence_slots)
 
 
+def test_cost_of_goods_sold_slot_rejects_alias_tokens_scattered_in_prose():
+    plan = build_query_plan(
+        "What was inventory turnover in FY2018 using cost of goods sold?",
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "pension-distractor",
+                "text": (
+                    "In 2018 compensation cost was $7 million. Finished goods "
+                    "were discussed elsewhere, and unrelated assets were sold."
+                ),
+                "modality": "text",
+            }
+        ],
+    )
+
+    cogs = next(
+        slot for slot in bound.evidence_slots if slot.metric == "cost of goods sold"
+    )
+    assert cogs.status == "missing"
+
+
+def test_cost_of_products_sold_is_a_bound_cogs_table_alias():
+    plan = build_query_plan(
+        "What was inventory turnover in FY2019 using cost of goods sold?",
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "income-statement",
+                "text": (
+                    "Consolidated Statements of Income (in millions). "
+                    "2019 2018. Cost of products sold 16,830 17,347."
+                ),
+                "modality": "table",
+            }
+        ],
+    )
+
+    cogs = next(
+        slot for slot in bound.evidence_slots if slot.metric == "cost of goods sold"
+    )
+    assert cogs.status == "filled"
+    assert cogs.evidence_ids == ("income-statement",)
+
+
 def test_multi_period_percentage_of_revenue_plan_requires_both_metrics():
     plan = build_query_plan(
         (

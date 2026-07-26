@@ -18,6 +18,7 @@ _SERVICE_ENV_FIELDS = {
     "MARA_RETRIEVAL_BASE_URL": "retrieval_endpoint",
     "MARA_VLM_BASE_URL": "vlm_endpoint",
     "MARA_VLM_MODEL": "vlm_model",
+    "MARA_COLVISION_ENDPOINT": "colvision_endpoint",
 }
 
 
@@ -44,7 +45,7 @@ def benchmark_run_provenance(
         "service": {
             key: value
             for key, value in service.items()
-            if key not in {"text_llm_endpoint", "retrieval_endpoint", "vlm_endpoint"}
+            if not key.endswith("_endpoint")
         },
     }
     runtime_payload = {

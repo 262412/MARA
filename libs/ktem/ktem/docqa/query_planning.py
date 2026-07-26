@@ -4,7 +4,11 @@ import re
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
-from .finance_query_planning import FINANCE_METRIC_ALIASES, finance_operand_specs
+from .finance_query_planning import (
+    FINANCE_METRIC_ALIASES,
+    finance_metric_phrase_matches,
+    finance_operand_specs,
+)
 
 QUERY_PLAN_CONTRACT = "query_plan.v1"
 MAX_RETRIEVAL_ROUNDS = 2
@@ -321,16 +325,7 @@ def _bound_numeric_value(
 
 
 def _slot_metric_supported(slot: EvidenceSlot, text: str) -> bool:
-    aliases = FINANCE_METRIC_ALIASES.get(slot.metric, (slot.metric,))
-    if slot.metric == "total current assets":
-        return "total current assets" in text
-    if slot.metric == "net property plant and equipment":
-        normalized = " ".join(re.findall(r"[a-z0-9]+", text))
-        return any(
-            " ".join(re.findall(r"[a-z0-9]+", alias.lower())) in normalized
-            for alias in aliases
-        )
-    return True
+    return finance_metric_phrase_matches(slot.metric, text)
 
 
 def missing_required_slots(plan: QueryPlan) -> list[EvidenceSlot]:

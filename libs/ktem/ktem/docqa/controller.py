@@ -415,6 +415,7 @@ def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
         "missing_required_slot_count",
         "second_round_queries",
         "retrieval_rounds",
+        "ranking_trace",
     }
     ignored_empty_keys = {"evidence", "evidence_ids", "modality_counts"}
     for key, value in evidence_metadata.items():

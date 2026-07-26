@@ -200,6 +200,56 @@ def test_required_slot_semantic_binding_still_rejects_wrong_metric():
     )
 
 
+def test_required_slot_binding_rejects_scattered_metric_tokens():
+    plan = CalculationPlan(
+        operands=(
+            CalculationOperand(
+                operand_id="cost_of_goods_sold",
+                evidence_id="pension-distractor",
+                value=Decimal("7"),
+                unit="USD",
+                scale="million",
+                currency="USD",
+                period="2018",
+            ),
+        ),
+        steps=(),
+        result_step_id="cost_of_goods_sold",
+        answer_unit="USD",
+        answer_scale="million",
+    )
+
+    verification = verify_calculation_plan(
+        plan,
+        [
+            {
+                "evidence_id": "pension-distractor",
+                "text": (
+                    "In 2018 compensation cost was USD $7 million. Finished "
+                    "goods were discussed, and unrelated assets were sold."
+                ),
+            }
+        ],
+        question="What was cost of goods sold in 2018?",
+        required_slots=[
+            {
+                "slot_id": "operand:cost_of_goods_sold:2018",
+                "role": "operand",
+                "metric": "cost of goods sold",
+                "period": "2018",
+                "required": True,
+                "status": "filled",
+                "evidence_ids": ["preliminary-candidate"],
+            }
+        ],
+    )
+
+    assert verification.valid is False
+    assert (
+        "required_slot_missing:operand:cost_of_goods_sold:2018" in verification.errors
+    )
+
+
 def test_execute_rejects_zero_division_without_guessing():
     plan = CalculationPlan(
         operands=(

@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, field
 from decimal import Decimal, DivisionByZero, InvalidOperation, localcontext
 from typing import Any
 
-from .finance_query_planning import FINANCE_METRIC_ALIASES
+from .finance_query_planning import finance_metric_phrase_matches
 
 CALCULATION_PLAN_CONTRACT = "calculation_plan.v1"
 ALLOWED_OPERATORS = {
@@ -457,11 +457,6 @@ def _operand_matches_slot(
     item = evidence_by_id.get(operand.evidence_id)
     if item is None:
         return False
-    allowed_ids = [str(value or "").strip() for value in slot.get("evidence_ids") or []]
-    if allowed_ids and not any(
-        evidence_by_id.get(value) is item for value in allowed_ids
-    ):
-        return False
     metric = str(slot.get("metric") or "").strip().lower()
     metric_item = {"text": operand.row_label} if operand.row_label else item
     if metric and not _item_supports_metric(metric_item, metric):
@@ -470,13 +465,7 @@ def _operand_matches_slot(
 
 
 def _item_supports_metric(item: dict[str, Any], metric: str) -> bool:
-    text_tokens = set(re.findall(r"[a-z0-9]+", _evidence_text(item).lower()))
-    aliases = FINANCE_METRIC_ALIASES.get(metric, (metric,))
-    return any(
-        tokens and len(tokens & text_tokens) / len(tokens) >= 0.75
-        for alias in aliases
-        if (tokens := set(re.findall(r"[a-z0-9]+", alias.lower())))
-    )
+    return finance_metric_phrase_matches(metric, _evidence_text(item))
 
 
 def _evidence_lookup(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

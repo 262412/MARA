@@ -128,7 +128,7 @@ def test_qasper_answerability_checks_boolean_question_sufficiency_not_token_supp
     assert result.answer == "no"
     assert result.trace["status"] == "ok"
     assert result.trace["verdict"] == "no"
-    assert "determine the supported polarity" in llm.calls[0][0]
+    assert "Compare the complete yes/no question proposition" in llm.calls[0][0]
     assert llm.calls[0][1]["response_format"]["json_schema"]["strict"] is True
 
 
@@ -327,7 +327,7 @@ def test_qasper_answerability_repairs_only_invalid_json_structure_once():
         call[1]["response_format"]["json_schema"]["schema"]["properties"][
             "evidence_quote"
         ]["maxLength"]
-        <= 320
+        <= 640
         for call in llm.calls
     )
     assert "at most 20 words" in llm.calls[0][0]

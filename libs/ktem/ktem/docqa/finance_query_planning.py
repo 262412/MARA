@@ -16,7 +16,12 @@ FINANCE_METRIC_ALIASES = {
         "cash and cash equivalents",
         "cash & cash equivalents",
     ),
-    "cost of goods sold": ("cost of goods sold", "cost of sales", "cogs"),
+    "cost of goods sold": (
+        "cost of goods sold",
+        "cost of products sold",
+        "cost of sales",
+        "cogs",
+    ),
     "total current assets": ("total current assets",),
     "current assets": ("current assets", "total current assets"),
     "current liabilities": ("current liabilities", "total current liabilities"),
@@ -59,6 +64,19 @@ FINANCE_METRIC_ALIASES = {
     "total assets": ("total assets",),
     "total debt": ("total debt", "long term debt", "short term debt"),
 }
+
+
+def finance_metric_phrase_matches(metric: str, text: str) -> bool:
+    normalized_text = f" {_normalized_metric_phrase(text)} "
+    return any(
+        f" {_normalized_metric_phrase(alias)} " in normalized_text
+        for alias in FINANCE_METRIC_ALIASES.get(metric, (metric,))
+        if _normalized_metric_phrase(alias)
+    )
+
+
+def _normalized_metric_phrase(value: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", str(value or "").lower()))
 
 
 def finance_operand_specs(
