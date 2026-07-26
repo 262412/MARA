@@ -157,6 +157,50 @@ def test_hybrid_route_can_use_learned_cross_modal_ranker():
     )
 
 
+def test_candidate_lineage_records_the_actual_post_fusion_ranking_input():
+    class PromoteLastRanker:
+        name = "fixture_promote_last"
+
+        def score(self, query, item):
+            return 10.0 if item["evidence_id"] == "text-81" else 0.0
+
+    request = DocQARequest(
+        prompt="Find the promoted financial evidence.",
+        route_policy="hybrid",
+    )
+    metadata = {
+        "hybrid_fusion_ranker": PromoteLastRanker(),
+        "evidence": [
+            {
+                "evidence_id": f"text-{index}",
+                "source_id": "report",
+                "page_label": str(index),
+                "text": f"Distinct financial statement evidence row {index}.",
+            }
+            for index in range(1, 82)
+        ],
+    }
+
+    bundle = build_evidence_bundle("hybrid", request, metadata)
+
+    candidate_ids = {
+        item["evidence_id"] for item in bundle.metadata["candidate_evidence"]
+    }
+    reranked_ids = {
+        item["evidence_id"] for item in bundle.metadata["reranked_evidence"]
+    }
+    assert len(candidate_ids) == 80
+    assert "text-81" in candidate_ids
+    assert reranked_ids <= candidate_ids
+    assert bundle.metadata["ranking_trace"] == {
+        "candidate_stage": "post_fusion",
+        "candidate_limit": 80,
+        "candidate_input_count": 80,
+        "output_count": 30,
+        "backend_execution": "not_recorded",
+    }
+
+
 def test_hybrid_fusion_prioritizes_financial_statement_text_over_irrelevant_visual_score():
     fused, trace = fuse_hybrid_evidence(
         "Calculate inventory turnover using cost of sales and inventories.",

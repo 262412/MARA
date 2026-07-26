@@ -1,374 +1,155 @@
-# MARA 剩余风险与开放问题
-
-最后更新：2026-07-26。
-
-本文档是 MARA benchmark 未关闭问题的唯一状态表。所有结论必须能够由
-已完成 artifact、当前代码或可重复 fixture 证明。以下情况都不等于问题
-已经关闭：
-
-- 任务正常退出；
-- 新 trace 字段已经出现；
-- verifier 成功拒绝了错误答案；
-- 单元测试通过，但冻结 benchmark 验收尚未通过。
-
-只有最终行为和对应的冻结验收门槛都通过，问题才能从开放问题表中删除。
-
-## 一、当前结论
-
-最近一次已完成的聚焦验证是：
-
-```text
-QASPER 159:
-/mnt/scratch/users/tbczhang/outputs/MARA/
-final_thesis_benchmark_statistical_20260720_repair_g_fullsystem/
-04_residual_validation/
-residual-qasper-typed-v17-atomic-semantic-identity-l40s/
-01_core_text/
-20260726_001932_residual-qasper-typed-v17-atomic-semantic-identity-l40s-9926922
-
-FinanceBench 20 x 4:
-/mnt/scratch/users/tbczhang/outputs/MARA/
-final_thesis_benchmark_statistical_20260720_repair_g_fullsystem/
-04_residual_validation/
-residual-finance-v16-cell-binding-identity-l40s/outputs/
-20260726_011653_residual-finance-v16-cell-binding-identity-l40s
-```
-
-两个任务均以 `0:0` 退出，分别产生 159/159 和 80/80 条可用预测。这只证明
-运行完成，不证明质量达标。
-
-| 数据集 / 范围                     | 上一轮 | 最近一轮 | 结论         |
-| --------------------------------- | -----: | -------: | ------------ |
-| QASPER native/token F1            | 62.02% |   62.02% | 无变化       |
-| QASPER semantic F1                | 58.49% |   58.49% | 无变化       |
-| QASPER evidence F1                | 21.66% |   21.66% | 无变化       |
-| QASPER canonical boolean exact    |  41/99 |    41/99 | 未通过       |
-| Finance quality native numeric    | 13.33% |   13.33% | 未通过       |
-| Finance quality semantic F1       | 29.00% |   30.11% | 小幅评分变化 |
-| Finance quality token F1          | 14.68% |   13.06% | 退化         |
-| Finance all-route strict page hit | 42.50% |   33.75% | 退化         |
-| Finance all-gold-pages hit        | 32.50% |   18.75% | 退化         |
-| Finance all-operands / execution  | 29.17% |   20.83% | 退化         |
-| Finance false abstention          | 18.75% |   23.75% | 退化         |
-
-本轮已经完成代码级修复和本地回归，但新的 QASPER 159 与 FinanceBench
-20×4 artifact 尚未生成。因此当前二元结论仍是：
-
-> P0 指标尚未关闭，禁止直接启动新的 3,540 条全量 benchmark。
-
-以下三个已经具有闭环证据的问题已从开放表删除：
-
-- canonical lineage 覆盖和 compact metric-input replay：最近 Finance artifact
-  已证明 lineage violation 为 0，compact replay 与持久化指标一致；
-- 跨 evidence-item 边界污染：精确 General Mills 生产路径 fixture 现在得到
-  FY2020 capex 460.8 和 FCF 3,215.4 million；
-- 自然语言页码污染：回归测试已证明 `page from` 不再产生页码 `"from"`，
-  数字页码与显式 `#page:<label>` 仍保留。
-
-## 二、为什么多轮修改仍然没有从根本上解决问题
-
-此前的修复单位是“某个函数或某个症状”，而 benchmark 的真实不变量是：
-
-```text
-冻结问题
-  -> 冻结检索输入
-  -> 必需语义槽位
-  -> 精确 evidence / table cell
-  -> 可验证的计算或命题
-  -> 最终答案
-  -> 可重放指标
-```
-
-具体失误如下：
-
-1. **把可观测性当成了能力。** canonical ID、cell ID、replay candidate 和
-   verifier error 让错误更容易定位，但不会自动找回正确页面，也不会保证
-   row、period、unit 和 scale 绑定正确。
-2. **测试没有穿过生产边界。** 旧测试使用单个干净表格；生产路径把多个
-   evidence item 用空格拍平，导致下一个 item 的文件名和页码进入上一行
-   表格。局部 parser 测试通过，但最终 operand 仍然错误。
-3. **修改的分支在冻结样本上没有执行。** 上一轮修改了 free-text semantic
-   judge prompt，但 QASPER 159 全部走 deterministic boolean/unanswerable
-   评分。159 条预测和 scoring answer 逐条完全相同，因此该修改不可能改善
-   本轮结果。
-4. **只报告条件成功率，没有报告覆盖率。** Finance 的确定性执行器在输入
-   完整时可靠，但 24 条 numeric quality 预测中只有 5 条形成合法并执行的
-   plan。只看这 5 条会掩盖 19 条根本没有到达执行器。
-5. **先加强下游 verifier，后修上游 retrieval/binding。** verifier 拒绝
-   无来源、错 period 或缺 scale 的 operand 是正确的，但会把过去的猜测值
-   变成 abstention。安全性提高，答案质量和 false-abstention 反而退化。
-6. **比较的运行没有完整不变量。** 上一轮 artifact 不能证明确切 Git
-   commit、dirty state、manifest、有效配置和服务启动契约。两轮 Finance
-   有 19/80 个 scoring answer 改变，不能把差异归因到某一个 patch，也不能
-   据此断言模型本身“不确定”。
-7. **没有核对指标实际输入。** 旧的 `Candidate Recall@50=40.83%` 实际使用
-   了完整的 80 条 reranker input pool。修正后真实 top-50 是 34.17%，
-   pool@80 仍为 40.83%。这一部分是口径纠正，不是模型退化。
-
-今后的修复必须由冻结 fixture 穿过完整链路。新增字段、prompt 或 guard
-如果没有在目标 subset 上执行，就不能计为修复收益。
-
-## 三、为什么 Finance 退化得如此严重
-
-退化由一个测量修正和三个真实行为变化共同造成：
-
-- **测量修正：** true Candidate Recall@50 是 34.17%；旧 40.83% 现在保留为
-  Candidate Pool Recall@80。该差异不能描述为检索模型退化。
-- **真实排序损失：** strict page hit 从 42.50% 降至 33.75%，
-  all-gold-pages hit 从 32.50% 降至 18.75%，reranked recall 从 38.33%
-  降至 27.50%。进入最终上下文的答案页更少。
-- **真实语义绑定损失：** all-operands/execution 从 29.17% 降至 20.83%。
-  旧 parser 能产生“有 identity 但语义错误”的 cell，所以 identity 100%
-  并不等于 operand 正确。
-- **严格验证带来的预期 abstention：** 缺 scale、错 row、把 period 当值或
-  evidence 缺失都会被拒绝，false abstention 因而从 18.75% 升至 23.75%。
-  这些拒绝避免了无依据答案，但没有完成 benchmark 任务。
-
-因此不能通过放松 verifier 恢复表面分数。需要先提高答案页召回，再保证
-table boundary、qualified metric、period 和 dimension provenance 正确。
-
-## 四、开放问题表
-
-| ID                | 优先级 | 当前 artifact 证明的问题                                                        | 当前代码状态                                                                | 关闭门槛                                                               |
-| ----------------- | ------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| FIN-RETRIEVAL-001 | P0     | page 33.75%、reranked 27.50%；相关文本会错误填满 operand slot                   | query expansion、严格 qualifier、typed-cell slot binding 已实现；待冻结验证 | page >=70%、all pages >=35%、answer-bearing element hit@10 >=30%       |
-| FIN-DIMENSION-001 | P0     | `04980` 找到 4,625，但不能证明 million 到 billion 的换算                        | same-source scale evidence 和二次 dimension retrieval 已实现；待冻结验证    | 所有换算 operand 引用 scale evidence；unit accuracy >=98%              |
-| QASPER-PROP-001   | P0     | boolean exact 41/99；20 个 boolean-shaped abstention 全部绕过 verifier          | v9 proposition path 已实现；待冻结 confusion matrix                         | structure 100%、semantic F1 >=80%，且无 gold runtime routing           |
-| REPRO-001         | P1     | 已完成 artifact 缺少完整 run contract，旧波次无法做严格因果比较                 | artifact fingerprint 和 clean-tree enforcement 已实现；待新 artifact 验证   | 聚焦运行记录一致 contract hash，mismatch 被拒绝                        |
-| RERANK-TRACE-001  | P1     | `reranked_evidence` 可能只是 heuristic fusion 后的前 30 条，不能证明 BGE 已执行 | 尚未修复                                                                    | trace 区分 fusion rank 与 cross-encoder rank，并记录 backend execution |
-| RELEASE-001       | P1     | 数据集门槛和 G-B paired CI 尚未完成                                             | 阻塞                                                                        | 所有保护门通过，G-B >=8 points 且 CI 下界 >0                           |
-| EVAL-EXTERNAL-001 | P2     | 没有完整 frozen paper-grade external evaluator artifact                         | 延后                                                                        | evaluator/version/prompt/parser/retry/cost 和完整 artifact             |
-| FORMAT-001        | P2     | preview/OCR/formula/chart 的生产矩阵不完整                                      | 延后                                                                        | frozen per-format 端到端矩阵通过                                       |
-
-## 五、FIN-RETRIEVAL-001：相关词命中不等于所需事实
-
-### 已证明的根因
-
-- `03531` 询问 **total current assets**，但命中 pages 64/65/41，并把
-  “other current assets” 当作所需事实。
-- `10285` 询问 balance sheet 上的 **net property, plant and equipment**，
-  但上下文只有 cash-flow additions -1,722 和无关页面。
-- `04302` 需要 2016、2017、2018 三期 COGS 与 revenue；controller/CRAG
-  只选 pages 36/38/60，slot coverage 为 1/3，无法生成 plan。
-- `10499` 的 slot coverage 显示 1.0，但 calculation adapter 仍没有 operand。
-  这证明旧 slot status 只是词面成功，不能由 cell binding 重放。
-
-旧实现对完整 “property, plant and equipment”、“total current assets”和
-COGS/revenue percentage 的扩展不完整；slot scoring 只要 alias、period 和
-任意数字共现就可标为 `filled`。错误的 `filled` 又阻止第二轮检索。
-
-### 本轮已落实
-
-- 对 net PP&E、total current assets、COGS/revenue 增加 statement/metric
-  query expansion；
-- 保留 `net`、`total` 等 qualifier，specific metric 命中时移除 generic
-  alias；
-- Finance operand slot 优先验证 typed financial cell 的 row semantics 和
-  period；有表格但没有匹配 cell 时不得填满；
-- “other current assets” 不得满足 “total current assets”，cash-flow
-  “additions to PP&E” 不得满足 “net PP&E”；
-- 未填满的 required slot 继续触发现有第二轮定向检索。
-
-### 仍未关闭的原因
+# MARA Benchmark 剩余风险与修复状态
 
-本地 fixture 只能证明错误 slot 不再被接受，不能证明真实 PDF 索引已经把
-答案页召回到前 50/10。必须重跑冻结 FinanceBench 20×4，并同时报告
-Candidate Recall@50、Pool@80、Reranked Recall@10、page/all-page hit、
-typed-cell hit 和 slot coverage。
-
-此外，`reranked_evidence` 的命名仍可能混淆 heuristic fusion 与真实
-cross-encoder，作为独立的 `RERANK-TRACE-001` 保留。
+最后更新：2026-07-26
+对应代码：`ec5d5865`
+状态结论：**仍有 P0 阻塞项，暂不应重跑全量 benchmark。**
 
-## 六、FIN-DIMENSION-001：scale 是带来源的事实
-
-### 已证明的根因
+## 1. 本文档的边界
 
-`financebench_id_04980` 的表格包含：
-
-```text
-2021 2020
-Capital spending (4,625) (4,240)
-```
+本文档只记录最新完成的聚焦验证仍能复现、并且有 artifact 或代码路径支撑的问题。已经解决、已被新证据否定、或仅来自旧运行推测的问题从开放表移除，保留在“已关闭问题”中作为简短审计记录。
 
-问题要求 USD billions，但该页没有重复报告前文的 “tabular dollars are
-presented in millions”。旧 plan 因此只有 -4,625 和 requested scale
-`billion`，没有 operand scale；verifier 正确拒绝了换算。
+本轮分析使用以下完成且无 execution error/timeout 的运行：
 
-General Mills 的 “In Millions, Except Per Share Data, Percentages and Ratios”
-也不符合旧 regex 仅支持的 parenthesized `in ...` / `dollars in ...` 形式。
+- QASPER v18，159/159：
+  `/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_statistical_20260720_repair_g_fullsystem/04_residual_validation/residual-qasper-typed-v18-proposition-provenance-l40s/01_core_text/20260726_134856_residual-qasper-typed-v18-proposition-provenance-l40s-9944162`
+- FinanceBench v17，20 × 4 = 80/80：
+  `/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_statistical_20260720_repair_g_fullsystem/04_residual_validation/residual-finance-v17-semantic-scale-provenance-l40s/outputs/20260726_145113_residual-finance-v17-semantic-scale-provenance-l40s`
 
-### 本轮已落实
+对照运行分别为 QASPER v17 和 FinanceBench v16。旧运行缺少部分 provenance，因此涉及新旧因果归因时只报告为“观测差异”，不伪装成严格受控实验。
 
-- 识别 `In Millions, Except ...` 和
-  `tabular dollars are presented in millions` 等显式 convention；
-- `CalculationOperand` 新增可选 `scale_evidence_id`；
-- 只允许从同一 source 中唯一、显式的 scale convention 继承 scale；
-- verifier 重新检查 scale evidence 是否存在、是否同 source、是否真的支持
-  scale，并把 value evidence 与 scale evidence 合并进 citation；
-- 请求包含 thousand/million/billion 且首轮缺 scale 时，新增 required
-  `dimension:scale` slot，第二轮只检索
-  `tabular dollars unit scale convention`。
+## 2. 最新事实基线
 
-精确本地 fixture 已证明 4,625 million 可转换为 4.625 billion，且同时引用
-capital-spending table 和 scale convention。
+### 2.1 QASPER
 
-### 仍未关闭的原因
+| 指标 | v17 | v18 | 结论 |
+|---|---:|---:|---|
+| token/native F1 | 62.02% | 61.93% | -0.09 pp |
+| semantic F1 | 58.49% | 58.49% | 无提升 |
+| evidence F1 | 19.35% | 19.35% | 无提升 |
+| 结构合法率 | — | 97.48%（155/159） | 未达 100% |
+| boolean exact | 45/99 | 45/99 | 无提升 |
+| unanswerable exact | 48/60 | 48/60 | 无提升 |
 
-最近的 Finance artifact 早于本轮代码，尚未证明真实索引能找回 scale
-convention，也尚未达到 `unit accuracy >=98%`。不同 source 或冲突 scale
-必须继续保持 verification error，不能用默认 scale 兜底。
+QASPER v9 判定器确实覆盖了全部 99 条 boolean 样本，因此“判定分支未执行”已关闭。但执行并不等于有效：
 
-## 七、QASPER-PROP-001：执行中的 boolean 路径无法修正初始决定
+- 85 条判为 `insufficient_evidence`，10 条 `yes`，4 条 `no`。
+- 20 条旧 boolean abstention 中，19 条仍 abstain；唯一恢复为 `yes` 的样本 gold 为 `no`。
+- 20 条中有 12 条的 gold evidence 已在最终上下文；其中 10 条仍被原始回答判为 insufficient。
+- 4 条 gold unanswerable 被输出为 free text，造成结构契约失败。
 
-### 已证明的根因
+### 2.2 FinanceBench
 
-最近两轮 159 条 prediction 和 scoring answer 逐条相同。99 条 boolean 和
-60 条 unanswerable 都使用 deterministic semantic scoring，因此此前修改的
-free-text judge prompt 没有执行。
+| 指标 | v16 | v17 | 结论 |
+|---|---:|---:|---|
+| token F1 | 12.17% | 14.07% | +1.90 pp |
+| native numeric | 10.00% | 11.25% | +1.25 pp，仍远低于 20% 门槛 |
+| semantic F1 | 25.08% | 33.75% | +8.67 pp |
+| page hit | 33.75% | 45.00% | +11.25 pp，仍低于 70% 门槛 |
+| false abstention | 23.75% | 16.25% | 改善，但仍高于 15% 门槛 |
+| Candidate Recall@50 | 34.17% | 45.83% | 改善，仍有明显召回缺口 |
+| Reranked Recall@10 | 27.50% | 37.50% | 改善，仍有排序丢失 |
+| all-gold-pages hit | 18.75% | 27.50% | 仍低于 35% 门槛 |
+| all-operands / execution | 20.83% | 37.50% | 仍低于 50% 门槛 |
+| cell accuracy | 79.41% | 100% | 本次样本已达标 |
+| unit accuracy | 50.00% | 83.33% | 改善，仍低于 98% 门槛 |
+| lineage consistency | 100% | 98.86% | 出现新的候选血缘违例 |
 
-99 条 boolean 中：
+24 条适用计算问题中，9 条成功执行且 verifier 通过，15 条仍未形成可执行计划；成功执行的 9 条中有 6 条 native 与 semantic 均正确。
 
-- 23 条被 verifier confirmed，但只有 15 条匹配 annotation；
-- 56 条得到 `insufficient_evidence`，继续保留初始 candidate；
-- 20 条初始输出为 `unanswerable`，旧路径直接跳过 verifier，20 条均不匹配
-  boolean annotation。
+已证实的正向变化：
 
-旧 verifier 还可能把相关命题当成完整命题，例如把 “created a dataset”
-等同于 “experimented with the dataset”。quote 出现在论文中只证明
-grounded，不证明 subject、relation、scope、qualifier 和 polarity 完整。
+- `04854` 正确绑定 General Mills 的 operating cash flow 3676.2 与 capital expenditure 460.8，得到 3215.4 million，证明跨证据边界和表格 scale 修复有效。
+- `03031` 新增正确结果 5818。
+- `03531`、`10285` 等问题不再用错误年份或错误资产项强行计算，说明 verifier 的拒绝是有价值的。
 
-### 本轮已落实
+仍需解释的退化和错误：
 
-- 使用问题句法检测 boolean-shaped question，不读取 gold answer type；
-- 即使初始答案是 `unanswerable`，boolean-shaped question 也执行 polarity
-  adjudicator；
-- 只有 grounded quote 支持完整 relation 且给出 definite polarity 时才允许
-  恢复或纠正答案；
-- trace 记录 primary answer、raw verifier verdict、adjudicated polarity、
-  relation terms、action 和 reason；
-- 增加 “created != experimented” 等负例；
-- 离线覆盖审计显示新句法规则可识别冻结集 99/99 个 boolean question，
-  包括 `Overall, does ...`。该 99/99 只用于测试 detector 覆盖，运行时不读取
-  annotation。
+- `00882`：同一运行中 QueryPlan slot 记录 page 85 的 evidence ID，但计算器从最终已选上下文中的 page 2 证据绑定两个 4.2B 操作数；语义、数值和页面证据均成立，却因 exact evidence ID 不一致被判 `required_slot_missing`，从旧版正确 `$8.4B` 退化为 abstain。
+- `04980`：证据明确为 4,625 million，程序正确得到 4.625B，但 gold 为 `$4.60`，历史 native 的 0.1% 数值容差将其判错。这是评测精度/舍入契约问题，不是计算错误。
+- `04302`：候选阶段有相关证据，但 rerank 后丢失。
+- `10499`：错误绑定到 COGS 7.0 或 pension distractor，属于表格 metric 语义绑定不足。
+- `03531`、`10285`：仍属于召回失败。
 
-### 仍未关闭的原因
+## 3. 开放问题表
 
-boolean verifier 是模型调用，本地 mock 不能证明实际 Qwen 输出质量。必须
-重跑 QASPER 159，检查 confusion matrix、20 个旧 abstention 的去向、已有
-正确 candidate 是否被误改，以及 structure/semantic/evidence 指标。
-
-## 八、REPRO-001：旧聚焦运行不能做严格因果比较
+| ID | 优先级 | 状态 | 根因 | 当前影响 | 关闭标准 |
+|---|---|---|---|---|---|
+| QASPER-PROP-002 | P0 | 开放 | boolean verifier 用词形/动词重叠近似命题蕴含，无法区分“相关主题”与“完整回答” | boolean exact 无提升；存在 false reject 与 false accept | 冻结样本中完整命题被接受、部分命题被拒绝；结构合法率 100%，boolean semantic F1 明显提升且不损害 unanswerable |
+| FIN-IDENTITY-002 | P0 | 开放 | 初轮 slot 的 exact evidence ID 被错误当成最终 operand 授权集合；跨页/重建后的同义证据身份不能统一 | `00882` 等已具备正确证据的问题错误 abstain | 最终 selected evidence 中 metric/period/value/unit/cell 语义一致的 operand 可通过；错 metric/period 仍必须失败 |
+| FIN-RETRIEVAL-001 | P0 | 开放 | page/table 召回和重排仍不足，候选召回与 rerank recall 均未达到发布门槛 | 15/24 计算问题无法执行，page hit 45% | page hit ≥70%，all-gold-pages ≥35%，all-operands ≥50%，并通过固定样本回归 |
+| FIN-TABLE-SEM-002 | P0 | 开放 | 表格行列标签、metric 别名与 entity/period 绑定仍不完整 | `10499` 等绑定 distractor；operand accuracy 56.86% | 冻结 distractor 用例选择正确行/列；operand accuracy 恢复并达到门槛 |
+| RERANK-LINEAGE-002 | P1 | 开放 | `candidate_evidence` 在 hybrid fusion 前截取，而后续 fusion 可把原 top-80 之外证据提升到 reranked 输出 | 6 个 reranked identity 不在声明的 candidate pool | candidate pool 精确等于 post-fusion reranker 输入；reranked IDs 必须是其子集，违例为 0 |
+| RERANK-TRACE-001 | P1 | 开放 | trace 只有排序结果，不能证明实际执行了哪个 reranker backend | 无法区分 BGE 执行、上游分数复用或 fallback | trace 明确记录 backend、模型、输入/输出数和执行状态；未执行时不得标记为 BGE |
+| REPRO-001 | P1 | 开放 | multimodal Slurm 未导出 text/retrieval endpoint；provenance 未采集 colvision endpoint | Finance artifact 不能完整重建 8000/8002/8003 服务拓扑 | artifact 记录 text、VLM、retrieval、colvision endpoint/model 与配置 hash |
+| FIN-EVAL-001 | P1 | 开放 | 历史 native numeric 只有固定相对容差，没有数据集精度/舍入语义 | `04980` 的正确 4.625B 被历史指标判错 | 保留历史 native 不变；新增独立 precision-aware diagnostic，并明确报告两者差异 |
+| FIN-UNIT-002 | P1 | 开放 | scale/currency/unit 绑定虽已改善，但覆盖不足 | unit accuracy 83.33%，低于 98% | 固定 scale/currency 回归全部通过，聚焦运行 unit accuracy ≥98% |
+| RELEASE-001 | P1 | 外部阻塞 | QASPER 与 FinanceBench 的 P0 指标未过门槛 | 全量重跑会放大成本而不能证明修复完成 | 所有 P0 聚焦验证通过后才能提交一次正式全量重跑 |
 
-### 已证明的根因
-
-旧 artifact 有 benchmark config 和 backend metadata，但没有一个统一、
-不可变的 fingerprint 覆盖 Git、dirty state、manifest、有效配置、模型/
-服务契约和 endpoint。因此不能把波次间答案差异严格归因到代码 patch。
+## 4. 根因反思
 
-### 本轮已落实
+前几轮没有从根本解决问题，主要不是“阈值还没调准”，而是三个层次被混在了一起：
 
-每个新 summary 新增 `run_provenance`：
-
-- Git commit 和 dirty state；
-- manifest path 与 SHA-256；
-- 排除 output path 等非语义字段后的有效 benchmark config；
-- model/service generation contract；
-- 实际 service/model endpoint。
-
-同时记录两个 hash：
-
-- `contract_hash`：用于跨任务配对，排除会随 Slurm job 改变的临时 endpoint，
-  但包含 commit、dirty、manifest、语义配置和 service contract；
-- `execution_hash`：额外包含实际 endpoint，用于重放具体执行环境。
-
-正式 Slurm 脚本在 dirty worktree 上直接失败，除非显式设置仅供开发运行的
-`MARA_ALLOW_DIRTY_BENCHMARK=1`。release gate 在 B/G 任一侧含 provenance
-时强制比较 `contract_hash`，不允许静默合并 mismatch。
-
-### 仍未关闭的原因
-
-单元测试已证明相同输入 hash 稳定、配置变化会改变 hash、mismatch 会被
-拒绝；但还没有新的真实聚焦 artifact 证明 Slurm service contract 和
-run_provenance 被完整持久化。
-
-## 九、RERANK-TRACE-001：stage 名称不能证明 cross-encoder 已执行
-
-当前 bundle 的 `reranked_evidence` 可能是 cross-modal heuristic fusion 和
-page-first ordering 后的前 30 条。仅看到该字段不能证明每个 modality 都由
-配置中的 BGE cross-encoder 评分。
-
-需要分别持久化：
-
-- canonical candidate pool 与各 retriever rank；
-- fusion/RRF rank；
-- reranker backend、model、input count、output count 和 execution status；
-- cross-encoder score/rank；
-- coverage/MMR 选择结果。
-
-在这些字段可重放前，报告只能称其为“post-fusion selected evidence”，不得
-称为“BGE 强重排结果”。
-
-## 十、RELEASE-001：全量发布门
-
-新的全量 benchmark 只允许在聚焦 P0 门槛通过后运行。仍需：
-
-1. 200 条 frozen semantic calibration 的人工一致率 ≥90%、judge coverage
-   ≥99.5%；
-2. QASPER 与 Finance 聚焦门槛通过；
-3. ALCE、SlideVQA、MMDocRAG、RAGTruth 保护回归通过；
-4. B 到 G 使用一致 `contract_hash` 做 paired evaluation；
-5. G-B QA semantic F1 至少 +8 个百分点，paired 95% CI 下界 >0；
-6. historical `avg_f1`、native/citation metric 和 latency budget 无退化。
-
-## 十一、延后但真实存在的风险
-
-### EVAL-EXTERNAL-001
-
-仓库已有 evaluator interface 和 local judge，但没有完整 frozen
-paper-grade external evaluator artifact。关闭需要固定 provider/model
-version、prompt、parser、retry、budget、calibration、coverage 和 failure。
-
-### FORMAT-001
-
-PDF、DOCX、PPTX、XLSX、CSV、Markdown、text 已有基础
-loader/index/query smoke；preview、Office conversion、OCR、复杂 slide、
-spreadsheet formula、chart、citation 和最终 QA 的生产矩阵仍不完整。
-
-## 十二、本轮落实状态与下一步
-
-为避免下游 guard 再次掩盖上游 miss，本轮严格按以下顺序执行：
-
-1. [x] 先增加会失败的生产路径回归：跨 item boundary、bare period、
-       scale scope、strict qualifier、QASPER boolean abstention、page locator、
-       run provenance。
-2. [x] 保留 evidence-item boundary，强化 typed financial-cell parsing。
-3. [x] 增加 same-source scale provenance 和定向 dimension retrieval。
-4. [x] 增强 Finance query expansion 和 semantic slot binding。
-5. [x] 修复实际执行的 QASPER boolean proposition path。
-6. [x] 增加 artifact run contract 和 Slurm clean-tree enforcement。
-7. [x] 完成本地门禁：
-   - `benchmark/tests`: 442 passed；
-   - `test_docqa_*.py` + `test_mara_*.py`: 464 passed；
-   - changed-files pre-commit：通过 black、isort、flake8、mypy、codespell；
-   - codebase hygiene ratchet：通过，未刷新 baseline；
-   - 两个 Slurm 脚本 `bash -n`：通过。
-8. [x] 在 clean commit 上提交聚焦验证，不启动全量 benchmark：
-   - QASPER 159：job `9944162`，suite
-     `residual-qasper-typed-v18-proposition-provenance-l40s`；
-   - FinanceBench 20×4：job `9944163`，suite
-     `residual-finance-v17-semantic-scale-provenance-l40s`。
-
-聚焦任务完成后，先比较冻结问题级 diff 和 stage metrics，再决定哪些 P0
-可以关闭。不能因为新任务正常退出就删除问题。
-
-## 十三、更新规则
-
-- 开放表只保留尚未满足冻结验收的问题；
-- 修改 Benchmark、DocQA、reporting、controller 或 Slurm 行为前先增加
-  characterization/regression test；
-- 不得为通过检查刷新 `scripts/codebase_hygiene_baseline.json`；
-- 所有条件指标必须同时报告 coverage 和 conditional success；
-- 历史指标定义不变；口径修正只能新增并明确命名；
-- runtime routing、retrieval、generation、binding 和 verification 禁止读取
-  gold label、gold page、gold answer type 或 gold value；
-- 任一 P0 未关闭时禁止全量 benchmark。
+1. **把执行覆盖当成语义正确。** QASPER v9 从未执行变成 99/99 执行，只解决控制流；其内部仍用关键词和词形重叠判断完整命题，所以指标没有提升。
+2. **把临时检索身份当成事实身份。** Finance 的 slot 在初轮检索时绑定一个 chunk ID，后续 page expansion、canonicalization 或 evidence selection 可能产生另一个 ID。verifier 对 exact ID 做授权，导致“事实相同但对象 ID 不同”的正确证据被拒绝。
+3. **trace 描述的阶段与真实执行阶段不一致。** 候选池在 fusion 前记录，reranked 输出在 fusion 后产生，因此报告可以出现逻辑上不可能的“输出不属于输入”。这同时削弱了此前因果分析的可信度。
+
+因此，核心修复不能继续围绕单个样本增加字符串例外，而必须建立三条不变量：
+
+- **命题不变量：** boolean 的判定对象是 subject、relation、object、scope、polarity 构成的完整命题；主题相关或部分支持不得等价为 yes/no。
+- **证据绑定不变量：** exact evidence ID 只用于 lineage；计算授权依据必须是最终 selected evidence 上可复核的 cell/value/metric/period/unit/entity 绑定。
+- **评测与 trace 不变量：** 每个输出必须属于声明的实际输入集合；历史指标保持原定义，新的诊断指标必须独立命名；未记录的 backend 不得被推断为已执行。
+
+## 5. 本轮落实方案
+
+### 5.1 QASPER 命题级 answerability v10
+
+- 将模型判定扩展为 `yes_complete`、`no_complete`、`yes_partial`、`no_partial`、`insufficient_evidence`。
+- 只有 grounded 且 complete 的同一命题才能映射为最终 `yes/no`；partial 一律保留为 insufficient。
+- prompt 明确定义 process/outcome、mention/perform、experimental control/quality validation 等边界，并允许引用完整但受限长度的连续证据。
+- exact quote 只负责 grounding，不再用动词重叠代替 relation entailment。
+- 新增两个保护样本：
+  - “系统控制实验数据”不能推出“验证质量”，必须判 partial。
+  - “不是 silver bullet”若直接回答是否存在 downside，应判 complete。
+
+### 5.2 Finance 统一身份与语义绑定
+
+- 移除“operand evidence ID 必须属于初轮 slot evidence IDs”的错误授权条件。
+- 仍要求 operand 来自最终 selected evidence，并逐项验证 evidence/cell、metric、period、value、unit、scale、currency 和 entity。
+- slot ID membership 保留为诊断字段，不能覆盖上述语义验证。
+- 新增 `00882` 型回归：初轮 slot 与最终正确证据 ID 不同仍应通过；错 period/metric 必须继续失败。
+
+### 5.3 Rerank 血缘与可复现性
+
+- canonicalize 和 hybrid fusion 后，再截取真实 top-80 作为 reranker input。
+- `candidate_evidence` 必须记录该真实输入；`reranked_evidence` 必须为其子集。
+- trace 记录 candidate stage、limit、input/output count 和已知 backend 状态；没有执行证据时明确标记 `not_recorded`。
+- multimodal Slurm 显式导出 text LLM、retrieval 和统一 LLM endpoint；provenance 增加 colvision endpoint。
+
+### 5.4 评测纪律
+
+- 不修改 `avg_f1`、native numeric 或既有容差。
+- `04980` 只作为 precision-aware diagnostic 的设计依据，不能通过读取 gold 决定输出舍入。
+- 修复后先重跑 QASPER 159 条和 FinanceBench 20 × 4；只有 P0 关闭才允许全量 benchmark。
+
+## 6. 实施与验证清单
+
+执行顺序固定为：
+
+1. 先提交 characterization/regression tests。
+2. 实现 QASPER v10、Finance semantic binding、post-fusion candidate lineage 和 provenance。
+3. 运行相关 benchmark/ktem 单元测试、changed-files pre-commit 和代码卫生检查。
+4. 提交新的 QASPER 159 与 FinanceBench 20 × 4 聚焦验证。
+5. 用新 artifact 更新本表；不得用本地 mock 通过代替真实聚焦指标。
+
+在新的聚焦 artifact 完成前，本轮代码修复只能标记为“已实现/待运行验证”，不能提前把 P0 标记为已关闭。
+
+## 7. 已关闭问题
+
+以下问题已由最新 artifact 直接证明关闭，不再保留在开放表：
+
+- **QASPER 判定分支未执行：** v18 中 99/99 boolean 样本已运行 v9 判定器。
+- **Finance 跨证据边界无法计算：** `04854` 已正确跨证据绑定并计算 3215.4 million。
+- **Finance `04980` 的 billion scale 误读：** 当前程序正确绑定 4,625 million 并得到 4.625B；剩余错误属于独立的评测精度契约。
+- **Finance cell 定位错误作为全局阻塞：** 本次聚焦运行 cell accuracy 为 100%；仍存在的错误已归入 metric/period/entity 语义绑定，而不是继续重复记录为 cell 定位问题。
+
+这些关闭结论只针对上述问题定义；不代表 FinanceBench 整体检索、单位和数值准确率已经达标。

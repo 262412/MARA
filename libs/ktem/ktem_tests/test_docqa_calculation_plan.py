@@ -85,6 +85,121 @@ def test_verifier_rejects_period_and_unit_mismatch():
     assert "operand_currency_mismatch:revenue" in verification.errors
 
 
+def test_required_slots_bind_semantically_to_final_selected_evidence():
+    selected_evidence = {
+        "evidence_id": "selected-page-2",
+        "source_id": "PEPSICO_2023_10K",
+        "page_label": "2",
+        "text": (
+            "In 2023, two revolving credit agreements each enable PepsiCo "
+            "to borrow up to USD $4.2 billion."
+        ),
+    }
+    plan = CalculationPlan(
+        operands=(
+            CalculationOperand(
+                operand_id="agreement_1",
+                evidence_id="selected-page-2",
+                value=Decimal("4.2"),
+                period="2023",
+                unit="USD",
+                scale="billion",
+                currency="USD",
+            ),
+            CalculationOperand(
+                operand_id="agreement_2",
+                evidence_id="selected-page-2",
+                value=Decimal("4.2"),
+                period="2023",
+                unit="USD",
+                scale="billion",
+                currency="USD",
+            ),
+        ),
+        steps=(
+            CalculationStep(
+                step_id="result",
+                operator="add",
+                input_ids=("agreement_1", "agreement_2"),
+            ),
+        ),
+        result_step_id="result",
+        answer_unit="USD",
+        answer_scale="billion",
+    )
+    slots = [
+        {
+            "slot_id": f"operand:revolving_credit_capacity:{index}",
+            "role": "operand",
+            "metric": "revolving credit capacity",
+            "period": "2023",
+            "required": True,
+            "status": "filled",
+            "evidence_ids": ["preliminary-page-85"],
+        }
+        for index in (1, 2)
+    ]
+
+    verification = verify_calculation_plan(
+        plan,
+        [selected_evidence],
+        question="What was the total revolving credit capacity in 2023?",
+        required_slots=slots,
+    )
+
+    assert verification.valid is True
+    assert verification.verified_required_slot_ids == (
+        "operand:revolving_credit_capacity:1",
+        "operand:revolving_credit_capacity:2",
+    )
+
+
+def test_required_slot_semantic_binding_still_rejects_wrong_metric():
+    plan = CalculationPlan(
+        operands=(
+            _operand(
+                "pension",
+                "selected-pension",
+                "4.2",
+                period="2023",
+                unit="USD",
+            ),
+        ),
+        steps=(),
+        result_step_id="pension",
+        answer_unit="USD",
+        answer_scale="billion",
+    )
+
+    verification = verify_calculation_plan(
+        plan,
+        [
+            {
+                "evidence_id": "selected-pension",
+                "text": "Pension expense was USD $4.2 billion in 2023.",
+            }
+        ],
+        question="What was the revolving credit capacity in 2023?",
+        required_slots=[
+            {
+                "slot_id": "operand:revolving_credit_capacity:2023",
+                "role": "operand",
+                "metric": "revolving credit capacity",
+                "period": "2023",
+                "required": True,
+                "status": "filled",
+                "evidence_ids": ["preliminary-page-85"],
+            }
+        ],
+    )
+
+    assert verification.valid is False
+    assert (
+        "required_slot_missing:operand:revolving_credit_capacity:2023"
+        in verification.errors
+    )
+
+
 def test_execute_rejects_zero_division_without_guessing():
     plan = CalculationPlan(
         operands=(

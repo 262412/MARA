@@ -210,6 +210,24 @@ def test_text_route_slurm_script_uses_job_scoped_service_ports():
     assert 'MARA_LLM_BASE_URL="$TEXT_LLM_BASE_URL"' in text
 
 
+def test_multimodal_slurm_script_exports_complete_runtime_topology():
+    text = SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert (
+        'MARA_TEXT_LLM_BASE_URL="${MARA_TEXT_LLM_BASE_URL:-http://127.0.0.1:8000/v1}"'
+        in text
+    )
+    assert (
+        'MARA_RETRIEVAL_BASE_URL="${MARA_RETRIEVAL_BASE_URL:-http://127.0.0.1:8002}"'
+        in text
+    )
+    assert 'MARA_LLM_BASE_URL="${MARA_LLM_BASE_URL:-$MARA_TEXT_LLM_BASE_URL}"' in text
+    assert (
+        'MARA_COLVISION_ENDPOINT="${MARA_COLVISION_ENDPOINT:-http://127.0.0.1:8003/visual-score}"'
+        in text
+    )
+
+
 def test_text_route_slurm_script_rejects_all_failed_artifacts():
     text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
 

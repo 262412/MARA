@@ -234,6 +234,49 @@ def test_qasper_boolean_relation_does_not_equate_created_with_experimented():
     assert result.trace["reason"] == "grounded_quote_incomplete_relation"
 
 
+def test_qasper_boolean_partial_quality_control_does_not_answer_quality_validation():
+    llm = _VerifierLLM(
+        '{"verdict":"yes_partial","evidence_quote":'
+        '"We systematically controlled the experimental data collection process."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Did the authors validate the quality of the collected data?",
+        evidence=(
+            "We systematically controlled the experimental data collection "
+            "process. The quality of the resulting data is harder to validate."
+        ),
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["verdict"] == "insufficient_evidence"
+    assert result.trace["raw_verifier_verdict"] == "yes_partial"
+    assert result.trace["reason"] == "grounded_partial_proposition"
+
+
+def test_qasper_boolean_complete_downside_statement_answers_question():
+    llm = _VerifierLLM(
+        '{"verdict":"yes_complete","evidence_quote":'
+        '"Lemmatizing is not a silver bullet and can remove useful distinctions."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Is there a downside to lemmatizing the training data?",
+        evidence=(
+            "Lemmatizing is not a silver bullet and can remove useful distinctions."
+        ),
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["verdict"] == "yes"
+    assert result.trace["raw_verifier_verdict"] == "yes_complete"
+    assert result.trace["reason"] == "grounded_complete_proposition"
+
+
 def test_qasper_answerability_rejects_boolean_candidate_when_question_is_unresolved():
     llm = _VerifierLLM('{"verdict":"insufficient_evidence","evidence_quote":""}')
 
