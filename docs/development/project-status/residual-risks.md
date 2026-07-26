@@ -1,7 +1,8 @@
 # MARA Benchmark 剩余风险与修复状态
 
 最后更新：2026-07-26
-对应代码：`ec5d5865`
+最新 artifact 对应代码：`ec5d5865`
+本轮修复代码：`8d86034`
 状态结论：**仍有 P0 阻塞项，暂不应重跑全量 benchmark。**
 
 ## 1. 本文档的边界
@@ -21,14 +22,14 @@
 
 ### 2.1 QASPER
 
-| 指标 | v17 | v18 | 结论 |
-|---|---:|---:|---|
-| token/native F1 | 62.02% | 61.93% | -0.09 pp |
-| semantic F1 | 58.49% | 58.49% | 无提升 |
-| evidence F1 | 19.35% | 19.35% | 无提升 |
-| 结构合法率 | — | 97.48%（155/159） | 未达 100% |
-| boolean exact | 45/99 | 45/99 | 无提升 |
-| unanswerable exact | 48/60 | 48/60 | 无提升 |
+| 指标               |    v17 |               v18 | 结论      |
+| ------------------ | -----: | ----------------: | --------- |
+| token/native F1    | 62.02% |            61.93% | -0.09 pp  |
+| semantic F1        | 58.49% |            58.49% | 无提升    |
+| evidence F1        | 19.35% |            19.35% | 无提升    |
+| 结构合法率         |      — | 97.48%（155/159） | 未达 100% |
+| boolean exact      |  45/99 |             45/99 | 无提升    |
+| unanswerable exact |  48/60 |             48/60 | 无提升    |
 
 QASPER v9 判定器确实覆盖了全部 99 条 boolean 样本，因此“判定分支未执行”已关闭。但执行并不等于有效：
 
@@ -39,20 +40,20 @@ QASPER v9 判定器确实覆盖了全部 99 条 boolean 样本，因此“判定
 
 ### 2.2 FinanceBench
 
-| 指标 | v16 | v17 | 结论 |
-|---|---:|---:|---|
-| token F1 | 12.17% | 14.07% | +1.90 pp |
-| native numeric | 10.00% | 11.25% | +1.25 pp，仍远低于 20% 门槛 |
-| semantic F1 | 25.08% | 33.75% | +8.67 pp |
-| page hit | 33.75% | 45.00% | +11.25 pp，仍低于 70% 门槛 |
-| false abstention | 23.75% | 16.25% | 改善，但仍高于 15% 门槛 |
-| Candidate Recall@50 | 34.17% | 45.83% | 改善，仍有明显召回缺口 |
-| Reranked Recall@10 | 27.50% | 37.50% | 改善，仍有排序丢失 |
-| all-gold-pages hit | 18.75% | 27.50% | 仍低于 35% 门槛 |
-| all-operands / execution | 20.83% | 37.50% | 仍低于 50% 门槛 |
-| cell accuracy | 79.41% | 100% | 本次样本已达标 |
-| unit accuracy | 50.00% | 83.33% | 改善，仍低于 98% 门槛 |
-| lineage consistency | 100% | 98.86% | 出现新的候选血缘违例 |
+| 指标                     |    v16 |    v17 | 结论                        |
+| ------------------------ | -----: | -----: | --------------------------- |
+| token F1                 | 12.17% | 14.07% | +1.90 pp                    |
+| native numeric           | 10.00% | 11.25% | +1.25 pp，仍远低于 20% 门槛 |
+| semantic F1              | 25.08% | 33.75% | +8.67 pp                    |
+| page hit                 | 33.75% | 45.00% | +11.25 pp，仍低于 70% 门槛  |
+| false abstention         | 23.75% | 16.25% | 改善，但仍高于 15% 门槛     |
+| Candidate Recall@50      | 34.17% | 45.83% | 改善，仍有明显召回缺口      |
+| Reranked Recall@10       | 27.50% | 37.50% | 改善，仍有排序丢失          |
+| all-gold-pages hit       | 18.75% | 27.50% | 仍低于 35% 门槛             |
+| all-operands / execution | 20.83% | 37.50% | 仍低于 50% 门槛             |
+| cell accuracy            | 79.41% |   100% | 本次样本已达标              |
+| unit accuracy            | 50.00% | 83.33% | 改善，仍低于 98% 门槛       |
+| lineage consistency      |   100% | 98.86% | 出现新的候选血缘违例        |
 
 24 条适用计算问题中，9 条成功执行且 verifier 通过，15 条仍未形成可执行计划；成功执行的 9 条中有 6 条 native 与 semantic 均正确。
 
@@ -72,18 +73,18 @@ QASPER v9 判定器确实覆盖了全部 99 条 boolean 样本，因此“判定
 
 ## 3. 开放问题表
 
-| ID | 优先级 | 状态 | 根因 | 当前影响 | 关闭标准 |
-|---|---|---|---|---|---|
-| QASPER-PROP-002 | P0 | 开放 | boolean verifier 用词形/动词重叠近似命题蕴含，无法区分“相关主题”与“完整回答” | boolean exact 无提升；存在 false reject 与 false accept | 冻结样本中完整命题被接受、部分命题被拒绝；结构合法率 100%，boolean semantic F1 明显提升且不损害 unanswerable |
-| FIN-IDENTITY-002 | P0 | 开放 | 初轮 slot 的 exact evidence ID 被错误当成最终 operand 授权集合；跨页/重建后的同义证据身份不能统一 | `00882` 等已具备正确证据的问题错误 abstain | 最终 selected evidence 中 metric/period/value/unit/cell 语义一致的 operand 可通过；错 metric/period 仍必须失败 |
-| FIN-RETRIEVAL-001 | P0 | 开放 | page/table 召回和重排仍不足，候选召回与 rerank recall 均未达到发布门槛 | 15/24 计算问题无法执行，page hit 45% | page hit ≥70%，all-gold-pages ≥35%，all-operands ≥50%，并通过固定样本回归 |
-| FIN-TABLE-SEM-002 | P0 | 开放 | 表格行列标签、metric 别名与 entity/period 绑定仍不完整 | `10499` 等绑定 distractor；operand accuracy 56.86% | 冻结 distractor 用例选择正确行/列；operand accuracy 恢复并达到门槛 |
-| RERANK-LINEAGE-002 | P1 | 开放 | `candidate_evidence` 在 hybrid fusion 前截取，而后续 fusion 可把原 top-80 之外证据提升到 reranked 输出 | 6 个 reranked identity 不在声明的 candidate pool | candidate pool 精确等于 post-fusion reranker 输入；reranked IDs 必须是其子集，违例为 0 |
-| RERANK-TRACE-001 | P1 | 开放 | trace 只有排序结果，不能证明实际执行了哪个 reranker backend | 无法区分 BGE 执行、上游分数复用或 fallback | trace 明确记录 backend、模型、输入/输出数和执行状态；未执行时不得标记为 BGE |
-| REPRO-001 | P1 | 开放 | multimodal Slurm 未导出 text/retrieval endpoint；provenance 未采集 colvision endpoint | Finance artifact 不能完整重建 8000/8002/8003 服务拓扑 | artifact 记录 text、VLM、retrieval、colvision endpoint/model 与配置 hash |
-| FIN-EVAL-001 | P1 | 开放 | 历史 native numeric 只有固定相对容差，没有数据集精度/舍入语义 | `04980` 的正确 4.625B 被历史指标判错 | 保留历史 native 不变；新增独立 precision-aware diagnostic，并明确报告两者差异 |
-| FIN-UNIT-002 | P1 | 开放 | scale/currency/unit 绑定虽已改善，但覆盖不足 | unit accuracy 83.33%，低于 98% | 固定 scale/currency 回归全部通过，聚焦运行 unit accuracy ≥98% |
-| RELEASE-001 | P1 | 外部阻塞 | QASPER 与 FinanceBench 的 P0 指标未过门槛 | 全量重跑会放大成本而不能证明修复完成 | 所有 P0 聚焦验证通过后才能提交一次正式全量重跑 |
+| ID                 | 优先级 | 状态               | 根因                                                                                                   | 当前影响                                                    | 关闭标准                                                                                                       |
+| ------------------ | ------ | ------------------ | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| QASPER-PROP-002    | P0     | 已实现，待聚焦验证 | boolean verifier 用词形/动词重叠近似命题蕴含，无法区分“相关主题”与“完整回答”                           | v18 boolean exact 无提升；存在 false reject 与 false accept | 冻结样本中完整命题被接受、部分命题被拒绝；结构合法率 100%，boolean semantic F1 明显提升且不损害 unanswerable   |
+| FIN-IDENTITY-002   | P0     | 已实现，待聚焦验证 | 初轮 slot 的 exact evidence ID 被错误当成最终 operand 授权集合；跨页/重建后的同义证据身份不能统一      | v17 中 `00882` 等已具备正确证据的问题错误 abstain           | 最终 selected evidence 中 metric/period/value/unit/cell 语义一致的 operand 可通过；错 metric/period 仍必须失败 |
+| FIN-RETRIEVAL-001  | P0     | 开放               | page/table 召回和重排仍不足，候选召回与 rerank recall 均未达到发布门槛                                 | 15/24 计算问题无法执行，page hit 45%                        | page hit ≥70%，all-gold-pages ≥35%，all-operands ≥50%，并通过固定样本回归                                      |
+| FIN-TABLE-SEM-002  | P0     | 已实现，待聚焦验证 | 表格行列标签、metric 别名与 entity/period 绑定仍不完整                                                 | v17 中 `10499` 等绑定 distractor；operand accuracy 56.86%   | 冻结 distractor 用例选择正确行/列；operand accuracy 恢复并达到门槛                                             |
+| RERANK-LINEAGE-002 | P1     | 已实现，待聚焦验证 | `candidate_evidence` 在 hybrid fusion 前截取，而后续 fusion 可把原 top-80 之外证据提升到 reranked 输出 | v17 有 6 个 reranked identity 不在声明的 candidate pool     | candidate pool 精确等于 post-fusion reranker 输入；reranked IDs 必须是其子集，违例为 0                         |
+| RERANK-TRACE-001   | P1     | 部分落实           | trace 只有排序结果，不能证明实际执行了哪个 reranker backend                                            | 已能诚实记录 `not_recorded`，但仍不能证明 BGE 是否执行      | trace 明确记录 backend、模型、输入/输出数和执行状态；未执行时不得标记为 BGE                                    |
+| REPRO-001          | P1     | 已实现，待聚焦验证 | multimodal Slurm 未导出 text/retrieval endpoint；provenance 未采集 colvision endpoint                  | v17 artifact 不能完整重建 8000/8002/8003 服务拓扑           | artifact 记录 text、VLM、retrieval、colvision endpoint/model 与配置 hash                                       |
+| FIN-EVAL-001       | P1     | 开放               | 历史 native numeric 只有固定相对容差，没有数据集精度/舍入语义                                          | `04980` 的正确 4.625B 被历史指标判错                        | 保留历史 native 不变；新增独立 precision-aware diagnostic，并明确报告两者差异                                  |
+| FIN-UNIT-002       | P1     | 开放               | scale/currency/unit 绑定虽已改善，但覆盖不足                                                           | unit accuracy 83.33%，低于 98%                              | 固定 scale/currency 回归全部通过，聚焦运行 unit accuracy ≥98%                                                  |
+| RELEASE-001        | P1     | 外部阻塞           | QASPER 与 FinanceBench 的 P0 指标未过门槛                                                              | 全量重跑会放大成本而不能证明修复完成                        | 所有 P0 聚焦验证通过后才能提交一次正式全量重跑                                                                 |
 
 ## 4. 根因反思
 
@@ -131,19 +132,41 @@ QASPER v9 判定器确实覆盖了全部 99 条 boolean 样本，因此“判定
 - `04980` 只作为 precision-aware diagnostic 的设计依据，不能通过读取 gold 决定输出舍入。
 - 修复后先重跑 QASPER 159 条和 FinanceBench 20 × 4；只有 P0 关闭才允许全量 benchmark。
 
-## 6. 实施与验证清单
+## 6. 本轮实际落实与验证
+
+保护测试提交为 `e6ac1b9`，实现提交为 `8d86034`。当前已经完成：
+
+- QASPER answerability 升级为 v10，运行时 schema 只允许 complete、partial 和 insufficient 三类语义状态；旧 `yes/no` 仅作为测试/旧响应解析兼容，不属于 v10 输出契约。
+- Finance verifier 不再把初轮 slot ID 当作最终授权；operand 必须来自最终 selected evidence，并继续接受 value、cell、period、unit、scale、currency、entity 和连续 metric phrase 的验证。
+- Finance slot binding 与 verifier 共用同一 metric phrase matcher；分散在长页面中的 alias token 不再形成假 slot coverage，并增加 `cost of products sold` 的真实报表别名。
+- candidate lineage 改为 canonicalize 和 hybrid fusion 之后截取 top-80；reranked top-30 必须是该集合的子集。
+- ranking trace 记录真实 stage、limit 和输入/输出数量；没有 backend 执行证据时明确写 `not_recorded`。
+- multimodal Slurm 与 run provenance 现在覆盖 text LLM、VLM、retrieval 和 colvision endpoint。
+- 修复了新 ranking trace 对空检索质量判断的污染；纯诊断元数据不再把 `poor` 错判为 `ambiguous`。
+
+验证结果：
+
+- 聚焦相关回归：158 passed。
+- `benchmark/tests`：446 passed。
+- `libs/ktem/ktem_tests`：1327 passed。
+- changed-files pre-commit：全部通过。
+- codebase hygiene ratchet：通过，未刷新 hygiene baseline。
+- storage preflight：`.venv` 与 cache/runtime 均位于 fastscratch；fastscratch 当时为 135.2 GiB、441452/500000 inodes；仓库根目录不存在 `data/`、`datasets/`、`outputs/`。
+
+公开影响仅限 benchmark QASPER 内部契约、DocQA evidence/calculation trace 和 Slurm provenance；`MARA`、`MARA-cli` 以及已有 CLI 参数未改变。
+
+## 7. 下一步聚焦验证
 
 执行顺序固定为：
 
-1. 先提交 characterization/regression tests。
-2. 实现 QASPER v10、Finance semantic binding、post-fusion candidate lineage 和 provenance。
-3. 运行相关 benchmark/ktem 单元测试、changed-files pre-commit 和代码卫生检查。
-4. 提交新的 QASPER 159 与 FinanceBench 20 × 4 聚焦验证。
-5. 用新 artifact 更新本表；不得用本地 mock 通过代替真实聚焦指标。
+1. 从干净的 `8d86034` 之后的文档状态提交新的 QASPER 159 与 FinanceBench 20 × 4。
+2. QASPER 必须逐条复核 20 条旧 boolean abstention、4 条结构违例和 complete/partial verdict 分布。
+3. Finance 必须逐条复核 `00882`、`10499`、`04302`、`03531`、`10285`、`04980`，并检查 lineage violation 和完整 provenance。
+4. 用新 artifact 更新本表；不得用本地 mock 通过代替真实聚焦指标。
 
 在新的聚焦 artifact 完成前，本轮代码修复只能标记为“已实现/待运行验证”，不能提前把 P0 标记为已关闭。
 
-## 7. 已关闭问题
+## 8. 已关闭问题
 
 以下问题已由最新 artifact 直接证明关闭，不再保留在开放表：
 
