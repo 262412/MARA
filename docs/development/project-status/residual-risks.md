@@ -352,8 +352,11 @@ spreadsheet formula、chart、citation 和最终 QA 的生产矩阵仍不完整�
    - changed-files pre-commit：通过 black、isort、flake8、mypy、codespell；
    - codebase hygiene ratchet：通过，未刷新 baseline；
    - 两个 Slurm 脚本 `bash -n`：通过。
-8. [ ] 在 clean commit 上提交 QASPER 159 和 FinanceBench 20×4 聚焦验证；
-       不启动全量 benchmark。
+8. [x] 在 clean commit 上提交聚焦验证，不启动全量 benchmark：
+   - QASPER 159：job `9944162`，suite
+     `residual-qasper-typed-v18-proposition-provenance-l40s`；
+   - FinanceBench 20×4：job `9944163`，suite
+     `residual-finance-v17-semantic-scale-provenance-l40s`。
 
 聚焦任务完成后，先比较冻结问题级 diff 和 stage metrics，再决定哪些 P0
 可以关闭。不能因为新任务正常退出就删除问题。
