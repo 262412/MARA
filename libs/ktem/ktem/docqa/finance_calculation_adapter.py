@@ -17,6 +17,11 @@ from .calculation_plan import (
 from .finance_query_planning import FINANCE_METRIC_ALIASES
 from .finance_scale import scale_from_text as _scale
 from .finance_scale import source_scale_evidence as _source_scale_evidence
+from .financial_statement_identity import (
+    compatible_financial_identity,
+    financial_statement_identity,
+    required_operand_identity,
+)
 from .financial_table import FinancialTableCell, find_financial_cell
 
 
@@ -126,18 +131,23 @@ def _operand_from_input(
     ):
         period = ""
     aliases = _operand_aliases(name, question, question_type)
+    statement_kind, financial_scope = required_operand_identity(name)
     cell = find_financial_cell(
         evidence_items,
         aliases=aliases,
         period=period,
         expected_value=decimal_value,
         excluded_cell_ids=excluded_evidence_ids,
+        statement_kind=statement_kind,
+        financial_scope=financial_scope,
     )
     semantic_cell = cell or find_financial_cell(
         evidence_items,
         aliases=aliases,
         period=period,
         excluded_cell_ids=excluded_evidence_ids,
+        statement_kind=statement_kind,
+        financial_scope=financial_scope,
     )
     if semantic_cell is not None:
         return _operand_from_cell(
@@ -154,6 +164,8 @@ def _operand_from_input(
         question_type=question_type,
         evidence_items=evidence_items,
         excluded_evidence_ids=excluded_evidence_ids,
+        statement_kind=statement_kind,
+        financial_scope=financial_scope,
     )
     return _operand_from_item(
         name,
@@ -196,6 +208,8 @@ def _operand_from_cell(
         row_label=cell.row_label,
         column_label=cell.column_label,
         scale_evidence_id=scale_evidence_id,
+        statement_kind=cell.statement_kind,
+        financial_scope=cell.financial_scope,
     )
 
 
@@ -208,6 +222,9 @@ def _operand_from_item(
     evidence_items: list[dict[str, Any]],
 ) -> CalculationOperand:
     text = _item_text(item) if item is not None else ""
+    statement_kind, financial_scope = (
+        financial_statement_identity(item) if item is not None else ("", "")
+    )
     scale = _item_dimension(item, "scale") or _scale(text, aliases=aliases)
     scale_evidence_id = ""
     if not scale:
@@ -225,6 +242,8 @@ def _operand_from_item(
         period=period or _item_dimension(item, "period"),
         entity=_item_dimension(item, "entity"),
         scale_evidence_id=scale_evidence_id,
+        statement_kind=statement_kind,
+        financial_scope=financial_scope,
     )
 
 
@@ -409,12 +428,19 @@ def _matching_item(
     question_type: str,
     evidence_items: list[dict[str, Any]],
     excluded_evidence_ids: set[str],
+    statement_kind: str,
+    financial_scope: str,
 ) -> dict[str, Any] | None:
     matches = [
         item
         for item in evidence_items
         if value in _decimal_values(_item_text(item))
         and _item_id(item) not in excluded_evidence_ids
+        and compatible_financial_identity(
+            item,
+            statement_kind,
+            financial_scope,
+        )
     ]
     if period:
         period_matches = [item for item in matches if period in _item_text(item)]

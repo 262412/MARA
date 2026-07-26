@@ -30,6 +30,26 @@ def _required_hybrid_eligibility(
     return sum(required), len(required)
 
 
+def _qasper_answerability_coverage(
+    predictions: list[dict[str, Any]],
+) -> tuple[int, int]:
+    required = [
+        row
+        for row in predictions
+        if _prediction_is_usable(row)
+        and str(row.get("answer_type") or "").strip().lower() == "boolean"
+    ]
+    covered = 0
+    for row in required:
+        metadata = row.get("evidence_metadata")
+        trace = (
+            metadata.get("qasper_answerability") if isinstance(metadata, dict) else None
+        )
+        if isinstance(trace, dict) and trace:
+            covered += 1
+    return covered, len(required)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Reject benchmark artifacts that contain no usable predictions."
@@ -38,6 +58,7 @@ def main() -> None:
     parser.add_argument("--expected-count", type=int)
     parser.add_argument("--require-all-usable", action="store_true")
     parser.add_argument("--require-hybrid-eligible", action="store_true")
+    parser.add_argument("--require-qasper-answerability", action="store_true")
     args = parser.parse_args()
 
     predictions_path = args.predictions
@@ -73,6 +94,19 @@ def main() -> None:
             raise SystemExit(
                 "required hybrid evidence was unavailable for "
                 f"{required_count - eligible_count}/{required_count} decisions"
+            )
+    if args.require_qasper_answerability:
+        covered_count, required_count = _qasper_answerability_coverage(predictions)
+        print(f"qasper_answerability_coverage={covered_count}/{required_count}")
+        if required_count == 0:
+            raise SystemExit(
+                "formal QASPER validation found no usable boolean predictions"
+            )
+        if covered_count != required_count:
+            raise SystemExit(
+                "QASPER answerability trace was missing for "
+                f"{required_count - covered_count}/{required_count} "
+                "usable boolean predictions"
             )
 
 

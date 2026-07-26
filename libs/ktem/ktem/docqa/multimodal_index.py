@@ -13,7 +13,7 @@ from typing import Any, Iterable
 from kotaemon.base import Document
 
 from ._runtime_utils import _serialize_value
-from .element_parser import parse_element_index_record
+from .element_parser import parse_element_index_records
 
 logger = logging.getLogger(__name__)
 ELEMENT_INDEX_DOC_TYPE = "mara_element_index"
@@ -105,16 +105,16 @@ def element_records_from_documents(documents: Iterable[Any]) -> list[dict[str, A
                 _element_record(doc, metadata, file_id, page_label, element_id)
             )
             continue
-        record = parse_element_index_record(
-            doc_id=_doc_id(doc),
-            file_id=file_id,
-            file_name=_file_name(metadata),
-            page_label=page_label,
-            text=_text(doc, metadata),
-            metadata=metadata,
+        records.extend(
+            parse_element_index_records(
+                doc_id=_doc_id(doc),
+                file_id=file_id,
+                file_name=_file_name(metadata),
+                page_label=page_label,
+                text=_text(doc, metadata),
+                metadata=metadata,
+            )
         )
-        if record is not None:
-            records.append(record)
     return records
 
 

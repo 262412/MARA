@@ -37,6 +37,8 @@ def test_stage_metrics_report_retrieval_pages_dedup_slots_and_calculation():
                 "calculation_verification": {
                     "valid": True,
                     "verified_operand_ids": ["a", "b"],
+                    "required_slot_ids": ["operand:a", "operand:b"],
+                    "verified_required_slot_ids": ["operand:a", "operand:b"],
                     "errors": [],
                 },
                 "calculation_execution": {"status": "ok"},
@@ -64,6 +66,8 @@ def test_stage_metrics_report_retrieval_pages_dedup_slots_and_calculation():
     assert metrics["all_gold_pages_hit"] == 1.0
     assert metrics["gold_table_cell_recall"] == 1.0
     assert metrics["slot_coverage"] == 1.0
+    assert metrics["retrieval_slot_coverage"] == 1.0
+    assert metrics["verified_slot_coverage"] == 1.0
     assert metrics["unique_pages"] == 2.0
     assert metrics["duplicate_ratio"] == 0.25
     assert metrics["operand_accuracy"] == 1.0
@@ -72,6 +76,7 @@ def test_stage_metrics_report_retrieval_pages_dedup_slots_and_calculation():
     assert metrics["program_accuracy"] == 1.0
     assert metrics["execution_accuracy"] == 1.0
     assert metrics["unit_accuracy"] == 1.0
+    assert metrics["successful_execution_unit_accuracy"] == 1.0
     assert metrics["claim_duplicate_rate"] == 1 / 3
     assert metrics["final_answer_duplicate_rate"] == 0.0
     assert metrics["final_answer_repetition_repair_rate"] == 1.0
@@ -153,6 +158,42 @@ def test_finance_stage_metrics_do_not_report_all_operands_for_invalid_plan():
     assert metrics["all_operands_bound"] == 0.0
     assert metrics["program_accuracy"] == 0.0
     assert metrics["execution_accuracy"] == 0.0
+    assert metrics["successful_execution_unit_accuracy"] is None
+
+
+def test_finance_stage_metrics_separate_retrieval_and_verified_slot_coverage():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "numeric",
+        "evidence_metadata": {
+            "slot_coverage": 1.0,
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [{"operand_id": "cogs"}],
+                    "steps": [],
+                },
+                "calculation_verification": {
+                    "valid": False,
+                    "required_slot_ids": [
+                        "operand:cogs",
+                        "operand:inventory:2018",
+                    ],
+                    "verified_required_slot_ids": ["operand:cogs"],
+                    "verified_operand_ids": ["cogs"],
+                    "errors": [
+                        "required_slot_missing:operand:inventory:2018",
+                    ],
+                },
+                "calculation_execution": {"status": "error"},
+            },
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["slot_coverage"] == 1.0
+    assert metrics["retrieval_slot_coverage"] == 1.0
+    assert metrics["verified_slot_coverage"] == 0.5
 
 
 def test_finance_stage_metrics_reject_rendered_scale_that_contradicts_plan():

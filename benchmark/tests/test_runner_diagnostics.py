@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from typing import Any
 
 from benchmark.diagnostics import prediction_diagnostics
@@ -50,6 +51,15 @@ class _DiagnosticEngine:
     @staticmethod
     def document_reports():
         return []
+
+    @staticmethod
+    def task_contract_llm():
+        return lambda *_args, **_kwargs: SimpleNamespace(
+            text=(
+                '{"verdict":"supported","evidence_quote":'
+                '"Revenue increased in 2026."}'
+            )
+        )
 
 
 def test_run_benchmark_adds_generic_route_diagnostics(monkeypatch, tmp_path):

@@ -175,12 +175,9 @@ def question_years(lowered_question: str) -> list[str]:
 
 
 def target_year(question: str, years: list[str]) -> str:
-    match = re.search(
-        r"\b(?:as\s+of|during|for|in)\s+(?:fy\s*)?((?:19|20)\d{2})\b",
-        question,
-        flags=re.IGNORECASE,
-    )
-    return match.group(1) if match is not None else years[-1]
+    from .finance_query_planning import finance_target_period
+
+    return finance_target_period(question, years)
 
 
 def asks_for_direct_finance_value(lowered_question: str) -> bool:

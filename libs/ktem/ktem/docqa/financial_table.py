@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from .financial_statement_identity import financial_statement_identity
+
 _YEAR_RE = re.compile(r"\b((?:19|20)\d{2})\b")
 _VALUE_RE = re.compile(
     r"(?:\$?\s*\([+-]?\d[\d,]*(?:\.\d+)?\)|" r"\(?[+-]?\$?\s*\d[\d,]*(?:\.\d+)?\)?)"
@@ -28,6 +30,8 @@ class FinancialTableCell:
     unit: str = ""
     scale: str = ""
     currency: str = ""
+    statement_kind: str = ""
+    financial_scope: str = ""
 
     def verification_text(self) -> str:
         return " ".join(
@@ -39,6 +43,8 @@ class FinancialTableCell:
                 self.unit,
                 self.scale,
                 self.currency,
+                self.statement_kind,
+                self.financial_scope,
             )
             if value
         )
@@ -59,6 +65,7 @@ def parse_financial_table_cells(
         return ()
 
     identity = _table_identity(item)
+    statement_kind, financial_scope = financial_statement_identity(item)
     scale = _dimension(item, "scale") or _scale(text)
     currency = _dimension(item, "currency") or _currency(text)
     unit = _dimension(item, "unit")
@@ -95,6 +102,8 @@ def parse_financial_table_cells(
                     unit=unit,
                     scale=scale,
                     currency=currency,
+                    statement_kind=statement_kind,
+                    financial_scope=financial_scope,
                 )
             )
     return tuple(cells)
@@ -107,6 +116,8 @@ def find_financial_cell(
     period: str = "",
     expected_value: Decimal | None = None,
     excluded_cell_ids: set[str] | None = None,
+    statement_kind: str = "",
+    financial_scope: str = "",
 ) -> FinancialTableCell | None:
     excluded = excluded_cell_ids or set()
     ranked: list[tuple[int, int, int, FinancialTableCell]] = []
@@ -115,6 +126,18 @@ def find_financial_cell(
             if cell.cell_id in excluded:
                 continue
             if period and cell.period != period:
+                continue
+            if (
+                statement_kind
+                and cell.statement_kind
+                and cell.statement_kind != statement_kind
+            ):
+                continue
+            if (
+                financial_scope
+                and cell.financial_scope
+                and cell.financial_scope != financial_scope
+            ):
                 continue
             support = _metric_support(cell.row_label, aliases)
             if support == 0:
@@ -187,6 +210,7 @@ def _explicit_cell(item: dict[str, Any]) -> FinancialTableCell | None:
     if value is None:
         return None
     identity = _table_identity(item)
+    statement_kind, financial_scope = financial_statement_identity(item)
     return FinancialTableCell(
         cell_id=str(item.get("cell_id") or "").strip()
         or (
@@ -207,6 +231,8 @@ def _explicit_cell(item: dict[str, Any]) -> FinancialTableCell | None:
         unit=_dimension(item, "unit"),
         scale=_dimension(item, "scale"),
         currency=_dimension(item, "currency"),
+        statement_kind=statement_kind,
+        financial_scope=financial_scope,
     )
 
 

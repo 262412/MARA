@@ -349,6 +349,30 @@ def test_inventory_turnover_plan_uses_distinct_average_inventory_periods():
         ("inventory", "2021"),
         ("inventory", "2022"),
     ]
+    assert [
+        (slot.statement_kind, slot.financial_scope) for slot in plan.evidence_slots
+    ] == [
+        ("income_statement", "consolidated"),
+        ("balance_sheet", "consolidated"),
+        ("balance_sheet", "consolidated"),
+    ]
+
+
+def test_inventory_turnover_uses_explicit_cogs_year_not_period_order():
+    plan = build_query_plan(
+        (
+            "What is FY2019 inventory turnover, calculated as FY2019 COGS "
+            "divided by average FY2018 and FY2019 inventory?"
+        ),
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+
+    assert [(slot.metric, slot.period) for slot in plan.evidence_slots] == [
+        ("cost of goods sold", "2019"),
+        ("inventory", "2018"),
+        ("inventory", "2019"),
+    ]
 
 
 def test_inventory_slot_distinguishes_balance_from_cash_flow_change():
@@ -397,6 +421,33 @@ def test_inventory_slot_distinguishes_balance_from_cash_flow_change():
     assert balance_sheet_inventory.status == "filled"
 
 
+def test_inventory_slot_rejects_held_for_sale_subscope():
+    plan = build_query_plan(
+        (
+            "What is FY2019 inventory turnover, calculated as FY2019 COGS "
+            "divided by average FY2018 and FY2019 inventory?"
+        ),
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "held-for-sale",
+                "text": (
+                    "Assets held for sale (in millions). 2019 2018. "
+                    "Inventories 21 92."
+                ),
+                "modality": "table",
+            }
+        ],
+    )
+
+    inventories = [slot for slot in bound.evidence_slots if slot.metric == "inventory"]
+    assert all(slot.status == "missing" for slot in inventories)
+
+
 def test_finance_fact_plan_tracks_adjusted_non_gaap_ebitda_period():
     plan = build_query_plan(
         "What was adjusted non-GAAP EBITDA for the twelve months ended 2023?",
@@ -424,3 +475,7 @@ def test_finance_segment_fact_plan_normalizes_short_fiscal_years():
         ("support", "net sales", "2021"),
         ("support", "net sales", "2022"),
     ]
+    assert plan.question_type == "comparison_argmax"
+    assert plan.constraints["comparison_operator"] == "proportional_increase"
+    assert plan.constraints["excluded_entities"] == ["embedded"]
+    assert all(slot.financial_scope == "segment" for slot in plan.evidence_slots)

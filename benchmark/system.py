@@ -28,7 +28,6 @@ from kotaemon.storages import InMemoryDocumentStore, InMemoryVectorStore
 
 from .benchmark_prompts import generation_prompt_for, retrieval_query_for
 from .evidence_metadata import _evidence_metadata
-from .qasper_answerability import verify_qasper_answerability
 from .schemas import BenchmarkConfig, BenchmarkDocument, BenchmarkExample
 
 TOKEN_RE = re.compile(r"[\w\u4e00-\u9fff]+", flags=re.UNICODE)
@@ -439,9 +438,8 @@ class KotaemonTextRAGSystem:
             context=evidence,
             dataset_name=self.config.suite_name,
         )
-        answer = _generate_benchmark_answer(
-            self, prompt, example, evidence, evidence_metadata
-        )
+        response = self.llm(prompt)
+        answer = getattr(response, "text", "") or str(response)
         return answer.strip(), evidence, time.perf_counter() - start, evidence_metadata
 
     def run_example(
@@ -558,24 +556,3 @@ class KotaemonTextRAGSystem:
 
     def document_reports(self) -> list[dict[str, Any]]:
         return [item.to_report_dict() for item in self._cache.values()]
-
-
-def _generate_benchmark_answer(
-    system: KotaemonTextRAGSystem,
-    prompt: str,
-    example: BenchmarkExample,
-    evidence: str,
-    evidence_metadata: dict[str, Any],
-) -> str:
-    response = system.llm(prompt)
-    answer = getattr(response, "text", "") or str(response)
-    if "qasper" not in str(system.config.suite_name or "").lower():
-        return answer
-    answerability = verify_qasper_answerability(
-        system.llm,
-        question=example.question,
-        evidence=evidence,
-        candidate_answer=answer,
-    )
-    evidence_metadata["qasper_answerability"] = answerability.trace
-    return answerability.answer

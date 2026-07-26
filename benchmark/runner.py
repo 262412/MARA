@@ -11,6 +11,10 @@ from .benchmark_prompts import build_benchmark_prompt
 from .benchmark_taxonomy import add_prediction_taxonomy
 from .diagnostics import prediction_diagnostics
 from .engines import EngineRunResult, get_engine
+from .external_adapter_summary import (
+    external_adapter_summary_metadata,
+    external_adapter_summary_metadata_by_route,
+)
 from .manifest import load_manifest
 from .mara_oriented_scores import (
     add_mara_oriented_metrics,
@@ -26,10 +30,7 @@ from .research_adapters import (
     research_adapter_metrics,
     route_backend_metadata,
 )
-from .research_evaluators import (
-    external_research_adapter_metric_metadata,
-    external_research_adapter_metrics,
-)
+from .research_evaluators import external_research_adapter_metrics
 from .route_execution import route_skip_record
 from .route_timeout import (
     RouteExecutionTimeout,
@@ -44,6 +45,7 @@ from .scoring import normalize_operational_fields, score_prediction
 from .semantic_answer import semantic_judge_backend
 from .stage_metrics import prediction_stage_metric_status, prediction_stage_metrics
 from .summary import build_benchmark_summary
+from .task_answer_contracts import apply_task_answer_contract
 from .verifier_observability import prediction_verifier_observability
 
 _CONFIG_FIELD_NAMES = {field.name for field in fields(BenchmarkConfig)}
@@ -453,6 +455,16 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                 dataset_name=bundle.dataset_name,
                 mode=route_config.benchmark_answer_mode,
             )
+            if apply_task_answer_contract(
+                prediction,
+                dataset_name=bundle.dataset_name,
+                llm_factory=lambda: engine.task_contract_llm(),
+            ):
+                finalize_prediction_answer(
+                    prediction,
+                    dataset_name=bundle.dataset_name,
+                    mode=route_config.benchmark_answer_mode,
+                )
             prediction["product_metrics"] = score_prediction(
                 prediction,
                 answer_key="predicted_answer",
@@ -500,12 +512,12 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         backend_health=load_backend_health(config.backend_health_json),
         skipped_routes=skipped_routes,
         adapter_metric_metadata=research_adapter_metric_metadata(),
-        external_adapter_metric_metadata=_external_adapter_summary_metadata(
+        external_adapter_metric_metadata=external_adapter_summary_metadata(
             predictions,
             active_routes,
         ),
         external_adapter_metric_metadata_by_route=(
-            _external_adapter_summary_metadata_by_route(predictions, active_routes)
+            external_adapter_summary_metadata_by_route(predictions, active_routes)
         ),
         selection=selection_summary(config, len(bundle.examples)),
     )
@@ -559,42 +571,3 @@ def _engine_document_reports(engines: Any) -> list[dict[str, Any]]:
             continue
         reports.extend(engine.document_reports())
     return reports
-
-
-def _external_adapter_summary_metadata(
-    predictions: list[dict[str, Any]],
-    active_routes: list[dict[str, Any]],
-) -> dict[str, Any]:
-    for prediction in predictions:
-        metadata = prediction.get("external_adapter_metric_metadata")
-        if isinstance(metadata, dict):
-            return metadata
-    route = active_routes[0] if active_routes else {}
-    return external_research_adapter_metric_metadata(route)
-
-
-def _external_adapter_summary_metadata_by_route(
-    predictions: list[dict[str, Any]],
-    active_routes: list[dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    metadata_by_route: dict[str, dict[str, Any]] = {}
-    prediction_metadata = _prediction_external_metadata_by_route(predictions)
-    for index, route in enumerate(active_routes, start=1):
-        route_id = _route_id(route, f"route_{index}")
-        metadata_by_route[route_id] = prediction_metadata.get(
-            route_id,
-            external_research_adapter_metric_metadata(route),
-        )
-    return metadata_by_route
-
-
-def _prediction_external_metadata_by_route(
-    predictions: list[dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    metadata_by_route: dict[str, dict[str, Any]] = {}
-    for prediction in predictions:
-        route = str(prediction.get("route") or "").strip()
-        metadata = prediction.get("external_adapter_metric_metadata")
-        if route and isinstance(metadata, dict) and route not in metadata_by_route:
-            metadata_by_route[route] = metadata
-    return metadata_by_route

@@ -254,6 +254,13 @@ def same_period_specs(
 
 
 def finance_target_period(question: str, periods: list[str]) -> str:
+    formula_period = re.search(
+        r"\b(?:fy\s*)?((?:19|20)\d{2})\s+"
+        r"(?:cogs|cost\s+of\s+(?:goods|products)\s+sold)\b",
+        question,
+    )
+    if formula_period is not None:
+        return formula_period.group(1)
     explicit = re.search(
         r"\b(?:as\s+of|during|for|in)\s+(?:fy\s*)?((?:19|20)\d{2})\b",
         question,
@@ -268,6 +275,23 @@ def finance_target_period(question: str, periods: list[str]) -> str:
     if change is not None:
         return change.group(2)
     return periods[-1] if periods else ""
+
+
+def is_finance_segment_comparison(question: str) -> bool:
+    lowered = str(question or "").lower()
+    return (
+        "segment" in lowered
+        and bool(re.search(r"\b(?:increase|decrease|grew|growth)\b", lowered))
+        and bool(re.search(r"\b(?:most|least|largest|smallest)\b", lowered))
+    )
+
+
+def finance_comparison_excluded_entities(question: str) -> list[str]:
+    match = re.search(
+        r"\bexcluding\s+([a-z][a-z0-9 &-]*?)(?:,|\bin\b|\bwhich\b|$)",
+        str(question or "").lower(),
+    )
+    return [match.group(1).strip()] if match else []
 
 
 def finance_metrics_in_question(question: str) -> list[str]:

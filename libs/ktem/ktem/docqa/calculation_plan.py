@@ -6,6 +6,7 @@ from decimal import Decimal, DivisionByZero, InvalidOperation, localcontext
 from typing import Any
 
 from .finance_query_planning import finance_metric_evidence_matches
+from .financial_statement_identity import financial_statement_identity
 
 CALCULATION_PLAN_CONTRACT = "calculation_plan.v1"
 ALLOWED_OPERATORS = {
@@ -46,6 +47,8 @@ class CalculationOperand:
     row_label: str = ""
     column_label: str = ""
     scale_evidence_id: str = ""
+    statement_kind: str = ""
+    financial_scope: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -55,6 +58,8 @@ class CalculationOperand:
             "row_label",
             "column_label",
             "scale_evidence_id",
+            "statement_kind",
+            "financial_scope",
         ):
             if not payload[field_name]:
                 payload.pop(field_name)
@@ -269,6 +274,11 @@ def _verify_operand(
         errors.append(f"operand_currency_mismatch:{operand.operand_id}")
     if operand.entity and not _term_matches(operand.entity, text):
         errors.append(f"operand_entity_mismatch:{operand.operand_id}")
+    statement_kind, financial_scope = financial_statement_identity(item)
+    if operand.statement_kind and operand.statement_kind != statement_kind:
+        errors.append(f"operand_statement_kind_mismatch:{operand.operand_id}")
+    if operand.financial_scope and operand.financial_scope != financial_scope:
+        errors.append(f"operand_financial_scope_mismatch:{operand.operand_id}")
     return errors, citations
 
 
@@ -453,6 +463,13 @@ def _operand_matches_slot(
         return False
     item = evidence_by_id.get(operand.evidence_id)
     if item is None:
+        return False
+    statement_kind, financial_scope = financial_statement_identity(item)
+    required_statement_kind = str(slot.get("statement_kind") or "").strip()
+    required_scope = str(slot.get("financial_scope") or "").strip()
+    if required_statement_kind and statement_kind != required_statement_kind:
+        return False
+    if required_scope and financial_scope != required_scope:
         return False
     metric = str(slot.get("metric") or "").strip().lower()
     metric_text = " ".join((operand.row_label, _evidence_text(item)))

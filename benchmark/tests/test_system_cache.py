@@ -294,17 +294,11 @@ def test_text_rag_generation_uses_benchmark_prompt_not_user_template(
     assert "Return the final answer as Markdown" not in prompt
 
 
-def test_qasper_text_rag_runs_answerability_verifier_after_generation(
+def test_qasper_text_rag_defers_answerability_to_runner_task_contract(
     monkeypatch,
     tmp_path,
 ):
-    llm = _SequenceLLM(
-        [
-            "The baseline was NDCG 55.46.",
-            '{"verdict":"unsupported","evidence_quote":'
-            '"The proposed system reports NDCG 55.46."}',
-        ]
-    )
+    llm = _SequenceLLM(["The baseline was NDCG 55.46."])
     monkeypatch.setattr(KotaemonTextRAGSystem, "_resolve_llm", lambda *_args: llm)
     system = KotaemonTextRAGSystem(
         BenchmarkConfig(
@@ -334,19 +328,9 @@ def test_qasper_text_rag_runs_answerability_verifier_after_generation(
         ],
     )
 
-    assert answer == "unanswerable"
-    assert len(llm.calls) == 2
-    assert metadata["qasper_answerability"] == {
-        "contract_id": "qasper_answerability.v10",
-        "status": "ok",
-        "verdict": "unsupported",
-        "action": "abstained_unsupported_candidate",
-        "evidence_quote": "The proposed system reports NDCG 55.46.",
-        "quote_grounded": "true",
-        "quote_supports_relation": "false",
-        "parser_status": "ok",
-        "repair_attempted": "false",
-    }
+    assert answer == "The baseline was NDCG 55.46."
+    assert len(llm.calls) == 1
+    assert "qasper_answerability" not in metadata
 
 
 def test_evidence_metadata_marks_visual_and_formula_context():

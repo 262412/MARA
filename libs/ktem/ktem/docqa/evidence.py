@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .evidence_identity import (
@@ -12,6 +11,7 @@ from .evidence_identity import (
 from .evidence_locators import merged_locator_metadata, source_alias_values
 from .evidence_planning import select_planned_evidence
 from .evidence_ranking_trace import ranking_trace
+from .evidence_schema import EvidenceBundle, EvidenceElement
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
 from .query_planning import request_planning_question
@@ -21,113 +21,12 @@ MAX_ELEMENT_EVIDENCE_ITEMS = 20
 MAX_RERANK_CANDIDATES = 80
 
 
-@dataclass(frozen=True)
-class EvidenceElement:
-    evidence_id: str
-    source_id: str = ""
-    source_name: str = ""
-    source_aliases: list[str] = field(default_factory=list)
-    page_label: str = ""
-    dataset_page: str = ""
-    parser_page_index: int | None = None
-    page_aliases: list[str] = field(default_factory=list)
-    modality: str = "text"
-    element_id: str = ""
-    cell_id: str = ""
-    canonical_id: str = ""
-    parent_element_id: str = ""
-    neighbor_element_ids: list[str] = field(default_factory=list)
-    section_id: str = ""
-    table_id: str = ""
-    row_index: int | None = None
-    column_index: int | None = None
-    row_label: str = ""
-    column_label: str = ""
-    period: str = ""
-    unit: str = ""
-    scale: str = ""
-    currency: str = ""
-    continuation_id: str = ""
-    chunk_start: int | None = None
-    chunk_end: int | None = None
-    normalized_text_hash: str = ""
-    duplicate_evidence_ids: list[str] = field(default_factory=list)
-    bbox: Any = None
-    caption: str = ""
-    text: str = ""
-    ocr_text: str = ""
-    vlm_text: str = ""
-    source_backrefs: list[str] = field(default_factory=list)
-    evidence_level: str = "page"
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    def as_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        for field_name in (
-            "source_aliases",
-            "dataset_page",
-            "parser_page_index",
-            "page_aliases",
-            "cell_id",
-            "row_label",
-            "column_label",
-            "period",
-            "unit",
-            "scale",
-            "currency",
-        ):
-            if payload[field_name] in ("", None, []):
-                payload.pop(field_name)
-        return payload
-
-
-@dataclass(frozen=True)
-class EvidenceBundle:
-    route: str
-    items: list[dict[str, Any]] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
 def build_evidence_bundle(
     route: str,
     request: Any,
     evidence_metadata: dict[str, Any],
 ) -> EvidenceBundle:
-    base_items = [
-        _coerce_item(item) for item in evidence_metadata.get("evidence") or []
-    ]
-    items = (
-        [] if route in {"doc_page_image", "doc_element", "graph_global"} else base_items
-    )
-    if route in {"doc", "hybrid"} and not base_items:
-        selected_text_item = _selected_text_item(request, route)
-        if selected_text_item is not None:
-            items.append(selected_text_item)
-    if route in {"doc_page_image", "hybrid"}:
-        page_items = _page_image_items(evidence_metadata)
-        page_item = _page_image_item(request, route)
-        if page_item is not None:
-            page_items.append(page_item)
-        items.extend(_rank_route_items(page_items, request, "doc_page_image"))
-    if route in {"doc_element", "hybrid"}:
-        element_scores = dict(evidence_metadata.get("element_retriever_scores") or {})
-        element_items = [
-            _coerce_item(_with_element_retriever_score(item, element_scores))
-            for item in evidence_metadata.get("element_index") or []
-        ]
-        element_items.extend(
-            _coerce_item(item) for item in evidence_metadata.get("elements") or []
-        )
-        items.extend(
-            _rank_route_items(element_items, request, "doc_element")[
-                :MAX_ELEMENT_EVIDENCE_ITEMS
-            ]
-        )
-    if route in {"graph_global", "hybrid"}:
-        items.extend(_graph_items(request, evidence_metadata))
+    items = _initial_evidence_items(route, request, evidence_metadata)
     deduped, dedupe_trace = canonicalize_and_dedupe_evidence(items)
     m3docrag_trace: dict[str, Any] | None = None
     hybrid_fusion_trace: dict[str, Any] | None = None
@@ -173,10 +72,56 @@ def build_evidence_bundle(
     return EvidenceBundle(route=route, items=deduped, metadata=metadata)
 
 
+def _initial_evidence_items(
+    route: str,
+    request: Any,
+    evidence_metadata: dict[str, Any],
+) -> list[dict[str, Any]]:
+    base_items = [
+        _coerce_item(item) for item in evidence_metadata.get("evidence") or []
+    ]
+    items = (
+        [] if route in {"doc_page_image", "doc_element", "graph_global"} else base_items
+    )
+    if route in {"doc", "hybrid"} and not base_items:
+        selected_text_item = _selected_text_item(request, route)
+        if selected_text_item is not None:
+            items.append(selected_text_item)
+    if route in {"doc_page_image", "hybrid"}:
+        page_items = _page_image_items(evidence_metadata)
+        page_item = _page_image_item(request, route)
+        if page_item is not None:
+            page_items.append(page_item)
+        items.extend(_rank_route_items(page_items, request, "doc_page_image"))
+    if route in {"doc_element", "hybrid"}:
+        element_scores = dict(evidence_metadata.get("element_retriever_scores") or {})
+        element_items = [
+            _coerce_item(
+                _with_retriever_score(
+                    item,
+                    element_scores,
+                    "element_retriever_score",
+                )
+            )
+            for item in evidence_metadata.get("element_index") or []
+        ]
+        element_items.extend(
+            _coerce_item(item) for item in evidence_metadata.get("elements") or []
+        )
+        items.extend(
+            _rank_route_items(element_items, request, "doc_element")[
+                :MAX_ELEMENT_EVIDENCE_ITEMS
+            ]
+        )
+    if route in {"graph_global", "hybrid"}:
+        items.extend(_graph_items(request, evidence_metadata))
+    return items
+
+
 def _page_image_items(evidence_metadata: dict[str, Any]) -> list[dict[str, Any]]:
     scores = dict(evidence_metadata.get("visual_retriever_scores") or {})
     return [
-        _coerce_item(_with_visual_retriever_score(item, scores))
+        _coerce_item(_with_retriever_score(item, scores, "visual_retriever_score"))
         for item in evidence_metadata.get("page_image_index") or []
     ]
 
@@ -195,28 +140,17 @@ def _limit_page_image_evidence(items: list[dict[str, Any]]) -> list[dict[str, An
     return selected
 
 
-def _with_visual_retriever_score(
-    item: dict[str, Any], scores: dict[str, Any]
+def _with_retriever_score(
+    item: dict[str, Any],
+    scores: dict[str, Any],
+    metadata_key: str,
 ) -> dict[str, Any]:
     evidence_id = str(item.get("evidence_id") or "").strip()
     if evidence_id not in scores:
         return item
     scored = dict(item)
     metadata = dict(scored.get("metadata") or {})
-    metadata["visual_retriever_score"] = float(scores[evidence_id])
-    scored["metadata"] = metadata
-    return scored
-
-
-def _with_element_retriever_score(
-    item: dict[str, Any], scores: dict[str, Any]
-) -> dict[str, Any]:
-    evidence_id = str(item.get("evidence_id") or "").strip()
-    if evidence_id not in scores:
-        return item
-    scored = dict(item)
-    metadata = dict(scored.get("metadata") or {})
-    metadata["element_retriever_score"] = float(scores[evidence_id])
+    metadata[metadata_key] = float(scores[evidence_id])
     scored["metadata"] = metadata
     return scored
 
@@ -276,6 +210,12 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         unit=str(item.get("unit") or metadata.get("unit") or "").strip(),
         scale=str(item.get("scale") or metadata.get("scale") or "").strip(),
         currency=str(item.get("currency") or metadata.get("currency") or "").strip(),
+        statement_kind=str(
+            item.get("statement_kind") or metadata.get("statement_kind") or ""
+        ).strip(),
+        financial_scope=str(
+            item.get("financial_scope") or metadata.get("financial_scope") or ""
+        ).strip(),
         continuation_id=str(
             item.get("continuation_id")
             or metadata.get("continuation_id")

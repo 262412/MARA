@@ -251,10 +251,14 @@ test -f "$RUN_DIR/summary.json"
 test -f "$RUN_DIR/route_metrics.csv"
 test -f "$RUN_DIR/predictions.jsonl"
 test -f "$RUN_DIR/report.md"
+VALIDATION_ARGS=(--require-all-usable)
+if [[ "${SUITE_NAME,,}" == *qasper* ]]; then
+  VALIDATION_ARGS+=(--require-qasper-answerability)
+fi
 uv run --python 3.10 python \
   "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \
   "$RUN_DIR/predictions.jsonl" \
-  --require-all-usable
+  "${VALIDATION_ARGS[@]}"
 
 log "outputs=${RUN_DIR}"
 mara_cleanup_benchmark_runtime

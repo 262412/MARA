@@ -94,6 +94,43 @@ def test_element_index_records_infer_plain_text_financial_table():
     assert records[0]["page_label"] == "30"
 
 
+def test_inferred_financial_elements_split_page_into_real_table_blocks():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "CONSOLIDATED STATEMENTS OF INCOME (in millions)\n"
+                "2022 2021\n"
+                "Net sales 100 90\n"
+                "Cost of products sold 60 55\n"
+                "Management discussion between tables must not become a table row.\n"
+                "CONSOLIDATED BALANCE SHEETS (in millions)\n"
+                "2022 2021\n"
+                "Inventories 30 25\n"
+                "Total current assets 80 70\n"
+            ),
+            id_="mixed-finance-page",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "annual-report.pdf",
+                "page_label": "41",
+                "type": "image",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+
+    assert len(records) == 2
+    assert records[0]["element_id"] != records[1]["element_id"]
+    assert "Inventories" not in records[0]["text"]
+    assert "Net sales" not in records[1]["text"]
+    assert records[0]["metadata"]["statement_kind"] == "income_statement"
+    assert records[1]["metadata"]["statement_kind"] == "balance_sheet"
+    assert all(
+        record["metadata"]["financial_scope"] == "consolidated" for record in records
+    )
+
+
 def test_element_index_documents_round_trip_records_for_persistence():
     docs = [
         RetrievedDocument(

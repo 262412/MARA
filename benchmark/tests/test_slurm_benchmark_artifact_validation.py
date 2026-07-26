@@ -177,3 +177,70 @@ def test_validator_accepts_available_required_hybrid_route(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert "required_hybrid_eligible=1/1" in result.stdout
+
+
+def test_validator_rejects_qasper_boolean_without_answerability_trace(tmp_path):
+    predictions = tmp_path / "predictions.jsonl"
+    _write_predictions(
+        predictions,
+        [
+            {
+                "example_id": "boolean",
+                "answer_type": "boolean",
+                "predicted_answer": "yes",
+                "error": None,
+                "evidence_metadata": {},
+            }
+        ],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--require-qasper-answerability",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "QASPER answerability trace was missing" in result.stderr
+
+
+def test_validator_accepts_qasper_boolean_with_answerability_trace(tmp_path):
+    predictions = tmp_path / "predictions.jsonl"
+    _write_predictions(
+        predictions,
+        [
+            {
+                "example_id": "boolean",
+                "answer_type": "boolean",
+                "predicted_answer": "yes",
+                "error": None,
+                "evidence_metadata": {
+                    "qasper_answerability": {
+                        "contract_id": "qasper_answerability.v10",
+                        "status": "ok",
+                    }
+                },
+            }
+        ],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--require-qasper-answerability",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "qasper_answerability_coverage=1/1" in result.stdout

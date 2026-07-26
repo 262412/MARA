@@ -43,6 +43,9 @@ from .system import KotaemonTextRAGSystem
 class BenchmarkEngine(Protocol):
     name: str
 
+    def task_contract_llm(self) -> Any:
+        ...
+
     def run(
         self,
         *,
@@ -88,6 +91,10 @@ class BaseBenchmarkEngine:
             config = self._benchmark_config(retrieval_mode="text")
             self._text_system = KotaemonTextRAGSystem(config)
         return self._text_system
+
+    def task_contract_llm(self) -> Any:
+        """Return the shared judge used by engine-independent task contracts."""
+        return self._get_text_system().llm
 
     def _benchmark_config(self, **overrides: Any) -> BenchmarkConfig:
         if isinstance(self.config, BenchmarkConfig):

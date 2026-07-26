@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import replace
 from typing import Any
 
+from .finance_evidence_dimensions import evidence_scale, requested_scale
 from .finance_query_planning import (
     FINANCE_METRIC_ALIASES,
     finance_fact_specs,
     finance_metric_evidence_matches,
     finance_operand_specs,
+    is_finance_segment_comparison,
 )
+from .financial_statement_identity import (
+    matches_required_financial_identity,
+    required_financial_identity,
+)
+from .query_plan_constraints import query_plan_constraints
+from .query_plan_schema import MAX_RETRIEVAL_ROUNDS, EvidenceSlot, QueryPlan
 
-QUERY_PLAN_CONTRACT = "query_plan.v1"
-MAX_RETRIEVAL_ROUNDS = 2
 _YEAR_RE = re.compile(r"\b(?:fy\s*)?((?:19|20)\d{2})\b|\bfy\s*(\d{2})\b", re.IGNORECASE)
 _VALUE_RE = re.compile(r"(?<![A-Za-z0-9])(?:[$€£¥]\s*)?\(?[+-]?\d[\d,]*(?:\.\d+)?%?\)?")
 _TOKEN_RE = re.compile(r"[a-z0-9%$€£¥]+", re.IGNORECASE)
@@ -81,49 +87,6 @@ _METRIC_STOPWORDS = {
 }
 
 
-@dataclass(frozen=True)
-class EvidenceSlot:
-    slot_id: str
-    role: str
-    entity: str = ""
-    metric: str = ""
-    period: str = ""
-    unit: str = ""
-    scale: str = ""
-    modality: str = ""
-    required: bool = True
-    status: str = "missing"
-    evidence_ids: tuple[str, ...] = ()
-    query: str = ""
-
-    def as_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["evidence_ids"] = list(self.evidence_ids)
-        return payload
-
-
-@dataclass(frozen=True)
-class QueryPlan:
-    answer_type: str
-    question_type: str
-    subqueries: tuple[str, ...] = ()
-    evidence_slots: tuple[EvidenceSlot, ...] = ()
-    constraints: dict[str, Any] = field(default_factory=dict)
-    max_retrieval_rounds: int = MAX_RETRIEVAL_ROUNDS
-    contract_id: str = QUERY_PLAN_CONTRACT
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "contract_id": self.contract_id,
-            "answer_type": self.answer_type,
-            "question_type": self.question_type,
-            "subqueries": list(self.subqueries),
-            "evidence_slots": [slot.as_dict() for slot in self.evidence_slots],
-            "constraints": dict(self.constraints),
-            "max_retrieval_rounds": self.max_retrieval_rounds,
-        }
-
-
 def build_query_plan(
     question: str,
     *,
@@ -155,6 +118,9 @@ def build_query_plan(
         causal_intent=causal_intent,
     )
     finance_domain = "finance" in str(verification_domain or "").lower()
+    segment_comparison = finance_domain and is_finance_segment_comparison(text)
+    if segment_comparison:
+        question_type = "comparison_argmax"
     finance_specs = (
         finance_operand_specs(text, periods)
         if normalized_answer_type == "numeric" and finance_domain
@@ -167,7 +133,7 @@ def build_query_plan(
     slots = (
         _finance_slots(
             finance_specs or finance_support_specs,
-            require_scale=bool(finance_specs and _requested_scale(text)),
+            require_scale=bool(finance_specs and requested_scale(text)),
             role="operand" if finance_specs else "support",
         )
         if finance_specs or finance_support_specs
@@ -179,17 +145,22 @@ def build_query_plan(
         )
     )
     subqueries = tuple(slot.query for slot in slots if slot.query) or (text,)
+    constraints = query_plan_constraints(
+        text,
+        question_type=question_type,
+        periods=periods,
+        verification_domain=verification_domain,
+        segment_comparison=segment_comparison,
+    )
+    if segment_comparison:
+        slots = _segment_comparison_slots(slots)
+        subqueries = tuple(slot.query for slot in slots if slot.query)
     return QueryPlan(
         answer_type=normalized_answer_type,
         question_type=question_type,
         subqueries=subqueries,
         evidence_slots=slots,
-        constraints={
-            "periods": periods,
-            "verification_domain": str(verification_domain or ""),
-            "requires_structure": question_type
-            in {"cross_page", "multi_period_numeric"},
-        },
+        constraints=constraints,
     )
 
 
@@ -200,6 +171,20 @@ def request_planning_question(request: Any) -> str:
         or getattr(request, "prompt", "")
         or ""
     ).strip()
+
+
+def _segment_comparison_slots(
+    slots: tuple[EvidenceSlot, ...],
+) -> tuple[EvidenceSlot, ...]:
+    return tuple(
+        replace(
+            slot,
+            statement_kind="segment_table",
+            financial_scope="segment",
+            query=f"reporting segment net revenue {slot.period}".strip(),
+        )
+        for slot in slots
+    )
 
 
 def bind_evidence_slots(
@@ -243,11 +228,17 @@ def bind_evidence_slots(
 def score_evidence_for_slot(slot: EvidenceSlot, item: dict[str, Any]) -> float:
     text = _evidence_text(item).lower()
     if slot.role == "dimension":
-        detected_scale = _evidence_scale(text, item)
+        detected_scale = evidence_scale(text, item)
         if not detected_scale or (slot.scale and slot.scale != detected_scale):
             return 0.0
         return 2.0
     if slot.period and slot.period not in text:
+        return 0.0
+    if not matches_required_financial_identity(
+        item,
+        slot.statement_kind,
+        slot.financial_scope,
+    ):
         return 0.0
     if slot.role == "operand" and not _bound_numeric_value(slot, item, text):
         return 0.0
@@ -413,21 +404,26 @@ def _finance_slots(
     require_scale: bool,
     role: str = "operand",
 ) -> tuple[EvidenceSlot, ...]:
-    slots = tuple(
-        EvidenceSlot(
-            slot_id=f"operand:{slot_id}",
-            role=role,
-            metric=metric,
-            period=period,
-            modality="auto",
-            query=" ".join(value for value in (metric, period) if value),
+    slots = []
+    for slot_id, metric, period in specs:
+        statement_kind, financial_scope = required_financial_identity(metric)
+        slots.append(
+            EvidenceSlot(
+                slot_id=f"operand:{slot_id}",
+                role=role,
+                metric=metric,
+                period=period,
+                modality="auto",
+                statement_kind=statement_kind,
+                financial_scope=financial_scope,
+                query=" ".join(value for value in (metric, period) if value),
+            )
         )
-        for slot_id, metric, period in specs
-    )
+    slots_tuple = tuple(slots)
     if not require_scale:
-        return slots
+        return slots_tuple
     return (
-        *slots,
+        *slots_tuple,
         EvidenceSlot(
             slot_id="dimension:scale",
             role="dimension",
@@ -525,6 +521,8 @@ def _plan_from_payload(
             period=str(item.get("period") or ""),
             unit=str(item.get("unit") or ""),
             scale=str(item.get("scale") or ""),
+            statement_kind=str(item.get("statement_kind") or ""),
+            financial_scope=str(item.get("financial_scope") or ""),
             modality=str(item.get("modality") or "auto"),
             required=bool(item.get("required", True)),
             query=str(item.get("query") or "").strip(),
@@ -571,29 +569,3 @@ def _evidence_text(item: dict[str, Any]) -> str:
             metadata.get("table_title"),
         )
     )
-
-
-def _requested_scale(question: str) -> str:
-    match = re.search(
-        r"\b(thousand|million|billion)s?\b",
-        str(question or ""),
-        flags=re.IGNORECASE,
-    )
-    return match.group(1).lower() if match else ""
-
-
-def _evidence_scale(text: str, item: dict[str, Any]) -> str:
-    metadata = dict(item.get("metadata") or {})
-    explicit = str(item.get("scale") or metadata.get("scale") or "").lower()
-    if explicit in {"thousand", "million", "billion"}:
-        return explicit
-    match = re.search(
-        r"(?:"
-        r"\(?\s*in|"
-        r"dollars?\s+(?:are\s+)?(?:presented\s+)?in|"
-        r"tabular\s+dollars?\s+(?:are\s+)?(?:presented\s+)?in"
-        r")\s+(thousands?|millions?|billions?)\b",
-        text,
-        flags=re.IGNORECASE,
-    )
-    return match.group(1).lower().rstrip("s") if match else ""

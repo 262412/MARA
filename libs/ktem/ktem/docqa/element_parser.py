@@ -5,6 +5,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from .financial_statement_identity import financial_statement_identity
+
 SUPPORTED_ELEMENT_MODALITIES = {"table", "figure", "formula", "slide"}
 LOCAL_ELEMENT_PARSER = "local_element_parser_v1"
 ELEMENT_SCHEMA_VERSION = "1.0"
@@ -49,9 +51,101 @@ def parse_element_index_record(
     text: str,
     metadata: dict[str, Any],
 ) -> dict[str, Any] | None:
+    records = parse_element_index_records(
+        doc_id=doc_id,
+        file_id=file_id,
+        file_name=file_name,
+        page_label=page_label,
+        text=text,
+        metadata=metadata,
+    )
+    return records[0] if records else None
+
+
+def parse_element_index_records(
+    *,
+    doc_id: str,
+    file_id: str,
+    file_name: str,
+    page_label: str,
+    text: str,
+    metadata: dict[str, Any],
+) -> list[dict[str, Any]]:
+    declared = str(
+        metadata.get("modality") or metadata.get("element_type") or ""
+    ).strip()
+    if declared in SUPPORTED_ELEMENT_MODALITIES:
+        return [
+            _element_record(
+                doc_id=doc_id,
+                file_id=file_id,
+                file_name=file_name,
+                page_label=page_label,
+                text=text,
+                metadata=metadata,
+                modality=declared,
+            )
+        ]
+
     modality = _element_modality(metadata, text)
     if not modality:
-        return None
+        return []
+    if modality == "table":
+        blocks = _financial_table_blocks(text)
+        if blocks:
+            page_statement_kind, page_scope = financial_statement_identity(text)
+            return [
+                _element_record(
+                    doc_id=(doc_id if len(blocks) == 1 else f"{doc_id}-block-{index}"),
+                    parser_source_doc_id=doc_id,
+                    file_id=file_id,
+                    file_name=file_name,
+                    page_label=page_label,
+                    text=block,
+                    metadata=metadata,
+                    modality=modality,
+                    financial_identity=True,
+                    fallback_statement_kind=page_statement_kind,
+                    fallback_financial_scope=page_scope,
+                )
+                for index, block in enumerate(blocks, start=1)
+            ]
+    return [
+        _element_record(
+            doc_id=doc_id,
+            file_id=file_id,
+            file_name=file_name,
+            page_label=page_label,
+            text=text,
+            metadata=metadata,
+            modality=modality,
+        )
+    ]
+
+
+def _element_record(
+    *,
+    doc_id: str,
+    file_id: str,
+    file_name: str,
+    page_label: str,
+    text: str,
+    metadata: dict[str, Any],
+    modality: str,
+    financial_identity: bool = False,
+    fallback_statement_kind: str = "",
+    fallback_financial_scope: str = "",
+    parser_source_doc_id: str = "",
+) -> dict[str, Any]:
+    parser_metadata = _parser_metadata(parser_source_doc_id or doc_id)
+    if financial_identity:
+        statement_kind, financial_scope = financial_statement_identity(text)
+        parser_metadata.update(
+            {
+                "statement_kind": statement_kind or fallback_statement_kind,
+                "financial_scope": financial_scope or fallback_financial_scope,
+            }
+        )
 
     element_id = _element_id(modality, doc_id, text)
     record = ElementIndexRecord(
@@ -65,7 +159,7 @@ def parse_element_index_record(
         caption=str(metadata.get("caption") or _caption_from_text(text, modality)),
         text=text,
         source_backrefs=[f"{file_id}#page:{page_label}"],
-        metadata=_parser_metadata(doc_id),
+        metadata=parser_metadata,
     )
     return record.as_dict()
 
@@ -115,6 +209,36 @@ def _looks_like_financial_table(text: str) -> bool:
         if len(numbers) >= 2:
             numeric_rows += 1
     return numeric_rows >= 2
+
+
+def _financial_table_blocks(text: str) -> tuple[str, ...]:
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    headers = [
+        index
+        for index, line in enumerate(lines)
+        if len(set(re.findall(r"\b(?:19|20)\d{2}\b", line))) >= 2
+    ]
+    if not headers:
+        return ()
+    blocks: list[str] = []
+    for header_index in headers:
+        start = max(0, header_index - 1)
+        block_lines = lines[start : header_index + 1]
+        numeric_rows = 0
+        for line in lines[header_index + 1 :]:
+            if len(set(re.findall(r"\b(?:19|20)\d{2}\b", line))) >= 2:
+                break
+            numbers = re.findall(r"\(?\$?\s*\d[\d,]*(?:\.\d+)?\)?", line)
+            if len(numbers) >= 2:
+                block_lines.append(line)
+                numeric_rows += 1
+                continue
+            if numeric_rows >= 2:
+                break
+            block_lines.append(line)
+        if numeric_rows >= 2:
+            blocks.append("\n".join(block_lines))
+    return tuple(blocks)
 
 
 def _caption_from_text(text: str, modality: str) -> str:
