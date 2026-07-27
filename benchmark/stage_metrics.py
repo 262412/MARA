@@ -35,6 +35,10 @@ STAGE_METRIC_KEYS = (
     "operator_accuracy",
     "program_accuracy",
     "execution_accuracy",
+    "binding_verifier_pass_rate",
+    "program_validity_rate",
+    "execution_success_rate",
+    "executed_answer_accuracy",
     "unit_accuracy",
     "successful_execution_unit_accuracy",
     "claim_duplicate_rate",
@@ -95,6 +99,9 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
                 or is_finance_numeric_prediction(prediction)
             ),
             rendered_answer=str(prediction.get("answer_for_scoring") or ""),
+            gold_numeric_match=_float_or_none(
+                (prediction.get("metrics") or {}).get("numeric_match")
+            ),
         ),
         "claim_duplicate_rate": _claim_duplicate_rate(prediction),
         "final_answer_duplicate_rate": _final_answer_duplicate_rate(prediction),

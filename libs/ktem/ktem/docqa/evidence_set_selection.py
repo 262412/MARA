@@ -155,11 +155,11 @@ def _required_slot_rerank_shortlist(
     restored = 0
     required_slots = [slot for slot in plan.evidence_slots if slot.required]
     for slot in required_slots:
-        if any(score_evidence_for_slot(slot, item) > 0 for item in candidates):
+        if any(_slot_score(plan, slot, item) > 0 for item in candidates):
             continue
         ranked_tail = sorted(
             (
-                (score_evidence_for_slot(slot, item), index, item)
+                (_slot_score(plan, slot, item), index, item)
                 for index, item in enumerate(
                     items[RERANK_CANDIDATE_LIMIT:],
                     start=RERANK_CANDIDATE_LIMIT,
@@ -175,7 +175,7 @@ def _required_slot_rerank_shortlist(
                 index
                 for index in range(len(candidates) - 1, -1, -1)
                 if not any(
-                    score_evidence_for_slot(required_slot, candidates[index]) > 0
+                    _slot_score(plan, required_slot, candidates[index]) > 0
                     for required_slot in required_slots
                 )
             ),
@@ -202,7 +202,7 @@ def _select_required_slot_evidence(
         ranked = sorted(
             candidates,
             key=lambda item: (
-                -score_evidence_for_slot(slot, item),
+                -_slot_score(plan, slot, item),
                 -_relevance(query, item),
                 _identity(item),
             ),
@@ -211,7 +211,7 @@ def _select_required_slot_evidence(
             (
                 item
                 for item in ranked
-                if score_evidence_for_slot(slot, item) > 0
+                if _slot_score(plan, slot, item) > 0
                 and _identity(item) not in selected_ids
                 and _page_allowed(item, selected, max_pages)
             ),
@@ -219,6 +219,18 @@ def _select_required_slot_evidence(
         )
         if match is not None:
             _append_selected(match, selected, selected_ids)
+
+
+def _slot_score(
+    plan: QueryPlan,
+    slot: Any,
+    item: dict[str, Any],
+) -> float:
+    return score_evidence_for_slot(
+        slot,
+        item,
+        requires_structure=bool(plan.constraints.get("requires_structure")),
+    )
 
 
 def _selection_trace(

@@ -14,7 +14,7 @@ from .evidence_ranking_trace import ranking_trace
 from .evidence_schema import EvidenceBundle, EvidenceElement
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
-from .query_planning import request_planning_question
+from .query_planning import build_query_plan, request_planning_question
 
 MAX_PAGE_IMAGE_EVIDENCE_ITEMS = 20
 MAX_ELEMENT_EVIDENCE_ITEMS = 20
@@ -93,7 +93,7 @@ def _initial_evidence_items(
         if page_item is not None:
             page_items.append(page_item)
         items.extend(_rank_route_items(page_items, request, "doc_page_image"))
-    if route in {"doc_element", "hybrid"}:
+    if _uses_element_index(route, request):
         element_scores = dict(evidence_metadata.get("element_retriever_scores") or {})
         element_items = [
             _coerce_item(
@@ -116,6 +116,19 @@ def _initial_evidence_items(
     if route in {"graph_global", "hybrid"}:
         items.extend(_graph_items(request, evidence_metadata))
     return items
+
+
+def _uses_element_index(route: str, request: Any) -> bool:
+    if route in {"doc_element", "hybrid"}:
+        return True
+    if route not in {"doc", "doc_text"}:
+        return False
+    plan = build_query_plan(
+        request_planning_question(request),
+        answer_type=str(getattr(request, "answer_type", "") or ""),
+        verification_domain=str(getattr(request, "verification_domain", "") or ""),
+    )
+    return bool(plan.constraints.get("requires_structure"))
 
 
 def _page_image_items(evidence_metadata: dict[str, Any]) -> list[dict[str, Any]]:
@@ -207,15 +220,13 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
             item.get("column_label") or metadata.get("column_label") or ""
         ).strip(),
         period=str(item.get("period") or metadata.get("period") or "").strip(),
+        period_kind=_item_metadata_text(item, metadata, "period_kind"),
+        value=_item_metadata_text(item, metadata, "value"),
         unit=str(item.get("unit") or metadata.get("unit") or "").strip(),
         scale=str(item.get("scale") or metadata.get("scale") or "").strip(),
         currency=str(item.get("currency") or metadata.get("currency") or "").strip(),
-        statement_kind=str(
-            item.get("statement_kind") or metadata.get("statement_kind") or ""
-        ).strip(),
-        financial_scope=str(
-            item.get("financial_scope") or metadata.get("financial_scope") or ""
-        ).strip(),
+        statement_kind=_item_metadata_text(item, metadata, "statement_kind"),
+        financial_scope=_item_metadata_text(item, metadata, "financial_scope"),
         continuation_id=str(
             item.get("continuation_id")
             or metadata.get("continuation_id")
@@ -235,6 +246,14 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         evidence_level=str(item.get("evidence_level") or "page").strip(),
         metadata=metadata,
     ).as_dict()
+
+
+def _item_metadata_text(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    field: str,
+) -> str:
+    return str(item.get(field) or metadata.get(field) or "").strip()
 
 
 def _coerced_locator_fields(

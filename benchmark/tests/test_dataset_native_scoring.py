@@ -33,6 +33,7 @@ def test_qasper_native_score_computes_dataset_token_f1_as_mara_score():
         "qasper_f1",
         "qasper_evidence_f1",
         "qasper_structure_valid",
+        "qasper_typed_accuracy",
     ]
     assert prediction["metrics"]["qasper_f1"] == 1.0
     assert prediction["metrics"]["native_score"] == 1.0
@@ -164,6 +165,7 @@ def test_qasper_native_score_reports_official_paragraph_evidence_f1():
         "qasper_f1",
         "qasper_evidence_f1",
         "qasper_structure_valid",
+        "qasper_typed_accuracy",
     )
     assert metrics["qasper_f1"] == 1.0
     assert metrics["qasper_evidence_f1"] == 0.5

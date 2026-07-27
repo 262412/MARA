@@ -27,6 +27,8 @@ class EvidenceElement:
     row_label: str = ""
     column_label: str = ""
     period: str = ""
+    period_kind: str = ""
+    value: str = ""
     unit: str = ""
     scale: str = ""
     currency: str = ""
@@ -57,6 +59,8 @@ class EvidenceElement:
             "row_label",
             "column_label",
             "period",
+            "period_kind",
+            "value",
             "unit",
             "scale",
             "currency",

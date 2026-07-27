@@ -16,8 +16,13 @@ def query_plan_constraints(
     constraints: dict[str, Any] = {
         "periods": periods,
         "verification_domain": str(verification_domain or ""),
-        "requires_structure": question_type
-        in {"cross_page", "multi_period_numeric", "comparison_argmax"},
+        "requires_structure": (
+            question_type in {"cross_page", "multi_period_numeric", "comparison_argmax"}
+            or (
+                "finance" in str(verification_domain or "").lower()
+                and question_type == "numeric"
+            )
+        ),
     }
     if segment_comparison:
         constraints.update(

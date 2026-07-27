@@ -136,9 +136,15 @@ if [[ -n "$GIT_STATUS" && "${MARA_ALLOW_DIRTY_BENCHMARK:-0}" != "1" ]]; then
   exit 2
 fi
 export MARA_BENCHMARK_GIT_COMMIT="$GIT_COMMIT"
+export MARA_BENCHMARK_INDEX_CONTRACT="$(
+  uv run --python 3.10 python \
+    "${PROJECT_ROOT}/scripts/slurm/benchmark_index_contract.py" \
+    "$MANIFEST"
+)"
 
 log "repo=$(pwd)"
 log "git_commit=${GIT_COMMIT} git_dirty=${GIT_DIRTY}"
+log "index_contract=${MARA_BENCHMARK_INDEX_CONTRACT}"
 log "run_root=${RUN_ROOT}"
 log "kh_app_data_dir=${KH_APP_DATA_DIR}"
 log "manifest=${MANIFEST}"

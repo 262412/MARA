@@ -82,6 +82,10 @@ def test_second_round_targets_only_missing_evidence_slot():
                         "evidence_id": "revenue-2021",
                         "file_id": "file-1",
                         "page_label": "4",
+                        "element_id": "revenue-table-2021",
+                        "table_id": "revenue-table-2021",
+                        "evidence_level": "element",
+                        "modality": "table",
                         "text": "Revenue was $10 million in 2021.",
                     }
                 ]
@@ -92,6 +96,10 @@ def test_second_round_targets_only_missing_evidence_slot():
                     "evidence_id": "revenue-2022",
                     "file_id": "file-1",
                     "page_label": "5",
+                    "element_id": "revenue-table-2022",
+                    "table_id": "revenue-table-2022",
+                    "evidence_level": "element",
+                    "modality": "table",
                     "text": "Revenue was $12 million in 2022.",
                 }
             ]
@@ -134,8 +142,14 @@ def test_second_round_retrieves_missing_same_source_scale_convention():
                         "evidence_id": "pepsico-capex",
                         "file_id": "pepsico",
                         "page_label": "53",
+                        "element_id": "cash-flow-table",
+                        "table_id": "cash-flow-table",
+                        "evidence_level": "element",
                         "modality": "table",
-                        "text": "2021 2020\nCapital spending (4,625) (4,240)",
+                        "text": (
+                            "Consolidated Statement of Cash Flows\n"
+                            "2021 2020\nCapital spending (4,625) (4,240)"
+                        ),
                     }
                 ]
             }

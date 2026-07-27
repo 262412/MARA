@@ -249,6 +249,8 @@ def _verify_operand(
         return [f"operand_evidence_missing:{operand.operand_id}"], []
     errors: list[str] = []
     citations = [operand.evidence_id]
+    if not operand.cell_id and _requires_atomic_binding(item):
+        errors.append(f"operand_atomic_binding_missing:{operand.operand_id}")
     text = _verified_cell_text(operand, item, errors)
     scale_text = text
     if not _value_appears(operand.value, text):
@@ -280,6 +282,19 @@ def _verify_operand(
     if operand.financial_scope and operand.financial_scope != financial_scope:
         errors.append(f"operand_financial_scope_mismatch:{operand.operand_id}")
     return errors, citations
+
+
+def _requires_atomic_binding(item: dict[str, Any]) -> bool:
+    if str(item.get("evidence_level") or "").strip().lower() == "page":
+        return _multiple_numeric_rows(_evidence_text(item))
+    return False
+
+
+def _multiple_numeric_rows(text: str) -> bool:
+    return (
+        sum(len(_NUMBER_RE.findall(line)) >= 2 for line in str(text or "").splitlines())
+        >= 2
+    )
 
 
 def _verified_cell_text(

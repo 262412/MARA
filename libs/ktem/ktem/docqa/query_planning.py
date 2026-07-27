@@ -16,6 +16,11 @@ from .financial_statement_identity import (
     matches_required_financial_identity,
     required_financial_identity,
 )
+from .query_evidence_constraints import (
+    atomic_evidence,
+    period_kind_conflicts,
+    period_kind_in_question,
+)
 from .query_plan_constraints import query_plan_constraints
 from .query_plan_schema import MAX_RETRIEVAL_ROUNDS, EvidenceSlot, QueryPlan
 
@@ -110,6 +115,7 @@ def build_query_plan(
         causal_intent=causal_intent,
     )
     periods = _periods_in_question(text)
+    period_kind = period_kind_in_question(text)
     metric = _metric_phrase(tokens, periods)
     question_type = _question_type(
         tokens,
@@ -135,6 +141,7 @@ def build_query_plan(
             finance_specs or finance_support_specs,
             require_scale=bool(finance_specs and requested_scale(text)),
             role="operand" if finance_specs else "support",
+            period_kind=period_kind,
         )
         if finance_specs or finance_support_specs
         else _heuristic_slots(
@@ -196,7 +203,17 @@ def bind_evidence_slots(
     for slot in plan.evidence_slots:
         ranked = sorted(
             (
-                (score_evidence_for_slot(slot, item), index, item)
+                (
+                    score_evidence_for_slot(
+                        slot,
+                        item,
+                        requires_structure=bool(
+                            plan.constraints.get("requires_structure")
+                        ),
+                    ),
+                    index,
+                    item,
+                )
                 for index, item in enumerate(evidence_items)
             ),
             key=lambda row: (-row[0], row[1]),
@@ -225,7 +242,12 @@ def bind_evidence_slots(
     return replace(plan, evidence_slots=tuple(bound_slots))
 
 
-def score_evidence_for_slot(slot: EvidenceSlot, item: dict[str, Any]) -> float:
+def score_evidence_for_slot(
+    slot: EvidenceSlot,
+    item: dict[str, Any],
+    *,
+    requires_structure: bool = False,
+) -> float:
     text = _evidence_text(item).lower()
     if slot.role == "dimension":
         detected_scale = evidence_scale(text, item)
@@ -233,6 +255,10 @@ def score_evidence_for_slot(slot: EvidenceSlot, item: dict[str, Any]) -> float:
             return 0.0
         return 2.0
     if slot.period and slot.period not in text:
+        return 0.0
+    if slot.period_kind and period_kind_conflicts(slot.period_kind, item, text):
+        return 0.0
+    if slot.role == "operand" and requires_structure and not atomic_evidence(item):
         return 0.0
     if not matches_required_financial_identity(
         item,
@@ -298,7 +324,7 @@ def _bound_numeric_value(
     ).strip()
     if not evidence_id:
         return False
-    if not _slot_metric_supported(slot, text):
+    if not finance_metric_evidence_matches(slot.metric, text):
         return False
     from .financial_table import parse_financial_table_cells
 
@@ -318,10 +344,6 @@ def _bound_numeric_value(
     if slot.period:
         values = [value for value in values if value != slot.period]
     return bool(values)
-
-
-def _slot_metric_supported(slot: EvidenceSlot, text: str) -> bool:
-    return finance_metric_evidence_matches(slot.metric, text)
 
 
 def missing_required_slots(plan: QueryPlan) -> list[EvidenceSlot]:
@@ -403,6 +425,7 @@ def _finance_slots(
     *,
     require_scale: bool,
     role: str = "operand",
+    period_kind: str = "",
 ) -> tuple[EvidenceSlot, ...]:
     slots = []
     for slot_id, metric, period in specs:
@@ -413,6 +436,7 @@ def _finance_slots(
                 role=role,
                 metric=metric,
                 period=period,
+                period_kind=period_kind,
                 modality="auto",
                 statement_kind=statement_kind,
                 financial_scope=financial_scope,

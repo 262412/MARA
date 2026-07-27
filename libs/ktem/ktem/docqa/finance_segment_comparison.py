@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from .financial_statement_identity import financial_statement_identity
 from .financial_table import parse_financial_table_cells
 
 FINANCE_SEGMENT_COMPARISON_CONTRACT = "finance_segment_comparison.v1"
@@ -40,25 +41,7 @@ def finance_segment_comparison_answer(
     if len(periods) != 2:
         return _result("", "missing_periods", periods, excluded, {}, {}, ())
 
-    values: dict[str, dict[str, Decimal]] = {}
-    citations: dict[str, set[str]] = {}
-    for item in evidence_items:
-        evidence_id = _item_id(item)
-        for cell in parse_financial_table_cells(item):
-            if cell.period not in periods or _is_total_row(cell.row_label):
-                continue
-            entity = _entity_label(cell.row_label)
-            if not entity or _excluded(entity, excluded):
-                continue
-            values.setdefault(entity, {})[cell.period] = cell.value
-            if evidence_id:
-                citations.setdefault(entity, set()).add(evidence_id)
-        for entity, period_values in _vertical_segment_values(item).items():
-            if _excluded(entity, excluded):
-                continue
-            values.setdefault(entity, {}).update(period_values)
-            if evidence_id:
-                citations.setdefault(entity, set()).add(evidence_id)
+    values, citations = _collect_segment_values(evidence_items, periods, excluded)
 
     complete = {
         entity: period_values
@@ -105,6 +88,59 @@ def finance_segment_comparison_answer(
         changes,
         _ordered_citations(complete, citations),
     )
+
+
+def _collect_segment_values(
+    evidence_items: list[dict[str, Any]],
+    periods: tuple[str, ...],
+    excluded: tuple[str, ...],
+) -> tuple[dict[str, dict[str, Decimal]], dict[str, set[str]]]:
+    values: dict[str, dict[str, Decimal]] = {}
+    citations: dict[str, set[str]] = {}
+    for item in evidence_items:
+        statement_kind, _scope = financial_statement_identity(item)
+        if statement_kind and statement_kind != "segment_table":
+            continue
+        evidence_id = _item_id(item)
+        for cell in parse_financial_table_cells(item):
+            if cell.period not in periods or _is_total_row(cell.row_label):
+                continue
+            entity = _entity_label(cell.row_label)
+            if not entity or not _valid_segment_entity(entity):
+                continue
+            _record_segment_value(
+                values,
+                citations,
+                entity,
+                {cell.period: cell.value},
+                evidence_id,
+                excluded,
+            )
+        for entity, period_values in _vertical_segment_values(item).items():
+            _record_segment_value(
+                values,
+                citations,
+                entity,
+                period_values,
+                evidence_id,
+                excluded,
+            )
+    return values, citations
+
+
+def _record_segment_value(
+    values: dict[str, dict[str, Decimal]],
+    citations: dict[str, set[str]],
+    entity: str,
+    period_values: dict[str, Decimal],
+    evidence_id: str,
+    excluded: tuple[str, ...],
+) -> None:
+    if not _valid_segment_entity(entity) or _excluded(entity, excluded):
+        return
+    values.setdefault(entity, {}).update(period_values)
+    if evidence_id:
+        citations.setdefault(entity, set()).add(evidence_id)
 
 
 def _result(
@@ -187,6 +223,25 @@ def _excluded(entity: str, excluded: tuple[str, ...]) -> bool:
 
 def _is_total_row(row_label: str) -> bool:
     return str(row_label or "").strip().lower().startswith("total")
+
+
+def _valid_segment_entity(entity: str) -> bool:
+    lowered = str(entity or "").strip().lower()
+    if not lowered or len(lowered) > 64:
+        return False
+    return not any(
+        phrase in lowered
+        for phrase in (
+            "each of the",
+            "months ended",
+            "period ended",
+            "year ended",
+            "december",
+            "september",
+            "june",
+            "march",
+        )
+    )
 
 
 def _item_id(item: dict[str, Any]) -> str:

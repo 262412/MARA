@@ -62,8 +62,8 @@ def _item_id(item: dict[str, Any] | None) -> str:
     if item is None:
         return ""
     return str(
-        item.get("element_id")
-        or item.get("evidence_id")
+        item.get("evidence_id")
+        or item.get("element_id")
         or item.get("canonical_id")
         or ""
     ).strip()

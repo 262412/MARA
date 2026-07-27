@@ -94,6 +94,10 @@ def boolean_quote_supports_relation(
     question_anchors = stemmed_content_tokens(question)
     question_relations = boolean_relation_lemmas(question)
     quote_relations = boolean_relation_lemmas(quote)
+    if _requirement_relation_conflicts(quote, question, verdict):
+        return False
+    if _qualitative_risk_relation_supported(quote, question, verdict):
+        return True
     if question_relations and not (question_relations & quote_relations):
         if verdict != "no" or not _negative_relation_supported(
             quote,
@@ -118,6 +122,55 @@ def boolean_quote_supports_relation(
             "not ",
             "unnecessary",
             "without",
+        )
+    )
+
+
+def _requirement_relation_conflicts(
+    quote: str,
+    question: str,
+    verdict: str,
+) -> bool:
+    lowered_question = str(question or "").lower()
+    if not re.search(
+        r"\b(?:require|required|requires|necessary|must)\b", lowered_question
+    ):
+        return False
+    lowered_quote = str(quote or "").lower()
+    if verdict == "yes":
+        return not re.search(
+            r"\b(?:require|required|requires|necessary|must)\b",
+            lowered_quote,
+        ) or bool(
+            re.search(
+                r"\b(?:without|unnecessary|optional|drop-in)\b",
+                lowered_quote,
+            )
+        )
+    return not bool(
+        re.search(
+            r"\b(?:without|unnecessary|not required|does not require|"
+            r"do not require|optional|drop-in)\b",
+            lowered_quote,
+        )
+    )
+
+
+def _qualitative_risk_relation_supported(
+    quote: str,
+    question: str,
+    verdict: str,
+) -> bool:
+    if verdict != "yes" or not re.search(
+        r"\b(?:downside|disadvantage|drawback|risk)\b",
+        str(question or "").lower(),
+    ):
+        return False
+    return bool(
+        re.search(
+            r"\b(?:disadvantage|drawback|harm|limit|remove|risk)\b|"
+            r"not a silver bullet",
+            str(quote or "").lower(),
         )
     )
 
@@ -153,10 +206,7 @@ def _negative_relation_supported(
         lemma[:5] if len(lemma) > 5 else lemma for lemma in question_relations
     }
     lowered_quote = str(quote or "").lower()
-    if (
-        "drop-in replacement" in lowered_quote
-        and {"fine", "tunin"} <= object_anchors
-    ):
+    if "drop-in replacement" in lowered_quote and {"fine", "tunin"} <= object_anchors:
         return True
     if not (object_anchors & quote_tokens):
         return False

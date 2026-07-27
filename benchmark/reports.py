@@ -96,6 +96,8 @@ _CSV_FIELD_ORDER = [
     "avg_mara_format_score",
     "avg_anls",
     "avg_page_hit",
+    "avg_strict_page_hit",
+    "avg_equivalent_evidence_page_hit",
     "avg_citation_recall",
     "avg_citation_precision",
     "avg_citation_metadata_recall",

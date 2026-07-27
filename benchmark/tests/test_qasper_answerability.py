@@ -216,10 +216,11 @@ def test_qasper_answerability_preserves_primary_on_conflicting_complete_verdict(
     )
 
     assert result.answer == "yes"
-    assert result.trace["verdict"] == "no"
-    assert result.trace["action"] == "polarity_conflict_preserved"
+    assert result.trace["verdict"] == "insufficient_evidence"
+    assert result.trace["action"] == "preserved_insufficient_candidate"
     assert result.trace["primary_answer"] == "yes"
-    assert result.trace["adjudicated_polarity"] == "no"
+    assert result.trace["adjudicated_polarity"] == "insufficient_evidence"
+    assert result.trace["reason"] == "grounded_quote_incomplete_relation"
 
 
 def test_qasper_boolean_question_reconsiders_primary_unanswerable():
@@ -336,9 +337,7 @@ def test_qasper_complete_verdict_still_requires_question_relation():
     result = verify_qasper_answerability(
         llm,
         question="Is fine-tuning required to use the method?",
-        evidence=(
-            "The method can be used as a drop-in component without fine-tuning."
-        ),
+        evidence=("The method can be used as a drop-in component without fine-tuning."),
         candidate_answer="no",
     )
 

@@ -14,6 +14,7 @@ class EvidenceSlot:
     entity: str = ""
     metric: str = ""
     period: str = ""
+    period_kind: str = ""
     unit: str = ""
     scale: str = ""
     statement_kind: str = ""

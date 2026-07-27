@@ -12,6 +12,7 @@ SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/multimodal_route_rerun.sbatch"
 TEXT_SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/text_route_rerun.sbatch"
 RUNTIME_HELPER = PROJECT_ROOT / "scripts/slurm/benchmark_runtime_isolation.sh"
 ARTIFACT_VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_benchmark_predictions.py"
+INDEX_CONTRACT = PROJECT_ROOT / "scripts/slurm/benchmark_index_contract.py"
 SEMANTIC_EVALUATOR_NORMALIZER = (
     PROJECT_ROOT / "scripts/slurm/normalize_semantic_evaluator.py"
 )
@@ -280,6 +281,49 @@ def test_text_route_slurm_script_records_and_enforces_clean_git_contract():
     assert "git status --porcelain" in text
     assert "MARA_ALLOW_DIRTY_BENCHMARK" in text
     assert "MARA_BENCHMARK_SERVICE_CONTRACT" in text
+
+
+def test_slurm_scripts_export_content_digest_index_contract():
+    for script in (TEXT_SLURM_SCRIPT, SLURM_SCRIPT):
+        text = script.read_text(encoding="utf-8")
+        assert "benchmark_index_contract.py" in text
+        assert "MARA_BENCHMARK_INDEX_CONTRACT" in text
+        assert text.index("benchmark_index_contract.py") < text.index(
+            "python -m benchmark run"
+        )
+
+
+def test_index_contract_changes_when_document_content_changes(tmp_path):
+    document = tmp_path / "document.txt"
+    manifest = tmp_path / "manifest.json"
+    document.write_text("version one", encoding="utf-8")
+    manifest.write_text(
+        (
+            '{"schema_version":"1.0","documents":['
+            f'{{"document_id":"doc","path":"{document}"}}'
+            '],"examples":[],"routes":[]}'
+        ),
+        encoding="utf-8",
+    )
+
+    first = subprocess.run(
+        [sys.executable, str(INDEX_CONTRACT), str(manifest)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    document.write_text("version two", encoding="utf-8")
+    second = subprocess.run(
+        [sys.executable, str(INDEX_CONTRACT), str(manifest)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+    assert first.stdout.startswith("sha256:")
+    assert first.stdout != second.stdout
 
 
 def test_benchmark_runtime_cleanup_removes_only_configured_job_runtime(tmp_path):

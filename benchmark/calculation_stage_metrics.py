@@ -9,6 +9,7 @@ def calculation_metrics(
     *,
     applicable: bool,
     rendered_answer: str,
+    gold_numeric_match: float | None = None,
 ) -> dict[str, float | None]:
     plan = dict(finance.get("calculation_plan") or {})
     verification = dict(finance.get("calculation_verification") or {})
@@ -71,10 +72,33 @@ def calculation_metrics(
         "operator_accuracy": 1.0 - len(operator_errors) / len(steps) if steps else 1.0,
         "program_accuracy": float(bool(verification.get("valid"))),
         "execution_accuracy": float(execution.get("status") == "ok"),
+        **_explicit_stage_metrics(
+            verification,
+            execution,
+            gold_numeric_match,
+        ),
         "unit_accuracy": float(not unit_errors and not rendered_dimension_error),
         "successful_execution_unit_accuracy": (
             float(not unit_errors and not rendered_dimension_error)
             if execution_succeeded
+            else None
+        ),
+    }
+
+
+def _explicit_stage_metrics(
+    verification: dict[str, Any],
+    execution: dict[str, Any],
+    gold_numeric_match: float | None,
+) -> dict[str, float | None]:
+    execution_ok = execution.get("status") == "ok"
+    return {
+        "binding_verifier_pass_rate": float(bool(verification.get("valid"))),
+        "program_validity_rate": float(bool(verification.get("valid"))),
+        "execution_success_rate": float(execution_ok),
+        "executed_answer_accuracy": (
+            float(gold_numeric_match)
+            if execution_ok and gold_numeric_match is not None
             else None
         ),
     }
@@ -152,6 +176,10 @@ def _empty_metrics(applicable: bool) -> dict[str, float | None]:
         "unit_accuracy": None,
         "verified_slot_coverage": None,
         "successful_execution_unit_accuracy": None,
+        "binding_verifier_pass_rate": None,
+        "program_validity_rate": None,
+        "execution_success_rate": None,
+        "executed_answer_accuracy": None,
     }
 
 

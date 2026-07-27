@@ -289,7 +289,7 @@ def _persisted_element_record(value: Any) -> dict[str, Any] | None:
     raw_metadata = value.get("metadata")
     metadata = _safe_dict(raw_metadata)
     modality = str(value.get("modality") or value.get("element_type") or "element")
-    return {
+    record = {
         "evidence_id": evidence_id,
         "file_id": file_id,
         "source_id": source_id or file_id,
@@ -305,6 +305,28 @@ def _persisted_element_record(value: Any) -> dict[str, Any] | None:
         "source_backrefs": _source_backrefs(value, file_id, page_label),
         "metadata": metadata,
     }
+    for key in (
+        "evidence_level",
+        "table_id",
+        "cell_id",
+        "parent_element_id",
+        "row_index",
+        "column_index",
+        "row_label",
+        "column_label",
+        "period",
+        "period_kind",
+        "value",
+        "unit",
+        "scale",
+        "currency",
+        "statement_kind",
+        "financial_scope",
+    ):
+        value_at_key = value.get(key)
+        if value_at_key not in (None, "", []):
+            record[key] = _serialize_value(value_at_key)
+    return record
 
 
 def _unique_element_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:

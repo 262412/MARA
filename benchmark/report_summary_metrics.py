@@ -7,6 +7,9 @@ def diagnostic_metric_lines(summary: dict[str, Any]) -> list[str]:
     return [
         f"- ANLS: `{summary.get('avg_anls')}`",
         f"- Page Hit: `{summary.get('avg_page_hit')}`",
+        f"- Strict Page Hit: `{summary.get('avg_strict_page_hit')}`",
+        "- Equivalent-Evidence Page Hit: "
+        f"`{summary.get('avg_equivalent_evidence_page_hit')}`",
         f"- Citation Recall: `{summary.get('avg_citation_recall')}`",
         "- Citation Metadata Recall: "
         f"`{summary.get('avg_citation_metadata_recall')}`",

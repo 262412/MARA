@@ -20,6 +20,22 @@ class ElementIndexRecord:
     page_label: str
     element_id: str
     modality: str
+    evidence_level: str = "element"
+    table_id: str = ""
+    cell_id: str = ""
+    parent_element_id: str = ""
+    row_index: int | None = None
+    column_index: int | None = None
+    row_label: str = ""
+    column_label: str = ""
+    period: str = ""
+    period_kind: str = ""
+    value: str = ""
+    unit: str = ""
+    scale: str = ""
+    currency: str = ""
+    statement_kind: str = ""
+    financial_scope: str = ""
     bbox: Any = None
     caption: str = ""
     text: str = ""
@@ -27,19 +43,54 @@ class ElementIndexRecord:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "evidence_id": self.evidence_id,
             "file_id": self.file_id,
             "file_name": self.file_name,
             "page_label": self.page_label,
             "element_id": self.element_id,
             "modality": self.modality,
+            "evidence_level": self.evidence_level,
+            "table_id": self.table_id,
+            "cell_id": self.cell_id,
+            "parent_element_id": self.parent_element_id,
+            "row_index": self.row_index,
+            "column_index": self.column_index,
+            "row_label": self.row_label,
+            "column_label": self.column_label,
+            "period": self.period,
+            "period_kind": self.period_kind,
+            "value": self.value,
+            "unit": self.unit,
+            "scale": self.scale,
+            "currency": self.currency,
+            "statement_kind": self.statement_kind,
+            "financial_scope": self.financial_scope,
             "bbox": self.bbox,
             "caption": self.caption,
             "text": self.text,
             "source_backrefs": list(self.source_backrefs),
             "metadata": dict(self.metadata),
         }
+        for key in (
+            "cell_id",
+            "parent_element_id",
+            "row_index",
+            "column_index",
+            "row_label",
+            "column_label",
+            "period",
+            "period_kind",
+            "value",
+            "unit",
+            "scale",
+            "currency",
+            "statement_kind",
+            "financial_scope",
+        ):
+            if payload[key] in (None, "", []):
+                payload.pop(key)
+        return payload
 
 
 def parse_element_index_record(
@@ -75,7 +126,7 @@ def parse_element_index_records(
         metadata.get("modality") or metadata.get("element_type") or ""
     ).strip()
     if declared in SUPPORTED_ELEMENT_MODALITIES:
-        return [
+        return _with_financial_cells(
             _element_record(
                 doc_id=doc_id,
                 file_id=file_id,
@@ -85,7 +136,7 @@ def parse_element_index_records(
                 metadata=metadata,
                 modality=declared,
             )
-        ]
+        )
 
     modality = _element_modality(metadata, text)
     if not modality:
@@ -94,7 +145,7 @@ def parse_element_index_records(
         blocks = _financial_table_blocks(text)
         if blocks:
             page_statement_kind, page_scope = financial_statement_identity(text)
-            return [
+            records = [
                 _element_record(
                     doc_id=(doc_id if len(blocks) == 1 else f"{doc_id}-block-{index}"),
                     parser_source_doc_id=doc_id,
@@ -110,7 +161,12 @@ def parse_element_index_records(
                 )
                 for index, block in enumerate(blocks, start=1)
             ]
-    return [
+            return [
+                record
+                for table_record in records
+                for record in _with_financial_cells(table_record)
+            ]
+    return _with_financial_cells(
         _element_record(
             doc_id=doc_id,
             file_id=file_id,
@@ -120,7 +176,7 @@ def parse_element_index_records(
             metadata=metadata,
             modality=modality,
         )
-    ]
+    )
 
 
 def _element_record(
@@ -138,14 +194,14 @@ def _element_record(
     parser_source_doc_id: str = "",
 ) -> dict[str, Any]:
     parser_metadata = _parser_metadata(parser_source_doc_id or doc_id)
-    if financial_identity:
+    if financial_identity or modality == "table":
         statement_kind, financial_scope = financial_statement_identity(text)
-        parser_metadata.update(
-            {
-                "statement_kind": statement_kind or fallback_statement_kind,
-                "financial_scope": financial_scope or fallback_financial_scope,
-            }
-        )
+        resolved_kind = statement_kind or fallback_statement_kind
+        resolved_scope = financial_scope or fallback_financial_scope
+        if resolved_kind:
+            parser_metadata["statement_kind"] = resolved_kind
+        if resolved_scope:
+            parser_metadata["financial_scope"] = resolved_scope
 
     element_id = _element_id(modality, doc_id, text)
     record = ElementIndexRecord(
@@ -155,6 +211,11 @@ def _element_record(
         page_label=page_label,
         element_id=element_id,
         modality=modality,
+        evidence_level="element",
+        table_id=element_id if modality == "table" else "",
+        period_kind=_period_kind(text),
+        statement_kind=str(parser_metadata.get("statement_kind") or ""),
+        financial_scope=str(parser_metadata.get("financial_scope") or ""),
         bbox=metadata.get("bbox"),
         caption=str(metadata.get("caption") or _caption_from_text(text, modality)),
         text=text,
@@ -162,6 +223,63 @@ def _element_record(
         metadata=parser_metadata,
     )
     return record.as_dict()
+
+
+def _with_financial_cells(record: dict[str, Any]) -> list[dict[str, Any]]:
+    if str(record.get("modality") or "") != "table":
+        return [record]
+    from .financial_table import parse_financial_table_cells
+
+    cells = parse_financial_table_cells(record)
+    if not cells:
+        return [record]
+    metadata = dict(record.get("metadata") or {})
+    cell_records = []
+    for cell in cells:
+        cell_records.append(
+            ElementIndexRecord(
+                evidence_id=cell.cell_id,
+                file_id=str(record.get("file_id") or ""),
+                file_name=str(record.get("file_name") or ""),
+                page_label=cell.page_label,
+                element_id=cell.table_id,
+                modality="table",
+                evidence_level="cell",
+                table_id=cell.table_id,
+                cell_id=cell.cell_id,
+                parent_element_id=cell.table_id,
+                row_index=cell.row_index,
+                column_index=cell.column_index,
+                row_label=cell.row_label,
+                column_label=cell.column_label,
+                period=cell.period,
+                period_kind=_period_kind(str(record.get("text") or "")),
+                value=str(cell.value),
+                unit=cell.unit,
+                scale=cell.scale,
+                currency=cell.currency,
+                statement_kind=cell.statement_kind,
+                financial_scope=cell.financial_scope,
+                bbox=record.get("bbox"),
+                caption=cell.row_label,
+                text=cell.verification_text(),
+                source_backrefs=[
+                    *list(record.get("source_backrefs") or []),
+                    cell.cell_id,
+                ],
+                metadata=metadata,
+            ).as_dict()
+        )
+    return [record, *cell_records]
+
+
+def _period_kind(text: str) -> str:
+    lowered = str(text or "").lower()
+    if "three months ended" in lowered or "quarter" in lowered:
+        return "quarter"
+    if "twelve months ended" in lowered or "fiscal year" in lowered:
+        return "fiscal_year"
+    return ""
 
 
 def _element_modality(metadata: dict[str, Any], text: str) -> str:

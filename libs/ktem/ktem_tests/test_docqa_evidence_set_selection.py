@@ -9,8 +9,24 @@ def test_selection_keeps_similar_evidence_when_each_fills_required_period_slot()
         verification_domain="finance",
     )
     items = [
-        _item("revenue-2021", "4", "Revenue was $10 million in 2021.", 0.9),
-        _item("revenue-2022", "5", "Revenue was $12 million in 2022.", 0.89),
+        _cell_item(
+            "revenue-2021",
+            "4",
+            "Revenue was $10 million in 2021.",
+            0.9,
+            row_label="Revenue",
+            period="2021",
+            value="10",
+        ),
+        _cell_item(
+            "revenue-2022",
+            "5",
+            "Revenue was $12 million in 2022.",
+            0.89,
+            row_label="Revenue",
+            period="2022",
+            value="12",
+        ),
         _item("distractor", "20", "The company described its strategy.", 0.95),
     ]
 
@@ -43,11 +59,14 @@ def test_selection_restores_required_slot_evidence_below_rerank_cutoff():
         )
         for index in range(30)
     ]
-    required = _item(
+    required = _cell_item(
         "current-assets-2021",
         "31",
         "Total current assets were $19,815 million in 2021.",
         0.1,
+        row_label="Total current assets",
+        period="2021",
+        value="19815",
     )
 
     selected, trace, bound = select_evidence_for_plan(
@@ -256,4 +275,28 @@ def _item(evidence_id, page, text, score):
         "text": text,
         "modality": "text",
         "metadata": {"hybrid_fusion_score": score},
+    }
+
+
+def _cell_item(
+    evidence_id,
+    page,
+    text,
+    score,
+    *,
+    row_label,
+    period,
+    value,
+):
+    return {
+        **_item(evidence_id, page, text, score),
+        "modality": "table",
+        "evidence_level": "cell",
+        "element_id": f"table-{page}",
+        "table_id": f"table-{page}",
+        "cell_id": evidence_id,
+        "row_label": row_label,
+        "column_label": period,
+        "period": period,
+        "value": value,
     }

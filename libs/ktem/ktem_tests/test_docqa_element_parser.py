@@ -29,6 +29,8 @@ def test_element_index_records_parse_declared_table_without_element_id():
             "page_label": "4",
             "element_id": "table-table-doc",
             "modality": "table",
+            "evidence_level": "element",
+            "table_id": "table-table-doc",
             "bbox": None,
             "caption": "Regional revenue",
             "text": "Table: Regional revenue\nNorth 10\nSouth 12",
@@ -88,10 +90,13 @@ def test_element_index_records_infer_plain_text_financial_table():
 
     records = element_records_from_documents(docs)
 
-    assert len(records) == 1
-    assert records[0]["modality"] == "table"
-    assert records[0]["element_id"] == "table-finance-page-30"
-    assert records[0]["page_label"] == "30"
+    table_records = [
+        record for record in records if record["evidence_level"] == "element"
+    ]
+    assert len(table_records) == 1
+    assert table_records[0]["modality"] == "table"
+    assert table_records[0]["element_id"] == "table-finance-page-30"
+    assert table_records[0]["page_label"] == "30"
 
 
 def test_inferred_financial_elements_split_page_into_real_table_blocks():
@@ -120,14 +125,15 @@ def test_inferred_financial_elements_split_page_into_real_table_blocks():
 
     records = element_records_from_documents(docs)
 
-    assert len(records) == 2
-    assert records[0]["element_id"] != records[1]["element_id"]
-    assert "Inventories" not in records[0]["text"]
-    assert "Net sales" not in records[1]["text"]
-    assert records[0]["metadata"]["statement_kind"] == "income_statement"
-    assert records[1]["metadata"]["statement_kind"] == "balance_sheet"
+    tables = [record for record in records if record["evidence_level"] == "element"]
+    assert len(tables) == 2
+    assert tables[0]["element_id"] != tables[1]["element_id"]
+    assert "Inventories" not in tables[0]["text"]
+    assert "Net sales" not in tables[1]["text"]
+    assert tables[0]["metadata"]["statement_kind"] == "income_statement"
+    assert tables[1]["metadata"]["statement_kind"] == "balance_sheet"
     assert all(
-        record["metadata"]["financial_scope"] == "consolidated" for record in records
+        record["metadata"]["financial_scope"] == "consolidated" for record in tables
     )
 
 
@@ -158,9 +164,7 @@ def test_financial_table_element_emits_atomic_cell_identity_records():
     assert len(cells) == 4
     assert all(cell["table_id"] == table["table_id"] for cell in cells)
     assert all(cell["cell_id"] for cell in cells)
-    assert {
-        (cell["row_label"], cell["period"], cell["value"]) for cell in cells
-    } == {
+    assert {(cell["row_label"], cell["period"], cell["value"]) for cell in cells} == {
         ("Net cash provided by operating activities", "2022", "3676.2"),
         ("Net cash provided by operating activities", "2021", "3100.0"),
         ("Capital expenditures", "2022", "460.8"),
@@ -210,6 +214,8 @@ def test_element_index_documents_round_trip_records_for_persistence():
             "element_id": "table-table-doc",
             "element_type": "table",
             "modality": "table",
+            "evidence_level": "element",
+            "table_id": "table-table-doc",
             "bbox": None,
             "caption": "Regional revenue",
             "text": "Table: Regional revenue\nNorth 10\nSouth 12",

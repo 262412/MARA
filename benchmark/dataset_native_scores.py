@@ -45,6 +45,7 @@ def dataset_native_score_metadata(dataset_name: str) -> dict[str, Any]:
                 "qasper_f1",
                 "qasper_evidence_f1",
                 "qasper_structure_valid",
+                "qasper_typed_accuracy",
             ),
         },
         "alce": {
@@ -168,6 +169,10 @@ def _qasper_metrics(prediction: dict[str, Any]) -> dict[str, float | None]:
             predicted_answer,
             gold_answers,
         ),
+        "qasper_typed_accuracy": _qasper_typed_accuracy(
+            predicted_answer,
+            gold_answers,
+        ),
     }
 
 
@@ -181,6 +186,17 @@ def _qasper_structure_valid(
     if normalized_gold and normalized_gold <= typed_values:
         return float(normalized_prediction in typed_values)
     return None
+
+
+def _qasper_typed_accuracy(
+    predicted_answer: str,
+    gold_answers: list[str],
+) -> float | None:
+    normalized_gold = {normalize_text(answer) for answer in gold_answers}
+    typed_values = {"yes", "no", "unanswerable"}
+    if not normalized_gold or not normalized_gold <= typed_values:
+        return None
+    return float(normalize_text(predicted_answer) in normalized_gold)
 
 
 def _alce_metrics(prediction: dict[str, Any]) -> dict[str, float | None]:

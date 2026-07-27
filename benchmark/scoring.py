@@ -74,15 +74,20 @@ def score_prediction(
     if abstained and any(str(answer or "").strip() for answer in gold_answers):
         false_abstention = 1.0
 
-    page_hit = page_hit_score(prediction["predicted_pages"], prediction["gold_pages"])
+    strict_page_hit = page_hit_score(
+        prediction["predicted_pages"],
+        prediction["gold_pages"],
+    )
+    equivalent_page_hit = evidence_aligned_page_hit_score(
+        prediction["predicted_pages"],
+        prediction["gold_pages"],
+        gold_evidence=list(prediction.get("gold_evidence") or []),
+        evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
+        retrieved_hits=list(prediction.get("retrieved_hits") or []),
+    )
+    page_hit = strict_page_hit
     if page_hit == 0.0:
-        page_hit = evidence_aligned_page_hit_score(
-            prediction["predicted_pages"],
-            prediction["gold_pages"],
-            gold_evidence=list(prediction.get("gold_evidence") or []),
-            evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
-            retrieved_hits=list(prediction.get("retrieved_hits") or []),
-        )
+        page_hit = equivalent_page_hit
 
     metrics = {
         "em": exact_match_score(predicted_answer, gold_answers),
@@ -91,6 +96,8 @@ def score_prediction(
         "formula_match": formula_normalized_match_score(predicted_answer, gold_answers),
         "numeric_match": numeric_tolerance_score(predicted_answer, gold_answers),
         "page_hit": page_hit,
+        "strict_page_hit": strict_page_hit,
+        "equivalent_evidence_page_hit": equivalent_page_hit,
         "citation_recall": recall_score(
             prediction["predicted_sources"], prediction["gold_sources"]
         ),
