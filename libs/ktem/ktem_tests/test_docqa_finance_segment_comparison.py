@@ -92,6 +92,46 @@ def test_segment_comparison_parses_financebench_vertical_table_extraction():
     }
 
 
+def test_segment_comparison_does_not_overwrite_sales_with_later_table_sections():
+    result = finance_segment_comparison_answer(
+        (
+            "From FY21 to FY22, excluding Embedded, in which AMD reporting "
+            "segment did sales proportionally increase the most?"
+        ),
+        [
+            {
+                "evidence_id": "AMD_2022_10K#page:68",
+                "text": (
+                    "The following table provides net revenue and operating "
+                    "income by segment.\n"
+                    "Year Ended\n2022 2021\n"
+                    "Net revenue:\n"
+                    "Data Center 6,043 3,694\n"
+                    "Client 6,201 6,887\n"
+                    "Gaming 6,805 5,607\n"
+                    "Embedded 4,552 246\n"
+                    "Total net revenue 23,601 16,434\n"
+                    "Operating income (loss):\n"
+                    "Data Center 1,848 991\n"
+                    "Client 1,190 2,088\n"
+                    "Gaming 953 934\n"
+                    "Embedded 2,084 207"
+                ),
+                "modality": "table",
+            }
+        ],
+    )
+
+    assert result is not None
+    assert result.status == "ok"
+    assert result.answer == "Data Center"
+    assert result.entity_period_values["Data Center"] == {
+        "2022": "6043",
+        "2021": "3694",
+    }
+    assert "Acquisition-related Costs" not in result.entity_period_values
+
+
 def test_finance_route_uses_deterministic_segment_comparison_contract():
     bundle = SimpleNamespace(
         items=[

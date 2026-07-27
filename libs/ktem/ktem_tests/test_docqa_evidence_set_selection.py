@@ -148,6 +148,41 @@ def test_selection_disables_structure_expansion_for_legacy_low_coverage_index():
     assert trace["continuation_expansion_count"] == 0
 
 
+def test_finance_structure_coverage_uses_element_index_not_mixed_page_pool():
+    plan = build_query_plan(
+        "What were total current assets in FY2021?",
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    cell = _cell_item(
+        "current-assets-2021",
+        "4",
+        "Total current assets were 19,815 million in 2021.",
+        0.6,
+        row_label="Total current assets",
+        period="2021",
+        value="19815",
+    )
+    items = [
+        cell,
+        *[
+            _item(f"page-{index}", str(index + 10), "Legacy page chunk.", 0.9)
+            for index in range(4)
+        ],
+    ]
+
+    _selected, trace, _bound = select_evidence_for_plan(
+        "total current assets 2021",
+        items,
+        plan,
+    )
+
+    assert trace["mixed_candidate_structure_metadata_coverage"] == 0.2
+    assert trace["structure_metadata_coverage"] == 1.0
+    assert trace["structure_coverage_scope"] == "element_index"
+    assert trace["structure_expansion_enabled"] is True
+
+
 def test_selection_prefers_complete_question_phrase_anchors_for_simple_fact():
     query = 'Who sings a version of "I\'ll Be Seeing You" in The Notebook?'
     plan = build_query_plan(

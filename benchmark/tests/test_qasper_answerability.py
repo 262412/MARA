@@ -328,6 +328,23 @@ def test_qasper_boolean_complete_downside_statement_answers_question():
     assert result.trace["reason"] == "grounded_complete_proposition"
 
 
+def test_qasper_complete_verdict_accepts_grounded_semantic_paraphrase():
+    quote = "Each answer was labeled independently by two annotators."
+    llm = _VerifierLLM('{"verdict":"yes_complete","evidence_quote":' f'"{quote}"}}')
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Are the answers double annotated?",
+        evidence=quote,
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["verdict"] == "yes"
+    assert result.trace["reason"] == "grounded_complete_proposition"
+    assert "Modal relations are strict" not in llm.calls[0][0]
+
+
 def test_qasper_complete_verdict_still_requires_question_relation():
     llm = _VerifierLLM(
         '{"verdict":"yes_complete","evidence_quote":'
@@ -346,6 +363,7 @@ def test_qasper_complete_verdict_still_requires_question_relation():
     assert result.trace["quote_grounded"] == "true"
     assert result.trace["quote_supports_relation"] == "false"
     assert result.trace["reason"] == "grounded_quote_incomplete_relation"
+    assert "Modal relations are strict" in llm.calls[0][0]
 
 
 def test_qasper_answerability_rejects_boolean_candidate_when_question_is_unresolved():

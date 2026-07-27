@@ -172,6 +172,67 @@ def test_financial_table_element_emits_atomic_cell_identity_records():
     }
 
 
+def test_explicit_layout_element_still_emits_financial_cells():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "CONSOLIDATED BALANCE SHEETS (in millions)\n"
+                "2019 2018\n"
+                "Inventories 2,750 2,500\n"
+                "Total current assets 20,000 19,000\n"
+            ),
+            id_="layout-table-doc",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "annual-report.pdf",
+                "page_label": "52",
+                "element_id": "layout-table-52",
+                "element_type": "table",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+
+    cells = [record for record in records if record.get("evidence_level") == "cell"]
+    assert {(cell["row_label"], cell["period"], cell["value"]) for cell in cells} == {
+        ("Inventories", "2019", "2750"),
+        ("Inventories", "2018", "2500"),
+        ("Total current assets", "2019", "20000"),
+        ("Total current assets", "2018", "19000"),
+    }
+    assert all(cell["table_id"] == "layout-table-52" for cell in cells)
+
+
+def test_financial_narrative_emits_distinct_atomic_amount_spans():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "The 2023 364 Day Credit Agreement enables PepsiCo to borrow "
+                "up to $4,200,000,000. The 2023 Five Year Credit Agreement "
+                "enables PepsiCo to borrow up to $4,200,000,000."
+            ),
+            id_="credit-page",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "credit-agreements.pdf",
+                "page_label": "2",
+                "element_id": "page-text-2",
+                "element_type": "text",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+
+    spans = [record for record in records if record.get("evidence_level") == "span"]
+    assert len(spans) == 2
+    assert len({span["evidence_id"] for span in spans}) == 2
+    assert {span["row_label"] for span in spans} == {"revolving credit capacity"}
+    assert {span["period"] for span in spans} == {"2023"}
+    assert {span["value"] for span in spans} == {"4200000000"}
+
+
 def test_element_index_documents_round_trip_records_for_persistence():
     docs = [
         RetrievedDocument(

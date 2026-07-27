@@ -89,6 +89,37 @@ def test_verifier_rejects_page_level_operand_with_multiple_candidate_values():
     assert "operand_atomic_binding_missing:capex" in verification.errors
 
 
+def test_verifier_rejects_every_page_level_operand_without_atomic_identity():
+    plan = CalculationPlan(
+        operands=(
+            CalculationOperand(
+                operand_id="assets",
+                evidence_id="page-52",
+                value=Decimal("20000"),
+                period="2019",
+                scale="million",
+            ),
+        ),
+        steps=(),
+        result_step_id="assets",
+    )
+
+    verification = verify_calculation_plan(
+        plan,
+        evidence_items=[
+            {
+                "evidence_id": "page-52",
+                "evidence_level": "page",
+                "text": "Total current assets were 20,000 million in 2019.",
+            }
+        ],
+        question="What were total current assets in FY2019?",
+    )
+
+    assert not verification.valid
+    assert "operand_atomic_binding_missing:assets" in verification.errors
+
+
 def test_verifier_rejects_period_and_unit_mismatch():
     plan = CalculationPlan(
         operands=(
