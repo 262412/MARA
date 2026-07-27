@@ -131,6 +131,43 @@ def test_inferred_financial_elements_split_page_into_real_table_blocks():
     )
 
 
+def test_financial_table_element_emits_atomic_cell_identity_records():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "CONSOLIDATED STATEMENTS OF CASH FLOWS (in millions)\n"
+                "2022 2021\n"
+                "Net cash provided by operating activities 3,676.2 3,100.0\n"
+                "Capital expenditures 460.8 420.0\n"
+            ),
+            id_="cash-flow-page",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "annual-report.pdf",
+                "page_label": "17",
+                "type": "image",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+    table = next(record for record in records if record["evidence_level"] == "element")
+    cells = [record for record in records if record["evidence_level"] == "cell"]
+
+    assert table["table_id"] == table["element_id"]
+    assert len(cells) == 4
+    assert all(cell["table_id"] == table["table_id"] for cell in cells)
+    assert all(cell["cell_id"] for cell in cells)
+    assert {
+        (cell["row_label"], cell["period"], cell["value"]) for cell in cells
+    } == {
+        ("Net cash provided by operating activities", "2022", "3676.2"),
+        ("Net cash provided by operating activities", "2021", "3100.0"),
+        ("Capital expenditures", "2022", "460.8"),
+        ("Capital expenditures", "2021", "420.0"),
+    }
+
+
 def test_element_index_documents_round_trip_records_for_persistence():
     docs = [
         RetrievedDocument(

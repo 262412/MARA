@@ -86,6 +86,8 @@ def test_qasper_structure_valid_accepts_all_canonical_typed_answers():
 
     assert predicted_no_for_unanswerable["qasper_structure_valid"] == 1.0
     assert predicted_unanswerable_for_boolean["qasper_structure_valid"] == 1.0
+    assert predicted_no_for_unanswerable["qasper_typed_accuracy"] == 0.0
+    assert predicted_unanswerable_for_boolean["qasper_typed_accuracy"] == 0.0
 
 
 def test_qasper_structure_valid_rejects_noncanonical_typed_answer():

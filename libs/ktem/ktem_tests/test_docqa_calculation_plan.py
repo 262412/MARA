@@ -52,6 +52,43 @@ def test_verifier_rejects_operand_without_traceable_evidence_cell():
     assert "operand_evidence_missing:assets" in verification.errors
 
 
+def test_verifier_rejects_page_level_operand_with_multiple_candidate_values():
+    plan = CalculationPlan(
+        operands=(
+            CalculationOperand(
+                operand_id="capex",
+                evidence_id="page-17",
+                value=Decimal("3215.4"),
+                period="2022",
+                unit="million",
+                scale="million",
+            ),
+        ),
+        steps=(),
+        result_step_id="capex",
+    )
+
+    verification = verify_calculation_plan(
+        plan,
+        evidence_items=[
+            {
+                "evidence_id": "page-17",
+                "evidence_level": "page",
+                "modality": "table",
+                "text": (
+                    "2022 2021\nOperating cash flow 3,676.2 3,100.0\n"
+                    "Capital expenditures 460.8 420.0\n"
+                    "Free cash flow 3,215.4 2,680.0"
+                ),
+            }
+        ],
+        question="What was free cash flow in FY2022?",
+    )
+
+    assert not verification.valid
+    assert "operand_atomic_binding_missing:capex" in verification.errors
+
+
 def test_verifier_rejects_period_and_unit_mismatch():
     plan = CalculationPlan(
         operands=(

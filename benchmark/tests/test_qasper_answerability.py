@@ -327,6 +327,28 @@ def test_qasper_boolean_complete_downside_statement_answers_question():
     assert result.trace["reason"] == "grounded_complete_proposition"
 
 
+def test_qasper_complete_verdict_still_requires_question_relation():
+    llm = _VerifierLLM(
+        '{"verdict":"yes_complete","evidence_quote":'
+        '"The method can be used as a drop-in component without fine-tuning."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Is fine-tuning required to use the method?",
+        evidence=(
+            "The method can be used as a drop-in component without fine-tuning."
+        ),
+        candidate_answer="no",
+    )
+
+    assert result.answer == "no"
+    assert result.trace["verdict"] == "insufficient_evidence"
+    assert result.trace["quote_grounded"] == "true"
+    assert result.trace["quote_supports_relation"] == "false"
+    assert result.trace["reason"] == "grounded_quote_incomplete_relation"
+
+
 def test_qasper_answerability_rejects_boolean_candidate_when_question_is_unresolved():
     llm = _VerifierLLM('{"verdict":"insufficient_evidence","evidence_quote":""}')
 

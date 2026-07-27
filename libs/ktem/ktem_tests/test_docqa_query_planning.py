@@ -332,6 +332,31 @@ def test_free_cash_flow_plan_retrieves_both_formula_operands():
         ("operand:capital_expenditure", "capital expenditure"),
     ]
     assert all(slot.period == "2022" for slot in plan.evidence_slots)
+    assert plan.constraints["requires_structure"] is True
+
+
+def test_finance_numeric_slots_do_not_bind_page_level_multi_value_evidence():
+    plan = build_query_plan(
+        "What was free cash flow in FY2022?",
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "page-17",
+                "evidence_level": "page",
+                "modality": "table",
+                "text": (
+                    "2022 2021\nOperating cash flow 3,676.2 3,100.0\n"
+                    "Capital expenditure 460.8 420.0\nFree cash flow 3,215.4"
+                ),
+            }
+        ],
+    )
+
+    assert all(slot.status == "missing" for slot in bound.evidence_slots)
 
 
 def test_inventory_turnover_plan_uses_distinct_average_inventory_periods():

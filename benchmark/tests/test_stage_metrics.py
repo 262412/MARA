@@ -45,6 +45,7 @@ def test_stage_metrics_report_retrieval_pages_dedup_slots_and_calculation():
             },
         },
         "semantic_answer_evaluation": {"judge_status": "ok"},
+        "metrics": {"numeric_match": 1.0},
         "answer_for_scoring": "4.5",
         "answer_finalization": {"repetition_removed": True},
         "controller_trace": [
@@ -75,6 +76,10 @@ def test_stage_metrics_report_retrieval_pages_dedup_slots_and_calculation():
     assert metrics["executor_activation_rate"] == 1.0
     assert metrics["program_accuracy"] == 1.0
     assert metrics["execution_accuracy"] == 1.0
+    assert metrics["binding_verifier_pass_rate"] == 1.0
+    assert metrics["program_validity_rate"] == 1.0
+    assert metrics["execution_success_rate"] == 1.0
+    assert metrics["executed_answer_accuracy"] == 1.0
     assert metrics["unit_accuracy"] == 1.0
     assert metrics["successful_execution_unit_accuracy"] == 1.0
     assert metrics["claim_duplicate_rate"] == 1 / 3
@@ -87,6 +92,34 @@ def test_stage_metrics_report_retrieval_pages_dedup_slots_and_calculation():
         ]
         == "none"
     )
+
+
+def test_execution_success_does_not_imply_executed_answer_correctness():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "numeric",
+        "metrics": {"numeric_match": 0.0},
+        "evidence_metadata": {
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [{"operand_id": "a"}],
+                    "steps": [],
+                },
+                "calculation_verification": {
+                    "valid": True,
+                    "verified_operand_ids": ["a"],
+                    "errors": [],
+                },
+                "calculation_execution": {"status": "ok", "value": "460.8"},
+            }
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["execution_accuracy"] == 1.0
+    assert metrics["execution_success_rate"] == 1.0
+    assert metrics["executed_answer_accuracy"] == 0.0
 
 
 def test_finance_stage_metrics_expose_missing_executor_activation():

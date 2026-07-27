@@ -461,6 +461,8 @@ def test_score_prediction_aligns_parser_page_when_visual_quote_is_retrieved():
     )
 
     assert metrics["page_hit"] == 1.0
+    assert metrics["strict_page_hit"] == 0.0
+    assert metrics["equivalent_evidence_page_hit"] == 1.0
     assert metrics["citation_recall"] == 1.0
     assert metrics["citation_precision"] == 1.0
     assert metrics["citation_recall_page"] == 1.0
