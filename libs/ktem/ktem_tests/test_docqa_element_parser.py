@@ -231,6 +231,42 @@ def test_financial_narrative_emits_distinct_atomic_amount_spans():
     assert {span["row_label"] for span in spans} == {"revolving credit capacity"}
     assert {span["period"] for span in spans} == {"2023"}
     assert {span["value"] for span in spans} == {"4200000000"}
+    assert all(span["source_backrefs"] == ["file-1#page:2"] for span in spans)
+
+
+def test_financial_narrative_restores_pdf_soft_wrap_before_span_split():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "On May 26, 2023, PepsiCo entered into a new $4,200,000,000 "
+                "364 day unsecured revolving credit agreement (the 2023 Credit\n"
+                "Agreement) among PepsiCo and its lenders. The 2023 Credit\n"
+                "Agreement enables PepsiCo to borrow up to $4,200,000,000 "
+                "in U.S. Dollars and Euros."
+            ),
+            id_="soft-wrapped-credit-page",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "credit-agreements.pdf",
+                "page_label": "2",
+                "element_id": "page-text-2",
+                "element_type": "text",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+    spans = [
+        record
+        for record in records
+        if record.get("evidence_level") == "span"
+        and record.get("value") == "4200000000"
+    ]
+
+    assert len(spans) == 2
+    assert len({span["evidence_id"] for span in spans}) == 2
+    assert all(span["parent_element_id"] == "page-text-2" for span in spans)
+    assert all(span["source_backrefs"] == ["file-1#page:2"] for span in spans)
 
 
 def test_element_index_documents_round_trip_records_for_persistence():

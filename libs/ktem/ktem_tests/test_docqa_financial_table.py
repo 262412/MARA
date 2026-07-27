@@ -3,6 +3,7 @@ from typing import Any
 
 from ktem.docqa.calculation_plan import verify_calculation_plan
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
+from ktem.docqa.finance_scale import source_scale_evidence
 from ktem.docqa.financial_table import find_financial_cell, parse_financial_table_cells
 
 LOCKHEED_BALANCE_SHEET = """
@@ -61,6 +62,68 @@ def test_financial_table_parser_skips_numeric_descriptor_columns():
     assert cell is not None
     assert cell.value == Decimal("33361")
     assert cell.row_label == "Buildings and equipment"
+
+
+def test_financial_table_parser_recovers_value_first_wrapped_rows():
+    item = _table_item(
+        """
+        CONSOLIDATED STATEMENTS OF FINANCIAL POSITION
+        December 31,
+        2018 2017 Assets
+        Cash and cash equivalents
+        $7,637 $8,813 Short-term and other investments
+        927 1,179 Property, plant and equipment, net
+        12,645 12,672 Goodwill
+        7,840 5,559
+        """
+    )
+
+    cell = find_financial_cell(
+        [item],
+        aliases=("property, plant and equipment, net",),
+        period="2018",
+        period_kind="fiscal_year",
+    )
+
+    assert cell is not None
+    assert cell.value == Decimal("12645")
+    assert cell.row_label == "Property, plant and equipment, net"
+    assert cell.column_label == "2018"
+    assert cell.cell_id.endswith(
+        "#row:property-plant-and-equipment-net#column:2018"
+    )
+
+
+def test_financial_table_parser_keeps_period_kind_per_table_section():
+    item = _table_item(
+        """
+        Reconciliation of adjusted EBITDA
+        Three Months Ended June 30, 2023 2022
+        Adjusted EBITDA 540 609
+        Twelve Months Ended June 30, 2023 2022
+        Adjusted EBITDA 2,018 1,948
+        """
+    )
+
+    fiscal = find_financial_cell(
+        [item],
+        aliases=("adjusted ebitda",),
+        period="2023",
+        period_kind="fiscal_year",
+    )
+    quarter = find_financial_cell(
+        [item],
+        aliases=("adjusted ebitda",),
+        period="2023",
+        period_kind="quarter",
+    )
+
+    assert fiscal is not None
+    assert fiscal.value == Decimal("2018")
+    assert fiscal.period_kind == "fiscal_year"
+    assert quarter is not None
+    assert quarter.value == Decimal("540")
+    assert quarter.period_kind == "quarter"
 
 
 def test_working_capital_operands_bind_to_distinct_rows_and_requested_period():
@@ -212,6 +275,32 @@ def test_finance_scale_can_be_proven_by_same_source_convention_evidence():
         "pepsico-free-cash-flow",
         "pepsico-tabular-scale",
     )
+
+
+def test_atomic_fact_scale_cannot_be_reused_as_table_scale_convention():
+    table = {
+        "evidence_id": "pepsico-free-cash-flow",
+        "source_id": "PEPSICO_2021_10K",
+        "page_label": "53",
+        "evidence_level": "element",
+        "modality": "table",
+        "text": "2021 2020\nCapital spending (4,625) (4,240)",
+    }
+    unrelated_atomic_fact = {
+        "evidence_id": "pepsico-financing-span",
+        "source_id": "PEPSICO_2021_10K",
+        "page_label": "52",
+        "evidence_level": "span",
+        "modality": "text",
+        "value": "10.8",
+        "scale": "billion",
+        "text": "Financing activities used $10.8 billion.",
+    }
+
+    assert source_scale_evidence(
+        table,
+        [table, unrelated_atomic_fact],
+    ) == ("", "")
 
 
 def test_ratio_uses_requested_period_instead_of_first_table_column():

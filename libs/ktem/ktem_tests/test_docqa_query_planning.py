@@ -68,6 +68,33 @@ def test_numeric_slot_rejects_topical_text_without_bound_value():
     assert missing_slot_queries(bound) == ["revenue 2021", "revenue 2022"]
 
 
+def test_finance_fact_slot_requires_exact_metric_not_adjusted_ebit_prefix():
+    plan = build_query_plan(
+        "What was adjusted non-GAAP EBITDA for FY2023?",
+        answer_type="extractive",
+        verification_domain="finance",
+    )
+    bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "full-year-adjusted-ebit",
+                "text": (
+                    "Fiscal 2023 Full Year Highlights. "
+                    "Adjusted EBIT was $1,608 million."
+                ),
+                "page_label": "1",
+                "period_kind": "fiscal_year",
+                "modality": "text",
+            }
+        ],
+    )
+
+    [adjusted_ebitda] = bound.evidence_slots
+    assert adjusted_ebitda.metric == "adjusted ebitda"
+    assert adjusted_ebitda.status == "missing"
+
+
 def test_numeric_slot_rejects_period_values_without_metric_support():
     plan = build_query_plan(
         (

@@ -1,4 +1,5 @@
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
+from ktem.docqa.financial_statement_identity import financial_statement_identity
 from ktem.docqa.query_planning import build_query_plan
 
 
@@ -41,6 +42,21 @@ def test_inventory_turnover_rejects_held_for_sale_inventory_binding():
         error.startswith("required_slot_missing:operand:inventory")
         for error in answer.calculation_verification["errors"]
     )
+
+
+def test_consolidated_statement_scope_is_not_overridden_by_one_held_for_sale_row():
+    statement_kind, scope = financial_statement_identity(
+        """
+        The Kraft Heinz Company Consolidated Balance Sheets
+        2019 2018
+        Inventories 2,750 2,500
+        Assets held for sale 21 92
+        Total current assets 8,000 7,500
+        """
+    )
+
+    assert statement_kind == "balance_sheet"
+    assert scope == "consolidated"
 
 
 def test_inventory_turnover_binds_cogs_to_explicit_formula_year():
