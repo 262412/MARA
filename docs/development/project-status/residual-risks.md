@@ -2,7 +2,11 @@
 
 最后更新：2026-07-27
 
-当前代码：`7077e9af63f77a9ec0b37a320d5a518021e1c558`
+最新 artifact 基线代码：`7077e9af63f77a9ec0b37a320d5a518021e1c558`
+
+本轮保护测试提交：`c47596f`
+
+本轮实现提交：`6965bb6`
 
 发布结论：**仍有 P0 结构绑定、QASPER 关系校验和评测可比性阻塞；本轮只能提交
 聚焦验证，不能直接重跑全量 benchmark。**
@@ -189,15 +193,15 @@ page chunk
 
 | ID | 优先级 | 状态 | 根因 | 本轮修复 | 关闭标准 |
 | --- | --- | --- | --- | --- | --- |
-| FIN-STRUCTURE-CONTRACT-005 | P0 | 开放 | element index 未生成 table/cell identity，结构覆盖为 0 | 扩展 element IR 并为可解析表格产生 cell records；Finance 数值 route 强制结构候选 | 新 artifact 的 table/cell identity 非零；structure coverage 非零；`10499` 能定向绑定或明确缺 slot |
-| FIN-CELL-BINDING-006 | P0 | 开放 | page-level value presence 被当作 operand provenance | QueryPlan 拒绝 page-only operand；verifier 拒绝非原子多数字绑定 | `04854` 不再以错误 operand 通过 valid；所有成功 plan 的 operand 可回溯到 cell/atomic element |
-| QASPER-RELATION-GUARD-005 | P0 | 开放 | complete verdict 绕过 relation entailment | 所有 yes/no verdict 统一执行 grounded + relation + polarity guard | 159×3 execution error=0；boolean exact 不低于 v22；已知 required/can 反例不再错误翻转 |
-| BENCH-TYPED-METRIC-004 | P0 | 开放 | 字符 token F1 对互斥 typed answer 给非零分 | 保留旧 F1，新增 typed exact；stage metrics 区分自洽与 gold correctness | QASPER typed conflict 为 0；execution ok 但 numeric wrong 时 executed-answer accuracy 为 0 |
-| BENCH-PAIRED-002 | P0 | 开放 | `index_contract` 为空 | Slurm 在运行前计算 manifest 与文档内容的稳定 digest 并写入 provenance | 新 artifact 的 index contract 非空；paired 比较能拒绝不同 digest |
-| FIN-PERIOD-GRANULARITY-001 | P1 | 开放 | slot 只绑定 year，不区分季度/全年 | QueryPlan/element/cell 传播 period kind 并拒绝显式冲突 | `01928` 不再绑定 Three Months Ended；period mismatch trace 可见 |
-| FIN-SEGMENT-SEMANTICS-002 | P1 | 开放 | segment argmax 扫描无关 table item，缺 statement/scope gate | 只在 segment table/scope 内构建 entity×period matrix，过滤表头伪实体 | `00563` matrix 不含日期表头伪实体；证据齐全时确定性返回 Data Center |
-| EVAL-LOCATOR-002 | P1 | 开放 | strict locator 与等价事实页混在旧 `page_hit` | 保留旧字段，新增 strict/equivalent 两个诊断 | prediction/route/summary 均能独立报告两个口径 |
-| BENCH-ROUTE-AGG-003 | P1 | 开放 | 等价 route 重复加权，不能代表独立能力 | 本轮先新增 route output agreement；发布前声明单一部署 route 或独立 route policy | summary 显式报告 route agreement；主结论不再把相同输出当独立增益 |
+| FIN-STRUCTURE-CONTRACT-005 | P0 | 已实现，待 artifact | element index 未生成 table/cell identity，结构覆盖为 0 | 可解析表格现生成 table record 与 atomic cell records；DocQA 数值 route 自动合入 element index 并强制结构候选 | 新 artifact 的 table/cell identity 非零；structure coverage 非零；`10499` 能定向绑定或明确缺 slot |
+| FIN-CELL-BINDING-006 | P0 | 已实现，待 artifact | page-level value presence 被当作 operand provenance，且 adapter/scale helper 对 `element_id/evidence_id` 的优先级不一致 | QueryPlan 拒绝明确的 page-only operand；verifier 拒绝非原子多数字绑定；Finance helper 统一以 `evidence_id` 回溯 item | `04854` 不再以错误 operand 通过 valid；所有成功 plan 的 operand 可回溯到 cell/atomic element |
+| QASPER-RELATION-GUARD-005 | P0 | 已实现，待 artifact | complete verdict 绕过 relation entailment | 所有 complete yes/no verdict 统一执行 grounded + relation + polarity guard；required/can modal 关系单独校验 | 159×3 execution error=0；boolean exact 不低于 v22；已知 required/can 反例不再错误翻转 |
+| BENCH-TYPED-METRIC-004 | P0 | 已实现，待 artifact | 字符 token F1 对互斥 typed answer 给非零分，execution 指标只测自洽 | 保留旧 F1，新增 `qasper_typed_accuracy` 与四个显式 calculation stage 指标 | QASPER typed conflict 为 0；execution ok 但 numeric wrong 时 executed-answer accuracy 为 0 |
+| BENCH-PAIRED-002 | P0 | 已实现，待 artifact | `index_contract` 为空 | 两类 Slurm 脚本在运行前计算 manifest 与所有文档内容的 SHA-256 digest 并写入 provenance | 新 artifact 的 index contract 非空；paired 比较能拒绝不同 digest |
+| FIN-PERIOD-GRANULARITY-001 | P1 | 已实现，待 artifact | slot 只绑定 year，不区分季度/全年 | QueryPlan、element 与 cell 传播 period kind，显式季度/全年冲突不再填 slot | `01928` 不再绑定 Three Months Ended；period mismatch trace 可见 |
+| FIN-SEGMENT-SEMANTICS-002 | P1 | 已实现，待 artifact | segment argmax 扫描无关 table item，缺 statement/scope gate | 有明确非 segment statement 的 item 被排除；日期/期间表头伪实体被过滤 | `00563` matrix 不含日期表头伪实体；证据齐全时确定性返回 Data Center |
+| EVAL-LOCATOR-002 | P1 | 已实现，待 artifact | strict locator 与等价事实页混在旧 `page_hit` | 保留旧字段，新增 `strict_page_hit` 与 `equivalent_evidence_page_hit` 并汇总到 route/summary | prediction/route/summary 均能独立报告两个口径 |
+| BENCH-ROUTE-AGG-003 | P1 | 部分实现 | 等价 route 重复加权，不能代表独立能力 | summary 新增 `route_output_agreement_rate`；本轮不重定义历史主指标 | 发布前声明单一部署 route 或独立 route policy；主结论不把相同输出当独立增益 |
 | RERANK-TRACE-001 | P1 | 开放 | 上游存在 reranking score，但 bundle trace 仍可能 `not_recorded` | 保留真实上游分数并记录 backend/model/executed/reason | trace 可区分“上游已重排”“本层未执行”“完全未重排” |
 | RELEASE-001 | P1 | 被 P0 阻塞 | 尚无本轮真实聚焦 artifact | 只提交 QASPER 159×3 与 Finance 20×4 聚焦任务 | P0 由真实 artifact 关闭后才允许全量重跑 |
 
@@ -214,8 +218,9 @@ page chunk
    gold correctness 分离；
 7. Slurm：index contract 必须写入每个新 artifact。
 
-生产代码按同样顺序实现。旧 `avg_f1`、`avg_native_score`、
-`avg_mara_score`、公开 `MARA`/`MARA-cli` 命令与用户参数保持不变。
+保护测试已在旧实现上按预期 8/8 失败，并先提交为 `c47596f`。生产实现随后提交为
+`6965bb6`。旧 `avg_f1`、`avg_native_score`、`avg_mara_score`、公开
+`MARA`/`MARA-cli` 命令与用户参数均未改变。
 
 ## 6. 验收与回退保护
 
@@ -227,6 +232,21 @@ page chunk
 - codebase hygiene 通过，不刷新 baseline；
 - changed-files pre-commit 通过；
 - 仓库根目录不产生 `data/`、`datasets/`、`outputs/`。
+
+本轮实际结果：
+
+- 根因保护测试：旧实现 8 failed；实现后 8 passed；
+- 扩展聚焦回归：177 passed，随后重构后 166 passed；
+- 完整 `benchmark/tests + libs/ktem/ktem_tests`：1813 passed；
+- codebase hygiene：通过，未更新
+  `scripts/codebase_hygiene_baseline.json`；
+- changed-files pre-commit：全部通过；
+- 两类 Slurm 脚本 `bash -n` 通过；
+- QASPER manifest 的本地 index contract 试算得到合法
+  `sha256:<64 hex>`；
+- storage preflight：`.venv`、UV/HF/DocQA runtime 位于 fastscratch；
+  fastscratch 约 137.4 GiB、446304/500000 files；仓库根目录没有
+  `data/`、`datasets/`、`outputs/`。
 
 聚焦 artifact 门槛：
 
