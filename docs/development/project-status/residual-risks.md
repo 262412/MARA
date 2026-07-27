@@ -2,11 +2,14 @@
 
 最后更新：2026-07-27
 
-当前代码基线：`37517302acdf665296534a3163faea569ac2da82`
+保护测试提交：`7e91eb5b45811b4baf8db8b444e3e1af9933d7d4`
 
-发布结论：**QASPER boolean 语义裁决和 Finance 结构化 operand 供给仍是 P0
-阻塞项。QASPER v23 与 FinanceBench v21 均发生真实质量回退，当前不得重跑全量
-benchmark。**
+本地实现提交：`9426e961e345e1cc4a01b9dcea22b03bdf24c63b`
+
+发布结论：**QASPER boolean 语义裁决和 Finance 结构化 operand 供给的已知代码断层
+已经按保护测试修复，但尚未经过新 artifact 验收，因此 P0 状态为“已实现、待验证”，
+而不是“已关闭”。当前只能提交 QASPER 159×3 和 FinanceBench 20×4 聚焦验证，
+不得直接重跑全量 benchmark。**
 
 ## 1. 文档范围与判断规则
 
@@ -85,11 +88,12 @@ unanswerable 正确数保持不变，回退集中在 boolean。三条 route 的 
 - 通用问题也受到只为 modal requirement 设计的 prompt 段落影响，原本稳定的
   complete verdict 大量变成 insufficient。
 
-正确边界是：
+已落实的边界是：
 
 - semantic judge 的 schema `complete/partial` 负责通用命题完整性；
-- 确定性规则只否决可证明冲突的窄关系，例如
-  `required/necessary/must` 与 `optional/without/drop-in`；
+- 确定性规则只否决可证明的高精度冲突，包括
+  `required/necessary/must` 与 `optional/without/drop-in`，以及 judge polarity
+  与 quote 中显式肯定/否定关系相反；
 - 通用 grounded complete verdict 不再由词法 anchor 二次否决；
 - modal 专用 prompt 只在问题确实询问 requirement 时加入。
 
@@ -177,18 +181,18 @@ score lineage 得到执行阶段、score field、scored count 和未评分候选
 
 ## 4. 开放问题表
 
-| ID                             | 优先级 | 状态       | 本轮修复                                                                                         | 关闭标准                                                                                          |
-| ------------------------------ | ------ | ---------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| QASPER-SEMANTIC-GATE-006       | P0     | 开放       | 通用 complete verdict 信任 schema 语义；确定性规则只处理高精度 modal 冲突；modal prompt 条件启用 | 159×3 可用且 boolean exact 不低于 v22；`b065` 保持正确；无新增大范围 insufficient；延迟回到预算内 |
-| FIN-INDEX-PARSE-BYPASS-007     | P0     | 开放       | 显式 layout element 继续经过 financial parser，保留原 identity 并生成 cell records               | 新索引的 table/cell coverage 显著非零；显式 element table 单测产生稳定 cell identity              |
-| FIN-SLOT-PRECAP-008            | P0     | 开放       | required-slot 保护前移到 element top-20 截断之前                                                 | 每个可用 required slot 的最佳候选进入 top-20；trace 记录恢复数；预算不扩大                        |
-| FIN-CELL-VALUE-009             | P0     | 开放       | semantic cell 的确定性值覆盖未绑定候选值                                                         | 计划中 value 与指定 cell 完全一致；`04854` 使用 3676.2 与 460.8                                   |
-| FIN-ATOMIC-NARRATIVE-010       | P0     | 开放       | page 一律禁止直接执行；叙述金额生成稳定 atomic span                                              | 所有成功 operand 为 cell 或 atomic span；`00882` 两个 4.2B 绑定两个不同 identity                  |
-| FIN-SEGMENT-METRIC-003         | P1     | 开放       | segment matrix 增加 metric-section 边界                                                          | `00563` 只含 segment net revenue，返回 Data Center                                                |
-| FIN-PERIOD-GRANULARITY-002     | P1     | 开放       | adjusted EBITDA direct adapter 与 period-kind 全链传播                                           | `01928` 绑定 FY2023 2018m，不绑定 quarter 540                                                     |
-| RERANK-TRACE-001               | P1     | 开放       | 记录真实上游 score lineage 或真实本层执行，不再用 `not_recorded` 掩盖                            | trace 能区分 upstream reranked、local rerank 和 no rerank；禁止把 shortlist 当 rerank             |
-| BENCH-ROUTE-INTERPRETATION-004 | P1     | 开放       | 保留 route agreement，发布结论按部署 route 而非重复 route 平均解释                               | 报告明确 headline route；相同输出不作为独立增益                                                   |
-| RELEASE-001                    | P1     | 被 P0 阻塞 | 完成本轮本地门槛后只提交 QASPER/Finance 聚焦任务                                                 | 所有 P0 经真实 artifact 关闭后才允许全量重跑                                                      |
+| ID                             | 优先级 | 状态             | 已落实或待落实内容                                                                                          | 关闭标准                                                                                          |
+| ------------------------------ | ------ | ---------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| QASPER-SEMANTIC-GATE-006       | P0     | 已实现，待验证   | contract v12 信任 complete 语义；只保留高精度冲突保护；modal prompt 条件启用                                | 159×3 可用且 boolean exact 不低于 v22；`b065` 保持正确；无新增大范围 insufficient；延迟回到预算内 |
+| FIN-INDEX-PARSE-BYPASS-007     | P0     | 已实现，待验证   | 显式 layout table 保留原 element 形状，同时经过 financial parser 并追加稳定 cell records                    | 新索引的 table/cell coverage 显著非零；显式 element table 单测产生稳定 cell identity              |
+| FIN-SLOT-PRECAP-008            | P0     | 已实现，待验证   | required-slot 保护前移到 element top-20 截断前；不可满足时也不扩大固定预算；trace 记录恢复数                | 每个可用 required slot 的最佳候选进入 top-20；trace 记录恢复数；预算不扩大                        |
+| FIN-CELL-VALUE-009             | P0     | 已实现，待验证   | semantic cell 的确定性值成为执行真值；只有数值完全相等时保留旧 Decimal 表示                                 | 计划中 value 与指定 cell 完全一致；`04854` 使用 3676.2 与 460.8                                   |
+| FIN-ATOMIC-NARRATIVE-010       | P0     | 已实现，待验证   | page 一律禁止直接执行；单一带币种或 scale 的财务事实句生成稳定 atomic span                                  | 所有成功 operand 为 cell 或 atomic span；`00882` 两个 4.2B 绑定两个不同 identity                  |
+| FIN-SEGMENT-METRIC-003         | P1     | 已实现，待验证   | 只在 Net revenue/Net sales 区段建立矩阵，到 total 或下一指标标题停止                                        | `00563` 只含 segment net revenue，返回 Data Center                                                |
+| FIN-PERIOD-GRANULARITY-002     | P1     | 已实现，待验证   | adjusted EBITDA direct adapter 与 `FinancialTableCell → CalculationOperand → verifier` period-kind 全链传播 | `01928` 绑定 FY2023 2018m，不绑定 quarter 540                                                     |
+| RERANK-TRACE-001               | P1     | 开放，未修改     | 记录真实上游 score lineage 或真实本层执行，不再用 `not_recorded` 掩盖                                       | trace 能区分 upstream reranked、local rerank 和 no rerank；禁止把 shortlist 当 rerank             |
+| BENCH-ROUTE-INTERPRETATION-004 | P1     | 开放，报告项     | 保留 route agreement，发布结论按部署 route 而非重复 route 平均解释                                          | 报告明确 headline route；相同输出不作为独立增益                                                   |
+| RELEASE-001                    | P1     | 被 artifact 阻塞 | 只提交 QASPER/Finance 聚焦任务；新 artifact 达标前不启动全量                                                | 所有 P0 经真实 artifact 关闭后才允许全量重跑                                                      |
 
 ## 5. 已关闭并从开放表移除
 
@@ -205,21 +209,33 @@ score lineage 得到执行阶段、score field、scored count 和未评分候选
 
 ## 6. 实施顺序与保护测试
 
-必须按以下顺序完成：
+执行记录：
 
-1. 先加入 QASPER semantic paraphrase、显式 element table、atomic narrative span、
+1. 已加入 QASPER semantic paraphrase、显式 element table、atomic narrative span、
    pre-cap slot restore、mixed-pool structure coverage、page atomic guard、segment
    metric section、period kind 和 cell-value source-of-truth 测试；
-2. 在生产代码未修改时确认上述测试失败；
-3. 单独提交保护测试和本文档；
-4. 实现索引/选择/binding 修复；
-5. 运行聚焦测试、完整 `benchmark/tests`、完整 `libs/ktem/ktem_tests`、hygiene 和
-   changed-files pre-commit；
-6. 提交实现；
-7. 提交 QASPER 159×3 与 FinanceBench 20×4 聚焦 Slurm 任务，不监听至完成。
+2. 已在生产代码未修改时确认 9 个保护测试失败；
+3. 已单独提交保护测试和本文档：`7e91eb5`；
+4. 已实现索引、选择、binding、期间和 segment 修复：`9426e96`；
+5. 已运行聚焦测试、完整 `benchmark/tests`、完整 `libs/ktem/ktem_tests`、hygiene
+   和 changed-files pre-commit；
+6. 下一步提交 QASPER 159×3 与 FinanceBench 20×4 聚焦 Slurm 任务，不监听至完成。
 
 本轮生产代码修改前，新增保护测试结果为 **9 failed、73 passed**。失败分别对应开放表
 中的真实断层，不包含人为构造的 gold 特判。
+
+本地实现后的验证结果：
+
+- 最终聚焦回归：**87 passed**；
+- 完整 `benchmark/tests` + `libs/ktem/ktem_tests`：**1823 passed，
+  45 warnings**；
+- codebase hygiene：通过，未刷新 `scripts/codebase_hygiene_baseline.json`；
+- changed-files pre-commit：最终全部通过。首次直接调用 `pre-commit` 因登录 shell
+  无该命令而 exit 127，改用 `.venv/bin/pre-commit` 后完成；首次 hook 运行只进行了
+  black/isort/autoflake 格式修正，第二次全绿；
+- 仓库根目录仍无 `data/`、`datasets/`、`outputs/`；
+- `MARA`/`MARA-cli` 命令和参数未改变。QASPER 离线答案契约从 v11 升为 v12；
+  Evidence/Calculation 仅增加 cell/span、结构 trace 和 `period_kind` 信息。
 
 ## 7. 本地与 artifact 验收
 
@@ -230,7 +246,8 @@ score lineage 得到执行阶段、score field、scored count 和未评分候选
 - 完整 `benchmark/tests` 与 `libs/ktem/ktem_tests` 通过；
 - codebase hygiene 通过且不刷新 baseline；
 - changed-files pre-commit 通过；
-- `MARA`/`MARA-cli` 公开命令、参数和持久化字段不变；
+- `MARA`/`MARA-cli` 公开命令和参数不变；持久化形状无删除或重命名，只新增向后兼容的
+  可选字段；
 - 仓库根目录不产生 `data/`、`datasets/`、`outputs/`。
 
 QASPER artifact 门槛：
@@ -251,5 +268,14 @@ FinanceBench artifact 门槛：
 - native、semantic F1 和 false abstention 至少不低于 v20；否则继续停留在聚焦验证，
   禁止全量重跑。
 
-若结构索引仍无法给 required slot 提供原子身份，下一轮必须继续修 index/IR，不得通过
-prompt、阈值、expected gold value 或放宽 verifier 制造分数提升。
+当前仍不能由本地测试证明的风险：
+
+- 正式聚焦运行必须重建隔离索引；旧索引不会自动补出 cell/span；
+- narrative span 为高精度规则：一句内有多个金额时主动不生成 span，这会保留
+  false abstention，但避免错误执行；
+- `RERANK-TRACE-001` 本轮没有修改，不能把 required-slot shortlist 声称为 rerank；
+- 单测证明不变量成立，不证明 QASPER/FinanceBench 总体不回退。只有新 artifact
+  达到上面的门槛，才能把“已实现，待验证”改为“关闭”。
+
+若新 artifact 仍无法给 required slot 提供原子身份，下一轮必须继续修 index/IR，
+不得通过 prompt、阈值、expected gold value 或放宽 verifier 制造分数提升。
