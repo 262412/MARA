@@ -13,7 +13,10 @@ from typing import Any, Iterable
 from kotaemon.base import Document
 
 from ._runtime_utils import _serialize_value
-from .element_parser import parse_element_index_records
+from .element_parser import (
+    parse_element_index_records,
+    parse_financial_numeric_span_records,
+)
 
 logger = logging.getLogger(__name__)
 ELEMENT_INDEX_DOC_TYPE = "mara_element_index"
@@ -100,18 +103,35 @@ def element_records_from_documents(documents: Iterable[Any]) -> list[dict[str, A
         page_label = _page_label(metadata)
         if not file_id or not page_label:
             continue
+        doc_id = _doc_id(doc)
+        file_name = _file_name(metadata)
+        text = _text(doc, metadata)
+        parsed_records = parse_element_index_records(
+            doc_id=doc_id,
+            file_id=file_id,
+            file_name=file_name,
+            page_label=page_label,
+            text=text,
+            metadata=metadata,
+        )
         if element_id:
             records.append(
                 _element_record(doc, metadata, file_id, page_label, element_id)
             )
-            continue
+            records.extend(
+                record
+                for record in parsed_records
+                if record.get("evidence_level") == "cell"
+            )
+        else:
+            records.extend(parsed_records)
         records.extend(
-            parse_element_index_records(
-                doc_id=_doc_id(doc),
+            parse_financial_numeric_span_records(
+                doc_id=doc_id,
                 file_id=file_id,
-                file_name=_file_name(metadata),
+                file_name=file_name,
                 page_label=page_label,
-                text=_text(doc, metadata),
+                text=text,
                 metadata=metadata,
             )
         )

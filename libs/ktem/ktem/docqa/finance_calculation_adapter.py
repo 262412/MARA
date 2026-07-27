@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from .calculation_plan import (
@@ -14,6 +14,18 @@ from .calculation_plan import (
     execute_calculation_plan,
     verify_calculation_plan,
 )
+from .finance_calculation_binding import atomic_evidence_id as _atomic_evidence_id
+from .finance_calculation_binding import atomic_item_value as _atomic_item_value
+from .finance_calculation_binding import decimal_values as _decimal_values
+from .finance_calculation_binding import item_dimension as _item_dimension
+from .finance_calculation_binding import item_id as _item_id
+from .finance_calculation_binding import item_text as _item_text
+from .finance_calculation_binding import operand_period as _operand_period
+from .finance_calculation_binding import requested_scale as _requested_scale
+from .finance_calculation_binding import shared_scale as _shared_scale
+from .finance_calculation_binding import (
+    single_question_period as _single_question_period,
+)
 from .finance_query_planning import FINANCE_METRIC_ALIASES
 from .finance_scale import scale_from_text as _scale
 from .finance_scale import source_scale_evidence as _source_scale_evidence
@@ -23,6 +35,7 @@ from .financial_statement_identity import (
     required_operand_identity,
 )
 from .financial_table import FinancialTableCell, find_financial_cell
+from .query_evidence_constraints import period_kind_conflicts, period_kind_in_question
 
 
 @dataclass(frozen=True)
@@ -69,6 +82,7 @@ def finance_calculation_audit(
     scale = _shared_scale(operand_tuple)
     scaled_result_types = {
         "capital_expenditure",
+        "adjusted_ebitda",
         "difference",
         "dividend",
         "free_cash_flow",
@@ -124,6 +138,7 @@ def _operand_from_input(
 ) -> CalculationOperand:
     decimal_value = Decimal(str(value))
     period = _operand_period(name, question)
+    period_kind = period_kind_in_question(question)
     if (
         period
         and _single_question_period(question) == period
@@ -136,6 +151,7 @@ def _operand_from_input(
         evidence_items,
         aliases=aliases,
         period=period,
+        period_kind=period_kind,
         expected_value=decimal_value,
         excluded_cell_ids=excluded_evidence_ids,
         statement_kind=statement_kind,
@@ -145,6 +161,7 @@ def _operand_from_input(
         evidence_items,
         aliases=aliases,
         period=period,
+        period_kind=period_kind,
         excluded_cell_ids=excluded_evidence_ids,
         statement_kind=statement_kind,
         financial_scope=financial_scope,
@@ -160,6 +177,7 @@ def _operand_from_input(
         name,
         decimal_value,
         period,
+        period_kind,
         question=question,
         question_type=question_type,
         evidence_items=evidence_items,
@@ -171,6 +189,7 @@ def _operand_from_input(
         name,
         decimal_value,
         period,
+        period_kind,
         aliases,
         item,
         evidence_items,
@@ -179,7 +198,7 @@ def _operand_from_input(
 
 def _operand_from_cell(
     name: str,
-    value: Decimal,
+    candidate_value: Decimal,
     cell: FinancialTableCell,
     evidence_items: list[dict[str, Any]],
 ) -> CalculationOperand:
@@ -195,14 +214,16 @@ def _operand_from_cell(
     scale_evidence_id = ""
     if not scale:
         scale, scale_evidence_id = _source_scale_evidence(item, evidence_items)
+    bound_value = candidate_value if candidate_value == cell.value else cell.value
     return CalculationOperand(
         operand_id=name,
         evidence_id=cell.evidence_id,
-        value=value,
+        value=bound_value,
         unit=cell.unit,
         scale=scale,
         currency=cell.currency,
         period=cell.period,
+        period_kind=cell.period_kind,
         entity=_item_dimension(item, "entity"),
         cell_id=cell.cell_id,
         row_label=cell.row_label,
@@ -217,6 +238,7 @@ def _operand_from_item(
     name: str,
     value: Decimal,
     period: str,
+    period_kind: str,
     aliases: tuple[str, ...],
     item: dict[str, Any] | None,
     evidence_items: list[dict[str, Any]],
@@ -229,10 +251,11 @@ def _operand_from_item(
     scale_evidence_id = ""
     if not scale:
         scale, scale_evidence_id = _source_scale_evidence(item, evidence_items)
+    bound_value = _atomic_item_value(item) if item is not None else None
     return CalculationOperand(
         operand_id=name,
         evidence_id=_item_id(item),
-        value=value,
+        value=bound_value if bound_value is not None else value,
         unit=_item_dimension(item, "unit"),
         scale=scale,
         currency=(
@@ -240,6 +263,7 @@ def _operand_from_item(
             or ("USD" if "$" in text or "usd" in text.lower() else "")
         ),
         period=period or _item_dimension(item, "period"),
+        period_kind=period_kind or _item_dimension(item, "period_kind"),
         entity=_item_dimension(item, "entity"),
         scale_evidence_id=scale_evidence_id,
         statement_kind=statement_kind,
@@ -423,6 +447,7 @@ def _matching_item(
     name: str,
     value: Decimal,
     period: str,
+    period_kind: str,
     *,
     question: str,
     question_type: str,
@@ -436,6 +461,14 @@ def _matching_item(
         for item in evidence_items
         if value in _decimal_values(_item_text(item))
         and _item_id(item) not in excluded_evidence_ids
+        and not (
+            period_kind
+            and period_kind_conflicts(
+                period_kind,
+                item,
+                _item_text(item).lower(),
+            )
+        )
         and compatible_financial_identity(
             item,
             statement_kind,
@@ -465,6 +498,8 @@ def _operand_aliases(
     question_type: str,
 ) -> tuple[str, ...]:
     lowered_question = question.lower()
+    if question_type == "adjusted_ebitda":
+        return FINANCE_METRIC_ALIASES["adjusted ebitda"]
     if question_type == "current_assets" and "total current assets" in (
         lowered_question
     ):
@@ -500,101 +535,3 @@ def _operand_aliases(
 def _metric_support(item: dict[str, Any], aliases: tuple[str, ...]) -> int:
     lowered = _item_text(item).lower()
     return int(any(alias.lower() in lowered for alias in aliases))
-
-
-def _operand_period(name: str, question: str) -> str:
-    years = re.findall(
-        r"\b(?:fy\s*)?((?:19|20)\d{2})\b",
-        str(question or ""),
-        flags=re.IGNORECASE,
-    )
-    name_period = re.search(r"(?:19|20)\d{2}", name)
-    if name_period is not None:
-        return name_period.group(0)
-    if name == "prior" and years:
-        return years[0]
-    if name == "current" and len(years) >= 2:
-        return years[1]
-    if len(years) == 1:
-        return years[0]
-    return ""
-
-
-def _single_question_period(question: str) -> str:
-    years = list(
-        dict.fromkeys(
-            re.findall(
-                r"\b(?:fy\s*)?((?:19|20)\d{2})\b",
-                str(question or ""),
-                flags=re.IGNORECASE,
-            )
-        )
-    )
-    return years[0] if len(years) == 1 else ""
-
-
-def _shared_scale(operands: tuple[CalculationOperand, ...]) -> str:
-    values = {operand.scale for operand in operands if operand.scale}
-    return values.pop() if len(values) == 1 else ""
-
-
-def _requested_scale(question: str) -> str:
-    lowered = str(question or "").lower()
-    for scale in ("billion", "million", "thousand"):
-        if re.search(rf"\b{scale}s?\b", lowered):
-            return scale
-    return ""
-
-
-def _item_id(item: dict[str, Any] | None) -> str:
-    if item is None:
-        return ""
-    return str(
-        item.get("evidence_id")
-        or item.get("element_id")
-        or item.get("canonical_id")
-        or ""
-    ).strip()
-
-
-def _atomic_evidence_id(
-    evidence_id: str,
-    evidence_items: list[dict[str, Any]],
-) -> bool:
-    return any(
-        _item_id(item) == evidence_id
-        and bool(item.get("cell_id") or item.get("element_id"))
-        for item in evidence_items
-    )
-
-
-def _item_text(item: dict[str, Any] | None) -> str:
-    if item is None:
-        return ""
-    return " ".join(
-        str(item.get(field) or "")
-        for field in ("text", "ocr_text", "vlm_text", "caption")
-    )
-
-
-def _item_dimension(item: dict[str, Any] | None, field: str) -> str:
-    if item is None:
-        return ""
-    metadata = dict(item.get("metadata") or {})
-    return str(item.get(field) or metadata.get(field) or "").strip()
-
-
-def _decimal_values(text: str) -> list[Decimal]:
-    values: list[Decimal] = []
-    pattern = (
-        r"(?:\$?\s*\([+-]?\d[\d,]*(?:\.\d+)?\)|" r"\(?[+-]?\$?\s*\d[\d,]*(?:\.\d+)?\)?)"
-    )
-    for raw in re.findall(pattern, text):
-        normalized = raw.replace("$", "").replace(",", "").replace(" ", "")
-        negative = "(" in normalized and normalized.endswith(")")
-        try:
-            parsed = Decimal(normalized.strip("()"))
-        except InvalidOperation:
-            continue
-        values.append(-parsed if negative else parsed)
-    return values

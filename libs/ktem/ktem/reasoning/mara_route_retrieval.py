@@ -10,6 +10,8 @@ from ktem.docqa.graph_index import (
     select_graph_index_evidence,
 )
 from ktem.docqa.multimodal_index import build_local_page_image_records
+from ktem.docqa.query_planning import build_query_plan
+from ktem.docqa.required_slot_selection import required_slot_shortlist
 from ktem.docqa.visual_retriever import rank_page_image_records
 
 TextRetrieveFn = Callable[[], tuple[list[Any], list[Any]]]
@@ -359,7 +361,22 @@ def _element_metadata(
         retriever=getattr(pipeline, "element_retriever", None),
         evidence_hints=_element_evidence_hints(understanding, pipeline),
     )
-    selected = ranked[:ELEMENT_RANK_CANDIDATE_LIMIT]
+    request = getattr(pipeline, "docqa_request", None)
+    plan = build_query_plan(
+        str(understanding.get("question") or ""),
+        answer_type=str(
+            getattr(request, "answer_type", None)
+            or getattr(request, "task_type", None)
+            or ""
+        ),
+        verification_domain=str(getattr(request, "verification_domain", None) or ""),
+        planner_payload=getattr(request, "query_plan", None),
+    )
+    selected, restored_required = required_slot_shortlist(
+        ranked,
+        plan,
+        candidate_limit=ELEMENT_RANK_CANDIDATE_LIMIT,
+    )
     selected_ids = {str(item.get("evidence_id") or "").strip() for item in selected}
     return {
         "requested_modalities": list(understanding.get("modalities", [])),
@@ -376,6 +393,7 @@ def _element_metadata(
         },
         "element_candidate_count": len(records),
         "element_selected_candidate_count": len(selected),
+        "element_required_slot_candidates_restored": restored_required,
     }
 
 

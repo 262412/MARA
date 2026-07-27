@@ -4,13 +4,15 @@ import math
 import re
 from typing import Any
 
+from .evidence_structure import structure_coverage_context
 from .query_planning import (
     QueryPlan,
     bind_evidence_slots,
     retrieval_budget,
-    score_evidence_for_slot,
     slot_coverage,
 )
+from .required_slot_selection import required_slot_shortlist
+from .required_slot_selection import slot_score as _slot_score
 
 MMR_LAMBDA = 0.7
 RERANK_CANDIDATE_LIMIT = 30
@@ -80,8 +82,7 @@ def select_evidence_for_plan(
     *,
     mmr_lambda: float = MMR_LAMBDA,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], QueryPlan]:
-    candidates, restored_required = _required_slot_rerank_shortlist(items, plan)
-    budget = retrieval_budget(plan)
+    candidates, restored_required, budget = _selection_context(items, plan)
     selected: list[dict[str, Any]] = []
     selected_ids: set[str] = set()
 
@@ -111,7 +112,11 @@ def select_evidence_for_plan(
             max_items=budget["max_items"],
         )
 
-    structure_coverage = structure_metadata_coverage(candidates)
+    (
+        structure_coverage,
+        mixed_structure_coverage,
+        structure_coverage_scope,
+    ) = structure_coverage_context(candidates)
     structure_expansion_enabled = structure_coverage >= MIN_STRUCTURE_METADATA_COVERAGE
     continuation_count = 0
     if structure_expansion_enabled:
@@ -143,50 +148,22 @@ def select_evidence_for_plan(
         page_modality_count=page_modality_count,
         mmr_lambda=mmr_lambda,
         required_slot_candidates_restored=restored_required,
+        mixed_structure_coverage=mixed_structure_coverage,
+        structure_coverage_scope=structure_coverage_scope,
     )
     return selected, trace, bound
 
 
-def _required_slot_rerank_shortlist(
+def _selection_context(
     items: list[dict[str, Any]],
     plan: QueryPlan,
-) -> tuple[list[dict[str, Any]], int]:
-    candidates = list(items[:RERANK_CANDIDATE_LIMIT])
-    restored = 0
-    required_slots = [slot for slot in plan.evidence_slots if slot.required]
-    for slot in required_slots:
-        if any(_slot_score(plan, slot, item) > 0 for item in candidates):
-            continue
-        ranked_tail = sorted(
-            (
-                (_slot_score(plan, slot, item), index, item)
-                for index, item in enumerate(
-                    items[RERANK_CANDIDATE_LIMIT:],
-                    start=RERANK_CANDIDATE_LIMIT,
-                )
-            ),
-            key=lambda row: (-row[0], row[1]),
-        )
-        match = next((item for score, _index, item in ranked_tail if score > 0), None)
-        if match is None:
-            continue
-        removable = next(
-            (
-                index
-                for index in range(len(candidates) - 1, -1, -1)
-                if not any(
-                    _slot_score(plan, required_slot, candidates[index]) > 0
-                    for required_slot in required_slots
-                )
-            ),
-            None,
-        )
-        if removable is None:
-            candidates.append(match)
-        else:
-            candidates[removable] = match
-        restored += 1
-    return candidates, restored
+) -> tuple[list[dict[str, Any]], int, dict[str, int]]:
+    candidates, restored_required = required_slot_shortlist(
+        items,
+        plan,
+        candidate_limit=RERANK_CANDIDATE_LIMIT,
+    )
+    return candidates, restored_required, retrieval_budget(plan)
 
 
 def _select_required_slot_evidence(
@@ -221,18 +198,6 @@ def _select_required_slot_evidence(
             _append_selected(match, selected, selected_ids)
 
 
-def _slot_score(
-    plan: QueryPlan,
-    slot: Any,
-    item: dict[str, Any],
-) -> float:
-    return score_evidence_for_slot(
-        slot,
-        item,
-        requires_structure=bool(plan.constraints.get("requires_structure")),
-    )
-
-
 def _selection_trace(
     candidates: list[dict[str, Any]],
     selected: list[dict[str, Any]],
@@ -245,6 +210,8 @@ def _selection_trace(
     page_modality_count: int,
     mmr_lambda: float,
     required_slot_candidates_restored: int,
+    mixed_structure_coverage: float,
+    structure_coverage_scope: str,
 ) -> dict[str, Any]:
     pages = _pages(selected)
     return {
@@ -266,6 +233,8 @@ def _selection_trace(
         "structure_expansion_enabled": structure_expansion_enabled,
         "mmr_lambda": mmr_lambda,
         "structure_metadata_coverage": structure_coverage,
+        "mixed_candidate_structure_metadata_coverage": mixed_structure_coverage,
+        "structure_coverage_scope": structure_coverage_scope,
         "required_slot_candidates_restored": required_slot_candidates_restored,
     }
 
@@ -287,22 +256,6 @@ def _expand_selected_pages(
         _append_selected(item, selected, selected_ids)
         count += 1
     return count
-
-
-def structure_metadata_coverage(items: list[dict[str, Any]]) -> float:
-    if not items:
-        return 0.0
-    structured = sum(
-        bool(
-            item.get("parent_element_id")
-            or item.get("neighbor_element_ids")
-            or item.get("table_id")
-            or item.get("continuation_id")
-            or item.get("section_id")
-        )
-        for item in items
-    )
-    return round(structured / len(items), 4)
 
 
 def _expand_structure(

@@ -5,6 +5,16 @@ from typing import Any
 
 DIRECT_VALUE_METRICS = (
     (
+        "adjusted_ebitda",
+        (
+            "adjusted non-gaap ebitda",
+            "adjusted non gaap ebitda",
+            "adjusted ebitda",
+            "adj. ebitda",
+            "adj ebitda",
+        ),
+    ),
+    (
         "capital_expenditure",
         ("capital expenditures", "capital expenditure", "capital spending"),
     ),
@@ -49,7 +59,16 @@ def metric_labels_for_question(lowered_question: str) -> tuple[str, ...]:
             "property and equipment, net",
         )
     metric_aliases = (
-        ("adjusted_ebitda", ("adjusted ebitda", "adj. ebitda", "adj ebitda")),
+        (
+            "adjusted_ebitda",
+            (
+                "adjusted non-gaap ebitda",
+                "adjusted non gaap ebitda",
+                "adjusted ebitda",
+                "adj. ebitda",
+                "adj ebitda",
+            ),
+        ),
         ("operating_income", ("operating income", "operating profit")),
         ("revenue", ("net sales", "net revenue", "net revenues", "revenue")),
         ("gross_profit", ("gross profit",)),
@@ -186,6 +205,9 @@ def asks_for_direct_finance_value(lowered_question: str) -> bool:
         for term in (
             "capital expenditure",
             "capex",
+            "adjusted ebitda",
+            "adjusted non-gaap ebitda",
+            "adjusted non gaap ebitda",
             "dividend",
             "net sales",
             "net revenue",
@@ -454,6 +476,7 @@ def render_execution_answer(
         return format_currency_with_unit(value, answer_scale or amount_unit(text))
     if question_type in {
         "capital_expenditure",
+        "adjusted_ebitda",
         "dividend",
         "net_sales",
         "operating_income",

@@ -126,6 +126,55 @@ def boolean_quote_supports_relation(
     )
 
 
+def boolean_complete_quote_conflicts(
+    quote: str,
+    question: str,
+    verdict: str,
+) -> bool:
+    """Return only deterministic, high-precision proposition conflicts.
+
+    Complete verdicts already come from the semantic proposition judge. This
+    helper must remain narrower than ``boolean_quote_supports_relation`` so a
+    lexical paraphrase mismatch cannot overrule a complete semantic verdict.
+    """
+
+    if _requirement_relation_conflicts(quote, question, verdict):
+        return True
+    if _qualitative_risk_relation_supported(quote, question, verdict):
+        return False
+    question_negative = _has_explicit_negation(question)
+    quote_negative = _has_explicit_negation(quote)
+    if question_negative:
+        return False
+    if verdict == "no" and not quote_negative:
+        return _positive_relation_alignment(quote, question)
+    if verdict == "yes" and quote_negative:
+        return boolean_quote_supports_relation(quote, question, "no")
+    return False
+
+
+def _has_explicit_negation(value: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:doesn't|does not|don't|do not|no|not|never|without)\b",
+            str(value or "").lower(),
+        )
+    )
+
+
+def _positive_relation_alignment(quote: str, question: str) -> bool:
+    question_relations = boolean_relation_lemmas(question)
+    quote_relations = boolean_relation_lemmas(quote)
+    if not question_relations or not (question_relations & quote_relations):
+        return False
+    relation_tokens = {
+        lemma[:5] if len(lemma) > 5 else lemma for lemma in question_relations
+    }
+    question_objects = stemmed_content_tokens(question) - relation_tokens
+    quote_tokens = stemmed_content_tokens(quote)
+    return bool(question_objects & quote_tokens)
+
+
 def _requirement_relation_conflicts(
     quote: str,
     question: str,

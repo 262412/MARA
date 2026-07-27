@@ -27,6 +27,7 @@ class FinancialTableCell:
     column_label: str
     period: str
     value: Decimal
+    period_kind: str = ""
     unit: str = ""
     scale: str = ""
     currency: str = ""
@@ -39,6 +40,7 @@ class FinancialTableCell:
             for value in (
                 self.row_label,
                 self.column_label,
+                self.period_kind,
                 str(self.value),
                 self.unit,
                 self.scale,
@@ -66,6 +68,7 @@ def parse_financial_table_cells(
 
     identity = _table_identity(item)
     statement_kind, financial_scope = financial_statement_identity(item)
+    period_kind = _period_kind(item, text)
     scale = _dimension(item, "scale") or _scale(text)
     currency = _dimension(item, "currency") or _currency(text)
     unit = _dimension(item, "unit")
@@ -99,6 +102,7 @@ def parse_financial_table_cells(
                     column_label=period,
                     period=period,
                     value=value,
+                    period_kind=period_kind,
                     unit=unit,
                     scale=scale,
                     currency=currency,
@@ -115,6 +119,7 @@ def find_financial_cell(
     aliases: tuple[str, ...],
     period: str = "",
     expected_value: Decimal | None = None,
+    period_kind: str = "",
     excluded_cell_ids: set[str] | None = None,
     statement_kind: str = "",
     financial_scope: str = "",
@@ -126,6 +131,8 @@ def find_financial_cell(
             if cell.cell_id in excluded:
                 continue
             if period and cell.period != period:
+                continue
+            if period_kind and cell.period_kind and cell.period_kind != period_kind:
                 continue
             if (
                 statement_kind
@@ -228,6 +235,7 @@ def _explicit_cell(item: dict[str, Any]) -> FinancialTableCell | None:
         column_label=column_label,
         period=str(item.get("period") or column_label).strip(),
         value=value,
+        period_kind=_period_kind(item, _item_text(item)),
         unit=_dimension(item, "unit"),
         scale=_dimension(item, "scale"),
         currency=_dimension(item, "currency"),
@@ -352,6 +360,21 @@ def _currency(text: str) -> str:
         return "EUR"
     if "gbp" in lowered or "£" in text:
         return "GBP"
+    return ""
+
+
+def _period_kind(item: dict[str, Any], text: str) -> str:
+    explicit = _dimension(item, "period_kind")
+    if explicit:
+        return explicit
+    lowered = str(text or "").lower()
+    if "three months ended" in lowered or "quarter" in lowered:
+        return "quarter"
+    if any(
+        phrase in lowered
+        for phrase in ("twelve months ended", "fiscal year", "full year", "year ended")
+    ):
+        return "fiscal_year"
     return ""
 
 

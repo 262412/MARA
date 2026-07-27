@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 
 def json_structure_repair_prompt(
     response: str,
@@ -46,6 +48,14 @@ def answerability_prompt(
 
 
 def boolean_answerability_prompt(*, question: str, evidence: str) -> str:
+    modal_instruction = (
+        "Modal relations are strict: evidence that a method can be used, is "
+        "compatible, or works as a drop-in component does not prove that it is "
+        "required. Conversely, 'without fine-tuning' or 'not required' supports "
+        "no for a requirement question.\n\n"
+        if _requires_requirement_guard(question)
+        else ""
+    )
     return (
         "/no_think\n"
         "You are a QASPER proposition verifier. Compare the complete yes/no "
@@ -54,10 +64,7 @@ def boolean_answerability_prompt(*, question: str, evidence: str) -> str:
         "and polarity. Distinguish a process from its outcome, mentioning from "
         "performing, creating from experimenting, and controlling experimental "
         "collection from validating the quality of the resulting data.\n\n"
-        "Modal relations are strict: evidence that a method can be used, is "
-        "compatible, or works as a drop-in component does not prove that it is "
-        "required. Conversely, 'without fine-tuning' or 'not required' supports "
-        "no for a requirement question.\n\n"
+        f"{modal_instruction}"
         "Return yes_complete or no_complete only when one polarity of that "
         "complete proposition is explicitly established. Return yes_partial "
         "or no_partial when the evidence supports that polarity only for a "
@@ -73,4 +80,14 @@ def boolean_answerability_prompt(*, question: str, evidence: str) -> str:
         '{"verdict":"yes_partial","evidence_quote":"..."}, '
         '{"verdict":"no_partial","evidence_quote":"..."}, or '
         '{"verdict":"insufficient_evidence","evidence_quote":""}.'
+    )
+
+
+def _requires_requirement_guard(question: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:require|required|requires|necessary|must)\b",
+            str(question or ""),
+            flags=re.IGNORECASE,
+        )
     )

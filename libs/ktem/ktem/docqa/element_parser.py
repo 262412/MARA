@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from .finance_query_planning import FINANCE_METRIC_ALIASES
 from .financial_statement_identity import financial_statement_identity
 
 SUPPORTED_ELEMENT_MODALITIES = {"table", "figure", "formula", "slide"}
@@ -179,6 +181,66 @@ def parse_element_index_records(
     )
 
 
+def parse_financial_numeric_span_records(
+    *,
+    doc_id: str,
+    file_id: str,
+    file_name: str,
+    page_label: str,
+    text: str,
+    metadata: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Extract atomic, finance-specific amount spans from narrative text."""
+    modality = str(
+        metadata.get("modality") or metadata.get("element_type") or ""
+    ).strip()
+    if modality in SUPPORTED_ELEMENT_MODALITIES:
+        return []
+
+    parent_element_id = str(metadata.get("element_id") or "").strip()
+    records: list[dict[str, Any]] = []
+    for span_index, clause in enumerate(_financial_fact_clauses(text), start=1):
+        metric = _finance_metric(clause)
+        amounts = _financial_amounts(clause)
+        if not metric or len(amounts) != 1:
+            continue
+        value, scale, currency = amounts[0]
+        period_match = re.search(r"\b(?:19|20)\d{2}\b", clause)
+        period = period_match.group(0) if period_match else ""
+        digest = hashlib.sha256(
+            f"{doc_id}:{span_index}:{clause}".encode("utf-8")
+        ).hexdigest()[:16]
+        element_id = f"span-{digest}"
+        parser_metadata = _parser_metadata(doc_id)
+        parser_metadata["parser_record_type"] = "financial_numeric_span"
+        records.append(
+            ElementIndexRecord(
+                evidence_id=f"span:{file_id}:{page_label}:{element_id}",
+                file_id=file_id,
+                file_name=file_name,
+                page_label=page_label,
+                element_id=element_id,
+                modality="text",
+                evidence_level="span",
+                parent_element_id=parent_element_id,
+                row_label=metric,
+                column_label=period,
+                period=period,
+                value=str(value),
+                scale=scale,
+                currency=currency,
+                caption=metric,
+                text=clause,
+                source_backrefs=[
+                    f"{file_id}#page:{page_label}",
+                    *([parent_element_id] if parent_element_id else []),
+                ],
+                metadata=parser_metadata,
+            ).as_dict()
+        )
+    return records
+
+
 def _element_record(
     *,
     doc_id: str,
@@ -193,7 +255,11 @@ def _element_record(
     fallback_financial_scope: str = "",
     parser_source_doc_id: str = "",
 ) -> dict[str, Any]:
-    parser_metadata = _parser_metadata(parser_source_doc_id or doc_id)
+    element_metadata = metadata.get("element_metadata")
+    parser_metadata = (
+        dict(element_metadata) if isinstance(element_metadata, dict) else {}
+    )
+    parser_metadata.update(_parser_metadata(parser_source_doc_id or doc_id))
     if financial_identity or modality == "table":
         statement_kind, financial_scope = financial_statement_identity(text)
         resolved_kind = statement_kind or fallback_statement_kind
@@ -203,7 +269,12 @@ def _element_record(
         if resolved_scope:
             parser_metadata["financial_scope"] = resolved_scope
 
-    element_id = _element_id(modality, doc_id, text)
+    explicit_element_id = str(metadata.get("element_id") or "").strip()
+    element_id = (
+        explicit_element_id
+        if explicit_element_id and not parser_source_doc_id
+        else _element_id(modality, doc_id, text)
+    )
     record = ElementIndexRecord(
         evidence_id=f"element:{file_id}:{page_label}:{element_id}",
         file_id=file_id,
@@ -280,6 +351,69 @@ def _period_kind(text: str) -> str:
     if "twelve months ended" in lowered or "fiscal year" in lowered:
         return "fiscal_year"
     return ""
+
+
+def _financial_fact_clauses(text: str) -> tuple[str, ...]:
+    return tuple(
+        " ".join(clause.split())
+        for clause in re.split(
+            r"(?<=[.!?])\s+(?=[A-Z])|[\r\n;]+",
+            str(text or ""),
+        )
+        if clause.strip()
+    )
+
+
+def _finance_metric(text: str) -> str:
+    normalized = _normalized_words(text)
+    if "credit agreement" in normalized and "borrow up to" in normalized:
+        return "revolving credit capacity"
+    for metric, aliases in FINANCE_METRIC_ALIASES.items():
+        if any(
+            f" {_normalized_words(alias)} " in f" {normalized} " for alias in aliases
+        ):
+            return metric
+    return ""
+
+
+def _financial_amounts(text: str) -> tuple[tuple[Decimal, str, str], ...]:
+    pattern = re.compile(
+        r"(?:(?P<currency>[$€£¥])\s*)?"
+        r"(?P<value>\(?[+-]?\d[\d,]*(?:\.\d+)?\)?)"
+        r"(?:\s*(?P<scale>thousands?|millions?|billions?))?",
+        flags=re.IGNORECASE,
+    )
+    values: list[tuple[Decimal, str, str]] = []
+    for match in pattern.finditer(text):
+        currency_symbol = str(match.group("currency") or "")
+        scale = str(match.group("scale") or "").lower().rstrip("s")
+        if not currency_symbol and not scale:
+            continue
+        value = _decimal_amount(match.group("value"))
+        if value is None:
+            continue
+        currency = {
+            "$": "USD",
+            "€": "EUR",
+            "£": "GBP",
+            "¥": "JPY",
+        }.get(currency_symbol, "")
+        values.append((value, scale, currency))
+    return tuple(values)
+
+
+def _decimal_amount(value: str) -> Decimal | None:
+    normalized = str(value or "").replace(",", "").strip()
+    negative = normalized.startswith("(") and normalized.endswith(")")
+    try:
+        parsed = Decimal(normalized.strip("()"))
+    except InvalidOperation:
+        return None
+    return -parsed if negative else parsed
+
+
+def _normalized_words(value: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", str(value or "").lower()))
 
 
 def _element_modality(metadata: dict[str, Any], text: str) -> str:

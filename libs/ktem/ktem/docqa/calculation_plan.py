@@ -7,6 +7,10 @@ from typing import Any
 
 from .finance_query_planning import finance_metric_evidence_matches
 from .financial_statement_identity import financial_statement_identity
+from .query_evidence_constraints import (
+    period_kind_conflicts,
+    requires_atomic_calculation_binding,
+)
 
 CALCULATION_PLAN_CONTRACT = "calculation_plan.v1"
 ALLOWED_OPERATORS = {
@@ -41,6 +45,7 @@ class CalculationOperand:
     scale: str = ""
     currency: str = ""
     period: str = ""
+    period_kind: str = ""
     entity: str = ""
     source: str = "evidence"
     cell_id: str = ""
@@ -57,6 +62,7 @@ class CalculationOperand:
             "cell_id",
             "row_label",
             "column_label",
+            "period_kind",
             "scale_evidence_id",
             "statement_kind",
             "financial_scope",
@@ -249,7 +255,7 @@ def _verify_operand(
         return [f"operand_evidence_missing:{operand.operand_id}"], []
     errors: list[str] = []
     citations = [operand.evidence_id]
-    if not operand.cell_id and _requires_atomic_binding(item):
+    if not operand.cell_id and requires_atomic_calculation_binding(item):
         errors.append(f"operand_atomic_binding_missing:{operand.operand_id}")
     text = _verified_cell_text(operand, item, errors)
     scale_text = text
@@ -259,6 +265,12 @@ def _verify_operand(
         errors.append(f"operand_value_is_period:{operand.operand_id}")
     if operand.period and operand.period not in text:
         errors.append(f"operand_period_mismatch:{operand.operand_id}")
+    if operand.period_kind and period_kind_conflicts(
+        operand.period_kind,
+        item,
+        _evidence_text(item).lower(),
+    ):
+        errors.append(f"operand_period_kind_mismatch:{operand.operand_id}")
     if operand.unit and not _term_matches(operand.unit, text):
         errors.append(f"operand_unit_mismatch:{operand.operand_id}")
     if operand.scale_evidence_id:
@@ -282,19 +294,6 @@ def _verify_operand(
     if operand.financial_scope and operand.financial_scope != financial_scope:
         errors.append(f"operand_financial_scope_mismatch:{operand.operand_id}")
     return errors, citations
-
-
-def _requires_atomic_binding(item: dict[str, Any]) -> bool:
-    if str(item.get("evidence_level") or "").strip().lower() == "page":
-        return _multiple_numeric_rows(_evidence_text(item))
-    return False
-
-
-def _multiple_numeric_rows(text: str) -> bool:
-    return (
-        sum(len(_NUMBER_RE.findall(line)) >= 2 for line in str(text or "").splitlines())
-        >= 2
-    )
 
 
 def _verified_cell_text(

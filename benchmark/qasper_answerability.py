@@ -13,6 +13,9 @@ from .qasper_answerability_prompts import (
     json_structure_repair_prompt as _json_structure_repair_prompt,
 )
 from .qasper_boolean import (
+    boolean_complete_quote_conflicts as _boolean_complete_quote_conflicts,
+)
+from .qasper_boolean import (
     boolean_quote_supports_relation as _boolean_quote_supports_relation,
 )
 from .qasper_boolean import boolean_relation_lemmas as _boolean_relation_lemmas
@@ -20,7 +23,7 @@ from .qasper_boolean import is_boolean_question as _is_boolean_question
 from .qasper_boolean import stemmed_content_tokens as _stemmed_content_tokens
 from .qasper_prompt_budget import fit_qasper_verifier_prompt
 
-QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v11"
+QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v12"
 QASPER_ANSWERABILITY_SEED = 20260724
 QASPER_ANSWERABILITY_MAX_TOKENS = 192
 QASPER_EVIDENCE_QUOTE_MAX_LENGTH = 640
@@ -235,11 +238,15 @@ def _ground_boolean_verdict(
     }
     if raw_verdict in complete:
         complete_verdict = complete[raw_verdict]
-        quote_supports_relation = quote_grounded and _boolean_quote_supports_relation(
+        deterministic_conflict = quote_grounded and _boolean_complete_quote_conflicts(
             quote,
             question,
             complete_verdict,
         )
+        relation_trace["deterministic_relation_conflict"] = str(
+            deterministic_conflict
+        ).lower()
+        quote_supports_relation = quote_grounded and not deterministic_conflict
         verdict = (
             complete_verdict if quote_supports_relation else "insufficient_evidence"
         )

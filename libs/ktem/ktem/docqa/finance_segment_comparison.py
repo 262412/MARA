@@ -102,7 +102,10 @@ def _collect_segment_values(
         if statement_kind and statement_kind != "segment_table":
             continue
         evidence_id = _item_id(item)
-        for cell in parse_financial_table_cells(item):
+        revenue_section = _revenue_section_item(item)
+        if revenue_section is None:
+            continue
+        for cell in parse_financial_table_cells(revenue_section):
             if cell.period not in periods or _is_total_row(cell.row_label):
                 continue
             entity = _entity_label(cell.row_label)
@@ -116,7 +119,10 @@ def _collect_segment_values(
                 evidence_id,
                 excluded,
             )
-        for entity, period_values in _vertical_segment_values(item).items():
+        for entity, period_values in _vertical_segment_values(
+            revenue_section,
+            periods,
+        ).items():
             _record_segment_value(
                 values,
                 citations,
@@ -255,10 +261,15 @@ def _item_id(item: dict[str, Any]) -> str:
 
 def _vertical_segment_values(
     item: dict[str, Any],
+    requested_periods: tuple[str, ...],
 ) -> dict[str, dict[str, Decimal]]:
     text = str(item.get("text") or "")
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    periods = tuple(dict.fromkeys(re.findall(r"\b(?:19|20)\d{2}\b", text)))
+    periods = tuple(
+        period
+        for period in dict.fromkeys(re.findall(r"\b(?:19|20)\d{2}\b", text))
+        if period in requested_periods
+    )
     if len(periods) < 2:
         return {}
     try:
@@ -306,6 +317,50 @@ def _vertical_segment_values(
             }
         index = max(cursor, index + 1)
     return values
+
+
+def _revenue_section_item(
+    item: dict[str, Any],
+) -> dict[str, Any] | None:
+    text = str(item.get("text") or "")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    heading_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if re.fullmatch(
+                r"(?:net\s+)?(?:sales|revenue|revenues)\s*:?",
+                line,
+                flags=re.IGNORECASE,
+            )
+            or (
+                re.search(
+                    r"\b(?:net\s+)?(?:sales|revenue|revenues)\b",
+                    line,
+                    flags=re.IGNORECASE,
+                )
+                and "segment" in line.lower()
+            )
+        ),
+        None,
+    )
+    if heading_index is None:
+        return None
+    end = next(
+        (
+            index
+            for index in range(heading_index + 1, len(lines))
+            if re.match(
+                r"(?:total\s+(?:net\s+)?(?:sales|revenue)|" r"operating\s+income)",
+                lines[index],
+                flags=re.IGNORECASE,
+            )
+        ),
+        len(lines),
+    )
+    section = dict(item)
+    section["text"] = "\n".join(lines[:end])
+    return section
 
 
 def _decimal_line(value: str) -> Decimal | None:
