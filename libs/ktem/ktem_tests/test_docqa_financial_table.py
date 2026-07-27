@@ -89,9 +89,7 @@ def test_financial_table_parser_recovers_value_first_wrapped_rows():
     assert cell.value == Decimal("12645")
     assert cell.row_label == "Property, plant and equipment, net"
     assert cell.column_label == "2018"
-    assert cell.cell_id.endswith(
-        "#row:property-plant-and-equipment-net#column:2018"
-    )
+    assert cell.cell_id.endswith("#row:property-plant-and-equipment-net#column:2018")
 
 
 def test_financial_table_parser_keeps_period_kind_per_table_section():

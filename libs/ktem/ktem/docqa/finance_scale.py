@@ -34,9 +34,12 @@ def source_scale_evidence(
     source_id = _source_id(item)
     if not source_id:
         return "", ""
+    item_id = _item_id(item)
     matches: list[tuple[str, str]] = []
     for candidate in evidence_items:
         if _source_id(candidate) != source_id:
+            continue
+        if _is_atomic_evidence(candidate) and _item_id(candidate) != item_id:
             continue
         scale = _item_dimension(candidate, "scale") or scale_from_text(
             _item_text(candidate)
@@ -96,3 +99,7 @@ def _item_dimension(item: dict[str, Any] | None, field: str) -> str:
         return ""
     metadata = dict(item.get("metadata") or {})
     return str(item.get(field) or metadata.get(field) or "").strip()
+
+
+def _is_atomic_evidence(item: dict[str, Any]) -> bool:
+    return str(item.get("evidence_level") or "").strip().lower() in {"cell", "span"}

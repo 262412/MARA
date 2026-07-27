@@ -141,6 +141,16 @@ def _statement_kind(text: str) -> str:
 
 
 def _financial_scope(text: str, statement_kind: str) -> str:
+    if (
+        statement_kind
+        in {
+            "balance_sheet",
+            "income_statement",
+            "cash_flow_statement",
+        }
+        and "consolidated" in text
+    ):
+        return "consolidated"
     if "held for sale" in text or "assets held for sale" in text:
         return "held_for_sale"
     if any(

@@ -95,6 +95,49 @@ def test_finance_fact_slot_requires_exact_metric_not_adjusted_ebit_prefix():
     assert adjusted_ebitda.status == "missing"
 
 
+def test_finance_fact_slot_requires_atomic_value_evidence():
+    plan = build_query_plan(
+        "What was adjusted non-GAAP EBITDA for FY2023?",
+        answer_type="extractive",
+        verification_domain="finance",
+    )
+    page_bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "full-year-page",
+                "evidence_level": "page",
+                "text": "FY2023 adjusted EBITDA was $2,018 million.",
+                "page_label": "1",
+                "period_kind": "fiscal_year",
+                "modality": "text",
+            }
+        ],
+    )
+    cell_bound = bind_evidence_slots(
+        plan,
+        [
+            {
+                "evidence_id": "adjusted-ebitda-cell",
+                "cell_id": "adjusted-ebitda-cell",
+                "evidence_level": "cell",
+                "row_label": "Adjusted EBITDA",
+                "column_label": "2023",
+                "period": "2023",
+                "period_kind": "fiscal_year",
+                "value": "2018",
+                "scale": "million",
+                "text": "Adjusted EBITDA 2023 fiscal_year 2018 million",
+                "modality": "table",
+            }
+        ],
+    )
+
+    assert page_bound.evidence_slots[0].status == "missing"
+    assert cell_bound.evidence_slots[0].status == "filled"
+    assert cell_bound.evidence_slots[0].evidence_ids == ("adjusted-ebitda-cell",)
+
+
 def test_numeric_slot_rejects_period_values_without_metric_support():
     plan = build_query_plan(
         (

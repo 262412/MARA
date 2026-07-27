@@ -2,7 +2,9 @@
 
 最后更新：2026-07-27
 
-当前代码基线：`6bff37fa27d171f7c81d5e7cb23bf3a7fb9d74fd`
+保护测试提交：`28b3627847d8fd85d6e1323500498118699683dc`
+
+本轮实现状态：**代码与本地验证已完成，等待 FinanceBench v23 新 artifact 验收。**
 
 发布结论：**QASPER v24 和 FinanceBench v22 聚焦任务均完整结束，但没有通过发布
 验收。当前禁止直接重跑全量 benchmark。下一轮只修复可由 artifact 证明的证据
@@ -47,21 +49,21 @@ v24/v22 的 `run_provenance.index_contract` 分别为
 
 ### 2.1 QASPER v24
 
-| 指标 | v22 | v23 | v24 | v24 对 v22 |
-| --- | ---: | ---: | ---: | ---: |
-| native/token F1 | 67.55% | 64.81% | 66.83% | -0.72 pp |
-| semantic F1 | 64.57% | 60.59% | 63.73% | -0.84 pp |
-| false abstention | 1.68% | 1.68% | 1.68% | 持平 |
-| generation 中位延迟 | 2.19 s | 4.77 s | 5.45 s | +149% |
+| 指标                |    v22 |    v23 |    v24 | v24 对 v22 |
+| ------------------- | -----: | -----: | -----: | ---------: |
+| native/token F1     | 67.55% | 64.81% | 66.83% |   -0.72 pp |
+| semantic F1         | 64.57% | 60.59% | 63.73% |   -0.84 pp |
+| false abstention    |  1.68% |  1.68% |  1.68% |       持平 |
+| generation 中位延迟 | 2.19 s | 4.77 s | 5.45 s |      +149% |
 
 Boolean exact：
 
-| Route | v22 | v23 | v24 |
-| --- | ---: | ---: | ---: |
-| text_rag | 50/99 | 43/99 | 52/99 |
-| controller_auto | 51/99 | 45/99 | 48/99 |
-| crag_guarded | 51/99 | 45/99 | 48/99 |
-| 合计 | 152/297 | 133/297 | 148/297 |
+| Route           |     v22 |     v23 |     v24 |
+| --------------- | ------: | ------: | ------: |
+| text_rag        |   50/99 |   43/99 |   52/99 |
+| controller_auto |   51/99 |   45/99 |   48/99 |
+| crag_guarded    |   51/99 |   45/99 |   48/99 |
+| 合计            | 152/297 | 133/297 | 148/297 |
 
 v24 相比 v23 有 29 个改善、14 个退化，证明 v12 已消除上一轮大范围词法误拒。
 但相比 v22 只有 11 个改善、15 个退化，仍少 4 个 boolean 正确结果。
@@ -75,16 +77,16 @@ v24 相比 v23 有 29 个改善、14 个退化，证明 v12 已消除上一轮�
 
 ### 2.2 FinanceBench v22
 
-| 指标 | v20 | v21 | v22 | v22 对 v20 |
-| --- | ---: | ---: | ---: | ---: |
-| token F1 | 13.40% | 12.24% | 15.77% | +2.37 pp |
-| overall native | 8.75% | 3.75% | 7.50% | -1.25 pp |
-| semantic F1 | 31.96% | 22.18% | 33.18% | +1.22 pp |
-| page hit | 40.00% | 36.25% | 43.75% | +3.75 pp |
-| Candidate Recall | 41.67% | 53.33% | 56.67% | +15.00 pp |
-| Reranked Recall | 25.83% | 31.67% | 36.67% | +10.84 pp |
-| slot coverage | 70.71% | 55.05% | 57.07% | -13.64 pp |
-| false abstention | 17.50% | 25.00% | 26.25% | +8.75 pp |
+| 指标             |    v20 |    v21 |    v22 | v22 对 v20 |
+| ---------------- | -----: | -----: | -----: | ---------: |
+| token F1         | 13.40% | 12.24% | 15.77% |   +2.37 pp |
+| overall native   |  8.75% |  3.75% |  7.50% |   -1.25 pp |
+| semantic F1      | 31.96% | 22.18% | 33.18% |   +1.22 pp |
+| page hit         | 40.00% | 36.25% | 43.75% |   +3.75 pp |
+| Candidate Recall | 41.67% | 53.33% | 56.67% |  +15.00 pp |
+| Reranked Recall  | 25.83% | 31.67% | 36.67% |  +10.84 pp |
+| slot coverage    | 70.71% | 55.05% | 57.07% |  -13.64 pp |
+| false abstention | 17.50% | 25.00% | 26.25% |   +8.75 pp |
 
 召回和 page hit 已改善，但没有转化成 operand。60 条检索型输出中只有 17 条启用
 结构扩展，pre-cap required-slot restore 只恢复 2 个候选。每条 quality route 的
@@ -136,6 +138,9 @@ span、单位和期间。先修表示和绑定契约比降低门槛更合理。
 
 ## 4. 当前根因
 
+本节描述的是 FinanceBench v22 和 QASPER v24 artifact 中仍存在的根因。对应代码
+修复完成后，在新 artifact 通过关闭标准前仍保留在开放表中，不能提前写成已解决。
+
 ### 4.1 QASPER：冲突过滤器不是对比证据恢复器
 
 v12 已把通用 semantic complete 与高精度 modal conflict 分开，上一轮的大范围
@@ -186,7 +191,7 @@ metric phrase；FY 问题不得由 Adjusted EBIT 或 quarter evidence 填槽。
 最终答案数值正确、citation 错误。deterministic calculation 的 citation 必须优先由
 `calculation_execution.citation_ids` 解析到 evidence source backref。
 
-另外，生成的 cell/span 当前把裸 `cell_id` 或 `parent_element_id` 混入
+另外，v22 生成的 cell/span 把裸 `cell_id` 或 `parent_element_id` 混入
 `source_backrefs`。结构身份字段不是 source locator；page/source provenance 与结构
 identity 必须分开。
 
@@ -198,19 +203,19 @@ scale 的实际换算。该指标不能用于宣称单位正确。
 
 ## 5. 开放问题表
 
-| ID | 优先级 | 状态 | 待落实内容 | 关闭标准 |
-| --- | --- | --- | --- | --- |
-| QASPER-CONTRASTIVE-EVIDENCE-007 | P1 | 开放 | 按 proposition 保留肯定、否定和 modal 对比证据；冲突时定向二次检索 | `b065` 返回 `no`；部署 route boolean 不低于 v22；不增加 unsupported yes/no |
-| QASPER-LATENCY-008 | P1 | 开放 | 拆分 answer generation、answerability judge 和 finalization 计时，再制定 route-specific 预算 | 分段计时 coverage 100%；能定位 v22→v24 回退来源 |
-| FIN-WRAPPED-TABLE-CELL-011 | P0 | 待实现 | 解析 value-first/label-wrapped PDF 表格，生成稳定 cell | `10285` 的 PPE 2018=12645 产生 cell；`04854/10499` 目标行可生成 cell |
-| FIN-NARRATIVE-SPAN-012 | P0 | 待实现 | 合并 PDF soft line wrap 后切句；同值多事实保留独立 span | `00882` 两个 4.2B 绑定两个不同 span；terminated 3.8B 不参与执行 |
-| FIN-SCALE-PROVENANCE-013 | P0 | 待实现 | 禁止 cell/span 为其他 evidence 提供共享 scale；仅表头或明确 convention 可传播 | `04980` 不再输出 4,625 billion；无单位证据时拒绝执行 |
-| FIN-PERIOD-SCOPE-014 | P0 | 待实现 | consolidated 主表优先；finance metric 完整短语匹配；period-kind 冲突不填槽 | `01928` 不绑定 540；`10499` inventory 绑定 consolidated balance-sheet cell |
-| FIN-CITATION-BACKREF-015 | P0 | 待实现 | 结构 identity 与 source backref 分离；执行 citation 从 execution IDs 投影 | `03031` citation 指向实际 operand evidence；不存在候选首项漂移 |
-| FIN-SLOT-ATOMICITY-016 | P0 | 待实现 | required slot 只由可生成匹配 cell 的 table 或 atomic span/cell 满足 | slot 标记 filled 时 verifier 可回溯对应原子事实；restore trace 非静默 |
-| FIN-UNIT-METRIC-017 | P1 | 待实现 | unit metric 检查实际 scale conversion 和 answer quantity | 1000 倍错误计为 unit failure；成功执行的 unit accuracy 与人工核对一致 |
-| RERANK-TRACE-001 | P1 | 开放 | 记录 upstream/local/no-rerank 的真实 score lineage | 不再以 `not_recorded` 或 shortlist 冒充 reranker |
-| RELEASE-001 | P0 | 被 artifact 阻塞 | 仅提交受影响的聚焦任务；P0 未关闭前不运行全量 | 所有 P0 由新 artifact 验收，部署 route 不低于行为基线 |
+| ID                              | 优先级 | 状态                | 待落实内容                                                                                   | 关闭标准                                                                   |
+| ------------------------------- | ------ | ------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| QASPER-CONTRASTIVE-EVIDENCE-007 | P1     | 开放                | 按 proposition 保留肯定、否定和 modal 对比证据；冲突时定向二次检索                           | `b065` 返回 `no`；部署 route boolean 不低于 v22；不增加 unsupported yes/no |
+| QASPER-LATENCY-008              | P1     | 开放                | 拆分 answer generation、answerability judge 和 finalization 计时，再制定 route-specific 预算 | 分段计时 coverage 100%；能定位 v22→v24 回退来源                            |
+| FIN-WRAPPED-TABLE-CELL-011      | P0     | 已实现，待 artifact | 解析 value-first/label-wrapped PDF 表格，生成稳定 cell                                       | `10285` 的 PPE 2018=12645 产生 cell；`04854/10499` 目标行可生成 cell       |
+| FIN-NARRATIVE-SPAN-012          | P0     | 已实现，待 artifact | 合并 PDF soft line wrap 后切句；同值多事实保留独立 span                                      | `00882` 两个 4.2B 绑定两个不同 span；terminated 3.8B 不参与执行            |
+| FIN-SCALE-PROVENANCE-013        | P0     | 已实现，待 artifact | 禁止 cell/span 为其他 evidence 提供共享 scale；仅表头或明确 convention 可传播                | `04980` 不再输出 4,625 billion；无单位证据时拒绝执行                       |
+| FIN-PERIOD-SCOPE-014            | P0     | 已实现，待 artifact | consolidated 主表优先；finance metric 完整短语匹配；period-kind 冲突不填槽                   | `01928` 不绑定 540；`10499` inventory 绑定 consolidated balance-sheet cell |
+| FIN-CITATION-BACKREF-015        | P0     | 已实现，待 artifact | 结构 identity 与 source backref 分离；执行 citation 从 execution IDs 投影                    | `03031` citation 指向实际 operand evidence；不存在候选首项漂移             |
+| FIN-SLOT-ATOMICITY-016          | P0     | 已实现，待 artifact | required finance metric slot 只由 atomic span/cell 满足                                      | slot 标记 filled 时 verifier 可回溯对应原子事实；restore trace 非静默      |
+| FIN-UNIT-METRIC-017             | P1     | 待实现              | unit metric 检查实际 scale conversion 和 answer quantity                                     | 1000 倍错误计为 unit failure；成功执行的 unit accuracy 与人工核对一致      |
+| RERANK-TRACE-001                | P1     | 开放                | 记录 upstream/local/no-rerank 的真实 score lineage                                           | 不再以 `not_recorded` 或 shortlist 冒充 reranker                           |
+| RELEASE-001                     | P0     | 被 artifact 阻塞    | 仅提交受影响的聚焦任务；P0 未关闭前不运行全量                                                | 所有 P0 由新 artifact 验收，部署 route 不低于行为基线                      |
 
 ## 6. 已关闭并从开放表移除
 
@@ -224,17 +229,37 @@ scale 的实际换算。该指标不能用于宣称单位正确。
 - **新 artifact provenance：** v24/v22 均记录非空 index contract。
 - **执行器缺失：** 执行器已存在；当前问题是其输入身份、单位和期间绑定。
 
-## 7. 本轮实施与验证顺序
+## 7. 本轮已落实内容与本地证据
 
-1. 先加入 wrapped table、soft-wrapped span、scale provenance、consolidated scope、
-   exact finance metric 和 execution citation 的失败回归测试；
-2. 单独提交保护测试和本文档；
-3. 实现 parser、identity、binding 和 finalizer 修复；
-4. 运行相关 `benchmark/tests`、`libs/ktem/ktem_tests`、完整两套测试、hygiene 和
-   changed-files pre-commit；
-5. 提交实现代码；
-6. 仅重建隔离索引并提交 FinanceBench 20×4 聚焦任务，不监听至完成；
-7. 新 artifact 达标后再判断是否需要 QASPER 定向修复和全量重跑。
+- table parser 按 period section 解析 quarter/fiscal-year，并支持
+  `label -> values + next label` 的 wrapped PDF 行；同年不同 section 的 cell ID
+  加入 `period-kind` 消歧。
+- narrative span parser 先合并 PDF soft line wrap，再按句子切分；相同金额的不同
+  事实保留独立 span ID。
+- atomic cell/span 的局部 scale 不再传播给其他 evidence；scale convention 仍可由
+  同 source 的表头或明确 tabular convention 提供。
+- consolidated 主表 heading 优先于某一行的 held-for-sale 文本；required finance
+  metric slot 使用完整短语、period kind 和 atomic evidence 三重约束。
+- cell/span 的结构 ID 与 source backref 分离；deterministic calculation 优先按
+  `calculation_execution.citation_ids` 回投实际 evidence。
+- 新 citation 投影拆到独立模块，没有扩大 `answer_finalizer.py` 的职责和 hygiene
+  债务。
+
+本地验证：
+
+| 验证                              | 结果                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| 新保护测试，生产修改前            | 8 failed、66 passed；失败与 8 个目标不变量一一对应                         |
+| 目标回归                          | 75 passed；新增 atomic-slot 测试单独先失败后通过                           |
+| `libs/ktem/ktem_tests`            | 1362 passed                                                                |
+| `benchmark/tests`                 | 469 passed                                                                 |
+| codebase hygiene                  | 无 ratchet violation；未刷新 baseline                                      |
+| changed-files pre-commit          | 全部通过                                                                   |
+| `MARA --help` / `MARA-cli --help` | 均 exit 0；仅 Usage 入口名称不同，命令面一致                               |
+| v22 artifact 只读回放             | `10285` 恢复 PPE FY2018=12645 的稳定 cell、fiscal-year、consolidated scope |
+
+下一步只提交隔离的 FinanceBench 20×4 v23 聚焦任务，不监听至完成。新 artifact 达标
+后再判断是否需要 QASPER 定向修复和全量重跑。
 
 公开 `MARA`、`MARA-cli` 和 `MARA docqa` 命令及参数保持不变。EvidenceBundle、
 CalculationPlan 和 benchmark prediction 只允许增加向后兼容的诊断字段，不删除或

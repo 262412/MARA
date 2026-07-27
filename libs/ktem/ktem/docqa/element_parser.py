@@ -231,10 +231,7 @@ def parse_financial_numeric_span_records(
                 currency=currency,
                 caption=metric,
                 text=clause,
-                source_backrefs=[
-                    f"{file_id}#page:{page_label}",
-                    *([parent_element_id] if parent_element_id else []),
-                ],
+                source_backrefs=[f"{file_id}#page:{page_label}"],
                 metadata=parser_metadata,
             ).as_dict()
         )
@@ -324,7 +321,7 @@ def _with_financial_cells(record: dict[str, Any]) -> list[dict[str, Any]]:
                 row_label=cell.row_label,
                 column_label=cell.column_label,
                 period=cell.period,
-                period_kind=_period_kind(str(record.get("text") or "")),
+                period_kind=cell.period_kind,
                 value=str(cell.value),
                 unit=cell.unit,
                 scale=cell.scale,
@@ -334,10 +331,7 @@ def _with_financial_cells(record: dict[str, Any]) -> list[dict[str, Any]]:
                 bbox=record.get("bbox"),
                 caption=cell.row_label,
                 text=cell.verification_text(),
-                source_backrefs=[
-                    *list(record.get("source_backrefs") or []),
-                    cell.cell_id,
-                ],
+                source_backrefs=list(record.get("source_backrefs") or []),
                 metadata=metadata,
             ).as_dict()
         )
@@ -356,9 +350,10 @@ def _period_kind(text: str) -> str:
 def _financial_fact_clauses(text: str) -> tuple[str, ...]:
     return tuple(
         " ".join(clause.split())
+        for paragraph in re.split(r"(?:\r?\n){2,}", str(text or ""))
         for clause in re.split(
-            r"(?<=[.!?])\s+(?=[A-Z])|[\r\n;]+",
-            str(text or ""),
+            r"(?<=[.!?])\s+(?=[A-Z])|[;]+",
+            " ".join(line.strip() for line in paragraph.splitlines()),
         )
         if clause.strip()
     )

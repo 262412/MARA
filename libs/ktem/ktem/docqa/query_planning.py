@@ -266,8 +266,13 @@ def score_evidence_for_slot(
         slot.financial_scope,
     ):
         return 0.0
-    if slot.role == "operand" and not _bound_numeric_value(slot, item, text):
-        return 0.0
+    if slot.metric in FINANCE_METRIC_ALIASES:
+        if not atomic_evidence(item):
+            return 0.0
+        if not finance_metric_evidence_matches(slot.metric, text):
+            return 0.0
+        if not _bound_numeric_value(slot, item, text):
+            return 0.0
     modality = str(item.get("modality") or item.get("element_type") or "").lower()
     if slot.modality and slot.modality not in {"auto", modality}:
         return 0.0

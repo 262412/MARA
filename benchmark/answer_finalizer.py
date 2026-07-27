@@ -7,6 +7,7 @@ from typing import Any
 from .answer_modes import normalize_benchmark_answer_mode
 from .answer_repetition import deduplicate_final_answer as _deduplicate_final_answer
 from .answer_scoring_adapter import select_scoring_answer
+from .calculation_citation_projection import calculation_citation_items
 from .ragtruth_answer_contract import ragtruth_finalization_metadata
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
@@ -241,6 +242,22 @@ def attach_structured_citations_from_evidence(
     if prediction.get("predicted_citations") or prediction.get("structured_citations"):
         return []
     canonical_sources = _canonical_source_refs(prediction)
+    calculation_citations = [
+        citation
+        for item in calculation_citation_items(
+            prediction,
+            _citation_candidate_items(prediction),
+        )
+        if (
+            citation := _citation_from_item(
+                item,
+                span=span,
+                canonical_sources=canonical_sources,
+            )
+        )
+    ]
+    if calculation_citations:
+        return _unique_citations(calculation_citations)
     for item in _citation_candidate_items(prediction):
         citation = _citation_from_item(
             item,

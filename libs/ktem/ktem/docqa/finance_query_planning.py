@@ -16,6 +16,8 @@ FINANCE_METRIC_ALIASES = {
         "capital expenditures",
         "capital spending",
         "capex",
+        "purchases of land buildings and equipment",
+        "purchase of property plant and equipment",
     ),
     "cash and cash equivalents": (
         "cash and cash equivalents",

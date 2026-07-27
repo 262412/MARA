@@ -62,54 +62,60 @@ def parse_financial_table_cells(
     if not text:
         return ()
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    header_index, periods = _period_header(lines)
-    if header_index is None or len(periods) < 2:
+    sections = _period_sections(lines, item)
+    if not sections:
         return ()
 
     identity = _table_identity(item)
     statement_kind, financial_scope = financial_statement_identity(item)
-    period_kind = _period_kind(item, text)
     scale = _dimension(item, "scale") or _scale(text)
     currency = _dimension(item, "currency") or _currency(text)
     unit = _dimension(item, "unit")
     cells: list[FinancialTableCell] = []
     row_index = 0
-    for line in lines[header_index + 1 :]:
-        if len(set(_YEAR_RE.findall(line))) >= 2:
-            break
-        parsed = _parse_row(line, periods)
-        if parsed is None:
-            continue
-        row_label, values = parsed
-        row_index += 1
-        row_slug = _slug(row_label)
-        for column_index, (period, value) in enumerate(
-            zip(periods, values),
-            start=1,
+    disambiguate_period_kind = len(sections) > 1
+    for header_index, end_index, periods, period_kind in sections:
+        for row_label, values in _section_rows(
+            lines[header_index + 1 : end_index],
+            periods,
         ):
-            cell_id = f"{identity['canonical_id']}#row:{row_slug}#column:{period}"
-            cells.append(
-                FinancialTableCell(
-                    cell_id=cell_id,
-                    evidence_id=identity["evidence_id"],
-                    canonical_id=identity["canonical_id"],
-                    source_id=identity["source_id"],
-                    page_label=identity["page_label"],
-                    table_id=identity["table_id"],
-                    row_index=row_index,
-                    column_index=column_index,
-                    row_label=row_label,
-                    column_label=period,
-                    period=period,
-                    value=value,
-                    period_kind=period_kind,
-                    unit=unit,
-                    scale=scale,
-                    currency=currency,
-                    statement_kind=statement_kind,
-                    financial_scope=financial_scope,
-                )
+            row_index += 1
+            row_slug = _slug(row_label)
+            period_kind_identity = (
+                f"#period-kind:{period_kind or 'unspecified'}"
+                if disambiguate_period_kind
+                else ""
             )
+            for column_index, (period, value) in enumerate(
+                zip(periods, values),
+                start=1,
+            ):
+                cell_id = (
+                    f"{identity['canonical_id']}{period_kind_identity}"
+                    f"#row:{row_slug}#column:{period}"
+                )
+                cells.append(
+                    FinancialTableCell(
+                        cell_id=cell_id,
+                        evidence_id=identity["evidence_id"],
+                        canonical_id=identity["canonical_id"],
+                        source_id=identity["source_id"],
+                        page_label=identity["page_label"],
+                        table_id=identity["table_id"],
+                        row_index=row_index,
+                        column_index=column_index,
+                        row_label=row_label,
+                        column_label=period,
+                        period=period,
+                        value=value,
+                        period_kind=period_kind,
+                        unit=unit,
+                        scale=scale,
+                        currency=currency,
+                        statement_kind=statement_kind,
+                        financial_scope=financial_scope,
+                    )
+                )
     return tuple(cells)
 
 
@@ -252,6 +258,82 @@ def _period_header(lines: list[str]) -> tuple[int | None, tuple[str, ...]]:
     return None, ()
 
 
+def _period_sections(
+    lines: list[str],
+    item: dict[str, Any],
+) -> tuple[tuple[int, int, tuple[str, ...], str], ...]:
+    headers = [
+        (index, tuple(dict.fromkeys(_YEAR_RE.findall(line))))
+        for index, line in enumerate(lines)
+        if len(set(_YEAR_RE.findall(line))) >= 2
+    ]
+    sections = []
+    explicit_period_kind = _dimension(item, "period_kind")
+    for header_position, (header_index, periods) in enumerate(headers):
+        end_index = (
+            headers[header_position + 1][0]
+            if header_position + 1 < len(headers)
+            else len(lines)
+        )
+        section_heading = " ".join(lines[max(0, header_index - 1) : header_index + 1])
+        period_kind = explicit_period_kind or _period_kind({}, section_heading)
+        sections.append((header_index, end_index, periods, period_kind))
+    return tuple(sections)
+
+
+def _section_rows(
+    lines: list[str],
+    periods: tuple[str, ...],
+) -> tuple[tuple[str, tuple[Decimal, ...]], ...]:
+    rows: list[tuple[str, tuple[Decimal, ...]]] = []
+    pending_label = ""
+    for line in lines:
+        parsed = _parse_row(line, periods)
+        if parsed is not None:
+            rows.append(parsed)
+            pending_label = ""
+            continue
+
+        matches = [
+            match
+            for match in _VALUE_RE.finditer(line)
+            if not _bare_period_token(match.group(0), periods)
+        ]
+        if pending_label and len(matches) >= len(periods):
+            selected = matches[: len(periods)]
+            values = tuple(
+                value
+                for match in selected
+                if (value := _decimal(match.group(0))) is not None
+            )
+            if len(values) == len(periods):
+                rows.append((pending_label, values))
+                pending_label = _row_label_fragment(line[selected[-1].end() :])
+                continue
+
+        if not matches:
+            fragment = _row_label_fragment(line)
+            if fragment:
+                pending_label = " ".join(
+                    part for part in (pending_label, fragment) if part
+                )
+        else:
+            pending_label = ""
+    return tuple(rows)
+
+
+def _row_label_fragment(value: str) -> str:
+    fragment = str(value or "").strip(" :.|-\t")
+    if _normalized_text(fragment) in {
+        "assets",
+        "liabilities",
+        "equity",
+        "liabilities and equity",
+    }:
+        return ""
+    return fragment if fragment and not _YEAR_RE.search(fragment) else ""
+
+
 def _parse_row(
     line: str,
     periods: tuple[str, ...],
@@ -372,7 +454,13 @@ def _period_kind(item: dict[str, Any], text: str) -> str:
         return "quarter"
     if any(
         phrase in lowered
-        for phrase in ("twelve months ended", "fiscal year", "full year", "year ended")
+        for phrase in (
+            "twelve months ended",
+            "fiscal year",
+            "full year",
+            "year ended",
+            "december 31",
+        )
     ):
         return "fiscal_year"
     return ""
