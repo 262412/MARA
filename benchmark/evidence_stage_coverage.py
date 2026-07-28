@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.evidence_locators import (
+    normalized_page_aliases,
+    normalized_source_aliases,
+)
+
 EvidenceKey = tuple[str, str, str, str]
 
 
@@ -15,6 +20,11 @@ def stage_coverage_values(
     gold: set[EvidenceKey],
 ) -> dict[str, float | None]:
     stages = {
+        "canonical_candidate_evidence_coverage": candidate_pool,
+        "post_fusion_evidence_coverage": _stage_records(
+            metadata,
+            "fused_evidence",
+        ),
         "fused_evidence_coverage": _stage_records(metadata, "fused_evidence"),
         "reranker_input_evidence_coverage": _stage_records(
             metadata,
@@ -31,7 +41,15 @@ def stage_coverage_values(
             "execution_operand_evidence",
         ),
         "verified_evidence_coverage": _stage_records(metadata, "verified_evidence"),
+        "verified_claim_support_evidence_coverage": _stage_records(
+            metadata,
+            "verified_claim_support_evidence",
+        ),
         "cited_evidence_coverage": _stage_records(metadata, "cited_evidence"),
+        "emitted_citation_evidence_coverage": _stage_records(
+            metadata,
+            "emitted_citation_evidence",
+        ),
     }
     return {
         "candidate_recall_at_50": evidence_coverage(candidates, prediction, gold),
@@ -40,7 +58,7 @@ def stage_coverage_values(
             _gold_page_keys(prediction),
         ),
         "candidate_pool_recall_at_80": evidence_coverage(
-            candidate_pool,
+            candidate_pool[:80] if candidate_pool is not None else None,
             prediction,
             gold,
         ),
@@ -130,16 +148,18 @@ def _record_key(item: dict[str, Any]) -> EvidenceKey:
             or item.get("document_id")
             or identity_payload.get("source_id")
             or ""
-        ),
-        str(item.get("page_label") or item.get("page") or ""),
-        _record_kind(item, identity_payload),
-        _record_local_id(item, identity_payload),
+        )
+        .strip()
+        .lower(),
+        str(item.get("page_label") or item.get("page") or "").strip().lower(),
+        _record_kind(item, identity_payload).lower(),
+        _record_local_id(item, identity_payload).lower(),
     )
 
 
 def _item_keys(item: dict[str, Any]) -> set[EvidenceKey]:
     sources = _item_sources(item) | {""}
-    pages = {str(item.get("page_label") or item.get("page") or ""), ""}
+    pages = normalized_page_aliases(item) | {""}
     record = _record_key(item)
     kinds = {record[2], ""}
     elements = {record[3], ""}
@@ -186,14 +206,16 @@ def _record_local_id(
 def _gold_page_keys(prediction: dict[str, Any]) -> set[tuple[str, str]]:
     keys = {
         (
-            str(item.get("source_id") or item.get("document_id") or ""),
-            str(item.get("page_label") or item.get("page") or ""),
+            str(item.get("source_id") or item.get("document_id") or "").strip().lower(),
+            str(item.get("page_label") or item.get("page") or "").lower(),
         )
         for item in _records(prediction.get("gold_evidence"))
         if item.get("page_label") not in (None, "")
         or item.get("page") not in (None, "")
     }
-    return keys or {("", str(page)) for page in prediction.get("gold_pages") or []}
+    return keys or {
+        ("", str(page).strip().lower()) for page in prediction.get("gold_pages") or []
+    }
 
 
 def _page_coverage(
@@ -207,7 +229,7 @@ def _page_coverage(
         for source, page in gold_pages
         if any(
             (not source or source in _item_sources(item))
-            and str(item.get("page_label") or item.get("page") or "") == page
+            and page.lower() in normalized_page_aliases(item)
             for item in items
         )
     }
@@ -222,17 +244,7 @@ def _stage_records(
 
 
 def _item_sources(item: dict[str, Any]) -> set[str]:
-    sources = {
-        str(item.get("source_id") or ""),
-        str(item.get("document_id") or ""),
-    }
-    source_name = str(item.get("source_name") or item.get("file_name") or "")
-    if source_name:
-        filename = source_name.rsplit("/", 1)[-1]
-        sources.add(filename.rsplit(".", 1)[0])
-    for source_ref in item.get("source_backrefs") or []:
-        sources.add(str(source_ref or "").split("#", 1)[0])
-    return {source for source in sources if source}
+    return normalized_source_aliases(item)
 
 
 def _records(value: Any) -> list[dict[str, Any]]:

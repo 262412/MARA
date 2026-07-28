@@ -6,6 +6,7 @@ from typing import Any
 
 from .calculation_claim_verification import calculation_claim_result
 from .calculation_evidence_identity import calculation_evidence_lookup
+from .claim_clauses import split_claim_clauses
 from .claim_filtering import answer_claims
 from .claim_support import (
     claim_supported,
@@ -21,9 +22,14 @@ from .domain_verifiers import (
     normalize_verification_domain,
 )
 from .evidence import EvidenceBundle
-from .evidence_identity import exact_evidence_aliases, identity_of
+from .evidence_identity import identity_of
 from .evidence_text import evidence_text, extract_final_answer_text
 from .query_planning import request_planning_question
+from .verification_evidence_mapping import (
+    claim_support_identities_by_claim,
+    missing_verification_slots,
+    verification_slots,
+)
 
 
 @dataclass(frozen=True)
@@ -76,7 +82,7 @@ def verify_decision(
             status="not_required",
             reason="Direct route does not require evidence verification.",
         )
-    missing_slots = _missing_verification_slots(request)
+    missing_slots = missing_verification_slots(request)
     if missing_slots:
         action = "retry" if retrieve_decision.retry else "abstain"
         return VerifyDecision(
@@ -100,13 +106,15 @@ def verify_decision(
             reason=f"{mode.title()} verification requested without sufficient evidence.",
             action=action,
         )
+    calculation_claims = split_claim_clauses(claims) if domain == "finance" else claims
     typed_calculation = calculation_claim_result(
         evidence_bundle,
         answer,
-        claims,
+        calculation_claims,
         domain=domain,
     )
     if typed_calculation is not None:
+        claims = calculation_claims
         results = _calculation_verification_results(
             typed_calculation,
             claims,
@@ -195,15 +203,6 @@ def with_verification_evidence(
     for citation_id in citation_ids:
         item = lookup.get(citation_id)
         if item is None:
-            item = next(
-                (
-                    candidate
-                    for candidate in bundle.items
-                    if citation_id in exact_evidence_aliases(candidate)
-                ),
-                None,
-            )
-        if item is None:
             continue
         identity = identity_of(item).key
         if identity not in seen:
@@ -212,6 +211,10 @@ def with_verification_evidence(
     metadata = dict(bundle.metadata)
     metadata["verified_evidence"] = verified
     metadata["verified_claim_support_evidence"] = list(verified)
+    metadata["verified_claim_support_by_claim"] = claim_support_identities_by_claim(
+        decision.claim_results,
+        lookup,
+    )
     return EvidenceBundle(route=bundle.route, items=bundle.items, metadata=metadata)
 
 
@@ -274,6 +277,14 @@ def verify_claim(
         for item in evidence_items
         if text_contradicts_claim(claim, evidence_text([item]))
     ]
+    if supporting and contradicting:
+        return VerifiedClaim(
+            claim_id=claim_id,
+            claim=claim,
+            status="conflicting",
+            supporting_evidence_ids=tuple(dict.fromkeys(supporting)),
+            contradicting_evidence_ids=tuple(dict.fromkeys(contradicting)),
+        )
     if supporting:
         return VerifiedClaim(
             claim_id=claim_id,
@@ -541,24 +552,6 @@ def _has_negation(value: str) -> bool:
     )
 
 
-def _verification_slots(request: Any) -> list[Any]:
-    plan = getattr(request, "query_plan", None)
-    return [
-        slot
-        for slot in getattr(plan, "evidence_slots", ()) or ()
-        if bool(getattr(slot, "required_for_verification", False))
-    ]
-
-
-def _missing_verification_slots(request: Any) -> list[str]:
-    return [
-        str(getattr(slot, "slot_id", "") or "")
-        for slot in _verification_slots(request)
-        if str(getattr(slot, "status", "") or "") != "filled"
-        or not tuple(getattr(slot, "evidence_ids", ()) or ())
-    ]
-
-
 def _enforce_verification_slot_support(
     request: Any,
     decision: VerifyDecision,
@@ -572,7 +565,7 @@ def _enforce_verification_slot_support(
     }
     unsupported_slots = [
         str(getattr(slot, "slot_id", "") or "")
-        for slot in _verification_slots(request)
+        for slot in verification_slots(request)
         if str(getattr(slot, "role", "") or "") == "support"
         and not (
             supporting_ids

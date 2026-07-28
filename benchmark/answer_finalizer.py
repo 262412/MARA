@@ -22,6 +22,7 @@ from .citation_stage_projection import (
     source_ref_uses_uuid_like_source,
 )
 from .ragtruth_answer_contract import ragtruth_finalization_metadata
+from .verified_claim_citations import verified_claim_support_items
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
 _TRUNCATED_JSON_ANSWER_RE = re.compile(
@@ -280,9 +281,8 @@ def attach_structured_citations_from_evidence(
             calculation_matches,
             canonical_sources=canonical_sources,
         )
-        return _unique_citations(calculation_citations)
     verified_citations = []
-    for item in _verified_claim_support_items(prediction):
+    for item in verified_claim_support_items(prediction, all_candidates):
         citation = _citation_from_item(
             item,
             span=span,
@@ -291,7 +291,7 @@ def attach_structured_citations_from_evidence(
         )
         if citation:
             verified_citations.append(citation)
-    return _unique_citations(verified_citations)
+    return _unique_citations([*calculation_citations, *verified_citations])
 
 
 def _canonicalized_existing_citations(
@@ -469,28 +469,6 @@ def _citation_candidate_items(prediction: dict[str, Any]) -> list[dict[str, Any]
         for item in prediction.get("retrieved_hits") or []
         if isinstance(item, dict)
     )
-    return items
-
-
-def _verified_claim_support_items(
-    prediction: dict[str, Any],
-) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
-    evidence_bundle = prediction.get("evidence_bundle")
-    metadata_sources: list[dict[str, Any]] = []
-    if isinstance(evidence_bundle, dict):
-        bundle_metadata = evidence_bundle.get("metadata")
-        if isinstance(bundle_metadata, dict):
-            metadata_sources.append(bundle_metadata)
-    evidence_metadata = prediction.get("evidence_metadata")
-    if isinstance(evidence_metadata, dict):
-        metadata_sources.append(evidence_metadata)
-    for metadata in metadata_sources:
-        items.extend(
-            item
-            for item in metadata.get("verified_claim_support_evidence") or []
-            if isinstance(item, dict)
-        )
     return items
 
 

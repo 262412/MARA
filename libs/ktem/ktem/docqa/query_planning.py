@@ -5,6 +5,7 @@ from dataclasses import replace
 from typing import Any
 
 from .evidence_identity import identity_of
+from .evidence_locators import locator_matches, locator_requirement_count
 from .evidence_modality import modality_matches
 from .finance_evidence_dimensions import evidence_scale, requested_scale
 from .finance_query_planning import (
@@ -128,12 +129,14 @@ def _build_heuristic_query_plan(
     finance_specs = inferred_finance_specs if finance_domain else ()
     finance_fact = finance_domain and normalized_type != "numeric" and not causal_intent
     finance_support_specs = finance_fact_specs(text, periods) if finance_fact else ()
+    explicit_page_labels = _explicit_page_labels(capabilities)
     slots = (
         _finance_slots(
             finance_specs or finance_support_specs,
             require_scale=bool(finance_specs and requested_scale(text)),
             role="operand" if finance_specs else "support",
             period_kind=period_kind,
+            page_labels=explicit_page_labels,
         )
         if finance_specs or finance_support_specs
         else heuristic_slots(
@@ -384,65 +387,26 @@ def _locator_score(
 ) -> float | None:
     if locator is None or not locator.as_dict():
         return 0.0
-    metadata = dict(item.get("metadata") or {})
-    comparisons = (
-        (
-            locator.source_id,
-            _first_item_value(
-                item,
-                metadata,
-                "source_id",
-                "file_id",
-                "document_id",
-                "runtime_source_id",
-            ),
-        ),
-        (
-            locator.page_label,
-            _first_item_value(
-                item, metadata, "page_label", "page", "page_number", "dataset_page"
-            ),
-        ),
-        (
-            locator.element_id,
-            _first_item_value(item, metadata, "element_id"),
-        ),
-        (
-            locator.figure_label,
-            _first_item_value(
-                item, metadata, "figure_label", "figure_id", "element_id"
-            ),
-        ),
-        (
-            locator.table_label,
-            _first_item_value(item, metadata, "table_label", "table_id", "element_id"),
-        ),
-    )
-    required = [
-        (expected.lower(), actual.lower())
-        for expected, actual in comparisons
-        if expected
-    ]
-    if any(
-        actual != expected
-        and not actual.endswith(f"-{expected}")
-        and not actual.endswith(f":{expected}")
-        for expected, actual in required
+    if not locator_matches(
+        item,
+        source_id=locator.source_id,
+        page_label=locator.page_label,
+        page_labels=locator.page_labels,
+        element_id=locator.element_id,
+        figure_label=locator.figure_label,
+        table_label=locator.table_label,
     ):
         return None
-    return float(len(required))
-
-
-def _first_item_value(
-    item: dict[str, Any],
-    metadata: dict[str, Any],
-    *keys: str,
-) -> str:
-    for key in keys:
-        value = item.get(key, metadata.get(key))
-        if value not in (None, ""):
-            return str(value).strip()
-    return ""
+    return float(
+        locator_requirement_count(
+            source_id=locator.source_id,
+            page_label=locator.page_label,
+            page_labels=locator.page_labels,
+            element_id=locator.element_id,
+            figure_label=locator.figure_label,
+            table_label=locator.table_label,
+        )
+    )
 
 
 def _metric_coverage(
@@ -543,9 +507,10 @@ def _finance_slots(
     require_scale: bool,
     role: str = "operand",
     period_kind: str = "",
+    page_labels: tuple[str, ...] = (),
 ) -> tuple[EvidenceSlot, ...]:
     slots = []
-    for slot_id, metric, period in specs:
+    for index, (slot_id, metric, period) in enumerate(specs):
         statement_kind, financial_scope = required_financial_identity(metric)
         slots.append(
             EvidenceSlot(
@@ -559,6 +524,11 @@ def _finance_slots(
                 financial_scope=financial_scope,
                 required_for_execution=role == "operand",
                 query=" ".join(value for value in (metric, period) if value),
+                locator=_finance_slot_locator(
+                    index,
+                    slot_count=len(specs),
+                    page_labels=page_labels,
+                ),
             )
         )
     slots_tuple = tuple(slots)
@@ -573,6 +543,24 @@ def _finance_slots(
             query="tabular dollars unit scale convention",
         ),
     )
+
+
+def _explicit_page_labels(capabilities: dict[str, object]) -> tuple[str, ...]:
+    values = capabilities.get("explicit_page_labels")
+    if not isinstance(values, (list, tuple)):
+        return ()
+    return tuple(str(value).strip() for value in values if str(value).strip())
+
+
+def _finance_slot_locator(
+    index: int,
+    *,
+    slot_count: int,
+    page_labels: tuple[str, ...],
+) -> EvidenceLocator:
+    if len(page_labels) == slot_count:
+        return EvidenceLocator(page_label=page_labels[index])
+    return EvidenceLocator(page_labels=page_labels)
 
 
 def _tokens(text: str) -> set[str]:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .claim_clauses import split_claim_text
 from .claim_filtering import clean_answer_text
 
 CLAIM_AGGREGATION_CONTRACT = "claim_aggregation.v1"
@@ -19,6 +20,7 @@ _UNIT_RE = re.compile(
     re.IGNORECASE,
 )
 _SYNONYMS = {
+    "amounted": "amount",
     "increased": "increase",
     "increases": "increase",
     "rose": "increase",
@@ -26,6 +28,7 @@ _SYNONYMS = {
     "higher": "increase",
     "grew": "increase",
     "growth": "increase",
+    "reported": "report",
     "decreased": "decrease",
     "declined": "decrease",
     "decline": "decrease",
@@ -52,6 +55,7 @@ _STOPWORDS = {
 }
 _RELATIONS = {
     "account": "account_for",
+    "amount": "equal",
     "comprise": "account_for",
     "decrease": "decrease",
     "equal": "equal",
@@ -59,6 +63,7 @@ _RELATIONS = {
     "include": "include",
     "increase": "increase",
     "outperform": "outperform",
+    "report": "equal",
     "represent": "account_for",
     "total": "equal",
 }
@@ -119,7 +124,10 @@ def aggregate_answer_claims(answer: str) -> tuple[str, dict[str, Any]]:
 def _claim_chunks(answer: str) -> list[str]:
     cleaned = clean_answer_text(answer)
     return [
-        chunk.strip() for chunk in _SENTENCE_SPLIT_RE.split(cleaned) if chunk.strip()
+        clause
+        for chunk in _SENTENCE_SPLIT_RE.split(cleaned)
+        for clause in split_claim_text(chunk)
+        if clause
     ]
 
 
@@ -214,6 +222,17 @@ def _typed_claim_key(tokens: list[str], text: str) -> dict[str, tuple[str, ...] 
         and token not in _SCOPE_TOKENS
         and token not in _RELATIONS
     )
+    relation_token = tokens[relation_index] if relation_index is not None else ""
+    if relation == "equal" and (relation_token == "report" or not subject):
+        metric_subject = _reported_metric_subject(
+            tokens,
+            relation_index,
+            years=years,
+            values=set(values),
+            units=set(units),
+        )
+        if metric_subject:
+            subject = metric_subject
     return {
         "subject": subject,
         "relation": relation,
@@ -223,6 +242,29 @@ def _typed_claim_key(tokens: list[str], text: str) -> dict[str, tuple[str, ...] 
         "scope": scope,
         "polarity": _polarity(tokens),
     }
+
+
+def _reported_metric_subject(
+    tokens: list[str],
+    relation_index: int | None,
+    *,
+    years: set[str],
+    values: set[str],
+    units: set[str],
+) -> tuple[str, ...]:
+    if relation_index is None:
+        return ()
+    candidates = [
+        token
+        for token in tokens[relation_index + 1 :]
+        if token not in years
+        and token not in values
+        and token not in units
+        and token not in _STOPWORDS
+        and token not in _RELATIONS
+        and token not in {"company", "group"}
+    ]
+    return tuple(candidates[-1:])
 
 
 def _relation(tokens: list[str]) -> tuple[int | None, str]:

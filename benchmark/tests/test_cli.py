@@ -17,6 +17,23 @@ def _read_jsonl(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+def _paired_semantic_summary(score, *, coverage=None):
+    summary = {
+        "avg_semantic_answer_f1": score,
+        "per_example_metric_records": [
+            {
+                "dataset": "qasper",
+                "example_id": "ex-1",
+                "route": "controller_auto",
+                "semantic_answer_f1": score,
+            }
+        ],
+    }
+    if coverage is not None:
+        summary["semantic_judge_coverage"] = coverage
+    return summary
+
+
 def fixture_rescore_alce_evaluator(_prediction):
     return {
         "metrics": {"official_answer_score": 0.64},
@@ -166,14 +183,9 @@ def test_evaluate_repair_gates_cli_writes_stage_specific_report(tmp_path):
     phase_b = tmp_path / "phase-b.json"
     phase_g = tmp_path / "phase-g.json"
     output = tmp_path / "repair-gates.json"
-    phase_b.write_text(json.dumps({"avg_semantic_answer_f1": 0.40}), encoding="utf-8")
+    phase_b.write_text(json.dumps(_paired_semantic_summary(0.40)), encoding="utf-8")
     phase_g.write_text(
-        json.dumps(
-            {
-                "avg_semantic_answer_f1": 0.49,
-                "semantic_judge_coverage": 0.997,
-            }
-        ),
+        json.dumps(_paired_semantic_summary(0.49, coverage=0.997)),
         encoding="utf-8",
     )
 

@@ -56,7 +56,17 @@ def test_formal_full_run_requires_phase_g_and_all_preflight_gates():
 
 def test_release_gates_report_metric_and_failure_stage_without_reweighting():
     result = evaluate_release_gates(
-        phase_b={"avg_semantic_answer_f1": 0.40},
+        phase_b={
+            "avg_semantic_answer_f1": 0.40,
+            "per_example_metric_records": [
+                {
+                    "dataset": "qasper",
+                    "example_id": "ex-1",
+                    "route": "controller_auto",
+                    "semantic_answer_f1": 0.40,
+                }
+            ],
+        },
         phase_g={
             "avg_semantic_answer_f1": 0.49,
             "semantic_calibration_examples": 200,
@@ -64,6 +74,14 @@ def test_release_gates_report_metric_and_failure_stage_without_reweighting():
             "semantic_judge_coverage": 0.997,
             "slidevqa_duplicate_ratio": 0.04,
             "ragtruth_json_valid": 0.995,
+            "per_example_metric_records": [
+                {
+                    "dataset": "qasper",
+                    "example_id": "ex-1",
+                    "route": "controller_auto",
+                    "semantic_answer_f1": 0.49,
+                }
+            ],
         },
         paired_semantic_ci_low=0.01,
     )
@@ -123,6 +141,14 @@ def test_release_gates_allow_different_code_with_matching_paired_inputs():
                 "paired_input_hash": "frozen-input",
                 "index_contract": f"sha256:{'a' * 64}",
             },
+            "per_example_metric_records": [
+                {
+                    "dataset": "qasper",
+                    "example_id": "ex-1",
+                    "route": "controller_auto",
+                    "semantic_answer_f1": 0.40,
+                }
+            ],
         },
         phase_g={
             "avg_semantic_answer_f1": 0.49,
@@ -131,6 +157,14 @@ def test_release_gates_allow_different_code_with_matching_paired_inputs():
                 "paired_input_hash": "frozen-input",
                 "index_contract": f"sha256:{'a' * 64}",
             },
+            "per_example_metric_records": [
+                {
+                    "dataset": "qasper",
+                    "example_id": "ex-1",
+                    "route": "controller_auto",
+                    "semantic_answer_f1": 0.49,
+                }
+            ],
         },
         paired_semantic_ci_low=0.01,
     )

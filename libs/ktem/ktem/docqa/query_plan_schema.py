@@ -13,16 +13,20 @@ MAX_RETRIEVAL_ROUNDS = 2
 class EvidenceLocator:
     source_id: str = ""
     page_label: str = ""
+    page_labels: tuple[str, ...] = ()
     element_id: str = ""
     figure_label: str = ""
     table_label: str = ""
 
-    def as_dict(self) -> dict[str, str]:
-        return {
+    def as_dict(self) -> dict[str, Any]:
+        payload = {
             key: value
             for key, value in asdict(self).items()
             if str(value or "").strip()
         }
+        if self.page_labels:
+            payload["page_labels"] = list(self.page_labels)
+        return payload
 
 
 @dataclass(frozen=True)
@@ -159,6 +163,11 @@ def _slot_from_payload(index: int, item: dict[str, Any]) -> EvidenceSlot:
         EvidenceLocator(
             source_id=str(locator_payload.get("source_id") or "").strip(),
             page_label=str(locator_payload.get("page_label") or "").strip(),
+            page_labels=tuple(
+                str(value).strip()
+                for value in locator_payload.get("page_labels") or []
+                if str(value).strip()
+            ),
             element_id=str(locator_payload.get("element_id") or "").strip(),
             figure_label=str(locator_payload.get("figure_label") or "").strip(),
             table_label=str(locator_payload.get("table_label") or "").strip(),

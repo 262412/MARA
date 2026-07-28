@@ -5,6 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from ktem.docqa.evidence_locators import (
+    normalized_page_aliases,
+    normalized_source_aliases,
+    normalized_source_page_locators,
+)
+
 PageExtractor = Callable[[Path, tuple[int, ...]], list[tuple[int, str]]]
 PAGE_LABEL_KEYS = ("page_label", "page_number_label", "source_page_label")
 PAGE_INDEX_KEYS = ("parser_page_index", "page", "page_index")
@@ -237,16 +243,15 @@ def item_matches_citation(item: dict[str, Any], citation: str) -> bool:
     citation_text = str(citation or "").strip()
     if not citation_text:
         return False
-    if citation_text in _item_source_backrefs(item):
-        return True
-
     citation_source = citation_source_id(citation_text)
-    if not citation_source or citation_source != item_source_id(item):
-        return False
     citation_page = citation_page_label(citation_text)
-    if citation_page is None:
-        return True
-    return citation_page == item_page_label(item)
+    source = citation_source.strip().lower()
+    page = str(citation_page or "").strip().lower()
+    return any(
+        (not source or source == candidate_source)
+        and (not page or page == candidate_page)
+        for candidate_source, candidate_page in normalized_source_page_locators(item)
+    )
 
 
 def locator_pages_are_alignment_candidates(
@@ -292,20 +297,20 @@ def item_matches_gold_source(item: dict[str, Any], gold_record: dict[str, Any]) 
     }
     if not gold_sources:
         return True
-    item_sources = {item_source_id(item)}
-    item_sources.update(citation_source_id(ref) for ref in _item_source_backrefs(item))
-    item_sources.discard(None)
-    item_sources.discard("")
-    return bool(item_sources & gold_sources)
+    normalized_gold = {source.strip().lower() for source in gold_sources}
+    return bool(normalized_source_aliases(item) & normalized_gold)
 
 
 def item_page_label(item: dict[str, Any]) -> str | None:
+    aliases = normalized_page_aliases(item)
     page_label = _first_metadata_text(
         item,
         ("page_label", "page_number_label", "source_page_label", "page"),
     )
     if page_label is not None:
         return page_label
+    if aliases:
+        return sorted(aliases)[0]
     for ref in _item_source_backrefs(item):
         page_label = citation_page_label(ref)
         if page_label is not None:
@@ -314,7 +319,11 @@ def item_page_label(item: dict[str, Any]) -> str | None:
 
 
 def item_source_id(item: dict[str, Any]) -> str | None:
-    return _first_metadata_text(item, SOURCE_ID_KEYS)
+    direct = _first_metadata_text(item, SOURCE_ID_KEYS)
+    if direct is not None:
+        return direct
+    aliases = normalized_source_aliases(item)
+    return sorted(aliases)[0] if aliases else None
 
 
 def citation_page_label(citation: str) -> str | None:

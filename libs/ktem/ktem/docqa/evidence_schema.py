@@ -8,6 +8,7 @@ from typing import Any
 class EvidenceElement:
     evidence_id: str
     source_id: str = ""
+    runtime_source_id: str = ""
     source_name: str = ""
     source_aliases: list[str] = field(default_factory=list)
     page_label: str = ""
@@ -16,6 +17,8 @@ class EvidenceElement:
     page_aliases: list[str] = field(default_factory=list)
     modality: str = "text"
     element_id: str = ""
+    figure_label: str = ""
+    table_label: str = ""
     cell_id: str = ""
     span_id: str = ""
     canonical_id: str = ""
@@ -55,11 +58,14 @@ class EvidenceElement:
         payload = asdict(self)
         for field_name in (
             "source_aliases",
+            "runtime_source_id",
             "dataset_page",
             "parser_page_index",
             "page_aliases",
             "cell_id",
             "span_id",
+            "figure_label",
+            "table_label",
             "row_label",
             "column_label",
             "period",

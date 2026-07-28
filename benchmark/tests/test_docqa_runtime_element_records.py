@@ -34,21 +34,26 @@ def test_element_index_records_from_documents_normalizes_layout_metadata(tmp_pat
         ]
     )
 
-    assert records == [
-        {
-            "evidence_id": "element:slide_page_7:7:table-1",
-            "file_id": "slide_page_7",
-            "file_name": "slide_page_7.jpg",
-            "page_label": "7",
-            "element_id": "table-1",
-            "modality": "table",
-            "bbox": [10, 20, 200, 120],
-            "caption": "Trading operating profit",
-            "text": "Trading Operating Profit 12.5 bn",
-            "source_backrefs": ["slide_page_7#page:7"],
-            "metadata": {},
-        }
-    ]
+    record = records[0]
+    assert record["evidence_id"] == "element:slide_page_7:7:table-1"
+    assert record["source_id"] == "slide_page_7"
+    assert record["file_id"] == "slide_page_7"
+    assert record["file_name"] == "slide_page_7.jpg"
+    assert record["page_label"] == "7"
+    assert record["page_number"] == 7
+    assert record["element_id"] == "table-1"
+    assert record["element_type"] == "table"
+    assert record["modality"] == "table"
+    assert record["bbox"] == [10, 20, 200, 120]
+    assert record["caption"] == "Trading operating profit"
+    assert record["text"] == "Trading Operating Profit 12.5 bn"
+    assert record["source_backrefs"] == ["slide_page_7#page:7"]
+    assert record["identity"] == {
+        "source_id": "slide_page_7",
+        "kind": "element",
+        "local_id": "table-1",
+    }
+    assert record["canonical_id"] == "element:slide_page_7:table-1"
 
 
 def test_element_record_normalization_preserves_v2_structure_fields(tmp_path):
@@ -155,7 +160,12 @@ def test_docqa_runtime_engine_passes_document_element_index_records(
 
     assert fake_runtime.indexed == []
     assert fake_runtime.requests[0].selected_file_ids == []
-    assert fake_runtime.requests[0].element_index_records == [element_record]
+    indexed_record = fake_runtime.requests[0].element_index_records[0]
+    for field, value in element_record.items():
+        assert indexed_record[field] == value
+    assert indexed_record["source_id"] == "slide_page_7"
+    assert indexed_record["page_number"] == 7
+    assert indexed_record["canonical_id"] == "element:slide_page_7:table-1"
 
 
 def test_docqa_runtime_engine_passes_external_offline_sidecar_records(

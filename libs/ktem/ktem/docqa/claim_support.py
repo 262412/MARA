@@ -275,7 +275,13 @@ def _direction_conflict(claim: str, evidence: str) -> bool:
 def _shared_claim_context(claim: str, evidence: str) -> bool:
     claim_tokens = meaningful_tokens(claim) - _DIRECTION_CONTEXT_TOKENS
     evidence_tokens = meaningful_tokens(evidence) - _DIRECTION_CONTEXT_TOKENS
-    return bool(claim_tokens & evidence_tokens)
+    if not claim_tokens or not evidence_tokens:
+        return False
+    overlap = claim_tokens & evidence_tokens
+    return bool(overlap) and (
+        bool(overlap - _WEAK_CONTEXT_TOKENS)
+        or len(overlap) / min(len(claim_tokens), len(evidence_tokens)) >= 0.5
+    )
 
 
 def _negation_conflict(claim: str, evidence: str) -> bool:
@@ -414,6 +420,16 @@ _NEGATIVE_DIRECTION_TOKENS = {
 }
 
 _DIRECTION_CONTEXT_TOKENS = _POSITIVE_DIRECTION_TOKENS | _NEGATIVE_DIRECTION_TOKENS
+_WEAK_CONTEXT_TOKENS = {
+    "article",
+    "different",
+    "morning",
+    "paper",
+    "program",
+    "programme",
+    "report",
+    "study",
+}
 
 _SEMANTIC_CONCEPT_TOKENS = {
     "profitability": {

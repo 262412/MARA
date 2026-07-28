@@ -57,7 +57,7 @@ def calculation_claim_result(
     values = _answer_numbers(claim)
     value_matches = any(_close(value, expected) for value in values)
     dimensions_match = _answer_dimensions_match(
-        rendered,
+        claim,
         answer_unit=str(plan.get("answer_unit") or ""),
         answer_scale=str(plan.get("answer_scale") or ""),
     )

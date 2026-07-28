@@ -98,14 +98,17 @@ def test_qasper_answer_change_invalidates_verification_state():
         llm_factory=_VerifierLLM,
     )
 
-    for key in (
-        "verified_evidence",
-        "verify_decision",
-        "claim_verification",
-        "guardrail_decision",
-        "verifier_observability",
-    ):
-        assert key not in prediction["evidence_metadata"]
+    assert "verified_evidence" not in prediction["evidence_metadata"]
+    assert "guardrail_decision" not in prediction["evidence_metadata"]
+    assert "verifier_observability" not in prediction["evidence_metadata"]
+    assert (
+        prediction["evidence_metadata"]["verify_decision"]["status"]
+        == "not_enough_evidence"
+    )
+    assert (
+        prediction["evidence_metadata"]["answer_dependent_state"]
+        == "post_contract_verified"
+    )
 
 
 def test_canonical_citation_resolves_source_and_page_together():

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ktem.docqa.element_record_contract import element_record_from_mapping
 from ktem.docqa.evidence_record_identity import unique_evidence_records
 
 from .schemas import BenchmarkDocument
@@ -121,35 +122,20 @@ def _element_index_record_from_payload(
     file_name = str(
         payload.get("file_name") or payload.get("source_name") or document.path.name
     ).strip()
-    raw_metadata = payload.get("metadata")
-    metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
-    output = {
-        "evidence_id": str(
-            payload.get("evidence_id") or f"element:{file_id}:{page_label}:{element_id}"
-        ),
-        "file_id": file_id,
-        "file_name": file_name,
-        "page_label": page_label,
-        "element_id": element_id,
-        "modality": str(
+    evidence_id = str(
+        payload.get("evidence_id") or f"element:{file_id}:{page_label}:{element_id}"
+    )
+    return element_record_from_mapping(
+        payload,
+        default_file_id=file_id,
+        default_file_name=file_name,
+        default_page_label=page_label,
+        default_element_id=element_id,
+        default_modality=str(
             payload.get("modality") or payload.get("element_type") or "element"
         ),
-        "bbox": payload.get("bbox"),
-        "caption": caption,
-        "text": text,
-        "source_backrefs": _source_backrefs(payload, file_id, page_label),
-        "metadata": dict(metadata),
-    }
-    evidence_level = str(
-        payload.get("evidence_level")
-        or metadata.get("evidence_level")
-        or ("cell" if payload.get("cell_id") or metadata.get("cell_id") else "")
-        or ("span" if payload.get("span_id") or metadata.get("span_id") else "")
-    ).strip()
-    if evidence_level:
-        output["evidence_level"] = evidence_level
-    _add_element_contract_fields(output, payload, metadata)
-    return output
+        default_evidence_id=evidence_id,
+    )
 
 
 def _add_element_contract_fields(

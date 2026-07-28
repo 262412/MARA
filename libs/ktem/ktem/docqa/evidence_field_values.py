@@ -30,10 +30,25 @@ def representation_values(
 def atomic_identity_fields(
     item: dict[str, Any],
     metadata: dict[str, Any],
-) -> dict[str, str]:
+) -> dict[str, Any]:
     return {
         field: str(item.get(field) or metadata.get(field) or "").strip()
         for field in ("cell_id", "span_id")
+    }
+
+
+def visual_evidence_fields(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "figure_label": item_metadata_text(item, metadata, "figure_label"),
+        "table_label": item_metadata_text(item, metadata, "table_label"),
+        "bbox": item.get("bbox", metadata.get("bbox")),
+        "caption": item_metadata_text(item, metadata, "caption"),
+        "ocr_text": item_metadata_text(item, metadata, "ocr_text"),
+        "vlm_text": item_metadata_text(item, metadata, "vlm_text"),
+        "representations": representation_values(item, metadata),
     }
 
 

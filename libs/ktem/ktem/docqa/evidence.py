@@ -8,8 +8,8 @@ from typing import Any
 from .evidence_field_values import (
     atomic_identity_fields,
     item_metadata_text,
-    representation_values,
     retrieval_lineage_values,
+    visual_evidence_fields,
 )
 from .evidence_identity import (
     EVIDENCE_BUNDLE_SCHEMA_VERSION,
@@ -257,6 +257,7 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
     return EvidenceElement(
         evidence_id=str(item.get("evidence_id") or item.get("doc_id") or "").strip(),
         source_id=file_id,
+        runtime_source_id=item_metadata_text(item, metadata, "runtime_source_id"),
         source_name=str(
             item.get("file_name")
             or item.get("source_name")
@@ -277,6 +278,7 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         ),
         modality=modality or "text",
         element_id=str(item.get("element_id") or "").strip(),
+        **visual_evidence_fields(item, metadata),
         **atomic_identity_fields(item, metadata),
         canonical_id=str(item.get("canonical_id") or "").strip(),
         parent_element_id=str(
@@ -318,12 +320,7 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         normalized_text_hash=str(item.get("normalized_text_hash") or "").strip(),
         duplicate_evidence_ids=_string_values(item.get("duplicate_evidence_ids")),
         retrieval_lineage=retrieval_lineage_values(item, metadata),
-        bbox=item.get("bbox"),
-        caption=str(item.get("caption") or "").strip(),
         text=str(item.get("text") or item.get("content") or "").strip(),
-        ocr_text=str(item.get("ocr_text") or "").strip(),
-        vlm_text=str(item.get("vlm_text") or "").strip(),
-        representations=representation_values(item, metadata),
         source_backrefs=backrefs,
         evidence_level=str(item.get("evidence_level") or "page").strip(),
         metadata=metadata,
@@ -337,8 +334,10 @@ def _coerced_locator_fields(
     file_id = str(
         item.get("file_id")
         or item.get("source_id")
+        or item.get("runtime_source_id")
         or metadata.get("file_id")
         or metadata.get("source_id")
+        or metadata.get("runtime_source_id")
         or ""
     ).strip()
     page_label = str(

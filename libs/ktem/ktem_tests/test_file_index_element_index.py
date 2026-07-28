@@ -186,9 +186,15 @@ def test_index_pipeline_persists_offline_element_records(monkeypatch, tmp_path):
     assert len(docstore.batches) == 2
     element_docs = docstore.batches[1]
     assert element_docs[0].metadata["type"] == "mara_element_index"
-    assert element_docs[0].metadata["element_index_record"] == (
-        _expected_offline_element_record()
-    )
+    record = element_docs[0].metadata["element_index_record"]
+    for field, value in _expected_offline_element_record().items():
+        assert record[field] == value
+    assert record["canonical_id"] == "element:file-1:table-4-1"
+    assert record["identity"] == {
+        "source_id": "file-1",
+        "kind": "element",
+        "local_id": "table-4-1",
+    }
     assert [row.relation_type for row in session.added_rows] == [
         "document",
         "element_index",

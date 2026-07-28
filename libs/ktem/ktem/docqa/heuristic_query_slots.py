@@ -15,7 +15,11 @@ def heuristic_slots(
 ) -> tuple[EvidenceSlot, ...]:
     multi_evidence = bool(capabilities.get("requires_multiple_evidence"))
     if question_type == "multi_period_numeric":
-        return _period_operand_slots(periods, metric)
+        return _period_operand_slots(
+            periods,
+            metric,
+            page_labels=_page_labels(capabilities),
+        )
     if answer_type == "numeric" and multi_evidence:
         return _paired_slots(
             question,
@@ -25,9 +29,18 @@ def heuristic_slots(
             page_labels=_page_labels(capabilities),
         )
     if answer_type == "boolean":
-        return _boolean_slots(question, metric, multi_evidence=multi_evidence)
+        return _boolean_slots(
+            question,
+            metric,
+            multi_evidence=multi_evidence,
+            page_labels=_page_labels(capabilities),
+        )
     if answer_type == "numeric":
-        return _numeric_slots(question, metric)
+        return _numeric_slots(
+            question,
+            metric,
+            page_labels=_page_labels(capabilities),
+        )
     if question_type == "cross_page":
         return _paired_slots(
             question,
@@ -57,6 +70,7 @@ def _boolean_slots(
     metric: str,
     *,
     multi_evidence: bool,
+    page_labels: tuple[str, ...] = (),
 ) -> tuple[EvidenceSlot, ...]:
     if not multi_evidence:
         return (
@@ -66,6 +80,9 @@ def _boolean_slots(
                 metric=metric,
                 modality="auto",
                 query=question,
+                locator=EvidenceLocator(
+                    page_label=page_labels[0] if page_labels else ""
+                ),
             ),
         )
     return (
@@ -77,7 +94,12 @@ def _boolean_slots(
             required_for_retrieval=False,
             query=question,
         ),
-        *_paired_slots(question, metric, role="support"),
+        *_paired_slots(
+            question,
+            metric,
+            role="support",
+            page_labels=page_labels,
+        ),
     )
 
 
@@ -113,6 +135,8 @@ def _paired_slots(
 def _period_operand_slots(
     periods: list[str],
     metric: str,
+    *,
+    page_labels: tuple[str, ...] = (),
 ) -> tuple[EvidenceSlot, ...]:
     return tuple(
         EvidenceSlot(
@@ -123,14 +147,19 @@ def _period_operand_slots(
             modality="auto",
             required_for_execution=True,
             query=" ".join(value for value in (metric, period) if value),
+            locator=EvidenceLocator(
+                page_label=page_labels[index] if index < len(page_labels) else ""
+            ),
         )
-        for period in periods
+        for index, period in enumerate(periods)
     )
 
 
 def _numeric_slots(
     question: str,
     metric: str,
+    *,
+    page_labels: tuple[str, ...] = (),
 ) -> tuple[EvidenceSlot, ...]:
     slot_ids = (
         ("operand:primary", "operand:secondary")
@@ -145,8 +174,11 @@ def _numeric_slots(
             modality="auto",
             required_for_execution=True,
             query=metric,
+            locator=EvidenceLocator(
+                page_label=page_labels[index] if index < len(page_labels) else ""
+            ),
         )
-        for slot_id in slot_ids
+        for index, slot_id in enumerate(slot_ids)
     )
 
 

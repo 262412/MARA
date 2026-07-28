@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.evidence_locators import normalized_source_page_locators
+
 
 def all_gold_pages_hit(prediction: dict[str, Any]) -> float | None:
     metadata = dict(prediction.get("evidence_metadata") or {})
@@ -30,12 +32,10 @@ def _all_gold_pages_hit_from_pairs(
     predicted_pairs: set[tuple[str, str]],
 ) -> float | None:
     gold_pairs = {
-        (
-            str(item.get("source_id") or item.get("document_id") or ""),
-            str(item.get("page_label") or item.get("page") or ""),
-        )
+        locator
         for item in _records(prediction.get("gold_evidence"))
-        if str(item.get("page_label") or item.get("page") or "")
+        for locator in normalized_source_page_locators(item)
+        if locator[1]
     }
     if not gold_pairs:
         return legacy_all_gold_pages_hit(prediction)
@@ -86,12 +86,7 @@ def _add_item_locators(
     pairs: set[tuple[str, str]],
     item: dict[str, Any],
 ) -> None:
-    source = str(item.get("source_id") or item.get("document_id") or "")
-    page = str(item.get("page_label") or item.get("page") or "")
-    if source and page:
-        pairs.add((source, page))
-    for source_ref in item.get("source_backrefs") or []:
-        _add_backref_locator(pairs, str(source_ref or ""))
+    pairs.update(normalized_source_page_locators(item))
 
 
 def _add_backref_locator(

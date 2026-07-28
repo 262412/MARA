@@ -3,9 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ktem.docqa.calculation_evidence_identity import materialize_financial_cell
-from ktem.docqa.evidence_identity import exact_evidence_aliases, identity_of
-from ktem.docqa.financial_table import parse_financial_table_cells
+from ktem.docqa.calculation_evidence_identity import calculation_evidence_lookup
 
 
 @dataclass(frozen=True)
@@ -21,18 +19,17 @@ def calculation_citation_items(
     citation_ids = _calculation_citation_ids(prediction)
     if not citation_ids:
         return []
+    lookup = calculation_evidence_lookup(candidates)
     matched: list[MatchedCitationEvidence] = []
     for citation_id in citation_ids:
-        for item in candidates:
-            matched_item = _matched_calculation_item(citation_id, item)
-            if matched_item is not None:
-                matched.append(
-                    MatchedCitationEvidence(
-                        citation_identity=citation_id,
-                        item=matched_item,
-                    )
+        matched_item = lookup.get(citation_id)
+        if matched_item is not None:
+            matched.append(
+                MatchedCitationEvidence(
+                    citation_identity=citation_id,
+                    item=matched_item,
                 )
-                break
+            )
     return matched
 
 
@@ -77,20 +74,6 @@ def _with_canonical_source_backref(
         dict.fromkeys([*list(item.get("source_backrefs") or []), source_ref])
     )
     return output
-
-
-def _matched_calculation_item(
-    citation_id: str,
-    item: dict[str, Any],
-) -> dict[str, Any] | None:
-    if citation_id in exact_evidence_aliases(item):
-        return item
-    for cell in parse_financial_table_cells(item):
-        cell_item = materialize_financial_cell(item, cell)
-        identity = identity_of(cell_item).key
-        if citation_id == identity:
-            return cell_item
-    return None
 
 
 def _calculation_citation_ids(prediction: dict[str, Any]) -> list[str]:

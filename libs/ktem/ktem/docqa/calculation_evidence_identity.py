@@ -2,32 +2,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from .evidence_identity import exact_evidence_aliases, identity_of
+from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
+from .evidence_identity import identity_of
 from .financial_table import parse_financial_table_cells
 
 
 def calculation_evidence_lookup(
     items: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    output: dict[str, dict[str, Any]] = {}
+    expanded: list[dict[str, Any]] = []
     for item in items:
-        identifiers = [
-            identity_of(item).key,
-            item.get("cell_id"),
-            item.get("evidence_id"),
-            item.get("canonical_id"),
-            item.get("element_id"),
-            *(item.get("duplicate_evidence_ids") or []),
-        ]
-        for identifier in identifiers:
-            value = str(identifier or "").strip()
-            if value:
-                output[value] = item
+        expanded.append(item)
         for cell in parse_financial_table_cells(item):
-            materialized = materialize_financial_cell(item, cell)
-            for identifier in exact_evidence_aliases(materialized):
-                output[identifier] = materialized
-    return output
+            expanded.append(materialize_financial_cell(item, cell))
+    return unambiguous_evidence_alias_lookup(expanded)
 
 
 def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any]:

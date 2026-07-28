@@ -31,6 +31,11 @@ from .semantic_summary import semantic_answer_coverage
 from .stage_metrics import stage_metric_summary
 from .summary_diagnostics import diagnostic_summary_fields
 from .summary_rankings import route_rankings
+from .summary_records import (
+    adapter_metadata_summary,
+    benchmark_identity_summary,
+    per_example_metric_records,
+)
 from .timing_summary import route_timing_fields, timing_summary
 from .verification_metrics import verification_summary
 from .verifier_observability import (
@@ -66,7 +71,9 @@ def build_benchmark_summary(
 ) -> dict[str, Any]:
     skipped_routes = skipped_routes or []
     return {
-        **_identity_summary(bundle, config, active_routes, predictions, skipped_routes),
+        **benchmark_identity_summary(
+            bundle, config, active_routes, predictions, skipped_routes
+        ),
         **(selection or {}),
         **_primary_score_summary(predictions),
         **_quality_summary(predictions),
@@ -93,28 +100,17 @@ def build_benchmark_summary(
         ),
         **verification_summary(predictions),
         **contract_invariant_summary(predictions),
+        "per_example_metric_records": per_example_metric_records(
+            bundle.dataset_name,
+            predictions,
+        ),
         **verifier_observability_summary(predictions),
         **timing_summary(predictions),
         **_cache_summary(predictions, config.cache_mode),
-        "route_metric_table": _route_metric_table(bundle.dataset_name, predictions),
-        **diagnostic_summary_fields(
-            bundle.dataset_name,
-            predictions,
-            skipped_routes=skipped_routes,
-        ),
-        "quality_route_metric_table": _route_metric_table(
-            bundle.dataset_name,
-            _role_predictions(predictions, {"qa_quality"}),
-        ),
-        "diagnostic_route_metric_table": _route_metric_table(
-            bundle.dataset_name,
-            _role_predictions(predictions, {"diagnostic", "prototype"}),
+        **_route_report_summary(
+            bundle.dataset_name, predictions, skipped_routes=skipped_routes
         ),
         **_quality_route_summary(predictions),
-        "route_rankings": route_rankings(
-            bundle.dataset_name,
-            _route_metric_table(bundle.dataset_name, predictions),
-        ),
         "mara_score_metadata": _headline_score_metadata(
             bundle.dataset_name,
             predictions,
@@ -122,11 +118,39 @@ def build_benchmark_summary(
         "mara_proxy_score_metadata": mara_proxy_score_metadata(bundle.dataset_name),
         "backend_metadata": backend_metadata,
         **backend_health_summary(backend_health),
-        "adapter_metric_metadata": adapter_metric_metadata or {},
-        "external_adapter_metric_metadata": external_adapter_metric_metadata or {},
-        "external_adapter_metric_metadata_by_route": (
-            external_adapter_metric_metadata_by_route or {}
+        **adapter_metadata_summary(
+            adapter_metric_metadata=adapter_metric_metadata,
+            external_adapter_metric_metadata=external_adapter_metric_metadata,
+            external_adapter_metric_metadata_by_route=(
+                external_adapter_metric_metadata_by_route
+            ),
         ),
+    }
+
+
+def _route_report_summary(
+    dataset_name: str,
+    predictions: list[dict[str, Any]],
+    *,
+    skipped_routes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    route_metrics = _route_metric_table(dataset_name, predictions)
+    return {
+        "route_metric_table": route_metrics,
+        **diagnostic_summary_fields(
+            dataset_name,
+            predictions,
+            skipped_routes=skipped_routes,
+        ),
+        "quality_route_metric_table": _route_metric_table(
+            dataset_name,
+            _role_predictions(predictions, {"qa_quality"}),
+        ),
+        "diagnostic_route_metric_table": _route_metric_table(
+            dataset_name,
+            _role_predictions(predictions, {"diagnostic", "prototype"}),
+        ),
+        "route_rankings": route_rankings(dataset_name, route_metrics),
     }
 
 
@@ -153,6 +177,10 @@ def add_mara_summary_fields(
             predictions,
         ),
         **contract_invariant_summary(predictions),
+        "per_example_metric_records": per_example_metric_records(
+            dataset_name,
+            predictions,
+        ),
         **verifier_observability_summary(predictions),
         **timing_summary(predictions),
         "route_metric_table": _route_metric_table(dataset_name, predictions),
@@ -172,36 +200,6 @@ def add_mara_summary_fields(
         ),
         "mara_score_metadata": _headline_score_metadata(dataset_name, predictions),
         "mara_proxy_score_metadata": mara_proxy_score_metadata(dataset_name),
-    }
-
-
-def _identity_summary(
-    bundle: Any,
-    config: Any,
-    active_routes: list[dict[str, Any]],
-    predictions: list[dict[str, Any]],
-    skipped_routes: list[dict[str, Any]],
-) -> dict[str, Any]:
-    num_skipped_routes = len(skipped_routes)
-    return {
-        "dataset_name": bundle.dataset_name,
-        "manifest_path": str(bundle.manifest_path),
-        "suite_name": config.suite_name,
-        "engine": config.engine if len(active_routes) == 1 else "matrix",
-        "route": config.route,
-        "scope": config.scope,
-        "num_documents": len(bundle.documents),
-        "num_examples": len(bundle.examples),
-        "num_routes": len(active_routes),
-        "num_executed_routes": len(active_routes) - num_skipped_routes,
-        "num_skipped_routes": num_skipped_routes,
-        "skipped_routes": skipped_routes,
-        "not_configured_routes": [
-            item
-            for item in skipped_routes
-            if item.get("backend_status") == "not_configured"
-        ],
-        "num_predictions": len(predictions),
     }
 
 

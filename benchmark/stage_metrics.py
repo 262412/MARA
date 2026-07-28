@@ -28,6 +28,8 @@ STAGE_METRIC_KEYS = (
     "candidate_recall_at_50",
     "candidate_page_coverage_at_50",
     "candidate_pool_recall_at_80",
+    "canonical_candidate_evidence_coverage",
+    "post_fusion_evidence_coverage",
     "reranked_recall_at_10",
     "fused_evidence_coverage",
     "reranker_input_evidence_coverage",
@@ -36,7 +38,9 @@ STAGE_METRIC_KEYS = (
     "generation_context_evidence_coverage",
     "execution_operand_evidence_coverage",
     "verified_evidence_coverage",
+    "verified_claim_support_evidence_coverage",
     "cited_evidence_coverage",
+    "emitted_citation_evidence_coverage",
     "reranker_lineage_coverage",
     "gold_evidence_support_recall",
     "retrieval_mrr",
@@ -146,10 +150,10 @@ def _stage_retrieval_context(
     float | None,
 ]:
     candidate_pool = (
-        _records(metadata.get("reranker_input_evidence"))
-        if "reranker_input_evidence" in metadata
+        _records(metadata.get("canonical_candidate_evidence"))
+        if "canonical_candidate_evidence" in metadata
         else (
-            _records(metadata.get("candidate_evidence"))[:80]
+            _records(metadata.get("candidate_evidence"))
             if "candidate_evidence" in metadata
             else None
         )
@@ -157,7 +161,11 @@ def _stage_retrieval_context(
     ranked = (
         _records(metadata.get("candidate_ranked_evidence"))
         if "candidate_ranked_evidence" in metadata
-        else candidate_pool
+        else (
+            _records(metadata.get("fused_evidence"))
+            if "fused_evidence" in metadata
+            else candidate_pool
+        )
     )
     candidates = ranked[:50] if ranked is not None else None
     reranked = (
@@ -214,23 +222,17 @@ def prediction_stage_metric_status(
     prediction: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
     metadata = dict(prediction.get("evidence_metadata") or {})
-    requirements = gold_requirement_keys(prediction)
-    gold_count = len(requirements) if requirements else len(_gold_keys(prediction))
-    candidate_count = len(_records(metadata.get("candidate_evidence")))
-    reranked_count = len(_records(metadata.get("reranked_evidence")))
-    candidate_pool = _records(
-        metadata.get("reranker_input_evidence")
-        if "reranker_input_evidence" in metadata
-        else metadata.get("candidate_evidence")
-    )
-    reranked = _records(metadata.get("reranked_evidence"))[:10]
-    candidate_status = _retrieval_metric_status(
-        gold_count=gold_count,
-        trace_available="candidate_evidence" in metadata,
-    )
-    reranked_status = _retrieval_metric_status(
-        gold_count=gold_count,
-        trace_available=reranked_trace_available(metadata),
+    (
+        gold_count,
+        candidate_count,
+        reranked_count,
+        candidate_pool,
+        reranked,
+        candidate_status,
+        reranked_status,
+    ) = _retrieval_status_inputs(
+        prediction,
+        metadata,
     )
     status: dict[str, dict[str, Any]] = {
         "candidate_recall_at_50": {
@@ -287,6 +289,38 @@ def prediction_stage_metric_status(
         rendered_answer=str(prediction.get("answer_for_scoring") or ""),
     )
     return status
+
+
+def _retrieval_status_inputs(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+) -> tuple[int, int, int, list[dict[str, Any]], list[dict[str, Any]], str, str]:
+    requirements = gold_requirement_keys(prediction)
+    gold_count = len(requirements) if requirements else len(_gold_keys(prediction))
+    candidate_trace_key = (
+        "canonical_candidate_evidence"
+        if "canonical_candidate_evidence" in metadata
+        else "candidate_evidence"
+    )
+    candidate_pool = _records(metadata.get(candidate_trace_key))
+    reranked = _records(metadata.get("reranked_evidence"))[:10]
+    candidate_status = _retrieval_metric_status(
+        gold_count=gold_count,
+        trace_available=candidate_trace_key in metadata,
+    )
+    reranked_status = _retrieval_metric_status(
+        gold_count=gold_count,
+        trace_available=reranked_trace_available(metadata),
+    )
+    return (
+        gold_count,
+        len(candidate_pool),
+        len(reranked),
+        candidate_pool,
+        reranked,
+        candidate_status,
+        reranked_status,
+    )
 
 
 def _identity_metric_status(

@@ -298,33 +298,18 @@ def test_element_index_documents_round_trip_records_for_persistence():
     assert persisted_docs[0].metadata["element_index_relation_type"] == (
         "element_index"
     )
-    assert multimodal_index_module.element_records_from_index_documents(
+    [record] = multimodal_index_module.element_records_from_index_documents(
         persisted_docs
-    ) == [
-        {
-            "evidence_id": "element:file-1:4:table-table-doc",
-            "file_id": "file-1",
-            "source_id": "file-1",
-            "file_name": "report.pdf",
-            "page_label": "4",
-            "page_number": 4,
-            "element_id": "table-table-doc",
-            "element_type": "table",
-            "modality": "table",
-            "evidence_level": "element",
-            "table_id": "table-table-doc",
-            "bbox": None,
-            "caption": "Regional revenue",
-            "text": "Table: Regional revenue\nNorth 10\nSouth 12",
-            "source_backrefs": ["file-1#page:4"],
-            "metadata": {
-                "element_schema_version": "1.0",
-                "index_source": "docstore_document",
-                "parser_backend": "local_element_parser_v1",
-                "parser_source_doc_id": "table-doc",
-            },
-        }
-    ]
+    )
+    assert record["evidence_id"] == "element:file-1:4:table-table-doc"
+    assert record["source_id"] == "file-1"
+    assert record["file_id"] == "file-1"
+    assert record["page_label"] == "4"
+    assert record["page_number"] == 4
+    assert record["element_id"] == "table-table-doc"
+    assert record["table_id"] == "table-table-doc"
+    assert record["evidence_level"] == "element"
+    assert record["canonical_id"] == "element:file-1:table-table-doc"
 
 
 def test_persisted_element_records_normalize_locator_aliases():

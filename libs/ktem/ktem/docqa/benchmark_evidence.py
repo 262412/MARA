@@ -14,6 +14,7 @@ class BenchmarkEvidenceRecord:
     canonical_id: str = ""
     document_id: str = ""
     source_id: str = ""
+    runtime_source_id: str = ""
     source_name: str = ""
     source_aliases: tuple[str, ...] = ()
     page_label: str = ""
@@ -23,6 +24,8 @@ class BenchmarkEvidenceRecord:
     page_aliases: tuple[str, ...] = ()
     modality: str = ""
     element_id: str = ""
+    figure_label: str = ""
+    table_label: str = ""
     cell_id: str = ""
     span_id: str = ""
     parent_element_id: str = ""
@@ -77,7 +80,15 @@ class BenchmarkEvidenceRecord:
 
 def benchmark_evidence_record(item: dict[str, Any]) -> BenchmarkEvidenceRecord:
     metadata = _merged_metadata(item)
-    source_id = _first_text(item, metadata, "source_id", "file_id", "document_id")
+    runtime_source_id = _first_text(item, metadata, "runtime_source_id")
+    source_id = _first_text(
+        item,
+        metadata,
+        "source_id",
+        "file_id",
+        "document_id",
+        "runtime_source_id",
+    )
     page_label = _first_text(
         item,
         metadata,
@@ -93,6 +104,7 @@ def benchmark_evidence_record(item: dict[str, Any]) -> BenchmarkEvidenceRecord:
         canonical_id=_first_text(item, metadata, "canonical_id") or identity.key,
         document_id=_first_text(item, metadata, "document_id") or source_id,
         source_id=source_id,
+        runtime_source_id=runtime_source_id,
         source_name=_first_text(item, metadata, "source_name", "file_name"),
         source_aliases=_first_tuple(item, metadata, "source_aliases"),
         page_label=page_label,
@@ -102,6 +114,7 @@ def benchmark_evidence_record(item: dict[str, Any]) -> BenchmarkEvidenceRecord:
         page_aliases=_first_tuple(item, metadata, "page_aliases"),
         modality=_first_text(item, metadata, "modality", "element_type", "type"),
         element_id=_first_text(item, metadata, "element_id", "element"),
+        **_visual_projection(item, metadata),
         cell_id=_first_text(item, metadata, "cell_id"),
         span_id=_first_text(item, metadata, "span_id"),
         parent_element_id=_first_text(item, metadata, "parent_element_id"),
@@ -138,17 +151,27 @@ def benchmark_evidence_record(item: dict[str, Any]) -> BenchmarkEvidenceRecord:
         element_type_aliases=_first_tuple(item, metadata, "element_type_aliases"),
         retrieval_lineage=_lineage(item, metadata),
         score=item.get("score", metadata.get("score")),
-        bbox=item.get("bbox", metadata.get("bbox")),
-        caption=_first_text(item, metadata, "caption"),
-        ocr_text=_first_text(item, metadata, "ocr_text"),
-        vlm_text=_first_text(item, metadata, "vlm_text"),
-        representations=_dict_tuple(item, metadata, "representations"),
         section_title=_first_text(item, metadata, "section_title"),
         table_title=_first_text(item, metadata, "table_title"),
         text=_first_text(item, metadata, "text", "content", "snippet"),
         source_backrefs=_source_backrefs(item, metadata),
         extension_metadata=_extension_metadata(metadata),
     )
+
+
+def _visual_projection(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "figure_label": _first_text(item, metadata, "figure_label", "figure_id"),
+        "table_label": _first_text(item, metadata, "table_label"),
+        "bbox": item.get("bbox", metadata.get("bbox")),
+        "caption": _first_text(item, metadata, "caption"),
+        "ocr_text": _first_text(item, metadata, "ocr_text"),
+        "vlm_text": _first_text(item, metadata, "vlm_text"),
+        "representations": _dict_tuple(item, metadata, "representations"),
+    }
 
 
 def _merged_metadata(item: dict[str, Any]) -> dict[str, Any]:

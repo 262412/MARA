@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .element_parser import ELEMENT_SCHEMA_VERSION
+from .element_record_contract import element_record_from_mapping
 from .element_sidecar_schema import (
     iter_sidecar_record_payloads,
     sidecar_page_label,
@@ -15,6 +16,7 @@ from .element_sidecar_schema import (
     sidecar_record_text,
     sidecar_schema_version,
 )
+from .evidence_record_identity import unique_evidence_records
 
 SIDECAR_SUFFIXES = (
     ".mara-elements.json",
@@ -47,7 +49,7 @@ def offline_element_records_for_file(
                 sidecar_path=sidecar_path,
             )
         )
-    return records
+    return unique_evidence_records(records)
 
 
 def offline_element_records_for_documents(
@@ -178,6 +180,7 @@ def _normalize_record(
         or f"element:{file_id}:{page_label}:{element_id}"
     )
     output = {
+        **record,
         "evidence_id": evidence_id,
         "file_id": file_id,
         "file_name": file_name,
@@ -196,13 +199,15 @@ def _normalize_record(
             record_index,
         ),
     }
-    element_id_aliases = _alias_values(record.get("element_id_aliases"))
-    if element_id_aliases:
-        output["element_id_aliases"] = element_id_aliases
-    element_type_aliases = _alias_values(record.get("element_type_aliases"))
-    if element_type_aliases:
-        output["element_type_aliases"] = element_type_aliases
-    return output
+    return element_record_from_mapping(
+        output,
+        default_file_id=file_id,
+        default_file_name=file_name,
+        default_page_label=page_label,
+        default_element_id=element_id,
+        default_modality=modality,
+        default_evidence_id=evidence_id,
+    )
 
 
 def _metadata(

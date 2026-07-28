@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ktem.docqa.evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from ktem.docqa.evidence_identity import exact_evidence_aliases, identity_of
+from ktem.docqa.evidence_locators import normalized_source_page_locators
 
 from .citation_locators import CitationLocator
 
@@ -31,6 +33,7 @@ def record_emitted_citation_evidence(
 ) -> None:
     cited_items: list[dict[str, Any]] = []
     cited_identities: set[str] = set()
+    alias_lookup = unambiguous_evidence_alias_lookup(candidates)
     for raw_citation in citations:
         citation = CitationLocator.from_mapping(raw_citation)
         if citation.kind in {"page", "source"} and not citation.evidence_identity:
@@ -43,7 +46,11 @@ def record_emitted_citation_evidence(
                 cited_items.append(page_record)
             continue
         for item in candidates:
-            if not _citation_matches_item(citation, item):
+            if not _citation_matches_item(
+                citation,
+                item,
+                alias_lookup=alias_lookup,
+            ):
                 continue
             identity = identity_of(item).key
             if identity in cited_identities:
@@ -71,6 +78,8 @@ def record_emitted_citation_evidence(
 def _citation_matches_item(
     citation: CitationLocator | dict[str, str],
     item: dict[str, Any],
+    *,
+    alias_lookup: dict[str, dict[str, Any]] | None = None,
 ) -> bool:
     locator = (
         citation
@@ -78,8 +87,8 @@ def _citation_matches_item(
         else CitationLocator.from_mapping(citation)
     )
     evidence_id = locator.evidence_identity
-    citation_source = locator.source_id
-    citation_page = locator.page_label
+    citation_source = locator.source_id.strip().lower()
+    citation_page = locator.page_label.strip().lower()
     item_identity = identity_of(item)
     if (
         locator.kind
@@ -87,8 +96,13 @@ def _citation_matches_item(
         and locator.kind != item_identity.kind
     ):
         return False
-    if evidence_id and evidence_id not in exact_evidence_aliases(item):
-        return False
+    if evidence_id:
+        if alias_lookup is not None:
+            matched = alias_lookup.get(evidence_id)
+            if matched is None or identity_of(matched) != item_identity:
+                return False
+        elif evidence_id not in exact_evidence_aliases(item):
+            return False
     locators = _item_locators(item)
     if citation_source and citation_page:
         if (citation_source, citation_page) not in locators:
@@ -135,24 +149,4 @@ def _locator_is_present(
 
 
 def _item_locators(item: dict[str, Any]) -> set[tuple[str, str]]:
-    sources = [
-        str(item.get(key) or "").strip()
-        for key in ("source_id", "document_id", "file_id", "runtime_source_id")
-        if str(item.get(key) or "").strip()
-    ]
-    pages = [
-        str(item.get(key) or "").strip()
-        for key in ("page_label", "page", "page_number", "dataset_page")
-        if str(item.get(key) or "").strip()
-    ]
-    locators = {(source, page) for source in sources for page in pages}
-    locators.update((source, "") for source in sources if not pages)
-    locators.update(("", page) for page in pages if not sources)
-    for source_ref in item.get("source_backrefs") or []:
-        value = str(source_ref or "").strip()
-        if "#page:" in value:
-            source_id, page_label = value.split("#page:", 1)
-            locators.add((source_id.strip(), page_label.split("#", 1)[0].strip()))
-        elif "#source" in value:
-            locators.add((value.split("#source", 1)[0].strip(), ""))
-    return {locator for locator in locators if any(locator)}
+    return normalized_source_page_locators(item)

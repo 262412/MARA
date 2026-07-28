@@ -70,7 +70,44 @@ CONTRACT_GATES = (
     ReleaseGate("qasper_structure_valid", 1.0, "ge", "task_contract", "contract"),
     ReleaseGate("ragtruth_json_valid", 0.99, "ge", "task_contract", "contract"),
     ReleaseGate("ragtruth_execution_error", 0.0, "eq", "task_contract", "contract"),
+    ReleaseGate("duplicate_identity_count", 0.0, "eq", "identity", "contract"),
+    ReleaseGate("conflicting_identity_count", 0.0, "eq", "identity", "contract"),
+    ReleaseGate(
+        "canonical_id_mismatch_count",
+        0.0,
+        "eq",
+        "identity",
+        "contract",
+    ),
     ReleaseGate("identity_collision_count", 0.0, "eq", "identity", "contract"),
+    ReleaseGate(
+        "atomic_field_roundtrip_rate",
+        1.0,
+        "ge",
+        "projection",
+        "contract",
+    ),
+    ReleaseGate(
+        "locator_roundtrip_rate",
+        1.0,
+        "ge",
+        "projection",
+        "contract",
+    ),
+    ReleaseGate(
+        "lineage_roundtrip_rate",
+        1.0,
+        "ge",
+        "projection",
+        "contract",
+    ),
+    ReleaseGate(
+        "representation_roundtrip_rate",
+        1.0,
+        "ge",
+        "projection",
+        "contract",
+    ),
     ReleaseGate(
         "runtime_benchmark_roundtrip",
         1.0,
@@ -478,15 +515,8 @@ def _paired_metric_statistics(
                     "paired_ci_low": ci_low,
                     "paired_ci_high": ci_high,
                 }
-    baseline_value = _first_number(phase_b, aliases)
-    candidate_value = _first_number(phase_g, aliases)
-    value = (
-        candidate_value - baseline_value
-        if baseline_value is not None and candidate_value is not None
-        else None
-    )
     return {
-        "value": value,
+        "value": None,
         "paired_example_count": 0,
         "paired_wins": 0,
         "paired_losses": 0,

@@ -17,6 +17,8 @@ from .element_parser import (
     parse_element_index_records,
     parse_financial_numeric_span_records,
 )
+from .element_record_contract import element_record_from_mapping
+from .evidence_record_identity import unique_evidence_records
 
 logger = logging.getLogger(__name__)
 ELEMENT_INDEX_DOC_TYPE = "mara_element_index"
@@ -143,17 +145,14 @@ def element_records_from_index_documents(
 ) -> list[dict[str, Any]]:
     """Read persisted layout-element records from element-index documents."""
     records = []
-    seen: set[str] = set()
     for doc in documents:
         metadata = _metadata(doc)
         if metadata.get("type") != ELEMENT_INDEX_DOC_TYPE:
             continue
         record = _persisted_element_record(metadata.get("element_index_record"))
-        if record is None or record["evidence_id"] in seen:
-            continue
-        seen.add(record["evidence_id"])
-        records.append(record)
-    return records
+        if record is not None:
+            records.append(record)
+    return unique_evidence_records(records)
 
 
 def element_index_documents_from_documents(
@@ -306,59 +305,25 @@ def _persisted_element_record(value: Any) -> dict[str, Any] | None:
     element_id = str(value.get("element_id") or "").strip()
     if not evidence_id or not file_id or not page_label or not element_id:
         return None
-    raw_metadata = value.get("metadata")
-    metadata = _safe_dict(raw_metadata)
-    modality = str(value.get("modality") or value.get("element_type") or "element")
-    record = {
-        "evidence_id": evidence_id,
-        "file_id": file_id,
-        "source_id": source_id or file_id,
-        "file_name": str(value.get("file_name") or value.get("source_name") or ""),
-        "page_label": page_label,
-        "page_number": _page_number(page_label),
-        "element_id": element_id,
-        "element_type": modality,
-        "modality": modality,
-        "bbox": _serialize_value(value.get("bbox")),
-        "caption": str(value.get("caption") or ""),
-        "text": str(value.get("text") or ""),
-        "source_backrefs": _source_backrefs(value, file_id, page_label),
-        "metadata": metadata,
-    }
-    for key in (
-        "evidence_level",
-        "table_id",
-        "cell_id",
-        "parent_element_id",
-        "row_index",
-        "column_index",
-        "row_label",
-        "column_label",
-        "period",
-        "period_kind",
-        "value",
-        "unit",
-        "scale",
-        "currency",
-        "statement_kind",
-        "financial_scope",
-    ):
-        value_at_key = value.get(key)
-        if value_at_key not in (None, "", []):
-            record[key] = _serialize_value(value_at_key)
-    return record
+    return element_record_from_mapping(
+        value,
+        default_file_id=file_id,
+        default_file_name=str(value.get("file_name") or value.get("source_name") or ""),
+        default_page_label=page_label,
+        default_element_id=element_id,
+        default_modality=str(
+            value.get("modality") or value.get("element_type") or "element"
+        ),
+        default_evidence_id=evidence_id,
+    )
 
 
 def _unique_element_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    unique = []
-    seen: set[str] = set()
-    for record in records:
-        normalized = _persisted_element_record(record)
-        if normalized is None or normalized["evidence_id"] in seen:
-            continue
-        seen.add(normalized["evidence_id"])
-        unique.append(normalized)
-    return unique
+    return unique_evidence_records(
+        normalized
+        for record in records
+        if (normalized := _persisted_element_record(record)) is not None
+    )
 
 
 def _source_backrefs(value: dict[str, Any], file_id: str, page_label: str) -> list[str]:

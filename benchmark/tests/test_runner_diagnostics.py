@@ -85,12 +85,13 @@ def test_run_benchmark_adds_generic_route_diagnostics(monkeypatch, tmp_path):
     assert diagnostics["gold_page_hit"] == 1.0
     assert diagnostics["gold_span_hit"] == 1.0
     assert diagnostics["answer_nonempty_after_cleaning"] == 1.0
-    assert diagnostics["verifier_status"] == "supported"
-    assert diagnostics["guardrail_action"] == "return"
+    assert diagnostics["verifier_status"] == "not_enough_evidence"
+    assert diagnostics["guardrail_action"] == ""
     assert diagnostics["retrieval_failure_type"] == "none"
     assert diagnostics["citation_failure_type"] == "none"
     assert diagnostics["failure_class"] == "none"
     assert diagnostics["controller_selected_route"] == "doc_text"
+    assert diagnostics["pipeline_failure_class"] == "verification_error"
     assert "doc_text" in diagnostics["recommended_routes"]
     assert report["summary"]["dataset_route_diagnostics"] == [
         {

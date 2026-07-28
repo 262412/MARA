@@ -3,6 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.evidence_locators import (
+    normalized_page_aliases,
+    normalized_source_aliases,
+)
 
 from .citation_locators import CitationLocator
 
@@ -20,6 +24,7 @@ def citation_from_item(
         item.get("page"),
         item.get("page_number"),
     )
+    page_aliases = normalized_page_aliases(item)
     source_ref = first_nonempty_value(
         *source_backrefs,
         matching_canonical_source_ref(
@@ -31,10 +36,8 @@ def citation_from_item(
                 item.get("file_id"),
                 item.get("runtime_source_id"),
             ),
-            source_aliases=[
-                *list(item.get("source_aliases") or []),
-                *list(dict(item.get("metadata") or {}).get("source_aliases") or []),
-            ],
+            source_aliases=tuple(normalized_source_aliases(item)),
+            page_aliases=tuple(page_aliases),
         ),
     )
     if source_ref:
@@ -66,20 +69,31 @@ def matching_canonical_source_ref(
     *,
     source_id: str = "",
     source_aliases: list[str] | tuple[str, ...] = (),
+    page_aliases: list[str] | tuple[str, ...] = (),
 ) -> str:
     aliases = {
-        str(value or "").strip().split("#", 1)[0]
+        str(value or "").strip().split("#", 1)[0].lower()
         for value in (source_id, *source_aliases)
+        if str(value or "").strip()
+    }
+    pages = {
+        str(value or "").strip().lower()
+        for value in (page_label, *page_aliases)
         if str(value or "").strip()
     }
     candidates = [
         str(source).strip()
         for source in sources
         if str(source or "").strip()
-        and (not page_label or str(source).strip().endswith(f"#page:{page_label}"))
+        and (
+            not pages
+            or any(
+                str(source).strip().lower().endswith(f"#page:{page}") for page in pages
+            )
+        )
     ]
     alias_matches = [
-        source for source in candidates if source.split("#", 1)[0] in aliases
+        source for source in candidates if source.split("#", 1)[0].lower() in aliases
     ]
     if len(alias_matches) == 1:
         return alias_matches[0]

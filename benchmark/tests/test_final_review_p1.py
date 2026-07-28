@@ -242,6 +242,13 @@ def test_contract_invariant_summary_measures_runtime_artifact_contracts():
     }
 
     assert contract_invariant_summary([prediction]) == {
+        "duplicate_identity_count": 0.0,
+        "conflicting_identity_count": 0.0,
+        "canonical_id_mismatch_count": 0.0,
+        "atomic_field_roundtrip_rate": 1.0,
+        "locator_roundtrip_rate": 1.0,
+        "lineage_roundtrip_rate": 1.0,
+        "representation_roundtrip_rate": 1.0,
         "identity_collision_count": 0.0,
         "runtime_benchmark_roundtrip": 1.0,
         "citation_provenance_violation_count": 0.0,
