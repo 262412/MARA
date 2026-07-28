@@ -114,6 +114,7 @@ def test_container_does_not_force_incompatible_legacy_provider_dependencies():
 
     assert "graphrag" not in dockerfile.lower()
     assert "pdfservices-sdk" not in dockerfile.lower()
+    assert "WORKDIR /var/lib/mara" in dockerfile
 
 
 def test_prepare_nltk_cache_uses_wheel_bundled_data_without_downloading(tmp_path):

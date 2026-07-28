@@ -66,7 +66,7 @@ EXPECTED_POLICY_MATRIX: dict[str, dict[str, object]] = {
     "benchmark": {
         "qa_scope_default": "document",
         "page_number_default": None,
-        "page_rule": "first_evidence",
+        "page_rule": "unscoped",
         "controller_mode_default": None,
         "route_policy_default": None,
         "verification_mode_default": None,

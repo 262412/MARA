@@ -317,7 +317,9 @@ def test_compact_artifact_preserves_fact_audit_fields():
         "chunk_end": 21,
     }
 
-    [projected] = compact_identity_evidence_list([item], "candidate_evidence")
+    projected_items = compact_identity_evidence_list([item], "candidate_evidence")
+    assert projected_items is not None
+    [projected] = projected_items
 
     for field, value in item.items():
         assert projected[field] == value

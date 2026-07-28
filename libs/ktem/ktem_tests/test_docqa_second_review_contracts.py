@@ -202,7 +202,12 @@ def test_boolean_cross_page_slots_keep_explicit_page_locators():
         for slot in plan.evidence_slots
         if slot.slot_id in {"support:left_subject", "support:right_subject"}
     ]
-    assert [slot.locator.page_label for slot in paired] == ["4", "9"]
+    locators = [slot.locator for slot in paired]
+    assert all(locator is not None for locator in locators)
+    assert [locator.page_label for locator in locators if locator is not None] == [
+        "4",
+        "9",
+    ]
 
 
 def test_finance_slots_keep_explicit_page_locators():
@@ -214,7 +219,12 @@ def test_finance_slots_keep_explicit_page_locators():
     )
 
     operands = [slot for slot in plan.evidence_slots if slot.role == "operand"]
-    assert [slot.locator.page_label for slot in operands[:2]] == ["4", "9"]
+    locators = [slot.locator for slot in operands[:2]]
+    assert all(locator is not None for locator in locators)
+    assert [locator.page_label for locator in locators if locator is not None] == [
+        "4",
+        "9",
+    ]
 
 
 def test_multi_period_slots_keep_explicit_page_locators():
@@ -224,7 +234,12 @@ def test_multi_period_slots_keep_explicit_page_locators():
         answer_type="numeric",
     )
 
-    assert [slot.locator.page_label for slot in plan.evidence_slots] == ["4", "9"]
+    locators = [slot.locator for slot in plan.evidence_slots]
+    assert all(locator is not None for locator in locators)
+    assert [locator.page_label for locator in locators if locator is not None] == [
+        "4",
+        "9",
+    ]
 
 
 def test_page_locator_matches_dataset_page_and_page_aliases():

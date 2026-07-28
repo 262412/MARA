@@ -50,7 +50,9 @@ def test_legacy_cli_request_keeps_raw_controller_defaults():
     assert request.origin == "cli"
 
 
-def test_benchmark_request_uses_named_policy_and_keeps_benchmark_lists(tmp_path):
+def test_benchmark_request_does_not_leak_gold_page_and_keeps_benchmark_lists(
+    tmp_path,
+):
     from ktem.docqa.request_policies import BENCHMARK_REQUEST_POLICY
 
     engine = DocQARuntimeEngine({})
@@ -78,7 +80,7 @@ def test_benchmark_request_uses_named_policy_and_keeps_benchmark_lists(tmp_path)
     )
 
     assert kwargs["qa_scope"] == BENCHMARK_REQUEST_POLICY.qa_scope_default
-    assert kwargs["page_number"] == 7
+    assert kwargs["page_number"] is None
     assert kwargs["origin"] == "benchmark"
     assert kwargs["max_context_length"] == 16000
     assert kwargs["selected_file_ids"] == []
