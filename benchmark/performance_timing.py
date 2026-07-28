@@ -45,7 +45,7 @@ def runtime_timing_payload(
     evidence_metadata: dict[str, Any],
     *,
     index_seconds: float,
-    generation_seconds: float,
+    runtime_turn_seconds: float,
     grounding_seconds: float,
 ) -> tuple[dict[str, float], dict[str, float]]:
     pipeline_stage_timings = dict(evidence_metadata.get("pipeline_stage_timings") or {})
@@ -58,13 +58,17 @@ def runtime_timing_payload(
     }
     timings = {
         "index_seconds": index_seconds,
-        "generation_seconds": generation_seconds,
+        "runtime_turn_seconds": runtime_turn_seconds,
+        "generation_seconds": segmented.get("pipeline_generation_seconds", 0.0),
         "answer_grounding_seconds": grounding_seconds,
         **segmented,
     }
     performance = {
         **timings,
-        "total_seconds": round(index_seconds + generation_seconds, 4),
+        "total_seconds": round(
+            index_seconds + runtime_turn_seconds + grounding_seconds,
+            4,
+        ),
     }
     return timings, performance
 
@@ -110,6 +114,7 @@ def _merge_failure_timings(
                 "index_seconds",
                 "retrieval_seconds",
                 "generation_seconds",
+                "runtime_turn_seconds",
             }
             and value is not None
         }

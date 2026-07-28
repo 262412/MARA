@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ktem.docqa.evidence_identity import exact_evidence_aliases, identity_of
+from ktem.docqa.evidence_identity import identity_of
 
 from .page_alignment import evidence_item_text, evidence_text_supports_gold_locator
 
@@ -22,10 +22,6 @@ _SOURCE_FIELDS = (
 def evidence_identity_keys(item: dict[str, Any]) -> set[str]:
     identity = identity_of(item)
     keys = {f"identity:{identity.key}"}
-    for value in exact_evidence_aliases(item):
-        normalized = _normalized_identifier(value)
-        if normalized:
-            keys.add(f"id:{normalized}")
 
     aliases = source_aliases(item)
     page = _page_label(item)

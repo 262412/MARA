@@ -41,9 +41,7 @@ def test_optional_slot_does_not_consume_required_page_budget():
 
     selected, _trace, bound = select_evidence_for_plan("", items, plan)
 
-    required = [
-        slot for slot in bound.evidence_slots if slot.required_for_retrieval
-    ]
+    required = [slot for slot in bound.evidence_slots if slot.required_for_retrieval]
     assert all(slot.status == "filled" for slot in required)
     assert {item["evidence_id"] for item in selected} >= {"alpha", "beta", "gamma"}
 
@@ -68,7 +66,9 @@ def test_selection_normalizes_incompatible_score_spaces():
     selected, trace, _bound = select_evidence_for_plan("revenue", items, plan)
 
     assert selected[0]["evidence_id"] == "relevant-reranked"
-    assert trace["relevance_score_contract"] == "per_query_rank_normalized_v1"
+    assert (
+        trace["relevance_score_contract"] == "single_stage_per_query_rank_normalized_v2"
+    )
     assert all("_selection_relevance_score" not in item for item in selected)
 
 

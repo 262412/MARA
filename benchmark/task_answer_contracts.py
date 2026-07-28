@@ -40,13 +40,44 @@ def apply_task_answer_contract(
         evidence=_prediction_evidence(prediction),
         candidate_answer=candidate,
     )
+    answer_changed = _normalized_answer(result.answer) != _normalized_answer(candidate)
     prediction["predicted_answer"] = result.answer
     metadata["qasper_answerability"] = result.trace
+    if answer_changed:
+        _clear_stale_answer_citations(prediction, metadata)
+        metadata["qasper_answerability"]["citation_state"] = "cleared_for_rebind"
     prediction["task_answer_contract"] = {
         "contract_id": QASPER_ANSWERABILITY_CONTRACT,
         "status": "applied",
     }
     return True
+
+
+def _clear_stale_answer_citations(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+) -> None:
+    prediction["structured_citations"] = []
+    prediction["predicted_citations"] = []
+    for key in (
+        "cited_evidence",
+        "emitted_citation_evidence",
+        "verified_claim_support_evidence",
+    ):
+        metadata[key] = []
+    bundle = prediction.get("evidence_bundle")
+    bundle_metadata = bundle.get("metadata") if isinstance(bundle, dict) else None
+    if isinstance(bundle_metadata, dict):
+        for key in (
+            "cited_evidence",
+            "emitted_citation_evidence",
+            "verified_claim_support_evidence",
+        ):
+            bundle_metadata[key] = []
+
+
+def _normalized_answer(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().split())
 
 
 def _prediction_evidence(prediction: dict[str, Any]) -> str:

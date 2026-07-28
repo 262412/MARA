@@ -5,6 +5,7 @@ from dataclasses import replace
 from typing import Any
 
 from .evidence_identity import identity_of
+from .evidence_modality import modality_matches
 from .finance_evidence_dimensions import evidence_scale, requested_scale
 from .finance_query_planning import (
     FINANCE_METRIC_ALIASES,
@@ -17,6 +18,7 @@ from .financial_statement_identity import (
     matches_required_financial_identity,
     required_financial_identity,
 )
+from .heuristic_query_slots import heuristic_slots
 from .query_classification import (
     has_causal_intent,
     normalized_answer_type,
@@ -28,11 +30,9 @@ from .query_evidence_constraints import (
     period_kind_conflicts,
     period_kind_in_question,
 )
-from .query_evidence_text import evidence_text, requires_multiple_operands
+from .query_evidence_text import evidence_text
 from .query_phrase_extraction import (
-    cross_page_support_queries,
     metric_phrase,
-    modality_hint,
     periods_in_question,
     source_page_locator,
 )
@@ -135,12 +135,13 @@ def _build_heuristic_query_plan(
             period_kind=period_kind,
         )
         if finance_specs or finance_support_specs
-        else _heuristic_slots(
+        else heuristic_slots(
             text,
             normalized_type,
             planned_question_type,
             periods,
             metric,
+            capabilities,
         )
     )
     subqueries = tuple(slot.query for slot in slots if slot.query) or (text,)
@@ -152,6 +153,7 @@ def _build_heuristic_query_plan(
         segment_comparison=segment_comparison,
         capabilities=capabilities,
     )
+    _add_distinct_slot_constraint(constraints, slots)
     if segment_comparison:
         slots = _segment_comparison_slots(slots)
         subqueries = tuple(slot.query for slot in slots if slot.query)
@@ -163,6 +165,20 @@ def _build_heuristic_query_plan(
         constraints=constraints,
     )
     return with_plan_id(plan, text)
+
+
+def _add_distinct_slot_constraint(
+    constraints: dict[str, Any],
+    slots: tuple[EvidenceSlot, ...],
+) -> None:
+    distinct_slot_ids = tuple(
+        slot.slot_id
+        for slot in slots
+        if slot.slot_id.endswith(("left", "right"))
+        or slot.slot_id in {"support:left_subject", "support:right_subject"}
+    )
+    if distinct_slot_ids:
+        constraints["distinct_source_page_slot_ids"] = distinct_slot_ids
 
 
 def ensure_request_query_plan(
@@ -247,9 +263,12 @@ def bind_evidence_slots(
         candidate_ids = [
             identity_of(item).key for score, _index, item in ranked[:3] if score > 0
         ]
-        if (
-            plan.constraints.get("requires_distinct_evidence")
-            and slot.role == "support"
+        distinct_slot_ids = set(
+            plan.constraints.get("distinct_source_page_slot_ids") or []
+        )
+        if plan.constraints.get("requires_distinct_evidence") and (
+            slot.slot_id in distinct_slot_ids
+            or (not distinct_slot_ids and slot.role in {"support", "operand"})
         ):
             candidate_ids = []
             for score, _index, item in ranked:
@@ -322,7 +341,7 @@ def score_evidence_for_slot(
         if not _bound_numeric_value(slot, item, text):
             return 0.0
     modality = str(item.get("modality") or item.get("element_type") or "").lower()
-    if slot.modality and slot.modality not in {"auto", modality}:
+    if not modality_matches(slot.modality, modality):
         return 0.0
     score = 0.0
     text_tokens = _tokens(text)
@@ -340,6 +359,8 @@ def score_evidence_for_slot(
         return 0.0
     if metric_token_sets:
         score += metric_coverage
+    if slot.modality not in {"", "auto"}:
+        score += 0.25
     if slot.period:
         score += 1.0
     if slot.entity and slot.entity.lower() in text:
@@ -441,74 +462,6 @@ def retrieval_budget(plan: QueryPlan) -> dict[str, int]:
     if plan.question_type == "long_form":
         return {"max_items": 12, "max_pages": 5}
     return {"max_items": 8, "max_pages": 3}
-
-
-def _heuristic_slots(
-    question: str,
-    answer_type: str,
-    question_type: str,
-    periods: list[str],
-    metric: str,
-) -> tuple[EvidenceSlot, ...]:
-    if answer_type == "boolean":
-        return (
-            EvidenceSlot(
-                slot_id="support:boolean_proposition",
-                role="support",
-                metric=metric,
-                modality="auto",
-                query=question,
-            ),
-        )
-    if question_type == "multi_period_numeric":
-        return tuple(
-            EvidenceSlot(
-                slot_id=f"operand:{period}",
-                role="operand",
-                metric=metric,
-                period=period,
-                modality="auto",
-                required_for_execution=True,
-                query=" ".join(value for value in (metric, period) if value),
-            )
-            for period in periods
-        )
-    if answer_type == "numeric":
-        roles = (
-            ("operand:primary", "operand:secondary")
-            if requires_multiple_operands(question)
-            else ("operand:primary",)
-        )
-        return tuple(
-            EvidenceSlot(
-                slot_id=slot_id,
-                role="operand",
-                metric=metric,
-                modality="auto",
-                required_for_execution=True,
-                query=metric,
-            )
-            for slot_id in roles
-        )
-    if question_type == "cross_page":
-        left_query, right_query = cross_page_support_queries(question, metric)
-        return (
-            EvidenceSlot(
-                slot_id="support:left_subject",
-                role="support",
-                metric=left_query,
-                modality=modality_hint(left_query),
-                query=left_query,
-            ),
-            EvidenceSlot(
-                slot_id="support:right_subject",
-                role="support",
-                metric=right_query,
-                modality=modality_hint(right_query),
-                query=right_query,
-            ),
-        )
-    return ()
 
 
 def _finance_slots(

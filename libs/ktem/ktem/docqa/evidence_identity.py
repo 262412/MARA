@@ -11,6 +11,8 @@ from .evidence_alias_values import exact_alias_values, grouping_alias_values
 from .evidence_fact_contract import (
     STRUCTURED_FACT_FIELDS,
     EvidenceIdentityConflictError,
+    fact_sets_conflict,
+    polarity,
 )
 from .evidence_field_values import score_value
 from .evidence_representations import (
@@ -31,8 +33,6 @@ _UNIT_RE = re.compile(
     r"\b(?:percent|percentage|million|billion|thousand|usd|eur|gbp|ratio)\b|[%$€£¥]",
     re.IGNORECASE,
 )
-_POSITIVE = {"increase", "increased", "rise", "rose", "growth", "higher", "up"}
-_NEGATIVE = {"decrease", "decreased", "decline", "declined", "lower", "down"}
 
 
 @dataclass(frozen=True)
@@ -71,14 +71,6 @@ def grouping_evidence_aliases(item: dict[str, Any]) -> set[str]:
 
 def identity_of(item: dict[str, Any]) -> EvidenceIdentity:
     metadata = _merged_metadata(item)
-    existing = item.get("identity")
-    if isinstance(existing, dict):
-        source_id = str(existing.get("source_id") or "").strip()
-        kind = str(existing.get("kind") or "").strip()
-        local_id = str(existing.get("local_id") or "").strip()
-        if kind and local_id:
-            return EvidenceIdentity(source_id, kind, local_id)
-
     source_id = _first(item, metadata, "source_id", "file_id", "document_id")
     cell_id = _first(item, metadata, "cell_id")
     if cell_id:
@@ -483,10 +475,15 @@ def _facts_conflict(left: dict[str, Any], right: dict[str, Any]) -> bool:
     for extractor in (_numbers, _years, _units):
         a = extractor(left_text)
         b = extractor(right_text)
-        if a and b and a != b:
+        if fact_sets_conflict(
+            identity_of(left).kind,
+            identity_of(right).kind,
+            a,
+            b,
+        ):
             return True
-    left_polarity = _polarity(left_text)
-    right_polarity = _polarity(right_text)
+    left_polarity = polarity(_tokens(left_text))
+    right_polarity = polarity(_tokens(right_text))
     return bool(left_polarity and right_polarity and left_polarity != right_polarity)
 
 
@@ -502,15 +499,6 @@ def _units(text: str) -> set[str]:
     return {value.lower() for value in _UNIT_RE.findall(text)}
 
 
-def _polarity(text: str) -> str:
-    tokens = _tokens(text)
-    if tokens & _POSITIVE:
-        return "positive"
-    if tokens & _NEGATIVE:
-        return "negative"
-    return ""
-
-
 def _normalized_text_hash(text: str) -> str:
     normalized = " ".join(
         unicodedata.normalize("NFKC", str(text or "")).lower().split()
@@ -523,11 +511,17 @@ def _tokens(text: str) -> set[str]:
 
 
 def _item_text(item: dict[str, Any]) -> str:
-    return "\n".join(
+    direct = [
         str(item.get(field) or "").strip()
         for field in ("text", "ocr_text", "vlm_text", "caption")
         if str(item.get(field) or "").strip()
-    )
+    ]
+    represented = [
+        str(value.get("text") or "").strip()
+        for value in evidence_representations(item)
+        if str(value.get("text") or "").strip()
+    ]
+    return "\n".join(dict.fromkeys([*direct, *represented]))
 
 
 def _merged_metadata(item: dict[str, Any]) -> dict[str, Any]:

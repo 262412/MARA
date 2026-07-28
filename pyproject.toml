@@ -68,6 +68,7 @@ dev = [
     "build",
     "coverage",
     "flake8",
+    "hypothesis",
     "ipython",
     "pre-commit",
     "pytest",

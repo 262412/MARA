@@ -46,26 +46,32 @@ def _graph_locator_items(
         for value in item.get("source_backrefs") or []
         if str(value or "").strip()
     ]
+    if len(source_backrefs) == 1:
+        return [_located_graph_item(item, source_backrefs[0])]
     if not expand or len(source_backrefs) < 2:
         return [item]
-    output = []
-    for source_backref in source_backrefs:
-        source_id, marker, page_label = source_backref.partition("#page:")
-        located = dict(item)
-        located["source_id"] = source_id
-        located["page_label"] = page_label if marker else ""
-        located["source_backrefs"] = [source_backref]
-        located["element_id"] = ":".join(
-            value
-            for value in (
-                str(item.get("element_id") or item.get("evidence_id") or "graph"),
-                source_id,
-                page_label,
-            )
-            if value
+    return [_located_graph_item(item, source_ref) for source_ref in source_backrefs]
+
+
+def _located_graph_item(
+    item: dict[str, Any],
+    source_backref: str,
+) -> dict[str, Any]:
+    source_id, marker, page_label = source_backref.partition("#page:")
+    located = dict(item)
+    located["source_id"] = source_id
+    located["page_label"] = page_label if marker else ""
+    located["source_backrefs"] = [source_backref]
+    located["element_id"] = ":".join(
+        value
+        for value in (
+            str(item.get("element_id") or item.get("evidence_id") or "graph"),
+            source_id,
+            page_label,
         )
-        output.append(located)
-    return output
+        if value
+    )
+    return located
 
 
 def _coerce_graph_item(item: dict[str, Any]) -> dict[str, Any]:

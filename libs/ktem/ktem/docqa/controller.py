@@ -447,6 +447,8 @@ def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
         "candidate_ranking_contract",
         "canonical_candidate_count",
         "pre_rerank_required_slot_candidates_restored",
+        "reranker_input_contract",
+        "reranker_input_evidence",
         "source_page_locators",
     }
     ignored_empty_keys = {"evidence", "evidence_ids", "modality_counts"}

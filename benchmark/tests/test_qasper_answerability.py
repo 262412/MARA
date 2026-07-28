@@ -162,7 +162,7 @@ def test_qasper_answerability_checks_boolean_question_sufficiency_not_token_supp
     assert llm.calls[0][1]["response_format"]["json_schema"]["strict"] is True
 
 
-def test_qasper_answerability_preserves_yes_candidate_on_conflicting_verdict():
+def test_qasper_answerability_corrects_yes_candidate_on_grounded_no_verdict():
     llm = _VerifierLLM(
         '{"verdict":"no","evidence_quote":'
         '"The method is used as a drop-in replacement and requires no fine-tuning."}'
@@ -178,13 +178,13 @@ def test_qasper_answerability_preserves_yes_candidate_on_conflicting_verdict():
         candidate_answer="yes",
     )
 
-    assert result.answer == "yes"
+    assert result.answer == "no"
     assert result.trace["verdict"] == "no"
-    assert result.trace["action"] == "polarity_conflict_preserved"
+    assert result.trace["action"] == "corrected_polarity"
     assert "CANDIDATE ANSWER" not in llm.calls[0][0]
 
 
-def test_qasper_answerability_preserves_no_candidate_on_conflicting_verdict():
+def test_qasper_answerability_corrects_no_candidate_on_grounded_yes_verdict():
     llm = _VerifierLLM(
         '{"verdict":"yes","evidence_quote":'
         '"The authors released their source code with the paper."}'
@@ -197,12 +197,12 @@ def test_qasper_answerability_preserves_no_candidate_on_conflicting_verdict():
         candidate_answer="no",
     )
 
-    assert result.answer == "no"
+    assert result.answer == "yes"
     assert result.trace["verdict"] == "yes"
-    assert result.trace["action"] == "polarity_conflict_preserved"
+    assert result.trace["action"] == "corrected_polarity"
 
 
-def test_qasper_answerability_preserves_primary_on_conflicting_complete_verdict():
+def test_qasper_answerability_abstains_on_incomplete_conflicting_verdict():
     llm = _VerifierLLM(
         '{"verdict":"no_complete","evidence_quote":'
         '"The model uses attention over the encoded input sequence."}'
@@ -215,9 +215,9 @@ def test_qasper_answerability_preserves_primary_on_conflicting_complete_verdict(
         candidate_answer="yes",
     )
 
-    assert result.answer == "yes"
+    assert result.answer == "unanswerable"
     assert result.trace["verdict"] == "insufficient_evidence"
-    assert result.trace["action"] == "preserved_insufficient_candidate"
+    assert result.trace["action"] == "abstained_insufficient_evidence"
     assert result.trace["primary_answer"] == "yes"
     assert result.trace["adjudicated_polarity"] == "insufficient_evidence"
     assert result.trace["reason"] == "grounded_quote_incomplete_relation"
@@ -358,7 +358,7 @@ def test_qasper_complete_verdict_still_requires_question_relation():
         candidate_answer="no",
     )
 
-    assert result.answer == "no"
+    assert result.answer == "unanswerable"
     assert result.trace["verdict"] == "insufficient_evidence"
     assert result.trace["quote_grounded"] == "true"
     assert result.trace["quote_supports_relation"] == "false"
@@ -379,10 +379,10 @@ def test_qasper_answerability_rejects_boolean_candidate_when_question_is_unresol
         candidate_answer="yes",
     )
 
-    assert result.answer == "yes"
+    assert result.answer == "unanswerable"
     assert result.trace["status"] == "ok"
     assert result.trace["verdict"] == "insufficient_evidence"
-    assert result.trace["action"] == "preserved_insufficient_candidate"
+    assert result.trace["action"] == "abstained_insufficient_evidence"
 
 
 def test_qasper_answerability_repairs_only_invalid_json_structure_once():
@@ -456,8 +456,8 @@ def test_qasper_boolean_verifier_requires_quote_to_support_question_relation():
         candidate_answer="yes",
     )
 
-    assert result.answer == "yes"
+    assert result.answer == "unanswerable"
     assert result.trace["verdict"] == "insufficient_evidence"
-    assert result.trace["action"] == "preserved_insufficient_candidate"
+    assert result.trace["action"] == "abstained_insufficient_evidence"
     assert result.trace["quote_grounded"] == "true"
     assert result.trace["quote_supports_relation"] == "false"

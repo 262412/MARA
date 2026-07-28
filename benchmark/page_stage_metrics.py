@@ -4,6 +4,31 @@ from typing import Any
 
 
 def all_gold_pages_hit(prediction: dict[str, Any]) -> float | None:
+    metadata = dict(prediction.get("evidence_metadata") or {})
+    for stage in ("generation_context_evidence", "selected_evidence"):
+        if stage in metadata:
+            return stage_all_gold_pages_hit(prediction, stage)
+    return _all_gold_pages_hit_from_pairs(
+        prediction,
+        predicted_source_page_pairs(prediction),
+    )
+
+
+def stage_all_gold_pages_hit(
+    prediction: dict[str, Any],
+    stage: str,
+) -> float | None:
+    metadata = dict(prediction.get("evidence_metadata") or {})
+    pairs: set[tuple[str, str]] = set()
+    for item in _records(metadata.get(stage)):
+        _add_item_locators(pairs, item)
+    return _all_gold_pages_hit_from_pairs(prediction, pairs)
+
+
+def _all_gold_pages_hit_from_pairs(
+    prediction: dict[str, Any],
+    predicted_pairs: set[tuple[str, str]],
+) -> float | None:
     gold_pairs = {
         (
             str(item.get("source_id") or item.get("document_id") or ""),
@@ -14,14 +39,12 @@ def all_gold_pages_hit(prediction: dict[str, Any]) -> float | None:
     }
     if not gold_pairs:
         return legacy_all_gold_pages_hit(prediction)
-    predicted_pairs = predicted_source_page_pairs(prediction)
     if not predicted_pairs:
         return 0.0
     return float(
         all(
             any(
-                (not source or source == predicted_source)
-                and page == predicted_page
+                (not source or source == predicted_source) and page == predicted_page
                 for predicted_source, predicted_page in predicted_pairs
             )
             for source, page in gold_pairs
@@ -45,8 +68,8 @@ def predicted_source_page_pairs(
     for key in (
         "cited_evidence",
         "verified_evidence",
+        "generation_context_evidence",
         "selected_evidence",
-        "candidate_evidence",
     ):
         for item in _records(metadata.get(key)):
             _add_item_locators(pairs, item)

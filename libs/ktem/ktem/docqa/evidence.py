@@ -30,7 +30,6 @@ from .query_planning import (
 from .required_slot_selection import required_slot_shortlist
 
 MAX_PAGE_IMAGE_EVIDENCE_ITEMS = 20
-MAX_ELEMENT_EVIDENCE_ITEMS = 20
 MAX_RERANK_CANDIDATES = 80
 
 
@@ -88,6 +87,8 @@ def build_evidence_bundle(
     metadata["candidate_ranked_evidence"] = ranked_candidates
     metadata["candidate_ranking_contract"] = "global_ranked_v1"
     metadata["pre_rerank_required_slot_candidates_restored"] = pre_rerank_restored
+    metadata["reranker_input_evidence"] = fused_candidates
+    metadata["reranker_input_contract"] = "required_slot_restored.v1"
     if route == "hybrid":
         metadata["fused_evidence"] = fused_candidates
     if reranked_candidates is not None:
@@ -147,11 +148,7 @@ def _initial_evidence_items(
         element_items.extend(
             _coerce_item(item) for item in evidence_metadata.get("elements") or []
         )
-        items.extend(
-            _rank_route_items(element_items, request, "doc_element")[
-                :MAX_ELEMENT_EVIDENCE_ITEMS
-            ]
-        )
+        items.extend(_rank_route_items(element_items, request, "doc_element"))
     if route in {"graph_global", "hybrid"}:
         items.extend(graph_items(request, evidence_metadata))
     return items

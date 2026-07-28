@@ -38,12 +38,40 @@ def calculation_citation_items(
 def record_calculation_stage_evidence(
     prediction: dict[str, Any],
     matches: list[MatchedCitationEvidence],
+    *,
+    canonical_sources: list[str] | None = None,
 ) -> None:
     metadata = prediction.get("evidence_metadata")
     if not isinstance(metadata, dict):
         metadata = {}
         prediction["evidence_metadata"] = metadata
-    metadata["execution_operand_evidence"] = [match.item for match in matches]
+    metadata["execution_operand_evidence"] = [
+        _with_canonical_source_backref(match.item, canonical_sources or [])
+        for match in matches
+    ]
+
+
+def _with_canonical_source_backref(
+    item: dict[str, Any],
+    canonical_sources: list[str],
+) -> dict[str, Any]:
+    page = str(item.get("page_label") or item.get("page") or "").strip()
+    suffix = f"#page:{page}" if page else "#source"
+    source_ref = next(
+        (
+            str(value).strip()
+            for value in canonical_sources
+            if str(value or "").strip().endswith(suffix)
+        ),
+        "",
+    )
+    if not source_ref:
+        return item
+    output = dict(item)
+    output["source_backrefs"] = list(
+        dict.fromkeys([*list(item.get("source_backrefs") or []), source_ref])
+    )
+    return output
 
 
 def _matched_calculation_item(

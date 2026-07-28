@@ -259,7 +259,11 @@ def _primary_score_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         return {
             "primary_score_metric": (
                 _DEPLOYED_POLICY_SCORE_METRIC
-                if policy == "deployed_controller_policy"
+                if policy
+                in {
+                    "deployed_controller_policy",
+                    "deployed_manifest_policy",
+                }
                 else _PRIMARY_SCORE_METRIC
             ),
             "primary_score": _avg_metric(primary_predictions, "native_score"),

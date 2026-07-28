@@ -17,7 +17,11 @@ from .evidence_stage_coverage import (
     stage_coverage_values,
 )
 from .metrics import round_metric, safe_mean
-from .page_stage_metrics import all_gold_pages_hit, legacy_all_gold_pages_hit
+from .page_stage_metrics import (
+    all_gold_pages_hit,
+    legacy_all_gold_pages_hit,
+    stage_all_gold_pages_hit,
+)
 from .report_identity_compaction import is_identity_only_projection
 
 STAGE_METRIC_KEYS = (
@@ -26,6 +30,7 @@ STAGE_METRIC_KEYS = (
     "candidate_pool_recall_at_80",
     "reranked_recall_at_10",
     "fused_evidence_coverage",
+    "reranker_input_evidence_coverage",
     "selected_evidence_coverage",
     "used_evidence_coverage",
     "generation_context_evidence_coverage",
@@ -37,6 +42,10 @@ STAGE_METRIC_KEYS = (
     "retrieval_mrr",
     "retrieval_ndcg",
     "all_gold_pages_hit",
+    "candidate_all_gold_pages_hit",
+    "selected_all_gold_pages_hit",
+    "generation_context_all_gold_pages_hit",
+    "cited_all_gold_pages_hit",
     "legacy_page_only_all_gold_pages_hit",
     "gold_table_cell_recall",
     "slot_coverage",
@@ -64,6 +73,7 @@ STAGE_METRIC_KEYS = (
 )
 _EVIDENCE_STAGE_TRACE_KEYS = (
     "fused_evidence",
+    "reranker_input_evidence",
     "selected_evidence",
     "used_evidence",
     "generation_context_evidence",
@@ -75,35 +85,14 @@ _EVIDENCE_STAGE_TRACE_KEYS = (
 
 def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | None]:
     metadata = dict(prediction.get("evidence_metadata") or {})
-    candidate_pool = (
-        _records(metadata.get("candidate_evidence"))[:80]
-        if "candidate_evidence" in metadata
-        else None
-    )
-    ranked_candidates = (
-        _records(metadata.get("candidate_ranked_evidence"))
-        if "candidate_ranked_evidence" in metadata
-        else candidate_pool
-    )
-    candidates = ranked_candidates[:50] if ranked_candidates is not None else None
-    reranked_available = reranked_trace_available(metadata)
-    reranked = (
-        _records(metadata.get("reranked_evidence"))[:10] if reranked_available else None
-    )
-    gold_keys = _gold_keys(prediction)
-    lineage_coverage = (
-        reranker_lineage(candidate_pool, reranked)[0]
-        if candidate_pool is not None and reranked is not None
-        else None
-    )
-    support_recall = gold_evidence_support_recall(
+    (
         candidate_pool,
-        _records(prediction.get("gold_evidence")),
-    )
-    if candidate_pool and is_identity_only_projection(candidate_pool):
-        support_recall = (prediction.get("stage_metrics") or {}).get(
-            "gold_evidence_support_recall"
-        )
+        candidates,
+        reranked,
+        gold_keys,
+        lineage_coverage,
+    ) = _stage_retrieval_context(prediction, metadata)
+    support_recall = _stage_support_recall(prediction, candidate_pool)
     selection = dict(metadata.get("evidence_selection_trace") or {})
     dedupe = dict(metadata.get("dedupe_trace") or {})
     finance = dict(metadata.get("finance_numeric_trace") or {})
@@ -120,8 +109,7 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
         "gold_evidence_support_recall": support_recall,
         "retrieval_mrr": _mrr(reranked, gold_keys),
         "retrieval_ndcg": _ndcg(reranked, gold_keys),
-        "all_gold_pages_hit": all_gold_pages_hit(prediction),
-        "legacy_page_only_all_gold_pages_hit": legacy_all_gold_pages_hit(prediction),
+        **_stage_page_hit_metrics(prediction),
         "gold_table_cell_recall": _element_recall(prediction),
         "slot_coverage": _float_or_none(metadata.get("slot_coverage")),
         "retrieval_slot_coverage": _float_or_none(metadata.get("slot_coverage")),
@@ -147,6 +135,81 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
     }
 
 
+def _stage_retrieval_context(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+) -> tuple[
+    list[dict[str, Any]] | None,
+    list[dict[str, Any]] | None,
+    list[dict[str, Any]] | None,
+    set[tuple[str, str, str, str]],
+    float | None,
+]:
+    candidate_pool = (
+        _records(metadata.get("reranker_input_evidence"))
+        if "reranker_input_evidence" in metadata
+        else (
+            _records(metadata.get("candidate_evidence"))[:80]
+            if "candidate_evidence" in metadata
+            else None
+        )
+    )
+    ranked = (
+        _records(metadata.get("candidate_ranked_evidence"))
+        if "candidate_ranked_evidence" in metadata
+        else candidate_pool
+    )
+    candidates = ranked[:50] if ranked is not None else None
+    reranked = (
+        _records(metadata.get("reranked_evidence"))[:10]
+        if reranked_trace_available(metadata)
+        else None
+    )
+    gold_keys = _gold_keys(prediction)
+    lineage = (
+        reranker_lineage(candidate_pool, reranked)[0]
+        if candidate_pool is not None and reranked is not None
+        else None
+    )
+    return candidate_pool, candidates, reranked, gold_keys, lineage
+
+
+def _stage_support_recall(
+    prediction: dict[str, Any],
+    candidate_pool: list[dict[str, Any]] | None,
+) -> float | None:
+    support_recall = gold_evidence_support_recall(
+        candidate_pool,
+        _records(prediction.get("gold_evidence")),
+    )
+    if candidate_pool and is_identity_only_projection(candidate_pool):
+        return (prediction.get("stage_metrics") or {}).get(
+            "gold_evidence_support_recall"
+        )
+    return support_recall
+
+
+def _stage_page_hit_metrics(
+    prediction: dict[str, Any],
+) -> dict[str, float | None]:
+    return {
+        "all_gold_pages_hit": all_gold_pages_hit(prediction),
+        "candidate_all_gold_pages_hit": stage_all_gold_pages_hit(
+            prediction, "candidate_evidence"
+        ),
+        "selected_all_gold_pages_hit": stage_all_gold_pages_hit(
+            prediction, "selected_evidence"
+        ),
+        "generation_context_all_gold_pages_hit": stage_all_gold_pages_hit(
+            prediction, "generation_context_evidence"
+        ),
+        "cited_all_gold_pages_hit": stage_all_gold_pages_hit(
+            prediction, "cited_evidence"
+        ),
+        "legacy_page_only_all_gold_pages_hit": legacy_all_gold_pages_hit(prediction),
+    }
+
+
 def prediction_stage_metric_status(
     prediction: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
@@ -155,7 +218,11 @@ def prediction_stage_metric_status(
     gold_count = len(requirements) if requirements else len(_gold_keys(prediction))
     candidate_count = len(_records(metadata.get("candidate_evidence")))
     reranked_count = len(_records(metadata.get("reranked_evidence")))
-    candidate_pool = _records(metadata.get("candidate_evidence"))[:80]
+    candidate_pool = _records(
+        metadata.get("reranker_input_evidence")
+        if "reranker_input_evidence" in metadata
+        else metadata.get("candidate_evidence")
+    )
     reranked = _records(metadata.get("reranked_evidence"))[:10]
     candidate_status = _retrieval_metric_status(
         gold_count=gold_count,
@@ -296,29 +363,25 @@ def stage_metric_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     return {**averages, **coverage}
 
 
-def _gold_keys(prediction: dict[str, Any]) -> set[tuple[str, str, str]]:
-    keys: set[tuple[str, str, str]] = set()
+def _gold_keys(prediction: dict[str, Any]) -> set[tuple[str, str, str, str]]:
+    keys: set[tuple[str, str, str, str]] = set()
     for item in _records(prediction.get("gold_evidence")):
         source = str(item.get("source_id") or item.get("document_id") or "")
         page = str(item.get("page_label") or item.get("page") or "")
-        element = str(
-            item.get("cell_id")
-            or item.get("span_id")
-            or item.get("element_id")
-            or item.get("evidence_id")
-            or ""
-        )
+        identity = item.get("identity")
+        identity = identity if isinstance(identity, dict) else {}
+        kind, element = _gold_kind_and_local_id(item, identity)
         if source or page or element:
-            keys.add((source, page, element))
+            keys.add((source, page, kind, element))
     if not keys:
         for page in prediction.get("gold_pages") or []:
-            keys.add(("", str(page), ""))
+            keys.add(("", str(page), "", ""))
     return keys
 
 
 def _mrr(
     items: list[dict[str, Any]] | None,
-    gold: set[tuple[str, str, str]],
+    gold: set[tuple[str, str, str, str]],
 ) -> float | None:
     if items is None or not gold:
         return None
@@ -330,13 +393,13 @@ def _mrr(
 
 def _ndcg(
     items: list[dict[str, Any]] | None,
-    gold: set[tuple[str, str, str]],
+    gold: set[tuple[str, str, str, str]],
 ) -> float | None:
     if items is None or not gold:
         return None
     if not items:
         return 0.0
-    seen_gold: set[tuple[str, str, str]] = set()
+    seen_gold: set[tuple[str, str, str, str]] = set()
     gains: list[float] = []
     for item in items:
         new_matches = matched_gold(item, gold) - seen_gold
@@ -358,6 +421,23 @@ def _element_recall(prediction: dict[str, Any]) -> float | None:
         return None
     predicted = {str(item) for item in prediction.get("predicted_element_ids") or []}
     return len(gold & predicted) / len(gold)
+
+
+def _gold_kind_and_local_id(
+    item: dict[str, Any],
+    identity: dict[str, Any],
+) -> tuple[str, str]:
+    if item.get("cell_id"):
+        return "cell", str(item["cell_id"])
+    if item.get("span_id"):
+        return "span", str(item["span_id"])
+    if item.get("element_id"):
+        return "element", str(item["element_id"])
+    if identity.get("local_id"):
+        return str(identity.get("kind") or ""), str(identity["local_id"])
+    if item.get("evidence_id"):
+        return "evidence", str(item["evidence_id"])
+    return "", ""
 
 
 def _claim_duplicate_rate(prediction: dict[str, Any]) -> float | None:

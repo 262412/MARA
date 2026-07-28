@@ -71,7 +71,7 @@ def test_hybrid_route_page_coverage_tracks_selected_evidence_not_candidates():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert bundle.metadata["page_coverage"] == ["1", "2"]
+    assert bundle.metadata["page_coverage"] == ["2", "1"]
     assert "99" not in bundle.metadata["page_coverage"]
 
 

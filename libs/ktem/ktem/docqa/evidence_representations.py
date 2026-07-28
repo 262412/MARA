@@ -20,10 +20,18 @@ def evidence_representations(item: dict[str, Any]) -> list[dict[str, Any]]:
     for field, modality in modality_by_field.items():
         text = str(item.get(field) or "").strip()
         if text:
-            representations.append(
-                {"modality": modality, "field": field, "text": text}
-            )
+            representations.append({"modality": modality, "field": field, "text": text})
     return stable_dict_union([], representations)
+
+
+def representation_texts(item: dict[str, Any]) -> list[str]:
+    return list(
+        dict.fromkeys(
+            str(value.get("text") or "").strip()
+            for value in evidence_representations(item)
+            if str(value.get("text") or "").strip()
+        )
+    )
 
 
 def stable_dict_union(left: Any, right: Any) -> list[dict[str, Any]]:

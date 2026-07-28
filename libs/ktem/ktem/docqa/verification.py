@@ -4,6 +4,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .calculation_claim_verification import calculation_claim_result
 from .claim_filtering import answer_claims
 from .claim_support import (
     claim_supported,
@@ -98,15 +99,33 @@ def verify_decision(
             reason=f"{mode.title()} verification requested without sufficient evidence.",
             action=action,
         )
-    typed_boolean = _boolean_verification(
-        prompt,
+    typed_calculation = calculation_claim_result(
+        evidence_bundle,
         answer,
-        evidence_bundle.items,
+        claims,
+        domain=domain,
     )
-    if typed_boolean is not None:
-        claims, results = typed_boolean
+    if typed_calculation is not None:
+        claims = [typed_calculation.claim]
+        results = [
+            VerifiedClaim(
+                claim_id="claim:1",
+                claim=typed_calculation.claim,
+                status=typed_calculation.status,
+                supporting_evidence_ids=typed_calculation.supporting_evidence_ids,
+                contradicting_evidence_ids=typed_calculation.contradicting_evidence_ids,
+            )
+        ]
     else:
-        results = _verify_claims(claims, evidence_bundle.items, prompt, domain)
+        typed_boolean = _boolean_verification(
+            prompt,
+            answer,
+            evidence_bundle.items,
+        )
+        if typed_boolean is not None:
+            claims, results = typed_boolean
+        else:
+            results = _verify_claims(claims, evidence_bundle.items, prompt, domain)
     decision = _decision_for_claim_results(
         mode,
         retrieve_decision.status,
@@ -418,7 +437,9 @@ def _boolean_verification(
     answer: str,
     evidence_items: list[dict[str, Any]],
 ) -> tuple[list[str], list[VerifiedClaim]] | None:
-    normalized = extract_final_answer_text(answer).strip().lower().rstrip(".")
+    answer_text = extract_final_answer_text(answer).strip().lower()
+    match = re.match(r"^(yes|true|no|false)\b", answer_text)
+    normalized = match.group(1) if match else ""
     aliases = {"yes": True, "true": True, "no": False, "false": False}
     if normalized not in aliases:
         return None
@@ -435,7 +456,10 @@ def _boolean_verification(
         if len(overlap) < min(len(proposition_tokens), required):
             continue
         evidence_is_negative = _has_negation(item_text)
-        if evidence_is_negative == (not aliases[normalized]):
+        expected_evidence_negation = _has_negation(proposition) ^ (
+            not aliases[normalized]
+        )
+        if evidence_is_negative == expected_evidence_negation:
             supporting.append(identity_of(item).key)
         else:
             contradicting.append(identity_of(item).key)

@@ -291,17 +291,17 @@ def _ground_boolean_verdict(
 
 def _boolean_answer_action(candidate_polarity: str, verdict: str) -> tuple[str, str]:
     if verdict not in {"yes", "no"}:
-        action = (
-            "preserved_insufficient_candidate"
+        return (
+            "abstained_insufficient_evidence"
             if candidate_polarity
-            else "preserved_boolean_abstention"
+            else "preserved_boolean_abstention",
+            "unanswerable",
         )
-        return action, candidate_polarity or "unanswerable"
     if not candidate_polarity:
         return "recovered_boolean_from_abstention", verdict
     if verdict == candidate_polarity:
         return "confirmed_candidate", verdict
-    return "polarity_conflict_preserved", candidate_polarity
+    return "corrected_polarity", verdict
 
 
 def _verify_free_text_candidate(

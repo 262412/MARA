@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-EvidenceKey = tuple[str, str, str]
+EvidenceKey = tuple[str, str, str, str]
 
 
 def stage_coverage_values(
@@ -16,6 +16,10 @@ def stage_coverage_values(
 ) -> dict[str, float | None]:
     stages = {
         "fused_evidence_coverage": _stage_records(metadata, "fused_evidence"),
+        "reranker_input_evidence_coverage": _stage_records(
+            metadata,
+            "reranker_input_evidence",
+        ),
         "selected_evidence_coverage": _stage_records(metadata, "selected_evidence"),
         "used_evidence_coverage": _stage_records(metadata, "used_evidence"),
         "generation_context_evidence_coverage": _stage_records(
@@ -56,7 +60,7 @@ def gold_requirement_keys(
         acceptable = {
             key
             for item in _records(requirement.get("acceptable_evidence"))
-            if (key := _record_key(item)) != ("", "", "")
+            if (key := _record_key(item)) != ("", "", "", "")
         }
         if acceptable:
             requirements.append(acceptable)
@@ -104,6 +108,7 @@ def matched_gold(
             (not key[0] or key[0] == candidate[0])
             and (not key[1] or key[1] == candidate[1])
             and (not key[2] or key[2] == candidate[2])
+            and (not key[3] or key[3] == candidate[3])
             for candidate in item_keys
         )
     }
@@ -127,27 +132,55 @@ def _record_key(item: dict[str, Any]) -> EvidenceKey:
             or ""
         ),
         str(item.get("page_label") or item.get("page") or ""),
-        str(
-            item.get("cell_id")
-            or item.get("span_id")
-            or item.get("element_id")
-            or item.get("evidence_id")
-            or identity_payload.get("local_id")
-            or ""
-        ),
+        _record_kind(item, identity_payload),
+        _record_local_id(item, identity_payload),
     )
 
 
 def _item_keys(item: dict[str, Any]) -> set[EvidenceKey]:
     sources = _item_sources(item) | {""}
     pages = {str(item.get("page_label") or item.get("page") or ""), ""}
-    elements = {_record_key(item)[2], ""}
+    record = _record_key(item)
+    kinds = {record[2], ""}
+    elements = {record[3], ""}
     return {
-        (source, page, element)
+        (source, page, kind, element)
         for source in sources
         for page in pages
+        for kind in kinds
         for element in elements
     }
+
+
+def _record_kind(
+    item: dict[str, Any],
+    identity: dict[str, Any],
+) -> str:
+    if identity.get("kind"):
+        return str(identity["kind"])
+    for field, kind in (
+        ("cell_id", "cell"),
+        ("span_id", "span"),
+        ("element_id", "element"),
+        ("evidence_id", "evidence"),
+    ):
+        if item.get(field):
+            return kind
+    return ""
+
+
+def _record_local_id(
+    item: dict[str, Any],
+    identity: dict[str, Any],
+) -> str:
+    return str(
+        item.get("cell_id")
+        or item.get("span_id")
+        or item.get("element_id")
+        or item.get("evidence_id")
+        or identity.get("local_id")
+        or ""
+    )
 
 
 def _gold_page_keys(prediction: dict[str, Any]) -> set[tuple[str, str]]:

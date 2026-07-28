@@ -354,7 +354,11 @@ def test_mara_text_route_adds_answer_format_requirements(monkeypatch):
                 RetrievedDocument(
                     text="Attention uses Q, K, V matrices.",
                     id_="doc-1",
-                    metadata={"file_id": "file-1", "page_label": "7"},
+                    metadata={
+                        "file_id": "file-1",
+                        "page_label": "7",
+                        "modality": "table",
+                    },
                 )
             ],
             [],

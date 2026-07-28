@@ -257,6 +257,23 @@ def _with_retrieval_lineage(
                 annotated.append(item)
                 continue
             record = dict(item)
+            record_metadata = record.get("metadata")
+            record_metadata = (
+                record_metadata if isinstance(record_metadata, dict) else {}
+            )
+            existing_lineage = [
+                dict(entry)
+                for entry in (
+                    record.get("retrieval_lineage")
+                    or record_metadata.get("retrieval_lineage")
+                    or []
+                )
+                if isinstance(entry, dict)
+            ]
+            if existing_lineage:
+                record["retrieval_lineage"] = existing_lineage
+                annotated.append(record)
+                continue
             raw_score, score_type = _raw_retrieval_score(record, retriever_name)
             lineage = {
                 "round_id": round_id,
@@ -268,7 +285,6 @@ def _with_retrieval_lineage(
                 "score_type": score_type,
             }
             record["retrieval_lineage"] = [
-                *list(record.get("retrieval_lineage") or []),
                 lineage,
             ]
             annotated.append(record)

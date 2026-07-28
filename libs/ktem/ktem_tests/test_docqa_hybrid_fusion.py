@@ -46,14 +46,14 @@ def test_hybrid_route_uses_retriever_level_rrf_scores():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert bundle.items[0]["evidence_id"] == "text-b"
+    assert bundle.items[0]["evidence_id"] == "page-image:file-b:5"
     assert bundle.metadata["hybrid_fusion_trace"]["ranker"] == (
         "retriever_reciprocal_rank_fusion_v2"
     )
     confidence = bundle.items[0]["metadata"]["evidence_confidence"]
-    assert confidence["route"] == "text"
-    assert confidence["normalized_score"] == 1.0
-    assert confidence["pre_fusion_rank"] == 1
+    assert confidence["route"] == "page_image"
+    assert confidence["normalized_score"] > 0.99
+    assert confidence["pre_fusion_rank"] == 2
 
 
 def test_rrf_accumulates_rank_contributions_for_shared_evidence_identity():
@@ -120,7 +120,10 @@ def test_rrf_builds_independent_lists_from_retrieval_lineage():
     )
 
     assert fused[0]["evidence_id"] == "shared"
-    assert trace["retriever_lists"] == ["bm25", "dense"]
+    assert trace["retriever_lists"] == [
+        "bm25|round:unknown|query:default",
+        "dense|round:unknown|query:default",
+    ]
 
 
 def test_hybrid_item_scores_use_canonical_cell_identity():

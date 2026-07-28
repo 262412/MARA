@@ -299,7 +299,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         runtime = self._get_runtime()
         selected_file_ids, index_seconds = self._prepare_runtime_documents(documents)
         active_record = active_runtime_record(runtime, selected_file_ids)
-        response, generation_seconds = self._run_runtime_generation(
+        response, runtime_turn_seconds = self._run_runtime_generation(
             runtime,
             example=example,
             documents=documents,
@@ -312,7 +312,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             documents=documents,
             selected_file_ids=selected_file_ids,
             index_seconds=index_seconds,
-            generation_seconds=generation_seconds,
+            runtime_turn_seconds=runtime_turn_seconds,
         )
 
     def _prepare_runtime_documents(
@@ -353,12 +353,12 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
 
         self._active_route_trace.append(
             {
-                "stage": "generation",
+                "stage": "runtime_turn",
                 "status": "started",
             }
         )
         self._active_stage_started_at = time.perf_counter()
-        generation_start = time.perf_counter()
+        runtime_turn_start = time.perf_counter()
         response = runtime.run_turn(
             DocQARequest(
                 **self._docqa_request_kwargs(
@@ -369,16 +369,16 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 )
             )
         )
-        generation_seconds = time.perf_counter() - generation_start
-        self._active_timings["generation_seconds"] = generation_seconds
+        runtime_turn_seconds = time.perf_counter() - runtime_turn_start
+        self._active_timings["runtime_turn_seconds"] = runtime_turn_seconds
         self._active_route_trace[-1].update(
             {
                 "status": "completed",
-                "seconds": round(generation_seconds, 4),
+                "seconds": round(runtime_turn_seconds, 4),
             }
         )
         self._active_stage_started_at = None
-        return response, generation_seconds
+        return response, runtime_turn_seconds
 
     def _runtime_result(
         self,
@@ -388,7 +388,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         documents: list[BenchmarkDocument],
         selected_file_ids: list[str],
         index_seconds: float,
-        generation_seconds: float,
+        runtime_turn_seconds: float,
     ) -> EngineRunResult:
         (
             evidence_metadata,
@@ -413,11 +413,10 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             self._active_route_trace.append(
                 alce_grounding_stage_event(grounding_trace, grounding_seconds)
             )
-        total_generation_seconds = generation_seconds + grounding_seconds
         timings, performance = runtime_timing_payload(
             evidence_metadata,
             index_seconds=index_seconds,
-            generation_seconds=total_generation_seconds,
+            runtime_turn_seconds=runtime_turn_seconds,
             grounding_seconds=grounding_seconds,
         )
         return EngineRunResult(

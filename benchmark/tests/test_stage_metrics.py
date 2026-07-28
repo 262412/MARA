@@ -22,6 +22,10 @@ def test_stage_metrics_report_retrieval_pages_dedup_slots_and_calculation():
                 {"source_id": "other", "page_label": "9"},
                 {"source_id": "report", "page_label": "3", "element_id": "cell-b"},
             ],
+            "generation_context_evidence": [
+                {"source_id": "report", "page_label": "2", "element_id": "cell-a"},
+                {"source_id": "report", "page_label": "3", "element_id": "cell-b"},
+            ],
             "reranked_evidence": [
                 {"source_id": "report", "page_label": "3", "element_id": "cell-b"},
                 {"source_id": "report", "page_label": "2", "element_id": "cell-a"},

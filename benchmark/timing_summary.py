@@ -12,6 +12,7 @@ _TIMING_STAGE_KEYS = (
     "retrieval_seconds",
     "reranking_seconds",
     "generation_seconds",
+    "runtime_turn_seconds",
     "retry_seconds",
     "verification_seconds",
     "pipeline_planning_seconds",
@@ -35,6 +36,7 @@ def timing_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         for key in (
             "retrieval_seconds",
             "generation_seconds",
+            "runtime_turn_seconds",
             "parse_seconds",
             "index_seconds",
         )

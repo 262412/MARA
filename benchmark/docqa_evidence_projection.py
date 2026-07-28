@@ -52,6 +52,7 @@ def evidence_element_ids(retrieved_hits: list[dict[str, Any]]) -> list[str]:
     for hit in retrieved_hits:
         element_id = str(
             hit.get("cell_id")
+            or hit.get("span_id")
             or hit.get("element_id")
             or dict(hit.get("identity") or {}).get("local_id")
             or ""

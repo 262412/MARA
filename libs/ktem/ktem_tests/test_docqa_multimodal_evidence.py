@@ -593,7 +593,7 @@ def test_hybrid_route_selects_page_first_multimodal_evidence_across_documents():
         "page_label": "5",
     }
     assert [item["evidence_id"] for item in bundle.items[:3]] == [
-        "text-b",
         "page-image:file-b:5",
+        "text-b",
         "element:file-b:5:table-a",
     ]

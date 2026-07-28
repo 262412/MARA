@@ -196,6 +196,7 @@ DEFAULT_MARA_ROUTES: list[dict[str, Any]] = [
             "generator_backend": "local_docqa_generator",
             "route_timeout_seconds": 90.0,
             "benchmark_role": "qa_quality",
+            "headline_role": "deployed_policy",
             "docqa_citation_mode": "inline",
         }
     ),

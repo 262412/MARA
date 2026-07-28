@@ -591,8 +591,8 @@ def test_execute_controller_turn_element_route_requires_element_evidence():
         generate=generate,
     )
 
-    assert result.answer == "The table-like paragraph identifies revenue."
-    assert result.controller_decision.route == "text_rag"
-    assert result.retrieve_decision.status == "good"
-    assert result.guardrail_decision.action == "return"
-    assert result.controller_decision.route_switch_used is True
+    assert "not retrieve enough evidence" in result.answer
+    assert result.controller_decision.route == "element_rag"
+    assert result.retrieve_decision.status == "poor"
+    assert result.guardrail_decision.action == "abstain"
+    assert result.evidence_bundle.metadata["missing_required_slot_count"] == 1

@@ -4,147 +4,143 @@
 
 ## 1. 当前结论
 
-本轮以 `Dev` 提交 `1739828e9033ed0530676e8401a44f1d279281bb` 的复核报告为
-输入，先关闭会让 artifact 失真的 P0，再处理其余静态审查项。
+本轮以 `Dev` 提交 `9063727e15425c2b45723a8a993f89d94ff47c56` 的复核报告为
+输入，对报告列出的 11 个 P0 和 13 个 P1 逐项核对实际代码、先写失败保护测试，再
+修复运行时与 benchmark 契约。
 
-复核报告中的三个 P0 已完成代码修复和失败保护测试：
+报告中的 24 个代码级问题目前均已关闭，包级回归和代码卫生检查通过。主要结果是：
 
-1. citation、calculation 和 reranker lineage 只用 atomic exact identity 做 join，
-   不再用父表 alias 扩散到兄弟 cell，也不再把 source 与 page 交叉组合；
-2. visual、structured 和 cross-page 不再是互斥 question type；跨页视觉问题会生成
-   两个具有 modality hint 的必需 support slots；
-3. `required_for_verification` 已进入 verifier，缺失 slot 或 slot evidence 没有支持
-   claim 时不能返回 `supported`。
+- citation locator 同时约束 evidence identity、source 和 page；page/source 引用保持
+  自身粒度，不再扩散成整页所有 cell；
+- generic citation 只来自 claim verifier 确认的支持证据，答案变更会清除旧 citation
+  并重新绑定；
+- numeric verifier 使用已验证的 calculation plan 和确定性 execution 结果，不再只用
+  答案与 operand 文本重叠判断派生数值；
+- numeric、boolean、visual 和 cross-page capability 可以组合成多个必需 slot，并能
+  约束不同 source-page；
+- candidate、reranker input、reranked、selected、generation context、verified 和
+  emitted citation 阶段有独立且可审计的 identity/coverage；
+- headline 使用 manifest 声明的 deployed policy，不再通过固定 route 名猜测部署策略；
+- release gates 已拆成 contract、judge calibration、paired regression 和 capability
+  target 四类。
 
-其余可由静态代码关闭的问题也已落实：multi-retriever lineage、跨模态
-representations、span identity、required-slot 候选配额、score 归一化、
-source-page paired metrics、headline policy、release gate 分类、boolean proposition
-验证和分阶段 latency 记录。
+这些结论只说明静态代码契约和本地单元测试已闭合，不说明数据集指标已经达标。本轮
+没有生成新的 QASPER/FinanceBench artifact，也没有提交 Slurm benchmark 任务。在
+完成真实 2–5 条 smoke 和聚焦验证前，仍不建议直接运行全量 benchmark。
 
-这代表本轮复核中的**代码契约断点已经关闭**，不代表数据集能力已经通过验收。当前
-仍没有使用本轮代码生成新的 QASPER/FinanceBench artifact，因此：
+本轮未改变公开 `MARA`、`MARA-cli` 或 `MARA docqa` 命令与参数。
 
-- 可以进入每类 2–5 条 contract smoke；
-- smoke 通过后可以运行 QASPER 159×3 和 FinanceBench 20×4 聚焦验证；
-- 在聚焦 artifact 证明 identity、stage、citation 和 paired regression 均通过前，
-  不建议运行全量 benchmark。
+## 2. 为什么此前修复会反复回退
 
-本轮未改变公开 `MARA`、`MARA-cli` 或 `MARA docqa` 命令及参数，也未提交 Slurm
-任务。
-
-## 2. 根因复盘
-
-此前多轮修复反复回退，不是因为某个 reranker 阈值不够好，而是下游继续用旧字段
-重新解释上游已经声明的类型和阶段。本次复核暴露的具体形式包括：
-
-- atomic cell 与父表共享 `evidence_id`，citation/lineage join 把 grouping alias
-  误当成 exact identity；
-- `(source_id, page_label)` 被拆成两个集合，产生并不存在的交叉 locator；
-- visual 和 cross-page 被建模成互斥类型，导致同时需要两种能力的问题绕过多证据
-  约束；
-- slot 声明 `required_for_verification=True`，verifier 却只看全局文本重叠；
-- dedupe 合并正文，却没有合并 dense/sparse lineage 或保留 OCR/VLM representation；
-- selection 在 required evidence 进入前统一硬截断，并直接混加不同 score 空间；
-- benchmark headline、stage 和 release gate 字段没有准确反映实际执行语义。
-
-共同根因是缺少可执行的不变量：
+此前把问题表现为多个独立的 reranker、MMR、prompt 或 verifier bug，但真正导致
+回退的是同一事实在不同阶段使用了不同身份、粒度和阶段含义：
 
 ```text
-identity declaration
-→ stage execution
-→ projection
-→ metric join
+runtime evidence
+→ candidate
+→ fusion/reranker input
+→ reranked
+→ evidence-set selection
+→ calculation/generation
+→ claim verification
+→ emitted citation
+→ benchmark projection
+→ metric
 ```
 
-本轮的关闭标准不是“某个函数已修改”，而是四个位置使用同一 identity/stage contract，
-且存在跨模块回归测试。
+具体断裂包括：
 
-## 3. 已完成且有代码证据的修复
+- local cell ID 曾绕过 citation 的 source/page 约束，page citation 又会扩散到整页
+  原子证据；
+- `cited_evidence` 曾混用“verifier 认为支持”和“最终答案实际输出引用”；
+- calculation execution 已经存在，但通用 numeric verifier 没有消费 execution value
+  与全部 operand provenance；
+- cross-page 只表达一个泛化 support slot，任一页命中就会虚假填满；
+- element candidate 在 slot restore 前被固定截断，reranker metric 又使用推测的前 80
+  而不是真实输入；
+- headline page hit 曾读取 candidate，stage identity 又没有 kind，导致 cell/span
+  同 local ID 时错误命中；
+- QASPER verifier 改变 answer polarity 或改成 unanswerable 后，旧 citation 仍被复用；
+- route、retriever、query 和 score stage 混在同一 trace key 或分数空间中。
 
-| 契约                        | 当前实现                                                                                                                        | 保护证据                                               |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Atomic citation identity    | exact aliases 与 grouping aliases 分离；兄弟 cell 不共享 exact join key                                                         | sibling-cell、source-page pair、emitted citation tests |
-| Calculation citations       | execution citation 保留匹配到的 canonical cell identity，同表多个 operand 不折叠                                                | calculation citation identity tests                    |
-| Visual cross-page plan      | capability 独立表达 visual/multiple/distinct-page/structured；左右 slot 带 modality hint                                        | visual cross-page 与常见问法 tests                     |
-| Verification slots          | verifier 检查 bound plan 的 verification-required slots 和 claim support provenance                                             | missing/unsupported verification slot tests            |
-| Quality retry               | 每个 query fallback 候选先 `strip()`，空白 retrieval query 不再短路回退                                                         | whitespace retry test                                  |
-| Reranker lineage            | 只接受 exact atomic identity；父表 alias 和全局 text hash 均不能制造 lineage                                                    | shared-parent/global-text lineage tests                |
-| Multi-retriever RRF         | dedupe 稳定合并全部 retrieval lineage；RRF 按 `retriever_name/raw_rank` 动态建表                                                | dense+sparse lineage/RRF tests                         |
-| Multimodal identity         | 同一 identity 保留 representation 列表；结构化或文本事实冲突抛 contract error                                                   | OCR/VLM conflict 与 representation union tests         |
-| Span round trip             | runtime schema、coercion 和 benchmark record 均保留 `span_id`                                                                   | span round-trip test                                   |
-| Candidate budget            | 在全局 cutoff 前给每个 retrieval-required slot 保留最多两个候选；按稀缺度优先，optional slot 不占 required budget               | below-cutoff quota/optional budget tests               |
-| Score contract              | evidence-set relevance 使用同一 query 内的 rank normalization；临时 selection score 不污染 evidence metadata                    | incompatible score-space tests                         |
-| Marginal objective          | page novelty 使用 `(source_id, page_label)`；neighbor join 使用 alias-aware identity                                            | cross-source same-page/neighbor tests                  |
-| Benchmark projection        | 保留 numeric、visual、span、lineage 和 representations；未知 parser 字段进入 `extension_metadata`                               | lossless/extension metadata tests                      |
-| Stage metrics               | 新增 fused 与 execution-operand coverage；candidate@50 使用统一 ranked candidates；gold identity 可读嵌套 `identity.local_id`   | stage metric tests                                     |
-| Locator metric              | headline all-gold-pages 使用 source-page pair；page-only 只保留为 legacy diagnostic                                             | paired locator tests                                   |
-| Headline policy             | 有 `controller_auto` 时只统计实际部署 controller policy；fixed/CRAG 不重复进入 headline                                         | controller headline tests                              |
-| Release gates               | 拆分 contract、paired regression 和 capability target；长期目标不伪装成代码 gate                                                | release gate category tests                            |
-| Typed verification          | boolean 生成 proposition slot；yes/no polarity 及高重叠关系/否定冲突被检查                                                      | boolean polarity 与 relation/scope tests               |
-| Finance atomic verification | quick-ratio verifier 优先读取 cell `row_label/value`，不再把 `Q2` 的 `2` 当金额；已知公式可从问题推断 finance slots             | quick-ratio regression tests                           |
-| Latency segmentation        | runtime 记录 planning/retrieval/generation/retry/verification/finalization；benchmark 另记 answerability 和 answer finalization | controller/runner timing tests                         |
-| Identity properties         | 多 source、kind、table、year、alias、continuation 的组合 round trip 无 collision                                                | identity property tests                                |
+因此本轮的关闭标准不是“修改了某个函数”，而是同一 contract 同时在运行时、投影、
+指标和跨模块回归测试中成立。
 
-## 4. 当前验证证据
+## 3. 已关闭的 P0
 
-| 验证                   | 结果                     |
-| ---------------------- | ------------------------ |
-| P0/P1 定向跨模块测试   | 199 passed               |
-| `libs/ktem/ktem_tests` | 1408 passed，45 warnings |
-| `benchmark/tests`      | 489 passed，6 warnings   |
-| 新 benchmark artifact  | 尚无                     |
-| 新 Slurm 任务          | 未提交                   |
+| P0                                               | 根因                                        | 已落实修复                                                                                             | 保护证据                               |
+| ------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------- |
+| 1. exact citation 绕过 source/page               | local ID 被当成全局 ID                      | citation 使用 evidence/source/page 合取匹配；裸 local ID 必须有 source                                 | cross-source/cross-page citation tests |
+| 2. page citation 扩散原子证据                    | locator 粒度和 evidence 粒度混用            | page/source citation 生成单一 locator record，不复制整页 cells                                         | page citation granularity tests        |
+| 3. generic fallback 引用首候选                   | retrieved 被误当成 supported                | 只允许 `verified_claim_support_evidence` 自动生成 citation                                             | unsupported candidate tests            |
+| 4. calculation execution 未进入 numeric verifier | 通用 token verifier 无法验证派生值          | typed verifier 核对 plan、execution value、unit/scale 和全部 execution citation                        | derived value/mismatch tests           |
+| 5. numeric/boolean cross-page 能力互斥           | 单一 question type 覆盖 capability          | numeric 生成左右 operand；boolean 生成 proposition 与左右 support；必要 slot 要求 distinct source-page | cross-page plan tests                  |
+| 6. element 在 slot restore 前截断                | element index 固定只供给 20 条              | element 全量进入 canonical candidate，再按 required-slot quota 和全局预算选择                          | rank-21 required element test          |
+| 7. reranker metric 使用推测输入                  | benchmark 用 `candidate[:80]` 代替执行输入  | runtime 记录 `reranker_input_evidence`，lineage/coverage 使用该阶段                                    | actual reranker input test             |
+| 8. headline all-gold-pages 读取 candidate        | 召回与最终证据混为一项                      | headline 使用 generation context/selected；candidate hit 仅作阶段诊断                                  | candidate-only page test               |
+| 9. span 投影优先级错误                           | parent element 覆盖 atomic span             | 投影优先级为 cell → span → element                                                                     | span projection test                   |
+| 10. QASPER 冲突保留错误答案                      | verifier verdict 与 candidate polarity 分叉 | 有 grounded opposite verdict 时纠正 polarity；不足证据时输出 unanswerable                              | QASPER polarity tests                  |
+| 11. 答案改变复用旧 citation                      | answer 与 citation 没有共同版本             | answer contract 改变答案时清空 structured/predicted/cited/verified support，等待重新绑定               | answer-change citation test            |
 
-单元测试证明代码不变量成立，不证明真实 parser、runtime adapter、模型输出或数据集指标
-已经达标。
+## 4. 已关闭的 P1
 
-## 5. 最新开放问题表
+| P1                                                        | 已落实修复                                                                                     |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1. reranker lineage 接受跨 source 裸 local/text hash      | lineage 只接受 canonical 或 source-scoped identity                                             |
+| 2. RRF 生成 synthetic modality list、合并不同 query       | 保留真实 dense/sparse/graph lineage；rank list key 包含 retriever、round、query                |
+| 3. modality equality 过严                                 | 通过明确 compatibility matrix 支持 figure/table/formula/slide 与 page image/element            |
+| 4. simple visual 没有 required slot                       | 新增 `support:visual_primary`                                                                  |
+| 5. representations 未进入推理且 aggregate subset 被判冲突 | text/OCR/VLM/caption 进入统一 representation；非原子 aggregate 允许事实子集/超集               |
+| 6. boolean 否定问题和解释型答案不稳定                     | typed boolean verifier 同时处理 question negation、yes/no polarity 和解释文本                  |
+| 7. 单 graph backref 不投影 locator                        | 单 backref 也解析 source/page，并优先使用 top-level locator                                    |
+| 8. 整个 runtime turn 被记为 generation                    | `runtime_turn_seconds` 与 pipeline `generation_seconds` 分离                                   |
+| 9. `identity_of()` 信任陈旧 embedded identity             | 始终从当前字段重算；canonicalization 对 expected identity 不一致抛 contract error              |
+| 10. stage identity 缺少 kind                              | stage/gold key 统一为 source、page、kind、local ID                                             |
+| 11. headline 硬编码 `controller_auto`                     | manifest 用 `headline_role=deployed_policy` 明确部署策略；旧 artifact 才走兼容回退             |
+| 12. release gate 类型混杂、paired regression 不完整       | 四类 gate 分组；增加 native、false abstention、citation 和 execution error paired delta        |
+| 13. identity tests 只是固定样例                           | 引入 Hypothesis，覆盖 source/kind/table/year/alias/continuation/representation/bbox 组合不变量 |
 
-表中只保留当前无法靠本轮静态代码和本地单元测试真实关闭的事项。
+完整测试还暴露并关闭了三项伴随回归：
 
-| ID                    | 优先级 | 状态                      | 根因与当前缺口                                                                                                                                                   | 关闭标准                                                                                                        |
-| --------------------- | ------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| CONTRACT-ARTIFACT-001 | P0     | 待真实 artifact 验证      | runtime parser、adapter 或模型输出仍可能破坏已通过单元测试的 identity/stage contract                                                                             | Finance/QASPER 各 2–5 条 smoke 中 candidate→emitted citation lineage 100%，contract violation=0；再完成聚焦验证 |
-| FIN-ATOMIC-SUPPLY-011 | P0     | 代码就绪，真实 PDF 未证实 | schema、selection、execution 和 verifier 已支持 cell/span，但 wrapped row、局部 scale 和 period header 是否稳定产出 atom 只能由真实 parser artifact 证明         | 困难样例 operand/dimension atom 全部可回溯；缺失时不执行；execution citation 覆盖全部 operand                   |
-| SEMANTIC-JUDGE-020    | P1     | 待人工校准 artifact       | semantic evaluator 契约和 gate 已存在，但仓库没有真实的冻结 200 条人工标注结果；代码不能伪造人工一致率                                                           | 冻结 200 条；coverage≥99.5%，人工一致率 ≥90%，数字/方向/单位冲突通过率为 0                                      |
-| VERIFY-FREETEXT-028   | P1     | 待校准验证                | deterministic verifier 已处理 numeric、boolean、year、direction、negation 和明显 relation conflict；开放域长文本 entailment 仍依赖尚未完成的 semantic judge 校准 | 冻结集按 answer type 报 precision/recall；supported claim 全有 atomic provenance；错误主体/关系/作用域不通过    |
-| LATENCY-PAIRED-008    | P1     | 已埋点，待 artifact       | 各阶段 timing 已记录，但没有本轮 route-specific paired artifact，无法声称满足延迟门槛                                                                            | timing coverage=100%；同样例 paired 报告中简单 QA 中位增幅 ≤20%，复杂 QA≤50%                                    |
+- prediction completion 的 `headline_role` 投影漏传 route；
+- selection 曾对每个 score field 单独归一化后取最大，单一 modality 分数会虚假压过
+  query anchor；现在每轮只采用一个可审计的 score stage；
+- required-slot 选择只看 slot 文本覆盖率；现在把真实 reranker relevance 纳入边际得分，
+  但不把 first-stage fusion 分数冒充 reranker。
 
-## 6. 已关闭并从开放表移除的问题
+## 5. 当前验证证据
 
-以下问题已有实现与包级回归，不再重复列为开放 bug：
+| 验证                     | 结果                     |
+| ------------------------ | ------------------------ |
+| P0/P1 定向跨模块测试     | 45 passed                |
+| `benchmark/tests`        | 504 passed，6 warnings   |
+| `libs/ktem/ktem_tests`   | 1430 passed，45 warnings |
+| codebase hygiene ratchet | passed；未刷新 baseline  |
+| 新 benchmark artifact    | 尚无                     |
+| 新 Slurm 任务            | 未提交                   |
 
-- citation 在同表兄弟 cell 间扩散或折叠；
-- calculation citation 退化为父表 ID；
-- citation source/page cross join；
-- visual cross-page 绕过左右 slot；
-- `required_for_verification` 未执行；
-- 空白 quality retry；
-- 父表 alias 造成 reranker lineage 假阳性；
-- dedupe 丢失 multi-retriever lineage；
-- 相同 identity 的 OCR/VLM 冲突被静默吞掉；
-- span identity 在 runtime→benchmark 丢失；
-- required evidence 在统一 80/30 cutoff 后无法恢复；
-- optional slot 提前消耗 required page budget；
-- selection 直接混加不同 score 空间；
-- marginal objective 使用 page-only locator 或 raw neighbor ID；
-- fused/execution stage coverage、paired page metric 和嵌套 gold identity 缺失；
-- controller/fixed/CRAG 重复进入 headline；
-- contract、paired regression 和长期目标混在同一 release gate；
-- QASPER boolean 没有 proposition/polarity contract；
-- generation、verification、finalization 没有独立 timing；
-- identity 只有固定单例测试，没有组合不变量测试。
+warnings 为现有第三方弃用/版本提示，不是本轮新增失败。单元测试证明代码不变量成立，
+不证明真实 parser、runtime adapter、模型输出或数据集分数已经达标。
 
-这些关闭结论只针对代码契约。真实数据集结果统一由开放问题表中的 artifact 验证关闭，
-不能用历史 artifact 或指标换名作为证据。
+## 6. 最新开放问题表
+
+这里只保留不能由本轮静态代码和本地测试真实关闭的事项。
+
+| ID                    | 优先级 | 状态                      | 根因与当前缺口                                                                                                        | 关闭标准                                                                                                  |
+| --------------------- | ------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| CONTRACT-ARTIFACT-001 | P0     | 待真实 artifact 验证      | 真实 parser、adapter、模型输出仍可能不满足单元测试中的 identity/stage/citation contract                               | Finance/QASPER 各 2–5 条 smoke 中全阶段 lineage 100%、contract violation=0；之后完成聚焦验证              |
+| FIN-ATOMIC-SUPPLY-011 | P0     | 代码就绪，真实 PDF 未证实 | wrapped row、跨页 table continuation、局部 scale 和 period header 是否稳定产出 atomic cell 只能由真实 artifact 证明   | 困难样例 operand/dimension 全部可回溯；缺失 requirement 时不执行；citation 覆盖所有 operand               |
+| SEMANTIC-JUDGE-020    | P1     | 待人工校准 artifact       | 没有冻结 200 条人工标注，不能从代码推断 judge 一致率                                                                  | 冻结 200 条；coverage≥99.5%，人工一致率 ≥90%，核心冲突不得判 supported                                    |
+| VERIFY-FREETEXT-028   | P1     | 待校准验证                | deterministic verifier 已覆盖 numeric/boolean/year/direction/negation；开放域主体、关系、条件与作用域仍需要冻结集校准 | 按 answer type 报 precision/recall；错误主体/关系/作用域不通过；所有 supported claim 有 atomic provenance |
+| LATENCY-PAIRED-008    | P1     | 已埋点，待 artifact       | stage timing 已拆分，但尚无同样例、同 route 的本轮 paired artifact                                                    | timing coverage=100%；简单 QA 中位增幅 ≤20%，复杂 QA≤50%                                                  |
 
 ## 7. 下一步顺序
 
-1. 生成 FinanceBench 和 QASPER 各 2–5 条 smoke artifact。
-2. 逐条核对
-   `candidate → fused → reranked → selected → generation_context → execution_operand → verified_claim_support → emitted_citation`。
-3. 任一 identity、slot、stage 或 citation contract violation 非 0，立即停在首次断裂
-   阶段修复，不调 reranker/MMR/prompt 掩盖。
-4. smoke 通过后运行 QASPER 159×3 与 FinanceBench 20×4。
-5. 聚焦验证通过 contract gates、paired regression 和 latency coverage 后，再决定是否
-   运行全量 benchmark。
+1. 先生成 FinanceBench 和 QASPER 各 2–5 条 smoke artifact。
+2. 逐条检查
+   `candidate → fused → reranker_input → reranked → selected → generation_context → execution_operand → verified_claim_support → emitted_citation`。
+3. 任一 identity、slot、stage 或 citation contract violation 非 0，停在首次断裂阶段修复，
+   不调 reranker、MMR 或 prompt 掩盖。
+4. smoke 通过后运行 QASPER 159×3 与 FinanceBench 20×4 聚焦验证。
+5. 聚焦验证通过 contract gates、paired regression、semantic calibration 和 latency
+   coverage 后，再决定是否运行全量 benchmark。

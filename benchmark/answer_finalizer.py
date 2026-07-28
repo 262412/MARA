@@ -253,10 +253,13 @@ def attach_structured_citations_from_evidence(
 ) -> list[dict[str, str]]:
     if prediction.get("predicted_citations") or prediction.get("structured_citations"):
         return []
+    if _is_unanswerable_text(str(span or "").strip().lower()):
+        return []
     canonical_sources = _canonical_source_refs(prediction)
+    all_candidates = _citation_candidate_items(prediction)
     calculation_matches = calculation_citation_items(
         prediction,
-        _citation_candidate_items(prediction),
+        all_candidates,
     )
     calculation_citations = [
         citation
@@ -272,19 +275,19 @@ def attach_structured_citations_from_evidence(
         )
     ]
     if calculation_citations:
-        record_calculation_stage_evidence(prediction, calculation_matches)
+        record_calculation_stage_evidence(
+            prediction,
+            calculation_matches,
+            canonical_sources=canonical_sources,
+        )
         return _unique_citations(calculation_citations)
-    for item in _citation_candidate_items(prediction):
+    for item in _verified_claim_support_items(prediction):
         citation = _citation_from_item(
             item,
             span=span,
             canonical_sources=canonical_sources,
             source_backrefs=_canonical_source_backrefs(item),
         )
-        if citation:
-            return [citation]
-    for source in canonical_sources:
-        citation = _citation_from_source_ref(str(source), span=span)
         if citation:
             return [citation]
     return []
@@ -349,6 +352,9 @@ def _canonicalized_citation_item(
     canonical = _citation_from_source_ref(source_ref, span=span)
     if not canonical:
         return citation
+    kind = str(citation.get("kind") or "").strip()
+    if kind:
+        canonical["kind"] = kind
     evidence_id = str(citation.get("evidence_id") or "").strip()
     if evidence_id:
         canonical["evidence_id"] = evidence_id
@@ -357,9 +363,10 @@ def _canonicalized_citation_item(
 
 def _unique_citations(citations: list[dict[str, str]]) -> list[dict[str, str]]:
     output: list[dict[str, str]] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str]] = set()
     for citation in citations:
         key = (
+            str(citation.get("kind") or ""),
             str(citation.get("source_id") or ""),
             str(citation.get("page_label") or ""),
             str(citation.get("evidence_id") or ""),
@@ -417,7 +424,7 @@ def _normalize_structured_citation(item: Any) -> dict[str, str]:
         return {}
     citation = {
         key: str(item.get(key) or "").strip()
-        for key in ("evidence_id", "source_id", "page_label", "span")
+        for key in ("kind", "evidence_id", "source_id", "page_label", "span")
         if str(item.get(key) or "").strip()
     }
     if "page_label" not in citation:
@@ -453,6 +460,28 @@ def _citation_candidate_items(prediction: dict[str, Any]) -> list[dict[str, Any]
         for item in prediction.get("retrieved_hits") or []
         if isinstance(item, dict)
     )
+    return items
+
+
+def _verified_claim_support_items(
+    prediction: dict[str, Any],
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    evidence_bundle = prediction.get("evidence_bundle")
+    metadata_sources: list[dict[str, Any]] = []
+    if isinstance(evidence_bundle, dict):
+        bundle_metadata = evidence_bundle.get("metadata")
+        if isinstance(bundle_metadata, dict):
+            metadata_sources.append(bundle_metadata)
+    evidence_metadata = prediction.get("evidence_metadata")
+    if isinstance(evidence_metadata, dict):
+        metadata_sources.append(evidence_metadata)
+    for metadata in metadata_sources:
+        items.extend(
+            item
+            for item in metadata.get("verified_claim_support_evidence") or []
+            if isinstance(item, dict)
+        )
     return items
 
 

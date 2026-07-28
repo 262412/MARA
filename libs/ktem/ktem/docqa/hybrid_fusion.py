@@ -442,12 +442,15 @@ def _lineage_retriever_scores(item: dict[str, Any]) -> dict[str, float]:
         retriever = str(entry.get("retriever_name") or "").strip()
         if not retriever:
             continue
+        round_id = str(entry.get("round_id") or "").strip() or "unknown"
+        query_id = str(entry.get("query_id") or "").strip() or "default"
+        rank_list = f"{retriever}|round:{round_id}|query:{query_id}"
         raw_rank = _positive_int(entry.get("raw_rank"))
         if raw_rank is not None:
             score = 1.0 / raw_rank
         else:
             score = _float_or_zero(entry.get("raw_score"))
-        scores[retriever] = max(scores.get(retriever, float("-inf")), score)
+        scores[rank_list] = max(scores.get(rank_list, float("-inf")), score)
     return scores
 
 

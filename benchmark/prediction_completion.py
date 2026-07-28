@@ -43,6 +43,7 @@ def complete_prediction(
         example=example,
         document=document,
         route_config=route_config,
+        route=route,
         dataset_name=dataset_name,
         benchmark_role=benchmark_role,
     )
@@ -76,6 +77,7 @@ def _prepare_prediction_defaults(
     example: Any,
     document: Any,
     route_config: Any,
+    route: dict[str, Any],
     dataset_name: str,
     benchmark_role: str,
 ) -> None:
@@ -88,6 +90,7 @@ def _prepare_prediction_defaults(
             "route": route_config.route,
             "scope": route_config.scope or example.scope,
             "benchmark_role": benchmark_role,
+            "headline_role": str(route.get("headline_role") or "").strip(),
         }
     )
     defaults = {
@@ -176,9 +179,7 @@ def _score_and_diagnose(
         semantic_judge=semantic_judge,
     )
     prediction["diagnostics"] = prediction_diagnostics(prediction)
-    prediction["verifier_observability"] = prediction_verifier_observability(
-        prediction
-    )
+    prediction["verifier_observability"] = prediction_verifier_observability(prediction)
     add_prediction_taxonomy(prediction)
     add_mara_oriented_metrics(prediction, dataset_name=dataset_name)
     prediction["stage_metrics"] = prediction_stage_metrics(prediction)

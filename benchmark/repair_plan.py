@@ -56,19 +56,72 @@ class ReleaseGate:
     threshold: float
     comparison: Literal["ge", "gt", "le", "eq"]
     failure_stage: str
-    category: Literal["contract", "paired_regression", "capability_target"]
+    category: Literal[
+        "contract",
+        "judge_calibration",
+        "paired_regression",
+        "capability_target",
+    ]
 
 
 CONTRACT_GATES = (
     ReleaseGate("token_f1_rescore_delta", 0.0, "eq", "evaluation", "contract"),
-    ReleaseGate("semantic_calibration_examples", 200.0, "ge", "judge", "contract"),
-    ReleaseGate("semantic_calibration_agreement", 0.90, "ge", "judge", "contract"),
-    ReleaseGate("semantic_judge_coverage", 0.995, "ge", "judge", "contract"),
     ReleaseGate("qasper_structure_valid", 1.0, "ge", "task_contract", "contract"),
     ReleaseGate("ragtruth_json_valid", 0.99, "ge", "task_contract", "contract"),
     ReleaseGate("ragtruth_execution_error", 0.0, "eq", "task_contract", "contract"),
 )
+JUDGE_CALIBRATION_GATES = (
+    ReleaseGate(
+        "semantic_calibration_examples",
+        200.0,
+        "ge",
+        "judge",
+        "judge_calibration",
+    ),
+    ReleaseGate(
+        "semantic_calibration_agreement",
+        0.90,
+        "ge",
+        "judge",
+        "judge_calibration",
+    ),
+    ReleaseGate(
+        "semantic_judge_coverage",
+        0.995,
+        "ge",
+        "judge",
+        "judge_calibration",
+    ),
+)
 PAIRED_REGRESSION_GATES = (
+    ReleaseGate(
+        "deployed_native_score_delta",
+        0.0,
+        "ge",
+        "native_score",
+        "paired_regression",
+    ),
+    ReleaseGate(
+        "false_abstention_delta",
+        0.0,
+        "le",
+        "controller",
+        "paired_regression",
+    ),
+    ReleaseGate(
+        "citation_score_delta",
+        0.0,
+        "ge",
+        "citation",
+        "paired_regression",
+    ),
+    ReleaseGate(
+        "execution_error_delta",
+        0.0,
+        "le",
+        "execution",
+        "paired_regression",
+    ),
     ReleaseGate(
         "simple_qa_median_latency_increase",
         0.20,
@@ -159,7 +212,12 @@ CAPABILITY_TARGETS = (
     ReleaseGate("alce_native_score", 0.75, "ge", "generation", "capability_target"),
     ReleaseGate("alce_citation_f1", 0.93, "ge", "generation", "capability_target"),
 )
-RELEASE_GATES = CONTRACT_GATES + PAIRED_REGRESSION_GATES + CAPABILITY_TARGETS
+RELEASE_GATES = (
+    CONTRACT_GATES
+    + JUDGE_CALIBRATION_GATES
+    + PAIRED_REGRESSION_GATES
+    + CAPABILITY_TARGETS
+)
 
 
 def validate_ablation_progression(phases: list[str]) -> None:
@@ -197,6 +255,7 @@ def evaluate_release_gates(
         require_matching_paired_inputs(phase_b, phase_g)
     metrics = _summary_metric_aliases(phase_g)
     metrics["token_f1_rescore_delta"] = token_f1_rescore_delta
+    metrics.update(_paired_regression_deltas(phase_b, phase_g))
     results = {
         gate.metric: _evaluate_gate(gate, metrics.get(gate.metric))
         for gate in RELEASE_GATES
@@ -239,7 +298,12 @@ def _custom_result(
     threshold: float,
     comparison: Literal["ge", "gt", "le", "eq"],
     failure_stage: str,
-    category: Literal["contract", "paired_regression", "capability_target"],
+    category: Literal[
+        "contract",
+        "judge_calibration",
+        "paired_regression",
+        "capability_target",
+    ],
 ) -> dict[str, Any]:
     if value is None:
         passed = False
@@ -284,3 +348,42 @@ def _summary_metric_aliases(summary: dict[str, Any]) -> dict[str, Any]:
         if key.startswith("avg_"):
             metrics.setdefault(key.removeprefix("avg_"), value)
     return metrics
+
+
+def _paired_regression_deltas(
+    phase_b: dict[str, Any],
+    phase_g: dict[str, Any],
+) -> dict[str, float | None]:
+    specs = {
+        "deployed_native_score_delta": ("primary_score", "avg_native_score"),
+        "false_abstention_delta": ("avg_false_abstention",),
+        "citation_score_delta": (
+            "avg_citation_f1",
+            "avg_citation_metadata_recall",
+        ),
+        "execution_error_delta": (
+            "execution_error_rate",
+            "avg_execution_error",
+        ),
+    }
+    output: dict[str, float | None] = {}
+    for metric, aliases in specs.items():
+        baseline = _first_number(phase_b, aliases)
+        candidate = _first_number(phase_g, aliases)
+        output[metric] = (
+            candidate - baseline
+            if baseline is not None and candidate is not None
+            else None
+        )
+    return output
+
+
+def _first_number(
+    values: dict[str, Any],
+    aliases: tuple[str, ...],
+) -> float | None:
+    for alias in aliases:
+        parsed = _number(values.get(alias))
+        if parsed is not None:
+            return parsed
+    return None
