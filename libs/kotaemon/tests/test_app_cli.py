@@ -59,6 +59,10 @@ def _run_package_mode_cli(tmp_path, *args, env_overrides=None, cwd=None):
     )
 
 
+def _configured_database_path(tmp_path):
+    return tmp_path / "runtime" / "ktem_app_data" / "user_data" / "sql.db"
+
+
 def test_docqa_doctor_runs_outside_repo(tmp_path):
     result = _run_package_mode_cli(tmp_path, "docqa", "doctor", "--json")
 
@@ -350,7 +354,7 @@ def test_app_init_password_file_creates_bcrypt_admin_without_secret_leakage(tmp_
 
     assert result.returncode == 0, result.stdout + "\nSTDERR:\n" + result.stderr
     payload = _extract_json_payload(result.stdout)
-    database_path = Path(payload["data_dir"]) / "user_data" / "sql.db"
+    database_path = _configured_database_path(tmp_path)
     users = _read_users(database_path)
     assert len(users) == 1
     username, username_lower, password_hash, is_admin = users[0]
@@ -389,7 +393,7 @@ def test_app_init_force_resets_named_user_without_modifying_other_users(tmp_path
     )
     assert created.returncode == 0, created.stdout + "\nSTDERR:\n" + created.stderr
     payload = _extract_json_payload(created.stdout)
-    database_path = Path(payload["data_dir"]) / "user_data" / "sql.db"
+    database_path = _configured_database_path(tmp_path)
     other_hash = "$mara-bcrypt-sha256$$2b$12$RwhUy721./dNELW47maHVeTbdjFVSiiZZLHJ1XGD5gqvLWMjafAt."
     with sqlite3.connect(database_path) as connection:
         connection.execute(
@@ -482,8 +486,7 @@ def test_app_init_forces_package_runtime_and_leaves_workspace_database_unchanged
     )
 
     assert result.returncode == 0, result.stdout + "\nSTDERR:\n" + result.stderr
-    payload = _extract_json_payload(result.stdout)
-    package_database = Path(payload["data_dir"]) / "user_data" / "sql.db"
+    package_database = _configured_database_path(tmp_path)
     assert package_database != workspace_database
     assert _read_users(package_database)[0][:2] == ("admin", "admin")
     assert hashlib.sha256(workspace_database.read_bytes()).hexdigest() == before_hash

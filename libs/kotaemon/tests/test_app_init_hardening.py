@@ -249,7 +249,7 @@ def test_app_init_force_ignores_existing_flowsettings_database_override(tmp_path
     assert result.returncode == 0, result.stdout + result.stderr
     assert hashlib.sha256(trap_database.read_bytes()).hexdigest() == before_hash
     assert _read_user(trap_database, "admin") == ("admin", "admin", trap_hash, 0)
-    default_database = tmp_path / "data" / "Kotaemon" / "user_data" / "sql.db"
+    default_database = tmp_path / "runtime" / "ktem_app_data" / "user_data" / "sql.db"
     default_user = _read_user(default_database, "admin")
     assert default_user[:2] == ("admin", "admin")
     assert verify_password(password, default_user[2]) == (True, None)
