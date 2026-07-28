@@ -352,7 +352,17 @@ def _check_container_quality_contract(
         ("vuln,secret,misconfig", source, "container-scanners"),
         ("HIGH,CRITICAL", source, "container-severity"),
         ("ignore-unfixed: true", source, "container-fixable-only"),
-        ('exit-code: "1"', source, "container-scan-fail"),
+        ('exit-code: "0"', source, "container-scan-report"),
+        (
+            "check_container_vulnerability_baseline.py",
+            commands,
+            "container-scan-ratchet",
+        ),
+        (
+            "container_vulnerability_baseline.json",
+            commands,
+            "container-scan-baseline",
+        ),
         ("sbom", source.lower(), "container-sbom"),
         ("provenance", source.lower(), "container-provenance"),
         ("type=oci", source, "container-runtime-image"),

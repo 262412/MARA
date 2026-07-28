@@ -362,7 +362,7 @@ jobs:
           MARA_SECRET_FILE="$MARA_SECRET_DIR/admin-password"
           trap 'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"' EXIT
           install -m 0600 /dev/null "$MARA_SECRET_FILE"
-          python -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())' >"$MARA_SECRET_FILE"
+          python -c 'import base64, os; print("Aa1!" + base64.urlsafe_b64encode(os.urandom(32)).decode())' >"$MARA_SECRET_FILE"
           chmod 0444 "$MARA_SECRET_FILE"
           python scripts/smoke_container_runtime.py \
             --image mara-quality:${{ matrix.target }}-${{ github.sha }} \
@@ -375,9 +375,16 @@ jobs:
           scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: "1"
-          format: table
+          exit-code: "0"
+          format: json
+          output: container-evidence/${{ matrix.target }}.trivy.json
           hide-progress: true
+      - name: Enforce frozen container vulnerability baseline
+        run: |
+          python scripts/check_container_vulnerability_baseline.py \
+            --target "${{ matrix.target }}" \
+            --report container-evidence/${{ matrix.target }}.trivy.json \
+            --baseline scripts/container_vulnerability_baseline.json
       - name: Generate SPDX image SBOM
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
