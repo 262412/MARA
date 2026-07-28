@@ -37,8 +37,10 @@ class DocQARequest:
     route_policy: Optional[str] = None
     planner_backend: Optional[str] = None
     planner_model: Optional[str] = None
+    planned_query_plan: Any = None
     query_plan: Any = None
     query_plan_id: str = ""
+    query_plan_state_version: int = 0
     allowed_routes: Optional[list[str]] = None
     verification_mode: Optional[str] = None
     verification_domain: Optional[str] = None

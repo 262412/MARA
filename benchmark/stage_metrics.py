@@ -26,6 +26,7 @@ STAGE_METRIC_KEYS = (
     "reranked_recall_at_10",
     "selected_evidence_coverage",
     "used_evidence_coverage",
+    "generation_context_evidence_coverage",
     "verified_evidence_coverage",
     "cited_evidence_coverage",
     "reranker_lineage_coverage",
@@ -140,6 +141,7 @@ def prediction_stage_metric_status(
     stage_trace_keys = (
         "selected_evidence",
         "used_evidence",
+        "generation_context_evidence",
         "verified_evidence",
         "cited_evidence",
     )
@@ -269,12 +271,14 @@ def stage_metric_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         for key in STAGE_METRIC_KEYS
     }
     coverage = {
-        f"coverage_{key}": round_metric(
-            sum(_metric_is_available(prediction, key) for prediction in predictions)
-            / len(predictions)
+        f"coverage_{key}": (
+            round_metric(
+                sum(_metric_is_available(prediction, key) for prediction in predictions)
+                / len(predictions)
+            )
+            if predictions
+            else None
         )
-        if predictions
-        else None
         for key in STAGE_METRIC_KEYS
     }
     return {**averages, **coverage}

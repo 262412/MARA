@@ -11,17 +11,17 @@ from .calculation_citation_projection import (
     calculation_citation_items,
     record_calculation_stage_evidence,
 )
+from .citation_stage_projection import (
+    is_uuid_like_source_id,
+    record_emitted_citation_evidence,
+    source_ref_uses_uuid_like_source,
+)
 from .ragtruth_answer_contract import ragtruth_finalization_metadata
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
 _TRUNCATED_JSON_ANSWER_RE = re.compile(
     r'"answer"\s*:\s*"((?:\\.|[^"\\])*)"',
     re.DOTALL,
-)
-_UUID_LIKE_SOURCE_RE = re.compile(
-    r"^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-"
-    r"[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
-    re.IGNORECASE,
 )
 
 
@@ -85,6 +85,14 @@ def finalize_prediction_answer(
     prediction["answer_finalization"][
         "qasper_contract_normalized"
     ] = qasper_contract_normalized
+    record_emitted_citation_evidence(
+        prediction,
+        citations=_existing_structured_citations(
+            prediction,
+            span=answer_text_for_user,
+        ),
+        candidates=_citation_candidate_items(prediction),
+    )
 
 
 def _prepare_standard_answer(
@@ -325,7 +333,7 @@ def _canonicalized_citation_item(
 ) -> dict[str, str]:
     source_id = str(citation.get("source_id") or "").strip()
     page_label = str(citation.get("page_label") or "").strip()
-    if source_id and not _is_uuid_like_source_id(source_id):
+    if source_id and not is_uuid_like_source_id(source_id):
         return citation
     source_ref = _matching_canonical_source_ref(canonical_sources, page_label)
     if not source_ref:
@@ -337,15 +345,6 @@ def _canonicalized_citation_item(
     if evidence_id:
         canonical["evidence_id"] = evidence_id
     return canonical
-
-
-def _is_uuid_like_source_id(source_id: str) -> bool:
-    return bool(_UUID_LIKE_SOURCE_RE.fullmatch(str(source_id or "").strip()))
-
-
-def _source_ref_uses_uuid_like_source(source_ref: str) -> bool:
-    source_id = str(source_ref or "").strip().split("#", 1)[0]
-    return _is_uuid_like_source_id(source_id)
 
 
 def _unique_citations(citations: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -497,7 +496,7 @@ def _canonical_source_refs(prediction: dict[str, Any]) -> list[str]:
             value = str(source or "").strip()
             if (
                 value
-                and not _source_ref_uses_uuid_like_source(value)
+                and not source_ref_uses_uuid_like_source(value)
                 and value not in refs
             ):
                 refs.append(value)
@@ -508,7 +507,7 @@ def _canonical_source_backrefs(item: dict[str, Any]) -> list[str]:
     refs: list[str] = []
     for source in item.get("source_backrefs") or []:
         value = str(source or "").strip()
-        if value and not _source_ref_uses_uuid_like_source(value):
+        if value and not source_ref_uses_uuid_like_source(value):
             refs.append(value)
     return refs
 

@@ -119,7 +119,7 @@ def test_selection_expands_table_continuation_and_respects_page_budget():
 
 def test_selection_expands_available_structure_edges_in_mixed_legacy_index():
     plan = build_query_plan(
-        "Compare revenue across the report pages.",
+        "Explain revenue in the report.",
         answer_type="free_text",
     )
     items = [
@@ -138,13 +138,40 @@ def test_selection_expands_available_structure_edges_in_mixed_legacy_index():
     ]
 
     _selected, trace, _bound = select_evidence_for_plan(
-        "compare revenue",
+        "explain revenue",
         items,
         plan,
     )
 
     assert trace["structure_metadata_coverage"] == 0.2
     assert trace["structure_expansion_enabled"] is True
+    assert trace["continuation_expansion_count"] == 1
+
+
+def test_neighbor_alias_expansion_uses_canonical_identity():
+    plan = build_query_plan(
+        "What was revenue?",
+        answer_type="free_text",
+    )
+    items = [
+        {
+            **_item("revenue-table", "4", "Revenue was 42 million.", 0.9),
+            "element_id": "table-a",
+            "neighbor_element_ids": ["table-b"],
+        },
+        {
+            **_item("table-note", "5", "Units are in millions.", 0.1),
+            "element_id": "table-b",
+        },
+    ]
+
+    selected, trace, _bound = select_evidence_for_plan(
+        "What was revenue?",
+        items,
+        plan,
+    )
+
+    assert {item["element_id"] for item in selected} == {"table-a", "table-b"}
     assert trace["continuation_expansion_count"] == 1
 
 

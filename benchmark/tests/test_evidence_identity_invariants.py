@@ -54,6 +54,34 @@ def test_reranker_lineage_reports_items_that_never_entered_candidate_pool():
     }
 
 
+def test_reranker_lineage_rejects_global_text_only_match():
+    prediction = {
+        "gold_evidence": [],
+        "evidence_metadata": {
+            "candidate_evidence": [
+                {
+                    "evidence_id": "candidate",
+                    "source_id": "document-a",
+                    "page_label": "2",
+                    "text": "The same boilerplate sentence.",
+                }
+            ],
+            "reranked_evidence": [
+                {
+                    "evidence_id": "injected",
+                    "source_id": "document-b",
+                    "page_label": "8",
+                    "text": "The same boilerplate sentence.",
+                }
+            ],
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["reranker_lineage_coverage"] == 0.0
+
+
 def test_equivalent_fact_support_does_not_redefine_strict_gold_page_hit():
     table_text = (
         "Consolidated balance sheet current assets 20,991 current liabilities "

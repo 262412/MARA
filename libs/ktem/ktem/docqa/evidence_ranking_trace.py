@@ -34,6 +34,7 @@ def materialize_reranked_candidates(
     backend = str(
         evidence_metadata.get("reranker_backend")
         or evidence_metadata.get("reranking_backend")
+        or _uniform_item_backend(candidates)
         or ""
     ).strip()
     scored = [
@@ -91,3 +92,16 @@ def _reranking_score_field(candidates: list[dict[str, Any]]) -> str:
         ):
             return field
     return ""
+
+
+def _uniform_item_backend(candidates: list[dict[str, Any]]) -> str:
+    backends = {
+        str(
+            dict(item.get("metadata") or {}).get("reranker_backend")
+            or item.get("reranker_backend")
+            or ""
+        ).strip()
+        for item in candidates
+    }
+    backends.discard("")
+    return next(iter(backends)) if len(backends) == 1 else ""

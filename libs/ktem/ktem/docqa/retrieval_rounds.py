@@ -110,10 +110,16 @@ def _second_round_requests(bundle: EvidenceBundle) -> list[dict[str, str]]:
 
 
 def _quality_retry_request(request: Any) -> dict[str, str]:
+    query = str(
+        getattr(request, "retrieval_query", "")
+        or request_planning_question(request)
+        or getattr(request, "prompt", "")
+        or ""
+    ).strip()
     return {
         "query_id": "round2:quality_retry",
         "slot_id": "",
-        "query": str(getattr(request, "retrieval_query", "") or ""),
+        "query": query,
         "modality": "auto",
     }
 

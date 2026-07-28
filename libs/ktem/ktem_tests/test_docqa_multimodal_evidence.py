@@ -588,7 +588,7 @@ def test_hybrid_route_selects_page_first_multimodal_evidence_across_documents():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert bundle.metadata["m3docrag_trace"]["selected_pages"][0] == {
+    assert bundle.metadata["m3docrag_trace"]["ranked_pages"][0] == {
         "source_id": "file-b",
         "page_label": "5",
     }

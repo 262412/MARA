@@ -179,6 +179,8 @@ def canonicalize_and_dedupe_evidence(
 
 def canonicalize_evidence_item(item: dict[str, Any]) -> dict[str, Any]:
     output = dict(item)
+    expected_identity = item.get("identity")
+    output.pop("identity", None)
     metadata = _merged_metadata(item)
     source_id = _first(item, metadata, "source_id", "file_id", "document_id")
     page_label = _first(item, metadata, "page_label", "page_number", "page", "page_idx")
@@ -219,6 +221,17 @@ def canonicalize_evidence_item(item: dict[str, Any]) -> dict[str, Any]:
     output["duplicate_evidence_ids"] = _string_list(item.get("duplicate_evidence_ids"))
     output["metadata"] = metadata
     identity = identity_of(output)
+    if isinstance(expected_identity, dict):
+        expected = EvidenceIdentity(
+            str(expected_identity.get("source_id") or "").strip(),
+            str(expected_identity.get("kind") or "").strip(),
+            str(expected_identity.get("local_id") or "").strip(),
+        )
+        if expected.kind and expected.local_id and expected != identity:
+            raise EvidenceIdentityConflictError(
+                f"Embedded identity {expected.key!r} does not match "
+                f"recomputed identity {identity.key!r}."
+            )
     output["identity"] = identity.as_dict()
     output["canonical_id"] = identity.key
     return output

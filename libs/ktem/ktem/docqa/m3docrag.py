@@ -13,7 +13,7 @@ def select_page_first_evidence(
     max_unpaged_items: int = 2,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     page_scores = _page_scores(query, items)
-    selected_pages = [
+    ranked_pages = [
         page
         for page, _ in sorted(
             page_scores.items(),
@@ -22,7 +22,7 @@ def select_page_first_evidence(
     ]
     trace = _trace(
         items,
-        selected_pages,
+        ranked_pages,
         pruned_item_count=0,
     )
     trace["candidate_preservation"] = "all"
@@ -36,15 +36,16 @@ def select_page_first_evidence(
 
 def _trace(
     selected: list[dict[str, Any]],
-    selected_pages: list[tuple[str, str]],
+    ranked_pages: list[tuple[str, str]],
     *,
     pruned_item_count: int,
 ) -> dict[str, Any]:
     return {
-        "selected_pages": [
+        "ranked_pages": [
             {"source_id": source_id, "page_label": page_label}
-            for source_id, page_label in selected_pages
+            for source_id, page_label in ranked_pages
         ],
+        "page_ranking_stage": "preview_only",
         "modality_counts": dict(Counter(item["modality"] for item in selected)),
         "pruned_item_count": pruned_item_count,
     }

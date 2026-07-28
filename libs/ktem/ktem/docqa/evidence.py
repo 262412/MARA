@@ -14,6 +14,7 @@ from .evidence_locators import merged_locator_metadata, source_alias_values
 from .evidence_planning import select_planned_evidence
 from .evidence_ranking_trace import materialize_reranked_candidates
 from .evidence_schema import EvidenceBundle, EvidenceElement
+from .graph_evidence import graph_items
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
 from .query_planning import (
@@ -83,7 +84,11 @@ def build_evidence_bundle(
     metadata["modality_counts"] = dict(Counter(item["modality"] for item in deduped))
     metadata["evidence"] = deduped
     metadata["selected_evidence"] = deduped
+    metadata["generation_context_evidence"] = deduped
     metadata["used_evidence"] = deduped
+    metadata["stage_aliases"] = {
+        "used_evidence": "generation_context_evidence",
+    }
     metadata.update(planning_metadata)
     if m3docrag_trace is not None:
         metadata["m3docrag_trace"] = m3docrag_trace
@@ -134,7 +139,7 @@ def _initial_evidence_items(
             ]
         )
     if route in {"graph_global", "hybrid"}:
-        items.extend(_graph_items(request, evidence_metadata))
+        items.extend(graph_items(request, evidence_metadata))
     return items
 
 
@@ -370,65 +375,6 @@ def _selected_text_item(request: Any, route: str) -> dict[str, Any] | None:
         evidence_level="source",
         metadata={"route": route},
     ).as_dict()
-
-
-def _graph_items(
-    request: Any, evidence_metadata: dict[str, Any]
-) -> list[dict[str, Any]]:
-    items = [
-        _coerce_graph_item(item)
-        for item in evidence_metadata.get("graph_evidence") or []
-    ]
-    graph_context = getattr(request, "graph_context", None)
-    graph = graph_context.get("graph") if isinstance(graph_context, dict) else None
-    if not isinstance(graph, dict):
-        return items
-    for node in graph.get("nodes") or []:
-        if isinstance(node, dict):
-            items.append(_coerce_graph_item(node))
-    return items
-
-
-def _coerce_graph_item(item: dict[str, Any]) -> dict[str, Any]:
-    node_id = str(
-        item.get("id") or item.get("element_id") or item.get("evidence_id") or ""
-    ).strip()
-    label = str(item.get("label") or item.get("source_name") or node_id).strip()
-    return EvidenceElement(
-        evidence_id=str(item.get("evidence_id") or f"graph:{node_id}").strip(),
-        source_name=label,
-        modality="graph",
-        element_id=node_id,
-        caption=label,
-        text=str(item.get("summary") or item.get("text") or "").strip(),
-        source_backrefs=_graph_source_backrefs(item),
-        evidence_level="graph",
-        metadata={"route": "graph_global"},
-    ).as_dict()
-
-
-def _graph_source_backrefs(item: dict[str, Any]) -> list[str]:
-    page_refs = _graph_page_backrefs(item.get("support_pages"))
-    if page_refs:
-        return page_refs
-    return [
-        str(ref) for ref in item.get("source_ids") or item.get("source_backrefs") or []
-    ]
-
-
-def _graph_page_backrefs(support_pages: Any) -> list[str]:
-    if not isinstance(support_pages, dict):
-        return []
-    refs: list[str] = []
-    for source_id, pages in support_pages.items():
-        source = str(source_id or "").strip()
-        if not source:
-            continue
-        for page in pages or []:
-            page_label = str(page or "").strip()
-            if page_label:
-                refs.append(f"{source}#page:{page_label}")
-    return refs
 
 
 def _dedupe_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -10,8 +10,8 @@ from .calculation_evidence_identity import (
     calculation_operand_identity,
     same_source,
 )
+from .calculation_slot_verification import verify_required_calculation_slots
 from .evidence_identity import identity_of
-from .finance_query_planning import finance_metric_evidence_matches
 from .financial_statement_identity import financial_statement_identity
 from .query_evidence_constraints import (
     period_kind_conflicts,
@@ -240,10 +240,15 @@ def verify_calculation_plan(
             for operand in plan.operands
             if operand.source == "evidence" and not operand.scale
         )
-    required_ids, verified_required_ids, required_errors = _verify_required_slots(
-        plan,
+    (
+        required_ids,
+        verified_required_ids,
+        required_errors,
+    ) = verify_required_calculation_slots(
+        plan.operands,
         evidence_by_id,
         required_slots or [],
+        evidence_text=_evidence_text,
     )
     errors.extend(required_errors)
     return CalculationVerification(
@@ -454,69 +459,6 @@ def _compatibility_errors(plan: CalculationPlan) -> list[str]:
                 if any(values) and len(set(values)) > 1:
                     errors.append(f"{field_name}_mismatch:{step.step_id}")
     return errors
-
-
-def _verify_required_slots(
-    plan: CalculationPlan,
-    evidence_by_id: dict[str, dict[str, Any]],
-    required_slots: list[dict[str, Any]],
-) -> tuple[list[str], list[str], list[str]]:
-    slots = [
-        slot
-        for slot in required_slots
-        if bool(
-            slot.get(
-                "required_for_execution",
-                str(slot.get("role") or "support") in {"operand", "dimension"},
-            )
-        )
-        and str(slot.get("role") or "support") == "operand"
-    ]
-    required_ids = [str(slot.get("slot_id") or "") for slot in slots]
-    verified_ids: list[str] = []
-    errors: list[str] = []
-    used_operands: set[str] = set()
-    for slot, slot_id in zip(slots, required_ids):
-        operand = next(
-            (
-                candidate
-                for candidate in plan.operands
-                if candidate.operand_id not in used_operands
-                and _operand_matches_slot(candidate, slot, evidence_by_id)
-            ),
-            None,
-        )
-        if operand is None:
-            errors.append(f"required_slot_missing:{slot_id}")
-            continue
-        used_operands.add(operand.operand_id)
-        verified_ids.append(slot_id)
-    return required_ids, verified_ids, errors
-
-
-def _operand_matches_slot(
-    operand: CalculationOperand,
-    slot: dict[str, Any],
-    evidence_by_id: dict[str, dict[str, Any]],
-) -> bool:
-    period = str(slot.get("period") or "").strip()
-    if period and operand.period != period:
-        return False
-    item = evidence_by_id.get(operand.evidence_identity or operand.evidence_id)
-    if item is None:
-        return False
-    statement_kind, financial_scope = financial_statement_identity(item)
-    required_statement_kind = str(slot.get("statement_kind") or "").strip()
-    required_scope = str(slot.get("financial_scope") or "").strip()
-    if required_statement_kind and statement_kind != required_statement_kind:
-        return False
-    if required_scope and financial_scope != required_scope:
-        return False
-    metric = str(slot.get("metric") or "").strip().lower()
-    metric_text = " ".join((operand.row_label, _evidence_text(item)))
-    if metric and not finance_metric_evidence_matches(metric, metric_text):
-        return False
-    return True
 
 
 def _evidence_text(item: dict[str, Any]) -> str:

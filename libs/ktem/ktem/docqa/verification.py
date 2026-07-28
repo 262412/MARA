@@ -115,7 +115,7 @@ def with_verification_evidence(
     verified = [item for item in bundle.items if citation_ids & evidence_aliases(item)]
     metadata = dict(bundle.metadata)
     metadata["verified_evidence"] = verified
-    metadata["cited_evidence"] = list(verified)
+    metadata["verified_claim_support_evidence"] = list(verified)
     return EvidenceBundle(route=bundle.route, items=bundle.items, metadata=metadata)
 
 

@@ -65,7 +65,7 @@ def test_route_and_executor_registries_expose_evidence_policies():
 def test_response_capture_builds_controller_contract_fields():
     capture = ResponseCapture(
         DocQARequest(
-            prompt="Compare these sources.",
+            prompt="How are these sources connected?",
             controller_mode="llm",
             route_policy="graph",
             allowed_routes=["graph_global"],
@@ -513,9 +513,11 @@ def test_execute_controller_turn_good_retrieval_generates_with_evidence_bundle()
         item["canonical_id"]
         for item in result.evidence_bundle.metadata["verified_evidence"]
     ] == ["evidence:file-1:doc-1"]
-    assert result.evidence_bundle.metadata["cited_evidence"] == (
-        result.evidence_bundle.metadata["verified_evidence"]
-    )
+    assert [
+        item["canonical_id"]
+        for item in result.evidence_bundle.metadata["verified_claim_support_evidence"]
+    ] == ["evidence:file-1:doc-1"]
+    assert "cited_evidence" not in result.evidence_bundle.metadata
 
 
 def test_execute_controller_turn_rewrites_unsupported_answer_once():

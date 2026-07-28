@@ -4,7 +4,7 @@ import math
 import re
 from typing import Any
 
-from .evidence_identity import identity_of
+from .evidence_identity import evidence_aliases, identity_of
 from .evidence_set_objective import marginal_set_gain
 from .evidence_structure import structure_coverage_context
 from .query_planning import (
@@ -193,6 +193,7 @@ def _select_required_slot_evidence(
     *,
     max_pages: int,
 ) -> None:
+    used_required_locators: set[tuple[str, str]] = set()
     for slot in plan.evidence_slots:
         ranked = sorted(
             candidates,
@@ -209,11 +210,22 @@ def _select_required_slot_evidence(
                 if _slot_score(plan, slot, item) > 0
                 and _identity(item) not in selected_ids
                 and _page_allowed(item, selected, max_pages)
+                and (
+                    not plan.constraints.get("requires_distinct_source_pages")
+                    or slot.role != "support"
+                    or (all(_page(item)) and _page(item) not in used_required_locators)
+                )
             ),
             None,
         )
         if match is not None:
             _append_selected(match, selected, selected_ids)
+            if (
+                plan.constraints.get("requires_distinct_source_pages")
+                and slot.role == "support"
+                and all(_page(match))
+            ):
+                used_required_locators.add(_page(match))
 
 
 def _selection_trace(
@@ -308,10 +320,14 @@ def _expand_structure(
             and str(item.get("parent_element_id")) in parent_ids
         )
         neighbor_match = any(
-            _identity(item)
-            in set(_string_values(selected_item.get("neighbor_element_ids")))
-            or _identity(selected_item)
-            in set(_string_values(item.get("neighbor_element_ids")))
+            bool(
+                evidence_aliases(item)
+                & set(_string_values(selected_item.get("neighbor_element_ids")))
+            )
+            or bool(
+                evidence_aliases(selected_item)
+                & set(_string_values(item.get("neighbor_element_ids")))
+            )
             for selected_item in selected
         )
         if not (continuation_match or parent_match or neighbor_match):

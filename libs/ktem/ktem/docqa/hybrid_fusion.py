@@ -9,7 +9,6 @@ from .retrieval_adequacy import financial_statement_match_count
 FUSION_RANKER = "retriever_reciprocal_rank_fusion_v2"
 WEIGHTED_RANKER = "weighted_cross_modal_v1"
 RRF_RANKER = FUSION_RANKER
-MODALITY_TOP_K = {"text": 30, "page_image": 20, "element": 20, "graph": 20}
 MODALITY_WEIGHTS = {
     "text": 1.0,
     "page_image": 1.2,
@@ -172,7 +171,7 @@ def _fuse_with_weighted_scores(
     for index, item in enumerate(items):
         score, components = _fusion_score(query, item, domain=domain)
         scored = _with_fusion_metadata(item, score, components)
-        item_scores[str(scored.get("evidence_id") or f"item-{index}")] = score
+        item_scores[identity_of(scored).key] = score
         scored_items.append((score, index, scored))
 
     scored_items.sort(key=lambda row: (-row[0], row[1]))
@@ -199,7 +198,6 @@ def _fuse_with_rrf(
     item_scores: dict[str, float] = {}
     for score, index, item, components in weighted_rows:
         identity = identity_of(item).key
-        evidence_id = str(item.get("evidence_id") or identity)
         rrf_score, rrf_components = _rrf_item_score(
             identity,
             components,
@@ -207,7 +205,7 @@ def _fuse_with_rrf(
             contributions,
         )
         scored = _with_fusion_metadata(item, rrf_score, rrf_components)
-        item_scores[evidence_id] = rrf_score
+        item_scores[identity] = rrf_score
         scored_items.append((rrf_score, index, scored))
 
     scored_items.sort(key=lambda row: (-row[0], row[1]))
@@ -245,9 +243,6 @@ def _fuse_with_rrf(
         "rrf_k": 60,
         "retriever_lists": retriever_lists,
         "item_scores": item_scores,
-        "selected_top_k": {
-            key: MODALITY_TOP_K[key] for key in ("text", "page_image", "element")
-        },
         "dropped_noise_count": max(0, len(items) - len(fused)),
     }
     trace.update(element_gate_trace)
@@ -298,13 +293,21 @@ def _fuse_with_learned_ranker(
         components = dict(components)
         components["learned_score"] = learned_score
         components["weighted_score"] = weighted_score
-        scored = _with_fusion_metadata(item, learned_score, components)
-        evidence_id = str(scored.get("evidence_id") or f"item-{index}")
-        item_scores[evidence_id] = learned_score
+        scored = _with_fusion_metadata(
+            item,
+            learned_score,
+            components,
+            reranker_backend=ranker_name,
+        )
+        item_scores[identity_of(scored).key] = learned_score
         scored_items.append((learned_score, index, scored))
 
     scored_items.sort(key=lambda row: (-row[0], row[1]))
-    return [item for _, _, item in scored_items], {
+    reranked = [
+        _with_reranker_lineage(item, ranker_name, rank)
+        for rank, (_score, _index, item) in enumerate(scored_items, start=1)
+    ]
+    return reranked, {
         "ranker": ranker_name,
         "ranker_type": "learned_cross_modal",
         "item_scores": item_scores,
@@ -347,11 +350,30 @@ def _with_fusion_metadata(
     item: dict[str, Any],
     score: float,
     components: dict[str, float],
+    *,
+    reranker_backend: str = "",
 ) -> dict[str, Any]:
     scored = dict(item)
     metadata = dict(scored.get("metadata") or {})
     metadata["hybrid_fusion_score"] = score
     metadata["hybrid_fusion_components"] = components
+    if reranker_backend:
+        metadata["reranker_backend"] = reranker_backend
+        metadata["reranker_score"] = score
+    scored["metadata"] = metadata
+    return scored
+
+
+def _with_reranker_lineage(
+    item: dict[str, Any],
+    backend: str,
+    rank: int,
+) -> dict[str, Any]:
+    scored = dict(item)
+    metadata = dict(scored.get("metadata") or {})
+    metadata["reranker_backend"] = backend
+    metadata["reranker_input_identity"] = identity_of(item).key
+    metadata["reranker_rank"] = rank
     scored["metadata"] = metadata
     return scored
 
@@ -408,7 +430,7 @@ def _retriever_rank_lists(
 def _explicit_retriever_scores(item: dict[str, Any]) -> dict[str, float]:
     metadata = dict(item.get("metadata") or {})
     fields = {
-        "text": ("reranking_score", "reranker_score", "retriever_score"),
+        "text": ("retriever_score",),
         "visual": ("visual_retriever_score",),
         "element": ("element_retriever_score",),
         "graph": ("graph_retriever_score",),
@@ -474,7 +496,6 @@ def _retriever_score(item: dict[str, Any]) -> float:
         "visual_retriever_score",
         "element_retriever_score",
         "retriever_score",
-        "reranker_score",
     ):
         value = metadata.get(key)
         if value is not None and value != "":

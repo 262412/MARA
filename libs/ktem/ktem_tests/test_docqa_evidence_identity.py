@@ -4,6 +4,7 @@ from ktem.docqa.evidence import build_evidence_bundle
 from ktem.docqa.evidence_identity import (
     EvidenceIdentityConflictError,
     canonicalize_and_dedupe_evidence,
+    canonicalize_evidence_item,
     identity_of,
 )
 
@@ -109,6 +110,23 @@ def test_cells_with_same_parent_remain_distinct():
     }
     assert {identity_of(item).kind for item in items} == {"cell"}
     assert trace["structure_duplicate_count"] == 0
+
+
+def test_canonicalization_rejects_stale_embedded_identity():
+    with pytest.raises(EvidenceIdentityConflictError, match="identity"):
+        canonicalize_evidence_item(
+            {
+                "evidence_id": "parent-table",
+                "source_id": "canonical-report",
+                "cell_id": "revenue-2023",
+                "identity": {
+                    "source_id": "old-report",
+                    "kind": "element",
+                    "local_id": "parent-table",
+                },
+                "text": "Revenue 2023 12.5 million.",
+            }
+        )
 
 
 def test_dedupe_rejects_same_identity_with_conflicting_structured_fact():

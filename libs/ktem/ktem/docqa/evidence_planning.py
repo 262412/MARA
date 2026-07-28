@@ -23,9 +23,20 @@ def select_planned_evidence(
         candidates,
         query_plan,
     )
+    planned_plan = getattr(request, "planned_query_plan", None) or query_plan
+    bound_state_version = int(getattr(request, "query_plan_state_version", 0) or 0) + 1
+    request.query_plan = bound_plan
+    request.query_plan_id = bound_plan.plan_id
+    request.query_plan_state_version = bound_state_version
+    planned_query_plan = planned_plan.as_dict()
+    planned_query_plan.update({"stage": "planned", "state_version": 0})
+    bound_query_plan = bound_plan.as_dict()
+    bound_query_plan.update({"stage": "bound", "state_version": bound_state_version})
     metadata = {
         "query_plan": bound_plan.as_dict(),
         "query_plan_id": bound_plan.plan_id,
+        "planned_query_plan": planned_query_plan,
+        "bound_query_plan": bound_query_plan,
         "evidence_selection_trace": selection_trace,
         "structure_metadata_coverage": selection_trace["structure_metadata_coverage"],
         "slot_coverage": selection_trace["slot_coverage"],

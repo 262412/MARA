@@ -94,6 +94,61 @@ def test_rrf_accumulates_rank_contributions_for_shared_evidence_identity():
     assert trace["retriever_lists"] == ["element", "visual"]
 
 
+def test_hybrid_item_scores_use_canonical_cell_identity():
+    items = [
+        {
+            "evidence_id": "parent-table",
+            "source_id": "report",
+            "page_label": "4",
+            "table_id": "balance-sheet",
+            "cell_id": cell_id,
+            "evidence_level": "cell",
+            "modality": "table",
+            "text": text,
+        }
+        for cell_id, text in (
+            ("current-assets", "Current assets were 100."),
+            ("current-liabilities", "Current liabilities were 50."),
+        )
+    ]
+
+    for strategy in ("rrf", "weighted"):
+        _fused, trace = fuse_hybrid_evidence(
+            "What was the current ratio?",
+            items,
+            strategy=strategy,
+        )
+        assert set(trace["item_scores"]) == {
+            "cell:report:current-assets",
+            "cell:report:current-liabilities",
+        }
+
+
+def test_rrf_does_not_treat_reranker_score_as_first_stage_retrieval():
+    fused, trace = fuse_hybrid_evidence(
+        "revenue result",
+        [
+            {
+                "evidence_id": "reranker-only",
+                "source_id": "report",
+                "page_label": "4",
+                "text": "Unrelated appendix.",
+                "metadata": {"reranker_score": 100.0},
+            },
+            {
+                "evidence_id": "retrieval-match",
+                "source_id": "report",
+                "page_label": "5",
+                "text": "The revenue result improved.",
+            },
+        ],
+        strategy="rrf",
+    )
+
+    assert fused[0]["evidence_id"] == "retrieval-match"
+    assert trace["retriever_lists"] == ["text"]
+
+
 def test_hybrid_route_can_use_rrf_fusion_strategy():
     request = DocQARequest(
         prompt="Explain revenue chart and table.", route_policy="hybrid"
@@ -193,6 +248,9 @@ def test_hybrid_route_can_use_learned_cross_modal_ranker():
     assert (
         bundle.items[0]["metadata"]["hybrid_fusion_components"]["learned_score"] == 3.0
     )
+    assert bundle.metadata["ranking_trace"]["backend_execution"] is True
+    assert bundle.metadata["ranking_trace"]["backend"] == "fixture_learned_ranker"
+    assert bundle.metadata["ranking_trace"]["score_field"] == "reranker_score"
 
 
 def test_fused_lineage_records_the_actual_post_fusion_ranking_output():
@@ -229,8 +287,10 @@ def test_fused_lineage_records_the_actual_post_fusion_ranking_output():
     assert "text-81" in candidate_ids
     assert "text-81" in fused_ids
     assert fused_ids <= candidate_ids
-    assert "reranked_evidence" not in bundle.metadata
-    assert bundle.metadata["ranking_trace"]["backend_execution"] is False
+    assert "text-81" in {
+        item["evidence_id"] for item in bundle.metadata["reranked_evidence"]
+    }
+    assert bundle.metadata["ranking_trace"]["backend_execution"] is True
 
 
 def test_hybrid_fusion_prioritizes_financial_statement_text_over_irrelevant_visual_score():
@@ -339,11 +399,7 @@ def test_hybrid_fusion_keeps_wide_candidates_for_downstream_mmr_selection():
         "page-image:mmdoc:99",
     ]
     assert trace["dropped_noise_count"] == 0
-    assert trace["selected_top_k"] == {
-        "text": 30,
-        "page_image": 20,
-        "element": 20,
-    }
+    assert "selected_top_k" not in trace
 
 
 def test_hybrid_bundle_preserves_cross_page_visual_evidence():

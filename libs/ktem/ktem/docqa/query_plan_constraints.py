@@ -13,9 +13,14 @@ def query_plan_constraints(
     verification_domain: str,
     segment_comparison: bool,
 ) -> dict[str, Any]:
+    cross_page = question_type == "cross_page"
+    lowered_question = str(question or "").lower()
     constraints: dict[str, Any] = {
         "periods": periods,
         "verification_domain": str(verification_domain or ""),
+        "requires_distinct_evidence": cross_page,
+        "requires_distinct_source_pages": cross_page
+        and ("page" in lowered_question or "across" in lowered_question),
         "requires_structure": (
             question_type in {"cross_page", "multi_period_numeric", "comparison_argmax"}
             or (

@@ -23,6 +23,12 @@ from .query_evidence_constraints import (
     period_kind_in_question,
 )
 from .query_evidence_text import evidence_text, requires_multiple_operands
+from .query_phrase_extraction import (
+    cross_page_support_queries,
+    metric_phrase,
+    periods_in_question,
+    source_page_locator,
+)
 from .query_plan_constraints import query_plan_constraints
 from .query_plan_schema import (
     EvidenceSlot,
@@ -31,7 +37,6 @@ from .query_plan_schema import (
     with_plan_id,
 )
 
-_YEAR_RE = re.compile(r"\b(?:fy\s*)?((?:19|20)\d{2})\b|\bfy\s*(\d{2})\b", re.IGNORECASE)
 _VALUE_RE = re.compile(r"(?<![A-Za-z0-9])(?:[$€£¥]\s*)?\(?[+-]?\d[\d,]*(?:\.\d+)?%?\)?")
 _TOKEN_RE = re.compile(r"[a-z0-9%$€£¥]+", re.IGNORECASE)
 _NUMERIC_TERMS = {
@@ -78,25 +83,6 @@ _VISUAL_TERMS = {
     "table",
     "visual",
 }
-_METRIC_STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "did",
-    "do",
-    "for",
-    "from",
-    "how",
-    "in",
-    "is",
-    "of",
-    "the",
-    "to",
-    "was",
-    "were",
-    "what",
-    "which",
-}
 
 
 def build_query_plan(
@@ -122,9 +108,9 @@ def build_query_plan(
         tokens,
         causal_intent=causal_intent,
     )
-    periods = _periods_in_question(text)
+    periods = periods_in_question(text)
     period_kind = period_kind_in_question(text)
-    metric = _metric_phrase(tokens, periods)
+    metric = metric_phrase(text, periods, numeric_terms=_NUMERIC_TERMS)
     question_type = _question_type(
         tokens,
         normalized_answer_type,
@@ -188,6 +174,8 @@ def ensure_request_query_plan(
 ) -> QueryPlan:
     existing = getattr(request, "query_plan", None)
     if isinstance(existing, QueryPlan):
+        if not isinstance(getattr(request, "planned_query_plan", None), QueryPlan):
+            request.planned_query_plan = existing
         if not getattr(request, "query_plan_id", ""):
             request.query_plan_id = existing.plan_id
         return existing
@@ -202,8 +190,10 @@ def ensure_request_query_plan(
         verification_domain=str(getattr(request, "verification_domain", None) or ""),
         planner_payload=payload,
     )
+    request.planned_query_plan = plan
     request.query_plan = plan
     request.query_plan_id = plan.plan_id
+    request.query_plan_state_version = 0
     return plan
 
 
@@ -236,6 +226,8 @@ def bind_evidence_slots(
 ) -> QueryPlan:
     bound_slots = []
     used_generic_operand_ids: set[str] = set()
+    used_comparison_ids: set[str] = set()
+    used_cross_page_locators: set[tuple[str, str]] = set()
     for slot in plan.evidence_slots:
         ranked = sorted(
             (
@@ -257,6 +249,31 @@ def bind_evidence_slots(
         candidate_ids = [
             identity_of(item).key for score, _index, item in ranked[:3] if score > 0
         ]
+        if (
+            plan.constraints.get("requires_distinct_evidence")
+            and slot.role == "support"
+        ):
+            candidate_ids = []
+            for score, _index, item in ranked:
+                identity = identity_of(item).key
+                locator = source_page_locator(item)
+                requires_distinct_pages = bool(
+                    plan.constraints.get("requires_distinct_source_pages")
+                )
+                if (
+                    score <= 0
+                    or identity in used_comparison_ids
+                    or (
+                        requires_distinct_pages
+                        and (not locator[1] or locator in used_cross_page_locators)
+                    )
+                ):
+                    continue
+                candidate_ids = [identity]
+                used_comparison_ids.add(identity)
+                if requires_distinct_pages:
+                    used_cross_page_locators.add(locator)
+                break
         if slot.role == "operand" and not slot.period:
             candidate_ids = [
                 evidence_id
@@ -466,13 +483,21 @@ def _heuristic_slots(
             for slot_id in roles
         )
     if question_type == "cross_page":
+        left_query, right_query = cross_page_support_queries(question, metric)
         return (
             EvidenceSlot(
-                slot_id="support:cross_page",
+                slot_id="support:left_subject",
                 role="support",
-                metric=metric,
+                metric=left_query,
                 modality="auto",
-                query=metric,
+                query=left_query,
+            ),
+            EvidenceSlot(
+                slot_id="support:right_subject",
+                role="support",
+                metric=right_query,
+                modality="auto",
+                query=right_query,
             ),
         )
     return ()
@@ -514,24 +539,6 @@ def _finance_slots(
             query="tabular dollars unit scale convention",
         ),
     )
-
-
-def _periods_in_question(question: str) -> list[str]:
-    periods = list(
-        dict.fromkeys(
-            full or f"20{short}" for full, short in _YEAR_RE.findall(question)
-        )
-    )
-    if len(periods) != 2 or not re.search(
-        r"\b(?:from|between)\b.*\b(?:and|through|to)\b",
-        question,
-        flags=re.IGNORECASE,
-    ):
-        return periods
-    start, end = (int(value) for value in periods)
-    if start >= end or end - start > 10:
-        return periods
-    return [str(year) for year in range(start, end + 1)]
 
 
 def _normalized_answer_type(
@@ -576,17 +583,6 @@ def _question_type(
     if tokens & _LONG_FORM_TERMS:
         return "long_form"
     return "simple_fact"
-
-
-def _metric_phrase(tokens: set[str], periods: list[str]) -> str:
-    values = [
-        token
-        for token in tokens
-        if token not in _METRIC_STOPWORDS
-        and token not in _NUMERIC_TERMS
-        and token not in set(periods)
-    ]
-    return " ".join(sorted(values))
 
 
 def _tokens(text: str) -> set[str]:

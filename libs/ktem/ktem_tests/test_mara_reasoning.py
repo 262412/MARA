@@ -558,7 +558,7 @@ def test_mara_graph_route_uses_graph_context_without_text_rag(monkeypatch):
     assert len(evidence_payloads) == 1
     metadata = evidence_payloads[0]
     assert metadata["requested_modalities"] == ["text"]
-    assert metadata["modality_counts"] == {"graph": 1}
+    assert metadata["modality_counts"] == {"graph": 2}
     assert metadata["page_coverage"] == ["2", "5"]
     assert metadata["source_ids"] == ["file-a", "file-b"]
     assert metadata["evidence_ids"] == ["graph:component::strategy"]
@@ -587,4 +587,7 @@ def test_mara_graph_route_uses_graph_context_without_text_rag(monkeypatch):
             ],
         }
     ]
-    assert metadata["evidence"][0]["evidence_id"] == "graph:component::strategy"
+    assert {item["source_id"] for item in metadata["evidence"]} == {
+        "file-a",
+        "file-b",
+    }

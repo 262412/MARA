@@ -30,8 +30,7 @@ def record_calculation_stage_evidence(
     if not isinstance(metadata, dict):
         metadata = {}
         prediction["evidence_metadata"] = metadata
-    metadata["used_evidence"] = list(items)
-    metadata["cited_evidence"] = list(items)
+    metadata["execution_operand_evidence"] = list(items)
 
 
 def _calculation_item_aliases(item: dict[str, Any]) -> set[str]:

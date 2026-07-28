@@ -17,6 +17,10 @@ def stage_coverage_values(
     stages = {
         "selected_evidence_coverage": _stage_records(metadata, "selected_evidence"),
         "used_evidence_coverage": _stage_records(metadata, "used_evidence"),
+        "generation_context_evidence_coverage": _stage_records(
+            metadata,
+            "generation_context_evidence",
+        ),
         "verified_evidence_coverage": _stage_records(metadata, "verified_evidence"),
         "cited_evidence_coverage": _stage_records(metadata, "cited_evidence"),
     }

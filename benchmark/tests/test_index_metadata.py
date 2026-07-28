@@ -105,6 +105,12 @@ def test_runtime_evidence_projection_is_lossless_for_identity_and_numeric_fields
                 }
             ],
             "source_backrefs": ["report#page:12#cell:revenue-2023"],
+            "bbox": [10.0, 20.0, 200.0, 120.0],
+            "caption": "Revenue table",
+            "ocr_text": "Revenue 2023 12.5",
+            "vlm_text": "A highlighted revenue cell.",
+            "section_title": "Financial results",
+            "table_title": "Revenue by year",
             "text": "Revenue 2023 12.5 million",
         }
     )
@@ -164,9 +170,34 @@ def _assert_lossless_projection(hit):
                 "score_type": "cosine",
             }
         ],
+        "bbox": [10.0, 20.0, 200.0, 120.0],
+        "caption": "Revenue table",
+        "ocr_text": "Revenue 2023 12.5",
+        "vlm_text": "A highlighted revenue cell.",
+        "section_title": "Financial results",
+        "table_title": "Revenue by year",
         "text": "Revenue 2023 12.5 million",
         "source_backrefs": ["report#page:12#cell:revenue-2023"],
     }
+
+
+def test_projection_normalizes_float_like_indexes_without_crashing():
+    hit = normalize_retrieved_hit(
+        {
+            "evidence_id": "table-1",
+            "source_id": "report",
+            "page_label": "page-5",
+            "parser_page_index": "5.0",
+            "row_index": "2.0",
+            "column_index": "not-an-index",
+            "text": "Revenue table.",
+        }
+    )
+
+    assert hit["page_label"] == "page-5"
+    assert hit["parser_page_index"] == 5
+    assert hit["row_index"] == 2
+    assert "column_index" not in hit
 
 
 def test_element_projection_prefers_atomic_cell_identity_over_parent_element():

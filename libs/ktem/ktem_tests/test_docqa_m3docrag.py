@@ -55,7 +55,7 @@ def test_page_first_evidence_ranks_pages_without_pruning_candidates():
     )
 
     assert selected == items
-    assert trace["selected_pages"] == [{"source_id": "file-b", "page_label": "5"}]
+    assert trace["ranked_pages"] == [{"source_id": "file-b", "page_label": "5"}]
     assert trace["pruned_item_count"] == 0
     assert trace["candidate_preservation"] == "all"
 
@@ -88,4 +88,4 @@ def test_page_rank_does_not_reward_duplicate_chunk_count_linearly():
     )
 
     assert len(selected) == 13
-    assert trace["selected_pages"] == [{"source_id": "report", "page_label": "8"}]
+    assert trace["ranked_pages"] == [{"source_id": "report", "page_label": "8"}]

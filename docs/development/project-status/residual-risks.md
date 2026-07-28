@@ -4,207 +4,133 @@
 
 ## 1. 当前结论
 
-本轮已按完整审查报告执行基础契约修复。代码建立在
-`aa50867cf1bfcde3905948a1c279449b503fe037` 之上，本轮实现与本文档由同一 Git
-提交记录；没有提交新的 Slurm 任务。
+本轮从 `Dev` 提交
+`5112c00beaffcea3e3f5b680a387a6a00f70fd7d` 开始复核和修复。复核报告指出的五个
+直接 P0 均已补失败保护测试并完成代码修复：
 
-当前结论分为两层：
+1. calculation verifier 现在验证全部 `required_for_execution` slot，不再跳过
+   `role="dimension"`；
+2. `verified_evidence` 与实际输出的 `cited_evidence` 已拆开；
+3. 普通 quality retry 不再发送空查询；
+4. cross-page/comparison QueryPlan 不再使用单一泛化 support slot；
+5. hybrid fusion 的 score trace 使用 canonical evidence identity，RRF 不再把
+   reranker score 当作 first-stage retriever score。
 
-- **代码不变量层：已通过。** Evidence Identity、runtime→benchmark 无损投影、
-  单一 QueryPlan、阶段语义、claim/citation provenance 和阶段覆盖指标已有唯一实现，
-  完整 `ktem` 与 `benchmark` 测试通过。
-- **数据集能力层：尚未验收。** 当前没有使用本轮代码生成新的 QASPER 或
-  FinanceBench artifact，因此不能声称 native、semantic F1、boolean exact、cell
-  recall 或 numeric accuracy 已恢复。
+这代表五个已知代码断点已经关闭，不代表数据集能力已经验收。当前仍没有使用本轮
+代码生成新的 QASPER 159×3 或 FinanceBench 20×4 artifact，因此：
 
-发布结论：**暂不运行全量 benchmark。先运行 QASPER 159×3 和 FinanceBench 20×4
-聚焦验证；只有基础契约在真实 artifact 中成立且部署 route 不回退，才允许全量重跑。**
+- **可以进入 2–5 条 smoke artifact 和两组聚焦验证；**
+- **仍不建议直接运行全量 benchmark；**
+- **不能声称 QASPER、FinanceBench 或最终 Phase G 指标已经达标。**
 
-旧文档中关于任务 `9976017` 正在等待的描述已经过期，已删除。本文不把历史 Slurm
-状态当作当前事实。
+本轮没有提交 Slurm 任务，也没有修改公开 `MARA`、`MARA-cli` 或 `MARA docqa`
+命令及参数。
 
-## 2. 事实来源
+## 2. 为什么 `5112c00` 仍未根治
 
-本轮依据：
+`5112c00` 已经实质重构 Evidence Identity、去重、二次检索、rerank truthfulness
+和 evidence-set selection，但当时的状态文档把“主链路已有实现”写成了“契约已经
+闭合”。静态复核证明这个结论过早，原因是测试主要验证模块内行为，没有逐阶段验证
+跨模块投影不变量：
 
-- 用户提供的完整静态审查报告：
-  `/mnt/fastscratch/users/tbczhang/.codex/attachments/d2be4168-b94f-40ad-abb6-721a68ded849/pasted-text.txt`
-- QASPER v24，159×3：
-  `/mnt/scratch/users/tbczhang/outputs/MARA/focused_validation_20260727_evidence_invariants/qasper-typed-v24-evidence-invariants-l40s/01_core_text/20260727_134621_qasper-typed-v24-evidence-invariants-l40s-9962978`
-- QASPER v22 行为基线：
-  `/mnt/scratch/users/tbczhang/outputs/MARA/focused_validation_20260726_eval_invariants/qasper-typed-v22-verifier-budget-l40s/01_core_text/20260726_230904_qasper-typed-v22-verifier-budget-l40s-9952461`
-- FinanceBench v22，20×4：
-  `/mnt/scratch/users/tbczhang/outputs/MARA/focused_validation_20260727_evidence_invariants/finance-v22-evidence-invariants-l40s/outputs/20260727_195210_finance-v22-evidence-invariants-l40s`
-- FinanceBench v20 行为基线：
-  `/mnt/scratch/users/tbczhang/outputs/MARA/focused_validation_20260726_eval_invariants/finance-v20-table-identity-segment-l40s/outputs/20260727_000149_finance-v20-table-identity-segment-l40s`
+- QueryPlan 声明了 dimension execution slot，但 calculation verifier 又按
+  `role == "operand"` 过滤；
+- verifier 产生的是 claim support，却被直接复制成 emitted citation；
+- 二轮 retrieval 的 missing-slot 路径有 query，普通 quality retry 路径却没有；
+- cross-page 类型存在，但一个 `support:cross_page` 无法表达左右两侧必须同时
+  命中；
+- RRF 排序使用 canonical identity，trace map 却继续使用父 `evidence_id`；
+- learned reranker 已执行，但 backend/score/rank 没有进入统一 reranked stage。
 
-历史 artifact 仍用于描述修复前问题，不能用于证明本轮代码已经关闭这些问题。
+这些都是同一类错误：类型或阶段在上游已经声明，下游又用旧字段重新解释。今后关闭
+问题必须同时证明“声明、执行、投影、指标”四个位置使用同一契约，不能只证明其中一
+个函数正确。
 
-## 3. 为什么过去多轮修改没有根治
+## 3. 本轮已完成且有代码证据的修复
 
-过去的问题不是一组互不相关的 prompt、阈值或数据集特例，而是五个系统契约没有
-闭合：
+| 项目                        | 当前实现                                                                                                                                                                               | 保护证据                                                                                                |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Dimension slot verification | 全部 execution-required slot 进入 verifier；dimension 与 operand 的 unit/scale/currency provenance 分角色验证，缺失时阻止验证通过                                                      | `test_required_dimension_slot_is_verified`、`test_missing_dimension_slot_blocks_execution_verification` |
+| Citation stage semantics    | runtime verifier 只写 `verified_claim_support_evidence`；benchmark finalizer 根据实际 structured/inline citation 反向映射 `emitted_citation_evidence`，再赋给兼容字段 `cited_evidence` | `test_cited_evidence_comes_from_emitted_citations`                                                      |
+| Generation context stage    | 新增 `generation_context_evidence`；旧 `used_evidence` 仅作为有显式 `stage_aliases` 的兼容字段；计算路径另记 `execution_operand_evidence`                                              | stage metric 与 calculation citation tests                                                              |
+| Quality retry               | 查询按 `retrieval_query → planning question → prompt` 回退，并强制去除空白                                                                                                             | `test_quality_retry_query_is_never_empty`                                                               |
+| Cross-page plan             | comparison 拆成 `support:left_subject` 和 `support:right_subject`；显式 page/across 问题要求不同 source-page locator；graph aggregate 按 backref 投影为 locator atoms                  | cross-page QueryPlan 与 graph route tests                                                               |
+| QueryPlan state             | request 保存初始 planned plan；每次绑定后更新 request 中的 bound plan，并记录 `stage/state_version`                                                                                    | `test_bound_plan_stage_is_explicit_and_updates_request_state`                                           |
+| Hybrid score identity       | weighted、RRF、learned 三个 score map 均以 `identity_of(item).key` 为 key                                                                                                              | `test_hybrid_item_scores_use_canonical_cell_identity`                                                   |
+| Fusion/rerank separation    | RRF 只消费 first-stage retriever score；learned reranker 统一输出 backend、score、input identity 和 rank                                                                               | hybrid fusion tests                                                                                     |
+| Reranker lineage            | 删除跨 source 的全局 text-hash lineage；只接受 canonical identity、alias 或 source-page-text                                                                                           | `test_reranker_lineage_rejects_global_text_only_match`                                                  |
+| Identity canonicalization   | canonicalization 重新计算 identity；嵌入的旧 identity 只作为 expected value，不一致即报 contract error                                                                                 | `test_canonicalization_rejects_stale_embedded_identity`                                                 |
+| Visual benchmark projection | 保留 bbox、caption、OCR、VLM、section/table title；浮点式 index 安全规范化，异常值不再抛错                                                                                             | index metadata tests                                                                                    |
+| Trace truthfulness          | page-first trace 改名为 `ranked_pages` 并标明 `preview_only`；未实际执行的 RRF modality top-k 字段已删除                                                                               | m3docrag/hybrid tests                                                                                   |
+| Neighbor expansion          | raw neighbor ID 与 canonical identity 通过 evidence aliases 对齐                                                                                                                       | `test_neighbor_alias_expansion_uses_canonical_identity`                                                 |
 
-1. **Identity Contract 缺失。** 同一个 cell 在不同阶段分别使用 `cell_id`、
-   parent `evidence_id`、`element_id`、table ID 或 row/column；跨模块 join 会静默
-   丢失。
-2. **Plan Contract 缺失。** controller、retrieval、selection 和 verifier 会各自
-   重新解释问题，没有共享唯一 `plan_id`、slot 集合和 required 语义。
-3. **Stage Contract 缺失。** candidate、fused、reranked、selected、used、
-   verified、cited 混用，字段名称和实际内容不一致。
-4. **Verification Contract 缺失。** “evidence 曾经出现”被误认为“evidence 支持
-   claim”；两 token 重叠会误放行错误数字或方向。
-5. **Metric Contract 缺失。** page、element、cell、span 和 slot 的 gold identity
-   粒度不一致，page hit 上升可能同时伴随 operand coverage 下降。
+## 4. 当前验证证据
 
-本轮完整回归还发现了一个直接实例：element score 已按 canonical identity 建表，
-后续却使用 raw selected ID 过滤，导致 score map 被清空。单测每个模块都可能正常，
-但端到端 identity join 已经断裂。这解释了过去“一项上升、另一项回退”的反复。
+| 验证                   | 结果                                                                    |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `libs/ktem/ktem_tests` | 1388 passed，45 warnings                                                |
+| `benchmark/tests`      | 479 passed，6 warnings                                                  |
+| 定向 P0/契约测试       | 全部通过                                                                |
+| 存储布局               | `.venv` 位于 fastscratch；repo root 无 `data/`、`datasets/`、`outputs/` |
+| fastscratch quota      | 141.5G/500G，447963/500000 files                                        |
+| 新 benchmark artifact  | 尚无                                                                    |
+| 新 Slurm 任务          | 未提交                                                                  |
 
-## 4. 本轮已落实的基础契约
+测试结果证明当前代码不变量通过，不证明真实数据集指标或延迟达标。fastscratch inode
+已接近软配额的 90%，提交聚焦任务前仍要再次预检，但当前没有超过配额。
 
-### 4.1 Evidence Identity 与去重
+## 5. 最新开放问题表
 
-- 新增不可变 `EvidenceIdentity(source_id, kind, local_id)`；统一身份优先级为
-  cell → span → table row/column → element → bbox → chunk/evidence → text。
-- parser、dedupe、RRF、selection、calculation、citation 和 benchmark projection
-  使用同一个 `identity_of()`，不再自行猜测主键。
-- 相同父表的两个 cell 保持不同 identity；相同文本不跨 source 合并。
-- exact text、overlap、MinHash 和 semantic 去重都执行结构化事实冲突检查。
-- 合并重复项时保留代表正文，并 union alias、source backref、retriever lineage 和
-  duplicate IDs；冲突事实不合并。
+表中只保留当前真实未关闭事项。已经有代码和包级回归证明关闭的问题不再重复列为
+“待修复”。
 
-### 4.2 无损 runtime→benchmark 投影
+| ID                       | 优先级 | 状态                      | 根因与当前缺口                                                                                                                                | 关闭标准                                                                                                                     |
+| ------------------------ | ------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| CONTRACT-ARTIFACT-001    | P0     | 待聚焦验证                | 五个 P0 只有代码和单元测试证据，尚无本轮真实 artifact；不能排除 runtime adapter 或模型输出再次破坏 stage lineage                              | 先跑每类 2–5 条 smoke，再完成 QASPER 159×3、Finance 20×4；identity/stage/citation contract violation 均为 0                  |
+| FIN-ATOMIC-SUPPLY-011    | P0     | 代码已有，artifact 未证实 | parser 和 table adapter 已能产生 cell/span，但真实 PDF 的 wrapped row、局部 scale、period header 仍可能只供给父表或 page evidence             | 固定困难样例全部提供可回溯 atom；缺 operand/dimension 时不执行；execution citation 覆盖全部 operand                          |
+| EVIDENCE-SET-BUDGET-024  | P1     | 未完成                    | 当前仍先统一截断最多 80 个 fused candidate，再在该集合内恢复 slot；排名 81 以后无法恢复。required slot 仍按顺序贪心，可能提前耗尽 page budget | 每个 required slot 有独立候选配额，加全局 relevance 与 structure 配额；联合满足 required coverage 后再选择 optional evidence |
+| SCORE-CALIBRATION-025    | P1     | 未完成                    | evidence-set relevance 仍可能混合 cross-encoder、RRF、element 和规则分数，不同数值空间会改变 route 间相对权重                                 | 每类 score 在同一 query/candidate pool 内校准或 rank-normalize；冻结集上 required evidence recall 不回退                     |
+| BENCHMARK-PROJECTION-026 | P1     | 部分完成                  | 核心 identity、numeric 和常见视觉字段已保留，但任意扩展 metadata 还不是完全无损 round trip                                                    | 对声明的 benchmark evidence schema 做 property round trip；未知扩展字段有明确 namespaced 容器或明确拒绝策略                  |
+| METRIC-LOCATOR-021       | P1     | 部分完成                  | candidate page coverage 已按 `(source_id, page)`；旧 `all_gold_pages_hit` 仍只比较 page number，报告中同时存在两种口径                        | 新增并采用 source-page paired headline；page-only 指标明确标记 legacy diagnostic，不用于发布门槛                             |
+| VERIFY-TYPED-019         | P1     | 部分完成                  | numeric 冲突和 execution provenance 已增强；boolean proposition entailment、主体/关系/作用域和长文本 calibrated judge 仍未统一                | numeric 由 execution 验证；boolean 有正反命题结果；free-text 冻结人工集一致率 ≥90%；每个 supported claim 有 provenance       |
+| QASPER-CONTRASTIVE-007   | P1     | 未实现                    | cross-page support slot 已拆分，但 QASPER boolean/contrastive 尚无 proposition、negation、condition、modal qualifier slots                    | 固定反例正确返回 `no`；unsupported yes/no 不增加；部署 route 不低于冻结基线                                                  |
+| QASPER-LATENCY-008       | P1     | 未实现                    | generation、answerability、verification、finalization timing 尚未完整分段                                                                     | 分段 timing coverage 100%，给出 paired route-specific latency 和瓶颈                                                         |
+| SEMANTIC-JUDGE-020       | P1     | 未验收                    | semantic F1 契约存在，但没有冻结 200 条人工校准 artifact                                                                                      | coverage ≥99.5%，人工一致率 ≥90%，数字/方向/单位冲突不得通过                                                                 |
+| REPORT-HEADLINE-022      | P1     | 未实现                    | `qa_quality` 仍可同时包含 controller、CRAG 和 fixed route；相同 effective route 可能重复计权                                                  | headline 只统计实际部署 controller policy；fixed/CRAG/oracle 仅作 baseline 或 diagnostic                                     |
+| RELEASE-GATE-027         | P1     | 未实现                    | contract correctness、paired regression、judge calibration、latency 和长期能力目标仍在同一 gate list                                          | 拆成三类 gate；contract 必须通过，paired regression 用置信区间，long-term target 不伪装成代码契约                            |
+| IDENTITY-PROPERTY-023    | P2     | 未实现                    | identity 仍以固定回归样例为主，缺多表、多年份、alias、continuation 的随机组合验证                                                             | property-based round-trip/dedupe 测试中 identity collision 为 0                                                              |
 
-- 新增共享 `BenchmarkEvidenceRecord`，`index_metadata` 不再维护独立字段白名单。
-- identity、source/page alias、cell/table、period、unit、scale、currency、
-  continuation、chunk、hash、retrieval lineage 和 source backref 可 round trip。
-- source canonicalization 会同步重建 identity/canonical ID，同时保留
-  `runtime_source_id` 和 source alias。
-- benchmark element projection 优先使用 atomic cell/span，而不是父 element。
+## 6. 已关闭并从开放表移除的问题
 
-### 4.3 单一 QueryPlan
+以下问题已经有实现和包级回归证据，不再保留为开放 bug：
 
-- 每个 request 只生成一次确定性 `plan_id`，controller、retrieval、selection、
-  calculation 和 verifier 复用同一对象。
-- `EvidenceSlot` 明确区分 `required_for_retrieval`、
-  `required_for_execution`、`required_for_verification`。
-- slot 绑定保存 canonical evidence identity。
-- 第二轮检索按 missing slot 独立执行，记录 `round_id/query_id/slot_id`；二轮后
-  required retrieval slot 仍缺失时阻止生成。
-- 普通 “from” 不再误触发跨页计划；无运算意图的直接 numeric 问题只创建一个
-  operand。
+- dimension execution slot 被 `role == "operand"` 过滤；
+- generic verifier 把 verified evidence 直接当成 cited evidence；
+- quality retry 使用空查询；
+- cross-page 只有单一 `support:cross_page`；
+- hybrid item score 被父表 `evidence_id` 覆盖；
+- reranker score 进入 first-stage RRF；
+- learned ranker 不能形成真实 reranked stage；
+- 相同文本跨 source 错误通过 reranker lineage；
+- 相同 `plan_id` 的 planned/bound 状态没有 stage/version；
+- stale embedded identity 被无条件信任；
+- neighbor raw ID 无法命中 canonical identity；
+- page ranking preview 被命名为 selected pages；
+- RRF trace 声称执行了实际未应用的 modality top-k；
+- benchmark index 遇到 `"5.0"` 或异常值直接抛错。
 
-### 4.4 真实阶段与 evidence-set selection
+这些关闭结论只针对代码契约。它们是否改善真实数据集结果统一由
+`CONTRACT-ARTIFACT-001` 验证，不把历史 artifact 当成本轮证据。
 
-- 明确记录 candidate、fused、reranked、selected、used、verified、cited。
-- 未执行真实 reranker 时，`reranked` 指标为 unavailable，不再用 shortlist 冒充。
-- dense/sparse 等 retriever list 先 canonicalize，再做真正 RRF；同一 retriever
-  内重复 identity 不重复计权。
-- page-first 只产生 page rank，不再前置删除三页以外候选；page score 使用 max 与
-  top-3 mean，避免奖励碎片数量。
-- 最终选择按 relevance、slot new coverage、structure、contrast、redundancy 和
-  cost 的边际收益构造 evidence set；required slot evidence 不被普通 MMR 删除。
-- continuation、parent 和 neighbor expansion 按可用 edge 启用，不再由全局 80%
-  metadata coverage 一票否决。
+## 7. 下一步顺序
 
-### 4.5 Calculation、claim verification 与 citation
-
-- CalculationOperand 同时保留 legacy raw ID 和 canonical
-  `evidence_identity/scale_evidence_identity`。
-- 合成 cell identity 可回溯父表；value、period、unit、scale、currency 和 slot
-  一致性仍由确定性 verifier 检查。
-- execution citation 优先使用实际 operand/dimension identity；benchmark
-  finalizer 把这些 evidence 记录为 used/cited，不再从候选首项猜 citation。
-- verifier 返回 `VerifiedClaim`，状态为 supported/contradicted/unknown，并分别
-  记录支持与冲突 evidence identity。
-- 删除“两 token 重叠即可支持”的最终判定；错误数字、年份和方向冲突优先判为
-  contradicted。证据不足但未达到反证置信度时返回 unknown，不伪造 citation。
-- evidence-only 和 empty-answer 路径也使用 canonical identity。
-
-### 4.6 Benchmark metric contract
-
-- `avg_f1` 继续是历史 token F1，不重定义；dataset native 仍是正式数据集指标。
-- semantic claim F1 保持补充指标，适合“答案包含 gold 且语义、方向、数字和单位
-  正确”的评价，但不能重命名成旧 F1，也不能把新指标绝对值抬升算成系统提升。
-- candidate evidence coverage 与 candidate page coverage 分开；gold cell/span
-  存在时不再由同页错误 element 计为 evidence 命中。
-- 新增 selected、used、verified、cited evidence coverage。
-- 支持 `gold_evidence_requirements` 及多个 acceptable evidence，区分 strict gold
-  page 与等价正确证据。
-- calculation accuracy 被限制在 `[0,1]`。
-
-## 5. 本地验证证据
-
-| 验证                     | 结果                                                         |
-| ------------------------ | ------------------------------------------------------------ |
-| 契约定向回归             | 170 passed                                                   |
-| `libs/ktem/ktem_tests`   | 1378 passed，45 warnings                                     |
-| `benchmark/tests`        | 476 passed，6 warnings                                       |
-| codebase hygiene         | 无 ratchet violation；未刷新 baseline                        |
-| changed-files pre-commit | black、isort、flake8、autoflake、mypy、codespell 全通过      |
-| 公共命令面               | 未修改 `MARA`、`MARA-cli`、`MARA docqa` 命令或参数           |
-| 存储预检                 | `.venv` 位于 fastscratch；无 repo-root data/datasets/outputs |
-| fastscratch quota        | 140.8G/500G，447952/500000 files；本轮未下载模型或建索引     |
-
-测试通过证明代码不变量成立，不等于真实 benchmark 指标达标。
-
-## 6. 最新开放问题表
-
-| ID                     | 优先级 | 状态                      | 真实未完成内容                                                                                                                                                                                        | 关闭标准                                                                                                                                      |
-| ---------------------- | ------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| CONTRACT-ARTIFACT-001  | P0     | 待聚焦验证                | 本轮基础契约尚无新 QASPER/Finance artifact                                                                                                                                                            | QASPER 159×3、Finance 20×4 完整结束；identity round trip、stage lineage、used=cited provenance coverage 100%；部署 route 对冻结基线无显著回退 |
-| QASPER-CONTRASTIVE-007 | P1     | 未实现                    | boolean/contrastive plan 尚无 proposition support、contradiction、condition、modal qualifier 独立 slots；发现冲突后仍不能定向恢复缺失极性                                                             | 固定反例 `b06512c17d99f9339ffdab12cedbc63501ff527e` 返回 `no`；部署 route boolean 不低于 v22；unsupported yes/no 不增加                       |
-| QASPER-LATENCY-008     | P1     | 未实现                    | generation、answerability judge、finalization 未完整分段，无法定位 v22→v24 的 2.19s→5.45s 回退                                                                                                        | 分段 timing coverage 100%；给出 route-specific paired latency 与瓶颈归因                                                                      |
-| FIN-ATOMIC-SUPPLY-011  | P0     | 代码已有，artifact 未证实 | wrapped/value-first table、soft-wrapped narrative 和局部单位/期间解析已实现，但真实 PDF 多样性下能否稳定供给 atomic cell/span 尚未由本轮 artifact 证明                                                | `10285/04854/10499/00882/01928/04980/03031` 固定样例全部满足 cell/span、period、scale、execution citation 不变量；缺证据时不执行              |
-| VERIFY-TYPED-019       | P1     | 部分完成                  | exact numeric/year/direction 与 claim-specific identity 已实现；boolean proposition entailment、长文本 calibrated NLI/LLM judge、跨多个 operand 的 claim→execution provenance 仍需统一 typed verifier | numeric 由 CalculationExecution 验证；boolean 有正反命题结果；free-text 在冻结人工集一致率 ≥90%；每个 supported claim 有可审计 provenance     |
-| SEMANTIC-JUDGE-020     | P1     | 未验收                    | semantic F1 设计合理，但本地 judge 尚无冻结 200 条人工校准结果                                                                                                                                        | coverage ≥99.5%，与人工标签一致率 ≥90%，冲突数字/方向/单位不得通过                                                                            |
-| METRIC-GRAIN-021       | P1     | 部分完成                  | 已有 stage evidence coverage，但 source-page、table、cell/span、slot 尚未在每个阶段分别报告；数据集 converter 也未普遍产出 GoldRequirement                                                            | candidate/reranked/selected/used/verified/cited 均报告所需粒度；多页/多表样例能定位首次丢失阶段                                               |
-| REPORT-HEADLINE-022    | P1     | 未实现                    | controller 与 CRAG 可能执行相同 effective route，当前报告仍可能把 route matrix 重复计入“系统总分”                                                                                                     | headline 只使用实际部署 controller policy；fixed routes 仅作为 baseline/diagnostic                                                            |
-| IDENTITY-PROPERTY-023  | P2     | 未实现                    | 当前保护测试是固定样例，尚无随机多表、多年份、alias、continuation collision 测试                                                                                                                      | property-based round-trip/dedupe 测试覆盖上述组合，identity collision 为 0                                                                    |
-
-## 7. 已从开放表移除的事项
-
-以下问题已有代码不变量和包级回归证明，不再作为独立开放 bug；它们仍需通过
-`CONTRACT-ARTIFACT-001` 验证真实效果：
-
-- raw/canonical ID 混用导致 element score 静默清空；
-- exact-text 去重绕过结构化事实冲突检查；
-- 相同父表 cell 被合并；
-- runtime→benchmark 字段白名单丢失 period/unit/lineage；
-- controller/retrieval/selection 重建不同 QueryPlan；
-- 二轮多个 slot 拼成单一 query；
-- page-first 前置三页硬裁剪；
-- shortlist 冒充 reranker；
-- 全局 structure coverage gate 禁用已有 continuation edge；
-- 两 token overlap 直接判 claim supported；
-- execution citation 从候选首项漂移；
-- cell/operator accuracy 产生负值；
-- evidence-only citation 继续使用 raw evidence ID。
-
-旧的 `FIN-WRAPPED-TABLE-CELL-011` 到 `FIN-CITATION-BACKREF-015` 已合并为
-`FIN-ATOMIC-SUPPLY-011`，因为它们目前共享同一剩余事实：代码路径存在，但尚无本轮
-真实 artifact。继续把它们写成多个“已实现待验证”不会增加诊断信息。
-
-## 8. 下一步与验收分层
-
-下一步只运行两组聚焦验证，不提交全量：
-
-1. QASPER 159×3：重点检查 boolean exact、false abstention、stage coverage 和分段
-   latency。
-2. FinanceBench 20×4：重点检查 all-operands、atomic cell/span、period/unit、
-   deterministic execution、used/verified/cited provenance。
-
-验收按三类分开：
-
-- **Contract correctness：必须 100%。** identity round trip、阶段字段真实性、
-  calculation provenance、citation provenance、指标范围、JSON validity。
-- **Paired regression：用 paired 差异和置信区间。** 部署 route native/semantic、
-  false abstention 和 latency；不要求每个诊断 route 的离散正确数完全相同。
-- **Long-term capability：不是单个基础契约补丁的伪通过条件。** Finance native
-  20%、QASPER semantic 80% 等仍可作为正式发布目标，但不能通过调评分权重或修改
-  gold 宣称本轮已达标。
-
-聚焦 artifact 未通过时，应报告首次失败阶段并只修该契约。禁止重新调 MMR 权重、
-CRAG threshold、prompt 或 Finance 特例来掩盖 identity、slot、stage 或 provenance
-断层。
+1. 先生成 FinanceBench 与 QASPER 各 2–5 条 smoke artifact，逐条检查
+   `candidate → fused → reranked → selected → generation_context → verified_claim_support → emitted_citation`。
+2. smoke 中 identity、slot、stage、citation 任一 contract violation 非 0，则停止
+   并修首次断裂阶段，不调 reranker/MMR/prompt 掩盖问题。
+3. smoke 通过后提交 QASPER 159×3 与 FinanceBench 20×4 聚焦验证。
+4. 聚焦验证通过 contract gates 且部署 route 对冻结基线无显著回退后，才讨论全量
+   benchmark。
+5. `EVIDENCE-SET-BUDGET-024`、`SCORE-CALIBRATION-025`、
+   `REPORT-HEADLINE-022` 和 `RELEASE-GATE-027` 在正式 Phase G 前必须关闭；不能通过
+   修改评分权重或 gold 宣称达标。

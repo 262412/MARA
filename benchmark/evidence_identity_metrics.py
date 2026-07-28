@@ -36,8 +36,6 @@ def evidence_identity_keys(item: dict[str, Any]) -> set[str]:
             keys.add(f"source_element:{alias}:{element}")
         if page and text_hash:
             keys.add(f"source_page_text:{alias}:{page}:{text_hash}")
-    if text_hash:
-        keys.add(f"text:{text_hash}")
     return keys
 
 

@@ -57,10 +57,14 @@ def test_finalizer_cites_executed_finance_evidence_not_first_candidate():
     )
     assert prediction["predicted_citations"] == ["LOCKHEEDMARTIN_2021_10K#page:30"]
     assert [
-        item["evidence_id"] for item in prediction["evidence_metadata"]["used_evidence"]
+        item["evidence_id"]
+        for item in prediction["evidence_metadata"]["execution_operand_evidence"]
     ] == ["working-capital-table"]
+    assert prediction["evidence_metadata"]["emitted_citation_evidence"] == (
+        prediction["evidence_metadata"]["execution_operand_evidence"]
+    )
     assert prediction["evidence_metadata"]["cited_evidence"] == (
-        prediction["evidence_metadata"]["used_evidence"]
+        prediction["evidence_metadata"]["emitted_citation_evidence"]
     )
 
 

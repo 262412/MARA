@@ -1,10 +1,12 @@
 from time import monotonic
+from types import SimpleNamespace
 
 import pytest
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.controller import build_controller_outputs
 from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
+from ktem.docqa.retrieval_rounds import retrieve_with_rounds
 
 
 @pytest.mark.parametrize(
@@ -204,6 +206,45 @@ def test_second_round_retrieves_each_missing_slot_independently():
         "operand:current_liabilities"
     )
     assert lineage_by_id["current-liabilities"][0]["round_id"] == 2
+
+
+def test_quality_retry_query_is_never_empty():
+    queries = []
+
+    def retrieve(request, _decision):
+        queries.append(request.retrieval_query)
+        return {
+            "evidence": [
+                {
+                    "evidence_id": "ambiguous-evidence",
+                    "source_id": "paper",
+                    "page_label": "4",
+                    "text": "The comparison is discussed in the results.",
+                }
+            ]
+        }
+
+    def evaluate(*_args, attempted_retry, **_kwargs):
+        return SimpleNamespace(
+            status="good" if attempted_retry else "ambiguous",
+            retry=not attempted_retry,
+        )
+
+    request = DocQARequest(
+        prompt="Which method performed better?",
+        retrieval_query="",
+        route_policy="doc",
+    )
+    retrieve_with_rounds(
+        request,
+        SimpleNamespace(legacy_route="doc"),
+        retrieve,
+        evaluate=evaluate,
+        retry_poor=False,
+    )
+
+    assert queries == ["", "Which method performed better?"]
+    assert queries[1].strip()
 
 
 def test_missing_required_slot_after_second_round_blocks_generation():

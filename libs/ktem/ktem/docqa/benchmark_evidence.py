@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -49,6 +50,12 @@ class BenchmarkEvidenceRecord:
     element_type_aliases: tuple[str, ...] = ()
     retrieval_lineage: tuple[dict[str, Any], ...] = ()
     score: Any = None
+    bbox: Any = None
+    caption: str = ""
+    ocr_text: str = ""
+    vlm_text: str = ""
+    section_title: str = ""
+    table_title: str = ""
     text: str = ""
     source_backrefs: tuple[str, ...] = ()
 
@@ -127,6 +134,12 @@ def benchmark_evidence_record(item: dict[str, Any]) -> BenchmarkEvidenceRecord:
         element_type_aliases=_first_tuple(item, metadata, "element_type_aliases"),
         retrieval_lineage=_lineage(item, metadata),
         score=item.get("score", metadata.get("score")),
+        bbox=item.get("bbox", metadata.get("bbox")),
+        caption=_first_text(item, metadata, "caption"),
+        ocr_text=_first_text(item, metadata, "ocr_text"),
+        vlm_text=_first_text(item, metadata, "vlm_text"),
+        section_title=_first_text(item, metadata, "section_title"),
+        table_title=_first_text(item, metadata, "table_title"),
         text=_first_text(item, metadata, "text", "content", "snippet"),
         source_backrefs=_source_backrefs(item, metadata),
     )
@@ -177,7 +190,13 @@ def _optional_int(
         value = metadata.get(key)
     if value in (None, ""):
         return None
-    return int(str(value))
+    try:
+        numeric = float(str(value))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numeric) or not numeric.is_integer():
+        return None
+    return int(numeric)
 
 
 def _values(value: Any) -> list[Any]:

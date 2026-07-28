@@ -428,6 +428,8 @@ def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
         "dedupe_trace",
         "query_plan",
         "query_plan_id",
+        "planned_query_plan",
+        "bound_query_plan",
         "evidence_selection_trace",
         "structure_metadata_coverage",
         "slot_coverage",
@@ -437,7 +439,9 @@ def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
         "retrieval_rounds",
         "ranking_trace",
         "selected_evidence",
+        "generation_context_evidence",
         "used_evidence",
+        "stage_aliases",
         "fused_evidence",
     }
     ignored_empty_keys = {"evidence", "evidence_ids", "modality_counts"}
