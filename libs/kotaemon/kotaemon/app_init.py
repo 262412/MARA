@@ -238,15 +238,26 @@ def acquire_admin_password(*, json_output: bool) -> str:
     )
 
 
+def _configured_database_path() -> Path:
+    from ktem.runtime_bootstrap import get_runtime_paths
+
+    runtime_paths = get_runtime_paths()
+    configured_app_data = str(os.environ.get("KH_APP_DATA_DIR", "") or "").strip()
+    app_data_dir = (
+        Path(configured_app_data).expanduser()
+        if configured_app_data
+        else runtime_paths.data_dir
+    )
+    return app_data_dir.resolve() / "user_data" / "sql.db"
+
+
 def provision_password_admin(*, username: str, password: str, force: bool) -> None:
     from ktem.auth.admin_provisioning import provision_password_admin as provision_admin
     from ktem.auth.policy import AuthConfigurationError
-    from ktem.runtime_bootstrap import get_runtime_paths
 
     try:
-        database_path = get_runtime_paths().data_dir / "user_data" / "sql.db"
         provision_admin(
-            database_path=database_path,
+            database_path=_configured_database_path(),
             username=username,
             password=password,
             force=force,
@@ -258,12 +269,10 @@ def provision_password_admin(*, username: str, password: str, force: bool) -> No
 def preflight_password_admin(*, username: str, password: str, force: bool) -> None:
     from ktem.auth.admin_provisioning import preflight_password_admin as preflight_admin
     from ktem.auth.policy import AuthConfigurationError
-    from ktem.runtime_bootstrap import get_runtime_paths
 
     try:
-        database_path = get_runtime_paths().data_dir / "user_data" / "sql.db"
         preflight_admin(
-            database_path=database_path,
+            database_path=_configured_database_path(),
             username=username,
             password=password,
             force=force,
