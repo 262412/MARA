@@ -1,7 +1,7 @@
 from ktem.docqa.m3docrag import select_page_first_evidence
 
 
-def test_page_first_evidence_prunes_non_selected_pages_and_caps_unpaged_items():
+def test_page_first_evidence_ranks_pages_without_pruning_candidates():
     items = [
         {
             "evidence_id": "text-1",
@@ -54,9 +54,38 @@ def test_page_first_evidence_prunes_non_selected_pages_and_caps_unpaged_items():
         max_unpaged_items=1,
     )
 
-    assert [item["evidence_id"] for item in selected] == [
-        "text-2",
-        "page-image-2",
-        "graph-1",
+    assert selected == items
+    assert trace["selected_pages"] == [{"source_id": "file-b", "page_label": "5"}]
+    assert trace["pruned_item_count"] == 0
+    assert trace["candidate_preservation"] == "all"
+
+
+def test_page_rank_does_not_reward_duplicate_chunk_count_linearly():
+    critical = {
+        "evidence_id": "critical-table",
+        "source_id": "report",
+        "page_label": "8",
+        "modality": "table",
+        "text": "Revenue was 42 million.",
+        "metadata": {"hybrid_fusion_score": 0.9},
+    }
+    duplicated = [
+        {
+            "evidence_id": f"duplicate-{index}",
+            "source_id": "report",
+            "page_label": "2",
+            "modality": "text",
+            "text": "Revenue background.",
+            "metadata": {"hybrid_fusion_score": 0.1},
+        }
+        for index in range(12)
     ]
-    assert trace["pruned_item_count"] == 3
+
+    selected, trace = select_page_first_evidence(
+        "What was revenue?",
+        [*duplicated, critical],
+        max_pages=1,
+    )
+
+    assert len(selected) == 13
+    assert trace["selected_pages"] == [{"source_id": "report", "page_label": "8"}]

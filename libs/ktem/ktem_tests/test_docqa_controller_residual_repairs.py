@@ -54,3 +54,34 @@ def test_execute_controller_turn_retries_element_then_falls_back_to_text():
     assert result.controller_decision.legacy_route == "doc_text"
     assert result.controller_trace[0]["failed_retrieval_rounds"] == 2
     assert result.controller_trace[0]["failed_slot_coverage"] is None
+
+
+def test_route_switch_uses_registered_defaults_when_allowed_routes_is_unset():
+    calls = []
+
+    def retrieve(_request, decision):
+        calls.append(decision.legacy_route)
+        if decision.legacy_route == "doc_element":
+            return {}
+        return {
+            "evidence": [
+                {
+                    "evidence_id": "text-1",
+                    "file_id": "file-1",
+                    "page_label": "3",
+                    "text": "The chair is Ada.",
+                }
+            ]
+        }
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt="Who is the chair?",
+            route_policy="element",
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: "The chair is Ada.",
+    )
+
+    assert calls == ["doc_element", "doc_element", "doc_text"]
+    assert result.controller_decision.legacy_route == "doc_text"

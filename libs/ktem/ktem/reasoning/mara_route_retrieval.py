@@ -5,6 +5,7 @@ import re
 from typing import Any, Callable
 
 from ktem.docqa.element_retriever import rank_element_records
+from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.graph_index import (
     graph_context_evidence_metadata,
     select_graph_index_evidence,
@@ -377,7 +378,7 @@ def _element_metadata(
         plan,
         candidate_limit=ELEMENT_RANK_CANDIDATE_LIMIT,
     )
-    selected_ids = {str(item.get("evidence_id") or "").strip() for item in selected}
+    selected_ids = {identity_of(item).key for item in selected}
     return {
         "requested_modalities": list(understanding.get("modalities", [])),
         "modality_counts": _element_modality_counts(selected),

@@ -14,6 +14,7 @@ from .calculation_plan import (
     execute_calculation_plan,
     verify_calculation_plan,
 )
+from .evidence_identity import identity_of
 from .finance_calculation_binding import atomic_evidence_id as _atomic_evidence_id
 from .finance_calculation_binding import atomic_item_value as _atomic_item_value
 from .finance_calculation_binding import decimal_values as _decimal_values
@@ -214,10 +215,15 @@ def _operand_from_cell(
     scale_evidence_id = ""
     if not scale:
         scale, scale_evidence_id = _source_scale_evidence(item, evidence_items)
+    scale_evidence_identity = _identity_for_raw_id(
+        scale_evidence_id,
+        evidence_items,
+    )
     bound_value = candidate_value if candidate_value == cell.value else cell.value
     return CalculationOperand(
         operand_id=name,
         evidence_id=cell.evidence_id,
+        evidence_identity=_item_identity(item, cell_id=cell.cell_id),
         value=bound_value,
         unit=cell.unit,
         scale=scale,
@@ -229,6 +235,7 @@ def _operand_from_cell(
         row_label=cell.row_label,
         column_label=cell.column_label,
         scale_evidence_id=scale_evidence_id,
+        scale_evidence_identity=scale_evidence_identity,
         statement_kind=cell.statement_kind,
         financial_scope=cell.financial_scope,
     )
@@ -255,6 +262,7 @@ def _operand_from_item(
     return CalculationOperand(
         operand_id=name,
         evidence_id=_item_id(item),
+        evidence_identity=_item_identity(item),
         value=bound_value if bound_value is not None else value,
         unit=_item_dimension(item, "unit"),
         scale=scale,
@@ -266,9 +274,46 @@ def _operand_from_item(
         period_kind=period_kind or _item_dimension(item, "period_kind"),
         entity=_item_dimension(item, "entity"),
         scale_evidence_id=scale_evidence_id,
+        scale_evidence_identity=_identity_for_raw_id(
+            scale_evidence_id,
+            evidence_items,
+        ),
         statement_kind=statement_kind,
         financial_scope=financial_scope,
     )
+
+
+def _item_identity(
+    item: dict[str, Any] | None,
+    *,
+    cell_id: str = "",
+) -> str:
+    if item is None:
+        return ""
+    payload = dict(item)
+    payload.pop("identity", None)
+    payload.pop("canonical_id", None)
+    if cell_id:
+        payload["cell_id"] = cell_id
+        payload["evidence_level"] = "cell"
+    return identity_of(payload).key
+
+
+def _identity_for_raw_id(
+    evidence_id: str,
+    evidence_items: list[dict[str, Any]],
+) -> str:
+    if not evidence_id:
+        return ""
+    item = next(
+        (
+            candidate
+            for candidate in evidence_items
+            if _item_id(candidate) == evidence_id
+        ),
+        None,
+    )
+    return _item_identity(item)
 
 
 def _steps(

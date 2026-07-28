@@ -29,29 +29,7 @@ def calculation_metrics(
         if operands
         else None
     )
-    cell_errors = [
-        error
-        for error in errors
-        if any(
-            term in error
-            for term in (
-                "evidence_missing",
-                "cell_mismatch",
-                "value_mismatch",
-                "period_mismatch",
-            )
-        )
-    ]
-    operator_errors = [
-        error
-        for error in errors
-        if "operator" in error or "step_input" in error or "arity" in error
-    ]
-    unit_errors = [
-        error
-        for error in errors
-        if any(term in error for term in ("unit", "scale", "currency"))
-    ]
+    cell_errors, operator_errors, unit_errors = _categorized_errors(errors)
     rendered_dimension_error = _rendered_dimension_error(plan, rendered_answer)
     execution_succeeded = bool(
         verification.get("valid") and execution.get("status") == "ok"
@@ -68,8 +46,12 @@ def calculation_metrics(
         "verified_slot_coverage": (
             len(verified_required) / len(required_slots) if required_slots else None
         ),
-        "cell_accuracy": 1.0 - len(cell_errors) / len(operands) if operands else None,
-        "operator_accuracy": 1.0 - len(operator_errors) / len(steps) if steps else 1.0,
+        "cell_accuracy": (
+            _bounded_accuracy(len(cell_errors), len(operands)) if operands else None
+        ),
+        "operator_accuracy": (
+            _bounded_accuracy(len(operator_errors), len(steps)) if steps else 1.0
+        ),
         "program_accuracy": float(bool(verification.get("valid"))),
         "execution_accuracy": float(execution.get("status") == "ok"),
         **_explicit_stage_metrics(
@@ -84,6 +66,35 @@ def calculation_metrics(
             else None
         ),
     }
+
+
+def _categorized_errors(errors: list[str]) -> tuple[list[str], list[str], list[str]]:
+    cell_terms = (
+        "evidence_missing",
+        "cell_mismatch",
+        "value_mismatch",
+        "period_mismatch",
+    )
+    cell_errors = [
+        error for error in errors if any(term in error for term in cell_terms)
+    ]
+    operator_errors = [
+        error
+        for error in errors
+        if "operator" in error or "step_input" in error or "arity" in error
+    ]
+    unit_errors = [
+        error
+        for error in errors
+        if any(term in error for term in ("unit", "scale", "currency"))
+    ]
+    return cell_errors, operator_errors, unit_errors
+
+
+def _bounded_accuracy(error_count: int, item_count: int) -> float:
+    if item_count <= 0:
+        return 0.0
+    return max(0.0, min(1.0, 1.0 - error_count / item_count))
 
 
 def _explicit_stage_metrics(

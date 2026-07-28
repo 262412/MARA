@@ -5,9 +5,9 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .evidence import build_evidence_bundle
-from .query_planning import build_query_plan, request_planning_question
+from .query_planning import ensure_request_query_plan, request_planning_question
 from .retrieval_adequacy import retrieval_adequacy_issue
-from .verification import VerifyDecision, verify_decision
+from .verification import VerifyDecision, verify_decision, with_verification_evidence
 from .workflow import build_workflow_plan
 from .workflow import executor_registry as workflow_executor_registry
 from .workflow import planner_payload_from_trace
@@ -158,6 +158,10 @@ def build_controller_outputs(
     evidence_metadata: dict[str, Any],
     answer: str = "",
 ) -> dict[str, Any]:
+    ensure_request_query_plan(
+        request,
+        planner_payload=planner_payload_from_trace(agent_trace or []),
+    )
     route_decision = _route_decision(request, agent_trace)
     workflow_plan = build_workflow_plan(
         route=route_decision.route,
@@ -184,6 +188,7 @@ def build_controller_outputs(
         evidence_bundle,
         answer,
     )
+    evidence_bundle = with_verification_evidence(evidence_bundle, verify_decision)
     controller_trace = ControllerTrace(
         [
             {
@@ -195,6 +200,7 @@ def build_controller_outputs(
             {
                 "stage": "workflow_plan",
                 "strategy": workflow_plan["strategy"],
+                "execution_control": workflow_plan["execution_control"],
                 "step_count": len(workflow_plan["steps"]),
                 "total_cost_units": workflow_plan["total_cost_units"],
             },
@@ -274,6 +280,18 @@ def evaluate_retrieval_quality(
             retry=False,
         )
     if _evidence_count(evidence_metadata) > 0:
+        missing_required_slots = int(
+            evidence_metadata.get("missing_required_slot_count") or 0
+        )
+        if missing_required_slots:
+            return RetrieveDecision(
+                status="poor" if attempted_retry else "ambiguous",
+                reason=(
+                    "Retrieved evidence does not fill "
+                    f"{missing_required_slots} required QueryPlan slot(s)."
+                ),
+                retry=not attempted_retry,
+            )
         adequacy_issue = retrieval_adequacy_issue(
             prompt,
             evidence_metadata,
@@ -409,13 +427,18 @@ def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
         "schema_version",
         "dedupe_trace",
         "query_plan",
+        "query_plan_id",
         "evidence_selection_trace",
         "structure_metadata_coverage",
         "slot_coverage",
         "missing_required_slot_count",
         "second_round_queries",
+        "second_round_requests",
         "retrieval_rounds",
         "ranking_trace",
+        "selected_evidence",
+        "used_evidence",
+        "fused_evidence",
     }
     ignored_empty_keys = {"evidence", "evidence_ids", "modality_counts"}
     for key, value in evidence_metadata.items():
@@ -465,16 +488,7 @@ def _route_reason(policy: str, route: str) -> str:
 
 
 def _auto_route(request: Any) -> str:
-    plan = build_query_plan(
-        request_planning_question(request),
-        answer_type=str(
-            getattr(request, "answer_type", None)
-            or getattr(request, "task_type", None)
-            or ""
-        ),
-        verification_domain=str(getattr(request, "verification_domain", None) or ""),
-        planner_payload=getattr(request, "query_plan", None),
-    )
+    plan = ensure_request_query_plan(request)
     if plan.answer_type == "numeric" or plan.question_type in {
         "cross_page",
         "multi_period_numeric",

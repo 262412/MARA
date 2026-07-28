@@ -4,17 +4,23 @@ import re
 from collections import Counter
 from typing import Any
 
+from .evidence_field_values import item_metadata_text, retrieval_lineage_values
 from .evidence_identity import (
     EVIDENCE_BUNDLE_SCHEMA_VERSION,
     canonicalize_and_dedupe_evidence,
+    identity_of,
 )
 from .evidence_locators import merged_locator_metadata, source_alias_values
 from .evidence_planning import select_planned_evidence
-from .evidence_ranking_trace import ranking_trace
+from .evidence_ranking_trace import materialize_reranked_candidates
 from .evidence_schema import EvidenceBundle, EvidenceElement
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
-from .query_planning import build_query_plan, request_planning_question
+from .query_planning import (
+    ensure_request_query_plan,
+    request_planning_question,
+    retrieval_budget,
+)
 
 MAX_PAGE_IMAGE_EVIDENCE_ITEMS = 20
 MAX_ELEMENT_EVIDENCE_ITEMS = 20
@@ -26,8 +32,10 @@ def build_evidence_bundle(
     request: Any,
     evidence_metadata: dict[str, Any],
 ) -> EvidenceBundle:
+    query_plan = ensure_request_query_plan(request)
     items = _initial_evidence_items(route, request, evidence_metadata)
     deduped, dedupe_trace = canonicalize_and_dedupe_evidence(items)
+    canonical_candidates = list(deduped)
     m3docrag_trace: dict[str, Any] | None = None
     hybrid_fusion_trace: dict[str, Any] | None = None
     if route == "doc_page_image":
@@ -36,34 +44,46 @@ def build_evidence_bundle(
         planning_question = request_planning_question(request)
         deduped, hybrid_fusion_trace = fuse_hybrid_evidence(
             planning_question,
-            deduped,
+            canonical_candidates,
             strategy=str(evidence_metadata.get("hybrid_fusion_strategy") or ""),
             learned_ranker=evidence_metadata.get("hybrid_fusion_ranker"),
             domain=getattr(request, "verification_domain", None),
         )
-    canonical_candidates = list(deduped[:MAX_RERANK_CANDIDATES])
-    reranked_candidates = list(canonical_candidates[:30])
+    fused_candidates = list(deduped[:MAX_RERANK_CANDIDATES])
+    reranked_candidates, ranking_metadata = materialize_reranked_candidates(
+        fused_candidates,
+        evidence_metadata,
+        limit=30,
+    )
+    selection_candidates = _reranked_with_remaining_candidates(
+        reranked_candidates,
+        fused_candidates,
+    )
     if route == "hybrid":
         deduped, m3docrag_trace = select_page_first_evidence(
             planning_question,
-            canonical_candidates,
+            selection_candidates,
+            max_pages=retrieval_budget(query_plan)["max_pages"],
         )
+    else:
+        deduped = selection_candidates
     deduped, planning_metadata = select_planned_evidence(request, deduped)
     metadata = dict(evidence_metadata)
     metadata["schema_version"] = EVIDENCE_BUNDLE_SCHEMA_VERSION
     metadata["dedupe_trace"] = dedupe_trace
     metadata["canonical_candidate_count"] = len(canonical_candidates)
     metadata["candidate_evidence"] = canonical_candidates
-    metadata["reranked_candidate_count"] = len(reranked_candidates)
-    metadata["reranked_evidence"] = reranked_candidates
-    metadata["ranking_trace"] = ranking_trace(
-        candidate_limit=MAX_RERANK_CANDIDATES,
-        input_count=len(canonical_candidates),
-        output_count=len(reranked_candidates),
-    )
+    if route == "hybrid":
+        metadata["fused_evidence"] = fused_candidates
+    if reranked_candidates is not None:
+        metadata["reranked_candidate_count"] = len(reranked_candidates)
+        metadata["reranked_evidence"] = reranked_candidates
+    metadata["ranking_trace"] = ranking_metadata
     metadata.update(merged_locator_metadata(metadata, deduped))
     metadata["modality_counts"] = dict(Counter(item["modality"] for item in deduped))
     metadata["evidence"] = deduped
+    metadata["selected_evidence"] = deduped
+    metadata["used_evidence"] = deduped
     metadata.update(planning_metadata)
     if m3docrag_trace is not None:
         metadata["m3docrag_trace"] = m3docrag_trace
@@ -123,11 +143,7 @@ def _uses_element_index(route: str, request: Any) -> bool:
         return True
     if route not in {"doc", "doc_text"}:
         return False
-    plan = build_query_plan(
-        request_planning_question(request),
-        answer_type=str(getattr(request, "answer_type", "") or ""),
-        verification_domain=str(getattr(request, "verification_domain", "") or ""),
-    )
+    plan = ensure_request_query_plan(request)
     return bool(plan.constraints.get("requires_structure"))
 
 
@@ -158,12 +174,19 @@ def _with_retriever_score(
     scores: dict[str, Any],
     metadata_key: str,
 ) -> dict[str, Any]:
-    evidence_id = str(item.get("evidence_id") or "").strip()
-    if evidence_id not in scores:
+    score_keys = (
+        identity_of(item).key,
+        str(item.get("cell_id") or "").strip(),
+        str(item.get("evidence_id") or "").strip(),
+        str(item.get("canonical_id") or "").strip(),
+        str(item.get("element_id") or "").strip(),
+    )
+    score_key = next((key for key in score_keys if key and key in scores), "")
+    if not score_key:
         return item
     scored = dict(item)
     metadata = dict(scored.get("metadata") or {})
-    metadata[metadata_key] = float(scores[evidence_id])
+    metadata[metadata_key] = float(scores[score_key])
     scored["metadata"] = metadata
     return scored
 
@@ -220,13 +243,13 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
             item.get("column_label") or metadata.get("column_label") or ""
         ).strip(),
         period=str(item.get("period") or metadata.get("period") or "").strip(),
-        period_kind=_item_metadata_text(item, metadata, "period_kind"),
-        value=_item_metadata_text(item, metadata, "value"),
+        period_kind=item_metadata_text(item, metadata, "period_kind"),
+        value=item_metadata_text(item, metadata, "value"),
         unit=str(item.get("unit") or metadata.get("unit") or "").strip(),
         scale=str(item.get("scale") or metadata.get("scale") or "").strip(),
         currency=str(item.get("currency") or metadata.get("currency") or "").strip(),
-        statement_kind=_item_metadata_text(item, metadata, "statement_kind"),
-        financial_scope=_item_metadata_text(item, metadata, "financial_scope"),
+        statement_kind=item_metadata_text(item, metadata, "statement_kind"),
+        financial_scope=item_metadata_text(item, metadata, "financial_scope"),
         continuation_id=str(
             item.get("continuation_id")
             or metadata.get("continuation_id")
@@ -237,6 +260,7 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         chunk_end=_optional_int(item.get("chunk_end", metadata.get("chunk_end"))),
         normalized_text_hash=str(item.get("normalized_text_hash") or "").strip(),
         duplicate_evidence_ids=_string_values(item.get("duplicate_evidence_ids")),
+        retrieval_lineage=retrieval_lineage_values(item, metadata),
         bbox=item.get("bbox"),
         caption=str(item.get("caption") or "").strip(),
         text=str(item.get("text") or item.get("content") or "").strip(),
@@ -246,14 +270,6 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         evidence_level=str(item.get("evidence_level") or "page").strip(),
         metadata=metadata,
     ).as_dict()
-
-
-def _item_metadata_text(
-    item: dict[str, Any],
-    metadata: dict[str, Any],
-    field: str,
-) -> str:
-    return str(item.get(field) or metadata.get(field) or "").strip()
 
 
 def _coerced_locator_fields(
@@ -417,6 +433,19 @@ def _graph_page_backrefs(support_pages: Any) -> list[str]:
 
 def _dedupe_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return canonicalize_and_dedupe_evidence(items)[0]
+
+
+def _reranked_with_remaining_candidates(
+    reranked: list[dict[str, Any]] | None,
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if reranked is None:
+        return candidates
+    reranked_ids = {identity_of(item).key for item in reranked}
+    return [
+        *reranked,
+        *(item for item in candidates if identity_of(item).key not in reranked_ids),
+    ]
 
 
 def _string_values(value: Any) -> list[str]:

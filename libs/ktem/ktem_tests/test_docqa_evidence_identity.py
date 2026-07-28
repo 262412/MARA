@@ -1,6 +1,11 @@
+import pytest
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.evidence import build_evidence_bundle
-from ktem.docqa.evidence_identity import canonicalize_and_dedupe_evidence
+from ktem.docqa.evidence_identity import (
+    EvidenceIdentityConflictError,
+    canonicalize_and_dedupe_evidence,
+    identity_of,
+)
 
 
 def test_structure_dedup_merges_same_element_and_preserves_all_backrefs():
@@ -37,7 +42,7 @@ def test_structure_dedup_merges_same_element_and_preserves_all_backrefs():
     assert trace["structure_duplicate_count"] == 1
 
 
-def test_text_dedup_merges_exact_text_across_sources_without_losing_provenance():
+def test_identical_text_across_sources_remains_distinct():
     items, trace = canonicalize_and_dedupe_evidence(
         [
             {
@@ -57,13 +62,104 @@ def test_text_dedup_merges_exact_text_across_sources_without_losing_provenance()
         ]
     )
 
-    assert len(items) == 1
-    assert items[0]["source_backrefs"] == [
-        "filing-a#page:2",
-        "filing-b#page:8",
+    assert len(items) == 2
+    assert [item["source_backrefs"] for item in items] == [
+        ["filing-a#page:2"],
+        ["filing-b#page:8"],
     ]
-    assert items[0]["metadata"]["dedupe_source_ids"] == ["filing-a", "filing-b"]
-    assert trace["exact_text_duplicate_count"] == 1
+    assert trace["exact_text_duplicate_count"] == 0
+
+
+def test_cells_with_same_parent_remain_distinct():
+    items, trace = canonicalize_and_dedupe_evidence(
+        [
+            {
+                "evidence_id": "table-1",
+                "source_id": "report",
+                "page_label": "10",
+                "element_id": "table-1",
+                "table_id": "table-1",
+                "cell_id": "table-1#row:revenue#column:2022",
+                "row_index": 2,
+                "column_index": 1,
+                "period": "2022",
+                "value": "10",
+                "text": "Revenue 2022 10",
+            },
+            {
+                "evidence_id": "table-1",
+                "source_id": "report",
+                "page_label": "10",
+                "element_id": "table-1",
+                "table_id": "table-1",
+                "cell_id": "table-1#row:revenue#column:2023",
+                "row_index": 2,
+                "column_index": 2,
+                "period": "2023",
+                "value": "12",
+                "text": "Revenue 2023 12",
+            },
+        ]
+    )
+
+    assert len(items) == 2
+    assert {identity_of(item).local_id for item in items} == {
+        "table-1#row:revenue#column:2022",
+        "table-1#row:revenue#column:2023",
+    }
+    assert {identity_of(item).kind for item in items} == {"cell"}
+    assert trace["structure_duplicate_count"] == 0
+
+
+def test_dedupe_rejects_same_identity_with_conflicting_structured_fact():
+    with pytest.raises(EvidenceIdentityConflictError, match="value"):
+        canonicalize_and_dedupe_evidence(
+            [
+                {
+                    "evidence_id": "dense",
+                    "source_id": "report",
+                    "cell_id": "revenue-2023",
+                    "period": "2023",
+                    "value": "10",
+                    "text": "Revenue 2023 10",
+                },
+                {
+                    "evidence_id": "sparse",
+                    "source_id": "report",
+                    "cell_id": "revenue-2023",
+                    "period": "2023",
+                    "value": "12",
+                    "text": "Revenue 2023 12 million",
+                },
+            ]
+        )
+
+
+def test_dedupe_never_overwrites_representative_structured_text():
+    items, _trace = canonicalize_and_dedupe_evidence(
+        [
+            {
+                "evidence_id": "dense",
+                "source_id": "report",
+                "cell_id": "revenue-2023",
+                "period": "2023",
+                "value": "10",
+                "text": "Revenue 2023 10",
+            },
+            {
+                "evidence_id": "sparse",
+                "source_id": "report",
+                "cell_id": "revenue-2023",
+                "period": "2023",
+                "value": "10",
+                "text": "Revenue for fiscal year 2023 was 10 million.",
+            },
+        ]
+    )
+
+    assert len(items) == 1
+    assert items[0]["text"] == "Revenue 2023 10"
+    assert items[0]["normalized_text_hash"]
 
 
 def test_semantic_dedup_does_not_merge_conflicting_numbers():
@@ -88,7 +184,7 @@ def test_semantic_dedup_does_not_merge_conflicting_numbers():
 
     assert len(items) == 2
     assert trace["semantic_duplicate_count"] == 0
-    assert trace["conflict_guard_count"] == 1
+    assert trace["conflict_guard_count"] == 0
 
 
 def test_overlapping_chunks_merge_when_same_parent_and_overlap_is_high():
@@ -161,3 +257,100 @@ def test_evidence_bundle_preserves_dataset_parser_and_cell_identity_fields():
     assert item["period"] == "2021"
     assert item["scale"] == "million"
     assert item["currency"] == "USD"
+
+
+def test_bundle_does_not_publish_reranked_stage_without_backend_execution():
+    bundle = build_evidence_bundle(
+        "doc",
+        DocQARequest(prompt="What happened?", route_policy="doc"),
+        {
+            "evidence": [
+                {
+                    "evidence_id": "chunk-1",
+                    "source_id": "report",
+                    "page_label": "2",
+                    "text": "Revenue increased.",
+                }
+            ]
+        },
+    )
+
+    assert "reranked_evidence" not in bundle.metadata
+    assert bundle.metadata["ranking_trace"]["backend_execution"] is False
+
+
+def test_bundle_publishes_reranked_stage_when_scores_have_backend_lineage():
+    bundle = build_evidence_bundle(
+        "doc",
+        DocQARequest(prompt="What happened?", route_policy="doc"),
+        {
+            "reranker_backend": "local-bge-reranker-v2-m3",
+            "evidence": [
+                {
+                    "evidence_id": "low",
+                    "source_id": "report",
+                    "page_label": "2",
+                    "text": "Background.",
+                    "metadata": {"reranking_score": 0.1},
+                },
+                {
+                    "evidence_id": "high",
+                    "source_id": "report",
+                    "page_label": "3",
+                    "text": "Revenue increased.",
+                    "metadata": {"reranking_score": 0.9},
+                },
+            ],
+        },
+    )
+
+    assert [item["evidence_id"] for item in bundle.metadata["reranked_evidence"]] == [
+        "high",
+        "low",
+    ]
+    assert bundle.metadata["ranking_trace"]["backend_execution"] is True
+    assert bundle.metadata["ranking_trace"]["backend"] == ("local-bge-reranker-v2-m3")
+
+
+def test_required_slot_can_restore_candidate_below_real_reranker_output_cutoff():
+    evidence = [
+        {
+            "evidence_id": f"background-{index}",
+            "source_id": "report",
+            "page_label": str(index),
+            "text": f"Background material {index}.",
+            "metadata": {"reranking_score": 1.0 - index / 100},
+        }
+        for index in range(35)
+    ]
+    evidence.append(
+        {
+            "evidence_id": "revenue-atom",
+            "source_id": "report",
+            "page_label": "40",
+            "text": "Revenue was 42 million.",
+            "metadata": {"reranking_score": 0.01},
+        }
+    )
+
+    bundle = build_evidence_bundle(
+        "doc",
+        DocQARequest(
+            prompt="What was revenue?",
+            task_type="numeric",
+            route_policy="doc",
+        ),
+        {
+            "reranker_backend": "local-bge-reranker-v2-m3",
+            "evidence": evidence,
+        },
+    )
+
+    assert "revenue-atom" not in {
+        item["evidence_id"] for item in bundle.metadata["reranked_evidence"]
+    }
+    assert "revenue-atom" in {item["evidence_id"] for item in bundle.items}
+    assert (
+        bundle.metadata["evidence_selection_trace"]["required_slot_candidates_restored"]
+        == 1
+    )

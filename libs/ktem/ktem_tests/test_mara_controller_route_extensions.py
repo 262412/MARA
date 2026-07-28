@@ -441,8 +441,8 @@ def test_mara_element_route_ranks_element_index_by_query():
     assert (
         metadata["element_index"][0]["evidence_id"] == _element_record()["evidence_id"]
     )
-    assert metadata["element_retriever_scores"][_element_record()["evidence_id"]] > (
-        metadata["element_retriever_scores"]["element:file-b:5:figure-1"]
+    assert metadata["element_retriever_scores"]["element:file-b:table-1"] > (
+        metadata["element_retriever_scores"]["element:file-b:figure-1"]
     )
     assert metadata["element_index"][0]["metadata"]["element_retriever"] == (
         "local_element_retriever"

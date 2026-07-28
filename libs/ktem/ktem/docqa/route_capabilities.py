@@ -29,8 +29,13 @@ def route_switch_candidate_evaluation(
     request: Any,
     current_route: str,
 ) -> tuple[list[str], list[dict[str, str]]]:
-    allowed_routes = list(getattr(request, "allowed_routes", []) or [])
     preferred_order = _cost_aware_route_switch_order(request)
+    configured_routes = getattr(request, "allowed_routes", None)
+    allowed_routes = (
+        list(configured_routes)
+        if configured_routes is not None
+        else list(preferred_order)
+    )
     allowed = [route for route in preferred_order if route in allowed_routes]
     allowed.extend(route for route in allowed_routes if route not in allowed)
     eligible = [

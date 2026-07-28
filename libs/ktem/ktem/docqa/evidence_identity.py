@@ -4,6 +4,7 @@ import hashlib
 import math
 import re
 import unicodedata
+from dataclasses import asdict, dataclass
 from typing import Any
 
 EVIDENCE_BUNDLE_SCHEMA_VERSION = "evidence_bundle.v2"
@@ -20,6 +21,128 @@ _UNIT_RE = re.compile(
 )
 _POSITIVE = {"increase", "increased", "rise", "rose", "growth", "higher", "up"}
 _NEGATIVE = {"decrease", "decreased", "decline", "declined", "lower", "down"}
+_STRUCTURED_FACT_FIELDS = (
+    "cell_id",
+    "table_id",
+    "row_index",
+    "column_index",
+    "row_label",
+    "column_label",
+    "period",
+    "period_kind",
+    "value",
+    "unit",
+    "scale",
+    "currency",
+    "statement_kind",
+    "financial_scope",
+)
+
+
+class EvidenceIdentityConflictError(ValueError):
+    """Raised when one immutable evidence atom has conflicting structured facts."""
+
+
+@dataclass(frozen=True)
+class EvidenceIdentity:
+    source_id: str
+    kind: str
+    local_id: str
+
+    @property
+    def key(self) -> str:
+        return ":".join((self.kind, self.source_id, self.local_id))
+
+    def as_dict(self) -> dict[str, str]:
+        return asdict(self)
+
+
+def evidence_aliases(item: dict[str, Any]) -> set[str]:
+    return {
+        value
+        for value in (
+            identity_of(item).key,
+            str(item.get("canonical_id") or "").strip(),
+            str(item.get("cell_id") or "").strip(),
+            str(item.get("span_id") or "").strip(),
+            str(item.get("element_id") or "").strip(),
+            str(item.get("evidence_id") or "").strip(),
+            *(str(value).strip() for value in item.get("duplicate_evidence_ids") or []),
+        )
+        if value
+    }
+
+
+def identity_of(item: dict[str, Any]) -> EvidenceIdentity:
+    metadata = _merged_metadata(item)
+    existing = item.get("identity")
+    if isinstance(existing, dict):
+        source_id = str(existing.get("source_id") or "").strip()
+        kind = str(existing.get("kind") or "").strip()
+        local_id = str(existing.get("local_id") or "").strip()
+        if kind and local_id:
+            return EvidenceIdentity(source_id, kind, local_id)
+
+    source_id = _first(item, metadata, "source_id", "file_id", "document_id")
+    cell_id = _first(item, metadata, "cell_id")
+    if cell_id:
+        return EvidenceIdentity(source_id, "cell", cell_id)
+
+    evidence_level = _first(item, metadata, "evidence_level").lower()
+    span_id = _first(item, metadata, "span_id")
+    if evidence_level == "span" and span_id:
+        return EvidenceIdentity(source_id, "span", span_id)
+
+    table_id = _first(item, metadata, "table_id")
+    row_index = _optional_int(_value(item, metadata, "row_index", "row"))
+    column_index = _optional_int(
+        _value(item, metadata, "column_index", "column", "col")
+    )
+    if table_id and row_index is not None and column_index is not None:
+        period_kind = _first(item, metadata, "period_kind")
+        local_id = f"{table_id}:{period_kind}:{row_index}:{column_index}"
+        return EvidenceIdentity(source_id, "cell", local_id)
+
+    element_id = _first(item, metadata, "element_id")
+    if evidence_level == "span" and element_id:
+        return EvidenceIdentity(source_id, "span", element_id)
+    if element_id:
+        return EvidenceIdentity(source_id, "element", element_id)
+
+    page_label = _first(
+        item,
+        metadata,
+        "page_label",
+        "page_number",
+        "page",
+        "page_idx",
+    )
+    bbox = _quantized_bbox(item.get("bbox", metadata.get("bbox")))
+    if page_label and bbox:
+        return EvidenceIdentity(source_id, "element", f"{page_label}:{bbox}")
+
+    chunk_start = _optional_int(
+        _value(item, metadata, "chunk_start", "start_char", "start")
+    )
+    chunk_end = _optional_int(_value(item, metadata, "chunk_end", "end_char", "end"))
+    if page_label and chunk_start is not None and chunk_end is not None:
+        return EvidenceIdentity(
+            source_id,
+            "chunk",
+            f"{page_label}:{chunk_start}:{chunk_end}",
+        )
+
+    evidence_id = _first(item, metadata, "evidence_id", "doc_id")
+    if evidence_id:
+        return EvidenceIdentity(source_id, "evidence", evidence_id)
+
+    text_hash = str(item.get("normalized_text_hash") or "").strip()
+    if not text_hash:
+        text_hash = _normalized_text_hash(_item_text(item))
+    local_id = ":".join(value for value in (page_label, text_hash) if value)
+    if local_id:
+        return EvidenceIdentity(source_id, "text", local_id)
+    raise ValueError("Evidence record has no stable identity fields.")
 
 
 def canonicalize_and_dedupe_evidence(
@@ -94,8 +217,10 @@ def canonicalize_evidence_item(item: dict[str, Any]) -> dict[str, Any]:
     output["bbox"] = item.get("bbox", metadata.get("bbox"))
     output["source_backrefs"] = _source_backrefs(output)
     output["duplicate_evidence_ids"] = _string_list(item.get("duplicate_evidence_ids"))
-    output["canonical_id"] = _canonical_id(output)
     output["metadata"] = metadata
+    identity = identity_of(output)
+    output["identity"] = identity.as_dict()
+    output["canonical_id"] = identity.key
     return output
 
 
@@ -109,7 +234,14 @@ def _find_duplicate(
             return existing, "structure", conflicts
     text_hash = str(item.get("normalized_text_hash") or "")
     for existing in selected:
-        if text_hash and text_hash == existing.get("normalized_text_hash"):
+        if (
+            text_hash
+            and text_hash == existing.get("normalized_text_hash")
+            and _text_dedupe_allowed(item, existing)
+        ):
+            if _facts_conflict(item, existing):
+                conflicts += 1
+                continue
             return existing, "exact_text", conflicts
     for existing in selected:
         if _overlapping_chunks(item, existing):
@@ -118,12 +250,17 @@ def _find_duplicate(
                 continue
             return existing, "overlap", conflicts
     for existing in selected:
-        if _minhash_similarity(item, existing) >= MINHASH_THRESHOLD:
+        if (
+            _near_duplicate_allowed(item, existing)
+            and _minhash_similarity(item, existing) >= MINHASH_THRESHOLD
+        ):
             if _facts_conflict(item, existing):
                 conflicts += 1
                 continue
             return existing, "minhash", conflicts
     for existing in selected:
+        if not _near_duplicate_allowed(item, existing):
+            continue
         if _cosine_similarity(item, existing) < SEMANTIC_THRESHOLD:
             continue
         if _facts_conflict(item, existing):
@@ -134,37 +271,15 @@ def _find_duplicate(
 
 
 def _structure_key(item: dict[str, Any]) -> tuple[Any, ...] | None:
-    source = str(item.get("source_id") or "")
-    element = str(item.get("element_id") or "")
-    if source and element:
-        return ("element", source, element)
-    table = str(item.get("table_id") or "")
-    row = item.get("row_index")
-    column = item.get("column_index")
-    if source and table and row is not None and column is not None:
-        return ("cell", source, table, row, column)
-    bbox = _quantized_bbox(item.get("bbox"))
-    page = str(item.get("page_label") or "")
-    if source and page and bbox:
-        return ("bbox", source, page, bbox)
-    return None
-
-
-def _canonical_id(item: dict[str, Any]) -> str:
-    structure = _structure_key(item)
-    if structure:
-        return ":".join(str(value) for value in structure)
-    text_hash = str(item.get("normalized_text_hash") or "")
-    if text_hash:
-        return f"text:{text_hash}"
-    evidence_id = str(item.get("evidence_id") or "")
-    if evidence_id:
-        return f"evidence:{evidence_id}"
-    payload = repr(sorted((str(key), str(value)) for key, value in item.items()))
-    return f"fallback:{hashlib.sha256(payload.encode()).hexdigest()}"
+    try:
+        identity = identity_of(item)
+    except ValueError:
+        return None
+    return (identity.kind, identity.source_id, identity.local_id)
 
 
 def _merge_duplicate(target: dict[str, Any], duplicate: dict[str, Any]) -> None:
+    _assert_same_structured_fact(target, duplicate)
     duplicate_id = str(duplicate.get("evidence_id") or "")
     ids = list(target.get("duplicate_evidence_ids") or [])
     ids.extend(duplicate.get("duplicate_evidence_ids") or [])
@@ -175,10 +290,6 @@ def _merge_duplicate(target: dict[str, Any], duplicate: dict[str, Any]) -> None:
         list(target.get("source_backrefs") or [])
         + list(duplicate.get("source_backrefs") or [])
     )
-    if len(_item_text(duplicate)) > len(_item_text(target)):
-        for field in ("text", "ocr_text", "vlm_text", "caption"):
-            if duplicate.get(field):
-                target[field] = duplicate[field]
     metadata = dict(target.get("metadata") or {})
     duplicate_metadata = dict(duplicate.get("metadata") or {})
     metadata["dedupe_source_ids"] = _unique(
@@ -210,6 +321,49 @@ def _merge_duplicate(target: dict[str, Any], duplicate: dict[str, Any]) -> None:
         elif _is_score_key(key):
             metadata[key] = max(_float(metadata[key]), _float(value))
     target["metadata"] = metadata
+
+
+def _assert_same_structured_fact(
+    target: dict[str, Any],
+    duplicate: dict[str, Any],
+) -> None:
+    if identity_of(target) != identity_of(duplicate):
+        return
+    conflicts = [
+        field
+        for field in _STRUCTURED_FACT_FIELDS
+        if target.get(field) not in (None, "")
+        and duplicate.get(field) not in (None, "")
+        and str(target.get(field)) != str(duplicate.get(field))
+    ]
+    if conflicts:
+        raise EvidenceIdentityConflictError(
+            "Conflicting structured fields for evidence identity "
+            f"{identity_of(target).key}: {', '.join(conflicts)}"
+        )
+
+
+def _text_dedupe_allowed(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    left_identity = identity_of(left)
+    right_identity = identity_of(right)
+    if left_identity.kind in {"cell", "span"} or right_identity.kind in {
+        "cell",
+        "span",
+    }:
+        return left_identity == right_identity
+    if left_identity.source_id != right_identity.source_id:
+        return False
+    if str(left.get("page_label") or "") != str(right.get("page_label") or ""):
+        return False
+    return str(left.get("modality") or "") == str(right.get("modality") or "")
+
+
+def _near_duplicate_allowed(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    if not _text_dedupe_allowed(left, right):
+        return False
+    left_parent = str(left.get("parent_element_id") or "")
+    right_parent = str(right.get("parent_element_id") or "")
+    return not (left_parent or right_parent) or left_parent == right_parent
 
 
 def _overlapping_chunks(left: dict[str, Any], right: dict[str, Any]) -> bool:

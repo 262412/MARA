@@ -10,6 +10,7 @@ from ktem.docqa.controller import (
     parse_planner_decision,
 )
 from ktem.docqa.execution import execute_controller_turn
+from ktem_tests.controller_test_assertions import assert_graph_bundle_contract
 
 
 def test_docqa_package_exports_controller_helpers():
@@ -110,7 +111,9 @@ def test_response_capture_builds_controller_contract_fields():
         "action": "generate",
         "claims": [],
         "unsupported_claims": [],
-        "verified_citations": ["doc-1"],
+        "unknown_claims": [],
+        "verified_citations": [],
+        "claim_results": [],
     }
     assert payload["controller_decision"] == {
         "route": "graph_rag",
@@ -132,14 +135,7 @@ def test_response_capture_builds_controller_contract_fields():
         "policy": "graph",
     }
     assert payload["workflow_plan"]["steps"][0]["executor"] == "retrieve_graph"
-    bundle = payload["evidence_bundle"]
-    assert bundle["route"] == "graph_global"
-    assert bundle["metadata"]["modality_counts"] == {"graph": 1}
-    assert bundle["metadata"]["page_coverage"] == ["1"]
-    assert bundle["items"][0]["evidence_id"] == "doc-1"
-    assert bundle["items"][0]["modality"] == "graph"
-    assert bundle["items"][0]["evidence_level"] == "graph"
-    assert payload["backend_metadata"] == {"graph_backend": "local_graph_index"}
+    assert_graph_bundle_contract(payload)
 
 
 def test_apply_request_context_copies_planner_contract_fields():
@@ -303,7 +299,7 @@ def test_strict_verifier_marks_unsupported_claims_and_abstain_action():
     assert payload["verify_decision"]["unsupported_claims"] == [
         "Profit declined sharply."
     ]
-    assert payload["verify_decision"]["verified_citations"] == ["doc-1"]
+    assert payload["verify_decision"]["verified_citations"] == ["evidence:file-1:doc-1"]
 
 
 def test_light_verifier_ignores_reasoning_scaffolding_and_inner_abstain_text():
@@ -351,7 +347,9 @@ def test_direct_route_verification_is_not_required():
         "action": "generate",
         "claims": [],
         "unsupported_claims": [],
+        "unknown_claims": [],
         "verified_citations": [],
+        "claim_results": [],
     }
 
 
@@ -511,6 +509,13 @@ def test_execute_controller_turn_good_retrieval_generates_with_evidence_bundle()
     assert result.guardrail_decision.action == "return"
     assert result.verify_decision.status == "supported"
     assert result.evidence_bundle.items[0]["source_backrefs"] == ["file-1#page:2"]
+    assert [
+        item["canonical_id"]
+        for item in result.evidence_bundle.metadata["verified_evidence"]
+    ] == ["evidence:file-1:doc-1"]
+    assert result.evidence_bundle.metadata["cited_evidence"] == (
+        result.evidence_bundle.metadata["verified_evidence"]
+    )
 
 
 def test_execute_controller_turn_rewrites_unsupported_answer_once():
@@ -564,15 +569,18 @@ def test_execute_controller_turn_element_route_requires_element_evidence():
             ]
         }
 
-    def fail_generate(_request, _decision, _bundle):
-        raise AssertionError("element route must not generate from text-only evidence")
+    def generate(_request, decision, _bundle):
+        assert decision.legacy_route == "doc_text"
+        return "The table-like paragraph identifies revenue."
 
     result = execute_controller_turn(
         DocQARequest(prompt="Which table shows revenue?", route_policy="element"),
         retrieve=retrieve,
-        generate=fail_generate,
+        generate=generate,
     )
 
-    assert result.controller_decision.route == "element_rag"
-    assert result.retrieve_decision.status == "poor"
-    assert result.guardrail_decision.action == "abstain"
+    assert result.answer == "The table-like paragraph identifies revenue."
+    assert result.controller_decision.route == "text_rag"
+    assert result.retrieve_decision.status == "good"
+    assert result.guardrail_decision.action == "return"
+    assert result.controller_decision.route_switch_used is True

@@ -4,8 +4,9 @@ from typing import Any
 
 from .evidence_set_selection import select_evidence_for_plan
 from .query_planning import (
-    build_query_plan,
+    ensure_request_query_plan,
     missing_slot_queries,
+    missing_slot_requests,
     request_planning_question,
 )
 
@@ -15,16 +16,7 @@ def select_planned_evidence(
     candidates: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     prompt = request_planning_question(request)
-    query_plan = build_query_plan(
-        prompt,
-        answer_type=str(
-            getattr(request, "answer_type", None)
-            or getattr(request, "task_type", None)
-            or ""
-        ),
-        verification_domain=str(getattr(request, "verification_domain", None) or ""),
-        planner_payload=getattr(request, "query_plan", None),
-    )
+    query_plan = ensure_request_query_plan(request)
     candidates = _apply_request_constraints(request, query_plan, candidates)
     selected, selection_trace, bound_plan = select_evidence_for_plan(
         prompt,
@@ -33,11 +25,13 @@ def select_planned_evidence(
     )
     metadata = {
         "query_plan": bound_plan.as_dict(),
+        "query_plan_id": bound_plan.plan_id,
         "evidence_selection_trace": selection_trace,
         "structure_metadata_coverage": selection_trace["structure_metadata_coverage"],
         "slot_coverage": selection_trace["slot_coverage"],
         "missing_required_slot_count": selection_trace["missing_required_slot_count"],
         "second_round_queries": missing_slot_queries(bound_plan),
+        "second_round_requests": missing_slot_requests(bound_plan),
     }
     return selected, metadata
 

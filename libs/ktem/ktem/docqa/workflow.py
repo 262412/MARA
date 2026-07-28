@@ -142,6 +142,7 @@ class WorkflowPlan:
     policy: str
     controller_mode: str
     strategy: str
+    execution_control: str = "fixed_state_machine"
     steps: list[WorkflowStep] = field(default_factory=list)
 
     @property
@@ -155,6 +156,7 @@ class WorkflowPlan:
             "policy": self.policy,
             "controller_mode": self.controller_mode,
             "strategy": self.strategy,
+            "execution_control": self.execution_control,
             "steps": [step.as_dict() for step in self.steps],
             "total_cost_units": total_cost,
             "reward_features": {
@@ -204,7 +206,7 @@ def build_workflow_plan(
             route=normalized_route,
             policy=policy,
             controller_mode=controller_mode,
-            strategy="planner_workflow",
+            strategy="planned_trace",
             steps=planned,
         )
     return WorkflowPlan(

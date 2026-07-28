@@ -13,7 +13,9 @@ def required_slot_shortlist(
 ) -> tuple[list[dict[str, Any]], int]:
     candidates = list(items[:candidate_limit])
     restored = 0
-    required_slots = [slot for slot in plan.evidence_slots if slot.required]
+    required_slots = [
+        slot for slot in plan.evidence_slots if slot.required_for_retrieval
+    ]
     for slot in required_slots:
         if any(slot_score(plan, slot, item) > 0 for item in candidates):
             continue

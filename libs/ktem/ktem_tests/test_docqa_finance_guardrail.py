@@ -2,15 +2,12 @@ from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.execution import ABSTAIN_MESSAGE, execute_controller_turn
 
 
-def test_finance_benchmark_unsupported_answer_returns_revise_not_abstain():
+def test_finance_benchmark_page_only_operands_abstain_before_generation():
     def retrieve(_request, _decision):
         return _quick_ratio_evidence_metadata()
 
     def generate(_request, _decision, _bundle):
-        return (
-            "Based on current assets, inventories, and current liabilities, "
-            "3M's quick ratio was 1.20."
-        )
+        raise AssertionError("page-only finance operands must not reach generation")
 
     result = execute_controller_turn(
         DocQARequest(
@@ -24,13 +21,12 @@ def test_finance_benchmark_unsupported_answer_returns_revise_not_abstain():
         generate=generate,
     )
 
-    assert result.verify_decision.status == "unsupported"
-    assert result.guardrail_decision.action == "revise"
-    assert result.answer != ABSTAIN_MESSAGE
-    assert "quick ratio was 1.20" in result.answer
+    assert result.verify_decision.status == "not_enough_evidence"
+    assert result.guardrail_decision.action == "abstain"
+    assert result.answer == ABSTAIN_MESSAGE
 
 
-def test_finance_benchmark_source_level_evidence_reaches_generator():
+def test_finance_benchmark_source_level_evidence_does_not_fill_atomic_slots():
     def retrieve(_request, _decision):
         return {
             "evidence": [
@@ -46,7 +42,9 @@ def test_finance_benchmark_source_level_evidence_reaches_generator():
         }
 
     def generate(_request, _decision, _bundle):
-        return "The quick ratio cannot be calculated from the available fields."
+        raise AssertionError(
+            "source-level finance evidence must not fill atomic operand slots"
+        )
 
     result = execute_controller_turn(
         DocQARequest(
@@ -60,11 +58,9 @@ def test_finance_benchmark_source_level_evidence_reaches_generator():
         generate=generate,
     )
 
-    assert result.retrieve_decision.status == "good"
-    assert result.guardrail_decision.action == "return"
-    assert result.answer == (
-        "The quick ratio cannot be calculated from the available fields."
-    )
+    assert result.retrieve_decision.status == "poor"
+    assert result.guardrail_decision.action == "abstain"
+    assert result.answer == ABSTAIN_MESSAGE
 
 
 def _quick_ratio_prompt() -> str:

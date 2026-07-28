@@ -39,6 +39,7 @@ class EvidenceElement:
     chunk_end: int | None = None
     normalized_text_hash: str = ""
     duplicate_evidence_ids: list[str] = field(default_factory=list)
+    retrieval_lineage: list[dict[str, Any]] = field(default_factory=list)
     bbox: Any = None
     caption: str = ""
     text: str = ""

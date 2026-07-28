@@ -11,6 +11,8 @@ class DocQARequest:
     prompt: str
     controller_question: str = ""
     retrieval_query: str = ""
+    retrieval_slot_id: str = ""
+    retrieval_round_id: int = 0
     dataset_family: str = ""
     conversation_id: str = ""
     selected_file_ids: Optional[list[str]] = None
@@ -35,6 +37,8 @@ class DocQARequest:
     route_policy: Optional[str] = None
     planner_backend: Optional[str] = None
     planner_model: Optional[str] = None
+    query_plan: Any = None
+    query_plan_id: str = ""
     allowed_routes: Optional[list[str]] = None
     verification_mode: Optional[str] = None
     verification_domain: Optional[str] = None

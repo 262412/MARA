@@ -3,11 +3,12 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .evidence_identity import identity_of
 from .retrieval_adequacy import financial_statement_match_count
 
-FUSION_RANKER = "modality_normalized_rrf_v1"
+FUSION_RANKER = "retriever_reciprocal_rank_fusion_v2"
 WEIGHTED_RANKER = "weighted_cross_modal_v1"
-RRF_RANKER = "reciprocal_rank_fusion_v1"
+RRF_RANKER = FUSION_RANKER
 MODALITY_TOP_K = {"text": 30, "page_image": 20, "element": 20, "graph": 20}
 MODALITY_WEIGHTS = {
     "text": 1.0,
@@ -41,153 +42,14 @@ def fuse_hybrid_evidence(
         return _fuse_with_weighted_scores(query, items, domain=domain)
     if str(strategy or "").strip().lower() == "rrf":
         return _fuse_with_rrf(query, items, domain=domain)
-    return _fuse_with_modality_normalized_rrf(query, items, domain=domain)
-
-
-def _fuse_with_modality_normalized_rrf(
-    query: str,
-    items: list[dict[str, Any]],
-    *,
-    domain: str | None,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    rows = _fusion_rows(query, items, domain=domain)
-    selected_rows = _selected_normalized_rrf_rows(query, rows)
-    selected_rows, element_gate_trace = _drop_low_coverage_element_rows(
-        domain,
-        selected_rows,
-    )
-    selected_rows, guard_trace = _document_complex_text_guard(
-        domain,
-        selected_rows,
-    )
-    selected_rows.sort(key=lambda row: (-row["final_score"], row["index"]))
-    fused, item_scores = _materialize_normalized_rows(rows, selected_rows)
-    trace = _normalized_rrf_trace(items, fused, item_scores)
-    trace.update(element_gate_trace)
-    trace.update(guard_trace)
-    return fused, trace
-
-
-def _fusion_rows(
-    query: str,
-    items: list[dict[str, Any]],
-    *,
-    domain: str | None,
-) -> list[dict[str, Any]]:
-    rows = []
-    for index, item in enumerate(items):
-        score, components = _fusion_score(query, item, domain=domain)
-        rows.append(
-            {
-                "score": score,
-                "index": index,
-                "item": item,
-                "components": components,
-                "group": _modality_group(item),
-            }
-        )
-    return rows
-
-
-def _selected_normalized_rrf_rows(
-    query: str, rows: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    selected_rows = []
-    for group, group_rows in _dict_rows_by_modality(rows).items():
-        ranked = sorted(group_rows, key=lambda row: (-row["score"], row["index"]))
-        for rank, row in enumerate(ranked[: MODALITY_TOP_K.get(group, 1)], start=1):
-            selected_rows.append(_normalized_rrf_row(query, group, ranked, rank, row))
-    return selected_rows
-
-
-def _normalized_rrf_row(
-    query: str,
-    group: str,
-    ranked: list[dict[str, Any]],
-    rank: int,
-    row: dict[str, Any],
-) -> dict[str, Any]:
-    normalized = _normalized_group_score(ranked, row)
-    rrf_score = 1.0 / (60 + rank)
-    final_score = round(
-        rrf_score + normalized * 0.001 + _modality_preference_bias(query, str(group)),
-        6,
-    )
-    components = dict(row["components"])
-    components.update(
-        {
-            "rrf_score": round(rrf_score, 6),
-            "normalized_score": round(normalized, 4),
-            "pre_fusion_rank": rank,
-            "modality_group": str(group),
-        }
-    )
-    output = dict(row)
-    output["final_score"] = final_score
-    output["components"] = components
-    output["normalized_score"] = round(normalized, 4)
-    output["pre_fusion_rank"] = rank
-    return output
-
-
-def _normalized_group_score(ranked: list[dict[str, Any]], row: dict[str, Any]) -> float:
-    max_score = float(ranked[0]["score"] or 0.0) if ranked else 0.0
-    min_score = float(ranked[-1]["score"] or 0.0) if ranked else 0.0
-    score_range = max(max_score - min_score, 0.0)
-    if score_range == 0.0:
-        return 1.0
-    return (float(row["score"]) - min_score) / score_range
-
-
-def _materialize_normalized_rows(
-    rows: list[dict[str, Any]], selected_rows: list[dict[str, Any]]
-) -> tuple[list[dict[str, Any]], dict[str, float]]:
-    fused = []
-    item_scores: dict[str, float] = {}
-    for normalized_rank, row in enumerate(selected_rows, start=1):
-        item = _with_fusion_metadata(
-            row["item"],
-            float(row["final_score"]),
-            row["components"],
-        )
-        item = _with_evidence_confidence(
-            item,
-            route=str(row["group"]),
-            normalized_score=float(row["normalized_score"]),
-            score_margin=_score_margin(rows, row),
-            pre_fusion_rank=int(row["pre_fusion_rank"]),
-            normalized_rank=normalized_rank,
-        )
-        evidence_id = str(item.get("evidence_id") or f"item-{row['index']}")
-        item_scores[evidence_id] = float(row["final_score"])
-        fused.append(item)
-    return fused, item_scores
-
-
-def _normalized_rrf_trace(
-    items: list[dict[str, Any]],
-    fused: list[dict[str, Any]],
-    item_scores: dict[str, float],
-) -> dict[str, Any]:
-    return {
-        "ranker": FUSION_RANKER,
-        "selected_top_k": {
-            key: MODALITY_TOP_K[key] for key in ("text", "page_image", "element")
-        },
-        "dropped_noise_count": max(0, len(items) - len(fused)),
-        "fallback_route": "",
-        "best_single_route": "",
-        "fusion_selected_route": _first_item_route(fused),
-        "locator_confidence_by_route": {},
-        "item_scores": item_scores,
-    }
+    return _fuse_with_rrf(query, items, domain=domain)
 
 
 def _document_complex_text_guard(
     domain: str | None,
     selected_rows: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    trace = {
+    trace: dict[str, Any] = {
         "best_single_route": _best_single_route(selected_rows),
         "fusion_selected_route": _first_row_route(selected_rows),
         "fallback_route": "",
@@ -203,16 +65,13 @@ def _document_complex_text_guard(
     if not text_rows:
         return selected_rows, trace
     text_page = _row_page_key(text_rows[0])
-    noisy_cross_page_visual = any(
+    cross_page_visual = any(
         str(row.get("group") or "") in {"page_image", "figure", "slide"}
         and _row_page_key(row) != text_page
         for row in selected_rows
     )
-    if not noisy_cross_page_visual:
-        return selected_rows, trace
-    trace["fallback_route"] = "text"
-    trace["best_single_route"] = "text"
-    return text_rows, trace
+    trace["cross_page_visual_preserved"] = cross_page_visual
+    return selected_rows, trace
 
 
 def _drop_low_coverage_element_rows(
@@ -335,25 +194,92 @@ def _fuse_with_rrf(
         score, components = _fusion_score(query, item, domain=domain)
         weighted_rows.append((score, index, item, components))
 
-    rrf_scores = _rrf_scores_by_item(weighted_rows)
+    rrf_scores, contributions, retriever_lists = _rrf_scores_by_item(weighted_rows)
     scored_items = []
     item_scores: dict[str, float] = {}
     for score, index, item, components in weighted_rows:
-        evidence_id = str(item.get("evidence_id") or f"item-{index}")
-        rrf_score = round(rrf_scores.get(evidence_id, 0.0), 6)
-        rrf_score += round(score * 0.0001, 6)
-        rrf_components = dict(components)
-        rrf_components["rrf_score"] = rrf_score
+        identity = identity_of(item).key
+        evidence_id = str(item.get("evidence_id") or identity)
+        rrf_score, rrf_components = _rrf_item_score(
+            identity,
+            components,
+            rrf_scores,
+            contributions,
+        )
         scored = _with_fusion_metadata(item, rrf_score, rrf_components)
         item_scores[evidence_id] = rrf_score
         scored_items.append((rrf_score, index, scored))
 
     scored_items.sort(key=lambda row: (-row[0], row[1]))
-    return [item for _, _, item in scored_items], {
+    max_score = scored_items[0][0] if scored_items else 0.0
+    fused = [
+        _with_evidence_confidence(
+            item,
+            route=_modality_group(item),
+            normalized_score=score / max_score if max_score else 0.0,
+            score_margin=0.0,
+            pre_fusion_rank=rank,
+            normalized_rank=rank,
+        )
+        for rank, (score, _index, item) in enumerate(scored_items, start=1)
+    ]
+    rows = [
+        {
+            "item": item,
+            "group": _modality_group(item),
+            "final_score": score,
+            "index": index,
+        }
+        for score, index, item in scored_items
+    ]
+    rows, element_gate_trace = _drop_low_coverage_element_rows(domain, rows)
+    rows, guard_trace = _document_complex_text_guard(domain, rows)
+    allowed = set()
+    for row in rows:
+        row_item = row.get("item")
+        if isinstance(row_item, dict):
+            allowed.add(identity_of(row_item).key)
+    fused = [item for item in fused if identity_of(item).key in allowed]
+    trace = {
         "ranker": RRF_RANKER,
         "rrf_k": 60,
+        "retriever_lists": retriever_lists,
         "item_scores": item_scores,
+        "selected_top_k": {
+            key: MODALITY_TOP_K[key] for key in ("text", "page_image", "element")
+        },
+        "dropped_noise_count": max(0, len(items) - len(fused)),
     }
+    trace.update(element_gate_trace)
+    trace.update(guard_trace)
+    return fused, trace
+
+
+def _rrf_item_score(
+    identity: str,
+    components: dict[str, float],
+    scores: dict[str, float],
+    contributions: dict[str, dict[str, float]],
+) -> tuple[float, dict[str, Any]]:
+    relevance_tiebreak = min(
+        0.0005,
+        (
+            float(components.get("lexical_overlap") or 0.0)
+            + float(components.get("modality_intent") or 0.0)
+        )
+        * 0.0001,
+    )
+    score = round(scores.get(identity, 0.0), 6)
+    score += round(relevance_tiebreak, 6)
+    score += round(
+        float(components.get("finance_statement_match") or 0.0) * 0.001,
+        6,
+    )
+    trace: dict[str, Any] = dict(components)
+    trace["rrf_score"] = score
+    trace["relevance_tiebreak"] = round(relevance_tiebreak, 6)
+    trace["rrf_contributions"] = contributions.get(identity, {})
+    return score, trace
 
 
 def _fuse_with_learned_ranker(
@@ -432,33 +358,70 @@ def _with_fusion_metadata(
 
 def _rrf_scores_by_item(
     weighted_rows: list[tuple[float, int, dict[str, Any], dict[str, float]]],
-) -> dict[str, float]:
+) -> tuple[dict[str, float], dict[str, dict[str, float]], list[str]]:
     scores: dict[str, float] = {}
-    for _modality, rows in _rows_by_modality(weighted_rows).items():
+    contributions: dict[str, dict[str, float]] = {}
+    rank_lists = _retriever_rank_lists(weighted_rows)
+    for retriever, rows in rank_lists.items():
         ranked = sorted(rows, key=lambda row: (-row[0], row[1]))
-        for rank, (_score, index, item, _components) in enumerate(ranked, start=1):
-            evidence_id = str(item.get("evidence_id") or f"item-{index}")
-            scores[evidence_id] = scores.get(evidence_id, 0.0) + 1.0 / (60 + rank)
-    return scores
+        seen_identities: set[str] = set()
+        unique_ranked = []
+        for row in ranked:
+            identity = identity_of(row[2]).key
+            if identity in seen_identities:
+                continue
+            seen_identities.add(identity)
+            unique_ranked.append(row)
+        for rank, (_score, index, item, _components) in enumerate(
+            unique_ranked,
+            start=1,
+        ):
+            identity = identity_of(item).key
+            contribution = 1.0 / (60 + rank)
+            scores[identity] = scores.get(identity, 0.0) + contribution
+            contributions.setdefault(identity, {})[retriever] = round(contribution, 6)
+    return scores, contributions, sorted(rank_lists)
 
 
-def _rows_by_modality(
+def _retriever_rank_lists(
     weighted_rows: list[tuple[float, int, dict[str, Any], dict[str, float]]],
 ) -> dict[str, list[tuple[float, int, dict[str, Any], dict[str, float]]]]:
-    rows: dict[str, list[tuple[float, int, dict[str, Any], dict[str, float]]]] = {}
-    for row in weighted_rows:
-        modality = str(row[2].get("modality") or "text").strip() or "text"
-        rows.setdefault(modality, []).append(row)
-    return rows
+    rank_lists: dict[
+        str,
+        list[tuple[float, int, dict[str, Any], dict[str, float]]],
+    ] = {}
+    for weighted_score, index, item, components in weighted_rows:
+        explicit = _explicit_retriever_scores(item)
+        if explicit:
+            for retriever, score in explicit.items():
+                rank_lists.setdefault(retriever, []).append(
+                    (score, index, item, components)
+                )
+            continue
+        fallback = _modality_group(item)
+        rank_lists.setdefault(fallback, []).append(
+            (weighted_score, index, item, components)
+        )
+    return rank_lists
 
 
-def _dict_rows_by_modality(
-    rows: list[dict[str, Any]]
-) -> dict[str, list[dict[str, Any]]]:
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        grouped.setdefault(str(row["group"]), []).append(row)
-    return grouped
+def _explicit_retriever_scores(item: dict[str, Any]) -> dict[str, float]:
+    metadata = dict(item.get("metadata") or {})
+    fields = {
+        "text": ("reranking_score", "reranker_score", "retriever_score"),
+        "visual": ("visual_retriever_score",),
+        "element": ("element_retriever_score",),
+        "graph": ("graph_retriever_score",),
+    }
+    scores: dict[str, float] = {}
+    for retriever, names in fields.items():
+        for name in names:
+            value = metadata.get(name, item.get(name))
+            if value in (None, ""):
+                continue
+            scores[retriever] = float(value)
+            break
+    return scores
 
 
 def _modality_group(item: dict[str, Any]) -> str:
@@ -466,30 +429,6 @@ def _modality_group(item: dict[str, Any]) -> str:
     if modality in {"text", "page_image", "graph"}:
         return modality
     return "element"
-
-
-def _modality_preference_bias(query: str, group: str) -> float:
-    query_tokens = _tokens(query)
-    if group == "text":
-        return 0.003
-    if group == "page_image" and query_tokens & MODALITY_TERMS["page_image"]:
-        return 0.002
-    if group == "element" and any(
-        query_tokens & MODALITY_TERMS.get(modality, set())
-        for modality in ("table", "formula", "figure")
-    ):
-        return 0.001
-    return 0.0
-
-
-def _score_margin(rows: list[dict[str, Any]], row: dict[str, Any]) -> float:
-    peers = [item for item in rows if item["group"] == row["group"]]
-    scores = sorted((float(item["score"]) for item in peers), reverse=True)
-    if not scores:
-        return 0.0
-    current = float(row["score"])
-    better = [score for score in scores if score > current]
-    return round((better[-1] - current) if better else 0.0, 4)
 
 
 def _with_evidence_confidence(

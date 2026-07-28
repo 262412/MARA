@@ -117,7 +117,7 @@ def test_selection_expands_table_continuation_and_respects_page_budget():
     assert trace["unique_pages"] <= trace["max_pages"]
 
 
-def test_selection_disables_structure_expansion_for_legacy_low_coverage_index():
+def test_selection_expands_available_structure_edges_in_mixed_legacy_index():
     plan = build_query_plan(
         "Compare revenue across the report pages.",
         answer_type="free_text",
@@ -144,8 +144,8 @@ def test_selection_disables_structure_expansion_for_legacy_low_coverage_index():
     )
 
     assert trace["structure_metadata_coverage"] == 0.2
-    assert trace["structure_expansion_enabled"] is False
-    assert trace["continuation_expansion_count"] == 0
+    assert trace["structure_expansion_enabled"] is True
+    assert trace["continuation_expansion_count"] == 1
 
 
 def test_finance_structure_coverage_uses_element_index_not_mixed_page_pool():
@@ -180,7 +180,7 @@ def test_finance_structure_coverage_uses_element_index_not_mixed_page_pool():
     assert trace["mixed_candidate_structure_metadata_coverage"] == 0.2
     assert trace["structure_metadata_coverage"] == 1.0
     assert trace["structure_coverage_scope"] == "element_index"
-    assert trace["structure_expansion_enabled"] is True
+    assert trace["structure_expansion_enabled"] is False
 
 
 def test_selection_prefers_complete_question_phrase_anchors_for_simple_fact():

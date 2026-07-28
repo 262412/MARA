@@ -7,7 +7,10 @@ from typing import Any
 from .answer_modes import normalize_benchmark_answer_mode
 from .answer_repetition import deduplicate_final_answer as _deduplicate_final_answer
 from .answer_scoring_adapter import select_scoring_answer
-from .calculation_citation_projection import calculation_citation_items
+from .calculation_citation_projection import (
+    calculation_citation_items,
+    record_calculation_stage_evidence,
+)
 from .ragtruth_answer_contract import ragtruth_finalization_metadata
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
@@ -30,7 +33,7 @@ def finalize_prediction_answer(
 ) -> None:
     normalized_mode = normalize_benchmark_answer_mode(mode)
     raw_answer = str(prediction.get("predicted_answer") or "")
-    if _is_ragtruth_dataset(dataset_name):
+    if "ragtruth" in str(dataset_name or "").strip().lower():
         _finalize_ragtruth_prediction(
             prediction,
             raw_answer=raw_answer,
@@ -191,10 +194,6 @@ def _finalize_ragtruth_prediction(
     }
 
 
-def _is_ragtruth_dataset(dataset_name: str) -> bool:
-    return "ragtruth" in str(dataset_name or "").strip().lower()
-
-
 def _normalize_qasper_contract_answer(
     answer: str,
     *,
@@ -242,12 +241,13 @@ def attach_structured_citations_from_evidence(
     if prediction.get("predicted_citations") or prediction.get("structured_citations"):
         return []
     canonical_sources = _canonical_source_refs(prediction)
+    calculation_items = calculation_citation_items(
+        prediction,
+        _citation_candidate_items(prediction),
+    )
     calculation_citations = [
         citation
-        for item in calculation_citation_items(
-            prediction,
-            _citation_candidate_items(prediction),
-        )
+        for item in calculation_items
         if (
             citation := _citation_from_item(
                 item,
@@ -257,6 +257,7 @@ def attach_structured_citations_from_evidence(
         )
     ]
     if calculation_citations:
+        record_calculation_stage_evidence(prediction, calculation_items)
         return _unique_citations(calculation_citations)
     for item in _citation_candidate_items(prediction):
         citation = _citation_from_item(

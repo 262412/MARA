@@ -18,8 +18,12 @@ def test_numeric_comparison_plan_has_distinct_required_period_operands():
     assert [slot.period for slot in plan.evidence_slots] == ["2021", "2022"]
     assert all(slot.required for slot in plan.evidence_slots)
     assert all(slot.role == "operand" for slot in plan.evidence_slots)
+    assert all(slot.required_for_retrieval for slot in plan.evidence_slots)
+    assert all(slot.required_for_execution for slot in plan.evidence_slots)
+    assert all(slot.required_for_verification for slot in plan.evidence_slots)
     assert plan.max_retrieval_rounds == 2
     assert retrieval_budget(plan) == {"max_items": 16, "max_pages": 6}
+    assert plan.plan_id.startswith("plan:")
 
 
 def test_slot_binding_and_missing_queries_only_target_unfilled_operand():
@@ -41,7 +45,7 @@ def test_slot_binding_and_missing_queries_only_target_unfilled_operand():
     )
 
     assert bound.evidence_slots[0].status == "filled"
-    assert bound.evidence_slots[0].evidence_ids == ("revenue-2021",)
+    assert bound.evidence_slots[0].evidence_ids == ("evidence::revenue-2021",)
     assert bound.evidence_slots[1].status == "missing"
     assert missing_slot_queries(bound) == ["revenue 2022"]
 
@@ -135,7 +139,7 @@ def test_finance_fact_slot_requires_atomic_value_evidence():
 
     assert page_bound.evidence_slots[0].status == "missing"
     assert cell_bound.evidence_slots[0].status == "filled"
-    assert cell_bound.evidence_slots[0].evidence_ids == ("adjusted-ebitda-cell",)
+    assert cell_bound.evidence_slots[0].evidence_ids == ("cell::adjusted-ebitda-cell",)
 
 
 def test_numeric_slot_rejects_period_values_without_metric_support():
@@ -212,7 +216,7 @@ def test_cost_of_products_sold_is_a_bound_cogs_table_alias():
         slot for slot in bound.evidence_slots if slot.metric == "cost of goods sold"
     )
     assert cogs.status == "filled"
-    assert cogs.evidence_ids == ("income-statement",)
+    assert cogs.evidence_ids == ("evidence::income-statement",)
 
 
 def test_multi_period_percentage_of_revenue_plan_requires_both_metrics():

@@ -269,9 +269,13 @@ def test_finance_scale_can_be_proven_by_same_source_convention_evidence():
     operand = answer.calculation_plan["operands"][0]
     assert operand["scale"] == "million"
     assert operand["scale_evidence_id"] == "pepsico-tabular-scale"
+    assert operand["evidence_identity"].startswith("cell:PEPSICO_2021_10K:")
+    assert operand["scale_evidence_identity"] == (
+        "evidence:PEPSICO_2021_10K:pepsico-tabular-scale"
+    )
     assert answer.calculation_verification["citation_ids"] == (
-        "pepsico-free-cash-flow",
-        "pepsico-tabular-scale",
+        operand["evidence_identity"],
+        operand["scale_evidence_identity"],
     )
 
 

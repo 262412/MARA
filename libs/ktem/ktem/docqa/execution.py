@@ -14,7 +14,9 @@ from .controller import (
     evaluate_retrieval_quality,
 )
 from .evidence import EvidenceBundle, build_evidence_bundle
+from .evidence_identity import identity_of
 from .evidence_text import extract_final_answer_text
+from .query_planning import ensure_request_query_plan
 from .retrieval_rounds import retrieve_with_rounds
 from .route_budget import optional_stage_allowed, route_budget_metadata
 from .route_capabilities import (
@@ -26,6 +28,7 @@ from .route_selection import (
     controller_decision_from_route,
     mark_route_switch_recovery,
 )
+from .verification import with_verification_evidence
 from .workflow import build_workflow_plan, planner_payload_from_trace
 
 DIRECT_ANSWER_MESSAGE = (
@@ -96,6 +99,7 @@ def execute_controller_turn(
     agent_trace: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
     planner_payload = planner_payload_from_trace(agent_trace or [])
+    ensure_request_query_plan(request, planner_payload=planner_payload)
     route_decision = _route_decision(request, agent_trace or [])
     controller_decision = _controller_decision(route_decision, planner_payload)
     workflow_plan = _build_execution_workflow_plan(
@@ -187,8 +191,9 @@ def _retrieve_and_evaluate(
     decision: ControllerDecision,
     retrieve: RetrieveFn,
     *,
-    max_rounds: int = 2,
+    max_rounds: int | None = None,
 ) -> tuple[EvidenceBundle, RetrieveDecision]:
+    plan = ensure_request_query_plan(request)
     return retrieve_with_rounds(
         request,
         decision,
@@ -198,7 +203,7 @@ def _retrieve_and_evaluate(
             decision.legacy_route == "doc_element"
             or not _route_switch_candidates(request, decision.legacy_route)
         ),
-        max_rounds=max_rounds,
+        max_rounds=plan.max_retrieval_rounds if max_rounds is None else max_rounds,
     )
 
 
@@ -473,11 +478,7 @@ def _evidence_only_verify_decision(
         mode=mode,
         status="not_required",
         reason="Evidence-only visual route did not invoke a VLM generator.",
-        verified_citations=[
-            str(item.get("evidence_id") or "")
-            for item in bundle.items
-            if str(item.get("evidence_id") or "")
-        ],
+        verified_citations=_bundle_citation_ids(bundle),
     )
 
 
@@ -500,7 +501,7 @@ def _empty_answer_verify_decision(
 def _bundle_citation_ids(bundle: EvidenceBundle) -> list[str]:
     citations: list[str] = []
     for item in bundle.items:
-        evidence_id = str(item.get("evidence_id") or "").strip()
+        evidence_id = identity_of(item).key
         if evidence_id and evidence_id not in citations:
             citations.append(evidence_id)
     return citations
@@ -516,6 +517,7 @@ def _result(
     answer: str,
     trace_prefix: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
+    bundle = with_verification_evidence(bundle, verify_decision)
     prefix = [
         item
         for item in list(trace_prefix or [])
@@ -558,6 +560,7 @@ def _trace(
         {
             "stage": "workflow_plan",
             "strategy": workflow_plan.get("strategy", ""),
+            "execution_control": workflow_plan.get("execution_control", ""),
             "step_count": len(workflow_plan.get("steps") or []),
             "total_cost_units": workflow_plan.get("total_cost_units", 0),
         },

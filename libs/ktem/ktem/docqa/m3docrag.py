@@ -20,15 +20,18 @@ def select_page_first_evidence(
             key=lambda item: (-item[1], item[0][0], item[0][1]),
         )[:max_pages]
     ]
-    if not selected_pages:
-        return items, _trace(items, selected_pages, pruned_item_count=0)
-    selected = [item for page in selected_pages for item in _page_items(items, page)]
-    selected.extend(_unpaged_items(query, items, max_unpaged_items))
-    return selected, _trace(
-        selected,
+    trace = _trace(
+        items,
         selected_pages,
-        pruned_item_count=max(0, len(items) - len(selected)),
+        pruned_item_count=0,
     )
+    trace["candidate_preservation"] = "all"
+    trace["ranked_unpaged_evidence_ids"] = [
+        str(item.get("evidence_id") or "")
+        for item in _unpaged_items(query, items, max_unpaged_items)
+        if str(item.get("evidence_id") or "")
+    ]
+    return items, trace
 
 
 def _trace(
@@ -47,21 +50,29 @@ def _trace(
     }
 
 
-def _page_scores(query: str, items: list[dict[str, Any]]) -> dict[tuple[str, str], int]:
+def _page_scores(
+    query: str, items: list[dict[str, Any]]
+) -> dict[tuple[str, str], float]:
     query_tokens = _tokens(query)
-    scores: dict[tuple[str, str], int] = {}
+    item_scores: dict[tuple[str, str], list[float]] = {}
     for item in items:
         page = _page_key(item)
         if not all(page):
             continue
-        score = len(query_tokens & _item_tokens(item))
+        score = float(len(query_tokens & _item_tokens(item)))
         score += _hybrid_fusion_score(item)
         if item.get("modality") == "page_image":
             score += 2
         if item.get("modality") not in {"page_image", "text"}:
             score += 2
-        scores[page] = scores.get(page, 0) + score
-    return scores
+        item_scores.setdefault(page, []).append(score)
+    return {page: _aggregate_page_score(scores) for page, scores in item_scores.items()}
+
+
+def _aggregate_page_score(scores: list[float]) -> float:
+    ranked = sorted(scores, reverse=True)
+    top = ranked[:3]
+    return ranked[0] + 0.25 * sum(top) / len(top)
 
 
 def _page_items(

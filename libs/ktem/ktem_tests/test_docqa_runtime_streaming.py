@@ -179,7 +179,7 @@ def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch)
         key: bundle_item[key] for key in expected_bundle_fields
     } == expected_bundle_fields
     assert bundle_item["source_backrefs"] == ["refs#source"]
-    assert bundle_item["canonical_id"].startswith("text:")
+    assert bundle_item["canonical_id"] == "evidence:refs:citation-refs"
     assert bundle_item["normalized_text_hash"]
     assert final.response.evidence_bundle["metadata"]["schema_version"] == (
         "evidence_bundle.v2"

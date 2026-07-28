@@ -50,7 +50,12 @@ def evidence_sources(retrieved_hits: list[dict[str, Any]]) -> list[str]:
 def evidence_element_ids(retrieved_hits: list[dict[str, Any]]) -> list[str]:
     element_ids: list[str] = []
     for hit in retrieved_hits:
-        element_id = str(hit.get("element_id") or "").strip()
+        element_id = str(
+            hit.get("cell_id")
+            or hit.get("element_id")
+            or dict(hit.get("identity") or {}).get("local_id")
+            or ""
+        ).strip()
         if element_id and element_id not in element_ids:
             element_ids.append(element_id)
     return element_ids

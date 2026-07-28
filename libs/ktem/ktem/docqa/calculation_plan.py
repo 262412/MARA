@@ -5,6 +5,12 @@ from dataclasses import asdict, dataclass, field
 from decimal import Decimal, DivisionByZero, InvalidOperation, localcontext
 from typing import Any
 
+from .calculation_evidence_identity import (
+    calculation_evidence_lookup,
+    calculation_operand_identity,
+    same_source,
+)
+from .evidence_identity import identity_of
 from .finance_query_planning import finance_metric_evidence_matches
 from .financial_statement_identity import financial_statement_identity
 from .query_evidence_constraints import (
@@ -41,6 +47,7 @@ class CalculationOperand:
     operand_id: str
     evidence_id: str
     value: Decimal
+    evidence_identity: str = ""
     unit: str = ""
     scale: str = ""
     currency: str = ""
@@ -52,6 +59,7 @@ class CalculationOperand:
     row_label: str = ""
     column_label: str = ""
     scale_evidence_id: str = ""
+    scale_evidence_identity: str = ""
     statement_kind: str = ""
     financial_scope: str = ""
 
@@ -60,10 +68,12 @@ class CalculationOperand:
         payload["value"] = str(self.value)
         for field_name in (
             "cell_id",
+            "evidence_identity",
             "row_label",
             "column_label",
             "period_kind",
             "scale_evidence_id",
+            "scale_evidence_identity",
             "statement_kind",
             "financial_scope",
         ):
@@ -187,8 +197,8 @@ def execute_calculation_plan(plan: CalculationPlan) -> CalculationExecution:
             for operand in plan.operands
             if operand.source == "evidence"
             for evidence_id in (
-                operand.evidence_id,
-                operand.scale_evidence_id,
+                operand.evidence_identity or operand.evidence_id,
+                operand.scale_evidence_identity or operand.scale_evidence_id,
             )
             if evidence_id
         )
@@ -209,7 +219,7 @@ def verify_calculation_plan(
     required_slots: list[dict[str, Any]] | None = None,
 ) -> CalculationVerification:
     errors = _structural_errors(plan, question=question)
-    evidence_by_id = _evidence_lookup(evidence_items)
+    evidence_by_id = calculation_evidence_lookup(evidence_items)
     verified_operands: list[str] = []
     citations: list[str] = []
     for operand in plan.operands:
@@ -250,11 +260,17 @@ def _verify_operand(
     operand: CalculationOperand,
     evidence_by_id: dict[str, dict[str, Any]],
 ) -> tuple[list[str], list[str]]:
-    item = evidence_by_id.get(operand.evidence_id)
+    lookup_id = operand.evidence_identity or operand.evidence_id
+    item = evidence_by_id.get(lookup_id)
     if operand.source != "evidence" or not operand.evidence_id or item is None:
         return [f"operand_evidence_missing:{operand.operand_id}"], []
     errors: list[str] = []
-    citations = [operand.evidence_id]
+    citations = [lookup_id]
+    if (
+        operand.evidence_identity
+        and calculation_operand_identity(item, operand) != operand.evidence_identity
+    ):
+        errors.append(f"operand_identity_mismatch:{operand.operand_id}")
     if not operand.cell_id and requires_atomic_calculation_binding(item):
         errors.append(f"operand_atomic_binding_missing:{operand.operand_id}")
     text = _verified_cell_text(operand, item, errors)
@@ -274,14 +290,20 @@ def _verify_operand(
     if operand.unit and not _term_matches(operand.unit, text):
         errors.append(f"operand_unit_mismatch:{operand.operand_id}")
     if operand.scale_evidence_id:
-        scale_item = evidence_by_id.get(operand.scale_evidence_id)
+        scale_lookup_id = operand.scale_evidence_identity or operand.scale_evidence_id
+        scale_item = evidence_by_id.get(scale_lookup_id)
         if scale_item is None:
             errors.append(f"operand_scale_evidence_missing:{operand.operand_id}")
-        elif not _same_source(item, scale_item):
+        elif not same_source(item, scale_item):
             errors.append(f"operand_scale_source_mismatch:{operand.operand_id}")
         else:
             scale_text = _evidence_text(scale_item)
-            citations.append(operand.scale_evidence_id)
+            if (
+                operand.scale_evidence_identity
+                and identity_of(scale_item).key != operand.scale_evidence_identity
+            ):
+                errors.append(f"operand_scale_identity_mismatch:{operand.operand_id}")
+            citations.append(scale_lookup_id)
     if operand.scale and not _term_matches(operand.scale, scale_text):
         errors.append(f"operand_scale_mismatch:{operand.operand_id}")
     if operand.currency and not _currency_matches(operand.currency, text):
@@ -442,7 +464,12 @@ def _verify_required_slots(
     slots = [
         slot
         for slot in required_slots
-        if bool(slot.get("required", True))
+        if bool(
+            slot.get(
+                "required_for_execution",
+                str(slot.get("role") or "support") in {"operand", "dimension"},
+            )
+        )
         and str(slot.get("role") or "support") == "operand"
     ]
     required_ids = [str(slot.get("slot_id") or "") for slot in slots]
@@ -475,7 +502,7 @@ def _operand_matches_slot(
     period = str(slot.get("period") or "").strip()
     if period and operand.period != period:
         return False
-    item = evidence_by_id.get(operand.evidence_id)
+    item = evidence_by_id.get(operand.evidence_identity or operand.evidence_id)
     if item is None:
         return False
     statement_kind, financial_scope = financial_statement_identity(item)
@@ -490,42 +517,6 @@ def _operand_matches_slot(
     if metric and not finance_metric_evidence_matches(metric, metric_text):
         return False
     return True
-
-
-def _evidence_lookup(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    output: dict[str, dict[str, Any]] = {}
-    for item in items:
-        identifiers = [
-            item.get("evidence_id"),
-            item.get("canonical_id"),
-            item.get("element_id"),
-            *(item.get("duplicate_evidence_ids") or []),
-        ]
-        for identifier in identifiers:
-            value = str(identifier or "").strip()
-            if value:
-                output[value] = item
-    return output
-
-
-def _same_source(
-    left: dict[str, Any],
-    right: dict[str, Any],
-) -> bool:
-    left_source = _source_id(left)
-    right_source = _source_id(right)
-    return bool(left_source and left_source == right_source)
-
-
-def _source_id(item: dict[str, Any]) -> str:
-    metadata = dict(item.get("metadata") or {})
-    return str(
-        item.get("source_id")
-        or item.get("file_id")
-        or item.get("document_id")
-        or metadata.get("source_id")
-        or ""
-    ).strip()
 
 
 def _evidence_text(item: dict[str, Any]) -> str:

@@ -4,6 +4,7 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from .evidence_identity import identity_of
 from .finance_evidence_dimensions import evidence_scale, requested_scale
 from .finance_query_planning import (
     FINANCE_METRIC_ALIASES,
@@ -21,8 +22,14 @@ from .query_evidence_constraints import (
     period_kind_conflicts,
     period_kind_in_question,
 )
+from .query_evidence_text import evidence_text, requires_multiple_operands
 from .query_plan_constraints import query_plan_constraints
-from .query_plan_schema import MAX_RETRIEVAL_ROUNDS, EvidenceSlot, QueryPlan
+from .query_plan_schema import (
+    EvidenceSlot,
+    QueryPlan,
+    initial_plan_from_payload,
+    with_plan_id,
+)
 
 _YEAR_RE = re.compile(r"\b(?:fy\s*)?((?:19|20)\d{2})\b|\bfy\s*(\d{2})\b", re.IGNORECASE)
 _VALUE_RE = re.compile(r"(?<![A-Za-z0-9])(?:[$€£¥]\s*)?\(?[+-]?\d[\d,]*(?:\.\d+)?%?\)?")
@@ -59,7 +66,7 @@ _CAUSAL_TERMS = {
     "reasons",
     "why",
 }
-_CROSS_PAGE_TERMS = {"across", "between", "compare", "comparison", "from"}
+_CROSS_PAGE_TERMS = {"across", "between", "compare", "comparison"}
 _MIN_OPERAND_METRIC_COVERAGE = 0.75
 _VISUAL_TERMS = {
     "chart",
@@ -97,15 +104,16 @@ def build_query_plan(
     *,
     answer_type: str = "",
     verification_domain: str = "",
-    planner_payload: dict[str, Any] | None = None,
+    planner_payload: QueryPlan | dict[str, Any] | None = None,
 ) -> QueryPlan:
-    if planner_payload and isinstance(planner_payload.get("evidence_slots"), list):
-        return _plan_from_payload(
-            question,
-            answer_type=answer_type,
-            verification_domain=verification_domain,
-            payload=planner_payload,
-        )
+    planned = initial_plan_from_payload(
+        question,
+        answer_type=answer_type,
+        verification_domain=verification_domain,
+        payload=planner_payload,
+    )
+    if planned is not None:
+        return planned
     text = str(question or "").strip()
     tokens = _tokens(text)
     causal_intent = bool(tokens & _CAUSAL_TERMS)
@@ -145,6 +153,7 @@ def build_query_plan(
         )
         if finance_specs or finance_support_specs
         else _heuristic_slots(
+            text,
             normalized_answer_type,
             question_type,
             periods,
@@ -162,13 +171,40 @@ def build_query_plan(
     if segment_comparison:
         slots = _segment_comparison_slots(slots)
         subqueries = tuple(slot.query for slot in slots if slot.query)
-    return QueryPlan(
+    plan = QueryPlan(
         answer_type=normalized_answer_type,
         question_type=question_type,
         subqueries=subqueries,
         evidence_slots=slots,
         constraints=constraints,
     )
+    return with_plan_id(plan, text)
+
+
+def ensure_request_query_plan(
+    request: Any,
+    *,
+    planner_payload: QueryPlan | dict[str, Any] | None = None,
+) -> QueryPlan:
+    existing = getattr(request, "query_plan", None)
+    if isinstance(existing, QueryPlan):
+        if not getattr(request, "query_plan_id", ""):
+            request.query_plan_id = existing.plan_id
+        return existing
+    payload = existing if isinstance(existing, dict) else planner_payload
+    plan = build_query_plan(
+        request_planning_question(request),
+        answer_type=str(
+            getattr(request, "answer_type", None)
+            or getattr(request, "task_type", None)
+            or ""
+        ),
+        verification_domain=str(getattr(request, "verification_domain", None) or ""),
+        planner_payload=payload,
+    )
+    request.query_plan = plan
+    request.query_plan_id = plan.plan_id
+    return plan
 
 
 def request_planning_question(request: Any) -> str:
@@ -219,10 +255,7 @@ def bind_evidence_slots(
             key=lambda row: (-row[0], row[1]),
         )
         candidate_ids = [
-            str(item.get("evidence_id") or item.get("canonical_id") or "")
-            for score, _index, item in ranked[:3]
-            if score > 0
-            and str(item.get("evidence_id") or item.get("canonical_id") or "")
+            identity_of(item).key for score, _index, item in ranked[:3] if score > 0
         ]
         if slot.role == "operand" and not slot.period:
             candidate_ids = [
@@ -248,7 +281,7 @@ def score_evidence_for_slot(
     *,
     requires_structure: bool = False,
 ) -> float:
-    text = _evidence_text(item).lower()
+    text = evidence_text(item).lower()
     if slot.role == "dimension":
         detected_scale = evidence_scale(text, item)
         if not detected_scale or (slot.scale and slot.scale != detected_scale):
@@ -355,7 +388,7 @@ def missing_required_slots(plan: QueryPlan) -> list[EvidenceSlot]:
     return [
         slot
         for slot in plan.evidence_slots
-        if slot.required and slot.status != "filled"
+        if slot.required_for_retrieval and slot.status != "filled"
     ]
 
 
@@ -365,8 +398,21 @@ def missing_slot_queries(plan: QueryPlan) -> list[str]:
     )
 
 
+def missing_slot_requests(plan: QueryPlan) -> list[dict[str, str]]:
+    return [
+        {
+            "query_id": f"round2:{slot.slot_id}",
+            "slot_id": slot.slot_id,
+            "query": slot.query,
+            "modality": slot.modality or "auto",
+        }
+        for slot in missing_required_slots(plan)
+        if slot.query
+    ]
+
+
 def slot_coverage(plan: QueryPlan) -> float | None:
-    required = [slot for slot in plan.evidence_slots if slot.required]
+    required = [slot for slot in plan.evidence_slots if slot.required_for_retrieval]
     if not required:
         return None
     return sum(slot.status == "filled" for slot in required) / len(required)
@@ -383,6 +429,7 @@ def retrieval_budget(plan: QueryPlan) -> dict[str, int]:
 
 
 def _heuristic_slots(
+    question: str,
     answer_type: str,
     question_type: str,
     periods: list[str],
@@ -396,18 +443,24 @@ def _heuristic_slots(
                 metric=metric,
                 period=period,
                 modality="auto",
+                required_for_execution=True,
                 query=" ".join(value for value in (metric, period) if value),
             )
             for period in periods
         )
     if answer_type == "numeric":
-        roles = ("operand:primary", "operand:secondary")
+        roles = (
+            ("operand:primary", "operand:secondary")
+            if requires_multiple_operands(question)
+            else ("operand:primary",)
+        )
         return tuple(
             EvidenceSlot(
                 slot_id=slot_id,
                 role="operand",
                 metric=metric,
                 modality="auto",
+                required_for_execution=True,
                 query=metric,
             )
             for slot_id in roles
@@ -445,6 +498,7 @@ def _finance_slots(
                 modality="auto",
                 statement_kind=statement_kind,
                 financial_scope=financial_scope,
+                required_for_execution=role == "operand",
                 query=" ".join(value for value in (metric, period) if value),
             )
         )
@@ -456,6 +510,7 @@ def _finance_slots(
         EvidenceSlot(
             slot_id="dimension:scale",
             role="dimension",
+            required_for_execution=True,
             query="tabular dollars unit scale convention",
         ),
     )
@@ -534,67 +589,5 @@ def _metric_phrase(tokens: set[str], periods: list[str]) -> str:
     return " ".join(sorted(values))
 
 
-def _plan_from_payload(
-    question: str,
-    *,
-    answer_type: str,
-    verification_domain: str,
-    payload: dict[str, Any],
-) -> QueryPlan:
-    slots = tuple(
-        EvidenceSlot(
-            slot_id=str(item.get("slot_id") or f"slot:{index}"),
-            role=str(item.get("role") or "support"),
-            entity=str(item.get("entity") or ""),
-            metric=str(item.get("metric") or ""),
-            period=str(item.get("period") or ""),
-            unit=str(item.get("unit") or ""),
-            scale=str(item.get("scale") or ""),
-            statement_kind=str(item.get("statement_kind") or ""),
-            financial_scope=str(item.get("financial_scope") or ""),
-            modality=str(item.get("modality") or "auto"),
-            required=bool(item.get("required", True)),
-            query=str(item.get("query") or "").strip(),
-        )
-        for index, item in enumerate(payload.get("evidence_slots") or [], start=1)
-        if isinstance(item, dict)
-    )
-    subqueries = tuple(
-        str(item).strip()
-        for item in payload.get("subqueries") or []
-        if str(item).strip()
-    )
-    return QueryPlan(
-        answer_type=str(payload.get("answer_type") or answer_type or "free_text"),
-        question_type=str(payload.get("question_type") or "planned"),
-        subqueries=subqueries or tuple(slot.query for slot in slots if slot.query),
-        evidence_slots=slots,
-        constraints={
-            **dict(payload.get("constraints") or {}),
-            "verification_domain": verification_domain,
-            "question": question,
-        },
-        max_retrieval_rounds=min(
-            MAX_RETRIEVAL_ROUNDS,
-            max(1, int(payload.get("max_retrieval_rounds") or MAX_RETRIEVAL_ROUNDS)),
-        ),
-    )
-
-
 def _tokens(text: str) -> set[str]:
     return {token.lower() for token in _TOKEN_RE.findall(str(text or ""))}
-
-
-def _evidence_text(item: dict[str, Any]) -> str:
-    metadata = dict(item.get("metadata") or {})
-    return " ".join(
-        str(value or "")
-        for value in (
-            item.get("text"),
-            item.get("ocr_text"),
-            item.get("vlm_text"),
-            item.get("caption"),
-            metadata.get("section_title"),
-            metadata.get("table_title"),
-        )
-    )

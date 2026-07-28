@@ -27,7 +27,9 @@ def test_finance_numeric_answer_computes_quick_ratio_from_evidence_text():
     assert answer.question_type == "quick_ratio"
     assert answer.calculation_plan["contract_id"] == "calculation_plan.v1"
     assert answer.calculation_verification["valid"] is True
-    assert answer.calculation_execution["citation_ids"] == ["balance-sheet-cell"]
+    assert answer.calculation_execution["citation_ids"] == [
+        "evidence::balance-sheet-cell"
+    ]
 
 
 def test_finance_numeric_answer_computes_percentage_change():
@@ -87,6 +89,7 @@ def test_finance_numeric_answer_binds_operand_dimensions_from_cell_metadata():
     assert operands["prior"] == {
         "operand_id": "prior",
         "evidence_id": "cell-revenue-2021",
+        "evidence_identity": "element::cell-revenue-2021",
         "value": "10.0",
         "unit": "USD",
         "scale": "million",
@@ -99,8 +102,8 @@ def test_finance_numeric_answer_binds_operand_dimensions_from_cell_metadata():
     assert operands["current"]["entity"] == "Example Corp"
     assert answer.calculation_verification["valid"] is True
     assert answer.calculation_execution["citation_ids"] == [
-        "cell-revenue-2021",
-        "cell-revenue-2022",
+        "element::cell-revenue-2021",
+        "element::cell-revenue-2022",
     ]
 
 
@@ -122,8 +125,8 @@ def test_finance_numeric_answer_does_not_reuse_one_cell_for_equal_operands():
     assert answer is not None
     assert answer.calculation_verification["valid"] is True
     assert answer.calculation_execution["citation_ids"] == [
-        "current-assets",
-        "current-liabilities",
+        "element::current-assets",
+        "element::current-liabilities",
     ]
 
 
@@ -223,9 +226,9 @@ def test_finance_numeric_answer_computes_three_period_average():
     assert answer.question_type == "multi_period_average"
     assert answer.calculation_verification["valid"] is True
     assert answer.calculation_execution["citation_ids"] == [
-        "ebitda-2020",
-        "ebitda-2021",
-        "ebitda-2022",
+        "element::ebitda-2020",
+        "element::ebitda-2021",
+        "element::ebitda-2022",
     ]
 
 
@@ -368,7 +371,7 @@ def test_finance_numeric_answer_executes_direct_capex_from_horizontal_cash_flow_
     assert answer.answer == "$4.625 billion"
     assert answer.question_type == "capital_expenditure"
     assert answer.calculation_verification["valid"] is True
-    assert answer.calculation_execution["citation_ids"] == ["pepsico-page-63"]
+    assert answer.calculation_execution["citation_ids"] == ["element::pepsico-page-63"]
 
 
 def test_finance_numeric_answer_rejects_target_scale_inferred_from_unrelated_text():

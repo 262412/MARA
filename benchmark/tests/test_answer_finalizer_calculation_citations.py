@@ -1,6 +1,10 @@
 from typing import Any
 
+from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.financial_table import parse_financial_table_cells
+
 from benchmark.answer_finalizer import finalize_prediction_answer
+from benchmark.calculation_citation_projection import calculation_citation_items
 
 
 def test_finalizer_cites_executed_finance_evidence_not_first_candidate():
@@ -52,3 +56,36 @@ def test_finalizer_cites_executed_finance_evidence_not_first_candidate():
         "$5,818.0 million LOCKHEEDMARTIN_2021_10K#page:30"
     )
     assert prediction["predicted_citations"] == ["LOCKHEEDMARTIN_2021_10K#page:30"]
+    assert [
+        item["evidence_id"] for item in prediction["evidence_metadata"]["used_evidence"]
+    ] == ["working-capital-table"]
+    assert prediction["evidence_metadata"]["cited_evidence"] == (
+        prediction["evidence_metadata"]["used_evidence"]
+    )
+
+
+def test_calculation_citation_resolves_synthetic_cell_identity_to_parent_table():
+    table = {
+        "evidence_id": "cash-flow-table",
+        "source_id": "report",
+        "page_label": "30",
+        "modality": "table",
+        "text": "2021 2020\nCapital spending (4,625) (4,240)",
+    }
+    [cell, *_rest] = parse_financial_table_cells(table)
+    identity_item = {**table, "cell_id": cell.cell_id, "evidence_level": "cell"}
+    cell_identity = identity_of(identity_item).key
+    prediction = {
+        "evidence_bundle": {
+            "metadata": {
+                "finance_numeric_trace": {
+                    "calculation_execution": {
+                        "status": "ok",
+                        "citation_ids": [cell_identity],
+                    }
+                }
+            }
+        }
+    }
+
+    assert calculation_citation_items(prediction, [table]) == [table]

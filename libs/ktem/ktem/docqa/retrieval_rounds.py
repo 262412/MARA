@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from .evidence import EvidenceBundle, build_evidence_bundle
-from .query_planning import request_planning_question
+from .evidence_identity import identity_of
+from .query_planning import ensure_request_query_plan, request_planning_question
 from .route_budget import optional_stage_allowed, route_budget_metadata
 
 EvaluateFn = Callable[..., Any]
@@ -19,7 +20,13 @@ def retrieve_with_rounds(
     retry_poor: bool,
     max_rounds: int = 2,
 ) -> tuple[EvidenceBundle, Any]:
-    evidence_metadata = retrieve(request, decision)
+    plan = ensure_request_query_plan(request)
+    evidence_metadata = _with_retrieval_lineage(
+        retrieve(request, decision),
+        round_id=1,
+        query_id="round1:primary",
+        slot_id="",
+    )
     evidence_bundle = build_evidence_bundle(
         decision.legacy_route,
         request,
@@ -32,14 +39,16 @@ def retrieve_with_rounds(
         evaluate,
         attempted_retry=False,
     )
-    second_round_queries = list(
-        evidence_bundle.metadata.get("second_round_queries") or []
-    )
-    retry_for_slots = bool(second_round_queries)
+    second_round_requests = _second_round_requests(evidence_bundle)
+    retry_for_slots = bool(second_round_requests)
     retry_for_quality = (
         retrieve_decision.status == "ambiguous" and retrieve_decision.retry
     ) or (retrieve_decision.status == "poor" and retrieve_decision.retry and retry_poor)
-    if max_rounds < 2 or (not retry_for_slots and not retry_for_quality):
+    if retry_for_quality and not second_round_requests:
+        second_round_requests = [_quality_retry_request(request)]
+    if min(max_rounds, plan.max_retrieval_rounds) < 2 or (
+        not retry_for_slots and not retry_for_quality
+    ):
         return _with_retrieval_rounds(evidence_bundle, 1), retrieve_decision
     if not optional_stage_allowed(request):
         metadata = dict(evidence_bundle.metadata)
@@ -56,7 +65,7 @@ def retrieve_with_rounds(
         request,
         decision,
         retrieve,
-        second_round_queries,
+        second_round_requests,
     )
     merged_metadata = _merge_retrieval_metadata(
         evidence_metadata,
@@ -78,19 +87,64 @@ def retrieve_with_rounds(
     return evidence_bundle, retrieve_decision
 
 
+def _second_round_requests(bundle: EvidenceBundle) -> list[dict[str, str]]:
+    requests = [
+        dict(item)
+        for item in bundle.metadata.get("second_round_requests") or []
+        if isinstance(item, dict)
+    ]
+    if requests:
+        return requests
+    return [
+        {
+            "query_id": f"round2:legacy:{index}",
+            "slot_id": "",
+            "query": str(query),
+            "modality": "auto",
+        }
+        for index, query in enumerate(
+            bundle.metadata.get("second_round_queries") or [],
+            start=1,
+        )
+    ]
+
+
+def _quality_retry_request(request: Any) -> dict[str, str]:
+    return {
+        "query_id": "round2:quality_retry",
+        "slot_id": "",
+        "query": str(getattr(request, "retrieval_query", "") or ""),
+        "modality": "auto",
+    }
+
+
 def _retrieve_second_round(
     request: Any,
     decision: Any,
     retrieve: RetrieveFn,
-    queries: list[str],
+    requests: list[dict[str, str]],
 ) -> dict[str, Any]:
     original_query = str(getattr(request, "retrieval_query", "") or "")
-    if queries:
-        request.retrieval_query = "\n".join(queries)
+    original_slot_id = str(getattr(request, "retrieval_slot_id", "") or "")
+    original_round_id = int(getattr(request, "retrieval_round_id", 0) or 0)
+    merged: dict[str, Any] = {}
     try:
-        return retrieve(request, decision)
+        for retrieval_request in requests:
+            request.retrieval_query = str(retrieval_request.get("query") or "")
+            request.retrieval_slot_id = str(retrieval_request.get("slot_id") or "")
+            request.retrieval_round_id = 2
+            response = _with_retrieval_lineage(
+                retrieve(request, decision),
+                round_id=2,
+                query_id=str(retrieval_request.get("query_id") or ""),
+                slot_id=request.retrieval_slot_id,
+            )
+            merged = _merge_retrieval_metadata(merged, response)
+        return merged
     finally:
         request.retrieval_query = original_query
+        request.retrieval_slot_id = original_slot_id
+        request.retrieval_round_id = original_round_id
 
 
 def _evaluate(
@@ -142,6 +196,15 @@ def _stable_union(first: list[Any], second: list[Any]) -> list[Any]:
     for item in [*first, *second]:
         identity = _retrieval_value_identity(item)
         if identity in identities:
+            existing_index = next(
+                index
+                for index, existing in enumerate(output)
+                if _retrieval_value_identity(existing) == identity
+            )
+            output[existing_index] = _merge_retrieval_value(
+                output[existing_index],
+                item,
+            )
             continue
         identities.add(identity)
         output.append(item)
@@ -151,11 +214,110 @@ def _stable_union(first: list[Any], second: list[Any]) -> list[Any]:
 def _retrieval_value_identity(value: Any) -> str:
     if not isinstance(value, dict):
         return repr(value)
-    identifier = str(
-        value.get("canonical_id")
-        or value.get("evidence_id")
-        or value.get("doc_id")
-        or value.get("element_id")
-        or ""
-    ).strip()
-    return identifier or repr(sorted(value.items()))
+    try:
+        return identity_of(value).key
+    except ValueError:
+        return repr(sorted(value.items()))
+
+
+def _with_retrieval_lineage(
+    metadata: dict[str, Any],
+    *,
+    round_id: int,
+    query_id: str,
+    slot_id: str,
+) -> dict[str, Any]:
+    output = dict(metadata or {})
+    retriever_names = {
+        "evidence": "text",
+        "page_image_index": "visual",
+        "element_index": "element",
+        "elements": "element",
+        "graph_evidence": "graph",
+    }
+    for key, retriever_name in retriever_names.items():
+        value = output.get(key)
+        if not isinstance(value, list):
+            continue
+        annotated = []
+        for raw_rank, item in enumerate(value, start=1):
+            if not isinstance(item, dict):
+                annotated.append(item)
+                continue
+            record = dict(item)
+            raw_score, score_type = _raw_retrieval_score(record, retriever_name)
+            lineage = {
+                "round_id": round_id,
+                "query_id": query_id,
+                "slot_id": slot_id,
+                "retriever_name": retriever_name,
+                "raw_rank": raw_rank,
+                "raw_score": raw_score,
+                "score_type": score_type,
+            }
+            record["retrieval_lineage"] = [
+                *list(record.get("retrieval_lineage") or []),
+                lineage,
+            ]
+            annotated.append(record)
+        output[key] = annotated
+    return output
+
+
+def _raw_retrieval_score(
+    item: dict[str, Any],
+    retriever_name: str,
+) -> tuple[float | None, str]:
+    metadata = dict(item.get("metadata") or {})
+    fields = {
+        "text": ("retriever_score", "score"),
+        "visual": ("visual_retriever_score", "score"),
+        "element": ("element_retriever_score", "score"),
+        "graph": ("graph_retriever_score", "score"),
+    }
+    for field in fields[retriever_name]:
+        value = item.get(field, metadata.get(field))
+        if value in (None, ""):
+            continue
+        return float(value), field
+    return None, "not_recorded"
+
+
+def _merge_retrieval_value(left: Any, right: Any) -> Any:
+    if not isinstance(left, dict) or not isinstance(right, dict):
+        return left
+    merged = dict(left)
+    merged["retrieval_lineage"] = _stable_dict_union(
+        list(left.get("retrieval_lineage") or []),
+        list(right.get("retrieval_lineage") or []),
+    )
+    merged["source_backrefs"] = list(
+        dict.fromkeys(
+            [
+                *list(left.get("source_backrefs") or []),
+                *list(right.get("source_backrefs") or []),
+            ]
+        )
+    )
+    metadata = dict(left.get("metadata") or {})
+    for key, value in dict(right.get("metadata") or {}).items():
+        if key not in metadata:
+            metadata[key] = value
+    if metadata:
+        merged["metadata"] = metadata
+    return merged
+
+
+def _stable_dict_union(
+    first: list[dict[str, Any]],
+    second: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    seen: set[tuple[tuple[str, str], ...]] = set()
+    for item in [*first, *second]:
+        key = tuple(sorted((str(name), str(value)) for name, value in item.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(item)
+    return output

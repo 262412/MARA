@@ -574,6 +574,17 @@ def test_mara_graph_route_uses_graph_context_without_text_rag(monkeypatch):
                 "file-a": ["chunk-a"],
                 "file-b": ["chunk-b"],
             },
+            "retrieval_lineage": [
+                {
+                    "round_id": 1,
+                    "query_id": "round1:primary",
+                    "slot_id": "",
+                    "retriever_name": "graph",
+                    "raw_rank": 1,
+                    "raw_score": None,
+                    "score_type": "not_recorded",
+                }
+            ],
         }
     ]
     assert metadata["evidence"][0]["evidence_id"] == "graph:component::strategy"

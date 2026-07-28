@@ -48,6 +48,7 @@ def test_evidence_element_preserves_multimodal_identity_fields():
         "chunk_end": None,
         "normalized_text_hash": "",
         "duplicate_evidence_ids": [],
+        "retrieval_lineage": [],
         "bbox": [1, 2, 3, 4],
         "caption": "Revenue table",
         "text": "Revenue increased.",
@@ -82,7 +83,9 @@ def test_visual_route_synthesizes_page_image_evidence_from_request_context():
     assert item["text"] == "The chart compares revenue growth."
     assert item["source_backrefs"] == ["file-1#page:4"]
     assert item["normalized_text_hash"]
-    assert item["canonical_id"].startswith("text:")
+    assert item["canonical_id"] == "evidence:file-1:page-image:file-1:4"
+    assert item["identity"]["kind"] == "evidence"
+    assert item["identity"]["local_id"] == "page-image:file-1:4"
     assert item["metadata"]["route"] == "doc_page_image"
     assert "dedupe_source_ids" not in item["metadata"]
 
@@ -123,11 +126,11 @@ def test_hybrid_route_normalizes_text_page_image_and_element_evidence():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert [item["modality"] for item in bundle.items] == [
+    assert {item["modality"] for item in bundle.items} == {
         "text",
         "table",
         "page_image",
-    ]
+    }
     assert bundle.metadata["modality_counts"] == {
         "page_image": 1,
         "table": 1,
@@ -507,11 +510,11 @@ def test_hybrid_bundle_consumes_multimodal_index_metadata():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert [item["modality"] for item in bundle.items] == [
+    assert {item["modality"] for item in bundle.items} == {
         "text",
         "page_image",
         "figure",
-    ]
+    }
     assert bundle.metadata["modality_counts"] == {
         "figure": 1,
         "page_image": 1,

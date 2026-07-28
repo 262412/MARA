@@ -4,6 +4,8 @@ import re
 from copy import deepcopy
 from typing import Any, Protocol
 
+from .evidence_identity import identity_of
+
 
 class ElementRetrieverBackend(Protocol):
     name: str
@@ -54,11 +56,7 @@ def rank_element_records(
         for index, record in enumerate(records)
     ]
     scored.sort(key=lambda item: (-item[0], item[1]))
-    scores = {
-        str(record.get("evidence_id") or "").strip(): score
-        for score, _, record in scored
-        if str(record.get("evidence_id") or "").strip()
-    }
+    scores = {identity_of(record).key: score for score, _, record in scored}
     ranked = [
         _with_score_metadata(
             record,

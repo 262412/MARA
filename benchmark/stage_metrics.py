@@ -10,13 +10,24 @@ from .calculation_stage_metrics import (
     is_finance_numeric_prediction,
 )
 from .evidence_identity_metrics import gold_evidence_support_recall, reranker_lineage
+from .evidence_stage_coverage import (
+    gold_requirement_keys,
+    matched_gold,
+    reranked_trace_available,
+    stage_coverage_values,
+)
 from .metrics import round_metric, safe_mean
 from .report_identity_compaction import is_identity_only_projection
 
 STAGE_METRIC_KEYS = (
     "candidate_recall_at_50",
+    "candidate_page_coverage_at_50",
     "candidate_pool_recall_at_80",
     "reranked_recall_at_10",
+    "selected_evidence_coverage",
+    "used_evidence_coverage",
+    "verified_evidence_coverage",
+    "cited_evidence_coverage",
     "reranker_lineage_coverage",
     "gold_evidence_support_recall",
     "retrieval_mrr",
@@ -56,10 +67,9 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
         else None
     )
     candidates = candidate_pool[:50] if candidate_pool is not None else None
+    reranked_available = reranked_trace_available(metadata)
     reranked = (
-        _records(metadata.get("reranked_evidence"))[:10]
-        if "reranked_evidence" in metadata
-        else None
+        _records(metadata.get("reranked_evidence"))[:10] if reranked_available else None
     )
     gold_keys = _gold_keys(prediction)
     lineage_coverage = (
@@ -79,9 +89,14 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
     dedupe = dict(metadata.get("dedupe_trace") or {})
     finance = dict(metadata.get("finance_numeric_trace") or {})
     return {
-        "candidate_recall_at_50": _recall(candidates, gold_keys),
-        "candidate_pool_recall_at_80": _recall(candidate_pool, gold_keys),
-        "reranked_recall_at_10": _recall(reranked, gold_keys),
+        **stage_coverage_values(
+            prediction,
+            metadata,
+            candidates=candidates,
+            candidate_pool=candidate_pool,
+            reranked=reranked,
+            gold=gold_keys,
+        ),
         "reranker_lineage_coverage": lineage_coverage,
         "gold_evidence_support_recall": support_recall,
         "retrieval_mrr": _mrr(reranked, gold_keys),
@@ -116,18 +131,25 @@ def prediction_stage_metric_status(
     prediction: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
     metadata = dict(prediction.get("evidence_metadata") or {})
-    gold_count = len(_gold_keys(prediction))
+    requirements = gold_requirement_keys(prediction)
+    gold_count = len(requirements) if requirements else len(_gold_keys(prediction))
     candidate_count = len(_records(metadata.get("candidate_evidence")))
     reranked_count = len(_records(metadata.get("reranked_evidence")))
     candidate_pool = _records(metadata.get("candidate_evidence"))[:80]
     reranked = _records(metadata.get("reranked_evidence"))[:10]
+    stage_trace_keys = (
+        "selected_evidence",
+        "used_evidence",
+        "verified_evidence",
+        "cited_evidence",
+    )
     candidate_status = _retrieval_metric_status(
         gold_count=gold_count,
         trace_available="candidate_evidence" in metadata,
     )
     reranked_status = _retrieval_metric_status(
         gold_count=gold_count,
-        trace_available="reranked_evidence" in metadata,
+        trace_available=reranked_trace_available(metadata),
     )
     status: dict[str, dict[str, Any]] = {
         "candidate_recall_at_50": {
@@ -156,6 +178,17 @@ def prediction_stage_metric_status(
             "candidate_count": reranked_count,
         },
     }
+    for trace_key in stage_trace_keys:
+        metric_key = f"{trace_key}_coverage"
+        records = _records(metadata.get(trace_key))
+        status[metric_key] = {
+            "status": _retrieval_metric_status(
+                gold_count=gold_count,
+                trace_available=trace_key in metadata,
+            ),
+            "gold_identity_count": gold_count,
+            "candidate_count": len(records),
+        }
     status.update(
         _identity_metric_status(
             prediction,
@@ -182,8 +215,8 @@ def _identity_metric_status(
     candidate_pool: list[dict[str, Any]],
     reranked: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    traces_available = (
-        "candidate_evidence" in metadata and "reranked_evidence" in metadata
+    traces_available = "candidate_evidence" in metadata and reranked_trace_available(
+        metadata
     )
     violation_count = (
         reranker_lineage(candidate_pool, reranked)[1] if traces_available else None
@@ -253,64 +286,18 @@ def _gold_keys(prediction: dict[str, Any]) -> set[tuple[str, str, str]]:
         source = str(item.get("source_id") or item.get("document_id") or "")
         page = str(item.get("page_label") or item.get("page") or "")
         element = str(
-            item.get("element_id")
-            or item.get("cell_id")
+            item.get("cell_id")
+            or item.get("span_id")
+            or item.get("element_id")
             or item.get("evidence_id")
             or ""
         )
         if source or page or element:
-            keys.add((source, page, "" if page else element))
+            keys.add((source, page, element))
     if not keys:
         for page in prediction.get("gold_pages") or []:
             keys.add(("", str(page), ""))
     return keys
-
-
-def _item_keys(item: dict[str, Any]) -> set[tuple[str, str, str]]:
-    sources = _item_sources(item) | {""}
-    pages = {str(item.get("page_label") or item.get("page") or ""), ""}
-    elements = {
-        str(
-            item.get("element_id")
-            or item.get("cell_id")
-            or item.get("evidence_id")
-            or ""
-        ),
-        "",
-    }
-    return {
-        (source, page, element)
-        for source in sources
-        for page in pages
-        for element in elements
-    }
-
-
-def _matched_gold(
-    item: dict[str, Any], gold: set[tuple[str, str, str]]
-) -> set[tuple[str, str, str]]:
-    item_keys = _item_keys(item)
-    return {
-        key
-        for key in gold
-        if any(
-            (not key[0] or key[0] == candidate[0])
-            and (not key[1] or key[1] == candidate[1])
-            and (not key[2] or key[2] == candidate[2])
-            for candidate in item_keys
-        )
-    }
-
-
-def _recall(
-    items: list[dict[str, Any]] | None, gold: set[tuple[str, str, str]]
-) -> float | None:
-    if items is None or not gold:
-        return None
-    if not items:
-        return 0.0
-    hits = set().union(*(_matched_gold(item, gold) for item in items))
-    return len(hits) / len(gold)
 
 
 def _mrr(
@@ -320,7 +307,7 @@ def _mrr(
     if items is None or not gold:
         return None
     for rank, item in enumerate(items, start=1):
-        if _matched_gold(item, gold):
+        if matched_gold(item, gold):
             return 1.0 / rank
     return 0.0
 
@@ -336,7 +323,7 @@ def _ndcg(
     seen_gold: set[tuple[str, str, str]] = set()
     gains: list[float] = []
     for item in items:
-        new_matches = _matched_gold(item, gold) - seen_gold
+        new_matches = matched_gold(item, gold) - seen_gold
         gains.append(1.0 if new_matches else 0.0)
         seen_gold.update(new_matches)
     dcg = sum(gain / math.log2(rank + 1) for rank, gain in enumerate(gains, start=1))
@@ -355,9 +342,9 @@ def _all_gold_pages_hit(prediction: dict[str, Any]) -> float | None:
 
 def _element_recall(prediction: dict[str, Any]) -> float | None:
     gold = {
-        str(item.get("element_id") or item.get("cell_id") or "")
+        str(item.get("cell_id") or item.get("span_id") or item.get("element_id") or "")
         for item in _records(prediction.get("gold_evidence"))
-        if item.get("element_id") or item.get("cell_id")
+        if item.get("cell_id") or item.get("span_id") or item.get("element_id")
     }
     if not gold:
         return None
@@ -410,20 +397,6 @@ def _float_or_none(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
-
-
-def _item_sources(item: dict[str, Any]) -> set[str]:
-    sources = {
-        str(item.get("source_id") or ""),
-        str(item.get("document_id") or ""),
-    }
-    source_name = str(item.get("source_name") or item.get("file_name") or "")
-    if source_name:
-        filename = source_name.rsplit("/", 1)[-1]
-        sources.add(filename.rsplit(".", 1)[0])
-    for source_ref in item.get("source_backrefs") or []:
-        sources.add(str(source_ref or "").split("#", 1)[0])
-    return {source for source in sources if source}
 
 
 def _retrieval_metric_status(*, gold_count: int, trace_available: bool) -> str:

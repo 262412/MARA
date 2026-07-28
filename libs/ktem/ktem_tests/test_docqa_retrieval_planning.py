@@ -130,6 +130,139 @@ def test_second_round_targets_only_missing_evidence_slot():
     assert result.evidence_bundle.metadata["slot_coverage"] == 1.0
 
 
+def test_second_round_retrieves_each_missing_slot_independently():
+    queries = []
+
+    def retrieve(request, _decision):
+        queries.append((request.retrieval_query, request.retrieval_slot_id))
+        if len(queries) == 1:
+            return {
+                "evidence": [
+                    _finance_cell(
+                        "current-assets",
+                        "Current assets",
+                        "100",
+                    )
+                ]
+            }
+        if request.retrieval_slot_id.endswith("current_liabilities"):
+            return {
+                "evidence": [
+                    _finance_cell(
+                        "current-liabilities",
+                        "Current liabilities",
+                        "50",
+                    )
+                ]
+            }
+        return {
+            "evidence": [
+                _finance_cell(
+                    "inventories",
+                    "Inventories",
+                    "10",
+                )
+            ]
+        }
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt="What was the quick ratio in FY2023?",
+            retrieval_query="quick ratio FY2023",
+            task_type="numeric",
+            verification_domain="finance",
+            route_policy="doc",
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: "1.8",
+    )
+
+    assert len(queries) == 3
+    assert {slot_id for _query, slot_id in queries[1:]} == {
+        "operand:current_liabilities",
+        "operand:inventory",
+    }
+    assert all("\n" not in query for query, _slot_id in queries[1:])
+    assert result.evidence_bundle.metadata["retrieval_rounds"] == 2
+    assert result.evidence_bundle.metadata["slot_coverage"] == 1.0
+    lineage_by_id = {
+        item["evidence_id"]: item["retrieval_lineage"]
+        for item in result.evidence_bundle.metadata["candidate_evidence"]
+    }
+    assert lineage_by_id["current-assets"] == [
+        {
+            "round_id": 1,
+            "query_id": "round1:primary",
+            "slot_id": "",
+            "retriever_name": "text",
+            "raw_rank": 1,
+            "raw_score": None,
+            "score_type": "not_recorded",
+        }
+    ]
+    assert lineage_by_id["current-liabilities"][0]["slot_id"] == (
+        "operand:current_liabilities"
+    )
+    assert lineage_by_id["current-liabilities"][0]["round_id"] == 2
+
+
+def test_missing_required_slot_after_second_round_blocks_generation():
+    calls = []
+
+    def retrieve(_request, _decision):
+        calls.append(1)
+        return {
+            "evidence": [
+                _finance_cell(
+                    "current-assets",
+                    "Current assets",
+                    "100",
+                )
+            ]
+        }
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt="What was the quick ratio in FY2023?",
+            retrieval_query="quick ratio FY2023",
+            task_type="numeric",
+            verification_domain="finance",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: (_ for _ in ()).throw(
+            AssertionError("missing required slots must block generation")
+        ),
+    )
+
+    assert len(calls) == 3
+    assert result.retrieve_decision.status == "poor"
+    assert result.guardrail_decision.action == "abstain"
+
+
+def _finance_cell(evidence_id, row_label, value):
+    return {
+        "evidence_id": evidence_id,
+        "file_id": "report",
+        "page_label": "4",
+        "element_id": "balance-sheet",
+        "table_id": "balance-sheet",
+        "cell_id": evidence_id,
+        "evidence_level": "cell",
+        "row_label": row_label,
+        "column_label": "2023",
+        "period": "2023",
+        "period_kind": "fiscal_year",
+        "statement_kind": "balance_sheet",
+        "financial_scope": "consolidated",
+        "value": value,
+        "scale": "million",
+        "modality": "table",
+        "text": f"{row_label} 2023 {value} million",
+    }
+
+
 def test_second_round_retrieves_missing_same_source_scale_convention():
     queries = []
 

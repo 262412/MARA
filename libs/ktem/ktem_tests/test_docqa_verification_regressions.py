@@ -251,7 +251,7 @@ def test_verifier_supports_quick_ratio_result_matching_evidence_numbers():
     )
 
     assert payload["verify_decision"]["status"] == "supported"
-    assert payload["guardrail_decision"]["action"] == "return"
+    assert payload["guardrail_decision"]["action"] == "generate"
 
 
 def test_verifier_focuses_finance_questions_on_final_numeric_conclusion():
@@ -281,10 +281,10 @@ def test_verifier_focuses_finance_questions_on_final_numeric_conclusion():
             "view does not show a reasonably healthy liquidity profile."
         )
     ]
-    assert payload["guardrail_decision"]["action"] == "return"
+    assert payload["guardrail_decision"]["action"] == "generate"
 
 
-def test_default_verifier_does_not_apply_finance_numeric_adapter():
+def test_default_verifier_still_rejects_conflicting_numeric_claim():
     payload = build_controller_outputs(
         DocQARequest(
             prompt=_quick_ratio_prompt(),
@@ -298,9 +298,14 @@ def test_default_verifier_does_not_apply_finance_numeric_adapter():
         ),
     )
 
-    assert payload["verify_decision"]["status"] == "supported"
-    assert payload["verify_decision"]["unsupported_claims"] == []
-    assert payload["guardrail_decision"]["action"] == "return"
+    assert payload["verify_decision"]["status"] == "unsupported"
+    assert payload["verify_decision"]["unsupported_claims"] == [
+        (
+            "Based on current assets, inventories, and current liabilities, "
+            "3M's quick ratio was 1.20."
+        )
+    ]
+    assert payload["guardrail_decision"]["action"] == "revise"
 
 
 def test_default_verifier_supports_short_source_level_evidence():
@@ -557,7 +562,7 @@ def test_execute_controller_turn_abstains_on_unsupported_quick_ratio_result():
         generate=generate,
     )
 
-    assert result.verify_decision.status == "unsupported"
+    assert result.verify_decision.status == "not_enough_evidence"
     assert result.guardrail_decision.action == "abstain"
     assert result.answer
 

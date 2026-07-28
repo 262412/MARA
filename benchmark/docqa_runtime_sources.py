@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
+from ktem.docqa.evidence_identity import EvidenceIdentity, identity_of
+
 from .schemas import BenchmarkDocument
 
 SHORT_SOURCE_TEXT_MAX_CHARS = 4096
@@ -268,7 +270,35 @@ def _canonicalize_docqa_hit(
         aliases,
         canonical_id,
     )
+    source_aliases = [
+        str(value).strip()
+        for value in normalized.get("source_aliases") or []
+        if str(value).strip()
+    ]
+    if runtime_source_id and runtime_source_id not in source_aliases:
+        source_aliases.append(runtime_source_id)
+    if source_aliases:
+        normalized["source_aliases"] = source_aliases
+    identity = _canonical_hit_identity(normalized, canonical_id)
+    normalized["identity"] = identity.as_dict()
+    normalized["canonical_id"] = identity.key
     return normalized
+
+
+def _canonical_hit_identity(
+    hit: dict[str, Any],
+    canonical_source_id: str,
+) -> EvidenceIdentity:
+    existing = hit.get("identity")
+    if isinstance(existing, dict):
+        kind = str(existing.get("kind") or "").strip()
+        local_id = str(existing.get("local_id") or "").strip()
+        if kind and local_id:
+            return EvidenceIdentity(canonical_source_id, kind, local_id)
+    identity_input = dict(hit)
+    identity_input.pop("identity", None)
+    identity_input.pop("canonical_id", None)
+    return identity_of(identity_input)
 
 
 def _hit_canonical_document_id(

@@ -4,6 +4,8 @@ import types
 from benchmark.docqa_runtime_sources import has_search_index
 from benchmark.engines import get_engine
 from benchmark.schemas import BenchmarkConfig, BenchmarkDocument, BenchmarkExample
+from benchmark.tests.runtime_source_fixtures import canonical_short_source_hit
+from benchmark.tests.runtime_source_fixtures import runtime_hit as _runtime_hit
 
 
 def test_docqa_runtime_engine_reindexes_existing_file_without_search_index(
@@ -140,10 +142,17 @@ def test_docqa_runtime_engine_derives_hits_pages_sources_and_elements(
             "document_id": "doc",
             "source_id": "doc",
             "runtime_source_id": "file-1",
+            "source_aliases": ["file-1"],
             "source_name": "doc.txt",
             "page_label": "2",
             "modality": "text",
             "element_id": "chunk-1",
+            "canonical_id": "element:doc:chunk-1",
+            "identity": {
+                "source_id": "doc",
+                "kind": "element",
+                "local_id": "chunk-1",
+            },
             "score": 0.91,
             "text": "Revenue increased.",
             "source_backrefs": ["doc#page:2"],
@@ -200,18 +209,7 @@ def test_docqa_runtime_engine_falls_back_to_selected_short_text_source(
 
     result = _run_docqa_runtime(doc_path, tmp_path)
 
-    assert result.retrieved_hits == [
-        {
-            "evidence_id": "doc#source",
-            "document_id": "doc",
-            "source_id": "doc",
-            "runtime_source_id": "file-1",
-            "source_name": "doc.txt",
-            "modality": "text",
-            "text": "Yelp",
-            "source_backrefs": ["doc#source"],
-        }
-    ]
+    assert result.retrieved_hits == [canonical_short_source_hit()]
     assert result.predicted_sources == ["doc#source"]
     assert result.predicted_pages == []
 
@@ -396,6 +394,12 @@ def test_docqa_runtime_engine_canonicalizes_source_backrefs_without_source_id(
             "document_id": "doc",
             "source_id": "doc",
             "source_name": "Generic entity",
+            "canonical_id": "evidence:doc:graph-hit",
+            "identity": {
+                "source_id": "doc",
+                "kind": "evidence",
+                "local_id": "graph-hit",
+            },
             "text": "Graph evidence.",
             "source_backrefs": ["doc#page:2", "doc#page:3"],
         }
@@ -566,20 +570,6 @@ class _ResponseRuntime:
     def run_turn(self, request):
         self.requests.append(request)
         return self.response
-
-
-def _runtime_hit():
-    return {
-        "evidence_id": "hit-1",
-        "source_id": "file-1",
-        "source_name": "doc.txt",
-        "page_label": "2",
-        "modality": "text",
-        "element_id": "chunk-1",
-        "score": 0.91,
-        "text": "Revenue increased.",
-        "source_backrefs": ["file-1#page:2"],
-    }
 
 
 def _metadata_hit():

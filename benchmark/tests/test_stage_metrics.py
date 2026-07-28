@@ -64,34 +64,41 @@ def test_stage_metrics_report_retrieval_pages_dedup_slots_and_calculation():
     assert metrics["retrieval_mrr"] == 1.0
     assert metrics["retrieval_ndcg"] is not None
     assert metrics["retrieval_ndcg"] > 0.9
-    assert metrics["all_gold_pages_hit"] == 1.0
-    assert metrics["gold_table_cell_recall"] == 1.0
-    assert metrics["slot_coverage"] == 1.0
-    assert metrics["retrieval_slot_coverage"] == 1.0
-    assert metrics["verified_slot_coverage"] == 1.0
-    assert metrics["unique_pages"] == 2.0
-    assert metrics["duplicate_ratio"] == 0.25
-    assert metrics["operand_accuracy"] == 1.0
-    assert metrics["all_operands_bound"] == 1.0
-    assert metrics["executor_activation_rate"] == 1.0
-    assert metrics["program_accuracy"] == 1.0
-    assert metrics["execution_accuracy"] == 1.0
-    assert metrics["binding_verifier_pass_rate"] == 1.0
-    assert metrics["program_validity_rate"] == 1.0
-    assert metrics["execution_success_rate"] == 1.0
-    assert metrics["executed_answer_accuracy"] == 1.0
-    assert metrics["unit_accuracy"] == 1.0
-    assert metrics["successful_execution_unit_accuracy"] == 1.0
-    assert metrics["claim_duplicate_rate"] == 1 / 3
-    assert metrics["final_answer_duplicate_rate"] == 0.0
-    assert metrics["final_answer_repetition_repair_rate"] == 1.0
-    assert metrics["judge_failure_rate"] == 0.0
+    _assert_successful_stage_metrics(metrics)
     assert (
         prediction_stage_metric_status(prediction)["calculation_pipeline"][
             "failure_stage"
         ]
         == "none"
     )
+
+
+def _assert_successful_stage_metrics(metrics: dict[str, Any]) -> None:
+    expected = {
+        "all_gold_pages_hit": 1.0,
+        "gold_table_cell_recall": 1.0,
+        "slot_coverage": 1.0,
+        "retrieval_slot_coverage": 1.0,
+        "verified_slot_coverage": 1.0,
+        "unique_pages": 2.0,
+        "duplicate_ratio": 0.25,
+        "operand_accuracy": 1.0,
+        "all_operands_bound": 1.0,
+        "executor_activation_rate": 1.0,
+        "program_accuracy": 1.0,
+        "execution_accuracy": 1.0,
+        "binding_verifier_pass_rate": 1.0,
+        "program_validity_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "executed_answer_accuracy": 1.0,
+        "unit_accuracy": 1.0,
+        "successful_execution_unit_accuracy": 1.0,
+        "claim_duplicate_rate": 1 / 3,
+        "final_answer_duplicate_rate": 0.0,
+        "final_answer_repetition_repair_rate": 1.0,
+        "judge_failure_rate": 0.0,
+    }
+    assert {key: metrics[key] for key in expected} == expected
 
 
 def test_execution_success_does_not_imply_executed_answer_correctness():
@@ -293,6 +300,38 @@ def test_finance_stage_metrics_count_cell_binding_mismatch_as_cell_error():
     assert metrics["program_accuracy"] == 0.0
 
 
+def test_calculation_metrics_remain_bounded_with_multiple_errors_per_operand():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "numeric",
+        "evidence_metadata": {
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [{"operand_id": "revenue"}],
+                    "steps": [{"step_id": "result", "operator": "add"}],
+                },
+                "calculation_verification": {
+                    "valid": False,
+                    "verified_operand_ids": [],
+                    "errors": [
+                        "operand_cell_mismatch:revenue",
+                        "operand_value_mismatch:revenue",
+                        "operand_period_mismatch:revenue",
+                        "invalid_operator_arity:result",
+                        "unsupported_operator:result",
+                    ],
+                },
+                "calculation_execution": {"status": "error"},
+            }
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["cell_accuracy"] == 0.0
+    assert metrics["operator_accuracy"] == 0.0
+
+
 def test_finance_stage_metrics_do_not_measure_long_form_query_plan_as_numeric():
     prediction = {
         "dataset_name": "financebench",
@@ -355,7 +394,25 @@ def test_retrieval_metrics_distinguish_missing_trace_from_measured_empty_result(
     assert empty_status["candidate_recall_at_50"]["status"] == "measured"
 
 
-def test_candidate_page_recall_does_not_require_matching_gold_element_id():
+def test_reranked_metrics_are_unavailable_when_backend_explicitly_did_not_run():
+    prediction = {
+        "gold_evidence": [{"source_id": "report", "page_label": "2"}],
+        "evidence_metadata": {
+            "candidate_evidence": [{"source_id": "report", "page_label": "2"}],
+            "reranked_evidence": [{"source_id": "report", "page_label": "2"}],
+            "ranking_trace": {"backend_execution": False},
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+    status = prediction_stage_metric_status(prediction)
+
+    assert metrics["candidate_recall_at_50"] == 1.0
+    assert metrics["reranked_recall_at_10"] is None
+    assert status["reranked_recall_at_10"]["status"] == "unavailable"
+
+
+def test_candidate_evidence_recall_requires_gold_element_when_it_is_available():
     prediction = {
         "gold_pages": [4],
         "gold_evidence": [
@@ -388,9 +445,93 @@ def test_candidate_page_recall_does_not_require_matching_gold_element_id():
 
     metrics = prediction_stage_metrics(prediction)
 
-    assert metrics["candidate_recall_at_50"] == 1.0
-    assert metrics["reranked_recall_at_10"] == 1.0
+    assert metrics["candidate_recall_at_50"] == 0.0
+    assert metrics["reranked_recall_at_10"] == 0.0
+    assert metrics["candidate_page_coverage_at_50"] == 1.0
     assert metrics["gold_table_cell_recall"] == 0.0
+
+
+def test_stage_metrics_keep_selected_used_verified_and_cited_evidence_distinct():
+    gold = {
+        "source_id": "report",
+        "page_label": "2",
+        "cell_id": "revenue-2023",
+        "identity": {
+            "source_id": "report",
+            "kind": "cell",
+            "local_id": "revenue-2023",
+        },
+    }
+    wrong = {
+        "source_id": "report",
+        "page_label": "8",
+        "cell_id": "expense-2023",
+    }
+    prediction = {
+        "gold_evidence": [gold],
+        "evidence_metadata": {
+            "candidate_evidence": [gold, wrong],
+            "selected_evidence": [wrong],
+            "used_evidence": [gold],
+            "verified_evidence": [gold],
+            "cited_evidence": [wrong],
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+    status = prediction_stage_metric_status(prediction)
+
+    assert metrics["candidate_recall_at_50"] == 1.0
+    assert metrics["reranked_recall_at_10"] is None
+    assert metrics["selected_evidence_coverage"] == 0.0
+    assert metrics["used_evidence_coverage"] == 1.0
+    assert metrics["verified_evidence_coverage"] == 1.0
+    assert metrics["cited_evidence_coverage"] == 0.0
+    assert status["reranked_recall_at_10"]["status"] == "unavailable"
+    assert status["selected_evidence_coverage"]["status"] == "measured"
+
+
+def test_candidate_coverage_accepts_declared_equivalent_evidence_requirement():
+    prediction = {
+        "gold_evidence": [
+            {
+                "source_id": "report",
+                "page_label": "2",
+                "cell_id": "revenue-cell",
+            }
+        ],
+        "gold_evidence_requirements": [
+            {
+                "requirement_id": "operand:revenue",
+                "acceptable_evidence": [
+                    {
+                        "source_id": "report",
+                        "page_label": "2",
+                        "cell_id": "revenue-cell",
+                    },
+                    {
+                        "source_id": "report",
+                        "page_label": "3",
+                        "span_id": "revenue-narrative",
+                    },
+                ],
+            }
+        ],
+        "evidence_metadata": {
+            "candidate_evidence": [
+                {
+                    "source_id": "report",
+                    "page_label": "3",
+                    "span_id": "revenue-narrative",
+                }
+            ]
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["candidate_recall_at_50"] == 1.0
+    assert metrics["candidate_page_coverage_at_50"] == 0.0
 
 
 def test_retrieval_ndcg_counts_each_gold_identity_only_once():

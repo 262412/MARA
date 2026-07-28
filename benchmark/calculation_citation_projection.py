@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.evidence_identity import evidence_aliases, identity_of
+from ktem.docqa.financial_table import parse_financial_table_cells
+
 
 def calculation_citation_items(
     prediction: dict[str, Any],
@@ -13,19 +16,34 @@ def calculation_citation_items(
     matched: list[dict[str, Any]] = []
     for citation_id in citation_ids:
         for item in candidates:
-            item_ids = {
-                str(item.get(field) or "").strip()
-                for field in (
-                    "evidence_id",
-                    "cell_id",
-                    "canonical_id",
-                    "element_id",
-                )
-            }
-            if citation_id in item_ids:
+            if citation_id in _calculation_item_aliases(item):
                 matched.append(item)
                 break
     return matched
+
+
+def record_calculation_stage_evidence(
+    prediction: dict[str, Any],
+    items: list[dict[str, Any]],
+) -> None:
+    metadata = prediction.get("evidence_metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        prediction["evidence_metadata"] = metadata
+    metadata["used_evidence"] = list(items)
+    metadata["cited_evidence"] = list(items)
+
+
+def _calculation_item_aliases(item: dict[str, Any]) -> set[str]:
+    aliases = evidence_aliases(item)
+    for cell in parse_financial_table_cells(item):
+        cell_item = dict(item)
+        cell_item.pop("identity", None)
+        cell_item.pop("canonical_id", None)
+        cell_item["cell_id"] = cell.cell_id
+        cell_item["evidence_level"] = "cell"
+        aliases.add(identity_of(cell_item).key)
+    return aliases
 
 
 def _calculation_citation_ids(prediction: dict[str, Any]) -> list[str]:

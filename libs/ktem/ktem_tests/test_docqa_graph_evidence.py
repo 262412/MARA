@@ -63,7 +63,7 @@ def test_graph_route_builds_graph_level_evidence_with_source_backrefs():
     assert item["source_backrefs"] == ["file-a", "file-b"]
     assert item["evidence_level"] == "graph"
     assert item["metadata"] == {"route": "graph_global"}
-    assert item["canonical_id"].startswith("text:")
+    assert item["canonical_id"] == "element::theme-1"
     assert item["normalized_text_hash"]
     assert bundle.metadata["schema_version"] == "evidence_bundle.v2"
 

@@ -4,6 +4,8 @@ import math
 import re
 from typing import Any
 
+from .evidence_identity import identity_of
+from .evidence_set_objective import marginal_set_gain
 from .evidence_structure import structure_coverage_context
 from .query_planning import (
     QueryPlan,
@@ -16,7 +18,6 @@ from .required_slot_selection import slot_score as _slot_score
 
 MMR_LAMBDA = 0.7
 RERANK_CANDIDATE_LIMIT = 30
-MIN_STRUCTURE_METADATA_COVERAGE = 0.8
 
 _TOKEN_RE = re.compile(r"[\w.%$€£¥-]+", re.UNICODE)
 _PHRASE_TOKEN_RE = re.compile(r"[\w]+", re.UNICODE)
@@ -86,14 +87,7 @@ def select_evidence_for_plan(
     selected: list[dict[str, Any]] = []
     selected_ids: set[str] = set()
 
-    if candidates and not plan.evidence_slots:
-        lead = candidates[0]
-        if plan.question_type == "simple_fact":
-            lead = min(
-                candidates,
-                key=lambda item: (-_relevance(query, item), _identity(item)),
-            )
-        _append_selected(lead, selected, selected_ids)
+    _seed_unplanned_selection(query, candidates, plan, selected, selected_ids)
     _select_required_slot_evidence(
         query,
         candidates,
@@ -117,7 +111,12 @@ def select_evidence_for_plan(
         mixed_structure_coverage,
         structure_coverage_scope,
     ) = structure_coverage_context(candidates)
-    structure_expansion_enabled = structure_coverage >= MIN_STRUCTURE_METADATA_COVERAGE
+    structure_expansion_enabled = any(
+        item.get("continuation_id")
+        or item.get("parent_element_id")
+        or item.get("neighbor_element_ids")
+        for item in candidates
+    )
     continuation_count = 0
     if structure_expansion_enabled:
         continuation_count = _expand_structure(
@@ -130,6 +129,7 @@ def select_evidence_for_plan(
     _fill_with_mmr(
         query,
         candidates,
+        plan,
         selected,
         selected_ids,
         max_items=budget["max_items"],
@@ -164,6 +164,24 @@ def _selection_context(
         candidate_limit=RERANK_CANDIDATE_LIMIT,
     )
     return candidates, restored_required, retrieval_budget(plan)
+
+
+def _seed_unplanned_selection(
+    query: str,
+    candidates: list[dict[str, Any]],
+    plan: QueryPlan,
+    selected: list[dict[str, Any]],
+    selected_ids: set[str],
+) -> None:
+    if not candidates or plan.evidence_slots:
+        return
+    lead = candidates[0]
+    if plan.question_type == "simple_fact":
+        lead = min(
+            candidates,
+            key=lambda item: (-_relevance(query, item), _identity(item)),
+        )
+    _append_selected(lead, selected, selected_ids)
 
 
 def _select_required_slot_evidence(
@@ -215,7 +233,7 @@ def _selection_trace(
 ) -> dict[str, Any]:
     pages = _pages(selected)
     return {
-        "strategy": "slot_coverage_then_constrained_mmr_v2",
+        "strategy": "marginal_evidence_set_selection_v3",
         "candidate_count": len(candidates),
         "selected_count": len(selected),
         "max_items": budget["max_items"],
@@ -226,7 +244,8 @@ def _selection_trace(
         ],
         "slot_coverage": slot_coverage(bound),
         "missing_required_slot_count": sum(
-            slot.required and slot.status != "filled" for slot in bound.evidence_slots
+            slot.required_for_retrieval and slot.status != "filled"
+            for slot in bound.evidence_slots
         ),
         "continuation_expansion_count": continuation_count,
         "page_modality_expansion_count": page_modality_count,
@@ -307,6 +326,7 @@ def _expand_structure(
 def _fill_with_mmr(
     query: str,
     candidates: list[dict[str, Any]],
+    plan: QueryPlan,
     selected: list[dict[str, Any]],
     selected_ids: set[str],
     *,
@@ -326,7 +346,10 @@ def _fill_with_mmr(
         ranked = sorted(
             remaining,
             key=lambda item: (
-                -_mmr_score(query, item, selected, mmr_lambda),
+                -(
+                    _mmr_score(query, item, selected, mmr_lambda)
+                    + marginal_set_gain(item, selected, plan)
+                ),
                 _identity(item),
             ),
         )
@@ -341,7 +364,8 @@ def _mmr_score(
 ) -> float:
     relevance = _relevance(query, item)
     redundancy = max((_similarity(item, other) for other in selected), default=0.0)
-    return mmr_lambda * relevance - (1.0 - mmr_lambda) * redundancy
+    cost = min(1.0, len(_tokens(_item_text(item))) / 500)
+    return mmr_lambda * relevance - (1.0 - mmr_lambda) * redundancy - 0.1 * cost
 
 
 def _relevance(query: str, item: dict[str, Any]) -> float:
@@ -512,7 +536,7 @@ def _append_selected(
 
 
 def _identity(item: dict[str, Any]) -> str:
-    return str(item.get("canonical_id") or item.get("evidence_id") or id(item))
+    return identity_of(item).key
 
 
 def _item_text(item: dict[str, Any]) -> str:
