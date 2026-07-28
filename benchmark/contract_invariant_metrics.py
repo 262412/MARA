@@ -4,11 +4,14 @@ from typing import Any
 
 from ktem.docqa.benchmark_evidence import benchmark_evidence_record
 from ktem.docqa.calculation_evidence_identity import calculation_evidence_lookup
+from ktem.docqa.evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_locators import normalized_source_page_locators
+from ktem.docqa.query_plan_schema import plan_from_payload
+from ktem.docqa.query_planning import score_evidence_for_slot
 
 from .evidence_identity_metrics import reranker_lineage
-from .metrics import is_abstention_answer, safe_mean
+from .metrics import is_abstention_answer, numeric_tolerance_score, safe_mean
 
 _ATOMIC_ROUNDTRIP_FIELDS = (
     "cell_id",
@@ -92,6 +95,22 @@ def contract_invariant_summary(
             float(value["missing_execution_slot_answer_count"] or 0.0)
             for value in metrics
         ),
+        "required_slot_false_fill_count": _sum_metric(
+            metrics,
+            "required_slot_false_fill_count",
+        ),
+        "source_page_cross_join_count": _sum_metric(
+            metrics,
+            "source_page_cross_join_count",
+        ),
+        "calculation_render_mismatch_count": _sum_metric(
+            metrics,
+            "calculation_render_mismatch_count",
+        ),
+        "qasper_stale_verifier_state_count": _sum_metric(
+            metrics,
+            "qasper_stale_verifier_state_count",
+        ),
     }
 
 
@@ -121,6 +140,18 @@ def _prediction_contract_metrics(
         ),
         "missing_execution_slot_answer_count": float(
             _answered_with_missing_execution_slot(prediction, metadata)
+        ),
+        "required_slot_false_fill_count": float(
+            _required_slot_false_fills(prediction, metadata)
+        ),
+        "source_page_cross_join_count": float(
+            _source_page_cross_joins(candidates, cited)
+        ),
+        "calculation_render_mismatch_count": float(
+            _calculation_render_mismatch(prediction, metadata)
+        ),
+        "qasper_stale_verifier_state_count": float(
+            _qasper_stale_verifier_state(prediction, metadata)
         ),
     }
 
@@ -199,6 +230,172 @@ def _citation_provenance_violations(
         )
         for item in cited
     )
+
+
+def _required_slot_false_fills(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+) -> int:
+    payload = metadata.get("query_plan")
+    if not isinstance(payload, dict) or not isinstance(
+        payload.get("evidence_slots"),
+        list,
+    ):
+        return 0
+    plan = plan_from_payload(
+        str(prediction.get("question") or ""),
+        answer_type=str(
+            payload.get("answer_type") or prediction.get("answer_type") or ""
+        ),
+        verification_domain=str(
+            dict(payload.get("constraints") or {}).get("verification_domain")
+            or prediction.get("verification_domain")
+            or ""
+        ),
+        payload=payload,
+    )
+    items = _contract_evidence_items(metadata)
+    lookup = unambiguous_evidence_alias_lookup(items)
+    requires_structure = bool(plan.constraints.get("requires_structure"))
+    violations = 0
+    for slot in plan.evidence_slots:
+        required = bool(
+            slot.required
+            or slot.required_for_retrieval
+            or slot.required_for_execution
+            or slot.required_for_verification
+        )
+        if not required or slot.status != "filled":
+            continue
+        resolved = [
+            lookup[evidence_id]
+            for evidence_id in slot.evidence_ids
+            if evidence_id in lookup
+        ]
+        if not resolved:
+            violations += 1
+            continue
+        if not _slot_has_match_constraints(slot):
+            continue
+        if not any(
+            score_evidence_for_slot(
+                slot,
+                item,
+                requires_structure=requires_structure,
+            )
+            > 0
+            for item in resolved
+        ):
+            violations += 1
+    return violations
+
+
+def _slot_has_match_constraints(slot: Any) -> bool:
+    locator = slot.locator.as_dict() if slot.locator is not None else {}
+    return bool(
+        locator
+        or slot.entity
+        or slot.metric
+        or slot.period
+        or slot.period_kind
+        or slot.unit
+        or slot.scale
+        or slot.statement_kind
+        or slot.financial_scope
+        or slot.modality not in {"", "auto"}
+    )
+
+
+def _contract_evidence_items(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for key in (
+        "canonical_candidate_evidence",
+        "candidate_evidence",
+        "fused_evidence",
+        "reranker_input_evidence",
+        "reranked_evidence",
+        "selected_evidence",
+        "generation_context_evidence",
+        "execution_operand_evidence",
+    ):
+        for item in _records(metadata.get(key)):
+            identity = identity_of(item).key
+            if identity in seen:
+                continue
+            seen.add(identity)
+            items.append(item)
+    return items
+
+
+def _source_page_cross_joins(
+    candidates: list[dict[str, Any]],
+    cited: list[dict[str, Any]],
+) -> int:
+    valid_pairs = set().union(
+        *(normalized_source_page_locators(item) for item in candidates)
+    )
+    sources = {source for source, _page in valid_pairs if source}
+    pages = {page for _source, page in valid_pairs if page}
+    invalid: set[tuple[str, str]] = set()
+    for item in cited:
+        for source, page in normalized_source_page_locators(item):
+            if (
+                source
+                and page
+                and (source, page) not in valid_pairs
+                and source in sources
+                and page in pages
+            ):
+                invalid.add((source, page))
+    return len(invalid)
+
+
+def _calculation_render_mismatch(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+) -> int:
+    trace = metadata.get("finance_numeric_trace")
+    if not isinstance(trace, dict):
+        return 0
+    execution = trace.get("calculation_execution")
+    if not isinstance(execution, dict) or execution.get("status") != "ok":
+        return 0
+    value = str(execution.get("value") or "").strip()
+    answer = str(
+        prediction.get("answer_for_scoring") or prediction.get("predicted_answer") or ""
+    ).strip()
+    if not value or not answer or is_abstention_answer(answer):
+        return 0
+    return int(numeric_tolerance_score(answer, [value]) != 1.0)
+
+
+def _qasper_stale_verifier_state(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+) -> int:
+    if not isinstance(prediction.get("pre_contract_verification"), dict):
+        return 0
+    post = prediction.get("post_contract_verification")
+    if not isinstance(post, dict):
+        return 1
+    final_answer = str(
+        prediction.get("answer_for_scoring") or prediction.get("predicted_answer") or ""
+    )
+    if _normalized_answer(post.get("answer")) != _normalized_answer(final_answer):
+        return 1
+    post_decision = post.get("verify_decision")
+    if not isinstance(post_decision, dict):
+        return 1
+    if prediction.get("verify_decision") != post_decision:
+        return 1
+    if metadata.get("verify_decision") != post_decision:
+        return 1
+    return int(metadata.get("answer_dependent_state") != "post_contract_verified")
+
+
+def _normalized_answer(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().split())
 
 
 def _answered_with_missing_execution_slot(

@@ -33,6 +33,9 @@ ROUTE_TIMEOUT_SECONDS="${MARA_TEXT_ROUTE_TIMEOUT_SECONDS:-${MARA_FINAL_ROUTE_TIM
 SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"
 SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"
 SEMANTIC_EVALUATOR_TIMEOUT_SECONDS="${MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS:-60}"
+ARTIFACT_DETAIL="${MARA_TEXT_ARTIFACT_DETAIL:-compact}"
+REQUIRE_CONTRACT_SMOKE="${MARA_REQUIRE_CONTRACT_SMOKE:-0}"
+CONTRACT_SMOKE_SUITE_KIND="${MARA_CONTRACT_SMOKE_SUITE_KIND:-}"
 SUITE_NAME="${NAME}-${RUN_ID}"
 LOG_ROOT="${OUT_ROOT}/logs/${RUN_ID}"
 BENCHMARK_LOG="${LOG_ROOT}/benchmark.log"
@@ -151,6 +154,7 @@ log "manifest=${MANIFEST}"
 log "output=${OUT_ROOT}"
 log "suite=${SUITE_NAME}"
 log "route=${ROUTE} limit=${LIMIT} sample_seed=${SAMPLE_SEED} max_context=${MAX_CONTEXT_LENGTH} route_timeout=${ROUTE_TIMEOUT_SECONDS}"
+log "artifact_detail=${ARTIFACT_DETAIL} require_contract_smoke=${REQUIRE_CONTRACT_SMOKE} contract_smoke_suite_kind=${CONTRACT_SMOKE_SUITE_KIND:-none}"
 log "text_llm_base_url=${TEXT_LLM_BASE_URL}"
 log "retrieval_base_url=${RETRIEVAL_BASE_URL}"
 log "node=${SLURMD_NODENAME:-$(hostname)}"
@@ -239,7 +243,7 @@ uv run --python 3.10 python -m benchmark run \
   --sample-seed "$SAMPLE_SEED" \
   "${SHARD_ARGS[@]}" \
   --output-dir "$OUT_ROOT" \
-  --artifact-detail compact \
+  --artifact-detail "$ARTIFACT_DETAIL" \
   --benchmark-prompt-policy gold_answer_v1 \
   --benchmark-prompt-profile auto \
   --benchmark-answer-mode scoring_adapter_v1 \
@@ -265,6 +269,16 @@ uv run --python 3.10 python \
   "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \
   "$RUN_DIR/predictions.jsonl" \
   "${VALIDATION_ARGS[@]}"
+if [[ "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
+  if [[ -z "$CONTRACT_SMOKE_SUITE_KIND" ]]; then
+    log "MARA_CONTRACT_SMOKE_SUITE_KIND is required for contract smoke validation"
+    exit 2
+  fi
+  uv run --python 3.10 python \
+    "${PROJECT_ROOT}/scripts/slurm/validate_contract_smoke.py" \
+    "$RUN_DIR" \
+    --suite-kind "$CONTRACT_SMOKE_SUITE_KIND"
+fi
 
 log "outputs=${RUN_DIR}"
 mara_cleanup_benchmark_runtime

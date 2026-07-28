@@ -65,6 +65,10 @@ class ReleaseGate:
     ]
 
 
+def _zero_contract_gate(metric: str, failure_stage: str) -> ReleaseGate:
+    return ReleaseGate(metric, 0.0, "eq", failure_stage, "contract")
+
+
 CONTRACT_GATES = (
     ReleaseGate("token_f1_rescore_delta", 0.0, "eq", "evaluation", "contract"),
     ReleaseGate("qasper_structure_valid", 1.0, "ge", "task_contract", "contract"),
@@ -136,6 +140,10 @@ CONTRACT_GATES = (
         "calculation",
         "contract",
     ),
+    _zero_contract_gate("required_slot_false_fill_count", "planning"),
+    _zero_contract_gate("source_page_cross_join_count", "citation"),
+    _zero_contract_gate("calculation_render_mismatch_count", "calculation"),
+    _zero_contract_gate("qasper_stale_verifier_state_count", "task_contract"),
 )
 JUDGE_CALIBRATION_GATES = (
     ReleaseGate(
