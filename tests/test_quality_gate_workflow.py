@@ -176,6 +176,16 @@ def test_supply_chain_jobs_build_scan_and_retain_evidence():
     assert "skopeo copy" in container_commands
     assert "docker-daemon:" in container_commands
     assert "smoke_container_runtime.py" in container_commands
+    expected_image_ref = "mara-quality:${{ matrix.target }}-${{ github.sha }}"
+    trivy_steps = [
+        step
+        for step in container["steps"]
+        if "aquasecurity/trivy-action@" in step.get("uses", "")
+    ]
+    assert len(trivy_steps) == 3
+    for step in trivy_steps:
+        assert step["with"]["image-ref"] == expected_image_ref
+        assert "input" not in step["with"]
 
     python_commands = _commands(python)
     assert "publish_packages.py check" in python_commands
