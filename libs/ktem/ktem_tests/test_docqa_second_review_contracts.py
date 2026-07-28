@@ -43,9 +43,7 @@ def test_offline_sidecar_preserves_atomic_cell_fields(tmp_path):
                         "financial_scope": "consolidated",
                         "continuation_id": "income-pages-4-5",
                         "retrieval_lineage": [{"retriever_name": "sidecar"}],
-                        "representations": [
-                            {"modality": "ocr", "text": "Revenue 120"}
-                        ],
+                        "representations": [{"modality": "ocr", "text": "Revenue 120"}],
                         "ocr_text": "Revenue 120",
                         "vlm_text": "A revenue cell",
                         "modality": "table",
@@ -348,7 +346,11 @@ def test_generic_claim_with_support_and_contradiction_is_conflicting():
     result = verify_claim(
         "Model A outperformed Model B.",
         [
-            {"source_id": "paper", "span_id": "yes", "text": "Model A outperformed Model B."},
+            {
+                "source_id": "paper",
+                "span_id": "yes",
+                "text": "Model A outperformed Model B.",
+            },
             {
                 "source_id": "paper",
                 "span_id": "no",

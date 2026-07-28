@@ -2890,7 +2890,6 @@ dependencies = [
     { name = "langchain-mistralai" },
     { name = "langchain-ollama" },
     { name = "langchain-openai" },
-    { name = "llama-hub" },
     { name = "llama-index" },
     { name = "llama-index-vector-stores-chroma" },
     { name = "llama-index-vector-stores-lancedb" },
@@ -3026,7 +3025,6 @@ requires-dist = [
     { name = "langchain-ollama", specifier = "<2" },
     { name = "langchain-openai", specifier = "<2" },
     { name = "llama-cpp-python", marker = "extra == 'llama-cpp'", specifier = "<0.2.8" },
-    { name = "llama-hub", specifier = ">=0.0.79,<0.1.0" },
     { name = "llama-index", specifier = ">=0.10.40,<0.11.0" },
     { name = "llama-index", marker = "extra == 'mara-runtime'", specifier = ">=0.10.40,<0.11.0" },
     { name = "llama-index-vector-stores-chroma", specifier = ">=0.1.9" },
@@ -3434,22 +3432,6 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b1/78/bd5e6653102ea16ce53a044cec606f257811da99c9c2a760af6a93cdfef3/llama_cpp_python-0.2.7.tar.gz", hash = "sha256:2267d3e90bf461ee581dc78332007ea15d9b40e79471850455458b399e3f1887", size = 1559658, upload-time = "2023-09-25T18:45:53.604Z" }
-
-[[package]]
-name = "llama-hub"
-version = "0.0.79.post1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "html2text" },
-    { name = "llama-index" },
-    { name = "psutil" },
-    { name = "pyaml" },
-    { name = "retrying" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8e/93/f6145e786f2052a6f474660eea7bf195a1cdc7ace46fd0eec9bfd6a403b9/llama_hub-0.0.79.post1.tar.gz", hash = "sha256:3dac59bbe87c4f8c1ac211c977c3265acd6c95b9460cfac9a9315f87dd449484", size = 97929713, upload-time = "2024-02-13T01:32:31.871Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/64/fe/53056ecef5c7666a1a8d1a7ea36a99369a977750ed871e8266d891d56f0c/llama_hub-0.0.79.post1-py3-none-any.whl", hash = "sha256:b4f9e6513ca5ee336256eb19a8b0d623bfc19fa5b82e864e12d092997ebc657a", size = 103923929, upload-time = "2024-02-13T01:32:10.488Z" },
-]
 
 [[package]]
 name = "llama-index"
@@ -5537,18 +5519,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyaml"
-version = "23.12.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pyyaml" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/d0/3d/ddd68d7e8e0173f4ce450056835b759d986fa1cab7bf1a0fa142feed93cd/pyaml-23.12.0.tar.gz", hash = "sha256:ce6f648efdfb1b3a5579f8cedb04facf0fa1e8f64846b639309b585bb322b4e5", size = 26308, upload-time = "2023-12-25T17:44:17.128Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/25/ec/8aaf0d127751f84d8b10395fe47def9ac3552990b70abffdd92714836d39/pyaml-23.12.0-py3-none-any.whl", hash = "sha256:90407d74c95a55d9b41d3860fcc1759640444d2795df748a328d077bc4f58393", size = 23218, upload-time = "2023-12-25T17:44:14.748Z" },
-]
-
-[[package]]
 name = "pyarrow"
 version = "21.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -6445,15 +6415,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f3/61/d7545dafb7ac2230c70d38d31cbfe4cc64f7144dc41f6e4e4b78ecd9f5bb/requests-toolbelt-1.0.0.tar.gz", hash = "sha256:7681a0a3d047012b5bdc0ee37d7f8f07ebe76ab08caeccfc3921ce23c88d5bc6", size = 206888, upload-time = "2023-05-01T04:11:33.229Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3f/51/d4db610ef29373b879047326cbf6fa98b6c1969d6f6dc423279de2b1be2c/requests_toolbelt-1.0.0-py2.py3-none-any.whl", hash = "sha256:cccfdd665f0a24fcf4726e690f65639d272bb0637b9b92dfd91a5568ccf6bd06", size = 54481, upload-time = "2023-05-01T04:11:28.427Z" },
-]
-
-[[package]]
-name = "retrying"
-version = "1.4.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c8/5a/b17e1e257d3e6f2e7758930e1256832c9ddd576f8631781e6a072914befa/retrying-1.4.2.tar.gz", hash = "sha256:d102e75d53d8d30b88562d45361d6c6c934da06fab31bd81c0420acb97a8ba39", size = 11411, upload-time = "2025-08-03T03:35:25.189Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/67/f3/6cd296376653270ac1b423bb30bd70942d9916b6978c6f40472d6ac038e7/retrying-1.4.2-py3-none-any.whl", hash = "sha256:bbc004aeb542a74f3569aeddf42a2516efefcdaff90df0eb38fbfbf19f179f59", size = 10859, upload-time = "2025-08-03T03:35:23.829Z" },
 ]
 
 [[package]]

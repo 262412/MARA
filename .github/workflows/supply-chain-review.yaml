@@ -72,6 +72,8 @@ jobs:
               "trivy.yaml",
               "trivy.yml",
               "scripts/check_container_lock_parity.py",
+              "scripts/check_dependency_audit.py",
+              "scripts/dependency_audit_baseline.json",
               "scripts/generate_container_attestation.py",
               "scripts/generate_distribution_attestations.py",
               "scripts/publish_packages.py",

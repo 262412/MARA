@@ -5,8 +5,8 @@ from typing import Any, Callable
 from .claim_aggregation import aggregate_answer_claims
 from .claim_revision import revise_to_supported_claims
 from .controller import RetrieveDecision, VerifyDecision
-from .evidence_schema import EvidenceBundle
 from .evidence_identity import identity_of
+from .evidence_schema import EvidenceBundle
 from .evidence_text import extract_final_answer_text
 from .pipeline_stage_timings import PipelineStageTimings
 
@@ -68,6 +68,35 @@ def verify_generated_answer(
                 ),
                 list(trace_prefix or []),
             )
+    return _verify_nonempty_answer(
+        request,
+        decision,
+        retrieve_decision,
+        bundle,
+        answer,
+        rewrite,
+        trace_prefix,
+        timings,
+        verify=verify,
+        guardrail_factory=guardrail_factory,
+        abstain_message=abstain_message,
+    )
+
+
+def _verify_nonempty_answer(
+    request: Any,
+    decision: Any,
+    retrieve_decision: RetrieveDecision,
+    bundle: EvidenceBundle,
+    answer: str,
+    rewrite: RewriteFn | None,
+    trace_prefix: list[dict[str, Any]] | None,
+    timings: PipelineStageTimings,
+    *,
+    verify: VerifyFn,
+    guardrail_factory: GuardrailFactory,
+    abstain_message: str,
+) -> tuple[str, VerifyDecision, Any, list[dict[str, Any]]]:
     answer, aggregation_trace = timings.measure(
         "finalization_seconds",
         aggregate_answer_claims,
@@ -252,8 +281,6 @@ def _verification_mode(request: Any) -> str:
 def _bundle_citation_ids(bundle: EvidenceBundle) -> list[str]:
     return list(
         dict.fromkeys(
-            identity_of(item).key
-            for item in bundle.items
-            if identity_of(item).key
+            identity_of(item).key for item in bundle.items if identity_of(item).key
         )
     )

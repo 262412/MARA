@@ -181,7 +181,7 @@ def check_secret_scan(root: Path) -> list[ContractIssue]:
             ContractIssue(
                 Path(".gitleaksignore"),
                 "gitleaks-fingerprint-baseline",
-                "only the eight triaged historical fingerprints are allowed",
+                "only the nine triaged historical fingerprints are allowed",
             )
         )
     config_path = root / ".gitleaks.toml"
@@ -305,9 +305,27 @@ def check_dependency_audit(root: Path) -> list[ContractIssue]:
             )
         )
     commands = "\n".join(str(step.get("run", "")) for step in audit.get("steps", []))
-    for token in ("uv audit --project", "--frozen", "--python-version"):
+    for token in (
+        "check_dependency_audit.py",
+        "--profile",
+        "--project",
+        "--python-version",
+    ):
         if token not in commands:
             issues.append(ContractIssue(path, "dependency-audit", f"missing {token}"))
+    setup_python = any(
+        str(step.get("uses", "")).startswith("actions/setup-python@")
+        and step.get("with", {}).get("python-version") == "3.10"
+        for step in audit.get("steps", [])
+    )
+    if not setup_python:
+        issues.append(
+            ContractIssue(
+                path,
+                "dependency-audit-python",
+                "dependency audit must provision the repository Python",
+            )
+        )
     return issues
 
 

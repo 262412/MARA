@@ -313,9 +313,10 @@ def _check_quality_supply_chain(root: Path) -> list[Violation]:
         ('exit-code: "1"', source, "container-scan-fail"),
         ("sbom", source.lower(), "container-sbom"),
         ("provenance", source.lower(), "container-provenance"),
-        ("type=docker", source, "container-runtime-image"),
+        ("type=oci", source, "container-runtime-image"),
         ("no-cache: true", source, "container-clean-build"),
-        ("docker load", commands, "container-load"),
+        ("skopeo copy", commands, "container-load"),
+        ("docker-daemon:", commands, "container-load-target"),
         ("smoke_container_runtime.py", commands, "container-runtime-smoke"),
     )
     for token, haystack, rule in contract_tokens:

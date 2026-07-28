@@ -8,6 +8,8 @@ RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
     "prompt",
     "controller_question",
     "retrieval_query",
+    "retrieval_slot_id",
+    "retrieval_round_id",
     "dataset_family",
     "conversation_id",
     "selected_file_ids",
@@ -32,6 +34,10 @@ RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
     "route_policy",
     "planner_backend",
     "planner_model",
+    "planned_query_plan",
+    "query_plan",
+    "query_plan_id",
+    "query_plan_state_version",
     "allowed_routes",
     "verification_mode",
     "verification_domain",
@@ -102,6 +108,12 @@ class DocQARequest:
     element_index_records: list[dict[str, Any]] | None = None
     route_timeout_seconds: float | None = None
     route_deadline_monotonic: float | None = None
+    retrieval_slot_id: str = ""
+    retrieval_round_id: int = 0
+    planned_query_plan: Any = None
+    query_plan: Any = None
+    query_plan_id: str = ""
+    query_plan_state_version: int = 0
 
 
 def to_runtime_docqa_request(request: DocQARequest):
@@ -121,6 +133,8 @@ def to_runtime_docqa_request(request: DocQARequest):
         prompt=deepcopy(request.prompt),
         controller_question=deepcopy(request.controller_question),
         retrieval_query=deepcopy(request.retrieval_query),
+        retrieval_slot_id=deepcopy(request.retrieval_slot_id),
+        retrieval_round_id=deepcopy(request.retrieval_round_id),
         dataset_family=deepcopy(request.dataset_family),
         conversation_id=deepcopy(request.conversation_id),
         selected_file_ids=deepcopy(request.selected_file_ids),
@@ -145,6 +159,10 @@ def to_runtime_docqa_request(request: DocQARequest):
         route_policy=deepcopy(request.route_policy),
         planner_backend=deepcopy(request.planner_backend),
         planner_model=deepcopy(request.planner_model),
+        planned_query_plan=deepcopy(request.planned_query_plan),
+        query_plan=deepcopy(request.query_plan),
+        query_plan_id=deepcopy(request.query_plan_id),
+        query_plan_state_version=deepcopy(request.query_plan_state_version),
         allowed_routes=deepcopy(request.allowed_routes),
         verification_mode=deepcopy(request.verification_mode),
         verification_domain=deepcopy(request.verification_domain),

@@ -11,3 +11,7 @@ c6dd01e8203aacdecd01541cac8429c596fe889a:.gitsecret/paths/mapping.cfg:generic-ap
 026df48b2c2fac399bdfd334bb05a3a588664cda:mara-stream-debug.jsonl:generic-api-key:3
 026df48b2c2fac399bdfd334bb05a3a588664cda:mara-stream-debug.jsonl:generic-api-key:5
 026df48b2c2fac399bdfd334bb05a3a588664cda:mara-stream-debug.jsonl:generic-api-key:19714
+
+# Removed PromptUI tunnel credential from 2023. Keep this exact historical
+# fingerprint quarantined without weakening scans of the current tree or new commits.
+aab982ddc4ab882155fcdac89cc3de480d184069:knowledgehub/contribs/promptui/tunnel.py:mara-promptui-frp-token:100

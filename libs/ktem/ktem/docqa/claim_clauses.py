@@ -9,12 +9,7 @@ _CLAUSE_BOUNDARY_RE = re.compile(
 
 
 def split_claim_clauses(claims: list[str]) -> list[str]:
-    return [
-        clause
-        for claim in claims
-        for clause in split_claim_text(claim)
-        if clause
-    ]
+    return [clause for claim in claims for clause in split_claim_text(claim) if clause]
 
 
 def split_claim_text(value: str) -> list[str]:

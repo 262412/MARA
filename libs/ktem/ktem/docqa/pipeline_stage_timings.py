@@ -35,6 +35,5 @@ class PipelineStageTimings:
 
     def record(self, bundle: EvidenceBundle) -> None:
         bundle.metadata["pipeline_stage_timings"] = {
-            key: round(max(0.0, float(value)), 6)
-            for key, value in self.values.items()
+            key: round(max(0.0, float(value)), 6) for key, value in self.values.items()
         }

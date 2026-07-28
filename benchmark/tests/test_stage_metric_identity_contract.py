@@ -8,9 +8,7 @@ def test_all_gold_pages_hit_uses_source_page_pairs():
         "predicted_pages": [5],
         "predicted_sources": ["document-b"],
         "evidence_metadata": {
-            "selected_evidence": [
-                {"source_id": "document-b", "page_label": "5"}
-            ]
+            "selected_evidence": [{"source_id": "document-b", "page_label": "5"}]
         },
     }
 

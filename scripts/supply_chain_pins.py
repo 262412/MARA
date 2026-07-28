@@ -62,6 +62,7 @@ GITLEAKS_IGNORE_FINGERPRINTS = (
     "026df48b2c2fac399bdfd334bb05a3a588664cda:mara-stream-debug.jsonl:generic-api-key:3",
     "026df48b2c2fac399bdfd334bb05a3a588664cda:mara-stream-debug.jsonl:generic-api-key:5",
     "026df48b2c2fac399bdfd334bb05a3a588664cda:mara-stream-debug.jsonl:generic-api-key:19714",
+    "aab982ddc4ab882155fcdac89cc3de480d184069:knowledgehub/contribs/promptui/tunnel.py:mara-promptui-frp-token:100",
 )
 SETUP_UV_ACTION = "astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4"
 SETUP_UV_VERSION = "0.11.19"

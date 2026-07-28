@@ -68,22 +68,18 @@ def element_record_from_mapping(
     default_evidence_id: str = "",
 ) -> dict[str, Any] | None:
     metadata = _metadata(value)
-    runtime_source_id = _first(value, metadata, "runtime_source_id")
-    source_id = _first(value, metadata, "source_id") or runtime_source_id
-    file_id = (
-        _first(value, metadata, "file_id", "document_id")
-        or source_id
-        or str(default_file_id or "").strip()
+    identity = _record_identity(
+        value,
+        metadata,
+        default_file_id=default_file_id,
+        default_page_label=default_page_label,
+        default_element_id=default_element_id,
     )
-    source_id = source_id or file_id
-    page_label = (
-        _first(value, metadata, "page_label", "page", "page_number", "dataset_page")
-        or str(default_page_label or "").strip()
-    )
-    element_id = (
-        _first(value, metadata, "element_id", "id")
-        or str(default_element_id or "").strip()
-    )
+    runtime_source_id = identity["runtime_source_id"]
+    source_id = identity["source_id"]
+    file_id = identity["file_id"]
+    page_label = identity["page_label"]
+    element_id = identity["element_id"]
     cell_id = _first(value, metadata, "cell_id")
     span_id = _first(value, metadata, "span_id")
     if not element_id:
@@ -126,6 +122,59 @@ def element_record_from_mapping(
         "source_backrefs": _source_backrefs(value, metadata, source_id, page_label),
         "metadata": metadata,
     }
+    _copy_structured_fields(output, value, metadata)
+    _set_evidence_level(output, cell_id=cell_id, span_id=span_id)
+    canonical = canonicalize_evidence_item(output)
+    record = {
+        key: item
+        for key, item in canonical.items()
+        if item not in ("", [], None) or key in {"bbox", "metadata"}
+    }
+    return _serialize_value(record)
+
+
+def _record_identity(
+    value: dict[str, Any],
+    metadata: dict[str, Any],
+    *,
+    default_file_id: str,
+    default_page_label: str,
+    default_element_id: str,
+) -> dict[str, str]:
+    runtime_source_id = _first(value, metadata, "runtime_source_id")
+    source_id = _first(value, metadata, "source_id") or runtime_source_id
+    file_id = (
+        _first(value, metadata, "file_id", "document_id")
+        or source_id
+        or str(default_file_id or "").strip()
+    )
+    return {
+        "runtime_source_id": runtime_source_id,
+        "source_id": source_id or file_id,
+        "file_id": file_id,
+        "page_label": (
+            _first(
+                value,
+                metadata,
+                "page_label",
+                "page",
+                "page_number",
+                "dataset_page",
+            )
+            or str(default_page_label or "").strip()
+        ),
+        "element_id": (
+            _first(value, metadata, "element_id", "id")
+            or str(default_element_id or "").strip()
+        ),
+    }
+
+
+def _copy_structured_fields(
+    output: dict[str, Any],
+    value: dict[str, Any],
+    metadata: dict[str, Any],
+) -> None:
     for field in ATOMIC_ELEMENT_FIELDS:
         field_value = _value(value, metadata, field)
         if field_value not in (None, "", []):
@@ -141,6 +190,14 @@ def element_record_from_mapping(
     scores = _value(value, metadata, "scores")
     if isinstance(scores, dict) and scores:
         output["scores"] = dict(scores)
+
+
+def _set_evidence_level(
+    output: dict[str, Any],
+    *,
+    cell_id: str,
+    span_id: str,
+) -> None:
     if cell_id:
         output["cell_id"] = cell_id
         output.setdefault("evidence_level", "cell")
@@ -149,13 +206,6 @@ def element_record_from_mapping(
         output.setdefault("evidence_level", "span")
     else:
         output.setdefault("evidence_level", "element")
-    canonical = canonicalize_evidence_item(output)
-    record = {
-        key: item
-        for key, item in canonical.items()
-        if item not in ("", [], None) or key in {"bbox", "metadata"}
-    }
-    return _serialize_value(record)
 
 
 def _metadata(value: dict[str, Any]) -> dict[str, Any]:
