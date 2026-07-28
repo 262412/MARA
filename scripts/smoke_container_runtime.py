@@ -71,7 +71,7 @@ def _check_runtime(container: str, target: str) -> None:
             'touch "$probe"; rm "$probe"; test ! -w /opt/mara'
         ),
     )
-    processes = _run("docker", "top", container, "-eo", "args").stdout
+    processes = _run("docker", "top", container, "-eo", "pid,args").stdout
     has_ollama = "ollama serve" in processes
     if has_ollama != (target == "ollama"):
         raise RuntimeError(
