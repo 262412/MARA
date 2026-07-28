@@ -371,7 +371,7 @@ jobs:
       - name: Scan fixable high and critical image findings
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          input: /tmp/mara-${{ matrix.target }}.oci.tar
+          image-ref: mara-quality:${{ matrix.target }}-${{ github.sha }}
           scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           ignore-unfixed: true
@@ -381,7 +381,7 @@ jobs:
       - name: Generate SPDX image SBOM
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          input: /tmp/mara-${{ matrix.target }}.oci.tar
+          image-ref: mara-quality:${{ matrix.target }}-${{ github.sha }}
           scanners: vuln
           format: spdx-json
           output: container-evidence/${{ matrix.target }}.spdx.json
@@ -389,7 +389,7 @@ jobs:
       - name: Generate CycloneDX image SBOM
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          input: /tmp/mara-${{ matrix.target }}.oci.tar
+          image-ref: mara-quality:${{ matrix.target }}-${{ github.sha }}
           scanners: vuln
           format: cyclonedx
           output: container-evidence/${{ matrix.target }}.cdx.json

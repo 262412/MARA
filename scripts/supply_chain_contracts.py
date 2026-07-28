@@ -329,6 +329,129 @@ def check_dependency_audit(root: Path) -> list[ContractIssue]:
     return issues
 
 
+def _check_container_quality_contract(
+    path: Path, source: str, container: dict
+) -> list[ContractIssue]:
+    issues: list[ContractIssue] = []
+    matrix = container.get("strategy", {}).get("matrix", {}).get("target")
+    if matrix != ["lite", "full", "ollama"]:
+        issues.append(
+            ContractIssue(
+                path,
+                "container-matrix",
+                "quality gate must build lite/full/ollama",
+            )
+        )
+    commands = "\n".join(
+        str(step.get("run", "")) for step in container.get("steps", [])
+    )
+    uses = "\n".join(str(step.get("uses", "")) for step in container.get("steps", []))
+    required_tokens = (
+        ("docker/build-push-action@", uses, "container-build"),
+        ("aquasecurity/trivy-action@", uses, "container-scan"),
+        ("vuln,secret,misconfig", source, "container-scanners"),
+        ("HIGH,CRITICAL", source, "container-severity"),
+        ("ignore-unfixed: true", source, "container-fixable-only"),
+        ('exit-code: "1"', source, "container-scan-fail"),
+        ("sbom", source.lower(), "container-sbom"),
+        ("provenance", source.lower(), "container-provenance"),
+        ("type=oci", source, "container-runtime-image"),
+        ("no-cache: true", source, "container-clean-build"),
+        ("skopeo copy", commands, "container-load"),
+        ("docker-daemon:", commands, "container-load-target"),
+        ("smoke_container_runtime.py", commands, "container-runtime-smoke"),
+    )
+    for token, haystack, rule in required_tokens:
+        if token not in haystack:
+            issues.append(ContractIssue(path, rule, f"missing {token}", token))
+    expected_image_ref = "mara-quality:${{ matrix.target }}-${{ github.sha }}"
+    trivy_steps = [
+        step
+        for step in container.get("steps", [])
+        if "aquasecurity/trivy-action@" in str(step.get("uses", ""))
+    ]
+    if len(trivy_steps) != 3:
+        issues.append(
+            ContractIssue(path, "container-scan-count", "three Trivy stages required")
+        )
+    for step in trivy_steps:
+        inputs = step.get("with", {})
+        if inputs.get("image-ref") != expected_image_ref or "input" in inputs:
+            issues.append(
+                ContractIssue(
+                    path,
+                    "container-scan-artifact",
+                    "Trivy must scan the OCI artifact imported into the local image tag",
+                )
+            )
+    if commands and "--target" not in commands and "target:" not in source:
+        issues.append(
+            ContractIssue(
+                path,
+                "container-target",
+                "matrix target is not passed to build",
+            )
+        )
+    return issues
+
+
+def _check_quality_job_contracts(path: Path, jobs: dict) -> list[ContractIssue]:
+    issues: list[ContractIssue] = []
+    python_source = str(jobs.get("python-supply-chain", {})).lower()
+    for token in (
+        "mara-app",
+        "mara-research-cli",
+        "kotaemon",
+        "ktem",
+        "sbom",
+        "provenance",
+    ):
+        if token not in python_source:
+            issues.append(
+                ContractIssue(path, "python-attestation", f"missing {token}", token)
+            )
+    static_commands = "\n".join(
+        str(step.get("run", "")) for step in jobs.get("static", {}).get("steps", [])
+    )
+    for token in (
+        "uv lock --project docker --check",
+        "check_container_lock_parity.py",
+        "check_supply_chain_policy.py",
+    ):
+        if token not in static_commands:
+            issues.append(
+                ContractIssue(path, "static-supply-chain", f"missing {token}", token)
+            )
+    required_needs = set(jobs.get("required", {}).get("needs", []))
+    for required_job in (
+        "container-supply-chain",
+        "python-supply-chain",
+        "dependency-audit",
+    ):
+        if required_job not in required_needs:
+            issues.append(
+                ContractIssue(
+                    path,
+                    "required-needs",
+                    f"required does not need {required_job}",
+                    required_job,
+                )
+            )
+    return issues
+
+
+def check_quality_supply_chain(root: Path) -> list[ContractIssue]:
+    path = Path(".github/workflows/quality-gates.yaml")
+    source = (root / path).read_text(encoding="utf-8")
+    jobs = _load_yaml(root, path).get("jobs", {})
+    return [
+        *_check_container_quality_contract(
+            path, source, jobs.get("container-supply-chain", {})
+        ),
+        *_check_quality_job_contracts(path, jobs),
+    ]
+
+
 def check_configuration(root: Path) -> list[ContractIssue]:
     return [
         *check_precommit(root),
@@ -338,4 +461,5 @@ def check_configuration(root: Path) -> list[ContractIssue]:
         *check_trusted_review(root),
         *check_signed_provenance(root),
         *check_dependency_audit(root),
+        *check_quality_supply_chain(root),
     ]

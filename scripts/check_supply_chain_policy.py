@@ -249,103 +249,6 @@ def _check_release_freeze(
     return violations
 
 
-def _check_quality_static_contract(
-    path: Path, source: str, jobs: dict
-) -> list[Violation]:
-    violations: list[Violation] = []
-    commands = "\n".join(
-        str(step.get("run", "")) for step in jobs.get("static", {}).get("steps", [])
-    )
-    for token in (
-        "uv lock --project docker --check",
-        "check_container_lock_parity.py",
-        "check_supply_chain_policy.py",
-    ):
-        if token not in commands:
-            violations.append(
-                _violation(path, source, "static-supply-chain", f"missing {token}")
-            )
-    required_needs = set(jobs.get("required", {}).get("needs", []))
-    for required_job in (
-        "container-supply-chain",
-        "python-supply-chain",
-        "dependency-audit",
-    ):
-        if required_job not in required_needs:
-            violations.append(
-                _violation(
-                    path,
-                    source,
-                    "required-needs",
-                    f"required does not need {required_job}",
-                )
-            )
-    return violations
-
-
-def _check_quality_supply_chain(root: Path) -> list[Violation]:
-    path = WORKFLOW_DIR / "quality-gates.yaml"
-    source = (root / path).read_text(encoding="utf-8")
-    workflow = _load_yaml(root, path)
-    jobs = workflow.get("jobs", {})
-    violations: list[Violation] = []
-    container = jobs.get("container-supply-chain", {})
-    matrix = container.get("strategy", {}).get("matrix", {}).get("target")
-    if matrix != ["lite", "full", "ollama"]:
-        violations.append(
-            _violation(
-                path,
-                source,
-                "container-matrix",
-                "quality gate must build lite/full/ollama",
-            )
-        )
-    commands = "\n".join(
-        str(step.get("run", "")) for step in container.get("steps", [])
-    )
-    uses = "\n".join(str(step.get("uses", "")) for step in container.get("steps", []))
-    contract_tokens = (
-        ("docker/build-push-action@", uses, "container-build"),
-        ("aquasecurity/trivy-action@", uses, "container-scan"),
-        ("vuln,secret,misconfig", source, "container-scanners"),
-        ("HIGH,CRITICAL", source, "container-severity"),
-        ("ignore-unfixed: true", source, "container-fixable-only"),
-        ('exit-code: "1"', source, "container-scan-fail"),
-        ("sbom", source.lower(), "container-sbom"),
-        ("provenance", source.lower(), "container-provenance"),
-        ("type=oci", source, "container-runtime-image"),
-        ("no-cache: true", source, "container-clean-build"),
-        ("skopeo copy", commands, "container-load"),
-        ("docker-daemon:", commands, "container-load-target"),
-        ("smoke_container_runtime.py", commands, "container-runtime-smoke"),
-    )
-    for token, haystack, rule in contract_tokens:
-        if token not in haystack:
-            violations.append(_violation(path, source, rule, f"missing {token}"))
-    if commands and "--target" not in commands and "target:" not in source:
-        violations.append(
-            _violation(
-                path, source, "container-target", "matrix target is not passed to build"
-            )
-        )
-    python_job = jobs.get("python-supply-chain", {})
-    python_source = str(python_job)
-    for token in (
-        "mara-app",
-        "mara-research-cli",
-        "kotaemon",
-        "ktem",
-        "sbom",
-        "provenance",
-    ):
-        if token not in python_source.lower():
-            violations.append(
-                _violation(path, source, "python-attestation", f"missing {token}")
-            )
-    violations.extend(_check_quality_static_contract(path, source, jobs))
-    return violations
-
-
 def check_workflows(root: Path) -> list[Violation]:
     violations: list[Violation] = []
     for absolute_path in sorted((root / WORKFLOW_DIR).glob("*.y*ml")):
@@ -356,7 +259,6 @@ def check_workflows(root: Path) -> list[Violation]:
         violations.extend(_check_runners(path, source))
         violations.extend(_check_workflow_commands(path, source))
         violations.extend(_check_release_freeze(root, path, workflow, source))
-    violations.extend(_check_quality_supply_chain(root))
     return violations
 
 
