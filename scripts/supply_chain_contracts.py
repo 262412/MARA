@@ -352,6 +352,7 @@ def _check_container_quality_contract(
         ("vuln,secret,misconfig", source, "container-scanners"),
         ("HIGH,CRITICAL", source, "container-severity"),
         ("ignore-unfixed: true", source, "container-fixable-only"),
+        ("timeout: 15m", source, "container-scan-timeout"),
         ('exit-code: "0"', source, "container-scan-report"),
         (
             "check_container_vulnerability_baseline.py",

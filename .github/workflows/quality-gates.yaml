@@ -379,6 +379,7 @@ jobs:
           format: json
           output: container-evidence/${{ matrix.target }}.trivy.json
           hide-progress: true
+          timeout: 15m
       - name: Enforce frozen container vulnerability baseline
         run: |
           python scripts/check_container_vulnerability_baseline.py \
@@ -393,6 +394,7 @@ jobs:
           format: spdx-json
           output: container-evidence/${{ matrix.target }}.spdx.json
           hide-progress: true
+          timeout: 15m
       - name: Generate CycloneDX image SBOM
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -401,6 +403,7 @@ jobs:
           format: cyclonedx
           output: container-evidence/${{ matrix.target }}.cdx.json
           hide-progress: true
+          timeout: 15m
       - name: Upload container evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
