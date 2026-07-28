@@ -378,6 +378,10 @@ def _docker_stages(source: str) -> dict[str, str]:
 def _check_docker_targets(path: Path, source: str) -> list[Violation]:
     violations: list[Violation] = []
     stages = _docker_stages(source)
+    if "WORKDIR /var/lib/mara" not in stages.get("runtime-base", ""):
+        violations.append(
+            _violation(path, source, "runtime-workdir", "runtime-base WORKDIR")
+        )
     for target in ("lite", "full", "ollama"):
         stage = stages.get(target, "")
         for token, rule in (

@@ -54,6 +54,7 @@ RUN apt-get update -qqy \
     && useradd --uid 10001 --gid 10001 --home-dir /home/mara --no-create-home --shell /usr/sbin/nologin mara \
     && install -d -m 0750 -o 10001 -g 10001 /home/mara /var/lib/mara \
     && install -d -m 0555 -o 0 -g 0 /opt/mara /opt/mara/bin
+WORKDIR /var/lib/mara
 COPY --chown=0:0 --chmod=0555 scripts/container_entrypoint.py /opt/mara/bin/container-entrypoint
 COPY --chown=0:0 --chmod=0444 scripts/container_healthcheck.py /opt/mara/bin/container_healthcheck.py
 RUN chmod -R a-w /opt/mara
