@@ -65,6 +65,15 @@ def _clear_stale_answer_citations(
         "verified_claim_support_evidence",
     ):
         metadata[key] = []
+    for key in (
+        "verified_evidence",
+        "verify_decision",
+        "claim_verification",
+        "guardrail_decision",
+        "verifier_observability",
+    ):
+        metadata.pop(key, None)
+    metadata["answer_dependent_state"] = "invalidated_for_reverification"
     bundle = prediction.get("evidence_bundle")
     bundle_metadata = bundle.get("metadata") if isinstance(bundle, dict) else None
     if isinstance(bundle_metadata, dict):
@@ -74,6 +83,15 @@ def _clear_stale_answer_citations(
             "verified_claim_support_evidence",
         ):
             bundle_metadata[key] = []
+        for key in (
+            "verified_evidence",
+            "verify_decision",
+            "claim_verification",
+            "guardrail_decision",
+            "verifier_observability",
+        ):
+            bundle_metadata.pop(key, None)
+        bundle_metadata["answer_dependent_state"] = "invalidated_for_reverification"
 
 
 def _normalized_answer(value: str) -> str:

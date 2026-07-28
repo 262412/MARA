@@ -8,6 +8,7 @@ from .answer_summary import (
     avg_product_metric,
 )
 from .backend_health_summary import backend_health_summary
+from .contract_invariant_metrics import contract_invariant_summary
 from .dataset_decision_protocol import phase2_dataset_decision, phase2_failure_counts
 from .effective_route_metrics import effective_route_stage_metric_table
 from .headline_policy import headline_policy_predictions
@@ -91,6 +92,7 @@ def build_benchmark_summary(
             active_routes=active_routes,
         ),
         **verification_summary(predictions),
+        **contract_invariant_summary(predictions),
         **verifier_observability_summary(predictions),
         **timing_summary(predictions),
         **_cache_summary(predictions, config.cache_mode),
@@ -150,6 +152,7 @@ def add_mara_summary_fields(
             dataset_name,
             predictions,
         ),
+        **contract_invariant_summary(predictions),
         **verifier_observability_summary(predictions),
         **timing_summary(predictions),
         "route_metric_table": _route_metric_table(dataset_name, predictions),

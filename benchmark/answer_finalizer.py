@@ -281,6 +281,7 @@ def attach_structured_citations_from_evidence(
             canonical_sources=canonical_sources,
         )
         return _unique_citations(calculation_citations)
+    verified_citations = []
     for item in _verified_claim_support_items(prediction):
         citation = _citation_from_item(
             item,
@@ -289,8 +290,8 @@ def attach_structured_citations_from_evidence(
             source_backrefs=_canonical_source_backrefs(item),
         )
         if citation:
-            return [citation]
-    return []
+            verified_citations.append(citation)
+    return _unique_citations(verified_citations)
 
 
 def _canonicalized_existing_citations(
@@ -302,11 +303,13 @@ def _canonicalized_existing_citations(
     if not existing:
         return []
     canonical_sources = _canonical_source_refs(prediction)
+    source_alias_map = _canonical_source_alias_map(prediction, canonical_sources)
     citations: list[dict[str, str]] = []
     for item in existing:
         citation = _canonicalized_citation_item(
             item,
             canonical_sources=canonical_sources,
+            source_alias_map=source_alias_map,
             span=span,
         )
         if citation:
@@ -340,13 +343,19 @@ def _canonicalized_citation_item(
     citation: dict[str, str],
     *,
     canonical_sources: list[str],
+    source_alias_map: dict[str, tuple[str, ...]],
     span: str,
 ) -> dict[str, str]:
     source_id = str(citation.get("source_id") or "").strip()
     page_label = str(citation.get("page_label") or "").strip()
     if source_id and not is_uuid_like_source_id(source_id):
         return citation
-    source_ref = _matching_canonical_source_ref(canonical_sources, page_label)
+    source_ref = _matching_canonical_source_ref(
+        canonical_sources,
+        page_label,
+        source_id=source_id,
+        source_aliases=source_alias_map.get(source_id, ()),
+    )
     if not source_ref:
         return citation
     canonical = _citation_from_source_ref(source_ref, span=span)
@@ -502,6 +511,37 @@ def _canonical_source_refs(prediction: dict[str, Any]) -> list[str]:
             ):
                 refs.append(value)
     return refs
+
+
+def _canonical_source_alias_map(
+    prediction: dict[str, Any],
+    canonical_sources: list[str],
+) -> dict[str, tuple[str, ...]]:
+    canonical_ids = {
+        str(source).split("#", 1)[0]
+        for source in canonical_sources
+        if str(source or "").strip()
+    }
+    aliases: dict[str, list[str]] = {}
+    for item in _citation_candidate_items(prediction):
+        runtime_ids = [
+            str(item.get(key) or "").strip()
+            for key in ("source_id", "document_id", "file_id", "runtime_source_id")
+            if str(item.get(key) or "").strip()
+        ]
+        explicit = [
+            str(value or "").strip().split("#", 1)[0]
+            for value in (
+                *list(item.get("source_aliases") or []),
+                *list(item.get("source_backrefs") or []),
+            )
+            if str(value or "").strip()
+        ]
+        matched = [value for value in explicit if value in canonical_ids]
+        for runtime_id in runtime_ids:
+            values = aliases.setdefault(runtime_id, [])
+            values.extend(value for value in matched if value not in values)
+    return {key: tuple(values) for key, values in aliases.items()}
 
 
 def _canonical_source_backrefs(item: dict[str, Any]) -> list[str]:

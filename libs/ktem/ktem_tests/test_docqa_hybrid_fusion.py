@@ -274,7 +274,7 @@ def test_hybrid_route_can_use_learned_cross_modal_ranker():
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
     assert bundle.items[0]["evidence_id"] == "element:file-b:5:table-a"
-    assert bundle.metadata["hybrid_fusion_trace"]["ranker"] == (
+    assert bundle.metadata["hybrid_reranker_trace"]["ranker"] == (
         "fixture_learned_ranker"
     )
     assert (
@@ -319,7 +319,7 @@ def test_fused_lineage_records_the_actual_post_fusion_ranking_output():
     assert "text-81" in candidate_ids
     assert "text-81" in fused_ids
     assert fused_ids <= candidate_ids
-    assert "text-81" in {
+    assert "text-81" not in {
         item["evidence_id"] for item in bundle.metadata["reranked_evidence"]
     }
     assert bundle.metadata["ranking_trace"]["backend_execution"] is True

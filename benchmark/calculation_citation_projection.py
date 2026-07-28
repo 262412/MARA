@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ktem.docqa.calculation_evidence_identity import materialize_financial_cell
 from ktem.docqa.evidence_identity import exact_evidence_aliases, identity_of
 from ktem.docqa.financial_table import parse_financial_table_cells
 
@@ -56,14 +57,18 @@ def _with_canonical_source_backref(
     canonical_sources: list[str],
 ) -> dict[str, Any]:
     page = str(item.get("page_label") or item.get("page") or "").strip()
-    suffix = f"#page:{page}" if page else "#source"
-    source_ref = next(
-        (
-            str(value).strip()
-            for value in canonical_sources
-            if str(value or "").strip().endswith(suffix)
-        ),
-        "",
+    from .citation_rendering import matching_canonical_source_ref
+
+    source_ref = matching_canonical_source_ref(
+        canonical_sources,
+        page,
+        source_id=str(
+            item.get("source_id")
+            or item.get("file_id")
+            or item.get("runtime_source_id")
+            or ""
+        ).strip(),
+        source_aliases=tuple(item.get("source_aliases") or ()),
     )
     if not source_ref:
         return item
@@ -81,30 +86,8 @@ def _matched_calculation_item(
     if citation_id in exact_evidence_aliases(item):
         return item
     for cell in parse_financial_table_cells(item):
-        cell_item = dict(item)
-        cell_item.pop("identity", None)
-        cell_item.pop("canonical_id", None)
-        cell_item.update(
-            {
-                "cell_id": cell.cell_id,
-                "evidence_level": "cell",
-                "table_id": cell.table_id,
-                "row_index": cell.row_index,
-                "column_index": cell.column_index,
-                "row_label": cell.row_label,
-                "column_label": cell.column_label,
-                "period": cell.period,
-                "period_kind": cell.period_kind,
-                "value": str(cell.value),
-                "unit": cell.unit,
-                "scale": cell.scale,
-                "currency": cell.currency,
-                "statement_kind": cell.statement_kind,
-                "financial_scope": cell.financial_scope,
-            }
-        )
+        cell_item = materialize_financial_cell(item, cell)
         identity = identity_of(cell_item).key
-        cell_item["canonical_id"] = identity
         if citation_id == identity:
             return cell_item
     return None

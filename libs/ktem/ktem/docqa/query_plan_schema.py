@@ -10,6 +10,22 @@ MAX_RETRIEVAL_ROUNDS = 2
 
 
 @dataclass(frozen=True)
+class EvidenceLocator:
+    source_id: str = ""
+    page_label: str = ""
+    element_id: str = ""
+    figure_label: str = ""
+    table_label: str = ""
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            key: value
+            for key, value in asdict(self).items()
+            if str(value or "").strip()
+        }
+
+
+@dataclass(frozen=True)
 class EvidenceSlot:
     slot_id: str
     role: str
@@ -29,10 +45,12 @@ class EvidenceSlot:
     status: str = "missing"
     evidence_ids: tuple[str, ...] = ()
     query: str = ""
+    locator: EvidenceLocator | None = None
 
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["evidence_ids"] = list(self.evidence_ids)
+        payload["locator"] = self.locator.as_dict() if self.locator else None
         return payload
 
 
@@ -136,6 +154,18 @@ def with_plan_id(
 def _slot_from_payload(index: int, item: dict[str, Any]) -> EvidenceSlot:
     role = str(item.get("role") or "support")
     required = bool(item.get("required", True))
+    locator_payload = item.get("locator")
+    locator = (
+        EvidenceLocator(
+            source_id=str(locator_payload.get("source_id") or "").strip(),
+            page_label=str(locator_payload.get("page_label") or "").strip(),
+            element_id=str(locator_payload.get("element_id") or "").strip(),
+            figure_label=str(locator_payload.get("figure_label") or "").strip(),
+            table_label=str(locator_payload.get("table_label") or "").strip(),
+        )
+        if isinstance(locator_payload, dict)
+        else None
+    )
     return EvidenceSlot(
         slot_id=str(item.get("slot_id") or f"slot:{index}"),
         role=role,
@@ -161,4 +191,5 @@ def _slot_from_payload(index: int, item: dict[str, Any]) -> EvidenceSlot:
             if str(value).strip()
         ),
         query=str(item.get("query") or "").strip(),
+        locator=locator,
     )

@@ -80,6 +80,13 @@ def _citation_matches_item(
     evidence_id = locator.evidence_identity
     citation_source = locator.source_id
     citation_page = locator.page_label
+    item_identity = identity_of(item)
+    if (
+        locator.kind
+        and locator.kind not in {"page", "source"}
+        and locator.kind != item_identity.kind
+    ):
+        return False
     if evidence_id and evidence_id not in exact_evidence_aliases(item):
         return False
     locators = _item_locators(item)
@@ -92,7 +99,7 @@ def _citation_matches_item(
         return False
     elif citation_page and not any(page == citation_page for _, page in locators):
         return False
-    if evidence_id and evidence_id != identity_of(item).key and not citation_source:
+    if evidence_id and evidence_id != item_identity.key and not citation_source:
         return False
     return bool(evidence_id or citation_source or citation_page)
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .query_evidence_text import requires_multiple_operands
 from .query_phrase_extraction import cross_page_support_queries, modality_hint
-from .query_plan_schema import EvidenceSlot
+from .query_plan_schema import EvidenceLocator, EvidenceSlot
 
 
 def heuristic_slots(
@@ -11,24 +11,30 @@ def heuristic_slots(
     question_type: str,
     periods: list[str],
     metric: str,
-    capabilities: dict[str, bool],
+    capabilities: dict[str, object],
 ) -> tuple[EvidenceSlot, ...]:
     multi_evidence = bool(capabilities.get("requires_multiple_evidence"))
+    if question_type == "multi_period_numeric":
+        return _period_operand_slots(periods, metric)
     if answer_type == "numeric" and multi_evidence:
         return _paired_slots(
             question,
             metric,
             role="operand",
             required_for_execution=True,
+            page_labels=_page_labels(capabilities),
         )
     if answer_type == "boolean":
         return _boolean_slots(question, metric, multi_evidence=multi_evidence)
-    if question_type == "multi_period_numeric":
-        return _period_operand_slots(periods, metric)
     if answer_type == "numeric":
         return _numeric_slots(question, metric)
     if question_type == "cross_page":
-        return _paired_slots(question, metric, role="support")
+        return _paired_slots(
+            question,
+            metric,
+            role="support",
+            page_labels=_page_labels(capabilities),
+        )
     if capabilities.get("requires_visual"):
         return (
             EvidenceSlot(
@@ -37,6 +43,10 @@ def heuristic_slots(
                 metric=metric,
                 modality=modality_hint(question),
                 query=question,
+                locator=EvidenceLocator(
+                    figure_label=str(capabilities.get("figure_label") or ""),
+                    table_label=str(capabilities.get("table_label") or ""),
+                ),
             ),
         )
     return ()
@@ -77,6 +87,7 @@ def _paired_slots(
     *,
     role: str,
     required_for_execution: bool = False,
+    page_labels: tuple[str, ...] = (),
 ) -> tuple[EvidenceSlot, ...]:
     left_query, right_query = cross_page_support_queries(question, metric)
     return tuple(
@@ -89,8 +100,13 @@ def _paired_slots(
             modality=modality_hint(query),
             required_for_execution=required_for_execution,
             query=query,
+            locator=EvidenceLocator(
+                page_label=page_labels[index] if index < len(page_labels) else ""
+            ),
         )
-        for side, query in (("left", left_query), ("right", right_query))
+        for index, (side, query) in enumerate(
+            (("left", left_query), ("right", right_query))
+        )
     )
 
 
@@ -132,3 +148,10 @@ def _numeric_slots(
         )
         for slot_id in slot_ids
     )
+
+
+def _page_labels(capabilities: dict[str, object]) -> tuple[str, ...]:
+    values = capabilities.get("explicit_page_labels")
+    if not isinstance(values, (list, tuple)):
+        return ()
+    return tuple(str(value).strip() for value in values if str(value).strip())

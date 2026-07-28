@@ -9,9 +9,18 @@ IDENTITY_TRACE_LIMITS = {
 }
 _LIST_LIMITS = {
     "candidate_evidence": IDENTITY_TRACE_LIMITS["max_candidate_identity_items"],
+    "canonical_candidate_evidence": IDENTITY_TRACE_LIMITS[
+        "max_candidate_identity_items"
+    ],
+    "candidate_ranked_evidence": IDENTITY_TRACE_LIMITS["max_candidate_identity_items"],
+    "fused_evidence": IDENTITY_TRACE_LIMITS["max_candidate_identity_items"],
+    "reranker_input_evidence": IDENTITY_TRACE_LIMITS["max_candidate_identity_items"],
     "reranked_evidence": IDENTITY_TRACE_LIMITS["max_reranked_identity_items"],
+    "selected_evidence": IDENTITY_TRACE_LIMITS["max_reranked_identity_items"],
+    "generation_context_evidence": IDENTITY_TRACE_LIMITS["max_reranked_identity_items"],
 }
 _IDENTITY_FIELDS = (
+    "identity",
     "evidence_id",
     "canonical_id",
     "source_id",
@@ -26,6 +35,8 @@ _IDENTITY_FIELDS = (
     "page_aliases",
     "element_id",
     "cell_id",
+    "span_id",
+    "evidence_level",
     "table_id",
     "row_index",
     "column_index",
@@ -38,6 +49,8 @@ _IDENTITY_FIELDS = (
     "continuation_id",
     "normalized_text_hash",
     "duplicate_evidence_ids",
+    "retrieval_lineage",
+    "representations",
     "source_backrefs",
 )
 

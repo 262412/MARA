@@ -23,8 +23,7 @@ def retrieval_adequacy_issue(
     ]
     if require_page_scoped and not _has_page_scoped_evidence(evidence_metadata):
         return "Retrieved evidence lacks page-scoped financial statement support."
-    present_count = len(requirements) - len(missing)
-    if missing and present_count <= 0:
+    if missing:
         return (
             "Retrieved evidence lacks financial statement fields needed for "
             f"generation: {', '.join(missing)}."

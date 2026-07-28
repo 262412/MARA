@@ -260,7 +260,7 @@ def test_span_identity_round_trip_is_lossless():
 
     [item] = bundle.items
     assert item["span_id"] == "span:conclusion"
-    assert identity_of(item).key == "span:paper:span:conclusion"
+    assert identity_of(item).key == "span:paper:span%3Aconclusion"
 
 
 def test_dedupe_never_overwrites_representative_structured_text():

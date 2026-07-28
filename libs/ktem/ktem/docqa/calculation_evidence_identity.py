@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .evidence_identity import identity_of
+from .evidence_identity import exact_evidence_aliases, identity_of
 from .financial_table import parse_financial_table_cells
 
 
@@ -24,8 +24,38 @@ def calculation_evidence_lookup(
             if value:
                 output[value] = item
         for cell in parse_financial_table_cells(item):
-            output[cell_identity(item, cell.cell_id)] = item
+            materialized = materialize_financial_cell(item, cell)
+            for identifier in exact_evidence_aliases(materialized):
+                output[identifier] = materialized
     return output
+
+
+def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any]:
+    materialized = dict(item)
+    materialized.pop("identity", None)
+    materialized.pop("canonical_id", None)
+    materialized.update(
+        {
+            "cell_id": cell.cell_id,
+            "evidence_level": "cell",
+            "table_id": cell.table_id,
+            "row_index": cell.row_index,
+            "column_index": cell.column_index,
+            "row_label": cell.row_label,
+            "column_label": cell.column_label,
+            "period": cell.period,
+            "period_kind": cell.period_kind,
+            "value": str(cell.value),
+            "unit": cell.unit,
+            "scale": cell.scale,
+            "currency": cell.currency,
+            "statement_kind": cell.statement_kind,
+            "financial_scope": cell.financial_scope,
+            "text": cell.verification_text(),
+        }
+    )
+    materialized["canonical_id"] = identity_of(materialized).key
+    return materialized
 
 
 def calculation_operand_identity(item: dict[str, Any], operand: Any) -> str:

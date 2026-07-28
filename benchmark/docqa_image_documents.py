@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ktem.docqa.evidence_record_identity import unique_evidence_records
+
 from .schemas import BenchmarkDocument
 
 IMAGE_FORMAT_TYPES = {"bmp", "gif", "jpeg", "jpg", "png", "tif", "tiff", "webp"}
@@ -45,7 +47,7 @@ def element_index_records_from_documents(
             )
             if record is not None:
                 records.append(record)
-    return _unique_element_records(records)
+    return unique_evidence_records(records)
 
 
 def page_image_record_from_document(document: BenchmarkDocument) -> dict[str, Any]:
@@ -138,12 +140,41 @@ def _element_index_record_from_payload(
         "source_backrefs": _source_backrefs(payload, file_id, page_label),
         "metadata": dict(metadata),
     }
+    evidence_level = str(
+        payload.get("evidence_level")
+        or metadata.get("evidence_level")
+        or ("cell" if payload.get("cell_id") or metadata.get("cell_id") else "")
+        or ("span" if payload.get("span_id") or metadata.get("span_id") else "")
+    ).strip()
+    if evidence_level:
+        output["evidence_level"] = evidence_level
+    _add_element_contract_fields(output, payload, metadata)
+    return output
+
+
+def _add_element_contract_fields(
+    output: dict[str, Any],
+    payload: dict[str, Any],
+    metadata: dict[str, Any],
+) -> None:
     for field in (
         "parent_element_id",
         "section_id",
         "table_id",
         "continuation_id",
         "normalized_text_hash",
+        "cell_id",
+        "span_id",
+        "row_label",
+        "column_label",
+        "period",
+        "period_kind",
+        "value",
+        "unit",
+        "scale",
+        "currency",
+        "statement_kind",
+        "financial_scope",
     ):
         value = str(payload.get(field) or metadata.get(field) or "").strip()
         if value:
@@ -168,7 +199,6 @@ def _element_index_record_from_payload(
     element_type_aliases = _alias_values(payload.get("element_type_aliases"))
     if element_type_aliases:
         output["element_type_aliases"] = element_type_aliases
-    return output
 
 
 def _source_backrefs(
@@ -196,18 +226,6 @@ def _alias_values(value: Any) -> list[str]:
         text = str(item or "").strip()
         if text and text not in output:
             output.append(text)
-    return output
-
-
-def _unique_element_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    output: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for record in records:
-        evidence_id = str(record.get("evidence_id") or "").strip()
-        if not evidence_id or evidence_id in seen:
-            continue
-        seen.add(evidence_id)
-        output.append(record)
     return output
 
 

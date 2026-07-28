@@ -6,6 +6,7 @@ from typing import Any
 from .claim_filtering import clean_answer_text
 
 CLAIM_AGGREGATION_CONTRACT = "claim_aggregation.v1"
+CLAIM_KEY_CONTRACT = "typed_claim_key.v1"
 
 _INLINE_CITATION_RE = re.compile(r"\[\s*\d+(?:\s*[,\]]\s*\d+)*\s*\]")
 _SOURCE_CITATION_RE = re.compile(r"\b[^\s#]+#(?:page:[^\s,;]+|source)\b")
@@ -49,6 +50,26 @@ _STOPWORDS = {
     "was",
     "were",
 }
+_RELATIONS = {
+    "account": "account_for",
+    "comprise": "account_for",
+    "decrease": "decrease",
+    "equal": "equal",
+    "exceed": "exceed",
+    "include": "include",
+    "increase": "increase",
+    "outperform": "outperform",
+    "represent": "account_for",
+    "total": "equal",
+}
+_SCOPE_TOKENS = {
+    "companywide": "consolidated",
+    "consolidated": "consolidated",
+    "fiscal": "",
+    "group": "",
+    "global": "global",
+    "worldwide": "global",
+}
 
 
 def aggregate_answer_claims(answer: str) -> tuple[str, dict[str, Any]]:
@@ -60,6 +81,7 @@ def aggregate_answer_claims(answer: str) -> tuple[str, dict[str, Any]]:
         "duplicate_claim_count": 0,
         "conflict_count": 0,
         "citation_union_count": 0,
+        "claim_key_contract": CLAIM_KEY_CONTRACT,
         "bypassed": False,
     }
     if not text or _structured_output(text):
@@ -110,6 +132,7 @@ def _claim_record(chunk: str) -> dict[str, Any]:
     text = re.sub(r"^\s*(?:[-*]|\d+[.)])\s+", "", text)
     text = " ".join(text.split()).strip()
     tokens = _canonical_tokens(text)
+    claim_key = _typed_claim_key(tokens, text)
     return {
         "text": text,
         "citations": citations,
@@ -118,20 +141,25 @@ def _claim_record(chunk: str) -> dict[str, Any]:
         "years": _normalized_matches(_YEAR_RE, text),
         "units": _normalized_matches(_UNIT_RE, text),
         "polarity": _polarity(tokens),
+        "claim_key": claim_key,
     }
 
 
 def _same_fact(left: dict[str, Any], right: dict[str, Any]) -> bool:
     if _fact_fields_conflict(left, right):
         return False
-    left_tokens = set(left["tokens"])
-    right_tokens = set(right["tokens"])
-    if not left_tokens or not right_tokens:
+    left_key = left["claim_key"]
+    right_key = right["claim_key"]
+    if not left_key["subject"] or not right_key["subject"]:
         return False
-    if left_tokens == right_tokens:
-        return True
-    similarity = len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
-    return similarity >= 0.85
+    return all(
+        left_key[field] == right_key[field]
+        for field in ("subject", "relation", "value", "unit", "time", "polarity")
+    ) and (
+        left_key["scope"] == right_key["scope"]
+        or not left_key["scope"]
+        or not right_key["scope"]
+    )
 
 
 def _claims_conflict(left: dict[str, Any], right: dict[str, Any]) -> bool:
@@ -159,9 +187,49 @@ def _fact_fields_conflict(left: dict[str, Any], right: dict[str, Any]) -> bool:
 
 
 def _subject_tokens(claim: dict[str, Any]) -> set[str]:
-    fact_tokens = set(claim["numbers"]) | set(claim["years"]) | set(claim["units"])
-    fact_tokens.update({"increase", "decrease"})
-    return set(claim["tokens"]) - fact_tokens
+    return set(claim["claim_key"]["subject"])
+
+
+def _typed_claim_key(tokens: list[str], text: str) -> dict[str, tuple[str, ...] | str]:
+    relation_index, relation = _relation(tokens)
+    subject_source = tokens[:relation_index] if relation_index is not None else tokens
+    years = set(_normalized_matches(_YEAR_RE, text))
+    values = tuple(
+        value for value in _normalized_matches(_NUMBER_RE, text) if value not in years
+    )
+    units = tuple(_normalized_matches(_UNIT_RE, text))
+    scope = tuple(
+        dict.fromkeys(
+            normalized
+            for token in tokens
+            if token in _SCOPE_TOKENS and (normalized := _SCOPE_TOKENS[token])
+        )
+    )
+    subject = tuple(
+        token
+        for token in subject_source
+        if token not in years
+        and token not in values
+        and token not in units
+        and token not in _SCOPE_TOKENS
+        and token not in _RELATIONS
+    )
+    return {
+        "subject": subject,
+        "relation": relation,
+        "value": values,
+        "unit": units,
+        "time": tuple(sorted(years)),
+        "scope": scope,
+        "polarity": _polarity(tokens),
+    }
+
+
+def _relation(tokens: list[str]) -> tuple[int | None, str]:
+    for index, token in enumerate(tokens):
+        if token in _RELATIONS:
+            return index, _RELATIONS[token]
+    return None, ""
 
 
 def _canonical_tokens(text: str) -> list[str]:

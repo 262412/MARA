@@ -92,19 +92,43 @@ def question_type(
 def question_capabilities(
     question: str,
     tokens: set[str],
-) -> dict[str, bool]:
+) -> dict[str, object]:
     page_numbers = re.findall(r"\bpages?\s+(\d+)|\bpage\s+(\d+)", question.lower())
-    explicit_pages = {
-        left or right for left, right in page_numbers if (left or right)
-    }
+    explicit_pages = {left or right for left, right in page_numbers if (left or right)}
     page_pair = re.search(
-        r"\bpages?\s+(\d+)\s+(?:and|with|to|versus|vs\.?)\s+"
-        r"(?:page\s+)?(\d+)\b",
+        r"\bpages?\s+(\d+)\s+(?:and|with|to|versus|vs\.?)\s+" r"(?:page\s+)?(\d+)\b",
         question,
         flags=re.IGNORECASE,
     )
     if page_pair:
         explicit_pages.update(page_pair.groups())
+    ordered_pages = (
+        tuple(page_pair.groups())
+        if page_pair
+        else tuple(
+            dict.fromkeys(
+                match.group(1) or match.group(2)
+                for match in re.finditer(
+                    r"\bpages?\s+(\d+)|\b(?:on|from)\s+page\s+(\d+)",
+                    question,
+                    flags=re.IGNORECASE,
+                )
+                if (match.group(1) or match.group(2))
+            )
+        )
+    )
+    if not ordered_pages:
+        ordered_pages = tuple(sorted(explicit_pages, key=int))
+    figure_match = re.search(
+        r"\b(?:figure|fig\.?)\s*([A-Za-z]*\d+[A-Za-z0-9.-]*)",
+        question,
+        re.I,
+    )
+    table_match = re.search(
+        r"\btable\s*([A-Za-z]*\d+[A-Za-z0-9.-]*)",
+        question,
+        re.I,
+    )
     requires_multiple = bool(tokens & _CROSS_PAGE_TERMS) or len(explicit_pages) >= 2
     return {
         "requires_visual": bool(tokens & _VISUAL_TERMS),
@@ -114,4 +138,7 @@ def question_capabilities(
         "requires_structured_elements": bool(
             tokens & {"chart", "diagram", "figure", "formula", "plot", "table"}
         ),
+        "explicit_page_labels": ordered_pages,
+        "figure_label": figure_match.group(1) if figure_match else "",
+        "table_label": table_match.group(1) if table_match else "",
     }

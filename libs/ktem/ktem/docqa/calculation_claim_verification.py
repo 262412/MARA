@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from .evidence_identity import exact_evidence_aliases
+from .calculation_evidence_identity import calculation_evidence_lookup
 from .evidence_schema import EvidenceBundle
 from .evidence_text import extract_final_answer_text
 
@@ -39,7 +39,8 @@ def calculation_claim_result(
     expected = _decimal(execution.get("value"))
     if expected is None:
         return None
-    claim = " ".join(claims).strip() or extract_final_answer_text(answer).strip()
+    rendered = extract_final_answer_text(answer)
+    claim = _result_claim(claims, rendered, expected)
     citation_ids = tuple(
         dict.fromkeys(
             str(value).strip()
@@ -47,15 +48,13 @@ def calculation_claim_result(
             if str(value or "").strip()
         )
     )
+    evidence_lookup = calculation_evidence_lookup(bundle.items)
     matched_ids = tuple(
-        citation_id
-        for citation_id in citation_ids
-        if any(citation_id in exact_evidence_aliases(item) for item in bundle.items)
+        citation_id for citation_id in citation_ids if citation_id in evidence_lookup
     )
     if not citation_ids or matched_ids != citation_ids:
         return CalculationClaimResult(claim=claim, status="unknown")
-    rendered = extract_final_answer_text(answer)
-    values = _answer_numbers(rendered)
+    values = _answer_numbers(claim)
     value_matches = any(_close(value, expected) for value in values)
     dimensions_match = _answer_dimensions_match(
         rendered,
@@ -73,6 +72,14 @@ def calculation_claim_result(
         status="contradicted",
         contradicting_evidence_ids=matched_ids,
     )
+
+
+def _result_claim(claims: list[str], rendered: str, expected: Decimal) -> str:
+    for claim in claims:
+        if any(_close(value, expected) for value in _answer_numbers(claim)):
+            return claim
+    numeric_claim = next((claim for claim in claims if _answer_numbers(claim)), "")
+    return numeric_claim or (claims[0] if len(claims) == 1 else rendered.strip())
 
 
 def _answer_numbers(value: str) -> list[Decimal]:

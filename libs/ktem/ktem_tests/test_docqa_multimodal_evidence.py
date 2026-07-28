@@ -83,7 +83,7 @@ def test_visual_route_synthesizes_page_image_evidence_from_request_context():
     assert item["text"] == "The chart compares revenue growth."
     assert item["source_backrefs"] == ["file-1#page:4"]
     assert item["normalized_text_hash"]
-    assert item["canonical_id"] == "evidence:file-1:page-image:file-1:4"
+    assert item["canonical_id"] == "evidence:file-1:page-image%3Afile-1%3A4"
     assert item["identity"]["kind"] == "evidence"
     assert item["identity"]["local_id"] == "page-image:file-1:4"
     assert item["metadata"]["route"] == "doc_page_image"

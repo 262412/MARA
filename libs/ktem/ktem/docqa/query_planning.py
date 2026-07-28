@@ -38,6 +38,7 @@ from .query_phrase_extraction import (
 )
 from .query_plan_constraints import query_plan_constraints
 from .query_plan_schema import (
+    EvidenceLocator,
     EvidenceSlot,
     QueryPlan,
     initial_plan_from_payload,
@@ -113,7 +114,7 @@ def _build_heuristic_query_plan(
         normalized_type,
         periods,
         causal_intent=causal_intent,
-        requires_multiple_evidence=capabilities["requires_multiple_evidence"],
+        requires_multiple_evidence=bool(capabilities["requires_multiple_evidence"]),
     )
     inferred_finance_specs = (
         finance_operand_specs(text, periods) if normalized_type == "numeric" else ()
@@ -316,6 +317,9 @@ def score_evidence_for_slot(
     requires_structure: bool = False,
 ) -> float:
     text = evidence_text(item).lower()
+    locator_score = _locator_score(slot.locator, item)
+    if locator_score is None:
+        return 0.0
     if slot.role == "dimension":
         detected_scale = evidence_scale(text, item)
         if not detected_scale or (slot.scale and slot.scale != detected_scale):
@@ -343,7 +347,7 @@ def score_evidence_for_slot(
     modality = str(item.get("modality") or item.get("element_type") or "").lower()
     if not modality_matches(slot.modality, modality):
         return 0.0
-    score = 0.0
+    score = locator_score
     text_tokens = _tokens(text)
     metric_token_sets = [
         _tokens(alias)
@@ -359,7 +363,9 @@ def score_evidence_for_slot(
         return 0.0
     if metric_token_sets:
         score += metric_coverage
-    if slot.modality not in {"", "auto"}:
+    if slot.modality not in {"", "auto"} and (
+        locator_score > 0 or metric_coverage > 0 or slot.modality.lower() == modality
+    ):
         score += 0.25
     if slot.period:
         score += 1.0
@@ -370,6 +376,73 @@ def score_evidence_for_slot(
     if modality in {"table", "formula"} and slot.role == "operand":
         score += 0.25
     return score
+
+
+def _locator_score(
+    locator: EvidenceLocator | None,
+    item: dict[str, Any],
+) -> float | None:
+    if locator is None or not locator.as_dict():
+        return 0.0
+    metadata = dict(item.get("metadata") or {})
+    comparisons = (
+        (
+            locator.source_id,
+            _first_item_value(
+                item,
+                metadata,
+                "source_id",
+                "file_id",
+                "document_id",
+                "runtime_source_id",
+            ),
+        ),
+        (
+            locator.page_label,
+            _first_item_value(
+                item, metadata, "page_label", "page", "page_number", "dataset_page"
+            ),
+        ),
+        (
+            locator.element_id,
+            _first_item_value(item, metadata, "element_id"),
+        ),
+        (
+            locator.figure_label,
+            _first_item_value(
+                item, metadata, "figure_label", "figure_id", "element_id"
+            ),
+        ),
+        (
+            locator.table_label,
+            _first_item_value(item, metadata, "table_label", "table_id", "element_id"),
+        ),
+    )
+    required = [
+        (expected.lower(), actual.lower())
+        for expected, actual in comparisons
+        if expected
+    ]
+    if any(
+        actual != expected
+        and not actual.endswith(f"-{expected}")
+        and not actual.endswith(f":{expected}")
+        for expected, actual in required
+    ):
+        return None
+    return float(len(required))
+
+
+def _first_item_value(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    *keys: str,
+) -> str:
+    for key in keys:
+        value = item.get(key, metadata.get(key))
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
 
 
 def _metric_coverage(

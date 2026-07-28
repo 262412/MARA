@@ -46,6 +46,7 @@ from ._runtime_models import (
 from ._runtime_session_facade import RuntimeSessionMutationFacade
 from ._runtime_session_service import RuntimeSessionService
 from ._runtime_utils import _html_to_text, _serialize_value
+from .evidence_record_identity import unique_evidence_records
 
 logger = logging.getLogger(__name__)
 
@@ -151,21 +152,9 @@ def _apply_request_element_index_records(pipeline: Any, request: DocQARequest) -
     request_records = [
         dict(item) for item in request.element_index_records if isinstance(item, dict)
     ]
-    pipeline.element_index_records = _unique_element_records(
+    pipeline.element_index_records = unique_evidence_records(
         existing_records + request_records
     )
-
-
-def _unique_element_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    output: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for record in records:
-        evidence_id = str(record.get("evidence_id") or "").strip()
-        if not evidence_id or evidence_id in seen:
-            continue
-        seen.add(evidence_id)
-        output.append(record)
-    return output
 
 
 def _artifact_source_scope(

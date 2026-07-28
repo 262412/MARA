@@ -12,7 +12,7 @@ def query_plan_constraints(
     periods: list[str],
     verification_domain: str,
     segment_comparison: bool,
-    capabilities: dict[str, bool] | None = None,
+    capabilities: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     capabilities = dict(capabilities or {})
     cross_page = bool(

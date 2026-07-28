@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .calculation_claim_verification import calculation_claim_result
+from .calculation_evidence_identity import calculation_evidence_lookup
 from .claim_filtering import answer_claims
 from .claim_support import (
     claim_supported,
@@ -106,16 +107,13 @@ def verify_decision(
         domain=domain,
     )
     if typed_calculation is not None:
-        claims = [typed_calculation.claim]
-        results = [
-            VerifiedClaim(
-                claim_id="claim:1",
-                claim=typed_calculation.claim,
-                status=typed_calculation.status,
-                supporting_evidence_ids=typed_calculation.supporting_evidence_ids,
-                contradicting_evidence_ids=typed_calculation.contradicting_evidence_ids,
-            )
-        ]
+        results = _calculation_verification_results(
+            typed_calculation,
+            claims,
+            evidence_bundle.items,
+            prompt=prompt,
+            domain=domain,
+        )
     else:
         typed_boolean = _boolean_verification(
             prompt,
@@ -138,6 +136,43 @@ def verify_decision(
     return _enforce_verification_slot_support(request, decision)
 
 
+def _calculation_verification_results(
+    typed_calculation: Any,
+    claims: list[str],
+    evidence_items: list[dict[str, Any]],
+    *,
+    prompt: str,
+    domain: str,
+) -> list[VerifiedClaim]:
+    results = []
+    typed_result_used = False
+    for index, claim in enumerate(claims, start=1):
+        if claim == typed_calculation.claim and not typed_result_used:
+            typed_result_used = True
+            results.append(
+                VerifiedClaim(
+                    claim_id=f"claim:{index}",
+                    claim=claim,
+                    status=typed_calculation.status,
+                    supporting_evidence_ids=typed_calculation.supporting_evidence_ids,
+                    contradicting_evidence_ids=(
+                        typed_calculation.contradicting_evidence_ids
+                    ),
+                )
+            )
+            continue
+        results.append(
+            verify_claim(
+                claim,
+                evidence_items,
+                claim_id=f"claim:{index}",
+                prompt=prompt,
+                domain=domain,
+            )
+        )
+    return results
+
+
 def normalize_verification_mode(value: Any) -> str:
     mode = str(value or "off").strip().lower()
     return mode if mode in {"off", "light", "strict"} else "off"
@@ -154,9 +189,26 @@ def with_verification_evidence(
         for citation in decision.verified_citations
         if str(citation).strip()
     }
-    verified = [
-        item for item in bundle.items if citation_ids & exact_evidence_aliases(item)
-    ]
+    lookup = calculation_evidence_lookup(bundle.items)
+    verified = []
+    seen: set[str] = set()
+    for citation_id in citation_ids:
+        item = lookup.get(citation_id)
+        if item is None:
+            item = next(
+                (
+                    candidate
+                    for candidate in bundle.items
+                    if citation_id in exact_evidence_aliases(candidate)
+                ),
+                None,
+            )
+        if item is None:
+            continue
+        identity = identity_of(item).key
+        if identity not in seen:
+            seen.add(identity)
+            verified.append(item)
     metadata = dict(bundle.metadata)
     metadata["verified_evidence"] = verified
     metadata["verified_claim_support_evidence"] = list(verified)
@@ -231,7 +283,7 @@ def verify_claim(
             contradicting_evidence_ids=tuple(dict.fromkeys(contradicting)),
         )
     if domain_supported is False and not contradicting:
-        contradicting = list(_identity_tuple(evidence_items))
+        contradicting = [identity_of(item).key for item in evidence_items]
     if contradicting:
         return VerifiedClaim(
             claim_id=claim_id,
@@ -390,13 +442,10 @@ def _unsupported_and_unknown(
     unknown = [
         result.claim
         for result in results
-        if result.status == "unknown" and result.claim not in unsupported
+        if result.status in {"unknown", "conflicting"}
+        and result.claim not in unsupported
     ]
     return unsupported, unknown
-
-
-def _identity_tuple(items: list[dict[str, Any]]) -> tuple[str, ...]:
-    return tuple(identity_of(item).key for item in items)
 
 
 def _domain_supporting_identities(
@@ -464,7 +513,13 @@ def _boolean_verification(
         else:
             contradicting.append(identity_of(item).key)
     status = (
-        "supported" if supporting else "contradicted" if contradicting else "unknown"
+        "conflicting"
+        if supporting and contradicting
+        else "supported"
+        if supporting
+        else "contradicted"
+        if contradicting
+        else "unknown"
     )
     result = VerifiedClaim(
         claim_id="claim:1",

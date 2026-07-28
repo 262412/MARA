@@ -255,12 +255,20 @@ def _year_conflict(claim: str, evidence: str) -> bool:
 
 def _direction_conflict(claim: str, evidence: str) -> bool:
     claim_direction = _direction_markers(claim)
-    evidence_direction = _direction_markers(evidence)
+    if not claim_direction:
+        return False
+    relevant_directions = [
+        direction
+        for fragment in re.split(r"(?<=[.!?;])\s+", str(evidence or ""))
+        if _shared_claim_context(claim, fragment)
+        and (direction := _direction_markers(fragment))
+    ]
     return bool(
-        claim_direction
-        and evidence_direction
-        and claim_direction.isdisjoint(evidence_direction)
-        and _shared_claim_context(claim, evidence)
+        relevant_directions
+        and any(
+            claim_direction.isdisjoint(direction) for direction in relevant_directions
+        )
+        and not any(claim_direction & direction for direction in relevant_directions)
     )
 
 

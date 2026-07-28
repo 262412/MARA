@@ -27,6 +27,10 @@ def required_slot_shortlist(
         ),
     )
     selected_ids: set[str] = set()
+    selected_locators: set[tuple[str, str]] = set()
+    preserve_locator_diversity = bool(
+        plan.constraints.get("requires_distinct_source_pages")
+    )
     original_index = {identity_of(item).key: index for index, item in enumerate(items)}
     required_slots.sort(
         key=lambda slot: (
@@ -45,9 +49,20 @@ def required_slot_shortlist(
         added = 0
         for score, _index, item in ranked:
             identity = identity_of(item).key
-            if score <= 0 or identity in selected_ids:
+            locator = _source_page(item)
+            if (
+                score <= 0
+                or identity in selected_ids
+                or (
+                    preserve_locator_diversity
+                    and locator[1]
+                    and locator in selected_locators
+                )
+            ):
                 continue
             selected_ids.add(identity)
+            if locator[1]:
+                selected_locators.add(locator)
             added += 1
             if added >= per_slot_quota or len(selected_ids) >= candidate_limit:
                 break
@@ -64,6 +79,26 @@ def required_slot_shortlist(
         original_index[identity_of(item).key] >= candidate_limit for item in candidates
     )
     return candidates, restored
+
+
+def _source_page(item: dict[str, Any]) -> tuple[str, str]:
+    metadata = dict(item.get("metadata") or {})
+    return (
+        str(
+            item.get("source_id")
+            or item.get("file_id")
+            or item.get("document_id")
+            or metadata.get("source_id")
+            or ""
+        ).strip(),
+        str(
+            item.get("page_label")
+            or item.get("page")
+            or item.get("page_number")
+            or metadata.get("page_label")
+            or ""
+        ).strip(),
+    )
 
 
 def slot_score(

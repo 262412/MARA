@@ -36,7 +36,7 @@ def test_finalizer_attaches_inline_citation_from_verified_evidence():
     assert prediction["structured_citations"] == [
         {
             "kind": "evidence",
-            "evidence_id": "evidence:deck:page-image:deck:3",
+            "evidence_id": "evidence:deck:page-image%3Adeck%3A3",
             "source_id": "deck",
             "page_label": "3",
             "span": "Market size",

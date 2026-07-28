@@ -4,25 +4,32 @@
 
 ## 1. 当前结论
 
-本轮以 `Dev` 提交 `9063727e15425c2b45723a8a993f89d94ff47c56` 的复核报告为
-输入，对报告列出的 11 个 P0 和 13 个 P1 逐项核对实际代码、先写失败保护测试，再
-修复运行时与 benchmark 契约。
+本轮以 `Dev` 提交 `bf96c742c79e82676b17082c4d0020ccea4afe86` 的复核报告为
+输入，对报告仍列出的 10 个 P0 和实际列出的 15 个 P1 逐项核对调用链、先写失败保护
+测试，再修复 runtime、Evidence IR、benchmark projection 和 release gate。
 
-报告中的 24 个代码级问题目前均已关闭，包级回归和代码卫生检查通过。主要结果是：
+报告中的代码级问题目前均已关闭，包级回归和代码卫生检查通过。主要结果是：
 
-- citation locator 同时约束 evidence identity、source 和 page；page/source 引用保持
-  自身粒度，不再扩散成整页所有 cell；
-- generic citation 只来自 claim verifier 确认的支持证据，答案变更会清除旧 citation
-  并重新绑定；
-- numeric verifier 使用已验证的 calculation plan 和确定性 execution 结果，不再只用
-  答案与 operand 文本重叠判断派生数值；
-- numeric、boolean、visual 和 cross-page capability 可以组合成多个必需 slot，并能
-  约束不同 source-page；
-- candidate、reranker input、reranked、selected、generation context、verified 和
-  emitted citation 阶段有独立且可审计的 identity/coverage；
-- headline 使用 manifest 声明的 deployed policy，不再通过固定 route 名猜测部署策略；
-- release gates 已拆成 contract、judge calibration、paired regression 和 capability
-  target 四类。
+- manifest/runtime element adapter 在进入 Evidence IR 前保留 cell/span、row/column、
+  period/value/unit/scale/currency 和 statement scope，去重使用 canonical atomic
+  identity；
+- `EvidenceSlot.locator` 结构化保存 source/page/element/figure/table locator，跨页
+  slot 按实际 locator 绑定，不再依赖证据正文恰好出现 “page 9”；
+- calculation verifier 与 citation projection 复用同一 synthetic-cell materializer；
+  execution 只验证结果 claim，额外解释 claim 仍逐条验证；
+- multi-period numeric 优先保留 metric/period；required-slot reservation 保留
+  source-page diversity；page image 不再在 slot protection 前截断；
+- `canonical candidate → post-fusion → reranker input → reranked → selected → generation context → verified support → emitted citation` 均为不同且真实的阶段；
+- page/source citation 可通过统一 identity round-trip，atomic citation 同时约束 kind、
+  identity、source 和 page；generic fallback 合并全部 verified support citation；
+- canonical identity 对分隔符做无歧义转义，同时保留 legacy alias；strict reranker
+  lineage 只接受 canonical 或显式 immutable input identity；
+- headline manifest 要求恰好一个 deployed policy，或显式声明一个共享 ensemble
+  policy；配置不完整时 fail-closed；
+- paired regression 按 dataset/example/route 对齐，记录 paired win/loss/tie 和
+  bootstrap CI；semantic +8pp 保留为 capability target，不再阻塞 contract 修复；
+- release gates 直接计算 identity collision、runtime→benchmark round-trip、citation
+  provenance、reranker lineage 和缺失 execution slot 仍生成答案五项不变量。
 
 这些结论只说明静态代码契约和本地单元测试已闭合，不说明数据集指标已经达标。本轮
 没有生成新的 QASPER/FinanceBench artifact，也没有提交 Slurm benchmark 任务。在
@@ -66,55 +73,48 @@ runtime evidence
 因此本轮的关闭标准不是“修改了某个函数”，而是同一 contract 同时在运行时、投影、
 指标和跨模块回归测试中成立。
 
-## 3. 已关闭的 P0
+## 3. 本轮已关闭的 P0
 
-| P0                                               | 根因                                        | 已落实修复                                                                                             | 保护证据                               |
-| ------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------- |
-| 1. exact citation 绕过 source/page               | local ID 被当成全局 ID                      | citation 使用 evidence/source/page 合取匹配；裸 local ID 必须有 source                                 | cross-source/cross-page citation tests |
-| 2. page citation 扩散原子证据                    | locator 粒度和 evidence 粒度混用            | page/source citation 生成单一 locator record，不复制整页 cells                                         | page citation granularity tests        |
-| 3. generic fallback 引用首候选                   | retrieved 被误当成 supported                | 只允许 `verified_claim_support_evidence` 自动生成 citation                                             | unsupported candidate tests            |
-| 4. calculation execution 未进入 numeric verifier | 通用 token verifier 无法验证派生值          | typed verifier 核对 plan、execution value、unit/scale 和全部 execution citation                        | derived value/mismatch tests           |
-| 5. numeric/boolean cross-page 能力互斥           | 单一 question type 覆盖 capability          | numeric 生成左右 operand；boolean 生成 proposition 与左右 support；必要 slot 要求 distinct source-page | cross-page plan tests                  |
-| 6. element 在 slot restore 前截断                | element index 固定只供给 20 条              | element 全量进入 canonical candidate，再按 required-slot quota 和全局预算选择                          | rank-21 required element test          |
-| 7. reranker metric 使用推测输入                  | benchmark 用 `candidate[:80]` 代替执行输入  | runtime 记录 `reranker_input_evidence`，lineage/coverage 使用该阶段                                    | actual reranker input test             |
-| 8. headline all-gold-pages 读取 candidate        | 召回与最终证据混为一项                      | headline 使用 generation context/selected；candidate hit 仅作阶段诊断                                  | candidate-only page test               |
-| 9. span 投影优先级错误                           | parent element 覆盖 atomic span             | 投影优先级为 cell → span → element                                                                     | span projection test                   |
-| 10. QASPER 冲突保留错误答案                      | verifier verdict 与 candidate polarity 分叉 | 有 grounded opposite verdict 时纠正 polarity；不足证据时输出 unanswerable                              | QASPER polarity tests                  |
-| 11. 答案改变复用旧 citation                      | answer 与 citation 没有共同版本             | answer contract 改变答案时清空 structured/predicted/cited/verified support，等待重新绑定               | answer-change citation test            |
+| P0                                      | 根因                                           | 已落实修复                                                                               |
+| --------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| A. element adapter 丢 atomic 字段       | adapter 在 Evidence IR 前降级为 parent element | 完整投影 atomic/financial 字段；benchmark 与 runtime 去重共用 canonical identity         |
+| B. QueryPlan 无结构化 locator           | page/figure/table 只存在于 query 文本          | 新增 `EvidenceLocator`；slot score 对 source/page/element/figure/table 字段做确定性匹配  |
+| C. verifier 找不到 synthetic cell       | calculation lookup 把 cell identity 映射回父表 | lookup、verifier 和 citation 共用 materialized cell record                               |
+| D. 正确数值掩盖错误解释                 | execution value 一次性支持整段答案             | execution 只验证包含结果值的 claim，其余 claim 继续走 typed/domain/general verifier      |
+| E. multi-period branch 丢 metric/period | generic multi-evidence 分支先命中              | multi-period numeric 优先生成逐 period operand slot                                      |
+| F. shortlist 不保留 locator diversity   | 每 slot top-2 可来自同一页                     | required reservation 联合保护 source-page diversity                                      |
+| G. page-image 前置截断                  | rank 20 后证据进不了 slot restore              | 所有 page image 先 canonicalize/slot reserve，再执行统一预算                             |
+| H. fusion 与 reranker input 同义        | trace 把 shortlist 冒充 post-fusion            | post-fusion 保留完整排名，reranker input 记录真实 80 条输入；learned reranker 在此后执行 |
+| I. QASPER 改答案保留 verifier state     | citation 清除但 answer-dependent state 未失效  | 同时失效 verified/claim/guardrail/observability state                                    |
+| J. citation 按 page-only 选 source      | 多文档同页发生 cross join                      | 使用显式 source alias 映射，并以 source+page 合取解析；歧义时不猜测                      |
 
-## 4. 已关闭的 P1
+## 4. 本轮已关闭的 P1
 
-| P1                                                        | 已落实修复                                                                                     |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1. reranker lineage 接受跨 source 裸 local/text hash      | lineage 只接受 canonical 或 source-scoped identity                                             |
-| 2. RRF 生成 synthetic modality list、合并不同 query       | 保留真实 dense/sparse/graph lineage；rank list key 包含 retriever、round、query                |
-| 3. modality equality 过严                                 | 通过明确 compatibility matrix 支持 figure/table/formula/slide 与 page image/element            |
-| 4. simple visual 没有 required slot                       | 新增 `support:visual_primary`                                                                  |
-| 5. representations 未进入推理且 aggregate subset 被判冲突 | text/OCR/VLM/caption 进入统一 representation；非原子 aggregate 允许事实子集/超集               |
-| 6. boolean 否定问题和解释型答案不稳定                     | typed boolean verifier 同时处理 question negation、yes/no polarity 和解释文本                  |
-| 7. 单 graph backref 不投影 locator                        | 单 backref 也解析 source/page，并优先使用 top-level locator                                    |
-| 8. 整个 runtime turn 被记为 generation                    | `runtime_turn_seconds` 与 pipeline `generation_seconds` 分离                                   |
-| 9. `identity_of()` 信任陈旧 embedded identity             | 始终从当前字段重算；canonicalization 对 expected identity 不一致抛 contract error              |
-| 10. stage identity 缺少 kind                              | stage/gold key 统一为 source、page、kind、local ID                                             |
-| 11. headline 硬编码 `controller_auto`                     | manifest 用 `headline_role=deployed_policy` 明确部署策略；旧 artifact 才走兼容回退             |
-| 12. release gate 类型混杂、paired regression 不完整       | 四类 gate 分组；增加 native、false abstention、citation 和 execution error paired delta        |
-| 13. identity tests 只是固定样例                           | 引入 Hypothesis，覆盖 source/kind/table/year/alias/continuation/representation/bbox 组合不变量 |
-
-完整测试还暴露并关闭了三项伴随回归：
-
-- prediction completion 的 `headline_role` 投影漏传 route；
-- selection 曾对每个 score field 单独归一化后取最大，单一 modality 分数会虚假压过
-  query anchor；现在每轮只采用一个可审计的 score stage；
-- required-slot 选择只看 slot 文本覆盖率；现在把真实 reranker relevance 纳入边际得分，
-  但不把 first-stage fusion 分数冒充 reranker。
+| P1                                       | 已落实修复                                                               |
+| ---------------------------------------- | ------------------------------------------------------------------------ |
+| 1. citation kind 未匹配                  | atomic citation 必须与 `identity_of(item).kind` 一致                     |
+| 2. page/source identity 不可 round-trip  | locator-only record 具有稳定 page/source identity                        |
+| 3. generic fallback 只引用第一条         | 对全部 verified support 做稳定 citation union                            |
+| 4. lineage 允许内容级 fallback           | 删除 source+page+text 和 kind-less element fallback                      |
+| 5. boolean 同时有支持/反证仍 supported   | 返回 `conflicting` claim result，最终决策为 unknown                      |
+| 6. graph `#source` 解析错误              | 分别解析 `#page:`、`#source` 并去除 marker                               |
+| 7. span 依赖 evidence_level              | 优先级固定为 cell → span → table cell → element                          |
+| 8. runtime_source_id 未进入 identity     | source identity 增加 runtime source 输入                                 |
+| 9. identity key 分隔符碰撞               | `%`/`:` 做无歧义转义，legacy key 仅作为兼容 alias                        |
+| 10. compact artifact 丢 identity         | 保留 identity/span/evidence_level/lineage/representations 及全部阶段列表 |
+| 11. headline policy fail-open            | manifest role 存在时强制单 deployed policy 或显式 ensemble               |
+| 12. paired regression 只是均值相减       | 逐样例对齐、timeout 配对、win/loss/tie 和 bootstrap CI                   |
+| 13. contract gate 缺 evidence 不变量     | 新增并实际计算五项 contract invariant                                    |
+| 14. Finance adequacy 允许部分字段缺失    | 任一 required field 缺失即阻止 generation                                |
+| 15. claim aggregation 仍是 token Jaccard | 使用 subject/relation/value/unit/time/scope/polarity typed claim key     |
 
 ## 5. 当前验证证据
 
 | 验证                     | 结果                     |
 | ------------------------ | ------------------------ |
-| P0/P1 定向跨模块测试     | 45 passed                |
-| `benchmark/tests`        | 504 passed，6 warnings   |
-| `libs/ktem/ktem_tests`   | 1430 passed，45 warnings |
+| P0/P1 定向跨模块测试     | 30 passed                |
+| `benchmark/tests`        | 517 passed，6 warnings   |
+| `libs/ktem/ktem_tests`   | 1447 passed，45 warnings |
 | codebase hygiene ratchet | passed；未刷新 baseline  |
 | 新 benchmark artifact    | 尚无                     |
 | 新 Slurm 任务            | 未提交                   |
@@ -138,7 +138,7 @@ warnings 为现有第三方弃用/版本提示，不是本轮新增失败。单�
 
 1. 先生成 FinanceBench 和 QASPER 各 2–5 条 smoke artifact。
 2. 逐条检查
-   `candidate → fused → reranker_input → reranked → selected → generation_context → execution_operand → verified_claim_support → emitted_citation`。
+   `canonical_candidate → fused → reranker_input → reranked → selected → generation_context → execution_operand → verified_claim_support → emitted_citation`。
 3. 任一 identity、slot、stage 或 citation contract violation 非 0，停在首次断裂阶段修复，
    不调 reranker、MMR 或 prompt 掩盖。
 4. smoke 通过后运行 QASPER 159×3 与 FinanceBench 20×4 聚焦验证。

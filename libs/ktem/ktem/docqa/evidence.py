@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from dataclasses import dataclass
 from typing import Any
 
 from .evidence_field_values import (
@@ -29,8 +30,22 @@ from .query_planning import (
 )
 from .required_slot_selection import required_slot_shortlist
 
-MAX_PAGE_IMAGE_EVIDENCE_ITEMS = 20
 MAX_RERANK_CANDIDATES = 80
+
+
+@dataclass(frozen=True)
+class _EvidenceStages:
+    canonical_candidates: list[dict[str, Any]]
+    ranked_candidates: list[dict[str, Any]]
+    reranker_input: list[dict[str, Any]]
+    reranked: list[dict[str, Any]] | None
+    selection_candidates: list[dict[str, Any]]
+    dedupe_trace: dict[str, Any]
+    ranking_metadata: dict[str, object]
+    required_slot_restored: int
+    page_ranking_trace: dict[str, Any] | None
+    fusion_trace: dict[str, Any] | None
+    reranker_trace: dict[str, Any] | None
 
 
 def build_evidence_bundle(
@@ -40,61 +55,34 @@ def build_evidence_bundle(
 ) -> EvidenceBundle:
     query_plan = ensure_request_query_plan(request)
     items = _initial_evidence_items(route, request, evidence_metadata)
-    deduped, dedupe_trace = canonicalize_and_dedupe_evidence(items)
-    canonical_candidates = list(deduped)
-    m3docrag_trace: dict[str, Any] | None = None
-    hybrid_fusion_trace: dict[str, Any] | None = None
-    if route == "doc_page_image":
-        deduped = _limit_page_image_evidence(deduped)
-    if route == "hybrid":
-        planning_question = request_planning_question(request)
-        deduped, hybrid_fusion_trace = fuse_hybrid_evidence(
-            planning_question,
-            canonical_candidates,
-            strategy=str(evidence_metadata.get("hybrid_fusion_strategy") or ""),
-            learned_ranker=evidence_metadata.get("hybrid_fusion_ranker"),
-            domain=getattr(request, "verification_domain", None),
-        )
-    ranked_candidates = list(deduped)
-    fused_candidates, pre_rerank_restored = required_slot_shortlist(
-        ranked_candidates,
-        query_plan,
-        candidate_limit=MAX_RERANK_CANDIDATES,
-    )
-    reranked_candidates, ranking_metadata = materialize_reranked_candidates(
-        fused_candidates,
+    stages = _build_evidence_stages(
+        route,
+        request,
         evidence_metadata,
-        limit=30,
+        items,
+        query_plan,
     )
-    selection_candidates = _reranked_with_remaining_candidates(
-        reranked_candidates,
-        fused_candidates,
-    )
-    if route == "hybrid":
-        deduped, m3docrag_trace = select_page_first_evidence(
-            planning_question,
-            selection_candidates,
-            max_pages=retrieval_budget(query_plan)["max_pages"],
-        )
-    else:
-        deduped = selection_candidates
+    deduped = stages.selection_candidates
     deduped, planning_metadata = select_planned_evidence(request, deduped)
     metadata = dict(evidence_metadata)
     metadata["schema_version"] = EVIDENCE_BUNDLE_SCHEMA_VERSION
-    metadata["dedupe_trace"] = dedupe_trace
-    metadata["canonical_candidate_count"] = len(canonical_candidates)
-    metadata["candidate_evidence"] = canonical_candidates
-    metadata["candidate_ranked_evidence"] = ranked_candidates
+    metadata["dedupe_trace"] = stages.dedupe_trace
+    metadata["canonical_candidate_count"] = len(stages.canonical_candidates)
+    metadata["canonical_candidate_evidence"] = stages.canonical_candidates
+    metadata["candidate_evidence"] = stages.canonical_candidates
+    metadata["candidate_ranked_evidence"] = stages.ranked_candidates
     metadata["candidate_ranking_contract"] = "global_ranked_v1"
-    metadata["pre_rerank_required_slot_candidates_restored"] = pre_rerank_restored
-    metadata["reranker_input_evidence"] = fused_candidates
+    metadata[
+        "pre_rerank_required_slot_candidates_restored"
+    ] = stages.required_slot_restored
+    metadata["reranker_input_evidence"] = stages.reranker_input
     metadata["reranker_input_contract"] = "required_slot_restored.v1"
     if route == "hybrid":
-        metadata["fused_evidence"] = fused_candidates
-    if reranked_candidates is not None:
-        metadata["reranked_candidate_count"] = len(reranked_candidates)
-        metadata["reranked_evidence"] = reranked_candidates
-    metadata["ranking_trace"] = ranking_metadata
+        metadata["fused_evidence"] = stages.ranked_candidates
+    if stages.reranked is not None:
+        metadata["reranked_candidate_count"] = len(stages.reranked)
+        metadata["reranked_evidence"] = stages.reranked
+    metadata["ranking_trace"] = stages.ranking_metadata
     metadata.update(merged_locator_metadata(metadata, deduped))
     metadata["modality_counts"] = dict(Counter(item["modality"] for item in deduped))
     metadata["evidence"] = deduped
@@ -105,11 +93,78 @@ def build_evidence_bundle(
         "used_evidence": "generation_context_evidence",
     }
     metadata.update(planning_metadata)
-    if m3docrag_trace is not None:
-        metadata["m3docrag_trace"] = m3docrag_trace
-    if hybrid_fusion_trace is not None:
-        metadata["hybrid_fusion_trace"] = hybrid_fusion_trace
+    if stages.page_ranking_trace is not None:
+        metadata["m3docrag_trace"] = stages.page_ranking_trace
+    if stages.fusion_trace is not None:
+        metadata["hybrid_fusion_trace"] = stages.fusion_trace
+    if stages.reranker_trace is not None:
+        metadata["hybrid_reranker_trace"] = stages.reranker_trace
     return EvidenceBundle(route=route, items=deduped, metadata=metadata)
+
+
+def _build_evidence_stages(
+    route: str,
+    request: Any,
+    evidence_metadata: dict[str, Any],
+    items: list[dict[str, Any]],
+    query_plan: Any,
+) -> _EvidenceStages:
+    deduped, dedupe_trace = canonicalize_and_dedupe_evidence(items)
+    canonical_candidates = list(deduped)
+    planning_question = request_planning_question(request)
+    fusion_trace = None
+    if route == "hybrid":
+        deduped, fusion_trace = fuse_hybrid_evidence(
+            planning_question,
+            canonical_candidates,
+            strategy=str(evidence_metadata.get("hybrid_fusion_strategy") or ""),
+            domain=getattr(request, "verification_domain", None),
+        )
+    ranked_candidates = list(deduped)
+    reranker_input, restored = required_slot_shortlist(
+        ranked_candidates,
+        query_plan,
+        candidate_limit=MAX_RERANK_CANDIDATES,
+    )
+    reranker_scored = reranker_input
+    reranker_trace = None
+    hybrid_reranker = evidence_metadata.get("hybrid_fusion_ranker")
+    if route == "hybrid" and hybrid_reranker is not None:
+        reranker_scored, reranker_trace = fuse_hybrid_evidence(
+            planning_question,
+            reranker_input,
+            learned_ranker=hybrid_reranker,
+            domain=getattr(request, "verification_domain", None),
+        )
+    reranked, ranking_metadata = materialize_reranked_candidates(
+        reranker_scored,
+        evidence_metadata,
+        limit=30,
+    )
+    selection_candidates = _reranked_with_remaining_candidates(
+        reranked,
+        reranker_input,
+    )
+    page_ranking_trace = None
+    if route == "hybrid":
+        selection_candidates, page_ranking_trace = select_page_first_evidence(
+            planning_question,
+            selection_candidates,
+            max_pages=retrieval_budget(query_plan)["max_pages"],
+        )
+    return _EvidenceStages(
+        canonical_candidates=canonical_candidates,
+        ranked_candidates=ranked_candidates,
+        reranker_input=reranker_input,
+        reranked=reranked,
+        selection_candidates=selection_candidates,
+        dedupe_trace=dedupe_trace,
+        ranking_metadata=ranking_metadata,
+        required_slot_restored=restored,
+        page_ranking_trace=page_ranking_trace,
+        fusion_trace=fusion_trace,
+        reranker_trace=reranker_trace,
+    )
 
 
 def _initial_evidence_items(
@@ -169,20 +224,6 @@ def _page_image_items(evidence_metadata: dict[str, Any]) -> list[dict[str, Any]]
         _coerce_item(_with_retriever_score(item, scores, "visual_retriever_score"))
         for item in evidence_metadata.get("page_image_index") or []
     ]
-
-
-def _limit_page_image_evidence(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    selected: list[dict[str, Any]] = []
-    page_image_count = 0
-    for item in items:
-        if str(item.get("modality") or "") != "page_image":
-            selected.append(item)
-            continue
-        if page_image_count >= MAX_PAGE_IMAGE_EVIDENCE_ITEMS:
-            continue
-        selected.append(item)
-        page_image_count += 1
-    return selected
 
 
 def _with_retriever_score(

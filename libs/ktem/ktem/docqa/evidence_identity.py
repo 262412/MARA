@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import math
 import re
 import unicodedata
 from dataclasses import asdict, dataclass
@@ -20,6 +19,7 @@ from .evidence_representations import (
     evidence_representations,
     stable_dict_union,
 )
+from .evidence_similarity import cosine_item_similarity, minhash_text_similarity
 
 EVIDENCE_BUNDLE_SCHEMA_VERSION = "evidence_bundle.v2"
 OVERLAP_THRESHOLD = 0.75
@@ -43,6 +43,13 @@ class EvidenceIdentity:
 
     @property
     def key(self) -> str:
+        return ":".join(
+            _identity_component(value)
+            for value in (self.kind, self.source_id, self.local_id)
+        )
+
+    @property
+    def legacy_key(self) -> str:
         return ":".join((self.kind, self.source_id, self.local_id))
 
     def as_dict(self) -> dict[str, str]:
@@ -55,11 +62,14 @@ def evidence_aliases(item: dict[str, Any]) -> set[str]:
 
 def exact_evidence_aliases(item: dict[str, Any]) -> set[str]:
     identity = identity_of(item)
-    return exact_alias_values(
+    aliases = exact_alias_values(
         item,
         identity_key=identity.key,
         identity_kind=identity.kind,
     )
+    if identity.legacy_key != identity.key:
+        aliases.add(identity.legacy_key)
+    return aliases
 
 
 def grouping_evidence_aliases(item: dict[str, Any]) -> set[str]:
@@ -71,15 +81,22 @@ def grouping_evidence_aliases(item: dict[str, Any]) -> set[str]:
 
 def identity_of(item: dict[str, Any]) -> EvidenceIdentity:
     metadata = _merged_metadata(item)
-    source_id = _first(item, metadata, "source_id", "file_id", "document_id")
+    source_id = _first(
+        item,
+        metadata,
+        "source_id",
+        "file_id",
+        "document_id",
+        "runtime_source_id",
+    )
     cell_id = _first(item, metadata, "cell_id")
     if cell_id:
         return EvidenceIdentity(source_id, "cell", cell_id)
 
-    evidence_level = _first(item, metadata, "evidence_level").lower()
     span_id = _first(item, metadata, "span_id")
-    if evidence_level == "span" and span_id:
+    if span_id:
         return EvidenceIdentity(source_id, "span", span_id)
+    evidence_level = _first(item, metadata, "evidence_level").lower()
 
     table_id = _first(item, metadata, "table_id")
     row_index = _optional_int(_value(item, metadata, "row_index", "row"))
@@ -96,6 +113,34 @@ def identity_of(item: dict[str, Any]) -> EvidenceIdentity:
         return EvidenceIdentity(source_id, "span", element_id)
     if element_id:
         return EvidenceIdentity(source_id, "element", element_id)
+    return _fallback_identity(item, metadata, source_id, evidence_level)
+
+
+def _fallback_identity(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    source_id: str,
+    evidence_level: str,
+) -> EvidenceIdentity:
+    evidence_id = _first(item, metadata, "evidence_id", "doc_id")
+    if (
+        evidence_level in {"page", "source"}
+        and not evidence_id
+        and not _item_text(item)
+    ):
+        page_label = _first(
+            item,
+            metadata,
+            "page_label",
+            "page_number",
+            "page",
+            "page_idx",
+        )
+        return EvidenceIdentity(
+            source_id,
+            evidence_level,
+            page_label if evidence_level == "page" else "source",
+        )
 
     page_label = _first(
         item,
@@ -120,7 +165,6 @@ def identity_of(item: dict[str, Any]) -> EvidenceIdentity:
             f"{page_label}:{chunk_start}:{chunk_end}",
         )
 
-    evidence_id = _first(item, metadata, "evidence_id", "doc_id")
     if evidence_id:
         return EvidenceIdentity(source_id, "evidence", evidence_id)
 
@@ -170,7 +214,14 @@ def canonicalize_evidence_item(item: dict[str, Any]) -> dict[str, Any]:
     expected_identity = item.get("identity")
     output.pop("identity", None)
     metadata = _merged_metadata(item)
-    source_id = _first(item, metadata, "source_id", "file_id", "document_id")
+    source_id = _first(
+        item,
+        metadata,
+        "source_id",
+        "file_id",
+        "document_id",
+        "runtime_source_id",
+    )
     page_label = _first(item, metadata, "page_label", "page_number", "page", "page_idx")
     element_id = _first(item, metadata, "element_id")
     parent_id = _first(item, metadata, "parent_element_id", "parent_id")
@@ -264,7 +315,8 @@ def _find_duplicate(
     for existing in selected:
         if (
             _near_duplicate_allowed(item, existing)
-            and _minhash_similarity(item, existing) >= MINHASH_THRESHOLD
+            and minhash_text_similarity(_item_text(item), _item_text(existing))
+            >= MINHASH_THRESHOLD
         ):
             if _facts_conflict(item, existing):
                 conflicts += 1
@@ -273,7 +325,7 @@ def _find_duplicate(
     for existing in selected:
         if not _near_duplicate_allowed(item, existing):
             continue
-        if _cosine_similarity(item, existing) < SEMANTIC_THRESHOLD:
+        if cosine_item_similarity(item, existing) < SEMANTIC_THRESHOLD:
             continue
         if _facts_conflict(item, existing):
             conflicts += 1
@@ -418,57 +470,6 @@ def _same_structure_context(left: dict[str, Any], right: dict[str, Any]) -> bool
     ) and bool(left.get("source_id") or left.get("parent_element_id"))
 
 
-def _minhash_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
-    left_tokens = _tokens(_item_text(left))
-    right_tokens = _tokens(_item_text(right))
-    if len(left_tokens) < 4 or len(right_tokens) < 4:
-        return 0.0
-    left_signature = _minhash_signature(left_tokens)
-    right_signature = _minhash_signature(right_tokens)
-    return sum(a == b for a, b in zip(left_signature, right_signature)) / len(
-        left_signature
-    )
-
-
-def _minhash_signature(tokens: set[str], permutations: int = 32) -> tuple[int, ...]:
-    return tuple(
-        min(
-            int.from_bytes(
-                hashlib.blake2b(
-                    f"{seed}:{token}".encode("utf-8"), digest_size=8
-                ).digest(),
-                "big",
-            )
-            for token in tokens
-        )
-        for seed in range(permutations)
-    )
-
-
-def _cosine_similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
-    a = _embedding(left)
-    b = _embedding(right)
-    if not a or not b or len(a) != len(b):
-        return 0.0
-    denominator = math.sqrt(sum(value * value for value in a)) * math.sqrt(
-        sum(value * value for value in b)
-    )
-    if denominator == 0:
-        return 0.0
-    return sum(x * y for x, y in zip(a, b)) / denominator
-
-
-def _embedding(item: dict[str, Any]) -> list[float]:
-    metadata = dict(item.get("metadata") or {})
-    raw = metadata.get("semantic_embedding") or metadata.get("embedding") or []
-    if not isinstance(raw, (list, tuple)):
-        return []
-    try:
-        return [float(value) for value in raw]
-    except (TypeError, ValueError):
-        return []
-
-
 def _facts_conflict(left: dict[str, Any], right: dict[str, Any]) -> bool:
     left_text = _item_text(left)
     right_text = _item_text(right)
@@ -589,3 +590,7 @@ def _unique(values: list[str]) -> list[str]:
 
 def _is_score_key(key: str) -> bool:
     return str(key).endswith("_score") or str(key) in {"score", "confidence"}
+
+
+def _identity_component(value: str) -> str:
+    return str(value).replace("%", "%25").replace(":", "%3A")

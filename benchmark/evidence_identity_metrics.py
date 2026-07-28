@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import re
 from pathlib import Path
 from typing import Any
@@ -21,18 +20,19 @@ _SOURCE_FIELDS = (
 
 def evidence_identity_keys(item: dict[str, Any]) -> set[str]:
     identity = identity_of(item)
-    keys = {f"identity:{identity.key}"}
-
-    aliases = source_aliases(item)
-    page = _page_label(item)
-    text_hash = _text_hash(evidence_item_text(item))
-    element = _normalized_identifier(identity.local_id)
-    for alias in aliases:
-        if element:
-            keys.add(f"source_element:{alias}:{element}")
-        if page and text_hash:
-            keys.add(f"source_page_text:{alias}:{page}:{text_hash}")
-    return keys
+    explicit_input_identity = str(
+        item.get("reranker_input_identity")
+        or dict(item.get("metadata") or {}).get("reranker_input_identity")
+        or ""
+    ).strip()
+    return {
+        value
+        for value in (
+            f"identity:{identity.key}",
+            f"identity:{explicit_input_identity}" if explicit_input_identity else "",
+        )
+        if value
+    }
 
 
 def reranker_lineage(
@@ -109,29 +109,5 @@ def _source_value_aliases(value: Any) -> set[str]:
     }
 
 
-def _page_label(item: dict[str, Any]) -> str:
-    metadata = item.get("metadata")
-    nested = metadata if isinstance(metadata, dict) else {}
-    for field in (
-        "page_label",
-        "source_page_label",
-        "dataset_page",
-        "parser_page_index",
-        "page",
-        "page_index",
-    ):
-        value = item.get(field, nested.get(field))
-        if str(value or "").strip():
-            return str(value).strip().lower()
-    return ""
-
-
 def _normalized_identifier(value: Any) -> str:
     return re.sub(r"[^a-z0-9._:-]+", "-", str(value or "").strip().lower()).strip("-")
-
-
-def _text_hash(text: str) -> str:
-    normalized = " ".join(re.findall(r"[a-z0-9]+", str(text or "").lower()))
-    if not normalized:
-        return ""
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()

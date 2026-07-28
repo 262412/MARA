@@ -97,7 +97,7 @@ def test_text_route_uses_selected_text_as_source_level_evidence():
     )
     assert selected["source_backrefs"] == ["file-a#source"]
     assert selected["evidence_level"] == "source"
-    assert selected["canonical_id"] == "evidence:file-a:selected-text:file-a"
+    assert selected["canonical_id"] == "evidence:file-a:selected-text%3Afile-a"
     assert selected["normalized_text_hash"]
     assert selected["duplicate_evidence_ids"] == []
     assert bundle.metadata["schema_version"] == "evidence_bundle.v2"

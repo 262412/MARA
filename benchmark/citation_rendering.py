@@ -22,7 +22,20 @@ def citation_from_item(
     )
     source_ref = first_nonempty_value(
         *source_backrefs,
-        matching_canonical_source_ref(canonical_sources, page_label),
+        matching_canonical_source_ref(
+            canonical_sources,
+            page_label,
+            source_id=first_nonempty_value(
+                item.get("source_id"),
+                item.get("document_id"),
+                item.get("file_id"),
+                item.get("runtime_source_id"),
+            ),
+            source_aliases=[
+                *list(item.get("source_aliases") or []),
+                *list(dict(item.get("metadata") or {}).get("source_aliases") or []),
+            ],
+        ),
     )
     if source_ref:
         parsed = citation_from_source_ref(source_ref, span=span)
@@ -47,13 +60,32 @@ def citation_from_item(
     ).as_dict()
 
 
-def matching_canonical_source_ref(sources: list[str], page_label: str) -> str:
-    if page_label:
-        suffix = f"#page:{page_label}"
-        for source in sources:
-            if str(source or "").strip().endswith(suffix):
-                return str(source).strip()
-    return sources[0] if sources else ""
+def matching_canonical_source_ref(
+    sources: list[str],
+    page_label: str,
+    *,
+    source_id: str = "",
+    source_aliases: list[str] | tuple[str, ...] = (),
+) -> str:
+    aliases = {
+        str(value or "").strip().split("#", 1)[0]
+        for value in (source_id, *source_aliases)
+        if str(value or "").strip()
+    }
+    candidates = [
+        str(source).strip()
+        for source in sources
+        if str(source or "").strip()
+        and (not page_label or str(source).strip().endswith(f"#page:{page_label}"))
+    ]
+    alias_matches = [
+        source for source in candidates if source.split("#", 1)[0] in aliases
+    ]
+    if len(alias_matches) == 1:
+        return alias_matches[0]
+    if len(candidates) == 1:
+        return candidates[0]
+    return ""
 
 
 def citation_from_source_ref(source_ref: str, *, span: str) -> dict[str, str]:

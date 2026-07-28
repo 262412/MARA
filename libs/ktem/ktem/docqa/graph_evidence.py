@@ -57,10 +57,17 @@ def _located_graph_item(
     item: dict[str, Any],
     source_backref: str,
 ) -> dict[str, Any]:
-    source_id, marker, page_label = source_backref.partition("#page:")
+    if "#page:" in source_backref:
+        source_id, page_label = source_backref.split("#page:", 1)
+    elif "#source" in source_backref:
+        source_id = source_backref.split("#source", 1)[0]
+        page_label = ""
+    else:
+        source_id = source_backref
+        page_label = ""
     located = dict(item)
-    located["source_id"] = source_id
-    located["page_label"] = page_label if marker else ""
+    located["source_id"] = source_id.strip()
+    located["page_label"] = page_label.strip()
     located["source_backrefs"] = [source_backref]
     located["element_id"] = ":".join(
         value
