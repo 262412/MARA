@@ -176,6 +176,7 @@ def test_supply_chain_jobs_build_scan_and_retain_evidence():
     assert "skopeo copy" in container_commands
     assert "docker-daemon:" in container_commands
     assert "smoke_container_runtime.py" in container_commands
+    assert 'print("Aa1!" + base64.urlsafe_b64encode' in container_commands
     expected_image_ref = "mara-quality:${{ matrix.target }}-${{ github.sha }}"
     trivy_steps = [
         step
@@ -186,6 +187,17 @@ def test_supply_chain_jobs_build_scan_and_retain_evidence():
     for step in trivy_steps:
         assert step["with"]["image-ref"] == expected_image_ref
         assert "input" not in step["with"]
+    vulnerability_scan = next(
+        step
+        for step in trivy_steps
+        if step["name"] == "Scan fixable high and critical image findings"
+    )
+    assert vulnerability_scan["with"]["exit-code"] == "0"
+    assert vulnerability_scan["with"]["format"] == "json"
+    assert vulnerability_scan["with"]["output"].endswith(".trivy.json")
+    assert "check_container_vulnerability_baseline.py" in container_commands
+    assert "container_vulnerability_baseline.json" in container_commands
+    assert "trivyignore" not in container_source.lower()
 
     python_commands = _commands(python)
     assert "publish_packages.py check" in python_commands
