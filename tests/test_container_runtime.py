@@ -107,6 +107,23 @@ def test_initialized_password_container_reprovisions_admin_from_rotated_secret(
     ]
 
 
+def test_container_process_check_requests_pid_column(monkeypatch):
+    from scripts import smoke_container_runtime
+
+    commands = []
+
+    def fake_run(*command, check=True):
+        commands.append(command)
+        stdout = "PID COMMAND\n1 /opt/mara/bin/container-entrypoint\n"
+        return subprocess.CompletedProcess(command, 0, stdout, "")
+
+    monkeypatch.setattr(smoke_container_runtime, "_run", fake_run)
+
+    smoke_container_runtime._check_runtime("container-id", "lite")
+
+    assert ("docker", "top", "container-id", "-eo", "pid,args") in commands
+
+
 def test_container_does_not_force_incompatible_legacy_provider_dependencies():
     dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(
         encoding="utf-8"
