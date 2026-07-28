@@ -15,6 +15,13 @@ from .query_planning import (
 )
 from .required_slot_selection import required_slot_shortlist
 from .required_slot_selection import slot_score as _slot_score
+from .selection_score_normalization import (
+    SELECTION_SCORE_CONTRACT,
+    normalized_selection_scores,
+    without_selection_annotations,
+)
+from .selection_values import first_float as _first_float
+from .selection_values import string_values as _string_values
 
 MMR_LAMBDA = 0.7
 RERANK_CANDIDATE_LIMIT = 30
@@ -98,7 +105,7 @@ def select_evidence_for_plan(
     )
 
     page_modality_count = 0
-    if plan.question_type == "visual":
+    if plan.constraints.get("requires_visual") or plan.question_type == "visual":
         page_modality_count = _expand_selected_pages(
             candidates,
             selected,
@@ -151,7 +158,7 @@ def select_evidence_for_plan(
         mixed_structure_coverage=mixed_structure_coverage,
         structure_coverage_scope=structure_coverage_scope,
     )
-    return selected, trace, bound
+    return [without_selection_annotations(item) for item in selected], trace, bound
 
 
 def _selection_context(
@@ -163,7 +170,11 @@ def _selection_context(
         plan,
         candidate_limit=RERANK_CANDIDATE_LIMIT,
     )
-    return candidates, restored_required, retrieval_budget(plan)
+    return (
+        normalized_selection_scores(candidates, identity_of=_identity),
+        restored_required,
+        retrieval_budget(plan),
+    )
 
 
 def _seed_unplanned_selection(
@@ -194,7 +205,16 @@ def _select_required_slot_evidence(
     max_pages: int,
 ) -> None:
     used_required_locators: set[tuple[str, str]] = set()
-    for slot in plan.evidence_slots:
+    required_slots = [
+        slot for slot in plan.evidence_slots if slot.required_for_retrieval
+    ]
+    required_slots.sort(
+        key=lambda slot: (
+            sum(_slot_score(plan, slot, item) > 0 for item in candidates),
+            slot.slot_id,
+        )
+    )
+    for slot in required_slots:
         ranked = sorted(
             candidates,
             key=lambda item: (
@@ -267,6 +287,7 @@ def _selection_trace(
         "mixed_candidate_structure_metadata_coverage": mixed_structure_coverage,
         "structure_coverage_scope": structure_coverage_scope,
         "required_slot_candidates_restored": required_slot_candidates_restored,
+        "relevance_score_contract": SELECTION_SCORE_CONTRACT,
     }
 
 
@@ -391,14 +412,19 @@ def _relevance(query: str, item: dict[str, Any]) -> float:
         len(query_tokens & item_tokens) / len(query_tokens) if query_tokens else 0.0
     )
     metadata = dict(item.get("metadata") or {})
-    score = _first_float(
-        metadata.get("learned_score"),
-        metadata.get("reranking_score"),
-        metadata.get("reranker_score"),
-        metadata.get("hybrid_fusion_score"),
-        metadata.get("visual_retriever_score"),
-        metadata.get("element_retriever_score"),
-        item.get("score"),
+    normalized_score = item.get("_selection_relevance_score")
+    score = (
+        _first_float(normalized_score)
+        if normalized_score is not None
+        else _first_float(
+            metadata.get("learned_score"),
+            metadata.get("reranking_score"),
+            metadata.get("reranker_score"),
+            metadata.get("hybrid_fusion_score"),
+            metadata.get("visual_retriever_score"),
+            metadata.get("element_retriever_score"),
+            item.get("score"),
+        )
     )
     metadata_tokens = _tokens(
         " ".join(
@@ -564,26 +590,3 @@ def _item_text(item: dict[str, Any]) -> str:
 
 def _tokens(text: str) -> set[str]:
     return {token.lower() for token in _TOKEN_RE.findall(str(text or ""))}
-
-
-def _first_float(*values: Any) -> float:
-    for value in values:
-        if value is None:
-            continue
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            continue
-    return 0.0
-
-
-def _string_values(value: Any) -> list[str]:
-    if isinstance(value, dict):
-        values: list[Any] = list(value.values())
-    elif isinstance(value, (list, tuple, set)):
-        values = list(value)
-    elif value is None:
-        return []
-    else:
-        values = [value]
-    return [str(item).strip() for item in values if str(item).strip()]

@@ -125,3 +125,32 @@ def test_two_shared_tokens_do_not_become_claim_level_support():
             "contradicting_evidence_ids": [],
         }
     ]
+
+
+def test_scope_and_relation_must_be_supported_not_only_shared_tokens():
+    request = DocQARequest(
+        prompt="How did Model A compare with Model B?",
+        verification_mode="strict",
+    )
+    bundle = EvidenceBundle(
+        route="doc_text",
+        items=[
+            {
+                "evidence_id": "evaluation",
+                "source_id": "paper",
+                "text": (
+                    "Model A and Model B were evaluated under all settings, "
+                    "but neither model outperformed the other."
+                ),
+            }
+        ],
+    )
+
+    decision = verify_decision(
+        request,
+        RetrieveDecision(status="good", reason="ok"),
+        bundle,
+        answer="Model A outperformed Model B under all settings.",
+    )
+
+    assert decision.status == "unsupported"

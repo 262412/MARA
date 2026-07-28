@@ -471,9 +471,11 @@ def test_stage_metrics_keep_selected_used_verified_and_cited_evidence_distinct()
         "gold_evidence": [gold],
         "evidence_metadata": {
             "candidate_evidence": [gold, wrong],
+            "fused_evidence": [gold],
             "selected_evidence": [wrong],
             "used_evidence": [gold],
             "generation_context_evidence": [gold],
+            "execution_operand_evidence": [gold],
             "verified_evidence": [gold],
             "cited_evidence": [wrong],
         },
@@ -483,10 +485,12 @@ def test_stage_metrics_keep_selected_used_verified_and_cited_evidence_distinct()
     status = prediction_stage_metric_status(prediction)
 
     assert metrics["candidate_recall_at_50"] == 1.0
+    assert metrics["fused_evidence_coverage"] == 1.0
     assert metrics["reranked_recall_at_10"] is None
     assert metrics["selected_evidence_coverage"] == 0.0
     assert metrics["used_evidence_coverage"] == 1.0
     assert metrics["generation_context_evidence_coverage"] == 1.0
+    assert metrics["execution_operand_evidence_coverage"] == 1.0
     assert metrics["verified_evidence_coverage"] == 1.0
     assert metrics["cited_evidence_coverage"] == 0.0
     assert status["reranked_recall_at_10"]["status"] == "unavailable"

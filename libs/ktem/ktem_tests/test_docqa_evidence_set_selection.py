@@ -112,7 +112,7 @@ def test_selection_expands_table_continuation_and_respects_page_budget():
     )
 
     assert {"table-p4", "table-p5"} <= {item["evidence_id"] for item in selected}
-    assert trace["continuation_expansion_count"] == 1
+    assert trace["continuation_expansion_count"] == 0
     assert trace["structure_expansion_enabled"] is True
     assert trace["unique_pages"] <= trace["max_pages"]
 

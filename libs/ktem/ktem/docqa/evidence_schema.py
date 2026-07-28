@@ -17,6 +17,7 @@ class EvidenceElement:
     modality: str = "text"
     element_id: str = ""
     cell_id: str = ""
+    span_id: str = ""
     canonical_id: str = ""
     parent_element_id: str = ""
     neighbor_element_ids: list[str] = field(default_factory=list)
@@ -45,6 +46,7 @@ class EvidenceElement:
     text: str = ""
     ocr_text: str = ""
     vlm_text: str = ""
+    representations: list[dict[str, Any]] = field(default_factory=list)
     source_backrefs: list[str] = field(default_factory=list)
     evidence_level: str = "page"
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -57,6 +59,7 @@ class EvidenceElement:
             "parser_page_index",
             "page_aliases",
             "cell_id",
+            "span_id",
             "row_label",
             "column_label",
             "period",
@@ -67,6 +70,7 @@ class EvidenceElement:
             "currency",
             "statement_kind",
             "financial_scope",
+            "representations",
         ):
             if payload[field_name] in ("", None, []):
                 payload.pop(field_name)

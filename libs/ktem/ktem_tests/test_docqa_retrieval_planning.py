@@ -232,7 +232,7 @@ def test_quality_retry_query_is_never_empty():
 
     request = DocQARequest(
         prompt="Which method performed better?",
-        retrieval_query="",
+        retrieval_query="   ",
         route_policy="doc",
     )
     retrieve_with_rounds(
@@ -243,7 +243,7 @@ def test_quality_retry_query_is_never_empty():
         retry_poor=False,
     )
 
-    assert queries == ["", "Which method performed better?"]
+    assert queries == ["   ", "Which method performed better?"]
     assert queries[1].strip()
 
 

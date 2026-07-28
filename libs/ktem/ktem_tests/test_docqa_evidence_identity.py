@@ -43,6 +43,44 @@ def test_structure_dedup_merges_same_element_and_preserves_all_backrefs():
     assert trace["structure_duplicate_count"] == 1
 
 
+def test_dedupe_preserves_all_retriever_lineage():
+    items, _trace = canonicalize_and_dedupe_evidence(
+        [
+            {
+                "evidence_id": "dense-hit",
+                "source_id": "report",
+                "element_id": "revenue-element",
+                "text": "Revenue increased.",
+                "retrieval_lineage": [
+                    {
+                        "retriever_name": "dense",
+                        "raw_rank": 1,
+                        "raw_score": 0.9,
+                    }
+                ],
+            },
+            {
+                "evidence_id": "sparse-hit",
+                "source_id": "report",
+                "element_id": "revenue-element",
+                "text": "Revenue increased.",
+                "retrieval_lineage": [
+                    {
+                        "retriever_name": "bm25",
+                        "raw_rank": 3,
+                        "raw_score": 12.0,
+                    }
+                ],
+            },
+        ]
+    )
+
+    assert [entry["retriever_name"] for entry in items[0]["retrieval_lineage"]] == [
+        "dense",
+        "bm25",
+    ]
+
+
 def test_identical_text_across_sources_remains_distinct():
     items, trace = canonicalize_and_dedupe_evidence(
         [
@@ -151,6 +189,78 @@ def test_dedupe_rejects_same_identity_with_conflicting_structured_fact():
                 },
             ]
         )
+
+
+def test_same_identity_conflicting_ocr_facts_raise():
+    with pytest.raises(EvidenceIdentityConflictError, match="textual facts"):
+        canonicalize_and_dedupe_evidence(
+            [
+                {
+                    "evidence_id": "ocr-a",
+                    "source_id": "report",
+                    "element_id": "revenue-row",
+                    "modality": "ocr",
+                    "ocr_text": "Revenue 2023: 10 million.",
+                },
+                {
+                    "evidence_id": "vlm-b",
+                    "source_id": "report",
+                    "element_id": "revenue-row",
+                    "modality": "vlm",
+                    "vlm_text": "Revenue 2023: 12 million.",
+                },
+            ]
+        )
+
+
+def test_multimodal_representations_are_not_destructively_merged():
+    items, _trace = canonicalize_and_dedupe_evidence(
+        [
+            {
+                "evidence_id": "text-hit",
+                "source_id": "report",
+                "element_id": "revenue-row",
+                "modality": "text",
+                "text": "Revenue increased in 2023.",
+            },
+            {
+                "evidence_id": "ocr-hit",
+                "source_id": "report",
+                "element_id": "revenue-row",
+                "modality": "ocr",
+                "ocr_text": "Revenue increased in 2023.",
+            },
+        ]
+    )
+
+    assert len(items) == 1
+    assert {
+        (representation["modality"], representation["field"])
+        for representation in items[0]["representations"]
+    } == {("text", "text"), ("ocr", "ocr_text")}
+
+
+def test_span_identity_round_trip_is_lossless():
+    bundle = build_evidence_bundle(
+        "doc",
+        DocQARequest(prompt="What evidence supports the conclusion?"),
+        {
+            "evidence": [
+                {
+                    "evidence_id": "paragraph-1",
+                    "source_id": "paper",
+                    "page_label": "4",
+                    "span_id": "span:conclusion",
+                    "evidence_level": "span",
+                    "text": "The experiment supports the conclusion.",
+                }
+            ]
+        },
+    )
+
+    [item] = bundle.items
+    assert item["span_id"] == "span:conclusion"
+    assert identity_of(item).key == "span:paper:span:conclusion"
 
 
 def test_dedupe_never_overwrites_representative_structured_text():
@@ -275,6 +385,9 @@ def test_evidence_bundle_preserves_dataset_parser_and_cell_identity_fields():
     assert item["period"] == "2021"
     assert item["scale"] == "million"
     assert item["currency"] == "USD"
+    assert bundle.metadata["source_page_locators"] == [
+        {"source_id": "runtime-file-id", "page_label": "68"}
+    ]
 
 
 def test_bundle_does_not_publish_reranked_stage_without_backend_execution():
@@ -372,3 +485,36 @@ def test_required_slot_can_restore_candidate_below_real_reranker_output_cutoff()
         bundle.metadata["evidence_selection_trace"]["required_slot_candidates_restored"]
         == 1
     )
+
+
+def test_required_slot_survives_global_candidate_budget():
+    evidence = [
+        {
+            "evidence_id": f"background-{index}",
+            "source_id": "report",
+            "page_label": str(index),
+            "text": f"Unrelated appendix material {index}.",
+        }
+        for index in range(1, 81)
+    ]
+    evidence.append(
+        {
+            "evidence_id": "revenue-atom",
+            "source_id": "report",
+            "page_label": "81",
+            "text": "Revenue was 42 million.",
+        }
+    )
+
+    bundle = build_evidence_bundle(
+        "doc",
+        DocQARequest(
+            prompt="What was revenue?",
+            task_type="numeric",
+            route_policy="doc",
+        ),
+        {"evidence": evidence},
+    )
+
+    assert "revenue-atom" in {item["evidence_id"] for item in bundle.items}
+    assert bundle.metadata["pre_rerank_required_slot_candidates_restored"] >= 1

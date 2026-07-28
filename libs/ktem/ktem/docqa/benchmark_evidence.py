@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .evidence_identity import EvidenceIdentity, identity_of
@@ -24,6 +24,7 @@ class BenchmarkEvidenceRecord:
     modality: str = ""
     element_id: str = ""
     cell_id: str = ""
+    span_id: str = ""
     parent_element_id: str = ""
     neighbor_element_ids: tuple[str, ...] = ()
     section_id: str = ""
@@ -54,10 +55,12 @@ class BenchmarkEvidenceRecord:
     caption: str = ""
     ocr_text: str = ""
     vlm_text: str = ""
+    representations: tuple[dict[str, Any], ...] = ()
     section_title: str = ""
     table_title: str = ""
     text: str = ""
     source_backrefs: tuple[str, ...] = ()
+    extension_metadata: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -68,7 +71,7 @@ class BenchmarkEvidenceRecord:
         return {
             key: value
             for key, value in payload.items()
-            if value not in ("", (), [], None)
+            if value not in ("", (), [], {}, None)
         }
 
 
@@ -100,6 +103,7 @@ def benchmark_evidence_record(item: dict[str, Any]) -> BenchmarkEvidenceRecord:
         modality=_first_text(item, metadata, "modality", "element_type", "type"),
         element_id=_first_text(item, metadata, "element_id", "element"),
         cell_id=_first_text(item, metadata, "cell_id"),
+        span_id=_first_text(item, metadata, "span_id"),
         parent_element_id=_first_text(item, metadata, "parent_element_id"),
         neighbor_element_ids=_first_tuple(
             item,
@@ -138,10 +142,12 @@ def benchmark_evidence_record(item: dict[str, Any]) -> BenchmarkEvidenceRecord:
         caption=_first_text(item, metadata, "caption"),
         ocr_text=_first_text(item, metadata, "ocr_text"),
         vlm_text=_first_text(item, metadata, "vlm_text"),
+        representations=_dict_tuple(item, metadata, "representations"),
         section_title=_first_text(item, metadata, "section_title"),
         table_title=_first_text(item, metadata, "table_title"),
         text=_first_text(item, metadata, "text", "content", "snippet"),
         source_backrefs=_source_backrefs(item, metadata),
+        extension_metadata=_extension_metadata(metadata),
     )
 
 
@@ -215,6 +221,15 @@ def _lineage(
     return tuple(dict(entry) for entry in value if isinstance(entry, dict))
 
 
+def _dict_tuple(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    key: str,
+) -> tuple[dict[str, Any], ...]:
+    value = item.get(key) or metadata.get(key) or []
+    return tuple(dict(entry) for entry in value if isinstance(entry, dict))
+
+
 def _source_backrefs(
     item: dict[str, Any],
     metadata: dict[str, Any],
@@ -227,3 +242,75 @@ def _source_backrefs(
         refs.extend(_values(item.get(key)))
         refs.extend(_values(metadata.get(key)))
     return tuple(dict.fromkeys(str(ref).strip() for ref in refs if str(ref).strip()))
+
+
+_PROJECTED_METADATA_KEYS = {
+    "bbox",
+    "canonical_id",
+    "caption",
+    "cell_id",
+    "chunk_end",
+    "chunk_start",
+    "column_index",
+    "column_label",
+    "continuation_id",
+    "currency",
+    "dataset_page",
+    "doc_id",
+    "document_id",
+    "duplicate_evidence_ids",
+    "element",
+    "element_id",
+    "element_id_aliases",
+    "element_type",
+    "element_type_aliases",
+    "evidence_id",
+    "evidence_level",
+    "file_id",
+    "file_name",
+    "financial_scope",
+    "metadata",
+    "modality",
+    "neighbor_element_ids",
+    "normalized_text_hash",
+    "ocr_text",
+    "page",
+    "page_aliases",
+    "page_index",
+    "page_label",
+    "page_num",
+    "page_number",
+    "parent_element_id",
+    "parser_page_index",
+    "period",
+    "period_kind",
+    "representations",
+    "retrieval_lineage",
+    "row_index",
+    "row_label",
+    "scale",
+    "score",
+    "section_id",
+    "section_title",
+    "source_aliases",
+    "source_backrefs",
+    "source_id",
+    "source_name",
+    "span_id",
+    "statement_kind",
+    "table_id",
+    "table_title",
+    "text",
+    "type",
+    "unit",
+    "value",
+    "vlm_text",
+}
+
+
+def _extension_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    return {
+        str(key): value
+        for key, value in metadata.items()
+        if str(key) not in _PROJECTED_METADATA_KEYS
+    }

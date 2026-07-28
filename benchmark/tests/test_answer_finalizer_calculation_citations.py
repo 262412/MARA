@@ -92,4 +92,52 @@ def test_calculation_citation_resolves_synthetic_cell_identity_to_parent_table()
         }
     }
 
-    assert calculation_citation_items(prediction, [table]) == [table]
+    [match] = calculation_citation_items(prediction, [table])
+    assert match.citation_identity == cell_identity
+    assert identity_of(match.item).key == cell_identity
+    assert match.item["evidence_id"] == table["evidence_id"]
+
+
+def test_calculation_citations_preserve_each_operand_identity():
+    table = {
+        "evidence_id": "cash-flow-table",
+        "source_id": "report",
+        "page_label": "30",
+        "modality": "table",
+        "text": "2021 2020\nCapital spending (4,625) (4,240)",
+    }
+    cells = parse_financial_table_cells(table)
+    citation_ids = [
+        identity_of({**table, "cell_id": cell.cell_id, "evidence_level": "cell"}).key
+        for cell in cells
+    ]
+    prediction: dict[str, Any] = {
+        "predicted_answer": "385",
+        "answer_type": "numeric",
+        "evidence_bundle": {
+            "items": [table],
+            "metadata": {
+                "finance_numeric_trace": {
+                    "calculation_execution": {
+                        "status": "ok",
+                        "citation_ids": citation_ids,
+                    }
+                }
+            },
+        },
+        "gold_evidence": [{"source_id": "report", "page_label": "30"}],
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="financebench",
+        mode="scoring_adapter_v1",
+    )
+
+    assert [
+        citation["evidence_id"] for citation in prediction["structured_citations"]
+    ] == citation_ids
+    assert {
+        identity_of(item).key
+        for item in prediction["evidence_metadata"]["execution_operand_evidence"]
+    } == set(citation_ids)

@@ -4,7 +4,12 @@ import re
 from collections import Counter
 from typing import Any
 
-from .evidence_field_values import item_metadata_text, retrieval_lineage_values
+from .evidence_field_values import (
+    atomic_identity_fields,
+    item_metadata_text,
+    representation_values,
+    retrieval_lineage_values,
+)
 from .evidence_identity import (
     EVIDENCE_BUNDLE_SCHEMA_VERSION,
     canonicalize_and_dedupe_evidence,
@@ -22,6 +27,7 @@ from .query_planning import (
     request_planning_question,
     retrieval_budget,
 )
+from .required_slot_selection import required_slot_shortlist
 
 MAX_PAGE_IMAGE_EVIDENCE_ITEMS = 20
 MAX_ELEMENT_EVIDENCE_ITEMS = 20
@@ -50,7 +56,12 @@ def build_evidence_bundle(
             learned_ranker=evidence_metadata.get("hybrid_fusion_ranker"),
             domain=getattr(request, "verification_domain", None),
         )
-    fused_candidates = list(deduped[:MAX_RERANK_CANDIDATES])
+    ranked_candidates = list(deduped)
+    fused_candidates, pre_rerank_restored = required_slot_shortlist(
+        ranked_candidates,
+        query_plan,
+        candidate_limit=MAX_RERANK_CANDIDATES,
+    )
     reranked_candidates, ranking_metadata = materialize_reranked_candidates(
         fused_candidates,
         evidence_metadata,
@@ -74,6 +85,9 @@ def build_evidence_bundle(
     metadata["dedupe_trace"] = dedupe_trace
     metadata["canonical_candidate_count"] = len(canonical_candidates)
     metadata["candidate_evidence"] = canonical_candidates
+    metadata["candidate_ranked_evidence"] = ranked_candidates
+    metadata["candidate_ranking_contract"] = "global_ranked_v1"
+    metadata["pre_rerank_required_slot_candidates_restored"] = pre_rerank_restored
     if route == "hybrid":
         metadata["fused_evidence"] = fused_candidates
     if reranked_candidates is not None:
@@ -225,7 +239,7 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         ),
         modality=modality or "text",
         element_id=str(item.get("element_id") or "").strip(),
-        cell_id=str(item.get("cell_id") or metadata.get("cell_id") or "").strip(),
+        **atomic_identity_fields(item, metadata),
         canonical_id=str(item.get("canonical_id") or "").strip(),
         parent_element_id=str(
             item.get("parent_element_id") or metadata.get("parent_element_id") or ""
@@ -271,6 +285,7 @@ def _coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         text=str(item.get("text") or item.get("content") or "").strip(),
         ocr_text=str(item.get("ocr_text") or "").strip(),
         vlm_text=str(item.get("vlm_text") or "").strip(),
+        representations=representation_values(item, metadata),
         source_backrefs=backrefs,
         evidence_level=str(item.get("evidence_level") or "page").strip(),
         metadata=metadata,

@@ -231,7 +231,7 @@ def test_rescore_artifact_cli_writes_mara_scores_without_mutating_source(tmp_pat
     assert summary["avg_mara_score"] == 1.0
     assert summary["avg_native_score"] == 1.0
     assert summary["avg_mara_proxy_score"] == 0.875
-    assert summary["primary_score_metric"] == "quality_avg_native_score"
+    assert summary["primary_score_metric"] == "deployed_policy_avg_native_score"
     assert summary["primary_score_label"] == "Dataset-Native Local Score"
     assert summary["primary_score_scope"] == "qa_quality"
     assert summary["score_authority_level"] == "local_dataset_native"
@@ -289,7 +289,7 @@ def test_rescore_artifacts_cli_rescores_direct_child_runs_and_skips_rescores(
     assert source_dirs == {str(source_a.resolve()), str(source_b.resolve())}
     for run in rescored_runs:
         summary = json.loads((run / "summary.json").read_text(encoding="utf-8"))
-        assert summary["primary_score_metric"] == "quality_avg_native_score"
+        assert summary["primary_score_metric"] == "deployed_policy_avg_native_score"
         assert summary["primary_score_scope"] == "qa_quality"
         assert summary["primary_score"] == 0.5
         assert str(summary["suite_name"]).startswith("batch-")
@@ -324,7 +324,7 @@ def test_rescore_artifacts_cli_runs_as_python_module(tmp_path):
     [rescored_run] = list(output_dir.iterdir())
     summary = json.loads((rescored_run / "summary.json").read_text(encoding="utf-8"))
     assert summary["mara_rescore_source_run_dir"] == str(source_run.resolve())
-    assert summary["primary_score_metric"] == "quality_avg_native_score"
+    assert summary["primary_score_metric"] == "deployed_policy_avg_native_score"
     assert summary["primary_score"] == 0.5
 
 
@@ -384,7 +384,7 @@ def test_rescore_artifact_cli_applies_external_evaluator_to_headline_score(tmp_p
     predictions = _read_jsonl(rescored_run / "predictions.jsonl")
     assert summary["avg_mara_score"] == 0.64
     assert summary["mara_score_metadata"]["scoring_mode"] == "paper_grade_external_v1"
-    assert summary["primary_score_metric"] == "quality_avg_native_score"
+    assert summary["primary_score_metric"] == "deployed_policy_avg_native_score"
     assert summary["primary_score_label"] == "Paper-Grade External Score"
     assert summary["score_authority_level"] == "paper_grade_external"
     assert summary["paper_grade_score_available"] is True

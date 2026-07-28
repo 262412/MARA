@@ -7,6 +7,18 @@ import unicodedata
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from .evidence_alias_values import exact_alias_values, grouping_alias_values
+from .evidence_fact_contract import (
+    STRUCTURED_FACT_FIELDS,
+    EvidenceIdentityConflictError,
+)
+from .evidence_field_values import score_value
+from .evidence_representations import (
+    dict_list,
+    evidence_representations,
+    stable_dict_union,
+)
+
 EVIDENCE_BUNDLE_SCHEMA_VERSION = "evidence_bundle.v2"
 OVERLAP_THRESHOLD = 0.75
 MINHASH_THRESHOLD = 0.90
@@ -21,26 +33,6 @@ _UNIT_RE = re.compile(
 )
 _POSITIVE = {"increase", "increased", "rise", "rose", "growth", "higher", "up"}
 _NEGATIVE = {"decrease", "decreased", "decline", "declined", "lower", "down"}
-_STRUCTURED_FACT_FIELDS = (
-    "cell_id",
-    "table_id",
-    "row_index",
-    "column_index",
-    "row_label",
-    "column_label",
-    "period",
-    "period_kind",
-    "value",
-    "unit",
-    "scale",
-    "currency",
-    "statement_kind",
-    "financial_scope",
-)
-
-
-class EvidenceIdentityConflictError(ValueError):
-    """Raised when one immutable evidence atom has conflicting structured facts."""
 
 
 @dataclass(frozen=True)
@@ -58,19 +50,23 @@ class EvidenceIdentity:
 
 
 def evidence_aliases(item: dict[str, Any]) -> set[str]:
-    return {
-        value
-        for value in (
-            identity_of(item).key,
-            str(item.get("canonical_id") or "").strip(),
-            str(item.get("cell_id") or "").strip(),
-            str(item.get("span_id") or "").strip(),
-            str(item.get("element_id") or "").strip(),
-            str(item.get("evidence_id") or "").strip(),
-            *(str(value).strip() for value in item.get("duplicate_evidence_ids") or []),
-        )
-        if value
-    }
+    return exact_evidence_aliases(item) | grouping_evidence_aliases(item)
+
+
+def exact_evidence_aliases(item: dict[str, Any]) -> set[str]:
+    identity = identity_of(item)
+    return exact_alias_values(
+        item,
+        identity_key=identity.key,
+        identity_kind=identity.kind,
+    )
+
+
+def grouping_evidence_aliases(item: dict[str, Any]) -> set[str]:
+    return grouping_alias_values(
+        item,
+        exact_aliases=exact_evidence_aliases(item),
+    )
 
 
 def identity_of(item: dict[str, Any]) -> EvidenceIdentity:
@@ -192,6 +188,8 @@ def canonicalize_evidence_item(item: dict[str, Any]) -> dict[str, Any]:
         "source_id": source_id,
         "page_label": page_label,
         "element_id": element_id,
+        "cell_id": _first(item, metadata, "cell_id"),
+        "span_id": _first(item, metadata, "span_id"),
         "parent_element_id": parent_id,
         "neighbor_element_ids": _string_list(
             item.get("neighbor_element_ids")
@@ -214,11 +212,20 @@ def canonicalize_evidence_item(item: dict[str, Any]) -> dict[str, Any]:
             _value(item, metadata, "chunk_end", "end_char", "end")
         ),
         "normalized_text_hash": normalized_hash,
+        **{
+            field: _value(item, metadata, field)
+            for field in STRUCTURED_FACT_FIELDS
+            if field not in {"cell_id", "table_id", "row_index", "column_index"}
+        },
     }
     output.update(fields)
     output["bbox"] = item.get("bbox", metadata.get("bbox"))
     output["source_backrefs"] = _source_backrefs(output)
     output["duplicate_evidence_ids"] = _string_list(item.get("duplicate_evidence_ids"))
+    output["retrieval_lineage"] = dict_list(
+        item.get("retrieval_lineage") or metadata.get("retrieval_lineage")
+    )
+    output["representations"] = evidence_representations(item)
     output["metadata"] = metadata
     identity = identity_of(output)
     if isinstance(expected_identity, dict):
@@ -303,6 +310,14 @@ def _merge_duplicate(target: dict[str, Any], duplicate: dict[str, Any]) -> None:
         list(target.get("source_backrefs") or [])
         + list(duplicate.get("source_backrefs") or [])
     )
+    target["retrieval_lineage"] = stable_dict_union(
+        target.get("retrieval_lineage"),
+        duplicate.get("retrieval_lineage"),
+    )
+    target["representations"] = stable_dict_union(
+        target.get("representations"),
+        duplicate.get("representations"),
+    )
     metadata = dict(target.get("metadata") or {})
     duplicate_metadata = dict(duplicate.get("metadata") or {})
     metadata["dedupe_source_ids"] = _unique(
@@ -332,7 +347,7 @@ def _merge_duplicate(target: dict[str, Any], duplicate: dict[str, Any]) -> None:
         if key not in metadata:
             metadata[key] = value
         elif _is_score_key(key):
-            metadata[key] = max(_float(metadata[key]), _float(value))
+            metadata[key] = max(score_value(metadata[key]), score_value(value))
     target["metadata"] = metadata
 
 
@@ -344,7 +359,7 @@ def _assert_same_structured_fact(
         return
     conflicts = [
         field
-        for field in _STRUCTURED_FACT_FIELDS
+        for field in STRUCTURED_FACT_FIELDS
         if target.get(field) not in (None, "")
         and duplicate.get(field) not in (None, "")
         and str(target.get(field)) != str(duplicate.get(field))
@@ -353,6 +368,11 @@ def _assert_same_structured_fact(
         raise EvidenceIdentityConflictError(
             "Conflicting structured fields for evidence identity "
             f"{identity_of(target).key}: {', '.join(conflicts)}"
+        )
+    if _facts_conflict(target, duplicate):
+        raise EvidenceIdentityConflictError(
+            "Conflicting textual facts for evidence identity "
+            f"{identity_of(target).key}."
         )
 
 
@@ -575,10 +595,3 @@ def _unique(values: list[str]) -> list[str]:
 
 def _is_score_key(key: str) -> bool:
     return str(key).endswith("_score") or str(key) in {"score", "confidence"}
-
-
-def _float(value: Any) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0

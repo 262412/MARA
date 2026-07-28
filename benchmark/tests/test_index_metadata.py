@@ -210,3 +210,42 @@ def test_element_projection_prefers_atomic_cell_identity_over_parent_element():
             }
         ]
     ) == ["revenue-2023"]
+
+
+def test_span_identity_projection_is_lossless():
+    hit = normalize_retrieved_hit(
+        {
+            "evidence_id": "paragraph-1",
+            "source_id": "paper",
+            "page_label": "4",
+            "span_id": "span:conclusion",
+            "evidence_level": "span",
+            "text": "The experiment supports the conclusion.",
+        }
+    )
+
+    assert hit["span_id"] == "span:conclusion"
+    assert hit["identity"] == {
+        "source_id": "paper",
+        "kind": "span",
+        "local_id": "span:conclusion",
+    }
+
+
+def test_projection_preserves_namespaced_extension_metadata():
+    hit = normalize_retrieved_hit(
+        {
+            "evidence_id": "figure-1",
+            "source_id": "paper",
+            "metadata": {
+                "parser_confidence": 0.87,
+                "layout_engine": "marker",
+            },
+            "text": "A figure.",
+        }
+    )
+
+    assert hit["extension_metadata"] == {
+        "parser_confidence": 0.87,
+        "layout_engine": "marker",
+    }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .evidence_field_values import retrieval_lineage_values
 from .evidence_identity import identity_of
 from .retrieval_adequacy import financial_statement_match_count
 
@@ -413,6 +414,13 @@ def _retriever_rank_lists(
         list[tuple[float, int, dict[str, Any], dict[str, float]]],
     ] = {}
     for weighted_score, index, item, components in weighted_rows:
+        lineage_scores = _lineage_retriever_scores(item)
+        if lineage_scores:
+            for retriever, score in lineage_scores.items():
+                rank_lists.setdefault(retriever, []).append(
+                    (score, index, item, components)
+                )
+            continue
         explicit = _explicit_retriever_scores(item)
         if explicit:
             for retriever, score in explicit.items():
@@ -425,6 +433,22 @@ def _retriever_rank_lists(
             (weighted_score, index, item, components)
         )
     return rank_lists
+
+
+def _lineage_retriever_scores(item: dict[str, Any]) -> dict[str, float]:
+    metadata = dict(item.get("metadata") or {})
+    scores: dict[str, float] = {}
+    for entry in retrieval_lineage_values(item, metadata):
+        retriever = str(entry.get("retriever_name") or "").strip()
+        if not retriever:
+            continue
+        raw_rank = _positive_int(entry.get("raw_rank"))
+        if raw_rank is not None:
+            score = 1.0 / raw_rank
+        else:
+            score = _float_or_zero(entry.get("raw_score"))
+        scores[retriever] = max(scores.get(retriever, float("-inf")), score)
+    return scores
 
 
 def _explicit_retriever_scores(item: dict[str, Any]) -> dict[str, float]:
@@ -444,6 +468,21 @@ def _explicit_retriever_scores(item: dict[str, Any]) -> dict[str, float]:
             scores[retriever] = float(value)
             break
     return scores
+
+
+def _positive_int(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _float_or_zero(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _modality_group(item: dict[str, Any]) -> str:

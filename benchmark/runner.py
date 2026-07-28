@@ -5,32 +5,16 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
-from .answer_finalizer import finalize_prediction_answer
 from .backend_health_summary import load_backend_health
-from .benchmark_prompts import build_benchmark_prompt
-from .benchmark_taxonomy import add_prediction_taxonomy
-from .diagnostics import prediction_diagnostics
 from .engines import EngineRunResult, get_engine
 from .external_adapter_summary import (
     external_adapter_summary_metadata,
     external_adapter_summary_metadata_by_route,
 )
 from .manifest import load_manifest
-from .mara_oriented_scores import (
-    add_mara_oriented_metrics,
-    promote_external_primary_score,
-)
-from .performance_timing import (
-    add_amortized_preparation_timing,
-    apply_engine_failure_diagnostics,
-    measure_duration,
-)
-from .research_adapters import (
-    research_adapter_metric_metadata,
-    research_adapter_metrics,
-    route_backend_metadata,
-)
-from .research_evaluators import external_research_adapter_metrics
+from .performance_timing import apply_engine_failure_diagnostics, measure_duration
+from .prediction_completion import complete_prediction
+from .research_adapters import research_adapter_metric_metadata, route_backend_metadata
 from .route_execution import route_skip_record
 from .route_timeout import (
     RouteExecutionTimeout,
@@ -41,12 +25,8 @@ from .route_timeout import (
 from .run_provenance import benchmark_run_provenance
 from .sampling import select_examples_for_config, selection_summary
 from .schemas import BenchmarkConfig, ManifestBundle
-from .scoring import normalize_operational_fields, score_prediction
 from .semantic_answer import semantic_judge_backend
-from .stage_metrics import prediction_stage_metric_status, prediction_stage_metrics
 from .summary import build_benchmark_summary
-from .task_answer_contracts import apply_task_answer_contract
-from .verifier_observability import prediction_verifier_observability
 
 _CONFIG_FIELD_NAMES = {field.name for field in fields(BenchmarkConfig)}
 
@@ -184,6 +164,10 @@ def _engine_result_to_prediction(
         "claim_verification": result.claim_verification,
         "presentation": result.presentation,
         "timings": {
+            **{
+                str(key): round(float(value or 0.0), 6)
+                for key, value in result.timings.items()
+            },
             "parse_seconds": round(float(result.timings.get("parse_seconds", 0.0)), 4),
             "index_seconds": round(float(result.timings.get("index_seconds", 0.0)), 4),
             "retrieval_seconds": round(
@@ -292,50 +276,6 @@ def _error_prediction(
     }
 
 
-def _prepare_prediction_defaults(
-    prediction: dict[str, Any],
-    *,
-    example,
-    document,
-    route_config: BenchmarkConfig,
-    route: dict[str, Any],
-    dataset_name: str,
-) -> None:
-    prompt = build_benchmark_prompt(example, route_config, dataset_name=dataset_name)
-    prediction["document_path"] = str(document.path)
-    prediction["document_ids"] = example.document_ids or [example.document_id]
-    prediction["engine"] = route_config.engine
-    prediction["route"] = route_config.route
-    prediction["scope"] = route_config.scope or example.scope
-    prediction["benchmark_role"] = _benchmark_role(route, route_config.route)
-    prediction.setdefault("benchmark_prompt_policy", prompt.policy)
-    prediction.setdefault("benchmark_prompt_profile", prompt.profile)
-    prediction.setdefault("benchmark_prompt_source", prompt.prompt_source)
-    prediction.setdefault("benchmark_answer_mode", route_config.benchmark_answer_mode)
-    prediction.setdefault("benchmark_no_think", prompt.no_think)
-    prediction.setdefault("route_timeout_seconds", route_config.route_timeout_seconds)
-    prediction.setdefault("benchmark_question", prompt.benchmark_question)
-    prediction.setdefault("benchmark_retrieval_query", prompt.retrieval_query)
-    prediction.setdefault("benchmark_runtime_prompt", prompt.runtime_prompt)
-    prediction.setdefault("example_metadata", dict(example.metadata or {}))
-    prediction.setdefault("expected_formats", example.expected_formats)
-    prediction.setdefault("expected_guardrails", example.expected_guardrails)
-    prediction.setdefault("predicted_citations", [])
-    prediction.setdefault("scored_predicted_sources", [])
-    prediction.setdefault("evidence_metadata", {})
-    prediction.setdefault("agent_trace", [])
-    prediction.setdefault("controller_trace", [])
-    prediction.setdefault("controller_decision", {})
-    prediction.setdefault("route_decision", {})
-    prediction.setdefault("retrieve_decision", {})
-    prediction.setdefault("verify_decision", {})
-    prediction.setdefault("guardrail_decision", {})
-    prediction.setdefault("evidence_bundle", {})
-    prediction.setdefault("workflow_plan", {})
-    prediction.setdefault("claim_verification", {})
-    prediction.setdefault("presentation", {})
-
-
 def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "example_id": item["example_id"],
@@ -435,65 +375,19 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                     exc=exc,
                 )
                 apply_engine_failure_diagnostics(prediction, engine)
-            _prepare_prediction_defaults(
+            complete_prediction(
                 prediction,
                 example=example,
                 document=document,
                 route_config=route_config,
                 route=route,
                 dataset_name=bundle.dataset_name,
-            )
-            normalize_operational_fields(prediction)
-            add_amortized_preparation_timing(
-                prediction, preparation_seconds, len(selected_bundle.examples)
-            )
-            prediction["modality"] = example.modality
-            prediction["answer_type"] = example.answer_type
-            prediction["gold_evidence"] = example.gold_evidence
-            finalize_prediction_answer(
-                prediction,
-                dataset_name=bundle.dataset_name,
-                mode=route_config.benchmark_answer_mode,
-            )
-            if apply_task_answer_contract(
-                prediction,
-                dataset_name=bundle.dataset_name,
-                llm_factory=lambda: engine.task_contract_llm(),
-            ):
-                finalize_prediction_answer(
-                    prediction,
-                    dataset_name=bundle.dataset_name,
-                    mode=route_config.benchmark_answer_mode,
-                )
-            prediction["product_metrics"] = score_prediction(
-                prediction,
-                answer_key="predicted_answer",
-            )
-            prediction["metrics"] = score_prediction(
-                prediction,
+                benchmark_role=_benchmark_role(route, route_config.route),
+                preparation_seconds=preparation_seconds,
+                example_count=len(selected_bundle.examples),
+                engine=engine,
                 semantic_judge=semantic_judge,
             )
-            prediction["diagnostics"] = prediction_diagnostics(prediction)
-            prediction["verifier_observability"] = prediction_verifier_observability(
-                prediction
-            )
-            add_prediction_taxonomy(prediction)
-            add_mara_oriented_metrics(prediction, dataset_name=bundle.dataset_name)
-            prediction["stage_metrics"] = prediction_stage_metrics(prediction)
-            prediction["stage_metric_status"] = prediction_stage_metric_status(
-                prediction
-            )
-            prediction["adapter_metrics"] = research_adapter_metrics(prediction)
-            prediction["adapter_metric_metadata"] = research_adapter_metric_metadata()
-            (
-                prediction["external_adapter_metrics"],
-                prediction["external_adapter_metric_metadata"],
-            ) = external_research_adapter_metrics(prediction, route)
-            promote_external_primary_score(
-                prediction,
-                dataset_name=bundle.dataset_name,
-            )
-            prediction["backend_metadata"] = route_backend_metadata(route, route_config)
             predictions.append(prediction)
 
     backend_metadata = {

@@ -94,6 +94,35 @@ def test_rrf_accumulates_rank_contributions_for_shared_evidence_identity():
     assert trace["retriever_lists"] == ["element", "visual"]
 
 
+def test_rrf_builds_independent_lists_from_retrieval_lineage():
+    fused, trace = fuse_hybrid_evidence(
+        "revenue",
+        [
+            {
+                "evidence_id": "dense-only",
+                "source_id": "report",
+                "text": "Revenue background.",
+                "retrieval_lineage": [
+                    {"retriever_name": "dense", "raw_rank": 1, "raw_score": 0.9}
+                ],
+            },
+            {
+                "evidence_id": "shared",
+                "source_id": "report",
+                "text": "Revenue result.",
+                "retrieval_lineage": [
+                    {"retriever_name": "dense", "raw_rank": 2, "raw_score": 0.8},
+                    {"retriever_name": "bm25", "raw_rank": 1, "raw_score": 12.0},
+                ],
+            },
+        ],
+        strategy="rrf",
+    )
+
+    assert fused[0]["evidence_id"] == "shared"
+    assert trace["retriever_lists"] == ["bm25", "dense"]
+
+
 def test_hybrid_item_scores_use_canonical_cell_identity():
     items = [
         {

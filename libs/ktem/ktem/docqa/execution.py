@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
-from .claim_aggregation import aggregate_answer_claims
-from .claim_revision import revise_to_supported_claims
 from .controller import (
     RetrieveDecision,
     RouteDecision,
@@ -14,8 +12,9 @@ from .controller import (
     evaluate_retrieval_quality,
 )
 from .evidence import EvidenceBundle, build_evidence_bundle
-from .evidence_identity import identity_of
-from .evidence_text import extract_final_answer_text
+from .execution_trace import execution_trace
+from .execution_verification import ragtruth_contract_request, verify_generated_answer
+from .pipeline_stage_timings import PipelineStageTimings
 from .query_planning import ensure_request_query_plan
 from .retrieval_rounds import retrieve_with_rounds
 from .route_budget import optional_stage_allowed, route_budget_metadata
@@ -98,55 +97,48 @@ def execute_controller_turn(
     rewrite: RewriteFn | None = None,
     agent_trace: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
-    planner_payload = planner_payload_from_trace(agent_trace or [])
-    ensure_request_query_plan(request, planner_payload=planner_payload)
-    route_decision = _route_decision(request, agent_trace or [])
-    controller_decision = _controller_decision(route_decision, planner_payload)
-    workflow_plan = _build_execution_workflow_plan(
+    timings = PipelineStageTimings()
+    controller_decision, workflow_plan = timings.measure(
+        "planning_seconds",
+        _planned_execution,
         request,
-        route_decision.route,
-        route_decision.policy,
-        route_decision.controller_mode,
         agent_trace or [],
     )
-    if controller_decision.route == "direct_answer":
-        return _static_result(
-            request, controller_decision, DIRECT_ANSWER_MESSAGE, workflow_plan
+    if controller_decision.route in {"direct_answer", "abstain"}:
+        answer = (
+            DIRECT_ANSWER_MESSAGE
+            if controller_decision.route == "direct_answer"
+            else ABSTAIN_MESSAGE
         )
-    if controller_decision.route == "abstain":
         return _static_result(
-            request, controller_decision, ABSTAIN_MESSAGE, workflow_plan
+            request,
+            controller_decision,
+            answer,
+            workflow_plan,
+            timings,
         )
-
-    evidence_bundle, retrieve_decision = _retrieve_and_evaluate(
+    evidence_bundle, retrieve_decision = timings.measure(
+        "retrieval_seconds",
+        _retrieve_and_evaluate,
         request,
         controller_decision,
         retrieve,
     )
-    route_switch_trace: list[dict[str, Any]] = []
-    if retrieve_decision.status != "good":
-        switched = _switch_after_failed_retrieval(
-            request,
-            controller_decision,
-            retrieve_decision,
-            evidence_bundle,
-            retrieve,
-        )
-        if switched is not None:
-            (
-                controller_decision,
-                evidence_bundle,
-                retrieve_decision,
-                switch_event,
-            ) = switched
-            workflow_plan = _build_execution_workflow_plan(
-                request,
-                controller_decision.legacy_route,
-                controller_decision.policy,
-                controller_decision.controller_mode,
-                [],
-            )
-            route_switch_trace.append(switch_event)
+    (
+        controller_decision,
+        evidence_bundle,
+        retrieve_decision,
+        workflow_plan,
+        route_switch_trace,
+    ) = _recover_after_failed_retrieval(
+        request,
+        controller_decision,
+        retrieve_decision,
+        evidence_bundle,
+        workflow_plan,
+        retrieve,
+        timings,
+    )
     if retrieve_decision.status != "good":
         return _guarded_result(
             request,
@@ -155,9 +147,15 @@ def execute_controller_turn(
             evidence_bundle,
             workflow_plan,
             route_switch_trace,
+            timings,
         )
-
-    answer = generate(request, controller_decision, evidence_bundle)
+    answer = timings.measure(
+        "generation_seconds",
+        generate,
+        request,
+        controller_decision,
+        evidence_bundle,
+    )
     return _verified_result(
         request,
         controller_decision,
@@ -167,7 +165,83 @@ def execute_controller_turn(
         rewrite,
         workflow_plan,
         route_switch_trace,
+        timings,
     )
+
+
+def _recover_after_failed_retrieval(
+    request: Any,
+    controller_decision: ControllerDecision,
+    retrieve_decision: RetrieveDecision,
+    evidence_bundle: EvidenceBundle,
+    workflow_plan: dict[str, Any],
+    retrieve: RetrieveFn,
+    timings: PipelineStageTimings,
+) -> tuple[
+    ControllerDecision,
+    EvidenceBundle,
+    RetrieveDecision,
+    dict[str, Any],
+    list[dict[str, Any]],
+]:
+    if retrieve_decision.status == "good":
+        return (
+            controller_decision,
+            evidence_bundle,
+            retrieve_decision,
+            workflow_plan,
+            [],
+        )
+    switched = timings.measure(
+        "retry_seconds",
+        _switch_after_failed_retrieval,
+        request,
+        controller_decision,
+        retrieve_decision,
+        evidence_bundle,
+        retrieve,
+    )
+    if switched is None:
+        return (
+            controller_decision,
+            evidence_bundle,
+            retrieve_decision,
+            workflow_plan,
+            [],
+        )
+    controller_decision, evidence_bundle, retrieve_decision, event = switched
+    workflow_plan = _build_execution_workflow_plan(
+        request,
+        controller_decision.legacy_route,
+        controller_decision.policy,
+        controller_decision.controller_mode,
+        [],
+    )
+    return (
+        controller_decision,
+        evidence_bundle,
+        retrieve_decision,
+        workflow_plan,
+        [event],
+    )
+
+
+def _planned_execution(
+    request: Any,
+    agent_trace: list[dict[str, Any]],
+) -> tuple[ControllerDecision, dict[str, Any]]:
+    planner_payload = planner_payload_from_trace(agent_trace)
+    ensure_request_query_plan(request, planner_payload=planner_payload)
+    route_decision = _route_decision(request, agent_trace)
+    controller_decision = _controller_decision(route_decision, planner_payload)
+    workflow_plan = _build_execution_workflow_plan(
+        request,
+        route_decision.route,
+        route_decision.policy,
+        route_decision.controller_mode,
+        agent_trace,
+    )
+    return controller_decision, workflow_plan
 
 
 def _build_execution_workflow_plan(
@@ -297,6 +371,7 @@ def _static_result(
     decision: ControllerDecision,
     answer: str,
     workflow_plan: dict[str, Any],
+    stage_timings: PipelineStageTimings,
 ) -> RouteExecutionResult:
     bundle = build_evidence_bundle(decision.legacy_route, request, {})
     retrieve_decision = evaluate_retrieval_quality(decision.legacy_route, {})
@@ -309,6 +384,7 @@ def _static_result(
         bundle,
         workflow_plan,
         answer,
+        stage_timings=stage_timings,
     )
 
 
@@ -319,8 +395,9 @@ def _guarded_result(
     bundle: EvidenceBundle,
     workflow_plan: dict[str, Any],
     trace_prefix: list[dict[str, Any]] | None = None,
+    stage_timings: PipelineStageTimings | None = None,
 ) -> RouteExecutionResult:
-    if _ragtruth_contract_request(request):
+    if ragtruth_contract_request(request):
         bundle.metadata["task_contract_fallback"] = "ragtruth_empty_retrieval"
         verify_decision = VerifyDecision(
             mode="off",
@@ -336,6 +413,7 @@ def _guarded_result(
             workflow_plan,
             RAGTRUTH_EMPTY_ANSWER,
             trace_prefix,
+            stage_timings,
         )
     verify_decision = _verify_decision(request, retrieve_decision, bundle, "")
     guardrail = GuardrailDecision(
@@ -352,6 +430,7 @@ def _guarded_result(
         workflow_plan,
         ABSTAIN_MESSAGE,
         trace_prefix,
+        stage_timings,
     )
 
 
@@ -364,67 +443,23 @@ def _verified_result(
     rewrite: RewriteFn | None,
     workflow_plan: dict[str, Any],
     trace_prefix: list[dict[str, Any]] | None = None,
+    stage_timings: PipelineStageTimings | None = None,
 ) -> RouteExecutionResult:
-    if bundle.metadata.get("generation_backend") == "evidence_only_without_vlm":
-        verify_decision = _evidence_only_verify_decision(request, bundle)
-        guardrail = _verification_guardrail(verify_decision, request)
-        return _result(
-            decision,
-            retrieve_decision,
-            verify_decision,
-            guardrail,
-            bundle,
-            workflow_plan,
-            answer,
-            trace_prefix,
-        )
-    if not extract_final_answer_text(answer).strip():
-        if _ragtruth_contract_request(request):
-            bundle.metadata["task_contract_fallback"] = "ragtruth_empty_generation"
-            answer = RAGTRUTH_EMPTY_ANSWER
-        else:
-            verify_decision = _empty_answer_verify_decision(request, bundle)
-            guardrail = _verification_guardrail(verify_decision, request)
-            return _result(
-                decision,
-                retrieve_decision,
-                verify_decision,
-                guardrail,
-                bundle,
-                workflow_plan,
-                ABSTAIN_MESSAGE,
-                trace_prefix,
-            )
-    answer, aggregation_trace = aggregate_answer_claims(answer)
-    trace_prefix = list(trace_prefix or []) + [
-        {"stage": "claim_aggregation", **aggregation_trace}
-    ]
-    verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
-    if verify_decision.action == "revise" and rewrite is not None:
-        answer = rewrite(request, decision, bundle, answer)
-        answer, rewrite_aggregation_trace = aggregate_answer_claims(answer)
-        trace_prefix.append(
-            {
-                "stage": "claim_aggregation",
-                "rewrite": True,
-                **rewrite_aggregation_trace,
-            }
-        )
-        verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
-    if verify_decision.action == "revise":
-        answer, verify_decision, revision_trace = revise_to_supported_claims(
-            request,
-            retrieve_decision,
-            bundle,
-            answer,
-            verify_decision,
-            verify=_verify_decision,
-        )
-        if revision_trace:
-            trace_prefix.append(revision_trace)
-    guardrail = _verification_guardrail(verify_decision, request)
-    if guardrail.action == "abstain":
-        answer = ABSTAIN_MESSAGE
+    stage_timings = stage_timings or PipelineStageTimings()
+    answer, verify_decision, guardrail, trace = verify_generated_answer(
+        request,
+        decision,
+        retrieve_decision,
+        bundle,
+        answer,
+        rewrite,
+        trace_prefix,
+        stage_timings,
+        verify=_verify_decision,
+        guardrail_factory=GuardrailDecision,
+        abstain_message=ABSTAIN_MESSAGE,
+        ragtruth_empty_answer=RAGTRUTH_EMPTY_ANSWER,
+    )
     return _result(
         decision,
         retrieve_decision,
@@ -433,78 +468,9 @@ def _verified_result(
         bundle,
         workflow_plan,
         answer,
-        trace_prefix,
+        trace,
+        stage_timings,
     )
-
-
-def _verification_guardrail(
-    verify_decision: VerifyDecision,
-    request: Any | None = None,
-) -> GuardrailDecision:
-    if verify_decision.status in {"supported", "not_requested", "not_required"}:
-        return GuardrailDecision("ok", "return", verify_decision.reason)
-    if verify_decision.action == "revise":
-        if _finance_benchmark_request(request):
-            return GuardrailDecision("unsupported", "revise", verify_decision.reason)
-        return GuardrailDecision("unsupported", "abstain", verify_decision.reason)
-    return GuardrailDecision(
-        verify_decision.status, verify_decision.action, verify_decision.reason
-    )
-
-
-def _finance_benchmark_request(request: Any | None) -> bool:
-    if request is None:
-        return False
-    origin = str(getattr(request, "origin", "") or "").strip().lower()
-    domain = str(getattr(request, "verification_domain", "") or "").strip().lower()
-    return origin == "benchmark" and domain in {"finance", "financial"}
-
-
-def _ragtruth_contract_request(request: Any | None) -> bool:
-    if request is None:
-        return False
-    domain = str(getattr(request, "verification_domain", "") or "").strip().lower()
-    return domain == "ragtruth"
-
-
-def _evidence_only_verify_decision(
-    request: Any,
-    bundle: EvidenceBundle,
-) -> VerifyDecision:
-    mode = str(getattr(request, "verification_mode", None) or "off").strip().lower()
-    if mode not in {"off", "light", "strict"}:
-        mode = "off"
-    return VerifyDecision(
-        mode=mode,
-        status="not_required",
-        reason="Evidence-only visual route did not invoke a VLM generator.",
-        verified_citations=_bundle_citation_ids(bundle),
-    )
-
-
-def _empty_answer_verify_decision(
-    request: Any,
-    bundle: EvidenceBundle,
-) -> VerifyDecision:
-    mode = str(getattr(request, "verification_mode", None) or "off").strip().lower()
-    if mode not in {"off", "light", "strict"}:
-        mode = "off"
-    return VerifyDecision(
-        mode=mode,
-        status="not_enough_evidence",
-        reason=f"{mode.title()} verification found no final answer to verify.",
-        action="abstain",
-        verified_citations=_bundle_citation_ids(bundle),
-    )
-
-
-def _bundle_citation_ids(bundle: EvidenceBundle) -> list[str]:
-    citations: list[str] = []
-    for item in bundle.items:
-        evidence_id = identity_of(item).key
-        if evidence_id and evidence_id not in citations:
-            citations.append(evidence_id)
-    return citations
 
 
 def _result(
@@ -516,8 +482,10 @@ def _result(
     workflow_plan: dict[str, Any],
     answer: str,
     trace_prefix: list[dict[str, Any]] | None = None,
+    stage_timings: PipelineStageTimings | None = None,
 ) -> RouteExecutionResult:
     bundle = with_verification_evidence(bundle, verify_decision)
+    (stage_timings or PipelineStageTimings()).record(bundle)
     prefix = [
         item
         for item in list(trace_prefix or [])
@@ -537,7 +505,7 @@ def _result(
         workflow_plan=workflow_plan,
         answer=answer,
         controller_trace=prefix
-        + _trace(
+        + execution_trace(
             decision,
             workflow_plan,
             retrieve_decision,
@@ -546,25 +514,3 @@ def _result(
         )
         + suffix,
     )
-
-
-def _trace(
-    decision: ControllerDecision,
-    workflow_plan: dict[str, Any],
-    retrieve_decision: RetrieveDecision,
-    guardrail_decision: GuardrailDecision,
-    verify_decision: VerifyDecision,
-) -> list[dict[str, Any]]:
-    return [
-        {"stage": "planner", **decision.as_dict()},
-        {
-            "stage": "workflow_plan",
-            "strategy": workflow_plan.get("strategy", ""),
-            "execution_control": workflow_plan.get("execution_control", ""),
-            "step_count": len(workflow_plan.get("steps") or []),
-            "total_cost_units": workflow_plan.get("total_cost_units", 0),
-        },
-        {"stage": "retrieval_evaluator", **retrieve_decision.as_dict()},
-        {"stage": "guardrail", **guardrail_decision.as_dict()},
-        {"stage": "verifier", **verify_decision.as_dict()},
-    ]

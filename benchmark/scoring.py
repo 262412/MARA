@@ -38,6 +38,20 @@ _TIMING_KEYS = (
     "index_seconds",
     "retrieval_seconds",
     "generation_seconds",
+    "pipeline_planning_seconds",
+    "pipeline_retrieval_seconds",
+    "pipeline_generation_seconds",
+    "pipeline_retry_seconds",
+    "pipeline_verification_seconds",
+    "pipeline_finalization_seconds",
+    "answerability_seconds",
+    "answer_finalization_seconds",
+)
+_TOTAL_TIMING_KEYS = (
+    "parse_seconds",
+    "index_seconds",
+    "retrieval_seconds",
+    "generation_seconds",
 )
 _CACHE_KEYS = ("hits", "misses", "writes")
 
@@ -470,5 +484,8 @@ def _normalize_cache(cache: dict[str, Any] | None) -> dict[str, Any]:
 def _performance_from_timings(timings: dict[str, float]) -> dict[str, Any]:
     return {
         **timings,
-        "total_seconds": round(sum(timings.values()), 4),
+        "total_seconds": round(
+            sum(timings.get(key, 0.0) for key in _TOTAL_TIMING_KEYS),
+            4,
+        ),
     }

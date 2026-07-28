@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -7,6 +8,7 @@ from .claim_filtering import answer_claims
 from .claim_support import (
     claim_supported,
     item_supports_claim,
+    meaningful_tokens,
     text_contradicts_claim,
     unsupported_confidence,
     unsupported_threshold,
@@ -17,7 +19,7 @@ from .domain_verifiers import (
     normalize_verification_domain,
 )
 from .evidence import EvidenceBundle
-from .evidence_identity import evidence_aliases, identity_of
+from .evidence_identity import exact_evidence_aliases, identity_of
 from .evidence_text import evidence_text, extract_final_answer_text
 from .query_planning import request_planning_question
 
@@ -72,6 +74,18 @@ def verify_decision(
             status="not_required",
             reason="Direct route does not require evidence verification.",
         )
+    missing_slots = _missing_verification_slots(request)
+    if missing_slots:
+        action = "retry" if retrieve_decision.retry else "abstain"
+        return VerifyDecision(
+            mode=mode,
+            status="not_enough_evidence",
+            reason=(
+                "Verification-required evidence slots are missing: "
+                + ", ".join(missing_slots)
+            ),
+            action=action,
+        )
     prompt, domain, claims = _verification_context(request, answer)
     if retrieve_decision.status != "good" and not _can_verify_available_evidence(
         evidence_bundle,
@@ -84,8 +98,16 @@ def verify_decision(
             reason=f"{mode.title()} verification requested without sufficient evidence.",
             action=action,
         )
-    results = _verify_claims(claims, evidence_bundle.items, prompt, domain)
-    return _decision_for_claim_results(
+    typed_boolean = _boolean_verification(
+        prompt,
+        answer,
+        evidence_bundle.items,
+    )
+    if typed_boolean is not None:
+        claims, results = typed_boolean
+    else:
+        results = _verify_claims(claims, evidence_bundle.items, prompt, domain)
+    decision = _decision_for_claim_results(
         mode,
         retrieve_decision.status,
         claims,
@@ -94,6 +116,7 @@ def verify_decision(
         prompt=prompt,
         domain=domain,
     )
+    return _enforce_verification_slot_support(request, decision)
 
 
 def normalize_verification_mode(value: Any) -> str:
@@ -112,7 +135,9 @@ def with_verification_evidence(
         for citation in decision.verified_citations
         if str(citation).strip()
     }
-    verified = [item for item in bundle.items if citation_ids & evidence_aliases(item)]
+    verified = [
+        item for item in bundle.items if citation_ids & exact_evidence_aliases(item)
+    ]
     metadata = dict(bundle.metadata)
     metadata["verified_evidence"] = verified
     metadata["verified_claim_support_evidence"] = list(verified)
@@ -385,4 +410,112 @@ def _supported_reason(mode: str, retrieve_status: str) -> str:
     return (
         f"{mode.title()} verification used available evidence despite "
         f"{retrieve_status} retrieval status."
+    )
+
+
+def _boolean_verification(
+    prompt: str,
+    answer: str,
+    evidence_items: list[dict[str, Any]],
+) -> tuple[list[str], list[VerifiedClaim]] | None:
+    normalized = extract_final_answer_text(answer).strip().lower().rstrip(".")
+    aliases = {"yes": True, "true": True, "no": False, "false": False}
+    if normalized not in aliases:
+        return None
+    proposition = str(prompt or "").strip()
+    claim = f"{normalized}: {proposition}"
+    proposition_tokens = meaningful_tokens(proposition)
+    supporting: list[str] = []
+    contradicting: list[str] = []
+    for item in evidence_items:
+        item_text = evidence_text([item])
+        item_tokens = meaningful_tokens(item_text)
+        overlap = proposition_tokens & item_tokens
+        required = max(2, int(len(proposition_tokens) * 0.6))
+        if len(overlap) < min(len(proposition_tokens), required):
+            continue
+        evidence_is_negative = _has_negation(item_text)
+        if evidence_is_negative == (not aliases[normalized]):
+            supporting.append(identity_of(item).key)
+        else:
+            contradicting.append(identity_of(item).key)
+    status = (
+        "supported" if supporting else "contradicted" if contradicting else "unknown"
+    )
+    result = VerifiedClaim(
+        claim_id="claim:1",
+        claim=claim,
+        status=status,
+        supporting_evidence_ids=tuple(dict.fromkeys(supporting)),
+        contradicting_evidence_ids=tuple(dict.fromkeys(contradicting)),
+    )
+    return [claim], [result]
+
+
+def _has_negation(value: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:cannot|can't|didn't|doesn't|neither|never|no|not|without)\b",
+            str(value or ""),
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _verification_slots(request: Any) -> list[Any]:
+    plan = getattr(request, "query_plan", None)
+    return [
+        slot
+        for slot in getattr(plan, "evidence_slots", ()) or ()
+        if bool(getattr(slot, "required_for_verification", False))
+    ]
+
+
+def _missing_verification_slots(request: Any) -> list[str]:
+    return [
+        str(getattr(slot, "slot_id", "") or "")
+        for slot in _verification_slots(request)
+        if str(getattr(slot, "status", "") or "") != "filled"
+        or not tuple(getattr(slot, "evidence_ids", ()) or ())
+    ]
+
+
+def _enforce_verification_slot_support(
+    request: Any,
+    decision: VerifyDecision,
+) -> VerifyDecision:
+    if decision.status != "supported":
+        return decision
+    supporting_ids = {
+        evidence_id
+        for result in decision.claim_results
+        for evidence_id in result.get("supporting_evidence_ids") or []
+    }
+    unsupported_slots = [
+        str(getattr(slot, "slot_id", "") or "")
+        for slot in _verification_slots(request)
+        if str(getattr(slot, "role", "") or "") == "support"
+        and not (
+            supporting_ids
+            & {
+                str(value).strip()
+                for value in getattr(slot, "evidence_ids", ()) or ()
+                if str(value).strip()
+            }
+        )
+    ]
+    if not unsupported_slots:
+        return decision
+    return VerifyDecision(
+        mode=decision.mode,
+        status="unknown",
+        reason=(
+            "Verification-required slots did not support any verified claim: "
+            + ", ".join(unsupported_slots)
+        ),
+        action="abstain",
+        claims=decision.claims,
+        unknown_claims=decision.claims,
+        verified_citations=decision.verified_citations,
+        claim_results=decision.claim_results,
     )

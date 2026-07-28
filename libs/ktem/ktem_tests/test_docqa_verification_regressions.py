@@ -4,6 +4,10 @@ from ktem.docqa.controller import build_controller_outputs
 from ktem.docqa.domain_verifiers import DomainVerifierRegistry
 from ktem.docqa.evidence_text import extract_final_answer_text
 from ktem.docqa.execution import execute_controller_turn
+from ktem_tests.finance_test_fixtures import (
+    quick_ratio_evidence_metadata as _quick_ratio_evidence_metadata,
+)
+from ktem_tests.finance_test_fixtures import quick_ratio_prompt as _quick_ratio_prompt
 
 
 def test_light_verifier_checks_final_answer_after_think_block_only():
@@ -251,7 +255,7 @@ def test_verifier_supports_quick_ratio_result_matching_evidence_numbers():
     )
 
     assert payload["verify_decision"]["status"] == "supported"
-    assert payload["guardrail_decision"]["action"] == "generate"
+    assert payload["guardrail_decision"]["action"] == "return"
 
 
 def test_verifier_focuses_finance_questions_on_final_numeric_conclusion():
@@ -281,7 +285,7 @@ def test_verifier_focuses_finance_questions_on_final_numeric_conclusion():
             "view does not show a reasonably healthy liquidity profile."
         )
     ]
-    assert payload["guardrail_decision"]["action"] == "generate"
+    assert payload["guardrail_decision"]["action"] == "return"
 
 
 def test_default_verifier_still_rejects_conflicting_numeric_claim():
@@ -562,30 +566,6 @@ def test_execute_controller_turn_abstains_on_unsupported_quick_ratio_result():
         generate=generate,
     )
 
-    assert result.verify_decision.status == "not_enough_evidence"
+    assert result.verify_decision.status == "unsupported"
     assert result.guardrail_decision.action == "abstain"
     assert result.answer
-
-
-def _quick_ratio_prompt() -> str:
-    return (
-        "Does 3M have a reasonably healthy liquidity profile based on its quick "
-        "ratio for Q2 of FY2023?"
-    )
-
-
-def _quick_ratio_evidence_metadata() -> dict:
-    return {
-        "evidence": [
-            {
-                "evidence_id": "balance-sheet-page",
-                "file_id": "file-1",
-                "page_label": "4",
-                "text": (
-                    "Total current assets $15,754 million. "
-                    "Total inventories $5,280 million. "
-                    "Total current liabilities $10,936 million."
-                ),
-            }
-        ]
-    }

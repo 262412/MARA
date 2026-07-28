@@ -17,6 +17,12 @@ from .financial_statement_identity import (
     matches_required_financial_identity,
     required_financial_identity,
 )
+from .query_classification import (
+    has_causal_intent,
+    normalized_answer_type,
+    question_capabilities,
+    question_type,
+)
 from .query_evidence_constraints import (
     atomic_evidence,
     period_kind_conflicts,
@@ -26,6 +32,7 @@ from .query_evidence_text import evidence_text, requires_multiple_operands
 from .query_phrase_extraction import (
     cross_page_support_queries,
     metric_phrase,
+    modality_hint,
     periods_in_question,
     source_page_locator,
 )
@@ -57,32 +64,7 @@ _NUMERIC_TERMS = {
     "rate",
     "total",
 }
-_LONG_FORM_TERMS = {"describe", "explain", "how", "summarize", "why"}
-_CAUSAL_TERMS = {
-    "cause",
-    "caused",
-    "causes",
-    "driver",
-    "drivers",
-    "drove",
-    "factor",
-    "factors",
-    "reason",
-    "reasons",
-    "why",
-}
-_CROSS_PAGE_TERMS = {"across", "between", "compare", "comparison"}
 _MIN_OPERAND_METRIC_COVERAGE = 0.75
-_VISUAL_TERMS = {
-    "chart",
-    "diagram",
-    "figure",
-    "image",
-    "plot",
-    "slide",
-    "table",
-    "visual",
-}
 
 
 def build_query_plan(
@@ -100,35 +82,50 @@ def build_query_plan(
     )
     if planned is not None:
         return planned
+    return _build_heuristic_query_plan(
+        question,
+        answer_type=answer_type,
+        verification_domain=verification_domain,
+    )
+
+
+def _build_heuristic_query_plan(
+    question: str,
+    *,
+    answer_type: str,
+    verification_domain: str,
+) -> QueryPlan:
     text = str(question or "").strip()
     tokens = _tokens(text)
-    causal_intent = bool(tokens & _CAUSAL_TERMS)
-    normalized_answer_type = _normalized_answer_type(
+    causal_intent = has_causal_intent(tokens)
+    normalized_type = normalized_answer_type(
         answer_type,
         tokens,
+        numeric_terms=_NUMERIC_TERMS,
         causal_intent=causal_intent,
     )
     periods = periods_in_question(text)
     period_kind = period_kind_in_question(text)
     metric = metric_phrase(text, periods, numeric_terms=_NUMERIC_TERMS)
-    question_type = _question_type(
+    capabilities = question_capabilities(text, tokens)
+    planned_question_type = question_type(
         tokens,
-        normalized_answer_type,
+        normalized_type,
         periods,
         causal_intent=causal_intent,
+        requires_multiple_evidence=capabilities["requires_multiple_evidence"],
     )
-    finance_domain = "finance" in str(verification_domain or "").lower()
+    inferred_finance_specs = (
+        finance_operand_specs(text, periods) if normalized_type == "numeric" else ()
+    )
+    finance_domain = "finance" in str(verification_domain or "").lower() or bool(
+        inferred_finance_specs
+    )
     segment_comparison = finance_domain and is_finance_segment_comparison(text)
     if segment_comparison:
-        question_type = "comparison_argmax"
-    finance_specs = (
-        finance_operand_specs(text, periods)
-        if normalized_answer_type == "numeric" and finance_domain
-        else ()
-    )
-    finance_fact = (
-        finance_domain and normalized_answer_type != "numeric" and not causal_intent
-    )
+        planned_question_type = "comparison_argmax"
+    finance_specs = inferred_finance_specs if finance_domain else ()
+    finance_fact = finance_domain and normalized_type != "numeric" and not causal_intent
     finance_support_specs = finance_fact_specs(text, periods) if finance_fact else ()
     slots = (
         _finance_slots(
@@ -140,8 +137,8 @@ def build_query_plan(
         if finance_specs or finance_support_specs
         else _heuristic_slots(
             text,
-            normalized_answer_type,
-            question_type,
+            normalized_type,
+            planned_question_type,
             periods,
             metric,
         )
@@ -149,17 +146,18 @@ def build_query_plan(
     subqueries = tuple(slot.query for slot in slots if slot.query) or (text,)
     constraints = query_plan_constraints(
         text,
-        question_type=question_type,
+        question_type=planned_question_type,
         periods=periods,
         verification_domain=verification_domain,
         segment_comparison=segment_comparison,
+        capabilities=capabilities,
     )
     if segment_comparison:
         slots = _segment_comparison_slots(slots)
         subqueries = tuple(slot.query for slot in slots if slot.query)
     plan = QueryPlan(
-        answer_type=normalized_answer_type,
-        question_type=question_type,
+        answer_type=normalized_type,
+        question_type=planned_question_type,
         subqueries=subqueries,
         evidence_slots=slots,
         constraints=constraints,
@@ -452,6 +450,16 @@ def _heuristic_slots(
     periods: list[str],
     metric: str,
 ) -> tuple[EvidenceSlot, ...]:
+    if answer_type == "boolean":
+        return (
+            EvidenceSlot(
+                slot_id="support:boolean_proposition",
+                role="support",
+                metric=metric,
+                modality="auto",
+                query=question,
+            ),
+        )
     if question_type == "multi_period_numeric":
         return tuple(
             EvidenceSlot(
@@ -489,14 +497,14 @@ def _heuristic_slots(
                 slot_id="support:left_subject",
                 role="support",
                 metric=left_query,
-                modality="auto",
+                modality=modality_hint(left_query),
                 query=left_query,
             ),
             EvidenceSlot(
                 slot_id="support:right_subject",
                 role="support",
                 metric=right_query,
-                modality="auto",
+                modality=modality_hint(right_query),
                 query=right_query,
             ),
         )
@@ -539,50 +547,6 @@ def _finance_slots(
             query="tabular dollars unit scale convention",
         ),
     )
-
-
-def _normalized_answer_type(
-    answer_type: str,
-    tokens: set[str],
-    *,
-    causal_intent: bool = False,
-) -> str:
-    value = str(answer_type or "").strip().lower()
-    if causal_intent:
-        return (
-            value
-            if value and value not in {"numeric", "number", "calculation"}
-            else "free_text"
-        )
-    if value in {"numeric", "number", "calculation", "percentage", "ratio"}:
-        return "numeric"
-    if tokens & _NUMERIC_TERMS:
-        return "numeric"
-    if value:
-        return value
-    return "free_text"
-
-
-def _question_type(
-    tokens: set[str],
-    answer_type: str,
-    periods: list[str],
-    *,
-    causal_intent: bool = False,
-) -> str:
-    if causal_intent:
-        return "long_form"
-    if answer_type == "numeric" and len(periods) >= 2:
-        return "multi_period_numeric"
-    if answer_type == "numeric":
-        return "numeric"
-    if tokens & _VISUAL_TERMS:
-        return "visual"
-    if tokens & _CROSS_PAGE_TERMS:
-        return "cross_page"
-    if tokens & _LONG_FORM_TERMS:
-        return "long_form"
-    return "simple_fact"
 
 
 def _tokens(text: str) -> set[str]:

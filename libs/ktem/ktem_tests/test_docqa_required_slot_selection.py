@@ -31,4 +31,5 @@ def test_required_slot_shortlist_never_expands_fixed_candidate_budget():
     )
 
     assert len(selected) == 20
-    assert restored == 0
+    assert restored == 1
+    assert "evidence-20" in {item["evidence_id"] for item in selected}

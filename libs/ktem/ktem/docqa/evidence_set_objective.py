@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .evidence_identity import identity_of
+from .evidence_identity import evidence_aliases
+from .query_phrase_extraction import source_page_locator
 from .query_planning import QueryPlan
 from .required_slot_selection import slot_score
 
@@ -22,12 +23,19 @@ def marginal_set_gain(
         for slot in plan.evidence_slots
     )
     structure_gain = float(_shares_structure_edge(item, selected))
+    locator = _page(item)
+    modality = str(item.get("modality") or "")
     contrast_gain = float(
-        bool(selected)
-        and (
-            _page(item) not in _pages(selected)
-            or str(item.get("modality") or "")
-            not in {str(other.get("modality") or "") for other in selected}
+        bool(
+            selected
+            and (
+                (all(locator) and locator not in _pages(selected))
+                or (
+                    modality
+                    and modality
+                    not in {str(other.get("modality") or "") for other in selected}
+                )
+            )
         )
     )
     return 1.25 * slot_gain + 0.35 * structure_gain + 0.2 * contrast_gain
@@ -43,19 +51,21 @@ def _shares_structure_edge(
     return any(
         (continuation_id and continuation_id == str(other.get("continuation_id") or ""))
         or (parent_id and parent_id == str(other.get("parent_element_id") or ""))
-        or identity_of(other).key in neighbors
-        or identity_of(item).key
-        in set(_string_values(other.get("neighbor_element_ids")))
+        or bool(evidence_aliases(other) & neighbors)
+        or bool(
+            evidence_aliases(item)
+            & set(_string_values(other.get("neighbor_element_ids")))
+        )
         for other in selected
     )
 
 
-def _pages(items: list[dict[str, Any]]) -> set[str]:
-    return {_page(item) for item in items if _page(item)}
+def _pages(items: list[dict[str, Any]]) -> set[tuple[str, str]]:
+    return {_page(item) for item in items if all(_page(item))}
 
 
-def _page(item: dict[str, Any]) -> str:
-    return str(item.get("page_label") or item.get("page") or "")
+def _page(item: dict[str, Any]) -> tuple[str, str]:
+    return source_page_locator(item)
 
 
 def _string_values(value: Any) -> list[str]:

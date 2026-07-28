@@ -518,6 +518,16 @@ def test_execute_controller_turn_good_retrieval_generates_with_evidence_bundle()
         for item in result.evidence_bundle.metadata["verified_claim_support_evidence"]
     ] == ["evidence:file-1:doc-1"]
     assert "cited_evidence" not in result.evidence_bundle.metadata
+    timings = result.evidence_bundle.metadata["pipeline_stage_timings"]
+    assert set(timings) == {
+        "planning_seconds",
+        "retrieval_seconds",
+        "generation_seconds",
+        "retry_seconds",
+        "verification_seconds",
+        "finalization_seconds",
+    }
+    assert all(value >= 0 for value in timings.values())
 
 
 def test_execute_controller_turn_rewrites_unsupported_answer_once():

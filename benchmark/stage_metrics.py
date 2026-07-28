@@ -17,6 +17,7 @@ from .evidence_stage_coverage import (
     stage_coverage_values,
 )
 from .metrics import round_metric, safe_mean
+from .page_stage_metrics import all_gold_pages_hit, legacy_all_gold_pages_hit
 from .report_identity_compaction import is_identity_only_projection
 
 STAGE_METRIC_KEYS = (
@@ -24,9 +25,11 @@ STAGE_METRIC_KEYS = (
     "candidate_page_coverage_at_50",
     "candidate_pool_recall_at_80",
     "reranked_recall_at_10",
+    "fused_evidence_coverage",
     "selected_evidence_coverage",
     "used_evidence_coverage",
     "generation_context_evidence_coverage",
+    "execution_operand_evidence_coverage",
     "verified_evidence_coverage",
     "cited_evidence_coverage",
     "reranker_lineage_coverage",
@@ -34,6 +37,7 @@ STAGE_METRIC_KEYS = (
     "retrieval_mrr",
     "retrieval_ndcg",
     "all_gold_pages_hit",
+    "legacy_page_only_all_gold_pages_hit",
     "gold_table_cell_recall",
     "slot_coverage",
     "retrieval_slot_coverage",
@@ -58,6 +62,15 @@ STAGE_METRIC_KEYS = (
     "final_answer_repetition_repair_rate",
     "judge_failure_rate",
 )
+_EVIDENCE_STAGE_TRACE_KEYS = (
+    "fused_evidence",
+    "selected_evidence",
+    "used_evidence",
+    "generation_context_evidence",
+    "execution_operand_evidence",
+    "verified_evidence",
+    "cited_evidence",
+)
 
 
 def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | None]:
@@ -67,7 +80,12 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
         if "candidate_evidence" in metadata
         else None
     )
-    candidates = candidate_pool[:50] if candidate_pool is not None else None
+    ranked_candidates = (
+        _records(metadata.get("candidate_ranked_evidence"))
+        if "candidate_ranked_evidence" in metadata
+        else candidate_pool
+    )
+    candidates = ranked_candidates[:50] if ranked_candidates is not None else None
     reranked_available = reranked_trace_available(metadata)
     reranked = (
         _records(metadata.get("reranked_evidence"))[:10] if reranked_available else None
@@ -102,7 +120,8 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
         "gold_evidence_support_recall": support_recall,
         "retrieval_mrr": _mrr(reranked, gold_keys),
         "retrieval_ndcg": _ndcg(reranked, gold_keys),
-        "all_gold_pages_hit": _all_gold_pages_hit(prediction),
+        "all_gold_pages_hit": all_gold_pages_hit(prediction),
+        "legacy_page_only_all_gold_pages_hit": legacy_all_gold_pages_hit(prediction),
         "gold_table_cell_recall": _element_recall(prediction),
         "slot_coverage": _float_or_none(metadata.get("slot_coverage")),
         "retrieval_slot_coverage": _float_or_none(metadata.get("slot_coverage")),
@@ -138,13 +157,6 @@ def prediction_stage_metric_status(
     reranked_count = len(_records(metadata.get("reranked_evidence")))
     candidate_pool = _records(metadata.get("candidate_evidence"))[:80]
     reranked = _records(metadata.get("reranked_evidence"))[:10]
-    stage_trace_keys = (
-        "selected_evidence",
-        "used_evidence",
-        "generation_context_evidence",
-        "verified_evidence",
-        "cited_evidence",
-    )
     candidate_status = _retrieval_metric_status(
         gold_count=gold_count,
         trace_available="candidate_evidence" in metadata,
@@ -180,7 +192,7 @@ def prediction_stage_metric_status(
             "candidate_count": reranked_count,
         },
     }
-    for trace_key in stage_trace_keys:
+    for trace_key in _EVIDENCE_STAGE_TRACE_KEYS:
         metric_key = f"{trace_key}_coverage"
         records = _records(metadata.get(trace_key))
         status[metric_key] = {
@@ -334,14 +346,6 @@ def _ndcg(
     ideal_count = min(len(gold), len(items))
     ideal = sum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_count + 1))
     return dcg / ideal if ideal else None
-
-
-def _all_gold_pages_hit(prediction: dict[str, Any]) -> float | None:
-    gold = {str(page) for page in prediction.get("gold_pages") or []}
-    if not gold:
-        return None
-    predicted = {str(page) for page in prediction.get("predicted_pages") or []}
-    return float(gold <= predicted)
 
 
 def _element_recall(prediction: dict[str, Any]) -> float | None:

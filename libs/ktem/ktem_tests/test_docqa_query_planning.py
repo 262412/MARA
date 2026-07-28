@@ -26,6 +26,21 @@ def test_numeric_comparison_plan_has_distinct_required_period_operands():
     assert plan.plan_id.startswith("plan:")
 
 
+def test_boolean_question_builds_required_proposition_slot():
+    plan = build_query_plan(
+        "Does the proposed model outperform the baseline?",
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+
+    [slot] = plan.evidence_slots
+    assert slot.slot_id == "support:boolean_proposition"
+    assert slot.role == "support"
+    assert slot.required_for_retrieval is True
+    assert slot.required_for_verification is True
+    assert slot.query == "Does the proposed model outperform the baseline?"
+
+
 def test_slot_binding_and_missing_queries_only_target_unfilled_operand():
     plan = build_query_plan(
         "What was the percentage change in revenue from 2021 to 2022?",

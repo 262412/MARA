@@ -72,6 +72,30 @@ def cross_page_support_queries(question: str, fallback: str) -> tuple[str, str]:
     )
     if compare:
         return (_clean_query(compare.group(1)), _clean_query(compare.group(2)))
+    compare_and = re.search(
+        r"\bcompare\s+(.+?)\s+and\s+(.+?)(?:[?.!]|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if compare_and:
+        return (_clean_query(compare_and.group(1)), _clean_query(compare_and.group(2)))
+    comparison_of = re.search(
+        r"\bcomparison\s+of\s+(.+?)\s+and\s+(.+?)(?:[?.!]|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if comparison_of:
+        return (
+            _clean_query(comparison_of.group(1)),
+            _clean_query(comparison_of.group(2)),
+        )
+    versus = re.search(
+        r"^(.+?)\s+(?:versus|vs\.?)\s+(.+?)(?:[?.!]|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if versus:
+        return (_clean_query(versus.group(1)), _clean_query(versus.group(2)))
     between = re.search(
         r"\bbetween\s+(.+?)\s+and\s+(.+?)(?:[?.!]|$)",
         text,
@@ -79,8 +103,28 @@ def cross_page_support_queries(question: str, fallback: str) -> tuple[str, str]:
     )
     if between:
         return (_clean_query(between.group(1)), _clean_query(between.group(2)))
+    pages = re.search(
+        r"\bpages?\s+(\d+)\s+(?:and|with|to|versus|vs\.?)\s+" r"(?:page\s+)?(\d+)\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if pages:
+        return (f"page {pages.group(1)}", f"page {pages.group(2)}")
     query = text or fallback
     return query, query
+
+
+def modality_hint(query: str) -> str:
+    tokens = set(_ordered_tokens(query))
+    if "table" in tokens:
+        return "table"
+    if tokens & {"chart", "diagram", "figure", "plot"}:
+        return "figure"
+    if tokens & {"image", "slide", "visual"}:
+        return "page_image"
+    if tokens & {"equation", "formula"}:
+        return "formula"
+    return "auto"
 
 
 def source_page_locator(item: dict[str, Any]) -> tuple[str, str]:

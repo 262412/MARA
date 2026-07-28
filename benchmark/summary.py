@@ -10,6 +10,7 @@ from .answer_summary import (
 from .backend_health_summary import backend_health_summary
 from .dataset_decision_protocol import phase2_dataset_decision, phase2_failure_counts
 from .effective_route_metrics import effective_route_stage_metric_table
+from .headline_policy import headline_policy_predictions
 from .mara_oriented_scores import (
     MARA_METRIC_KEYS,
     mara_proxy_score_metadata,
@@ -43,6 +44,7 @@ _CITATION_GROUP_METRICS = (
     "citation_metadata_precision",
 )
 _PRIMARY_SCORE_METRIC = "quality_avg_native_score"
+_DEPLOYED_POLICY_SCORE_METRIC = "deployed_policy_avg_native_score"
 _PRIMARY_SCORE_FALLBACK_METRIC = "avg_native_score"
 _DIAGNOSTIC_SCORE_METRICS = ("avg_em", "avg_f1", "avg_anls")
 
@@ -250,14 +252,21 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _primary_score_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
-    primary_predictions = _role_predictions(predictions, {"qa_quality"})
+    quality_predictions = _role_predictions(predictions, {"qa_quality"})
+    primary_predictions, policy = headline_policy_predictions(quality_predictions)
     if primary_predictions:
         paper_grade = paper_grade_score_available(primary_predictions)
         return {
-            "primary_score_metric": _PRIMARY_SCORE_METRIC,
+            "primary_score_metric": (
+                _DEPLOYED_POLICY_SCORE_METRIC
+                if policy == "deployed_controller_policy"
+                else _PRIMARY_SCORE_METRIC
+            ),
             "primary_score": _avg_metric(primary_predictions, "native_score"),
             "primary_score_label": primary_score_label(paper_grade),
             "primary_score_scope": "qa_quality",
+            "primary_score_policy": policy,
+            "primary_score_routes": _ordered_routes(primary_predictions),
             "score_authority_level": score_authority_level(paper_grade),
             "paper_grade_score_available": paper_grade,
             "diagnostic_score_metrics": list(_DIAGNOSTIC_SCORE_METRICS),
@@ -268,6 +277,8 @@ def _primary_score_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "primary_score": _avg_metric(predictions, "native_score"),
         "primary_score_label": primary_score_label(paper_grade),
         "primary_score_scope": "all_routes_fallback",
+        "primary_score_policy": "all_routes_fallback",
+        "primary_score_routes": _ordered_routes(predictions),
         "score_authority_level": score_authority_level(paper_grade),
         "paper_grade_score_available": paper_grade,
         "diagnostic_score_metrics": list(_DIAGNOSTIC_SCORE_METRICS),

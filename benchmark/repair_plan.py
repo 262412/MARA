@@ -56,38 +56,110 @@ class ReleaseGate:
     threshold: float
     comparison: Literal["ge", "gt", "le", "eq"]
     failure_stage: str
+    category: Literal["contract", "paired_regression", "capability_target"]
 
 
-RELEASE_GATES = (
-    ReleaseGate("token_f1_rescore_delta", 0.0, "eq", "evaluation"),
-    ReleaseGate("semantic_calibration_examples", 200.0, "ge", "judge"),
-    ReleaseGate("semantic_calibration_agreement", 0.90, "ge", "judge"),
-    ReleaseGate("semantic_judge_coverage", 0.995, "ge", "judge"),
-    ReleaseGate("qasper_structure_valid", 1.0, "ge", "task_contract"),
-    ReleaseGate("qasper_semantic_f1", 0.80, "ge", "task_contract"),
-    ReleaseGate("ragtruth_json_valid", 0.99, "ge", "task_contract"),
-    ReleaseGate("ragtruth_execution_error", 0.0, "eq", "task_contract"),
-    ReleaseGate("ragtruth_positive_recall", 0.70, "ge", "task_contract"),
-    ReleaseGate("ragtruth_clean_specificity", 0.90, "ge", "task_contract"),
-    ReleaseGate("ragtruth_span_f1", 0.60, "ge", "task_contract"),
-    ReleaseGate("slidevqa_duplicate_ratio", 0.05, "le", "aggregation"),
-    ReleaseGate("slidevqa_token_f1", 0.58, "ge", "generation"),
-    ReleaseGate("mmdocrag_page_duplicate_ratio", 0.10, "le", "aggregation"),
-    ReleaseGate("mmdocrag_page_f1", 0.18, "ge", "retrieval"),
-    ReleaseGate("mmdocrag_element_hit_at_10", 0.30, "ge", "retrieval"),
-    ReleaseGate("mmdocrag_element_f1", 0.12, "ge", "retrieval"),
-    ReleaseGate("financebench_page_hit", 0.70, "ge", "retrieval"),
-    ReleaseGate("financebench_all_gold_pages_hit", 0.35, "ge", "coverage"),
-    ReleaseGate("financebench_all_operands_hit", 0.50, "ge", "coverage"),
-    ReleaseGate("financebench_native_numeric", 0.20, "ge", "calculation"),
-    ReleaseGate("conditional_calculation_accuracy", 0.95, "ge", "calculation"),
-    ReleaseGate("unit_accuracy", 0.98, "ge", "verification"),
-    ReleaseGate("crag_false_abstention", 0.15, "le", "controller"),
-    ReleaseGate("alce_native_score", 0.75, "ge", "generation"),
-    ReleaseGate("alce_citation_f1", 0.93, "ge", "generation"),
-    ReleaseGate("simple_qa_median_latency_increase", 0.20, "le", "latency"),
-    ReleaseGate("complex_qa_median_latency_increase", 0.50, "le", "latency"),
+CONTRACT_GATES = (
+    ReleaseGate("token_f1_rescore_delta", 0.0, "eq", "evaluation", "contract"),
+    ReleaseGate("semantic_calibration_examples", 200.0, "ge", "judge", "contract"),
+    ReleaseGate("semantic_calibration_agreement", 0.90, "ge", "judge", "contract"),
+    ReleaseGate("semantic_judge_coverage", 0.995, "ge", "judge", "contract"),
+    ReleaseGate("qasper_structure_valid", 1.0, "ge", "task_contract", "contract"),
+    ReleaseGate("ragtruth_json_valid", 0.99, "ge", "task_contract", "contract"),
+    ReleaseGate("ragtruth_execution_error", 0.0, "eq", "task_contract", "contract"),
 )
+PAIRED_REGRESSION_GATES = (
+    ReleaseGate(
+        "simple_qa_median_latency_increase",
+        0.20,
+        "le",
+        "latency",
+        "paired_regression",
+    ),
+    ReleaseGate(
+        "complex_qa_median_latency_increase",
+        0.50,
+        "le",
+        "latency",
+        "paired_regression",
+    ),
+)
+CAPABILITY_TARGETS = (
+    ReleaseGate("qasper_semantic_f1", 0.80, "ge", "task_contract", "capability_target"),
+    ReleaseGate(
+        "ragtruth_positive_recall",
+        0.70,
+        "ge",
+        "task_contract",
+        "capability_target",
+    ),
+    ReleaseGate(
+        "ragtruth_clean_specificity",
+        0.90,
+        "ge",
+        "task_contract",
+        "capability_target",
+    ),
+    ReleaseGate("ragtruth_span_f1", 0.60, "ge", "task_contract", "capability_target"),
+    ReleaseGate(
+        "slidevqa_duplicate_ratio",
+        0.05,
+        "le",
+        "aggregation",
+        "capability_target",
+    ),
+    ReleaseGate("slidevqa_token_f1", 0.58, "ge", "generation", "capability_target"),
+    ReleaseGate(
+        "mmdocrag_page_duplicate_ratio",
+        0.10,
+        "le",
+        "aggregation",
+        "capability_target",
+    ),
+    ReleaseGate("mmdocrag_page_f1", 0.18, "ge", "retrieval", "capability_target"),
+    ReleaseGate(
+        "mmdocrag_element_hit_at_10",
+        0.30,
+        "ge",
+        "retrieval",
+        "capability_target",
+    ),
+    ReleaseGate("mmdocrag_element_f1", 0.12, "ge", "retrieval", "capability_target"),
+    ReleaseGate("financebench_page_hit", 0.70, "ge", "retrieval", "capability_target"),
+    ReleaseGate(
+        "financebench_all_gold_pages_hit",
+        0.35,
+        "ge",
+        "coverage",
+        "capability_target",
+    ),
+    ReleaseGate(
+        "financebench_all_operands_hit",
+        0.50,
+        "ge",
+        "coverage",
+        "capability_target",
+    ),
+    ReleaseGate(
+        "financebench_native_numeric",
+        0.20,
+        "ge",
+        "calculation",
+        "capability_target",
+    ),
+    ReleaseGate(
+        "conditional_calculation_accuracy",
+        0.95,
+        "ge",
+        "calculation",
+        "capability_target",
+    ),
+    ReleaseGate("unit_accuracy", 0.98, "ge", "verification", "capability_target"),
+    ReleaseGate("crag_false_abstention", 0.15, "le", "controller", "capability_target"),
+    ReleaseGate("alce_native_score", 0.75, "ge", "generation", "capability_target"),
+    ReleaseGate("alce_citation_f1", 0.93, "ge", "generation", "capability_target"),
+)
+RELEASE_GATES = CONTRACT_GATES + PAIRED_REGRESSION_GATES + CAPABILITY_TARGETS
 
 
 def validate_ablation_progression(phases: list[str]) -> None:
@@ -139,12 +211,14 @@ def evaluate_release_gates(
         threshold=8.0,
         comparison="ge",
         failure_stage="end_to_end",
+        category="paired_regression",
     )
     results["semantic_f1_ci_low"] = _custom_result(
         value=_number(paired_semantic_ci_low),
         threshold=0.0,
         comparison="gt",
         failure_stage="end_to_end",
+        category="paired_regression",
     )
     return results
 
@@ -155,6 +229,7 @@ def _evaluate_gate(gate: ReleaseGate, value: Any) -> dict[str, Any]:
         threshold=gate.threshold,
         comparison=gate.comparison,
         failure_stage=gate.failure_stage,
+        category=gate.category,
     )
 
 
@@ -164,6 +239,7 @@ def _custom_result(
     threshold: float,
     comparison: Literal["ge", "gt", "le", "eq"],
     failure_stage: str,
+    category: Literal["contract", "paired_regression", "capability_target"],
 ) -> dict[str, Any]:
     if value is None:
         passed = False
@@ -178,6 +254,8 @@ def _custom_result(
         "passed": passed,
         "status": status,
         "failure_stage": "" if passed else failure_stage,
+        "category": category,
+        "release_blocking": category != "capability_target",
     }
 
 

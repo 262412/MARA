@@ -67,6 +67,7 @@ def text_contradicts_claim(claim: str, evidence: str) -> bool:
         _year_conflict(claim, evidence)
         or _direction_conflict(claim, evidence)
         or _numeric_conflict(claim, evidence)
+        or _negation_conflict(claim, evidence)
     )
 
 
@@ -267,6 +268,22 @@ def _shared_claim_context(claim: str, evidence: str) -> bool:
     claim_tokens = meaningful_tokens(claim) - _DIRECTION_CONTEXT_TOKENS
     evidence_tokens = meaningful_tokens(evidence) - _DIRECTION_CONTEXT_TOKENS
     return bool(claim_tokens & evidence_tokens)
+
+
+def _negation_conflict(claim: str, evidence: str) -> bool:
+    return _has_negation(claim) != _has_negation(evidence) and _shared_claim_context(
+        claim, evidence
+    )
+
+
+def _has_negation(value: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:cannot|can't|didn't|doesn't|neither|never|not|without)\b",
+            str(value or ""),
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _source_summary_supports_claim(

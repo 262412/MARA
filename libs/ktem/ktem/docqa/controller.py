@@ -443,6 +443,11 @@ def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
         "used_evidence",
         "stage_aliases",
         "fused_evidence",
+        "candidate_ranked_evidence",
+        "candidate_ranking_contract",
+        "canonical_candidate_count",
+        "pre_rerank_required_slot_candidates_restored",
+        "source_page_locators",
     }
     ignored_empty_keys = {"evidence", "evidence_ids", "modality_counts"}
     for key, value in evidence_metadata.items():

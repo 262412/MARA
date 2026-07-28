@@ -27,6 +27,48 @@ def add_amortized_preparation_timing(
     prediction["performance"] = performance
 
 
+def record_stage_timing(
+    prediction: dict[str, Any],
+    key: str,
+    seconds: float,
+) -> None:
+    value = round(max(0.0, float(seconds)), 6)
+    timings = dict(prediction.get("timings") or {})
+    timings[key] = value
+    prediction["timings"] = timings
+    performance = dict(prediction.get("performance") or {})
+    performance[key] = value
+    prediction["performance"] = performance
+
+
+def runtime_timing_payload(
+    evidence_metadata: dict[str, Any],
+    *,
+    index_seconds: float,
+    generation_seconds: float,
+    grounding_seconds: float,
+) -> tuple[dict[str, float], dict[str, float]]:
+    pipeline_stage_timings = dict(evidence_metadata.get("pipeline_stage_timings") or {})
+    segmented = {
+        f"pipeline_{key}": float(value)
+        for key, value in pipeline_stage_timings.items()
+        if key.endswith("_seconds")
+        and isinstance(value, (int, float))
+        and not isinstance(value, bool)
+    }
+    timings = {
+        "index_seconds": index_seconds,
+        "generation_seconds": generation_seconds,
+        "answer_grounding_seconds": grounding_seconds,
+        **segmented,
+    }
+    performance = {
+        **timings,
+        "total_seconds": round(index_seconds + generation_seconds, 4),
+    }
+    return timings, performance
+
+
 def apply_engine_failure_diagnostics(
     prediction: dict[str, Any],
     engine: Any,

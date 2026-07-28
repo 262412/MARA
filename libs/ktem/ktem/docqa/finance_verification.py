@@ -16,7 +16,9 @@ def finance_numeric_claim_supported(
     if "quick ratio" not in context:
         return None
 
-    inputs = _quick_ratio_inputs(evidence_text(evidence_items))
+    inputs = _quick_ratio_inputs_from_items(evidence_items)
+    if inputs is None:
+        inputs = _quick_ratio_inputs(evidence_text(evidence_items))
     if inputs is None:
         return None
     ratios = _decimal_numbers(claim)
@@ -85,6 +87,35 @@ def _quick_ratio_inputs(text: str) -> tuple[float, float, float] | None:
     if assets is None or inventories is None or liabilities is None:
         return None
     return assets, inventories, liabilities
+
+
+def _quick_ratio_inputs_from_items(
+    evidence_items: list[dict[str, Any]],
+) -> tuple[float, float, float] | None:
+    values: dict[str, float] = {}
+    for item in evidence_items:
+        metadata = item.get("metadata")
+        metadata = metadata if isinstance(metadata, dict) else {}
+        row_label = str(item.get("row_label") or metadata.get("row_label") or "")
+        value = _structured_finance_amount(item.get("value", metadata.get("value")))
+        if value is None:
+            continue
+        normalized_label = " ".join(re.findall(r"[a-z]+", row_label.lower()))
+        if "current liabilities" in normalized_label:
+            values["liabilities"] = value
+        elif "current assets" in normalized_label:
+            values["assets"] = value
+        elif "inventor" in normalized_label:
+            values["inventories"] = value
+    if not {"assets", "inventories", "liabilities"} <= values.keys():
+        return None
+    return values["assets"], values["inventories"], values["liabilities"]
+
+
+def _structured_finance_amount(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    return _parse_finance_amount(str(value))
 
 
 def _finance_amount_after(text: str, labels: list[str]) -> float | None:

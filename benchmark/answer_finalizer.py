@@ -11,6 +11,11 @@ from .calculation_citation_projection import (
     calculation_citation_items,
     record_calculation_stage_evidence,
 )
+from .citation_rendering import citation_from_item as _citation_from_item
+from .citation_rendering import citation_from_source_ref as _citation_from_source_ref
+from .citation_rendering import (
+    matching_canonical_source_ref as _matching_canonical_source_ref,
+)
 from .citation_stage_projection import (
     is_uuid_like_source_id,
     record_emitted_citation_evidence,
@@ -249,29 +254,32 @@ def attach_structured_citations_from_evidence(
     if prediction.get("predicted_citations") or prediction.get("structured_citations"):
         return []
     canonical_sources = _canonical_source_refs(prediction)
-    calculation_items = calculation_citation_items(
+    calculation_matches = calculation_citation_items(
         prediction,
         _citation_candidate_items(prediction),
     )
     calculation_citations = [
         citation
-        for item in calculation_items
+        for match in calculation_matches
         if (
             citation := _citation_from_item(
-                item,
+                match.item,
                 span=span,
                 canonical_sources=canonical_sources,
+                source_backrefs=_canonical_source_backrefs(match.item),
+                evidence_identity=match.citation_identity,
             )
         )
     ]
     if calculation_citations:
-        record_calculation_stage_evidence(prediction, calculation_items)
+        record_calculation_stage_evidence(prediction, calculation_matches)
         return _unique_citations(calculation_citations)
     for item in _citation_candidate_items(prediction):
         citation = _citation_from_item(
             item,
             span=span,
             canonical_sources=canonical_sources,
+            source_backrefs=_canonical_source_backrefs(item),
         )
         if citation:
             return [citation]
@@ -432,6 +440,11 @@ def _citation_candidate_items(prediction: dict[str, Any]) -> list[dict[str, Any]
     if isinstance(evidence_metadata, dict):
         items.extend(
             item
+            for item in evidence_metadata.get("execution_operand_evidence") or []
+            if isinstance(item, dict)
+        )
+        items.extend(
+            item
             for item in evidence_metadata.get("evidence") or []
             if isinstance(item, dict)
         )
@@ -441,47 +454,6 @@ def _citation_candidate_items(prediction: dict[str, Any]) -> list[dict[str, Any]
         if isinstance(item, dict)
     )
     return items
-
-
-def _citation_from_item(
-    item: dict[str, Any],
-    *,
-    span: str,
-    canonical_sources: list[str],
-) -> dict[str, str]:
-    page_label = _first_nonempty_value(
-        item.get("page_label"),
-        item.get("page"),
-        item.get("page_number"),
-    )
-    source_ref = _first_nonempty_value(
-        *_canonical_source_backrefs(item),
-        _matching_canonical_source_ref(canonical_sources, page_label),
-    )
-    if source_ref:
-        parsed = _citation_from_source_ref(source_ref, span=span)
-        source_id = parsed.get("source_id", "")
-        page_label = parsed.get("page_label", "") or page_label
-    else:
-        source_id = _first_nonempty_value(
-            item.get("source_id"),
-            item.get("document_id"),
-            item.get("file_id"),
-            item.get("runtime_source_id"),
-        )
-    if not source_id and not page_label:
-        return {}
-    citation = {
-        key: value
-        for key, value in {
-            "evidence_id": _first_nonempty_value(item.get("evidence_id")),
-            "source_id": source_id,
-            "page_label": page_label,
-            "span": str(span or "").strip(),
-        }.items()
-        if value
-    }
-    return citation
 
 
 def _canonical_source_refs(prediction: dict[str, Any]) -> list[str]:
@@ -510,51 +482,6 @@ def _canonical_source_backrefs(item: dict[str, Any]) -> list[str]:
         if value and not source_ref_uses_uuid_like_source(value):
             refs.append(value)
     return refs
-
-
-def _matching_canonical_source_ref(sources: list[str], page_label: str) -> str:
-    if page_label:
-        suffix = f"#page:{page_label}"
-        for source in sources:
-            if str(source or "").strip().endswith(suffix):
-                return str(source).strip()
-    return sources[0] if sources else ""
-
-
-def _citation_from_source_ref(source_ref: str, *, span: str) -> dict[str, str]:
-    value = str(source_ref or "").strip()
-    if not value:
-        return {}
-    if "#page:" in value:
-        source_id, page_label = value.split("#page:", 1)
-        return {
-            key: item
-            for key, item in {
-                "source_id": source_id.strip(),
-                "page_label": page_label.strip(),
-                "span": str(span or "").strip(),
-            }.items()
-            if item
-        }
-    if "#source" in value:
-        source_id = value.split("#source", 1)[0].strip()
-        return {
-            key: item
-            for key, item in {
-                "source_id": source_id,
-                "span": str(span or "").strip(),
-            }.items()
-            if item
-        }
-    return {"source_id": value, "span": str(span or "").strip()} if value else {}
-
-
-def _first_nonempty_value(*values: Any) -> str:
-    for value in values:
-        text = str(value or "").strip()
-        if text:
-            return text
-    return ""
 
 
 def _render_structured_answer_for_user(structured: dict[str, Any]) -> str:

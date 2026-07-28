@@ -15,11 +15,16 @@ def stage_coverage_values(
     gold: set[EvidenceKey],
 ) -> dict[str, float | None]:
     stages = {
+        "fused_evidence_coverage": _stage_records(metadata, "fused_evidence"),
         "selected_evidence_coverage": _stage_records(metadata, "selected_evidence"),
         "used_evidence_coverage": _stage_records(metadata, "used_evidence"),
         "generation_context_evidence_coverage": _stage_records(
             metadata,
             "generation_context_evidence",
+        ),
+        "execution_operand_evidence_coverage": _stage_records(
+            metadata,
+            "execution_operand_evidence",
         ),
         "verified_evidence_coverage": _stage_records(metadata, "verified_evidence"),
         "cited_evidence_coverage": _stage_records(metadata, "cited_evidence"),
@@ -112,14 +117,22 @@ def reranked_trace_available(metadata: dict[str, Any]) -> bool:
 
 
 def _record_key(item: dict[str, Any]) -> EvidenceKey:
+    identity = item.get("identity")
+    identity_payload = identity if isinstance(identity, dict) else {}
     return (
-        str(item.get("source_id") or item.get("document_id") or ""),
+        str(
+            item.get("source_id")
+            or item.get("document_id")
+            or identity_payload.get("source_id")
+            or ""
+        ),
         str(item.get("page_label") or item.get("page") or ""),
         str(
             item.get("cell_id")
             or item.get("span_id")
             or item.get("element_id")
             or item.get("evidence_id")
+            or identity_payload.get("local_id")
             or ""
         ),
     )

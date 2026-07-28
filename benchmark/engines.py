@@ -35,6 +35,7 @@ from .engine_context import (
 from .engine_helpers import _parsed_indexes_cache, _performance_from_timings
 from .engine_result import EngineRunResult
 from .engine_result_adapters import prediction_to_result
+from .performance_timing import runtime_timing_payload
 from .schemas import BenchmarkConfig, BenchmarkDocument
 from .system import KotaemonTextRAGSystem
 
@@ -413,6 +414,12 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 alce_grounding_stage_event(grounding_trace, grounding_seconds)
             )
         total_generation_seconds = generation_seconds + grounding_seconds
+        timings, performance = runtime_timing_payload(
+            evidence_metadata,
+            index_seconds=index_seconds,
+            generation_seconds=total_generation_seconds,
+            grounding_seconds=grounding_seconds,
+        )
         return EngineRunResult(
             answer=answer,
             predicted_pages=predicted_pages,
@@ -420,20 +427,8 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             predicted_citations=predicted_citations,
             predicted_element_ids=evidence_element_ids(retrieved_hits),
             retrieved_hits=retrieved_hits,
-            timings={
-                "index_seconds": index_seconds,
-                "generation_seconds": total_generation_seconds,
-                "answer_grounding_seconds": grounding_seconds,
-            },
-            performance={
-                "index_seconds": round(index_seconds, 4),
-                "generation_seconds": round(total_generation_seconds, 4),
-                "answer_grounding_seconds": round(grounding_seconds, 4),
-                "total_seconds": round(
-                    index_seconds + total_generation_seconds,
-                    4,
-                ),
-            },
+            timings=timings,
+            performance=performance,
             cache={"document_index": dict(self._last_index_cache)},
             context_preview=response.references_text[: self.max_context_length],
             agent_trace=list(getattr(response, "agent_trace", []) or []),

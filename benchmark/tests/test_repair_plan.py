@@ -2,6 +2,9 @@ import pytest
 
 from benchmark.repair_plan import (
     ABLATION_PHASES,
+    CAPABILITY_TARGETS,
+    CONTRACT_GATES,
+    PAIRED_REGRESSION_GATES,
     evaluate_release_gates,
     formal_full_run_allowed,
     validate_ablation_progression,
@@ -72,6 +75,22 @@ def test_release_gates_report_metric_and_failure_stage_without_reweighting():
     assert result["ragtruth_positive_recall"]["passed"] is False
     assert result["ragtruth_positive_recall"]["status"] == "missing"
     assert result["ragtruth_positive_recall"]["failure_stage"] == "task_contract"
+
+
+def test_release_gates_separate_contract_regression_and_capability_targets():
+    assert {gate.category for gate in CONTRACT_GATES} == {"contract"}
+    assert {gate.category for gate in PAIRED_REGRESSION_GATES} == {"paired_regression"}
+    assert {gate.category for gate in CAPABILITY_TARGETS} == {"capability_target"}
+
+    result = evaluate_release_gates(
+        phase_b={"avg_semantic_answer_f1": 0.4},
+        phase_g={"avg_semantic_answer_f1": 0.49},
+        paired_semantic_ci_low=0.01,
+    )
+
+    assert result["token_f1_rescore_delta"]["release_blocking"] is True
+    assert result["financebench_native_numeric"]["release_blocking"] is False
+    assert result["financebench_native_numeric"]["category"] == "capability_target"
 
 
 def test_release_gates_reject_mismatched_paired_inputs():
