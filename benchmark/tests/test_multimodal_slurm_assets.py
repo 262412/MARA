@@ -12,6 +12,7 @@ SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/multimodal_route_rerun.sbatch"
 TEXT_SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/text_route_rerun.sbatch"
 RUNTIME_HELPER = PROJECT_ROOT / "scripts/slurm/benchmark_runtime_isolation.sh"
 ARTIFACT_VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_benchmark_predictions.py"
+CONTRACT_SMOKE_VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_contract_smoke.py"
 INDEX_CONTRACT = PROJECT_ROOT / "scripts/slurm/benchmark_index_contract.py"
 SEMANTIC_EVALUATOR_NORMALIZER = (
     PROJECT_ROOT / "scripts/slurm/normalize_semantic_evaluator.py"
@@ -164,6 +165,19 @@ def test_text_route_slurm_script_requires_isolated_benchmark_runtime():
         not in text
     )
     assert "${MARA_RUNTIME_DIR}/ktem_app_data" not in text
+
+
+def test_text_route_slurm_script_can_emit_and_validate_full_contract_artifacts():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert 'ARTIFACT_DETAIL="${MARA_TEXT_ARTIFACT_DETAIL:-compact}"' in text
+    assert '--artifact-detail "$ARTIFACT_DETAIL"' in text
+    assert 'REQUIRE_CONTRACT_SMOKE="${MARA_REQUIRE_CONTRACT_SMOKE:-0}"' in text
+    assert str(CONTRACT_SMOKE_VALIDATOR.name) in text
+    assert '--suite-kind "$CONTRACT_SMOKE_SUITE_KIND"' in text
+    assert text.index(CONTRACT_SMOKE_VALIDATOR.name) < text.index(
+        "mara_cleanup_benchmark_runtime"
+    )
 
 
 def test_semantic_evaluator_normalizer_maps_local_alias_and_rejects_invalid_values():

@@ -207,6 +207,10 @@ def test_contract_gates_cover_evidence_invariants():
         "citation_provenance_violation_count",
         "reranker_lineage_violation_count",
         "missing_execution_slot_answer_count",
+        "required_slot_false_fill_count",
+        "source_page_cross_join_count",
+        "calculation_render_mismatch_count",
+        "qasper_stale_verifier_state_count",
     } <= metrics
 
 
@@ -254,4 +258,8 @@ def test_contract_invariant_summary_measures_runtime_artifact_contracts():
         "citation_provenance_violation_count": 0.0,
         "reranker_lineage_violation_count": 0.0,
         "missing_execution_slot_answer_count": 0.0,
+        "required_slot_false_fill_count": 0.0,
+        "source_page_cross_join_count": 0.0,
+        "calculation_render_mismatch_count": 0.0,
+        "qasper_stale_verifier_state_count": 0.0,
     }

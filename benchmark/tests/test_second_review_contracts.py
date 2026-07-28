@@ -224,6 +224,83 @@ def test_roundtrip_contract_reports_each_projection_dimension():
     assert summary["representation_roundtrip_rate"] == 1.0
 
 
+def test_contract_summary_detects_false_slot_fill_and_source_page_cross_join():
+    candidate_a = {
+        "source_id": "document-a",
+        "page_label": "1",
+        "span_id": "a",
+        "period": "2022",
+        "text": "Revenue in 2022 was 100.",
+    }
+    candidate_b = {
+        "source_id": "document-b",
+        "page_label": "2",
+        "span_id": "b",
+        "text": "An unrelated statement.",
+    }
+    prediction = {
+        "question": "What was revenue in 2023?",
+        "predicted_answer": "100",
+        "evidence_metadata": {
+            "canonical_candidate_evidence": [candidate_a, candidate_b],
+            "query_plan": {
+                "answer_type": "numeric",
+                "question_type": "numeric",
+                "constraints": {},
+                "evidence_slots": [
+                    {
+                        "slot_id": "operand:revenue_2023",
+                        "role": "operand",
+                        "metric": "revenue",
+                        "period": "2023",
+                        "required": True,
+                        "required_for_execution": True,
+                        "status": "filled",
+                        "evidence_ids": ["span:document-a:a"],
+                    }
+                ],
+            },
+            "emitted_citation_evidence": [
+                {
+                    "source_id": "document-a",
+                    "page_label": "2",
+                    "evidence_level": "page",
+                }
+            ],
+        },
+    }
+
+    summary = contract_invariant_summary([prediction])
+
+    assert summary["required_slot_false_fill_count"] == 1.0
+    assert summary["source_page_cross_join_count"] == 1.0
+
+
+def test_contract_summary_detects_calculation_render_and_qasper_state_mismatch():
+    prediction = {
+        "question": "What was the percentage change?",
+        "predicted_answer": "30%",
+        "answer_for_scoring": "30%",
+        "pre_contract_verification": {"verify_decision": {"status": "supported"}},
+        "post_contract_verification": {
+            "answer": "unanswerable",
+            "verify_decision": {"status": "not_enough_evidence"},
+        },
+        "evidence_metadata": {
+            "answer_dependent_state": "invalidated_for_reverification",
+            "finance_numeric_trace": {
+                "calculation_execution": {"status": "ok", "value": "20"}
+            },
+            "query_plan": {"evidence_slots": []},
+        },
+    }
+
+    summary = contract_invariant_summary([prediction])
+
+    assert summary["calculation_render_mismatch_count"] == 1.0
+    assert summary["qasper_stale_verifier_state_count"] == 1.0
+
+
 def test_canonical_candidate_and_reranker_input_metrics_are_distinct():
     gold = {
         "source_id": "paper",
