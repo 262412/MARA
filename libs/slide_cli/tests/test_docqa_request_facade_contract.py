@@ -16,6 +16,8 @@ CANONICAL_REQUEST_FIELDS = (
     "prompt",
     "controller_question",
     "retrieval_query",
+    "retrieval_slot_id",
+    "retrieval_round_id",
     "dataset_family",
     "conversation_id",
     "selected_file_ids",
@@ -40,6 +42,10 @@ CANONICAL_REQUEST_FIELDS = (
     "route_policy",
     "planner_backend",
     "planner_model",
+    "planned_query_plan",
+    "query_plan",
+    "query_plan_id",
+    "query_plan_state_version",
     "allowed_routes",
     "verification_mode",
     "verification_domain",
@@ -107,6 +113,12 @@ APPENDED_FACADE_FIELDS = (
     "element_index_records",
     "route_timeout_seconds",
     "route_deadline_monotonic",
+    "retrieval_slot_id",
+    "retrieval_round_id",
+    "planned_query_plan",
+    "query_plan",
+    "query_plan_id",
+    "query_plan_state_version",
 )
 
 

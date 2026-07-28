@@ -6,6 +6,11 @@ from pathlib import Path
 
 import yaml
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
+
 from scripts.check_supply_chain_policy import _check_action_pins, scan_repository
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +28,17 @@ LEGACY_INSTALLERS = (
 
 def test_repository_satisfies_supply_chain_policy():
     assert scan_repository(REPO_ROOT) == []
+
+
+def test_runtime_dependencies_exclude_llama_hub_secret_bearing_examples():
+    pyproject = tomllib.loads(
+        (REPO_ROOT / "libs/kotaemon/pyproject.toml").read_text(encoding="utf-8")
+    )
+
+    assert all(
+        not dependency.startswith("llama-hub")
+        for dependency in pyproject["project"]["dependencies"]
+    )
 
 
 def test_supply_chain_policy_cli_is_fail_closed():

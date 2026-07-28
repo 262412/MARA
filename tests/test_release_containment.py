@@ -163,7 +163,7 @@ def test_gitleaks_history_baseline_contains_only_exact_triaged_fingerprints():
     )
 
     assert actual == GITLEAKS_IGNORE_FINGERPRINTS
-    assert len(actual) == 8
+    assert len(actual) == 9
 
     config = (REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8")
     assert "useDefault = true" in config

@@ -93,9 +93,15 @@ def test_static_and_test_jobs_enforce_the_repository_contracts():
         },
     ]
     audit_commands = _commands(audit)
-    assert "uv audit --project" in audit_commands
-    assert "--frozen" in audit_commands
+    assert "check_dependency_audit.py" in audit_commands
+    assert "--project" in audit_commands
     assert "--python-version" in audit_commands
+    audit_setup = next(
+        step
+        for step in audit["steps"]
+        if str(step.get("uses", "")).startswith("actions/setup-python@")
+    )
+    assert audit_setup["with"]["python-version"] == "3.10"
     collection_commands = _commands(jobs["collection"])
     assert "check_pytest_collection.py" in collection_commands
     assert "--minimum 1260" in collection_commands
@@ -108,6 +114,13 @@ def test_static_and_test_jobs_enforce_the_repository_contracts():
     assert "libs/slide_cli" in _commands(jobs["slide-cli"])
     root_commands = _commands(jobs["benchmark-root"])
     assert "benchmark/tests" in root_commands and "tests" in root_commands
+    for job_name in ("benchmark-root", "coverage"):
+        sync = next(
+            step
+            for step in jobs[job_name]["steps"]
+            if step["name"] == "Sync locked environment"
+        )
+        assert "--all-packages" in sync["run"]
 
 
 def test_frontend_coverage_and_wheel_jobs_are_executable_gates():
@@ -157,8 +170,11 @@ def test_supply_chain_jobs_build_scan_and_retain_evidence():
     assert "permissions" not in container
     build_step = next(step for step in container["steps"] if step.get("id") == "build")
     assert build_step["with"]["no-cache"] is True
+    assert build_step["with"]["outputs"].strip().startswith("type=oci,")
+    assert "type=docker" not in build_step["with"]["outputs"]
     container_commands = _commands(container)
-    assert "docker load" in container_commands
+    assert "skopeo copy" in container_commands
+    assert "docker-daemon:" in container_commands
     assert "smoke_container_runtime.py" in container_commands
 
     python_commands = _commands(python)
@@ -312,6 +328,8 @@ def test_supply_chain_pin_changes_require_trusted_context_owner_review():
         "generate_container_attestation.py",
         "smoke_container_runtime.py",
         "check_container_lock_parity.py",
+        "check_dependency_audit.py",
+        "dependency_audit_baseline.json",
     ):
         assert protected in source
     assert "two-person control" in source
