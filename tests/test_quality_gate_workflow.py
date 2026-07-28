@@ -187,6 +187,7 @@ def test_supply_chain_jobs_build_scan_and_retain_evidence():
     for step in trivy_steps:
         assert step["with"]["image-ref"] == expected_image_ref
         assert "input" not in step["with"]
+        assert step["with"]["timeout"] == "15m"
     vulnerability_scan = next(
         step
         for step in trivy_steps
