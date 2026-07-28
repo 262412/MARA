@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -14,6 +14,45 @@ _VALUE_RE = re.compile(
 
 
 @dataclass(frozen=True, slots=True)
+class PhysicalCellIdentity:
+    source_id: str
+    page_label: str
+    table_instance_id: str
+    block_id: str
+    row_index: int
+    column_index: int
+
+    @property
+    def key(self) -> str:
+        return "#".join(
+            (
+                f"source:{_identity_component(self.source_id)}",
+                f"page:{_identity_component(self.page_label)}",
+                f"table-instance:{_identity_component(self.table_instance_id)}",
+                f"block:{_identity_component(self.block_id)}",
+                f"row:{self.row_index}",
+                f"column:{self.column_index}",
+            )
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticCellKey:
+    metric: str
+    period: str
+    statement_kind: str
+    financial_scope: str
+    unit: str
+    scale: str
+
+    def as_dict(self) -> dict[str, str]:
+        return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
 class FinancialTableCell:
     cell_id: str
     evidence_id: str
@@ -21,6 +60,9 @@ class FinancialTableCell:
     source_id: str
     page_label: str
     table_id: str
+    table_instance_id: str
+    table_group_id: str
+    block_id: str
     row_index: int
     column_index: int
     row_label: str
@@ -33,6 +75,28 @@ class FinancialTableCell:
     currency: str = ""
     statement_kind: str = ""
     financial_scope: str = ""
+
+    @property
+    def physical_identity(self) -> PhysicalCellIdentity:
+        return PhysicalCellIdentity(
+            source_id=self.source_id,
+            page_label=self.page_label,
+            table_instance_id=self.table_instance_id,
+            block_id=self.block_id,
+            row_index=self.row_index,
+            column_index=self.column_index,
+        )
+
+    @property
+    def semantic_key(self) -> SemanticCellKey:
+        return SemanticCellKey(
+            metric=_slug(self.row_label).replace("-", "_"),
+            period=self.period,
+            statement_kind=self.statement_kind,
+            financial_scope=self.financial_scope,
+            unit=self.unit,
+            scale=self.scale,
+        )
 
     def verification_text(self) -> str:
         return " ".join(
@@ -80,28 +144,34 @@ def parse_financial_table_cells(
             periods,
         ):
             row_index += 1
-            row_slug = _slug(row_label)
-            period_kind_identity = (
-                f"#period-kind:{period_kind or 'unspecified'}"
-                if disambiguate_period_kind
-                else ""
-            )
             for column_index, (period, value) in enumerate(
                 zip(periods, values),
                 start=1,
             ):
-                cell_id = (
-                    f"{identity['canonical_id']}{period_kind_identity}"
-                    f"#row:{row_slug}#column:{period}"
+                physical_block_id = (
+                    f"{identity['block_id']}:{period_kind or 'unspecified'}"
+                    if disambiguate_period_kind
+                    else identity["block_id"]
+                )
+                physical_identity = PhysicalCellIdentity(
+                    source_id=identity["source_id"],
+                    page_label=identity["page_label"],
+                    table_instance_id=identity["table_instance_id"],
+                    block_id=physical_block_id,
+                    row_index=row_index,
+                    column_index=column_index,
                 )
                 cells.append(
                     FinancialTableCell(
-                        cell_id=cell_id,
+                        cell_id=physical_identity.key,
                         evidence_id=identity["evidence_id"],
                         canonical_id=identity["canonical_id"],
                         source_id=identity["source_id"],
                         page_label=identity["page_label"],
                         table_id=identity["table_id"],
+                        table_instance_id=identity["table_instance_id"],
+                        table_group_id=identity["table_group_id"],
+                        block_id=physical_block_id,
                         row_index=row_index,
                         column_index=column_index,
                         row_label=row_label,
@@ -224,19 +294,28 @@ def _explicit_cell(item: dict[str, Any]) -> FinancialTableCell | None:
         return None
     identity = _table_identity(item)
     statement_kind, financial_scope = financial_statement_identity(item)
+    row_index = int(item.get("row_index") or 0)
+    column_index = int(item.get("column_index") or 0)
+    physical_identity = PhysicalCellIdentity(
+        source_id=identity["source_id"],
+        page_label=identity["page_label"],
+        table_instance_id=identity["table_instance_id"],
+        block_id=identity["block_id"],
+        row_index=row_index,
+        column_index=column_index,
+    )
     return FinancialTableCell(
-        cell_id=str(item.get("cell_id") or "").strip()
-        or (
-            f"{identity['canonical_id']}#row:{_slug(row_label)}"
-            f"#column:{_slug(column_label)}"
-        ),
+        cell_id=str(item.get("cell_id") or "").strip() or physical_identity.key,
         evidence_id=identity["evidence_id"],
         canonical_id=identity["canonical_id"],
         source_id=identity["source_id"],
         page_label=identity["page_label"],
         table_id=identity["table_id"],
-        row_index=int(item.get("row_index") or 0),
-        column_index=int(item.get("column_index") or 0),
+        table_instance_id=identity["table_instance_id"],
+        table_group_id=identity["table_group_id"],
+        block_id=identity["block_id"],
+        row_index=row_index,
+        column_index=column_index,
         row_label=row_label,
         column_label=column_label,
         period=str(item.get("period") or column_label).strip(),
@@ -372,20 +451,44 @@ def _table_identity(item: dict[str, Any]) -> dict[str, str]:
         item.get("canonical_id"),
     )
     canonical_id = _first(item.get("canonical_id"), evidence_id, "financial-table")
+    source_id = _first(
+        item.get("source_id"),
+        item.get("document_id"),
+        nested.get("source_id"),
+    )
+    page_label = _first(
+        item.get("page_label"),
+        item.get("page"),
+        nested.get("page_label"),
+    )
+    table_id = _first(item.get("table_id"), item.get("element_id"), canonical_id)
+    table_instance_id = _first(
+        item.get("table_instance_id"),
+        nested.get("table_instance_id"),
+        table_id,
+    )
+    table_group_id = _first(
+        item.get("table_group_id"),
+        nested.get("table_group_id"),
+        item.get("continuation_id"),
+        nested.get("continuation_id"),
+        table_id,
+    )
+    block_id = _first(
+        item.get("block_id"),
+        nested.get("block_id"),
+        nested.get("parser_source_doc_id"),
+        table_instance_id,
+    )
     return {
         "evidence_id": evidence_id,
         "canonical_id": canonical_id,
-        "source_id": _first(
-            item.get("source_id"),
-            item.get("document_id"),
-            nested.get("source_id"),
-        ),
-        "page_label": _first(
-            item.get("page_label"),
-            item.get("page"),
-            nested.get("page_label"),
-        ),
-        "table_id": _first(item.get("table_id"), item.get("element_id"), canonical_id),
+        "source_id": source_id,
+        "page_label": page_label,
+        "table_id": table_id,
+        "table_instance_id": table_instance_id,
+        "table_group_id": table_group_id,
+        "block_id": block_id,
     }
 
 
@@ -485,6 +588,10 @@ def _first(*values: Any) -> str:
 
 def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+
+
+def _identity_component(value: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9._~-]+", "_", str(value or "").strip()) or "unknown"
 
 
 def _normalized_text(value: str) -> str:

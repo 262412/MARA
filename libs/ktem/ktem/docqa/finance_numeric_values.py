@@ -455,6 +455,7 @@ def render_execution_answer(
         "debt_to_equity",
         "inventory_turnover",
         "inventory_turnover_average",
+        "fixed_asset_turnover",
         "quick_ratio",
     }:
         return format_decimal(value)

@@ -15,6 +15,8 @@ from ktem.docqa.query_planning import build_query_plan
 from ktem.docqa.required_slot_selection import required_slot_shortlist
 from ktem.docqa.visual_retriever import rank_page_image_records
 
+from .mara_element_ingestion_trace import element_ingestion_trace
+
 TextRetrieveFn = Callable[[], tuple[list[Any], list[Any]]]
 MetadataBuilderFn = Callable[[list[Any], dict[str, Any]], dict[str, Any]]
 DEFAULT_PAGE_IMAGE_RANK_CANDIDATE_LIMIT = 48
@@ -355,6 +357,7 @@ def _element_metadata(
             "evidence": [],
             "element_candidate_count": 0,
             "element_selected_candidate_count": 0,
+            "element_ingestion_trace": element_ingestion_trace(pipeline, records),
         }
     ranked, scores = rank_element_records(
         str(understanding.get("question") or ""),
@@ -395,6 +398,7 @@ def _element_metadata(
         "element_candidate_count": len(records),
         "element_selected_candidate_count": len(selected),
         "element_required_slot_candidates_restored": restored_required,
+        "element_ingestion_trace": element_ingestion_trace(pipeline, records),
     }
 
 

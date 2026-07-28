@@ -4,16 +4,15 @@ from typing import Any
 
 from ktem.docqa.evidence_text import extract_final_answer_text
 
+from .answer_metric_core import core_answer_metrics
 from .citation_metrics import citation_precision_score, citation_recall_score
 from .element_locator_metrics import element_locator_hit_score
 from .engine_context import extract_citations
+from .indexed_citations import indexed_inline_citations
 from .metrics import (
-    anls_score,
     cross_page_evidence_hit_score,
     element_hit_score,
-    exact_match_score,
     false_abstention_score,
-    formula_normalized_match_score,
     hard_negative_rejection_score,
     image_quote_hit_score,
     is_abstention_answer,
@@ -21,11 +20,8 @@ from .metrics import (
     markdown_table_renderable_score,
     modality_hit_score,
     multimodal_support_score,
-    numeric_tolerance_score,
     page_hit_score,
-    recall_score,
     span_recall_score,
-    token_f1_score,
 )
 from .page_alignment import evidence_aligned_page_hit_score
 from .semantic_answer import SemanticJudge, semantic_answer_metrics
@@ -85,7 +81,10 @@ def score_prediction(
     if expected_formats & _LATEX_FORMATS and latex_score is None:
         latex_score = 0.0
     false_abstention = false_abstention_score(predicted_answer, gold_answers)
-    if abstained and any(str(answer or "").strip() for answer in gold_answers):
+    if abstained and any(
+        str(answer or "").strip() and not is_abstention_answer(str(answer))
+        for answer in gold_answers
+    ):
         false_abstention = 1.0
 
     strict_page_hit = page_hit_score(
@@ -103,27 +102,19 @@ def score_prediction(
     if page_hit == 0.0:
         page_hit = equivalent_page_hit
 
-    metrics = {
-        "em": exact_match_score(predicted_answer, gold_answers),
-        "f1": token_f1_score(predicted_answer, gold_answers),
-        "anls": anls_score(predicted_answer, gold_answers),
-        "formula_match": formula_normalized_match_score(predicted_answer, gold_answers),
-        "numeric_match": numeric_tolerance_score(predicted_answer, gold_answers),
-        "page_hit": page_hit,
-        "strict_page_hit": strict_page_hit,
-        "equivalent_evidence_page_hit": equivalent_page_hit,
-        "citation_recall": recall_score(
-            prediction["predicted_sources"], prediction["gold_sources"]
-        ),
-        "abstained": float(abstained),
-        "false_abstention": false_abstention,
-        "markdown_table_renderable": markdown_table_score,
-        "latex_renderable": latex_score,
-        "rewrite_skipped": float(bool(claim_verification.get("rewrite_skipped"))),
-        "guardrail_expectation_match": _guardrail_expectation_match(
-            prediction, abstained
-        ),
-    }
+    metrics = core_answer_metrics(
+        prediction,
+        predicted_answer=predicted_answer,
+        gold_answers=gold_answers,
+        abstained=abstained,
+        false_abstention=false_abstention,
+        page_scores=(page_hit, strict_page_hit, equivalent_page_hit),
+        format_scores=(markdown_table_score, latex_score),
+        rewrite_skipped=bool(claim_verification.get("rewrite_skipped")),
+    )
+    metrics["guardrail_expectation_match"] = _guardrail_expectation_match(
+        prediction, abstained
+    )
     _add_modality_metrics(metrics, prediction)
     metrics.update(verification_metrics(prediction))
     _add_gold_evidence_metrics(metrics, prediction, predicted_answer)
@@ -225,9 +216,48 @@ def _prediction_abstained(
 ) -> bool:
     return (
         bool(claim_verification.get("abstained"))
+        or _structured_abstention(prediction)
         or _guardrail_abstained(prediction)
         or is_abstention_answer(predicted_answer)
     )
+
+
+def _structured_abstention(prediction: dict[str, Any]) -> bool:
+    route = (
+        str(prediction.get("effective_route") or prediction.get("route") or "")
+        .strip()
+        .lower()
+    )
+    if route == "abstain":
+        return True
+    metadata = dict(prediction.get("evidence_metadata") or {})
+    trace = metadata.get("answerability_contract_trace")
+    if isinstance(trace, dict) and is_abstention_answer(
+        str(trace.get("post_contract_answer") or "")
+    ):
+        return True
+    qasper = metadata.get("qasper_answerability")
+    if isinstance(qasper, dict) and str(qasper.get("action") or "").startswith(
+        "abstained_"
+    ):
+        return True
+    for value in (
+        prediction.get("verify_decision"),
+        prediction.get("retrieval_decision"),
+        metadata.get("verify_decision"),
+        metadata.get("retrieval_decision"),
+    ):
+        if not isinstance(value, dict):
+            continue
+        action = str(value.get("action") or "").strip().lower()
+        status = str(value.get("status") or "").strip().lower()
+        if action == "abstain" or status in {
+            "insufficient",
+            "insufficient_evidence",
+            "not_enough_evidence",
+        }:
+            return True
+    return False
 
 
 def _guardrail_expectation_match(
@@ -276,7 +306,7 @@ def _add_gold_evidence_metrics(
         return
     inline_citations = _inline_citations_for_scoring(prediction)
     metadata_citations = _metadata_citations_for_scoring(prediction)
-    predicted_citations = inline_citations or metadata_citations
+    emitted_citations = _emitted_citations_for_scoring(prediction)
     metrics["element_hit"] = element_hit_score(
         prediction.get("predicted_element_ids", []), gold_evidence
     )
@@ -296,13 +326,13 @@ def _add_gold_evidence_metrics(
         gold_evidence=gold_evidence,
     )
     metrics["citation_recall"] = citation_recall_score(
-        predicted_citations,
+        emitted_citations,
         gold_evidence,
         evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
         retrieved_hits=list(prediction.get("retrieved_hits") or []),
     )
     metrics["citation_precision"] = citation_precision_score(
-        predicted_citations,
+        emitted_citations,
         gold_evidence,
         evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
         retrieved_hits=list(prediction.get("retrieved_hits") or []),
@@ -321,9 +351,7 @@ def _add_gold_evidence_metrics(
         gold_evidence,
         prediction,
     )
-    _add_citation_locator_metrics(
-        metrics, prediction, gold_evidence, predicted_citations
-    )
+    _add_citation_locator_metrics(metrics, prediction, gold_evidence, emitted_citations)
     _add_citation_locator_metrics(
         metrics,
         prediction,
@@ -400,13 +428,52 @@ def _add_citation_group_metrics(
 
 
 def _inline_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
-    predicted_citations = list(prediction.get("predicted_citations") or [])
-    if predicted_citations:
-        return predicted_citations
-    structured_citations = _structured_citations_for_scoring(prediction)
-    if structured_citations:
-        return structured_citations
-    return extract_citations(str(prediction.get("predicted_answer") or ""))
+    answer = str(prediction.get("predicted_answer") or "")
+    citations = [
+        *extract_citations(answer),
+        *indexed_inline_citations(
+            answer,
+            list(prediction.get("retrieved_hits") or []),
+        ),
+    ]
+    return list(dict.fromkeys(citations))
+
+
+def _emitted_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
+    metadata = dict(prediction.get("evidence_metadata") or {})
+    bundle = prediction.get("evidence_bundle")
+    bundle_metadata = (
+        dict(bundle.get("metadata") or {}) if isinstance(bundle, dict) else {}
+    )
+    citations = [
+        *_structured_citations_for_scoring(prediction),
+        *_inline_citations_for_scoring(prediction),
+    ]
+    emitted_items = [
+        *(metadata.get("emitted_citation_evidence") or []),
+        *(bundle_metadata.get("emitted_citation_evidence") or []),
+    ]
+    for item in emitted_items:
+        if not isinstance(item, dict):
+            continue
+        refs = item.get("source_backrefs")
+        if isinstance(refs, str):
+            refs = [refs]
+        citations.extend(
+            str(value).strip() for value in refs or [] if str(value).strip()
+        )
+        source_id = str(
+            item.get("source_id")
+            or item.get("document_id")
+            or item.get("file_id")
+            or ""
+        ).strip()
+        page_label = str(item.get("page_label") or item.get("page") or "").strip()
+        if source_id and page_label:
+            citations.append(f"{source_id}#page:{page_label}")
+        elif source_id:
+            citations.append(f"{source_id}#source")
+    return list(dict.fromkeys(value for value in citations if value))
 
 
 def _metadata_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:

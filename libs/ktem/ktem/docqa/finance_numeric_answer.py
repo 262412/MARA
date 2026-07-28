@@ -6,6 +6,10 @@ from typing import Any
 
 from .evidence_text import evidence_text
 from .finance_calculation_adapter import finance_calculation_audit
+from .finance_fixed_asset_turnover import (
+    fixed_asset_turnover_answer_fields,
+    is_fixed_asset_turnover,
+)
 from .finance_numeric_values import amount_unit as _amount_unit
 from .finance_numeric_values import (
     asks_for_causal_explanation as _asks_for_causal_explanation,
@@ -137,6 +141,9 @@ def _finance_numeric_answer_from_text(
             denominator_labels=("average inventories", "inventories", "inventory"),
             formula="cost_of_sales / inventories",
         )
+    if is_fixed_asset_turnover(lowered):
+        fields = fixed_asset_turnover_answer_fields(lowered, text)
+        return FinanceNumericAnswer(**fields) if fields is not None else None
     margin_or_leverage = _margin_or_leverage_answer(lowered, text)
     if margin_or_leverage is not None:
         return margin_or_leverage
@@ -261,6 +268,11 @@ def _has_supported_formula_intent(question: str) -> bool:
             "free cash flow",
             "gross margin",
             "inventory turnover",
+            "fixed asset turnover",
+            "net fixed asset turnover",
+            "ppe turnover",
+            "pp&e turnover",
+            "property plant and equipment turnover",
             "operating margin",
             "percent change",
             "percentage change",

@@ -1,6 +1,9 @@
 STRUCTURED_FACT_FIELDS = (
     "cell_id",
     "table_id",
+    "table_instance_id",
+    "table_group_id",
+    "block_id",
     "row_index",
     "column_index",
     "row_label",

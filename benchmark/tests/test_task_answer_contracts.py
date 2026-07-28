@@ -35,6 +35,14 @@ def test_qasper_answerability_contract_runs_after_engine_projection():
 
     assert prediction["predicted_answer"] == "yes"
     assert prediction["evidence_metadata"]["qasper_answerability"]["status"] == "ok"
+    trace = prediction["evidence_metadata"]["answerability_contract_trace"]
+    assert trace["pre_contract_answer"] == "unanswerable"
+    assert trace["post_contract_answer"] == "yes"
+    assert trace["rewrite_applied"] is True
+    assert trace["rewrite_type"] == "unanswerable_to_polarity"
+    assert trace["rewrite_reason"]
+    assert trace["pre_contract_verification"] == {}
+    assert trace["post_contract_verification"]["answer"] == "yes"
     assert prediction["task_answer_contract"] == {
         "contract_id": "qasper_answerability.v12",
         "status": "applied",

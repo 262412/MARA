@@ -206,8 +206,11 @@ def add_mara_summary_fields(
 def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "answer_quality_contract": SEMANTIC_ANSWER_CONTRACT,
+        "token_f1_contract": "token_f1_v2",
         "avg_em": _avg_metric(predictions, "em"),
         "avg_f1": _avg_metric(predictions, "f1"),
+        "avg_token_f1_v2": _avg_metric(predictions, "token_f1_v2"),
+        "avg_legacy_token_f1": _avg_metric(predictions, "legacy_token_f1"),
         "avg_semantic_answer_precision": _avg_metric(
             predictions, "semantic_answer_precision"
         ),

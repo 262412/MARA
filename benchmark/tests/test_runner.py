@@ -561,7 +561,7 @@ def test_run_benchmark_reports_named_research_adapters_and_backends(
         "response_relevancy",
     } <= set(adapter_metrics["ragas"])
     assert adapter_metrics["alce"]["correctness"] == 1.0
-    assert adapter_metrics["alce"]["citation_recall"] == 1.0
+    assert adapter_metrics["alce"]["citation_recall"] == 0.0
     assert adapter_metrics["mmdocrag"]["image_quote_hit"] == 1.0
     assert adapter_metrics["ragtruth"]["unsupported_claim_rate"] == 0.0
     assert adapter_metrics["ragas"]["faithfulness"] == 1.0

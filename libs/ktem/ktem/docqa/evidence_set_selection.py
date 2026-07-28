@@ -241,6 +241,23 @@ def _selection_trace(
         "mixed_candidate_structure_metadata_coverage": mixed_structure_coverage,
         "structure_coverage_scope": structure_coverage_scope,
         "required_slot_candidates_restored": required_slot_candidates_restored,
+        "required_slot_bindings": [
+            {
+                "slot_id": slot.slot_id,
+                "status": slot.status,
+                "selected_evidence_ids": list(slot.evidence_ids),
+                "best_selected_slot_score": max(
+                    (
+                        _slot_score(bound, slot, item)
+                        for item in selected
+                        if identity_of(item).key in set(slot.evidence_ids)
+                    ),
+                    default=0.0,
+                ),
+            }
+            for slot in bound.evidence_slots
+            if slot.required_for_retrieval
+        ],
         "relevance_score_contract": SELECTION_SCORE_CONTRACT,
     }
 

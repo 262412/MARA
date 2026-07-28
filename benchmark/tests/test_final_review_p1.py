@@ -227,10 +227,21 @@ def test_contract_invariant_summary_measures_runtime_artifact_contracts():
     }
     prediction = {
         "predicted_answer": "10",
+        "gold_answers": ["10"],
+        "gold_evidence": [
+            {
+                "document_id": "paper",
+                "page_label": "5",
+                "span": "Revenue 2023 10",
+            }
+        ],
         "evidence_metadata": {
+            "canonical_candidate_evidence": [item],
             "candidate_evidence": [item],
             "reranker_input_evidence": [item],
             "reranked_evidence": [item],
+            "selected_evidence": [item],
+            "generation_context_evidence": [item],
             "emitted_citation_evidence": [item],
             "query_plan": {
                 "evidence_slots": [
@@ -245,7 +256,8 @@ def test_contract_invariant_summary_measures_runtime_artifact_contracts():
         },
     }
 
-    assert contract_invariant_summary([prediction]) == {
+    summary = contract_invariant_summary([prediction])
+    assert {
         "duplicate_identity_count": 0.0,
         "conflicting_identity_count": 0.0,
         "canonical_id_mismatch_count": 0.0,
@@ -262,4 +274,8 @@ def test_contract_invariant_summary_measures_runtime_artifact_contracts():
         "source_page_cross_join_count": 0.0,
         "calculation_render_mismatch_count": 0.0,
         "qasper_stale_verifier_state_count": 0.0,
-    }
+    }.items() <= summary.items()
+    assert summary["required_candidate_nonempty_rate"] == 1.0
+    assert summary["citation_emission_coverage"] == 1.0
+    assert summary["contract_gates"]["citation_emission"]["status"] == "passed"
+    assert summary["contract_gates"]["reranker_lineage"]["status"] == "not_applicable"

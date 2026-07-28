@@ -10,7 +10,7 @@ from ktem.docqa.evidence_locators import normalized_source_page_locators
 from ktem.docqa.query_plan_schema import plan_from_payload
 from ktem.docqa.query_planning import score_evidence_for_slot
 
-from .evidence_identity_metrics import reranker_lineage
+from .contract_gate_metrics import contract_gate_summary, prediction_gate_metrics
 from .metrics import is_abstention_answer, numeric_tolerance_score, safe_mean
 
 _ATOMIC_ROUNDTRIP_FIELDS = (
@@ -18,6 +18,11 @@ _ATOMIC_ROUNDTRIP_FIELDS = (
     "span_id",
     "evidence_level",
     "table_id",
+    "table_instance_id",
+    "table_group_id",
+    "block_id",
+    "physical_cell_identity",
+    "semantic_cell_key",
     "row_index",
     "column_index",
     "row_label",
@@ -58,9 +63,9 @@ _REPRESENTATION_ROUNDTRIP_FIELDS = (
 
 def contract_invariant_summary(
     predictions: list[dict[str, Any]],
-) -> dict[str, float | None]:
+) -> dict[str, Any]:
     metrics = [_prediction_contract_metrics(prediction) for prediction in predictions]
-    return {
+    summary: dict[str, Any] = {
         "duplicate_identity_count": _sum_metric(metrics, "duplicate_identity_count"),
         "conflicting_identity_count": _sum_metric(
             metrics,
@@ -112,6 +117,8 @@ def contract_invariant_summary(
             "qasper_stale_verifier_state_count",
         ),
     }
+    summary.update(contract_gate_summary(metrics))
+    return summary
 
 
 def _prediction_contract_metrics(
@@ -124,19 +131,25 @@ def _prediction_contract_metrics(
     )
     reranker_input = _records(metadata.get("reranker_input_evidence"))
     reranked = _records(metadata.get("reranked_evidence"))
-    cited = _records(
-        metadata.get("emitted_citation_evidence") or metadata.get("cited_evidence")
+    cited = _records(metadata.get("emitted_citation_evidence"))
+    selected = _records(metadata.get("selected_evidence"))
+    generation_context = _records(metadata.get("generation_context_evidence"))
+    identity_metrics = _identity_contract_metrics(candidates)
+    ingestion_trace = metadata.get("element_ingestion_trace")
+    ingestion_conflicts = (
+        int(ingestion_trace.get("identity_conflict_count") or 0)
+        if isinstance(ingestion_trace, dict)
+        else 0
     )
     return {
-        **_identity_contract_metrics(candidates),
+        **identity_metrics,
+        "identity_collision_count": float(
+            identity_metrics["identity_collision_count"] + ingestion_conflicts
+        ),
+        "element_ingestion_identity_conflict_count": float(ingestion_conflicts),
         **_roundtrip_metrics(candidates),
         "citation_provenance_violation_count": float(
             _citation_provenance_violations(candidates, cited)
-        ),
-        "reranker_lineage_violation_count": float(
-            reranker_lineage(reranker_input, reranked)[1]
-            if reranker_input and reranked
-            else 0
         ),
         "missing_execution_slot_answer_count": float(
             _answered_with_missing_execution_slot(prediction, metadata)
@@ -152,6 +165,15 @@ def _prediction_contract_metrics(
         ),
         "qasper_stale_verifier_state_count": float(
             _qasper_stale_verifier_state(prediction, metadata)
+        ),
+        **prediction_gate_metrics(
+            prediction,
+            metadata,
+            candidates=candidates,
+            reranker_input=reranker_input,
+            reranked=reranked,
+            selected=selected,
+            generation_context=generation_context,
         ),
     }
 

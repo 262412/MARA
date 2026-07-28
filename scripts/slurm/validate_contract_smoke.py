@@ -10,6 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from benchmark.answerability_trace import normalized_answerability_trace  # noqa: E402
 from benchmark.contract_invariant_metrics import (  # noqa: E402
     contract_invariant_summary,
 )
@@ -62,6 +63,10 @@ HARD_GATES = {
     "source_page_cross_join_count": ("eq", 0.0),
     "calculation_render_mismatch_count": ("eq", 0.0),
     "qasper_stale_verifier_state_count": ("eq", 0.0),
+    "required_candidate_nonempty_rate": ("eq", 1.0),
+    "required_selected_nonempty_rate": ("eq", 1.0),
+    "required_generation_context_nonempty_rate": ("eq", 1.0),
+    "citation_emission_coverage": ("eq", 1.0),
 }
 
 
@@ -108,9 +113,20 @@ def _stage_audit(
         and str(slot.get("status") or "missing") != "filled"
         for slot in slots
     )
+    answerable = any(
+        str(answer or "").strip().lower()
+        not in {
+            "",
+            "unanswerable",
+            "insufficient evidence",
+        }
+        for answer in prediction.get("gold_answers") or []
+    )
     for stage in STAGES:
         records = _records(metadata.get(stage))
-        if stage in metadata:
+        if stage in CORE_STAGES and answerable and stage in metadata and not records:
+            status = "empty_required"
+        elif stage in metadata:
             status = "recorded"
         elif stage == "reranked_evidence" and not ranking_trace.get(
             "backend_execution"
@@ -123,7 +139,7 @@ def _stage_audit(
         else:
             status = "missing"
         audit[stage] = {"status": status, "count": len(records)}
-        if stage in CORE_STAGES and status == "missing":
+        if stage in CORE_STAGES and status in {"missing", "empty_required"}:
             missing.append(stage)
         if (
             stage == "reranked_evidence"
@@ -163,32 +179,39 @@ def _hard_gate_results(metrics: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _observed_qasper_answer_rewrite(prediction: dict[str, Any]) -> bool:
-    pre = prediction.get("pre_contract_verification")
-    post = prediction.get("post_contract_verification")
-    metadata = dict(prediction.get("evidence_metadata") or {})
-    trace = dict(metadata.get("qasper_answerability") or {})
-    primary_answer = " ".join(
-        str(trace.get("primary_answer") or "").strip().lower().split()
+    trace = normalized_answerability_trace(prediction)
+    pre_answer = " ".join(
+        str(trace.get("pre_contract_answer") or "").strip().lower().split()
     )
-    final_answer = " ".join(
-        str(
-            prediction.get("answer_for_scoring")
-            or prediction.get("predicted_answer")
-            or ""
-        )
-        .strip()
-        .lower()
-        .split()
+    post_answer = " ".join(
+        str(trace.get("post_contract_answer") or "").strip().lower().split()
     )
     return bool(
-        isinstance(pre, dict)
-        and isinstance(post, dict)
-        and primary_answer
-        and final_answer
-        and primary_answer != final_answer
-        and trace.get("citation_state") == "cleared_for_rebind"
-        and metadata.get("answer_dependent_state") == "post_contract_verified"
+        trace.get("rewrite_applied") is True
+        and pre_answer
+        and post_answer
+        and pre_answer != post_answer
     )
+
+
+def _all_stage_audits(
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    audits: list[dict[str, Any]] = []
+    violations: list[dict[str, Any]] = []
+    for prediction in predictions:
+        audit, missing = _stage_audit(prediction, suite_kind=suite_kind)
+        audits.append(audit)
+        if missing:
+            violations.append(
+                {
+                    "example_id": audit["example_id"],
+                    "missing_stages": sorted(set(missing)),
+                }
+            )
+    return audits, violations
 
 
 def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
@@ -215,27 +238,26 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
     ):
         behavior_violations.append("answerability_rewrite_not_observed")
 
-    stage_audits: list[dict[str, Any]] = []
-    stage_violations: list[dict[str, Any]] = []
-    for prediction in predictions:
-        audit, missing = _stage_audit(prediction, suite_kind=suite_kind)
-        stage_audits.append(audit)
-        if missing:
-            stage_violations.append(
-                {
-                    "example_id": audit["example_id"],
-                    "missing_stages": sorted(set(missing)),
-                }
-            )
+    stage_audits, stage_violations = _all_stage_audits(
+        predictions, suite_kind=suite_kind
+    )
 
     metrics = contract_invariant_summary(predictions)
     hard_gates = _hard_gate_results(metrics)
     failed_gates = [
         metric for metric, result in hard_gates.items() if not result["passed"]
     ]
+    contract_gate_failures = [
+        name
+        for name, gate in dict(metrics.get("contract_gates") or {}).items()
+        if isinstance(gate, dict) and gate.get("status") == "failed"
+    ]
     status = (
         "passed"
-        if not stage_violations and not behavior_violations and not failed_gates
+        if not stage_violations
+        and not behavior_violations
+        and not failed_gates
+        and not contract_gate_failures
         else "failed"
     )
     audit = {
@@ -249,6 +271,8 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
         "behavior_violations": behavior_violations,
         "hard_gates": hard_gates,
         "failed_gates": failed_gates,
+        "contract_gates": metrics.get("contract_gates"),
+        "contract_gate_failures": contract_gate_failures,
         "status": status,
     }
     (run_dir / "contract_smoke_audit.json").write_text(
@@ -263,6 +287,8 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
             details.append("behavior_violations=" + ",".join(behavior_violations))
         if failed_gates:
             details.append("failed_gates=" + ",".join(failed_gates))
+        if contract_gate_failures:
+            details.append("contract_gate_failures=" + ",".join(contract_gate_failures))
         raise ValueError("contract smoke failed: " + " ".join(details))
     return audit
 

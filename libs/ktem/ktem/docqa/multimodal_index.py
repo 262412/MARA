@@ -18,7 +18,11 @@ from .element_parser import (
     parse_financial_numeric_span_records,
 )
 from .element_record_contract import element_record_from_mapping
-from .evidence_record_identity import unique_evidence_records
+from .evidence_record_identity import (
+    EvidenceRecordIngestionResult,
+    isolate_evidence_records,
+    unique_evidence_records,
+)
 
 logger = logging.getLogger(__name__)
 ELEMENT_INDEX_DOC_TYPE = "mara_element_index"
@@ -34,6 +38,7 @@ ELEMENT_INDEX_METADATA_REQUIRED_KEYS = [
     "element_index_schema_version",
     "element_index_record",
 ]
+ELEMENT_INDEX_METADATA_OPTIONAL_KEYS = ["element_ingestion_trace"]
 ELEMENT_INDEX_RECORD_REQUIRED_KEYS = [
     "evidence_id",
     "file_id",
@@ -53,6 +58,7 @@ def element_index_persistence_contract() -> dict[str, Any]:
         "relation_type": ELEMENT_INDEX_RELATION_TYPE,
         "schema_version": ELEMENT_INDEX_SCHEMA_VERSION,
         "metadata_required_keys": list(ELEMENT_INDEX_METADATA_REQUIRED_KEYS),
+        "metadata_optional_keys": list(ELEMENT_INDEX_METADATA_OPTIONAL_KEYS),
         "record_required_keys": list(ELEMENT_INDEX_RECORD_REQUIRED_KEYS),
     }
 
@@ -151,6 +157,12 @@ def element_records_from_index_documents(
             continue
         record = _persisted_element_record(metadata.get("element_index_record"))
         if record is not None:
+            trace = metadata.get("element_ingestion_trace")
+            if isinstance(trace, dict):
+                record = dict(record)
+                record_metadata = dict(record.get("metadata") or {})
+                record_metadata["element_ingestion_trace"] = dict(trace)
+                record["metadata"] = record_metadata
             records.append(record)
     return unique_evidence_records(records)
 
@@ -172,7 +184,9 @@ def element_index_documents_from_records(
 ) -> list[Document]:
     source_id = str(file_id or "").strip()
     documents = []
-    for record in _unique_element_records(records):
+    ingestion = _isolated_element_records(records)
+    trace = ingestion.as_trace()
+    for record in ingestion.accepted_records:
         metadata = {
             "type": ELEMENT_INDEX_DOC_TYPE,
             "source_id": source_id,
@@ -182,6 +196,7 @@ def element_index_documents_from_records(
             "element_index_relation_type": ELEMENT_INDEX_RELATION_TYPE,
             "element_index_schema_version": ELEMENT_INDEX_SCHEMA_VERSION,
             "element_index_record": record,
+            "element_ingestion_trace": trace,
         }
         documents.append(
             Document(
@@ -319,7 +334,13 @@ def _persisted_element_record(value: Any) -> dict[str, Any] | None:
 
 
 def _unique_element_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    return unique_evidence_records(
+    return list(_isolated_element_records(records).accepted_records)
+
+
+def _isolated_element_records(
+    records: Iterable[dict[str, Any]],
+) -> EvidenceRecordIngestionResult:
+    return isolate_evidence_records(
         normalized
         for record in records
         if (normalized := _persisted_element_record(record)) is not None

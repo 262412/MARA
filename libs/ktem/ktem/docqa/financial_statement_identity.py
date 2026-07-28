@@ -39,6 +39,8 @@ def required_financial_identity(metric: str) -> tuple[str, str]:
         return "balance_sheet", "consolidated"
     if normalized == "cost of goods sold":
         return "income_statement", "consolidated"
+    if normalized == "net property plant and equipment":
+        return "balance_sheet", "consolidated"
     if normalized in {"capital expenditure", "operating cash flow"}:
         return "cash_flow_statement", "consolidated"
     return "", ""

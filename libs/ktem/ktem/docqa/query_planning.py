@@ -11,6 +11,7 @@ from .finance_evidence_dimensions import evidence_scale, requested_scale
 from .finance_query_planning import (
     FINANCE_METRIC_ALIASES,
     finance_fact_specs,
+    finance_formula_spec,
     finance_metric_evidence_matches,
     finance_operand_specs,
     is_finance_segment_comparison,
@@ -103,6 +104,7 @@ def _build_heuristic_query_plan(
     normalized_type = normalized_answer_type(
         answer_type,
         tokens,
+        question=text,
         numeric_terms=_NUMERIC_TERMS,
         causal_intent=causal_intent,
     )
@@ -157,6 +159,7 @@ def _build_heuristic_query_plan(
         segment_comparison=segment_comparison,
         capabilities=capabilities,
     )
+    _add_finance_formula_constraint(constraints, text, periods, finance_domain)
     _add_distinct_slot_constraint(constraints, slots)
     if segment_comparison:
         slots = _segment_comparison_slots(slots)
@@ -169,6 +172,17 @@ def _build_heuristic_query_plan(
         constraints=constraints,
     )
     return with_plan_id(plan, text)
+
+
+def _add_finance_formula_constraint(
+    constraints: dict[str, Any],
+    question: str,
+    periods: list[str],
+    finance_domain: bool,
+) -> None:
+    formula_spec = finance_formula_spec(question, periods) if finance_domain else None
+    if formula_spec is not None:
+        constraints["finance_formula"] = formula_spec
 
 
 def _add_distinct_slot_constraint(

@@ -39,6 +39,7 @@ def apply_task_answer_contract(
     candidate = str(
         prediction.get("answer_for_scoring") or prediction.get("predicted_answer") or ""
     )
+    pre_contract_verification = _verification_snapshot(prediction, answer=candidate)
     result = verify_qasper_answerability(
         llm_factory(),
         question=str(prediction.get("question") or ""),
@@ -49,19 +50,29 @@ def apply_task_answer_contract(
     prediction["predicted_answer"] = result.answer
     metadata["qasper_answerability"] = result.trace
     if answer_changed:
-        prediction["pre_contract_verification"] = {
-            key: prediction.get(key)
-            for key in (
-                "verify_decision",
-                "claim_verification",
-                "guardrail_decision",
-                "verifier_observability",
-            )
-            if key in prediction
-        }
+        prediction["pre_contract_verification"] = pre_contract_verification
         _clear_stale_answer_citations(prediction, metadata)
         _run_post_contract_verification(prediction, metadata, result.answer)
         metadata["qasper_answerability"]["citation_state"] = "cleared_for_rebind"
+    post_contract_verification = (
+        dict(prediction.get("post_contract_verification") or {})
+        if answer_changed
+        else _verification_snapshot(prediction, answer=result.answer)
+    )
+    metadata["answerability_contract_trace"] = {
+        "pre_contract_answer": candidate,
+        "post_contract_answer": result.answer,
+        "rewrite_applied": answer_changed,
+        "rewrite_type": _rewrite_type(candidate, result.answer),
+        "rewrite_reason": str(
+            result.trace.get("reason")
+            or result.trace.get("action")
+            or result.trace.get("verdict")
+            or "answerability_contract_decision"
+        ),
+        "pre_contract_verification": pre_contract_verification,
+        "post_contract_verification": post_contract_verification,
+    }
     prediction["task_answer_contract"] = {
         "contract_id": QASPER_ANSWERABILITY_CONTRACT,
         "status": "applied",
@@ -114,7 +125,39 @@ def _clear_stale_answer_citations(
             "verifier_observability",
         ):
             bundle_metadata.pop(key, None)
-        bundle_metadata["answer_dependent_state"] = "invalidated_for_reverification"
+            bundle_metadata["answer_dependent_state"] = "invalidated_for_reverification"
+
+
+def _verification_snapshot(
+    prediction: dict[str, Any],
+    *,
+    answer: str,
+) -> dict[str, Any]:
+    snapshot = {
+        key: prediction.get(key)
+        for key in (
+            "verify_decision",
+            "claim_verification",
+            "guardrail_decision",
+            "verifier_observability",
+        )
+        if key in prediction
+    }
+    if snapshot:
+        snapshot["answer"] = answer
+    return snapshot
+
+
+def _rewrite_type(before: str, after: str) -> str:
+    if _normalized_answer(before) == _normalized_answer(after):
+        return "none"
+    before_abstained = _normalized_answer(before) == "unanswerable"
+    after_abstained = _normalized_answer(after) == "unanswerable"
+    if before_abstained and not after_abstained:
+        return "unanswerable_to_polarity"
+    if not before_abstained and after_abstained:
+        return "polarity_to_unanswerable"
+    return "answer_rewrite"
 
 
 def _run_post_contract_verification(

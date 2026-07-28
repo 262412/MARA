@@ -46,7 +46,7 @@ def citation_precision_score(
         return None
     predicted = {str(item).strip() for item in predicted_citations if str(item).strip()}
     if not predicted:
-        return 0.0
+        return None
     matches = sum(
         1
         for citation in predicted

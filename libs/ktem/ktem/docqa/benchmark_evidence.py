@@ -2,9 +2,48 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, TypedDict
 
 from .evidence_identity import EvidenceIdentity, identity_of
+
+
+class _VisualProjection(TypedDict):
+    figure_label: str
+    table_label: str
+    bbox: Any
+    caption: str
+    ocr_text: str
+    vlm_text: str
+    representations: tuple[dict[str, Any], ...]
+
+
+class _AtomicProjection(TypedDict):
+    cell_id: str
+    span_id: str
+    parent_element_id: str
+    neighbor_element_ids: tuple[str, ...]
+    section_id: str
+    table_id: str
+    table_instance_id: str
+    table_group_id: str
+    block_id: str
+    physical_cell_identity: dict[str, Any]
+    semantic_cell_key: dict[str, Any]
+    row_index: int | None
+    column_index: int | None
+    row_label: str
+    column_label: str
+
+
+class _FinancialProjection(TypedDict):
+    period: str
+    period_kind: str
+    value: str
+    unit: str
+    scale: str
+    currency: str
+    statement_kind: str
+    financial_scope: str
 
 
 @dataclass(frozen=True)
@@ -32,6 +71,11 @@ class BenchmarkEvidenceRecord:
     neighbor_element_ids: tuple[str, ...] = ()
     section_id: str = ""
     table_id: str = ""
+    table_instance_id: str = ""
+    table_group_id: str = ""
+    block_id: str = ""
+    physical_cell_identity: dict[str, Any] = field(default_factory=dict)
+    semantic_cell_key: dict[str, Any] = field(default_factory=dict)
     row_index: int | None = None
     column_index: int | None = None
     row_label: str = ""
@@ -115,28 +159,8 @@ def benchmark_evidence_record(item: dict[str, Any]) -> BenchmarkEvidenceRecord:
         modality=_first_text(item, metadata, "modality", "element_type", "type"),
         element_id=_first_text(item, metadata, "element_id", "element"),
         **_visual_projection(item, metadata),
-        cell_id=_first_text(item, metadata, "cell_id"),
-        span_id=_first_text(item, metadata, "span_id"),
-        parent_element_id=_first_text(item, metadata, "parent_element_id"),
-        neighbor_element_ids=_first_tuple(
-            item,
-            metadata,
-            "neighbor_element_ids",
-        ),
-        section_id=_first_text(item, metadata, "section_id"),
-        table_id=_first_text(item, metadata, "table_id"),
-        row_index=_optional_int(item, metadata, "row_index"),
-        column_index=_optional_int(item, metadata, "column_index"),
-        row_label=_first_text(item, metadata, "row_label"),
-        column_label=_first_text(item, metadata, "column_label"),
-        period=_first_text(item, metadata, "period"),
-        period_kind=_first_text(item, metadata, "period_kind"),
-        value=_first_text(item, metadata, "value"),
-        unit=_first_text(item, metadata, "unit"),
-        scale=_first_text(item, metadata, "scale"),
-        currency=_first_text(item, metadata, "currency"),
-        statement_kind=_first_text(item, metadata, "statement_kind"),
-        financial_scope=_first_text(item, metadata, "financial_scope"),
+        **_atomic_projection(item, metadata),
+        **_financial_projection(item, metadata),
         continuation_id=_first_text(item, metadata, "continuation_id"),
         chunk_start=_optional_int(item, metadata, "chunk_start"),
         chunk_end=_optional_int(item, metadata, "chunk_end"),
@@ -159,10 +183,49 @@ def benchmark_evidence_record(item: dict[str, Any]) -> BenchmarkEvidenceRecord:
     )
 
 
+def _atomic_projection(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+) -> _AtomicProjection:
+    return {
+        "cell_id": _first_text(item, metadata, "cell_id"),
+        "span_id": _first_text(item, metadata, "span_id"),
+        "parent_element_id": _first_text(item, metadata, "parent_element_id"),
+        "neighbor_element_ids": _first_tuple(item, metadata, "neighbor_element_ids"),
+        "section_id": _first_text(item, metadata, "section_id"),
+        "table_id": _first_text(item, metadata, "table_id"),
+        "table_instance_id": _first_text(item, metadata, "table_instance_id"),
+        "table_group_id": _first_text(item, metadata, "table_group_id"),
+        "block_id": _first_text(item, metadata, "block_id"),
+        "physical_cell_identity": _first_dict(item, metadata, "physical_cell_identity"),
+        "semantic_cell_key": _first_dict(item, metadata, "semantic_cell_key"),
+        "row_index": _optional_int(item, metadata, "row_index"),
+        "column_index": _optional_int(item, metadata, "column_index"),
+        "row_label": _first_text(item, metadata, "row_label"),
+        "column_label": _first_text(item, metadata, "column_label"),
+    }
+
+
+def _financial_projection(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+) -> _FinancialProjection:
+    return {
+        "period": _first_text(item, metadata, "period"),
+        "period_kind": _first_text(item, metadata, "period_kind"),
+        "value": _first_text(item, metadata, "value"),
+        "unit": _first_text(item, metadata, "unit"),
+        "scale": _first_text(item, metadata, "scale"),
+        "currency": _first_text(item, metadata, "currency"),
+        "statement_kind": _first_text(item, metadata, "statement_kind"),
+        "financial_scope": _first_text(item, metadata, "financial_scope"),
+    }
+
+
 def _visual_projection(
     item: dict[str, Any],
     metadata: dict[str, Any],
-) -> dict[str, Any]:
+) -> _VisualProjection:
     return {
         "figure_label": _first_text(item, metadata, "figure_label", "figure_id"),
         "table_label": _first_text(item, metadata, "table_label"),
@@ -253,6 +316,17 @@ def _dict_tuple(
     return tuple(dict(entry) for entry in value if isinstance(entry, dict))
 
 
+def _first_dict(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    key: str,
+) -> dict[str, Any]:
+    value = item.get(key)
+    if not isinstance(value, dict):
+        value = metadata.get(key)
+    return dict(value) if isinstance(value, dict) else {}
+
+
 def _source_backrefs(
     item: dict[str, Any],
     metadata: dict[str, Any],
@@ -269,6 +343,7 @@ def _source_backrefs(
 
 _PROJECTED_METADATA_KEYS = {
     "bbox",
+    "block_id",
     "canonical_id",
     "caption",
     "cell_id",
@@ -307,6 +382,7 @@ _PROJECTED_METADATA_KEYS = {
     "parser_page_index",
     "period",
     "period_kind",
+    "physical_cell_identity",
     "representations",
     "retrieval_lineage",
     "row_index",
@@ -321,7 +397,10 @@ _PROJECTED_METADATA_KEYS = {
     "source_name",
     "span_id",
     "statement_kind",
+    "semantic_cell_key",
     "table_id",
+    "table_group_id",
+    "table_instance_id",
     "table_title",
     "text",
     "type",

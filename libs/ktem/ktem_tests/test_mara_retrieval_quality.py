@@ -6,6 +6,12 @@ from ktem.reasoning.mara import (
     _collect_text_rag_generation,
     _message_with_answer_format_requirements,
 )
+from ktem.reasoning.mara_answer_type_contract import (
+    answer_type_consistency as _answer_type_consistency,
+)
+from ktem.reasoning.mara_answer_type_contract import (
+    message_with_answer_type_contract as _message_with_answer_type_contract,
+)
 from ktem.reasoning.mara_retrieval_query import retrieval_query
 from ktem.reasoning.simple import FullQAPipeline
 
@@ -369,6 +375,31 @@ def test_mara_answer_format_requirements_skip_benchmark_prompt_contract():
     )
 
     assert _message_with_answer_format_requirements(prompt) == prompt
+
+
+def test_mara_generation_prompt_includes_query_plan_answer_type():
+    request = SimpleNamespace(
+        query_plan=SimpleNamespace(answer_type="free_text"),
+    )
+
+    prompt = _message_with_answer_type_contract(
+        "What background knowledge do the authors leverage?",
+        request,
+    )
+
+    assert "Required answer type: free_text" in prompt
+    assert "Do not use a numeric or formula template" in prompt
+
+
+def test_mara_generation_answer_type_check_rejects_formula_only_free_text():
+    assert _answer_type_consistency("free_text", "$$ x / y $$") == (
+        False,
+        "formula_only_answer",
+    )
+    assert _answer_type_consistency("free_text", "They leverage labeled features.") == (
+        True,
+        "free_text",
+    )
 
 
 def test_mara_text_generation_returns_final_answer_without_rendered_thought(

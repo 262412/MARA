@@ -38,6 +38,7 @@ def test_element_index_persistence_contract_names_docstore_shape():
             "element_index_schema_version",
             "element_index_record",
         ],
+        "metadata_optional_keys": ["element_ingestion_trace"],
         "record_required_keys": [
             "evidence_id",
             "file_id",
@@ -56,7 +57,10 @@ def test_element_index_document_metadata_satisfies_persistence_contract():
     [doc] = element_index_documents_from_records("file-1", [_element_record()])
     contract = element_index_persistence_contract()
 
-    assert list(doc.metadata) == contract["metadata_required_keys"]
+    assert set(contract["metadata_required_keys"]).issubset(doc.metadata)
+    assert set(doc.metadata) <= set(
+        contract["metadata_required_keys"] + contract["metadata_optional_keys"]
+    )
     assert doc.metadata["type"] == contract["doc_type"]
     assert doc.metadata["element_index_relation_type"] == contract["relation_type"]
     assert doc.metadata["element_index_schema_version"] == contract["schema_version"]

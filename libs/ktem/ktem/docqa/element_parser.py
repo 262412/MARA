@@ -24,7 +24,12 @@ class ElementIndexRecord:
     modality: str
     evidence_level: str = "element"
     table_id: str = ""
+    table_instance_id: str = ""
+    table_group_id: str = ""
+    block_id: str = ""
     cell_id: str = ""
+    physical_cell_identity: dict[str, Any] | None = None
+    semantic_cell_key: dict[str, str] | None = None
     parent_element_id: str = ""
     row_index: int | None = None
     column_index: int | None = None
@@ -54,7 +59,12 @@ class ElementIndexRecord:
             "modality": self.modality,
             "evidence_level": self.evidence_level,
             "table_id": self.table_id,
+            "table_instance_id": self.table_instance_id,
+            "table_group_id": self.table_group_id,
+            "block_id": self.block_id,
             "cell_id": self.cell_id,
+            "physical_cell_identity": self.physical_cell_identity,
+            "semantic_cell_key": self.semantic_cell_key,
             "parent_element_id": self.parent_element_id,
             "row_index": self.row_index,
             "column_index": self.column_index,
@@ -76,6 +86,11 @@ class ElementIndexRecord:
         }
         for key in (
             "cell_id",
+            "physical_cell_identity",
+            "semantic_cell_key",
+            "table_instance_id",
+            "table_group_id",
+            "block_id",
             "parent_element_id",
             "row_index",
             "column_index",
@@ -151,6 +166,7 @@ def parse_element_index_records(
                 _element_record(
                     doc_id=(doc_id if len(blocks) == 1 else f"{doc_id}-block-{index}"),
                     parser_source_doc_id=doc_id,
+                    parser_block_id=f"block-{index}",
                     file_id=file_id,
                     file_name=file_name,
                     page_label=page_label,
@@ -251,6 +267,7 @@ def _element_record(
     fallback_statement_kind: str = "",
     fallback_financial_scope: str = "",
     parser_source_doc_id: str = "",
+    parser_block_id: str = "",
 ) -> dict[str, Any]:
     element_metadata = metadata.get("element_metadata")
     parser_metadata = (
@@ -272,6 +289,20 @@ def _element_record(
         if explicit_element_id and not parser_source_doc_id
         else _element_id(modality, doc_id, text)
     )
+    table_instance_id = str(
+        metadata.get("table_instance_id") or element_id if modality == "table" else ""
+    ).strip()
+    table_group_id = str(
+        metadata.get("table_group_id")
+        or metadata.get("continuation_id")
+        or (parser_source_doc_id if modality == "table" else "")
+        or table_instance_id
+    ).strip()
+    block_id = str(
+        metadata.get("block_id")
+        or parser_block_id
+        or (doc_id if modality == "table" else "")
+    ).strip()
     record = ElementIndexRecord(
         evidence_id=f"element:{file_id}:{page_label}:{element_id}",
         file_id=file_id,
@@ -281,6 +312,9 @@ def _element_record(
         modality=modality,
         evidence_level="element",
         table_id=element_id if modality == "table" else "",
+        table_instance_id=table_instance_id,
+        table_group_id=table_group_id,
+        block_id=block_id,
         period_kind=_period_kind(text),
         statement_kind=str(parser_metadata.get("statement_kind") or ""),
         financial_scope=str(parser_metadata.get("financial_scope") or ""),
@@ -314,7 +348,12 @@ def _with_financial_cells(record: dict[str, Any]) -> list[dict[str, Any]]:
                 modality="table",
                 evidence_level="cell",
                 table_id=cell.table_id,
+                table_instance_id=cell.table_instance_id,
+                table_group_id=cell.table_group_id,
+                block_id=cell.block_id,
                 cell_id=cell.cell_id,
+                physical_cell_identity=cell.physical_identity.as_dict(),
+                semantic_cell_key=cell.semantic_key.as_dict(),
                 parent_element_id=cell.table_id,
                 row_index=cell.row_index,
                 column_index=cell.column_index,

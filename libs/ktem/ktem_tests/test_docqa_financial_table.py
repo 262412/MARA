@@ -41,7 +41,9 @@ def test_financial_table_parser_emits_metric_period_cell_identity():
     assert current_assets.column_label == "2021"
     assert current_assets.period == "2021"
     assert current_assets.scale == "million"
-    assert current_assets.cell_id.endswith("#row:current-assets#column:2021")
+    assert current_assets.cell_id.endswith("#row:1#column:1")
+    assert current_assets.physical_identity.row_index == 1
+    assert current_assets.semantic_key.metric == "current_assets"
 
 
 def test_financial_table_parser_skips_numeric_descriptor_columns():
@@ -89,7 +91,8 @@ def test_financial_table_parser_recovers_value_first_wrapped_rows():
     assert cell.value == Decimal("12645")
     assert cell.row_label == "Property, plant and equipment, net"
     assert cell.column_label == "2018"
-    assert cell.cell_id.endswith("#row:property-plant-and-equipment-net#column:2018")
+    assert cell.cell_id.endswith("#row:3#column:1")
+    assert cell.semantic_key.metric == "property_plant_and_equipment_net"
 
 
 def test_financial_table_parser_keeps_period_kind_per_table_section():

@@ -275,8 +275,9 @@ def test_calculation_verifier_materializes_parent_table_cells():
                     "status": "ok",
                     "value": "20",
                     "citation_ids": [
-                        "cell:report:evidence:report:income-table"
-                        "#row:revenue#column:2022"
+                        "cell:report:source%3Areport#page%3A5"
+                        "#table-instance%3Aincome-table#block%3Aincome-table"
+                        "#row%3A1#column%3A1"
                     ],
                 },
             },

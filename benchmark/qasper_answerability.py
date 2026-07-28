@@ -22,6 +22,7 @@ from .qasper_boolean import boolean_relation_lemmas as _boolean_relation_lemmas
 from .qasper_boolean import is_boolean_question as _is_boolean_question
 from .qasper_boolean import stemmed_content_tokens as _stemmed_content_tokens
 from .qasper_prompt_budget import fit_qasper_verifier_prompt
+from .qasper_proposition_conflict import resolve_boolean_conflict
 
 QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v12"
 QASPER_ANSWERABILITY_SEED = 20260724
@@ -200,7 +201,13 @@ def _verify_boolean_candidate(
         verdict=verdict,
         quote=quote,
     )
-    action, answer = _boolean_answer_action(candidate_polarity, verdict)
+    action, answer, conflict_trace = resolve_boolean_conflict(
+        evidence,
+        question,
+        candidate_polarity=candidate_polarity,
+        verdict=verdict,
+    )
+    relation_trace.update(conflict_trace)
     return QasperAnswerabilityResult(
         answer=answer,
         trace=_trace(
@@ -287,21 +294,6 @@ def _ground_boolean_verdict(
         reason,
         relation_trace,
     )
-
-
-def _boolean_answer_action(candidate_polarity: str, verdict: str) -> tuple[str, str]:
-    if verdict not in {"yes", "no"}:
-        return (
-            "abstained_insufficient_evidence"
-            if candidate_polarity
-            else "preserved_boolean_abstention",
-            "unanswerable",
-        )
-    if not candidate_polarity:
-        return "recovered_boolean_from_abstention", verdict
-    if verdict == candidate_polarity:
-        return "confirmed_candidate", verdict
-    return "corrected_polarity", verdict
 
 
 def _verify_free_text_candidate(

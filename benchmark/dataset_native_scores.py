@@ -39,7 +39,7 @@ def dataset_native_score_metadata(dataset_name: str) -> dict[str, Any]:
             ),
         },
         "qasper": {
-            "contract_id": "qasper_answer_evidence_f1_v1",
+            "contract_id": "qasper_answer_evidence_f1_v2",
             "primary_metric": "qasper_f1",
             "native_metrics": (
                 "qasper_f1",
@@ -76,6 +76,7 @@ def dataset_native_score_metadata(dataset_name: str) -> dict[str, Any]:
     )
     return {
         "scoring_mode": "dataset_native_v1",
+        "answer_token_f1_contract": "token_f1_v2",
         "dataset_family": family,
         "paper_grade": False,
         **contract,
@@ -127,6 +128,7 @@ def native_score_metadata_for_prediction(
 def _alce_qampari_score_metadata(family: str) -> dict[str, Any]:
     return {
         "scoring_mode": "dataset_native_v1",
+        "answer_token_f1_contract": "token_f1_v2",
         "dataset_family": family,
         "paper_grade": False,
         "contract_id": "alce_qampari_f1_v1",

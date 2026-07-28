@@ -9,6 +9,11 @@ from ktem.docqa.graph_index import graph_answer_from_evidence
 
 from kotaemon.base import Document, RetrievedDocument
 
+from .mara_answer_type_contract import (
+    answer_type_consistency,
+    message_with_answer_type_contract,
+    request_answer_type,
+)
 from .mara_artifacts import build_artifact_for_pipeline
 from .mara_controller import planner_trace_payload
 from .mara_controller_request import (
@@ -305,7 +310,23 @@ def _generate_controller_route_answer(
     if decision.route == "element_rag":
         bundle.metadata["generation_backend"] = "local_element_evidence"
         return element_evidence_answer(bundle, message), []
-    return _collect_text_rag_generation(pipeline, message, conv_id, history, kwargs)
+    generation_message = message_with_answer_type_contract(message, request)
+    answer, events = _collect_text_rag_generation(
+        pipeline,
+        generation_message,
+        conv_id,
+        history,
+        kwargs,
+    )
+    answer_type = request_answer_type(request)
+    consistent, reason = answer_type_consistency(answer_type, answer)
+    bundle.metadata["generation_answer_type_contract"] = {
+        "answer_type": answer_type,
+        "consistent": consistent,
+        "reason": reason,
+        "status": "passed" if consistent else "failed",
+    }
+    return answer, events
 
 
 class MaraAgentPipeline(FullQAPipeline):

@@ -27,6 +27,7 @@ from .finance_calculation_binding import shared_scale as _shared_scale
 from .finance_calculation_binding import (
     single_question_period as _single_question_period,
 )
+from .finance_fixed_asset_turnover import fixed_asset_turnover_steps
 from .finance_query_planning import FINANCE_METRIC_ALIASES
 from .finance_scale import scale_from_text as _scale
 from .finance_scale import source_scale_evidence as _source_scale_evidence
@@ -354,6 +355,8 @@ def _steps(
         return _multi_period_ratio_average_steps(input_ids)
     if question_type == "inventory_turnover_average":
         return _inventory_turnover_average_steps(input_ids)
+    if question_type == "fixed_asset_turnover":
+        return fixed_asset_turnover_steps(input_ids)
     if question_type == "revolving_credit_capacity" and len(input_ids) > 1:
         return (
             (CalculationStep("result", "add", input_ids),),

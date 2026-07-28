@@ -134,6 +134,39 @@ def finance_operand_specs(
     return ((slot_id, metric, current_period),)
 
 
+def finance_formula_spec(
+    question: str,
+    periods: list[str],
+) -> dict[str, object] | None:
+    lowered = str(question or "").lower()
+    if not _is_fixed_asset_turnover(lowered):
+        return None
+    target_period = finance_target_period(lowered, periods)
+    previous_period = _previous_period(periods, target_period)
+    if not target_period or not previous_period:
+        return None
+    revenue = f"operand:net_sales:{target_period}"
+    previous_ppe = f"operand:net_property_plant_and_equipment:{previous_period}"
+    target_ppe = f"operand:net_property_plant_and_equipment:{target_period}"
+    return {
+        "name": "fixed_asset_turnover",
+        "output_unit": "ratio",
+        "program": {
+            "operator": "divide",
+            "inputs": [
+                {"ref": revenue},
+                {
+                    "operator": "average",
+                    "inputs": [
+                        {"ref": previous_ppe},
+                        {"ref": target_ppe},
+                    ],
+                },
+            ],
+        },
+    }
+
+
 def finance_fact_specs(
     question: str,
     periods: list[str],
@@ -161,6 +194,22 @@ def _named_formula_specs(
     periods: list[str],
     current_period: str,
 ) -> FinanceOperandSpecs:
+    if _is_fixed_asset_turnover(question):
+        previous_period = _previous_period(periods, current_period)
+        if previous_period and current_period:
+            return (
+                (f"net_sales:{current_period}", "net sales", current_period),
+                (
+                    f"net_property_plant_and_equipment:{previous_period}",
+                    "net property plant and equipment",
+                    previous_period,
+                ),
+                (
+                    f"net_property_plant_and_equipment:{current_period}",
+                    "net property plant and equipment",
+                    current_period,
+                ),
+            )
     multi_period_ratio = _multi_period_ratio_specs(question, periods)
     if multi_period_ratio:
         return multi_period_ratio
@@ -204,6 +253,32 @@ def _named_formula_specs(
             ("shareholders_equity", "shareholders equity"),
         )
     return ()
+
+
+def _is_fixed_asset_turnover(question: str) -> bool:
+    normalized = _normalized_metric_phrase(question)
+    return any(
+        alias in normalized
+        for alias in (
+            "fixed asset turnover",
+            "net fixed asset turnover",
+            "pp e turnover",
+            "ppe turnover",
+            "property plant and equipment turnover",
+        )
+    )
+
+
+def _previous_period(periods: list[str], target_period: str) -> str:
+    ordered = sorted(
+        {
+            value
+            for value in periods
+            if re.fullmatch(r"(?:19|20)\d{2}", str(value or ""))
+        }
+    )
+    earlier = [value for value in ordered if value < target_period]
+    return earlier[-1] if earlier else ""
 
 
 def _multi_period_ratio_specs(

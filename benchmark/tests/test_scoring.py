@@ -217,6 +217,7 @@ def test_score_prediction_counts_source_level_citation_when_gold_span_is_retriev
             "predicted_pages": [],
             "gold_pages": [],
             "predicted_sources": ["paper-1#source"],
+            "structured_citations": [{"source_id": "paper-1"}],
             "gold_sources": [],
             "gold_evidence": [
                 {
@@ -259,6 +260,7 @@ def test_score_prediction_reports_page_level_citation_submetrics():
             "predicted_pages": [5],
             "gold_pages": [5],
             "predicted_sources": ["doc#page:5"],
+            "structured_citations": [{"source_id": "doc", "page_label": "5"}],
             "gold_sources": ["doc#page:5"],
             "gold_evidence": [
                 {"document_id": "doc", "citation": "doc#page:5", "page": 5}
@@ -379,7 +381,7 @@ def test_score_prediction_reports_inline_and_metadata_citation_metrics_separatel
     assert metrics["citation_precision"] == 1.0
 
 
-def test_score_prediction_falls_back_to_sources_when_emitted_citations_are_empty():
+def test_score_prediction_does_not_fall_back_when_emitted_citations_are_empty():
     metrics = score_prediction(
         {
             "gold_answers": ["42"],
@@ -410,10 +412,10 @@ def test_score_prediction_falls_back_to_sources_when_emitted_citations_are_empty
         }
     )
 
-    assert metrics["citation_recall"] == 1.0
-    assert metrics["citation_precision"] == 1.0
-    assert metrics["citation_recall_page"] == 1.0
-    assert metrics["citation_precision_page"] == 1.0
+    assert metrics["citation_recall"] == 0.0
+    assert metrics["citation_precision"] is None
+    assert metrics["citation_recall_page"] == 0.0
+    assert metrics["citation_precision_page"] is None
 
 
 def test_score_prediction_aligns_parser_page_when_visual_quote_is_retrieved():
@@ -424,6 +426,7 @@ def test_score_prediction_aligns_parser_page_when_visual_quote_is_retrieved():
             "predicted_pages": ["59"],
             "gold_pages": [58],
             "predicted_sources": ["doc#page:59"],
+            "structured_citations": [{"source_id": "doc", "page_label": "59"}],
             "gold_sources": ["doc#page:58"],
             "gold_evidence": [
                 {
@@ -477,6 +480,7 @@ def test_score_prediction_keeps_wrong_parser_page_without_gold_quote_support():
             "predicted_pages": ["59"],
             "gold_pages": [58],
             "predicted_sources": ["doc#page:59"],
+            "structured_citations": [{"source_id": "doc", "page_label": "59"}],
             "gold_sources": ["doc#page:58"],
             "gold_evidence": [
                 {
@@ -519,6 +523,7 @@ def test_score_prediction_requires_nearby_page_for_quote_based_alignment():
             "predicted_pages": ["2"],
             "gold_pages": [58],
             "predicted_sources": ["doc#page:2"],
+            "structured_citations": [{"source_id": "doc", "page_label": "2"}],
             "gold_sources": ["doc#page:58"],
             "gold_evidence": [
                 {
@@ -568,6 +573,7 @@ def test_score_prediction_rejects_source_level_citation_without_retrieved_gold_s
             "predicted_pages": [],
             "gold_pages": [],
             "predicted_sources": ["paper-1#source"],
+            "structured_citations": [{"source_id": "paper-1"}],
             "gold_sources": [],
             "gold_evidence": [
                 {

@@ -46,7 +46,7 @@ from ._runtime_models import (
 from ._runtime_session_facade import RuntimeSessionMutationFacade
 from ._runtime_session_service import RuntimeSessionService
 from ._runtime_utils import _html_to_text, _serialize_value
-from .evidence_record_identity import unique_evidence_records
+from .evidence_record_identity import isolate_evidence_records
 
 logger = logging.getLogger(__name__)
 
@@ -152,9 +152,9 @@ def _apply_request_element_index_records(pipeline: Any, request: DocQARequest) -
     request_records = [
         dict(item) for item in request.element_index_records if isinstance(item, dict)
     ]
-    pipeline.element_index_records = unique_evidence_records(
-        existing_records + request_records
-    )
+    ingestion = isolate_evidence_records(existing_records + request_records)
+    pipeline.element_index_records = list(ingestion.accepted_records)
+    pipeline.element_ingestion_trace = ingestion.as_trace()
 
 
 def _artifact_source_scope(

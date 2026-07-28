@@ -35,6 +35,11 @@ _VISUAL_TERMS = {
     "table",
     "visual",
 }
+_BOOLEAN_QUESTION_RE = re.compile(
+    r"(?:^|^[^,;:]{1,40}[,;:]\s*)(?:is|are|was|were|do|does|did|has|have|had|can|could|"
+    r"will|would|should|may|might)\b",
+    flags=re.IGNORECASE,
+)
 
 
 def has_causal_intent(tokens: set[str]) -> bool:
@@ -45,6 +50,7 @@ def normalized_answer_type(
     answer_type: str,
     tokens: set[str],
     *,
+    question: str = "",
     numeric_terms: set[str],
     causal_intent: bool,
 ) -> str:
@@ -59,6 +65,12 @@ def normalized_answer_type(
         return "numeric"
     if value in {"boolean", "free_text", "formula", "list", "unanswerable"}:
         return value
+    if value in {"qa", "qasper_qa"}:
+        return (
+            "boolean"
+            if _BOOLEAN_QUESTION_RE.search(question.strip())
+            else ("free_text")
+        )
     if tokens & numeric_terms:
         return "numeric"
     return value or "free_text"

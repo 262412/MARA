@@ -223,6 +223,47 @@ def test_qasper_answerability_abstains_on_incomplete_conflicting_verdict():
     assert result.trace["reason"] == "grounded_quote_incomplete_relation"
 
 
+def test_qasper_boolean_preserves_directly_supported_candidate_on_weak_conflict():
+    llm = _VerifierLLM('{"verdict":"insufficient_evidence","evidence_quote":""}')
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Did the authors release the code?",
+        evidence=(
+            "The authors released their source code with the paper. "
+            "The appendix discusses unrelated licensing concerns."
+        ),
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["action"] == "preserved_candidate_conflict_warning"
+    assert result.trace["conflict_status"] == "candidate_support_dominates"
+    assert float(result.trace["candidate_support_score"]) > 0
+    assert float(result.trace["contradiction_score"]) == 0
+
+
+def test_qasper_boolean_abstains_when_direct_polarities_are_balanced():
+    llm = _VerifierLLM(
+        '{"verdict":"no_complete","evidence_quote":'
+        '"The authors did not release the code with the paper."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Did the authors release the code?",
+        evidence=(
+            "The authors released the code with the paper. "
+            "The authors did not release the code with the paper."
+        ),
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["action"] == "abstained_polarity_conflict"
+    assert result.trace["conflict_status"] == "balanced_conflict"
+
+
 def test_qasper_boolean_question_reconsiders_primary_unanswerable():
     llm = _VerifierLLM(
         '{"verdict":"no","evidence_quote":'
@@ -358,11 +399,12 @@ def test_qasper_complete_verdict_still_requires_question_relation():
         candidate_answer="no",
     )
 
-    assert result.answer == "unanswerable"
+    assert result.answer == "no"
     assert result.trace["verdict"] == "insufficient_evidence"
     assert result.trace["quote_grounded"] == "true"
     assert result.trace["quote_supports_relation"] == "false"
     assert result.trace["reason"] == "grounded_quote_incomplete_relation"
+    assert result.trace["action"] == "preserved_candidate_conflict_warning"
     assert "Modal relations are strict" in llm.calls[0][0]
 
 

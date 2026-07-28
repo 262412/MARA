@@ -43,6 +43,8 @@ def _prediction(requirements: list[str]) -> dict[str, Any]:
         "example_id": "smoke",
         "question": "What result is reported?",
         "answer_type": "free_text",
+        "gold_answers": ["The result."],
+        "gold_evidence": [{"document_id": "paper", "page": 1}],
         "predicted_answer": "The result.",
         "answer_for_scoring": "The result.",
         "example_metadata": {
@@ -102,6 +104,15 @@ def test_contract_smoke_validator_accepts_full_auditable_artifact(tmp_path):
                 "action": "abstained_insufficient_evidence",
                 "primary_answer": "yes",
                 "citation_state": "cleared_for_rebind",
+            },
+            "answerability_contract_trace": {
+                "pre_contract_answer": "yes",
+                "post_contract_answer": "unanswerable",
+                "rewrite_applied": True,
+                "rewrite_type": "polarity_to_unanswerable",
+                "rewrite_reason": "insufficient_evidence",
+                "pre_contract_verification": {},
+                "post_contract_verification": {},
             },
         }
     )
