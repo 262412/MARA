@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from ktem.docqa.evidence_identity import exact_evidence_aliases, identity_of
 
 from .metrics import is_abstention_answer
+from .qasper_boolean import stemmed_content_tokens
 
 QASPER_VERIFIER_PROMPT_MAX_CHARS = 7000
 _TRUNCATION_NOTICE = (
@@ -157,12 +158,22 @@ def _ranked_evidence_records(
         claim_support=claim_support,
         claim_contradiction=claim_contradiction,
     )
-    ordered_priority = [
-        row
-        for row in rows
-        if row.required or row.claim_support or row.claim_contradiction
-    ]
+    ordered_priority = [row for row in rows if row.required]
     seen_priority = {row.identity for row in ordered_priority}
+    if not _looks_boolean(question):
+        _append_relation_priority(
+            ordered_priority,
+            rows,
+            seen_priority,
+            question=question,
+            candidate_answer=substantive_candidate,
+        )
+    for row in rows:
+        if row.identity not in seen_priority and (
+            row.claim_support or row.claim_contradiction
+        ):
+            ordered_priority.append(row)
+            seen_priority.add(row.identity)
     _append_claim_priority(
         ordered_priority,
         rows,
@@ -228,6 +239,48 @@ def _evidence_rows(
         )
     )
     return rows
+
+
+def _append_relation_priority(
+    ordered: list[_EvidenceRow],
+    rows: list[_EvidenceRow],
+    seen: set[str],
+    *,
+    question: str,
+    candidate_answer: str,
+) -> None:
+    question_tokens = stemmed_content_tokens(question)
+    answer_text = re.sub(r"\\[a-zA-Z]+", " ", candidate_answer)
+    answer_tokens = stemmed_content_tokens(answer_text) - question_tokens
+    if not question_tokens or not answer_tokens:
+        return
+    candidates: list[tuple[tuple[int, int, int], _EvidenceRow, str]] = []
+    for row in rows:
+        if row.identity in seen:
+            continue
+        for statement in re.split(r"(?:\r?\n)+|(?<=[.!?])\s+", row.text):
+            statement = statement.strip()
+            statement_tokens = stemmed_content_tokens(statement)
+            relation_hits = len(question_tokens & statement_tokens)
+            answer_hits = len(answer_tokens & statement_tokens)
+            if relation_hits and answer_hits:
+                candidates.append(
+                    (
+                        (relation_hits, answer_hits, -len(statement)),
+                        row,
+                        statement,
+                    )
+                )
+    if not candidates:
+        return
+    _score, row, statement = max(candidates, key=lambda value: value[0])
+    ordered.append(
+        replace(
+            row,
+            rendered=f"[evidence_id={row.identity}]\n{statement}",
+        )
+    )
+    seen.add(row.identity)
 
 
 def _append_claim_priority(

@@ -150,6 +150,51 @@ def test_required_verifier_evidence_is_not_dropped_by_budget_packing():
     assert trace["verifier_required_evidence_coverage"] == "1.000000"
 
 
+def test_free_text_verifier_preserves_atomic_question_answer_relation():
+    misleading_support = _item(
+        "preliminary-support",
+        (
+            "The experiments compare labeled features, class distribution, "
+            "and neutral features. "
+        )
+        * 45,
+    )
+    preliminary_conflicts = [
+        _item(
+            f"preliminary-conflict-{index}",
+            ("Additional comparisons discuss class distribution. " * 60),
+        )
+        for index in range(2)
+    ]
+    direct_relation = _item(
+        "direct-relation",
+        (
+            "The method leverages labeled features as prior knowledge. "
+            "A labeled feature is a strong indicator of a specific class."
+        ),
+    )
+
+    _prompt, bounded, trace = fit_qasper_verifier_items(
+        [misleading_support, *preliminary_conflicts, direct_relation],
+        lambda evidence: f"QUESTION\n{evidence}",
+        question="What background knowledge do they leverage?",
+        candidate_answer=(
+            "Background knowledge = labeled features + class distribution "
+            "+ neutral features"
+        ),
+        claim_support_evidence_ids=["evidence:paper:preliminary-support"],
+        claim_contradiction_evidence_ids=[
+            "evidence:paper:preliminary-conflict-0",
+            "evidence:paper:preliminary-conflict-1",
+        ],
+    )
+
+    assert "The method leverages labeled features as prior knowledge." in bounded
+    assert trace["verifier_input_evidence_ids"].split(",")[0] == (
+        "evidence:paper:direct-relation"
+    )
+
+
 def test_supported_core_is_pruned_when_extension_breaks_whole_answer_relation():
     evidence = "The classification model uses manually provided labeled features."
     result = verify_qasper_answerability(
