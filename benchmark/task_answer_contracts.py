@@ -58,13 +58,16 @@ def apply_task_answer_contract(
         evidence_items,
         llm_factory=llm_factory,
     )
+    typed_boolean_recheck = result.trace.get("typed_boolean_recheck") == "true"
     answer_changed = _normalized_answer(result.answer) != _normalized_answer(
         product_answer
     )
     prediction["predicted_answer"] = result.answer
     recovery_result = _recovery_result(
         product_abstained=candidate_state.product_abstained,
-        recovery_attempted=candidate_state.recovery_attempted,
+        recovery_attempted=(
+            candidate_state.recovery_attempted or typed_boolean_recheck
+        ),
         final_answer=result.answer,
     )
     _record_answerability_result(
@@ -104,7 +107,19 @@ def _adjudicate_qasper_answer(
     llm_factory: Callable[[], Any],
 ) -> QasperAnswerabilityResult:
     candidate = candidate_state.candidate_for_answerability
-    if not candidate:
+    question = str(prediction.get("question") or "")
+    priorities = qasper_evidence_priorities(
+        prediction,
+        evidence_items,
+        question=question,
+        candidate_answer=candidate,
+    )
+    typed_boolean_recheck = bool(
+        not candidate
+        and str(prediction.get("answer_type") or "").strip().lower() == "boolean"
+        and priorities.required_evidence_ids
+    )
+    if not candidate and not typed_boolean_recheck:
         return QasperAnswerabilityResult(
             answer=candidate_state.product_answer,
             trace={
@@ -115,14 +130,7 @@ def _adjudicate_qasper_answer(
                 "reason": "missing_original_candidate",
             },
         )
-    question = str(prediction.get("question") or "")
-    priorities = qasper_evidence_priorities(
-        prediction,
-        evidence_items,
-        question=question,
-        candidate_answer=candidate,
-    )
-    return verify_qasper_answerability(
+    result = verify_qasper_answerability(
         llm_factory(),
         question=question,
         evidence=_prediction_evidence(prediction),
@@ -134,7 +142,13 @@ def _adjudicate_qasper_answer(
         claim_contradiction_evidence_ids=list(
             priorities.claim_contradiction_evidence_ids
         ),
-        candidate_answer=candidate,
+        candidate_answer="unanswerable" if typed_boolean_recheck else candidate,
+    )
+    if not typed_boolean_recheck:
+        return result
+    return QasperAnswerabilityResult(
+        answer=result.answer,
+        trace={**result.trace, "typed_boolean_recheck": "true"},
     )
 
 
@@ -147,7 +161,7 @@ def _record_answerability_result(
 ) -> None:
     metadata["qasper_answerability"] = {
         **result.trace,
-        **_candidate_trace(candidate_state),
+        **_candidate_trace(candidate_state, result),
         "recovery_result": recovery_result,
         "final_post_contract_answer": result.answer,
     }
@@ -161,7 +175,10 @@ def _refresh_qasper_verification(
     *,
     pre_contract_verification: dict[str, Any],
 ) -> None:
-    if not candidate_state.candidate_for_answerability:
+    if (
+        not candidate_state.candidate_for_answerability
+        and result.trace.get("typed_boolean_recheck") != "true"
+    ):
         return
     prediction["pre_contract_verification"] = pre_contract_verification
     _clear_stale_answer_citations(prediction, metadata)
@@ -198,20 +215,32 @@ def _record_answerability_contract_trace(
         "rewrite_reason": _answerability_reason(result.trace),
         "pre_contract_verification": pre_contract_verification,
         "post_contract_verification": post_verification,
-        **_candidate_trace(candidate_state),
+        **_candidate_trace(candidate_state, result),
         "recovery_result": recovery_result,
         "final_post_contract_answer": result.answer,
     }
 
 
-def _candidate_trace(candidate_state: AnswerabilityCandidate) -> dict[str, Any]:
+def _candidate_trace(
+    candidate_state: AnswerabilityCandidate,
+    result: QasperAnswerabilityResult | None = None,
+) -> dict[str, Any]:
+    typed_boolean_recheck = bool(
+        result is not None and result.trace.get("typed_boolean_recheck") == "true"
+    )
     return {
-        "input_candidate_kind": candidate_state.input_candidate_kind,
+        "input_candidate_kind": (
+            "typed_boolean_proposition"
+            if typed_boolean_recheck
+            else candidate_state.input_candidate_kind
+        ),
         "product_answer": candidate_state.product_answer,
         "pre_guardrail_answer": candidate_state.pre_guardrail_answer,
         "pre_verification_answer": candidate_state.pre_verification_answer,
         "candidate_for_answerability": candidate_state.candidate_for_answerability,
-        "recovery_attempted": candidate_state.recovery_attempted,
+        "recovery_attempted": (
+            candidate_state.recovery_attempted or typed_boolean_recheck
+        ),
     }
 
 

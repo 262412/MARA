@@ -23,6 +23,13 @@ class BooleanScopeDecision:
         }
 
 
+@dataclass(frozen=True)
+class ClosedScopeResolution:
+    polarity: str
+    evidence_quote: str
+    decision: BooleanScopeDecision
+
+
 def validate_boolean_scope(
     question: str,
     quote: str,
@@ -129,6 +136,44 @@ def boolean_retrieval_query(question: str) -> str:
     else:
         return text
     return f"{text} {expansion}".strip()
+
+
+def resolve_closed_scope_boolean(
+    question: str,
+    evidence_items: list[dict[str, Any]],
+) -> ClosedScopeResolution | None:
+    if not (_language_data_question(question) and _has_closed_quantifier(question)):
+        return None
+    supported: dict[str, list[tuple[dict[str, Any], BooleanScopeDecision]]] = {
+        "yes": [],
+        "no": [],
+    }
+    for item in evidence_items:
+        text = evidence_item_text(item)
+        if not text:
+            continue
+        for polarity in supported:
+            decision = validate_boolean_scope(
+                question,
+                text,
+                polarity,
+                evidence_items=[item],
+            )
+            if decision.scope_valid:
+                supported[polarity].append((item, decision))
+    polarities = [polarity for polarity, values in supported.items() if values]
+    if len(polarities) != 1:
+        return None
+    polarity = polarities[0]
+    item, decision = min(
+        supported[polarity],
+        key=lambda value: len(evidence_item_text(value[0])),
+    )
+    return ClosedScopeResolution(
+        polarity=polarity,
+        evidence_quote=_scope_excerpt(evidence_item_text(item), polarity),
+        decision=decision,
+    )
 
 
 def boolean_proposition_evidence_score(
@@ -320,6 +365,22 @@ def _content_tokens(value: str) -> set[str]:
         for token in re.findall(r"[a-z0-9]+", str(value or "").lower())
         if len(token) > 2 and token not in stopwords
     }
+
+
+def _scope_excerpt(text: str, polarity: str) -> str:
+    lowered = text.lower()
+    markers = (
+        ("non-english", "greek", "german", "french", "multilingual")
+        if polarity == "no"
+        else ("english-speaking countries", "english datasets", "english data")
+    )
+    position = next(
+        (lowered.find(marker) for marker in markers if marker in lowered),
+        0,
+    )
+    start = max(0, position - 360)
+    end = min(len(text), position + 280)
+    return text[start:end].strip()
 
 
 def _normalized(value: str) -> str:

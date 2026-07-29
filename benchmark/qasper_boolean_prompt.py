@@ -1,0 +1,39 @@
+from __future__ import annotations
+
+from typing import Any
+
+from .qasper_answerability_prompts import boolean_answerability_prompt
+from .qasper_prompt_budget import fit_qasper_verifier_items, fit_qasper_verifier_prompt
+
+
+def fit_boolean_verifier_prompt(
+    *,
+    question: str,
+    evidence: str,
+    evidence_items: list[dict[str, Any]] | None,
+    candidate_answer: str,
+    required_evidence_ids: list[str] | None,
+    required_slot_ids: list[str] | None,
+    priority_evidence_ids: list[str] | None,
+    claim_support_evidence_ids: list[str] | None,
+    claim_contradiction_evidence_ids: list[str] | None,
+) -> tuple[str, str, dict[str, str]]:
+    def prompt_builder(bounded_evidence: str) -> str:
+        return boolean_answerability_prompt(
+            question=question,
+            evidence=bounded_evidence,
+        )
+
+    if evidence_items is None:
+        return fit_qasper_verifier_prompt(evidence, prompt_builder)
+    return fit_qasper_verifier_items(
+        evidence_items,
+        prompt_builder,
+        question=question,
+        candidate_answer=candidate_answer,
+        required_evidence_ids=required_evidence_ids,
+        required_slot_ids=required_slot_ids,
+        priority_evidence_ids=priority_evidence_ids,
+        claim_support_evidence_ids=claim_support_evidence_ids,
+        claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
+    )

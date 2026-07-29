@@ -276,6 +276,104 @@ def test_current_paper_closed_english_experiment_supports_yes():
     assert result.trace["boolean_scope_valid"] == "true"
 
 
+def test_closed_english_scope_overrides_unscoped_candidate_fallback():
+    current = _item(
+        "current",
+        (
+            "As a main field of interest in the current study, we identified "
+            "controversial topics in education in English-speaking countries."
+        ),
+    )
+    related = _item(
+        "related",
+        "Goudas et al. 2014 evaluated user-generated Greek texts.",
+        section_id="related_work",
+    )
+    result = verify_qasper_answerability(
+        _VerifierLLM(
+            {
+                "verdict": "insufficient_evidence",
+                "evidence_quote": "",
+            }
+        ),
+        question="Do they report results only on English data?",
+        evidence=f"{current['text']}\n{related['text']}",
+        evidence_items=[related, current],
+        candidate_answer="no",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["verdict"] == "yes"
+    assert result.trace["boolean_scope_valid"] == "true"
+    assert result.trace["reason"] == "deterministic_current_scope"
+
+
+def test_missing_free_text_candidate_can_only_recheck_typed_boolean_proposition():
+    refusal = "MARA could not retrieve enough evidence to answer reliably."
+    support = _item(
+        "experiment",
+        (
+            "I tested the translation programs on several task examples and "
+            "report the observed failures."
+        ),
+    )
+    plan = build_query_plan(
+        "Do the authors conduct experiments on the tasks mentioned?",
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    bound_plan = {
+        **plan.as_dict(),
+        "evidence_slots": [
+            {
+                **plan.evidence_slots[0].as_dict(),
+                "status": "filled",
+                "evidence_ids": ["evidence:paper:experiment"],
+            }
+        ],
+    }
+    prediction: dict[str, Any] = {
+        "question": "Do the authors conduct experiments on the tasks mentioned?",
+        "predicted_answer": refusal,
+        "answer_for_scoring": refusal,
+        "answer_type": "boolean",
+        "guardrail_decision": {"action": "abstain"},
+        "evidence_bundle": {
+            "items": [support],
+            "metadata": {"query_plan": bound_plan},
+        },
+        "evidence_metadata": {
+            "pre_guardrail_answer": (
+                "unanswerable\nThe context does not mention experiments."
+            ),
+            "pre_verification_answer": (
+                "unanswerable\nThe context does not mention experiments."
+            ),
+            "query_plan": bound_plan,
+            "generation_context_evidence": [support],
+        },
+    }
+    llm = _VerifierLLM(
+        {
+            "verdict": "yes_complete",
+            "evidence_quote": support["text"],
+        }
+    )
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper",
+        llm_factory=lambda: llm,
+    )
+
+    trace = prediction["evidence_metadata"]["qasper_answerability"]
+    assert prediction["predicted_answer"] == "yes"
+    assert trace["candidate_for_answerability"] == ""
+    assert trace["typed_boolean_recheck"] == "true"
+    assert trace["recovery_attempted"] is True
+    assert trace["recovery_result"] == "recovered"
+
+
 def test_current_paper_non_english_counterexample_supports_no():
     quote = "We additionally evaluate the model on a Greek dataset in our experiments."
     result = verify_qasper_answerability(

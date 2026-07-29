@@ -7,9 +7,6 @@ from typing import Any
 
 from .metrics import is_abstention_answer
 from .qasper_answerability_prompts import (
-    boolean_answerability_prompt as _boolean_answerability_prompt,
-)
-from .qasper_answerability_prompts import (
     json_structure_repair_prompt as _json_structure_repair_prompt,
 )
 from .qasper_boolean import boolean_candidate_polarity as _candidate_polarity
@@ -22,9 +19,12 @@ from .qasper_boolean import (
 )
 from .qasper_boolean import boolean_relation_lemmas as _boolean_relation_lemmas
 from .qasper_boolean import is_boolean_question as _is_boolean_question
+from .qasper_boolean_prompt import (
+    fit_boolean_verifier_prompt as _fit_boolean_verifier_prompt,
+)
 from .qasper_boolean_scope import BooleanScopeDecision, validate_boolean_scope
+from .qasper_deterministic_boolean import deterministic_closed_scope_result
 from .qasper_free_text_answerability import verify_free_text_candidate
-from .qasper_prompt_budget import fit_qasper_verifier_items, fit_qasper_verifier_prompt
 from .qasper_proposition_conflict import resolve_boolean_conflict
 
 QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v14"
@@ -165,6 +165,18 @@ def _verify_boolean_candidate(
     candidate: str,
 ) -> QasperAnswerabilityResult:
     candidate_polarity = _candidate_polarity(candidate)
+    deterministic = deterministic_closed_scope_result(
+        contract_id=QASPER_ANSWERABILITY_CONTRACT,
+        question=question,
+        evidence_items=evidence_items or [],
+        candidate_polarity=candidate_polarity,
+    )
+    if deterministic is not None:
+        answer, trace = deterministic
+        return QasperAnswerabilityResult(
+            answer=answer,
+            trace=trace,
+        )
     prompt, evidence, budget_trace = _fit_boolean_verifier_prompt(
         question=question,
         evidence=evidence,
@@ -261,39 +273,6 @@ def _adjudicated_boolean_result(
             raw_verifier_verdict=raw_verdict,
             reason=reason,
         ),
-    )
-
-
-def _fit_boolean_verifier_prompt(
-    *,
-    question: str,
-    evidence: str,
-    evidence_items: list[dict[str, Any]] | None,
-    candidate_answer: str,
-    required_evidence_ids: list[str] | None,
-    required_slot_ids: list[str] | None,
-    priority_evidence_ids: list[str] | None,
-    claim_support_evidence_ids: list[str] | None,
-    claim_contradiction_evidence_ids: list[str] | None,
-) -> tuple[str, str, dict[str, str]]:
-    def prompt_builder(bounded_evidence: str) -> str:
-        return _boolean_answerability_prompt(
-            question=question,
-            evidence=bounded_evidence,
-        )
-
-    if evidence_items is None:
-        return fit_qasper_verifier_prompt(evidence, prompt_builder)
-    return fit_qasper_verifier_items(
-        evidence_items,
-        prompt_builder,
-        question=question,
-        candidate_answer=candidate_answer,
-        required_evidence_ids=required_evidence_ids,
-        required_slot_ids=required_slot_ids,
-        priority_evidence_ids=priority_evidence_ids,
-        claim_support_evidence_ids=claim_support_evidence_ids,
-        claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
     )
 
 
