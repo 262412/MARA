@@ -351,6 +351,11 @@ def test_closed_english_scope_overrides_unscoped_candidate_fallback():
     assert result.trace["verdict"] == "yes"
     assert result.trace["boolean_scope_valid"] == "true"
     assert result.trace["reason"] == "deterministic_current_scope"
+    assert result.trace["verifier_input_evidence_ids"] == "evidence:paper:current"
+    assert result.trace["verifier_dropped_evidence_ids"] == "evidence:paper:related"
+    assert int(result.trace["verifier_input_character_count"]) > 0
+    assert int(result.trace["verifier_input_token_count"]) > 0
+    assert result.trace["verifier_budget_exhausted"] == "false"
 
 
 def test_institution_name_is_not_a_non_english_dataset_counterexample():
