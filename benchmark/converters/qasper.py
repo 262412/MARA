@@ -68,7 +68,12 @@ def _example(document_id: str, qa: dict[str, Any], index: int) -> dict[str, Any]
         "answer_type": answer_type,
         "question": str(qa.get("question") or "").strip(),
         "answers": answers,
-        "evidence_sources": evidence,
+        "evidence_sources": [
+            f"{document_id}#evidence:{evidence_index + 1}"
+            for evidence_index, _item in enumerate(evidence)
+        ],
+        "gold_source_ids": [document_id],
+        "gold_evidence_texts": evidence,
         "gold_evidence": [
             {
                 "document_id": document_id,

@@ -9,7 +9,7 @@ from .qasper_answerability_prompts import (
     json_structure_repair_prompt,
 )
 from .qasper_boolean import stemmed_content_tokens
-from .qasper_prompt_budget import fit_qasper_verifier_prompt
+from .qasper_prompt_budget import fit_qasper_verifier_items, fit_qasper_verifier_prompt
 
 _ALLOWED_VERDICTS = (
     "supported",
@@ -48,19 +48,20 @@ def verify_free_text_candidate(
     *,
     question: str,
     evidence: str,
+    evidence_items: list[dict[str, Any]] | None = None,
+    required_evidence_ids: list[str] | None = None,
     candidate_answer: str,
     candidate: str,
     contract_id: str,
     seed: int,
     max_tokens: int,
 ) -> tuple[str, dict[str, str]]:
-    prompt, bounded_evidence, budget_trace = fit_qasper_verifier_prompt(
-        evidence,
-        lambda bounded: answerability_prompt(
-            question=question,
-            evidence=bounded,
-            candidate_answer=candidate,
-        ),
+    prompt, bounded_evidence, budget_trace = _fit_free_text_verifier_prompt(
+        question=question,
+        evidence=evidence,
+        evidence_items=evidence_items,
+        candidate=candidate,
+        required_evidence_ids=required_evidence_ids,
     )
     verdict, quote, revised_answer, parse_trace = _call_verifier(
         llm,
@@ -115,6 +116,32 @@ def verify_free_text_candidate(
         quote_grounded=quote_grounded,
         quote_supports_relation=relation_supported,
         parse_trace=parse_trace,
+    )
+
+
+def _fit_free_text_verifier_prompt(
+    *,
+    question: str,
+    evidence: str,
+    evidence_items: list[dict[str, Any]] | None,
+    candidate: str,
+    required_evidence_ids: list[str] | None,
+) -> tuple[str, str, dict[str, str]]:
+    def prompt_builder(bounded: str) -> str:
+        return answerability_prompt(
+            question=question,
+            evidence=bounded,
+            candidate_answer=candidate,
+        )
+
+    if evidence_items is None:
+        return fit_qasper_verifier_prompt(evidence, prompt_builder)
+    return fit_qasper_verifier_items(
+        evidence_items,
+        prompt_builder,
+        question=question,
+        candidate_answer=candidate,
+        required_evidence_ids=required_evidence_ids,
     )
 
 

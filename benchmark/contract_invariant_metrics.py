@@ -9,10 +9,11 @@ from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_locators import normalized_source_page_locators
 from ktem.docqa.query_plan_schema import plan_from_payload
 from ktem.docqa.query_planning import score_evidence_for_slot
-from ktem.docqa.source_identity_crosswalk import SourceIdentityResolver
 
-from .contract_gate_metrics import contract_gate_summary, prediction_gate_metrics
-from .metrics import is_abstention_answer, numeric_tolerance_score, safe_mean
+from .contract_gate_metrics import prediction_gate_metrics
+from .contract_invariant_summary import summarize_contract_invariants
+from .metrics import is_abstention_answer, numeric_tolerance_score
+from .source_join_metrics import source_join_metrics
 
 _ATOMIC_ROUNDTRIP_FIELDS = (
     "cell_id",
@@ -42,6 +43,9 @@ _ATOMIC_ROUNDTRIP_FIELDS = (
 _LOCATOR_ROUNDTRIP_FIELDS = (
     "source_id",
     "runtime_source_id",
+    "evaluation_source_id",
+    "runtime_identity",
+    "evaluation_identity",
     "source_aliases",
     "page_label",
     "dataset_page",
@@ -52,6 +56,8 @@ _LOCATOR_ROUNDTRIP_FIELDS = (
     "table_label",
     "bbox",
     "source_backrefs",
+    "runtime_source_backrefs",
+    "evaluation_source_backrefs",
 )
 _LINEAGE_ROUNDTRIP_FIELDS = ("retrieval_lineage",)
 _REPRESENTATION_ROUNDTRIP_FIELDS = (
@@ -66,72 +72,7 @@ def contract_invariant_summary(
     predictions: list[dict[str, Any]],
 ) -> dict[str, Any]:
     metrics = [_prediction_contract_metrics(prediction) for prediction in predictions]
-    summary: dict[str, Any] = {
-        "duplicate_identity_count": _sum_metric(metrics, "duplicate_identity_count"),
-        "conflicting_identity_count": _sum_metric(
-            metrics,
-            "conflicting_identity_count",
-        ),
-        "canonical_id_mismatch_count": _sum_metric(
-            metrics,
-            "canonical_id_mismatch_count",
-        ),
-        "atomic_field_roundtrip_rate": _mean_metric(
-            metrics, "atomic_field_roundtrip_rate"
-        ),
-        "locator_roundtrip_rate": _mean_metric(metrics, "locator_roundtrip_rate"),
-        "lineage_roundtrip_rate": _mean_metric(metrics, "lineage_roundtrip_rate"),
-        "representation_roundtrip_rate": _mean_metric(
-            metrics,
-            "representation_roundtrip_rate",
-        ),
-        "identity_collision_count": _sum_metric(metrics, "identity_collision_count"),
-        "runtime_benchmark_roundtrip": _mean_metric(
-            metrics,
-            "runtime_benchmark_roundtrip",
-        ),
-        "citation_provenance_violation_count": sum(
-            float(value["citation_provenance_violation_count"] or 0.0)
-            for value in metrics
-        ),
-        "reranker_lineage_violation_count": sum(
-            float(value["reranker_lineage_violation_count"] or 0.0) for value in metrics
-        ),
-        "missing_execution_slot_answer_count": sum(
-            float(value["missing_execution_slot_answer_count"] or 0.0)
-            for value in metrics
-        ),
-        "required_slot_false_fill_count": _sum_metric(
-            metrics,
-            "required_slot_false_fill_count",
-        ),
-        "source_page_cross_join_count": _sum_metric(
-            metrics,
-            "source_page_cross_join_count",
-        ),
-        "calculation_render_mismatch_count": _sum_metric(
-            metrics,
-            "calculation_render_mismatch_count",
-        ),
-        "qasper_stale_verifier_state_count": _sum_metric(
-            metrics,
-            "qasper_stale_verifier_state_count",
-        ),
-        "gold_runtime_source_join_rate": _mean_metric(
-            metrics, "gold_runtime_source_join_rate"
-        ),
-        "unresolved_gold_source_count": _sum_metric(
-            metrics, "unresolved_gold_source_count"
-        ),
-        "ambiguous_source_alias_count": _sum_metric(
-            metrics, "ambiguous_source_alias_count"
-        ),
-        "gold_runtime_source_page_join_rate": _mean_metric(
-            metrics, "gold_runtime_source_page_join_rate"
-        ),
-    }
-    summary.update(contract_gate_summary(metrics))
-    return summary
+    return summarize_contract_invariants(metrics)
 
 
 def _prediction_contract_metrics(
@@ -154,6 +95,10 @@ def _prediction_contract_metrics(
         if isinstance(ingestion_trace, dict)
         else 0
     )
+    slot_reference_metrics = _required_slot_reference_metrics(
+        prediction,
+        metadata,
+    )
     return {
         **identity_metrics,
         "identity_collision_count": float(
@@ -167,9 +112,10 @@ def _prediction_contract_metrics(
         "missing_execution_slot_answer_count": float(
             _answered_with_missing_execution_slot(prediction, metadata)
         ),
-        "required_slot_false_fill_count": float(
-            _required_slot_false_fills(prediction, metadata)
-        ),
+        **slot_reference_metrics,
+        "required_slot_false_fill_count": slot_reference_metrics[
+            "slot_semantic_false_fill_count"
+        ],
         "source_page_cross_join_count": float(
             _source_page_cross_joins(candidates, cited)
         ),
@@ -179,7 +125,7 @@ def _prediction_contract_metrics(
         "qasper_stale_verifier_state_count": float(
             _qasper_stale_verifier_state(prediction, metadata)
         ),
-        **_source_join_metrics(prediction, candidates),
+        **source_join_metrics(prediction, candidates),
         **prediction_gate_metrics(
             prediction,
             metadata,
@@ -189,64 +135,6 @@ def _prediction_contract_metrics(
             selected=selected,
             generation_context=generation_context,
         ),
-    }
-
-
-def _source_join_metrics(
-    prediction: dict[str, Any],
-    candidates: list[dict[str, Any]],
-) -> dict[str, float | None]:
-    resolver = SourceIdentityResolver(
-        prediction.get("source_identity_crosswalk")
-        or dict(prediction.get("evidence_metadata") or {}).get(
-            "source_identity_crosswalk"
-        )
-        or []
-    )
-    gold_records = _records(prediction.get("gold_evidence"))
-    gold_sources = {
-        str(item.get("source_id") or item.get("document_id") or "").strip()
-        for item in gold_records
-        if str(item.get("source_id") or item.get("document_id") or "").strip()
-    }
-    gold_sources.update(
-        str(value).split("#", 1)[0].strip()
-        for value in prediction.get("gold_sources") or []
-        if str(value).strip()
-    )
-    resolved_sources = {source for source in gold_sources if resolver.resolve(source)}
-    source_join_rate = (
-        len(resolved_sources) / len(gold_sources) if gold_sources else None
-    )
-    candidate_pairs = set().union(
-        *(normalized_source_page_locators(item) for item in candidates)
-    )
-    canonical_candidate_pairs = {
-        (resolver.canonical_or_original(source), page)
-        for source, page in candidate_pairs
-    }
-    gold_pairs = {
-        (
-            resolver.canonical_or_original(
-                item.get("source_id") or item.get("document_id") or ""
-            ),
-            str(item.get("page_label") or item.get("page") or "").strip(),
-        )
-        for item in gold_records
-        if str(item.get("page_label") or item.get("page") or "").strip()
-    }
-    page_join_rate = (
-        sum(pair in canonical_candidate_pairs for pair in gold_pairs) / len(gold_pairs)
-        if gold_pairs
-        else None
-    )
-    return {
-        "gold_runtime_source_join_rate": source_join_rate,
-        "unresolved_gold_source_count": float(
-            len(gold_sources) - len(resolved_sources)
-        ),
-        "ambiguous_source_alias_count": float(resolver.ambiguous_alias_count),
-        "gold_runtime_source_page_join_rate": page_join_rate,
     }
 
 
@@ -326,16 +214,20 @@ def _citation_provenance_violations(
     )
 
 
-def _required_slot_false_fills(
+def _required_slot_reference_metrics(
     prediction: dict[str, Any],
     metadata: dict[str, Any],
-) -> int:
+) -> dict[str, float | None]:
     payload = metadata.get("query_plan")
     if not isinstance(payload, dict) or not isinstance(
         payload.get("evidence_slots"),
         list,
     ):
-        return 0
+        return {
+            "slot_semantic_false_fill_count": 0.0,
+            "slot_unresolved_reference_count": 0.0,
+            "plan_evidence_reference_resolution_rate": None,
+        }
     plan = plan_from_payload(
         str(prediction.get("question") or ""),
         answer_type=str(
@@ -351,7 +243,10 @@ def _required_slot_false_fills(
     items = _contract_evidence_items(metadata)
     lookup = unambiguous_evidence_alias_lookup(items)
     requires_structure = bool(plan.constraints.get("requires_structure"))
-    violations = 0
+    semantic_false_fills = 0
+    unresolved_references = 0
+    reference_count = 0
+    resolved_reference_count = 0
     for slot in plan.evidence_slots:
         required = bool(
             slot.required
@@ -361,13 +256,15 @@ def _required_slot_false_fills(
         )
         if not required or slot.status != "filled":
             continue
+        reference_count += len(slot.evidence_ids)
         resolved = [
             lookup[evidence_id]
             for evidence_id in slot.evidence_ids
             if evidence_id in lookup
         ]
+        resolved_reference_count += len(resolved)
         if not resolved:
-            violations += 1
+            unresolved_references += len(slot.evidence_ids) or 1
             continue
         if not _slot_has_match_constraints(slot):
             continue
@@ -380,8 +277,14 @@ def _required_slot_false_fills(
             > 0
             for item in resolved
         ):
-            violations += 1
-    return violations
+            semantic_false_fills += 1
+    return {
+        "slot_semantic_false_fill_count": float(semantic_false_fills),
+        "slot_unresolved_reference_count": float(unresolved_references),
+        "plan_evidence_reference_resolution_rate": (
+            resolved_reference_count / reference_count if reference_count else None
+        ),
+    }
 
 
 def _slot_has_match_constraints(slot: Any) -> bool:
@@ -558,22 +461,6 @@ def _stable(value: Any) -> str:
     if isinstance(value, (list, tuple)):
         return repr([_stable(item) for item in value])
     return str(value)
-
-
-def _sum_metric(
-    metrics: list[dict[str, float | None]],
-    key: str,
-) -> float:
-    return sum(float(metric.get(key) or 0.0) for metric in metrics)
-
-
-def _mean_metric(
-    metrics: list[dict[str, float | None]],
-    key: str,
-) -> float | None:
-    return safe_mean(
-        [value for metric in metrics if (value := metric.get(key)) is not None]
-    )
 
 
 def _records(value: Any) -> list[dict[str, Any]]:

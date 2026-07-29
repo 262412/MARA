@@ -345,6 +345,33 @@ def test_compound_numeric_sentence_does_not_hide_false_direction():
     )
 
 
+def test_unrelated_negated_evidence_is_not_a_claim_contradiction():
+    claim = "The classification model uses labeled features."
+    supporting = {
+        "source_id": "paper",
+        "span_id": "support",
+        "text": "The classification model uses labeled features.",
+    }
+    unrelated = {
+        "source_id": "paper",
+        "span_id": "unrelated",
+        "text": (
+            "The appendix does not release implementation code for a separate "
+            "model discussed in future work."
+        ),
+    }
+
+    result = verify_claim(
+        claim,
+        [supporting, unrelated],
+        claim_id="claim:1",
+        prompt="What features does the classification model use?",
+    )
+
+    assert result.status == "supported"
+    assert result.contradicting_evidence_ids == ()
+
+
 def test_calculation_dimension_is_checked_on_result_claim_only():
     result = calculation_claim_result(
         _calculation_bundle(),
@@ -378,6 +405,36 @@ def test_generic_claim_with_support_and_contradiction_is_conflicting():
     assert result.status == "conflicting"
     assert result.supporting_evidence_ids
     assert result.contradicting_evidence_ids
+
+
+def test_supported_core_with_unknown_extension_requests_claim_pruning():
+    request = DocQARequest(
+        prompt="What features does the classification model use?",
+        verification_mode="strict",
+    )
+    decision = verify_decision(
+        request,
+        SimpleNamespace(status="good", retry=False),
+        EvidenceBundle(
+            route="doc",
+            items=[
+                {
+                    "source_id": "paper",
+                    "span_id": "support",
+                    "text": "The classification model uses labeled features.",
+                }
+            ],
+        ),
+        (
+            "The classification model uses labeled features. "
+            "It also depends on an undocumented graph module."
+        ),
+    )
+
+    assert decision.action == "revise"
+    assert decision.unsupported_claims == [
+        "It also depends on an undocumented graph module."
+    ]
 
 
 def test_legacy_identity_alias_lookup_rejects_ambiguous_key():

@@ -71,7 +71,9 @@ def test_normalize_qasper_manifest_materializes_paper_text(tmp_path):
     )
     assert bundle.examples[0].answers == ["retrieval", "document retrieval"]
     assert bundle.examples[0].answer_type == "free_text"
-    assert bundle.examples[0].evidence_sources == ["The method uses retrieval."]
+    assert bundle.examples[0].evidence_sources == ["paper-1#evidence:1"]
+    assert bundle.examples[0].gold_source_ids == ["paper-1"]
+    assert bundle.examples[0].gold_evidence_texts == ["The method uses retrieval."]
     assert bundle.examples[0].metadata["dataset_family"] == "scientific_qa"
     assert bundle.examples[0].metadata["qasper_answer_annotations"] == [
         {

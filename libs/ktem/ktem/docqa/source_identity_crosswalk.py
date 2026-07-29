@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from .evidence_identity import EvidenceIdentity, identity_of
+
 
 def _alias_key(value: Any) -> str:
     return str(value or "").strip().casefold()
@@ -145,6 +147,7 @@ def canonicalize_evidence_source(
         or metadata.get("file_id")
         or ""
     ).strip()
+    runtime_source = runtime_source or canonical
     aliases = {
         str(value).strip()
         for value in [
@@ -153,30 +156,56 @@ def canonicalize_evidence_source(
         ]
         if str(value or "").strip()
     }
-    normalized["runtime_source_id"] = runtime_source
-    normalized["source_id"] = canonical
-    normalized["document_id"] = canonical
-    normalized["file_id"] = canonical
-    normalized["source_aliases"] = sorted(
-        alias for alias in aliases if alias != canonical
+    aliases.add(canonical)
+    runtime_identity = _identity_for_source(normalized, runtime_source)
+    evaluation_identity = _identity_for_source(normalized, canonical)
+    source_projection = _source_projection(
+        runtime_source,
+        canonical,
+        aliases,
+        runtime_identity,
+        evaluation_identity,
     )
-    normalized["source_backrefs"] = [
-        _canonical_backref(str(value), resolver)
+    normalized.update(source_projection)
+    original_backrefs = [
+        str(value).strip()
         for value in normalized.get("source_backrefs") or []
+        if str(value).strip()
     ]
-    metadata.update(
-        {
-            "runtime_source_id": runtime_source,
-            "source_id": canonical,
-            "document_id": canonical,
-            "file_id": canonical,
-            "source_aliases": normalized["source_aliases"],
-        }
-    )
+    evaluation_backrefs = [
+        _canonical_backref(str(value), resolver) for value in original_backrefs
+    ]
+    normalized["runtime_source_backrefs"] = original_backrefs
+    normalized["source_backrefs"] = evaluation_backrefs
+    normalized["evaluation_source_backrefs"] = evaluation_backrefs
+    metadata.update(source_projection)
+    metadata.pop("identity", None)
+    metadata.pop("canonical_id", None)
+    metadata["runtime_source_backrefs"] = original_backrefs
+    metadata["evaluation_source_backrefs"] = evaluation_backrefs
     normalized["metadata"] = metadata
-    normalized.pop("identity", None)
-    normalized.pop("canonical_id", None)
     return normalized
+
+
+def _source_projection(
+    runtime_source: str,
+    canonical_source: str,
+    aliases: set[str],
+    runtime_identity: EvidenceIdentity,
+    evaluation_identity: EvidenceIdentity,
+) -> dict[str, Any]:
+    return {
+        "runtime_source_id": runtime_source,
+        "evaluation_source_id": canonical_source,
+        "source_id": runtime_source,
+        "document_id": canonical_source,
+        "file_id": runtime_source,
+        "source_aliases": sorted(aliases),
+        "runtime_identity": runtime_identity.key,
+        "evaluation_identity": evaluation_identity.key,
+        "identity": runtime_identity.as_dict(),
+        "canonical_id": runtime_identity.key,
+    }
 
 
 def canonicalize_evidence_sources(
@@ -195,3 +224,29 @@ def _canonical_backref(value: str, resolver: SourceIdentityResolver) -> str:
     if not canonical:
         return value
     return f"{canonical}{marker}{suffix}" if marker else canonical
+
+
+def _identity_for_source(
+    item: Mapping[str, Any],
+    source_id: str,
+) -> EvidenceIdentity:
+    projected = dict(item)
+    metadata = dict(projected.get("metadata") or {})
+    projected.update(
+        {
+            "source_id": source_id,
+            "file_id": source_id,
+            "runtime_source_id": source_id,
+        }
+    )
+    metadata.update(
+        {
+            "source_id": source_id,
+            "file_id": source_id,
+            "runtime_source_id": source_id,
+        }
+    )
+    projected["metadata"] = metadata
+    projected.pop("identity", None)
+    projected.pop("canonical_id", None)
+    return identity_of(projected)

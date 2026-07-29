@@ -140,22 +140,27 @@ def test_docqa_runtime_engine_derives_hits_pages_sources_and_elements(
         {
             "evidence_id": "hit-1",
             "document_id": "doc",
-            "source_id": "doc",
+            "source_id": "file-1",
             "runtime_source_id": "file-1",
-            "source_aliases": ["file-1"],
+            "evaluation_source_id": "doc",
+            "source_aliases": ["file-1", "doc"],
             "source_name": "doc.txt",
             "page_label": "2",
             "modality": "text",
             "element_id": "chunk-1",
-            "canonical_id": "element:doc:chunk-1",
+            "canonical_id": "element:file-1:chunk-1",
+            "runtime_identity": "element:file-1:chunk-1",
+            "evaluation_identity": "element:doc:chunk-1",
             "identity": {
-                "source_id": "doc",
+                "source_id": "file-1",
                 "kind": "element",
                 "local_id": "chunk-1",
             },
             "score": 0.91,
             "text": "Revenue increased.",
             "source_backrefs": ["doc#page:2"],
+            "runtime_source_backrefs": ["file-1#page:2"],
+            "evaluation_source_backrefs": ["doc#page:2"],
         }
     ]
     assert result.predicted_pages == ["2"]
@@ -392,16 +397,26 @@ def test_docqa_runtime_engine_canonicalizes_source_backrefs_without_source_id(
         {
             "evidence_id": "graph-hit",
             "document_id": "doc",
-            "source_id": "doc",
+            "source_id": "file-1",
+            "runtime_source_id": "file-1",
+            "evaluation_source_id": "doc",
+            "source_aliases": ["file-1", "doc"],
             "source_name": "Generic entity",
-            "canonical_id": "evidence:doc:graph-hit",
+            "canonical_id": "evidence:file-1:graph-hit",
+            "runtime_identity": "evidence:file-1:graph-hit",
+            "evaluation_identity": "evidence:doc:graph-hit",
             "identity": {
-                "source_id": "doc",
+                "source_id": "file-1",
                 "kind": "evidence",
                 "local_id": "graph-hit",
             },
             "text": "Graph evidence.",
             "source_backrefs": ["doc#page:2", "doc#page:3"],
+            "runtime_source_backrefs": [
+                "file-1#page:2",
+                "file-1#page:3",
+            ],
+            "evaluation_source_backrefs": ["doc#page:2", "doc#page:3"],
         }
     ]
     assert result.predicted_sources == ["doc#page:2", "doc#page:3"]

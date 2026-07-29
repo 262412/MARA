@@ -33,6 +33,9 @@ _IDENTITY_FIELDS = (
     "canonical_id",
     "source_id",
     "runtime_source_id",
+    "evaluation_source_id",
+    "runtime_identity",
+    "evaluation_identity",
     "source_name",
     "source_aliases",
     "document_id",
@@ -77,8 +80,15 @@ _IDENTITY_FIELDS = (
     "normalized_text_hash",
     "duplicate_evidence_ids",
     "retrieval_lineage",
+    "reranker_input_identity",
+    "reranker_score",
+    "reranker_rank",
+    "reranker_backend",
+    "reranker_model",
     "representations",
     "source_backrefs",
+    "runtime_source_backrefs",
+    "evaluation_source_backrefs",
 )
 
 

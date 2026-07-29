@@ -5,9 +5,11 @@ from types import SimpleNamespace
 from typing import Any
 
 from ktem.docqa._runtime_models import DocQARequest
+from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.verification import verify_decision, with_verification_evidence
 
+from .metrics import is_abstention_answer
 from .qasper_answerability import (
     QASPER_ANSWERABILITY_CONTRACT,
     verify_qasper_answerability,
@@ -40,10 +42,13 @@ def apply_task_answer_contract(
         prediction.get("answer_for_scoring") or prediction.get("predicted_answer") or ""
     )
     pre_contract_verification = _verification_snapshot(prediction, answer=candidate)
+    evidence_items = _prediction_evidence_items(prediction)
     result = verify_qasper_answerability(
         llm_factory(),
         question=str(prediction.get("question") or ""),
         evidence=_prediction_evidence(prediction),
+        evidence_items=evidence_items or None,
+        required_evidence_ids=_required_plan_evidence_ids(prediction),
         candidate_answer=candidate,
     )
     answer_changed = _normalized_answer(result.answer) != _normalized_answer(candidate)
@@ -151,8 +156,8 @@ def _verification_snapshot(
 def _rewrite_type(before: str, after: str) -> str:
     if _normalized_answer(before) == _normalized_answer(after):
         return "none"
-    before_abstained = _normalized_answer(before) == "unanswerable"
-    after_abstained = _normalized_answer(after) == "unanswerable"
+    before_abstained = is_abstention_answer(before)
+    after_abstained = is_abstention_answer(after)
     if before_abstained and not after_abstained:
         return "unanswerable_to_polarity"
     if not before_abstained and after_abstained:
@@ -234,14 +239,64 @@ def _prediction_evidence_items(
     prediction: dict[str, Any],
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    metadata = prediction.get("evidence_metadata")
+    if isinstance(metadata, dict):
+        for key in (
+            "generation_context_evidence",
+            "selected_evidence",
+            "reranked_evidence",
+            "canonical_candidate_evidence",
+            "evidence",
+        ):
+            items.extend(_records(metadata.get(key)))
     bundle = prediction.get("evidence_bundle")
     if isinstance(bundle, dict):
         items.extend(_records(bundle.get("items")))
-    metadata = prediction.get("evidence_metadata")
-    if isinstance(metadata, dict):
-        items.extend(_records(metadata.get("evidence")))
     items.extend(_records(prediction.get("retrieved_hits")))
-    return items
+    output: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        try:
+            identity = identity_of(item).key
+        except ValueError:
+            continue
+        if identity in seen:
+            continue
+        seen.add(identity)
+        output.append(item)
+    return output
+
+
+def _required_plan_evidence_ids(prediction: dict[str, Any]) -> list[str]:
+    metadata = prediction.get("evidence_metadata")
+    payload = metadata.get("query_plan") if isinstance(metadata, dict) else None
+    if not isinstance(payload, dict):
+        bundle = prediction.get("evidence_bundle")
+        bundle_metadata = bundle.get("metadata") if isinstance(bundle, dict) else None
+        payload = (
+            bundle_metadata.get("query_plan")
+            if isinstance(bundle_metadata, dict)
+            else None
+        )
+    if not isinstance(payload, dict):
+        return []
+    values: list[str] = []
+    for slot in payload.get("evidence_slots") or []:
+        if not isinstance(slot, dict) or not any(
+            bool(slot.get(field))
+            for field in (
+                "required",
+                "required_for_retrieval",
+                "required_for_execution",
+                "required_for_verification",
+            )
+        ):
+            continue
+        for evidence_id in slot.get("evidence_ids") or []:
+            value = str(evidence_id).strip()
+            if value and value not in values:
+                values.append(value)
+    return values
 
 
 def _normalized_answer(value: str) -> str:

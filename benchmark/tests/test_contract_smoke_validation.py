@@ -36,15 +36,29 @@ def _prediction(requirements: list[str]) -> dict[str, Any]:
     metadata.update(
         {
             "ranking_trace": {"backend_execution": False},
-            "query_plan": {"evidence_slots": []},
+            "query_plan": {
+                "evidence_slots": [
+                    {
+                        "slot_id": "support:answer",
+                        "role": "support",
+                        "required": True,
+                        "status": "filled",
+                        "evidence_ids": ["span:paper:s1"],
+                    }
+                ]
+            },
         }
     )
     return {
         "example_id": "smoke",
+        "document_id": "paper",
+        "document_ids": ["paper"],
         "question": "What result is reported?",
         "answer_type": "free_text",
         "gold_answers": ["The result."],
         "gold_evidence": [{"document_id": "paper", "page": 1}],
+        "gold_source_ids": ["paper"],
+        "gold_evidence_texts": ["The paper reports the result."],
         "source_identity_crosswalk": [
             {
                 "canonical_dataset_id": "paper",
@@ -114,6 +128,12 @@ def test_contract_smoke_validator_accepts_full_auditable_artifact(tmp_path):
                 "action": "abstained_insufficient_evidence",
                 "primary_answer": "yes",
                 "citation_state": "cleared_for_rebind",
+                "status": "ok",
+                "verifier_input_evidence_ids": "span:paper:s1",
+                "verifier_dropped_evidence_ids": "",
+                "verifier_input_character_count": "29",
+                "verifier_input_token_count": "5",
+                "verifier_budget_exhausted": "false",
             },
             "answerability_contract_trace": {
                 "pre_contract_answer": "yes",

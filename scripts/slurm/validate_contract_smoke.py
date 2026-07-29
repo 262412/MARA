@@ -60,10 +60,14 @@ HARD_GATES = {
     "citation_provenance_violation_count": ("eq", 0.0),
     "missing_execution_slot_answer_count": ("eq", 0.0),
     "required_slot_false_fill_count": ("eq", 0.0),
+    "slot_semantic_false_fill_count": ("eq", 0.0),
+    "slot_unresolved_reference_count": ("eq", 0.0),
+    "plan_evidence_reference_resolution_rate": ("eq", 1.0),
     "source_page_cross_join_count": ("eq", 0.0),
     "calculation_render_mismatch_count": ("eq", 0.0),
     "qasper_stale_verifier_state_count": ("eq", 0.0),
     "gold_runtime_source_join_rate": ("eq", 1.0),
+    "gold_source_schema_valid": ("eq", 1.0),
     "unresolved_gold_source_count": ("eq", 0.0),
     "ambiguous_source_alias_count": ("eq", 0.0),
     "gold_runtime_source_page_join_rate": ("eq", 1.0),
@@ -157,6 +161,10 @@ def _stage_audit(
             and status == "missing"
         ):
             missing.append(stage)
+    if ranking_trace.get("executed") and int(
+        ranking_trace.get("output_count") or 0
+    ) != len(_records(metadata.get("reranked_evidence"))):
+        missing.append("reranker_output_count_mismatch")
     return audit, missing
 
 
@@ -242,11 +250,10 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
             "missing contract smoke requirements: "
             + ", ".join(sorted(missing_requirements))
         )
-    behavior_violations: list[str] = []
-    if suite_kind == "qasper" and not any(
-        _observed_qasper_answer_rewrite(prediction) for prediction in predictions
-    ):
-        behavior_violations.append("answerability_rewrite_not_observed")
+    behavior_violations = _behavior_violations(
+        predictions,
+        suite_kind=suite_kind,
+    )
 
     stage_audits, stage_violations = _all_stage_audits(
         predictions, suite_kind=suite_kind
@@ -301,6 +308,39 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
             details.append("contract_gate_failures=" + ",".join(contract_gate_failures))
         raise ValueError("contract smoke failed: " + " ".join(details))
     return audit
+
+
+def _behavior_violations(
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+) -> list[str]:
+    if suite_kind != "qasper":
+        return []
+    violations: list[str] = []
+    if not any(
+        _observed_qasper_answer_rewrite(prediction) for prediction in predictions
+    ):
+        violations.append("answerability_rewrite_not_observed")
+    required_trace_fields = (
+        "verifier_input_evidence_ids",
+        "verifier_dropped_evidence_ids",
+        "verifier_input_character_count",
+        "verifier_input_token_count",
+        "verifier_budget_exhausted",
+    )
+    for prediction in predictions:
+        trace = dict(
+            dict(prediction.get("evidence_metadata") or {}).get("qasper_answerability")
+            or {}
+        )
+        if trace.get("status") == "ok" and any(
+            field not in trace for field in required_trace_fields
+        ):
+            violations.append(
+                f"verifier_input_trace_missing:{prediction.get('example_id')}"
+            )
+    return violations
 
 
 def main() -> None:

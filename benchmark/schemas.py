@@ -82,7 +82,10 @@ class BenchmarkExample:
     answer_type: str = "extractive"
     evidence_pages: list[int | str] = field(default_factory=list)
     evidence_sources: list[str] = field(default_factory=list)
+    gold_source_ids: list[str] = field(default_factory=list)
+    gold_evidence_texts: list[str] = field(default_factory=list)
     gold_evidence: list[dict[str, Any]] = field(default_factory=list)
+    gold_evidence_records: list[dict[str, Any]] = field(default_factory=list)
     expected_formats: list[str] = field(default_factory=list)
     expected_guardrails: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)

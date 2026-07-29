@@ -33,10 +33,15 @@ def evidence_pages(retrieved_hits: list[dict[str, Any]]) -> list[str]:
 def evidence_sources(retrieved_hits: list[dict[str, Any]]) -> list[str]:
     sources: list[str] = []
     for hit in retrieved_hits:
-        refs = list(hit.get("source_backrefs") or [])
+        refs = list(
+            hit.get("evaluation_source_backrefs") or hit.get("source_backrefs") or []
+        )
         if not refs:
             source_id = str(
-                hit.get("source_id") or hit.get("document_id") or ""
+                hit.get("evaluation_source_id")
+                or hit.get("document_id")
+                or hit.get("source_id")
+                or ""
             ).strip()
             page = str(hit.get("page_label") or "").strip()
             refs = _fallback_source_backrefs(source_id, page)

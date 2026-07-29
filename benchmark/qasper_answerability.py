@@ -20,10 +20,10 @@ from .qasper_boolean import (
 from .qasper_boolean import boolean_relation_lemmas as _boolean_relation_lemmas
 from .qasper_boolean import is_boolean_question as _is_boolean_question
 from .qasper_free_text_answerability import verify_free_text_candidate
-from .qasper_prompt_budget import fit_qasper_verifier_prompt
+from .qasper_prompt_budget import fit_qasper_verifier_items, fit_qasper_verifier_prompt
 from .qasper_proposition_conflict import resolve_boolean_conflict
 
-QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v13"
+QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v14"
 QASPER_ANSWERABILITY_SEED = 20260724
 QASPER_ANSWERABILITY_MAX_TOKENS = 192
 QASPER_EVIDENCE_QUOTE_MAX_LENGTH = 640
@@ -75,6 +75,8 @@ def verify_qasper_answerability(
     *,
     question: str,
     evidence: str,
+    evidence_items: list[dict[str, Any]] | None = None,
+    required_evidence_ids: list[str] | None = None,
     candidate_answer: str,
 ) -> QasperAnswerabilityResult:
     candidate = _clean_candidate(candidate_answer)
@@ -93,6 +95,8 @@ def verify_qasper_answerability(
                 llm,
                 question=question,
                 evidence=evidence,
+                evidence_items=evidence_items,
+                required_evidence_ids=required_evidence_ids,
                 candidate_answer="unanswerable",
                 candidate="",
             )
@@ -110,6 +114,8 @@ def verify_qasper_answerability(
             llm,
             question=question,
             evidence=evidence,
+            evidence_items=evidence_items,
+            required_evidence_ids=required_evidence_ids,
             candidate_answer=candidate_answer,
             candidate=candidate,
         )
@@ -117,6 +123,8 @@ def verify_qasper_answerability(
         llm,
         question=question,
         evidence=evidence,
+        evidence_items=evidence_items,
+        required_evidence_ids=required_evidence_ids,
         candidate_answer=candidate_answer,
         candidate=candidate,
     )
@@ -127,18 +135,18 @@ def _verify_boolean_candidate(
     *,
     question: str,
     evidence: str,
+    evidence_items: list[dict[str, Any]] | None,
+    required_evidence_ids: list[str] | None,
     candidate_answer: str,
     candidate: str,
 ) -> QasperAnswerabilityResult:
-    candidate_polarity = (
-        "yes" if candidate.lower() in {"yes", "true"} else "no" if candidate else ""
-    )
-    prompt, evidence, budget_trace = fit_qasper_verifier_prompt(
-        evidence,
-        lambda bounded_evidence: _boolean_answerability_prompt(
-            question=question,
-            evidence=bounded_evidence,
-        ),
+    candidate_polarity = _candidate_polarity(candidate)
+    prompt, evidence, budget_trace = _fit_boolean_verifier_prompt(
+        question=question,
+        evidence=evidence,
+        evidence_items=evidence_items,
+        candidate_answer=candidate_answer,
+        required_evidence_ids=required_evidence_ids,
     )
     verdict, quote, parse_trace = _call_verifier(
         llm,
@@ -200,6 +208,37 @@ def _verify_boolean_candidate(
             raw_verifier_verdict=raw_verdict,
             reason=reason,
         ),
+    )
+
+
+def _candidate_polarity(candidate: str) -> str:
+    if candidate.lower() in {"yes", "true"}:
+        return "yes"
+    return "no" if candidate else ""
+
+
+def _fit_boolean_verifier_prompt(
+    *,
+    question: str,
+    evidence: str,
+    evidence_items: list[dict[str, Any]] | None,
+    candidate_answer: str,
+    required_evidence_ids: list[str] | None,
+) -> tuple[str, str, dict[str, str]]:
+    def prompt_builder(bounded_evidence: str) -> str:
+        return _boolean_answerability_prompt(
+            question=question,
+            evidence=bounded_evidence,
+        )
+
+    if evidence_items is None:
+        return fit_qasper_verifier_prompt(evidence, prompt_builder)
+    return fit_qasper_verifier_items(
+        evidence_items,
+        prompt_builder,
+        question=question,
+        candidate_answer=candidate_answer,
+        required_evidence_ids=required_evidence_ids,
     )
 
 
@@ -278,6 +317,8 @@ def _verify_free_text_candidate(
     *,
     question: str,
     evidence: str,
+    evidence_items: list[dict[str, Any]] | None,
+    required_evidence_ids: list[str] | None,
     candidate_answer: str,
     candidate: str,
 ) -> QasperAnswerabilityResult:
@@ -285,6 +326,8 @@ def _verify_free_text_candidate(
         llm,
         question=question,
         evidence=evidence,
+        evidence_items=evidence_items,
+        required_evidence_ids=required_evidence_ids,
         candidate_answer=candidate_answer,
         candidate=candidate,
         contract_id=QASPER_ANSWERABILITY_CONTRACT,

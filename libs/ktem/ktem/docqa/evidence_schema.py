@@ -9,6 +9,9 @@ class EvidenceElement:
     evidence_id: str
     source_id: str = ""
     runtime_source_id: str = ""
+    evaluation_source_id: str = ""
+    runtime_identity: str = ""
+    evaluation_identity: str = ""
     source_name: str = ""
     source_aliases: list[str] = field(default_factory=list)
     page_label: str = ""
@@ -51,6 +54,8 @@ class EvidenceElement:
     vlm_text: str = ""
     representations: list[dict[str, Any]] = field(default_factory=list)
     source_backrefs: list[str] = field(default_factory=list)
+    runtime_source_backrefs: list[str] = field(default_factory=list)
+    evaluation_source_backrefs: list[str] = field(default_factory=list)
     evidence_level: str = "page"
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -59,6 +64,9 @@ class EvidenceElement:
         for field_name in (
             "source_aliases",
             "runtime_source_id",
+            "evaluation_source_id",
+            "runtime_identity",
+            "evaluation_identity",
             "dataset_page",
             "parser_page_index",
             "page_aliases",
@@ -77,6 +85,8 @@ class EvidenceElement:
             "statement_kind",
             "financial_scope",
             "representations",
+            "evaluation_source_backrefs",
+            "runtime_source_backrefs",
         ):
             if payload[field_name] in ("", None, []):
                 payload.pop(field_name)

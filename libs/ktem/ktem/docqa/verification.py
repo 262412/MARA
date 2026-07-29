@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .boolean_claim_verification import boolean_evidence_assessment
 from .calculation_claim_verification import calculation_claim_result
 from .calculation_evidence_identity import calculation_evidence_lookup
 from .claim_clauses import split_claim_clauses
@@ -11,7 +11,6 @@ from .claim_filtering import answer_claims
 from .claim_support import (
     claim_supported,
     item_supports_claim,
-    meaningful_tokens,
     text_contradicts_claim,
     unsupported_confidence,
     unsupported_threshold,
@@ -378,6 +377,22 @@ def _decision_for_claim_results(
             unsupported_claims=unsupported,
         )
     if unknown:
+        supported_core = bool(results and results[0].status == "supported")
+        if supported_core:
+            return _result_decision(
+                mode,
+                claims,
+                unknown,
+                citations,
+                serialized,
+                status="unsupported",
+                reason=(
+                    f"{mode.title()} verification supported the core claim but "
+                    "found unsupported or conflicting extensions."
+                ),
+                action="revise",
+                unsupported_claims=unknown,
+            )
         return _result_decision(
             mode,
             claims,
@@ -497,59 +512,18 @@ def _boolean_verification(
     answer: str,
     evidence_items: list[dict[str, Any]],
 ) -> tuple[list[str], list[VerifiedClaim]] | None:
-    answer_text = extract_final_answer_text(answer).strip().lower()
-    match = re.match(r"^(yes|true|no|false)\b", answer_text)
-    normalized = match.group(1) if match else ""
-    aliases = {"yes": True, "true": True, "no": False, "false": False}
-    if normalized not in aliases:
+    assessment = boolean_evidence_assessment(prompt, answer, evidence_items)
+    if assessment is None:
         return None
-    proposition = str(prompt or "").strip()
-    claim = f"{normalized}: {proposition}"
-    proposition_tokens = meaningful_tokens(proposition)
-    supporting: list[str] = []
-    contradicting: list[str] = []
-    for item in evidence_items:
-        item_text = evidence_text([item])
-        item_tokens = meaningful_tokens(item_text)
-        overlap = proposition_tokens & item_tokens
-        required = max(2, int(len(proposition_tokens) * 0.6))
-        if len(overlap) < min(len(proposition_tokens), required):
-            continue
-        evidence_is_negative = _has_negation(item_text)
-        expected_evidence_negation = _has_negation(proposition) ^ (
-            not aliases[normalized]
-        )
-        if evidence_is_negative == expected_evidence_negation:
-            supporting.append(identity_of(item).key)
-        else:
-            contradicting.append(identity_of(item).key)
-    status = (
-        "conflicting"
-        if supporting and contradicting
-        else "supported"
-        if supporting
-        else "contradicted"
-        if contradicting
-        else "unknown"
-    )
+    claim, status, supporting, contradicting = assessment
     result = VerifiedClaim(
         claim_id="claim:1",
         claim=claim,
         status=status,
-        supporting_evidence_ids=tuple(dict.fromkeys(supporting)),
-        contradicting_evidence_ids=tuple(dict.fromkeys(contradicting)),
+        supporting_evidence_ids=supporting,
+        contradicting_evidence_ids=contradicting,
     )
     return [claim], [result]
-
-
-def _has_negation(value: str) -> bool:
-    return bool(
-        re.search(
-            r"\b(?:cannot|can't|didn't|doesn't|neither|never|no|not|without)\b",
-            str(value or ""),
-            flags=re.IGNORECASE,
-        )
-    )
 
 
 def _enforce_verification_slot_support(

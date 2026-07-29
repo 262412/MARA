@@ -4,14 +4,17 @@ import json
 from types import SimpleNamespace
 from typing import Any
 
+from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_ranking_trace import materialize_reranked_candidates
 from ktem.docqa.source_identity_crosswalk import (
     SourceIdentityCrosswalk,
     SourceIdentityResolver,
+    canonicalize_evidence_source,
 )
 
 from benchmark.answer_metric_core import core_answer_metrics
 from benchmark.contract_gate_metrics import prediction_gate_metrics
+from benchmark.contract_invariant_metrics import contract_invariant_summary
 from benchmark.evidence_stage_coverage import stage_coverage_values
 from benchmark.page_stage_metrics import stage_all_gold_pages_hit
 from benchmark.qasper_answerability import verify_qasper_answerability
@@ -45,6 +48,83 @@ def test_gold_document_id_matches_runtime_uuid_alias():
     assert resolver.resolve("/datasets/paper.pdf") == "paper-gold-id"
     assert resolver.unresolved_count(["paper-gold-id"]) == 0
     assert resolver.ambiguous_alias_count == 0
+
+
+def test_benchmark_source_projection_preserves_runtime_plan_identity():
+    runtime = {
+        "source_id": "8edc-runtime-uuid",
+        "span_id": "answer-span",
+        "text": "The paper uses labeled features.",
+    }
+    runtime_identity = identity_of(runtime).key
+
+    projected = canonicalize_evidence_source(runtime, _crosswalk())
+
+    assert identity_of(projected).key == runtime_identity
+    assert projected["runtime_identity"] == runtime_identity
+    assert projected["evaluation_identity"] == ("span:paper-gold-id:answer-span")
+    prediction = {
+        "question": "What features are used?",
+        "evidence_metadata": {
+            "canonical_candidate_evidence": [projected],
+            "query_plan": {
+                "answer_type": "free_text",
+                "question_type": "factoid",
+                "constraints": {},
+                "evidence_slots": [
+                    {
+                        "slot_id": "support:answer",
+                        "role": "support",
+                        "required": True,
+                        "status": "filled",
+                        "evidence_ids": [runtime_identity],
+                    }
+                ],
+            },
+        },
+    }
+
+    summary = contract_invariant_summary([prediction])
+
+    assert summary["slot_unresolved_reference_count"] == 0.0
+    assert summary["slot_semantic_false_fill_count"] == 0.0
+    assert summary["plan_evidence_reference_resolution_rate"] == 1.0
+
+
+def test_unresolved_slot_reference_is_not_a_semantic_false_fill():
+    prediction = {
+        "question": "What features are used?",
+        "evidence_metadata": {
+            "canonical_candidate_evidence": [
+                {
+                    "source_id": "runtime",
+                    "span_id": "available",
+                    "text": "The paper uses labeled features.",
+                }
+            ],
+            "query_plan": {
+                "answer_type": "free_text",
+                "question_type": "factoid",
+                "constraints": {},
+                "evidence_slots": [
+                    {
+                        "slot_id": "support:answer",
+                        "role": "support",
+                        "required": True,
+                        "status": "filled",
+                        "evidence_ids": ["span:runtime:missing"],
+                    }
+                ],
+            },
+        },
+    }
+
+    summary = contract_invariant_summary([prediction])
+
+    assert summary["slot_unresolved_reference_count"] == 1.0
+    assert summary["slot_semantic_false_fill_count"] == 0.0
+    assert summary["required_slot_false_fill_count"] == 0.0
+    assert summary["plan_evidence_reference_resolution_rate"] == 0.0
 
 
 def test_source_page_pair_uses_crosswalk():
@@ -200,6 +280,48 @@ def test_partial_reranker_input_materializes_with_explicit_lineage():
     assert ranking["executed"] is True
     assert ranking["input_count"] == 1
     assert ranking["output_count"] == 1
+    assert ranking["backend_output_count"] == 1
+    assert ranking["reranker_artifact_record_count"] == 1
+
+
+def test_reranker_trace_reports_materialized_count_after_identity_dedupe():
+    candidates = [
+        {
+            "source_id": "paper",
+            "span_id": "same",
+            "reranker_input_identity": "raw:a",
+            "reranker_score": 0.9,
+        },
+        {
+            "source_id": "paper",
+            "span_id": "same",
+            "reranker_input_identity": "raw:b",
+            "reranker_score": 0.8,
+        },
+    ]
+    trace = {
+        "configured": True,
+        "loaded": True,
+        "executed": True,
+        "backend": "tei",
+        "model": "bge",
+        "input_count": 2,
+        "output_count": 2,
+        "score_field": "reranker_score",
+        "input_identities": ["raw:a", "raw:b"],
+        "output_identities": ["raw:a", "raw:b"],
+    }
+
+    output, ranking = materialize_reranked_candidates(
+        candidates,
+        {"reranker_execution_trace": trace},
+        limit=30,
+    )
+
+    assert len(output or []) == 1
+    assert ranking["backend_output_count"] == 2
+    assert ranking["output_count"] == 1
+    assert ranking["reranker_artifact_record_count"] == 1
 
 
 def test_predicted_source_recall_is_not_citation_recall():

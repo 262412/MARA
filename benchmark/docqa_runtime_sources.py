@@ -307,18 +307,30 @@ def _canonicalize_docqa_hit(
     if not canonical_id:
         return normalized
 
-    runtime_source_id = str(
-        normalized.get("source_id") or normalized.get("document_id") or ""
-    ).strip()
-    if runtime_source_id and runtime_source_id != canonical_id:
-        normalized["runtime_source_id"] = runtime_source_id
-    normalized["source_id"] = canonical_id
+    runtime_source_id = _runtime_hit_source_id(normalized) or canonical_id
+    runtime_identity = _canonical_hit_identity(normalized, runtime_source_id)
+    evaluation_identity = EvidenceIdentity(
+        canonical_id,
+        runtime_identity.kind,
+        runtime_identity.local_id,
+    )
+    normalized["runtime_source_id"] = runtime_source_id
+    normalized["evaluation_source_id"] = canonical_id
+    normalized["source_id"] = runtime_source_id
     normalized["document_id"] = canonical_id
-    normalized["source_backrefs"] = _canonical_source_backrefs(
+    original_backrefs = [
+        str(value).strip()
+        for value in normalized.get("source_backrefs") or []
+        if str(value).strip()
+    ]
+    evaluation_backrefs = _canonical_source_backrefs(
         normalized,
         aliases,
         canonical_id,
     )
+    normalized["runtime_source_backrefs"] = original_backrefs
+    normalized["source_backrefs"] = evaluation_backrefs
+    normalized["evaluation_source_backrefs"] = evaluation_backrefs
     source_aliases = [
         str(value).strip()
         for value in normalized.get("source_aliases") or []
@@ -326,12 +338,31 @@ def _canonicalize_docqa_hit(
     ]
     if runtime_source_id and runtime_source_id not in source_aliases:
         source_aliases.append(runtime_source_id)
+    if canonical_id not in source_aliases:
+        source_aliases.append(canonical_id)
     if source_aliases:
         normalized["source_aliases"] = source_aliases
-    identity = _canonical_hit_identity(normalized, canonical_id)
-    normalized["identity"] = identity.as_dict()
-    normalized["canonical_id"] = identity.key
+    normalized["runtime_identity"] = runtime_identity.key
+    normalized["evaluation_identity"] = evaluation_identity.key
+    normalized["identity"] = runtime_identity.as_dict()
+    normalized["canonical_id"] = runtime_identity.key
     return normalized
+
+
+def _runtime_hit_source_id(hit: dict[str, Any]) -> str:
+    value = str(
+        hit.get("runtime_source_id")
+        or hit.get("source_id")
+        or hit.get("document_id")
+        or ""
+    ).strip()
+    if value:
+        return value
+    for ref in hit.get("source_backrefs") or []:
+        source, _separator, _suffix = str(ref or "").strip().partition("#")
+        if source:
+            return source
+    return ""
 
 
 def _canonical_hit_identity(

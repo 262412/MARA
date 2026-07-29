@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .evidence_identity import identity_of
+
 
 def ranking_trace(
     *,
@@ -18,14 +20,29 @@ def ranking_trace(
     model: str = "",
     input_identities: list[str] | None = None,
     output_identities: list[str] | None = None,
+    backend_output_count: int | None = None,
+    backend_output_identities: list[str] | None = None,
+    scored_count: int | None = None,
 ) -> dict[str, object]:
     return {
         "candidate_stage": "post_fusion",
         "candidate_limit": candidate_limit,
         "candidate_input_count": input_count,
         "input_count": input_count,
+        "reranker_input_count": input_count,
+        "reranker_scored_count": (
+            input_count
+            if scored_count is None and backend_execution
+            else scored_count or 0
+        ),
         "output_limit": output_limit,
         "output_count": output_count,
+        "backend_output_count": (
+            output_count if backend_output_count is None else backend_output_count
+        ),
+        "reranker_output_count": output_count,
+        "reranker_artifact_record_count": output_count,
+        "selection_retained_reranked_count": output_count,
         "backend_execution": backend_execution,
         "configured": configured,
         "loaded": loaded,
@@ -35,6 +52,11 @@ def ranking_trace(
         "score_field": score_field,
         "input_identities": list(input_identities or []),
         "output_identities": list(output_identities or []),
+        "backend_output_identities": list(
+            backend_output_identities
+            if backend_output_identities is not None
+            else output_identities or []
+        ),
         "failure_reason": failure_reason,
     }
 
@@ -81,6 +103,7 @@ def materialize_reranked_candidates(
         )
     scored.sort(key=lambda row: (-float(row[0] or 0.0), row[1]))
     output = [item for _score, _index, item in scored[:limit]]
+    output = _dedupe_ranked(output)
     return output, ranking_trace(
         candidate_limit=len(candidates),
         input_count=len(candidates),
@@ -93,6 +116,8 @@ def materialize_reranked_candidates(
         loaded=True,
         input_identities=[_item_input_identity(item) for item in candidates],
         output_identities=[_item_input_identity(item) for item in output],
+        backend_output_count=len(scored[:limit]),
+        scored_count=len(scored),
     )
 
 
@@ -146,7 +171,12 @@ def _materialize_from_execution_trace(
         )
     ]
     scored.sort(key=lambda row: (-float(row[0] or 0.0), row[1]))
-    output = [item for _score, _index, item in scored[:limit]]
+    backend_output_count = int(
+        trace.get("backend_output_count")
+        or trace.get("output_count")
+        or len(output_identities)
+    )
+    output = _dedupe_ranked([item for _score, _index, item in scored[:limit]])
     return output, ranking_trace(
         candidate_limit=len(candidates),
         input_count=int(trace.get("input_count") or len(input_identities)),
@@ -162,7 +192,10 @@ def _materialize_from_execution_trace(
             "" if output else str(trace.get("failure_reason") or "no_scored_output")
         ),
         input_identities=input_identities,
-        output_identities=output_identities,
+        output_identities=[_item_input_identity(item) for item in output],
+        backend_output_count=backend_output_count,
+        backend_output_identities=output_identities,
+        scored_count=len(scored),
     )
 
 
@@ -214,6 +247,18 @@ def _item_input_identity(item: dict[str, Any]) -> str:
         or item.get("evidence_id")
         or ""
     ).strip()
+
+
+def _dedupe_ranked(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        identity = identity_of(item).key
+        if identity in seen:
+            continue
+        seen.add(identity)
+        output.append(item)
+    return output
 
 
 def actual_reranker_input(

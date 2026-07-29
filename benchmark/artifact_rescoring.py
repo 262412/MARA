@@ -115,10 +115,16 @@ def _prepare_prediction_defaults(prediction: dict[str, Any]) -> None:
     prediction.setdefault("gold_pages", [])
     prediction.setdefault("predicted_pages", [])
     prediction.setdefault("gold_sources", [])
+    prediction.setdefault("gold_source_ids", [])
+    prediction.setdefault("gold_evidence_texts", [])
     prediction.setdefault("predicted_sources", [])
     prediction.setdefault("predicted_citations", [])
     prediction.setdefault("scored_predicted_sources", [])
     prediction.setdefault("gold_evidence", [])
+    prediction.setdefault(
+        "gold_evidence_records",
+        list(prediction.get("gold_evidence") or []),
+    )
     prediction.setdefault("expected_formats", [])
     prediction.setdefault("expected_guardrails", {})
     prediction.setdefault("claim_verification", {})

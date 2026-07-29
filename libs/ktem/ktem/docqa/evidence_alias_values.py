@@ -10,6 +10,11 @@ def exact_alias_values(
     identity_kind: str,
 ) -> set[str]:
     aliases = {identity_key}
+    for key in ("runtime_identity", "evaluation_identity"):
+        _add_alias(aliases, item.get(key))
+        metadata = item.get("metadata")
+        if isinstance(metadata, dict):
+            _add_alias(aliases, metadata.get(key))
     canonical_id = str(item.get("canonical_id") or "").strip()
     if canonical_id == identity_key:
         aliases.add(canonical_id)

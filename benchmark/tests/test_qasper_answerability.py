@@ -44,6 +44,47 @@ def test_qasper_answerability_bounds_long_retrieved_evidence_before_llm_call():
     )
 
 
+def test_qasper_verifier_packs_late_relevant_item_without_partial_items():
+    quote = "The classification model uses labeled features."
+    llm = _ContextLimitedVerifierLLM(
+        '{"verdict":"supported","evidence_quote":' f'"{quote}",' '"revised_answer":""}'
+    )
+    evidence_items = [
+        {
+            "source_id": "paper",
+            "span_id": f"noise-{index}",
+            "text": f"Unrelated appendix material {index}. " * 80,
+        }
+        for index in range(20)
+    ]
+    evidence_items.append(
+        {
+            "source_id": "paper",
+            "span_id": "answer",
+            "text": quote,
+        }
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="What features does the classification model use?",
+        evidence="",
+        evidence_items=evidence_items,
+        required_evidence_ids=["span:paper:answer"],
+        candidate_answer="labeled features",
+    )
+
+    prompt = llm.calls[0][0]
+    assert result.answer == "labeled features"
+    assert quote in prompt
+    assert result.trace["verifier_input_evidence_ids"].split(",")[0] == (
+        "span:paper:answer"
+    )
+    assert "span:paper:noise-19" in result.trace["verifier_dropped_evidence_ids"]
+    assert result.trace["verifier_budget_exhausted"] == "true"
+    assert not prompt.rstrip().endswith("Unrelated appendix")
+
+
 def test_qasper_answerability_rejects_related_but_unsupported_candidate():
     llm = _VerifierLLM(
         '{"verdict":"unsupported","evidence_quote":"The paper reports NDCG 55.46."}'

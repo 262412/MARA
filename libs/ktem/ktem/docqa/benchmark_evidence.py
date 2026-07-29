@@ -54,6 +54,9 @@ class BenchmarkEvidenceRecord:
     document_id: str = ""
     source_id: str = ""
     runtime_source_id: str = ""
+    evaluation_source_id: str = ""
+    runtime_identity: str = ""
+    evaluation_identity: str = ""
     source_name: str = ""
     source_aliases: tuple[str, ...] = ()
     page_label: str = ""
@@ -97,6 +100,11 @@ class BenchmarkEvidenceRecord:
     element_id_aliases: tuple[str, ...] = ()
     element_type_aliases: tuple[str, ...] = ()
     retrieval_lineage: tuple[dict[str, Any], ...] = ()
+    reranker_input_identity: str = ""
+    reranker_score: Any = None
+    reranker_rank: int | None = None
+    reranker_backend: str = ""
+    reranker_model: str = ""
     score: Any = None
     bbox: Any = None
     caption: str = ""
@@ -107,6 +115,8 @@ class BenchmarkEvidenceRecord:
     table_title: str = ""
     text: str = ""
     source_backrefs: tuple[str, ...] = ()
+    runtime_source_backrefs: tuple[str, ...] = ()
+    evaluation_source_backrefs: tuple[str, ...] = ()
     extension_metadata: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
@@ -149,6 +159,13 @@ def benchmark_evidence_record(item: dict[str, Any]) -> BenchmarkEvidenceRecord:
         document_id=_first_text(item, metadata, "document_id") or source_id,
         source_id=source_id,
         runtime_source_id=runtime_source_id,
+        evaluation_source_id=_first_text(
+            item,
+            metadata,
+            "evaluation_source_id",
+        ),
+        runtime_identity=_first_text(item, metadata, "runtime_identity"),
+        evaluation_identity=_first_text(item, metadata, "evaluation_identity"),
         source_name=_first_text(item, metadata, "source_name", "file_name"),
         source_aliases=_first_tuple(item, metadata, "source_aliases"),
         page_label=page_label,
@@ -173,14 +190,45 @@ def benchmark_evidence_record(item: dict[str, Any]) -> BenchmarkEvidenceRecord:
         evidence_level=_first_text(item, metadata, "evidence_level"),
         element_id_aliases=_first_tuple(item, metadata, "element_id_aliases"),
         element_type_aliases=_first_tuple(item, metadata, "element_type_aliases"),
-        retrieval_lineage=_lineage(item, metadata),
+        **_ranking_projection(item, metadata),
         score=item.get("score", metadata.get("score")),
         section_title=_first_text(item, metadata, "section_title"),
         table_title=_first_text(item, metadata, "table_title"),
         text=_first_text(item, metadata, "text", "content", "snippet"),
         source_backrefs=_source_backrefs(item, metadata),
+        runtime_source_backrefs=_first_tuple(
+            item,
+            metadata,
+            "runtime_source_backrefs",
+        ),
+        evaluation_source_backrefs=_first_tuple(
+            item,
+            metadata,
+            "evaluation_source_backrefs",
+        ),
         extension_metadata=_extension_metadata(metadata),
     )
+
+
+def _ranking_projection(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "retrieval_lineage": _lineage(item, metadata),
+        "reranker_input_identity": _first_text(
+            item,
+            metadata,
+            "reranker_input_identity",
+        ),
+        "reranker_score": item.get(
+            "reranker_score",
+            metadata.get("reranker_score"),
+        ),
+        "reranker_rank": _optional_int(item, metadata, "reranker_rank"),
+        "reranker_backend": _first_text(item, metadata, "reranker_backend"),
+        "reranker_model": _first_text(item, metadata, "reranker_model"),
+    }
 
 
 def _atomic_projection(
@@ -362,6 +410,9 @@ _PROJECTED_METADATA_KEYS = {
     "element_id_aliases",
     "element_type",
     "element_type_aliases",
+    "evaluation_identity",
+    "evaluation_source_backrefs",
+    "evaluation_source_id",
     "evidence_id",
     "evidence_level",
     "file_id",
@@ -385,8 +436,16 @@ _PROJECTED_METADATA_KEYS = {
     "physical_cell_identity",
     "representations",
     "retrieval_lineage",
+    "reranker_backend",
+    "reranker_input_identity",
+    "reranker_model",
+    "reranker_rank",
+    "reranker_score",
     "row_index",
     "row_label",
+    "runtime_identity",
+    "runtime_source_backrefs",
+    "runtime_source_id",
     "scale",
     "score",
     "section_id",
