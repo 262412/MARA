@@ -80,8 +80,9 @@ def _chunk_markdown(doc: Any) -> str:
         content += f"\nFile name: {doc.metadata['file_name']}"
     if "section" in doc.metadata:
         content += f"\nSection: {doc.metadata['section']}"
-    if doc.metadata.get("type") == "image":
-        image_origin = f'<p><img src="{doc.metadata["image_origin"]}"></p>'
+    image_source = doc.metadata.get("image_origin")
+    if doc.metadata.get("type") == "image" and image_source:
+        image_origin = f'<p><img src="{image_source}"></p>'
         content += f"\nImage origin: {image_origin}"
     if doc.text:
         content += f"\ntext:\n{doc.text}"
