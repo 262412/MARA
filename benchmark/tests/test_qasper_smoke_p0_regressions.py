@@ -308,6 +308,40 @@ def test_closed_english_scope_overrides_unscoped_candidate_fallback():
     assert result.trace["reason"] == "deterministic_current_scope"
 
 
+def test_institution_name_is_not_a_non_english_dataset_counterexample():
+    current = _item(
+        "current",
+        (
+            "As a main field of interest in the current study, we chose "
+            "controversies in education. In cooperation with researchers from "
+            "the German Institute for International Educational Research, we "
+            "identified topics in education in English-speaking countries. "
+            "We compiled the resulting corpus for our experiments."
+        ),
+    )
+    related = _item(
+        "related",
+        "Goudas et al. 2014 evaluated user-generated Greek texts.",
+        section_id="related_work",
+    )
+    result = verify_qasper_answerability(
+        _VerifierLLM(
+            {
+                "verdict": "insufficient_evidence",
+                "evidence_quote": "",
+            }
+        ),
+        question="Do they report results only on English data?",
+        evidence=f"{current['text']}\n{related['text']}",
+        evidence_items=[current, related],
+        candidate_answer="no",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["verdict"] == "yes"
+    assert result.trace["reason"] == "deterministic_current_scope"
+
+
 def test_missing_free_text_candidate_can_only_recheck_typed_boolean_proposition():
     refusal = "MARA could not retrieve enough evidence to answer reliably."
     support = _item(

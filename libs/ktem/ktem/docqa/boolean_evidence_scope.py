@@ -314,19 +314,19 @@ def _language_data_question(question: str) -> bool:
 
 
 def _non_english_counterexample(quote: str) -> bool:
-    lowered = str(quote or "").lower()
-    return bool(
-        re.search(
+    for statement in re.split(r"(?:\r?\n)+|(?<=[.!?])\s+", str(quote or "")):
+        lowered = statement.lower()
+        if re.search(
             r"\b(?:non-english|greek|german|french|spanish|chinese|"
             r"japanese|arabic|multilingual)\b",
             lowered,
-        )
-        and re.search(
+        ) and re.search(
             r"\b(?:evaluate|evaluated|evaluation|experiment|report|results?|"
             r"test|tested|dataset|corpus)\w*\b",
             lowered,
-        )
-    )
+        ):
+            return True
+    return False
 
 
 def _english_closed_scope(quote: str) -> bool:
