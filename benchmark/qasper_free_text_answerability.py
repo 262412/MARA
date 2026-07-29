@@ -358,8 +358,11 @@ def _quote_supports_relation(quote: str, question: str, candidate: str) -> bool:
     candidate_tokens = stemmed_content_tokens(candidate)
     if not candidate_tokens:
         return False
-    candidate_coverage = len(quote_tokens & candidate_tokens) / len(candidate_tokens)
-    question_anchors = stemmed_content_tokens(question) - candidate_tokens
+    question_tokens = stemmed_content_tokens(question)
+    answer_tokens = candidate_tokens - question_tokens
+    support_tokens = answer_tokens or candidate_tokens
+    candidate_coverage = len(quote_tokens & support_tokens) / len(support_tokens)
+    question_anchors = question_tokens - candidate_tokens
     required_anchors = min(2, len(question_anchors))
     lexical_relation = (
         candidate_coverage >= 0.5
