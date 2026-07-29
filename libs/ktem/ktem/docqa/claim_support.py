@@ -63,11 +63,17 @@ def item_supports_claim(
 
 
 def text_contradicts_claim(claim: str, evidence: str) -> bool:
-    return (
-        _year_conflict(claim, evidence)
-        or _direction_conflict(claim, evidence)
-        or _numeric_conflict(claim, evidence)
-        or _negation_conflict(claim, evidence)
+    fragments = [
+        fragment
+        for fragment in re.split(r"(?:\r?\n)+|(?<=[.!?;])\s+", str(evidence or ""))
+        if fragment.strip() and _shared_claim_context(claim, fragment)
+    ]
+    return any(
+        _year_conflict(claim, fragment)
+        or _direction_conflict(claim, fragment)
+        or _numeric_conflict(claim, fragment)
+        or _negation_conflict(claim, fragment)
+        for fragment in fragments
     )
 
 

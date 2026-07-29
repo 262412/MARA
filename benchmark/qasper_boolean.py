@@ -69,6 +69,22 @@ def is_boolean_question(question: str) -> bool:
     return bool(_BOOLEAN_QUESTION_RE.search(str(question or "").strip()))
 
 
+def boolean_candidate_polarity(candidate: str) -> str:
+    if str(candidate or "").lower() in {"yes", "true"}:
+        return "yes"
+    return "no" if candidate else ""
+
+
+def normalized_boolean_quote(value: str) -> str:
+    return " ".join(str(value or "").lower().split())
+
+
+def boolean_quote_is_grounded(quote: str, evidence: str) -> bool:
+    normalized_quote = normalized_boolean_quote(quote)
+    normalized_evidence = normalized_boolean_quote(evidence)
+    return len(normalized_quote) >= 8 and normalized_quote in normalized_evidence
+
+
 def boolean_relation_lemmas(value: str) -> set[str]:
     return {
         lemma

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ktem.docqa.evidence_alias_lookup import unambiguous_evidence_alias_lookup
+from ktem.docqa.evidence_identity import identity_of
 
 
 def verified_claim_support_items(
@@ -28,6 +29,33 @@ def verified_claim_support_items(
             if isinstance(item, dict)
         )
     return items
+
+
+def verified_claim_support_groups(
+    prediction: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> list[list[dict[str, Any]]]:
+    alias_lookup = unambiguous_evidence_alias_lookup(candidates)
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for metadata in _metadata_sources(prediction):
+        by_claim = metadata.get("verified_claim_support_by_claim")
+        if not isinstance(by_claim, dict):
+            continue
+        for claim_id, values in by_claim.items():
+            group = groups.setdefault(str(claim_id), [])
+            for value in values or []:
+                item = (
+                    value if isinstance(value, dict) else alias_lookup.get(str(value))
+                )
+                if item is None:
+                    continue
+                identity = identity_of(item).key
+                if all(identity_of(existing).key != identity for existing in group):
+                    group.append(item)
+    if groups:
+        return [group for group in groups.values() if group]
+    flat = verified_claim_support_items(prediction, candidates)
+    return [[item] for item in flat]
 
 
 def _metadata_sources(prediction: dict[str, Any]) -> list[dict[str, Any]]:

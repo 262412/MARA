@@ -24,7 +24,10 @@ def test_qasper_answerability_contract_runs_after_engine_projection():
         "predicted_answer": "unanswerable",
         "answer_type": "boolean",
         "context_preview": ("The authors released their source code with the paper."),
-        "evidence_metadata": {},
+        "evidence_metadata": {
+            "pre_guardrail_answer": "unanswerable",
+            "pre_verification_answer": "yes",
+        },
     }
 
     apply_task_answer_contract(

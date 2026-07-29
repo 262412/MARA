@@ -107,6 +107,7 @@ def test_contract_smoke_validator_accepts_full_auditable_artifact(tmp_path):
     first = _prediction(requirements)
     first.update(
         {
+            "gold_answers": ["unanswerable"],
             "predicted_answer": "unanswerable",
             "answer_for_scoring": "unanswerable",
             "pre_contract_verification": {
@@ -134,6 +135,9 @@ def test_contract_smoke_validator_accepts_full_auditable_artifact(tmp_path):
                 "verifier_input_character_count": "29",
                 "verifier_input_token_count": "5",
                 "verifier_budget_exhausted": "false",
+                "candidate_for_answerability": "yes",
+                "verifier_required_evidence_ids": "span:paper:s1",
+                "verifier_required_evidence_coverage": "1.000000",
             },
             "answerability_contract_trace": {
                 "pre_contract_answer": "yes",

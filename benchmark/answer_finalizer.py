@@ -11,6 +11,7 @@ from .calculation_citation_projection import (
     calculation_citation_items,
     record_calculation_stage_evidence,
 )
+from .citation_claim_selection import minimum_verified_claim_support_items
 from .citation_rendering import citation_from_item as _citation_from_item
 from .citation_rendering import citation_from_source_ref as _citation_from_source_ref
 from .citation_rendering import (
@@ -22,7 +23,6 @@ from .citation_stage_projection import (
     source_ref_uses_uuid_like_source,
 )
 from .ragtruth_answer_contract import ragtruth_finalization_metadata
-from .verified_claim_citations import verified_claim_support_items
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
 _TRUNCATED_JSON_ANSWER_RE = re.compile(
@@ -282,7 +282,11 @@ def attach_structured_citations_from_evidence(
             canonical_sources=canonical_sources,
         )
     verified_citations = []
-    for item in verified_claim_support_items(prediction, all_candidates):
+    for item in minimum_verified_claim_support_items(
+        prediction,
+        all_candidates,
+        span=span,
+    ):
         citation = _citation_from_item(
             item,
             span=span,

@@ -2,14 +2,31 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from ktem.docqa.evidence_identity import exact_evidence_aliases, identity_of
+
+from .metrics import is_abstention_answer
 
 QASPER_VERIFIER_PROMPT_MAX_CHARS = 7000
 _TRUNCATION_NOTICE = (
     "\n\n[additional retrieved evidence omitted to fit the verifier prompt budget]"
 )
+
+
+@dataclass(frozen=True)
+class _EvidenceRow:
+    identity: str
+    aliases: frozenset[str]
+    rendered: str
+    text: str
+    index: int
+    relevance: int
+    required: bool
+    claim_support: bool
+    claim_contradiction: bool
+    priority: bool
 
 
 def fit_qasper_verifier_prompt(
@@ -62,47 +79,57 @@ def fit_qasper_verifier_items(
     question: str,
     candidate_answer: str,
     required_evidence_ids: list[str] | None = None,
+    required_slot_ids: list[str] | None = None,
+    priority_evidence_ids: list[str] | None = None,
+    claim_support_evidence_ids: list[str] | None = None,
+    claim_contradiction_evidence_ids: list[str] | None = None,
 ) -> tuple[str, str, dict[str, str]]:
-    required = {
-        str(value).strip()
-        for value in required_evidence_ids or []
-        if str(value).strip()
-    }
+    required = _normalized_ids(required_evidence_ids)
     records = _ranked_evidence_records(
         evidence_items,
         question=question,
         candidate_answer=candidate_answer,
         required=required,
+        priority=_normalized_ids(priority_evidence_ids),
+        claim_support=_normalized_ids(claim_support_evidence_ids),
+        claim_contradiction=_normalized_ids(claim_contradiction_evidence_ids),
     )
     empty_prompt = prompt_builder("")
     evidence_limit = max(0, QASPER_VERIFIER_PROMPT_MAX_CHARS - len(empty_prompt))
-    selected: list[tuple[str, str]] = []
+    selected: list[_EvidenceRow] = []
     dropped: list[str] = []
     used_chars = 0
-    for evidence_id, rendered in records:
+    for row in records:
         separator_chars = 2 if selected else 0
-        if used_chars + separator_chars + len(rendered) <= evidence_limit:
-            selected.append((evidence_id, rendered))
-            used_chars += separator_chars + len(rendered)
+        if used_chars + separator_chars + len(row.rendered) <= evidence_limit:
+            selected.append(row)
+            used_chars += separator_chars + len(row.rendered)
         else:
-            dropped.append(evidence_id)
-    bounded = "\n\n".join(rendered for _evidence_id, rendered in selected)
+            dropped.append(row.identity)
+    bounded = "\n\n".join(row.rendered for row in selected)
     prompt = prompt_builder(bounded)
     trace = _budget_trace(
         status="full" if not dropped else "item_packed",
-        original="\n\n".join(rendered for _identity, rendered in records),
+        original="\n\n".join(row.rendered for row in records),
         used=bounded,
         prompt=prompt,
     )
+    required_selected = {
+        required_id
+        for required_id in required
+        if any(required_id in row.aliases for row in selected)
+    }
+    required_coverage = len(required_selected) / len(required) if required else 1.0
     trace.update(
         {
-            "verifier_input_evidence_ids": ",".join(
-                evidence_id for evidence_id, _rendered in selected
-            ),
+            "verifier_input_evidence_ids": ",".join(row.identity for row in selected),
             "verifier_dropped_evidence_ids": ",".join(dropped),
             "verifier_input_character_count": str(len(bounded)),
             "verifier_input_token_count": str(len(re.findall(r"\S+", bounded))),
             "verifier_budget_exhausted": str(bool(dropped)).lower(),
+            "verifier_required_evidence_ids": ",".join(sorted(required)),
+            "verifier_required_slot_ids": ",".join(required_slot_ids or []),
+            "verifier_required_evidence_coverage": f"{required_coverage:.6f}",
         }
     )
     return prompt, bounded, trace
@@ -114,9 +141,53 @@ def _ranked_evidence_records(
     question: str,
     candidate_answer: str,
     required: set[str],
-) -> list[tuple[str, str]]:
-    query_tokens = _content_tokens(f"{question} {candidate_answer}")
-    rows: list[tuple[bool, int, int, str, str, str]] = []
+    priority: set[str],
+    claim_support: set[str],
+    claim_contradiction: set[str],
+) -> list[_EvidenceRow]:
+    substantive_candidate = (
+        "" if is_abstention_answer(candidate_answer) else candidate_answer
+    )
+    query_tokens = _content_tokens(f"{question} {substantive_candidate}")
+    rows = _evidence_rows(
+        evidence_items,
+        query_tokens=query_tokens,
+        required=required,
+        priority=priority,
+        claim_support=claim_support,
+        claim_contradiction=claim_contradiction,
+    )
+    ordered_priority = [
+        row
+        for row in rows
+        if row.required or row.claim_support or row.claim_contradiction
+    ]
+    seen_priority = {row.identity for row in ordered_priority}
+    _append_claim_priority(
+        ordered_priority,
+        rows,
+        seen_priority,
+        question=question,
+        candidate_answer=substantive_candidate,
+    )
+    if _looks_boolean(question):
+        _append_boolean_priority(ordered_priority, rows, seen_priority)
+    return [
+        *ordered_priority,
+        *(row for row in rows if row.identity not in seen_priority),
+    ]
+
+
+def _evidence_rows(
+    evidence_items: list[dict[str, Any]],
+    *,
+    query_tokens: set[str],
+    required: set[str],
+    priority: set[str],
+    claim_support: set[str],
+    claim_contradiction: set[str],
+) -> list[_EvidenceRow]:
+    rows: list[_EvidenceRow] = []
     seen: set[str] = set()
     for index, item in enumerate(evidence_items):
         text = _item_text(item)
@@ -131,14 +202,42 @@ def _ranked_evidence_records(
             continue
         seen.add(evidence_id)
         relevance = len(query_tokens & _content_tokens(text))
-        is_required = bool(required & aliases)
         rendered = f"[evidence_id={evidence_id}]\n{text}"
-        rows.append((is_required, relevance, index, evidence_id, rendered, text))
-    rows.sort(key=lambda row: (-int(row[0]), -row[1], row[2]))
-    priority: list[tuple[bool, int, int, str, str, str]] = [
-        row for row in rows if row[0]
-    ]
-    seen_priority = {row[3] for row in priority}
+        rows.append(
+            _EvidenceRow(
+                identity=evidence_id,
+                aliases=frozenset(aliases),
+                rendered=rendered,
+                text=text,
+                index=index,
+                relevance=relevance,
+                required=bool(required & aliases),
+                claim_support=bool(claim_support & aliases),
+                claim_contradiction=bool(claim_contradiction & aliases),
+                priority=bool(priority & aliases),
+            )
+        )
+    rows.sort(
+        key=lambda row: (
+            -int(row.required),
+            -int(row.claim_support),
+            -int(row.claim_contradiction),
+            -int(row.priority),
+            -row.relevance,
+            row.index,
+        )
+    )
+    return rows
+
+
+def _append_claim_priority(
+    ordered: list[_EvidenceRow],
+    rows: list[_EvidenceRow],
+    seen: set[str],
+    *,
+    question: str,
+    candidate_answer: str,
+) -> None:
     claim_texts = [
         value.strip()
         for value in re.split(r"(?<=[.!?;])\s+", candidate_answer)
@@ -146,33 +245,44 @@ def _ranked_evidence_records(
     ] or [question]
     for claim in claim_texts:
         claim_tokens = _content_tokens(f"{question} {claim}")
-        candidates = [row for row in rows if row[3] not in seen_priority]
+        candidates = [row for row in rows if row.identity not in seen]
         if not candidates:
-            break
+            return
         best = max(
             candidates,
-            key=lambda row: (len(claim_tokens & _content_tokens(row[5])), -row[2]),
+            key=lambda row: (
+                len(claim_tokens & _content_tokens(row.text)),
+                -row.index,
+            ),
         )
-        if claim_tokens & _content_tokens(best[5]):
-            priority.append(best)
-            seen_priority.add(best[3])
-    if _looks_boolean(question):
-        for negative in (False, True):
-            candidate = next(
-                (
-                    row
-                    for row in rows
-                    if row[3] not in seen_priority
-                    and _has_negation(row[5]) is negative
-                    and row[1] > 0
-                ),
-                None,
-            )
-            if candidate is not None:
-                priority.append(candidate)
-                seen_priority.add(candidate[3])
-    ordered = [*priority, *(row for row in rows if row[3] not in seen_priority)]
-    return [(row[3], row[4]) for row in ordered]
+        if claim_tokens & _content_tokens(best.text):
+            ordered.append(best)
+            seen.add(best.identity)
+
+
+def _append_boolean_priority(
+    ordered: list[_EvidenceRow],
+    rows: list[_EvidenceRow],
+    seen: set[str],
+) -> None:
+    for negative in (False, True):
+        candidate = next(
+            (
+                row
+                for row in rows
+                if row.identity not in seen
+                and _has_negation(row.text) is negative
+                and row.relevance > 0
+            ),
+            None,
+        )
+        if candidate is not None:
+            ordered.append(candidate)
+            seen.add(candidate.identity)
+
+
+def _normalized_ids(values: list[str] | None) -> set[str]:
+    return {str(value).strip() for value in values or [] if str(value).strip()}
 
 
 def _content_tokens(value: str) -> set[str]:

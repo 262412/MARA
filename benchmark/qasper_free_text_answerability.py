@@ -50,6 +50,10 @@ def verify_free_text_candidate(
     evidence: str,
     evidence_items: list[dict[str, Any]] | None = None,
     required_evidence_ids: list[str] | None = None,
+    required_slot_ids: list[str] | None = None,
+    priority_evidence_ids: list[str] | None = None,
+    claim_support_evidence_ids: list[str] | None = None,
+    claim_contradiction_evidence_ids: list[str] | None = None,
     candidate_answer: str,
     candidate: str,
     contract_id: str,
@@ -62,6 +66,10 @@ def verify_free_text_candidate(
         evidence_items=evidence_items,
         candidate=candidate,
         required_evidence_ids=required_evidence_ids,
+        required_slot_ids=required_slot_ids,
+        priority_evidence_ids=priority_evidence_ids,
+        claim_support_evidence_ids=claim_support_evidence_ids,
+        claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
     )
     verdict, quote, revised_answer, parse_trace = _call_verifier(
         llm,
@@ -78,7 +86,31 @@ def verify_free_text_candidate(
             "preserved_primary_answer",
             parse_trace=parse_trace,
         )
+    return _free_text_decision(
+        verdict,
+        quote,
+        revised_answer,
+        question=question,
+        bounded_evidence=bounded_evidence,
+        candidate=candidate,
+        candidate_answer=candidate_answer,
+        contract_id=contract_id,
+        parse_trace=parse_trace,
+    )
 
+
+def _free_text_decision(
+    verdict: str,
+    quote: str,
+    revised_answer: str,
+    *,
+    question: str,
+    bounded_evidence: str,
+    candidate: str,
+    candidate_answer: str,
+    contract_id: str,
+    parse_trace: dict[str, str],
+) -> tuple[str, dict[str, str]]:
     quote_grounded = _quote_is_grounded(quote, bounded_evidence)
     supported_answer = (
         revised_answer
@@ -90,6 +122,27 @@ def verify_free_text_candidate(
         question,
         supported_answer,
     )
+    pruned_answer = (
+        _supported_candidate_core(
+            candidate,
+            quote=quote,
+            question=question,
+            revised_answer=revised_answer,
+        )
+        if verdict in _POSITIVE_VERDICTS and quote_grounded
+        else ""
+    )
+    if pruned_answer and _normalized(pruned_answer) != _normalized(candidate):
+        return pruned_answer, _trace(
+            contract_id,
+            "ok",
+            "supported_with_pruning",
+            "pruned_unsupported_extension",
+            evidence_quote=quote,
+            quote_grounded=True,
+            quote_supports_relation=True,
+            parse_trace=parse_trace,
+        )
     if verdict in _POSITIVE_VERDICTS and not relation_supported:
         return "unanswerable", _trace(
             contract_id,
@@ -126,6 +179,10 @@ def _fit_free_text_verifier_prompt(
     evidence_items: list[dict[str, Any]] | None,
     candidate: str,
     required_evidence_ids: list[str] | None,
+    required_slot_ids: list[str] | None,
+    priority_evidence_ids: list[str] | None,
+    claim_support_evidence_ids: list[str] | None,
+    claim_contradiction_evidence_ids: list[str] | None,
 ) -> tuple[str, str, dict[str, str]]:
     def prompt_builder(bounded: str) -> str:
         return answerability_prompt(
@@ -142,7 +199,42 @@ def _fit_free_text_verifier_prompt(
         question=question,
         candidate_answer=candidate,
         required_evidence_ids=required_evidence_ids,
+        required_slot_ids=required_slot_ids,
+        priority_evidence_ids=priority_evidence_ids,
+        claim_support_evidence_ids=claim_support_evidence_ids,
+        claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
     )
+
+
+def _supported_candidate_core(
+    candidate: str,
+    *,
+    quote: str,
+    question: str,
+    revised_answer: str,
+) -> str:
+    revised = str(revised_answer or "").strip()
+    if revised and _quote_supports_relation(quote, question, revised):
+        return revised
+    clauses = [
+        clause.strip(" ,.;")
+        for clause in re.split(
+            r"(?<=[.!?;])\s+|\s+(?:and|but|while|whereas)\s+",
+            str(candidate or ""),
+            flags=re.IGNORECASE,
+        )
+        if clause.strip(" ,.;")
+    ]
+    supported = [
+        clause
+        for clause in clauses
+        if _quote_supports_relation(quote, question, clause)
+    ]
+    return "; ".join(supported)
+
+
+def _normalized(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().split())
 
 
 def _call_verifier(

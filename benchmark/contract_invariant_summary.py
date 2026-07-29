@@ -90,6 +90,35 @@ def _execution_summary(
             metrics,
             "qasper_stale_verifier_state_count",
         ),
+        "abstention_candidate_sent_as_semantic_answer_count": _sum(
+            metrics,
+            "abstention_candidate_sent_as_semantic_answer_count",
+        ),
+        "verifier_required_evidence_coverage": _mean(
+            metrics,
+            "verifier_required_evidence_coverage",
+        ),
+        "answerable_false_abstention_count": _sum(
+            metrics,
+            "answerable_false_abstention_count",
+        ),
+        "boolean_scope_violation_count": _sum(
+            metrics,
+            "boolean_scope_violation_count",
+        ),
+        "wrong_polarity_count": _sum(metrics, "wrong_polarity_count"),
+        "citation_claim_support_violation_count": _sum(
+            metrics,
+            "citation_claim_support_violation_count",
+        ),
+        "citation_scope_violation_count": _sum(
+            metrics,
+            "citation_scope_violation_count",
+        ),
+        "citation_nonminimal_count": _sum(
+            metrics,
+            "citation_nonminimal_count",
+        ),
     }
 
 

@@ -13,6 +13,7 @@ from ktem.docqa.query_planning import score_evidence_for_slot
 from .contract_gate_metrics import prediction_gate_metrics
 from .contract_invariant_summary import summarize_contract_invariants
 from .metrics import is_abstention_answer, numeric_tolerance_score
+from .qasper_contract_invariants import qasper_contract_metric_values
 from .source_join_metrics import source_join_metrics
 
 _ATOMIC_ROUNDTRIP_FIELDS = (
@@ -99,6 +100,7 @@ def _prediction_contract_metrics(
         prediction,
         metadata,
     )
+    contract_items = _contract_evidence_items(metadata)
     return {
         **identity_metrics,
         "identity_collision_count": float(
@@ -124,6 +126,12 @@ def _prediction_contract_metrics(
         ),
         "qasper_stale_verifier_state_count": float(
             _qasper_stale_verifier_state(prediction, metadata)
+        ),
+        **qasper_contract_metric_values(
+            prediction,
+            metadata,
+            cited=cited,
+            contract_items=contract_items,
         ),
         **source_join_metrics(prediction, candidates),
         **prediction_gate_metrics(

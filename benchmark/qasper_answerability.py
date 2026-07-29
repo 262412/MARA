@@ -5,20 +5,24 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .metrics import is_abstention_answer
 from .qasper_answerability_prompts import (
     boolean_answerability_prompt as _boolean_answerability_prompt,
 )
 from .qasper_answerability_prompts import (
     json_structure_repair_prompt as _json_structure_repair_prompt,
 )
+from .qasper_boolean import boolean_candidate_polarity as _candidate_polarity
 from .qasper_boolean import (
     boolean_complete_quote_conflicts as _boolean_complete_quote_conflicts,
 )
+from .qasper_boolean import boolean_quote_is_grounded as _quote_is_grounded
 from .qasper_boolean import (
     boolean_quote_supports_relation as _boolean_quote_supports_relation,
 )
 from .qasper_boolean import boolean_relation_lemmas as _boolean_relation_lemmas
 from .qasper_boolean import is_boolean_question as _is_boolean_question
+from .qasper_boolean_scope import BooleanScopeDecision, validate_boolean_scope
 from .qasper_free_text_answerability import verify_free_text_candidate
 from .qasper_prompt_budget import fit_qasper_verifier_items, fit_qasper_verifier_prompt
 from .qasper_proposition_conflict import resolve_boolean_conflict
@@ -67,7 +71,7 @@ _UNANSWERABLE_RE = re.compile(
 @dataclass(frozen=True)
 class QasperAnswerabilityResult:
     answer: str
-    trace: dict[str, str]
+    trace: dict[str, Any]
 
 
 def verify_qasper_answerability(
@@ -77,6 +81,10 @@ def verify_qasper_answerability(
     evidence: str,
     evidence_items: list[dict[str, Any]] | None = None,
     required_evidence_ids: list[str] | None = None,
+    required_slot_ids: list[str] | None = None,
+    priority_evidence_ids: list[str] | None = None,
+    claim_support_evidence_ids: list[str] | None = None,
+    claim_contradiction_evidence_ids: list[str] | None = None,
     candidate_answer: str,
 ) -> QasperAnswerabilityResult:
     candidate = _clean_candidate(candidate_answer)
@@ -89,7 +97,7 @@ def verify_qasper_answerability(
                 action="preserved_primary_answer",
             ),
         )
-    if _UNANSWERABLE_RE.match(candidate):
+    if is_abstention_answer(candidate) or _UNANSWERABLE_RE.match(candidate):
         if _is_boolean_question(question):
             return _verify_boolean_candidate(
                 llm,
@@ -97,6 +105,10 @@ def verify_qasper_answerability(
                 evidence=evidence,
                 evidence_items=evidence_items,
                 required_evidence_ids=required_evidence_ids,
+                required_slot_ids=required_slot_ids,
+                priority_evidence_ids=priority_evidence_ids,
+                claim_support_evidence_ids=claim_support_evidence_ids,
+                claim_contradiction_evidence_ids=(claim_contradiction_evidence_ids),
                 candidate_answer="unanswerable",
                 candidate="",
             )
@@ -116,6 +128,10 @@ def verify_qasper_answerability(
             evidence=evidence,
             evidence_items=evidence_items,
             required_evidence_ids=required_evidence_ids,
+            required_slot_ids=required_slot_ids,
+            priority_evidence_ids=priority_evidence_ids,
+            claim_support_evidence_ids=claim_support_evidence_ids,
+            claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
             candidate_answer=candidate_answer,
             candidate=candidate,
         )
@@ -125,6 +141,10 @@ def verify_qasper_answerability(
         evidence=evidence,
         evidence_items=evidence_items,
         required_evidence_ids=required_evidence_ids,
+        required_slot_ids=required_slot_ids,
+        priority_evidence_ids=priority_evidence_ids,
+        claim_support_evidence_ids=claim_support_evidence_ids,
+        claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
         candidate_answer=candidate_answer,
         candidate=candidate,
     )
@@ -137,6 +157,10 @@ def _verify_boolean_candidate(
     evidence: str,
     evidence_items: list[dict[str, Any]] | None,
     required_evidence_ids: list[str] | None,
+    required_slot_ids: list[str] | None,
+    priority_evidence_ids: list[str] | None,
+    claim_support_evidence_ids: list[str] | None,
+    claim_contradiction_evidence_ids: list[str] | None,
     candidate_answer: str,
     candidate: str,
 ) -> QasperAnswerabilityResult:
@@ -147,6 +171,10 @@ def _verify_boolean_candidate(
         evidence_items=evidence_items,
         candidate_answer=candidate_answer,
         required_evidence_ids=required_evidence_ids,
+        required_slot_ids=required_slot_ids,
+        priority_evidence_ids=priority_evidence_ids,
+        claim_support_evidence_ids=claim_support_evidence_ids,
+        claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
     )
     verdict, quote, parse_trace = _call_verifier(
         llm,
@@ -173,6 +201,27 @@ def _verify_boolean_candidate(
                 primary_answer=candidate_polarity or "unanswerable",
             ),
         )
+    return _adjudicated_boolean_result(
+        question=question,
+        evidence=evidence,
+        evidence_items=evidence_items,
+        candidate_polarity=candidate_polarity,
+        verdict=verdict,
+        quote=quote,
+        parse_trace=parse_trace,
+    )
+
+
+def _adjudicated_boolean_result(
+    *,
+    question: str,
+    evidence: str,
+    evidence_items: list[dict[str, Any]] | None,
+    candidate_polarity: str,
+    verdict: str,
+    quote: str,
+    parse_trace: dict[str, str],
+) -> QasperAnswerabilityResult:
     (
         verdict,
         raw_verdict,
@@ -185,11 +234,15 @@ def _verify_boolean_candidate(
         evidence=evidence,
         verdict=verdict,
         quote=quote,
+        evidence_items=evidence_items,
     )
+    scope_valid = relation_trace.get("boolean_scope_valid") != "false"
+    conflict_evidence = evidence if scope_valid else ""
+    conflict_candidate = candidate_polarity if scope_valid else ""
     action, answer, conflict_trace = resolve_boolean_conflict(
-        evidence,
+        conflict_evidence,
         question,
-        candidate_polarity=candidate_polarity,
+        candidate_polarity=conflict_candidate,
         verdict=verdict,
     )
     relation_trace.update(conflict_trace)
@@ -211,12 +264,6 @@ def _verify_boolean_candidate(
     )
 
 
-def _candidate_polarity(candidate: str) -> str:
-    if candidate.lower() in {"yes", "true"}:
-        return "yes"
-    return "no" if candidate else ""
-
-
 def _fit_boolean_verifier_prompt(
     *,
     question: str,
@@ -224,6 +271,10 @@ def _fit_boolean_verifier_prompt(
     evidence_items: list[dict[str, Any]] | None,
     candidate_answer: str,
     required_evidence_ids: list[str] | None,
+    required_slot_ids: list[str] | None,
+    priority_evidence_ids: list[str] | None,
+    claim_support_evidence_ids: list[str] | None,
+    claim_contradiction_evidence_ids: list[str] | None,
 ) -> tuple[str, str, dict[str, str]]:
     def prompt_builder(bounded_evidence: str) -> str:
         return _boolean_answerability_prompt(
@@ -239,6 +290,10 @@ def _fit_boolean_verifier_prompt(
         question=question,
         candidate_answer=candidate_answer,
         required_evidence_ids=required_evidence_ids,
+        required_slot_ids=required_slot_ids,
+        priority_evidence_ids=priority_evidence_ids,
+        claim_support_evidence_ids=claim_support_evidence_ids,
+        claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
     )
 
 
@@ -248,6 +303,7 @@ def _ground_boolean_verdict(
     evidence: str,
     verdict: str,
     quote: str,
+    evidence_items: list[dict[str, Any]] | None,
 ) -> tuple[str, str, bool, bool, str, dict[str, str]]:
     raw_verdict = verdict
     relation_trace = {
@@ -259,49 +315,48 @@ def _ground_boolean_verdict(
         "yes_complete": "yes",
         "no_complete": "no",
     }
-    if raw_verdict in complete:
-        complete_verdict = complete[raw_verdict]
-        deterministic_conflict = quote_grounded and _boolean_complete_quote_conflicts(
-            quote,
+    typed_polarity = complete.get(raw_verdict, "")
+    scope = (
+        validate_boolean_scope(
             question,
-            complete_verdict,
+            quote,
+            typed_polarity,
+            evidence_items=evidence_items,
         )
+        if typed_polarity and quote_grounded
+        else None
+    )
+    if scope is not None:
+        relation_trace.update(scope.as_trace())
+    (
+        verdict,
+        quote_supports_relation,
+        reason,
+        deterministic_conflict,
+    ) = _grounded_boolean_relation(
+        raw_verdict,
+        question=question,
+        quote=quote,
+        quote_grounded=quote_grounded,
+        scope=scope,
+    )
+    if deterministic_conflict is not None:
         relation_trace["deterministic_relation_conflict"] = str(
             deterministic_conflict
         ).lower()
-        quote_supports_relation = quote_grounded and not deterministic_conflict
-        verdict = (
-            complete_verdict if quote_supports_relation else "insufficient_evidence"
-        )
-        if not quote_grounded:
-            reason = "ungrounded_quote"
-        elif not quote_supports_relation:
-            reason = "grounded_quote_incomplete_relation"
-        else:
-            reason = "grounded_complete_proposition"
-    elif raw_verdict in {"yes_partial", "no_partial"}:
-        quote_supports_relation = False
-        verdict = "insufficient_evidence"
-        reason = (
-            "grounded_partial_proposition" if quote_grounded else "ungrounded_quote"
-        )
-    elif raw_verdict == "insufficient_evidence":
-        quote_supports_relation = False
-        reason = "insufficient_evidence"
-    else:
-        quote_supports_relation = quote_grounded and _boolean_quote_supports_relation(
-            quote,
-            question,
-            verdict,
-        )
-        if not quote_supports_relation:
+    if verdict in {"yes", "no"}:
+        if scope is None:
+            scope = validate_boolean_scope(
+                question,
+                quote,
+                verdict,
+                evidence_items=evidence_items,
+            )
+            relation_trace.update(scope.as_trace())
+        if not scope.scope_valid:
             verdict = "insufficient_evidence"
-        if not quote_grounded:
-            reason = "ungrounded_quote"
-        elif not quote_supports_relation:
-            reason = "grounded_quote_incomplete_relation"
-        else:
-            reason = "grounded_complete_relation"
+            quote_supports_relation = False
+            reason = scope.reason
     return (
         verdict,
         raw_verdict,
@@ -312,6 +367,66 @@ def _ground_boolean_verdict(
     )
 
 
+def _grounded_boolean_relation(
+    raw_verdict: str,
+    *,
+    question: str,
+    quote: str,
+    quote_grounded: bool,
+    scope: BooleanScopeDecision | None,
+) -> tuple[str, bool, str, bool | None]:
+    complete = {
+        "yes_complete": "yes",
+        "no_complete": "no",
+    }
+    if raw_verdict in complete:
+        polarity = complete[raw_verdict]
+        conflict = (
+            quote_grounded
+            and not (
+                scope is not None and scope.scope_valid and scope.quantifier == "only"
+            )
+            and _boolean_complete_quote_conflicts(quote, question, polarity)
+        )
+        supported = quote_grounded and not conflict
+        if not quote_grounded:
+            reason = "ungrounded_quote"
+        elif not supported:
+            reason = "grounded_quote_incomplete_relation"
+        else:
+            reason = "grounded_complete_proposition"
+        return (
+            polarity if supported else "insufficient_evidence",
+            supported,
+            reason,
+            conflict,
+        )
+    if raw_verdict in {"yes_partial", "no_partial"}:
+        reason = (
+            "grounded_partial_proposition" if quote_grounded else "ungrounded_quote"
+        )
+        return "insufficient_evidence", False, reason, None
+    if raw_verdict == "insufficient_evidence":
+        return raw_verdict, False, "insufficient_evidence", None
+    supported = quote_grounded and _boolean_quote_supports_relation(
+        quote,
+        question,
+        raw_verdict,
+    )
+    if not quote_grounded:
+        reason = "ungrounded_quote"
+    elif not supported:
+        reason = "grounded_quote_incomplete_relation"
+    else:
+        reason = "grounded_complete_relation"
+    return (
+        raw_verdict if supported else "insufficient_evidence",
+        supported,
+        reason,
+        None,
+    )
+
+
 def _verify_free_text_candidate(
     llm: Any,
     *,
@@ -319,6 +434,10 @@ def _verify_free_text_candidate(
     evidence: str,
     evidence_items: list[dict[str, Any]] | None,
     required_evidence_ids: list[str] | None,
+    required_slot_ids: list[str] | None,
+    priority_evidence_ids: list[str] | None,
+    claim_support_evidence_ids: list[str] | None,
+    claim_contradiction_evidence_ids: list[str] | None,
     candidate_answer: str,
     candidate: str,
 ) -> QasperAnswerabilityResult:
@@ -328,6 +447,10 @@ def _verify_free_text_candidate(
         evidence=evidence,
         evidence_items=evidence_items,
         required_evidence_ids=required_evidence_ids,
+        required_slot_ids=required_slot_ids,
+        priority_evidence_ids=priority_evidence_ids,
+        claim_support_evidence_ids=claim_support_evidence_ids,
+        claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
         candidate_answer=candidate_answer,
         candidate=candidate,
         contract_id=QASPER_ANSWERABILITY_CONTRACT,
@@ -434,16 +557,6 @@ def _boolean_verdict(answer: str) -> tuple[str, str]:
         "insufficient_evidence",
     }
     return (value, quote) if value in allowed else ("", "")
-
-
-def _quote_is_grounded(quote: str, evidence: str) -> bool:
-    normalized_quote = _normalized_quote(quote)
-    normalized_evidence = _normalized_quote(evidence)
-    return len(normalized_quote) >= 8 and normalized_quote in normalized_evidence
-
-
-def _normalized_quote(value: str) -> str:
-    return " ".join(str(value or "").lower().split())
 
 
 def _trace(

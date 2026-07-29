@@ -102,6 +102,7 @@ def _verify_nonempty_answer(
         aggregate_answer_claims,
         answer,
     )
+    bundle.metadata["pre_verification_answer"] = answer
     trace = [
         *list(trace_prefix or []),
         {"stage": "claim_aggregation", **aggregation_trace},
@@ -146,6 +147,7 @@ def _verify_nonempty_answer(
         request,
         guardrail_factory=guardrail_factory,
     )
+    bundle.metadata["pre_guardrail_answer"] = answer
     return (
         abstain_message if guardrail.action == "abstain" else answer,
         verify_decision,

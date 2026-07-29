@@ -76,6 +76,16 @@ HARD_GATES = {
     "required_generation_context_nonempty_rate": ("eq", 1.0),
     "citation_emission_coverage": ("eq", 1.0),
 }
+QASPER_HARD_GATES = {
+    "abstention_candidate_sent_as_semantic_answer_count": ("eq", 0.0),
+    "verifier_required_evidence_coverage": ("eq", 1.0),
+    "answerable_false_abstention_count": ("eq", 0.0),
+    "boolean_scope_violation_count": ("eq", 0.0),
+    "wrong_polarity_count": ("eq", 0.0),
+    "citation_claim_support_violation_count": ("eq", 0.0),
+    "citation_scope_violation_count": ("eq", 0.0),
+    "citation_nonminimal_count": ("eq", 0.0),
+}
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -180,9 +190,17 @@ def _requirements(predictions: list[dict[str, Any]]) -> set[str]:
     return values
 
 
-def _hard_gate_results(metrics: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _hard_gate_results(
+    metrics: dict[str, Any],
+    *,
+    suite_kind: str,
+) -> dict[str, dict[str, Any]]:
     results: dict[str, dict[str, Any]] = {}
-    for metric, (comparison, expected) in HARD_GATES.items():
+    gates = {
+        **HARD_GATES,
+        **(QASPER_HARD_GATES if suite_kind == "qasper" else {}),
+    }
+    for metric, (comparison, expected) in gates.items():
         value = metrics.get(metric)
         passed = value is not None and (
             float(value) == expected if comparison == "eq" else False
@@ -260,7 +278,7 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
     )
 
     metrics = contract_invariant_summary(predictions)
-    hard_gates = _hard_gate_results(metrics)
+    hard_gates = _hard_gate_results(metrics, suite_kind=suite_kind)
     failed_gates = [
         metric for metric, result in hard_gates.items() if not result["passed"]
     ]
