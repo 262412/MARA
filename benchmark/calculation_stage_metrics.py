@@ -10,6 +10,7 @@ def calculation_metrics(
     applicable: bool,
     rendered_answer: str,
     gold_numeric_match: float | None = None,
+    answerable: bool = True,
 ) -> dict[str, float | None]:
     plan = dict(finance.get("calculation_plan") or {})
     verification = dict(finance.get("calculation_verification") or {})
@@ -34,18 +35,23 @@ def calculation_metrics(
     execution_succeeded = bool(
         verification.get("valid") and execution.get("status") == "ok"
     )
+    slot_coverage = (
+        len(verified_required) / len(required_slots) if required_slots else None
+    )
     return {
         "executor_activation_rate": 1.0,
-        "all_operands_bound": float(
-            bool(operands)
-            and bool(verification.get("valid"))
-            and len(verified) == len(operands)
-            and (not required_slots or len(verified_required) == len(required_slots))
+        **_denominator_metrics(
+            operands=operands,
+            verification=verification,
+            verified=verified,
+            required_slots=required_slots,
+            verified_required=verified_required,
+            errors=errors,
+            answerable=answerable,
+            slot_coverage=slot_coverage,
         ),
         "operand_accuracy": operand_accuracy,
-        "verified_slot_coverage": (
-            len(verified_required) / len(required_slots) if required_slots else None
-        ),
+        "verified_slot_coverage": slot_coverage,
         "cell_accuracy": (
             _bounded_accuracy(len(cell_errors), len(operands)) if operands else None
         ),
@@ -65,6 +71,40 @@ def calculation_metrics(
             if execution_succeeded
             else None
         ),
+    }
+
+
+def _denominator_metrics(
+    *,
+    operands: list[dict[str, Any]],
+    verification: dict[str, Any],
+    verified: set[str],
+    required_slots: list[Any],
+    verified_required: set[str],
+    errors: list[str],
+    answerable: bool,
+    slot_coverage: float | None,
+) -> dict[str, float | None]:
+    bound = float(
+        bool(operands)
+        and bool(verification.get("valid"))
+        and len(verified) == len(operands)
+        and (not required_slots or len(verified_required) == len(required_slots))
+    )
+    missing_detected = bool(
+        required_slots
+        and len(verified_required) < len(required_slots)
+        and any(error.startswith("required_slot_missing:") for error in errors)
+    )
+    return {
+        "all_operands_bound": bound,
+        "overall_all_operands_bound": bound,
+        "answerable_all_operands_bound": bound if answerable else None,
+        "expected_missing_slot_detection": (
+            float(missing_detected) if not answerable else None
+        ),
+        "overall_slot_coverage": slot_coverage,
+        "answerable_required_slot_coverage": (slot_coverage if answerable else None),
     }
 
 
@@ -179,6 +219,11 @@ def _empty_metrics(applicable: bool) -> dict[str, float | None]:
     return {
         "executor_activation_rate": 0.0 if applicable else None,
         "all_operands_bound": 0.0 if applicable else None,
+        "overall_all_operands_bound": 0.0 if applicable else None,
+        "answerable_all_operands_bound": 0.0 if applicable else None,
+        "expected_missing_slot_detection": None,
+        "overall_slot_coverage": None,
+        "answerable_required_slot_coverage": None,
         "operand_accuracy": None,
         "cell_accuracy": None,
         "operator_accuracy": None,

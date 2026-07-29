@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, TypedDict
 
 from .evidence_identity import EvidenceIdentity, identity_of
+from .evidence_labels import normalize_evidence_label
 
 
 class _VisualProjection(TypedDict):
@@ -33,6 +34,10 @@ class _AtomicProjection(TypedDict):
     column_index: int | None
     row_label: str
     column_label: str
+    raw_row_label: str
+    raw_column_label: str
+    normalized_row_label: str
+    normalized_column_label: str
     cell_role: str
     materialization_source_id: str
 
@@ -85,6 +90,10 @@ class BenchmarkEvidenceRecord:
     column_index: int | None = None
     row_label: str = ""
     column_label: str = ""
+    raw_row_label: str = ""
+    raw_column_label: str = ""
+    normalized_row_label: str = ""
+    normalized_column_label: str = ""
     cell_role: str = ""
     materialization_source_id: str = ""
     period: str = ""
@@ -239,6 +248,28 @@ def _atomic_projection(
     item: dict[str, Any],
     metadata: dict[str, Any],
 ) -> _AtomicProjection:
+    raw_row_label = _first_raw_text(
+        item,
+        metadata,
+        "raw_row_label",
+        "row_label",
+    )
+    raw_column_label = _first_raw_text(
+        item,
+        metadata,
+        "raw_column_label",
+        "column_label",
+    )
+    normalized_row_label = _first_text(
+        item,
+        metadata,
+        "normalized_row_label",
+    ) or normalize_evidence_label(raw_row_label)
+    normalized_column_label = _first_text(
+        item,
+        metadata,
+        "normalized_column_label",
+    ) or normalize_evidence_label(raw_column_label)
     return {
         "cell_id": _first_text(item, metadata, "cell_id"),
         "span_id": _first_text(item, metadata, "span_id"),
@@ -253,8 +284,12 @@ def _atomic_projection(
         "semantic_cell_key": _first_dict(item, metadata, "semantic_cell_key"),
         "row_index": _optional_int(item, metadata, "row_index"),
         "column_index": _optional_int(item, metadata, "column_index"),
-        "row_label": _first_text(item, metadata, "row_label"),
-        "column_label": _first_text(item, metadata, "column_label"),
+        "row_label": normalized_row_label,
+        "column_label": normalized_column_label,
+        "raw_row_label": raw_row_label,
+        "raw_column_label": raw_column_label,
+        "normalized_row_label": normalized_row_label,
+        "normalized_column_label": normalized_column_label,
         "cell_role": _first_text(item, metadata, "cell_role"),
         "materialization_source_id": _first_text(
             item,
@@ -316,6 +351,20 @@ def _first_text(
             value = metadata.get(key)
         if value not in (None, ""):
             return str(value).strip()
+    return ""
+
+
+def _first_raw_text(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    *keys: str,
+) -> str:
+    for key in keys:
+        value = item.get(key)
+        if value in (None, ""):
+            value = metadata.get(key)
+        if value not in (None, ""):
+            return str(value)
     return ""
 
 
@@ -409,6 +458,8 @@ _PROJECTED_METADATA_KEYS = {
     "chunk_start",
     "column_index",
     "column_label",
+    "raw_column_label",
+    "normalized_column_label",
     "continuation_id",
     "currency",
     "dataset_page",
@@ -453,6 +504,8 @@ _PROJECTED_METADATA_KEYS = {
     "reranker_score",
     "row_index",
     "row_label",
+    "raw_row_label",
+    "normalized_row_label",
     "runtime_identity",
     "runtime_source_backrefs",
     "runtime_source_id",

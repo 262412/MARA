@@ -56,6 +56,10 @@ HARD_GATES = {
     "identity_collision_count": ("eq", 0.0),
     "runtime_benchmark_roundtrip": ("eq", 1.0),
     "atomic_field_roundtrip_rate": ("eq", 1.0),
+    "exact_atomic_identity_roundtrip": ("eq", 1.0),
+    "exact_numeric_field_roundtrip": ("eq", 1.0),
+    "normalized_label_roundtrip": ("eq", 1.0),
+    "raw_representation_preservation": ("eq", 1.0),
     "reranker_lineage_violation_count": ("eq", 0.0),
     "citation_provenance_violation_count": ("eq", 0.0),
     "missing_execution_slot_answer_count": ("eq", 0.0),
@@ -65,6 +69,8 @@ HARD_GATES = {
     "plan_evidence_reference_resolution_rate": ("eq", 1.0),
     "source_page_cross_join_count": ("eq", 0.0),
     "calculation_render_mismatch_count": ("eq", 0.0),
+    "heuristic_veto_after_verified_execution_count": ("eq", 0.0),
+    "rounding_verification_failure_count": ("eq", 0.0),
     "qasper_stale_verifier_state_count": ("eq", 0.0),
     "gold_runtime_source_join_rate": ("eq", 1.0),
     "gold_source_schema_valid": ("eq", 1.0),
@@ -77,6 +83,9 @@ HARD_GATES = {
     "required_selected_nonempty_rate": ("eq", 1.0),
     "required_generation_context_nonempty_rate": ("eq", 1.0),
     "citation_emission_coverage": ("eq", 1.0),
+    "accepted_answer_citation_emission": ("eq", 1.0),
+    "verified_claim_support_coverage": ("eq", 1.0),
+    "final_answer_citation_emission": ("eq", 1.0),
 }
 FINANCE_HARD_GATES = {
     "execution_slot_atomicity_rate": ("eq", 1.0),
@@ -86,6 +95,9 @@ FINANCE_HARD_GATES = {
     "execution_slot_atomicity_violation_count": ("eq", 0.0),
     "parent_table_false_fill_count": ("eq", 0.0),
     "header_as_value_violation_count": ("eq", 0.0),
+    "execution_operand_provenance_coverage": ("eq", 1.0),
+    "reranker_execution_query_coverage": ("eq", 1.0),
+    "reranker_unique_output_artifact_mismatch_count": ("eq", 0.0),
 }
 QASPER_HARD_GATES = {
     "abstention_candidate_sent_as_semantic_answer_count": ("eq", 0.0),
@@ -345,8 +357,8 @@ def _behavior_violations(
     *,
     suite_kind: str,
 ) -> list[str]:
-    if suite_kind != "qasper":
-        return []
+    if suite_kind == "finance":
+        return _finance_behavior_violations(predictions)
     violations: list[str] = []
     if not any(
         _observed_qasper_answer_rewrite(prediction) for prediction in predictions
@@ -369,6 +381,48 @@ def _behavior_violations(
         ):
             violations.append(
                 f"verifier_input_trace_missing:{prediction.get('example_id')}"
+            )
+    return violations
+
+
+def _finance_behavior_violations(
+    predictions: list[dict[str, Any]],
+) -> list[str]:
+    violations: list[str] = []
+    answerable = [
+        prediction
+        for prediction in predictions
+        if any(
+            str(answer or "").strip().lower()
+            not in {"", "unanswerable", "insufficient evidence"}
+            for answer in prediction.get("gold_answers") or []
+        )
+    ]
+    expected_abstentions = [
+        prediction for prediction in predictions if prediction not in answerable
+    ]
+    for prediction in answerable:
+        metadata = dict(prediction.get("evidence_metadata") or {})
+        trace = dict(metadata.get("finance_numeric_trace") or {})
+        verification = dict(trace.get("calculation_verification") or {})
+        execution = dict(trace.get("calculation_execution") or {})
+        if not verification.get("valid") or execution.get("status") != "ok":
+            violations.append(
+                f"answerable_typed_execution_failed:{prediction.get('example_id')}"
+            )
+        if str(prediction.get("answer_status") or "") != "answered":
+            violations.append(
+                f"answerable_typed_execution_not_accepted:{prediction.get('example_id')}"
+            )
+    for prediction in expected_abstentions:
+        if str(prediction.get("answer_status") or "") != "abstained":
+            violations.append(
+                f"expected_safe_abstention_not_observed:{prediction.get('example_id')}"
+            )
+        metadata = dict(prediction.get("evidence_metadata") or {})
+        if _records(metadata.get("emitted_citation_evidence")):
+            violations.append(
+                f"abstention_emitted_answer_citation:{prediction.get('example_id')}"
             )
     return violations
 

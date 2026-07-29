@@ -111,6 +111,7 @@ def verify_decision(
         answer,
         calculation_claims,
         domain=domain,
+        prompt=prompt,
     )
     if typed_calculation is not None:
         claims = calculation_claims

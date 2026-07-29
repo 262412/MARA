@@ -16,7 +16,7 @@ from .evidence_stage_coverage import (
     reranked_trace_available,
     stage_coverage_values,
 )
-from .metrics import round_metric, safe_mean
+from .metrics import is_abstention_answer, round_metric, safe_mean
 from .page_stage_metrics import (
     all_gold_pages_hit,
     legacy_all_gold_pages_hit,
@@ -59,6 +59,11 @@ STAGE_METRIC_KEYS = (
     "duplicate_ratio",
     "executor_activation_rate",
     "all_operands_bound",
+    "overall_all_operands_bound",
+    "answerable_all_operands_bound",
+    "expected_missing_slot_detection",
+    "overall_slot_coverage",
+    "answerable_required_slot_coverage",
     "operand_accuracy",
     "cell_accuracy",
     "operator_accuracy",
@@ -74,6 +79,14 @@ STAGE_METRIC_KEYS = (
     "final_answer_duplicate_rate",
     "final_answer_repetition_repair_rate",
     "judge_failure_rate",
+    "parent_table_candidate_count",
+    "materialized_table_count",
+    "materialized_cell_count",
+    "materialization_cache_hit_rate",
+    "materialized_cells_per_required_slot",
+    "candidate_count_before_materialization",
+    "candidate_count_after_materialization",
+    "materialization_seconds",
 )
 _EVIDENCE_STAGE_TRACE_KEYS = (
     "fused_evidence",
@@ -99,6 +112,7 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
     support_recall = _stage_support_recall(prediction, candidate_pool)
     selection = dict(metadata.get("evidence_selection_trace") or {})
     dedupe = dict(metadata.get("dedupe_trace") or {})
+    materialization = dict(metadata.get("materialization_trace") or {})
     finance = dict(metadata.get("finance_numeric_trace") or {})
     return {
         **stage_coverage_values(
@@ -119,6 +133,19 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
         "retrieval_slot_coverage": _float_or_none(metadata.get("slot_coverage")),
         "unique_pages": _float_or_none(selection.get("unique_pages")),
         "duplicate_ratio": _float_or_none(dedupe.get("duplicate_ratio")),
+        **{
+            key: _float_or_none(materialization.get(key))
+            for key in (
+                "parent_table_candidate_count",
+                "materialized_table_count",
+                "materialized_cell_count",
+                "materialization_cache_hit_rate",
+                "materialized_cells_per_required_slot",
+                "candidate_count_before_materialization",
+                "candidate_count_after_materialization",
+                "materialization_seconds",
+            )
+        },
         **calculation_metrics(
             finance,
             applicable=(
@@ -129,6 +156,7 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
             gold_numeric_match=_float_or_none(
                 (prediction.get("metrics") or {}).get("numeric_match")
             ),
+            answerable=_gold_answerable(prediction),
         ),
         "claim_duplicate_rate": _claim_duplicate_rate(prediction),
         "final_answer_duplicate_rate": _final_answer_duplicate_rate(prediction),
@@ -137,6 +165,13 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
         ),
         "judge_failure_rate": _judge_failure_rate(prediction),
     }
+
+
+def _gold_answerable(prediction: dict[str, Any]) -> bool:
+    return any(
+        str(answer or "").strip() and not is_abstention_answer(str(answer))
+        for answer in prediction.get("gold_answers") or []
+    )
 
 
 def _stage_retrieval_context(

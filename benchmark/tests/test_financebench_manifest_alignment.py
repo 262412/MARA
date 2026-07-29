@@ -54,6 +54,13 @@ def test_load_manifest_aligns_legacy_financebench_evidence_to_parser_page(
             "citation": "legacy#page:5",
             "span": "Revenue was 10.",
             "page_alignment": "financebench_span_to_parser_page",
+            "page_mapping": {
+                "dataset_page": 4,
+                "runtime_page": 5,
+                "mapping_source": "financebench_span_to_parser_page",
+                "mapping_confidence": 1.0,
+                "mapping_version": "financebench_page_mapping.v1",
+            },
         }
     ]
 

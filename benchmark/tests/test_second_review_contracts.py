@@ -95,10 +95,15 @@ def test_calculation_citations_union_explanatory_claim_citations():
                     "claim:2": [identity_of(explanation).key],
                 },
                 "finance_numeric_trace": {
+                    "calculation_verification": {
+                        "valid": True,
+                        "required_slot_ids": ["operand:revenue"],
+                        "verified_required_slot_ids": ["operand:revenue"],
+                    },
                     "calculation_execution": {
                         "status": "ok",
                         "citation_ids": ["operand"],
-                    }
+                    },
                 },
             },
         },

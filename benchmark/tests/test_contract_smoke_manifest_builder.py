@@ -49,3 +49,32 @@ def test_qasper_cross_page_fixture_is_a_legible_two_page_pdf(tmp_path):
     assert len(reader.pages) == 2
     assert "released the code publicly" in (reader.pages[0].extract_text() or "")
     assert "did not release the code" in (reader.pages[1].extract_text() or "")
+
+
+def test_finance_smoke_uses_audited_fixed_page_mapping():
+    example = {
+        "document_id": "ADOBE_2016_10K",
+        "document_ids": ["ADOBE_2016_10K"],
+        "evidence_pages": [61],
+        "evidence_sources": ["ADOBE_2016_10K#page:61"],
+        "gold_evidence": [
+            {
+                "document_id": "ADOBE_2016_10K",
+                "page": 61,
+                "citation": "ADOBE_2016_10K#page:61",
+            }
+        ],
+    }
+
+    mapped = builder.with_audited_finance_page_mappings(example)
+
+    assert mapped["evidence_pages"] == [62]
+    assert mapped["gold_evidence"][0]["dataset_page"] == 61
+    assert mapped["gold_evidence"][0]["page"] == 62
+    assert mapped["gold_evidence"][0]["page_mapping"] == {
+        "dataset_page": 61,
+        "runtime_page": 62,
+        "mapping_source": "financebench_contract_fixed_mapping",
+        "mapping_confidence": 1.0,
+        "mapping_version": "financebench_contract_page_mapping.v1",
+    }

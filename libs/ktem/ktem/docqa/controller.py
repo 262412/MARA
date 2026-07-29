@@ -280,18 +280,6 @@ def evaluate_retrieval_quality(
             retry=False,
         )
     if _evidence_count(evidence_metadata) > 0:
-        missing_required_slots = int(
-            evidence_metadata.get("missing_required_slot_count") or 0
-        )
-        if missing_required_slots:
-            return RetrieveDecision(
-                status="poor" if attempted_retry else "ambiguous",
-                reason=(
-                    "Retrieved evidence does not fill "
-                    f"{missing_required_slots} required QueryPlan slot(s)."
-                ),
-                retry=not attempted_retry,
-            )
         adequacy_issue = retrieval_adequacy_issue(
             prompt,
             evidence_metadata,
@@ -301,6 +289,21 @@ def evaluate_retrieval_quality(
                 origin,
             ),
         )
+        missing_required_slots = int(
+            evidence_metadata.get("missing_required_slot_count") or 0
+        )
+        if missing_required_slots:
+            evidence_metadata["final_adequacy_status"] = "ambiguous"
+            evidence_metadata["adequacy_decision_authority"] = "query_plan"
+            evidence_metadata["heuristic_overridden"] = False
+            return RetrieveDecision(
+                status="poor" if attempted_retry else "ambiguous",
+                reason=(
+                    "Retrieved evidence does not fill "
+                    f"{missing_required_slots} required QueryPlan slot(s)."
+                ),
+                retry=not attempted_retry,
+            )
         if adequacy_issue:
             return RetrieveDecision(
                 status="ambiguous",
@@ -438,6 +441,8 @@ def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
         "second_round_requests",
         "retrieval_rounds",
         "ranking_trace",
+        "reranker_aggregate_trace",
+        "materialization_trace",
         "selected_evidence",
         "generation_context_evidence",
         "used_evidence",

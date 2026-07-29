@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from .evidence_field_values import (
     atomic_identity_fields,
@@ -8,12 +8,20 @@ from .evidence_field_values import (
     retrieval_lineage_values,
     visual_evidence_fields,
 )
+from .evidence_labels import normalize_evidence_label
 from .evidence_locators import source_alias_values
 from .evidence_schema import EvidenceElement
 
 
 def coerce_item(item: dict[str, Any]) -> dict[str, Any]:
     metadata = _merged_item_metadata(item)
+    raw_row_label = _raw_field(item, metadata, "raw_row_label", "row_label")
+    raw_column_label = _raw_field(
+        item,
+        metadata,
+        "raw_column_label",
+        "column_label",
+    )
     file_id, page_label, modality, backrefs = _coerced_locator_fields(
         item,
         metadata,
@@ -61,10 +69,7 @@ def coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         column_index=_optional_int(
             item.get("column_index", metadata.get("column_index"))
         ),
-        row_label=str(item.get("row_label") or metadata.get("row_label") or "").strip(),
-        column_label=str(
-            item.get("column_label") or metadata.get("column_label") or ""
-        ).strip(),
+        **cast(Any, _label_fields(raw_row_label, raw_column_label)),
         period=str(item.get("period") or metadata.get("period") or "").strip(),
         period_kind=item_metadata_text(item, metadata, "period_kind"),
         value=item_metadata_text(item, metadata, "value"),
@@ -88,6 +93,39 @@ def coerce_item(item: dict[str, Any]) -> dict[str, Any]:
         evidence_level=str(item.get("evidence_level") or "page").strip(),
         metadata=metadata,
     ).as_dict()
+
+
+def _raw_field(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    raw_field: str,
+    fallback_field: str,
+) -> str:
+    for container in (item, metadata):
+        value = container.get(raw_field)
+        if value not in (None, ""):
+            return str(value)
+    for container in (item, metadata):
+        value = container.get(fallback_field)
+        if value not in (None, ""):
+            return str(value)
+    return ""
+
+
+def _label_fields(
+    raw_row_label: str,
+    raw_column_label: str,
+) -> dict[str, str]:
+    normalized_row = normalize_evidence_label(raw_row_label)
+    normalized_column = normalize_evidence_label(raw_column_label)
+    return {
+        "row_label": normalized_row,
+        "column_label": normalized_column,
+        "raw_row_label": raw_row_label,
+        "raw_column_label": raw_column_label,
+        "normalized_row_label": normalized_row,
+        "normalized_column_label": normalized_column,
+    }
 
 
 def _source_projection(

@@ -10,6 +10,7 @@ def contract_gate_summary(
     metrics: list[dict[str, float | None]],
 ) -> dict[str, Any]:
     summary: dict[str, Any] = {
+        **_coverage_summary(metrics),
         "required_candidate_nonempty_rate": _mean(
             metrics, "required_candidate_nonempty"
         ),
@@ -17,14 +18,6 @@ def contract_gate_summary(
         "required_generation_context_nonempty_rate": _mean(
             metrics, "required_generation_context_nonempty"
         ),
-        "citation_required_example_count": _sum(metrics, "citation_required"),
-        "citation_emitted_example_count": _sum(metrics, "citation_emitted"),
-        "required_citation_missing_count": _sum(metrics, "required_citation_missing"),
-        "citation_emission_rate": _mean(metrics, "citation_emission"),
-        "citation_emission_coverage": _mean(metrics, "citation_emission"),
-        "reranker_execution_coverage": _mean(metrics, "reranker_executed"),
-        "calculation_execution_coverage": _mean(metrics, "calculation_executed"),
-        "safe_abstention_coverage": _mean(metrics, "safe_abstention_passed"),
     }
     summary["contract_gates"] = {
         "reranker_lineage": _gate(
@@ -33,6 +26,13 @@ def contract_gate_summary(
             executed="reranker_executed",
             evaluated="reranker_evaluated",
             passed="reranker_passed",
+        ),
+        "reranker_query_execution": _gate(
+            metrics,
+            applicable="reranker_query_applicable",
+            executed="reranker_queries_executed",
+            evaluated="reranker_query_applicable",
+            passed="reranker_query_execution_passed",
         ),
         "citation_emission": _gate(
             metrics,
@@ -64,6 +64,47 @@ def contract_gate_summary(
         ),
     }
     return summary
+
+
+def _coverage_summary(
+    metrics: list[dict[str, float | None]],
+) -> dict[str, float | None]:
+    mean_keys = (
+        "citation_emission",
+        "execution_operand_provenance_coverage",
+        "accepted_answer_citation_emission",
+        "verified_claim_support_coverage",
+        "final_answer_citation_emission",
+        "reranker_execution_query_coverage",
+        "calculation_executed",
+        "safe_abstention_passed",
+    )
+    summary = {key: _mean(metrics, key) for key in mean_keys}
+    return {
+        "citation_required_example_count": _sum(metrics, "citation_required"),
+        "citation_emitted_example_count": _sum(metrics, "citation_emitted"),
+        "required_citation_missing_count": _sum(metrics, "required_citation_missing"),
+        "citation_emission_rate": summary["citation_emission"],
+        "citation_emission_coverage": summary["citation_emission"],
+        "accepted_answer_count": _sum(metrics, "accepted_answer_count"),
+        "reranker_execution_coverage": _mean(metrics, "reranker_executed"),
+        "reranker_unique_output_artifact_mismatch_count": _sum(
+            metrics,
+            "reranker_unique_output_artifact_mismatch_count",
+        ),
+        "calculation_execution_coverage": summary["calculation_executed"],
+        "safe_abstention_coverage": summary["safe_abstention_passed"],
+        **{
+            key: summary[key]
+            for key in (
+                "execution_operand_provenance_coverage",
+                "accepted_answer_citation_emission",
+                "verified_claim_support_coverage",
+                "final_answer_citation_emission",
+                "reranker_execution_query_coverage",
+            )
+        },
+    }
 
 
 def prediction_gate_metrics(
@@ -136,13 +177,27 @@ def _citation_gate_metrics(
     metadata: dict[str, Any],
     answerable: bool,
 ) -> dict[str, float | None]:
-    required = answerable and bool(prediction.get("gold_evidence"))
+    accepted = _accepted_answer(prediction)
+    required = accepted and bool(prediction.get("gold_evidence"))
     emitted = _has_emitted_citation(prediction, metadata)
+    execution = _calculation_executed(metadata) or _bundle_calculation_executed(
+        prediction
+    )
+    execution_provenance = bool(_records(metadata.get("execution_operand_evidence")))
+    verified_support = bool(_records(metadata.get("verified_claim_support_evidence")))
     return {
         "citation_required": float(required),
         "citation_emitted": float(emitted),
         "required_citation_missing": float(required and not emitted),
         "citation_emission": _when(required, emitted),
+        "execution_operand_provenance_coverage": _when(
+            execution,
+            execution_provenance,
+        ),
+        "accepted_answer_count": float(accepted),
+        "accepted_answer_citation_emission": _when(accepted, emitted),
+        "verified_claim_support_coverage": _when(accepted, verified_support),
+        "final_answer_citation_emission": _when(accepted, emitted),
     }
 
 
@@ -164,12 +219,47 @@ def _reranker_gate_metrics(
         else 0
     )
     evaluated = executed and bool(reranker_input and reranked)
+    execution_traces = [
+        trace
+        for trace in metadata.get("reranker_execution_traces") or []
+        if isinstance(trace, dict)
+    ]
+    applicable_queries = [
+        trace
+        for trace in execution_traces
+        if trace.get("configured") or trace.get("loaded")
+    ]
+    missing_query_trace = applicable and not execution_traces
+    if missing_query_trace:
+        applicable_queries = [{"configured": True, "executed": False}]
+    executed_queries = [trace for trace in applicable_queries if trace.get("executed")]
+    query_coverage = (
+        len(executed_queries) / len(applicable_queries) if applicable_queries else None
+    )
+    unique_output_count = ranking_trace.get("unique_output_identity_count")
+    artifact_count = ranking_trace.get("reranker_artifact_record_count")
+    artifact_mismatch = (
+        int(unique_output_count != artifact_count)
+        if unique_output_count is not None and artifact_count is not None
+        else 0
+    )
     return {
         "reranker_applicable": float(applicable),
         "reranker_executed": _when(applicable, executed),
         "reranker_evaluated": _when(applicable, evaluated),
         "reranker_passed": _when(applicable, evaluated and violations == 0),
         "reranker_lineage_violation_count": float(violations),
+        "reranker_query_applicable": float(bool(applicable_queries)),
+        "reranker_queries_executed": _when(
+            bool(applicable_queries),
+            len(executed_queries) == len(applicable_queries),
+        ),
+        "reranker_query_execution_passed": _when(
+            bool(applicable_queries),
+            len(executed_queries) == len(applicable_queries),
+        ),
+        "reranker_execution_query_coverage": query_coverage,
+        "reranker_unique_output_artifact_mismatch_count": float(artifact_mismatch),
     }
 
 
@@ -250,6 +340,22 @@ def _has_emitted_citation(
         return True
     answer = str(prediction.get("predicted_answer") or "")
     return bool("#page:" in answer or "#source" in answer or "#evidence:" in answer)
+
+
+def _accepted_answer(prediction: dict[str, Any]) -> bool:
+    status = str(prediction.get("answer_status") or "").strip().lower()
+    answer = str(
+        prediction.get("answer_for_scoring") or prediction.get("predicted_answer") or ""
+    )
+    return status != "abstained" and not is_abstention_answer(answer)
+
+
+def _bundle_calculation_executed(prediction: dict[str, Any]) -> bool:
+    bundle = prediction.get("evidence_bundle")
+    if not isinstance(bundle, dict):
+        return False
+    metadata = bundle.get("metadata")
+    return isinstance(metadata, dict) and _calculation_executed(metadata)
 
 
 def _reranker_applicable(ranking_trace: dict[str, Any]) -> bool:

@@ -47,18 +47,11 @@ def build_mara_evidence_metadata(
         "evidence": evidence,
     }
     reranker_traces = [
-        dict(trace)
-        for doc in docs
-        if isinstance(
-            (
-                trace := dict(getattr(doc, "metadata", {}) or {}).get(
-                    "reranker_execution_trace"
-                )
-            ),
-            dict,
-        )
+        dict(trace) for doc in docs for trace in _document_reranker_traces(doc)
     ]
     if reranker_traces:
+        reranker_traces = _unique_reranker_traces(reranker_traces)
+        metadata["reranker_execution_traces"] = reranker_traces
         metadata["reranker_execution_trace"] = reranker_traces[-1]
         metadata["reranker_backend"] = str(reranker_traces[-1].get("backend") or "")
     _add_multimodal_index_records(
@@ -67,6 +60,29 @@ def build_mara_evidence_metadata(
         question=str(understanding.get("question") or ""),
     )
     return metadata
+
+
+def _document_reranker_traces(doc: RetrievedDocument) -> list[dict[str, Any]]:
+    metadata = dict(getattr(doc, "metadata", {}) or {})
+    traces = metadata.get("reranker_execution_traces")
+    if isinstance(traces, list):
+        return [dict(trace) for trace in traces if isinstance(trace, dict)]
+    trace = metadata.get("reranker_execution_trace")
+    return [dict(trace)] if isinstance(trace, dict) else []
+
+
+def _unique_reranker_traces(
+    traces: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for trace in traces:
+        key = repr(sorted(trace.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(trace)
+    return output
 
 
 def _evidence_item(doc: RetrievedDocument) -> dict[str, Any]:

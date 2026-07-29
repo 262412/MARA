@@ -5,6 +5,7 @@ from typing import Any
 from ktem.docqa.benchmark_evidence import benchmark_evidence_record
 from ktem.docqa.calculation_evidence_identity import calculation_evidence_lookup
 from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.evidence_labels import normalize_evidence_label
 from ktem.docqa.evidence_locators import normalized_source_page_locators
 
 from .contract_gate_metrics import prediction_gate_metrics
@@ -26,8 +27,6 @@ _ATOMIC_ROUNDTRIP_FIELDS = (
     "semantic_cell_key",
     "row_index",
     "column_index",
-    "row_label",
-    "column_label",
     "cell_role",
     "materialization_source_id",
     "period",
@@ -40,6 +39,29 @@ _ATOMIC_ROUNDTRIP_FIELDS = (
     "financial_scope",
     "continuation_id",
     "neighbor_element_ids",
+)
+_EXACT_ATOMIC_IDENTITY_FIELDS = (
+    "cell_id",
+    "span_id",
+    "evidence_level",
+    "table_id",
+    "table_instance_id",
+    "table_group_id",
+    "block_id",
+    "physical_cell_identity",
+    "semantic_cell_key",
+    "row_index",
+    "column_index",
+    "cell_role",
+    "materialization_source_id",
+)
+_EXACT_NUMERIC_FIELDS = (
+    "period",
+    "period_kind",
+    "value",
+    "unit",
+    "scale",
+    "currency",
 )
 _LOCATOR_ROUNDTRIP_FIELDS = (
     "source_id",
@@ -125,6 +147,12 @@ def _prediction_contract_metrics(
         "calculation_render_mismatch_count": float(
             _calculation_render_mismatch(prediction, metadata)
         ),
+        "heuristic_veto_after_verified_execution_count": float(
+            _heuristic_veto_after_verified_execution(prediction, metadata)
+        ),
+        "rounding_verification_failure_count": float(
+            _rounding_verification_failure(metadata)
+        ),
         "qasper_stale_verifier_state_count": float(
             _qasper_stale_verifier_state(prediction, metadata)
         ),
@@ -174,17 +202,83 @@ def _identity_contract_metrics(
 def _roundtrip_metrics(
     items: list[dict[str, Any]],
 ) -> dict[str, float | None]:
+    exact_atomic = _roundtrip_rate(items, _EXACT_ATOMIC_IDENTITY_FIELDS)
+    exact_numeric = _roundtrip_rate(items, _EXACT_NUMERIC_FIELDS)
+    normalized_labels = _normalized_label_roundtrip_rate(items)
+    raw_labels = _roundtrip_rate(
+        items,
+        ("raw_row_label", "raw_column_label"),
+    )
     rates = {
         "atomic_field_roundtrip_rate": _roundtrip_rate(items, _ATOMIC_ROUNDTRIP_FIELDS),
+        "exact_atomic_identity_roundtrip": exact_atomic,
+        "exact_numeric_field_roundtrip": exact_numeric,
+        "normalized_label_roundtrip": normalized_labels,
+        "raw_representation_preservation": raw_labels,
+        "normalization_equivalence_count": float(
+            _normalization_equivalence_count(items)
+        ),
         "locator_roundtrip_rate": _roundtrip_rate(items, _LOCATOR_ROUNDTRIP_FIELDS),
         "lineage_roundtrip_rate": _roundtrip_rate(items, _LINEAGE_ROUNDTRIP_FIELDS),
         "representation_roundtrip_rate": _roundtrip_rate(
             items, _REPRESENTATION_ROUNDTRIP_FIELDS
         ),
     }
-    available = [value for value in rates.values() if value is not None]
+    available = [
+        value
+        for key, value in rates.items()
+        if key != "normalization_equivalence_count" and value is not None
+    ]
     rates["runtime_benchmark_roundtrip"] = min(available) if available else None
     return rates
+
+
+def _normalized_label_roundtrip_rate(
+    items: list[dict[str, Any]],
+) -> float | None:
+    if not items:
+        return None
+    valid = 0
+    for item in items:
+        projected = benchmark_evidence_record(item).as_dict()
+        if identity_of(projected) != identity_of(item):
+            continue
+        if all(
+            _label_contract_valid(item, projected, label) for label in ("row", "column")
+        ):
+            valid += 1
+    return valid / len(items)
+
+
+def _label_contract_valid(
+    source: dict[str, Any],
+    projected: dict[str, Any],
+    label: str,
+) -> bool:
+    raw_field = f"raw_{label}_label"
+    normalized_field = f"normalized_{label}_label"
+    plain_field = f"{label}_label"
+    raw = _contract_field_value(source, raw_field)
+    plain = _contract_field_value(source, plain_field)
+    expected = normalize_evidence_label(raw if raw not in (None, "") else plain)
+    actual = str(_contract_field_value(source, normalized_field) or plain or "")
+    projected_normalized = str(
+        _contract_field_value(projected, normalized_field)
+        or _contract_field_value(projected, plain_field)
+        or ""
+    )
+    return actual == expected and projected_normalized == expected
+
+
+def _normalization_equivalence_count(items: list[dict[str, Any]]) -> int:
+    count = 0
+    for item in items:
+        for label in ("row", "column"):
+            raw = _contract_field_value(item, f"raw_{label}_label")
+            normalized = _contract_field_value(item, f"normalized_{label}_label")
+            if raw not in (None, "") and str(raw) != str(normalized or ""):
+                count += 1
+    return count
 
 
 def _roundtrip_rate(
@@ -272,6 +366,9 @@ def _calculation_render_mismatch(
     prediction: dict[str, Any],
     metadata: dict[str, Any],
 ) -> int:
+    comparison = metadata.get("calculation_result_comparison")
+    if isinstance(comparison, dict):
+        return int(not comparison.get("matched"))
     trace = metadata.get("finance_numeric_trace")
     if not isinstance(trace, dict):
         return 0
@@ -285,6 +382,23 @@ def _calculation_render_mismatch(
     if not value or not answer or is_abstention_answer(answer):
         return 0
     return int(numeric_tolerance_score(answer, [value]) != 1.0)
+
+
+def _heuristic_veto_after_verified_execution(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+) -> int:
+    typed_good = str(metadata.get("typed_adequacy_status") or "") == "good"
+    final_good = str(metadata.get("final_adequacy_status") or "") == "good"
+    answer = str(
+        prediction.get("answer_for_scoring") or prediction.get("predicted_answer") or ""
+    )
+    return int(typed_good and (not final_good or is_abstention_answer(answer)))
+
+
+def _rounding_verification_failure(metadata: dict[str, Any]) -> int:
+    comparison = metadata.get("calculation_result_comparison")
+    return int(isinstance(comparison, dict) and not comparison.get("matched"))
 
 
 def _qasper_stale_verifier_state(

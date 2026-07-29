@@ -20,10 +20,9 @@ from .metrics import (
     markdown_table_renderable_score,
     modality_hit_score,
     multimodal_support_score,
-    page_hit_score,
     span_recall_score,
 )
-from .page_alignment import evidence_aligned_page_hit_score
+from .page_metric_contract import page_metric_contract
 from .semantic_answer import SemanticJudge, semantic_answer_metrics
 from .verification_metrics import verification_metrics
 
@@ -87,20 +86,7 @@ def score_prediction(
     ):
         false_abstention = 1.0
 
-    strict_page_hit = page_hit_score(
-        prediction["predicted_pages"],
-        prediction["gold_pages"],
-    )
-    equivalent_page_hit = evidence_aligned_page_hit_score(
-        prediction["predicted_pages"],
-        prediction["gold_pages"],
-        gold_evidence=list(prediction.get("gold_evidence") or []),
-        evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
-        retrieved_hits=list(prediction.get("retrieved_hits") or []),
-    )
-    page_hit = strict_page_hit
-    if page_hit == 0.0:
-        page_hit = equivalent_page_hit
+    page_contract = page_metric_contract(prediction)
 
     metrics = core_answer_metrics(
         prediction,
@@ -108,10 +94,25 @@ def score_prediction(
         gold_answers=gold_answers,
         abstained=abstained,
         false_abstention=false_abstention,
-        page_scores=(page_hit, strict_page_hit, equivalent_page_hit),
+        page_scores=(
+            page_contract["legacy_page_hit"],
+            page_contract["strict_page_hit"],
+            page_contract["equivalent_page_hit"],
+        ),
         format_scores=(markdown_table_score, latex_score),
         rewrite_skipped=bool(claim_verification.get("rewrite_skipped")),
     )
+    metrics.update(
+        {
+            key: page_contract[key]
+            for key in (
+                "strict_gold_page_coverage",
+                "canonical_mapped_page_coverage",
+                "equivalent_evidence_page_coverage",
+            )
+        }
+    )
+    prediction["page_mapping_trace"] = page_contract["mapping_trace"]
     metrics["guardrail_expectation_match"] = _guardrail_expectation_match(
         prediction, abstained
     )

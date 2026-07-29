@@ -22,6 +22,10 @@ FINANCE_CASES = {
     "financebench_id_07966": {"multi_period_percentage_change"},
 }
 FINANCE_NEGATIVE_REQUIREMENTS = {"missing_execution_requirement_abstains"}
+FINANCE_FIXED_PAGE_MAPPINGS = {
+    ("ADOBE_2016_10K", 61): 62,
+    ("ACTIVISIONBLIZZARD_2019_10K", 72): 73,
+}
 QASPER_CASES = {
     "50be4a737dc0951b35d139f51075011095d77f2a": {"ordinary_free_text"},
     "2cd37743bcc7ea3bd405ce6d91e79e5339d7642e": {"yes_no"},
@@ -187,7 +191,10 @@ def _finance_negative_example(
 
 def build_finance_manifest(source_path: Path) -> dict[str, Any]:
     source = _load_manifest(source_path)
-    examples = _selected_examples(source, FINANCE_CASES)
+    examples = [
+        with_audited_finance_page_mappings(example)
+        for example in _selected_examples(source, FINANCE_CASES)
+    ]
     negative_source = next(
         item for item in examples if item.get("example_id") == "financebench_id_07507"
     )
@@ -200,6 +207,64 @@ def build_finance_manifest(source_path: Path) -> dict[str, Any]:
         "examples": examples,
         "metadata": {"contract": "contract_smoke_manifest.v1"},
     }
+
+
+def with_audited_finance_page_mappings(
+    example: dict[str, Any],
+) -> dict[str, Any]:
+    mapped = copy.deepcopy(example)
+    gold_evidence = [
+        dict(item)
+        for item in mapped.get("gold_evidence") or []
+        if isinstance(item, dict)
+    ]
+    for item in gold_evidence:
+        document_id = str(
+            item.get("document_id")
+            or item.get("source_id")
+            or mapped.get("document_id")
+            or ""
+        ).strip()
+        current_page = item.get("page", item.get("page_label"))
+        try:
+            page_number = int(str(current_page))
+        except (TypeError, ValueError):
+            continue
+        dataset_page = item.get("dataset_page")
+        runtime_page = page_number
+        mapping_source = str(item.get("page_alignment") or "")
+        mapping_version = "financebench_page_mapping.v1"
+        if (document_id, page_number) in FINANCE_FIXED_PAGE_MAPPINGS:
+            dataset_page = page_number
+            runtime_page = FINANCE_FIXED_PAGE_MAPPINGS[(document_id, page_number)]
+            mapping_source = "financebench_contract_fixed_mapping"
+            mapping_version = "financebench_contract_page_mapping.v1"
+        if dataset_page in (None, "") or int(str(dataset_page)) == runtime_page:
+            continue
+        item["dataset_page"] = dataset_page
+        item["page"] = runtime_page
+        item["citation"] = f"{document_id}#page:{runtime_page}"
+        item["page_mapping"] = {
+            "dataset_page": dataset_page,
+            "runtime_page": runtime_page,
+            "mapping_source": mapping_source,
+            "mapping_confidence": 1.0,
+            "mapping_version": mapping_version,
+        }
+    mapped["gold_evidence"] = gold_evidence
+    runtime_pages = [
+        item.get("page") for item in gold_evidence if item.get("page") not in (None, "")
+    ]
+    runtime_sources = [
+        str(item.get("citation") or "")
+        for item in gold_evidence
+        if str(item.get("citation") or "")
+    ]
+    if runtime_pages:
+        mapped["evidence_pages"] = list(dict.fromkeys(runtime_pages))
+    if runtime_sources:
+        mapped["evidence_sources"] = list(dict.fromkeys(runtime_sources))
+    return mapped
 
 
 def _qasper_answer_type(example: dict[str, Any]) -> str:

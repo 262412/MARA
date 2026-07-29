@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .finance_typed_adequacy import typed_calculation_adequacy
+
 
 def retrieval_adequacy_issue(
     prompt: str,
@@ -9,6 +11,47 @@ def retrieval_adequacy_issue(
     *,
     domain: str | None = None,
     require_page_scoped: bool = True,
+) -> str:
+    heuristic_issue = _heuristic_adequacy_issue(
+        prompt,
+        evidence_metadata,
+        domain=domain,
+        require_page_scoped=require_page_scoped,
+    )
+    typed_status, typed_reason = typed_calculation_adequacy(
+        evidence_metadata,
+        domain=domain,
+    )
+    heuristic_status = "ambiguous" if heuristic_issue else "good"
+    typed_overrides = typed_status == "good" and bool(heuristic_issue)
+    evidence_metadata.update(
+        {
+            "typed_adequacy_status": typed_status,
+            "heuristic_adequacy_status": heuristic_status,
+            "final_adequacy_status": (
+                "good" if typed_status == "good" else heuristic_status
+            ),
+            "adequacy_decision_authority": (
+                "typed_calculation" if typed_status == "good" else "general_heuristic"
+            ),
+            "heuristic_overridden": typed_overrides,
+            "heuristic_override_reason": (
+                "verified_typed_execution_supersedes_legacy_text_heuristic"
+                if typed_overrides
+                else ""
+            ),
+            "typed_adequacy_reason": typed_reason,
+        }
+    )
+    return "" if typed_status == "good" else heuristic_issue
+
+
+def _heuristic_adequacy_issue(
+    prompt: str,
+    evidence_metadata: dict[str, Any],
+    *,
+    domain: str | None,
+    require_page_scoped: bool,
 ) -> str:
     if not _finance_domain_enabled(domain):
         return ""

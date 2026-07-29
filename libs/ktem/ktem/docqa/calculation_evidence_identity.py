@@ -39,6 +39,16 @@ def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any
     materialized = dict(item)
     materialized.pop("identity", None)
     materialized.pop("canonical_id", None)
+    for key in (
+        "reranker_backend",
+        "reranker_input_identity",
+        "reranker_model",
+        "reranker_observations",
+        "reranker_rank",
+        "reranker_score",
+        "reranking_score",
+    ):
+        materialized.pop(key, None)
     parent_evidence_id = str(
         item.get("evidence_id")
         or item.get("canonical_id")
@@ -85,6 +95,15 @@ def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any
         "caption",
         "ocr_text",
         "vlm_text",
+        "reranker_backend",
+        "reranker_execution_trace",
+        "reranker_execution_traces",
+        "reranker_input_identity",
+        "reranker_model",
+        "reranker_observations",
+        "reranker_rank",
+        "reranker_score",
+        "reranking_score",
     ):
         metadata.pop(key, None)
     materialized["metadata"] = metadata

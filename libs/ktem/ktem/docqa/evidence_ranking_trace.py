@@ -42,7 +42,7 @@ def ranking_trace(
         ),
         "reranker_output_count": output_count,
         "reranker_artifact_record_count": output_count,
-        "selection_retained_reranked_count": output_count,
+        "selection_retained_reranked_count": None,
         "backend_execution": backend_execution,
         "configured": configured,
         "loaded": loaded,
@@ -67,6 +67,17 @@ def materialize_reranked_candidates(
     *,
     limit: int,
 ) -> tuple[list[dict[str, Any]] | None, dict[str, object]]:
+    execution_traces = [
+        dict(trace)
+        for trace in evidence_metadata.get("reranker_execution_traces") or []
+        if isinstance(trace, dict)
+    ]
+    if execution_traces:
+        return _materialize_from_execution_traces(
+            candidates,
+            execution_traces,
+            limit=limit,
+        )
     explicit_trace = evidence_metadata.get("reranker_execution_trace")
     if isinstance(explicit_trace, dict):
         return _materialize_from_execution_trace(
@@ -119,6 +130,249 @@ def materialize_reranked_candidates(
         backend_output_count=len(scored[:limit]),
         scored_count=len(scored),
     )
+
+
+def _materialize_from_execution_traces(
+    candidates: list[dict[str, Any]],
+    traces: list[dict[str, Any]],
+    *,
+    limit: int,
+) -> tuple[list[dict[str, Any]] | None, dict[str, object]]:
+    context = _execution_trace_context(traces)
+    executed_traces = context["executed_traces"]
+    if not executed_traces:
+        return None, _not_executed_query_trace(
+            candidates,
+            traces,
+            context,
+            limit=limit,
+        )
+    by_identity, observations = _candidate_observations(
+        candidates,
+        executed_traces,
+    )
+    output = _observed_reranker_output(by_identity, observations, limit=limit)
+    return output, _executed_query_trace(
+        candidates,
+        traces,
+        context,
+        output,
+        limit=limit,
+    )
+
+
+def _candidate_observations(
+    candidates: list[dict[str, Any]],
+    executed_traces: list[dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    by_identity: dict[str, dict[str, Any]] = {}
+    observations: dict[str, list[dict[str, Any]]] = {}
+    for trace in executed_traces:
+        accepted_ids = set(_trace_values(trace, "output_identities"))
+        accepted_ids.update(
+            [] if accepted_ids else _trace_values(trace, "input_identities")
+        )
+        for candidate in candidates:
+            raw_identity = _item_input_identity(candidate)
+            canonical_identity = identity_of(candidate).key
+            if accepted_ids and not (
+                _candidate_trace_aliases(candidate) & accepted_ids
+            ):
+                continue
+            score = _reranking_score(candidate)
+            if score is None:
+                continue
+            observations.setdefault(canonical_identity, []).append(
+                _reranker_observation(trace, raw_identity, score)
+            )
+            existing = by_identity.get(canonical_identity)
+            if existing is None or float(_reranking_score(existing) or 0.0) < score:
+                by_identity[canonical_identity] = dict(candidate)
+    return by_identity, observations
+
+
+def _observed_reranker_output(
+    by_identity: dict[str, dict[str, Any]],
+    observations: dict[str, list[dict[str, Any]]],
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    ranked = sorted(
+        by_identity.items(),
+        key=lambda item: (
+            -max(float(observation["score"]) for observation in observations[item[0]]),
+            item[0],
+        ),
+    )
+    output = []
+    for canonical_identity, candidate in ranked[:limit]:
+        candidate["reranker_observations"] = observations[canonical_identity]
+        output.append(candidate)
+    return output
+
+
+def _executed_query_trace(
+    candidates: list[dict[str, Any]],
+    traces: list[dict[str, Any]],
+    context: dict[str, Any],
+    output: list[dict[str, Any]],
+    *,
+    limit: int,
+) -> dict[str, object]:
+    executed_traces = context["executed_traces"]
+    aggregate = ranking_trace(
+        candidate_limit=len(candidates),
+        input_count=sum(
+            int(trace.get("input_count") or len(trace.get("input_identities") or []))
+            for trace in executed_traces
+        ),
+        output_count=len(output),
+        backend_execution=True,
+        backend=_uniform_trace_value(executed_traces, "backend"),
+        model=_uniform_trace_value(executed_traces, "model"),
+        score_field=_uniform_trace_value(executed_traces, "score_field")
+        or "reranker_score",
+        output_limit=limit,
+        configured=context["configured"],
+        loaded=context["loaded"],
+        input_identities=context["input_identities"],
+        output_identities=[identity_of(item).key for item in output],
+        backend_output_count=context["backend_output_total"],
+        backend_output_identities=context["backend_output_identities"],
+        scored_count=sum(
+            int(trace.get("scored_count") or trace.get("input_count") or 0)
+            for trace in executed_traces
+        ),
+    )
+    aggregate.update(
+        {
+            "query_execution_count": len(executed_traces),
+            "backend_output_total": context["backend_output_total"],
+            "unique_output_identity_count": len(output),
+            "reranker_artifact_record_count": len(output),
+            "reranker_execution_traces": traces,
+        }
+    )
+    return aggregate
+
+
+def _execution_trace_context(
+    traces: list[dict[str, Any]],
+) -> dict[str, Any]:
+    executed = [trace for trace in traces if bool(trace.get("executed"))]
+    return {
+        "executed_traces": executed,
+        "configured": any(bool(trace.get("configured")) for trace in traces),
+        "loaded": any(bool(trace.get("loaded")) for trace in traces),
+        "input_identities": _trace_identities(traces, "input_identities"),
+        "backend_output_identities": _trace_identities(
+            executed,
+            "output_identities",
+        ),
+        "backend_output_total": sum(
+            int(
+                trace.get("backend_output_count")
+                or trace.get("output_count")
+                or len(trace.get("output_identities") or [])
+            )
+            for trace in executed
+        ),
+    }
+
+
+def _not_executed_query_trace(
+    candidates: list[dict[str, Any]],
+    traces: list[dict[str, Any]],
+    context: dict[str, Any],
+    *,
+    limit: int,
+) -> dict[str, object]:
+    trace = ranking_trace(
+        candidate_limit=len(candidates),
+        input_count=sum(int(item.get("input_count") or 0) for item in traces),
+        output_count=0,
+        backend_execution=False,
+        output_limit=limit,
+        configured=context["configured"],
+        loaded=context["loaded"],
+        failure_reason="reranker_not_executed",
+        input_identities=context["input_identities"],
+    )
+    trace.update(
+        {
+            "query_execution_count": 0,
+            "backend_output_total": 0,
+            "unique_output_identity_count": 0,
+            "reranker_artifact_record_count": 0,
+            "reranker_execution_traces": traces,
+        }
+    )
+    return trace
+
+
+def _candidate_trace_aliases(candidate: dict[str, Any]) -> set[str]:
+    return {
+        _item_input_identity(candidate),
+        identity_of(candidate).key,
+        str(candidate.get("canonical_id") or "").strip(),
+    }
+
+
+def _reranker_observation(
+    trace: dict[str, Any],
+    raw_identity: str,
+    score: float,
+) -> dict[str, Any]:
+    return {
+        "query_id": str(trace.get("query_id") or ""),
+        "slot_id": str(trace.get("slot_id") or ""),
+        "round_id": int(trace.get("round_id") or 0),
+        "backend": str(trace.get("backend") or ""),
+        "model": str(trace.get("model") or ""),
+        "input_identity": raw_identity,
+        "score": score,
+        "rank": _trace_rank(raw_identity, trace),
+    }
+
+
+def _trace_values(trace: dict[str, Any], field: str) -> list[str]:
+    return [
+        str(value).strip()
+        for value in trace.get(field) or []
+        if str(value or "").strip()
+    ]
+
+
+def _trace_identities(
+    traces: list[dict[str, Any]],
+    field: str,
+) -> list[str]:
+    return list(
+        dict.fromkeys(
+            str(value).strip()
+            for trace in traces
+            for value in trace.get(field) or []
+            if str(value or "").strip()
+        )
+    )
+
+
+def _trace_rank(identity: str, trace: dict[str, Any]) -> int | None:
+    outputs = [
+        str(value).strip()
+        for value in trace.get("output_identities") or []
+        if str(value or "").strip()
+    ]
+    return outputs.index(identity) + 1 if identity in outputs else None
+
+
+def _uniform_trace_value(traces: list[dict[str, Any]], field: str) -> str:
+    values = {
+        str(trace.get(field) or "").strip()
+        for trace in traces
+        if str(trace.get(field) or "").strip()
+    }
+    return next(iter(values)) if len(values) == 1 else ""
 
 
 def _materialize_from_execution_trace(

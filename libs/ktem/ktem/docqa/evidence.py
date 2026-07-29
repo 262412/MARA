@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any
@@ -27,6 +28,7 @@ from .query_planning import (
     ensure_request_query_plan,
     request_planning_question,
     retrieval_budget,
+    score_evidence_for_slot,
 )
 from .required_slot_selection import (
     required_slot_candidate_limit,
@@ -86,29 +88,18 @@ def build_evidence_bundle(
     if stages.reranked is not None:
         metadata["reranked_candidate_count"] = len(stages.reranked)
         metadata["reranked_evidence"] = stages.reranked
-        execution_trace = metadata.get("reranker_execution_trace")
-        if isinstance(execution_trace, dict):
-            execution_trace = dict(execution_trace)
-            execution_trace["backend_output_count"] = int(
-                execution_trace.get("backend_output_count")
-                or execution_trace.get("output_count")
-                or 0
-            )
-            execution_trace["output_count"] = len(stages.reranked)
-            execution_trace["reranker_output_count"] = len(stages.reranked)
-            execution_trace["reranker_artifact_record_count"] = len(stages.reranked)
-            metadata["reranker_execution_trace"] = execution_trace
     ranking_metadata = dict(stages.ranking_metadata)
+    execution_traces = ranking_metadata.get("reranker_execution_traces")
+    if isinstance(execution_traces, list):
+        metadata["reranker_execution_traces"] = execution_traces
     if stages.reranked is not None:
         selected_identities = {identity_of(item).key for item in deduped}
         retained_count = sum(
             identity_of(item).key in selected_identities for item in stages.reranked
         )
         ranking_metadata["selection_retained_reranked_count"] = retained_count
-        execution_trace = metadata.get("reranker_execution_trace")
-        if isinstance(execution_trace, dict):
-            execution_trace["selection_retained_reranked_count"] = retained_count
     metadata["ranking_trace"] = ranking_metadata
+    metadata["reranker_aggregate_trace"] = ranking_metadata
     metadata.update(merged_locator_metadata(metadata, deduped))
     metadata["modality_counts"] = dict(Counter(item["modality"] for item in deduped))
     metadata["evidence"] = deduped
@@ -242,31 +233,101 @@ def _initial_evidence_items(
         items.extend(_rank_route_items(element_items, request, "doc_element"))
     if route in {"graph_global", "hybrid"}:
         items.extend(graph_items(request, evidence_metadata))
-    items = _materialize_execution_cells(request, items)
+    items = _materialize_execution_cells(request, items, evidence_metadata)
     return canonicalize_evidence_sources(items, crosswalk)
 
 
 def _materialize_execution_cells(
     request: Any,
     items: list[dict[str, Any]],
+    evidence_metadata: dict[str, Any],
 ) -> list[dict[str, Any]]:
     plan = ensure_request_query_plan(request)
-    if not any(slot.required_for_execution for slot in plan.evidence_slots):
+    slots = [
+        slot
+        for slot in plan.evidence_slots
+        if slot.required_for_execution and slot.role == "operand"
+    ]
+    if not slots:
         return items
+    started = time.perf_counter()
     expanded: list[dict[str, Any]] = []
     existing = {identity_of(item).key for item in items}
-    for item in items:
-        expanded.append(item)
-        if str(item.get("evidence_level") or "").lower() == "cell":
-            continue
-        for cell in parse_financial_table_cells(item):
-            materialized = materialize_financial_cell(item, cell)
-            identity = identity_of(materialized).key
-            if identity in existing:
+    expanded.extend(items)
+    cache: dict[str, tuple[Any, ...]] = {}
+    cache_hits = 0
+    cache_misses = 0
+    parent_candidates: set[str] = set()
+    materialized_tables: set[str] = set()
+    per_slot_counts: dict[str, int] = {}
+    for slot in slots:
+        slot_matches = 0
+        for item in items:
+            if str(item.get("evidence_level") or "").lower() == "cell":
                 continue
-            existing.add(identity)
-            expanded.append(materialized)
+            if not _parent_may_contain_slot(item, slot):
+                continue
+            table_key = _materialization_table_key(item)
+            parent_candidates.add(table_key)
+            if table_key in cache:
+                cells = cache[table_key]
+                cache_hits += 1
+            else:
+                cells = parse_financial_table_cells(item)
+                cache[table_key] = cells
+                cache_misses += 1
+                if cells:
+                    materialized_tables.add(table_key)
+            for cell in cells:
+                materialized = materialize_financial_cell(item, cell)
+                if score_evidence_for_slot(slot, materialized) <= 0:
+                    continue
+                identity = identity_of(materialized).key
+                if identity not in existing:
+                    existing.add(identity)
+                    expanded.append(materialized)
+                slot_matches += 1
+        per_slot_counts[slot.slot_id] = slot_matches
+    attempts = cache_hits + cache_misses
+    materialized_count = len(expanded) - len(items)
+    evidence_metadata["materialization_trace"] = {
+        "parent_table_candidate_count": len(parent_candidates),
+        "materialized_table_count": len(materialized_tables),
+        "materialized_cell_count": materialized_count,
+        "materialization_cache_hit_rate": (cache_hits / attempts if attempts else 0.0),
+        "materialized_cells_per_required_slot": (
+            sum(per_slot_counts.values()) / len(slots) if slots else 0.0
+        ),
+        "materialized_cells_by_required_slot": per_slot_counts,
+        "candidate_count_before_materialization": len(items),
+        "candidate_count_after_materialization": len(expanded),
+        "materialization_seconds": time.perf_counter() - started,
+    }
     return expanded
+
+
+def _parent_may_contain_slot(item: dict[str, Any], slot: Any) -> bool:
+    text = " ".join(
+        str(item.get(field) or "")
+        for field in ("text", "caption", "ocr_text", "table_title")
+    ).lower()
+    if not text.strip():
+        return False
+    period = str(slot.period or "").strip().lower()
+    if period and period not in text:
+        return False
+    return bool(
+        item.get("table_id")
+        or item.get("table_instance_id")
+        or str(item.get("modality") or "").lower() == "table"
+        or ("\n" in text and any(character.isdigit() for character in text))
+    )
+
+
+def _materialization_table_key(item: dict[str, Any]) -> str:
+    return str(
+        item.get("table_instance_id") or item.get("table_id") or identity_of(item).key
+    )
 
 
 def _uses_element_index(route: str, request: Any) -> bool:

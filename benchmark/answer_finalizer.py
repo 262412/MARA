@@ -8,10 +8,7 @@ from .answer_abstention import structured_or_text_abstention
 from .answer_modes import normalize_benchmark_answer_mode
 from .answer_repetition import deduplicate_final_answer as _deduplicate_final_answer
 from .answer_scoring_adapter import select_scoring_answer
-from .calculation_citation_projection import (
-    calculation_citation_items,
-    record_calculation_stage_evidence,
-)
+from .calculation_citation_projection import calculation_citation_items
 from .citation_claim_selection import minimum_verified_claim_support_items
 from .citation_rendering import citation_from_item as _citation_from_item
 from .citation_rendering import citation_from_source_ref as _citation_from_source_ref
@@ -22,6 +19,12 @@ from .citation_stage_projection import (
     is_uuid_like_source_id,
     record_emitted_citation_evidence,
     source_ref_uses_uuid_like_source,
+)
+from .finance_citation_contract import (
+    clear_answer_citation_state,
+    record_execution_operand_evidence,
+    record_verified_claim_support,
+    typed_calculation_is_verified,
 )
 from .ragtruth_answer_contract import ragtruth_finalization_metadata
 
@@ -57,6 +60,11 @@ def finalize_prediction_answer(
         prediction=prediction,
         dataset_name=dataset_name,
     )
+    record_execution_operand_evidence(
+        prediction,
+        _citation_candidate_items(prediction),
+        _canonical_source_refs(prediction),
+    )
     (
         answer_for_user,
         answer_text_for_user,
@@ -81,9 +89,10 @@ def finalize_prediction_answer(
         answer_for_scoring = "unanswerable"
         source = "canonical_abstention"
         prediction["answer_status"] = "abstained"
+        answer_for_user = answer_text_for_user
+        clear_answer_citation_state(prediction)
     else:
         prediction["answer_status"] = "answered"
-
     _store_finalized_answers(
         prediction,
         answer_for_user=answer_for_user,
@@ -265,9 +274,10 @@ def attach_structured_citations_from_evidence(
         return []
     canonical_sources = _canonical_source_refs(prediction)
     all_candidates = _citation_candidate_items(prediction)
-    calculation_matches = calculation_citation_items(
-        prediction,
-        all_candidates,
+    calculation_matches = (
+        calculation_citation_items(prediction, all_candidates)
+        if typed_calculation_is_verified(prediction)
+        else []
     )
     calculation_citations = [
         citation
@@ -282,18 +292,20 @@ def attach_structured_citations_from_evidence(
             )
         )
     ]
-    if calculation_citations:
-        record_calculation_stage_evidence(
-            prediction,
-            calculation_matches,
-            canonical_sources=canonical_sources,
-        )
     verified_citations = []
-    for item in minimum_verified_claim_support_items(
+    verified_items = minimum_verified_claim_support_items(
         prediction,
         all_candidates,
         span=span,
-    ):
+    )
+    record_verified_claim_support(
+        prediction,
+        [
+            *[match.item for match in calculation_matches],
+            *verified_items,
+        ],
+    )
+    for item in verified_items:
         citation = _citation_from_item(
             item,
             span=span,

@@ -374,6 +374,56 @@ def test_materialized_cells_execute_multi_period_percentage_change():
     assert answer.calculation_execution["status"] == "ok"
 
 
+def test_execution_cell_materialization_is_slot_scoped_and_cached():
+    request = DocQARequest(
+        prompt=(
+            "What was the percentage change in operating income from "
+            "FY2015 to FY2016?"
+        ),
+        task_type="numeric",
+        verification_domain="finance",
+    )
+    bundle = build_evidence_bundle(
+        "doc",
+        request,
+        {
+            "evidence": [
+                {
+                    "evidence_id": "income-table",
+                    "source_id": "adobe",
+                    "page_label": "62",
+                    "table_id": "income-table",
+                    "table_instance_id": "income-table",
+                    "modality": "table",
+                    "text": (
+                        "Consolidated Statements of Income (in thousands)\n"
+                        "2016 2015\n"
+                        "Operating income 1,493,602 903,095\n"
+                        "Net revenue 4,796,000 4,100,000\n"
+                        "Cost of revenue 500,000 450,000"
+                    ),
+                }
+            ]
+        },
+    )
+
+    trace = bundle.metadata["materialization_trace"]
+    cells = [
+        item
+        for item in bundle.metadata["canonical_candidate_evidence"]
+        if item.get("evidence_level") == "cell"
+    ]
+    assert {(item["row_label"], item["period"]) for item in cells} == {
+        ("Operating income", "2015"),
+        ("Operating income", "2016"),
+    }
+    assert trace["materialized_table_count"] == 1
+    assert trace["materialization_cache_hit_rate"] > 0
+    assert trace["candidate_count_after_materialization"] == (
+        trace["candidate_count_before_materialization"] + 2
+    )
+
+
 def test_period_slots_cannot_share_parent_identity():
     request = DocQARequest(
         prompt=(

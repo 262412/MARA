@@ -31,10 +31,15 @@ def test_finalizer_cites_executed_finance_evidence_not_first_candidate():
             ],
             "metadata": {
                 "finance_numeric_trace": {
+                    "calculation_verification": {
+                        "valid": True,
+                        "required_slot_ids": ["operand:working_capital"],
+                        "verified_required_slot_ids": ["operand:working_capital"],
+                    },
                     "calculation_execution": {
                         "status": "ok",
                         "citation_ids": ["working-capital-table"],
-                    }
+                    },
                 }
             },
         },
@@ -83,10 +88,18 @@ def test_calculation_citation_materializes_atomic_cell_with_parent_backref():
         "evidence_bundle": {
             "metadata": {
                 "finance_numeric_trace": {
+                    "calculation_verification": {
+                        "valid": True,
+                        "required_slot_ids": ["operand:prior", "operand:current"],
+                        "verified_required_slot_ids": [
+                            "operand:prior",
+                            "operand:current",
+                        ],
+                    },
                     "calculation_execution": {
                         "status": "ok",
                         "citation_ids": [cell_identity],
-                    }
+                    },
                 }
             }
         }
@@ -119,10 +132,18 @@ def test_calculation_citations_preserve_each_operand_identity():
             "items": [table],
             "metadata": {
                 "finance_numeric_trace": {
+                    "calculation_verification": {
+                        "valid": True,
+                        "required_slot_ids": ["operand:prior", "operand:current"],
+                        "verified_required_slot_ids": [
+                            "operand:prior",
+                            "operand:current",
+                        ],
+                    },
                     "calculation_execution": {
                         "status": "ok",
                         "citation_ids": citation_ids,
-                    }
+                    },
                 }
             },
         },

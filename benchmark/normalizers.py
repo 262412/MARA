@@ -86,6 +86,13 @@ def _financebench_evidence_fields(
                 evidence_item["span"] = span
             if alignment:
                 evidence_item["page_alignment"] = alignment
+                evidence_item["page_mapping"] = {
+                    "dataset_page": dataset_page,
+                    "runtime_page": page,
+                    "mapping_source": alignment,
+                    "mapping_confidence": 1.0,
+                    "mapping_version": "financebench_page_mapping.v1",
+                }
             if len(evidence_item) > 1:
                 gold_evidence.append(evidence_item)
             continue

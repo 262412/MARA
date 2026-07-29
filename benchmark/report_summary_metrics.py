@@ -10,6 +10,12 @@ def diagnostic_metric_lines(summary: dict[str, Any]) -> list[str]:
         f"- Strict Page Hit: `{summary.get('avg_strict_page_hit')}`",
         "- Equivalent-Evidence Page Hit: "
         f"`{summary.get('avg_equivalent_evidence_page_hit')}`",
+        "- Strict Gold Page Coverage: "
+        f"`{summary.get('avg_strict_gold_page_coverage')}`",
+        "- Canonical-Mapped Page Coverage: "
+        f"`{summary.get('avg_canonical_mapped_page_coverage')}`",
+        "- Equivalent-Evidence Page Coverage: "
+        f"`{summary.get('avg_equivalent_evidence_page_coverage')}`",
         f"- Citation Recall: `{summary.get('avg_citation_recall')}`",
         "- Citation Metadata Recall: "
         f"`{summary.get('avg_citation_metadata_recall')}`",

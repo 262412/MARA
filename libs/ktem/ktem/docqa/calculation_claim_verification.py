@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from .calculation_evidence_identity import calculation_evidence_lookup
+from .calculation_result_comparison import compare_calculation_result
 from .evidence_schema import EvidenceBundle
 from .evidence_text import extract_final_answer_text
 
@@ -27,6 +28,7 @@ def calculation_claim_result(
     claims: list[str],
     *,
     domain: str,
+    prompt: str = "",
 ) -> CalculationClaimResult | None:
     if domain != "finance":
         return None
@@ -40,7 +42,8 @@ def calculation_claim_result(
     if expected is None:
         return None
     rendered = extract_final_answer_text(answer)
-    claim = _result_claim(claims, rendered, expected)
+    normalized_expected = _normalized_expected(expected, plan)
+    claim = _result_claim(claims, rendered, normalized_expected)
     citation_ids = tuple(
         dict.fromkeys(
             str(value).strip()
@@ -55,7 +58,23 @@ def calculation_claim_result(
     if not citation_ids or matched_ids != citation_ids:
         return CalculationClaimResult(claim=claim, status="unknown")
     values = _answer_numbers(claim)
-    value_matches = any(_close(value, expected) for value in values)
+    comparisons = [
+        compare_calculation_result(
+            expected,
+            value,
+            prompt=prompt,
+            plan=plan,
+            rendered_text=claim,
+        )
+        for value in values
+    ]
+    comparison = next(
+        (item for item in comparisons if bool(item.get("matched"))),
+        comparisons[0] if comparisons else None,
+    )
+    if comparison is not None:
+        bundle.metadata["calculation_result_comparison"] = comparison
+    value_matches = bool(comparison and comparison.get("matched"))
     dimensions_match = _answer_dimensions_match(
         claim,
         answer_unit=str(plan.get("answer_unit") or ""),
@@ -125,5 +144,16 @@ def _decimal(value: Any) -> Decimal | None:
 
 
 def _close(left: Decimal, right: Decimal) -> bool:
-    tolerance = max(Decimal("0.005"), abs(right) * Decimal("0.0001"))
-    return abs(left - right) <= tolerance
+    return left == right
+
+
+def _normalized_expected(expected: Decimal, plan: dict[str, Any]) -> Decimal:
+    result_unit = (
+        str(plan.get("raw_result_unit") or plan.get("execution_value_unit") or "")
+        .strip()
+        .lower()
+    )
+    answer_unit = str(plan.get("answer_unit") or "").strip().lower()
+    if answer_unit in {"percent", "%"} and result_unit in {"fraction", "ratio"}:
+        return expected * Decimal("100")
+    return expected

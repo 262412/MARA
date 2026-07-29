@@ -38,6 +38,10 @@ class EvidenceElement:
     column_index: int | None = None
     row_label: str = ""
     column_label: str = ""
+    raw_row_label: str = ""
+    raw_column_label: str = ""
+    normalized_row_label: str = ""
+    normalized_column_label: str = ""
     period: str = ""
     period_kind: str = ""
     value: str = ""
@@ -86,6 +90,10 @@ class EvidenceElement:
             "materialization_source_id",
             "row_label",
             "column_label",
+            "raw_row_label",
+            "raw_column_label",
+            "normalized_row_label",
+            "normalized_column_label",
             "period",
             "period_kind",
             "value",

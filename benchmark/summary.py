@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any
 
 from .answer_summary import (
@@ -20,6 +18,7 @@ from .mara_oriented_scores import (
 )
 from .metrics import round_metric, safe_mean
 from .multimodal_route_summary import phase3_multimodal_summary
+from .page_metric_summary import page_metric_summary
 from .prompt_summary import benchmark_prompt_summary
 from .route_output_agreement import route_output_agreement_rate
 from .score_authority import (
@@ -229,6 +228,7 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
             predictions,
             "equivalent_evidence_page_hit",
         ),
+        **page_metric_summary(predictions),
         "route_output_agreement_rate": route_output_agreement_rate(predictions),
         **citation_headline_summary(predictions),
         **_citation_group_summary(predictions),
@@ -543,6 +543,7 @@ def _route_metric_table(
                     route_predictions,
                     "equivalent_evidence_page_hit",
                 ),
+                **page_metric_summary(route_predictions),
                 "avg_element_hit": _avg_metric(route_predictions, "element_hit"),
                 "avg_element_locator_hit": _avg_metric(
                     route_predictions, "element_locator_hit"

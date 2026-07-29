@@ -4,6 +4,7 @@ from typing import Any, Callable
 
 from .evidence import EvidenceBundle, build_evidence_bundle
 from .evidence_identity import identity_of
+from .finance_typed_adequacy import ensure_finance_numeric_trace
 from .query_planning import ensure_request_query_plan, request_planning_question
 from .route_budget import optional_stage_allowed, route_budget_metadata
 
@@ -214,6 +215,7 @@ def _evaluate(
     *,
     attempted_retry: bool,
 ) -> Any:
+    ensure_finance_numeric_trace(request, bundle)
     return evaluate(
         decision.legacy_route,
         bundle.metadata,
@@ -287,6 +289,12 @@ def _with_retrieval_lineage(
     slot_id: str,
 ) -> dict[str, Any]:
     output = dict(metadata or {})
+    _record_reranker_query_context(
+        output,
+        round_id=round_id,
+        query_id=query_id,
+        slot_id=slot_id,
+    )
     retriever_names = {
         "evidence": "text",
         "page_image_index": "visual",
@@ -337,6 +345,37 @@ def _with_retrieval_lineage(
             annotated.append(record)
         output[key] = annotated
     return output
+
+
+def _record_reranker_query_context(
+    metadata: dict[str, Any],
+    *,
+    round_id: int,
+    query_id: str,
+    slot_id: str,
+) -> None:
+    traces = [
+        dict(trace)
+        for trace in metadata.get("reranker_execution_traces") or []
+        if isinstance(trace, dict)
+    ]
+    legacy_trace = metadata.get("reranker_execution_trace")
+    if isinstance(legacy_trace, dict) and not traces:
+        traces.append(dict(legacy_trace))
+    if not traces:
+        return
+    contextualized = []
+    for trace in traces:
+        trace.update(
+            {
+                "round_id": round_id,
+                "query_id": query_id,
+                "slot_id": slot_id,
+            }
+        )
+        contextualized.append(trace)
+    metadata["reranker_execution_traces"] = contextualized
+    metadata["reranker_execution_trace"] = contextualized[-1]
 
 
 def _raw_retrieval_score(

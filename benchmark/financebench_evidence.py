@@ -44,7 +44,22 @@ def legacy_financebench_evidence_from_source(
         evidence["span"] = span
     if alignment:
         evidence["page_alignment"] = alignment
+        evidence["page_mapping"] = _page_mapping(dataset_page, page, alignment)
     return evidence if len(evidence) > 1 else None
+
+
+def _page_mapping(
+    dataset_page: int | str | None,
+    runtime_page: int | str | None,
+    alignment: str,
+) -> dict[str, Any]:
+    return {
+        "dataset_page": dataset_page,
+        "runtime_page": runtime_page,
+        "mapping_source": alignment,
+        "mapping_confidence": 1.0,
+        "mapping_version": "financebench_page_mapping.v1",
+    }
 
 
 def _first_present(record: dict[str, Any], *keys: str) -> Any:

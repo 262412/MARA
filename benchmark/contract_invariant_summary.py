@@ -48,6 +48,26 @@ def _identity_summary(
             metrics,
             "atomic_field_roundtrip_rate",
         ),
+        "exact_atomic_identity_roundtrip": _mean(
+            metrics,
+            "exact_atomic_identity_roundtrip",
+        ),
+        "exact_numeric_field_roundtrip": _mean(
+            metrics,
+            "exact_numeric_field_roundtrip",
+        ),
+        "normalized_label_roundtrip": _mean(
+            metrics,
+            "normalized_label_roundtrip",
+        ),
+        "raw_representation_preservation": _mean(
+            metrics,
+            "raw_representation_preservation",
+        ),
+        "normalization_equivalence_count": _sum(
+            metrics,
+            "normalization_equivalence_count",
+        ),
         "locator_roundtrip_rate": _mean(metrics, "locator_roundtrip_rate"),
         "lineage_roundtrip_rate": _mean(metrics, "lineage_roundtrip_rate"),
         "representation_roundtrip_rate": _mean(
@@ -138,6 +158,14 @@ def _execution_binding_summary(
         "calculation_render_mismatch_count": _sum(
             metrics,
             "calculation_render_mismatch_count",
+        ),
+        "heuristic_veto_after_verified_execution_count": _sum(
+            metrics,
+            "heuristic_veto_after_verified_execution_count",
+        ),
+        "rounding_verification_failure_count": _sum(
+            metrics,
+            "rounding_verification_failure_count",
         ),
     }
 

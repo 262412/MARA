@@ -113,10 +113,11 @@ def _text_metadata(
     docs, info = text_retrieve()
     pipeline._mara_cached_retrieval = (message, list(history), docs, info)
     metadata = metadata_builder(docs, understanding)
-    reranker_trace = _latest_reranker_execution_trace(pipeline)
-    if reranker_trace:
-        metadata["reranker_execution_trace"] = reranker_trace
-        metadata["reranker_backend"] = str(reranker_trace.get("backend") or "")
+    reranker_traces = _reranker_execution_traces(pipeline)
+    if reranker_traces:
+        metadata["reranker_execution_traces"] = reranker_traces
+        metadata["reranker_execution_trace"] = reranker_traces[-1]
+        metadata["reranker_backend"] = str(reranker_traces[-1].get("backend") or "")
     attempts = _bounded_retrieval_attempts(
         getattr(pipeline, "_mara_retrieval_attempts", [])
     )
@@ -126,7 +127,7 @@ def _text_metadata(
     return metadata
 
 
-def _latest_reranker_execution_trace(pipeline: Any) -> dict[str, Any]:
+def _reranker_execution_traces(pipeline: Any) -> list[dict[str, Any]]:
     traces: list[dict[str, Any]] = []
     for retriever in getattr(pipeline, "retrievers", None) or []:
         vector_retrieval = getattr(retriever, "vector_retrieval", None)
@@ -139,8 +140,7 @@ def _latest_reranker_execution_trace(pipeline: Any) -> dict[str, Any]:
         trace = metadata.get("reranker_execution")
         if isinstance(trace, dict):
             traces.append(dict(trace))
-    executed = [trace for trace in traces if trace.get("executed")]
-    return (executed or traces)[-1] if traces else {}
+    return traces
 
 
 def _bounded_retrieval_attempts(attempts: Any) -> list[dict[str, Any]]:
