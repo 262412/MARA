@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from .financial_statement_identity import financial_statement_identity
-
-_YEAR_RE = re.compile(r"\b((?:19|20)\d{2})\b")
-_VALUE_RE = re.compile(
-    r"(?:\$?\s*\([+-]?\d[\d,]*(?:\.\d+)?\)|" r"\(?[+-]?\$?\s*\d[\d,]*(?:\.\d+)?\)?)"
-)
+from .financial_table_parser import decimal_value as _decimal
+from .financial_table_parser import period_header_records as _period_header_records
+from .financial_table_parser import period_kind as _period_kind
+from .financial_table_parser import period_sections as _period_sections
+from .financial_table_parser import section_rows as _section_rows
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +69,7 @@ class FinancialTableCell:
     column_label: str
     period: str
     value: Decimal
+    cell_role: str = "data"
     period_kind: str = ""
     unit: str = ""
     scale: str = ""
@@ -111,6 +112,7 @@ class FinancialTableCell:
                 self.currency,
                 self.statement_kind,
                 self.financial_scope,
+                self.cell_role,
             )
             if value
         )
@@ -131,7 +133,12 @@ def parse_financial_table_cells(
         return ()
 
     identity = _table_identity(item)
-    statement_kind, financial_scope = financial_statement_identity(item)
+    text_statement_kind, text_financial_scope = financial_statement_identity(text)
+    explicit_statement_kind, explicit_financial_scope = financial_statement_identity(
+        item
+    )
+    statement_kind = text_statement_kind or explicit_statement_kind
+    financial_scope = text_financial_scope or explicit_financial_scope
     scale = _dimension(item, "scale") or _scale(text)
     currency = _dimension(item, "currency") or _currency(text)
     unit = _dimension(item, "unit")
@@ -272,11 +279,7 @@ def financial_table_yearly_amounts(
 
 def _table_blocks(text: str) -> tuple[str, ...]:
     lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
-    headers = [
-        index
-        for index, line in enumerate(lines)
-        if len(set(_YEAR_RE.findall(line))) >= 2
-    ]
+    headers = [start for start, _end, _periods in _period_header_records(lines)]
     return tuple(
         "\n".join(lines[max(0, start - 1) : end])
         for start, end in zip(headers, [*headers[1:], len(lines)])
@@ -320,6 +323,7 @@ def _explicit_cell(item: dict[str, Any]) -> FinancialTableCell | None:
         column_label=column_label,
         period=str(item.get("period") or column_label).strip(),
         value=value,
+        cell_role=str(item.get("cell_role") or "data").strip().lower(),
         period_kind=_period_kind(item, _item_text(item)),
         unit=_dimension(item, "unit"),
         scale=_dimension(item, "scale"),
@@ -327,119 +331,6 @@ def _explicit_cell(item: dict[str, Any]) -> FinancialTableCell | None:
         statement_kind=statement_kind,
         financial_scope=financial_scope,
     )
-
-
-def _period_header(lines: list[str]) -> tuple[int | None, tuple[str, ...]]:
-    for index, line in enumerate(lines):
-        periods = tuple(dict.fromkeys(_YEAR_RE.findall(line)))
-        if len(periods) >= 2:
-            return index, periods
-    return None, ()
-
-
-def _period_sections(
-    lines: list[str],
-    item: dict[str, Any],
-) -> tuple[tuple[int, int, tuple[str, ...], str], ...]:
-    headers = [
-        (index, tuple(dict.fromkeys(_YEAR_RE.findall(line))))
-        for index, line in enumerate(lines)
-        if len(set(_YEAR_RE.findall(line))) >= 2
-    ]
-    sections = []
-    explicit_period_kind = _dimension(item, "period_kind")
-    for header_position, (header_index, periods) in enumerate(headers):
-        end_index = (
-            headers[header_position + 1][0]
-            if header_position + 1 < len(headers)
-            else len(lines)
-        )
-        section_heading = " ".join(lines[max(0, header_index - 1) : header_index + 1])
-        period_kind = explicit_period_kind or _period_kind({}, section_heading)
-        sections.append((header_index, end_index, periods, period_kind))
-    return tuple(sections)
-
-
-def _section_rows(
-    lines: list[str],
-    periods: tuple[str, ...],
-) -> tuple[tuple[str, tuple[Decimal, ...]], ...]:
-    rows: list[tuple[str, tuple[Decimal, ...]]] = []
-    pending_label = ""
-    for line in lines:
-        parsed = _parse_row(line, periods)
-        if parsed is not None:
-            rows.append(parsed)
-            pending_label = ""
-            continue
-
-        matches = [
-            match
-            for match in _VALUE_RE.finditer(line)
-            if not _bare_period_token(match.group(0), periods)
-        ]
-        if pending_label and len(matches) >= len(periods):
-            selected = matches[: len(periods)]
-            values = tuple(
-                value
-                for match in selected
-                if (value := _decimal(match.group(0))) is not None
-            )
-            if len(values) == len(periods):
-                rows.append((pending_label, values))
-                pending_label = _row_label_fragment(line[selected[-1].end() :])
-                continue
-
-        if not matches:
-            fragment = _row_label_fragment(line)
-            if fragment:
-                pending_label = " ".join(
-                    part for part in (pending_label, fragment) if part
-                )
-        else:
-            pending_label = ""
-    return tuple(rows)
-
-
-def _row_label_fragment(value: str) -> str:
-    fragment = str(value or "").strip(" :.|-\t")
-    if _normalized_text(fragment) in {
-        "assets",
-        "liabilities",
-        "equity",
-        "liabilities and equity",
-    }:
-        return ""
-    return fragment if fragment and not _YEAR_RE.search(fragment) else ""
-
-
-def _parse_row(
-    line: str,
-    periods: tuple[str, ...],
-) -> tuple[str, tuple[Decimal, ...]] | None:
-    matches = [
-        match
-        for match in _VALUE_RE.finditer(line)
-        if not _bare_period_token(match.group(0), periods)
-    ]
-    if len(matches) < len(periods):
-        return None
-    row_label = line[: matches[0].start()].strip(" :.|-\t")
-    if not row_label or _YEAR_RE.search(row_label):
-        return None
-    values = tuple(
-        value
-        for match in matches[-len(periods) :]
-        if (value := _decimal(match.group(0))) is not None
-    )
-    if len(values) != len(periods):
-        return None
-    return row_label, values
-
-
-def _bare_period_token(value: str, periods: tuple[str, ...]) -> bool:
-    token = str(value or "").strip()
-    return token in periods
 
 
 def _table_identity(item: dict[str, Any]) -> dict[str, str]:
@@ -530,11 +421,16 @@ def _scale(text: str) -> str:
         r"\(?\s*in|"
         r"dollars?\s+(?:are\s+)?(?:presented\s+)?in|"
         r"tabular\s+dollars?\s+(?:are\s+)?(?:presented\s+)?in"
-        r")\s+(thousands?|millions?|billions?)\b",
+        r")\s+(thousands?|millions?|billions?)\b|"
+        r"\(\s*(thousands?|millions?|billions?)\s*\)",
         text,
         flags=re.IGNORECASE,
     )
-    return match.group(1).lower().rstrip("s") if match else ""
+    return (
+        next(value for value in match.groups() if value).lower().rstrip("s")
+        if match
+        else ""
+    )
 
 
 def _currency(text: str) -> str:
@@ -546,37 +442,6 @@ def _currency(text: str) -> str:
     if "gbp" in lowered or "£" in text:
         return "GBP"
     return ""
-
-
-def _period_kind(item: dict[str, Any], text: str) -> str:
-    explicit = _dimension(item, "period_kind")
-    if explicit:
-        return explicit
-    lowered = str(text or "").lower()
-    if "three months ended" in lowered or "quarter" in lowered:
-        return "quarter"
-    if any(
-        phrase in lowered
-        for phrase in (
-            "twelve months ended",
-            "fiscal year",
-            "full year",
-            "year ended",
-            "december 31",
-        )
-    ):
-        return "fiscal_year"
-    return ""
-
-
-def _decimal(value: Any) -> Decimal | None:
-    text = str(value or "").replace("$", "").replace(",", "").replace(" ", "")
-    negative = text.startswith("(") and text.endswith(")")
-    try:
-        parsed = Decimal(text.strip("()"))
-    except InvalidOperation:
-        return None
-    return -parsed if negative else parsed
 
 
 def _first(*values: Any) -> str:

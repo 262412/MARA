@@ -48,7 +48,14 @@ def test_route_switch_does_not_accept_non_atomic_finance_page_as_recovery():
         generate=generate,
     )
 
-    assert calls == ["hybrid", "hybrid", "hybrid", "doc_text"]
+    assert calls == [
+        "hybrid",
+        "hybrid",
+        "hybrid",
+        "hybrid",
+        "doc_text",
+        "doc_text",
+    ]
     assert result.controller_decision.legacy_route == "hybrid"
     assert result.controller_decision.route_switch_used is False
     assert result.retrieve_decision.status == "poor"

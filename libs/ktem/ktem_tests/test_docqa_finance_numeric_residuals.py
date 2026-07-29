@@ -6,13 +6,38 @@ def test_finance_free_cash_flow_operands_inherit_single_question_period():
         "What was free cash flow in 2020?",
         [
             {
-                "element_id": "cash-flow-2020",
+                "evidence_id": "operating-cash-flow-2020",
+                "cell_id": "operating-cash-flow-2020",
+                "evidence_level": "cell",
+                "cell_role": "data",
+                "row_label": "Net cash provided by operating activities",
+                "column_label": "2020",
+                "period": "2020",
+                "value": "3676.2",
+                "scale": "million",
+                "statement_kind": "cash_flow_statement",
+                "financial_scope": "consolidated",
                 "text": (
-                    "Cash flow statement (in millions). In 2020, net cash "
-                    "provided by operating activities was $3,676.2 million "
-                    "and capital expenditures were $460.8 million."
+                    "Cash flow statement. Net cash provided by operating "
+                    "activities 2020 3,676.2 million."
                 ),
-            }
+            },
+            {
+                "evidence_id": "capital-expenditure-2020",
+                "cell_id": "capital-expenditure-2020",
+                "evidence_level": "cell",
+                "cell_role": "data",
+                "row_label": "Capital expenditures",
+                "column_label": "2020",
+                "period": "2020",
+                "value": "460.8",
+                "scale": "million",
+                "statement_kind": "cash_flow_statement",
+                "financial_scope": "consolidated",
+                "text": (
+                    "Cash flow statement. Capital expenditures 2020 " "460.8 million."
+                ),
+            },
         ],
         query_plan={
             "evidence_slots": [

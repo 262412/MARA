@@ -10,23 +10,55 @@ from .financial_table import parse_financial_table_cells
 def calculation_evidence_lookup(
     items: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
+    return unambiguous_evidence_alias_lookup(calculation_evidence_items(items))
+
+
+def calculation_evidence_items(
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     expanded: list[dict[str, Any]] = []
+    identities: set[str] = set()
     for item in items:
-        expanded.append(item)
-        for cell in parse_financial_table_cells(item):
-            expanded.append(materialize_financial_cell(item, cell))
-    return unambiguous_evidence_alias_lookup(expanded)
+        candidates = [
+            item,
+            *(
+                materialize_financial_cell(item, cell)
+                for cell in parse_financial_table_cells(item)
+            ),
+        ]
+        for candidate in candidates:
+            identity = identity_of(candidate).key
+            if identity in identities:
+                continue
+            identities.add(identity)
+            expanded.append(candidate)
+    return expanded
 
 
 def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any]:
     materialized = dict(item)
     materialized.pop("identity", None)
     materialized.pop("canonical_id", None)
+    parent_evidence_id = str(
+        item.get("evidence_id")
+        or item.get("canonical_id")
+        or item.get("element_id")
+        or ""
+    ).strip()
     materialized.update(
         {
+            "evidence_id": cell.cell_id,
             "cell_id": cell.cell_id,
+            "cell_role": cell.cell_role,
             "evidence_level": "cell",
             "table_id": cell.table_id,
+            "table_instance_id": cell.table_instance_id,
+            "table_group_id": cell.table_group_id,
+            "block_id": cell.block_id,
+            "physical_cell_identity": cell.physical_identity.as_dict(),
+            "semantic_cell_key": cell.semantic_key.as_dict(),
+            "parent_element_id": cell.table_id,
+            "materialization_source_id": parent_evidence_id,
             "row_index": cell.row_index,
             "column_index": cell.column_index,
             "row_label": cell.row_label,
@@ -40,8 +72,22 @@ def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any
             "statement_kind": cell.statement_kind,
             "financial_scope": cell.financial_scope,
             "text": cell.verification_text(),
+            "caption": cell.row_label,
+            "ocr_text": "",
+            "vlm_text": "",
+            "representations": [],
         }
     )
+    metadata = dict(materialized.get("metadata") or {})
+    for key in (
+        "late_interaction_tokens",
+        "representations",
+        "caption",
+        "ocr_text",
+        "vlm_text",
+    ):
+        metadata.pop(key, None)
+    materialized["metadata"] = metadata
     materialized["canonical_id"] = identity_of(materialized).key
     return materialized
 

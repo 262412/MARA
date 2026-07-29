@@ -22,6 +22,22 @@ def _identity_summary(
     metrics: list[dict[str, float | None]],
 ) -> dict[str, float | None]:
     return {
+        "gold_source_alias_resolution_rate": _mean(
+            metrics,
+            "gold_source_alias_resolution_rate",
+        ),
+        "gold_page_alias_resolution_rate": _mean(
+            metrics,
+            "gold_page_alias_resolution_rate",
+        ),
+        "gold_source_page_crosswalk_rate": _mean(
+            metrics,
+            "gold_source_page_crosswalk_rate",
+        ),
+        "retrieved_gold_source_page_coverage": _mean(
+            metrics,
+            "retrieved_gold_source_page_coverage",
+        ),
         "duplicate_identity_count": _sum(metrics, "duplicate_identity_count"),
         "conflicting_identity_count": _sum(metrics, "conflicting_identity_count"),
         "canonical_id_mismatch_count": _sum(
@@ -58,6 +74,15 @@ def _execution_summary(
     metrics: list[dict[str, float | None]],
 ) -> dict[str, float | None]:
     return {
+        **_execution_binding_summary(metrics),
+        **_verification_summary(metrics),
+    }
+
+
+def _execution_binding_summary(
+    metrics: list[dict[str, float | None]],
+) -> dict[str, float | None]:
+    return {
         "missing_execution_slot_answer_count": _sum(
             metrics,
             "missing_execution_slot_answer_count",
@@ -78,6 +103,34 @@ def _execution_summary(
             metrics,
             "plan_evidence_reference_resolution_rate",
         ),
+        "execution_slot_atomicity_rate": _mean(
+            metrics,
+            "execution_slot_atomicity_rate",
+        ),
+        "execution_slot_materialization_rate": _mean(
+            metrics,
+            "execution_slot_materialization_rate",
+        ),
+        "execution_slot_binding_rate": _mean(
+            metrics,
+            "execution_slot_binding_rate",
+        ),
+        "execution_operand_resolution_rate": _mean(
+            metrics,
+            "execution_operand_resolution_rate",
+        ),
+        "execution_slot_atomicity_violation_count": _sum(
+            metrics,
+            "execution_slot_atomicity_violation_count",
+        ),
+        "parent_table_false_fill_count": _sum(
+            metrics,
+            "parent_table_false_fill_count",
+        ),
+        "header_as_value_violation_count": _sum(
+            metrics,
+            "header_as_value_violation_count",
+        ),
         "source_page_cross_join_count": _sum(
             metrics,
             "source_page_cross_join_count",
@@ -86,6 +139,13 @@ def _execution_summary(
             metrics,
             "calculation_render_mismatch_count",
         ),
+    }
+
+
+def _verification_summary(
+    metrics: list[dict[str, float | None]],
+) -> dict[str, float | None]:
+    return {
         "qasper_stale_verifier_state_count": _sum(
             metrics,
             "qasper_stale_verifier_state_count",

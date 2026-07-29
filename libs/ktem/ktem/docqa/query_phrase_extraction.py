@@ -57,11 +57,16 @@ def periods_in_question(question: str) -> list[str]:
             full or f"20{short}" for full, short in _YEAR_RE.findall(question)
         )
     )
-    if len(periods) != 2 or not re.search(
+    explicit_range = re.search(
         r"\b(?:from|between)\b.*\b(?:and|through|to)\b",
         question,
         flags=re.IGNORECASE,
-    ):
+    ) or re.search(
+        r"\b(?:fy\s*)?(?:19|20)\d{2}\s*[-–—]\s*" r"(?:fy\s*)?(?:19|20)\d{2}\b",
+        question,
+        flags=re.IGNORECASE,
+    )
+    if len(periods) != 2 or not explicit_range:
         return periods
     start, end = (int(value) for value in periods)
     if start >= end or end - start > 10:

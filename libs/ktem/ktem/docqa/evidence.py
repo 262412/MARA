@@ -5,6 +5,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+from .calculation_evidence_identity import materialize_financial_cell
 from .evidence_identity import (
     EVIDENCE_BUNDLE_SCHEMA_VERSION,
     canonicalize_and_dedupe_evidence,
@@ -18,6 +19,7 @@ from .evidence_ranking_trace import (
     materialize_reranked_candidates,
 )
 from .evidence_schema import EvidenceBundle, EvidenceElement
+from .financial_table import parse_financial_table_cells
 from .graph_evidence import graph_items
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
@@ -26,7 +28,10 @@ from .query_planning import (
     request_planning_question,
     retrieval_budget,
 )
-from .required_slot_selection import required_slot_shortlist
+from .required_slot_selection import (
+    required_slot_candidate_limit,
+    required_slot_shortlist,
+)
 from .source_identity_crosswalk import canonicalize_evidence_sources
 
 MAX_RERANK_CANDIDATES = 80
@@ -142,10 +147,14 @@ def _build_evidence_stages(
             domain=getattr(request, "verification_domain", None),
         )
     ranked_candidates = list(deduped)
+    reranker_candidate_limit = required_slot_candidate_limit(
+        query_plan,
+        base_limit=MAX_RERANK_CANDIDATES,
+    )
     reranker_input, restored = required_slot_shortlist(
         ranked_candidates,
         query_plan,
-        candidate_limit=MAX_RERANK_CANDIDATES,
+        candidate_limit=reranker_candidate_limit,
     )
     reranker_scored = reranker_input
     reranker_trace = None
@@ -160,7 +169,7 @@ def _build_evidence_stages(
     reranked, ranking_metadata = materialize_reranked_candidates(
         reranker_scored,
         evidence_metadata,
-        limit=30,
+        limit=required_slot_candidate_limit(query_plan, base_limit=30),
     )
     reranker_input_stage = actual_reranker_input(
         reranker_input,
@@ -233,7 +242,31 @@ def _initial_evidence_items(
         items.extend(_rank_route_items(element_items, request, "doc_element"))
     if route in {"graph_global", "hybrid"}:
         items.extend(graph_items(request, evidence_metadata))
+    items = _materialize_execution_cells(request, items)
     return canonicalize_evidence_sources(items, crosswalk)
+
+
+def _materialize_execution_cells(
+    request: Any,
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    plan = ensure_request_query_plan(request)
+    if not any(slot.required_for_execution for slot in plan.evidence_slots):
+        return items
+    expanded: list[dict[str, Any]] = []
+    existing = {identity_of(item).key for item in items}
+    for item in items:
+        expanded.append(item)
+        if str(item.get("evidence_level") or "").lower() == "cell":
+            continue
+        for cell in parse_financial_table_cells(item):
+            materialized = materialize_financial_cell(item, cell)
+            identity = identity_of(materialized).key
+            if identity in existing:
+                continue
+            existing.add(identity)
+            expanded.append(materialized)
+    return expanded
 
 
 def _uses_element_index(route: str, request: Any) -> bool:

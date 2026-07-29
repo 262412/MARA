@@ -70,11 +70,22 @@ HARD_GATES = {
     "gold_source_schema_valid": ("eq", 1.0),
     "unresolved_gold_source_count": ("eq", 0.0),
     "ambiguous_source_alias_count": ("eq", 0.0),
-    "gold_runtime_source_page_join_rate": ("eq", 1.0),
+    "gold_source_alias_resolution_rate": ("eq", 1.0),
+    "gold_page_alias_resolution_rate": ("eq", 1.0),
+    "gold_source_page_crosswalk_rate": ("eq", 1.0),
     "required_candidate_nonempty_rate": ("eq", 1.0),
     "required_selected_nonempty_rate": ("eq", 1.0),
     "required_generation_context_nonempty_rate": ("eq", 1.0),
     "citation_emission_coverage": ("eq", 1.0),
+}
+FINANCE_HARD_GATES = {
+    "execution_slot_atomicity_rate": ("eq", 1.0),
+    "execution_slot_materialization_rate": ("eq", 1.0),
+    "execution_slot_binding_rate": ("eq", 1.0),
+    "execution_operand_resolution_rate": ("eq", 1.0),
+    "execution_slot_atomicity_violation_count": ("eq", 0.0),
+    "parent_table_false_fill_count": ("eq", 0.0),
+    "header_as_value_violation_count": ("eq", 0.0),
 }
 QASPER_HARD_GATES = {
     "abstention_candidate_sent_as_semantic_answer_count": ("eq", 0.0),
@@ -198,6 +209,7 @@ def _hard_gate_results(
     results: dict[str, dict[str, Any]] = {}
     gates = {
         **HARD_GATES,
+        **(FINANCE_HARD_GATES if suite_kind == "finance" else {}),
         **(QASPER_HARD_GATES if suite_kind == "qasper" else {}),
     }
     for metric, (comparison, expected) in gates.items():

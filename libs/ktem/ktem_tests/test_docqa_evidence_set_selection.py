@@ -361,4 +361,6 @@ def _cell_item(
         "column_label": period,
         "period": period,
         "value": value,
+        "statement_kind": "income_statement",
+        "financial_scope": "consolidated",
     }

@@ -28,6 +28,7 @@ class ElementIndexRecord:
     table_group_id: str = ""
     block_id: str = ""
     cell_id: str = ""
+    cell_role: str = ""
     physical_cell_identity: dict[str, Any] | None = None
     semantic_cell_key: dict[str, str] | None = None
     parent_element_id: str = ""
@@ -63,6 +64,7 @@ class ElementIndexRecord:
             "table_group_id": self.table_group_id,
             "block_id": self.block_id,
             "cell_id": self.cell_id,
+            "cell_role": self.cell_role,
             "physical_cell_identity": self.physical_cell_identity,
             "semantic_cell_key": self.semantic_cell_key,
             "parent_element_id": self.parent_element_id,
@@ -86,6 +88,7 @@ class ElementIndexRecord:
         }
         for key in (
             "cell_id",
+            "cell_role",
             "physical_cell_identity",
             "semantic_cell_key",
             "table_instance_id",
@@ -352,6 +355,7 @@ def _with_financial_cells(record: dict[str, Any]) -> list[dict[str, Any]]:
                 table_group_id=cell.table_group_id,
                 block_id=cell.block_id,
                 cell_id=cell.cell_id,
+                cell_role=cell.cell_role,
                 physical_cell_identity=cell.physical_identity.as_dict(),
                 semantic_cell_key=cell.semantic_key.as_dict(),
                 parent_element_id=cell.table_id,

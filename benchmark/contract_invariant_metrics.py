@@ -4,14 +4,12 @@ from typing import Any
 
 from ktem.docqa.benchmark_evidence import benchmark_evidence_record
 from ktem.docqa.calculation_evidence_identity import calculation_evidence_lookup
-from ktem.docqa.evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_locators import normalized_source_page_locators
-from ktem.docqa.query_plan_schema import plan_from_payload
-from ktem.docqa.query_planning import score_evidence_for_slot
 
 from .contract_gate_metrics import prediction_gate_metrics
 from .contract_invariant_summary import summarize_contract_invariants
+from .execution_slot_contract_metrics import required_slot_reference_metrics
 from .metrics import is_abstention_answer, numeric_tolerance_score
 from .qasper_contract_invariants import qasper_contract_metric_values
 from .source_join_metrics import source_join_metrics
@@ -30,6 +28,8 @@ _ATOMIC_ROUNDTRIP_FIELDS = (
     "column_index",
     "row_label",
     "column_label",
+    "cell_role",
+    "materialization_source_id",
     "period",
     "period_kind",
     "value",
@@ -96,11 +96,12 @@ def _prediction_contract_metrics(
         if isinstance(ingestion_trace, dict)
         else 0
     )
-    slot_reference_metrics = _required_slot_reference_metrics(
+    contract_items = _contract_evidence_items(metadata)
+    slot_reference_metrics = required_slot_reference_metrics(
         prediction,
         metadata,
+        contract_items,
     )
-    contract_items = _contract_evidence_items(metadata)
     return {
         **identity_metrics,
         "identity_collision_count": float(
@@ -219,95 +220,6 @@ def _citation_provenance_violations(
             or not (normalized_source_page_locators(item) & locators)
         )
         for item in cited
-    )
-
-
-def _required_slot_reference_metrics(
-    prediction: dict[str, Any],
-    metadata: dict[str, Any],
-) -> dict[str, float | None]:
-    payload = metadata.get("query_plan")
-    if not isinstance(payload, dict) or not isinstance(
-        payload.get("evidence_slots"),
-        list,
-    ):
-        return {
-            "slot_semantic_false_fill_count": 0.0,
-            "slot_unresolved_reference_count": 0.0,
-            "plan_evidence_reference_resolution_rate": None,
-        }
-    plan = plan_from_payload(
-        str(prediction.get("question") or ""),
-        answer_type=str(
-            payload.get("answer_type") or prediction.get("answer_type") or ""
-        ),
-        verification_domain=str(
-            dict(payload.get("constraints") or {}).get("verification_domain")
-            or prediction.get("verification_domain")
-            or ""
-        ),
-        payload=payload,
-    )
-    items = _contract_evidence_items(metadata)
-    lookup = unambiguous_evidence_alias_lookup(items)
-    requires_structure = bool(plan.constraints.get("requires_structure"))
-    semantic_false_fills = 0
-    unresolved_references = 0
-    reference_count = 0
-    resolved_reference_count = 0
-    for slot in plan.evidence_slots:
-        required = bool(
-            slot.required
-            or slot.required_for_retrieval
-            or slot.required_for_execution
-            or slot.required_for_verification
-        )
-        if not required or slot.status != "filled":
-            continue
-        reference_count += len(slot.evidence_ids)
-        resolved = [
-            lookup[evidence_id]
-            for evidence_id in slot.evidence_ids
-            if evidence_id in lookup
-        ]
-        resolved_reference_count += len(resolved)
-        if not resolved:
-            unresolved_references += len(slot.evidence_ids) or 1
-            continue
-        if not _slot_has_match_constraints(slot):
-            continue
-        if not any(
-            score_evidence_for_slot(
-                slot,
-                item,
-                requires_structure=requires_structure,
-            )
-            > 0
-            for item in resolved
-        ):
-            semantic_false_fills += 1
-    return {
-        "slot_semantic_false_fill_count": float(semantic_false_fills),
-        "slot_unresolved_reference_count": float(unresolved_references),
-        "plan_evidence_reference_resolution_rate": (
-            resolved_reference_count / reference_count if reference_count else None
-        ),
-    }
-
-
-def _slot_has_match_constraints(slot: Any) -> bool:
-    locator = slot.locator.as_dict() if slot.locator is not None else {}
-    return bool(
-        locator
-        or slot.entity
-        or slot.metric
-        or slot.period
-        or slot.period_kind
-        or slot.unit
-        or slot.scale
-        or slot.statement_kind
-        or slot.financial_scope
-        or slot.modality not in {"", "auto"}
     )
 
 

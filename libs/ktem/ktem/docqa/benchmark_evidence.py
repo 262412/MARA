@@ -33,6 +33,8 @@ class _AtomicProjection(TypedDict):
     column_index: int | None
     row_label: str
     column_label: str
+    cell_role: str
+    materialization_source_id: str
 
 
 class _FinancialProjection(TypedDict):
@@ -83,6 +85,8 @@ class BenchmarkEvidenceRecord:
     column_index: int | None = None
     row_label: str = ""
     column_label: str = ""
+    cell_role: str = ""
+    materialization_source_id: str = ""
     period: str = ""
     period_kind: str = ""
     value: str = ""
@@ -251,6 +255,12 @@ def _atomic_projection(
         "column_index": _optional_int(item, metadata, "column_index"),
         "row_label": _first_text(item, metadata, "row_label"),
         "column_label": _first_text(item, metadata, "column_label"),
+        "cell_role": _first_text(item, metadata, "cell_role"),
+        "materialization_source_id": _first_text(
+            item,
+            metadata,
+            "materialization_source_id",
+        ),
     }
 
 

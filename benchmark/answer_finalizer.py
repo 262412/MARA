@@ -4,6 +4,7 @@ import json
 import re
 from typing import Any
 
+from .answer_abstention import structured_or_text_abstention
 from .answer_modes import normalize_benchmark_answer_mode
 from .answer_repetition import deduplicate_final_answer as _deduplicate_final_answer
 from .answer_scoring_adapter import select_scoring_answer
@@ -76,6 +77,12 @@ def finalize_prediction_answer(
         dataset_name=dataset_name,
         mode=normalized_mode,
     )
+    if structured_or_text_abstention(prediction, answer_for_user):
+        answer_for_scoring = "unanswerable"
+        source = "canonical_abstention"
+        prediction["answer_status"] = "abstained"
+    else:
+        prediction["answer_status"] = "answered"
 
     _store_finalized_answers(
         prediction,

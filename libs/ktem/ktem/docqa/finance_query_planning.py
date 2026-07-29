@@ -18,6 +18,9 @@ FINANCE_METRIC_ALIASES = {
         "capex",
         "purchases of land buildings and equipment",
         "purchase of property plant and equipment",
+        "purchases of property plant and equipment",
+        "purchases of property, plant and equipment",
+        "purchases of property, plant and equipment (pp&e)",
     ),
     "cash and cash equivalents": (
         "cash and cash equivalents",
@@ -108,6 +111,22 @@ def finance_operand_specs(
     periods: list[str],
 ) -> FinanceOperandSpecs:
     lowered = str(question or "").lower()
+    formula = finance_formula_spec(lowered, periods)
+    if formula is not None:
+        operand_specs = formula.get("operand_specs")
+        if not isinstance(operand_specs, list):
+            return ()
+        return tuple(
+            (
+                str(spec["slot_id"]),
+                str(spec["metric"]),
+                str(spec["period"]),
+            )
+            for spec in operand_specs
+            if isinstance(spec, dict)
+        )
+    if finance_formula_status(lowered, periods) == "unsupported":
+        return ()
     current_period = finance_target_period(lowered, periods)
     named_specs = _named_formula_specs(lowered, periods, current_period)
     if named_specs:
@@ -139,31 +158,132 @@ def finance_formula_spec(
     periods: list[str],
 ) -> dict[str, object] | None:
     lowered = str(question or "").lower()
-    if not _is_fixed_asset_turnover(lowered):
-        return None
-    target_period = finance_target_period(lowered, periods)
+    if _is_fixed_asset_turnover(lowered):
+        return _fixed_asset_turnover_formula(lowered, periods)
+    ratio_specs = _multi_period_ratio_specs(lowered, periods)
+    if ratio_specs and "average" in lowered:
+        return _multi_period_percentage_formula(lowered, ratio_specs)
+    return None
+
+
+def _fixed_asset_turnover_formula(
+    question: str,
+    periods: list[str],
+) -> dict[str, object] | None:
+    target_period = finance_target_period(question, periods)
     previous_period = _previous_period(periods, target_period)
     if not target_period or not previous_period:
         return None
     revenue = f"operand:net_sales:{target_period}"
     previous_ppe = f"operand:net_property_plant_and_equipment:{previous_period}"
     target_ppe = f"operand:net_property_plant_and_equipment:{target_period}"
-    return {
-        "name": "fixed_asset_turnover",
-        "output_unit": "ratio",
-        "program": {
+    return _formula_spec(
+        formula_id="fixed_asset_turnover",
+        match_rule="alias:fixed_asset_turnover",
+        operand_specs=(
+            (f"net_sales:{target_period}", "net sales", target_period),
+            (
+                f"net_property_plant_and_equipment:{previous_period}",
+                "net property plant and equipment",
+                previous_period,
+            ),
+            (
+                f"net_property_plant_and_equipment:{target_period}",
+                "net property plant and equipment",
+                target_period,
+            ),
+        ),
+        expression={
             "operator": "divide",
             "inputs": [
                 {"ref": revenue},
                 {
                     "operator": "average",
-                    "inputs": [
-                        {"ref": previous_ppe},
-                        {"ref": target_ppe},
-                    ],
+                    "inputs": [{"ref": previous_ppe}, {"ref": target_ppe}],
                 },
             ],
         },
+        answer_unit="ratio",
+        target_period=target_period,
+        previous_period=previous_period,
+    )
+
+
+def _multi_period_percentage_formula(
+    question: str,
+    ratio_specs: FinanceOperandSpecs,
+) -> dict[str, object]:
+    years = list(dict.fromkeys(period for _slot, _metric, period in ratio_specs))
+    numerator, denominator = finance_metrics_in_question(question)[:2]
+    numerator = "net sales" if numerator == "revenue" else numerator
+    denominator = "net sales" if denominator == "revenue" else denominator
+    percentages = [
+        {
+            "operator": "multiply",
+            "inputs": [
+                {
+                    "operator": "divide",
+                    "inputs": [
+                        {"ref": f"operand:{numerator.replace(' ', '_')}:{period}"},
+                        {"ref": f"operand:{denominator.replace(' ', '_')}:{period}"},
+                    ],
+                },
+                {"constant": "100"},
+            ],
+        }
+        for period in years
+    ]
+    return _formula_spec(
+        formula_id="multi_period_percentage_of_average",
+        match_rule="pattern:average_metric_as_percentage_of_metric",
+        operand_specs=ratio_specs,
+        expression={"operator": "average", "inputs": percentages},
+        answer_unit="percent",
+        target_period=years[-1],
+        previous_period=years[-2] if len(years) > 1 else "",
+    )
+
+
+def finance_formula_status(question: str, periods: list[str]) -> str:
+    if finance_formula_spec(question, periods) is not None:
+        return "supported"
+    lowered = str(question or "").lower()
+    unsupported_turnover = "turnover" in lowered and not (
+        _is_fixed_asset_turnover(lowered) or "inventory turnover" in lowered
+    )
+    unsupported_percentage_of = bool(
+        re.search(r"\bas\s+(?:a\s+)?(?:%|percent(?:age)?)\s+of\b", lowered)
+    )
+    if unsupported_turnover or unsupported_percentage_of:
+        return "unsupported"
+    return "not_applicable"
+
+
+def _formula_spec(
+    *,
+    formula_id: str,
+    match_rule: str,
+    operand_specs: FinanceOperandSpecs,
+    expression: dict[str, object],
+    answer_unit: str,
+    target_period: str,
+    previous_period: str,
+) -> dict[str, object]:
+    serialized_operands = [
+        {"slot_id": slot_id, "metric": metric, "period": period}
+        for slot_id, metric, period in operand_specs
+    ]
+    return {
+        "formula_id": formula_id,
+        "name": formula_id,
+        "formula_match_rule": match_rule,
+        "formula_confidence": 1.0,
+        "operand_specs": serialized_operands,
+        "expression_ast": expression,
+        "program": expression,
+        "output_unit": answer_unit,
+        "target_period": target_period,
+        "previous_period": previous_period,
     }
 
 
@@ -292,6 +412,8 @@ def _multi_period_ratio_specs(
     if not percentage_of or len(periods) < 2 or len(metrics) < 2:
         return ()
     numerator, denominator = metrics[:2]
+    numerator = "net sales" if numerator == "revenue" else numerator
+    denominator = "net sales" if denominator == "revenue" else denominator
     return tuple(
         (
             f"{metric.replace(' ', '_')}:{period}",
@@ -331,6 +453,14 @@ def same_period_specs(
 
 
 def finance_target_period(question: str, periods: list[str]) -> str:
+    named_formula_period = re.search(
+        r"\b(?:fy\s*)?((?:19|20)\d{2})\s+"
+        r"(?:fixed\s+asset\s+turnover|net\s+fixed\s+asset\s+turnover|"
+        r"revenue|net\s+sales)\b",
+        question,
+    )
+    if named_formula_period is not None:
+        return named_formula_period.group(1)
     formula_period = re.search(
         r"\b(?:fy\s*)?((?:19|20)\d{2})\s+"
         r"(?:cogs|cost\s+of\s+(?:goods|products)\s+sold)\b",

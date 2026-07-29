@@ -21,11 +21,11 @@ def retrieve_with_rounds(
     max_rounds: int = 2,
 ) -> tuple[EvidenceBundle, Any]:
     plan = ensure_request_query_plan(request)
-    evidence_metadata = _with_retrieval_lineage(
-        retrieve(request, decision),
-        round_id=1,
-        query_id="round1:primary",
-        slot_id="",
+    evidence_metadata = _retrieve_first_round(
+        request,
+        decision,
+        retrieve,
+        plan,
     )
     evidence_bundle = build_evidence_bundle(
         decision.legacy_route,
@@ -85,6 +85,53 @@ def retrieve_with_rounds(
         attempted_retry=True,
     )
     return evidence_bundle, retrieve_decision
+
+
+def _retrieve_first_round(
+    request: Any,
+    decision: Any,
+    retrieve: RetrieveFn,
+    plan: Any,
+) -> dict[str, Any]:
+    requests = [
+        {
+            "query_id": f"round1:{slot.slot_id}",
+            "slot_id": slot.slot_id,
+            "query": slot.query,
+        }
+        for slot in plan.evidence_slots
+        if slot.required_for_retrieval and slot.query
+    ]
+    if not requests:
+        query = str(getattr(request, "retrieval_query", "") or "").strip()
+        requests = [
+            {
+                "query_id": "round1:primary",
+                "slot_id": "",
+                "query": query or request_planning_question(request),
+            }
+        ]
+    original_query = str(getattr(request, "retrieval_query", "") or "")
+    original_slot_id = str(getattr(request, "retrieval_slot_id", "") or "")
+    original_round_id = int(getattr(request, "retrieval_round_id", 0) or 0)
+    merged: dict[str, Any] = {}
+    try:
+        for retrieval_request in requests:
+            request.retrieval_query = str(retrieval_request["query"])
+            request.retrieval_slot_id = str(retrieval_request["slot_id"])
+            request.retrieval_round_id = 1
+            response = _with_retrieval_lineage(
+                retrieve(request, decision),
+                round_id=1,
+                query_id=str(retrieval_request["query_id"]),
+                slot_id=request.retrieval_slot_id,
+            )
+            merged = _merge_retrieval_metadata(merged, response)
+        return merged
+    finally:
+        request.retrieval_query = original_query
+        request.retrieval_slot_id = original_slot_id
+        request.retrieval_round_id = original_round_id
 
 
 def _second_round_requests(bundle: EvidenceBundle) -> list[dict[str, str]]:

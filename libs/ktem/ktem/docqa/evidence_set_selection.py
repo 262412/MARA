@@ -13,7 +13,10 @@ from .query_planning import (
     retrieval_budget,
     slot_coverage,
 )
-from .required_slot_selection import required_slot_shortlist
+from .required_slot_selection import (
+    required_slot_candidate_limit,
+    required_slot_shortlist,
+)
 from .required_slot_selection import slot_score as _slot_score
 from .selection_query_anchors import anchor_coverage, phrase_bigram_coverage
 from .selection_score_normalization import (
@@ -115,7 +118,10 @@ def _selection_context(
     candidates, restored_required = required_slot_shortlist(
         items,
         plan,
-        candidate_limit=RERANK_CANDIDATE_LIMIT,
+        candidate_limit=required_slot_candidate_limit(
+            plan,
+            base_limit=RERANK_CANDIDATE_LIMIT,
+        ),
     )
     return (
         normalized_selection_scores(candidates, identity_of=_identity),
@@ -245,6 +251,21 @@ def _selection_trace(
             {
                 "slot_id": slot.slot_id,
                 "status": slot.status,
+                "retrieval_satisfied": bool(
+                    slot.evidence_ids or _parent_retrieval_candidate(slot, candidates)
+                ),
+                "execution_satisfied": (
+                    slot.status == "filled" if slot.required_for_execution else None
+                ),
+                "reason": (
+                    "parent_evidence_not_materialized"
+                    if (
+                        slot.required_for_execution
+                        and slot.status != "filled"
+                        and _parent_retrieval_candidate(slot, candidates)
+                    )
+                    else ""
+                ),
                 "selected_evidence_ids": list(slot.evidence_ids),
                 "best_selected_slot_score": max(
                     (
@@ -260,6 +281,23 @@ def _selection_trace(
         ],
         "relevance_score_contract": SELECTION_SCORE_CONTRACT,
     }
+
+
+def _parent_retrieval_candidate(slot: Any, candidates: list[dict[str, Any]]) -> bool:
+    metric_tokens = {
+        token for token in _TOKEN_RE.findall(str(slot.metric or "").lower())
+    }
+    if not metric_tokens:
+        return False
+    for item in candidates:
+        if identity_of(item).kind in {"cell", "span"}:
+            continue
+        text = str(item.get("text") or "").lower()
+        if slot.period and slot.period not in text:
+            continue
+        if metric_tokens <= set(_TOKEN_RE.findall(text)):
+            return True
+    return False
 
 
 def _expand_selected_pages(

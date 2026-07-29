@@ -11,11 +11,12 @@ def scale_from_text(text: str, *, aliases: tuple[str, ...] = ()) -> str:
         r"\(?\s*in|"
         r"dollars?\s+(?:are\s+)?(?:presented\s+)?in|"
         r"tabular\s+dollars?\s+(?:are\s+)?(?:presented\s+)?in"
-        r")\s+(thousands?|millions?|billions?)\b",
+        r")\s+(thousands?|millions?|billions?)\b|"
+        r"\(\s*(thousands?|millions?|billions?)\s*\)",
         lowered,
     )
     if header is not None:
-        return header.group(1).rstrip("s")
+        return next(value for value in header.groups() if value).rstrip("s")
     for alias in aliases:
         match = re.search(
             rf"{re.escape(alias.lower())}.{{0,100}}?"
@@ -35,30 +36,102 @@ def source_scale_evidence(
     if not source_id:
         return "", ""
     item_id = _item_id(item)
-    matches: list[tuple[str, str]] = []
+    matches: list[tuple[int, str, str]] = []
     for candidate in evidence_items:
         if _source_id(candidate) != source_id:
             continue
-        if _is_atomic_evidence(candidate) and _item_id(candidate) != item_id:
+        if (
+            _is_atomic_evidence(candidate)
+            and _item_id(candidate) != item_id
+            and candidate.get("value") not in (None, "")
+        ):
             continue
         scale = _item_dimension(candidate, "scale") or scale_from_text(
             _item_text(candidate)
         )
         evidence_id = _item_id(candidate)
         if scale and evidence_id:
-            matches.append((scale, evidence_id))
-    scales = {scale for scale, _evidence_id in matches}
+            matches.append((_binding_distance(item, candidate), scale, evidence_id))
+    if not matches:
+        return "", ""
+    best_distance = min(distance for distance, _scale, _evidence_id in matches)
+    local_matches = [
+        (scale, evidence_id)
+        for distance, scale, evidence_id in matches
+        if distance == best_distance
+    ]
+    scales = {scale for scale, _evidence_id in local_matches}
     if len(scales) != 1:
         return "", ""
     scale = next(iter(scales))
     evidence_id = next(
         evidence_id
-        for candidate_scale, evidence_id in matches
+        for candidate_scale, evidence_id in local_matches
         if candidate_scale == scale
     )
     if item is not None and evidence_id == _item_id(item):
         return scale, ""
     return scale, evidence_id
+
+
+def dimension_binding_scope(
+    item: dict[str, Any] | None,
+    dimension_item: dict[str, Any] | None,
+) -> str:
+    if item is None or dimension_item is None:
+        return ""
+    if _same_field(item, dimension_item, "table_instance_id"):
+        return "table"
+    if _same_field(item, dimension_item, "table_group_id"):
+        return "table_group"
+    if _same_field(item, dimension_item, "page_label"):
+        return "page"
+    if _source_id(item) == _source_id(dimension_item):
+        return "source"
+    return ""
+
+
+def compatible_dimension_scope(
+    item: dict[str, Any],
+    dimension_item: dict[str, Any],
+) -> bool:
+    if _source_id(item) != _source_id(dimension_item):
+        return False
+    table_instance_id = _item_dimension(item, "table_instance_id")
+    dimension_table_instance_id = _item_dimension(
+        dimension_item,
+        "table_instance_id",
+    )
+    if table_instance_id and dimension_table_instance_id:
+        return table_instance_id == dimension_table_instance_id
+    table_group_id = _item_dimension(item, "table_group_id")
+    dimension_table_group_id = _item_dimension(dimension_item, "table_group_id")
+    if table_group_id and dimension_table_group_id:
+        return table_group_id == dimension_table_group_id
+    return True
+
+
+def _binding_distance(
+    item: dict[str, Any] | None,
+    candidate: dict[str, Any],
+) -> int:
+    scope = dimension_binding_scope(item, candidate)
+    return {
+        "table": 0,
+        "table_group": 1,
+        "page": 2,
+        "source": 3,
+    }.get(scope, 4)
+
+
+def _same_field(
+    left: dict[str, Any],
+    right: dict[str, Any],
+    field: str,
+) -> bool:
+    left_value = _item_dimension(left, field)
+    right_value = _item_dimension(right, field)
+    return bool(left_value and left_value == right_value)
 
 
 def _item_id(item: dict[str, Any] | None) -> str:

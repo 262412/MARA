@@ -1,0 +1,229 @@
+from __future__ import annotations
+
+from collections import Counter
+from typing import Any
+
+from ktem.docqa.evidence_alias_lookup import unambiguous_evidence_alias_lookup
+from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.query_evidence_constraints import executable_operand_evidence
+from ktem.docqa.query_plan_schema import plan_from_payload
+from ktem.docqa.query_planning import score_evidence_for_slot
+
+from .metrics import is_abstention_answer
+
+
+def required_slot_reference_metrics(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+    items: list[dict[str, Any]],
+) -> dict[str, float | None]:
+    payload = metadata.get("query_plan")
+    if not isinstance(payload, dict) or not isinstance(
+        payload.get("evidence_slots"),
+        list,
+    ):
+        return _metric_payload(Counter())
+    plan = plan_from_payload(
+        str(prediction.get("question") or ""),
+        answer_type=str(
+            payload.get("answer_type") or prediction.get("answer_type") or ""
+        ),
+        verification_domain=str(
+            dict(payload.get("constraints") or {}).get("verification_domain")
+            or prediction.get("verification_domain")
+            or ""
+        ),
+        payload=payload,
+    )
+    lookup = unambiguous_evidence_alias_lookup(items)
+    requires_structure = bool(plan.constraints.get("requires_structure"))
+    calculation_operands = _calculation_operands(metadata)
+    audit_execution = any(
+        str(answer or "").strip() and not is_abstention_answer(str(answer))
+        for answer in prediction.get("gold_answers") or []
+    )
+    counts: Counter[str] = Counter()
+    for slot in plan.evidence_slots:
+        counts.update(
+            _audit_slot_reference(
+                slot,
+                lookup,
+                calculation_operands,
+                requires_structure=requires_structure,
+                audit_execution=audit_execution,
+            )
+        )
+    return _metric_payload(counts)
+
+
+def _audit_slot_reference(
+    slot: Any,
+    lookup: dict[str, dict[str, Any]],
+    calculation_operands: list[dict[str, Any]],
+    *,
+    requires_structure: bool,
+    audit_execution: bool,
+) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    required = bool(
+        slot.required
+        or slot.required_for_retrieval
+        or slot.required_for_execution
+        or slot.required_for_verification
+    )
+    if not required:
+        return counts
+    execution_required = bool(slot.required_for_execution and audit_execution)
+    counts["execution_slot_count"] += int(execution_required)
+    if slot.status != "filled":
+        return counts
+    counts["reference_count"] += len(slot.evidence_ids)
+    resolved = [
+        lookup[evidence_id]
+        for evidence_id in slot.evidence_ids
+        if evidence_id in lookup
+    ]
+    counts["resolved_reference_count"] += len(resolved)
+    if not resolved:
+        counts["unresolved_references"] += len(slot.evidence_ids) or 1
+        return counts
+    if execution_required:
+        counts.update(
+            _audit_execution_slot(
+                slot,
+                resolved,
+                calculation_operands,
+                requires_structure=requires_structure,
+            )
+        )
+    if _has_match_constraints(slot) and not any(
+        score_evidence_for_slot(
+            slot,
+            item,
+            requires_structure=requires_structure,
+        )
+        > 0
+        for item in resolved
+    ):
+        counts["semantic_false_fills"] += 1
+    return counts
+
+
+def _audit_execution_slot(
+    slot: Any,
+    resolved: list[dict[str, Any]],
+    calculation_operands: list[dict[str, Any]],
+    *,
+    requires_structure: bool,
+) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    executable = [item for item in resolved if executable_operand_evidence(item)]
+    if executable:
+        counts["atomic_execution_slots"] = 1
+        counts["materialized_execution_slots"] = 1
+    else:
+        counts["parent_false_fills"] = int(
+            any(identity_of(item).kind not in {"cell", "span"} for item in resolved)
+        )
+        counts["header_value_violations"] = int(
+            any(_header_or_period_value(item) for item in resolved)
+        )
+    matching = [
+        item
+        for item in executable
+        if score_evidence_for_slot(
+            slot,
+            item,
+            requires_structure=requires_structure,
+        )
+        > 0
+    ]
+    if not matching:
+        return counts
+    counts["bound_execution_slots"] = 1
+    matching_ids = {identity_of(item).key for item in matching}
+    counts["resolved_execution_operands"] = int(
+        any(
+            str(operand.get("evidence_identity") or operand.get("evidence_id") or "")
+            in matching_ids
+            for operand in calculation_operands
+        )
+    )
+    return counts
+
+
+def _metric_payload(counts: Counter[str]) -> dict[str, float | None]:
+    execution_count = counts["execution_slot_count"]
+    reference_count = counts["reference_count"]
+    return {
+        "slot_semantic_false_fill_count": float(counts["semantic_false_fills"]),
+        "slot_unresolved_reference_count": float(counts["unresolved_references"]),
+        "plan_evidence_reference_resolution_rate": (
+            counts["resolved_reference_count"] / reference_count
+            if reference_count
+            else None
+        ),
+        "execution_slot_atomicity_rate": _rate(
+            counts["atomic_execution_slots"],
+            execution_count,
+        ),
+        "execution_slot_materialization_rate": _rate(
+            counts["materialized_execution_slots"],
+            execution_count,
+        ),
+        "execution_slot_binding_rate": _rate(
+            counts["bound_execution_slots"],
+            execution_count,
+        ),
+        "execution_operand_resolution_rate": _rate(
+            counts["resolved_execution_operands"],
+            execution_count,
+        ),
+        "execution_slot_atomicity_violation_count": float(
+            execution_count - counts["atomic_execution_slots"]
+        ),
+        "parent_table_false_fill_count": float(counts["parent_false_fills"]),
+        "header_as_value_violation_count": float(counts["header_value_violations"]),
+    }
+
+
+def _calculation_operands(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    trace = metadata.get("finance_numeric_trace")
+    if not isinstance(trace, dict):
+        return []
+    plan = trace.get("calculation_plan")
+    if not isinstance(plan, dict):
+        return []
+    return _records(plan.get("operands"))
+
+
+def _has_match_constraints(slot: Any) -> bool:
+    locator = slot.locator.as_dict() if slot.locator is not None else {}
+    return bool(
+        locator
+        or slot.entity
+        or slot.metric
+        or slot.period
+        or slot.period_kind
+        or slot.unit
+        or slot.scale
+        or slot.statement_kind
+        or slot.financial_scope
+        or slot.modality not in {"", "auto"}
+    )
+
+
+def _header_or_period_value(item: dict[str, Any]) -> bool:
+    period = str(item.get("period") or item.get("column_label") or "")
+    value = str(item.get("value") or "")
+    return str(item.get("cell_role") or "").lower() == "header" or (
+        period == value and value.isdigit()
+    )
+
+
+def _rate(numerator: int, denominator: int) -> float | None:
+    return numerator / denominator if denominator else None
+
+
+def _records(value: Any) -> list[dict[str, Any]]:
+    return [item for item in value or [] if isinstance(item, dict)]

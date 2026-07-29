@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 _NUMBER_RE = re.compile(
@@ -12,15 +13,35 @@ def atomic_evidence(item: dict[str, Any]) -> bool:
     evidence_level = str(item.get("evidence_level") or "").strip().lower()
     if evidence_level == "page":
         return False
-    if evidence_level == "span":
-        return bool(item.get("element_id") and item.get("value") not in (None, ""))
-    modality = str(item.get("modality") or item.get("element_type") or "").lower()
-    if not evidence_level and modality in {"table", "formula"}:
+    if evidence_level == "cell" or item.get("cell_id"):
         return True
-    return bool(
-        item.get("cell_id")
-        or item.get("table_id")
-        or (item.get("element_id") and modality in {"table", "formula"})
+    if evidence_level == "span" or item.get("span_id"):
+        return True
+    return False
+
+
+def executable_operand_evidence(item: dict[str, Any]) -> bool:
+    if not atomic_evidence(item):
+        return False
+    value = item.get("value")
+    if value in (None, ""):
+        return False
+    try:
+        parsed = Decimal(str(value).replace(",", "").strip(" $()"))
+    except InvalidOperation:
+        return False
+    cell_role = str(item.get("cell_role") or "").strip().lower()
+    if not cell_role and (
+        item.get("cell_id") and item.get("row_label") and item.get("column_label")
+    ):
+        cell_role = "data"
+    if cell_role and cell_role != "data":
+        return False
+    if not cell_role and not item.get("span_id"):
+        return False
+    period = str(item.get("period") or item.get("column_label") or "").strip()
+    return not (
+        period and re.fullmatch(r"(?:19|20)\d{2}", period) and parsed == Decimal(period)
     )
 
 

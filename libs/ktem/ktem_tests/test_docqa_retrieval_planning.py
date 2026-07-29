@@ -78,34 +78,8 @@ def test_second_round_targets_only_missing_evidence_slot():
     def retrieve(request, _decision):
         queries.append(request.retrieval_query)
         if len(queries) == 1:
-            return {
-                "evidence": [
-                    {
-                        "evidence_id": "revenue-2021",
-                        "file_id": "file-1",
-                        "page_label": "4",
-                        "element_id": "revenue-table-2021",
-                        "table_id": "revenue-table-2021",
-                        "evidence_level": "element",
-                        "modality": "table",
-                        "text": "Revenue was $10 million in 2021.",
-                    }
-                ]
-            }
-        return {
-            "evidence": [
-                {
-                    "evidence_id": "revenue-2022",
-                    "file_id": "file-1",
-                    "page_label": "5",
-                    "element_id": "revenue-table-2022",
-                    "table_id": "revenue-table-2022",
-                    "evidence_level": "element",
-                    "modality": "table",
-                    "text": "Revenue was $12 million in 2022.",
-                }
-            ]
-        }
+            return {"evidence": [_revenue_cell("revenue-2021", "2021", "10")]}
+        return {"evidence": [_revenue_cell("revenue-2022", "2022", "12")]}
 
     def generate(_request, _decision, bundle):
         assert {item["evidence_id"] for item in bundle.items} == {
@@ -128,7 +102,7 @@ def test_second_round_targets_only_missing_evidence_slot():
 
     assert len(queries) == 2
     assert queries[1] == "revenue 2022"
-    assert result.evidence_bundle.metadata["retrieval_rounds"] == 2
+    assert result.evidence_bundle.metadata["retrieval_rounds"] == 1
     assert result.evidence_bundle.metadata["slot_coverage"] == 1.0
 
 
@@ -185,7 +159,7 @@ def test_second_round_retrieves_each_missing_slot_independently():
         "operand:inventory",
     }
     assert all("\n" not in query for query, _slot_id in queries[1:])
-    assert result.evidence_bundle.metadata["retrieval_rounds"] == 2
+    assert result.evidence_bundle.metadata["retrieval_rounds"] == 1
     assert result.evidence_bundle.metadata["slot_coverage"] == 1.0
     lineage_by_id = {
         item["evidence_id"]: item["retrieval_lineage"]
@@ -194,8 +168,8 @@ def test_second_round_retrieves_each_missing_slot_independently():
     assert lineage_by_id["current-assets"] == [
         {
             "round_id": 1,
-            "query_id": "round1:primary",
-            "slot_id": "",
+            "query_id": "round1:operand:current_assets",
+            "slot_id": "operand:current_assets",
             "retriever_name": "text",
             "raw_rank": 1,
             "raw_score": None,
@@ -205,7 +179,7 @@ def test_second_round_retrieves_each_missing_slot_independently():
     assert lineage_by_id["current-liabilities"][0]["slot_id"] == (
         "operand:current_liabilities"
     )
-    assert lineage_by_id["current-liabilities"][0]["round_id"] == 2
+    assert lineage_by_id["current-liabilities"][0]["round_id"] == 1
 
 
 def test_quality_retry_query_is_never_empty():
@@ -243,8 +217,11 @@ def test_quality_retry_query_is_never_empty():
         retry_poor=False,
     )
 
-    assert queries == ["   ", "Which method performed better?"]
-    assert queries[1].strip()
+    assert queries == [
+        "Which method performed better?",
+        "Which method performed better?",
+    ]
+    assert all(query.strip() for query in queries)
 
 
 def test_missing_required_slot_after_second_round_blocks_generation():
@@ -277,7 +254,7 @@ def test_missing_required_slot_after_second_round_blocks_generation():
         ),
     )
 
-    assert len(calls) == 3
+    assert len(calls) == 5
     assert result.retrieve_decision.status == "poor"
     assert result.guardrail_decision.action == "abstain"
 
@@ -301,6 +278,27 @@ def _finance_cell(evidence_id, row_label, value):
         "scale": "million",
         "modality": "table",
         "text": f"{row_label} 2023 {value} million",
+    }
+
+
+def _revenue_cell(evidence_id: str, period: str, value: str):
+    return {
+        "evidence_id": evidence_id,
+        "file_id": "file-1",
+        "page_label": period,
+        "element_id": "revenue-table",
+        "table_id": "revenue-table",
+        "cell_id": evidence_id,
+        "evidence_level": "cell",
+        "cell_role": "data",
+        "row_label": "Revenue",
+        "column_label": period,
+        "period": period,
+        "value": value,
+        "statement_kind": "income_statement",
+        "financial_scope": "consolidated",
+        "modality": "table",
+        "text": f"Revenue {period} {value}",
     }
 
 
@@ -365,10 +363,10 @@ def test_second_round_retrieves_missing_same_source_scale_convention():
     )
 
     assert queries == [
-        "FY2021 capital expenditure",
+        "capital expenditure 2021",
         "tabular dollars unit scale convention",
     ]
-    assert result.evidence_bundle.metadata["retrieval_rounds"] == 2
+    assert result.evidence_bundle.metadata["retrieval_rounds"] == 1
     assert result.evidence_bundle.metadata["slot_coverage"] == 1.0
 
 
@@ -401,7 +399,7 @@ def test_second_round_stops_when_generation_reserve_is_exhausted():
         generate=lambda *_args: "20%.",
     )
 
-    assert calls == [1]
+    assert calls == [1, 1]
     assert result.evidence_bundle.metadata["retrieval_rounds"] == 1
     assert (
         result.evidence_bundle.metadata["second_round_skipped_reason"]

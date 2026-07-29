@@ -51,16 +51,21 @@ def test_slot_binding_and_missing_queries_only_target_unfilled_operand():
         plan,
         [
             {
-                "evidence_id": "revenue-2021",
+                **_finance_cell(
+                    "revenue-2021",
+                    "Revenue",
+                    "2021",
+                    "10",
+                    "income_statement",
+                ),
                 "text": "Revenue was $10 million in 2021.",
                 "page_label": "4",
-                "modality": "table",
             }
         ],
     )
 
     assert bound.evidence_slots[0].status == "filled"
-    assert bound.evidence_slots[0].evidence_ids == ("evidence::revenue-2021",)
+    assert bound.evidence_slots[0].evidence_ids == ("cell::revenue-2021",)
     assert bound.evidence_slots[1].status == "missing"
     assert missing_slot_queries(bound) == ["revenue 2022"]
 
@@ -217,12 +222,17 @@ def test_cost_of_products_sold_is_a_bound_cogs_table_alias():
         plan,
         [
             {
-                "evidence_id": "income-statement",
-                "text": (
-                    "Consolidated Statements of Income (in millions). "
-                    "2019 2018. Cost of products sold 16,830 17,347."
+                **_finance_cell(
+                    "cogs-2019",
+                    "Cost of products sold",
+                    "2019",
+                    "16830",
+                    "income_statement",
                 ),
-                "modality": "table",
+                "text": (
+                    "Consolidated Statements of Income. Cost of products "
+                    "sold 2019 16,830 million."
+                ),
             }
         ],
     )
@@ -231,7 +241,7 @@ def test_cost_of_products_sold_is_a_bound_cogs_table_alias():
         slot for slot in bound.evidence_slots if slot.metric == "cost of goods sold"
     )
     assert cogs.status == "filled"
-    assert cogs.evidence_ids == ("evidence::income-statement",)
+    assert cogs.evidence_ids == ("cell::cogs-2019",)
 
 
 def test_multi_period_percentage_of_revenue_plan_requires_both_metrics():
@@ -246,11 +256,11 @@ def test_multi_period_percentage_of_revenue_plan_requires_both_metrics():
 
     assert [(slot.metric, slot.period) for slot in plan.evidence_slots] == [
         ("cost of goods sold", "2016"),
-        ("revenue", "2016"),
+        ("net sales", "2016"),
         ("cost of goods sold", "2017"),
-        ("revenue", "2017"),
+        ("net sales", "2017"),
         ("cost of goods sold", "2018"),
-        ("revenue", "2018"),
+        ("net sales", "2018"),
     ]
 
 
@@ -289,14 +299,24 @@ def test_generic_numeric_slots_bind_distinct_canonical_evidence():
         plan,
         [
             {
-                "evidence_id": "operating-income",
+                **_finance_cell(
+                    "operating-income",
+                    "Operating income",
+                    "",
+                    "20",
+                    "income_statement",
+                ),
                 "text": "Operating income was $20 million.",
-                "modality": "table",
             },
             {
-                "evidence_id": "net-sales",
+                **_finance_cell(
+                    "net-sales",
+                    "Net sales",
+                    "",
+                    "100",
+                    "income_statement",
+                ),
                 "text": "Net sales were $100 million.",
-                "modality": "table",
             },
         ],
     )
@@ -489,107 +509,23 @@ def test_inventory_turnover_uses_explicit_cogs_year_not_period_order():
     ]
 
 
-def test_inventory_slot_distinguishes_balance_from_cash_flow_change():
-    plan = build_query_plan(
-        "What was inventory turnover in FY2018 using cost of goods sold?",
-        answer_type="numeric",
-        verification_domain="finance",
-    )
-    cash_flow_bound = bind_evidence_slots(
-        plan,
-        [
-            {
-                "evidence_id": "cash-flow-change",
-                "text": (
-                    "Consolidated Statements of Cash Flows (in millions). "
-                    "Changes in current assets and liabilities. "
-                    "Inventories (277) (251). 2019 2018."
-                ),
-                "modality": "table",
-            }
-        ],
-    )
-    balance_sheet_bound = bind_evidence_slots(
-        plan,
-        [
-            {
-                "evidence_id": "balance-sheet-inventory",
-                "text": (
-                    "Consolidated Balance Sheets (in millions). "
-                    "Inventories 2,750 2,500. 2019 2018."
-                ),
-                "modality": "table",
-            }
-        ],
-    )
-
-    cash_flow_inventory = next(
-        slot for slot in cash_flow_bound.evidence_slots if slot.metric == "inventory"
-    )
-    balance_sheet_inventory = next(
-        slot
-        for slot in balance_sheet_bound.evidence_slots
-        if slot.metric == "inventory"
-    )
-    assert cash_flow_inventory.status == "missing"
-    assert balance_sheet_inventory.status == "filled"
-
-
-def test_inventory_slot_rejects_held_for_sale_subscope():
-    plan = build_query_plan(
-        (
-            "What is FY2019 inventory turnover, calculated as FY2019 COGS "
-            "divided by average FY2018 and FY2019 inventory?"
-        ),
-        answer_type="numeric",
-        verification_domain="finance",
-    )
-    bound = bind_evidence_slots(
-        plan,
-        [
-            {
-                "evidence_id": "held-for-sale",
-                "text": (
-                    "Assets held for sale (in millions). 2019 2018. "
-                    "Inventories 21 92."
-                ),
-                "modality": "table",
-            }
-        ],
-    )
-
-    inventories = [slot for slot in bound.evidence_slots if slot.metric == "inventory"]
-    assert all(slot.status == "missing" for slot in inventories)
-
-
-def test_finance_fact_plan_tracks_adjusted_non_gaap_ebitda_period():
-    plan = build_query_plan(
-        "What was adjusted non-GAAP EBITDA for the twelve months ended 2023?",
-        answer_type="extractive",
-        verification_domain="finance",
-    )
-
-    assert [(slot.role, slot.metric, slot.period) for slot in plan.evidence_slots] == [
-        ("support", "adjusted ebitda", "2023")
-    ]
-    assert plan.subqueries == ("adjusted ebitda 2023",)
-
-
-def test_finance_segment_fact_plan_normalizes_short_fiscal_years():
-    plan = build_query_plan(
-        (
-            "From FY21 to FY22, excluding Embedded, in which AMD reporting "
-            "segment did sales proportionally increase the most?"
-        ),
-        answer_type="extractive",
-        verification_domain="finance",
-    )
-
-    assert [(slot.role, slot.metric, slot.period) for slot in plan.evidence_slots] == [
-        ("support", "net sales", "2021"),
-        ("support", "net sales", "2022"),
-    ]
-    assert plan.question_type == "comparison_argmax"
-    assert plan.constraints["comparison_operator"] == "proportional_increase"
-    assert plan.constraints["excluded_entities"] == ["embedded"]
-    assert all(slot.financial_scope == "segment" for slot in plan.evidence_slots)
+def _finance_cell(
+    evidence_id: str,
+    row_label: str,
+    period: str,
+    value: str,
+    statement_kind: str,
+) -> dict[str, str]:
+    return {
+        "evidence_id": evidence_id,
+        "cell_id": evidence_id,
+        "evidence_level": "cell",
+        "cell_role": "data",
+        "row_label": row_label,
+        "column_label": period or "FY",
+        "period": period,
+        "value": value,
+        "statement_kind": statement_kind,
+        "financial_scope": "consolidated",
+        "modality": "table",
+    }

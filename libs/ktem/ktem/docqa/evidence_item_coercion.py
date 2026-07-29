@@ -44,6 +44,19 @@ def coerce_item(item: dict[str, Any]) -> dict[str, Any]:
             item.get("section_id") or metadata.get("section_id") or ""
         ).strip(),
         table_id=str(item.get("table_id") or metadata.get("table_id") or "").strip(),
+        table_instance_id=item_metadata_text(
+            item,
+            metadata,
+            "table_instance_id",
+        ),
+        table_group_id=item_metadata_text(item, metadata, "table_group_id"),
+        block_id=item_metadata_text(item, metadata, "block_id"),
+        cell_role=item_metadata_text(item, metadata, "cell_role"),
+        materialization_source_id=item_metadata_text(
+            item,
+            metadata,
+            "materialization_source_id",
+        ),
         row_index=_optional_int(item.get("row_index", metadata.get("row_index"))),
         column_index=_optional_int(
             item.get("column_index", metadata.get("column_index"))

@@ -68,7 +68,7 @@ def test_finalizer_cites_executed_finance_evidence_not_first_candidate():
     )
 
 
-def test_calculation_citation_resolves_synthetic_cell_identity_to_parent_table():
+def test_calculation_citation_materializes_atomic_cell_with_parent_backref():
     table = {
         "evidence_id": "cash-flow-table",
         "source_id": "report",
@@ -95,7 +95,8 @@ def test_calculation_citation_resolves_synthetic_cell_identity_to_parent_table()
     [match] = calculation_citation_items(prediction, [table])
     assert match.citation_identity == cell_identity
     assert identity_of(match.item).key == cell_identity
-    assert match.item["evidence_id"] == table["evidence_id"]
+    assert match.item["evidence_id"] == cell.cell_id
+    assert match.item["materialization_source_id"] == table["evidence_id"]
 
 
 def test_calculation_citations_preserve_each_operand_identity():

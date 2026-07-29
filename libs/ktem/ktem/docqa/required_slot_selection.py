@@ -8,6 +8,15 @@ from .query_planning import QueryPlan, score_evidence_for_slot
 REQUIRED_SLOT_CANDIDATE_QUOTA = 2
 
 
+def required_slot_candidate_limit(
+    plan: QueryPlan,
+    *,
+    base_limit: int,
+) -> int:
+    required_count = sum(slot.required_for_retrieval for slot in plan.evidence_slots)
+    return max(base_limit, REQUIRED_SLOT_CANDIDATE_QUOTA * required_count)
+
+
 def required_slot_shortlist(
     items: list[dict[str, Any]],
     plan: QueryPlan,

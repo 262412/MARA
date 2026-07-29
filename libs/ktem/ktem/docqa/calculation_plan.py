@@ -12,6 +12,7 @@ from .calculation_evidence_identity import (
 )
 from .calculation_slot_verification import verify_required_calculation_slots
 from .evidence_identity import identity_of
+from .finance_scale import compatible_dimension_scope
 from .financial_statement_identity import financial_statement_identity
 from .query_evidence_constraints import (
     period_kind_conflicts,
@@ -62,6 +63,9 @@ class CalculationOperand:
     scale_evidence_identity: str = ""
     statement_kind: str = ""
     financial_scope: str = ""
+    table_instance_id: str = ""
+    table_group_id: str = ""
+    dimension_binding_scope: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -76,6 +80,9 @@ class CalculationOperand:
             "scale_evidence_identity",
             "statement_kind",
             "financial_scope",
+            "table_instance_id",
+            "table_group_id",
+            "dimension_binding_scope",
         ):
             if not payload[field_name]:
                 payload.pop(field_name)
@@ -280,7 +287,10 @@ def _verify_operand(
         errors.append(f"operand_atomic_binding_missing:{operand.operand_id}")
     text = _verified_cell_text(operand, item, errors)
     scale_text = text
-    if not _value_appears(operand.value, text):
+    if not _value_appears(operand.value, text) and not (
+        operand.operand_id.startswith("capital_expenditure")
+        and _value_appears(-operand.value, text)
+    ):
         errors.append(f"operand_value_mismatch:{operand.operand_id}")
     if _operand_value_is_period(operand):
         errors.append(f"operand_value_is_period:{operand.operand_id}")
@@ -301,6 +311,8 @@ def _verify_operand(
             errors.append(f"operand_scale_evidence_missing:{operand.operand_id}")
         elif not same_source(item, scale_item):
             errors.append(f"operand_scale_source_mismatch:{operand.operand_id}")
+        elif not compatible_dimension_scope(item, scale_item):
+            errors.append(f"operand_scale_scope_mismatch:{operand.operand_id}")
         else:
             scale_text = _evidence_text(scale_item)
             if (
@@ -336,7 +348,13 @@ def _verified_cell_text(
     cell = find_financial_cell_by_id(item, operand.cell_id)
     if (
         cell is None
-        or cell.value != operand.value
+        or (
+            cell.value != operand.value
+            and not (
+                operand.operand_id.startswith("capital_expenditure")
+                and abs(cell.value) == operand.value
+            )
+        )
         or (operand.row_label and cell.row_label.lower() != operand.row_label.lower())
         or (
             operand.column_label

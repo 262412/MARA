@@ -9,7 +9,6 @@ from .calculation_plan import (
     CalculationExecution,
     CalculationOperand,
     CalculationPlan,
-    CalculationStep,
     CalculationVerification,
     execute_calculation_plan,
     verify_calculation_plan,
@@ -27,8 +26,9 @@ from .finance_calculation_binding import shared_scale as _shared_scale
 from .finance_calculation_binding import (
     single_question_period as _single_question_period,
 )
-from .finance_fixed_asset_turnover import fixed_asset_turnover_steps
+from .finance_calculation_steps import calculation_steps
 from .finance_query_planning import FINANCE_METRIC_ALIASES
+from .finance_scale import dimension_binding_scope as _dimension_binding_scope
 from .finance_scale import scale_from_text as _scale
 from .finance_scale import source_scale_evidence as _source_scale_evidence
 from .financial_statement_identity import (
@@ -38,6 +38,23 @@ from .financial_statement_identity import (
 )
 from .financial_table import FinancialTableCell, find_financial_cell
 from .query_evidence_constraints import period_kind_conflicts, period_kind_in_question
+
+_SCALED_RESULT_TYPES = {
+    "capital_expenditure",
+    "adjusted_ebitda",
+    "difference",
+    "dividend",
+    "free_cash_flow",
+    "free_cash_flow_negative_capex",
+    "multi_period_average",
+    "net_sales",
+    "operating_income",
+    "property_plant_equipment",
+    "current_assets",
+    "revolving_credit_capacity",
+    "total_assets",
+    "working_capital",
+}
 
 
 @dataclass(frozen=True)
@@ -80,24 +97,11 @@ def finance_calculation_audit(
         ):
             used_evidence_ids.add(binding_id)
     operand_tuple = tuple(operands)
-    steps, result_step_id, answer_unit = _steps(question_type, tuple(inputs))
+    steps, result_step_id, answer_unit = calculation_steps(
+        question_type,
+        tuple(inputs),
+    )
     scale = _shared_scale(operand_tuple)
-    scaled_result_types = {
-        "capital_expenditure",
-        "adjusted_ebitda",
-        "difference",
-        "dividend",
-        "free_cash_flow",
-        "free_cash_flow_negative_capex",
-        "multi_period_average",
-        "net_sales",
-        "operating_income",
-        "property_plant_equipment",
-        "current_assets",
-        "revolving_credit_capacity",
-        "total_assets",
-        "working_capital",
-    }
     requested_scale = _requested_scale(question)
     result_scale = requested_scale or scale
     plan = CalculationPlan(
@@ -106,7 +110,7 @@ def finance_calculation_audit(
         result_step_id=result_step_id,
         answer_unit=answer_unit,
         answer_scale=(
-            result_scale if question_type in scaled_result_types or not steps else ""
+            result_scale if question_type in _SCALED_RESULT_TYPES or not steps else ""
         ),
     )
     verification = verify_calculation_plan(
@@ -174,6 +178,10 @@ def _operand_from_input(
             decimal_value,
             semantic_cell,
             evidence_items,
+            normalize_magnitude=(
+                question_type in {"capital_expenditure", "multi_period_ratio_average"}
+                and name.startswith("capital_expenditure")
+            ),
         )
     item = _matching_item(
         name,
@@ -203,6 +211,8 @@ def _operand_from_cell(
     candidate_value: Decimal,
     cell: FinancialTableCell,
     evidence_items: list[dict[str, Any]],
+    *,
+    normalize_magnitude: bool = False,
 ) -> CalculationOperand:
     item = next(
         (
@@ -214,13 +224,21 @@ def _operand_from_cell(
     )
     scale = cell.scale
     scale_evidence_id = ""
+    if scale and item is not None:
+        materialization_source_id = str(
+            item.get("materialization_source_id") or ""
+        ).strip()
+        if _item_for_id(materialization_source_id, evidence_items) is not None:
+            scale_evidence_id = materialization_source_id
     if not scale:
         scale, scale_evidence_id = _source_scale_evidence(item, evidence_items)
+    scale_item = _item_for_id(scale_evidence_id, evidence_items)
     scale_evidence_identity = _identity_for_raw_id(
         scale_evidence_id,
         evidence_items,
     )
-    bound_value = candidate_value if candidate_value == cell.value else cell.value
+    cell_value = abs(cell.value) if normalize_magnitude else cell.value
+    bound_value = candidate_value if candidate_value == cell_value else cell_value
     return CalculationOperand(
         operand_id=name,
         evidence_id=cell.evidence_id,
@@ -239,6 +257,9 @@ def _operand_from_cell(
         scale_evidence_identity=scale_evidence_identity,
         statement_kind=cell.statement_kind,
         financial_scope=cell.financial_scope,
+        table_instance_id=cell.table_instance_id,
+        table_group_id=cell.table_group_id,
+        dimension_binding_scope=_dimension_binding_scope(item, scale_item),
     )
 
 
@@ -259,6 +280,7 @@ def _operand_from_item(
     scale_evidence_id = ""
     if not scale:
         scale, scale_evidence_id = _source_scale_evidence(item, evidence_items)
+    scale_item = _item_for_id(scale_evidence_id, evidence_items)
     bound_value = _atomic_item_value(item) if item is not None else None
     return CalculationOperand(
         operand_id=name,
@@ -281,6 +303,9 @@ def _operand_from_item(
         ),
         statement_kind=statement_kind,
         financial_scope=financial_scope,
+        table_instance_id=_item_dimension(item, "table_instance_id"),
+        table_group_id=_item_dimension(item, "table_group_id"),
+        dimension_binding_scope=_dimension_binding_scope(item, scale_item),
     )
 
 
@@ -317,178 +342,20 @@ def _identity_for_raw_id(
     return _item_identity(item)
 
 
-def _steps(
-    question_type: str,
-    input_ids: tuple[str, ...],
-) -> tuple[tuple[CalculationStep, ...], str, str]:
-    if question_type == "quick_ratio":
-        return _quick_ratio_steps()
-    if question_type in {
-        "current_ratio",
-        "inventory_turnover",
-        "debt_to_equity",
-    }:
-        return ((CalculationStep("result", "ratio", input_ids),), "result", "ratio")
-    if question_type in {"operating_margin", "gross_margin"}:
-        return _margin_steps(input_ids)
-    if question_type == "percentage_change":
-        return (
-            (CalculationStep("result", "percent_change", ("prior", "current")),),
-            "result",
-            "percent",
-        )
-    if question_type in {
-        "free_cash_flow",
-        "free_cash_flow_negative_capex",
-    }:
-        return _free_cash_flow_steps(question_type)
-    if question_type in {
-        "multi_period_average",
-        "multi_period_percentage_average",
-    }:
-        return (
-            (CalculationStep("result", "average", input_ids),),
-            "result",
-            "percent" if question_type == "multi_period_percentage_average" else "",
-        )
-    if question_type == "multi_period_ratio_average":
-        return _multi_period_ratio_average_steps(input_ids)
-    if question_type == "inventory_turnover_average":
-        return _inventory_turnover_average_steps(input_ids)
-    if question_type == "fixed_asset_turnover":
-        return fixed_asset_turnover_steps(input_ids)
-    if question_type == "revolving_credit_capacity" and len(input_ids) > 1:
-        return (
-            (CalculationStep("result", "add", input_ids),),
-            "result",
-            "",
-        )
-    if question_type in {"difference", "working_capital"}:
-        names = (
-            ("prior", "current") if question_type == "difference" else ("left", "right")
-        )
-        ordered = (names[1], names[0]) if question_type == "difference" else names
-        return ((CalculationStep("result", "subtract", ordered),), "result", "")
-    return (), input_ids[0], ""
-
-
-def _quick_ratio_steps() -> tuple[tuple[CalculationStep, ...], str, str]:
-    return (
+def _item_for_id(
+    evidence_id: str,
+    evidence_items: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not evidence_id:
+        return None
+    return next(
         (
-            CalculationStep(
-                "liquid_assets",
-                "subtract",
-                ("current_assets", "inventories"),
-            ),
-            CalculationStep(
-                "result",
-                "ratio",
-                ("liquid_assets", "current_liabilities"),
-            ),
+            candidate
+            for candidate in evidence_items
+            if _item_id(candidate) == evidence_id
         ),
-        "result",
-        "ratio",
+        None,
     )
-
-
-def _margin_steps(
-    input_ids: tuple[str, ...],
-) -> tuple[tuple[CalculationStep, ...], str, str]:
-    return (
-        (
-            CalculationStep("ratio", "ratio", input_ids),
-            CalculationStep(
-                "result",
-                "multiply",
-                ("ratio",),
-                constant=Decimal("100"),
-            ),
-        ),
-        "result",
-        "percent",
-    )
-
-
-def _free_cash_flow_steps(
-    question_type: str,
-) -> tuple[tuple[CalculationStep, ...], str, str]:
-    operator = "add" if question_type == "free_cash_flow_negative_capex" else "subtract"
-    return (
-        (
-            CalculationStep(
-                "result",
-                operator,
-                ("operating_cash_flow", "capital_expenditure"),
-            ),
-        ),
-        "result",
-        "",
-    )
-
-
-def _inventory_turnover_average_steps(
-    input_ids: tuple[str, ...],
-) -> tuple[tuple[CalculationStep, ...], str, str]:
-    inventory_ids = tuple(
-        input_id for input_id in input_ids if input_id.startswith("inventory_")
-    )
-    return (
-        (
-            CalculationStep(
-                "average_inventory",
-                "average",
-                inventory_ids,
-            ),
-            CalculationStep(
-                "result",
-                "ratio",
-                ("cost_of_goods_sold", "average_inventory"),
-            ),
-        ),
-        "result",
-        "ratio",
-    )
-
-
-def _multi_period_ratio_average_steps(
-    input_ids: tuple[str, ...],
-) -> tuple[tuple[CalculationStep, ...], str, str]:
-    years = list(
-        dict.fromkeys(
-            match.group(0)
-            for input_id in input_ids
-            if (match := re.search(r"(?:19|20)\d{2}", input_id))
-        )
-    )
-    steps: list[CalculationStep] = []
-    percentage_ids: list[str] = []
-    for year in years:
-        numerator = next(
-            input_id
-            for input_id in input_ids
-            if input_id.endswith(year) and input_id.startswith("cost_of_goods_sold")
-        )
-        denominator = next(
-            input_id
-            for input_id in input_ids
-            if input_id.endswith(year) and input_id.startswith("revenue")
-        )
-        ratio_id = f"ratio_{year}"
-        percentage_id = f"percentage_{year}"
-        steps.extend(
-            (
-                CalculationStep(ratio_id, "ratio", (numerator, denominator)),
-                CalculationStep(
-                    percentage_id,
-                    "multiply",
-                    (ratio_id,),
-                    constant=Decimal("100"),
-                ),
-            )
-        )
-        percentage_ids.append(percentage_id)
-    steps.append(CalculationStep("result", "average", tuple(percentage_ids)))
-    return tuple(steps), "result", "percent"
 
 
 def _matching_item(
@@ -572,6 +439,8 @@ def _operand_aliases(
     canonical = re.sub(r"_(?:19|20)\d{2}$", "", name).replace("_", " ")
     if canonical == "inventories":
         canonical = "inventory"
+    if canonical == "revenue":
+        canonical = "net sales"
     aliases = FINANCE_METRIC_ALIASES.get(canonical)
     if aliases:
         return aliases

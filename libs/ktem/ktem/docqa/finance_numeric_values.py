@@ -172,25 +172,9 @@ def _record_yearly_candidate(
 
 
 def question_years(lowered_question: str) -> list[str]:
-    years = list(
-        dict.fromkeys(
-            re.findall(
-                r"\b(?:fy\s*)?((?:19|20)\d{2})\b",
-                lowered_question,
-                flags=re.IGNORECASE,
-            )
-        )
-    )
-    if len(years) != 2 or not re.search(
-        r"\b(?:from|between)\b.*\b(?:and|through|to)\b",
-        lowered_question,
-        flags=re.IGNORECASE,
-    ):
-        return years
-    start, end = (int(value) for value in years)
-    if start >= end or end - start > 10:
-        return years
-    return [str(year) for year in range(start, end + 1)]
+    from .query_phrase_extraction import periods_in_question
+
+    return periods_in_question(lowered_question)
 
 
 def target_year(question: str, years: list[str]) -> str:

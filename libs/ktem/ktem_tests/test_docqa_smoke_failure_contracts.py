@@ -199,22 +199,21 @@ def test_fixed_asset_turnover_plan_has_formula_specific_slots_and_program():
             "2019",
         ),
     ]
-    assert plan.constraints["finance_formula"] == {
-        "name": "fixed_asset_turnover",
-        "output_unit": "ratio",
-        "program": {
-            "operator": "divide",
-            "inputs": [
-                {"ref": "operand:net_sales:2019"},
-                {
-                    "operator": "average",
-                    "inputs": [
-                        {"ref": "operand:net_property_plant_and_equipment:2018"},
-                        {"ref": "operand:net_property_plant_and_equipment:2019"},
-                    ],
-                },
-            ],
-        },
+    formula = plan.constraints["finance_formula"]
+    assert formula["formula_id"] == "fixed_asset_turnover"
+    assert formula["output_unit"] == "ratio"
+    assert formula["expression_ast"] == {
+        "operator": "divide",
+        "inputs": [
+            {"ref": "operand:net_sales:2019"},
+            {
+                "operator": "average",
+                "inputs": [
+                    {"ref": "operand:net_property_plant_and_equipment:2018"},
+                    {"ref": "operand:net_property_plant_and_equipment:2019"},
+                ],
+            },
+        ],
     }
 
 

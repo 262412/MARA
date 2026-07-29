@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import replace
 from typing import Any
 
 from .evidence_text import evidence_text
@@ -34,22 +34,13 @@ from .finance_numeric_values import question_years as _question_years
 from .finance_numeric_values import render_execution_answer as _render_execution_answer
 from .finance_numeric_values import target_year as _target_year
 from .finance_numeric_values import yearly_amounts as _yearly_amounts
-
-
-@dataclass(frozen=True)
-class FinanceNumericAnswer:
-    answer: str
-    confidence: float
-    question_type: str
-    inputs: dict[str, float]
-    formula: str
-    calculation_plan: dict[str, Any] = field(default_factory=dict)
-    calculation_verification: dict[str, Any] = field(default_factory=dict)
-    calculation_execution: dict[str, Any] = field(default_factory=dict)
-    attempt_status: str = "executed"
-
-    def as_trace(self) -> dict[str, Any]:
-        return asdict(self)
+from .finance_query_plan_answer import (
+    FinanceNumericAnswer,
+    answer_from_query_plan,
+    bind_numeric_query_plan,
+    failed_numeric_attempt,
+)
+from .finance_query_planning import FINANCE_METRIC_ALIASES, finance_metrics_in_question
 
 
 def finance_numeric_answer(
@@ -58,16 +49,25 @@ def finance_numeric_answer(
     *,
     query_plan: dict[str, Any] | None = None,
 ) -> FinanceNumericAnswer | None:
-    answer = _finance_numeric_answer_from_text(prompt, evidence_items)
+    bound_query_plan = bind_numeric_query_plan(prompt, evidence_items, query_plan)
+    answer = answer_from_query_plan(
+        prompt,
+        evidence_items,
+        query_plan=bound_query_plan,
+    )
+    if answer is not None and answer.attempt_status != "executed":
+        return answer
+    if answer is None:
+        answer = _finance_numeric_answer_from_text(prompt, evidence_items)
     if answer is None:
         failure_reason = _numeric_attempt_failure_reason(prompt, evidence_items)
-        return _failed_numeric_attempt(failure_reason) if failure_reason else None
+        return failed_numeric_attempt(failure_reason) if failure_reason else None
     audit = finance_calculation_audit(
         prompt,
         evidence_items,
         question_type=answer.question_type,
         inputs=answer.inputs,
-        query_plan=query_plan,
+        query_plan=bound_query_plan,
     )
     if not audit.verification.valid or audit.execution.status != "ok":
         return replace(
@@ -197,38 +197,6 @@ def _margin_or_leverage_answer(
             formula="debt / equity",
         )
     return None
-
-
-def _failed_numeric_attempt(reason: str) -> FinanceNumericAnswer:
-    return FinanceNumericAnswer(
-        answer="",
-        confidence=0.0,
-        question_type="unplanned_numeric",
-        inputs={},
-        formula="",
-        calculation_plan={
-            "contract_id": "calculation_plan.v1",
-            "operands": [],
-            "steps": [],
-            "result_step_id": "",
-            "answer_unit": "",
-            "answer_scale": "",
-        },
-        calculation_verification={
-            "valid": False,
-            "errors": [reason],
-            "verified_operand_ids": [],
-            "citation_ids": [],
-        },
-        calculation_execution={
-            "status": "error",
-            "value": None,
-            "citation_ids": [],
-            "step_values": {},
-            "error": reason,
-        },
-        attempt_status=reason,
-    )
 
 
 def _numeric_attempt_failure_reason(
@@ -366,31 +334,41 @@ def _multi_period_ratio_average_answer(
     text: str,
 ) -> FinanceNumericAnswer | None:
     years = _question_years(lowered_question)
-    cogs = _yearly_amounts(
-        text,
-        ("cost of goods sold", "cost of sales", "cogs"),
+    metrics = finance_metrics_in_question(lowered_question)
+    if len(metrics) < 2:
+        return None
+    numerator_metric, denominator_metric = (
+        "net sales" if metric == "revenue" else metric for metric in metrics[:2]
     )
-    revenue = _yearly_amounts(
+    numerator_values = _yearly_amounts(
         text,
-        ("net sales", "net revenue", "net revenues", "revenue"),
+        FINANCE_METRIC_ALIASES.get(numerator_metric, (numerator_metric,)),
     )
-    if any(year not in cogs or year not in revenue for year in years):
+    denominator_values = _yearly_amounts(
+        text,
+        FINANCE_METRIC_ALIASES.get(denominator_metric, (denominator_metric,)),
+    )
+    if any(
+        year not in numerator_values or year not in denominator_values for year in years
+    ):
         return None
     inputs: dict[str, float] = {}
     percentages: list[float] = []
+    numerator_id = numerator_metric.replace(" ", "_")
+    denominator_id = denominator_metric.replace(" ", "_")
     for year in years:
-        if revenue[year] == 0:
+        if denominator_values[year] == 0:
             return None
-        inputs[f"cost_of_goods_sold_{year}"] = cogs[year]
-        inputs[f"revenue_{year}"] = revenue[year]
-        percentages.append(cogs[year] / revenue[year] * 100)
+        inputs[f"{numerator_id}_{year}"] = numerator_values[year]
+        inputs[f"{denominator_id}_{year}"] = denominator_values[year]
+        percentages.append(numerator_values[year] / denominator_values[year] * 100)
     average = sum(percentages) / len(percentages)
     return FinanceNumericAnswer(
         answer=_format_percentage(average),
         confidence=0.9,
         question_type="multi_period_ratio_average",
         inputs=inputs,
-        formula="average(cost_of_goods_sold_year / revenue_year * 100)",
+        formula=(f"average({numerator_id}_year / {denominator_id}_year * 100)"),
     )
 
 

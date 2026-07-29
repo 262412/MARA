@@ -29,6 +29,11 @@ class EvidenceElement:
     neighbor_element_ids: list[str] = field(default_factory=list)
     section_id: str = ""
     table_id: str = ""
+    table_instance_id: str = ""
+    table_group_id: str = ""
+    block_id: str = ""
+    cell_role: str = ""
+    materialization_source_id: str = ""
     row_index: int | None = None
     column_index: int | None = None
     row_label: str = ""
@@ -74,6 +79,11 @@ class EvidenceElement:
             "span_id",
             "figure_label",
             "table_label",
+            "table_instance_id",
+            "table_group_id",
+            "block_id",
+            "cell_role",
+            "materialization_source_id",
             "row_label",
             "column_label",
             "period",

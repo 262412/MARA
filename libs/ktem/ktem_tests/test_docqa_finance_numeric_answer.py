@@ -452,10 +452,11 @@ def test_finance_working_capital_operands_inherit_single_question_period():
             {
                 "element_id": "balance-sheet-2021",
                 "text": (
-                    "Balance sheet (in millions). 2021 2020. Total current "
-                    "assets 19,815 19,378. Total current liabilities "
-                    "13,997 13,933. An unrelated note describes a $3 billion "
-                    "debt capacity."
+                    "Balance sheet (in millions)\n"
+                    "2021 2020\n"
+                    "Total current assets 19,815 19,378\n"
+                    "Total current liabilities 13,997 13,933\n"
+                    "An unrelated note describes a $3 billion debt capacity."
                 ),
             }
         ],
