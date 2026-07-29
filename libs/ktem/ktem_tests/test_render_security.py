@@ -104,6 +104,20 @@ def test_image_and_highlight_render_document_fields_as_inert_text():
     assert "script URL" in image
 
 
+def test_image_evidence_without_origin_renders_text_fallback():
+    document = RetrievedDocument(
+        text="OCR-only figure evidence",
+        score=0.8,
+        metadata={"type": "image", "file_name": "report.pdf"},
+    )
+
+    basic = Render.collapsible_with_header(document)
+    scored = Render.collapsible_with_header_score(document)
+
+    assert "OCR-only figure evidence" in basic
+    assert "OCR-only figure evidence" in scored
+
+
 def test_safe_evidence_structure_survives_the_allowlist():
     markdown = (
         "> Quoted evidence\n\n"
