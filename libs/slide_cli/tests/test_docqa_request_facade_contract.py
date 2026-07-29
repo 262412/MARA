@@ -21,6 +21,7 @@ CANONICAL_REQUEST_FIELDS = (
     "dataset_family",
     "conversation_id",
     "selected_file_ids",
+    "source_identity_crosswalk",
     "selected_inputs",
     "qa_scope",
     "active_file_id",
@@ -52,6 +53,7 @@ CANONICAL_REQUEST_FIELDS = (
     "graph_mode",
     "visual_retriever_backend",
     "visual_generator_backend",
+    "reranker_name",
     "page_image_records",
     "element_index_records",
     "llm",
@@ -119,6 +121,8 @@ APPENDED_FACADE_FIELDS = (
     "query_plan",
     "query_plan_id",
     "query_plan_state_version",
+    "source_identity_crosswalk",
+    "reranker_name",
 )
 
 
@@ -156,23 +160,27 @@ def test_facade_conversion_deep_copies_mutable_fields():
     facade = request_module.DocQARequest(
         prompt="question",
         selected_file_ids=["file-1"],
+        source_identity_crosswalk=[{"runtime_source_id": "file-1"}],
         selected_inputs={9: ["file-1"]},
         graph_context={"nested": {"value": 1}},
         state={"app": {"regen": False}},
         history=[("old question", "old answer")],
         page_image_records=[{"evidence_id": "page-1"}],
         element_index_records=[{"evidence_id": "element-1"}],
+        reranker_name="reranker-a",
     )
     facade_before = asdict(facade)
 
     runtime_request = request_module.to_runtime_docqa_request(facade)
     runtime_request.selected_file_ids.append("file-2")
+    runtime_request.source_identity_crosswalk[0]["runtime_source_id"] = "file-2"
     runtime_request.selected_inputs[9].append("file-2")
     runtime_request.graph_context["nested"]["value"] = 2
     runtime_request.state["app"]["regen"] = True
     runtime_request.history.append(("new question", "new answer"))
     runtime_request.page_image_records[0]["evidence_id"] = "page-2"
     runtime_request.element_index_records[0]["evidence_id"] = "element-2"
+    runtime_request.reranker_name = "reranker-b"
 
     assert asdict(facade) == facade_before
 

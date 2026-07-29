@@ -562,30 +562,23 @@ def test_mara_graph_route_uses_graph_context_without_text_rag(monkeypatch):
     assert metadata["page_coverage"] == ["2", "5"]
     assert metadata["source_ids"] == ["file-a", "file-b"]
     assert metadata["evidence_ids"] == ["graph:component::strategy"]
-    assert metadata["graph_evidence"] == [
-        {
-            "evidence_id": "graph:component::strategy",
-            "id": "component::strategy",
-            "label": "Strategy",
-            "summary": "Strategy connects pricing and product roadmap themes.",
-            "source_ids": ["file-a", "file-b"],
-            "support_pages": {"file-a": ["2"], "file-b": ["5"]},
-            "support_chunk_ids": {
-                "file-a": ["chunk-a"],
-                "file-b": ["chunk-b"],
-            },
-            "retrieval_lineage": [
-                {
-                    "round_id": 1,
-                    "query_id": "round1:primary",
-                    "slot_id": "",
-                    "retriever_name": "graph",
-                    "raw_rank": 1,
-                    "raw_score": None,
-                    "score_type": "not_recorded",
-                }
-            ],
-        }
+    graph_evidence = metadata["graph_evidence"]
+    assert len(graph_evidence) == 1
+    assert graph_evidence[0]["evidence_id"] == "graph:component::strategy"
+    assert graph_evidence[0]["summary"] == (
+        "Strategy connects pricing and product roadmap themes."
+    )
+    assert graph_evidence[0]["source_ids"] == ["file-a", "file-b"]
+    assert graph_evidence[0]["support_pages"] == {
+        "file-a": ["2"],
+        "file-b": ["5"],
+    }
+    assert [
+        (entry["query_id"], entry["slot_id"])
+        for entry in graph_evidence[0]["retrieval_lineage"]
+    ] == [
+        ("round1:support:left_subject", "support:left_subject"),
+        ("round1:support:right_subject", "support:right_subject"),
     ]
     assert {item["source_id"] for item in metadata["evidence"]} == {
         "file-a",

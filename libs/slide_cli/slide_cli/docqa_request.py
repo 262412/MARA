@@ -13,6 +13,7 @@ RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
     "dataset_family",
     "conversation_id",
     "selected_file_ids",
+    "source_identity_crosswalk",
     "selected_inputs",
     "qa_scope",
     "active_file_id",
@@ -44,6 +45,7 @@ RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
     "graph_mode",
     "visual_retriever_backend",
     "visual_generator_backend",
+    "reranker_name",
     "page_image_records",
     "element_index_records",
     "llm",
@@ -114,6 +116,8 @@ class DocQARequest:
     query_plan: Any = None
     query_plan_id: str = ""
     query_plan_state_version: int = 0
+    source_identity_crosswalk: list[dict[str, Any]] | None = None
+    reranker_name: str | None = None
 
 
 def to_runtime_docqa_request(request: DocQARequest):
@@ -138,6 +142,7 @@ def to_runtime_docqa_request(request: DocQARequest):
         dataset_family=deepcopy(request.dataset_family),
         conversation_id=deepcopy(request.conversation_id),
         selected_file_ids=deepcopy(request.selected_file_ids),
+        source_identity_crosswalk=deepcopy(request.source_identity_crosswalk),
         selected_inputs=deepcopy(request.selected_inputs),
         qa_scope=deepcopy(request.qa_scope),
         active_file_id=deepcopy(request.active_file_id),
@@ -169,6 +174,7 @@ def to_runtime_docqa_request(request: DocQARequest):
         graph_mode=deepcopy(request.graph_mode),
         visual_retriever_backend=deepcopy(request.visual_retriever_backend),
         visual_generator_backend=deepcopy(request.visual_generator_backend),
+        reranker_name=deepcopy(request.reranker_name),
         page_image_records=deepcopy(request.page_image_records),
         element_index_records=deepcopy(request.element_index_records),
         llm=deepcopy(request.llm),
