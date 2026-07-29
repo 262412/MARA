@@ -118,6 +118,22 @@ def test_image_evidence_without_origin_renders_text_fallback():
     assert "OCR-only figure evidence" in scored
 
 
+def test_image_evidence_with_origin_renders_image_and_caption():
+    document = RetrievedDocument(
+        text="Figure caption",
+        score=0.8,
+        metadata={
+            "type": "image",
+            "image_origin": "data:image/png;base64,abc",
+        },
+    )
+
+    rendered = Render.collapsible_with_header(document)
+
+    assert "<img" in rendered
+    assert "Figure caption" in rendered
+
+
 def test_safe_evidence_structure_survives_the_allowlist():
     markdown = (
         "> Quoted evidence\n\n"
