@@ -400,7 +400,8 @@ def _qasper_stale_verifier_state(
 
 
 def _normalized_answer(value: Any) -> str:
-    return " ".join(str(value or "").strip().lower().split())
+    normalized = " ".join(str(value or "").strip().lower().split())
+    return normalized.rstrip(" .!?。！？")
 
 
 def _answered_with_missing_execution_slot(
