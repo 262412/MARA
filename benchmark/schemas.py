@@ -62,6 +62,7 @@ class BenchmarkDocument:
     format_type: str
     modality: str = "text"
     metadata: dict[str, Any] = field(default_factory=dict)
+    source_identity_crosswalk: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)

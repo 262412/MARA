@@ -8,6 +8,7 @@ from .answer_summary import (
     avg_product_metric,
 )
 from .backend_health_summary import backend_health_summary
+from .citation_headline_summary import citation_headline_summary
 from .contract_invariant_metrics import contract_invariant_summary
 from .dataset_decision_protocol import phase2_dataset_decision, phase2_failure_counts
 from .effective_route_metrics import effective_route_stage_metric_table
@@ -229,8 +230,7 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
             "equivalent_evidence_page_hit",
         ),
         "route_output_agreement_rate": route_output_agreement_rate(predictions),
-        "avg_citation_recall": _avg_metric(predictions, "citation_recall"),
-        "avg_citation_precision": _avg_metric(predictions, "citation_precision"),
+        **citation_headline_summary(predictions),
         **_citation_group_summary(predictions),
         **_citation_locator_summary(predictions),
         "avg_element_hit": _avg_metric(predictions, "element_hit"),

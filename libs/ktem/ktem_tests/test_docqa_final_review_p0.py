@@ -179,9 +179,10 @@ def test_required_page_image_beyond_rank_20_survives():
     )
 
     assert any(
-        item.get("page_label") == "25"
-        for item in bundle.metadata["reranker_input_evidence"]
+        item.get("page_label") == "25" for item in bundle.metadata["selected_evidence"]
     )
+    assert bundle.metadata["reranker_input_evidence"] == []
+    assert bundle.metadata["ranking_trace"]["configured"] is False
 
 
 def test_post_fusion_and_reranker_input_are_distinct_stages():

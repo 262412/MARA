@@ -163,6 +163,7 @@ def _engine_result_to_prediction(
         "workflow_plan": result.workflow_plan,
         "claim_verification": result.claim_verification,
         "presentation": result.presentation,
+        "source_identity_crosswalk": result.source_identity_crosswalk,
         "timings": {
             **{
                 str(key): round(float(value or 0.0), 6)

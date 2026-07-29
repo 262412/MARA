@@ -16,6 +16,7 @@ class DocQARequest:
     dataset_family: str = ""
     conversation_id: str = ""
     selected_file_ids: Optional[list[str]] = None
+    source_identity_crosswalk: Optional[list[dict[str, Any]]] = None
     selected_inputs: Optional[dict[int, Any]] = None
     qa_scope: str = "auto"
     active_file_id: str = ""
@@ -47,6 +48,7 @@ class DocQARequest:
     graph_mode: Optional[str] = None
     visual_retriever_backend: Optional[str] = None
     visual_generator_backend: Optional[str] = None
+    reranker_name: Optional[str] = None
     page_image_records: Optional[list[dict[str, Any]]] = None
     element_index_records: Optional[list[dict[str, Any]]] = None
     llm: Optional[str] = None

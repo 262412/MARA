@@ -22,7 +22,8 @@ from .base import BaseIndexing, BaseRetrieval
 from .elements import annotate_document_with_element_metadata
 from .indexing_status import IndexingStatusTracker, refresh_vector_store
 from .performance_cache import JsonDiskCache, content_hash, stable_cache_key
-from .rankings import BaseReranking, LLMReranking
+from .rankings import BaseReranking
+from .reranker_execution_trace import execute_rerankers
 from .retrieval_identity import reciprocal_rank_fuse
 from .retrieval_quality import QueryRoute, route_query
 from .retrieval_trace import RetrievalCostStats, RetrievalTrace
@@ -459,21 +460,14 @@ class VectorRetrieval(BaseRetrieval):
         result = self._apply_query_route_boost(result, query_route)
         retrieval_latency_ms = round((perf_counter() - retrieval_started_at) * 1000, 3)
 
-        # use additional reranker to re-order the document list
-        if self.rerankers and text:
-            rerank_started_at = perf_counter()
-            try:
-                if rerank_top_k:
-                    result = self._filter_docs(result, top_k=rerank_top_k)
-                for reranker in self.rerankers:
-                    # if reranker is LLMReranking, limit the document with top_k items only
-                    if isinstance(reranker, LLMReranking):
-                        result = self._filter_docs(result, top_k=top_k)
-                    result = reranker.run(documents=result, query=text)
-            finally:
-                rerank_latency_ms = round(
-                    (perf_counter() - rerank_started_at) * 1000, 3
-                )
+        result, reranker_trace, rerank_latency_ms = execute_rerankers(
+            self.rerankers,
+            result,
+            text,
+            rerank_top_k=rerank_top_k,
+            output_top_k=top_k,
+            filter_docs=lambda docs, limit: self._filter_docs(docs, top_k=limit),
+        )
 
         result = self._filter_docs(result, top_k=top_k)
         logger.debug("Got raw %s retrieved documents", len(result))
@@ -552,6 +546,7 @@ class VectorRetrieval(BaseRetrieval):
                     "scope_count": len(scope) if scope is not None else None,
                 },
             ),
+            metadata={"reranker_execution": reranker_trace},
         ).to_dict()
 
         return result

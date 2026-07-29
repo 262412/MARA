@@ -18,7 +18,10 @@ from .evidence_identity import (
 )
 from .evidence_locators import merged_locator_metadata, source_alias_values
 from .evidence_planning import select_planned_evidence
-from .evidence_ranking_trace import materialize_reranked_candidates
+from .evidence_ranking_trace import (
+    actual_reranker_input,
+    materialize_reranked_candidates,
+)
 from .evidence_schema import EvidenceBundle, EvidenceElement
 from .graph_evidence import graph_items
 from .hybrid_fusion import fuse_hybrid_evidence
@@ -29,6 +32,7 @@ from .query_planning import (
     retrieval_budget,
 )
 from .required_slot_selection import required_slot_shortlist
+from .source_identity_crosswalk import canonicalize_evidence_sources
 
 MAX_RERANK_CANDIDATES = 80
 
@@ -141,6 +145,10 @@ def _build_evidence_stages(
         evidence_metadata,
         limit=30,
     )
+    reranker_input_stage = actual_reranker_input(
+        reranker_input,
+        ranking_metadata,
+    )
     selection_candidates = _reranked_with_remaining_candidates(
         reranked,
         reranker_input,
@@ -155,7 +163,7 @@ def _build_evidence_stages(
     return _EvidenceStages(
         canonical_candidates=canonical_candidates,
         ranked_candidates=ranked_candidates,
-        reranker_input=reranker_input,
+        reranker_input=reranker_input_stage,
         reranked=reranked,
         selection_candidates=selection_candidates,
         dedupe_trace=dedupe_trace,
@@ -175,6 +183,8 @@ def _initial_evidence_items(
     base_items = [
         _coerce_item(item) for item in evidence_metadata.get("evidence") or []
     ]
+    crosswalk = getattr(request, "source_identity_crosswalk", None) or []
+    base_items = canonicalize_evidence_sources(base_items, crosswalk)
     items = (
         [] if route in {"doc_page_image", "doc_element", "graph_global"} else base_items
     )
@@ -206,7 +216,7 @@ def _initial_evidence_items(
         items.extend(_rank_route_items(element_items, request, "doc_element"))
     if route in {"graph_global", "hybrid"}:
         items.extend(graph_items(request, evidence_metadata))
-    return items
+    return canonicalize_evidence_sources(items, crosswalk)
 
 
 def _uses_element_index(route: str, request: Any) -> bool:

@@ -337,6 +337,8 @@ def _add_gold_evidence_metrics(
         evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
         retrieved_hits=list(prediction.get("retrieved_hits") or []),
     )
+    metrics["emitted_citation_recall"] = metrics["citation_recall"]
+    metrics["emitted_citation_precision"] = metrics["citation_precision"]
     _add_citation_group_metrics(
         metrics,
         "citation_inline",

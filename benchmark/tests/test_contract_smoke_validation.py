@@ -45,6 +45,16 @@ def _prediction(requirements: list[str]) -> dict[str, Any]:
         "answer_type": "free_text",
         "gold_answers": ["The result."],
         "gold_evidence": [{"document_id": "paper", "page": 1}],
+        "source_identity_crosswalk": [
+            {
+                "canonical_dataset_id": "paper",
+                "runtime_file_id": "paper-runtime",
+                "runtime_source_id": "paper-runtime",
+                "document_path": "/datasets/paper.pdf",
+                "filename": "paper.pdf",
+                "aliases": ["paper"],
+            }
+        ],
         "predicted_answer": "The result.",
         "answer_for_scoring": "The result.",
         "example_metadata": {

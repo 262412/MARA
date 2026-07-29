@@ -31,3 +31,4 @@ class EngineRunResult:
     workflow_plan: dict[str, Any] = field(default_factory=dict)
     claim_verification: dict[str, Any] = field(default_factory=dict)
     presentation: dict[str, Any] = field(default_factory=dict)
+    source_identity_crosswalk: list[dict[str, Any]] = field(default_factory=list)

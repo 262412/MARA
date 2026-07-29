@@ -5,7 +5,6 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .qasper_answerability_prompts import answerability_prompt as _answerability_prompt
 from .qasper_answerability_prompts import (
     boolean_answerability_prompt as _boolean_answerability_prompt,
 )
@@ -20,36 +19,14 @@ from .qasper_boolean import (
 )
 from .qasper_boolean import boolean_relation_lemmas as _boolean_relation_lemmas
 from .qasper_boolean import is_boolean_question as _is_boolean_question
-from .qasper_boolean import stemmed_content_tokens as _stemmed_content_tokens
+from .qasper_free_text_answerability import verify_free_text_candidate
 from .qasper_prompt_budget import fit_qasper_verifier_prompt
 from .qasper_proposition_conflict import resolve_boolean_conflict
 
-QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v12"
+QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v13"
 QASPER_ANSWERABILITY_SEED = 20260724
 QASPER_ANSWERABILITY_MAX_TOKENS = 192
 QASPER_EVIDENCE_QUOTE_MAX_LENGTH = 640
-QASPER_ANSWERABILITY_RESPONSE_FORMAT = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "qasper_answerability",
-        "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "verdict": {
-                    "type": "string",
-                    "enum": ["supported", "unsupported"],
-                },
-                "evidence_quote": {
-                    "type": "string",
-                    "maxLength": QASPER_EVIDENCE_QUOTE_MAX_LENGTH,
-                },
-            },
-            "required": ["verdict", "evidence_quote"],
-            "additionalProperties": False,
-        },
-    },
-}
 QASPER_BOOLEAN_ANSWERABILITY_RESPONSE_FORMAT = {
     "type": "json_schema",
     "json_schema": {
@@ -304,67 +281,17 @@ def _verify_free_text_candidate(
     candidate_answer: str,
     candidate: str,
 ) -> QasperAnswerabilityResult:
-    prompt, evidence, budget_trace = fit_qasper_verifier_prompt(
-        evidence,
-        lambda bounded_evidence: _answerability_prompt(
-            question=question,
-            evidence=bounded_evidence,
-            candidate_answer=candidate,
-        ),
-    )
-    verdict, quote, parse_trace = _call_verifier(
+    answer, trace = verify_free_text_candidate(
         llm,
-        prompt,
-        response_format=QASPER_ANSWERABILITY_RESPONSE_FORMAT,
-        parser=_verdict,
-        allowed_values=("supported", "unsupported"),
+        question=question,
+        evidence=evidence,
+        candidate_answer=candidate_answer,
+        candidate=candidate,
+        contract_id=QASPER_ANSWERABILITY_CONTRACT,
+        seed=QASPER_ANSWERABILITY_SEED,
+        max_tokens=QASPER_ANSWERABILITY_MAX_TOKENS,
     )
-    parse_trace = {**budget_trace, **parse_trace}
-    if not verdict:
-        return QasperAnswerabilityResult(
-            answer=candidate_answer,
-            trace=_trace(
-                "error",
-                "",
-                action="preserved_primary_answer",
-                parse_trace=parse_trace,
-            ),
-        )
-    quote_grounded = _quote_is_grounded(quote, evidence)
-    quote_supports_relation = quote_grounded and _quote_supports_relation(
-        quote,
-        question,
-        candidate,
-    )
-    if verdict == "supported" and not quote_supports_relation:
-        return QasperAnswerabilityResult(
-            answer="unanswerable",
-            trace=_trace(
-                "ok",
-                "unsupported",
-                action="abstained_ungrounded_quote",
-                evidence_quote=quote,
-                quote_grounded=quote_grounded,
-                quote_supports_relation=False,
-                parse_trace=parse_trace,
-            ),
-        )
-    return QasperAnswerabilityResult(
-        answer=candidate_answer if verdict == "supported" else "unanswerable",
-        trace=_trace(
-            "ok",
-            verdict,
-            action=(
-                "confirmed_candidate"
-                if verdict == "supported"
-                else "abstained_unsupported_candidate"
-            ),
-            evidence_quote=quote,
-            quote_grounded=quote_grounded,
-            quote_supports_relation=quote_supports_relation,
-            parse_trace=parse_trace,
-        ),
-    )
+    return QasperAnswerabilityResult(answer=answer, trace=trace)
 
 
 def _call_verifier(
@@ -445,18 +372,6 @@ def _clean_candidate(answer: str) -> str:
     return _THINK_BLOCK_RE.sub("", str(answer or "")).strip().rstrip(".")
 
 
-def _verdict(answer: str) -> tuple[str, str]:
-    try:
-        payload = json.loads(str(answer or ""))
-    except json.JSONDecodeError:
-        return "", ""
-    if not isinstance(payload, dict):
-        return "", ""
-    value = str(payload.get("verdict") or "")
-    quote = str(payload.get("evidence_quote") or "").strip()
-    return (value, quote) if value in {"supported", "unsupported"} else ("", "")
-
-
 def _boolean_verdict(answer: str) -> tuple[str, str]:
     try:
         payload = json.loads(str(answer or ""))
@@ -476,21 +391,6 @@ def _boolean_verdict(answer: str) -> tuple[str, str]:
         "insufficient_evidence",
     }
     return (value, quote) if value in allowed else ("", "")
-
-
-def _quote_supports_relation(quote: str, question: str, candidate: str) -> bool:
-    quote_tokens = _stemmed_content_tokens(quote)
-    candidate_tokens = _stemmed_content_tokens(candidate)
-    if not candidate_tokens:
-        return False
-    candidate_coverage = len(quote_tokens & candidate_tokens) / len(candidate_tokens)
-    question_anchors = _stemmed_content_tokens(question) - candidate_tokens
-    required_anchors = min(2, len(question_anchors))
-    return (
-        candidate_coverage >= 0.5
-        and required_anchors > 0
-        and len(quote_tokens & question_anchors) >= required_anchors
-    )
 
 
 def _quote_is_grounded(quote: str, evidence: str) -> bool:

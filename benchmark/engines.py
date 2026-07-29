@@ -21,7 +21,10 @@ from .docqa_image_documents import (
 )
 from .docqa_index_cache import DocQAIndexCache
 from .docqa_response_projection import response_evidence_outputs
-from .docqa_runtime_sources import selected_source_fallback_text
+from .docqa_runtime_sources import (
+    selected_source_fallback_text,
+    source_identity_crosswalk,
+)
 from .engine_accessors import active_runtime_record, config_value, field_value
 from .engine_context import (
     all_context_pages,
@@ -247,11 +250,15 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
     ) -> dict[str, Any]:
         policy = BENCHMARK_REQUEST_POLICY
         config = self._benchmark_config()
+        crosswalk = source_identity_crosswalk(documents, selected_file_ids)
+        for document, record in zip(documents, crosswalk):
+            document.source_identity_crosswalk = [dict(record)]
         return {
             **controller_request_context(
                 example, config, lambda key: config_value(self.config, key, None)
             ),
             "selected_file_ids": selected_file_ids,
+            "source_identity_crosswalk": crosswalk,
             "page_image_records": page_image_records_from_documents(documents),
             "element_index_records": element_index_records_from_documents(documents),
             "qa_scope": str(
@@ -435,6 +442,10 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             **cf.controller_response_kwargs(response),
             claim_verification=dict(getattr(response, "claim_verification", {}) or {}),
             presentation=dict(getattr(response, "presentation", {}) or {}),
+            source_identity_crosswalk=source_identity_crosswalk(
+                documents,
+                selected_file_ids,
+            ),
             retrieval_trace=[
                 *self._active_route_trace,
                 {

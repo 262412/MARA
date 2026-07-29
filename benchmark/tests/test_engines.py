@@ -300,7 +300,7 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     assert result.predicted_pages == ["1"]
     assert result.predicted_sources == ["doc#page:1"]
     assert result.agent_trace == [{"stage": "planner", "decision": "retrieve"}]
-    assert result.evidence_metadata == {"has_formula_evidence": True}
+    assert result.evidence_metadata["has_formula_evidence"] is True
     assert result.controller_trace == [{"stage": "planner", "route": "graph_global"}]
     assert result.controller_decision == {"route": "graph_rag"}
     assert result.route_decision == {"route": "graph_global"}

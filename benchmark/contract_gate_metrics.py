@@ -74,7 +74,9 @@ def prediction_gate_metrics(
     ranking_trace = dict(metadata.get("ranking_trace") or {})
     reranker_applicable = _reranker_applicable(ranking_trace)
     reranker_executed = reranker_applicable and bool(
-        ranking_trace.get("backend_execution")
+        ranking_trace.get("executed")
+        if "executed" in ranking_trace
+        else ranking_trace.get("backend_execution")
     )
     reranker_violations = (
         reranker_lineage(reranker_input, reranked)[1]
@@ -111,11 +113,14 @@ def prediction_gate_metrics(
         "reranker_applicable": float(reranker_applicable),
         "reranker_executed": _when(reranker_applicable, reranker_executed),
         "reranker_evaluated": _when(
-            reranker_executed, bool(reranker_input and reranked)
+            reranker_applicable,
+            reranker_executed and bool(reranker_input and reranked),
         ),
         "reranker_passed": _when(
-            reranker_executed,
-            bool(reranker_input and reranked) and reranker_violations == 0,
+            reranker_applicable,
+            reranker_executed
+            and bool(reranker_input and reranked)
+            and reranker_violations == 0,
         ),
         "reranker_lineage_violation_count": float(reranker_violations),
         "calculation_applicable": float(calculation_applicable),
@@ -177,7 +182,10 @@ def _has_emitted_citation(
 
 def _reranker_applicable(ranking_trace: dict[str, Any]) -> bool:
     return bool(
-        ranking_trace.get("backend_execution")
+        ranking_trace.get("configured")
+        or ranking_trace.get("loaded")
+        or ranking_trace.get("executed")
+        or ranking_trace.get("backend_execution")
         or ranking_trace.get("backend")
         or ranking_trace.get("configured_backend")
         or ranking_trace.get("reranker_backend")

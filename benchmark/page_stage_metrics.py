@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ktem.docqa.evidence_locators import normalized_source_page_locators
+from ktem.docqa.source_identity_crosswalk import SourceIdentityResolver
 
 
 def all_gold_pages_hit(prediction: dict[str, Any]) -> float | None:
@@ -22,8 +23,9 @@ def stage_all_gold_pages_hit(
 ) -> float | None:
     metadata = dict(prediction.get("evidence_metadata") or {})
     pairs: set[tuple[str, str]] = set()
+    resolver = _resolver(prediction)
     for item in _records(metadata.get(stage)):
-        _add_item_locators(pairs, item)
+        _add_item_locators(pairs, item, resolver)
     return _all_gold_pages_hit_from_pairs(prediction, pairs)
 
 
@@ -32,7 +34,7 @@ def _all_gold_pages_hit_from_pairs(
     predicted_pairs: set[tuple[str, str]],
 ) -> float | None:
     gold_pairs = {
-        locator
+        (_resolver(prediction).canonical_or_original(locator[0]), locator[1])
         for item in _records(prediction.get("gold_evidence"))
         for locator in normalized_source_page_locators(item)
         if locator[1]
@@ -64,6 +66,7 @@ def predicted_source_page_pairs(
     prediction: dict[str, Any],
 ) -> set[tuple[str, str]]:
     pairs: set[tuple[str, str]] = set()
+    resolver = _resolver(prediction)
     metadata = dict(prediction.get("evidence_metadata") or {})
     for key in (
         "cited_evidence",
@@ -72,11 +75,14 @@ def predicted_source_page_pairs(
         "selected_evidence",
     ):
         for item in _records(metadata.get(key)):
-            _add_item_locators(pairs, item)
+            _add_item_locators(pairs, item, resolver)
     sources = [str(value) for value in prediction.get("predicted_sources") or []]
     pages = [str(value) for value in prediction.get("predicted_pages") or []]
     if len(sources) == len(pages):
-        pairs.update(zip(sources, pages))
+        pairs.update(
+            (resolver.canonical_or_original(source), page)
+            for source, page in zip(sources, pages)
+        )
     for source_ref in sources:
         _add_backref_locator(pairs, source_ref)
     return pairs
@@ -85,8 +91,15 @@ def predicted_source_page_pairs(
 def _add_item_locators(
     pairs: set[tuple[str, str]],
     item: dict[str, Any],
+    resolver: SourceIdentityResolver | None = None,
 ) -> None:
-    pairs.update(normalized_source_page_locators(item))
+    pairs.update(
+        (
+            resolver.canonical_or_original(source) if resolver else source,
+            page,
+        )
+        for source, page in normalized_source_page_locators(item)
+    )
 
 
 def _add_backref_locator(
@@ -101,3 +114,7 @@ def _add_backref_locator(
 
 def _records(value: Any) -> list[dict[str, Any]]:
     return [dict(item) for item in value or [] if isinstance(item, dict)]
+
+
+def _resolver(prediction: dict[str, Any]) -> SourceIdentityResolver:
+    return SourceIdentityResolver(prediction.get("source_identity_crosswalk") or [])

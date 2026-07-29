@@ -340,6 +340,10 @@ def copy_request_fields(target: Any, source: Any) -> None:
     target.controller_question = getattr(source, "controller_question", "")
     target.retrieval_query = getattr(source, "retrieval_query", "")
     target.dataset_family = getattr(source, "dataset_family", "")
+    target.source_identity_crosswalk = getattr(
+        source, "source_identity_crosswalk", None
+    )
+    target.reranker_name = getattr(source, "reranker_name", None)
     target.task_type = source.task_type
     target.agent_mode = source.agent_mode
     target.artifact_type = source.artifact_type

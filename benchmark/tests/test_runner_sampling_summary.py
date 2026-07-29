@@ -71,6 +71,7 @@ def test_run_benchmark_applies_seeded_limit_and_sharding(monkeypatch, tmp_path):
             "format_type": "txt",
             "modality": "text",
             "metadata": {},
+            "source_identity_crosswalk": [],
         }
     ]
 

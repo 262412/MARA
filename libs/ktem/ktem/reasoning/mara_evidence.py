@@ -46,6 +46,21 @@ def build_mara_evidence_metadata(
         "evidence_ids": evidence_ids,
         "evidence": evidence,
     }
+    reranker_traces = [
+        dict(trace)
+        for doc in docs
+        if isinstance(
+            (
+                trace := dict(getattr(doc, "metadata", {}) or {}).get(
+                    "reranker_execution_trace"
+                )
+            ),
+            dict,
+        )
+    ]
+    if reranker_traces:
+        metadata["reranker_execution_trace"] = reranker_traces[-1]
+        metadata["reranker_backend"] = str(reranker_traces[-1].get("backend") or "")
     _add_multimodal_index_records(
         metadata,
         docs,

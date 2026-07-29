@@ -38,9 +38,14 @@ def core_answer_metrics(
         "page_hit": page_hit,
         "strict_page_hit": strict_page_hit,
         "equivalent_evidence_page_hit": equivalent_page_hit,
-        "citation_recall": recall_score(
+        "source_retrieval_recall": recall_score(
             prediction["predicted_sources"], prediction["gold_sources"]
         ),
+        "predicted_source_recall": recall_score(
+            prediction["predicted_sources"], prediction["gold_sources"]
+        ),
+        "citation_recall": None,
+        "citation_precision": None,
         "abstained": float(abstained),
         "false_abstention": false_abstention,
         "markdown_table_renderable": markdown_table_score,

@@ -307,6 +307,16 @@ def test_hybrid_retrieval_limits_documents_before_local_reranking():
 
     assert len(reranker.received_doc_ids) == 50
     assert len(result) == 5
+    assert retrieval.last_trace is not None
+    trace = retrieval.last_trace["metadata"]["reranker_execution"]
+    assert trace["configured"] is True
+    assert trace["loaded"] is True
+    assert trace["executed"] is True
+    assert trace["input_count"] == 50
+    assert trace["output_count"] == 50
+    assert trace["input_identities"] == reranker.received_doc_ids
+    assert all(doc.metadata["reranker_input_identity"] for doc in result)
+    assert all(doc.metadata["reranker_rank"] > 0 for doc in result)
 
 
 def test_hybrid_retrieval_boosts_query_routed_element_types():

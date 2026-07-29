@@ -4,11 +4,65 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from ktem.docqa.evidence_identity import EvidenceIdentity, identity_of
+from ktem.docqa.source_identity_crosswalk import (
+    SourceIdentityCrosswalk,
+    canonicalize_evidence_source,
+)
 
 from .schemas import BenchmarkDocument
 
 SHORT_SOURCE_TEXT_MAX_CHARS = 4096
 TEXT_FORMAT_TYPES = {"txt", "text", "md", "markdown", "json", "jsonl", "csv"}
+
+
+def source_identity_crosswalk(
+    documents: list[BenchmarkDocument],
+    selected_file_ids: list[str],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for index, document in enumerate(documents):
+        runtime_file_id = (
+            str(selected_file_ids[index]).strip()
+            if index < len(selected_file_ids)
+            else ""
+        )
+        path = Path(document.path)
+        records.append(
+            SourceIdentityCrosswalk(
+                canonical_dataset_id=document.document_id,
+                runtime_file_id=runtime_file_id,
+                runtime_source_id=runtime_file_id,
+                document_path=str(path),
+                filename=path.name,
+                aliases=(path.stem,),
+            ).as_dict()
+        )
+    return records
+
+
+def canonicalize_docqa_evidence_metadata(
+    metadata: dict[str, Any],
+    documents: list[BenchmarkDocument],
+    selected_file_ids: list[str],
+) -> dict[str, Any]:
+    normalized = dict(metadata)
+    crosswalk = source_identity_crosswalk(documents, selected_file_ids)
+    for key, value in list(normalized.items()):
+        if not isinstance(value, list) or not all(
+            isinstance(item, dict) for item in value
+        ):
+            continue
+        if key.endswith("_evidence") or key in {
+            "evidence",
+            "candidate_evidence",
+            "element_index",
+            "page_image_index",
+        }:
+            normalized[key] = [
+                canonicalize_evidence_source(item, crosswalk) for item in value
+            ]
+    normalized["source_identity_crosswalk"] = crosswalk
+    return normalized
 
 
 def document_paths(documents: list[BenchmarkDocument]) -> list[str]:
@@ -223,30 +277,25 @@ def _docqa_source_aliases(
     documents: list[BenchmarkDocument],
     selected_file_ids: list[str],
 ) -> dict[str, str]:
-    aliases: dict[str, str] = {}
-    for document, file_id in zip(documents, selected_file_ids):
-        _add_source_alias(aliases, file_id, document.document_id)
-    for document in documents:
-        path = Path(document.path)
-        for alias in (
-            document.document_id,
-            str(path),
-            str(path.resolve()),
-            path.name,
-            path.stem,
+    targets: dict[str, set[str]] = {}
+    for record in source_identity_crosswalk(documents, selected_file_ids):
+        canonical = str(record["canonical_dataset_id"])
+        for value in (
+            canonical,
+            record.get("runtime_file_id"),
+            record.get("runtime_source_id"),
+            record.get("document_path"),
+            record.get("filename"),
+            *(record.get("aliases") or []),
         ):
-            _add_source_alias(aliases, alias, document.document_id)
-    return aliases
-
-
-def _add_source_alias(
-    aliases: dict[str, str],
-    alias: Any,
-    document_id: str,
-) -> None:
-    key = _source_alias_key(alias)
-    if key:
-        aliases[key] = document_id
+            key = _source_alias_key(value)
+            if key:
+                targets.setdefault(key, set()).add(canonical)
+    return {
+        alias: next(iter(canonical_ids))
+        for alias, canonical_ids in targets.items()
+        if len(canonical_ids) == 1
+    }
 
 
 def _canonicalize_docqa_hit(

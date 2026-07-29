@@ -6,6 +6,7 @@ from ktem.docqa.evidence_locators import (
     normalized_page_aliases,
     normalized_source_aliases,
 )
+from ktem.docqa.source_identity_crosswalk import SourceIdentityResolver
 
 EvidenceKey = tuple[str, str, str, str]
 
@@ -19,6 +20,11 @@ def stage_coverage_values(
     reranked: list[dict[str, Any]] | None,
     gold: set[EvidenceKey],
 ) -> dict[str, float | None]:
+    resolver = _resolver(prediction)
+    gold = {
+        (resolver.canonical_or_original(source).lower(), page, kind, local_id)
+        for source, page, kind, local_id in gold
+    }
     stages = {
         "canonical_candidate_evidence_coverage": candidate_pool,
         "post_fusion_evidence_coverage": _stage_records(
@@ -56,6 +62,7 @@ def stage_coverage_values(
         "candidate_page_coverage_at_50": _page_coverage(
             candidates,
             _gold_page_keys(prediction),
+            prediction,
         ),
         "candidate_pool_recall_at_80": evidence_coverage(
             candidate_pool[:80] if candidate_pool is not None else None,
@@ -78,7 +85,7 @@ def gold_requirement_keys(
         acceptable = {
             key
             for item in _records(requirement.get("acceptable_evidence"))
-            if (key := _record_key(item)) != ("", "", "", "")
+            if (key := _record_key(item, _resolver(prediction))) != ("", "", "", "")
         }
         if acceptable:
             requirements.append(acceptable)
@@ -92,11 +99,11 @@ def evidence_coverage(
 ) -> float | None:
     requirements = gold_requirement_keys(prediction)
     if not requirements:
-        return evidence_recall(items, gold)
+        return evidence_recall(items, gold, prediction)
     if items is None:
         return None
     matched = sum(
-        any(matched_gold(item, acceptable) for item in items)
+        any(matched_gold(item, acceptable, prediction) for item in items)
         for acceptable in requirements
     )
     return matched / len(requirements)
@@ -105,20 +112,22 @@ def evidence_coverage(
 def evidence_recall(
     items: list[dict[str, Any]] | None,
     gold: set[EvidenceKey],
+    prediction: dict[str, Any] | None = None,
 ) -> float | None:
     if items is None or not gold:
         return None
     if not items:
         return 0.0
-    hits = set().union(*(matched_gold(item, gold) for item in items))
+    hits = set().union(*(matched_gold(item, gold, prediction) for item in items))
     return len(hits) / len(gold)
 
 
 def matched_gold(
     item: dict[str, Any],
     gold: set[EvidenceKey],
+    prediction: dict[str, Any] | None = None,
 ) -> set[EvidenceKey]:
-    item_keys = _item_keys(item)
+    item_keys = _item_keys(item, prediction)
     return {
         key
         for key in gold
@@ -139,10 +148,13 @@ def reranked_trace_available(metadata: dict[str, Any]) -> bool:
     return not (isinstance(trace, dict) and trace.get("backend_execution") is False)
 
 
-def _record_key(item: dict[str, Any]) -> EvidenceKey:
+def _record_key(
+    item: dict[str, Any],
+    resolver: SourceIdentityResolver | None = None,
+) -> EvidenceKey:
     identity = item.get("identity")
     identity_payload = identity if isinstance(identity, dict) else {}
-    return (
+    source = (
         str(
             item.get("source_id")
             or item.get("document_id")
@@ -150,17 +162,28 @@ def _record_key(item: dict[str, Any]) -> EvidenceKey:
             or ""
         )
         .strip()
-        .lower(),
+        .lower()
+    )
+    if resolver is not None:
+        source = resolver.canonical_or_original(source).lower()
+    return (
+        source,
         str(item.get("page_label") or item.get("page") or "").strip().lower(),
         _record_kind(item, identity_payload).lower(),
         _record_local_id(item, identity_payload).lower(),
     )
 
 
-def _item_keys(item: dict[str, Any]) -> set[EvidenceKey]:
-    sources = _item_sources(item) | {""}
+def _item_keys(
+    item: dict[str, Any],
+    prediction: dict[str, Any] | None = None,
+) -> set[EvidenceKey]:
+    resolver = _resolver(prediction or {})
+    sources = {
+        resolver.canonical_or_original(source).lower() for source in _item_sources(item)
+    } | {""}
     pages = normalized_page_aliases(item) | {""}
-    record = _record_key(item)
+    record = _record_key(item, resolver)
     kinds = {record[2], ""}
     elements = {record[3], ""}
     return {
@@ -204,9 +227,12 @@ def _record_local_id(
 
 
 def _gold_page_keys(prediction: dict[str, Any]) -> set[tuple[str, str]]:
+    resolver = _resolver(prediction)
     keys = {
         (
-            str(item.get("source_id") or item.get("document_id") or "").strip().lower(),
+            resolver.canonical_or_original(
+                item.get("source_id") or item.get("document_id") or ""
+            ).lower(),
             str(item.get("page_label") or item.get("page") or "").lower(),
         )
         for item in _records(prediction.get("gold_evidence"))
@@ -221,6 +247,7 @@ def _gold_page_keys(prediction: dict[str, Any]) -> set[tuple[str, str]]:
 def _page_coverage(
     items: list[dict[str, Any]] | None,
     gold_pages: set[tuple[str, str]],
+    prediction: dict[str, Any] | None = None,
 ) -> float | None:
     if items is None or not gold_pages:
         return None
@@ -228,7 +255,16 @@ def _page_coverage(
         (source, page)
         for source, page in gold_pages
         if any(
-            (not source or source in _item_sources(item))
+            (
+                not source
+                or source
+                in {
+                    _resolver(prediction or {})
+                    .canonical_or_original(item_source)
+                    .lower()
+                    for item_source in _item_sources(item)
+                }
+            )
             and page.lower() in normalized_page_aliases(item)
             for item in items
         )
@@ -245,6 +281,10 @@ def _stage_records(
 
 def _item_sources(item: dict[str, Any]) -> set[str]:
     return normalized_source_aliases(item)
+
+
+def _resolver(prediction: dict[str, Any]) -> SourceIdentityResolver:
+    return SourceIdentityResolver(prediction.get("source_identity_crosswalk") or [])
 
 
 def _records(value: Any) -> list[dict[str, Any]]:

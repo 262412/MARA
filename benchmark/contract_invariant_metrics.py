@@ -9,6 +9,7 @@ from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_locators import normalized_source_page_locators
 from ktem.docqa.query_plan_schema import plan_from_payload
 from ktem.docqa.query_planning import score_evidence_for_slot
+from ktem.docqa.source_identity_crosswalk import SourceIdentityResolver
 
 from .contract_gate_metrics import contract_gate_summary, prediction_gate_metrics
 from .metrics import is_abstention_answer, numeric_tolerance_score, safe_mean
@@ -116,6 +117,18 @@ def contract_invariant_summary(
             metrics,
             "qasper_stale_verifier_state_count",
         ),
+        "gold_runtime_source_join_rate": _mean_metric(
+            metrics, "gold_runtime_source_join_rate"
+        ),
+        "unresolved_gold_source_count": _sum_metric(
+            metrics, "unresolved_gold_source_count"
+        ),
+        "ambiguous_source_alias_count": _sum_metric(
+            metrics, "ambiguous_source_alias_count"
+        ),
+        "gold_runtime_source_page_join_rate": _mean_metric(
+            metrics, "gold_runtime_source_page_join_rate"
+        ),
     }
     summary.update(contract_gate_summary(metrics))
     return summary
@@ -166,6 +179,7 @@ def _prediction_contract_metrics(
         "qasper_stale_verifier_state_count": float(
             _qasper_stale_verifier_state(prediction, metadata)
         ),
+        **_source_join_metrics(prediction, candidates),
         **prediction_gate_metrics(
             prediction,
             metadata,
@@ -175,6 +189,64 @@ def _prediction_contract_metrics(
             selected=selected,
             generation_context=generation_context,
         ),
+    }
+
+
+def _source_join_metrics(
+    prediction: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> dict[str, float | None]:
+    resolver = SourceIdentityResolver(
+        prediction.get("source_identity_crosswalk")
+        or dict(prediction.get("evidence_metadata") or {}).get(
+            "source_identity_crosswalk"
+        )
+        or []
+    )
+    gold_records = _records(prediction.get("gold_evidence"))
+    gold_sources = {
+        str(item.get("source_id") or item.get("document_id") or "").strip()
+        for item in gold_records
+        if str(item.get("source_id") or item.get("document_id") or "").strip()
+    }
+    gold_sources.update(
+        str(value).split("#", 1)[0].strip()
+        for value in prediction.get("gold_sources") or []
+        if str(value).strip()
+    )
+    resolved_sources = {source for source in gold_sources if resolver.resolve(source)}
+    source_join_rate = (
+        len(resolved_sources) / len(gold_sources) if gold_sources else None
+    )
+    candidate_pairs = set().union(
+        *(normalized_source_page_locators(item) for item in candidates)
+    )
+    canonical_candidate_pairs = {
+        (resolver.canonical_or_original(source), page)
+        for source, page in candidate_pairs
+    }
+    gold_pairs = {
+        (
+            resolver.canonical_or_original(
+                item.get("source_id") or item.get("document_id") or ""
+            ),
+            str(item.get("page_label") or item.get("page") or "").strip(),
+        )
+        for item in gold_records
+        if str(item.get("page_label") or item.get("page") or "").strip()
+    }
+    page_join_rate = (
+        sum(pair in canonical_candidate_pairs for pair in gold_pairs) / len(gold_pairs)
+        if gold_pairs
+        else None
+    )
+    return {
+        "gold_runtime_source_join_rate": source_join_rate,
+        "unresolved_gold_source_count": float(
+            len(gold_sources) - len(resolved_sources)
+        ),
+        "ambiguous_source_alias_count": float(resolver.ambiguous_alias_count),
+        "gold_runtime_source_page_join_rate": page_join_rate,
     }
 
 

@@ -63,6 +63,10 @@ HARD_GATES = {
     "source_page_cross_join_count": ("eq", 0.0),
     "calculation_render_mismatch_count": ("eq", 0.0),
     "qasper_stale_verifier_state_count": ("eq", 0.0),
+    "gold_runtime_source_join_rate": ("eq", 1.0),
+    "unresolved_gold_source_count": ("eq", 0.0),
+    "ambiguous_source_alias_count": ("eq", 0.0),
+    "gold_runtime_source_page_join_rate": ("eq", 1.0),
     "required_candidate_nonempty_rate": ("eq", 1.0),
     "required_selected_nonempty_rate": ("eq", 1.0),
     "required_generation_context_nonempty_rate": ("eq", 1.0),
@@ -128,8 +132,10 @@ def _stage_audit(
             status = "empty_required"
         elif stage in metadata:
             status = "recorded"
-        elif stage == "reranked_evidence" and not ranking_trace.get(
-            "backend_execution"
+        elif stage == "reranked_evidence" and not (
+            ranking_trace.get("executed")
+            if "executed" in ranking_trace
+            else ranking_trace.get("backend_execution")
         ):
             status = "truthfully_not_executed"
         elif stage == "execution_operand_evidence" and suite_kind == "qasper":
@@ -143,7 +149,11 @@ def _stage_audit(
             missing.append(stage)
         if (
             stage == "reranked_evidence"
-            and ranking_trace.get("backend_execution")
+            and (
+                ranking_trace.get("executed")
+                if "executed" in ranking_trace
+                else ranking_trace.get("backend_execution")
+            )
             and status == "missing"
         ):
             missing.append(stage)

@@ -12,6 +12,7 @@ from .docqa_evidence_projection import (
 )
 from .docqa_runtime_sources import (
     canonicalize_docqa_citations,
+    canonicalize_docqa_evidence_metadata,
     canonicalize_docqa_hits,
     selected_source_fallback_hits,
 )
@@ -40,6 +41,13 @@ def response_evidence_outputs(
 ]:
     evidence_bundle = dict(getattr(response, "evidence_bundle", {}) or {})
     evidence_metadata = dict(getattr(response, "evidence_metadata", {}) or {})
+    evidence_bundle, evidence_metadata = _canonicalize_response_evidence(
+        response,
+        evidence_bundle=evidence_bundle,
+        evidence_metadata=evidence_metadata,
+        documents=documents,
+        selected_file_ids=selected_file_ids,
+    )
     retrieved_hits = retrieved_hits_from_docqa_evidence(
         evidence_bundle,
         evidence_metadata,
@@ -97,6 +105,34 @@ def response_evidence_outputs(
         predicted_citations,
         predicted_pages,
     )
+
+
+def _canonicalize_response_evidence(
+    response: Any,
+    *,
+    evidence_bundle: dict[str, Any],
+    evidence_metadata: dict[str, Any],
+    documents: list[BenchmarkDocument],
+    selected_file_ids: list[str],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    evidence_metadata = canonicalize_docqa_evidence_metadata(
+        evidence_metadata,
+        documents,
+        selected_file_ids,
+    )
+    bundle_metadata = evidence_bundle.get("metadata")
+    if isinstance(bundle_metadata, dict):
+        evidence_bundle["metadata"] = canonicalize_docqa_evidence_metadata(
+            bundle_metadata,
+            documents,
+            selected_file_ids,
+        )
+    try:
+        response.evidence_bundle = evidence_bundle
+        response.evidence_metadata = evidence_metadata
+    except AttributeError:
+        pass
+    return evidence_bundle, evidence_metadata
 
 
 def _reference_pages(value: str) -> list[str]:

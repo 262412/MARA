@@ -30,20 +30,31 @@ def answerability_prompt(
     return (
         "/no_think\n"
         "You are a QASPER evidence-sufficiency verifier. Decide whether the "
-        "retrieved paper evidence explicitly supports the complete candidate "
-        "answer to the question. Topic overlap or a plausible answer is not "
-        "sufficient. Every entity, relation, metric, qualifier, polarity, and "
-        "number in the candidate must be entailed. For yes/no candidates, the "
-        "evidence must support that polarity. Return unsupported when the "
-        "paper merely mentions related facts. For a supported verdict, quote "
+        "retrieved paper evidence supports the core answer to the question. "
+        "Separate the supported core answer from optional explanations or "
+        "unsupported extensions. Topic overlap alone is not sufficient. "
+        "Return supported when the complete candidate is supported. Return "
+        "supported_with_pruning when the core answer is supported but extra "
+        "claims must be removed, and put the shortest sufficient core answer "
+        "in revised_answer. Return partially_supported only when a usable core "
+        "answer can be stated in revised_answer. Topic overlap or a plausible "
+        "answer is not sufficient. Return conflicting_core when evidence "
+        "contradicts the core answer, and insufficient_core_evidence when the "
+        "core relation is not established. For a positive verdict, quote "
         "the shortest exact evidence span, at most 20 words, that states the "
         "question-candidate relation. If no such exact span exists, return "
-        "unsupported with an empty evidence_quote.\n\n"
+        "insufficient_core_evidence with an empty evidence_quote.\n\n"
         f"QUESTION:\n{question}\n\n"
         f"RETRIEVED PAPER EVIDENCE:\n{evidence}\n\n"
         f"CANDIDATE ANSWER:\n{candidate_answer}\n\n"
-        'Return exactly {"verdict":"supported","evidence_quote":"..."} or '
-        '{"verdict":"unsupported","evidence_quote":""}.'
+        'Return exactly {"verdict":"supported","evidence_quote":"...",'
+        '"revised_answer":""}, {"verdict":"supported_with_pruning",'
+        '"evidence_quote":"...","revised_answer":"..."}, '
+        '{"verdict":"partially_supported","evidence_quote":"...",'
+        '"revised_answer":"..."}, {"verdict":"conflicting_core",'
+        '"evidence_quote":"...","revised_answer":""}, or '
+        '{"verdict":"insufficient_core_evidence","evidence_quote":"",'
+        '"revised_answer":""}.'
     )
 
 
