@@ -28,6 +28,7 @@ from .mara_finance_answering import (
     ensure_finance_numeric_trace,
     route_finance_numeric_answer,
 )
+from .mara_generation_context import cache_generation_context
 from .mara_query_planning import plan_steps as build_mara_plan_steps
 from .mara_query_planning import understand_query as understand_mara_query
 from .mara_query_planning import with_selected_source_context
@@ -310,6 +311,7 @@ def _generate_controller_route_answer(
     if decision.route == "element_rag":
         bundle.metadata["generation_backend"] = "local_element_evidence"
         return element_evidence_answer(bundle, message), []
+    cache_generation_context(pipeline, message, history, bundle)
     generation_message = message_with_answer_type_contract(message, request)
     answer, events = _collect_text_rag_generation(
         pipeline,

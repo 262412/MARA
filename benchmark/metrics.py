@@ -13,22 +13,22 @@ WHITESPACE_RE = re.compile(r"\s+")
 NUMBER_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
 ABSTENTION_RE = re.compile(
     r"^\s*(?:"
-    r"unanswerable|"
+    r"unanswerable\b.*|"
     r"MARA could not retrieve enough evidence\b.*|"
     r"(?:the\s+)?(?:available\s+)?(?:document\s+)?evidence is insufficient\b.*|"
     r"insufficient evidence\b.*|"
     r"not enough evidence\b.*|"
     r"not supported by (?:the )?document\b.*|"
     r"cannot be supported by (?:the )?document\b.*|"
-    r"cannot answer (?:from|based on)(?: the)?(?: available)? evidence\b.*|"
-    r"unable to answer (?:from|based on)(?: the)?(?: available)? evidence\b.*|"
+    r"cannot answer\b.*|"
+    r"unable to answer\b.*|"
     r"文档证据无法支持(?:该回答|这个回答|回答该问题)?[。.!！]?\s*|"
     r"证据无法支持(?:该回答|这个回答|回答该问题)?[。.!！]?\s*|"
     r"无法根据(?:所给|当前|现有|可用)?文档(?:证据)?(?:回答|作答).+|"
     r"(?:当前|现有|可用)?文档没有足够(?:的)?证据(?:回答|支持).+|"
     r"没有足够(?:的)?(?:文档)?证据(?:回答|支持).+"
     r")\s*$",
-    flags=re.IGNORECASE,
+    flags=re.IGNORECASE | re.DOTALL,
 )
 TOKEN_V2_RE = re.compile(
     r"[$€£¥]?\d+(?:[.,]\d+)*(?:%)?|"

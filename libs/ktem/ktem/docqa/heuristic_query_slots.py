@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .boolean_evidence_scope import boolean_retrieval_query
 from .query_evidence_text import requires_multiple_operands
 from .query_phrase_extraction import cross_page_support_queries, modality_hint
 from .query_plan_schema import EvidenceLocator, EvidenceSlot
@@ -12,6 +13,7 @@ def heuristic_slots(
     periods: list[str],
     metric: str,
     capabilities: dict[str, object],
+    verification_domain: str = "",
 ) -> tuple[EvidenceSlot, ...]:
     multi_evidence = bool(capabilities.get("requires_multiple_evidence"))
     if question_type == "multi_period_numeric":
@@ -34,6 +36,7 @@ def heuristic_slots(
             metric,
             multi_evidence=multi_evidence,
             page_labels=_page_labels(capabilities),
+            typed_scope="qasper" in verification_domain.lower(),
         )
     if answer_type == "numeric":
         return _numeric_slots(
@@ -71,7 +74,10 @@ def _boolean_slots(
     *,
     multi_evidence: bool,
     page_labels: tuple[str, ...] = (),
+    typed_scope: bool = False,
 ) -> tuple[EvidenceSlot, ...]:
+    query = boolean_retrieval_query(question) if typed_scope else question
+    statement_kind = "boolean_proposition" if typed_scope else ""
     if not multi_evidence:
         return (
             EvidenceSlot(
@@ -79,7 +85,8 @@ def _boolean_slots(
                 role="support",
                 metric=metric,
                 modality="auto",
-                query=question,
+                statement_kind=statement_kind,
+                query=query,
                 locator=EvidenceLocator(
                     page_label=page_labels[0] if page_labels else ""
                 ),
@@ -92,7 +99,8 @@ def _boolean_slots(
             metric=metric,
             modality="auto",
             required_for_retrieval=False,
-            query=question,
+            statement_kind=statement_kind,
+            query=query,
         ),
         *_paired_slots(
             question,

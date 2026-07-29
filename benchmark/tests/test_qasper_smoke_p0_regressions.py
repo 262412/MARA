@@ -4,6 +4,8 @@ import json
 from types import SimpleNamespace
 from typing import Any
 
+from ktem.docqa.query_planning import build_query_plan, score_evidence_for_slot
+
 from benchmark.answer_finalizer import attach_structured_citations_from_evidence
 from benchmark.contract_invariant_metrics import contract_invariant_summary
 from benchmark.qasper_answerability import verify_qasper_answerability
@@ -101,6 +103,30 @@ def test_product_abstention_without_original_candidate_is_preserved():
     assert prediction["predicted_answer"] == refusal
 
 
+def test_multiline_unanswerable_explanation_is_not_a_recovery_candidate():
+    refusal = "MARA could not retrieve enough evidence to answer this question."
+    generated_abstention = (
+        "unanswerable\n"
+        "The provided context does not mention experiments conducted by the authors."
+    )
+    prediction: dict[str, Any] = {
+        "question": "Do the authors conduct experiments on the tasks mentioned?",
+        "predicted_answer": refusal,
+        "answer_for_scoring": refusal,
+        "guardrail_decision": {"action": "abstain"},
+        "evidence_metadata": {
+            "pre_guardrail_answer": generated_abstention,
+            "pre_verification_answer": generated_abstention,
+        },
+    }
+
+    candidate = select_answerability_candidate(prediction)
+
+    assert candidate.input_candidate_kind == "missing_original_candidate"
+    assert candidate.candidate_for_answerability == ""
+    assert candidate.recovery_attempted is False
+
+
 def test_required_verifier_evidence_is_not_dropped_by_budget_packing():
     support = _item(
         "late-support",
@@ -144,6 +170,63 @@ def test_supported_core_is_pruned_when_extension_breaks_whole_answer_relation():
     assert result.answer == "manually provided labeled features"
     assert result.trace["verdict"] == "supported_with_pruning"
     assert result.trace["action"] == "pruned_unsupported_extension"
+
+
+def test_grounded_core_is_pruned_even_when_whole_answer_verdict_is_unsupported():
+    quote = (
+        "A labeled feature is a strong indicator of a specific class and is "
+        "manually provided to the classifier."
+    )
+    result = verify_qasper_answerability(
+        _VerifierLLM(
+            {
+                "verdict": "unsupported",
+                "evidence_quote": quote,
+                "revised_answer": "",
+            }
+        ),
+        question="What background knowledge do they leverage?",
+        evidence=quote,
+        candidate_answer=(
+            "Labeled features are manually provided indicators of specific classes. "
+            "Class distribution is also used to guide predictions."
+        ),
+    )
+
+    assert result.answer == (
+        "Labeled features are manually provided indicators of specific classes"
+    )
+    assert result.trace["verdict"] == "supported_with_pruning"
+    assert result.trace["action"] == "pruned_unsupported_extension"
+
+
+def test_qasper_boolean_slot_rejects_cited_work_and_selects_current_scope():
+    plan = build_query_plan(
+        "Do they report results only on English data?",
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    slot = plan.evidence_slots[0]
+    cited_work = _item(
+        "related",
+        (
+            "Goudas et al. 2014 evaluated user-generated Greek texts in "
+            "previous work."
+        ),
+        section_id="related_work",
+    )
+    current_scope = _item(
+        "current",
+        (
+            "As a main field of interest in the current study, we identified "
+            "controversial topics in education in English-speaking countries."
+        ),
+    )
+
+    assert slot.statement_kind == "boolean_proposition"
+    assert "current study" in slot.query.lower()
+    assert score_evidence_for_slot(slot, cited_work) == 0.0
+    assert score_evidence_for_slot(slot, current_scope) > 0.0
 
 
 def test_related_work_non_english_evidence_cannot_support_current_paper_no():

@@ -4,6 +4,7 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from .boolean_evidence_scope import boolean_proposition_evidence_score
 from .evidence_identity import identity_of
 from .evidence_locators import locator_matches, locator_requirement_count
 from .evidence_modality import modality_matches
@@ -131,14 +132,13 @@ def _build_heuristic_query_plan(
     finance_specs = inferred_finance_specs if finance_domain else ()
     finance_fact = finance_domain and normalized_type != "numeric" and not causal_intent
     finance_support_specs = finance_fact_specs(text, periods) if finance_fact else ()
-    explicit_page_labels = _explicit_page_labels(capabilities)
     slots = (
         _finance_slots(
             finance_specs or finance_support_specs,
             require_scale=bool(finance_specs and requested_scale(text)),
             role="operand" if finance_specs else "support",
             period_kind=period_kind,
-            page_labels=explicit_page_labels,
+            page_labels=_explicit_page_labels(capabilities),
         )
         if finance_specs or finance_support_specs
         else heuristic_slots(
@@ -148,6 +148,7 @@ def _build_heuristic_query_plan(
             periods,
             metric,
             capabilities,
+            verification_domain,
         )
     )
     subqueries = tuple(slot.query for slot in slots if slot.query) or (text,)
@@ -348,12 +349,20 @@ def score_evidence_for_slot(
         return 0.0
     if slot.role == "operand" and requires_structure and not atomic_evidence(item):
         return 0.0
-    if not matches_required_financial_identity(
-        item,
-        slot.statement_kind,
-        slot.financial_scope,
+    if (
+        slot.statement_kind != "boolean_proposition"
+        and not matches_required_financial_identity(
+            item,
+            slot.statement_kind,
+            slot.financial_scope,
+        )
     ):
         return 0.0
+    boolean_score = 0.0
+    if slot.statement_kind == "boolean_proposition":
+        boolean_score = boolean_proposition_evidence_score(slot.metric, item)
+        if boolean_score <= 0:
+            return 0.0
     if slot.metric in FINANCE_METRIC_ALIASES:
         if not atomic_evidence(item):
             return 0.0
@@ -364,7 +373,7 @@ def score_evidence_for_slot(
     modality = str(item.get("modality") or item.get("element_type") or "").lower()
     if not modality_matches(slot.modality, modality):
         return 0.0
-    score = locator_score
+    score = locator_score + boolean_score
     text_tokens = _tokens(text)
     metric_token_sets = [
         _tokens(alias)

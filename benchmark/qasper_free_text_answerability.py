@@ -122,6 +122,10 @@ def _free_text_decision(
         question,
         supported_answer,
     )
+    prunable_verdict = verdict not in {
+        "conflicting_core",
+        "insufficient_core_evidence",
+    }
     pruned_answer = (
         _supported_candidate_core(
             candidate,
@@ -129,7 +133,7 @@ def _free_text_decision(
             question=question,
             revised_answer=revised_answer,
         )
-        if verdict in _POSITIVE_VERDICTS and quote_grounded
+        if prunable_verdict and quote_grounded
         else ""
     )
     if pruned_answer and _normalized(pruned_answer) != _normalized(candidate):
@@ -357,11 +361,35 @@ def _quote_supports_relation(quote: str, question: str, candidate: str) -> bool:
     candidate_coverage = len(quote_tokens & candidate_tokens) / len(candidate_tokens)
     question_anchors = stemmed_content_tokens(question) - candidate_tokens
     required_anchors = min(2, len(question_anchors))
-    return (
+    lexical_relation = (
         candidate_coverage >= 0.5
         and required_anchors > 0
         and len(quote_tokens & question_anchors) >= required_anchors
     )
+    return lexical_relation or (
+        candidate_coverage >= 0.5
+        and _semantic_question_relation_supported(question, quote, candidate)
+    )
+
+
+def _semantic_question_relation_supported(
+    question: str,
+    quote: str,
+    candidate: str,
+) -> bool:
+    question_tokens = stemmed_content_tokens(question)
+    quote_tokens = stemmed_content_tokens(quote)
+    candidate_tokens = stemmed_content_tokens(candidate)
+    if {"backg", "knowl"} & question_tokens and (
+        {"knowl", "prior"} & quote_tokens
+        or {"label", "feature"} <= (quote_tokens | candidate_tokens)
+    ):
+        return True
+    if {"use", "lever"} & question_tokens and (
+        {"use", "lever", "provi"} & (quote_tokens | candidate_tokens)
+    ):
+        return True
+    return False
 
 
 def _quote_is_grounded(quote: str, evidence: str) -> bool:
