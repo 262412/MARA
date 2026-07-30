@@ -7,11 +7,13 @@ import {
   ipcMain,
   protocol,
   session,
-  type IpcMainInvokeEvent,
 } from "electron";
 
+import type { RuntimeStatus } from "../shared/runtime-contracts";
+import { resolveDesktopDataRoot } from "./desktop-data";
+import { registerDesktopIpc } from "./ipc";
 import { contentTypeFor, resolveAppAsset } from "./protocol";
-import { RuntimeStatus, SidecarManager } from "./sidecar-manager";
+import { SidecarManager } from "./sidecar-manager";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -28,8 +30,15 @@ app.enableSandbox();
 let mainWindow: BrowserWindow | undefined;
 let quitting = false;
 
+const desktopDataRoot = resolveDesktopDataRoot(
+  process.platform,
+  process.env,
+  app.getPath("home"),
+  app.getPath("appData"),
+);
 const sidecar = new SidecarManager({
   appPath: app.getAppPath(),
+  dataRoot: desktopDataRoot,
   isPackaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
   onStatus: (status) => broadcastRuntimeStatus(status),
@@ -41,16 +50,12 @@ function broadcastRuntimeStatus(status: RuntimeStatus): void {
   }
 }
 
-function trustedSender(event: IpcMainInvokeEvent): boolean {
-  return event.senderFrame?.url.startsWith("mara://app/") ?? false;
-}
-
 function registerIpc(): void {
-  ipcMain.handle("runtime:get-status", (event) => {
-    if (!trustedSender(event)) {
-      throw new Error("Untrusted IPC sender");
-    }
-    return sidecar.getStatus();
+  registerDesktopIpc(ipcMain, {
+    getRuntimeStatus: () => sidecar.getStatus(),
+    getDoctor: () => sidecar.getDoctor(),
+    listFiles: () => sidecar.listFiles(),
+    listSessions: () => sidecar.listSessions(),
   });
 }
 
@@ -111,7 +116,15 @@ app.whenReady().then(async () => {
   createWindow();
   const status = await sidecar.start();
   if (process.argv.includes("--smoke-test")) {
-    if (status.state !== "healthy") {
+    const doctor = await sidecar.getDoctor();
+    const files = await sidecar.listFiles();
+    const sessions = await sidecar.listSessions();
+    if (
+      status.state !== "healthy" ||
+      !doctor.ok ||
+      !files.ok ||
+      !sessions.ok
+    ) {
       process.exitCode = 1;
     }
     app.quit();

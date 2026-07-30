@@ -1,10 +1,14 @@
+import type { SessionSummary } from "../../shared/session-contracts";
+import type { ResourceState } from "../resource-state";
 import { Icon, type IconName } from "./Icon";
 
 type SidebarProps = {
   active: string;
   onNavigate: (value: string) => void;
-  selectedTask: number;
-  onSelectTask: (taskId: number) => void;
+  sessions: ResourceState<SessionSummary[]>;
+  selectedSessionId: string | undefined;
+  onSelectSession: (sessionId: string) => void;
+  onRetrySessions: () => void;
 };
 
 const navigation: Array<{ id: string; label: string; icon: IconName }> = [
@@ -14,18 +18,13 @@ const navigation: Array<{ id: string; label: string; icon: IconName }> = [
   { id: "help", label: "Help", icon: "help" },
 ];
 
-const tasks = [
-  { id: 1, title: "Agent 研究方向研报", detail: "8 个来源" },
-  { id: 2, title: "蛋白质最适 pH 值预测", detail: "3 个来源" },
-  { id: 3, title: "多模态 RAG 评估整理", detail: "12 个来源" },
-  { id: 4, title: "QASPER 引用误差分析", detail: "5 个来源" },
-];
-
 export function Sidebar({
   active,
   onNavigate,
-  selectedTask,
-  onSelectTask,
+  sessions,
+  selectedSessionId,
+  onSelectSession,
+  onRetrySessions,
 }: SidebarProps) {
   return (
     <aside className="sidebar" aria-label="应用导航">
@@ -65,19 +64,41 @@ export function Sidebar({
         </button>
       </div>
       <div className="task-list" role="list">
-        {tasks.map((task) => (
-          <button
-            aria-current={selectedTask === task.id ? "true" : undefined}
-            className={selectedTask === task.id ? "task active" : "task"}
-            key={task.id}
-            onClick={() => onSelectTask(task.id)}
-            role="listitem"
-            type="button"
-          >
-            <span>{task.title}</span>
-            <small>{task.detail}</small>
-          </button>
-        ))}
+        {sessions.status === "loading" ? (
+          <p className="sidebar-state">正在读取最近任务…</p>
+        ) : null}
+        {sessions.status === "failed" ? (
+          <div className="sidebar-state" role="alert">
+            <span>{sessions.message}</span>
+            <button onClick={onRetrySessions} type="button">重试</button>
+          </div>
+        ) : null}
+        {sessions.status === "success" && sessions.data.length === 0 ? (
+          <p className="sidebar-state">还没有保存的任务</p>
+        ) : null}
+        {sessions.status === "success"
+          ? sessions.data.map((session) => (
+              <button
+                aria-current={
+                  selectedSessionId === session.conversation_id ? "true" : undefined
+                }
+                className={
+                  selectedSessionId === session.conversation_id
+                    ? "task active"
+                    : "task"
+                }
+                key={session.conversation_id}
+                onClick={() => onSelectSession(session.conversation_id)}
+                role="listitem"
+                type="button"
+              >
+                <span>{session.name || "未命名任务"}</span>
+                <small>
+                  {session.message_count} 条消息 · {session.graph_source_count} 个图谱来源
+                </small>
+              </button>
+            ))
+          : null}
       </div>
 
       <div className="sidebar-footer">

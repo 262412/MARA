@@ -1,34 +1,67 @@
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
-import type { RuntimeStatus } from "../electron/sidecar-manager";
+import type {
+  DesktopResult,
+  RuntimeStatus,
+} from "../shared/runtime-contracts";
+import { FilesPage } from "./components/FilesPage";
 import { Inspector, type InspectorTab } from "./components/Inspector";
 import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
+import { useDesktopResource } from "./useDesktopResource";
 
-const browserPreviewStatus: RuntimeStatus = {
-  state: "healthy",
+const unavailableRuntime: RuntimeStatus = {
+  state: "failed",
   protocol: 1,
-  version: "browser-preview",
-  capabilities: ["ui-preview"],
+  capabilities: [],
+  message: "Desktop bridge 不可用。",
 };
 
 export default function App() {
   const [activeNav, setActiveNav] = useState("workbench");
-  const [selectedTask, setSelectedTask] = useState(1);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>();
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("preview");
   const [runtime, setRuntime] = useState<RuntimeStatus>(
-    window.maraDesktop
+    window.desktop
       ? { state: "starting", protocol: 1, capabilities: [] }
-      : browserPreviewStatus,
+      : unavailableRuntime,
   );
+  const loadDoctor = useCallback(
+    () =>
+      window.desktop?.getDoctor() ??
+      unavailableResult("Doctor 仅能在 MARA Desktop 中使用。"),
+    [],
+  );
+  const loadFiles = useCallback(
+    () =>
+      window.desktop?.listFiles() ??
+      unavailableResult("Files 仅能在 MARA Desktop 中使用。"),
+    [],
+  );
+  const loadSessions = useCallback(
+    () =>
+      window.desktop?.listSessions() ??
+      unavailableResult("Sessions 仅能在 MARA Desktop 中使用。"),
+    [],
+  );
+  const doctor = useDesktopResource(loadDoctor);
+  const files = useDesktopResource(loadFiles);
+  const sessions = useDesktopResource(loadSessions);
 
   useEffect(() => {
-    if (!window.maraDesktop) {
+    if (!window.desktop) {
       return;
     }
-    void window.maraDesktop.getRuntimeStatus().then(setRuntime);
-    return window.maraDesktop.onRuntimeStatus(setRuntime);
+    void window.desktop
+      .getRuntimeStatus()
+      .then(setRuntime)
+      .catch(() => setRuntime(unavailableRuntime));
+    return window.desktop.onRuntimeStatus(setRuntime);
   }, []);
 
   const openCitation = () => {
@@ -43,17 +76,25 @@ export default function App() {
         <Sidebar
           active={activeNav}
           onNavigate={setActiveNav}
-          onSelectTask={setSelectedTask}
-          selectedTask={selectedTask}
+          onRetrySessions={sessions.retry}
+          onSelectSession={setSelectedSessionId}
+          selectedSessionId={selectedSessionId}
+          sessions={sessions.resource}
         />
-        <Workspace
-          onOpenCitation={openCitation}
-          onToggleInspector={() => setInspectorOpen((value) => !value)}
-        />
+        {activeNav === "files" ? (
+          <FilesPage files={files.resource} onRetry={files.retry} />
+        ) : (
+          <Workspace
+            onOpenCitation={openCitation}
+            onToggleInspector={() => setInspectorOpen((value) => !value)}
+          />
+        )}
         {inspectorOpen ? (
           <Inspector
             activeTab={inspectorTab}
+            doctor={doctor.resource}
             onClose={() => setInspectorOpen(false)}
+            onRetryDoctor={doctor.retry}
             onSelectTab={setInspectorTab}
             runtime={runtime}
           />
@@ -61,4 +102,17 @@ export default function App() {
       </div>
     </>
   );
+}
+
+function unavailableResult<T>(message: string): Promise<DesktopResult<T>> {
+  return Promise.resolve({
+    ok: false,
+    error: {
+      code: "desktop_bridge_unavailable",
+      message,
+      details: null,
+      retryable: false,
+      request_id: "renderer-offline",
+    },
+  });
 }

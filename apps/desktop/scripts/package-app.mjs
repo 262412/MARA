@@ -11,7 +11,7 @@ if (target !== "linux" && target !== "win32") {
 }
 
 const sourceDirectoryPattern = new RegExp(
-  "^/(?:build|electron|node_modules|public|release|resources|scripts|sidecar|src)(?:/|$)",
+  "^/(?:build|dist-tests|electron|node_modules|public|release|resources|scripts|shared|sidecar|src)(?:/|$)",
 );
 const sourceFilePattern = new RegExp(
   "^/(?:README\\.md|index\\.html|package-lock\\.json|tsconfig(?:\\.electron)?\\.json|vite\\.config\\.ts)$",

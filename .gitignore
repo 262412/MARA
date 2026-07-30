@@ -12,6 +12,7 @@ test-results/
 playwright-report/
 coverage-artifacts/
 apps/desktop/dist-electron/
+apps/desktop/dist-tests/
 apps/desktop/release/
 apps/desktop/resources/sidecar/
 

@@ -1,0 +1,190 @@
+name: Desktop Gate 2
+
+"on":
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-gate2.yaml"
+      - "apps/desktop/**"
+      - "libs/ktem/ktem/runtime_bootstrap.py"
+      - "libs/ktem/ktem_tests/test_runtime_bootstrap_paths.py"
+      - "libs/slide_cli/slide_cli/docqa_runtime.py"
+      - "uv.lock"
+
+permissions:
+  contents: read
+
+jobs:
+  package-linux-22:
+    name: Package and smoke on Ubuntu 22.04
+    runs-on: ubuntu-22.04
+    env:
+      XDG_CACHE_HOME: ${{ runner.temp }}/mara-desktop/cache
+      XDG_CONFIG_HOME: ${{ runner.temp }}/mara-desktop/config
+      XDG_DATA_HOME: ${{ runner.temp }}/mara-desktop/data
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Sync locked Python workspace
+        run: uv sync --all-packages --frozen --python 3.10
+      - name: Install Sidecar build dependency
+        run: uv pip install --python .venv -r apps/desktop/sidecar/requirements-build.txt
+      - name: Install locked desktop dependencies
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Run desktop contracts
+        working-directory: apps/desktop
+        run: npm run verify
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install --yes xvfb
+      - name: Package native Linux application
+        working-directory: apps/desktop
+        run: npm run package:linux
+      - name: Smoke packaged vertical slice and record metrics
+        shell: bash
+        run: |
+          mkdir -p apps/desktop/release/metrics
+          /usr/bin/time -v -o apps/desktop/release/metrics/linux-22-time.txt \
+            xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA --smoke-test
+          du -sb apps/desktop/release/MARA-linux-x64 \
+            > apps/desktop/release/metrics/linux-22-size.txt
+          find apps/desktop/release/MARA-linux-x64 -type f | wc -l \
+            > apps/desktop/release/metrics/linux-22-file-count.txt
+          ldd apps/desktop/release/MARA-linux-x64/resources/sidecar/mara-desktop-sidecar/mara-desktop-sidecar \
+            > apps/desktop/release/metrics/linux-22-sidecar-ldd.txt
+          if grep -q "not found" apps/desktop/release/metrics/linux-22-sidecar-ldd.txt; then
+            exit 1
+          fi
+          cat apps/desktop/release/metrics/linux-22-time.txt >> "$GITHUB_STEP_SUMMARY"
+          cat apps/desktop/release/metrics/linux-22-size.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Archive Linux package
+        run: tar -C apps/desktop/release -czf apps/desktop/release/mara-linux-22.tar.gz MARA-linux-x64 metrics
+      - name: Upload Ubuntu 22.04 package evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mara-desktop-linux-22
+          path: apps/desktop/release/mara-linux-22.tar.gz
+          if-no-files-found: error
+
+  smoke-linux-24:
+    name: Smoke Ubuntu 22.04 package on Ubuntu 24.04
+    needs: package-linux-22
+    runs-on: ubuntu-24.04
+    env:
+      XDG_DATA_HOME: ${{ runner.temp }}/mara-desktop/data
+    steps:
+      - name: Download Ubuntu 22.04 package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: mara-desktop-linux-22
+          path: desktop-artifact
+      - name: Extract package
+        run: tar -xzf desktop-artifact/mara-linux-22.tar.gz -C desktop-artifact
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install --yes xvfb
+      - name: Smoke packaged vertical slice
+        run: xvfb-run -a desktop-artifact/MARA-linux-x64/MARA --smoke-test
+
+  package-windows:
+    name: Package, smoke, and Defender scan on Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Sync locked Python workspace
+        run: uv sync --all-packages --frozen --python 3.10
+      - name: Install Sidecar build dependency
+        run: uv pip install --python .venv -r apps/desktop/sidecar/requirements-build.txt
+      - name: Install locked desktop dependencies
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Run desktop contracts
+        working-directory: apps/desktop
+        run: npm run verify
+      - name: Package native Windows application
+        working-directory: apps/desktop
+        run: npm run package:windows
+      - name: Smoke packaged vertical slice and record metrics
+        shell: pwsh
+        run: |
+          $env:APPDATA = Join-Path $env:RUNNER_TEMP "mara-desktop-appdata"
+          $metrics = "apps/desktop/release/windows-metrics.txt"
+          $executable = "apps/desktop/release/MARA-win32-x64/MARA.exe"
+          $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+          $process = Start-Process $executable -ArgumentList "--smoke-test" -PassThru
+          $peakWorkingSet = 0
+          while (-not $process.HasExited) {
+            $process.Refresh()
+            $peakWorkingSet = [Math]::Max($peakWorkingSet, $process.WorkingSet64)
+            Start-Sleep -Milliseconds 100
+          }
+          $stopwatch.Stop()
+          if ($process.ExitCode -ne 0) {
+            exit $process.ExitCode
+          }
+          $files = Get-ChildItem "apps/desktop/release/MARA-win32-x64" -Recurse -File
+          $bytes = ($files | Measure-Object Length -Sum).Sum
+          @(
+            "elapsed_ms=$($stopwatch.ElapsedMilliseconds)"
+            "peak_working_set_bytes=$peakWorkingSet"
+            "package_bytes=$bytes"
+            "file_count=$($files.Count)"
+          ) | Set-Content $metrics
+          Get-Content $metrics | Add-Content $env:GITHUB_STEP_SUMMARY
+      - name: Scan package with Windows Defender
+        shell: pwsh
+        run: |
+          $defender = Get-Command Start-MpScan -ErrorAction SilentlyContinue
+          if (-not $defender) {
+            throw "Windows Defender Start-MpScan is unavailable on this runner."
+          }
+          Start-MpScan -ScanType CustomScan -ScanPath "apps/desktop/release/MARA-win32-x64"
+          $matches = Get-MpThreatDetection | Where-Object {
+            $_.Resources -match "MARA-win32-x64"
+          }
+          if ($matches) {
+            $matches | Format-List | Out-String | Write-Error
+            exit 1
+          }
+          "Windows Defender custom scan: no detections" |
+            Tee-Object -FilePath apps/desktop/release/windows-defender.txt |
+            Add-Content $env:GITHUB_STEP_SUMMARY
+      - name: Upload Windows package evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mara-desktop-windows
+          path: |
+            apps/desktop/release/MARA-win32-x64/
+            apps/desktop/release/windows-metrics.txt
+            apps/desktop/release/windows-defender.txt
+          if-no-files-found: error

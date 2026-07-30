@@ -31,6 +31,8 @@
 7. [发布与验收计划](release-and-acceptance-plan.md)：Windows/Linux 构建矩阵和质量门。
 8. [技术原型结果](technical-spike-results.md)：Gate 1 的实测证据、发现和边界。
 9. 技术原型（`apps/desktop/README.md`）：可运行的三栏壳层与 Sidecar 生命周期验证。
+10. [Gate 2 纵向切片证据](gate-2-vertical-slice-evidence.md)：Doctor、Files、
+    Sessions 的实现、测试、Linux 包指标和跨平台待验收项。
 
 ## 阶段门
 

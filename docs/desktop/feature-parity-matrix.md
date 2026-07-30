@@ -68,3 +68,17 @@ Beta 稳定化阶段，`Later` 表示不阻塞首发。状态在正式开发开�
 
 只有当这些能力未来成为独立的 MARA 产品需求并通过新的 PRD/ADR 时，才会
 进入本矩阵。
+
+## 4. Gate 2 纵向切片状态
+
+`Verified` 仍以两平台原生构建、打包后真实 smoke 和风险登记册中的平台证据为
+准。开发机或单一平台通过不能提前升级状态。
+
+| 切片     | 状态        | 当前证据                                                                           | 升级为 Verified 仍需                           |
+| -------- | ----------- | ---------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Doctor   | In progress | 现有 CLI 特征测试；application service、Sidecar、IPC、React 测试；Linux 打包 smoke | Windows 原生包、Defender、Ubuntu 22/24 CI 结果 |
+| Files    | In progress | 真实 `collect_docqa_file_records()`；本地路径不进入 Renderer；四态测试             | 同上，以及跨平台包中非空数据 smoke             |
+| Sessions | In progress | 真实 `collect_docqa_session_summaries()`；左栏四态与重试测试                       | 同上，以及跨平台包中非空数据 smoke             |
+
+详细命令、指标、已解决问题和剩余验收项见
+[Gate 2 纵向切片证据](gate-2-vertical-slice-evidence.md)。

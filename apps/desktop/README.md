@@ -1,21 +1,24 @@
-# MARA Desktop 技术原型
+# MARA Desktop
 
-这个目录是正式开发前的 Gate 1 原型，用来证明三件事：
+这个目录包含 Gate 1 壳层和 Gate 2 的首个真实纵向切片：
 
 1. Electron Main 能启动、认证、检查和有序关闭 Python Sidecar。
 2. React 能承载 Codex 式三栏信息架构，同时保持 MARA 的功能和术语。
 3. Renderer 保持沙箱和上下文隔离，只通过窄 Preload API 获取脱敏运行状态。
+4. Doctor、Files、Sessions 复用 `slide_cli.docqa_runtime` 的 application service，
+   通过 FastAPI、明确 IPC 和 React 四态贯通。
 
-它**不是完整 MARA Desktop**。Sidecar 目前只实现 `/health`、
-`/capabilities` 和 `/shutdown`，不调用真实 DocQA；界面数据也是用于设计评审的
-固定场景。下一阶段必须用真实的文件、会话和 doctor 服务切片完成 Gate 2。
+它**不是完整 MARA Desktop**。文件导入、索引、问答、预览、Studio 和迁移仍按
+功能矩阵逐个切片接入。当前 Sidecar 的真实业务端点是 `/v1/doctor`、
+`/v1/files` 和 `/v1/sessions`。
 
 ## 目录
 
 ```text
 apps/desktop/
 ├── electron/     # Main、Preload、私有协议和 Sidecar supervisor
-├── sidecar/      # 零第三方运行依赖的 Python 进程原型
+├── shared/       # Main、Preload 和 Renderer 共用的稳定 TypeScript 契约
+├── sidecar/      # FastAPI adapter 与 MARA application service
 ├── src/          # React 三栏界面
 ├── scripts/      # PyInstaller Sidecar 构建与 Electron 打包
 └── package.json  # 锁定依赖与双平台打包入口
@@ -80,6 +83,8 @@ Gate 1 使用 Electron Packager 验证组合后的应用目录；NSIS、`.deb` �
 - 现有数据迁移或 CLI/Desktop 并发写入。
 - 完整功能对齐。
 
-这些项目由
+Gate 2 的本地 Linux 指标和跨平台 CI 边界记录在
+[Gate 2 纵向切片证据](../../docs/desktop/gate-2-vertical-slice-evidence.md)。
+其余项目由
 [发布与验收计划](../../docs/desktop/release-and-acceptance-plan.md)
 中的 Gate 2–5 覆盖。

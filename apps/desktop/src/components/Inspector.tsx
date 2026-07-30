@@ -1,4 +1,6 @@
-import type { RuntimeStatus } from "../../electron/sidecar-manager";
+import type { DoctorPayload } from "../../shared/doctor-contracts";
+import type { RuntimeStatus } from "../../shared/runtime-contracts";
+import type { ResourceState } from "../resource-state";
 import { Icon } from "./Icon";
 
 export type InspectorTab = "preview" | "sources" | "run";
@@ -8,6 +10,8 @@ type InspectorProps = {
   onClose: () => void;
   onSelectTab: (tab: InspectorTab) => void;
   runtime: RuntimeStatus;
+  doctor: ResourceState<DoctorPayload>;
+  onRetryDoctor: () => void;
 };
 
 export function Inspector({
@@ -15,6 +19,8 @@ export function Inspector({
   onClose,
   onSelectTab,
   runtime,
+  doctor,
+  onRetryDoctor,
 }: InspectorProps) {
   return (
     <aside className="inspector" aria-label="上下文检查器">
@@ -47,7 +53,13 @@ export function Inspector({
 
       {activeTab === "preview" ? <Preview /> : null}
       {activeTab === "sources" ? <Sources /> : null}
-      {activeTab === "run" ? <RunStatus runtime={runtime} /> : null}
+      {activeTab === "run" ? (
+        <RunStatus
+          doctor={doctor}
+          onRetryDoctor={onRetryDoctor}
+          runtime={runtime}
+        />
+      ) : null}
     </aside>
   );
 }
@@ -124,13 +136,15 @@ function Sources() {
   );
 }
 
-function RunStatus({ runtime }: { runtime: RuntimeStatus }) {
-  const steps = [
-    ["来源范围", "8 个文件"],
-    ["检索", "24 个候选片段"],
-    ["证据重排", "保留 7 个片段"],
-    ["生成", "已完成"],
-  ];
+function RunStatus({
+  runtime,
+  doctor,
+  onRetryDoctor,
+}: {
+  runtime: RuntimeStatus;
+  doctor: ResourceState<DoctorPayload>;
+  onRetryDoctor: () => void;
+}) {
   return (
     <div className="inspector-content run-content" role="tabpanel">
       <div className="runtime-card">
@@ -141,19 +155,59 @@ function RunStatus({ runtime }: { runtime: RuntimeStatus }) {
         </div>
         <code>v{runtime.version ?? "—"}</code>
       </div>
-      <h2>本次运行</h2>
-      <div className="run-steps">
-        {steps.map(([label, detail]) => (
-          <div className="run-step" key={label}>
-            <span className="step-check" aria-hidden="true">✓</span>
-            <div>
-              <strong>{label}</strong>
-              <span>{detail}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+      <h2>Doctor</h2>
+      {doctor.status === "loading" ? (
+        <p className="doctor-state">正在运行 Doctor…</p>
+      ) : null}
+      {doctor.status === "failed" ? (
+        <div className="doctor-state failed" role="alert">
+          <strong>{doctor.message}</strong>
+          <span>
+            {doctor.error?.request_id
+              ? `请求 ID：${doctor.error.request_id}`
+              : "请检查 Sidecar 后重试。"}
+          </span>
+          <button className="small-button" onClick={onRetryDoctor} type="button">
+            重试
+          </button>
+        </div>
+      ) : null}
+      {doctor.status === "success" ? (
+        <DoctorSummary doctor={doctor.data} />
+      ) : null}
       <button className="diagnostics-button" type="button">打开诊断中心</button>
+    </div>
+  );
+}
+
+function DoctorSummary({ doctor }: { doctor: DoctorPayload }) {
+  return (
+    <div className={doctor.ok ? "doctor-summary" : "doctor-summary degraded"}>
+      <strong>{doctor.ok ? "Doctor 通过" : "Doctor 发现问题"}</strong>
+      <dl>
+        <div>
+          <dt>文件</dt>
+          <dd>{doctor.file_count}</dd>
+        </div>
+        <div>
+          <dt>会话</dt>
+          <dd>{doctor.session_count}</dd>
+        </div>
+        <div>
+          <dt>LLM</dt>
+          <dd>{doctor.llm_default || "未配置"}</dd>
+        </div>
+        <div>
+          <dt>Embedding</dt>
+          <dd>{doctor.embedding_default || "未配置"}</dd>
+        </div>
+      </dl>
+      {doctor.issues.map((issue) => (
+        <p className="doctor-issue" key={issue}>{issue}</p>
+      ))}
+      {doctor.warnings.map((warning) => (
+        <p className="doctor-warning" key={warning}>{warning}</p>
+      ))}
     </div>
   );
 }

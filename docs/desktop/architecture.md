@@ -71,6 +71,9 @@ flowchart TB
 Renderer 到 Main 只开放按能力命名的方法，例如：
 
 - `desktop.getRuntimeStatus()`
+- `desktop.getDoctor()`
+- `desktop.listFiles()`
+- `desktop.listSessions()`
 - `desktop.chooseFiles(options)`
 - `desktop.saveArtifact(options)`
 - `desktop.revealPath(handle)`
