@@ -11,6 +11,9 @@ node_modules/
 test-results/
 playwright-report/
 coverage-artifacts/
+apps/desktop/dist-electron/
+apps/desktop/release/
+apps/desktop/resources/sidecar/
 
 # LaTeX build artifacts
 *.aux

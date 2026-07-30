@@ -88,5 +88,6 @@ repos:
     rev: ec0f41b9573937aebab66e3ca5b00d00a7b339fa # v2.2.4
     hooks:
       - id: codespell
+        exclude: "(^|/)package-lock\\.json$"
         additional_dependencies:
           - tomli==2.2.1

@@ -1,0 +1,39 @@
+{
+  "name": "@mara/desktop-spike",
+  "version": "0.0.0",
+  "private": true,
+  "description": "MARA Desktop pre-development process and UI spike",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "build": "npm run build:electron && npm run build:renderer",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:renderer": "vite build",
+    "package:linux": "npm run sidecar:bundle && npm run build && node scripts/package-app.mjs linux",
+    "package:windows": "npm run sidecar:bundle && npm run build && node scripts/package-app.mjs win32",
+    "sidecar:bundle": "node scripts/build-sidecar.mjs",
+    "smoke:electron": "npm run build && electron . --smoke-test",
+    "start": "npm run build && electron .",
+    "test": "npm run test:electron && npm run test:sidecar",
+    "test:electron": "npm run build:electron && node --test dist-electron/**/*.test.js",
+    "test:sidecar": "python3 -m unittest discover -s sidecar -p 'test_*.py'",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "verify": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.2",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.4",
+    "@electron/packager": "20.0.4",
+    "electron": "43.2.0",
+    "typescript": "7.0.2",
+    "vite": "8.1.5"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
