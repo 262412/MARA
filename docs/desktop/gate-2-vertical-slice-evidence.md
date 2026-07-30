@@ -136,8 +136,8 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 | Electron 主可执行文件             | 210 MB                  |
 | `app.asar`                        | 264 KB                  |
 | 发布目录文件数                    | 1,733                   |
-| 冷启动至非空三接口 smoke 完成     | 5.07 秒                 |
-| smoke 峰值常驻内存                | 142,916 KiB，约 140 MiB |
+| 冷启动至非空三接口 smoke 完成     | 4.95 秒                 |
+| smoke 峰值常驻内存                | 147,232 KiB，约 144 MiB |
 | swap                              | 0                       |
 | Sidecar 直接动态链接缺失          | 0                       |
 | Sidecar SHA-256                   | `291b3e0a...6c2da2b3`   |

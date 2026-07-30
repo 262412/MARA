@@ -25,6 +25,16 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
             from ktem.db.models import engine
 
             try:
+                self.assertFalse(
+                    (
+                        data_root
+                        / "state"
+                        / "ktem_app_data"
+                        / "user_data"
+                        / "vectorstore"
+                        / "chroma.sqlite3"
+                    ).exists()
+                )
                 service = DesktopApplicationService()
                 doctor = service.get_doctor()
                 files = service.list_files()
