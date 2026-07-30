@@ -71,9 +71,13 @@ class DesktopApplicationServiceTest(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as temporary_directory:
                 root = Path(temporary_directory) / "MARA"
+                resolved_root = root.resolve()
                 app_data = configure_desktop_data_root(root)
 
-                self.assertEqual(app_data, root / "state" / "ktem_app_data")
+                self.assertEqual(
+                    app_data,
+                    resolved_root / "state" / "ktem_app_data",
+                )
                 self.assertEqual(os.environ["KH_APP_DATA_DIR"], str(app_data))
                 self.assertEqual(
                     os.environ["THEFLOW_SETTINGS_MODULE"],
@@ -92,7 +96,7 @@ class DesktopApplicationServiceTest(unittest.TestCase):
                     "backups",
                     "tmp",
                 ]:
-                    self.assertTrue((root / name).is_dir())
+                    self.assertTrue((resolved_root / name).is_dir())
         finally:
             for name, value in original.items():
                 if value is None:
