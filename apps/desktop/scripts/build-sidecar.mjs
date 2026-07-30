@@ -4,6 +4,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { excludedSidecarModules } from "./sidecar-bundle-config.mjs";
+
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = path.resolve(desktopRoot, "..", "..");
 const buildRoot = path.join(desktopRoot, "build", "sidecar");
@@ -19,46 +21,6 @@ const workspacePackageRoots = [
   path.join(repositoryRoot, "libs", "ktem"),
   path.join(repositoryRoot, "libs", "kotaemon"),
 ];
-const excludedDevelopmentModules = [
-  "IPython",
-  "_pytest",
-  "_tkinter",
-  "black",
-  "chromadb",
-  "cohere",
-  "cryptography",
-  "docutils",
-  "fsspec",
-  "gradio",
-  "gradio_client",
-  "haystack",
-  "huggingface_hub",
-  "jedi",
-  "keyring",
-  "ktem.docqa",
-  "llama_index",
-  "matplotlib",
-  "mistralai",
-  "networkx",
-  "onnxruntime",
-  "openai",
-  "opentelemetry",
-  "pandas",
-  "posthog",
-  "pyarrow",
-  "pytest",
-  "safetensors",
-  "scipy",
-  "sentence_transformers",
-  "sklearn",
-  "sphinx",
-  "tensorflow",
-  "tkinter",
-  "tokenizers",
-  "torch",
-  "transformers",
-];
-
 for (const target of [buildRoot, outputRoot]) {
   if (!target.startsWith(`${desktopRoot}${path.sep}`)) {
     throw new Error(`Refusing to clean path outside desktop root: ${target}`);
@@ -99,7 +61,7 @@ const result = spawnSync(
       "--paths",
       modulePath,
     ]),
-    ...excludedDevelopmentModules.flatMap((moduleName) => [
+    ...excludedSidecarModules.flatMap((moduleName) => [
       "--exclude-module",
       moduleName,
     ]),

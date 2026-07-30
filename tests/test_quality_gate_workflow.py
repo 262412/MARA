@@ -270,6 +270,19 @@ def test_desktop_job_environment_uses_contexts_available_before_dispatch():
             assert "${{ runner." not in str(value)
 
 
+def test_ubuntu_24_desktop_smoke_configures_the_electron_sandbox():
+    workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
+    job = workflow["jobs"]["smoke-linux-24"]
+    commands = _commands(job)
+
+    assert (
+        "sudo chown root:root desktop-artifact/MARA-linux-x64/chrome-sandbox"
+        in commands
+    )
+    assert "sudo chmod 4755 desktop-artifact/MARA-linux-x64/chrome-sandbox" in commands
+    assert "--no-sandbox" not in commands
+
+
 def test_workflows_do_not_grant_blanket_write_permissions():
     for path in (REPO_ROOT / ".github" / "workflows").glob("*.y*ml"):
         assert "write-all" not in path.read_text(encoding="utf-8"), path.name

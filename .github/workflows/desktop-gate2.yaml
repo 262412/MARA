@@ -104,6 +104,10 @@ jobs:
           path: desktop-artifact
       - name: Extract package
         run: tar -xzf desktop-artifact/mara-linux-22.tar.gz -C desktop-artifact
+      - name: Configure Electron sandbox
+        run: |
+          sudo chown root:root desktop-artifact/MARA-linux-x64/chrome-sandbox
+          sudo chmod 4755 desktop-artifact/MARA-linux-x64/chrome-sandbox
       - name: Install virtual display
         run: sudo apt-get update && sudo apt-get install --yes xvfb
       - name: Smoke packaged vertical slice

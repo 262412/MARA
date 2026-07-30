@@ -66,6 +66,12 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 7. uv `0.11.19` 下载校验和按 runner 平台登记：Linux x64 为
    `70356081...947c368`，Windows x64 为 `1665fc8e...b28d61`，均来自官方 release
    的对应资产校验文件。
+8. Windows PyInstaller 不再探测 Gate 2 运行路径未使用的可选 `python-magic`
+   模块；排除清单独立为可测试配置，并增加回归断言，避免原生打包子进程因
+   `libmagic` 导入而崩溃。
+9. Ubuntu 24.04 对 Electron SUID sandbox 的所有者与权限要求比打包 runner
+   更严格；跨版本 smoke 在解包后显式恢复 `root:root` 和 `4755`，未使用
+   `--no-sandbox` 降级安全边界。
 
 这些修正关闭代码和策略层阻塞，但不替代新的双平台工作流结果。
 
@@ -78,7 +84,8 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 | Electron/IPC          | 10 passed；包含启动期间数据请求等待 healthy              |
 | React 状态渲染        | 3 passed；覆盖 Files、Sessions、Doctor 的四态与重试入口  |
 | Sidecar/application   | 10 passed；包含 OpenAPI → TypeScript 漂移检查            |
-| 供应链策略            | 31 passed；runner 例外按 workflow/job 限定               |
+| 供应链策略            | 33 passed；runner 例外及 sandbox 配置有契约保护          |
+| Sidecar 打包配置      | 1 passed；Windows 不导入未使用的 `python-magic`          |
 | Runtime 路径          | 1 passed；Desktop config/data/cache 全部约束在独立数据根 |
 | Desktop 综合验证      | `npm run verify` 通过                                    |
 | `slide_cli` 回归门    | 完整 package test 通过                                   |
