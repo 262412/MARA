@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 from typing import cast
 
-from server import PROTOCOL_VERSION, build_server
+from .server import PROTOCOL_VERSION, build_server
 
 
 class SidecarContractTest(unittest.TestCase):

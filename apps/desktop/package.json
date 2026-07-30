@@ -15,7 +15,7 @@
     "start": "npm run build && electron .",
     "test": "npm run test:electron && npm run test:sidecar",
     "test:electron": "npm run build:electron && node --test dist-electron/**/*.test.js",
-    "test:sidecar": "python3 -m unittest discover -s sidecar -p 'test_*.py'",
+    "test:sidecar": "python3 -m unittest discover -s sidecar -t . -p 'test_*.py'",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "verify": "npm run typecheck && npm test && npm run build"
   },
