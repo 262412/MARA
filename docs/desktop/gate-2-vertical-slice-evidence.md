@@ -72,6 +72,9 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 9. Ubuntu 24.04 对 Electron SUID sandbox 的所有者与权限要求比打包 runner
    更严格；跨版本 smoke 在解包后显式恢复 `root:root` 和 `4755`，未使用
    `--no-sandbox` 降级安全边界。
+10. GitHub Windows runner 默认把 `C:\`、`D:\` 整盘加入 Defender 排除项。
+    Defender 步骤现在解析包的绝对路径、仅移除所在盘根排除、确认引擎状态并
+    启用 archive scanning；扫描无法启动或发现威胁都会失败并上传诊断证据。
 
 这些修正关闭代码和策略层阻塞，但不替代新的双平台工作流结果。
 
@@ -84,7 +87,7 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 | Electron/IPC          | 10 passed；包含启动期间数据请求等待 healthy              |
 | React 状态渲染        | 3 passed；覆盖 Files、Sessions、Doctor 的四态与重试入口  |
 | Sidecar/application   | 10 passed；包含 OpenAPI → TypeScript 漂移检查            |
-| 供应链策略            | 33 passed；runner 例外及 sandbox 配置有契约保护          |
+| 供应链策略            | 34 passed；runner、sandbox 与 Defender 配置有契约保护    |
 | Sidecar 打包配置      | 1 passed；Windows 不导入未使用的 `python-magic`          |
 | Runtime 路径          | 1 passed；Desktop config/data/cache 全部约束在独立数据根 |
 | Desktop 综合验证      | `npm run verify` 通过                                    |

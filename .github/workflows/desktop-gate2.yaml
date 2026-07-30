@@ -177,22 +177,51 @@ jobs:
       - name: Scan package with Windows Defender
         shell: pwsh
         run: |
+          $evidence = "apps/desktop/release/windows-defender.txt"
+          $scanPath = (Resolve-Path "apps/desktop/release/MARA-win32-x64").Path
           $defender = Get-Command Start-MpScan -ErrorAction SilentlyContinue
           if (-not $defender) {
             throw "Windows Defender Start-MpScan is unavailable on this runner."
           }
-          Start-MpScan -ScanType CustomScan -ScanPath "apps/desktop/release/MARA-win32-x64"
+          $status = Get-MpComputerStatus
+          @(
+            "antivirus_enabled=$($status.AntivirusEnabled)"
+            "antimalware_service_enabled=$($status.AMServiceEnabled)"
+            "signature_version=$($status.AntivirusSignatureVersion)"
+            "signature_last_updated=$($status.AntivirusSignatureLastUpdated)"
+            "scan_path=$scanPath"
+          ) | Set-Content $evidence
+          if (-not $status.AntivirusEnabled -or -not $status.AMServiceEnabled) {
+            throw "Windows Defender antivirus engine is not enabled on this runner."
+          }
+          $preferences = Get-MpPreference
+          $driveRoot = [System.IO.Path]::GetPathRoot($scanPath)
+          if (@($preferences.ExclusionPath) -contains $driveRoot) {
+            Remove-MpPreference -ExclusionPath $driveRoot
+            "removed_runner_drive_exclusion=$driveRoot" | Add-Content $evidence
+          }
+          if ($preferences.DisableArchiveScanning) {
+            Set-MpPreference -DisableArchiveScanning $false
+            "archive_scanning_enabled=True" | Add-Content $evidence
+          }
+          try {
+            Start-MpScan -ScanType CustomScan -ScanPath $scanPath -ErrorAction Stop
+          } catch {
+            "scan_error=$($_.Exception.Message)" | Add-Content $evidence
+            throw
+          }
           $matches = Get-MpThreatDetection | Where-Object {
             $_.Resources -match "MARA-win32-x64"
           }
           if ($matches) {
-            $matches | Format-List | Out-String | Write-Error
+            $matches | Format-List | Out-String | Add-Content $evidence
+            Get-Content $evidence | Add-Content $env:GITHUB_STEP_SUMMARY
             exit 1
           }
-          "Windows Defender custom scan: no detections" |
-            Tee-Object -FilePath apps/desktop/release/windows-defender.txt |
-            Add-Content $env:GITHUB_STEP_SUMMARY
+          "scan_result=no_detections" | Add-Content $evidence
+          Get-Content $evidence | Add-Content $env:GITHUB_STEP_SUMMARY
       - name: Upload Windows package evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mara-desktop-windows

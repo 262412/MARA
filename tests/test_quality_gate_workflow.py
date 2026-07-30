@@ -283,6 +283,24 @@ def test_ubuntu_24_desktop_smoke_configures_the_electron_sandbox():
     assert "--no-sandbox" not in commands
 
 
+def test_windows_desktop_scan_removes_the_hosted_runner_drive_exclusion():
+    workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
+    job = workflow["jobs"]["package-windows"]
+    scan = next(
+        step
+        for step in job["steps"]
+        if step["name"] == "Scan package with Windows Defender"
+    )
+    commands = scan["run"]
+
+    assert "(Resolve-Path" in commands
+    assert "AntivirusEnabled" in commands
+    assert "Remove-MpPreference -ExclusionPath $driveRoot" in commands
+    assert "Set-MpPreference -DisableArchiveScanning $false" in commands
+    assert "Start-MpScan" in commands and "-ErrorAction Stop" in commands
+    assert "Get-MpThreatDetection" in commands
+
+
 def test_workflows_do_not_grant_blanket_write_permissions():
     for path in (REPO_ROOT / ".github" / "workflows").glob("*.y*ml"):
         assert "write-all" not in path.read_text(encoding="utf-8"), path.name
