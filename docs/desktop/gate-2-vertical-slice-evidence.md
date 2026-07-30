@@ -3,22 +3,22 @@
 ## 结论
 
 Doctor、Files、Sessions 的端到端纵向切片已经实现。提交
-`62bde2cff185be15766369ad159ca1d8b058b2fd` 的 Windows Server 2022、
-Ubuntu 22.04 原生打包，以及 Ubuntu 24.04 跨版本 smoke 均已通过；Windows
-Defender 实际扫描也已通过。整体 Gate 2 状态仍为 **In progress**，不能标记为
-`Verified`：还需要 Windows 10 和 Windows 11 干净虚拟机上的产品验收。当前
-工作流已经加入确定性的非空 File/Session 打包 smoke，新的双平台运行结果会在
-合入本次收口后补记。
+`e04514110277b9147e02b01ec241e955ceaa803b` 的 Windows Server 2022、
+Ubuntu 22.04 原生打包，以及 Ubuntu 24.04 跨版本非空 smoke 均已通过；
+Windows Defender 实际扫描也已通过。整体 Gate 2 状态仍为 **In progress**，
+不能标记为 `Verified`：还需要 Windows 10 和 Windows 11 干净虚拟机上的产品
+验收。
 
 ## 当前自动化证据
 
-| 证据                | 结果                                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Desktop Gate 2      | [run 30557220627](https://github.com/262412/MARA/actions/runs/30557220627)，3 个任务全部成功                   |
-| Windows Server 2022 | 原生 Sidecar/Electron 打包、首次启动 smoke、Defender 扫描成功；artifact `8765409786`，压缩后 254,316,082 bytes |
-| Ubuntu 22.04        | 原生 Sidecar/Electron 打包和 smoke 成功；artifact `8765398432`，压缩后 260,965,646 bytes                       |
-| Ubuntu 24.04        | 使用 Ubuntu 22.04 产物完成跨版本 smoke                                                                         |
-| Quality gates       | [run 30557222456](https://github.com/262412/MARA/actions/runs/30557222456)，20 个任务全部成功                  |
+| 证据                 | 结果                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Desktop Gate 2       | [run 30562505330](https://github.com/262412/MARA/actions/runs/30562505330)，3 个任务全部成功               |
+| Windows Server 2022  | 原生 Sidecar/Electron 打包、非空 smoke、Defender 扫描成功；artifact `8767573657`，压缩后 254,315,311 bytes |
+| Defender diagnostics | 独立 artifact `8767561828`，完整包只在扫描成功后上传                                                       |
+| Ubuntu 22.04         | 原生 Sidecar/Electron 打包和非空 smoke 成功；artifact `8767567918`，压缩后 260,981,383 bytes               |
+| Ubuntu 24.04         | 使用 Ubuntu 22.04 产物和同一非空数据快照完成跨版本 smoke                                                   |
+| Quality gates        | [run 30562506257](https://github.com/262412/MARA/actions/runs/30562506257)，20 个任务全部成功              |
 
 Windows Server 2022 runner 是自动化构建证据，不等同于 Windows 10/11 干净
 虚拟机验收。
@@ -175,6 +175,5 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 - Defender 诊断证据始终上传；完整 Windows 包仅在扫描成功后上传。
 - PR 以及 `main`/`Dev` 直接 push 的 Desktop 路径过滤触发。
 
-确定性非空 smoke 的本地回归已经通过；合入后的双平台工作流结果仍需补记。
-在 Windows 10/11 干净 VM 验收完成前，功能矩阵中的三个切片都保持
-`In progress`。
+确定性非空 smoke 的本地和双平台 CI 回归均已通过。在 Windows 10/11 干净 VM
+验收完成前，功能矩阵中的三个切片都保持 `In progress`。
