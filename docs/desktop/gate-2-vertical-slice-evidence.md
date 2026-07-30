@@ -2,11 +2,26 @@
 
 ## 结论
 
-Doctor、Files、Sessions 的 Linux 端到端纵向切片已经实现并通过开发态与打包态
-真实 smoke。整体 Gate 2 状态仍为 **In progress**，不能标记为 `Verified`：
-Windows 原生包、Windows Defender、Ubuntu 22.04/24.04 的工作流已经建立，但
-对应 runner 尚未产生本次变更的结果；非空文件和会话数据的跨平台包 smoke 也仍
-需要记录。
+Doctor、Files、Sessions 的端到端纵向切片已经实现。提交
+`62bde2cff185be15766369ad159ca1d8b058b2fd` 的 Windows Server 2022、
+Ubuntu 22.04 原生打包，以及 Ubuntu 24.04 跨版本 smoke 均已通过；Windows
+Defender 实际扫描也已通过。整体 Gate 2 状态仍为 **In progress**，不能标记为
+`Verified`：还需要 Windows 10 和 Windows 11 干净虚拟机上的产品验收。当前
+工作流已经加入确定性的非空 File/Session 打包 smoke，新的双平台运行结果会在
+合入本次收口后补记。
+
+## 当前自动化证据
+
+| 证据                | 结果                                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Desktop Gate 2      | [run 30557220627](https://github.com/262412/MARA/actions/runs/30557220627)，3 个任务全部成功                   |
+| Windows Server 2022 | 原生 Sidecar/Electron 打包、首次启动 smoke、Defender 扫描成功；artifact `8765409786`，压缩后 254,316,082 bytes |
+| Ubuntu 22.04        | 原生 Sidecar/Electron 打包和 smoke 成功；artifact `8765398432`，压缩后 260,965,646 bytes                       |
+| Ubuntu 24.04        | 使用 Ubuntu 22.04 产物完成跨版本 smoke                                                                         |
+| Quality gates       | [run 30557222456](https://github.com/262412/MARA/actions/runs/30557222456)，20 个任务全部成功                  |
+
+Windows Server 2022 runner 是自动化构建证据，不等同于 Windows 10/11 干净
+虚拟机验收。
 
 ## 公共表面与边界
 
@@ -75,8 +90,15 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 10. GitHub Windows runner 默认把 `C:\`、`D:\` 整盘加入 Defender 排除项。
     Defender 步骤现在解析包的绝对路径、仅移除所在盘根排除、确认引擎状态并
     启用 archive scanning；扫描无法启动或发现威胁都会失败并上传诊断证据。
+11. Windows 完整包只在前置步骤全部成功（包括 Defender 扫描）时上传；
+    Defender 诊断文本独立使用 `always()` 上传，扫描失败不会保存未经放行的
+    完整包 artifact。
+12. 双平台打包 smoke 在独立数据根中通过现有 application schema 确定性预置
+    1 个 File 和 1 个 Session，再验证 Doctor `ok`、精确记录数、固定记录 ID
+    以及 File 响应不包含本地路径。Ubuntu 22.04 产物携带同一数据快照供
+    Ubuntu 24.04 跨版本复验。
 
-这些修正关闭代码和策略层阻塞，但不替代新的双平台工作流结果。
+这些修正关闭代码和策略层阻塞，但不替代 Windows 10/11 干净虚拟机验收。
 
 ## 测试结果
 
@@ -84,10 +106,10 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 
 | 层                    | 结果                                                     |
 | --------------------- | -------------------------------------------------------- |
-| Electron/IPC          | 10 passed；包含启动期间数据请求等待 healthy              |
+| Electron/IPC          | 13 passed；包含启动等待和非空 smoke 响应契约             |
 | React 状态渲染        | 3 passed；覆盖 Files、Sessions、Doctor 的四态与重试入口  |
-| Sidecar/application   | 10 passed；包含 OpenAPI → TypeScript 漂移检查            |
-| 供应链策略            | 34 passed；runner、sandbox 与 Defender 配置有契约保护    |
+| Sidecar/application   | 11 passed；包含契约漂移和真实非空 fixture 读取           |
+| 供应链策略            | 36 passed；含非空 smoke 与 Defender artifact 隔离        |
 | Sidecar 打包配置      | 1 passed；Windows 不导入未使用的 `python-magic`          |
 | Runtime 路径          | 1 passed；Desktop config/data/cache 全部约束在独立数据根 |
 | Desktop 综合验证      | `npm run verify` 通过                                    |
@@ -96,15 +118,11 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 | 开发态 Electron smoke | 真实 Doctor → Files → Sessions 顺序通过                  |
 | PyInstaller smoke     | 三个真实 v1 端点顺序通过                                 |
 | 非空打包数据 smoke    | 1 个文件、1 个会话；Doctor `ok=true`；本地路径未返回     |
-| 组合发布目录 smoke    | `MARA --smoke-test` 退出码 0                             |
+| 组合发布目录 smoke    | `MARA --smoke-test-nonempty` 退出码 0                    |
 | 代码卫生              | Python changed-files ratchet 通过；baseline 未刷新       |
 
-新数据目录中的 Doctor 返回 `ok=false` 和
-`No default FileIndex is available.`，Files/Sessions 返回空数组。这是独立新库的
-正确业务诊断和空状态，不是 API 或打包失败。
-
-审查修复后的组合包在 Sidecar startup 未完成时并发发起 Doctor、Files、Sessions
-请求，退出码为 0；该次隔离数据根 smoke 用时 5.31 秒，峰值 RSS 132,416 KiB。
+空数据状态仍由 React 和 Sidecar 契约测试覆盖。打包验收使用隔离的确定性数据
+快照，避免只证明“空库可启动”而没有证明真实 File/Session 读取。
 
 ## Linux 本地测量
 
@@ -118,8 +136,8 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 | Electron 主可执行文件             | 210 MB                  |
 | `app.asar`                        | 264 KB                  |
 | 发布目录文件数                    | 1,733                   |
-| 冷启动至非空三接口 smoke 完成     | 4.89 秒                 |
-| smoke 峰值常驻内存                | 145,648 KiB，约 142 MiB |
+| 冷启动至非空三接口 smoke 完成     | 5.07 秒                 |
+| smoke 峰值常驻内存                | 142,916 KiB，约 140 MiB |
 | swap                              | 0                       |
 | Sidecar 直接动态链接缺失          | 0                       |
 | Sidecar SHA-256                   | `291b3e0a...6c2da2b3`   |
@@ -152,7 +170,11 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 - 将 Ubuntu 22.04 产物带到 Ubuntu 24.04 再运行真实 smoke。
 - Windows 原生打包、真实 smoke、包体/冷启动/内存记录和 Windows Defender
   自定义扫描。
+- Windows 和 Ubuntu smoke 都预置一个真实 File 与 Session，并以
+  `--smoke-test-nonempty` 验证三个 API 的非空响应。
+- Defender 诊断证据始终上传；完整 Windows 包仅在扫描成功后上传。
 - PR 以及 `main`/`Dev` 直接 push 的 Desktop 路径过滤触发。
 
-只有上述工作流实际通过，并补充 Windows 10/11 干净 VM 与非空数据记录后，
-功能矩阵中的三个切片才能从 `In progress` 更新为 `Verified`。
+确定性非空 smoke 的本地回归已经通过；合入后的双平台工作流结果仍需补记。
+在 Windows 10/11 干净 VM 验收完成前，功能矩阵中的三个切片都保持
+`In progress`。

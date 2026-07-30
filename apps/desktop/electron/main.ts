@@ -14,6 +14,7 @@ import { resolveDesktopDataRoot } from "./desktop-data";
 import { registerDesktopIpc } from "./ipc";
 import { contentTypeFor, resolveAppAsset } from "./protocol";
 import { SidecarManager } from "./sidecar-manager";
+import { assertPackagedSmoke } from "./smoke-validation";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -115,19 +116,21 @@ app.whenReady().then(async () => {
   registerIpc();
   const startup = sidecar.start();
   createWindow();
-  if (process.argv.includes("--smoke-test")) {
+  const requireNonEmptyFixture = process.argv.includes("--smoke-test-nonempty");
+  if (process.argv.includes("--smoke-test") || requireNonEmptyFixture) {
     const [status, doctor, files, sessions] = await Promise.all([
       startup,
       sidecar.getDoctor(),
       sidecar.listFiles(),
       sidecar.listSessions(),
     ]);
-    if (
-      status.state !== "healthy" ||
-      !doctor.ok ||
-      !files.ok ||
-      !sessions.ok
-    ) {
+    try {
+      assertPackagedSmoke(
+        { status, doctor, files, sessions },
+        requireNonEmptyFixture,
+      );
+    } catch (error) {
+      console.error(error);
       process.exitCode = 1;
     }
     app.quit();

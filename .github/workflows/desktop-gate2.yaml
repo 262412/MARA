@@ -67,9 +67,12 @@ jobs:
       - name: Smoke packaged vertical slice and record metrics
         shell: bash
         run: |
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
           mkdir -p apps/desktop/release/metrics
           /usr/bin/time -v -o apps/desktop/release/metrics/linux-22-time.txt \
-            xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA --smoke-test
+            xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+              --smoke-test-nonempty
           du -sb apps/desktop/release/MARA-linux-x64 \
             > apps/desktop/release/metrics/linux-22-size.txt
           find apps/desktop/release/MARA-linux-x64 -type f | wc -l \
@@ -81,8 +84,10 @@ jobs:
           fi
           cat apps/desktop/release/metrics/linux-22-time.txt >> "$GITHUB_STEP_SUMMARY"
           cat apps/desktop/release/metrics/linux-22-size.txt >> "$GITHUB_STEP_SUMMARY"
+          cp -a /tmp/mara-desktop/data/MARA \
+            apps/desktop/release/gate2-smoke-data
       - name: Archive Linux package
-        run: tar -C apps/desktop/release -czf apps/desktop/release/mara-linux-22.tar.gz MARA-linux-x64 metrics
+        run: tar -C apps/desktop/release -czf apps/desktop/release/mara-linux-22.tar.gz MARA-linux-x64 metrics gate2-smoke-data
       - name: Upload Ubuntu 22.04 package evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -110,8 +115,12 @@ jobs:
           sudo chmod 4755 desktop-artifact/MARA-linux-x64/chrome-sandbox
       - name: Install virtual display
         run: sudo apt-get update && sudo apt-get install --yes xvfb
+      - name: Restore deterministic smoke data
+        run: |
+          mkdir -p /tmp/mara-desktop/data/MARA
+          cp -a desktop-artifact/gate2-smoke-data/. /tmp/mara-desktop/data/MARA/
       - name: Smoke packaged vertical slice
-        run: xvfb-run -a desktop-artifact/MARA-linux-x64/MARA --smoke-test
+        run: xvfb-run -a desktop-artifact/MARA-linux-x64/MARA --smoke-test-nonempty
 
   package-windows:
     name: Package, smoke, and Defender scan on Windows
@@ -153,8 +162,11 @@ jobs:
           $env:APPDATA = Join-Path $env:RUNNER_TEMP "mara-desktop-appdata"
           $metrics = "apps/desktop/release/windows-metrics.txt"
           $executable = "apps/desktop/release/MARA-win32-x64/MARA.exe"
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root (Join-Path $env:APPDATA "MARA")
           $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-          $process = Start-Process $executable -ArgumentList "--smoke-test" -PassThru
+          $process = Start-Process $executable `
+            -ArgumentList "--smoke-test-nonempty" -PassThru
           $peakWorkingSet = 0
           while (-not $process.HasExited) {
             $process.Refresh()
@@ -220,13 +232,19 @@ jobs:
           }
           "scan_result=no_detections" | Add-Content $evidence
           Get-Content $evidence | Add-Content $env:GITHUB_STEP_SUMMARY
-      - name: Upload Windows package evidence
+      - name: Upload Windows Defender diagnostics
         if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mara-desktop-windows-defender
+          path: apps/desktop/release/windows-defender.txt
+          if-no-files-found: warn
+      - name: Upload Windows package evidence
+        if: ${{ success() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mara-desktop-windows
           path: |
             apps/desktop/release/MARA-win32-x64/
             apps/desktop/release/windows-metrics.txt
-            apps/desktop/release/windows-defender.txt
           if-no-files-found: error

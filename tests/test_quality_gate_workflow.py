@@ -301,6 +301,37 @@ def test_windows_desktop_scan_removes_the_hosted_runner_drive_exclusion():
     assert "Get-MpThreatDetection" in commands
 
 
+def test_desktop_jobs_smoke_deterministic_nonempty_data():
+    workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
+    jobs = workflow["jobs"]
+
+    for job_name in ("package-linux-22", "package-windows"):
+        commands = _commands(jobs[job_name])
+        assert "sidecar.smoke_fixture" in commands
+        assert "--smoke-test-nonempty" in commands
+
+    linux_24_commands = _commands(jobs["smoke-linux-24"])
+    assert "gate2-smoke-data" in linux_24_commands
+    assert "--smoke-test-nonempty" in linux_24_commands
+
+
+def test_windows_defender_failure_uploads_diagnostics_but_not_the_package():
+    workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
+    steps = workflow["jobs"]["package-windows"]["steps"]
+    diagnostics = next(
+        step for step in steps if step["name"] == "Upload Windows Defender diagnostics"
+    )
+    package = next(
+        step for step in steps if step["name"] == "Upload Windows package evidence"
+    )
+
+    assert diagnostics["if"] == "${{ always() }}"
+    assert diagnostics["with"]["path"] == "apps/desktop/release/windows-defender.txt"
+    assert package.get("if", "${{ success() }}") == "${{ success() }}"
+    assert "MARA-win32-x64" in package["with"]["path"]
+    assert "windows-defender.txt" not in package["with"]["path"]
+
+
 def test_workflows_do_not_grant_blanket_write_permissions():
     for path in (REPO_ROOT / ".github" / "workflows").glob("*.y*ml"):
         assert "write-all" not in path.read_text(encoding="utf-8"), path.name
