@@ -5,6 +5,7 @@ from typing import Any
 
 from ktem.docqa.evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.finance_scale import compatible_dimension_scope
 from ktem.docqa.query_evidence_constraints import executable_operand_evidence
 from ktem.docqa.query_plan_schema import plan_from_payload
 from ktem.docqa.query_planning import score_evidence_for_slot
@@ -74,7 +75,13 @@ def _audit_slot_reference(
     if not required:
         return counts
     execution_required = bool(slot.required_for_execution and audit_execution)
-    counts["execution_slot_count"] += int(execution_required)
+    execution_operand = bool(execution_required and slot.role == "operand")
+    execution_dimension = bool(execution_required and slot.role == "dimension")
+    counts["execution_operand_slot_count"] += int(execution_operand)
+    counts["execution_dimension_slot_count"] += int(execution_dimension)
+    counts["execution_other_slot_count"] += int(
+        execution_required and not execution_operand and not execution_dimension
+    )
     if slot.status != "filled":
         return counts
     counts["reference_count"] += len(slot.evidence_ids)
@@ -87,12 +94,22 @@ def _audit_slot_reference(
     if not resolved:
         counts["unresolved_references"] += len(slot.evidence_ids) or 1
         return counts
-    if execution_required:
+    if execution_operand:
         counts.update(
-            _audit_execution_slot(
+            _audit_execution_operand_slot(
                 slot,
                 resolved,
                 calculation_operands,
+                requires_structure=requires_structure,
+            )
+        )
+    elif execution_dimension:
+        counts.update(
+            _audit_execution_dimension_slot(
+                slot,
+                resolved,
+                calculation_operands,
+                lookup,
                 requires_structure=requires_structure,
             )
         )
@@ -109,7 +126,7 @@ def _audit_slot_reference(
     return counts
 
 
-def _audit_execution_slot(
+def _audit_execution_operand_slot(
     slot: Any,
     resolved: list[dict[str, Any]],
     calculation_operands: list[dict[str, Any]],
@@ -152,8 +169,50 @@ def _audit_execution_slot(
     return counts
 
 
+def _audit_execution_dimension_slot(
+    slot: Any,
+    resolved: list[dict[str, Any]],
+    calculation_operands: list[dict[str, Any]],
+    lookup: dict[str, dict[str, Any]],
+    *,
+    requires_structure: bool,
+) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    matching = [
+        item
+        for item in resolved
+        if score_evidence_for_slot(
+            slot,
+            item,
+            requires_structure=requires_structure,
+        )
+        > 0
+    ]
+    if not matching:
+        return counts
+    counts["bound_dimension_slots"] = 1
+    operand_items = [
+        lookup[evidence_id]
+        for operand in calculation_operands
+        if (
+            evidence_id := str(
+                operand.get("evidence_identity") or operand.get("evidence_id") or ""
+            )
+        )
+        and evidence_id in lookup
+    ]
+    if not operand_items or any(
+        compatible_dimension_scope(operand, dimension)
+        for operand in operand_items
+        for dimension in matching
+    ):
+        counts["scope_valid_dimension_slots"] = 1
+    return counts
+
+
 def _metric_payload(counts: Counter[str]) -> dict[str, float | None]:
-    execution_count = counts["execution_slot_count"]
+    operand_count = counts["execution_operand_slot_count"]
+    dimension_count = counts["execution_dimension_slot_count"]
     reference_count = counts["reference_count"]
     return {
         "slot_semantic_false_fill_count": float(counts["semantic_false_fills"]),
@@ -165,25 +224,42 @@ def _metric_payload(counts: Counter[str]) -> dict[str, float | None]:
         ),
         "execution_slot_atomicity_rate": _rate(
             counts["atomic_execution_slots"],
-            execution_count,
+            operand_count,
         ),
         "execution_slot_materialization_rate": _rate(
             counts["materialized_execution_slots"],
-            execution_count,
+            operand_count,
         ),
         "execution_slot_binding_rate": _rate(
             counts["bound_execution_slots"],
-            execution_count,
+            operand_count,
         ),
         "execution_operand_resolution_rate": _rate(
             counts["resolved_execution_operands"],
-            execution_count,
+            operand_count,
         ),
         "execution_slot_atomicity_violation_count": float(
-            execution_count - counts["atomic_execution_slots"]
+            operand_count - counts["atomic_execution_slots"]
         ),
         "parent_table_false_fill_count": float(counts["parent_false_fills"]),
         "header_as_value_violation_count": float(counts["header_value_violations"]),
+        "execution_operand_slot_count": float(operand_count),
+        "execution_dimension_slot_count": float(dimension_count),
+        "execution_other_slot_count": float(counts["execution_other_slot_count"]),
+        "dimension_binding_rate": _rate(
+            counts["bound_dimension_slots"],
+            dimension_count,
+        ),
+        "dimension_scope_rate": _rate(
+            counts["scope_valid_dimension_slots"],
+            dimension_count,
+        ),
+        "dimension_binding_violation_count": float(
+            dimension_count - counts["bound_dimension_slots"]
+        ),
+        "dimension_scope_violation_count": float(
+            dimension_count - counts["scope_valid_dimension_slots"]
+        ),
     }
 
 

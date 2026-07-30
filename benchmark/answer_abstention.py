@@ -9,6 +9,9 @@ def structured_or_text_abstention(
     prediction: dict[str, Any],
     answer: str,
 ) -> bool:
+    terminal_contract_state = _terminal_task_contract_abstention(prediction, answer)
+    if terminal_contract_state is not None:
+        return terminal_contract_state
     for field in (
         "guardrail_decision",
         "verify_decision",
@@ -37,3 +40,27 @@ def structured_or_text_abstention(
         ):
             return True
     return is_abstention_answer(answer)
+
+
+def _terminal_task_contract_abstention(
+    prediction: dict[str, Any],
+    answer: str,
+) -> bool | None:
+    contract = prediction.get("task_answer_contract")
+    if not isinstance(contract, dict) or contract.get("status") != "applied":
+        return None
+    verification = prediction.get("post_contract_verification")
+    if not isinstance(verification, dict):
+        return None
+    terminal_answer = str(verification.get("answer") or "").strip()
+    if not terminal_answer or _normalized(terminal_answer) != _normalized(answer):
+        return None
+    return is_abstention_answer(terminal_answer)
+
+
+def _normalized(value: str) -> str:
+    normalized = " ".join(str(value or "").strip().lower().split())
+    return {
+        "true": "yes",
+        "false": "no",
+    }.get(normalized, normalized)

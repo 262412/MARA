@@ -76,9 +76,11 @@ def period_header_records(
 def section_rows(
     lines: list[str],
     periods: tuple[str, ...],
+    *,
+    initial_label: str = "",
 ) -> tuple[tuple[str, tuple[Decimal, ...]], ...]:
     rows: list[tuple[str, tuple[Decimal, ...]]] = []
-    pending_label = ""
+    pending_label = str(initial_label or "").strip()
     index = 0
     while index < len(lines):
         line = lines[index]
@@ -131,6 +133,26 @@ def section_rows(
             pending_label = ""
         index += 1
     return tuple(rows)
+
+
+def trailing_period_header_label(
+    header_text: str,
+    periods: tuple[str, ...],
+) -> str:
+    if not periods:
+        return ""
+    last_period_end = -1
+    for match in _YEAR_RE.finditer(str(header_text or "")):
+        if match.group(1) in periods:
+            last_period_end = match.end()
+    if last_period_end < 0:
+        return ""
+    trailing = str(header_text or "")[last_period_end:].strip(" :.|-\t")
+    if not trailing or re.search(r"[%$0-9]", trailing):
+        return ""
+    if len(re.findall(r"[A-Za-z]+", trailing)) > 8:
+        return ""
+    return _row_label_fragment(trailing)
 
 
 def period_kind(item: dict[str, Any], text: str) -> str:

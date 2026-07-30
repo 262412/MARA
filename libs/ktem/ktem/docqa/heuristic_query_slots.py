@@ -65,7 +65,44 @@ def heuristic_slots(
                 ),
             ),
         )
+    primary_support = _primary_support_slots(
+        question,
+        answer_type,
+        question_type,
+        metric,
+        capabilities,
+        verification_domain,
+    )
+    if primary_support:
+        return primary_support
     return ()
+
+
+def _primary_support_slots(
+    question: str,
+    answer_type: str,
+    question_type: str,
+    metric: str,
+    capabilities: dict[str, object],
+    verification_domain: str,
+) -> tuple[EvidenceSlot, ...]:
+    if (
+        "finance" not in verification_domain.lower()
+        or question_type not in {"simple_fact", "long_form"}
+        or answer_type in {"boolean", "formula", "numeric", "unanswerable"}
+    ):
+        return ()
+    page_labels = _page_labels(capabilities)
+    return (
+        EvidenceSlot(
+            slot_id="support:primary",
+            role="support",
+            metric=metric or question,
+            modality="auto",
+            query=question,
+            locator=EvidenceLocator(page_label=page_labels[0] if page_labels else ""),
+        ),
+    )
 
 
 def _boolean_slots(

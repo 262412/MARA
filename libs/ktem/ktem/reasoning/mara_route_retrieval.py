@@ -4,6 +4,7 @@ import os
 import re
 from typing import Any, Callable
 
+from ktem.docqa import element_slot_candidates
 from ktem.docqa.element_retriever import rank_element_records
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.graph_index import (
@@ -12,7 +13,6 @@ from ktem.docqa.graph_index import (
 )
 from ktem.docqa.multimodal_index import build_local_page_image_records
 from ktem.docqa.query_planning import build_query_plan
-from ktem.docqa.required_slot_selection import required_slot_shortlist
 from ktem.docqa.visual_retriever import rank_page_image_records
 
 from .mara_element_ingestion_trace import element_ingestion_trace
@@ -72,7 +72,7 @@ def route_retrieval_metadata(
     if route == "page_image_rag":
         return _page_image_metadata(pipeline, understanding)
     if route == "element_rag":
-        return _element_metadata(pipeline, understanding)
+        return _element_metadata(pipeline, understanding, query=message)
     if route == "graph_rag":
         return _graph_metadata(pipeline, understanding)
     if route == "hybrid_rag":
@@ -88,7 +88,10 @@ def route_retrieval_metadata(
             _merge_page_image_metadata(
                 metadata, _page_image_metadata(pipeline, understanding)
             )
-        _merge_element_metadata(metadata, _element_metadata(pipeline, understanding))
+        _merge_element_metadata(
+            metadata,
+            _element_metadata(pipeline, understanding, query=message),
+        )
         _merge_graph_metadata(metadata, _graph_metadata(pipeline, understanding))
         return metadata
     return _text_metadata(
@@ -366,8 +369,10 @@ def _string_values(values: list[Any]) -> list[str]:
 def _element_metadata(
     pipeline: Any,
     understanding: dict[str, Any],
+    *,
+    query: str = "",
 ) -> dict[str, Any]:
-    records = _element_records_for_pipeline(pipeline)
+    records = element_slot_candidates.element_records_for_pipeline(pipeline)
     if not records:
         return {
             "requested_modalities": list(understanding.get("modalities", [])),
@@ -381,7 +386,7 @@ def _element_metadata(
             "element_ingestion_trace": element_ingestion_trace(pipeline, records),
         }
     ranked, scores = rank_element_records(
-        str(understanding.get("question") or ""),
+        str(query or understanding.get("question") or ""),
         records,
         retriever=getattr(pipeline, "element_retriever", None),
         evidence_hints=_element_evidence_hints(understanding, pipeline),
@@ -397,15 +402,22 @@ def _element_metadata(
         verification_domain=str(getattr(request, "verification_domain", None) or ""),
         planner_payload=getattr(request, "query_plan", None),
     )
-    selected, restored_required = required_slot_shortlist(
+    active_slot_id = str(getattr(request, "retrieval_slot_id", "") or "").strip()
+    (
+        selected,
+        restored_required,
+        active_slot_candidate_count,
+        active_slot_parent_candidate_count,
+    ) = element_slot_candidates.shortlist_element_candidates(
         ranked,
         plan,
+        active_slot_id=active_slot_id,
         candidate_limit=ELEMENT_RANK_CANDIDATE_LIMIT,
     )
     selected_ids = {identity_of(item).key for item in selected}
     return {
         "requested_modalities": list(understanding.get("modalities", [])),
-        "modality_counts": _element_modality_counts(selected),
+        "modality_counts": element_slot_candidates.element_modality_counts(selected),
         "page_coverage": _unique(item.get("page_label") for item in selected),
         "source_ids": _unique(item.get("file_id") for item in selected),
         "evidence_ids": _unique(item.get("evidence_id") for item in selected),
@@ -419,15 +431,13 @@ def _element_metadata(
         "element_candidate_count": len(records),
         "element_selected_candidate_count": len(selected),
         "element_required_slot_candidates_restored": restored_required,
+        "element_active_slot_id": active_slot_id,
+        "element_active_slot_candidate_count": active_slot_candidate_count,
+        "element_active_slot_parent_candidate_count": (
+            active_slot_parent_candidate_count
+        ),
         "element_ingestion_trace": element_ingestion_trace(pipeline, records),
     }
-
-
-def _element_records_for_pipeline(pipeline: Any) -> list[dict[str, Any]]:
-    explicit_records = getattr(pipeline, "element_index_records", None)
-    if not explicit_records:
-        return []
-    return [dict(item) for item in explicit_records if isinstance(item, dict)]
 
 
 def _element_evidence_hints(
@@ -484,16 +494,6 @@ def _hint_values(value: Any) -> list[Any]:
     if isinstance(value, (list, tuple, set)):
         return list(value)
     return [value]
-
-
-def _element_modality_counts(records: list[dict[str, Any]]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for record in records:
-        modality = str(
-            record.get("modality") or record.get("element_type") or "element"
-        ).strip()
-        counts[modality or "element"] = counts.get(modality or "element", 0) + 1
-    return counts
 
 
 def _merge_page_image_metadata(

@@ -55,6 +55,8 @@ def normalized_answer_type(
     causal_intent: bool,
 ) -> str:
     value = str(answer_type or "").strip().lower()
+    if value in {"qa", "qasper_qa"} and _BOOLEAN_QUESTION_RE.search(question.strip()):
+        return "boolean"
     if causal_intent:
         return (
             value
@@ -84,6 +86,8 @@ def question_type(
     causal_intent: bool,
     requires_multiple_evidence: bool,
 ) -> str:
+    if answer_type == "boolean":
+        return "cross_page" if requires_multiple_evidence else "simple_fact"
     if causal_intent:
         return "long_form"
     if answer_type == "numeric" and len(periods) >= 2:

@@ -360,6 +360,11 @@ def _grounded_boolean_relation(
     }
     if raw_verdict in complete:
         polarity = complete[raw_verdict]
+        relation_supported = _boolean_quote_supports_relation(
+            quote,
+            question,
+            polarity,
+        )
         conflict = (
             quote_grounded
             and not (
@@ -367,7 +372,7 @@ def _grounded_boolean_relation(
             )
             and _boolean_complete_quote_conflicts(quote, question, polarity)
         )
-        supported = quote_grounded and not conflict
+        supported = quote_grounded and relation_supported and not conflict
         if not quote_grounded:
             reason = "ungrounded_quote"
         elif not supported:

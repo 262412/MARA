@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -312,10 +313,13 @@ def test_index_contract_changes_when_document_content_changes(tmp_path):
     manifest = tmp_path / "manifest.json"
     document.write_text("version one", encoding="utf-8")
     manifest.write_text(
-        (
-            '{"schema_version":"1.0","documents":['
-            f'{{"document_id":"doc","path":"{document}"}}'
-            '],"examples":[],"routes":[]}'
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "documents": [{"document_id": "doc", "path": str(document)}],
+                "examples": [],
+                "routes": [],
+            }
         ),
         encoding="utf-8",
     )

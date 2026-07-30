@@ -85,7 +85,7 @@ def finalize_prediction_answer(
         dataset_name=dataset_name,
         mode=normalized_mode,
     )
-    if structured_or_text_abstention(prediction, answer_for_user):
+    if structured_or_text_abstention(prediction, answer_text_for_user):
         answer_for_scoring = "unanswerable"
         source = "canonical_abstention"
         prediction["answer_status"] = "abstained"

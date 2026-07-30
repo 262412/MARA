@@ -41,6 +41,19 @@ def test_boolean_question_builds_required_proposition_slot():
     assert slot.query == "Does the proposed model outperform the baseline?"
 
 
+def test_qasper_boolean_form_takes_precedence_over_causal_word() -> None:
+    plan = build_query_plan(
+        "Do they demonstrate why interdisciplinary insights are important?",
+        answer_type="qasper_qa",
+        verification_domain="qasper",
+    )
+
+    assert plan.answer_type == "boolean"
+    assert plan.question_type == "simple_fact"
+    [slot] = plan.evidence_slots
+    assert slot.statement_kind == "boolean_proposition"
+
+
 def test_slot_binding_and_missing_queries_only_target_unfilled_operand():
     plan = build_query_plan(
         "What was the percentage change in revenue from 2021 to 2022?",
@@ -286,7 +299,30 @@ def test_causal_finance_question_takes_precedence_over_numeric_surface_terms():
 
     assert plan.answer_type == "extractive"
     assert plan.question_type == "long_form"
-    assert plan.evidence_slots == ()
+    assert len(plan.evidence_slots) == 1
+    assert plan.evidence_slots[0].slot_id == "support:primary"
+    assert plan.evidence_slots[0].required_for_execution is False
+    assert plan.evidence_slots[0].query == (
+        "What drove the reduction in SG&A expense as a percent of net "
+        "sales in FY2023?"
+    )
+
+
+def test_simple_fact_plan_reserves_primary_support_evidence():
+    plan = build_query_plan(
+        "What industry does AMCOR primarily operate in?",
+        answer_type="extractive",
+        verification_domain="finance",
+    )
+
+    assert plan.question_type == "simple_fact"
+    assert len(plan.evidence_slots) == 1
+    assert plan.evidence_slots[0].slot_id == "support:primary"
+    assert plan.evidence_slots[0].required_for_retrieval is True
+    assert plan.evidence_slots[0].required_for_verification is True
+    assert plan.evidence_slots[0].query == (
+        "What industry does AMCOR primarily operate in?"
+    )
 
 
 def test_generic_numeric_slots_bind_distinct_canonical_evidence():

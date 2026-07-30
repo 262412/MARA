@@ -220,21 +220,50 @@ def _supported_candidate_core(
     revised = str(revised_answer or "").strip()
     if revised and _quote_supports_relation(quote, question, revised):
         return revised
-    clauses = [
+    clauses = _candidate_answer_clauses(candidate, question=question)
+    supported = [
+        clause
+        for clause in clauses
+        if _candidate_clause_is_grounded(quote, question, clause)
+    ]
+    return "; ".join(supported)
+
+
+def _candidate_clause_is_grounded(quote: str, question: str, clause: str) -> bool:
+    if not _quote_supports_relation(quote, question, clause):
+        return False
+    question_tokens = stemmed_content_tokens(question)
+    answer_tokens = stemmed_content_tokens(clause) - question_tokens
+    if not answer_tokens:
+        return False
+    quote_tokens = stemmed_content_tokens(quote)
+    return len(quote_tokens & answer_tokens) / len(answer_tokens) >= 0.75
+
+
+def _candidate_answer_clauses(candidate: str, *, question: str) -> list[str]:
+    text = str(candidate or "")
+    latex_phrases = [
+        " ".join(match.split())
+        for match in re.findall(r"\\text\{([^{}]+)\}", text)
+        if " ".join(match.split())
+    ]
+    question_tokens = stemmed_content_tokens(question)
+    answer_phrases = [
+        phrase
+        for phrase in latex_phrases
+        if stemmed_content_tokens(phrase) - question_tokens
+    ]
+    if answer_phrases:
+        return list(dict.fromkeys(answer_phrases))
+    return [
         clause.strip(" ,.;")
         for clause in re.split(
-            r"(?<=[.!?;])\s+|\s+(?:and|but|while|whereas)\s+",
-            str(candidate or ""),
+            r"(?<=[.!?;])\s+|\s+(?:and|but|while|whereas)\s+|\s*\+\s*",
+            text,
             flags=re.IGNORECASE,
         )
         if clause.strip(" ,.;")
     ]
-    supported = [
-        clause
-        for clause in clauses
-        if _quote_supports_relation(quote, question, clause)
-    ]
-    return "; ".join(supported)
 
 
 def _normalized(value: str) -> str:

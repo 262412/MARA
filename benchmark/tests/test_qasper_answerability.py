@@ -125,6 +125,30 @@ def test_qasper_answerability_preserves_supported_candidate():
     assert result.trace["verdict"] == "supported"
 
 
+def test_qasper_answerability_prunes_latex_extension_to_grounded_phrase():
+    quote = (
+        "We address the robustness problem using a method which leverages "
+        "labeled features as prior knowledge."
+    )
+    llm = _VerifierLLM(
+        '{"verdict":"supported","evidence_quote":' f'"{quote}","revised_answer":""}}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="What background knowledge do they leverage?",
+        evidence=quote,
+        candidate_answer=(
+            "$$ \\text{Background knowledge} = \\text{labeled features} + "
+            "\\text{class distribution} + \\text{neutral features} $$"
+        ),
+    )
+
+    assert result.answer == "labeled features"
+    assert result.trace["verdict"] == "supported_with_pruning"
+    assert result.trace["action"] == "pruned_unsupported_extension"
+
+
 def test_qasper_answerability_rejects_supported_verdict_without_grounded_quote():
     llm = _VerifierLLM(
         '{"verdict":"supported","evidence_quote":'
@@ -447,6 +471,27 @@ def test_qasper_complete_verdict_still_requires_question_relation():
     assert result.trace["reason"] == "grounded_quote_incomplete_relation"
     assert result.trace["action"] == "preserved_candidate_conflict_warning"
     assert "Modal relations are strict" in llm.calls[0][0]
+
+
+def test_qasper_complete_verdict_rejects_topical_quote_without_action_relation():
+    quote = "Interdisciplinary insights are essential for this research area."
+    llm = _VerifierLLM(
+        '{"verdict":"yes_complete","evidence_quote":'
+        '"Interdisciplinary insights are essential for this research area."}'
+    )
+
+    result = verify_qasper_answerability(
+        llm,
+        question="Do they demonstrate why interdisciplinary insights are important?",
+        evidence=quote,
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["verdict"] == "insufficient_evidence"
+    assert result.trace["quote_grounded"] == "true"
+    assert result.trace["quote_supports_relation"] == "false"
+    assert result.trace["reason"] == "grounded_quote_incomplete_relation"
 
 
 def test_qasper_answerability_rejects_boolean_candidate_when_question_is_unresolved():

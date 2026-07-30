@@ -11,6 +11,9 @@ from .financial_table_parser import period_header_records as _period_header_reco
 from .financial_table_parser import period_kind as _period_kind
 from .financial_table_parser import period_sections as _period_sections
 from .financial_table_parser import section_rows as _section_rows
+from .financial_table_parser import (
+    trailing_period_header_label as _trailing_period_header_label,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,10 +149,13 @@ def parse_financial_table_cells(
     row_index = 0
     disambiguate_period_kind = len(sections) > 1
     for header_index, end_index, periods, period_kind in sections:
-        for row_label, values in _section_rows(
-            lines[header_index + 1 : end_index],
+        rows = _rows_for_period_section(
+            lines,
+            header_index,
+            end_index,
             periods,
-        ):
+        )
+        for row_label, values in rows:
             row_index += 1
             for column_index, (period, value) in enumerate(
                 zip(periods, values),
@@ -194,6 +200,20 @@ def parse_financial_table_cells(
                     )
                 )
     return tuple(cells)
+
+
+def _rows_for_period_section(
+    lines: list[str],
+    header_index: int,
+    end_index: int,
+    periods: tuple[str, ...],
+) -> tuple[tuple[str, tuple[Decimal, ...]], ...]:
+    initial_label = _trailing_period_header_label(lines[header_index], periods)
+    return _section_rows(
+        lines[header_index + 1 : end_index],
+        periods,
+        initial_label=initial_label,
+    )
 
 
 def find_financial_cell(

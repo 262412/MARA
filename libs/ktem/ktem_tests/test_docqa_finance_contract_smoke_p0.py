@@ -231,6 +231,39 @@ def test_amount_and_percentage_subcolumns_bind_amount_not_100_percent():
     ] == [("2019", 6489), ("2018", 7500)]
 
 
+def test_trailing_row_labels_materialize_cells_from_pdf_reading_order() -> None:
+    cells = parse_financial_table_cells(
+        {
+            "evidence_id": "nike-income",
+            "source_id": "nike",
+            "page_label": "46",
+            "table_id": "nike-income",
+            "modality": "table",
+            "text": (
+                "NIKE, Inc. Consolidated Statements of Income\n"
+                "Year Ended May 31, (In millions)\n"
+                "2018 2017 2016 Revenues\n"
+                "$36,397 $34,350 $32,376 Cost of sales\n"
+                "20,441 19,038 17,405 Gross profit\n"
+                "15,956 15,312 14,971"
+            ),
+        }
+    )
+
+    assert [
+        (cell.row_label, cell.period, cell.value)
+        for cell in cells
+        if cell.row_label in {"Revenues", "Cost of sales"}
+    ] == [
+        ("Revenues", "2018", 36397),
+        ("Revenues", "2017", 34350),
+        ("Revenues", "2016", 32376),
+        ("Cost of sales", "2018", 20441),
+        ("Cost of sales", "2017", 19038),
+        ("Cost of sales", "2016", 17405),
+    ]
+
+
 def test_scale_dimension_binds_to_same_table_group():
     operand = {
         "evidence_id": "capex-cell",

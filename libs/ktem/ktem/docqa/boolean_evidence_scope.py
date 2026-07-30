@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .boolean_relations import boolean_relations_align, primary_boolean_relation
+
 
 @dataclass(frozen=True)
 class BooleanScopeDecision:
@@ -41,13 +43,19 @@ def validate_boolean_scope(
     section_role = _section_role(matching_item, quote)
     actor = _actor(quote, section_role)
     quantifier = "only" if _has_closed_quantifier(question) else "none"
-    if actor == "cited_work":
+    scope_rejection = _scope_rejection(
+        question,
+        actor=actor,
+        section_role=section_role,
+        structured_scope_available=bool(matching_item),
+    )
+    if scope_rejection:
         return BooleanScopeDecision(
             actor,
             section_role,
             quantifier,
             False,
-            "cited_work_does_not_establish_current_paper_claim",
+            scope_rejection,
         )
     if quantifier != "only":
         return BooleanScopeDecision(
@@ -142,6 +150,12 @@ def resolve_closed_scope_boolean(
     question: str,
     evidence_items: list[dict[str, Any]],
 ) -> ClosedScopeResolution | None:
+    experiment_resolution = _resolve_current_experiment_question(
+        question,
+        evidence_items,
+    )
+    if experiment_resolution is not None:
+        return experiment_resolution
     if not (_language_data_question(question) and _has_closed_quantifier(question)):
         return None
     supported: dict[str, list[tuple[dict[str, Any], BooleanScopeDecision]]] = {
@@ -176,6 +190,71 @@ def resolve_closed_scope_boolean(
     )
 
 
+def _resolve_current_experiment_question(
+    question: str,
+    evidence_items: list[dict[str, Any]],
+) -> ClosedScopeResolution | None:
+    lowered = str(question or "").lower()
+    if not (
+        re.search(r"\b(?:the authors?|they|this (?:paper|study|work))\b", lowered)
+        and re.search(
+            r"\b(?:conduct|perform|run|carry out)\w*\s+(?:an?\s+)?experiments?\b",
+            lowered,
+        )
+        and re.search(r"\b(?:tasks?|benchmarks?)\b", lowered)
+    ):
+        return None
+    candidates: list[tuple[str, BooleanScopeDecision]] = []
+    for item in evidence_items:
+        text = evidence_item_text(item)
+        if not text:
+            continue
+        decision = validate_boolean_scope(
+            question,
+            text,
+            "yes",
+            evidence_items=[item],
+        )
+        if not decision.scope_valid:
+            continue
+        quote = _current_experiment_excerpt(text)
+        if quote:
+            candidates.append((quote, decision))
+    if not candidates:
+        return None
+    quote, decision = min(candidates, key=lambda value: len(value[0]))
+    return ClosedScopeResolution(
+        polarity="yes",
+        evidence_quote=quote,
+        decision=decision,
+    )
+
+
+def _current_experiment_excerpt(text: str) -> str:
+    statements = [
+        statement.strip()
+        for statement in re.split(r"(?:\r?\n)+|(?<=[.!?])\s+", str(text or ""))
+        if statement.strip()
+    ]
+    current_actor = re.compile(
+        r"\b(?:i|we|our|the authors?|this (?:paper|study|work))\b",
+        flags=re.IGNORECASE,
+    )
+    empirical_action = re.compile(
+        r"\b(?:experiment|evaluat|test|translat|unable to construct|"
+        r"ran|measur|observation|observe)\w*\b",
+        flags=re.IGNORECASE,
+    )
+    return next(
+        (
+            statement
+            for statement in statements
+            if current_actor.search(statement) and empirical_action.search(statement)
+        ),
+        "",
+    )
+
+
 def boolean_proposition_evidence_score(
     question: str,
     item: dict[str, Any],
@@ -198,6 +277,11 @@ def boolean_proposition_evidence_score(
             for verdict in ("yes", "no")
         )
         return 2.0 if valid else 0.0
+    if primary_boolean_relation(question) and not boolean_relations_align(
+        question,
+        text,
+    ):
+        return 0.0
     if re.search(r"\b(?:experiment|evaluate|test|task)\w*\b", question.lower()):
         if actor == "current_paper" and section_role in {
             "experiments",
@@ -259,21 +343,30 @@ def _actor(quote: str, section_role: str) -> str:
         lowered,
     ):
         return "current_paper"
+    if section_role in {"experiments", "methods", "results"}:
+        return "current_paper"
     return "unknown"
 
 
 def _section_role(item: dict[str, Any], quote: str) -> str:
-    values = [
+    explicit_values = [
         str(item.get(field) or "")
         for field in ("section_id", "section_title", "section", "heading")
     ]
     metadata = item.get("metadata")
     if isinstance(metadata, dict):
-        values.extend(
+        explicit_values.extend(
             str(metadata.get(field) or "")
             for field in ("section_id", "section_title", "section", "heading")
         )
-    lowered = " ".join([*values, str(quote or "")]).lower()
+    explicit_role = _section_role_from_text(" ".join(explicit_values))
+    if explicit_role:
+        return explicit_role
+    return _section_role_from_text(str(quote or "")) or "unknown"
+
+
+def _section_role_from_text(value: str) -> str:
+    lowered = str(value or "").lower()
     if re.search(r"\b(?:related work|background|previous work|prior work)\b", lowered):
         return "related_work"
     if re.search(
@@ -293,7 +386,64 @@ def _section_role(item: dict[str, Any], quote: str) -> str:
         return "methods"
     if re.search(r"\b(?:future work|limitation)\b", lowered):
         return "future_work"
-    return "unknown"
+    if re.search(r"\b(?:introduction|overview|motivation)\b", lowered):
+        return "introduction"
+    return ""
+
+
+def _requires_current_paper_scope(question: str) -> bool:
+    lowered = str(question or "").lower()
+    return bool(
+        re.search(
+            r"\b(?:the authors?|this (?:paper|article|study|work)|"
+            r"current (?:paper|study|work)|they|their)\b",
+            lowered,
+        )
+        or _requires_experiment_scope(question)
+    )
+
+
+def _scope_rejection(
+    question: str,
+    *,
+    actor: str,
+    section_role: str,
+    structured_scope_available: bool,
+) -> str:
+    if actor == "cited_work":
+        return "cited_work_does_not_establish_current_paper_claim"
+    if not _requires_current_paper_scope(question):
+        return ""
+    if actor != "current_paper" and (
+        structured_scope_available or _requires_experiment_scope(question)
+    ):
+        return "current_paper_scope_not_established"
+    if (
+        actor == "current_paper"
+        and section_role != "unknown"
+        and section_role not in _current_paper_section_roles(question)
+    ):
+        return "current_paper_scope_not_established"
+    return ""
+
+
+def _requires_experiment_scope(question: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:experiment|evaluate|evaluation|test|task|dataset|"
+            r"result|report)\w*\b",
+            str(question or "").lower(),
+        )
+    )
+
+
+def _current_paper_section_roles(question: str) -> set[str]:
+    lowered = str(question or "").lower()
+    if _requires_experiment_scope(question):
+        return {"experiments", "methods", "results"}
+    if re.search(r"\b(?:method|approach|propose|introduce|train|use)\w*\b", lowered):
+        return {"introduction", "methods", "results"}
+    return {"introduction", "experiments", "methods", "results"}
 
 
 def _has_closed_quantifier(question: str) -> bool:

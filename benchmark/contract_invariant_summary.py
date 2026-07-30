@@ -95,6 +95,7 @@ def _execution_summary(
 ) -> dict[str, float | None]:
     return {
         **_execution_binding_summary(metrics),
+        **_dimension_binding_summary(metrics),
         **_verification_summary(metrics),
     }
 
@@ -166,6 +167,35 @@ def _execution_binding_summary(
         "rounding_verification_failure_count": _sum(
             metrics,
             "rounding_verification_failure_count",
+        ),
+    }
+
+
+def _dimension_binding_summary(
+    metrics: list[dict[str, float | None]],
+) -> dict[str, float | None]:
+    return {
+        "execution_operand_slot_count": _sum(
+            metrics,
+            "execution_operand_slot_count",
+        ),
+        "execution_dimension_slot_count": _sum(
+            metrics,
+            "execution_dimension_slot_count",
+        ),
+        "execution_other_slot_count": _sum(
+            metrics,
+            "execution_other_slot_count",
+        ),
+        "dimension_binding_rate": _mean(metrics, "dimension_binding_rate"),
+        "dimension_scope_rate": _mean(metrics, "dimension_scope_rate"),
+        "dimension_binding_violation_count": _sum(
+            metrics,
+            "dimension_binding_violation_count",
+        ),
+        "dimension_scope_violation_count": _sum(
+            metrics,
+            "dimension_scope_violation_count",
         ),
     }
 

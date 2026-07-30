@@ -2,36 +2,17 @@ from __future__ import annotations
 
 import re
 
+from ktem.docqa.boolean_relations import (
+    boolean_relation_lemmas,
+    boolean_relations_align,
+    primary_boolean_relation,
+)
+
 _BOOLEAN_QUESTION_RE = re.compile(
     r"(?:^|[,;:]\s*)(?:is|are|was|were|do|does|did|has|have|had|"
     r"can|could|will|would|should|may|might)\b",
     re.IGNORECASE,
 )
-_BOOLEAN_RELATION_WORDS = {
-    "add",
-    "annotate",
-    "collect",
-    "compare",
-    "create",
-    "demonstrate",
-    "evaluate",
-    "experiment",
-    "incorporate",
-    "introduce",
-    "perform",
-    "provide",
-    "reach",
-    "recommend",
-    "release",
-    "report",
-    "require",
-    "show",
-    "test",
-    "train",
-    "translate",
-    "use",
-    "work",
-}
 _QUESTION_STOPWORDS = {
     "a",
     "an",
@@ -85,14 +66,6 @@ def boolean_quote_is_grounded(quote: str, evidence: str) -> bool:
     return len(normalized_quote) >= 8 and normalized_quote in normalized_evidence
 
 
-def boolean_relation_lemmas(value: str) -> set[str]:
-    return {
-        lemma
-        for token in re.findall(r"[a-z]+", str(value or "").lower())
-        if (lemma := _relation_lemma(token)) in _BOOLEAN_RELATION_WORDS
-    }
-
-
 def stemmed_content_tokens(value: str) -> set[str]:
     return {
         token[:5] if len(token) > 5 else token
@@ -114,14 +87,17 @@ def boolean_quote_supports_relation(
         return False
     if _qualitative_risk_relation_supported(quote, question, verdict):
         return True
-    if question_relations and not (question_relations & quote_relations):
+    primary_relation = primary_boolean_relation(question)
+    if primary_relation and not boolean_relations_align(question, quote):
         if verdict != "no" or not _negative_relation_supported(
             quote,
             question_anchors,
             quote_tokens,
-            question_relations,
+            {primary_relation},
         ):
             return False
+    elif question_relations and not (question_relations & quote_relations):
+        return False
     required_anchors = min(2, len(question_anchors))
     if required_anchors and len(quote_tokens & question_anchors) >= required_anchors:
         return True
@@ -238,27 +214,6 @@ def _qualitative_risk_relation_supported(
             str(quote or "").lower(),
         )
     )
-
-
-def _relation_lemma(token: str) -> str:
-    irregular = {
-        "used": "use",
-        "uses": "use",
-        "using": "use",
-        "shown": "show",
-        "showed": "show",
-        "worked": "work",
-    }
-    if token in irregular:
-        return irregular[token]
-    for suffix in ("ing", "ed", "es", "s"):
-        if token.endswith(suffix) and len(token) > len(suffix) + 3:
-            stem = token[: -len(suffix)]
-            if stem in _BOOLEAN_RELATION_WORDS:
-                return stem
-            if f"{stem}e" in _BOOLEAN_RELATION_WORDS:
-                return f"{stem}e"
-    return token
 
 
 def _negative_relation_supported(

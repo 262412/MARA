@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .boolean_evidence_scope import boolean_proposition_evidence_score
 from .claim_support import meaningful_tokens
 from .evidence_identity import identity_of
 from .evidence_text import evidence_text, extract_final_answer_text
@@ -25,6 +26,8 @@ def boolean_evidence_assessment(
     supporting: list[str] = []
     contradicting: list[str] = []
     for item in evidence_items:
+        if boolean_proposition_evidence_score(proposition, item) <= 0:
+            continue
         item_text = evidence_text([item])
         item_tokens = meaningful_tokens(item_text)
         overlap = proposition_tokens & item_tokens
