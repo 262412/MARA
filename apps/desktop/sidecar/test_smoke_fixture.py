@@ -22,22 +22,28 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
             seed_smoke_fixture(data_root)
             seed_smoke_fixture(data_root)
 
-            service = DesktopApplicationService()
-            doctor = service.get_doctor()
-            files = service.list_files()
-            sessions = service.list_sessions()
+            from ktem.db.models import engine
 
-            self.assertTrue(doctor["ok"])
-            self.assertEqual(doctor["file_count"], 1)
-            self.assertEqual(doctor["session_count"], 1)
-            self.assertEqual(
-                [record["file_id"] for record in files], [GATE2_SMOKE_FILE_ID]
-            )
-            self.assertNotIn("path", files[0])
-            self.assertEqual(
-                [record["conversation_id"] for record in sessions],
-                [GATE2_SMOKE_SESSION_ID],
-            )
+            try:
+                service = DesktopApplicationService()
+                doctor = service.get_doctor()
+                files = service.list_files()
+                sessions = service.list_sessions()
+
+                self.assertTrue(doctor["ok"])
+                self.assertEqual(doctor["file_count"], 1)
+                self.assertEqual(doctor["session_count"], 1)
+                self.assertEqual(
+                    [record["file_id"] for record in files],
+                    [GATE2_SMOKE_FILE_ID],
+                )
+                self.assertNotIn("path", files[0])
+                self.assertEqual(
+                    [record["conversation_id"] for record in sessions],
+                    [GATE2_SMOKE_SESSION_ID],
+                )
+            finally:
+                engine.dispose()
 
 
 if __name__ == "__main__":
