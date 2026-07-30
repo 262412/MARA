@@ -6,6 +6,11 @@ from pathlib import Path
 import pytest
 import yaml
 
+from scripts.supply_chain_pins import (
+    APPROVED_WORKFLOW_JOB_RUNNERS,
+    DEFAULT_GITHUB_RUNNER,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "quality-gates.yaml"
 SIGNED_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "signed-provenance.yaml"
@@ -237,10 +242,15 @@ def test_signed_provenance_runs_only_after_a_successful_trusted_push():
 def test_every_workflow_uses_immutable_actions_and_runner_images():
     for path in (REPO_ROOT / ".github" / "workflows").glob("*.y*ml"):
         workflow = _load_workflow(path)
-        for job in workflow.get("jobs", {}).values():
+        relative_path = path.relative_to(REPO_ROOT).as_posix()
+        for job_name, job in workflow.get("jobs", {}).items():
             runner = job.get("runs-on")
             if runner is not None:
-                assert runner == "ubuntu-24.04", (path.name, runner)
+                expected = APPROVED_WORKFLOW_JOB_RUNNERS.get(
+                    (relative_path, job_name),
+                    DEFAULT_GITHUB_RUNNER,
+                )
+                assert runner == expected, (path.name, job_name, runner)
             for step in job.get("steps", []):
                 action = step.get("uses")
                 if not action or action.startswith("./"):

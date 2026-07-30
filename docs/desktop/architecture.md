@@ -65,6 +65,9 @@ flowchart TB
 - 错误使用稳定的 `code`、面向用户的 `message`、可选 `details` 和
   `retryable`，不把 Python traceback 直接显示给用户。
 - API Schema 由 Python 生成 OpenAPI，并生成 TypeScript 客户端类型；CI 检查漂移。
+  当前生成入口为 `npm run contracts:generate`，提交产物为
+  `apps/desktop/shared/api-contracts.generated.ts`，`npm run contracts:check`
+  对照实时 FastAPI schema 并在漂移时失败。
 
 ### IPC
 

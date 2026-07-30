@@ -7,6 +7,8 @@
 3. Renderer 保持沙箱和上下文隔离，只通过窄 Preload API 获取脱敏运行状态。
 4. Doctor、Files、Sessions 复用 `slide_cli.docqa_runtime` 的 application service，
    通过 FastAPI、明确 IPC 和 React 四态贯通。
+5. 启动期间的数据请求等待 Sidecar healthy；OpenAPI 生成共享 TypeScript 响应
+   类型并由验证脚本检查漂移。
 
 它**不是完整 MARA Desktop**。文件导入、索引、问答、预览、Studio 和迁移仍按
 功能矩阵逐个切片接入。当前 Sidecar 的真实业务端点是 `/v1/doctor`、
@@ -29,6 +31,7 @@ apps/desktop/
 ```bash
 cd apps/desktop
 npm ci
+npm run contracts:check
 npm run verify
 npm start
 ```

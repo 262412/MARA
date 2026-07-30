@@ -1,3 +1,5 @@
+import type { SidecarError } from "./api-contracts.generated";
+
 export const SIDECAR_PROTOCOL_VERSION = 1;
 
 export type RuntimeStatus = {
@@ -8,13 +10,7 @@ export type RuntimeStatus = {
   message?: string;
 };
 
-export type SidecarError = {
-  code: string;
-  message: string;
-  details: unknown | null;
-  retryable: boolean;
-  request_id: string;
-};
+export type { SidecarError } from "./api-contracts.generated";
 
 export type DesktopResult<T> =
   | { ok: true; data: T }

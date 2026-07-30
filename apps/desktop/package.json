@@ -8,6 +8,8 @@
     "build": "npm run build:electron && npm run build:renderer",
     "build:electron": "tsc -p tsconfig.electron.json",
     "build:renderer": "vite build",
+    "contracts:generate": "node scripts/run-python.mjs -m sidecar.generate_contracts",
+    "contracts:check": "node scripts/run-python.mjs -m sidecar.generate_contracts --check",
     "package:linux": "npm run sidecar:bundle && npm run build && node scripts/package-app.mjs linux",
     "package:windows": "npm run sidecar:bundle && npm run build && node scripts/package-app.mjs win32",
     "sidecar:bundle": "node scripts/build-sidecar.mjs",
@@ -18,7 +20,7 @@
     "test:renderer": "tsc -p tsconfig.renderer-test.json && node --test dist-tests/src/**/*.test.js",
     "test:sidecar": "node scripts/run-python.mjs -m unittest discover -s sidecar -t . -p test_*.py",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
-    "verify": "npm run typecheck && npm test && npm run build"
+    "verify": "npm run contracts:check && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "react": "19.2.8",

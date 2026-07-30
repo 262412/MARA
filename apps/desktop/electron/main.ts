@@ -113,12 +113,15 @@ app.whenReady().then(async () => {
     (_webContents, _permission, callback) => callback(false),
   );
   registerIpc();
+  const startup = sidecar.start();
   createWindow();
-  const status = await sidecar.start();
   if (process.argv.includes("--smoke-test")) {
-    const doctor = await sidecar.getDoctor();
-    const files = await sidecar.listFiles();
-    const sessions = await sidecar.listSessions();
+    const [status, doctor, files, sessions] = await Promise.all([
+      startup,
+      sidecar.getDoctor(),
+      sidecar.listFiles(),
+      sidecar.listSessions(),
+    ]);
     if (
       status.state !== "healthy" ||
       !doctor.ok ||
@@ -128,6 +131,8 @@ app.whenReady().then(async () => {
       process.exitCode = 1;
     }
     app.quit();
+  } else {
+    await startup;
   }
 
   app.on("activate", () => {

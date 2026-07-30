@@ -43,6 +43,28 @@ class SidecarRequestFailure extends Error {
   }
 }
 
+function sidecarNotReadyFailure(): SidecarRequestFailure {
+  return new SidecarRequestFailure({
+    code: "sidecar_not_ready",
+    message: "The MARA Sidecar is not ready.",
+    details: null,
+    retryable: true,
+    request_id: randomUUID(),
+  });
+}
+
+export async function waitForRequestReadiness(
+  getStatus: () => RuntimeStatus,
+  startup?: Promise<RuntimeStatus>,
+): Promise<void> {
+  if (startup) {
+    await startup;
+  }
+  if (getStatus().state !== "healthy") {
+    throw sidecarNotReadyFailure();
+  }
+}
+
 export function parseReadyMessage(line: string): SidecarReadyMessage {
   const value: unknown = JSON.parse(line);
   if (!value || typeof value !== "object") {
@@ -68,6 +90,7 @@ export class SidecarManager {
   private child?: ChildProcessWithoutNullStreams;
   private token?: string;
   private port?: number;
+  private startup?: Promise<RuntimeStatus>;
   private stopping = false;
   private status: RuntimeStatus = {
     state: "stopped",
@@ -83,6 +106,7 @@ export class SidecarManager {
 
   async getDoctor(): Promise<DesktopResult<DoctorPayload>> {
     return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
       const response = await this.requestJson<DoctorResponse>("/v1/doctor", {}, true);
       return response.doctor;
     });
@@ -90,6 +114,7 @@ export class SidecarManager {
 
   async listFiles(): Promise<DesktopResult<FileRecord[]>> {
     return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
       const response = await this.requestJson<FileListResponse>("/v1/files", {}, true);
       return response.files;
     });
@@ -97,6 +122,7 @@ export class SidecarManager {
 
   async listSessions(): Promise<DesktopResult<SessionSummary[]>> {
     return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
       const response = await this.requestJson<SessionListResponse>(
         "/v1/sessions",
         {},
@@ -106,7 +132,30 @@ export class SidecarManager {
     });
   }
 
-  async start(): Promise<RuntimeStatus> {
+  start(): Promise<RuntimeStatus> {
+    if (this.startup) {
+      return this.startup;
+    }
+    if (this.status.state === "healthy") {
+      return Promise.resolve(this.getStatus());
+    }
+
+    const startup = this.launch();
+    this.startup = startup;
+    startup.then(
+      () => this.clearStartup(startup),
+      () => this.clearStartup(startup),
+    );
+    return startup;
+  }
+
+  private clearStartup(startup: Promise<RuntimeStatus>): void {
+    if (this.startup === startup) {
+      this.startup = undefined;
+    }
+  }
+
+  private async launch(): Promise<RuntimeStatus> {
     if (this.child) {
       return this.getStatus();
     }
@@ -311,13 +360,7 @@ export class SidecarManager {
     requireMatchingRequestId = false,
   ): Promise<T> {
     if (!this.port || !this.token) {
-      throw new SidecarRequestFailure({
-        code: "sidecar_not_ready",
-        message: "The MARA Sidecar is not ready.",
-        details: null,
-        retryable: true,
-        request_id: randomUUID(),
-      });
+      throw sidecarNotReadyFailure();
     }
     const requestId = randomUUID();
     const response = await fetch(`http://127.0.0.1:${this.port}${pathname}`, {

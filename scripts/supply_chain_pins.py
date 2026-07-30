@@ -6,6 +6,7 @@ APPROVED_ACTIONS = {
     "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10": "v6.0.3",
     "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093": "v4.3.0",
     "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065": "v5.6.0",
+    "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020": "v4.4.0",
     "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02": "v4.6.2",
     "amannn/action-semantic-pull-request@0723387faaf9b38adef4775cd42cfd5155ed6017": "v5.5.3",
     "anothrNick/github-tag-action@4ed44965e0db8dab2b466a16da04aec3cc312fd8": "1.75.0",
@@ -21,6 +22,12 @@ APPROVED_ACTIONS = {
     "marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405": "v2.9.4",
     "softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65": "v2.6.2",
     "wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed": "v6.2.1",
+}
+
+DEFAULT_GITHUB_RUNNER = "ubuntu-24.04"
+APPROVED_WORKFLOW_JOB_RUNNERS = {
+    (".github/workflows/desktop-gate2.yaml", "package-linux-22"): "ubuntu-22.04",
+    (".github/workflows/desktop-gate2.yaml", "package-windows"): "windows-2022",
 }
 
 APPROVED_EXTERNAL_IMAGES = {

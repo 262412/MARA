@@ -30,7 +30,10 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 
 ## 契约与安全证据
 
-- FastAPI 负责 OpenAPI、响应模型与参数验证。
+- FastAPI 负责 OpenAPI、响应模型与参数验证。Doctor、File、Session 和 Sidecar
+  error 类型由 `sidecar.generate_contracts` 从当前 OpenAPI 确定性生成到
+  `shared/api-contracts.generated.ts`；`npm run contracts:check` 在生成结果漂移时
+  失败，并已纳入 `npm run verify`。
 - 每个请求携带或生成 `request_id`；错误固定为 `code`、`message`、`details`、
   `retryable`、`request_id`。
 - 缺少或错误 Bearer 令牌返回 401；带浏览器 `Origin` 的请求返回 403。
@@ -39,6 +42,27 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 - IPC 逐方法注册并校验 `mara://app/` sender；三个读取方法不接受参数。
 - Desktop 启动时覆盖旧的 `KH_APP_DATA_DIR`，并强制使用包内 runtime settings。
   config、data、cache 和兼容 `ktem_app_data` 都位于 Desktop 数据根。
+- Main 在创建窗口前取得唯一的 Sidecar startup Promise；启动期间发起的 Doctor、
+  Files、Sessions 请求等待该 Promise，而不是提前返回 `sidecar_not_ready`。
+  打包 smoke 也改为在 startup 未完成时并发发起三个数据请求。
+
+## Gate 2 审查 P1 收口
+
+2026-07-30 的 Gate 2 审查识别出三项阻塞问题。本轮处理结果：
+
+1. 首次启动竞态：增加延迟启动回归测试，数据请求会等待 healthy，打包 smoke
+   不再先等 ready 后才请求。
+2. 供应链策略：Ubuntu 22.04 仅允许
+   `desktop-gate2.yaml/package-linux-22`；Windows 仅允许
+   `desktop-gate2.yaml/package-windows` 且固定为 `windows-2022`。其余任务仍
+   必须使用 `ubuntu-24.04`。
+3. `actions/setup-node` 的 `v4.4.0` 标签经 git tag ref 和 GitHub ref API 独立
+   核对均解析到
+   `49933ea5288caeca8642d1e84afbd3f7d6820020`，并登记到供应链 allowlist。
+4. Desktop workflow 为 `main`/`Dev` 增加带 Desktop 路径过滤的 `push` 触发。
+5. OpenAPI → TypeScript 生成与 checked-in 漂移检查已进入 Desktop verify。
+
+这些修正关闭代码和策略层阻塞，但不替代新的双平台工作流结果。
 
 ## 测试结果
 
@@ -46,9 +70,10 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 
 | 层                    | 结果                                                     |
 | --------------------- | -------------------------------------------------------- |
-| Electron/IPC          | 9 passed                                                 |
+| Electron/IPC          | 10 passed；包含启动期间数据请求等待 healthy              |
 | React 状态渲染        | 3 passed；覆盖 Files、Sessions、Doctor 的四态与重试入口  |
-| Sidecar/application   | 9 passed；覆盖认证、Origin、参数、响应、错误和 OpenAPI   |
+| Sidecar/application   | 10 passed；包含 OpenAPI → TypeScript 漂移检查            |
+| 供应链策略            | 31 passed；runner 例外按 workflow/job 限定               |
 | Runtime 路径          | 1 passed；Desktop config/data/cache 全部约束在独立数据根 |
 | Desktop 综合验证      | `npm run verify` 通过                                    |
 | `slide_cli` 回归门    | 完整 package test 通过                                   |
@@ -62,6 +87,9 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 新数据目录中的 Doctor 返回 `ok=false` 和
 `No default FileIndex is available.`，Files/Sessions 返回空数组。这是独立新库的
 正确业务诊断和空状态，不是 API 或打包失败。
+
+审查修复后的组合包在 Sidecar startup 未完成时并发发起 Doctor、Files、Sessions
+请求，退出码为 0；该次隔离数据根 smoke 用时 5.31 秒，峰值 RSS 132,416 KiB。
 
 ## Linux 本地测量
 
@@ -109,6 +137,7 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 - 将 Ubuntu 22.04 产物带到 Ubuntu 24.04 再运行真实 smoke。
 - Windows 原生打包、真实 smoke、包体/冷启动/内存记录和 Windows Defender
   自定义扫描。
+- PR 以及 `main`/`Dev` 直接 push 的 Desktop 路径过滤触发。
 
 只有上述工作流实际通过，并补充 Windows 10/11 干净 VM 与非空数据记录后，
 功能矩阵中的三个切片才能从 `In progress` 更新为 `Verified`。

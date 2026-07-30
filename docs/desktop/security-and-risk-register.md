@@ -54,6 +54,8 @@ flowchart LR
 | R16 | npm/Python 供应链或许可证不兼容                | 发布安全/法律风险          | 锁文件、SBOM、漏洞扫描、许可证审查                                | 无未处置高危项和禁止许可证                |
 | R17 | 自定义窗口框影响 Windows/Linux 可访问性        | 窗口控制不可用             | 首版使用原生标题栏                                                | 键盘、缩放、屏幕阅读器 smoke              |
 | R18 | 单一 Linux CI 掩盖 Windows 问题                | 发布晚期集中失败           | 从 Gate 2 起保持双平台流水线                                      | 每个合并请求至少做双平台 build smoke      |
+| R19 | Renderer 在 Sidecar healthy 前读取真实数据     | 首屏永久停留在可重试错误   | 查询等待同一 startup Promise；延迟启动回归；并发打包 smoke        | healthy 后 Doctor/Files/Sessions 自动成功 |
+| R20 | OpenAPI 与 TypeScript 响应类型静默漂移         | Main/Renderer 运行时失配   | 从 FastAPI OpenAPI 生成类型；提交生成文件；CI 检查差异            | 生成漂移门通过                            |
 
 ## 4. 安全验收场景
 

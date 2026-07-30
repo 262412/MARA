@@ -17,6 +17,8 @@ supply_chain_pins = importlib.import_module(
 
 APPROVED_ACTIONS = supply_chain_pins.APPROVED_ACTIONS
 APPROVED_EXTERNAL_IMAGES = supply_chain_pins.APPROVED_EXTERNAL_IMAGES
+APPROVED_WORKFLOW_JOB_RUNNERS = supply_chain_pins.APPROVED_WORKFLOW_JOB_RUNNERS
+DEFAULT_GITHUB_RUNNER = supply_chain_pins.DEFAULT_GITHUB_RUNNER
 DOCKERFILE_FRONTEND = supply_chain_pins.DOCKERFILE_FRONTEND
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -149,16 +151,25 @@ def _check_action_pins(path: Path, source: str) -> list[Violation]:
     return violations
 
 
-def _check_runners(path: Path, source: str) -> list[Violation]:
+def _check_runners(path: Path, source: str, workflow: dict) -> list[Violation]:
     violations: list[Violation] = []
-    for number, line in enumerate(source.splitlines(), start=1):
-        if not re.match(r"^\s*runs-on\s*:", line):
+    for job_name, job in workflow.get("jobs", {}).items():
+        runner = job.get("runs-on")
+        if runner is None:
             continue
-        runner = line.split(":", 1)[1].split("#", 1)[0].strip().strip("\"'")
-        if runner != "ubuntu-24.04":
+        expected = APPROVED_WORKFLOW_JOB_RUNNERS.get(
+            (path.as_posix(), job_name),
+            DEFAULT_GITHUB_RUNNER,
+        )
+        if runner != expected:
+            needle = f"runs-on: {runner}"
             violations.append(
-                Violation(
-                    path.as_posix(), number, "runner-pin", f"runner is {runner!r}"
+                _violation(
+                    path,
+                    source,
+                    "runner-pin",
+                    f"job {job_name!r} runner is {runner!r}; expected {expected!r}",
+                    needle=needle,
                 )
             )
     return violations
@@ -256,7 +267,7 @@ def check_workflows(root: Path) -> list[Violation]:
         source = absolute_path.read_text(encoding="utf-8")
         workflow = _load_yaml(root, path)
         violations.extend(_check_action_pins(path, source))
-        violations.extend(_check_runners(path, source))
+        violations.extend(_check_runners(path, source, workflow))
         violations.extend(_check_workflow_commands(path, source))
         violations.extend(_check_release_freeze(root, path, workflow, source))
     return violations

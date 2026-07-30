@@ -11,7 +11,12 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10
     import tomli as tomllib
 
-from scripts.check_supply_chain_policy import _check_action_pins, scan_repository
+from scripts.check_supply_chain_policy import (
+    _check_action_pins,
+    _check_runners,
+    scan_repository,
+)
+from scripts.supply_chain_pins import APPROVED_ACTIONS
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LEGACY_INSTALLERS = (
@@ -96,6 +101,38 @@ def test_action_policy_rejects_unknown_digests_and_malformed_version_comments():
 
     assert "action-allowlist" in unknown_rules
     assert "action-version-comment" in malformed_rules
+
+
+def test_desktop_runner_exceptions_are_limited_to_the_required_jobs():
+    path = Path(".github/workflows/desktop-gate2.yaml")
+    source = """
+jobs:
+  package-linux-22:
+    runs-on: ubuntu-22.04
+  smoke-linux-24:
+    runs-on: ubuntu-24.04
+  package-windows:
+    runs-on: windows-2022
+"""
+    workflow = yaml.safe_load(source)
+
+    assert _check_runners(path, source, workflow) == []
+
+    workflow["jobs"]["smoke-linux-24"]["runs-on"] = "windows-2022"
+    violations = _check_runners(path, source, workflow)
+    assert [(item.rule, item.detail) for item in violations] == [
+        (
+            "runner-pin",
+            "job 'smoke-linux-24' runner is 'windows-2022'; expected 'ubuntu-24.04'",
+        )
+    ]
+
+
+def test_setup_node_pin_is_independently_registered():
+    assert (
+        APPROVED_ACTIONS["actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020"]
+        == "v4.4.0"
+    )
 
 
 def test_external_precommit_revisions_are_full_verified_commits():
