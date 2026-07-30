@@ -16,7 +16,7 @@ from scripts.check_supply_chain_policy import (
     _check_runners,
     scan_repository,
 )
-from scripts.supply_chain_pins import APPROVED_ACTIONS
+from scripts.supply_chain_pins import APPROVED_ACTIONS, SETUP_UV_CHECKSUMS
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LEGACY_INSTALLERS = (
@@ -161,10 +161,9 @@ def test_setup_uv_downloads_are_versioned_and_checksum_verified():
             for step in job.get("steps", []):
                 if not str(step.get("uses", "")).startswith("astral-sh/setup-uv@"):
                     continue
+                expected_checksum = SETUP_UV_CHECKSUMS[job["runs-on"]]
                 assert step["with"]["version"] == "0.11.19"
-                assert step["with"]["checksum"] == (
-                    "7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368"
-                )
+                assert step["with"]["checksum"] == expected_checksum
 
 
 def test_buildx_and_buildkit_are_version_and_digest_pinned():

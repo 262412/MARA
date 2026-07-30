@@ -123,7 +123,7 @@ jobs:
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
         with:
           version: "0.11.19"
-          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+          checksum: 1665fc8e37b5d70a134820d6d7891747471a2ac8bc940ee7af0b69fd03b28d61
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:

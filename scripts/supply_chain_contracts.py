@@ -121,27 +121,34 @@ def check_workflow_tool_inputs(root: Path) -> list[ContractIssue]:
     for absolute in sorted((root / ".github/workflows").glob("*.y*ml")):
         path = absolute.relative_to(root)
         workflow = _load_yaml(root, path)
-        for step in _steps(workflow):
-            action = str(step.get("uses", ""))
-            inputs = step.get("with", {})
-            if action == supply_chain_pins.SETUP_UV_ACTION and (
-                inputs.get("version") != supply_chain_pins.SETUP_UV_VERSION
-                or inputs.get("checksum") != supply_chain_pins.SETUP_UV_CHECKSUM
-            ):
-                issues.append(
-                    ContractIssue(path, "setup-uv-pin", "uv version/checksum mismatch")
-                )
-            if action.startswith("docker/setup-buildx-action@") and inputs != {
-                "version": supply_chain_pins.BUILDX_VERSION,
-                "driver-opts": f"image={supply_chain_pins.BUILDKIT_IMAGE}",
-            }:
-                issues.append(
-                    ContractIssue(
-                        path,
-                        "buildx-pin",
-                        "Buildx version and BuildKit image digest must match the allowlist",
+        for job in workflow.get("jobs", {}).values():
+            runner = job.get("runs-on")
+            for step in job.get("steps", []):
+                action = str(step.get("uses", ""))
+                inputs = step.get("with", {})
+                if action == supply_chain_pins.SETUP_UV_ACTION and (
+                    inputs.get("version") != supply_chain_pins.SETUP_UV_VERSION
+                    or inputs.get("checksum")
+                    != supply_chain_pins.SETUP_UV_CHECKSUMS.get(runner)
+                ):
+                    issues.append(
+                        ContractIssue(
+                            path,
+                            "setup-uv-pin",
+                            f"uv version/checksum mismatch for runner {runner!r}",
+                        )
                     )
-                )
+                if action.startswith("docker/setup-buildx-action@") and inputs != {
+                    "version": supply_chain_pins.BUILDX_VERSION,
+                    "driver-opts": f"image={supply_chain_pins.BUILDKIT_IMAGE}",
+                }:
+                    issues.append(
+                        ContractIssue(
+                            path,
+                            "buildx-pin",
+                            "Buildx version and BuildKit image digest must match the allowlist",
+                        )
+                    )
     return issues
 
 
