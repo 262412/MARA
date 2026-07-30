@@ -61,6 +61,8 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
    `49933ea5288caeca8642d1e84afbd3f7d6820020`，并登记到供应链 allowlist。
 4. Desktop workflow 为 `main`/`Dev` 增加带 Desktop 路径过滤的 `push` 触发。
 5. OpenAPI → TypeScript 生成与 checked-in 漂移检查已进入 Desktop verify。
+6. Linux job-level XDG 路径使用 runner 本地 `/tmp/mara-desktop`；不在 job
+   dispatch 前引用尚不可用的 `runner` expression context。
 
 这些修正关闭代码和策略层阻塞，但不替代新的双平台工作流结果。
 

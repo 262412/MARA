@@ -14,6 +14,7 @@ from scripts.supply_chain_pins import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "quality-gates.yaml"
 SIGNED_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "signed-provenance.yaml"
+DESKTOP_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "desktop-gate2.yaml"
 REQUIRED_JOBS = {
     "static",
     "dependency-audit",
@@ -259,6 +260,14 @@ def test_every_workflow_uses_immutable_actions_and_runner_images():
                     path.name,
                     action,
                 )
+
+
+def test_desktop_job_environment_uses_contexts_available_before_dispatch():
+    workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
+
+    for job in workflow["jobs"].values():
+        for value in job.get("env", {}).values():
+            assert "${{ runner." not in str(value)
 
 
 def test_workflows_do_not_grant_blanket_write_permissions():
