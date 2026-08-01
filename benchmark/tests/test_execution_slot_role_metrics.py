@@ -38,6 +38,43 @@ def test_dimension_evidence_is_not_a_failed_atomic_operand_slot() -> None:
     assert summary["dimension_scope_violation_count"] == 0.0
 
 
+def test_verified_execution_slot_accepts_equivalent_materialized_cell() -> None:
+    selected_operand, dimension = _evidence_records()
+    execution_operand = {
+        **selected_operand,
+        "table_id": "income-materialized",
+        "table_instance_id": "income-materialized",
+        "cell_id": "revenue-2023-materialized",
+        "materialization_source_id": "income",
+    }
+    selected_id = identity_of(selected_operand).key
+    execution_id = identity_of(execution_operand).key
+    dimension_id = identity_of(dimension).key
+    metadata = _metadata(selected_id, dimension_id)
+    finance_trace = metadata["finance_numeric_trace"]
+    finance_trace["calculation_plan"]["operands"][0]["evidence_identity"] = execution_id
+    finance_trace["calculation_verification"] = {
+        "valid": True,
+        "errors": [],
+        "required_slot_ids": ["operand:revenue:2023"],
+        "verified_required_slot_ids": ["operand:revenue:2023"],
+    }
+    finance_trace["calculation_execution"] = {"status": "ok"}
+    prediction = {
+        "question": "What was revenue in 2023, in millions?",
+        "answer_type": "numeric",
+        "gold_answers": ["120"],
+    }
+
+    metrics = required_slot_reference_metrics(
+        prediction,
+        metadata,
+        [selected_operand, execution_operand, dimension],
+    )
+
+    assert metrics["execution_operand_resolution_rate"] == 1.0
+
+
 def _evidence_records() -> tuple[dict[str, Any], dict[str, Any]]:
     operand = {
         "source_id": "report",

@@ -25,6 +25,7 @@ def select_answerability_candidate(
     product_answer = str(
         prediction.get("answer_for_scoring") or prediction.get("predicted_answer") or ""
     ).strip()
+    product_candidate = _strip_truncated_display_math(product_answer)
     metadata_sources = _metadata_sources(prediction)
     pre_guardrail = _first_substantive_value(
         metadata_sources,
@@ -34,13 +35,16 @@ def select_answerability_candidate(
         metadata_sources,
         "pre_verification_answer",
     )
-    product_abstained = _structured_abstention(prediction, product_answer)
+    product_abstained = _structured_abstention(
+        prediction,
+        product_answer,
+    ) or not _is_substantive_answer(product_candidate)
     if not product_abstained:
         return AnswerabilityCandidate(
             product_answer=product_answer,
             pre_guardrail_answer=pre_guardrail,
             pre_verification_answer=pre_verification,
-            candidate_for_answerability=product_answer,
+            candidate_for_answerability=product_candidate,
             input_candidate_kind="product_answer",
             product_abstained=False,
             recovery_attempted=False,
@@ -62,11 +66,22 @@ def _original_candidate(
     pre_guardrail: str,
     pre_verification: str,
 ) -> tuple[str, str]:
-    if pre_guardrail and not is_abstention_answer(pre_guardrail):
+    if _is_substantive_answer(pre_guardrail):
         return pre_guardrail, "pre_guardrail_answer"
-    if pre_verification and not is_abstention_answer(pre_verification):
+    if _is_substantive_answer(pre_verification):
         return pre_verification, "pre_verification_answer"
     return "", "missing_original_candidate"
+
+
+def _is_substantive_answer(value: str) -> bool:
+    return bool(value) and not is_abstention_answer(value)
+
+
+def _strip_truncated_display_math(value: str) -> str:
+    stripped = value.strip()
+    if stripped.count("$$") % 2:
+        stripped = stripped[: stripped.rfind("$$")].rstrip()
+    return stripped
 
 
 def _structured_abstention(
@@ -107,7 +122,7 @@ def _first_substantive_value(
     key: str,
 ) -> str:
     for source in sources:
-        value = str(source.get(key) or "").strip()
-        if value:
+        value = _strip_truncated_display_math(str(source.get(key) or ""))
+        if _is_substantive_answer(value):
             return value
     return ""

@@ -405,6 +405,25 @@ def _qasper_stale_verifier_state(
     prediction: dict[str, Any],
     metadata: dict[str, Any],
 ) -> int:
+    terminal = prediction.get("terminal_answer_state")
+    if isinstance(terminal, dict):
+        final_answer = str(
+            prediction.get("answer_for_scoring")
+            or prediction.get("predicted_answer")
+            or ""
+        )
+        terminal_decision = terminal.get("verify_decision")
+        if _normalized_answer(terminal.get("answer")) != _normalized_answer(
+            final_answer
+        ):
+            return 1
+        if not isinstance(terminal_decision, dict):
+            return 1
+        if prediction.get("verify_decision") != terminal_decision:
+            return 1
+        if metadata.get("verify_decision") != terminal_decision:
+            return 1
+        return int(metadata.get("answer_dependent_state") != "terminal_answer_state.v1")
     if not isinstance(prediction.get("pre_contract_verification"), dict):
         return 0
     post = prediction.get("post_contract_verification")

@@ -3,7 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import pytest
+
 from kotaemon.base import Document, LLMInterface
+from kotaemon.indices.qa.citation import (
+    CitationPipeline,
+    CitationToolCallConfigurationError,
+)
 from kotaemon.indices.qa.citation_qa import AnswerWithContextPipeline
 from kotaemon.indices.qa.citation_qa_inline import AnswerWithInlineCitation
 from kotaemon.indices.qa.format_context import EVIDENCE_MODE_FIGURE
@@ -82,6 +88,33 @@ def _claims_with_status(
     return [
         claim for claim in claim_verification["claims"] if claim.get("status") == status
     ]
+
+
+def test_stream_surfaces_citation_tool_call_configuration_errors():
+    class ToolCallBadRequest(Exception):
+        status_code = 400
+
+    class MisconfiguredLLM(ChatLLM):
+        def invoke(self, _messages, **_kwargs):
+            raise ToolCallBadRequest(
+                'tool_choice="required" requires --tool-call-parser to be set'
+            )
+
+    pipeline = AnswerWithContextPipeline(
+        llm=FakeStreamingLLM(chunks=["Supported answer."]),
+        citation_pipeline=CitationPipeline(llm=MisconfiguredLLM()),
+        create_mindmap_pipeline=lambda **kwargs: None,
+        enable_citation=True,
+        enable_claim_verification=False,
+    )
+
+    with pytest.raises(CitationToolCallConfigurationError):
+        _consume_stream(
+            pipeline.stream(
+                question="What is supported?",
+                evidence="Supported answer.",
+            )
+        )
 
 
 def test_stream_records_supported_claim_when_claim_verification_enabled():

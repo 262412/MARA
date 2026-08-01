@@ -21,6 +21,7 @@ from kotaemon.llms import ChatLLM, PromptTemplate
 
 from .citation import CitationPipeline
 from .citation_refs import citation_target_from_document, citation_targets_from_spans
+from .citation_task import CitationTask
 from .claim_verification import revise_or_abstain, verify_claims
 from .format_context import (
     EVIDENCE_MODE_FIGURE,
@@ -308,12 +309,10 @@ class AnswerWithContextPipeline(BaseComponent):
             prompt = question
 
         # retrieve the citation
-        citation = None
+        citation_task = CitationTask(
+            self.citation_pipeline, context=evidence, question=question
+        )
         mindmap = None
-
-        def citation_call():
-            nonlocal citation
-            citation = self.citation_pipeline(context=evidence, question=question)
 
         def mindmap_call():
             nonlocal mindmap
@@ -325,7 +324,7 @@ class AnswerWithContextPipeline(BaseComponent):
         # execute function call in thread
         if evidence:
             if self.enable_citation:
-                citation_thread = threading.Thread(target=citation_call)
+                citation_thread = threading.Thread(target=citation_task.run)
                 citation_thread.start()
 
             if self.enable_mindmap:
@@ -397,8 +396,7 @@ class AnswerWithContextPipeline(BaseComponent):
         else:
             qa_score = None
 
-        if citation_thread:
-            citation_thread.join(timeout=CITATION_TIMEOUT)
+        citation = citation_task.finish(citation_thread, CITATION_TIMEOUT)
         if mindmap_thread:
             mindmap_thread.join(timeout=CITATION_TIMEOUT)
 

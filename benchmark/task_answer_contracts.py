@@ -20,6 +20,7 @@ from .qasper_candidate_state import (
     AnswerabilityCandidate,
     select_answerability_candidate,
 )
+from .qasper_deterministic_support import deterministic_support_ids
 from .qasper_evidence_priorities import qasper_evidence_priorities
 
 
@@ -99,6 +100,19 @@ def apply_task_answer_contract(
     return True
 
 
+def synchronize_terminal_answer_state(prediction: dict[str, Any]) -> bool:
+    """Commit one authoritative QASPER state after presentation finalization."""
+
+    from .qasper_terminal_sync import synchronize_terminal_answer_state as synchronize
+
+    return synchronize(
+        prediction,
+        clear_citations=_clear_stale_answer_citations,
+        verify_answer=_run_post_contract_verification,
+        bind_support=_bind_answerability_support,
+    )
+
+
 def _adjudicate_qasper_answer(
     prediction: dict[str, Any],
     candidate_state: AnswerabilityCandidate,
@@ -117,7 +131,11 @@ def _adjudicate_qasper_answer(
     typed_boolean_recheck = bool(
         not candidate
         and str(prediction.get("answer_type") or "").strip().lower() == "boolean"
-        and priorities.required_evidence_ids
+        and (
+            priorities.required_evidence_ids
+            or priorities.generation_evidence_ids
+            or priorities.claim_support_evidence_ids
+        )
     )
     if not candidate and not typed_boolean_recheck:
         return QasperAnswerabilityResult(
@@ -284,11 +302,7 @@ def _bind_answerability_support(
         if _normalized_answer(quote) in _normalized_answer(_item_text(item))
     ]
     if str(prediction.get("answer_type") or "").strip().lower() == "boolean":
-        items = scope_valid_support_items(
-            str(prediction.get("question") or ""),
-            answer,
-            items,
-        )
+        items = _validated_boolean_support(prediction, answer, trace, items)
     if not items:
         return
     support = min(items, key=lambda item: len(_item_text(item)))
@@ -346,6 +360,22 @@ def _bind_answerability_support(
             "qasper:answerability": [support_id]
         }
         target["answer_dependent_state"] = "post_contract_verified"
+
+
+def _validated_boolean_support(
+    prediction: dict[str, Any],
+    answer: str,
+    trace: dict[str, Any],
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    deterministic_ids = deterministic_support_ids(trace)
+    if deterministic_ids:
+        return [item for item in items if identity_of(item).key in deterministic_ids]
+    return scope_valid_support_items(
+        str(prediction.get("question") or ""),
+        answer,
+        items,
+    )
 
 
 def _clear_stale_answer_citations(

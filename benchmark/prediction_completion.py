@@ -20,7 +20,10 @@ from .research_adapters import (
 from .research_evaluators import external_research_adapter_metrics
 from .scoring import normalize_operational_fields, score_prediction
 from .stage_metrics import prediction_stage_metric_status, prediction_stage_metrics
-from .task_answer_contracts import apply_task_answer_contract
+from .task_answer_contracts import (
+    apply_task_answer_contract,
+    synchronize_terminal_answer_state,
+)
 from .verifier_observability import prediction_verifier_observability
 
 
@@ -154,6 +157,7 @@ def _finalize_answer(
             mode=answer_mode,
         )
         finalization_seconds += monotonic() - started
+    synchronize_terminal_answer_state(prediction)
     record_stage_timing(prediction, "answerability_seconds", answerability_seconds)
     record_stage_timing(
         prediction,

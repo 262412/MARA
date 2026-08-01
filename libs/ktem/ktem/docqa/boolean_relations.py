@@ -50,6 +50,7 @@ _IRREGULAR_FORMS = {
     "shown": "show",
     "taught": "train",
     "used": "use",
+    "uses": "use",
 }
 
 

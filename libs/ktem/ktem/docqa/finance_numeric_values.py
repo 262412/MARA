@@ -302,14 +302,39 @@ def free_cash_flow_inputs(
 
 def revolving_credit_capacities(text: str) -> list[float]:
     capacities: list[float] = []
+    seen_agreements: set[tuple[str, float]] = set()
     pattern = (
         r"\b(?:borrow|borrowing)[^.:\n]{0,80}?\bup\s+to\s+"
         r"(\$?\s*\d[\d,]*(?:\.\d+)?)"
     )
-    for match in re.finditer(pattern, str(text or ""), flags=re.IGNORECASE):
+    source = str(text or "")
+    for match in re.finditer(pattern, source, flags=re.IGNORECASE):
         value = parse_amount(match.group(1))
-        if value is not None:
-            capacities.append(value)
+        if value is None:
+            continue
+        clause_start = max(
+            source.rfind(".", 0, match.start()) + 1,
+            source.rfind("\n", 0, match.start()) + 1,
+        )
+        clause = source[clause_start : match.end()].lower()
+        agreement_context = source[max(0, match.start() - 240) : match.end()].lower()
+        kinds = [
+            (candidate.end(), kind)
+            for pattern_text, kind in (
+                (r"\b364[ -]day\b", "364_day"),
+                (r"\bfive[ -]year\b", "five_year"),
+                (r"\b5[ -]year\b", "five_year"),
+            )
+            for candidate in re.finditer(pattern_text, agreement_context)
+        ]
+        agreement_kind = (
+            max(kinds)[1] if kinds else " ".join(re.findall(r"[a-z0-9]+", clause))
+        )
+        agreement = (agreement_kind, value)
+        if agreement in seen_agreements:
+            continue
+        seen_agreements.add(agreement)
+        capacities.append(value)
     return capacities
 
 

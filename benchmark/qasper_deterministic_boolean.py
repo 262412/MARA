@@ -6,9 +6,9 @@ from typing import Any
 from ktem.docqa.evidence_identity import identity_of
 
 from .qasper_boolean_scope import (
+    ClosedScopeResolution,
     evidence_item_text,
     resolve_closed_scope_boolean,
-    scope_valid_support_items,
 )
 
 
@@ -41,8 +41,7 @@ def deterministic_closed_scope_result(
         "reason": "deterministic_current_scope",
         "parser_status": "not_called_deterministic_scope",
         **_deterministic_input_trace(
-            question,
-            resolution.polarity,
+            resolution,
             evidence_items,
         ),
         **resolution.decision.as_trace(),
@@ -51,12 +50,10 @@ def deterministic_closed_scope_result(
 
 
 def _deterministic_input_trace(
-    question: str,
-    polarity: str,
+    resolution: ClosedScopeResolution,
     evidence_items: list[dict[str, Any]],
 ) -> dict[str, str]:
-    support_items = scope_valid_support_items(question, polarity, evidence_items)
-    support = min(support_items, key=lambda item: len(evidence_item_text(item)))
+    support = resolution.evidence_item
     support_id = identity_of(support).key
     dropped_ids: list[str] = []
     for item in evidence_items:

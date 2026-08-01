@@ -98,6 +98,21 @@ def test_verified_typed_execution_cannot_be_abstained_by_missing_phrase():
     assert metadata["heuristic_overridden"] is True
 
 
+def test_verified_typed_execution_overrides_stale_missing_slot_count():
+    metadata = _typed_metadata()
+    metadata["missing_required_slot_count"] = 1
+
+    decision = evaluate_retrieval_quality(
+        "doc_text",
+        metadata,
+        prompt="What was capital expenditure in 2018?",
+        verification_domain="finance",
+    )
+
+    assert decision.status == "good"
+    assert metadata["adequacy_decision_authority"] == "typed_calculation"
+
+
 def test_incomplete_typed_execution_does_not_override_adequacy():
     metadata = _typed_metadata(complete=False)
 

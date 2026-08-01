@@ -40,6 +40,7 @@ def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any
     materialized.pop("identity", None)
     materialized.pop("canonical_id", None)
     for key in (
+        "evaluation_identity",
         "reranker_backend",
         "reranker_input_identity",
         "reranker_model",
@@ -47,6 +48,7 @@ def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any
         "reranker_rank",
         "reranker_score",
         "reranking_score",
+        "runtime_identity",
     ):
         materialized.pop(key, None)
     parent_evidence_id = str(
@@ -90,6 +92,7 @@ def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any
     )
     metadata = dict(materialized.get("metadata") or {})
     for key in (
+        "evaluation_identity",
         "late_interaction_tokens",
         "representations",
         "caption",
@@ -104,6 +107,7 @@ def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any
         "reranker_rank",
         "reranker_score",
         "reranking_score",
+        "runtime_identity",
     ):
         metadata.pop(key, None)
     materialized["metadata"] = metadata
@@ -127,9 +131,27 @@ def cell_identity(item: dict[str, Any], cell_id: str) -> str:
 
 
 def same_source(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    if _explicit_parent_child_lineage(left, right):
+        return True
     left_source = _source_id(left)
     right_source = _source_id(right)
     return bool(left_source and left_source == right_source)
+
+
+def _explicit_parent_child_lineage(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> bool:
+    for child, parent in ((left, right), (right, left)):
+        parent_id = str(child.get("materialization_source_id") or "").strip()
+        parent_aliases = {
+            str(parent.get(field) or "").strip()
+            for field in ("evidence_id", "canonical_id", "element_id")
+            if str(parent.get(field) or "").strip()
+        }
+        if parent_id and parent_id in parent_aliases:
+            return True
+    return False
 
 
 def _source_id(item: dict[str, Any]) -> str:

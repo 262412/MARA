@@ -292,7 +292,12 @@ def evaluate_retrieval_quality(
         missing_required_slots = int(
             evidence_metadata.get("missing_required_slot_count") or 0
         )
-        if missing_required_slots:
+        typed_execution_is_authoritative = (
+            evidence_metadata.get("typed_adequacy_status") == "good"
+            and evidence_metadata.get("adequacy_decision_authority")
+            == "typed_calculation"
+        )
+        if missing_required_slots and not typed_execution_is_authoritative:
             evidence_metadata["final_adequacy_status"] = "ambiguous"
             evidence_metadata["adequacy_decision_authority"] = "query_plan"
             evidence_metadata["heuristic_overridden"] = False

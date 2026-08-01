@@ -13,6 +13,7 @@ from .finance_query_planning import (
     FINANCE_METRIC_ALIASES,
     finance_metric_evidence_matches,
 )
+from .finance_scale import compatible_dimension_scope, dimension_binding_scope
 from .financial_statement_identity import matches_required_financial_identity
 from .query_evidence_constraints import (
     atomic_evidence,
@@ -35,6 +36,8 @@ def bind_evidence_slots(
     used_generic_operand_ids: set[str] = set()
     used_comparison_ids: set[str] = set()
     used_cross_page_locators: set[tuple[str, str]] = set()
+    evidence_by_identity = {identity_of(item).key: item for item in evidence_items}
+    bound_operand_items: list[dict[str, Any]] = []
     for slot in plan.evidence_slots:
         ranked = sorted(
             (
@@ -51,11 +54,19 @@ def bind_evidence_slots(
                 )
                 for index, item in enumerate(evidence_items)
             ),
-            key=lambda row: (-row[0], row[1]),
+            key=lambda row: (
+                -(row[0] + _binding_quality(row[2])),
+                -row[0],
+                row[1],
+            ),
         )
-        candidate_ids = [
-            identity_of(item).key for score, _index, item in ranked[:3] if score > 0
-        ]
+        candidate_ids = (
+            _dimension_candidate_ids(ranked, bound_operand_items)
+            if slot.role == "dimension"
+            else [
+                identity_of(item).key for score, _index, item in ranked[:3] if score > 0
+            ]
+        )
         distinct_slot_ids = set(
             plan.constraints.get("distinct_source_page_slot_ids") or []
         )
@@ -77,6 +88,12 @@ def bind_evidence_slots(
             ][:1]
             used_generic_operand_ids.update(candidate_ids)
         evidence_ids = tuple(candidate_ids)
+        if slot.role == "operand":
+            bound_operand_items.extend(
+                evidence_by_identity[evidence_id]
+                for evidence_id in evidence_ids
+                if evidence_id in evidence_by_identity
+            )
         bound_slots.append(
             replace(
                 slot,
@@ -85,6 +102,54 @@ def bind_evidence_slots(
             )
         )
     return replace(plan, evidence_slots=tuple(bound_slots))
+
+
+def _dimension_candidate_ids(
+    ranked: list[tuple[float, int, dict[str, Any]]],
+    operand_items: list[dict[str, Any]],
+) -> list[str]:
+    selected: list[str] = []
+    for operand in operand_items:
+        candidates = [
+            (
+                _dimension_scope_rank(operand, item),
+                -score,
+                index,
+                item,
+            )
+            for score, index, item in ranked
+            if score > 0
+            and not executable_operand_evidence(item)
+            and compatible_dimension_scope(operand, item)
+        ]
+        if not candidates:
+            continue
+        _scope, _score, _index, item = min(candidates)
+        identity = identity_of(item).key
+        if identity not in selected:
+            selected.append(identity)
+    return selected
+
+
+def _dimension_scope_rank(
+    operand: dict[str, Any],
+    dimension: dict[str, Any],
+) -> int:
+    return {
+        "table": 0,
+        "table_group": 1,
+        "page": 2,
+        "source": 3,
+    }.get(dimension_binding_scope(operand, dimension), 4)
+
+
+def _binding_quality(item: dict[str, Any]) -> float:
+    quality = 0.0
+    if evidence_scale(evidence_text(item), item):
+        quality += 1.0
+    if str(item.get("materialization_source_id") or "").strip():
+        quality += 0.25
+    return quality
 
 
 def score_evidence_for_slot(

@@ -86,7 +86,7 @@ def test_run_benchmark_adds_generic_route_diagnostics(monkeypatch, tmp_path):
     assert diagnostics["gold_span_hit"] == 1.0
     assert diagnostics["answer_nonempty_after_cleaning"] == 1.0
     assert diagnostics["verifier_status"] == "not_enough_evidence"
-    assert diagnostics["guardrail_action"] == ""
+    assert diagnostics["guardrail_action"] == "abstain"
     assert diagnostics["retrieval_failure_type"] == "none"
     assert diagnostics["citation_failure_type"] == "none"
     assert diagnostics["failure_class"] == "none"

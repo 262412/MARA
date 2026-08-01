@@ -3,7 +3,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ktem.docqa.evidence_identity import identity_of
+
 from .qasper_boolean_scope import scope_valid_support_items
+from .qasper_deterministic_support import deterministic_support_ids
 from .verified_claim_citations import verified_claim_support_groups
 
 
@@ -29,11 +32,26 @@ def _scope_valid_group(
 ) -> list[dict[str, Any]]:
     if str(prediction.get("answer_type") or "").strip().lower() != "boolean":
         return items
+    deterministic = _deterministic_qasper_support(prediction, items)
+    if deterministic:
+        return deterministic
     return scope_valid_support_items(
         str(prediction.get("question") or ""),
         span,
         items,
     )
+
+
+def _deterministic_qasper_support(
+    prediction: dict[str, Any],
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    metadata = prediction.get("evidence_metadata")
+    trace = metadata.get("qasper_answerability") if isinstance(metadata, dict) else None
+    if not isinstance(trace, dict):
+        return []
+    support_ids = deterministic_support_ids(trace)
+    return [item for item in items if identity_of(item).key in support_ids]
 
 
 def _best_item(

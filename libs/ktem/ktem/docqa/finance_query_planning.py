@@ -37,7 +37,13 @@ FINANCE_METRIC_ALIASES = {
     "current liabilities": ("current liabilities", "total current liabilities"),
     "gross profit": ("gross profit",),
     "inventory": ("inventory", "inventories"),
-    "net sales": ("net sales", "net revenue", "net revenues", "revenue"),
+    "net sales": (
+        "net sales",
+        "net revenue",
+        "net revenues",
+        "revenue",
+        "revenues",
+    ),
     "operating cash flow": (
         "operating cash flow",
         "cash from operations",
@@ -160,10 +166,41 @@ def finance_formula_spec(
     lowered = str(question or "").lower()
     if _is_fixed_asset_turnover(lowered):
         return _fixed_asset_turnover_formula(lowered, periods)
+    if "inventory turnover" in lowered:
+        return _inventory_turnover_formula(lowered, periods)
     ratio_specs = _multi_period_ratio_specs(lowered, periods)
     if ratio_specs and "average" in lowered:
         return _multi_period_percentage_formula(lowered, ratio_specs)
     return None
+
+
+def _inventory_turnover_formula(
+    question: str,
+    periods: list[str],
+) -> dict[str, object] | None:
+    target_period = finance_target_period(question, periods)
+    operand_specs = _inventory_turnover_specs(periods, target_period)
+    inventory_specs = [spec for spec in operand_specs if spec[1] == "inventory"]
+    if not target_period or len(inventory_specs) < 2:
+        return None
+    inventory_refs = [
+        {"ref": f"operand:{slot_id}"} for slot_id, _metric, _period in inventory_specs
+    ]
+    return _formula_spec(
+        formula_id="inventory_turnover_average",
+        match_rule="alias:inventory_turnover_average_inventory",
+        operand_specs=operand_specs,
+        expression={
+            "operator": "divide",
+            "inputs": [
+                {"ref": "operand:cost_of_goods_sold"},
+                {"operator": "average", "inputs": inventory_refs},
+            ],
+        },
+        answer_unit="ratio",
+        target_period=target_period,
+        previous_period=inventory_specs[0][2],
+    )
 
 
 def _fixed_asset_turnover_formula(

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import re
+from typing import Any
+
+from ktem.docqa.boolean_evidence_scope import classify_boolean_evidence_set
 
 from .qasper_boolean import boolean_quote_supports_relation, stemmed_content_tokens
 
@@ -11,12 +14,23 @@ def resolve_boolean_conflict(
     *,
     candidate_polarity: str,
     verdict: str,
+    evidence_items: list[dict[str, Any]] | None = None,
 ) -> tuple[str, str, dict[str, str]]:
-    candidate_score = _proposition_support_score(evidence, question, candidate_polarity)
+    candidate_score = _support_score(
+        evidence,
+        question,
+        candidate_polarity,
+        evidence_items=evidence_items,
+    )
     opposite = (
         "no" if candidate_polarity == "yes" else "yes" if candidate_polarity else ""
     )
-    contradiction_score = _proposition_support_score(evidence, question, opposite)
+    contradiction_score = _support_score(
+        evidence,
+        question,
+        opposite,
+        evidence_items=evidence_items,
+    )
     action, answer, conflict_status = _boolean_answer_action(
         candidate_polarity,
         verdict,
@@ -34,6 +48,29 @@ def resolve_boolean_conflict(
             "abstention_reason": conflict_status if answer == "unanswerable" else "",
         },
     )
+
+
+def _support_score(
+    evidence: str,
+    question: str,
+    polarity: str,
+    *,
+    evidence_items: list[dict[str, Any]] | None,
+) -> float:
+    if evidence_items:
+        classified = classify_boolean_evidence_set(
+            question,
+            polarity,
+            evidence_items,
+        )
+        return max(
+            (
+                assessment.relation_score * assessment.object_score
+                for assessment in classified.supports
+            ),
+            default=0.0,
+        )
+    return _proposition_support_score(evidence, question, polarity)
 
 
 def _boolean_answer_action(

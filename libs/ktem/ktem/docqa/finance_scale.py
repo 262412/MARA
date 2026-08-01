@@ -40,6 +40,8 @@ def source_scale_evidence(
     for candidate in evidence_items:
         if _source_id(candidate) != source_id:
             continue
+        if item is not None and not compatible_dimension_scope(item, candidate):
+            continue
         if (
             _is_atomic_evidence(candidate)
             and _item_id(candidate) != item_id
@@ -80,6 +82,8 @@ def dimension_binding_scope(
 ) -> str:
     if item is None or dimension_item is None:
         return ""
+    if _is_materialization_parent(item, dimension_item):
+        return "table"
     if _same_field(item, dimension_item, "table_instance_id"):
         return "table"
     if _same_field(item, dimension_item, "table_group_id"):
@@ -95,20 +99,72 @@ def compatible_dimension_scope(
     item: dict[str, Any],
     dimension_item: dict[str, Any],
 ) -> bool:
+    if _is_materialization_parent(item, dimension_item):
+        return True
     if _source_id(item) != _source_id(dimension_item):
         return False
+    if _source_wide_scale_convention(dimension_item):
+        return True
     table_instance_id = _item_dimension(item, "table_instance_id")
     dimension_table_instance_id = _item_dimension(
         dimension_item,
         "table_instance_id",
     )
-    if table_instance_id and dimension_table_instance_id:
-        return table_instance_id == dimension_table_instance_id
+    if table_instance_id or dimension_table_instance_id:
+        return bool(
+            table_instance_id
+            and dimension_table_instance_id
+            and table_instance_id == dimension_table_instance_id
+        )
     table_group_id = _item_dimension(item, "table_group_id")
     dimension_table_group_id = _item_dimension(dimension_item, "table_group_id")
-    if table_group_id and dimension_table_group_id:
-        return table_group_id == dimension_table_group_id
+    if table_group_id or dimension_table_group_id:
+        return bool(
+            table_group_id
+            and dimension_table_group_id
+            and table_group_id == dimension_table_group_id
+        )
+    page_label = _item_dimension(item, "page_label")
+    dimension_page_label = _item_dimension(dimension_item, "page_label")
+    if page_label or dimension_page_label:
+        return bool(
+            page_label and dimension_page_label and page_label == dimension_page_label
+        )
     return True
+
+
+def _source_wide_scale_convention(item: dict[str, Any]) -> bool:
+    text = " ".join(_item_text(item).lower().split())
+    return bool(
+        (
+            "unless otherwise noted" in text
+            and (
+                "tabular dollars" in text
+                or "all dollar amounts" in text
+                or "all amounts" in text
+            )
+        )
+        or re.search(
+            r"all amounts.{0,80}?following tables?.{0,40}?"
+            r"(?:are\s+)?in\s+(?:thousands?|millions?|billions?)\b",
+            text,
+        )
+    )
+
+
+def _is_materialization_parent(
+    item: dict[str, Any],
+    candidate: dict[str, Any],
+) -> bool:
+    parent_id = str(item.get("materialization_source_id") or "").strip()
+    if not parent_id:
+        return False
+    candidate_ids = {
+        str(candidate.get(field) or "").strip()
+        for field in ("evidence_id", "canonical_id", "element_id")
+        if str(candidate.get(field) or "").strip()
+    }
+    return parent_id in candidate_ids
 
 
 def _binding_distance(

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from .calculation_evidence_identity import calculation_evidence_lookup
 from .calculation_plan import (
     CalculationExecution,
     CalculationOperand,
@@ -37,7 +38,11 @@ from .financial_statement_identity import (
     required_operand_identity,
 )
 from .financial_table import FinancialTableCell, find_financial_cell
-from .query_evidence_constraints import period_kind_conflicts, period_kind_in_question
+from .query_evidence_constraints import (
+    executable_operand_evidence,
+    period_kind_conflicts,
+    period_kind_in_question,
+)
 
 _SCALED_RESULT_TYPES = {
     "capital_expenditure",
@@ -74,13 +79,26 @@ def finance_calculation_audit(
 ) -> FinanceCalculationAudit:
     operands: list[CalculationOperand] = []
     used_evidence_ids: set[str] = set()
-    for name, value in inputs.items():
+    execution_slots = [
+        dict(slot)
+        for slot in (query_plan or {}).get("evidence_slots") or []
+        if isinstance(slot, dict)
+        and str(slot.get("role") or "") == "operand"
+        and bool(slot.get("required_for_execution"))
+    ]
+    positionally_bound = len(execution_slots) == len(inputs)
+    for input_index, (name, value) in enumerate(inputs.items()):
+        slot = execution_slots[input_index] if positionally_bound else None
+        operand_evidence = _preferred_slot_evidence(
+            evidence_items,
+            list((slot or {}).get("evidence_ids") or []),
+        )
         operand = _operand_from_input(
             name,
             value,
             question=question,
             question_type=question_type,
-            evidence_items=evidence_items,
+            evidence_items=operand_evidence,
             excluded_evidence_ids=used_evidence_ids,
         )
         operands.append(operand)
@@ -89,7 +107,6 @@ def finance_calculation_audit(
         if (
             repeated_value
             and binding_id
-            and not name.startswith("revolving_credit_capacity_")
             and (
                 bool(operand.cell_id)
                 or _atomic_evidence_id(operand.evidence_id, evidence_items)
@@ -131,6 +148,29 @@ def finance_calculation_audit(
         )
     )
     return FinanceCalculationAudit(plan, verification, execution)
+
+
+def _preferred_slot_evidence(
+    evidence_items: list[dict[str, Any]],
+    evidence_ids: list[Any],
+) -> list[dict[str, Any]]:
+    if not evidence_ids:
+        return evidence_items
+    lookup = calculation_evidence_lookup(evidence_items)
+    preferred = [
+        lookup[evidence_id]
+        for raw_id in evidence_ids
+        if (evidence_id := str(raw_id or "").strip()) in lookup
+    ]
+    preferred_identities = {identity_of(item).key for item in preferred}
+    return [
+        *preferred,
+        *(
+            item
+            for item in evidence_items
+            if identity_of(item).key not in preferred_identities
+        ),
+    ]
 
 
 def _operand_from_input(
@@ -399,6 +439,7 @@ def _matching_item(
     ranked = sorted(
         enumerate(matches),
         key=lambda row: (
+            -executable_operand_evidence(row[1]),
             -_metric_support(row[1], aliases),
             -bool(_item_dimension(row[1], "scale") or _scale(_item_text(row[1]))),
             row[0],

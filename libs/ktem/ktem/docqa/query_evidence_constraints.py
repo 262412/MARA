@@ -23,6 +23,7 @@ def atomic_evidence(item: dict[str, Any]) -> bool:
 def executable_operand_evidence(item: dict[str, Any]) -> bool:
     if not atomic_evidence(item):
         return False
+    evidence_level = str(item.get("evidence_level") or "").strip().lower()
     value = item.get("value")
     if value in (None, ""):
         return False
@@ -37,7 +38,7 @@ def executable_operand_evidence(item: dict[str, Any]) -> bool:
         cell_role = "data"
     if cell_role and cell_role != "data":
         return False
-    if not cell_role and not item.get("span_id"):
+    if not cell_role and evidence_level != "span" and not item.get("span_id"):
         return False
     period = str(item.get("period") or item.get("column_label") or "").strip()
     return not (

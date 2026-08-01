@@ -38,19 +38,6 @@ def bind_numeric_query_plan(
 ) -> dict[str, Any] | None:
     if not isinstance(query_plan, dict):
         return None
-    slots = [
-        slot
-        for slot in query_plan.get("evidence_slots") or []
-        if isinstance(slot, dict)
-    ]
-    execution_slots = [
-        slot for slot in slots if bool(slot.get("required_for_execution"))
-    ]
-    if execution_slots and all(
-        str(slot.get("status") or "") == "filled" and bool(slot.get("evidence_ids"))
-        for slot in execution_slots
-    ):
-        return query_plan
     constraints = dict(query_plan.get("constraints") or {})
     plan = plan_from_payload(
         prompt,
@@ -178,6 +165,14 @@ def _formula_answer(
             question_type="multi_period_ratio_average",
             inputs=inputs,
             formula="average(numerator_year / denominator_year * 100)",
+        )
+    if formula_id == "inventory_turnover_average":
+        return FinanceNumericAnswer(
+            answer="",
+            confidence=0.95,
+            question_type="inventory_turnover_average",
+            inputs=inputs,
+            formula="cost_of_goods_sold / average(inventory_years)",
         )
     return None
 

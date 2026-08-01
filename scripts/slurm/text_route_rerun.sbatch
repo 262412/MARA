@@ -40,6 +40,8 @@ SUITE_NAME="${NAME}-${RUN_ID}"
 LOG_ROOT="${OUT_ROOT}/logs/${RUN_ID}"
 BENCHMARK_LOG="${LOG_ROOT}/benchmark.log"
 HEALTH_JSON="${HEALTH_ROOT}/${NAME}-${RUN_ID}.json"
+TOOL_CALL_SMOKE_JSON="${HEALTH_ROOT}/${NAME}-${RUN_ID}-tool-calls.json"
+TOOL_CALL_SMOKE_LOG="${LOG_ROOT}/tool-call-smoke.log"
 
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/users/tbczhang/fastscratch/cache/uv}"
 export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/users/tbczhang/fastscratch/cache/uv/python}"
@@ -195,6 +197,14 @@ fi
 
 wait_http text_llm "${TEXT_LLM_BASE_URL}/models" 600
 wait_http retrieval "${RETRIEVAL_BASE_URL}/health" 240
+
+uv run --python 3.10 python \
+  "${PROJECT_ROOT}/scripts/slurm/smoke_openai_tool_calls.py" \
+  --base-url "$TEXT_LLM_BASE_URL" \
+  --output "$TOOL_CALL_SMOKE_JSON" |
+  tee "$TOOL_CALL_SMOKE_LOG"
+grep -Fx "citation_tool_call_error_count=0" "$TOOL_CALL_SMOKE_LOG"
+grep -Fx "inline_structured_citation_path_executed=true" "$TOOL_CALL_SMOKE_LOG"
 
 uv run --python 3.10 python "${HPC_HOME}/configure_mara_local_models.py"
 

@@ -39,6 +39,7 @@ def required_slot_reference_metrics(
     lookup = unambiguous_evidence_alias_lookup(items)
     requires_structure = bool(plan.constraints.get("requires_structure"))
     calculation_operands = _calculation_operands(metadata)
+    verified_execution_slots = _verified_execution_slots(metadata)
     audit_execution = any(
         str(answer or "").strip() and not is_abstention_answer(str(answer))
         for answer in prediction.get("gold_answers") or []
@@ -50,6 +51,7 @@ def required_slot_reference_metrics(
                 slot,
                 lookup,
                 calculation_operands,
+                verified_execution_slots,
                 requires_structure=requires_structure,
                 audit_execution=audit_execution,
             )
@@ -61,6 +63,7 @@ def _audit_slot_reference(
     slot: Any,
     lookup: dict[str, dict[str, Any]],
     calculation_operands: list[dict[str, Any]],
+    verified_execution_slots: set[str],
     *,
     requires_structure: bool,
     audit_execution: bool,
@@ -100,6 +103,7 @@ def _audit_slot_reference(
                 slot,
                 resolved,
                 calculation_operands,
+                verified_execution_slots,
                 requires_structure=requires_structure,
             )
         )
@@ -130,6 +134,7 @@ def _audit_execution_operand_slot(
     slot: Any,
     resolved: list[dict[str, Any]],
     calculation_operands: list[dict[str, Any]],
+    verified_execution_slots: set[str],
     *,
     requires_structure: bool,
 ) -> Counter[str]:
@@ -160,7 +165,8 @@ def _audit_execution_operand_slot(
     counts["bound_execution_slots"] = 1
     matching_ids = {identity_of(item).key for item in matching}
     counts["resolved_execution_operands"] = int(
-        any(
+        slot.slot_id in verified_execution_slots
+        or any(
             str(operand.get("evidence_identity") or operand.get("evidence_id") or "")
             in matching_ids
             for operand in calculation_operands
@@ -271,6 +277,26 @@ def _calculation_operands(metadata: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(plan, dict):
         return []
     return _records(plan.get("operands"))
+
+
+def _verified_execution_slots(metadata: dict[str, Any]) -> set[str]:
+    trace = metadata.get("finance_numeric_trace")
+    if not isinstance(trace, dict):
+        return set()
+    verification = trace.get("calculation_verification")
+    execution = trace.get("calculation_execution")
+    if (
+        not isinstance(verification, dict)
+        or not verification.get("valid")
+        or not isinstance(execution, dict)
+        or execution.get("status") != "ok"
+    ):
+        return set()
+    return {
+        str(value).strip()
+        for value in verification.get("verified_required_slot_ids") or []
+        if str(value or "").strip()
+    }
 
 
 def _has_match_constraints(slot: Any) -> bool:

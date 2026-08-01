@@ -8,6 +8,7 @@ from ktem.docqa.evidence_locators import normalized_source_page_locators
 
 from .metrics import is_abstention_answer
 from .qasper_boolean_scope import scope_valid_support_items
+from .qasper_deterministic_support import deterministic_support_ids
 
 
 def qasper_contract_metric_values(
@@ -139,6 +140,11 @@ def _scope_valid_citations(
 ) -> list[dict[str, Any]]:
     if _answer_type(prediction) != "boolean" or is_abstention_answer(answer):
         return cited
+    metadata = prediction.get("evidence_metadata")
+    trace = metadata.get("qasper_answerability") if isinstance(metadata, dict) else None
+    support_ids = deterministic_support_ids(trace) if isinstance(trace, dict) else set()
+    if support_ids:
+        return [item for item in cited if identity_of(item).key in support_ids]
     return scope_valid_support_items(
         str(prediction.get("question") or ""),
         answer,

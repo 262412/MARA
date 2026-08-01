@@ -7,6 +7,12 @@ from typing import Any
 from .evidence_identity import evidence_aliases, identity_of
 from .evidence_set_objective import marginal_set_gain
 from .evidence_structure import structure_coverage_context
+from .execution_slot_lineage import (
+    execution_slot_lineage,
+    is_atomic_operand_candidate,
+    linked_dimension_candidate,
+    linked_parent_candidate,
+)
 from .query_planning import (
     QueryPlan,
     bind_evidence_slots,
@@ -181,8 +187,15 @@ def _select_required_slot_evidence(
                 item
                 for item in ranked
                 if _slot_score(plan, slot, item) > 0
+                and (
+                    not (slot.required_for_execution and slot.role == "operand")
+                    or is_atomic_operand_candidate(item)
+                )
                 and _identity(item) not in selected_ids
-                and _page_allowed(item, selected, max_pages)
+                and (
+                    (slot.required_for_execution and slot.role == "operand")
+                    or _page_allowed(item, selected, max_pages)
+                )
                 and (
                     not plan.constraints.get("requires_distinct_source_pages")
                     or (distinct_slot_ids and slot.slot_id not in distinct_slot_ids)
@@ -197,6 +210,13 @@ def _select_required_slot_evidence(
         )
         if match is not None:
             _append_selected(match, selected, selected_ids)
+            if slot.required_for_execution and slot.role == "operand":
+                parent = linked_parent_candidate(match, candidates)
+                if parent is not None and _identity(parent) not in selected_ids:
+                    _append_selected(parent, selected, selected_ids)
+                dimension = linked_dimension_candidate(match, candidates)
+                if dimension is not None and _identity(dimension) not in selected_ids:
+                    _append_selected(dimension, selected, selected_ids)
             if (
                 plan.constraints.get("requires_distinct_source_pages")
                 and (
@@ -278,6 +298,11 @@ def _selection_trace(
             }
             for slot in bound.evidence_slots
             if slot.required_for_retrieval
+        ],
+        "execution_slot_lineage": [
+            execution_slot_lineage(bound, slot, candidates, selected)
+            for slot in bound.evidence_slots
+            if slot.required_for_execution
         ],
         "relevance_score_contract": SELECTION_SCORE_CONTRACT,
     }

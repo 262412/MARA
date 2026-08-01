@@ -4,8 +4,6 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .boolean_relations import boolean_relations_align, primary_boolean_relation
-
 
 @dataclass(frozen=True)
 class BooleanScopeDecision:
@@ -30,6 +28,29 @@ class ClosedScopeResolution:
     polarity: str
     evidence_quote: str
     decision: BooleanScopeDecision
+    evidence_item: dict[str, Any]
+
+
+def classify_boolean_evidence(
+    question: str,
+    answer: str,
+    item: dict[str, Any],
+) -> Any:
+    from .boolean_proposition_evidence import classify_boolean_evidence as classify
+
+    return classify(question, answer, item)
+
+
+def classify_boolean_evidence_set(
+    question: str,
+    answer: str,
+    items: list[dict[str, Any]],
+) -> Any:
+    from .boolean_proposition_evidence import (
+        classify_boolean_evidence_set as classify_set,
+    )
+
+    return classify_set(question, answer, items)
 
 
 def validate_boolean_scope(
@@ -112,23 +133,8 @@ def scope_valid_support_items(
     answer: str,
     items: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    polarity = _answer_polarity(answer)
-    if not polarity:
-        return []
-    output: list[dict[str, Any]] = []
-    for item in items:
-        text = evidence_item_text(item)
-        if not text:
-            continue
-        decision = validate_boolean_scope(
-            question,
-            text,
-            polarity,
-            evidence_items=[item],
-        )
-        if decision.scope_valid:
-            output.append(item)
-    return output
+    classified = classify_boolean_evidence_set(question, answer, items)
+    return [assessment.item for assessment in classified.supports]
 
 
 def boolean_retrieval_query(question: str) -> str:
@@ -187,6 +193,7 @@ def resolve_closed_scope_boolean(
         polarity=polarity,
         evidence_quote=_scope_excerpt(evidence_item_text(item), polarity),
         decision=decision,
+        evidence_item=item,
     )
 
 
@@ -204,7 +211,7 @@ def _resolve_current_experiment_question(
         and re.search(r"\b(?:tasks?|benchmarks?)\b", lowered)
     ):
         return None
-    candidates: list[tuple[str, BooleanScopeDecision]] = []
+    candidates: list[tuple[dict[str, Any], str, BooleanScopeDecision]] = []
     for item in evidence_items:
         text = evidence_item_text(item)
         if not text:
@@ -219,14 +226,15 @@ def _resolve_current_experiment_question(
             continue
         quote = _current_experiment_excerpt(text)
         if quote:
-            candidates.append((quote, decision))
+            candidates.append((item, quote, decision))
     if not candidates:
         return None
-    quote, decision = min(candidates, key=lambda value: len(value[0]))
+    item, quote, decision = min(candidates, key=lambda value: len(value[1]))
     return ClosedScopeResolution(
         polarity="yes",
         evidence_quote=quote,
         decision=decision,
+        evidence_item=item,
     )
 
 
@@ -245,59 +253,43 @@ def _current_experiment_excerpt(text: str) -> str:
         r"ran|measur|observation|observe)\w*\b",
         flags=re.IGNORECASE,
     )
-    return next(
-        (
-            statement
-            for statement in statements
-            if current_actor.search(statement) and empirical_action.search(statement)
-        ),
-        "",
+    candidates = [
+        statement
+        for statement in statements
+        if current_actor.search(statement) and empirical_action.search(statement)
+    ]
+    return max(
+        candidates,
+        key=_current_experiment_statement_score,
+        default="",
     )
+
+
+def _current_experiment_statement_score(statement: str) -> int:
+    lowered = statement.lower()
+    score = 0
+    if re.search(r"\b(?:i|we|our|the authors?)\b", lowered):
+        score += 2
+    if re.search(
+        r"\b(?:unable to construct|evaluat|experiment|measur|"
+        r"observe|observed|observes|observing|observation|ran|tested)\w*\b",
+        lowered,
+    ):
+        score += 2
+    if re.search(r"\b(?:could|may|might|will|would)\b", lowered):
+        score -= 3
+    return score
 
 
 def boolean_proposition_evidence_score(
     question: str,
     item: dict[str, Any],
 ) -> float:
-    text = evidence_item_text(item)
-    if not text:
-        return 0.0
-    section_role = _section_role(item, text)
-    actor = _actor(text, section_role)
-    if actor == "cited_work":
-        return 0.0
-    if _language_data_question(question) and _has_closed_quantifier(question):
-        valid = any(
-            validate_boolean_scope(
-                question,
-                text,
-                verdict,
-                evidence_items=[item],
-            ).scope_valid
-            for verdict in ("yes", "no")
-        )
-        return 2.0 if valid else 0.0
-    if primary_boolean_relation(question) and not boolean_relations_align(
-        question,
-        text,
-    ):
-        return 0.0
-    if re.search(r"\b(?:experiment|evaluate|test|task)\w*\b", question.lower()):
-        if actor == "current_paper" and section_role in {
-            "experiments",
-            "methods",
-            "results",
-        }:
-            return 2.0
-        return 0.0
-    question_tokens = _content_tokens(question)
-    evidence_tokens = _content_tokens(text)
-    if not question_tokens:
-        return 0.0
-    coverage = len(question_tokens & evidence_tokens) / len(question_tokens)
-    if coverage < 0.35:
-        return 0.0
-    return 1.0 + coverage
+    from .boolean_proposition_evidence import (
+        boolean_proposition_evidence_score as score,
+    )
+
+    return score(question, item)
 
 
 def evidence_item_text(item: dict[str, Any]) -> str:
@@ -369,6 +361,8 @@ def _section_role_from_text(value: str) -> str:
     lowered = str(value or "").lower()
     if re.search(r"\b(?:related work|background|previous work|prior work)\b", lowered):
         return "related_work"
+    if re.search(r"\b(?:future work|limitation)\b", lowered):
+        return "future_work"
     if re.search(
         r"\b(?:experiments?|evaluation|evaluate|datasets?|corpora|corpus|"
         r"test(?:ed|ing)?|translated?|translation programs?|for instance|"
@@ -384,8 +378,6 @@ def _section_role_from_text(value: str) -> str:
         lowered,
     ):
         return "methods"
-    if re.search(r"\b(?:future work|limitation)\b", lowered):
-        return "future_work"
     if re.search(r"\b(?:introduction|overview|motivation)\b", lowered):
         return "introduction"
     return ""
@@ -488,33 +480,6 @@ def _english_closed_scope(quote: str) -> bool:
             lowered,
         )
     )
-
-
-def _answer_polarity(answer: str) -> str:
-    normalized = str(answer or "").strip().lower()
-    if normalized in {"yes", "true"}:
-        return "yes"
-    if normalized in {"no", "false"}:
-        return "no"
-    return ""
-
-
-def _content_tokens(value: str) -> set[str]:
-    stopwords = {
-        "are",
-        "did",
-        "does",
-        "only",
-        "the",
-        "they",
-        "was",
-        "were",
-    }
-    return {
-        token
-        for token in re.findall(r"[a-z0-9]+", str(value or "").lower())
-        if len(token) > 2 and token not in stopwords
-    }
 
 
 def _scope_excerpt(text: str, polarity: str) -> str:

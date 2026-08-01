@@ -256,6 +256,7 @@ def _adjudicated_boolean_result(
         question,
         candidate_polarity=conflict_candidate,
         verdict=verdict,
+        evidence_items=evidence_items if scope_valid else [],
     )
     relation_trace.update(conflict_trace)
     return QasperAnswerabilityResult(

@@ -10,6 +10,19 @@ from kotaemon.llms import BaseLLM
 logger = logging.getLogger(__name__)
 
 
+class CitationToolCallConfigurationError(RuntimeError):
+    """The citation backend rejected its required tool-call contract."""
+
+
+def _is_tool_call_configuration_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return (
+        getattr(exc, "status_code", None) == 400
+        and "tool_choice" in message
+        and ("tool-call-parser" in message or "tool call parser" in message)
+    )
+
+
 def _should_disable_deepseek_v4_thinking(llm: BaseLLM) -> bool:
     source_llm = getattr(llm, "ff_original_obj", llm)
     model = str(getattr(source_llm, "model", "") or "").lower()
@@ -100,8 +113,12 @@ class CitationPipeline(BaseComponent):
                 output = CiteEvidence.parse_raw(function_output)
             else:
                 output = CiteEvidence.parse_obj(function_output)
-        except Exception:
+        except Exception as exc:
             logger.exception("CitationPipeline failed")
+            if _is_tool_call_configuration_error(exc):
+                raise CitationToolCallConfigurationError(
+                    "Citation backend does not support the required tool-call contract"
+                ) from exc
             return None
 
         return output

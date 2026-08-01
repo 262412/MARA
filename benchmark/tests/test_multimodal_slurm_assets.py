@@ -18,6 +18,7 @@ INDEX_CONTRACT = PROJECT_ROOT / "scripts/slurm/benchmark_index_contract.py"
 SEMANTIC_EVALUATOR_NORMALIZER = (
     PROJECT_ROOT / "scripts/slurm/normalize_semantic_evaluator.py"
 )
+TOOL_CALL_SMOKE = PROJECT_ROOT / "scripts/slurm/smoke_openai_tool_calls.py"
 RUNBOOK = PROJECT_ROOT / "docs/development/multimodal_route_runbook.md"
 
 
@@ -179,6 +180,15 @@ def test_text_route_slurm_script_can_emit_and_validate_full_contract_artifacts()
     assert text.index(CONTRACT_SMOKE_VALIDATOR.name) < text.index(
         "mara_cleanup_benchmark_runtime"
     )
+
+
+def test_text_route_slurm_script_hard_checks_tool_calls_before_benchmark():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert TOOL_CALL_SMOKE.name in text
+    assert "citation_tool_call_error_count=0" in text
+    assert "inline_structured_citation_path_executed=true" in text
+    assert text.index(TOOL_CALL_SMOKE.name) < text.index("python -m benchmark run")
 
 
 def test_semantic_evaluator_normalizer_maps_local_alias_and_rejects_invalid_values():
