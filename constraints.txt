@@ -169,7 +169,7 @@ nest-asyncio==1.6.0
 networkx==3.4.2 ; python_full_version < '3.11'
 networkx==3.5 ; python_full_version >= '3.11'
 nh3==0.3.6
-nltk==3.9.2
+nltk==3.10.0
 numba==0.62.1
 numpy==1.26.4
 nvidia-cublas-cu12==12.8.4.1 ; platform_machine == 'x86_64' and sys_platform == 'linux'
@@ -220,7 +220,7 @@ protobuf==4.25.8
 psutil==7.1.0
 py-rust-stemmers==0.1.5
 pyarrow==21.0.0
-pyasn1==0.6.1
+pyasn1==0.6.4
 pyasn1-modules==0.4.2
 pycparser==2.23 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
 pydantic==2.10.6
