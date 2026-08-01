@@ -314,13 +314,21 @@ def _matching_item(
 
 def _actor(quote: str, section_role: str) -> str:
     lowered = str(quote or "").lower()
+    if any(
+        marker in lowered
+        for marker in (
+            "other authors",
+            "other researchers",
+            "other studies",
+            "other work",
+        )
+    ):
+        return "other_authors"
     cited_markers = (
         "previous work",
         "prior work",
         "earlier work",
         "related work",
-        "other studies",
-        "other researchers",
     )
     if (
         section_role == "related_work"
@@ -329,6 +337,8 @@ def _actor(quote: str, section_role: str) -> str:
         or re.search(r"\b[a-z][a-z-]+\s+et\s+al\.?\s*(?:19|20)\d{2}\b", lowered)
     ):
         return "cited_work"
+    if re.search(r"\b[a-z][a-z-]+\s+et\s+al\.?", lowered):
+        return "other_authors"
     if re.search(
         r"\b(?:i|we|our|current study|this (?:paper|article|study|work)|"
         r"the authors)\b",
@@ -370,7 +380,7 @@ def _section_role_from_text(value: str) -> str:
         lowered,
     ):
         return "experiments"
-    if re.search(r"\b(?:result|finding|performance)\b", lowered):
+    if re.search(r"\b(?:results?|findings?|performance)\b", lowered):
         return "results"
     if re.search(
         r"\b(?:method|approach|procedure|annotation|current study|"
@@ -402,7 +412,7 @@ def _scope_rejection(
     section_role: str,
     structured_scope_available: bool,
 ) -> str:
-    if actor == "cited_work":
+    if actor in {"cited_work", "other_authors"}:
         return "cited_work_does_not_establish_current_paper_claim"
     if not _requires_current_paper_scope(question):
         return ""

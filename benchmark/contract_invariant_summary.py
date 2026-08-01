@@ -168,6 +168,14 @@ def _execution_binding_summary(
             metrics,
             "rounding_verification_failure_count",
         ),
+        "query_plan_calculation_plan_state_mismatch_count": _sum(
+            metrics,
+            "query_plan_calculation_plan_state_mismatch_count",
+        ),
+        "verified_execution_gold_discrepancy_count": _sum(
+            metrics,
+            "verified_execution_gold_discrepancy_count",
+        ),
     }
 
 

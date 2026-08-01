@@ -28,7 +28,11 @@ def financial_statement_identity(
         explicit_scope = ""
         text = str(value or "")
     normalized = _normalize(text)
-    kind = explicit_kind or _statement_kind(normalized)
+    kind = (
+        explicit_kind
+        or _atomic_metric_statement_kind(value)
+        or _statement_kind(normalized)
+    )
     scope = explicit_scope or _financial_scope(normalized, kind)
     return kind, scope
 
@@ -37,6 +41,10 @@ def required_financial_identity(metric: str) -> tuple[str, str]:
     normalized = str(metric or "").strip().lower()
     if normalized == "inventory":
         return "balance_sheet", "consolidated"
+    if normalized in {
+        "adjusted ebitda",
+    }:
+        return "non_gaap_performance", ""
     if normalized in {
         "cost of goods sold",
         "gross profit",
@@ -97,6 +105,17 @@ def _statement_kind(text: str) -> str:
     if any(
         phrase in text
         for phrase in (
+            "adjusted ebitda reconciliation",
+            "reconciliation of adjusted ebitda",
+            "reconciliation of non gaap",
+            "non gaap financial measure",
+            "non gaap measures",
+        )
+    ):
+        return "non_gaap_performance"
+    if any(
+        phrase in text
+        for phrase in (
             "reporting segment",
             "reportable segment",
             "revenue by segment",
@@ -147,6 +166,16 @@ def _statement_kind(text: str) -> str:
         )
     ):
         return "compensation_or_benefit_table"
+    return ""
+
+
+def _atomic_metric_statement_kind(value: str | dict[str, Any]) -> str:
+    if not isinstance(value, dict):
+        return ""
+    evidence_level = str(value.get("evidence_level") or "").strip().lower()
+    row_label = _normalize(str(value.get("row_label") or ""))
+    if evidence_level in {"cell", "span"} and row_label == "adjusted ebitda":
+        return "non_gaap_performance"
     return ""
 
 

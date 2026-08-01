@@ -11,6 +11,11 @@ from ktem.docqa.evidence_locators import normalized_source_page_locators
 from .contract_gate_metrics import prediction_gate_metrics
 from .contract_invariant_summary import summarize_contract_invariants
 from .execution_slot_contract_metrics import required_slot_reference_metrics
+from .finance_contract_violation_summary import (
+    query_plan_calculation_plan_state_mismatch,
+    unique_finance_violation_summary,
+    verified_execution_gold_discrepancy,
+)
 from .metrics import is_abstention_answer, numeric_tolerance_score
 from .qasper_contract_invariants import qasper_contract_metric_values
 from .source_join_metrics import source_join_metrics
@@ -95,7 +100,9 @@ def contract_invariant_summary(
     predictions: list[dict[str, Any]],
 ) -> dict[str, Any]:
     metrics = [_prediction_contract_metrics(prediction) for prediction in predictions]
-    return summarize_contract_invariants(metrics)
+    summary = summarize_contract_invariants(metrics)
+    summary.update(unique_finance_violation_summary(predictions, metrics))
+    return summary
 
 
 def _prediction_contract_metrics(
@@ -153,6 +160,7 @@ def _prediction_contract_metrics(
         "rounding_verification_failure_count": float(
             _rounding_verification_failure(metadata)
         ),
+        **_finance_state_metrics(prediction, metadata),
         "qasper_stale_verifier_state_count": float(
             _qasper_stale_verifier_state(prediction, metadata)
         ),
@@ -171,6 +179,20 @@ def _prediction_contract_metrics(
             reranked=reranked,
             selected=selected,
             generation_context=generation_context,
+        ),
+    }
+
+
+def _finance_state_metrics(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+) -> dict[str, float]:
+    return {
+        "query_plan_calculation_plan_state_mismatch_count": float(
+            query_plan_calculation_plan_state_mismatch(metadata)
+        ),
+        "verified_execution_gold_discrepancy_count": float(
+            verified_execution_gold_discrepancy(prediction, metadata)
         ),
     }
 

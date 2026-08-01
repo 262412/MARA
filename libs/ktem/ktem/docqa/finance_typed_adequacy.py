@@ -25,7 +25,46 @@ def ensure_finance_numeric_trace(request: Any, bundle: Any) -> None:
         query_plan=dict(metadata.get("query_plan") or {}),
     )
     if result is not None:
-        metadata["finance_numeric_trace"] = result.as_trace()
+        trace = result.as_trace()
+        metadata["finance_numeric_trace"] = trace
+        authoritative = dict(trace.get("authoritative_query_plan") or {})
+        if authoritative:
+            metadata["query_plan"] = authoritative
+            metadata["bound_query_plan"] = authoritative
+            metadata["missing_required_slot_count"] = sum(
+                bool(slot.get("required_for_retrieval"))
+                and str(slot.get("status") or "missing") != "filled"
+                for slot in authoritative.get("evidence_slots") or []
+                if isinstance(slot, dict)
+            )
+        _synchronize_typed_support(metadata, evidence_items, trace)
+
+
+def _synchronize_typed_support(
+    metadata: dict[str, Any],
+    evidence_items: list[dict[str, Any]],
+    trace: dict[str, Any],
+) -> None:
+    verification = dict(trace.get("calculation_verification") or {})
+    execution = dict(trace.get("calculation_execution") or {})
+    if not verification.get("valid") or execution.get("status") != "ok":
+        return
+    lookup = calculation_evidence_lookup(evidence_items)
+    citation_ids = [
+        str(value).strip()
+        for value in execution.get("citation_ids") or []
+        if str(value or "").strip()
+    ]
+    support: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for evidence_id in citation_ids:
+        item = lookup.get(evidence_id)
+        if item is None or id(item) in seen:
+            continue
+        seen.add(id(item))
+        support.append(item)
+    metadata["typed_calculation_support_evidence"] = support
+    metadata["typed_calculation_citation_ids"] = citation_ids
 
 
 def typed_calculation_adequacy(
@@ -35,11 +74,16 @@ def typed_calculation_adequacy(
 ) -> tuple[str, str]:
     if str(domain or "").strip().lower() not in _FINANCE_DOMAINS:
         return "not_applicable", "non_finance_domain"
-    query_plan = dict(evidence_metadata.get("query_plan") or {})
+    trace = evidence_metadata.get("finance_numeric_trace")
+    trace_payload = trace if isinstance(trace, dict) else {}
+    query_plan = dict(
+        trace_payload.get("authoritative_query_plan")
+        or evidence_metadata.get("query_plan")
+        or {}
+    )
     constraints = dict(query_plan.get("constraints") or {})
     if constraints.get("finance_formula_status") == "unsupported":
         return "not_applicable", "unsupported_formula"
-    trace = evidence_metadata.get("finance_numeric_trace")
     if not isinstance(trace, dict):
         return "incomplete", "missing_typed_calculation_trace"
     verification = dict(trace.get("calculation_verification") or {})

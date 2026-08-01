@@ -28,6 +28,9 @@ def verify_required_calculation_slots(
     verified_ids: list[str] = []
     errors: list[str] = []
     used_operands: set[str] = set()
+    exact_lineage = any(
+        str(getattr(operand, "query_slot_id", "") or "").strip() for operand in operands
+    )
     for slot, slot_id in zip(slots, required_ids):
         if str(slot.get("role") or "support") == "dimension":
             if _dimension_matches_slot(operands, slot, evidence_by_id):
@@ -40,6 +43,10 @@ def verify_required_calculation_slots(
                 candidate
                 for candidate in operands
                 if candidate.operand_id not in used_operands
+                and (
+                    not exact_lineage
+                    or str(getattr(candidate, "query_slot_id", "") or "") == slot_id
+                )
                 and _operand_matches_slot(
                     candidate,
                     slot,

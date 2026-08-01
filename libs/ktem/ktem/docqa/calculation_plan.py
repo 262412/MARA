@@ -48,7 +48,9 @@ class CalculationOperand:
     operand_id: str
     evidence_id: str
     value: Decimal
+    query_slot_id: str = ""
     evidence_identity: str = ""
+    source_id: str = ""
     unit: str = ""
     scale: str = ""
     currency: str = ""
@@ -72,7 +74,9 @@ class CalculationOperand:
         payload["value"] = str(self.value)
         for field_name in (
             "cell_id",
+            "query_slot_id",
             "evidence_identity",
+            "source_id",
             "row_label",
             "column_label",
             "period_kind",

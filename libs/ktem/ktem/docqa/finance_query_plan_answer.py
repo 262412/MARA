@@ -23,6 +23,7 @@ class FinanceNumericAnswer:
     calculation_plan: dict[str, Any] = field(default_factory=dict)
     calculation_verification: dict[str, Any] = field(default_factory=dict)
     calculation_execution: dict[str, Any] = field(default_factory=dict)
+    authoritative_query_plan: dict[str, Any] = field(default_factory=dict)
     attempt_status: str = "executed"
 
     def as_trace(self) -> dict[str, Any]:
@@ -38,6 +39,7 @@ def bind_numeric_query_plan(
 ) -> dict[str, Any] | None:
     if not isinstance(query_plan, dict):
         return None
+    query_plan = _calculation_query_plan(query_plan)
     constraints = dict(query_plan.get("constraints") or {})
     plan = plan_from_payload(
         prompt,
@@ -59,6 +61,7 @@ def answer_from_query_plan(
 ) -> FinanceNumericAnswer | None:
     if not isinstance(query_plan, dict):
         return None
+    query_plan = _calculation_query_plan(query_plan)
     constraints = dict(query_plan.get("constraints") or {})
     if constraints.get("finance_formula_status") == "unsupported":
         return failed_numeric_attempt("unsupported_formula")
@@ -114,8 +117,11 @@ def _execution_operand_slots(
         dict(slot)
         for slot in query_plan.get("evidence_slots") or []
         if isinstance(slot, dict)
-        and str(slot.get("role") or "") == "operand"
-        and bool(slot.get("required_for_execution"))
+        and str(slot.get("slot_id") or "").startswith("operand:")
+        and (
+            str(slot.get("role") or "") == "operand"
+            or bool(slot.get("required_for_execution"))
+        )
     ]
 
 
@@ -199,7 +205,7 @@ def _generic_plan_answer(
             answer="",
             confidence=0.95,
             question_type="percentage_change",
-            inputs={"prior": float(bound[0][1]), "current": float(bound[1][1])},
+            inputs={_slot_operand_id(slot): float(value) for slot, value in bound},
             formula="(current - prior) / abs(prior) * 100",
         )
     if len(bound) != 1:
@@ -280,8 +286,133 @@ def _dimension_bindings(
     return list(bindings.values())
 
 
+def synchronize_authoritative_query_plan(
+    query_plan: dict[str, Any] | None,
+    calculation_plan: dict[str, Any],
+    calculation_verification: dict[str, Any],
+) -> dict[str, Any]:
+    authoritative = _calculation_query_plan(query_plan or {})
+    if not authoritative or not calculation_verification.get("valid"):
+        return authoritative
+    operands = {
+        str(operand.get("query_slot_id") or ""): dict(operand)
+        for operand in calculation_plan.get("operands") or []
+        if isinstance(operand, dict) and str(operand.get("query_slot_id") or "")
+    }
+    slots: list[dict[str, Any]] = []
+    for raw_slot in authoritative.get("evidence_slots") or []:
+        if not isinstance(raw_slot, dict):
+            continue
+        slot = dict(raw_slot)
+        slot_id = str(slot.get("slot_id") or "")
+        operand = operands.get(slot_id)
+        if operand is not None:
+            slot.update(_operand_slot_state(operand))
+        elif str(slot.get("role") or "") == "dimension":
+            slot.update(_dimension_slot_state(slot_id, operands.values()))
+        slots.append(slot)
+    authoritative["evidence_slots"] = slots
+    authoritative["state_authority"] = "verified_calculation_plan"
+    authoritative["verified_required_slot_ids"] = list(
+        calculation_verification.get("verified_required_slot_ids") or []
+    )
+    return authoritative
+
+
+def _calculation_query_plan(query_plan: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(query_plan, dict):
+        return {}
+    payload = dict(query_plan)
+    slots: list[dict[str, Any]] = []
+    for value in query_plan.get("evidence_slots") or []:
+        if not isinstance(value, dict):
+            continue
+        slot = dict(value)
+        if str(slot.get("slot_id") or "").startswith("operand:"):
+            slot["role"] = "operand"
+            slot["required_for_execution"] = True
+        slots.append(slot)
+    payload["evidence_slots"] = slots
+    payload["constraints"] = dict(query_plan.get("constraints") or {})
+    return payload
+
+
+def _operand_slot_state(operand: dict[str, Any]) -> dict[str, Any]:
+    evidence_id = str(
+        operand.get("evidence_identity") or operand.get("evidence_id") or ""
+    )
+    state = {
+        "role": "operand",
+        "required_for_execution": True,
+        "status": "filled" if evidence_id else "missing",
+        "evidence_ids": [evidence_id] if evidence_id else [],
+    }
+    for field_name in (
+        "source_id",
+        "unit",
+        "scale",
+        "currency",
+        "period",
+        "period_kind",
+        "statement_kind",
+        "financial_scope",
+        "table_instance_id",
+        "table_group_id",
+        "dimension_binding_scope",
+    ):
+        value = operand.get(field_name)
+        if value not in (None, ""):
+            state[field_name] = value
+    return state
+
+
+def _dimension_slot_state(
+    slot_id: str,
+    operands: Any,
+) -> dict[str, Any]:
+    dimension = slot_id.rsplit(":", 1)[-1]
+    evidence_field = f"{dimension}_evidence_identity"
+    raw_evidence_field = f"{dimension}_evidence_id"
+    values = [
+        str(operand.get(dimension) or "")
+        for operand in operands
+        if str(operand.get(dimension) or "")
+    ]
+    evidence_ids = list(
+        dict.fromkeys(
+            str(operand.get(evidence_field) or operand.get(raw_evidence_field) or "")
+            for operand in operands
+            if str(operand.get(evidence_field) or operand.get(raw_evidence_field) or "")
+        )
+    )
+    state: dict[str, Any] = {
+        "status": "filled" if values and evidence_ids else "missing",
+        "evidence_ids": evidence_ids,
+    }
+    if len(set(values)) == 1:
+        state[dimension] = values[0]
+    scopes = list(
+        dict.fromkeys(
+            str(operand.get("dimension_binding_scope") or "")
+            for operand in operands
+            if str(operand.get("dimension_binding_scope") or "")
+        )
+    )
+    if len(scopes) == 1:
+        state["dimension_binding_scope"] = scopes[0]
+    state["applied_query_slot_ids"] = list(
+        dict.fromkeys(
+            str(operand.get("query_slot_id") or "")
+            for operand in operands
+            if str(operand.get("query_slot_id") or "")
+        )
+    )
+    return state
+
+
 def _direct_question_type(metric: str) -> str | None:
     return {
+        "adjusted ebitda": "adjusted_ebitda",
         "capital expenditure": "capital_expenditure",
         "current assets": "current_assets",
         "net property plant and equipment": "property_plant_equipment",

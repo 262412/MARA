@@ -15,6 +15,7 @@ from .calculation_plan import (
     verify_calculation_plan,
 )
 from .evidence_identity import identity_of
+from .execution_slot_lineage import linked_dimension_candidate, linked_parent_candidate
 from .finance_calculation_binding import atomic_evidence_id as _atomic_evidence_id
 from .finance_calculation_binding import atomic_item_value as _atomic_item_value
 from .finance_calculation_binding import decimal_values as _decimal_values
@@ -32,6 +33,7 @@ from .finance_query_planning import FINANCE_METRIC_ALIASES
 from .finance_scale import dimension_binding_scope as _dimension_binding_scope
 from .finance_scale import scale_from_text as _scale
 from .finance_scale import source_scale_evidence as _source_scale_evidence
+from .finance_slot_binding import slot_for_formula_input
 from .financial_statement_identity import (
     compatible_financial_identity,
     financial_statement_identity,
@@ -79,19 +81,20 @@ def finance_calculation_audit(
 ) -> FinanceCalculationAudit:
     operands: list[CalculationOperand] = []
     used_evidence_ids: set[str] = set()
-    execution_slots = [
-        dict(slot)
-        for slot in (query_plan or {}).get("evidence_slots") or []
-        if isinstance(slot, dict)
-        and str(slot.get("role") or "") == "operand"
-        and bool(slot.get("required_for_execution"))
-    ]
-    positionally_bound = len(execution_slots) == len(inputs)
-    for input_index, (name, value) in enumerate(inputs.items()):
-        slot = execution_slots[input_index] if positionally_bound else None
-        operand_evidence = _preferred_slot_evidence(
-            evidence_items,
-            list((slot or {}).get("evidence_ids") or []),
+    execution_slots = _execution_slots(query_plan)
+    for name, value in inputs.items():
+        slot = slot_for_formula_input(
+            name,
+            execution_slots,
+            question_type=question_type,
+        )
+        operand_evidence = (
+            _preferred_slot_evidence(
+                evidence_items,
+                _slot_evidence_ids(slot, query_plan),
+            )
+            if slot is not None
+            else ([] if execution_slots else evidence_items)
         )
         operand = _operand_from_input(
             name,
@@ -100,6 +103,7 @@ def finance_calculation_audit(
             question_type=question_type,
             evidence_items=operand_evidence,
             excluded_evidence_ids=used_evidence_ids,
+            query_slot_id=str((slot or {}).get("slot_id") or ""),
         )
         operands.append(operand)
         repeated_value = list(inputs.values()).count(value) > 1
@@ -134,9 +138,7 @@ def finance_calculation_audit(
         plan,
         evidence_items,
         question=question,
-        required_slots=[
-            dict(slot) for slot in (query_plan or {}).get("evidence_slots") or []
-        ],
+        required_slots=_authoritative_required_slots(query_plan, execution_slots),
     )
     execution = (
         execute_calculation_plan(plan)
@@ -155,22 +157,70 @@ def _preferred_slot_evidence(
     evidence_ids: list[Any],
 ) -> list[dict[str, Any]]:
     if not evidence_ids:
-        return evidence_items
+        return []
     lookup = calculation_evidence_lookup(evidence_items)
     preferred = [
         lookup[evidence_id]
         for raw_id in evidence_ids
         if (evidence_id := str(raw_id or "").strip()) in lookup
     ]
-    preferred_identities = {identity_of(item).key for item in preferred}
+    unique: dict[str, dict[str, Any]] = {}
+    for item in preferred:
+        unique.setdefault(identity_of(item).key, item)
+    for item in preferred:
+        parent = linked_parent_candidate(item, evidence_items)
+        if parent is not None:
+            unique.setdefault(identity_of(parent).key, parent)
+        dimension = linked_dimension_candidate(item, evidence_items)
+        if dimension is not None:
+            unique.setdefault(identity_of(dimension).key, dimension)
+    return list(unique.values())
+
+
+def _execution_slots(query_plan: dict[str, Any] | None) -> list[dict[str, Any]]:
     return [
-        *preferred,
-        *(
-            item
-            for item in evidence_items
-            if identity_of(item).key not in preferred_identities
-        ),
+        dict(slot)
+        for slot in (query_plan or {}).get("evidence_slots") or []
+        if isinstance(slot, dict)
+        and str(slot.get("slot_id") or "").startswith("operand:")
+        and (
+            bool(slot.get("required_for_execution"))
+            or str(slot.get("role") or "") in {"operand", "support"}
+        )
     ]
+
+
+def _slot_evidence_ids(
+    slot: dict[str, Any],
+    query_plan: dict[str, Any] | None,
+) -> list[Any]:
+    values = list(slot.get("evidence_ids") or [])
+    values.extend(
+        evidence_id
+        for dimension in (query_plan or {}).get("evidence_slots") or []
+        if isinstance(dimension, dict)
+        and str(dimension.get("role") or "") == "dimension"
+        and str(dimension.get("status") or "") == "filled"
+        for evidence_id in dimension.get("evidence_ids") or []
+    )
+    return list(dict.fromkeys(values))
+
+
+def _authoritative_required_slots(
+    query_plan: dict[str, Any] | None,
+    execution_slots: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    execution_ids = {str(slot.get("slot_id") or "") for slot in execution_slots}
+    slots: list[dict[str, Any]] = []
+    for value in (query_plan or {}).get("evidence_slots") or []:
+        if not isinstance(value, dict):
+            continue
+        slot = dict(value)
+        if str(slot.get("slot_id") or "") in execution_ids:
+            slot["role"] = "operand"
+            slot["required_for_execution"] = True
+        slots.append(slot)
+    return slots
 
 
 def _operand_from_input(
@@ -181,6 +231,7 @@ def _operand_from_input(
     question_type: str,
     evidence_items: list[dict[str, Any]],
     excluded_evidence_ids: set[str],
+    query_slot_id: str,
 ) -> CalculationOperand:
     decimal_value = Decimal(str(value))
     period = _operand_period(name, question)
@@ -218,6 +269,7 @@ def _operand_from_input(
             decimal_value,
             semantic_cell,
             evidence_items,
+            query_slot_id=query_slot_id,
             normalize_magnitude=(
                 question_type in {"capital_expenditure", "multi_period_ratio_average"}
                 and name.startswith("capital_expenditure")
@@ -243,6 +295,7 @@ def _operand_from_input(
         aliases,
         item,
         evidence_items,
+        query_slot_id=query_slot_id,
     )
 
 
@@ -252,6 +305,7 @@ def _operand_from_cell(
     cell: FinancialTableCell,
     evidence_items: list[dict[str, Any]],
     *,
+    query_slot_id: str = "",
     normalize_magnitude: bool = False,
 ) -> CalculationOperand:
     item = next(
@@ -284,6 +338,8 @@ def _operand_from_cell(
         evidence_id=cell.evidence_id,
         evidence_identity=_item_identity(item, cell_id=cell.cell_id),
         value=bound_value,
+        query_slot_id=query_slot_id,
+        source_id=_item_dimension(item, "source_id"),
         unit=cell.unit,
         scale=scale,
         currency=cell.currency,
@@ -311,6 +367,8 @@ def _operand_from_item(
     aliases: tuple[str, ...],
     item: dict[str, Any] | None,
     evidence_items: list[dict[str, Any]],
+    *,
+    query_slot_id: str = "",
 ) -> CalculationOperand:
     text = _item_text(item) if item is not None else ""
     statement_kind, financial_scope = (
@@ -327,6 +385,8 @@ def _operand_from_item(
         evidence_id=_item_id(item),
         evidence_identity=_item_identity(item),
         value=bound_value if bound_value is not None else value,
+        query_slot_id=query_slot_id,
+        source_id=_item_dimension(item, "source_id"),
         unit=_item_dimension(item, "unit"),
         scale=scale,
         currency=(

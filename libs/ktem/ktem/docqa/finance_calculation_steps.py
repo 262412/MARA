@@ -22,8 +22,9 @@ def calculation_steps(
     if question_type in {"operating_margin", "gross_margin"}:
         return _margin_steps(input_ids)
     if question_type == "percentage_change":
+        operands = input_ids if len(input_ids) == 2 else ("prior", "current")
         return (
-            (CalculationStep("result", "percent_change", ("prior", "current")),),
+            (CalculationStep("result", "percent_change", operands),),
             "result",
             "percent",
         )

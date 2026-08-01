@@ -39,6 +39,7 @@ from .finance_query_plan_answer import (
     answer_from_query_plan,
     bind_numeric_query_plan,
     failed_numeric_attempt,
+    synchronize_authoritative_query_plan,
 )
 from .finance_query_planning import FINANCE_METRIC_ALIASES, finance_metrics_in_question
 
@@ -56,7 +57,10 @@ def finance_numeric_answer(
         query_plan=bound_query_plan,
     )
     if answer is not None and answer.attempt_status != "executed":
-        return answer
+        return replace(
+            answer,
+            authoritative_query_plan=dict(bound_query_plan or {}),
+        )
     if answer is None:
         answer = _finance_numeric_answer_from_text(prompt, evidence_items)
     if answer is None:
@@ -70,6 +74,11 @@ def finance_numeric_answer(
         query_plan=bound_query_plan,
     )
     if not audit.verification.valid or audit.execution.status != "ok":
+        authoritative_query_plan = synchronize_authoritative_query_plan(
+            bound_query_plan,
+            audit.plan.as_dict(),
+            audit.verification.as_dict(),
+        )
         return replace(
             answer,
             answer="",
@@ -77,6 +86,7 @@ def finance_numeric_answer(
             calculation_plan=audit.plan.as_dict(),
             calculation_verification=audit.verification.as_dict(),
             calculation_execution=audit.execution.as_dict(),
+            authoritative_query_plan=authoritative_query_plan,
             attempt_status="verification_failed",
         )
     verified_answer = _render_execution_answer(
@@ -91,6 +101,11 @@ def finance_numeric_answer(
         calculation_plan=audit.plan.as_dict(),
         calculation_verification=audit.verification.as_dict(),
         calculation_execution=audit.execution.as_dict(),
+        authoritative_query_plan=synchronize_authoritative_query_plan(
+            bound_query_plan,
+            audit.plan.as_dict(),
+            audit.verification.as_dict(),
+        ),
     )
 
 

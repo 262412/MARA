@@ -5,6 +5,10 @@ import re
 from typing import Any
 
 from .evidence_identity import evidence_aliases, identity_of
+from .evidence_selection_budget import (
+    evidence_selection_budget_trace,
+    slot_candidate_reasons,
+)
 from .evidence_set_objective import marginal_set_gain
 from .evidence_structure import structure_coverage_context
 from .execution_slot_lineage import (
@@ -178,7 +182,8 @@ def _select_required_slot_evidence(
         ranked = sorted(
             candidates,
             key=lambda item: (
-                -(_slot_score(plan, slot, item) + _relevance(query, item)),
+                -_slot_score(plan, slot, item),
+                -_relevance(query, item),
                 _identity(item),
             ),
         )
@@ -267,6 +272,7 @@ def _selection_trace(
         "mixed_candidate_structure_metadata_coverage": mixed_structure_coverage,
         "structure_coverage_scope": structure_coverage_scope,
         "required_slot_candidates_restored": required_slot_candidates_restored,
+        **evidence_selection_budget_trace(bound, candidates, selected),
         "required_slot_bindings": [
             {
                 "slot_id": slot.slot_id,
@@ -295,6 +301,7 @@ def _selection_trace(
                     ),
                     default=0.0,
                 ),
+                **slot_candidate_reasons(bound, slot, candidates, selected),
             }
             for slot in bound.evidence_slots
             if slot.required_for_retrieval
