@@ -135,6 +135,9 @@ def test_joint_selection_preserves_all_required_operands() -> None:
         for binding in trace["execution_slot_lineage"]
         if binding["slot_id"].startswith("operand:")
     )
+    for binding in trace["required_slot_bindings"]:
+        assert binding["candidate_selection_reasons"]
+        assert "candidate_drop_reasons" in binding
 
 
 def test_correct_cell_survives_global_reranking() -> None:

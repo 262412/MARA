@@ -5,6 +5,7 @@ from typing import Any
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_set_selection import select_evidence_for_plan
 from ktem.docqa.execution_slot_lineage import linked_dimension_candidate
+from ktem.docqa.finance_calculation_adapter import finance_calculation_audit
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 from ktem.docqa.query_planning import bind_evidence_slots, build_query_plan
 
@@ -99,6 +100,83 @@ def test_execution_uses_query_plan_selected_cell_not_unscoped_duplicate() -> Non
     assert answer.calculation_plan["operands"][0]["evidence_id"] == "ppe-scoped"
 
 
+def test_execution_slot_preferred_evidence_cannot_leak_to_global_pool() -> None:
+    question = "What were FY2021 net sales?"
+    selected = {
+        **_cell("selected-sales", "Net sales", "100", period="2021"),
+        "statement_kind": "income_statement",
+    }
+    leaked = {
+        **_cell("leaked-sales", "Net sales", "999", period="2021"),
+        "statement_kind": "income_statement",
+    }
+    query_plan = build_query_plan(
+        question,
+        answer_type="numeric",
+        verification_domain="finance",
+    ).as_dict()
+    [slot] = [
+        item
+        for item in query_plan["evidence_slots"]
+        if item["slot_id"].startswith("operand:")
+    ]
+    slot["status"] = "filled"
+    slot["evidence_ids"] = [identity_of(selected).key]
+
+    audit = finance_calculation_audit(
+        question,
+        [selected, leaked],
+        question_type="net_sales",
+        inputs={"net_sales_2021": 999.0},
+        query_plan=query_plan,
+    )
+
+    [operand] = audit.plan.as_dict()["operands"]
+    assert operand["evidence_identity"] == identity_of(selected).key
+    assert operand["value"] == "100"
+
+
+def test_calculation_inputs_bind_to_slot_ids_not_slot_position() -> None:
+    question = (
+        "What was FY2021 working capital, defined as current assets less "
+        "current liabilities?"
+    )
+    assets = _cell("assets", "Current assets", "20991", period="2021")
+    liabilities = _cell(
+        "liabilities",
+        "Current liabilities",
+        "15173",
+        period="2021",
+    )
+    bound = bind_evidence_slots(
+        build_query_plan(
+            question,
+            answer_type="numeric",
+            verification_domain="finance",
+        ),
+        [assets, liabilities],
+    )
+
+    audit = finance_calculation_audit(
+        question,
+        [assets, liabilities],
+        question_type="working_capital",
+        inputs={"current_liabilities": 15173, "current_assets": 20991},
+        query_plan=bound.as_dict(),
+    )
+
+    operands = {
+        operand["query_slot_id"]: operand
+        for operand in audit.plan.as_dict()["operands"]
+    }
+    assert operands["operand:current_assets"]["evidence_identity"] == (
+        identity_of(assets).key
+    )
+    assert operands["operand:current_liabilities"]["evidence_identity"] == (
+        identity_of(liabilities).key
+    )
+
+
 def test_parenthesized_scale_header_binds_to_materialized_operand() -> None:
     question = "What was FY2018 capital expenditure in USD millions?"
     parent = {
@@ -147,6 +225,73 @@ def test_parenthesized_scale_header_binds_to_materialized_operand() -> None:
     assert answer is not None
     assert answer.answer == "$1,577 million"
     assert answer.calculation_execution["status"] == "ok"
+    authoritative = answer.as_trace()["authoritative_query_plan"]
+    operand_slot = next(
+        slot for slot in authoritative["evidence_slots"] if slot["role"] == "operand"
+    )
+    dimension_slot = next(
+        slot for slot in authoritative["evidence_slots"] if slot["role"] == "dimension"
+    )
+    assert operand_slot["scale"] == "million"
+    assert operand_slot["statement_kind"] == "cash_flow_statement"
+    assert operand_slot["table_instance_id"] == "cash-flow-table"
+    assert dimension_slot["scale"] == "million"
+    assert dimension_slot["evidence_ids"] == [identity_of(parent).key]
+
+
+def test_extractive_finance_cell_becomes_typed_execution_authority() -> None:
+    question = "What was adjusted EBITDA in FY2023?"
+    cell = {
+        **_cell("adjusted-ebitda", "Adjusted EBITDA", "1250", period="2023"),
+        "statement_kind": "non_gaap_performance",
+        "financial_scope": "consolidated",
+        "text": (
+            "Consolidated non-GAAP financial measure Adjusted EBITDA " "2023 1250 USD"
+        ),
+    }
+    plan = build_query_plan(
+        question,
+        answer_type="extractive",
+        verification_domain="finance",
+    )
+
+    answer = finance_numeric_answer(
+        question,
+        [cell],
+        query_plan=plan.as_dict(),
+    )
+
+    assert answer is not None
+    assert answer.attempt_status == "executed"
+    assert answer.calculation_verification["valid"] is True
+    assert answer.calculation_execution["status"] == "ok"
+    assert answer.authoritative_query_plan["state_authority"] == (
+        "verified_calculation_plan"
+    )
+
+
+def test_extractive_finance_cell_with_wrong_statement_scope_fails_closed() -> None:
+    question = "What was adjusted EBITDA in FY2023?"
+    compensation_cell = {
+        **_cell("compensation", "Adjusted EBITDA", "2018", period="2023"),
+        "statement_kind": "compensation_or_benefit_table",
+        "financial_scope": "",
+        "text": "Executive compensation Adjusted EBITDA 2023 2018",
+    }
+
+    answer = finance_numeric_answer(
+        question,
+        [compensation_cell],
+        query_plan=build_query_plan(
+            question,
+            answer_type="extractive",
+            verification_domain="finance",
+        ).as_dict(),
+    )
+
+    assert answer is not None
+    assert answer.calculation_execution["status"] != "ok"
+    assert answer.answer == ""
 
 
 def _ratio_cell(

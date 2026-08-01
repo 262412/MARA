@@ -8,8 +8,10 @@ from ktem.docqa.boolean_evidence_scope import (
 )
 
 from benchmark.answer_finalizer import finalize_prediction_answer
+from benchmark.contract_invariant_metrics import contract_invariant_summary
 from benchmark.qasper_answerability import verify_qasper_answerability
 from benchmark.qasper_contract_invariants import qasper_contract_metric_values
+from benchmark.qasper_proposition_conflict import resolve_boolean_conflict
 from benchmark.task_answer_contracts import (
     apply_task_answer_contract,
     synchronize_terminal_answer_state,
@@ -73,6 +75,23 @@ def test_current_paper_experiment_not_confused_with_related_work() -> None:
     assert assessment.proposition.actor == "cited_work"
 
 
+def test_current_paper_experiment_not_confused_with_other_authors() -> None:
+    item = _item(
+        "other-authors",
+        "Smith et al. evaluated the model on clinical tasks.",
+        section="results",
+    )
+
+    assessment = classify_boolean_evidence(
+        "Did the authors evaluate the model on clinical tasks?",
+        "yes",
+        item,
+    )
+
+    assert assessment.classification == "insufficient_scope"
+    assert assessment.proposition.actor == "other_authors"
+
+
 def test_future_work_does_not_prove_experiment_was_performed() -> None:
     item = _item(
         "future",
@@ -123,6 +142,132 @@ def test_high_confidence_support_survives_unrelated_evidence() -> None:
     assert classified.contradicts == ()
 
 
+def test_unrelated_negation_does_not_flip_target_predicate() -> None:
+    item = _item(
+        "mixed",
+        (
+            "We did not release the source code, but we evaluated the model "
+            "on clinical tasks."
+        ),
+    )
+
+    assessment = classify_boolean_evidence(
+        "Did the authors evaluate the model on clinical tasks?",
+        "yes",
+        item,
+    )
+
+    assert assessment.classification == "supports"
+    assert assessment.proposition.polarity == "yes"
+
+
+def test_negation_of_other_relation_does_not_flip_target_predicate() -> None:
+    item = _item(
+        "mixed-relations",
+        (
+            "We did not train the model on clinical tasks; "
+            "we evaluated it on clinical tasks."
+        ),
+    )
+
+    assessment = classify_boolean_evidence(
+        "Did the authors evaluate the model on clinical tasks?",
+        "yes",
+        item,
+    )
+
+    assert assessment.classification == "supports"
+    assert assessment.proposition.action == "evaluate"
+
+
+def test_proposition_key_contains_identity_and_polarity_dimensions() -> None:
+    assessment = classify_boolean_evidence(
+        "Did the authors evaluate the model on clinical tasks?",
+        "yes",
+        _item("support", "We evaluated the model on clinical tasks."),
+    )
+
+    assert assessment.proposition.key == (
+        "current_paper",
+        "evaluate",
+        "clinical model task",
+        "results",
+        "none",
+        "yes",
+    )
+
+
+def test_boolean_recovery_requires_claim_specific_support_identity() -> None:
+    quote = "We evaluated the model on clinical tasks."
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote),
+        question="Did the authors evaluate the model on clinical tasks?",
+        evidence=quote,
+        evidence_items=[],
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["action"] == "preserved_boolean_abstention"
+
+
+def test_weak_candidate_support_is_not_preserved() -> None:
+    action, answer, trace = resolve_boolean_conflict(
+        "We evaluated a benchmark.",
+        "Did the authors evaluate the model on clinical tasks?",
+        candidate_polarity="yes",
+        verdict="insufficient_evidence",
+    )
+
+    assert action == "abstained_insufficient_evidence"
+    assert answer == "unanswerable"
+    assert trace["conflict_status"] == "insufficient_evidence"
+
+
+def test_exact_positive_support_beats_unrelated_negative_clause() -> None:
+    positive = _item(
+        "positive",
+        "We evaluated the model on clinical tasks and report the results.",
+    )
+    unrelated_negative = _item(
+        "negative",
+        "We did not release the implementation used for the experiments.",
+    )
+
+    classified = classify_boolean_evidence_set(
+        "Did the authors evaluate the model on clinical tasks?",
+        "yes",
+        [unrelated_negative, positive],
+    )
+
+    assert [value.item["evidence_id"] for value in classified.supports] == ["positive"]
+    assert classified.contradicts == ()
+
+
+def test_balanced_conflict_requires_the_same_proposition_key() -> None:
+    positive = _item(
+        "positive",
+        "We evaluated the model on clinical tasks.",
+    )
+    negative = _item(
+        "negative",
+        "We did not evaluate the model on clinical tasks.",
+    )
+
+    action, answer, trace = resolve_boolean_conflict(
+        "",
+        "Did the authors evaluate the model on clinical tasks?",
+        candidate_polarity="yes",
+        verdict="no",
+        evidence_items=[positive, negative],
+    )
+
+    assert action == "abstained_polarity_conflict"
+    assert answer == "unanswerable"
+    assert trace["conflict_status"] == "balanced_conflict"
+
+
 def test_only_quantifier_requires_scope_valid_counterexample() -> None:
     related = _item(
         "related",
@@ -143,6 +288,34 @@ def test_only_quantifier_requires_scope_valid_counterexample() -> None:
 
     assert [item.item["evidence_id"] for item in classified.contradicts] == ["current"]
     assert classified.insufficient_scope[0].item["evidence_id"] == "related"
+
+
+def test_language_identity_is_not_collapsed_for_non_quantified_claim() -> None:
+    assessment = classify_boolean_evidence(
+        "Did the authors evaluate German datasets?",
+        "yes",
+        _item("greek", "We evaluated Greek datasets in our experiments."),
+    )
+
+    assert assessment.classification == "unrelated"
+    assert "german" in assessment.proposition.object
+
+
+def test_different_object_cannot_create_same_proposition_conflict() -> None:
+    positive = _item("positive", "We evaluated German datasets.")
+    different_object = _item("different", "We did not evaluate Greek datasets.")
+
+    action, answer, trace = resolve_boolean_conflict(
+        "",
+        "Did the authors evaluate German datasets?",
+        candidate_polarity="yes",
+        verdict="no",
+        evidence_items=[positive, different_object],
+    )
+
+    assert action == "preserved_candidate_conflict_warning"
+    assert answer == "yes"
+    assert trace["conflict_status"] == "candidate_support_dominates"
 
 
 def test_supported_boolean_answer_is_not_false_abstained() -> None:
@@ -236,6 +409,10 @@ def test_deterministic_experiment_support_survives_terminal_citation_rebuild() -
         contract_items=[evidence],
     )
     assert metrics["citation_scope_violation_count"] == 0.0
+    assert (
+        contract_invariant_summary([prediction])["qasper_stale_verifier_state_count"]
+        == 0.0
+    )
     assert prediction["evidence_metadata"]["qasper_answerability"][
         "evidence_quote"
     ].startswith("In fact, I have been unable")

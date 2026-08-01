@@ -1,4 +1,5 @@
 from ktem.docqa.evidence_set_selection import select_evidence_for_plan
+from ktem.docqa.query_plan_schema import EvidenceLocator, EvidenceSlot, QueryPlan
 from ktem.docqa.query_planning import build_query_plan
 
 
@@ -326,6 +327,147 @@ def test_selection_preserves_lowercase_multiword_entity_anchors():
     selected, _trace, _bound = select_evidence_for_plan(query, items, plan)
 
     assert selected[0]["evidence_id"] == "gideon-answer"
+
+
+def test_atomic_reservations_preserve_required_factual_evidence() -> None:
+    plan = QueryPlan(
+        answer_type="numeric",
+        question_type="numeric",
+        evidence_slots=(
+            EvidenceSlot(
+                slot_id="support:outlook",
+                role="support",
+                metric="supply disruption",
+            ),
+            EvidenceSlot(
+                slot_id="operand:current_assets:2021",
+                role="operand",
+                metric="current_assets",
+                period="2021",
+                statement_kind="balance_sheet",
+                financial_scope="consolidated",
+                required_for_execution=True,
+            ),
+        ),
+        constraints={"requires_structure": True},
+    )
+    factual = _item(
+        "outlook",
+        "9",
+        "Management expects the supply disruption to ease next year.",
+        0.01,
+    )
+    operand = _cell_item(
+        "assets",
+        "12",
+        "Consolidated current assets in 2021 were 120 million.",
+        0.02,
+        row_label="Current assets",
+        period="2021",
+        value="120",
+    )
+    operand["statement_kind"] = "balance_sheet"
+    operand["financial_scope"] = "consolidated"
+    calculation_noise = [
+        {
+            **operand,
+            "evidence_id": f"noise-{index}",
+            "canonical_id": f"evidence:noise-{index}",
+            "cell_id": f"noise-{index}",
+            "value": str(index + 1),
+            "metadata": {"reranking_score": 1.0 - index / 100},
+        }
+        for index in range(20)
+    ]
+
+    selected, trace, bound = select_evidence_for_plan(
+        "Explain supply disruption and report current assets in 2021",
+        [*calculation_noise, operand, factual],
+        plan,
+    )
+
+    assert "outlook" in {item["evidence_id"] for item in selected}
+    assert all(slot.status == "filled" for slot in bound.evidence_slots)
+    assert trace["selected_budget_usage"]["factual_narrative"] >= 1
+    assert trace["selected_budget_usage"]["execution_operands"] >= 1
+
+
+def test_reranker_cannot_override_incompatible_metric_or_period() -> None:
+    plan = build_query_plan(
+        "What were current assets in FY2021?",
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    wrong = _cell_item(
+        "wrong",
+        "12",
+        "Current liabilities in 2020 were 999 million.",
+        1.0,
+        row_label="Current liabilities",
+        period="2020",
+        value="999",
+    )
+    correct = _cell_item(
+        "correct",
+        "13",
+        "Current assets in 2021 were 120 million.",
+        0.01,
+        row_label="Current assets",
+        period="2021",
+        value="120",
+    )
+
+    selected, trace, bound = select_evidence_for_plan(
+        "current assets 2021",
+        [wrong, correct],
+        plan,
+    )
+
+    [operand] = [slot for slot in bound.evidence_slots if slot.role == "operand"]
+    assert operand.evidence_ids == ("cell:report:correct",)
+    [binding] = trace["required_slot_bindings"]
+    reasons = {
+        item["evidence_id"]: item["reason"]
+        for item in binding["candidate_drop_reasons"]
+    }
+    assert reasons["cell:report:wrong"] == "semantic_slot_mismatch"
+    assert "correct" in {item["evidence_id"] for item in selected}
+
+
+def test_required_gold_page_remains_selected_with_active_locator() -> None:
+    plan = QueryPlan(
+        answer_type="free_text",
+        question_type="simple_fact",
+        evidence_slots=(
+            EvidenceSlot(
+                slot_id="support:gold-page",
+                role="support",
+                metric="reported outlook",
+                locator=EvidenceLocator(source_id="report", page_label="9"),
+            ),
+        ),
+    )
+    wrong_page = _item(
+        "wrong-page",
+        "2",
+        "The reported outlook was positive.",
+        1.0,
+    )
+    gold_page = _item(
+        "gold-page",
+        "9",
+        "The reported outlook was cautious.",
+        0.01,
+    )
+
+    selected, _trace, bound = select_evidence_for_plan(
+        "reported outlook",
+        [wrong_page, gold_page],
+        plan,
+    )
+
+    assert "gold-page" in {item["evidence_id"] for item in selected}
+    assert bound.evidence_slots[0].evidence_ids == ("evidence:report:gold-page",)
 
 
 def _item(evidence_id, page, text, score):
