@@ -49,7 +49,26 @@ def _answer_text(answer: str) -> str:
         return ""
     text = _drop_late_answer_marker_rewrite(text)
     text = re.sub(r"<[^>]+>", " ", text)
+    text = _drop_incomplete_trailing_markup(text)
     return _remove_inner_abstain_text(text)
+
+
+def _drop_incomplete_trailing_markup(text: str) -> str:
+    cleaned = str(text or "")
+    for opener, closer in (("$$", "$$"), (r"\[", r"\]"), (r"\(", r"\)")):
+        if opener == closer:
+            if cleaned.count(opener) % 2:
+                cleaned = cleaned[: cleaned.rfind(opener)]
+            continue
+        if cleaned.count(opener) > cleaned.count(closer):
+            cleaned = cleaned[: cleaned.rfind(opener)]
+
+    for match in reversed(list(re.finditer(r"\\[A-Za-z]+\s*\{", cleaned))):
+        tail = cleaned[match.start() :]
+        if tail.count("{") > tail.count("}"):
+            cleaned = cleaned[: match.start()]
+            break
+    return cleaned.rstrip()
 
 
 def _last_discardable_answer_marker(text: str) -> re.Match[str] | None:

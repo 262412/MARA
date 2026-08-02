@@ -33,12 +33,18 @@ def source_scale_evidence(
     evidence_items: list[dict[str, Any]],
 ) -> tuple[str, str]:
     source_id = _source_id(item)
-    if not source_id:
-        return "", ""
     item_id = _item_id(item)
-    matches: list[tuple[int, str, str]] = []
+    if not source_id and not item_id:
+        return "", ""
+    matches: list[tuple[int, int, str, str]] = []
     for candidate in evidence_items:
-        if _source_id(candidate) != source_id:
+        if source_id and _source_id(candidate) != source_id:
+            continue
+        if (
+            not source_id
+            and _item_id(candidate) != item_id
+            and (item is None or not _is_materialization_parent(item, candidate))
+        ):
             continue
         if item is not None and not compatible_dimension_scope(item, candidate):
             continue
@@ -48,19 +54,35 @@ def source_scale_evidence(
             and candidate.get("value") not in (None, "")
         ):
             continue
-        scale = _item_dimension(candidate, "scale") or scale_from_text(
-            _item_text(candidate)
-        )
+        structured_scale = _item_dimension(candidate, "scale")
+        text_scale = scale_from_text(_item_text(candidate))
+        is_self = _item_id(candidate) == item_id
+        if _is_atomic_evidence(candidate) and is_self:
+            scale = (
+                structured_scale
+                if structured_scale
+                and _explicit_scale_in_text(_item_text(candidate), structured_scale)
+                else ""
+            )
+        else:
+            scale = structured_scale or text_scale
         evidence_id = _item_id(candidate)
         if scale and evidence_id:
-            matches.append((_binding_distance(item, candidate), scale, evidence_id))
+            matches.append(
+                (
+                    1 if _is_atomic_evidence(candidate) else 0,
+                    _binding_distance(item, candidate),
+                    scale,
+                    evidence_id,
+                )
+            )
     if not matches:
         return "", ""
-    best_distance = min(distance for distance, _scale, _evidence_id in matches)
+    best_rank = min((kind, distance) for kind, distance, _scale, _id in matches)
     local_matches = [
         (scale, evidence_id)
-        for distance, scale, evidence_id in matches
-        if distance == best_distance
+        for kind, distance, scale, evidence_id in matches
+        if (kind, distance) == best_rank
     ]
     scales = {scale for scale, _evidence_id in local_matches}
     if len(scales) != 1:
@@ -71,9 +93,16 @@ def source_scale_evidence(
         for candidate_scale, evidence_id in local_matches
         if candidate_scale == scale
     )
-    if item is not None and evidence_id == _item_id(item):
-        return scale, ""
     return scale, evidence_id
+
+
+def _explicit_scale_in_text(text: str, scale: str) -> bool:
+    return bool(
+        re.search(
+            rf"\b{re.escape(str(scale or '').lower())}s?\b",
+            str(text or "").lower(),
+        )
+    )
 
 
 def dimension_binding_scope(

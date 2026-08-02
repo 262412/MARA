@@ -39,6 +39,7 @@ from .finance_query_plan_answer import (
     answer_from_query_plan,
     bind_numeric_query_plan,
     failed_numeric_attempt,
+    reconcile_provisional_query_plan,
     synchronize_authoritative_query_plan,
 )
 from .finance_query_planning import FINANCE_METRIC_ALIASES, finance_metrics_in_question
@@ -51,11 +52,7 @@ def finance_numeric_answer(
     query_plan: dict[str, Any] | None = None,
 ) -> FinanceNumericAnswer | None:
     bound_query_plan = bind_numeric_query_plan(prompt, evidence_items, query_plan)
-    answer = answer_from_query_plan(
-        prompt,
-        evidence_items,
-        query_plan=bound_query_plan,
-    )
+    answer = answer_from_query_plan(prompt, evidence_items, query_plan=bound_query_plan)
     if answer is not None and answer.attempt_status != "executed":
         return replace(
             answer,
@@ -66,16 +63,27 @@ def finance_numeric_answer(
     if answer is None:
         failure_reason = _numeric_attempt_failure_reason(prompt, evidence_items)
         return failed_numeric_attempt(failure_reason) if failure_reason else None
-    audit = finance_calculation_audit(
+    initial_audit = finance_calculation_audit(
         prompt,
         evidence_items,
         question_type=answer.question_type,
         inputs=answer.inputs,
         query_plan=bound_query_plan,
     )
+    provisional_query_plan = reconcile_provisional_query_plan(
+        bound_query_plan,
+        initial_audit.plan.as_dict(),
+    )
+    audit = finance_calculation_audit(
+        prompt,
+        evidence_items,
+        question_type=answer.question_type,
+        inputs=answer.inputs,
+        query_plan=provisional_query_plan,
+    )
     if not audit.verification.valid or audit.execution.status != "ok":
         authoritative_query_plan = synchronize_authoritative_query_plan(
-            bound_query_plan,
+            provisional_query_plan,
             audit.plan.as_dict(),
             audit.verification.as_dict(),
         )
@@ -102,7 +110,7 @@ def finance_numeric_answer(
         calculation_verification=audit.verification.as_dict(),
         calculation_execution=audit.execution.as_dict(),
         authoritative_query_plan=synchronize_authoritative_query_plan(
-            bound_query_plan,
+            provisional_query_plan,
             audit.plan.as_dict(),
             audit.verification.as_dict(),
         ),

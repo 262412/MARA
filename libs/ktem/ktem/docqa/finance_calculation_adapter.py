@@ -349,14 +349,11 @@ def _operand_from_cell(
     )
     scale = cell.scale
     scale_evidence_id = ""
-    if scale and item is not None:
-        materialization_source_id = str(
-            item.get("materialization_source_id") or ""
-        ).strip()
-        if _item_for_id(materialization_source_id, evidence_items) is not None:
-            scale_evidence_id = materialization_source_id
+    discovered_scale, scale_evidence_id = _source_scale_evidence(item, evidence_items)
     if not scale:
-        scale, scale_evidence_id = _source_scale_evidence(item, evidence_items)
+        scale = discovered_scale
+    elif discovered_scale != scale:
+        scale_evidence_id = ""
     scale_item = _item_for_id(scale_evidence_id, evidence_items)
     scale_evidence_identity = _identity_for_raw_id(
         scale_evidence_id,

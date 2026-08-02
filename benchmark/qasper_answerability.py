@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ktem.docqa.boolean_proposition_evidence import boolean_proposition_binding_trace
+from ktem.docqa.claim_filtering import clean_answer_text
 
 from .metrics import is_abstention_answer
 from .qasper_answerability_prompts import (
@@ -531,7 +532,7 @@ def _has_repairable_verdict(
 
 
 def _clean_candidate(answer: str) -> str:
-    return _THINK_BLOCK_RE.sub("", str(answer or "")).strip().rstrip(".")
+    return clean_answer_text(_THINK_BLOCK_RE.sub("", str(answer or ""))).rstrip(".")
 
 
 def _boolean_verdict(answer: str) -> tuple[str, str]:

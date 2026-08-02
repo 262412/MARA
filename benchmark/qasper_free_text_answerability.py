@@ -255,15 +255,25 @@ def _candidate_answer_clauses(candidate: str, *, question: str) -> list[str]:
     ]
     if answer_phrases:
         return list(dict.fromkeys(answer_phrases))
-    return [
-        clause.strip(" ,.;")
-        for clause in re.split(
-            r"(?<=[.!?;])\s+|\s+(?:and|but|while|whereas)\s+|\s*\+\s*",
-            text,
+    clauses: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        sentence = re.sub(
+            r"^.*?\b(?:include(?:s|d|ing)?|consists?\s+of|comprises?)\s+",
+            "",
+            sentence,
+            count=1,
             flags=re.IGNORECASE,
         )
-        if clause.strip(" ,.;")
-    ]
+        clauses.extend(
+            clause.strip(" ,.;:")
+            for clause in re.split(
+                r"\s*[,;]\s*|\s+(?:and|but|while|whereas)\s+|\s*\+\s*",
+                sentence,
+                flags=re.IGNORECASE,
+            )
+            if clause.strip(" ,.;:")
+        )
+    return list(dict.fromkeys(clauses))
 
 
 def _normalized(value: str) -> str:

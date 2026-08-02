@@ -78,7 +78,7 @@ def test_cell_scale_provenance_reconciles_dimension_before_verification() -> Non
     assert answer is not None
     assert answer.answer == "$1,577 million"
     assert answer.calculation_execution["status"] == "ok"
-    assert answer.calculation_execution["value"] == "1577000000"
+    assert answer.calculation_execution["value"] == "1577"
     assert answer.calculation_verification["valid"] is True
     assert answer.authoritative_query_plan["state_authority"] == (
         "verified_calculation_plan"

@@ -12,8 +12,9 @@ from .finance_evidence_dimensions import evidence_scale
 from .finance_query_planning import (
     FINANCE_METRIC_ALIASES,
     finance_metric_evidence_matches,
+    finance_revenue_row_quality,
 )
-from .finance_scale import compatible_dimension_scope, dimension_binding_scope
+from .finance_scale import source_scale_evidence
 from .financial_statement_identity import matches_required_financial_identity
 from .query_evidence_constraints import (
     atomic_evidence,
@@ -32,70 +33,72 @@ def bind_evidence_slots(
     plan: QueryPlan,
     evidence_items: list[dict[str, Any]],
 ) -> QueryPlan:
+    bound, _trace = _bind_evidence_slots(
+        plan,
+        evidence_items,
+        preserve_existing=False,
+    )
+    return bound
+
+
+def bind_evidence_slots_monotonic(
+    plan: QueryPlan,
+    evidence_items: list[dict[str, Any]],
+) -> tuple[QueryPlan, list[dict[str, Any]]]:
+    return _bind_evidence_slots(plan, evidence_items, preserve_existing=True)
+
+
+def _bind_evidence_slots(
+    plan: QueryPlan,
+    evidence_items: list[dict[str, Any]],
+    *,
+    preserve_existing: bool,
+) -> tuple[QueryPlan, list[dict[str, Any]]]:
     bound_slots = []
+    binding_trace: list[dict[str, Any]] = []
     used_generic_operand_ids: set[str] = set()
     used_comparison_ids: set[str] = set()
     used_cross_page_locators: set[tuple[str, str]] = set()
     evidence_by_identity = {identity_of(item).key: item for item in evidence_items}
     bound_operand_items: list[dict[str, Any]] = []
     for slot in plan.evidence_slots:
-        ranked = sorted(
-            (
-                (
-                    score_evidence_for_slot(
-                        slot,
-                        item,
-                        requires_structure=bool(
-                            plan.constraints.get("requires_structure")
-                        ),
-                    ),
-                    index,
-                    item,
-                )
-                for index, item in enumerate(evidence_items)
-            ),
-            key=lambda row: (
-                -(row[0] + _binding_quality(row[2])),
-                -row[0],
-                row[1],
-            ),
+        preserved, replacement_reason = _existing_binding_state(
+            slot,
+            evidence_by_identity,
+            requires_structure=bool(plan.constraints.get("requires_structure")),
         )
-        candidate_ids = (
-            _dimension_candidate_ids(ranked, bound_operand_items)
-            if slot.role == "dimension"
-            else [
-                identity_of(item).key for score, _index, item in ranked[:3] if score > 0
-            ]
-        )
-        distinct_slot_ids = set(
-            plan.constraints.get("distinct_source_page_slot_ids") or []
-        )
-        if plan.constraints.get("requires_distinct_evidence") and (
-            slot.slot_id in distinct_slot_ids
-            or (not distinct_slot_ids and slot.role in {"support", "operand"})
-        ):
-            candidate_ids = _distinct_candidate_ids(
-                ranked,
-                plan,
-                used_comparison_ids,
-                used_cross_page_locators,
+        if preserve_existing and preserved:
+            evidence_ids = slot.evidence_ids
+            _update_bound_operand_state(
+                slot,
+                evidence_ids,
+                evidence_by_identity,
+                bound_operand_items,
+                used_generic_operand_ids,
             )
-        if slot.role == "operand" and not slot.period:
-            candidate_ids = [
-                evidence_id
-                for evidence_id in candidate_ids
-                if evidence_id not in used_generic_operand_ids
-            ][:1]
-            used_generic_operand_ids.update(candidate_ids)
-        if slot.role == "operand":
-            candidate_ids = candidate_ids[: max(1, slot.cardinality)]
+            bound_slots.append(slot)
+            binding_trace.append(
+                _binding_trace(slot, evidence_ids, evidence_ids, preserved=True)
+            )
+            continue
+        ranked = _ranked_evidence(plan, slot, evidence_items)
+        candidate_ids = _candidate_ids_for_slot(
+            plan,
+            slot,
+            ranked,
+            bound_operand_items,
+            used_generic_operand_ids,
+            used_comparison_ids,
+            used_cross_page_locators,
+        )
         evidence_ids = tuple(candidate_ids)
-        if slot.role == "operand":
-            bound_operand_items.extend(
-                evidence_by_identity[evidence_id]
-                for evidence_id in evidence_ids
-                if evidence_id in evidence_by_identity
-            )
+        _update_bound_operand_state(
+            slot,
+            evidence_ids,
+            evidence_by_identity,
+            bound_operand_items,
+            used_generic_operand_ids,
+        )
         bound_slots.append(
             replace(
                 slot,
@@ -103,54 +106,180 @@ def bind_evidence_slots(
                 evidence_ids=evidence_ids,
             )
         )
-    return replace(plan, evidence_slots=tuple(bound_slots))
+        if preserve_existing:
+            binding_trace.append(
+                _binding_trace(
+                    slot,
+                    slot.evidence_ids,
+                    evidence_ids,
+                    preserved=False,
+                    replacement_reason=replacement_reason,
+                )
+            )
+    return replace(plan, evidence_slots=tuple(bound_slots)), binding_trace
+
+
+def _ranked_evidence(
+    plan: QueryPlan,
+    slot: EvidenceSlot,
+    evidence_items: list[dict[str, Any]],
+) -> list[tuple[float, int, dict[str, Any]]]:
+    ranked = (
+        (
+            score_evidence_for_slot(
+                slot,
+                item,
+                requires_structure=bool(plan.constraints.get("requires_structure")),
+            ),
+            index,
+            item,
+        )
+        for index, item in enumerate(evidence_items)
+    )
+    return sorted(
+        ranked,
+        key=lambda row: (
+            -(row[0] + _binding_quality(slot, row[2])),
+            -row[0],
+            row[1],
+        ),
+    )
+
+
+def _candidate_ids_for_slot(
+    plan: QueryPlan,
+    slot: EvidenceSlot,
+    ranked: list[tuple[float, int, dict[str, Any]]],
+    bound_operand_items: list[dict[str, Any]],
+    used_generic_operand_ids: set[str],
+    used_comparison_ids: set[str],
+    used_cross_page_locators: set[tuple[str, str]],
+) -> list[str]:
+    candidate_ids = (
+        _dimension_candidate_ids(slot, ranked, bound_operand_items)
+        if slot.role == "dimension"
+        else [identity_of(item).key for score, _index, item in ranked[:3] if score > 0]
+    )
+    distinct_slot_ids = set(plan.constraints.get("distinct_source_page_slot_ids") or [])
+    if plan.constraints.get("requires_distinct_evidence") and (
+        slot.slot_id in distinct_slot_ids
+        or (not distinct_slot_ids and slot.role in {"support", "operand"})
+    ):
+        candidate_ids = _distinct_candidate_ids(
+            ranked,
+            plan,
+            used_comparison_ids,
+            used_cross_page_locators,
+        )
+    if slot.role == "operand" and not slot.period:
+        candidate_ids = [
+            evidence_id
+            for evidence_id in candidate_ids
+            if evidence_id not in used_generic_operand_ids
+        ][:1]
+    return (
+        candidate_ids[: max(1, slot.cardinality)]
+        if slot.role == "operand"
+        else candidate_ids
+    )
+
+
+def _update_bound_operand_state(
+    slot: EvidenceSlot,
+    evidence_ids: tuple[str, ...],
+    evidence_by_identity: dict[str, dict[str, Any]],
+    bound_operand_items: list[dict[str, Any]],
+    used_generic_operand_ids: set[str],
+) -> None:
+    if slot.role != "operand":
+        return
+    bound_operand_items.extend(
+        evidence_by_identity[evidence_id]
+        for evidence_id in evidence_ids
+        if evidence_id in evidence_by_identity
+    )
+    if not slot.period:
+        used_generic_operand_ids.update(evidence_ids)
+
+
+def _existing_binding_state(
+    slot: EvidenceSlot,
+    evidence_by_identity: dict[str, dict[str, Any]],
+    *,
+    requires_structure: bool,
+) -> tuple[bool, str]:
+    if slot.status != "filled" or not slot.evidence_ids:
+        return False, "missing_existing_binding"
+    if len(slot.evidence_ids) < max(1, slot.cardinality):
+        return False, "incomplete_existing_binding"
+    items = [evidence_by_identity.get(evidence_id) for evidence_id in slot.evidence_ids]
+    if any(item is None for item in items):
+        return False, "unresolved_existing_identity"
+    if any(
+        score_evidence_for_slot(
+            slot,
+            item,
+            requires_structure=requires_structure,
+        )
+        <= 0
+        for item in items
+        if item is not None
+    ):
+        return False, "incompatible_existing_binding"
+    if slot.role == "dimension" and any(
+        not _trusted_dimension_item(item) for item in items if item is not None
+    ):
+        return False, "incompatible_existing_binding"
+    return True, ""
+
+
+def _binding_trace(
+    slot: EvidenceSlot,
+    before_ids: tuple[str, ...],
+    after_ids: tuple[str, ...],
+    *,
+    preserved: bool,
+    replacement_reason: str = "",
+) -> dict[str, Any]:
+    return {
+        "slot_id": slot.slot_id,
+        "preserved_existing_binding": preserved,
+        "replacement_reason": replacement_reason,
+        "before_identity": before_ids[0] if before_ids else "",
+        "after_identity": after_ids[0] if after_ids else "",
+    }
 
 
 def _dimension_candidate_ids(
+    slot: EvidenceSlot,
     ranked: list[tuple[float, int, dict[str, Any]]],
     operand_items: list[dict[str, Any]],
 ) -> list[str]:
     selected: list[str] = []
+    evidence_items = [item for _score, _index, item in ranked]
     for operand in operand_items:
-        candidates = [
-            (
-                _dimension_scope_rank(operand, item),
-                -score,
-                index,
-                item,
-            )
-            for score, index, item in ranked
-            if score > 0
-            and not executable_operand_evidence(item)
-            and compatible_dimension_scope(operand, item)
-        ]
-        if not candidates:
+        scale, raw_evidence_id = source_scale_evidence(operand, evidence_items)
+        if not scale or (slot.scale and slot.scale != scale):
             continue
-        _scope, _score, _index, item = min(candidates)
+        item = _item_for_raw_id(raw_evidence_id, evidence_items)
+        if item is None:
+            continue
         identity = identity_of(item).key
         if identity not in selected:
             selected.append(identity)
     return selected
 
 
-def _dimension_scope_rank(
-    operand: dict[str, Any],
-    dimension: dict[str, Any],
-) -> int:
-    return {
-        "table": 0,
-        "table_group": 1,
-        "page": 2,
-        "source": 3,
-    }.get(dimension_binding_scope(operand, dimension), 4)
-
-
-def _binding_quality(item: dict[str, Any]) -> float:
+def _binding_quality(slot: EvidenceSlot, item: dict[str, Any]) -> float:
     quality = 0.0
     if evidence_scale(evidence_text(item), item):
         quality += 1.0
     if str(item.get("materialization_source_id") or "").strip():
         quality += 0.25
+    quality += 0.5 * finance_revenue_row_quality(
+        slot.metric,
+        str(item.get("row_label") or ""),
+    )
     return quality
 
 
@@ -258,6 +387,11 @@ def _finance_operand_matches(
         )
         if value
     )
+    if slot.metric in {"net sales", "revenue"} and not finance_revenue_row_quality(
+        slot.metric,
+        str(item.get("row_label") or ""),
+    ):
+        return False
     if not finance_metric_evidence_matches(slot.metric, metric_text):
         return False
     observed_period = str(item.get("period") or item.get("column_label") or "").strip()
@@ -342,3 +476,26 @@ def _metric_coverage(
 
 def _tokens(text: str) -> set[str]:
     return {token.lower() for token in _TOKEN_RE.findall(str(text or ""))}
+
+
+def _trusted_dimension_item(item: dict[str, Any]) -> bool:
+    scale, raw_evidence_id = source_scale_evidence(item, [item])
+    return bool(scale and _item_for_raw_id(raw_evidence_id, [item]) is item)
+
+
+def _item_for_raw_id(
+    raw_evidence_id: str,
+    evidence_items: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    target = str(raw_evidence_id or "").strip()
+    if not target:
+        return None
+    for item in evidence_items:
+        aliases = {
+            str(item.get(field) or "").strip()
+            for field in ("evidence_id", "element_id", "canonical_id", "cell_id")
+            if str(item.get(field) or "").strip()
+        }
+        if target in aliases:
+            return item
+    return None

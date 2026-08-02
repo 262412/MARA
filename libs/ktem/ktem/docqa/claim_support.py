@@ -32,7 +32,7 @@ def claim_supported(
         return True
     claim_tokens = meaningful_tokens(claim)
     if not claim_tokens:
-        return True
+        return False
     evidence_tokens = meaningful_tokens(evidence_text(evidence_items))
     overlap = claim_tokens & evidence_tokens
     return _source_summary_supports_claim(prompt, overlap, evidence_tokens)
@@ -151,7 +151,7 @@ def _direct_evidence_supports_claim(
 ) -> bool:
     claim_tokens = meaningful_tokens(claim)
     if not claim_tokens:
-        return True
+        return False
     for item in evidence_items:
         item_text = evidence_text([item])
         if text_contradicts_claim(claim, item_text):
@@ -368,7 +368,8 @@ def _direction_markers(value: str) -> set[str]:
 
 
 def _token_text(value: str) -> str:
-    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(value or ""))
+    text = re.sub(r"\\[A-Za-z]+", " ", str(value or ""))
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
     text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", text)
     return text.replace("_", " ").replace("-", " ")
 

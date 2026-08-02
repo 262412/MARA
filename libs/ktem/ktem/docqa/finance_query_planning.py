@@ -115,6 +115,26 @@ def finance_metric_evidence_matches(metric: str, text: str) -> bool:
     return not (cash_flow_statement and inventory_change)
 
 
+def finance_revenue_row_quality(metric: str, row_label: str) -> int:
+    if metric not in {"net sales", "revenue"}:
+        return 0
+    normalized = _normalized_metric_phrase(row_label)
+    if normalized == "net sales":
+        return 4
+    if normalized in {
+        "net revenue",
+        "net revenues",
+        "total net revenue",
+        "total net revenues",
+        "total revenue",
+        "total revenues",
+    }:
+        return 3
+    if normalized in {"revenue", "revenues"}:
+        return 2
+    return 0
+
+
 def _normalized_metric_phrase(value: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", str(value or "").lower()))
 

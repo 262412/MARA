@@ -131,6 +131,8 @@ def cell_identity(item: dict[str, Any], cell_id: str) -> str:
 
 
 def same_source(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    if identity_of(left).key == identity_of(right).key:
+        return True
     if _explicit_parent_child_lineage(left, right):
         return True
     left_source = _source_id(left)

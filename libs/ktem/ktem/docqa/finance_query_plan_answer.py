@@ -9,9 +9,9 @@ from .calculation_evidence_identity import (
     calculation_evidence_lookup,
 )
 from .evidence_identity import identity_of
+from .query_evidence_binding import bind_evidence_slots_monotonic
 from .query_evidence_constraints import executable_operand_evidence
 from .query_plan_schema import plan_from_payload
-from .query_planning import bind_evidence_slots
 
 
 @dataclass(frozen=True)
@@ -48,10 +48,13 @@ def bind_numeric_query_plan(
         verification_domain=str(constraints.get("verification_domain") or "finance"),
         payload=query_plan,
     )
-    return bind_evidence_slots(
+    bound, binding_trace = bind_evidence_slots_monotonic(
         plan,
         calculation_evidence_items(evidence_items),
-    ).as_dict()
+    )
+    payload = bound.as_dict()
+    payload["binding_trace"] = binding_trace
+    return payload
 
 
 def answer_from_query_plan(
@@ -311,31 +314,71 @@ def synchronize_authoritative_query_plan(
     calculation_plan: dict[str, Any],
     calculation_verification: dict[str, Any],
 ) -> dict[str, Any]:
-    authoritative = _calculation_query_plan(query_plan or {})
-    if not authoritative or not calculation_verification.get("valid"):
+    if not calculation_verification.get("valid"):
+        return _calculation_query_plan(query_plan or {})
+    authoritative = _reconciled_query_plan(
+        query_plan,
+        calculation_plan,
+        state_authority="verified_calculation_plan",
+    )
+    if not authoritative:
         return authoritative
-    operands = {
-        str(operand.get("query_slot_id") or ""): dict(operand)
-        for operand in calculation_plan.get("operands") or []
-        if isinstance(operand, dict) and str(operand.get("query_slot_id") or "")
-    }
+    authoritative["verified_required_slot_ids"] = list(
+        calculation_verification.get("verified_required_slot_ids") or []
+    )
+    return authoritative
+
+
+def reconcile_provisional_query_plan(
+    query_plan: dict[str, Any] | None,
+    calculation_plan: dict[str, Any],
+) -> dict[str, Any]:
+    return _reconciled_query_plan(
+        query_plan,
+        calculation_plan,
+        state_authority="provisional_calculation_plan",
+    )
+
+
+def _reconciled_query_plan(
+    query_plan: dict[str, Any] | None,
+    calculation_plan: dict[str, Any],
+    *,
+    state_authority: str,
+) -> dict[str, Any]:
+    authoritative = _calculation_query_plan(query_plan or {})
+    if not authoritative:
+        return authoritative
+    operands: dict[str, list[dict[str, Any]]] = {}
+    for raw_operand in calculation_plan.get("operands") or []:
+        if not isinstance(raw_operand, dict):
+            continue
+        query_slot_id = str(raw_operand.get("query_slot_id") or "")
+        if query_slot_id:
+            operands.setdefault(query_slot_id, []).append(dict(raw_operand))
+    operand_values = [
+        operand
+        for grouped_operands in operands.values()
+        for operand in grouped_operands
+    ]
     slots: list[dict[str, Any]] = []
     for raw_slot in authoritative.get("evidence_slots") or []:
         if not isinstance(raw_slot, dict):
             continue
         slot = dict(raw_slot)
         slot_id = str(slot.get("slot_id") or "")
-        operand = operands.get(slot_id)
-        if operand is not None:
-            slot.update(_operand_slot_state(operand))
+        slot_operands = operands.get(slot_id)
+        if slot_operands is not None:
+            slot.update(_operand_slot_state(slot_operands))
         elif str(slot.get("role") or "") == "dimension":
-            slot.update(_dimension_slot_state(slot_id, operands.values()))
+            slot.update(_dimension_slot_state(slot_id, operand_values))
         slots.append(slot)
+    existing_slot_ids = {str(slot.get("slot_id") or "") for slot in slots}
+    scale_slot = _new_dimension_slot("scale", operand_values)
+    if scale_slot is not None and "dimension:scale" not in existing_slot_ids:
+        slots.append(scale_slot)
     authoritative["evidence_slots"] = slots
-    authoritative["state_authority"] = "verified_calculation_plan"
-    authoritative["verified_required_slot_ids"] = list(
-        calculation_verification.get("verified_required_slot_ids") or []
-    )
+    authoritative["state_authority"] = state_authority
     return authoritative
 
 
@@ -357,15 +400,19 @@ def _calculation_query_plan(query_plan: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def _operand_slot_state(operand: dict[str, Any]) -> dict[str, Any]:
-    evidence_id = str(
-        operand.get("evidence_identity") or operand.get("evidence_id") or ""
+def _operand_slot_state(operands: list[dict[str, Any]]) -> dict[str, Any]:
+    evidence_ids = list(
+        dict.fromkeys(
+            str(operand.get("evidence_identity") or operand.get("evidence_id") or "")
+            for operand in operands
+            if str(operand.get("evidence_identity") or operand.get("evidence_id") or "")
+        )
     )
     state = {
         "role": "operand",
         "required_for_execution": True,
-        "status": "filled" if evidence_id else "missing",
-        "evidence_ids": [evidence_id] if evidence_id else [],
+        "status": "filled" if evidence_ids else "missing",
+        "evidence_ids": evidence_ids,
     }
     for field_name in (
         "source_id",
@@ -380,9 +427,15 @@ def _operand_slot_state(operand: dict[str, Any]) -> dict[str, Any]:
         "table_group_id",
         "dimension_binding_scope",
     ):
-        value = operand.get(field_name)
-        if value not in (None, ""):
-            state[field_name] = value
+        values = list(
+            dict.fromkeys(
+                str(operand.get(field_name) or "")
+                for operand in operands
+                if str(operand.get(field_name) or "")
+            )
+        )
+        if values:
+            state[field_name] = values[-1]
     return state
 
 
@@ -428,6 +481,38 @@ def _dimension_slot_state(
         )
     )
     return state
+
+
+def _new_dimension_slot(
+    dimension: str,
+    operands: Any,
+) -> dict[str, Any] | None:
+    operand_values = list(operands)
+    state = _dimension_slot_state(f"dimension:{dimension}", operand_values)
+    if not any(str(operand.get(dimension) or "") for operand in operand_values):
+        return None
+    return {
+        "slot_id": f"dimension:{dimension}",
+        "role": "dimension",
+        "entity": "",
+        "metric": "",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": True,
+        "required_for_retrieval": False,
+        "required_for_execution": True,
+        "required_for_verification": True,
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "",
+        "locator": None,
+        **state,
+    }
 
 
 def _direct_question_type(metric: str) -> str | None:
