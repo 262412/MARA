@@ -3,11 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.evidence_set_selection import select_evidence_for_plan
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 from ktem.docqa.finance_query_plan_answer import bind_numeric_query_plan
 from ktem.docqa.finance_scale import source_scale_evidence
 from ktem.docqa.query_planning import bind_evidence_slots, build_query_plan
 
+from .test_docqa_execution_binding_regressions import _multi_period_ratio_evidence
 from .test_docqa_execution_slot_lineage_contract import _cell
 
 
@@ -160,3 +162,36 @@ def test_bind_numeric_query_plan_replaces_only_unresolved_binding() -> None:
     assert trace["replacement_reason"] == "unresolved_existing_identity"
     assert trace["before_identity"] == "cell:report:missing"
     assert trace["after_identity"] == identity_of(total).key
+
+
+def test_selection_keeps_linked_dimensions_when_context_budget_is_full() -> None:
+    question = (
+        "What is the FY2017 - FY2019 3 year average of capex as a % of revenue? "
+        "Answer in units of percents and round to one decimal place."
+    )
+    evidence = _multi_period_ratio_evidence()
+    for index, item in enumerate(evidence):
+        item["reranker_score"] = 100 - index
+    evidence[0]["reranker_score"] = -100
+    evidence.extend(
+        {
+            "evidence_id": f"distractor-{index}",
+            "source_id": "report",
+            "page_label": str(100 + index % 5),
+            "text": f"capex revenue 2017 2018 2019 average percent {index}",
+            "reranker_score": 1000 - index,
+        }
+        for index in range(80)
+    )
+
+    selected, _trace, _bound = select_evidence_for_plan(
+        question,
+        evidence,
+        build_query_plan(
+            question,
+            answer_type="numeric",
+            verification_domain="finance",
+        ),
+    )
+
+    assert "selected-financial-data-page" in {item["evidence_id"] for item in selected}

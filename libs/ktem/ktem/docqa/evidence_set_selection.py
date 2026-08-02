@@ -8,7 +8,10 @@ from .evidence_identity import evidence_aliases, identity_of
 from .evidence_selection_trace import build_selection_trace
 from .evidence_set_objective import marginal_set_gain
 from .evidence_structure import structure_coverage_context
-from .execution_slot_lineage import is_atomic_operand_candidate
+from .execution_slot_lineage import (
+    is_atomic_operand_candidate,
+    linked_dimension_candidate,
+)
 from .query_planning import QueryPlan, bind_evidence_slots, retrieval_budget
 from .required_slot_selection import (
     required_slot_candidate_limit,
@@ -52,6 +55,13 @@ def select_evidence_for_plan(
     )
     _select_execution_parents(
         query,
+        candidates,
+        plan,
+        selected,
+        selected_ids,
+        max_pages=budget["max_pages"],
+    )
+    _select_execution_dimensions(
         candidates,
         plan,
         selected,
@@ -191,6 +201,35 @@ def _select_execution_parents(
         )
         if parent is not None:
             _append_selected(parent, selected, selected_ids)
+
+
+def _select_execution_dimensions(
+    candidates: list[dict[str, Any]],
+    plan: QueryPlan,
+    selected: list[dict[str, Any]],
+    selected_ids: set[str],
+    *,
+    max_pages: int,
+) -> None:
+    execution_slots = [
+        slot
+        for slot in plan.evidence_slots
+        if slot.required_for_execution and slot.role == "operand"
+    ]
+    selected_operands = [
+        item
+        for item in selected
+        if is_atomic_operand_candidate(item)
+        and any(_slot_score(plan, slot, item) > 0 for slot in execution_slots)
+    ]
+    for operand in selected_operands:
+        dimension = linked_dimension_candidate(operand, candidates)
+        if (
+            dimension is not None
+            and _identity(dimension) not in selected_ids
+            and _page_allowed(dimension, selected, max_pages)
+        ):
+            _append_selected(dimension, selected, selected_ids)
 
 
 def _selection_context(
