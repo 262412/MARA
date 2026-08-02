@@ -216,6 +216,34 @@ def test_supported_core_is_not_overwritten_by_strict_whole_answer_verifier():
     assert result.trace["action"] == "confirmed_candidate"
 
 
+def test_partial_qasper_list_recovers_grounded_atom_when_revision_is_empty():
+    evidence = (
+        "We address the robustness problem on top of GE-FL, a GE method which "
+        "leverages labeled features as prior knowledge."
+    )
+    result = verify_qasper_answerability(
+        _JsonLLM(
+            {
+                "verdict": "partially_supported",
+                "evidence_quote": evidence,
+                "revised_answer": "",
+            }
+        ),
+        question="What background knowledge do they leverage?",
+        evidence=evidence,
+        candidate_answer=(
+            "The background knowledge they leverage includes labeled features, "
+            "class distribution, and neutral features. Labeled features are "
+            "manually provided indicators, while neutral features prevent bias."
+        ),
+    )
+
+    assert result.answer == "labeled features"
+    assert result.trace["action"] == "pruned_unsupported_extension"
+    assert "class distribution" not in result.answer
+    assert "neutral features" not in result.answer
+
+
 def test_loaded_reranker_without_execution_fails_gate():
     metadata = {
         "ranking_trace": {

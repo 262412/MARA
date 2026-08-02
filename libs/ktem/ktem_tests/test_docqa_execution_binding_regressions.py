@@ -433,3 +433,152 @@ def test_explicit_following_tables_scale_applies_to_same_page_table_cells() -> N
     assert {operand["scale_evidence_id"] for operand in net_sales_operands} == {
         "selected-financial-data-page"
     }
+
+
+def _turnover_cell(
+    evidence_id: str,
+    row_label: str,
+    value: str,
+    period: str,
+    *,
+    statement_kind: str,
+    table_id: str,
+) -> dict[str, Any]:
+    return {
+        **_cell(evidence_id, row_label, value, period=period),
+        "page_label": "37" if statement_kind == "income_statement" else "69",
+        "table_id": table_id,
+        "table_instance_id": table_id,
+        "table_group_id": table_id,
+        "materialization_source_id": "",
+        "statement_kind": statement_kind,
+        "scale": "million",
+        "currency": "USD",
+        "text": f"{row_label} {period} {value} million USD",
+    }
+
+
+def _fixed_asset_turnover_evidence() -> list[dict[str, Any]]:
+    return [
+        _turnover_cell(
+            "net-revenues-2019",
+            "Net revenues",
+            "6489",
+            "2019",
+            statement_kind="income_statement",
+            table_id="income",
+        ),
+        _turnover_cell(
+            "subscription-revenues-2019",
+            "Subscription, licensing, and other revenues",
+            "4514",
+            "2019",
+            statement_kind="income_statement",
+            table_id="income",
+        ),
+        _turnover_cell(
+            "net-ppe-2018",
+            "Property and equipment, net",
+            "282",
+            "2018",
+            statement_kind="balance_sheet",
+            table_id="balance-sheet",
+        ),
+        _turnover_cell(
+            "net-ppe-2019",
+            "Property and equipment, net",
+            "253",
+            "2019",
+            statement_kind="balance_sheet",
+            table_id="balance-sheet",
+        ),
+    ]
+
+
+def test_execution_preserves_selected_total_revenue_binding() -> None:
+    question = (
+        "What is the FY2019 fixed asset turnover ratio? Fixed asset turnover "
+        "is FY2019 revenue divided by average PP&E for FY2018 and FY2019."
+    )
+    evidence = _fixed_asset_turnover_evidence()
+    selected_plan = bind_evidence_slots(
+        build_query_plan(
+            question,
+            answer_type="numeric",
+            verification_domain="finance",
+        ),
+        evidence,
+    )
+    revenue_slot = next(
+        slot
+        for slot in selected_plan.evidence_slots
+        if slot.slot_id == "operand:net_sales:2019"
+    )
+    selected_identity = identity_of(evidence[0]).key
+    assert revenue_slot.evidence_ids == (selected_identity,)
+
+    answer = finance_numeric_answer(
+        question,
+        [evidence[1], evidence[0], *evidence[2:]],
+        query_plan=selected_plan.as_dict(),
+    )
+
+    assert answer is not None
+    assert answer.answer == "24.26"
+    authoritative_slot = next(
+        slot
+        for slot in answer.authoritative_query_plan["evidence_slots"]
+        if slot["slot_id"] == "operand:net_sales:2019"
+    )
+    assert authoritative_slot["evidence_ids"] == [selected_identity]
+    trace = answer.authoritative_query_plan["binding_trace"]
+    revenue_trace = next(
+        item for item in trace if item["slot_id"] == "operand:net_sales:2019"
+    )
+    assert revenue_trace == {
+        "slot_id": "operand:net_sales:2019",
+        "preserved_existing_binding": True,
+        "replacement_reason": "",
+        "before_identity": selected_identity,
+        "after_identity": selected_identity,
+    }
+
+
+def test_revenue_binding_distinguishes_rollups_from_components() -> None:
+    question = "What were FY2019 net sales?"
+    total, component = _fixed_asset_turnover_evidence()[:2]
+    generic = _turnover_cell(
+        "generic-revenue-2019",
+        "Revenues",
+        "6000",
+        "2019",
+        statement_kind="income_statement",
+        table_id="income",
+    )
+
+    def bound_id(items: list[dict[str, Any]]) -> tuple[str, ...]:
+        plan = bind_evidence_slots(
+            build_query_plan(
+                question,
+                answer_type="numeric",
+                verification_domain="finance",
+            ),
+            items,
+        )
+        return next(
+            slot for slot in plan.evidence_slots if slot.role == "operand"
+        ).evidence_ids
+
+    assert bound_id([component, total]) == (identity_of(total).key,)
+    assert bound_id([total]) == (identity_of(total).key,)
+    assert bound_id([generic]) == (identity_of(generic).key,)
+    assert bound_id([component]) == ()
+    second_component = {
+        **component,
+        "evidence_id": "product-revenue",
+        "canonical_id": "cell:report:product-revenue",
+        "cell_id": "product-revenue",
+        "row_label": "Product revenues",
+        "text": "Product revenues 2019 1975 million USD",
+    }
+    assert bound_id([component, second_component]) == ()

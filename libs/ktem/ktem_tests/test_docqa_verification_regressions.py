@@ -1,5 +1,6 @@
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.claim_filtering import answer_claims, clean_answer_text
+from ktem.docqa.claim_support import claim_supported
 from ktem.docqa.controller import build_controller_outputs
 from ktem.docqa.domain_verifiers import DomainVerifierRegistry
 from ktem.docqa.evidence_text import extract_final_answer_text
@@ -81,6 +82,30 @@ def test_clean_answer_text_drops_untagged_thought_without_final_answer():
 
     assert clean_answer_text(answer) == ""
     assert answer_claims(answer) == []
+
+
+def test_incomplete_display_math_tail_preserves_substantive_answer():
+    answer = "The paper leverages labeled features. $$ \\text{"
+
+    assert clean_answer_text(answer) == "The paper leverages labeled features."
+    assert answer_claims(answer) == ["The paper leverages labeled features."]
+
+
+def test_markup_only_latex_command_is_not_a_supported_claim():
+    assert answer_claims(r"$$ \text{") == []
+    assert (
+        claim_supported(
+            r"$$ \text{",
+            [{"evidence_id": "source", "text": "The text describes labeled features."}],
+        )
+        is False
+    )
+
+
+def test_complete_latex_answer_is_preserved():
+    answer = r"$$ \text{labeled features} $$"
+
+    assert clean_answer_text(answer) == answer
 
 
 def test_verifier_abstains_reasoning_only_generation_without_claim_explosion():
