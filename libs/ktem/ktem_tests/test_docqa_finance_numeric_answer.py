@@ -88,6 +88,7 @@ def test_finance_numeric_answer_binds_operand_dimensions_from_cell_metadata():
     }
     assert operands["prior"] == {
         "operand_id": "prior",
+        "input_id": "prior",
         "evidence_id": "cell-revenue-2021",
         "evidence_identity": "element::cell-revenue-2021",
         "value": "10.0",
@@ -394,7 +395,7 @@ def test_finance_numeric_answer_rejects_target_scale_inferred_from_unrelated_tex
     assert answer.answer == ""
     assert answer.attempt_status == "verification_failed"
     assert (
-        "operand_scale_missing_for_conversion:value"
+        "operand_scale_missing_for_conversion:capital_expenditure_2021"
         in answer.calculation_verification["errors"]
     )
 

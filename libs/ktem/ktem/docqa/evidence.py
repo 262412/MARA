@@ -20,7 +20,7 @@ from .evidence_ranking_trace import (
     materialize_reranked_candidates,
 )
 from .evidence_schema import EvidenceBundle, EvidenceElement
-from .financial_table import parse_financial_table_cells
+from .financial_table import parse_financial_table_cells_with_context
 from .graph_evidence import graph_items
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
@@ -273,7 +273,7 @@ def _materialize_execution_cells(
                 cells = cache[table_key]
                 cache_hits += 1
             else:
-                cells = parse_financial_table_cells(item)
+                cells = parse_financial_table_cells_with_context(item, items)
                 cache[table_key] = cells
                 cache_misses += 1
                 if cells:
@@ -312,9 +312,6 @@ def _parent_may_contain_slot(item: dict[str, Any], slot: Any) -> bool:
         for field in ("text", "caption", "ocr_text", "table_title")
     ).lower()
     if not text.strip():
-        return False
-    period = str(slot.period or "").strip().lower()
-    if period and period not in text:
         return False
     return bool(
         item.get("table_id")

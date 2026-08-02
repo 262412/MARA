@@ -8,6 +8,7 @@ from .calculation_evidence_identity import (
     calculation_evidence_items,
     calculation_evidence_lookup,
 )
+from .evidence_identity import identity_of
 from .query_evidence_constraints import executable_operand_evidence
 from .query_plan_schema import plan_from_payload
 from .query_planning import bind_evidence_slots
@@ -72,7 +73,8 @@ def answer_from_query_plan(
         slot
         for slot in slots
         if str(slot.get("status") or "missing") != "filled"
-        or not list(slot.get("evidence_ids") or [])
+        or len(list(slot.get("evidence_ids") or []))
+        < max(1, int(slot.get("cardinality") or 1))
     ]
     if missing_slots:
         return _failed_plan_attempt(missing_slots)
@@ -132,20 +134,21 @@ def _resolved_operands(
     lookup = calculation_evidence_lookup(evidence_items)
     bound: list[tuple[dict[str, Any], Decimal]] = []
     for slot in slots:
-        item = next(
-            (
-                lookup.get(str(evidence_id))
-                for evidence_id in slot.get("evidence_ids") or []
-                if lookup.get(str(evidence_id)) is not None
-            ),
-            None,
-        )
-        if item is None or not executable_operand_evidence(item):
+        cardinality = max(1, int(slot.get("cardinality") or 1))
+        items: dict[str, dict[str, Any]] = {}
+        for evidence_id in slot.get("evidence_ids") or []:
+            item = lookup.get(str(evidence_id))
+            if item is not None:
+                items.setdefault(identity_of(item).key, item)
+        if len(items) < cardinality:
             return None
-        value = _structured_decimal(item.get("value"))
-        if value is None:
-            return None
-        bound.append((slot, value))
+        for item in list(items.values())[:cardinality]:
+            if not executable_operand_evidence(item):
+                return None
+            value = _structured_decimal(item.get("value"))
+            if value is None:
+                return None
+            bound.append((slot, value))
     return bound
 
 
@@ -189,6 +192,23 @@ def _generic_plan_answer(
 ) -> FinanceNumericAnswer | None:
     metrics = {str(slot.get("metric") or "") for slot, _value in bound}
     lowered = str(prompt or "").lower()
+    if (
+        len(bound) >= 2
+        and metrics == {"revolving credit capacity"}
+        and "total" in lowered
+    ):
+        input_id = str(bound[0][0].get("metric") or "").replace(" ", "_")
+        inputs = {
+            f"{input_id}_{index}": float(value)
+            for index, (_slot, value) in enumerate(bound, start=1)
+        }
+        return FinanceNumericAnswer(
+            answer="",
+            confidence=0.95,
+            question_type="revolving_credit_capacity",
+            inputs=inputs,
+            formula=" + ".join(inputs),
+        )
     if (
         len(bound) == 2
         and len(metrics) == 1
@@ -437,6 +457,7 @@ def _structured_decimal(value: Any) -> Decimal | None:
 def _empty_calculation_plan() -> dict[str, Any]:
     return {
         "contract_id": "calculation_plan.v1",
+        "formula_inputs": [],
         "operands": [],
         "steps": [],
         "result_step_id": "",

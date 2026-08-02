@@ -48,6 +48,8 @@ class EvidenceSlot:
     required_for_verification: bool = True
     status: str = "missing"
     evidence_ids: tuple[str, ...] = ()
+    cardinality: int = 1
+    operator_role: str = ""
     query: str = ""
     locator: EvidenceLocator | None = None
 
@@ -199,6 +201,8 @@ def _slot_from_payload(index: int, item: dict[str, Any]) -> EvidenceSlot:
             for value in item.get("evidence_ids") or []
             if str(value).strip()
         ),
+        cardinality=max(1, int(item.get("cardinality") or 1)),
+        operator_role=str(item.get("operator_role") or ""),
         query=str(item.get("query") or "").strip(),
         locator=locator,
     )

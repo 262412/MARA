@@ -49,6 +49,13 @@ def test_selected_candidate_is_not_reported_as_bound_without_slot_identity() -> 
     assert "semantic_slot_match_selected" not in selected_reasons.values()
     assert selected_reasons["cell:report:compatible"] == "bound_to_slot"
     assert binding["selected_evidence_ids"] == ["cell:report:compatible"]
+    stages = {item["evidence_id"]: item for item in trace["evidence_stage_trace"]}
+    assert stages["cell:report:compatible"]["selected_in_context"] is True
+    assert stages["cell:report:compatible"]["bound_to_slot_ids"] == [
+        "operand:current_assets:2021"
+    ]
+    assert stages["cell:report:compatible"]["executable_operand"] is True
+    assert trace["trace_validation_errors"] == []
 
 
 def test_parent_reservation_is_independent_of_existing_atomic_cell() -> None:
@@ -91,3 +98,9 @@ def test_parent_reservation_is_independent_of_existing_atomic_cell() -> None:
     assert bound.evidence_slots[0].status == "missing"
     assert trace["selected_budget_usage"]["parent_tables"] == 1
     assert trace["required_slot_bindings"][0]["retrieval_satisfied"] is True
+    [stage] = trace["evidence_stage_trace"]
+    assert stage["selected_in_context"] is True
+    assert stage["parent_retained"] is True
+    assert stage["bound_to_slot_ids"] == []
+    assert stage["executable_operand"] is False
+    assert trace["trace_validation_errors"] == []

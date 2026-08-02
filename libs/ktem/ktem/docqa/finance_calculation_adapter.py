@@ -29,11 +29,11 @@ from .finance_calculation_binding import (
     single_question_period as _single_question_period,
 )
 from .finance_calculation_steps import calculation_steps
+from .finance_formula_inputs import FormulaInputSpec, formula_input_specs
 from .finance_query_planning import FINANCE_METRIC_ALIASES
 from .finance_scale import dimension_binding_scope as _dimension_binding_scope
 from .finance_scale import scale_from_text as _scale
 from .finance_scale import source_scale_evidence as _source_scale_evidence
-from .finance_slot_binding import slot_for_formula_input
 from .financial_statement_identity import (
     compatible_financial_identity,
     financial_statement_identity,
@@ -79,56 +79,24 @@ def finance_calculation_audit(
     inputs: dict[str, float],
     query_plan: dict[str, Any] | None = None,
 ) -> FinanceCalculationAudit:
-    operands: list[CalculationOperand] = []
-    used_evidence_ids: set[str] = set()
-    execution_slots = _execution_slots(query_plan)
-    for name, value in inputs.items():
-        slot = slot_for_formula_input(
-            name,
-            execution_slots,
-            question_type=question_type,
-        )
-        operand_evidence = (
-            _preferred_slot_evidence(
-                evidence_items,
-                _slot_evidence_ids(slot, query_plan),
-            )
-            if slot is not None
-            else ([] if execution_slots else evidence_items)
-        )
-        operand = _operand_from_input(
-            name,
-            value,
-            question=question,
-            question_type=question_type,
-            evidence_items=operand_evidence,
-            excluded_evidence_ids=used_evidence_ids,
-            query_slot_id=str((slot or {}).get("slot_id") or ""),
-        )
-        operands.append(operand)
-        repeated_value = list(inputs.values()).count(value) > 1
-        binding_id = operand.cell_id or operand.evidence_id
-        if (
-            repeated_value
-            and binding_id
-            and (
-                bool(operand.cell_id)
-                or _atomic_evidence_id(operand.evidence_id, evidence_items)
-            )
-        ):
-            used_evidence_ids.add(binding_id)
-    operand_tuple = tuple(operands)
+    operand_tuple, formula_inputs, execution_slots = _formula_operands(
+        question,
+        evidence_items,
+        question_type=question_type,
+        inputs=inputs,
+        query_plan=query_plan,
+    )
     steps, result_step_id, answer_unit = calculation_steps(
         question_type,
         tuple(inputs),
     )
     scale = _shared_scale(operand_tuple)
-    requested_scale = _requested_scale(question)
-    result_scale = requested_scale or scale
+    result_scale = _requested_scale(question) or scale
     plan = CalculationPlan(
         operands=operand_tuple,
         steps=steps,
         result_step_id=result_step_id,
+        formula_inputs=formula_inputs,
         answer_unit=answer_unit,
         answer_scale=(
             result_scale if question_type in _SCALED_RESULT_TYPES or not steps else ""
@@ -150,6 +118,69 @@ def finance_calculation_audit(
         )
     )
     return FinanceCalculationAudit(plan, verification, execution)
+
+
+def _formula_operands(
+    question: str,
+    evidence_items: list[dict[str, Any]],
+    *,
+    question_type: str,
+    inputs: dict[str, float],
+    query_plan: dict[str, Any] | None,
+) -> tuple[
+    tuple[CalculationOperand, ...],
+    tuple[FormulaInputSpec, ...],
+    list[dict[str, Any]],
+]:
+    operands: list[CalculationOperand] = []
+    used_evidence_ids: set[str] = set()
+    execution_slots = _execution_slots(query_plan)
+    formula_inputs = formula_input_specs(
+        question_type=question_type,
+        input_ids=tuple(inputs),
+        query_plan=query_plan,
+    )
+    for spec in formula_inputs:
+        name = spec.input_id
+        value = inputs[name]
+        slot = next(
+            (
+                candidate
+                for candidate in execution_slots
+                if str(candidate.get("slot_id") or "") == spec.query_slot_id
+            ),
+            None,
+        )
+        operand_evidence = (
+            _preferred_slot_evidence(
+                evidence_items,
+                _slot_evidence_ids(slot, query_plan),
+            )
+            if slot is not None
+            else ([] if execution_slots else evidence_items)
+        )
+        operand = _operand_from_input(
+            name,
+            value,
+            question=question,
+            question_type=question_type,
+            evidence_items=operand_evidence,
+            excluded_evidence_ids=used_evidence_ids,
+            query_slot_id=spec.query_slot_id,
+        )
+        operands.append(operand)
+        repeated_value = list(inputs.values()).count(value) > 1
+        binding_id = operand.cell_id or operand.evidence_id
+        if (
+            repeated_value
+            and binding_id
+            and (
+                bool(operand.cell_id)
+                or _atomic_evidence_id(operand.evidence_id, evidence_items)
+            )
+        ):
+            used_evidence_ids.add(binding_id)
+    return tuple(operands), formula_inputs, execution_slots
 
 
 def _preferred_slot_evidence(
@@ -335,6 +366,7 @@ def _operand_from_cell(
     bound_value = candidate_value if candidate_value == cell_value else cell_value
     return CalculationOperand(
         operand_id=name,
+        input_id=name,
         evidence_id=cell.evidence_id,
         evidence_identity=_item_identity(item, cell_id=cell.cell_id),
         value=bound_value,
@@ -351,6 +383,8 @@ def _operand_from_cell(
         column_label=cell.column_label,
         scale_evidence_id=scale_evidence_id,
         scale_evidence_identity=scale_evidence_identity,
+        dimension_evidence_id=scale_evidence_id,
+        dimension_evidence_identity=scale_evidence_identity,
         statement_kind=cell.statement_kind,
         financial_scope=cell.financial_scope,
         table_instance_id=cell.table_instance_id,
@@ -382,6 +416,7 @@ def _operand_from_item(
     bound_value = _atomic_item_value(item) if item is not None else None
     return CalculationOperand(
         operand_id=name,
+        input_id=name,
         evidence_id=_item_id(item),
         evidence_identity=_item_identity(item),
         value=bound_value if bound_value is not None else value,
@@ -398,6 +433,11 @@ def _operand_from_item(
         entity=_item_dimension(item, "entity"),
         scale_evidence_id=scale_evidence_id,
         scale_evidence_identity=_identity_for_raw_id(
+            scale_evidence_id,
+            evidence_items,
+        ),
+        dimension_evidence_id=scale_evidence_id,
+        dimension_evidence_identity=_identity_for_raw_id(
             scale_evidence_id,
             evidence_items,
         ),

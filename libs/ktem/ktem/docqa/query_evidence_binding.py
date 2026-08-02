@@ -87,6 +87,8 @@ def bind_evidence_slots(
                 if evidence_id not in used_generic_operand_ids
             ][:1]
             used_generic_operand_ids.update(candidate_ids)
+        if slot.role == "operand":
+            candidate_ids = candidate_ids[: max(1, slot.cardinality)]
         evidence_ids = tuple(candidate_ids)
         if slot.role == "operand":
             bound_operand_items.extend(
@@ -158,7 +160,17 @@ def score_evidence_for_slot(
     *,
     requires_structure: bool = False,
 ) -> float:
-    text = evidence_text(item).lower()
+    text = " ".join(
+        str(value or "")
+        for value in (
+            evidence_text(item),
+            item.get("row_label"),
+            item.get("column_label"),
+            item.get("period"),
+            item.get("value"),
+        )
+        if str(value or "").strip()
+    ).lower()
     locator_score = _locator_score(slot.locator, item)
     if locator_score is None:
         return 0.0
@@ -237,7 +249,16 @@ def _finance_operand_matches(
         return False
     if not atomic_evidence(item):
         return False
-    if not finance_metric_evidence_matches(slot.metric, text):
+    metric_text = " ".join(
+        value
+        for value in (
+            text,
+            str(item.get("row_label") or "").lower(),
+            str(item.get("caption") or "").lower(),
+        )
+        if value
+    )
+    if not finance_metric_evidence_matches(slot.metric, metric_text):
         return False
     observed_period = str(item.get("period") or item.get("column_label") or "").strip()
     return (not slot.period or observed_period == slot.period) and item.get(

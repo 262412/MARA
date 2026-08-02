@@ -33,7 +33,9 @@ def executable_operand_evidence(item: dict[str, Any]) -> bool:
         return False
     cell_role = str(item.get("cell_role") or "").strip().lower()
     if not cell_role and (
-        item.get("cell_id") and item.get("row_label") and item.get("column_label")
+        item.get("cell_id")
+        and item.get("row_label")
+        and (item.get("column_label") or item.get("period"))
     ):
         cell_role = "data"
     if cell_role and cell_role != "data":

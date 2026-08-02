@@ -31,6 +31,80 @@ def evidence_selection_budget_trace(
     }
 
 
+def evidence_stage_trace(
+    plan: QueryPlan,
+    candidates: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    selected_ids = {identity_of(item).key for item in selected}
+    bound_slots = {
+        identity: [
+            slot.slot_id
+            for slot in plan.evidence_slots
+            if identity in set(slot.evidence_ids)
+        ]
+        for identity in {identity_of(item).key for item in candidates}
+    }
+    execution_slot_ids = {
+        slot.slot_id
+        for slot in plan.evidence_slots
+        if slot.required_for_execution and slot.role == "operand"
+    }
+    output: list[dict[str, Any]] = []
+    for item in candidates:
+        identity = identity_of(item).key
+        materialized_slots = [
+            slot.slot_id
+            for slot in plan.evidence_slots
+            if str(item.get("materialization_source_id") or "")
+            and slot_score(plan, slot, item) > 0
+        ]
+        parent_retained = identity in selected_ids and any(
+            slot.required_for_execution
+            and slot.role == "operand"
+            and not is_atomic_operand_candidate(item)
+            and slot_score(plan, slot, item) > 0
+            for slot in plan.evidence_slots
+        )
+        output.append(
+            {
+                "evidence_id": identity,
+                "retrieved_candidate": True,
+                "selected_in_context": identity in selected_ids,
+                "parent_retained": parent_retained,
+                "materialized_for_slot_ids": materialized_slots,
+                "bound_to_slot_ids": bound_slots[identity],
+                "executable_operand": bool(
+                    set(bound_slots[identity]) & execution_slot_ids
+                    and is_atomic_operand_candidate(item)
+                ),
+                "verified_support": False,
+                "citation_emitted": False,
+                "stage_scope": "selection",
+            }
+        )
+    return output
+
+
+def selection_trace_consistency_errors(
+    plan: QueryPlan,
+    candidates: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+) -> list[str]:
+    candidate_ids = {identity_of(item).key for item in candidates}
+    selected_ids = {identity_of(item).key for item in selected}
+    errors: list[str] = []
+    for slot in plan.evidence_slots:
+        evidence_ids = set(slot.evidence_ids)
+        if (slot.status == "filled") != bool(evidence_ids):
+            errors.append(f"slot_status_identity_mismatch:{slot.slot_id}")
+        for evidence_id in evidence_ids - candidate_ids:
+            errors.append(f"bound_identity_not_retrieved:{slot.slot_id}:{evidence_id}")
+        for evidence_id in evidence_ids - selected_ids:
+            errors.append(f"bound_identity_not_selected:{slot.slot_id}:{evidence_id}")
+    return errors
+
+
 def slot_candidate_reasons(
     plan: QueryPlan,
     slot: Any,
@@ -44,8 +118,22 @@ def slot_candidate_reasons(
         identity = identity_of(item).key
         score = slot_score(plan, slot, item)
         if identity in selected_ids and score > 0:
+            bound = identity in set(slot.evidence_ids)
+            parent = (
+                slot.required_for_execution
+                and slot.role == "operand"
+                and not is_atomic_operand_candidate(item)
+            )
             chosen.append(
-                _candidate_reason(identity, "semantic_slot_match_selected", score)
+                _candidate_reason(
+                    identity,
+                    "bound_to_slot"
+                    if bound
+                    else "parent_retained"
+                    if parent
+                    else "selected_in_context_not_bound",
+                    score,
+                )
             )
             continue
         if score <= 0:
@@ -116,7 +204,17 @@ def _selected_budget_usage(
         for evidence_id in slot.evidence_ids
         if evidence_id in selected_by_id
     }
-    parent_ids: set[str] = set()
+    parent_ids = {
+        identity
+        for identity, item in selected_by_id.items()
+        if not is_atomic_operand_candidate(item)
+        and any(
+            slot.required_for_execution
+            and slot.role == "operand"
+            and slot_score(plan, slot, item) > 0
+            for slot in plan.evidence_slots
+        )
+    }
     for evidence_id in operand_ids:
         operand = selected_by_id[evidence_id]
         parent = linked_parent_candidate(operand, candidates)

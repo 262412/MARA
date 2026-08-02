@@ -12,6 +12,7 @@ from .calculation_evidence_identity import (
 )
 from .calculation_slot_verification import verify_required_calculation_slots
 from .evidence_identity import identity_of
+from .finance_formula_inputs import FormulaInputSpec
 from .finance_scale import compatible_dimension_scope
 from .financial_statement_identity import financial_statement_identity
 from .query_evidence_constraints import (
@@ -48,6 +49,7 @@ class CalculationOperand:
     operand_id: str
     evidence_id: str
     value: Decimal
+    input_id: str = ""
     query_slot_id: str = ""
     evidence_identity: str = ""
     source_id: str = ""
@@ -68,12 +70,15 @@ class CalculationOperand:
     table_instance_id: str = ""
     table_group_id: str = ""
     dimension_binding_scope: str = ""
+    dimension_evidence_id: str = ""
+    dimension_evidence_identity: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["value"] = str(self.value)
         for field_name in (
             "cell_id",
+            "input_id",
             "query_slot_id",
             "evidence_identity",
             "source_id",
@@ -87,6 +92,8 @@ class CalculationOperand:
             "table_instance_id",
             "table_group_id",
             "dimension_binding_scope",
+            "dimension_evidence_id",
+            "dimension_evidence_identity",
         ):
             if not payload[field_name]:
                 payload.pop(field_name)
@@ -114,6 +121,7 @@ class CalculationPlan:
     operands: tuple[CalculationOperand, ...]
     steps: tuple[CalculationStep, ...]
     result_step_id: str
+    formula_inputs: tuple[FormulaInputSpec, ...] = ()
     answer_unit: str = ""
     answer_scale: str = ""
     contract_id: str = CALCULATION_PLAN_CONTRACT
@@ -121,6 +129,7 @@ class CalculationPlan:
     def as_dict(self) -> dict[str, Any]:
         return {
             "contract_id": self.contract_id,
+            "formula_inputs": [value.as_dict() for value in self.formula_inputs],
             "operands": [operand.as_dict() for operand in self.operands],
             "steps": [step.as_dict() for step in self.steps],
             "result_step_id": self.result_step_id,

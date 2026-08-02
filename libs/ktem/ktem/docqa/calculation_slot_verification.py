@@ -38,28 +38,28 @@ def verify_required_calculation_slots(
             else:
                 errors.append(f"required_slot_missing:{slot_id}")
             continue
-        operand = next(
-            (
-                candidate
-                for candidate in operands
-                if candidate.operand_id not in used_operands
-                and (
-                    not exact_lineage
-                    or str(getattr(candidate, "query_slot_id", "") or "") == slot_id
-                )
-                and _operand_matches_slot(
-                    candidate,
-                    slot,
-                    evidence_by_id,
-                    evidence_text=evidence_text,
-                )
-            ),
-            None,
-        )
-        if operand is None:
+        cardinality = max(1, int(slot.get("cardinality") or 1))
+        matching_operands = [
+            candidate
+            for candidate in operands
+            if candidate.operand_id not in used_operands
+            and (
+                not exact_lineage
+                or str(getattr(candidate, "query_slot_id", "") or "") == slot_id
+            )
+            and _operand_matches_slot(
+                candidate,
+                slot,
+                evidence_by_id,
+                evidence_text=evidence_text,
+            )
+        ]
+        if len(matching_operands) < cardinality:
             errors.append(f"required_slot_missing:{slot_id}")
             continue
-        used_operands.add(operand.operand_id)
+        used_operands.update(
+            operand.operand_id for operand in matching_operands[:cardinality]
+        )
         verified_ids.append(slot_id)
     return required_ids, verified_ids, errors
 

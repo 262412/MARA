@@ -5,6 +5,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from ktem.docqa.boolean_proposition_evidence import boolean_proposition_binding_trace
+
 from .metrics import is_abstention_answer
 from .qasper_answerability_prompts import (
     json_structure_repair_prompt as _json_structure_repair_prompt,
@@ -259,6 +261,15 @@ def _adjudicated_boolean_result(
         evidence_items=evidence_items if scope_valid else [],
     )
     relation_trace.update(conflict_trace)
+    selected_answer = answer if answer in {"yes", "no"} else candidate_polarity
+    if selected_answer:
+        relation_trace.update(
+            boolean_proposition_binding_trace(
+                question,
+                selected_answer,
+                evidence_items or [],
+            )
+        )
     return QasperAnswerabilityResult(
         answer=answer,
         trace=_trace(

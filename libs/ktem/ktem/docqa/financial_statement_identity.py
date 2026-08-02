@@ -132,6 +132,12 @@ def _statement_kind(text: str) -> str:
             "statement of cash flow",
             "statements of cash flow",
             "cash flow statement",
+            "cash flows from investing activities",
+            "cash flows from operating activities",
+            "net cash provided by operating activities",
+            "net cash used in investing activities",
+            "purchases of property plant and equipment",
+            "purchase of property plant and equipment",
         )
     ):
         return "cash_flow_statement"

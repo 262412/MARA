@@ -202,6 +202,82 @@ def parse_financial_table_cells(
     return tuple(cells)
 
 
+def parse_financial_table_cells_with_context(
+    item: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> tuple[FinancialTableCell, ...]:
+    direct = parse_financial_table_cells(item)
+    if direct:
+        return direct
+    header = _reliable_context_header(item, candidates)
+    if not header:
+        return ()
+    contextual = dict(item)
+    contextual["text"] = f"{header}\n{_item_text(item)}"
+    contextual.pop("statement_kind", None)
+    metadata = dict(contextual.get("metadata") or {})
+    metadata.pop("statement_kind", None)
+    contextual["metadata"] = metadata
+    return parse_financial_table_cells(contextual)
+
+
+def _reliable_context_header(
+    item: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> str:
+    source_id = _table_identity(item)["source_id"]
+    item_page = _page_number(_table_identity(item)["page_label"])
+    parent_kind, _scope = financial_statement_identity(_item_text(item))
+    matches: list[tuple[int, int, str]] = []
+    for candidate_index, candidate in enumerate(candidates):
+        if candidate is item or _table_identity(candidate)["source_id"] != source_id:
+            continue
+        lines = [
+            line.strip() for line in _item_text(candidate).splitlines() if line.strip()
+        ]
+        headers = _period_header_records(lines)
+        if not headers:
+            continue
+        candidate_kind, _candidate_scope = financial_statement_identity(candidate)
+        if parent_kind and candidate_kind and parent_kind != candidate_kind:
+            continue
+        candidate_page = _page_number(_table_identity(candidate)["page_label"])
+        distance = (
+            abs(candidate_page - item_page)
+            if candidate_page is not None and item_page is not None
+            else 99
+        )
+        same_group = bool(
+            set(
+                value
+                for value in (
+                    str(item.get("table_group_id") or ""),
+                    str(item.get("continuation_id") or ""),
+                )
+                if value
+            )
+            & set(
+                value
+                for value in (
+                    str(candidate.get("table_group_id") or ""),
+                    str(candidate.get("continuation_id") or ""),
+                )
+                if value
+            )
+        )
+        if not same_group and distance > 3:
+            continue
+        start, end, _periods = headers[-1]
+        prefix = "\n".join(lines[max(0, start - 5) : end + 1])
+        matches.append((0 if same_group else distance, candidate_index, prefix))
+    return min(matches, default=(0, 0, ""))[2]
+
+
+def _page_number(value: str) -> int | None:
+    match = re.search(r"\d+", str(value or ""))
+    return int(match.group(0)) if match else None
+
+
 def _rows_for_period_section(
     lines: list[str],
     header_index: int,

@@ -5,24 +5,11 @@ import re
 from typing import Any
 
 from .evidence_identity import evidence_aliases, identity_of
-from .evidence_selection_budget import (
-    evidence_selection_budget_trace,
-    slot_candidate_reasons,
-)
+from .evidence_selection_trace import build_selection_trace
 from .evidence_set_objective import marginal_set_gain
 from .evidence_structure import structure_coverage_context
-from .execution_slot_lineage import (
-    execution_slot_lineage,
-    is_atomic_operand_candidate,
-    linked_dimension_candidate,
-    linked_parent_candidate,
-)
-from .query_planning import (
-    QueryPlan,
-    bind_evidence_slots,
-    retrieval_budget,
-    slot_coverage,
-)
+from .execution_slot_lineage import is_atomic_operand_candidate
+from .query_planning import QueryPlan, bind_evidence_slots, retrieval_budget
 from .required_slot_selection import (
     required_slot_candidate_limit,
     required_slot_shortlist,
@@ -30,7 +17,6 @@ from .required_slot_selection import (
 from .required_slot_selection import slot_score as _slot_score
 from .selection_query_anchors import anchor_coverage, phrase_bigram_coverage
 from .selection_score_normalization import (
-    SELECTION_SCORE_CONTRACT,
     normalized_selection_scores,
     without_selection_annotations,
 )
@@ -62,8 +48,68 @@ def select_evidence_for_plan(
         selected,
         selected_ids,
         max_pages=budget["max_pages"],
+        phase="execution_operand",
+    )
+    _select_execution_parents(
+        query,
+        candidates,
+        plan,
+        selected,
+        selected_ids,
+        max_pages=budget["max_pages"],
+    )
+    _select_required_slot_evidence(
+        query,
+        candidates,
+        plan,
+        selected,
+        selected_ids,
+        max_pages=budget["max_pages"],
+        phase="dimension",
+    )
+    _select_required_slot_evidence(
+        query,
+        candidates,
+        plan,
+        selected,
+        selected_ids,
+        max_pages=budget["max_pages"],
+        phase="factual",
     )
 
+    context = _complete_context_selection(
+        query,
+        candidates,
+        plan,
+        selected,
+        selected_ids,
+        budget=budget,
+        mmr_lambda=mmr_lambda,
+    )
+    bound = bind_evidence_slots(plan, selected)
+    trace = build_selection_trace(
+        candidates,
+        selected,
+        bound,
+        budget,
+        {
+            **context,
+            "required_slot_candidates_restored": restored_required,
+        },
+    )
+    return [without_selection_annotations(item) for item in selected], trace, bound
+
+
+def _complete_context_selection(
+    query: str,
+    candidates: list[dict[str, Any]],
+    plan: QueryPlan,
+    selected: list[dict[str, Any]],
+    selected_ids: set[str],
+    *,
+    budget: dict[str, int],
+    mmr_lambda: float,
+) -> dict[str, Any]:
     page_modality_count = 0
     if plan.constraints.get("requires_visual") or plan.question_type == "visual":
         page_modality_count = _expand_selected_pages(
@@ -72,27 +118,24 @@ def select_evidence_for_plan(
             selected_ids,
             max_items=budget["max_items"],
         )
-
-    (
-        structure_coverage,
-        mixed_structure_coverage,
-        structure_coverage_scope,
-    ) = structure_coverage_context(candidates)
-    structure_expansion_enabled = any(
+    coverage, mixed_coverage, coverage_scope = structure_coverage_context(candidates)
+    expansion_enabled = any(
         item.get("continuation_id")
         or item.get("parent_element_id")
         or item.get("neighbor_element_ids")
         for item in candidates
     )
-    continuation_count = 0
-    if structure_expansion_enabled:
-        continuation_count = _expand_structure(
+    continuation_count = (
+        _expand_structure(
             candidates,
             selected,
             selected_ids,
             max_items=budget["max_items"],
             max_pages=budget["max_pages"],
         )
+        if expansion_enabled
+        else 0
+    )
     _fill_with_mmr(
         query,
         candidates,
@@ -103,22 +146,51 @@ def select_evidence_for_plan(
         max_pages=budget["max_pages"],
         mmr_lambda=mmr_lambda,
     )
-    bound = bind_evidence_slots(plan, selected)
-    trace = _selection_trace(
-        candidates,
-        selected,
-        bound,
-        budget,
-        structure_coverage=structure_coverage,
-        structure_expansion_enabled=structure_expansion_enabled,
-        continuation_count=continuation_count,
-        page_modality_count=page_modality_count,
-        mmr_lambda=mmr_lambda,
-        required_slot_candidates_restored=restored_required,
-        mixed_structure_coverage=mixed_structure_coverage,
-        structure_coverage_scope=structure_coverage_scope,
-    )
-    return [without_selection_annotations(item) for item in selected], trace, bound
+    return {
+        "continuation_expansion_count": continuation_count,
+        "page_modality_expansion_count": page_modality_count,
+        "structure_expansion_enabled": expansion_enabled,
+        "mmr_lambda": mmr_lambda,
+        "structure_metadata_coverage": coverage,
+        "mixed_candidate_structure_metadata_coverage": mixed_coverage,
+        "structure_coverage_scope": coverage_scope,
+    }
+
+
+def _select_execution_parents(
+    query: str,
+    candidates: list[dict[str, Any]],
+    plan: QueryPlan,
+    selected: list[dict[str, Any]],
+    selected_ids: set[str],
+    *,
+    max_pages: int,
+) -> None:
+    for slot in plan.evidence_slots:
+        if not (
+            slot.required_for_retrieval
+            and slot.required_for_execution
+            and slot.role == "operand"
+        ):
+            continue
+        parent = min(
+            (
+                item
+                for item in candidates
+                if not is_atomic_operand_candidate(item)
+                and _slot_score(plan, slot, item) > 0
+                and _identity(item) not in selected_ids
+                and _page_allowed(item, selected, max_pages)
+            ),
+            key=lambda item: (
+                -_slot_score(plan, slot, item),
+                -_relevance(query, item),
+                _identity(item),
+            ),
+            default=None,
+        )
+        if parent is not None:
+            _append_selected(parent, selected, selected_ids)
 
 
 def _selection_context(
@@ -166,11 +238,14 @@ def _select_required_slot_evidence(
     selected_ids: set[str],
     *,
     max_pages: int,
+    phase: str,
 ) -> None:
     used_required_locators: set[tuple[str, str]] = set()
     distinct_slot_ids = set(plan.constraints.get("distinct_source_page_slot_ids") or [])
     required_slots = [
-        slot for slot in plan.evidence_slots if slot.required_for_retrieval
+        slot
+        for slot in plan.evidence_slots
+        if slot.required_for_retrieval and _slot_selection_phase(slot) == phase
     ]
     required_slots.sort(
         key=lambda slot: (
@@ -215,13 +290,6 @@ def _select_required_slot_evidence(
         )
         if match is not None:
             _append_selected(match, selected, selected_ids)
-            if slot.required_for_execution and slot.role == "operand":
-                parent = linked_parent_candidate(match, candidates)
-                if parent is not None and _identity(parent) not in selected_ids:
-                    _append_selected(parent, selected, selected_ids)
-                dimension = linked_dimension_candidate(match, candidates)
-                if dimension is not None and _identity(dimension) not in selected_ids:
-                    _append_selected(dimension, selected, selected_ids)
             if (
                 plan.constraints.get("requires_distinct_source_pages")
                 and (
@@ -233,103 +301,12 @@ def _select_required_slot_evidence(
                 used_required_locators.add(_page(match))
 
 
-def _selection_trace(
-    candidates: list[dict[str, Any]],
-    selected: list[dict[str, Any]],
-    bound: QueryPlan,
-    budget: dict[str, int],
-    *,
-    structure_coverage: float,
-    structure_expansion_enabled: bool,
-    continuation_count: int,
-    page_modality_count: int,
-    mmr_lambda: float,
-    required_slot_candidates_restored: int,
-    mixed_structure_coverage: float,
-    structure_coverage_scope: str,
-) -> dict[str, Any]:
-    pages = _pages(selected)
-    return {
-        "strategy": "marginal_evidence_set_selection_v3",
-        "candidate_count": len(candidates),
-        "selected_count": len(selected),
-        "max_items": budget["max_items"],
-        "max_pages": budget["max_pages"],
-        "unique_pages": len(pages),
-        "selected_pages": [
-            {"source_id": source, "page_label": page} for source, page in pages
-        ],
-        "slot_coverage": slot_coverage(bound),
-        "missing_required_slot_count": sum(
-            slot.required_for_retrieval and slot.status != "filled"
-            for slot in bound.evidence_slots
-        ),
-        "continuation_expansion_count": continuation_count,
-        "page_modality_expansion_count": page_modality_count,
-        "structure_expansion_enabled": structure_expansion_enabled,
-        "mmr_lambda": mmr_lambda,
-        "structure_metadata_coverage": structure_coverage,
-        "mixed_candidate_structure_metadata_coverage": mixed_structure_coverage,
-        "structure_coverage_scope": structure_coverage_scope,
-        "required_slot_candidates_restored": required_slot_candidates_restored,
-        **evidence_selection_budget_trace(bound, candidates, selected),
-        "required_slot_bindings": [
-            {
-                "slot_id": slot.slot_id,
-                "status": slot.status,
-                "retrieval_satisfied": bool(
-                    slot.evidence_ids or _parent_retrieval_candidate(slot, candidates)
-                ),
-                "execution_satisfied": (
-                    slot.status == "filled" if slot.required_for_execution else None
-                ),
-                "reason": (
-                    "parent_evidence_not_materialized"
-                    if (
-                        slot.required_for_execution
-                        and slot.status != "filled"
-                        and _parent_retrieval_candidate(slot, candidates)
-                    )
-                    else ""
-                ),
-                "selected_evidence_ids": list(slot.evidence_ids),
-                "best_selected_slot_score": max(
-                    (
-                        _slot_score(bound, slot, item)
-                        for item in selected
-                        if identity_of(item).key in set(slot.evidence_ids)
-                    ),
-                    default=0.0,
-                ),
-                **slot_candidate_reasons(bound, slot, candidates, selected),
-            }
-            for slot in bound.evidence_slots
-            if slot.required_for_retrieval
-        ],
-        "execution_slot_lineage": [
-            execution_slot_lineage(bound, slot, candidates, selected)
-            for slot in bound.evidence_slots
-            if slot.required_for_execution
-        ],
-        "relevance_score_contract": SELECTION_SCORE_CONTRACT,
-    }
-
-
-def _parent_retrieval_candidate(slot: Any, candidates: list[dict[str, Any]]) -> bool:
-    metric_tokens = {
-        token for token in _TOKEN_RE.findall(str(slot.metric or "").lower())
-    }
-    if not metric_tokens:
-        return False
-    for item in candidates:
-        if identity_of(item).kind in {"cell", "span"}:
-            continue
-        text = str(item.get("text") or "").lower()
-        if slot.period and slot.period not in text:
-            continue
-        if metric_tokens <= set(_TOKEN_RE.findall(text)):
-            return True
-    return False
+def _slot_selection_phase(slot: Any) -> str:
+    if slot.required_for_execution and slot.role == "operand":
+        return "execution_operand"
+    if slot.role == "dimension":
+        return "dimension"
+    return "factual"
 
 
 def _expand_selected_pages(

@@ -248,7 +248,6 @@ def slot_score(
         str(item.get(field) or "")
         for field in ("text", "caption", "ocr_text", "table_title")
     ).lower()
-    period = str(slot.period or "").strip().lower()
     metric = str(slot.metric or "").strip().lower()
     table_like = bool(
         item.get("table_id")
@@ -256,11 +255,6 @@ def slot_score(
         or str(item.get("modality") or "").lower() == "table"
         or str(item.get("element_type") or "").lower() == "table"
     )
-    if (
-        table_like
-        and metric
-        and (not period or period in text)
-        and finance_metric_evidence_matches(metric, text)
-    ):
+    if table_like and metric and finance_metric_evidence_matches(metric, text):
         return 0.25
     return 0.0

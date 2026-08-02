@@ -44,6 +44,13 @@ FINANCE_METRIC_ALIASES = {
         "revenue",
         "revenues",
     ),
+    "revenue": (
+        "net sales",
+        "net revenue",
+        "net revenues",
+        "revenue",
+        "revenues",
+    ),
     "operating cash flow": (
         "operating cash flow",
         "cash from operations",

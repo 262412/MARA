@@ -377,8 +377,27 @@ def direct_value_inputs(
                 excluded_values=tuple(float(year) for year in years),
             )
         if value is not None:
-            return question_type, value, {"value": value}, "direct_value", 0.78
+            input_id = _direct_metric_input_id(
+                question_type,
+                requested_year,
+                lowered_question,
+            )
+            return question_type, value, {input_id: value}, "direct_value", 0.78
     return None
+
+
+def _direct_metric_input_id(
+    question_type: str,
+    period: str,
+    question: str,
+) -> str:
+    metric_ids = {
+        "property_plant_equipment": "property_plant_and_equipment",
+    }
+    metric_id = metric_ids.get(question_type, question_type)
+    if metric_id == "current_assets" and "total current assets" in question:
+        metric_id = "total_current_assets"
+    return f"{metric_id}_{period}" if period else metric_id
 
 
 def _qualified_direct_value_labels(

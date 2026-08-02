@@ -10,11 +10,13 @@ from .boolean_evidence_scope import (
     _has_closed_quantifier,
     _language_data_question,
     _non_english_counterexample,
+    _requires_current_paper_scope,
     _scope_rejection,
     _section_role,
     evidence_item_text,
 )
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
+from .evidence_identity import identity_of
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,10 @@ class BooleanEvidenceAssessment:
     relation_score: float
     object_score: float
     reason: str
+    span_id: str = ""
+    span_text: str = ""
+    actor_score: float = 0.0
+    scope_score: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -65,15 +71,38 @@ def classify_boolean_evidence(
     answer: str,
     item: dict[str, Any],
 ) -> BooleanEvidenceAssessment:
-    text = evidence_item_text(item)
-    desired_polarity = _answer_polarity(answer)
-    assessments = [
-        _assess_proposition_span(question, desired_polarity, item, span)
-        for span in _proposition_spans(question, text)
-    ]
+    assessments = list(classify_boolean_evidence_candidates(question, answer, item))
     if not assessments:
-        assessments = [_assess_proposition_span(question, desired_polarity, item, text)]
+        text = evidence_item_text(item)
+        assessments = [
+            _assess_proposition_span(
+                question,
+                _answer_polarity(answer),
+                item,
+                text,
+                span_index=1,
+            )
+        ]
     return max(assessments, key=_assessment_rank)
+
+
+def classify_boolean_evidence_candidates(
+    question: str,
+    answer: str,
+    item: dict[str, Any],
+) -> tuple[BooleanEvidenceAssessment, ...]:
+    desired_polarity = _answer_polarity(answer)
+    spans = _proposition_spans(question, evidence_item_text(item))
+    return tuple(
+        _assess_proposition_span(
+            question,
+            desired_polarity,
+            item,
+            span,
+            span_index=index,
+        )
+        for index, span in enumerate(spans, start=1)
+    )
 
 
 def _assess_proposition_span(
@@ -81,6 +110,8 @@ def _assess_proposition_span(
     desired_polarity: str,
     item: dict[str, Any],
     span: str,
+    *,
+    span_index: int,
 ) -> BooleanEvidenceAssessment:
     section_role = _section_role(item, span)
     actor = _actor(span, section_role)
@@ -105,6 +136,17 @@ def _assess_proposition_span(
         actor=actor,
         section_role=section_role,
         structured_scope_available=True,
+    )
+    actor_score = (
+        1.0
+        if actor == "current_paper"
+        or (actor == "unknown" and not _requires_current_paper_scope(question))
+        else 0.0
+    )
+    scope_score = (
+        1.0
+        if section_role not in {"related_work", "future_work"} and not scope_rejection
+        else 0.0
     )
     if (
         actor in {"cited_work", "other_authors"}
@@ -132,6 +174,10 @@ def _assess_proposition_span(
         relation_score=relation_score,
         object_score=object_score,
         reason=reason,
+        span_id=f"{identity_of(item).key}#proposition:{span_index}",
+        span_text=span,
+        actor_score=actor_score,
+        scope_score=scope_score,
     )
 
 
@@ -161,8 +207,11 @@ def classify_boolean_evidence_set(
         "insufficient_scope": [],
     }
     for item in items:
-        assessment = classify_boolean_evidence(question, answer, item)
-        grouped[assessment.classification].append(assessment)
+        assessments = classify_boolean_evidence_candidates(question, answer, item) or (
+            classify_boolean_evidence(question, answer, item),
+        )
+        for assessment in assessments:
+            grouped[assessment.classification].append(assessment)
     return BooleanEvidenceSet(
         supports=tuple(grouped["supports"]),
         contradicts=tuple(grouped["contradicts"]),
@@ -178,9 +227,18 @@ def boolean_proposition_evidence_score(
     text = evidence_item_text(item)
     if not text:
         return 0.0
-    assessment = classify_boolean_evidence(question, "yes", item)
-    if assessment.classification in {"unrelated", "insufficient_scope"}:
+    assessments = classify_boolean_evidence_candidates(question, "", item)
+    compatible = [
+        assessment
+        for assessment in assessments
+        if assessment.actor_score > 0
+        and assessment.scope_score > 0
+        and assessment.relation_score > 0
+        and assessment.object_score >= 0.6
+    ]
+    if not compatible:
         return 0.0
+    assessment = max(compatible, key=_assessment_rank)
     section_role = assessment.proposition.section_scope
     actor = assessment.proposition.actor
     if _language_data_question(question) and _has_closed_quantifier(question):
@@ -201,6 +259,85 @@ def boolean_proposition_evidence_score(
     if coverage < 0.35:
         return 0.0
     return 1.0 + coverage + 0.5 * assessment.relation_score
+
+
+def boolean_proposition_binding_trace(
+    question: str,
+    answer: str,
+    items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    question_relation = primary_boolean_relation(question)
+    question_object = _object_compatibility(question, question)[1]
+    question_actor = (
+        "current_paper"
+        if _requires_current_paper_scope(question)
+        else _actor(question, _section_role({}, question))
+    )
+    candidates = [
+        assessment
+        for item in items
+        for assessment in classify_boolean_evidence_candidates(question, answer, item)
+    ]
+    supports = [value for value in candidates if value.classification == "supports"]
+    contradictions = [
+        value for value in candidates if value.classification == "contradicts"
+    ]
+    rejected = [
+        value
+        for value in candidates
+        if value.classification in {"unrelated", "insufficient_scope"}
+    ]
+    return {
+        "question_proposition": {
+            "actor": question_actor,
+            "relation": question_relation,
+            "object": question_object,
+            "scope": (
+                "current_paper" if question_actor == "current_paper" else "document"
+            ),
+            "polarity": _answer_polarity(answer),
+        },
+        "proposition_candidate_ids": [value.span_id for value in candidates],
+        "normalized_relation": question_relation,
+        "relation_match_reason": (
+            "normalized_relation_family_match" if supports or contradictions else ""
+        ),
+        "proposition_candidates": [_assessment_trace(value) for value in candidates],
+        "bound_support_span_ids": [value.span_id for value in supports],
+        "bound_contradiction_span_ids": [value.span_id for value in contradictions],
+        "bound_support_evidence_ids": _assessment_evidence_ids(supports),
+        "bound_contradiction_evidence_ids": _assessment_evidence_ids(contradictions),
+        "rejected_candidates": [_assessment_trace(value) for value in rejected],
+        "final_support_evidence_ids": _assessment_evidence_ids(supports),
+        "final_contradiction_evidence_ids": _assessment_evidence_ids(contradictions),
+        "binding_status": "filled" if supports else "missing",
+    }
+
+
+def _assessment_trace(value: BooleanEvidenceAssessment) -> dict[str, Any]:
+    return {
+        "proposition_candidate_id": value.span_id,
+        "evidence_id": identity_of(value.item).key,
+        "span": value.span_text,
+        "normalized_relation": value.proposition.action,
+        "relation_match_reason": (
+            "normalized_relation_family_match"
+            if value.relation_score > 0
+            else "normalized_relation_mismatch"
+        ),
+        "actor_score": value.actor_score,
+        "scope_score": value.scope_score,
+        "object_score": value.object_score,
+        "polarity": value.proposition.polarity,
+        "classification": value.classification,
+        "reason": value.reason,
+    }
+
+
+def _assessment_evidence_ids(
+    values: list[BooleanEvidenceAssessment],
+) -> list[str]:
+    return list(dict.fromkeys(identity_of(value.item).key for value in values))
 
 
 def _answer_polarity(answer: str) -> str:
@@ -224,10 +361,9 @@ def _evidence_polarity(
         if _english_closed_scope(text):
             return "yes"
         return ""
-    negative = _target_relation_is_negated(question, text)
-    if negative:
-        return "no"
-    return "yes" if desired_polarity else ""
+    evidence_negative = _target_relation_is_negated(question, text)
+    question_negative = _target_relation_is_negated(question, question)
+    return "yes" if evidence_negative == question_negative else "no"
 
 
 def _target_relation_is_negated(question: str, text: str) -> bool:
@@ -345,6 +481,8 @@ def _split_target_conjunction(value: str, target: str) -> list[str]:
 
 def _relation_surface_tokens(relation: str) -> set[str]:
     surfaces = {
+        "annotate": {"annotate", "construct", "label"},
+        "compare": {"compare", "contrast", "outperform"},
         "create": {
             "build",
             "built",
@@ -361,11 +499,23 @@ def _relation_surface_tokens(relation: str) -> set[str]:
             "evaluate",
             "experiment",
             "perform",
+            "present",
+            "report",
+            "results",
             "run",
             "test",
         },
         "provide": {"available", "provide", "publish", "release"},
-        "use": {"apply", "incorporate", "introduce", "use", "used"},
+        "train": {"finetune", "fine-tune", "train"},
+        "use": {
+            "apply",
+            "employ",
+            "incorporate",
+            "introduce",
+            "rely",
+            "use",
+            "used",
+        },
     }
     return surfaces.get(relation, {relation})
 
@@ -388,13 +538,18 @@ def _object_token(token: str) -> str:
 def _content_tokens(value: str) -> set[str]:
     stopwords = {
         "are",
+        "both",
         "did",
         "does",
+        "never",
+        "no",
+        "not",
         "only",
         "the",
         "they",
         "was",
         "were",
+        "without",
     }
     return {
         token

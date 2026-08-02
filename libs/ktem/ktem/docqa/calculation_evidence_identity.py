@@ -4,7 +4,7 @@ from typing import Any
 
 from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from .evidence_identity import identity_of
-from .financial_table import parse_financial_table_cells
+from .financial_table import parse_financial_table_cells_with_context
 
 
 def calculation_evidence_lookup(
@@ -23,7 +23,7 @@ def calculation_evidence_items(
             item,
             *(
                 materialize_financial_cell(item, cell)
-                for cell in parse_financial_table_cells(item)
+                for cell in parse_financial_table_cells_with_context(item, items)
             ),
         ]
         for candidate in candidates:

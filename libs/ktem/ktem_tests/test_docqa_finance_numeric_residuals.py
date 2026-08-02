@@ -1,7 +1,7 @@
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 
 
-def test_finance_free_cash_flow_operands_inherit_single_question_period():
+def test_finance_free_cash_flow_rejects_unresolved_slot_evidence_ids():
     answer = finance_numeric_answer(
         "What was free cash flow in 2020?",
         [
@@ -64,11 +64,13 @@ def test_finance_free_cash_flow_operands_inherit_single_question_period():
     )
 
     assert answer is not None
-    assert answer.answer == "$3,215.4 million"
-    assert answer.calculation_verification["valid"] is True
-    assert {operand["period"] for operand in answer.calculation_plan["operands"]} == {
-        "2020"
-    }
+    assert answer.answer == ""
+    assert answer.attempt_status == "verification_failed"
+    assert answer.calculation_verification["valid"] is False
+    assert any(
+        error.startswith("operand_evidence_missing:")
+        for error in answer.calculation_verification["errors"]
+    )
 
 
 def test_finance_numeric_answer_sums_active_revolving_credit_agreements():

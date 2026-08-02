@@ -190,6 +190,15 @@ def _heuristic_evidence_slots(
             verification_domain,
         )
     )
+    if "total" in text.lower() and any(
+        slot.metric == "revolving credit capacity" for slot in slots
+    ):
+        slots = tuple(
+            replace(slot, cardinality=2, operator_role="collection")
+            if slot.metric == "revolving credit capacity"
+            else slot
+            for slot in slots
+        )
     return slots, finance_domain, segment_comparison
 
 

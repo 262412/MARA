@@ -2,11 +2,18 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from ktem.docqa.calculation_evidence_identity import materialize_financial_cell
+from ktem.docqa.calculation_evidence_identity import (
+    calculation_evidence_items,
+    materialize_financial_cell,
+)
+from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 from ktem.docqa.financial_table import parse_financial_table_cells_with_context
+from ktem.docqa.query_planning import bind_evidence_slots, build_query_plan
 
 
-def _header(text: str = "Cash flows from investing activities\nYears ended December 31\n2018\n2017\n2016") -> dict[str, object]:
+def _header(
+    text: str = "Cash flows from investing activities\nYears ended December 31\n2018\n2017\n2016",
+) -> dict[str, object]:
     return {
         "evidence_id": "header",
         "source_id": "report",
@@ -37,6 +44,7 @@ def _parent(text: str | None = None) -> dict[str, object]:
         """,
         "source_backrefs": ["report#page:49"],
         "scale": "million",
+        "financial_scope": "consolidated",
     }
 
 
@@ -77,3 +85,27 @@ def test_no_reliable_period_mapping_emits_no_cells() -> None:
     )
 
     assert cells == ()
+
+
+def test_materialized_parent_executes_requested_2018_capex_value() -> None:
+    question = "What was FY2018 capital expenditure in USD millions?"
+    evidence = [_header(), _parent()]
+    expanded = calculation_evidence_items(evidence)
+    bound = bind_evidence_slots(
+        build_query_plan(
+            question,
+            answer_type="numeric",
+            verification_domain="finance",
+        ),
+        expanded,
+    )
+
+    answer = finance_numeric_answer(
+        question,
+        expanded,
+        query_plan=bound.as_dict(),
+    )
+
+    assert answer is not None
+    assert answer.answer == "$1,577 million"
+    assert answer.calculation_verification["valid"] is True

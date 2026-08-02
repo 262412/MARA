@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 
 _RELATION_GROUPS = {
-    "annotate": {"annotate", "label"},
+    "annotate": {"annotate", "construct", "label"},
     "associate": {"associate", "connect", "link", "relate"},
-    "compare": {"compare", "contrast"},
-    "create": {"build", "collect", "compile", "construct", "create", "develop"},
+    "compare": {"compare", "contrast", "outperform"},
+    "create": {"build", "collect", "compile", "create", "develop"},
     "demonstrate": {"demonstrate", "establish", "prove", "show"},
     "evaluate": {
         "assess",
@@ -15,6 +15,8 @@ _RELATION_GROUPS = {
         "evaluate",
         "experiment",
         "perform",
+        "present",
+        "report",
         "run",
         "test",
     },
@@ -30,11 +32,10 @@ _RELATION_GROUPS = {
     "learn": {"capture", "learn"},
     "provide": {"available", "provide", "publish", "release"},
     "recommend": {"recommend", "suggest"},
-    "report": {"present", "report"},
     "require": {"must", "need", "require"},
     "train": {"finetune", "fine-tune", "train"},
     "translate": {"translate"},
-    "use": {"apply", "incorporate", "introduce", "use"},
+    "use": {"apply", "employ", "incorporate", "introduce", "rely", "use"},
     "validate": {"check", "control", "validate", "verify"},
 }
 _RELATION_BY_FORM = {
