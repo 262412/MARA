@@ -81,7 +81,11 @@ def query_plan_calculation_plan_state_mismatch(
         for value in verification.get("verified_required_slot_ids") or []
         if str(value or "").strip()
     }
-    if any(slot_id not in operands_by_slot for slot_id in verified_slot_ids):
+    if any(
+        slot_id not in operands_by_slot
+        for slot_id in verified_slot_ids
+        if not _is_execution_dimension_slot(slots.get(slot_id), slot_id)
+    ):
         return True
     if any(
         slots.get(slot_id) is None
@@ -92,6 +96,17 @@ def query_plan_calculation_plan_state_mismatch(
     return any(
         not _dimension_state_matches(slots, operands, dimension)
         for dimension in ("scale", "unit", "currency")
+    )
+
+
+def _is_execution_dimension_slot(
+    slot: dict[str, Any] | None,
+    slot_id: str,
+) -> bool:
+    return bool(
+        slot
+        and str(slot.get("role") or "") == "dimension"
+        and slot_id.rsplit(":", 1)[-1] in {"scale", "unit", "currency"}
     )
 
 

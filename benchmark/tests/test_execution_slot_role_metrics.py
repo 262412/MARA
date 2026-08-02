@@ -117,7 +117,10 @@ def test_query_plan_calculation_plan_state_mismatch_is_reported() -> None:
         {
             "calculation_verification": {
                 "valid": True,
-                "verified_required_slot_ids": ["operand:revenue:2023"],
+                "verified_required_slot_ids": [
+                    "operand:revenue:2023",
+                    "dimension:scale",
+                ],
             },
             "calculation_execution": {"status": "ok"},
         }
@@ -169,6 +172,58 @@ def test_synchronized_query_and_calculation_plans_have_no_state_mismatch() -> No
             "calculation_verification": {
                 "valid": True,
                 "verified_required_slot_ids": ["operand:revenue:2023"],
+            },
+            "calculation_execution": {"status": "ok"},
+        }
+    )
+    metadata["finance_numeric_trace"]["calculation_plan"]["operands"][0].update(
+        {
+            "query_slot_id": "operand:revenue:2023",
+            "source_id": "report",
+            "table_instance_id": "income",
+            "table_group_id": "income",
+            "scale": "million",
+            "scale_evidence_identity": dimension_id,
+        }
+    )
+    prediction = {
+        "example_id": "finance-example",
+        "question": "What was revenue in 2023, in millions?",
+        "answer_type": "numeric",
+        "gold_answers": ["120"],
+        "evidence_metadata": {
+            **metadata,
+            "selected_evidence": [operand, dimension],
+        },
+    }
+
+    summary = contract_invariant_summary([prediction])
+
+    assert summary["query_plan_calculation_plan_state_mismatch_count"] == 0.0
+
+
+def test_synchronized_verified_dimension_is_not_treated_as_an_operand() -> None:
+    operand, dimension = _evidence_records()
+    operand_id = identity_of(operand).key
+    dimension_id = identity_of(dimension).key
+    metadata = _metadata(operand_id, dimension_id)
+    metadata["query_plan"]["state_authority"] = "verified_calculation_plan"
+    metadata["query_plan"]["evidence_slots"][0].update(
+        {
+            "source_id": "report",
+            "table_instance_id": "income",
+            "table_group_id": "income",
+            "scale": "million",
+        }
+    )
+    metadata["finance_numeric_trace"].update(
+        {
+            "calculation_verification": {
+                "valid": True,
+                "verified_required_slot_ids": [
+                    "operand:revenue:2023",
+                    "dimension:scale",
+                ],
             },
             "calculation_execution": {"status": "ok"},
         }
