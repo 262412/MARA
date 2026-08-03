@@ -484,7 +484,12 @@ def render_execution_answer(
         return ""
     question_type = template.question_type
     if question_type == "percentage_decrease":
-        return format_percentage(abs(float(value)))
+        numeric = float(value)
+        if numeric < 0:
+            return f"Yes, a {format_percentage(abs(numeric))} decrease"
+        if numeric > 0:
+            return f"No, there was a {format_percentage(numeric)} increase"
+        return "No, there was no decrease"
     if question_type in {
         "current_ratio",
         "debt_to_equity",
@@ -524,12 +529,35 @@ def render_execution_answer(
     }:
         if question_type == "capital_expenditure":
             value = abs(value)
+            if answer_scale == "billion":
+                return _format_precise_currency(value, answer_scale, decimals=1)
         return _format_precise_currency(value, answer_scale)
     return template.answer
 
 
-def _format_precise_currency(value: Any, unit: str) -> str:
+def _format_precise_currency(value: Any, unit: str, *, decimals: int = 3) -> str:
     numeric = float(value)
     prefix = "-$" if numeric < 0 else "$"
-    rendered = f"{abs(numeric):,.3f}".rstrip("0").rstrip(".")
+    rendered = f"{abs(numeric):,.{decimals}f}".rstrip("0").rstrip(".")
     return f"{prefix}{rendered} {unit}".strip()
+
+
+def execution_payload(
+    question_type: str,
+    value: Any,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    if question_type != "percentage_decrease" or value is None:
+        return payload
+    if value < 0:
+        direction = "decrease"
+    elif value > 0:
+        direction = "increase"
+    else:
+        direction = "unchanged"
+    return {
+        **payload,
+        "signed_value": str(value),
+        "direction": direction,
+        "magnitude": str(abs(value)),
+    }

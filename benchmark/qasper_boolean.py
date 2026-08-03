@@ -51,9 +51,46 @@ def is_boolean_question(question: str) -> bool:
 
 
 def boolean_candidate_polarity(candidate: str) -> str:
-    if str(candidate or "").lower() in {"yes", "true"}:
+    first_line = next(
+        (line.strip() for line in str(candidate or "").splitlines() if line.strip()),
+        "",
+    )
+    match = re.match(
+        r"^(?:answer\s*:\s*)?(yes|no|true|false)\b",
+        first_line,
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return ""
+    return "yes" if match.group(1).lower() in {"yes", "true"} else "no"
+
+
+def quality_control_relation_polarity(question: str, quote: str) -> str:
+    """Resolve the narrow QASPER data-quality proposition from a local quote."""
+
+    lowered_question = str(question or "").lower()
+    if not (
+        re.search(r"\b(?:subject(?:ed)?\s+to|undergo(?:es|ne)?)\b", lowered_question)
+        and re.search(r"\bquality\s+control\b", lowered_question)
+    ):
+        return ""
+    lowered_quote = str(quote or "").lower()
+    if re.search(
+        r"\b(?:not\s+subject(?:ed)?\s+to|without|no)\s+(?:any\s+)?quality\s+control\b",
+        lowered_quote,
+    ):
+        return "no"
+    if re.search(
+        r"\b(?:harder|difficult|impossible)\s+to\s+validate\s+the\s+quality\b",
+        lowered_quote,
+    ):
+        return "no"
+    if re.search(
+        r"\b(?:subject(?:ed)?\s+to|undergo(?:es|ne|went)?)\s+(?:a\s+)?quality\s+control\b",
+        lowered_quote,
+    ):
         return "yes"
-    return "no" if candidate else ""
+    return ""
 
 
 def normalized_boolean_quote(value: str) -> str:
@@ -79,6 +116,9 @@ def boolean_quote_supports_relation(
     question: str,
     verdict: str,
 ) -> bool:
+    quality_control_polarity = quality_control_relation_polarity(question, quote)
+    if quality_control_polarity:
+        return verdict == quality_control_polarity
     quote_tokens = stemmed_content_tokens(quote)
     question_anchors = stemmed_content_tokens(question)
     question_relations = boolean_relation_lemmas(question)
@@ -143,6 +183,27 @@ def boolean_complete_quote_conflicts(
     if verdict == "yes" and quote_negative:
         return boolean_quote_supports_relation(quote, question, "no")
     return False
+
+
+def corrected_complete_requirement_polarity(
+    quote: str,
+    question: str,
+    verdict: str,
+) -> str:
+    """Correct only an explicit requirement-modality contradiction.
+
+    A complete semantic verdict remains authoritative for ordinary lexical
+    negation.  Requirement questions are the narrow exception because phrases
+    such as ``without fine-tuning`` directly determine whether something is
+    required.
+    """
+
+    if not _requirement_relation_conflicts(quote, question, verdict):
+        return ""
+    opposite = "no" if verdict == "yes" else "yes"
+    if boolean_quote_supports_relation(quote, question, opposite):
+        return opposite
+    return ""
 
 
 def _has_explicit_negation(value: str) -> bool:

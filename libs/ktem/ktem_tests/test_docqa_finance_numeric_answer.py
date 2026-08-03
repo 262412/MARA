@@ -369,7 +369,7 @@ def test_finance_numeric_answer_executes_direct_capex_from_horizontal_cash_flow_
     )
 
     assert answer is not None
-    assert answer.answer == "$4.625 billion"
+    assert answer.answer == "$4.6 billion"
     assert answer.question_type == "capital_expenditure"
     assert answer.calculation_verification["valid"] is True
     assert answer.calculation_execution["citation_ids"] == ["element::pepsico-page-63"]

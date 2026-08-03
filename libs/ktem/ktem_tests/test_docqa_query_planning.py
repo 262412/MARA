@@ -80,7 +80,9 @@ def test_slot_binding_and_missing_queries_only_target_unfilled_operand():
     assert bound.evidence_slots[0].status == "filled"
     assert bound.evidence_slots[0].evidence_ids == ("cell::revenue-2021",)
     assert bound.evidence_slots[1].status == "missing"
-    assert missing_slot_queries(bound) == ["revenue 2022"]
+    assert missing_slot_queries(bound) == [
+        "revenue consolidated statements of income 2022"
+    ]
 
 
 def test_numeric_slot_rejects_topical_text_without_bound_value():
@@ -102,7 +104,10 @@ def test_numeric_slot_rejects_topical_text_without_bound_value():
     )
 
     assert all(slot.status == "missing" for slot in bound.evidence_slots)
-    assert missing_slot_queries(bound) == ["revenue 2021", "revenue 2022"]
+    assert missing_slot_queries(bound) == [
+        "revenue consolidated statements of income 2021",
+        "revenue consolidated statements of income 2022",
+    ]
 
 
 def test_finance_fact_slot_requires_exact_metric_not_adjusted_ebit_prefix():
@@ -434,7 +439,10 @@ def test_total_current_assets_slot_rejects_other_current_assets_prose():
     operand = next(slot for slot in bound.evidence_slots if slot.role == "operand")
     assert operand.metric == "total current assets"
     assert operand.status == "missing"
-    assert "total current assets 2019" in missing_slot_queries(bound)
+    assert (
+        "total current assets consolidated balance sheet 2019"
+        in missing_slot_queries(bound)
+    )
 
 
 def test_net_ppe_slot_rejects_cash_flow_additions():

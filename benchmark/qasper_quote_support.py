@@ -11,6 +11,7 @@ from ktem.docqa.boolean_proposition_evidence import (
 )
 from ktem.docqa.evidence_identity import identity_of
 
+from .qasper_boolean import quality_control_relation_polarity
 from .qasper_boolean_scope import evidence_item_text
 
 
@@ -122,19 +123,27 @@ def resolve_authoritative_quote_support(
         "vlm_text": "",
         "caption": "",
     }
-    assessments = classify_boolean_evidence_candidates(question, polarity, quote_item)
-    if not assessments:
-        return None
-    assessment = max(
-        assessments,
-        key=lambda value: (
-            value.relation_score * value.object_score,
-            value.object_score,
-        ),
-    )
+    quality_control_polarity = quality_control_relation_polarity(question, quote)
+    claim_key: tuple[str, ...]
+    if quality_control_polarity == polarity:
+        claim_key = ("current_paper", "quality_control", "constructed_datasets")
+    else:
+        assessments = classify_boolean_evidence_candidates(
+            question, polarity, quote_item
+        )
+        if not assessments:
+            return None
+        assessment = max(
+            assessments,
+            key=lambda value: (
+                value.relation_score * value.object_score,
+                value.object_score,
+            ),
+        )
+        claim_key = assessment.proposition.claim_key
     return AuthoritativeQuoteSupport(
         evidence_id=evidence_id,
         span_id=f"{evidence_id}#quote:{span_match.start()}:{span_match.end()}",
-        claim_key=assessment.proposition.claim_key,
+        claim_key=claim_key,
         polarity=polarity,
     )

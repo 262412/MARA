@@ -542,7 +542,8 @@ def _scale(text: str) -> str:
         r"dollars?\s+(?:are\s+)?(?:presented\s+)?in|"
         r"tabular\s+dollars?\s+(?:are\s+)?(?:presented\s+)?in"
         r")\s+(thousands?|millions?|billions?)\b|"
-        r"\(\s*(thousands?|millions?|billions?)\s*\)",
+        r"\(\s*(?:[$€£¥]\s*)?(thousands?|millions?|billions?)\s*\)|"
+        r"\b(?:19|20)\d{2}\s*[$€£¥]\s*(thousands?|millions?|billions?)\b",
         text,
         flags=re.IGNORECASE,
     )

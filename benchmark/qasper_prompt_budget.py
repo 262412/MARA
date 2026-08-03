@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -28,6 +29,13 @@ class _EvidenceRow:
     claim_support: bool
     claim_contradiction: bool
     priority: bool
+    spans: tuple[tuple[int, int], ...]
+
+
+def compact_qasper_candidate(candidate: str, *, max_chars: int = 1800) -> str:
+    """Keep candidate rationale useful without allowing it to consume evidence budget."""
+
+    return _truncate_evidence(str(candidate or ""), max_chars)
 
 
 def fit_qasper_verifier_prompt(
@@ -97,6 +105,8 @@ def fit_qasper_verifier_items(
     )
     empty_prompt = prompt_builder("")
     evidence_limit = max(0, QASPER_VERIFIER_PROMPT_MAX_CHARS - len(empty_prompt))
+    original_records = list(records)
+    records = _reserve_required_record_budget(records, evidence_limit)
     selected: list[_EvidenceRow] = []
     dropped: list[str] = []
     used_chars = 0
@@ -111,7 +121,7 @@ def fit_qasper_verifier_items(
     prompt = prompt_builder(bounded)
     trace = _budget_trace(
         status="full" if not dropped else "item_packed",
-        original="\n\n".join(row.rendered for row in records),
+        original="\n\n".join(row.rendered for row in original_records),
         used=bounded,
         prompt=prompt,
     )
@@ -131,9 +141,40 @@ def fit_qasper_verifier_items(
             "verifier_required_evidence_ids": ",".join(sorted(required)),
             "verifier_required_slot_ids": ",".join(required_slot_ids or []),
             "verifier_required_evidence_coverage": f"{required_coverage:.6f}",
+            "verifier_input_evidence_spans": json.dumps(
+                [
+                    {
+                        "evidence_id": row.identity,
+                        "spans": [
+                            {"span_start": start, "span_end": end}
+                            for start, end in row.spans
+                        ],
+                    }
+                    for row in selected
+                ],
+                separators=(",", ":"),
+            ),
         }
     )
     return prompt, bounded, trace
+
+
+def _reserve_required_record_budget(
+    records: list[_EvidenceRow],
+    evidence_limit: int,
+) -> list[_EvidenceRow]:
+    required_records = [row for row in records if row.required]
+    if not required_records:
+        return records
+    separator_budget = 2 * (len(required_records) - 1)
+    per_required_limit = max(
+        0,
+        (evidence_limit - separator_budget) // len(required_records),
+    )
+    return [
+        *(_fit_evidence_row(row, per_required_limit) for row in required_records),
+        *(row for row in records if not row.required),
+    ]
 
 
 def _ranked_evidence_records(
@@ -215,13 +256,17 @@ def _evidence_rows(
             continue
         seen.add(evidence_id)
         rendered_text = text
+        spans: tuple[tuple[int, int], ...] = ((0, len(text)),)
         lineage = ""
-        if _looks_boolean(question) and len(text) > 1200:
-            rendered_text, span_start, span_end = _boolean_proposition_snippet(
+        if len(text) > 1200 and (_looks_boolean(question) or bool(required & aliases)):
+            rendered_text, spans = _boolean_proposition_snippet(
                 text,
                 question,
             )
-            lineage = f" span_start={span_start} span_end={span_end}"
+            lineage = (
+                f" span_start={spans[0][0]} span_end={spans[-1][1]}"
+                " selected_spans=" + ",".join(f"{start}:{end}" for start, end in spans)
+            )
         relevance = len(query_tokens & _content_tokens(rendered_text))
         rendered = f"[evidence_id={evidence_id}{lineage}]\n{rendered_text}"
         rows.append(
@@ -236,6 +281,7 @@ def _evidence_rows(
                 claim_support=bool(claim_support & aliases),
                 claim_contradiction=bool(claim_contradiction & aliases),
                 priority=bool(priority & aliases),
+                spans=spans,
             )
         )
     rows.sort(
@@ -254,7 +300,7 @@ def _evidence_rows(
 def _boolean_proposition_snippet(
     text: str,
     question: str,
-) -> tuple[str, int, int]:
+) -> tuple[str, tuple[tuple[int, int], ...]]:
     statements = [
         (match.start(), match.end(), match.group(0).strip())
         for match in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", text)
@@ -262,7 +308,7 @@ def _boolean_proposition_snippet(
     ]
     if not statements:
         bounded = _truncate_evidence(text, 900)
-        return bounded, 0, len(bounded)
+        return bounded, ((0, len(bounded)),)
     question_tokens = stemmed_content_tokens(question)
     ranked = sorted(
         statements,
@@ -287,9 +333,47 @@ def _boolean_proposition_snippet(
     )
     if opposite is not None:
         selected.append(opposite)
-    selected.sort(key=lambda row: row[0])
-    snippet = " … ".join(_truncate_evidence(row[2], 900) for row in selected)
-    return snippet, selected[0][0], selected[-1][1]
+    bounded_statements = [_truncate_evidence(row[2], 900) for row in selected]
+    spans = tuple(
+        (row[0], row[0] + len(bounded))
+        for row, bounded in zip(selected, bounded_statements)
+    )
+    return " … ".join(bounded_statements), spans
+
+
+def _fit_evidence_row(row: _EvidenceRow, limit: int) -> _EvidenceRow:
+    if len(row.rendered) <= limit:
+        return row
+    prefix = f"[evidence_id={row.identity}]\n"
+    text_limit = max(0, limit - len(prefix) - 120)
+    parts = row.text.split(" … ")
+    selected_parts: list[str] = []
+    selected_spans: list[tuple[int, int]] = []
+    remaining = text_limit
+    for part, (start, end) in zip(parts, row.spans):
+        separator = 3 if selected_parts else 0
+        if remaining <= separator:
+            break
+        bounded = _truncate_evidence(part, remaining - separator)
+        if not bounded:
+            break
+        selected_parts.append(bounded)
+        selected_spans.append((start, min(end, start + len(bounded))))
+        remaining -= separator + len(bounded)
+    text = " … ".join(selected_parts)
+    spans = tuple(selected_spans)
+    lineage = ""
+    if spans:
+        lineage = (
+            f" span_start={spans[0][0]} span_end={spans[-1][1]}"
+            " selected_spans=" + ",".join(f"{start}:{end}" for start, end in spans)
+        )
+    return replace(
+        row,
+        rendered=f"[evidence_id={row.identity}{lineage}]\n{text}",
+        text=text,
+        spans=spans,
+    )
 
 
 def _append_relation_priority(

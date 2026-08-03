@@ -252,6 +252,22 @@ def test_weak_candidate_support_is_not_preserved() -> None:
     assert trace["conflict_status"] == "insufficient_evidence"
 
 
+def test_authoritative_same_polarity_quote_confirms_candidate_without_chunk_score():
+    action, answer, trace = resolve_boolean_conflict(
+        "",
+        "Did the authors release the code?",
+        candidate_polarity="yes",
+        verdict="yes",
+        evidence_items=[],
+        authoritative_claim_key=("current_paper", "release", "code"),
+        authoritative_polarity="yes",
+    )
+
+    assert action == "confirmed_candidate"
+    assert answer == "yes"
+    assert trace["verdict_support_score"] == "1.000"
+
+
 def test_exact_positive_support_beats_unrelated_negative_clause() -> None:
     positive = _item(
         "positive",
@@ -328,21 +344,20 @@ def test_language_identity_is_not_collapsed_for_non_quantified_claim() -> None:
     assert "german" in assessment.proposition.object
 
 
-def test_different_object_cannot_create_same_proposition_conflict() -> None:
+def test_insufficient_verdict_cannot_preserve_candidate_from_broad_chunk_score() -> None:
     positive = _item("positive", "We evaluated German datasets.")
-    different_object = _item("different", "We did not evaluate Greek datasets.")
 
     action, answer, trace = resolve_boolean_conflict(
         "",
         "Did the authors evaluate German datasets?",
         candidate_polarity="yes",
-        verdict="no",
-        evidence_items=[positive, different_object],
+        verdict="insufficient_evidence",
+        evidence_items=[positive],
     )
 
-    assert action == "preserved_candidate_conflict_warning"
-    assert answer == "yes"
-    assert trace["conflict_status"] == "candidate_support_dominates"
+    assert action == "abstained_insufficient_evidence"
+    assert answer == "unanswerable"
+    assert trace["conflict_status"] == "insufficient_evidence"
 
 
 def test_supported_boolean_answer_is_not_false_abstained() -> None:
@@ -494,6 +509,7 @@ def test_deterministic_experiment_support_survives_terminal_citation_rebuild() -
     assert prediction["evidence_metadata"]["verified_claim_support_evidence"] == [
         evidence
     ]
+    assert prediction["predicted_evidence"] == [evidence["text"]]
     assert prediction["evidence_metadata"]["emitted_citation_evidence"] == [evidence]
     metrics = qasper_contract_metric_values(
         prediction,
@@ -509,6 +525,58 @@ def test_deterministic_experiment_support_survives_terminal_citation_rebuild() -
     assert prediction["evidence_metadata"]["qasper_answerability"][
         "evidence_quote"
     ].startswith("In fact, I have been unable")
+
+
+def test_authoritative_quality_quote_identity_survives_terminal_rebinding() -> None:
+    quote = (
+        "It is much harder to validate the quality of such data at such a "
+        "scale and such varying levels of complexity."
+    )
+    evidence = _item("quality", quote)
+    prediction: dict[str, Any] = {
+        "question": (
+            "Are the automatically constructed datasets subject to quality control?"
+        ),
+        "answer_type": "boolean",
+        "predicted_answer": "yes",
+        "route": "text_only",
+        "gold_evidence": ["anonymous-support"],
+        "evidence_bundle": {"items": [evidence], "metadata": {}},
+        "evidence_metadata": {
+            "selected_evidence": [evidence],
+            "generation_context_evidence": [evidence],
+        },
+        "structured_citations": [],
+        "predicted_citations": [],
+    }
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_typed",
+        mode="scoring_adapter_v1",
+    )
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: _Verifier("no_complete", quote),
+    )
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_typed",
+        mode="scoring_adapter_v1",
+    )
+    synchronize_terminal_answer_state(prediction)
+
+    trace = prediction["evidence_metadata"]["qasper_answerability"]
+    assert prediction["answer_for_scoring"] == "no"
+    assert trace["authoritative_quote_evidence_id"] == "evidence:paper:quality"
+    assert prediction["evidence_metadata"]["verified_claim_support_evidence"] == [
+        evidence
+    ]
+    assert prediction["predicted_evidence"] == [quote]
+    assert prediction["structured_citations"][0]["evidence_id"] == (
+        "evidence:paper:quality"
+    )
 
 
 def test_wrong_polarity_is_rejected_without_abstaining_valid_answer() -> None:

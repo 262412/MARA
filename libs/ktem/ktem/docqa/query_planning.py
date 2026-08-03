@@ -44,6 +44,7 @@ _NUMERIC_TERMS = {
     "difference",
     "decline",
     "drop",
+    "ebitda",
     "margin",
     "million",
     "millions",
@@ -375,7 +376,7 @@ def missing_slot_requests(plan: QueryPlan) -> list[dict[str, str]]:
         {
             "query_id": f"round2:{slot.slot_id}",
             "slot_id": slot.slot_id,
-            "query": slot.query,
+            "query": _second_round_slot_query(slot),
             "modality": slot.modality or "auto",
         }
         for slot in missing_required_slots(plan)
@@ -458,13 +459,41 @@ def _finance_retrieval_query(
     statement_kind: str,
 ) -> str:
     terms = [metric]
-    if metric == "capital expenditure":
-        terms.append("capital spending")
-    if statement_kind == "cash_flow_statement":
-        terms.append("consolidated statement of cash flows")
+    aliases = {
+        "capital expenditure": ("capital spending",),
+        "cost of goods sold": (
+            "cost of products sold",
+            "cost of revenues",
+            "cost of sales",
+            "COGS",
+        ),
+    }
+    terms.extend(aliases.get(metric, ()))
+    headings = {
+        "balance_sheet": "consolidated balance sheet",
+        "cash_flow_statement": "consolidated statement of cash flows",
+        "income_statement": "consolidated statements of income",
+        "non_gaap_performance": "non-GAAP reconciliation",
+    }
+    if statement_kind in headings:
+        terms.append(headings[statement_kind])
     if period:
         terms.append(period)
     return " ".join(terms)
+
+
+def _second_round_slot_query(slot: EvidenceSlot) -> str:
+    if slot.role == "dimension":
+        return "parent table dollars scale unit convention for required operands"
+    expanded = _finance_retrieval_query(
+        slot.metric,
+        slot.period,
+        statement_kind=slot.statement_kind,
+    )
+    identity_terms = [slot.slot_id.replace(":", " "), expanded]
+    if slot.financial_scope:
+        identity_terms.append(slot.financial_scope)
+    return " ".join(dict.fromkeys(term for term in identity_terms if term))
 
 
 def _explicit_page_labels(capabilities: dict[str, object]) -> tuple[str, ...]:

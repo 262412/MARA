@@ -42,8 +42,14 @@ def calculation_claim_result(
     if expected is None:
         return None
     rendered = extract_final_answer_text(answer)
-    normalized_expected = _normalized_expected(expected, plan)
-    claim = _result_claim(claims, rendered, normalized_expected)
+    result_direction = str(execution.get("direction") or "").strip().lower()
+    result_magnitude = _decimal(execution.get("magnitude"))
+    comparison_expected = result_magnitude if result_magnitude is not None else expected
+    claim = _result_claim(
+        claims,
+        rendered,
+        _normalized_expected(comparison_expected, plan),
+    )
     citation_ids = tuple(
         dict.fromkeys(
             str(value).strip()
@@ -60,7 +66,7 @@ def calculation_claim_result(
     values = _answer_numbers(claim)
     comparisons = [
         compare_calculation_result(
-            expected,
+            comparison_expected,
             value,
             prompt=prompt,
             plan=plan,
@@ -80,7 +86,8 @@ def calculation_claim_result(
         answer_unit=str(plan.get("answer_unit") or ""),
         answer_scale=str(plan.get("answer_scale") or ""),
     )
-    if value_matches and dimensions_match:
+    direction_matches = not result_direction or result_direction in claim.lower()
+    if value_matches and dimensions_match and direction_matches:
         return CalculationClaimResult(
             claim=claim,
             status="supported",
@@ -111,7 +118,11 @@ def _answer_numbers(value: str) -> list[Decimal]:
             parsed = Decimal(normalized)
         except InvalidOperation:
             continue
-        if parsed == parsed.to_integral() and 1900 <= parsed <= 2100:
+        if (
+            parsed == parsed.to_integral()
+            and 1900 <= parsed <= 2100
+            and not re.search(r"[$€£¥,]", raw)
+        ):
             continue
         numbers.append(-parsed if negative else parsed)
     return numbers

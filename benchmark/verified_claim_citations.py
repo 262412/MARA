@@ -28,6 +28,8 @@ def verified_claim_support_items(
             for item in metadata.get("verified_claim_support_evidence") or []
             if isinstance(item, dict)
         )
+        if not items:
+            items.extend(_qasper_authoritative_items(metadata, alias_lookup))
     return items
 
 
@@ -55,6 +57,10 @@ def verified_claim_support_groups(
     resolved_groups = [group for group in groups.values() if group]
     if resolved_groups:
         return resolved_groups
+    for metadata in _metadata_sources(prediction):
+        authoritative = _qasper_authoritative_items(metadata, alias_lookup)
+        if authoritative:
+            return [authoritative]
     flat = verified_claim_support_items(prediction, candidates)
     return [[item] for item in flat]
 
@@ -70,3 +76,15 @@ def _metadata_sources(prediction: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(evidence_metadata, dict):
         sources.append(evidence_metadata)
     return sources
+
+
+def _qasper_authoritative_items(
+    metadata: dict[str, Any],
+    alias_lookup: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    trace = metadata.get("qasper_answerability")
+    if not isinstance(trace, dict):
+        return []
+    evidence_id = str(trace.get("authoritative_quote_evidence_id") or "").strip()
+    item = alias_lookup.get(evidence_id)
+    return [item] if item is not None else []

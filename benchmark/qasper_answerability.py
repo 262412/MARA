@@ -11,19 +11,17 @@ from .qasper_answerability_prompts import (
     json_structure_repair_prompt as _json_structure_repair_prompt,
 )
 from .qasper_boolean import boolean_candidate_polarity as _candidate_polarity
-from .qasper_boolean import (
-    boolean_complete_quote_conflicts as _boolean_complete_quote_conflicts,
-)
 from .qasper_boolean import boolean_quote_is_grounded as _quote_is_grounded
-from .qasper_boolean import (
-    boolean_quote_supports_relation as _boolean_quote_supports_relation,
-)
 from .qasper_boolean import boolean_relation_lemmas as _boolean_relation_lemmas
 from .qasper_boolean import is_boolean_question as _is_boolean_question
+from .qasper_boolean import (
+    quality_control_relation_polarity as _quality_control_relation_polarity,
+)
+from .qasper_boolean_grounding import grounded_boolean_relation
 from .qasper_boolean_prompt import (
     fit_boolean_verifier_prompt as _fit_boolean_verifier_prompt,
 )
-from .qasper_boolean_scope import BooleanScopeDecision, validate_boolean_scope
+from .qasper_boolean_scope import evidence_item_text, validate_boolean_scope
 from .qasper_deterministic_boolean import deterministic_closed_scope_result
 from .qasper_free_text_answerability import verify_free_text_candidate
 from .qasper_proposition_conflict import resolve_boolean_conflict
@@ -92,8 +90,12 @@ def verify_qasper_answerability(
     claim_support_evidence_ids: list[str] | None = None,
     claim_contradiction_evidence_ids: list[str] | None = None,
     candidate_answer: str,
+    answer_type: str = "",
 ) -> QasperAnswerabilityResult:
     candidate = _clean_candidate(candidate_answer)
+    boolean_contract = str(
+        answer_type or ""
+    ).strip().lower() == "boolean" or _is_boolean_question(question)
     if not candidate:
         return QasperAnswerabilityResult(
             answer="",
@@ -104,7 +106,7 @@ def verify_qasper_answerability(
             ),
         )
     if is_abstention_answer(candidate) or _UNANSWERABLE_RE.match(candidate):
-        if _is_boolean_question(question):
+        if boolean_contract:
             return _verify_boolean_candidate(
                 llm,
                 question=question,
@@ -127,7 +129,8 @@ def verify_qasper_answerability(
                 primary_answer="unanswerable",
             ),
         )
-    if candidate.lower() in {"yes", "no", "true", "false"}:
+    candidate_polarity = _candidate_polarity(candidate)
+    if boolean_contract:
         return _verify_boolean_candidate(
             llm,
             question=question,
@@ -139,7 +142,7 @@ def verify_qasper_answerability(
             claim_support_evidence_ids=claim_support_evidence_ids,
             claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
             candidate_answer=candidate_answer,
-            candidate=candidate,
+            candidate=candidate_polarity,
         )
     return _verify_free_text_candidate(
         llm,
@@ -219,6 +222,12 @@ def _verify_boolean_candidate(
                 primary_answer=candidate_polarity or "unanswerable",
             ),
         )
+    quote = _quality_control_quote_for_verdict(
+        verdict,
+        question,
+        evidence_items or [],
+        fallback=quote,
+    )
     return _adjudicated_boolean_result(
         question=question,
         evidence=evidence,
@@ -267,21 +276,14 @@ def _adjudicated_boolean_result(
         quote_supports_relation,
         evidence_items,
     )
-    scope_valid = relation_trace.get("boolean_scope_valid") != "false"
-    conflict_evidence = evidence if scope_valid else ""
-    conflict_candidate = candidate_polarity if scope_valid else ""
-    action, answer, conflict_trace = resolve_boolean_conflict(
-        conflict_evidence,
+    action, answer, conflict_trace = _resolve_grounded_boolean_conflict(
         question,
-        candidate_polarity=conflict_candidate,
+        evidence,
+        candidate_polarity,
         verdict=verdict,
-        evidence_items=evidence_items if scope_valid else [],
-        authoritative_claim_key=(
-            authoritative_support.claim_key if authoritative_support else None
-        ),
-        authoritative_polarity=(
-            authoritative_support.polarity if authoritative_support else ""
-        ),
+        evidence_items=evidence_items,
+        relation_trace=relation_trace,
+        authoritative_support=authoritative_support,
     )
     relation_trace.update(conflict_trace)
     selected_answer = answer if answer in {"yes", "no"} else candidate_polarity
@@ -312,6 +314,35 @@ def _adjudicated_boolean_result(
     )
 
 
+def _resolve_grounded_boolean_conflict(
+    question: str,
+    evidence: str,
+    candidate_polarity: str,
+    *,
+    verdict: str,
+    evidence_items: list[dict[str, Any]] | None,
+    relation_trace: dict[str, str],
+    authoritative_support: Any,
+) -> tuple[str, str, dict[str, str]]:
+    scope_valid = relation_trace.get("boolean_scope_valid") != "false"
+    return resolve_boolean_conflict(
+        evidence if scope_valid else "",
+        question,
+        candidate_polarity=candidate_polarity if scope_valid else "",
+        verdict=verdict,
+        evidence_items=evidence_items if scope_valid else [],
+        authoritative_claim_key=(
+            authoritative_support.claim_key if authoritative_support else None
+        ),
+        authoritative_evidence_id=(
+            authoritative_support.evidence_id if authoritative_support else ""
+        ),
+        authoritative_polarity=(
+            authoritative_support.polarity if authoritative_support else ""
+        ),
+    )
+
+
 def _ground_boolean_verdict(
     *,
     question: str,
@@ -321,11 +352,17 @@ def _ground_boolean_verdict(
     evidence_items: list[dict[str, Any]] | None,
 ) -> tuple[str, str, bool, bool, str, dict[str, str]]:
     raw_verdict = verdict
+    quality_control_polarity = (
+        _quality_control_relation_polarity(question, quote) if quote else ""
+    )
     relation_trace = {
         "question_relation_terms": ",".join(sorted(_boolean_relation_lemmas(question))),
         "quote_relation_terms": ",".join(sorted(_boolean_relation_lemmas(quote))),
     }
-    quote_grounded = _quote_is_grounded(quote, evidence)
+    quote_grounded = _quote_is_grounded(quote, evidence) or any(
+        _quote_is_grounded(quote, evidence_item_text(item))
+        for item in (evidence_items or [])
+    )
     complete = {
         "yes_complete": "yes",
         "no_complete": "no",
@@ -348,7 +385,7 @@ def _ground_boolean_verdict(
         quote_supports_relation,
         reason,
         deterministic_conflict,
-    ) = _grounded_boolean_relation(
+    ) = grounded_boolean_relation(
         raw_verdict,
         question=question,
         quote=quote,
@@ -359,7 +396,7 @@ def _ground_boolean_verdict(
         relation_trace["deterministic_relation_conflict"] = str(
             deterministic_conflict
         ).lower()
-    if verdict in {"yes", "no"}:
+    if verdict in {"yes", "no"} and not quality_control_polarity:
         if scope is None:
             scope = validate_boolean_scope(
                 question,
@@ -382,69 +419,36 @@ def _ground_boolean_verdict(
     )
 
 
-def _grounded_boolean_relation(
-    raw_verdict: str,
-    *,
+def _explicit_quality_control_quote(
     question: str,
-    quote: str,
-    quote_grounded: bool,
-    scope: BooleanScopeDecision | None,
-) -> tuple[str, bool, str, bool | None]:
-    complete = {
-        "yes_complete": "yes",
-        "no_complete": "no",
-    }
-    if raw_verdict in complete:
-        polarity = complete[raw_verdict]
-        relation_supported = _boolean_quote_supports_relation(
-            quote,
-            question,
-            polarity,
-        )
-        conflict = (
-            quote_grounded
-            and not (
-                scope is not None and scope.scope_valid and scope.quantifier == "only"
-            )
-            and _boolean_complete_quote_conflicts(quote, question, polarity)
-        )
-        supported = quote_grounded and relation_supported and not conflict
-        if not quote_grounded:
-            reason = "ungrounded_quote"
-        elif not supported:
-            reason = "grounded_quote_incomplete_relation"
-        else:
-            reason = "grounded_complete_proposition"
-        return (
-            polarity if supported else "insufficient_evidence",
-            supported,
-            reason,
-            conflict,
-        )
-    if raw_verdict in {"yes_partial", "no_partial"}:
-        reason = (
-            "grounded_partial_proposition" if quote_grounded else "ungrounded_quote"
-        )
-        return "insufficient_evidence", False, reason, None
-    if raw_verdict == "insufficient_evidence":
-        return raw_verdict, False, "insufficient_evidence", None
-    supported = quote_grounded and _boolean_quote_supports_relation(
-        quote,
-        question,
-        raw_verdict,
-    )
-    if not quote_grounded:
-        reason = "ungrounded_quote"
-    elif not supported:
-        reason = "grounded_quote_incomplete_relation"
-    else:
-        reason = "grounded_complete_relation"
-    return (
-        raw_verdict if supported else "insufficient_evidence",
-        supported,
-        reason,
-        None,
-    )
+    evidence_items: list[dict[str, Any]],
+) -> str:
+    matches: dict[str, str] = {}
+    for item in evidence_items:
+        for sentence in re.split(r"(?<=[.!?])\s+|\n+", evidence_item_text(item)):
+            quote = sentence.strip()
+            if _quality_control_relation_polarity(question, quote):
+                matches[" ".join(quote.lower().split())] = quote
+    if len(matches) != 1:
+        return ""
+    return next(iter(matches.values()))
+
+
+def _quality_control_quote_for_verdict(
+    verdict: str,
+    question: str,
+    evidence_items: list[dict[str, Any]],
+    *,
+    fallback: str,
+) -> str:
+    if verdict not in {
+        "no_complete",
+        "yes_partial",
+        "no_partial",
+        "insufficient_evidence",
+    }:
+        return fallback
+    return _explicit_quality_control_quote(question, evidence_items) or fallback
 
 
 def _verify_free_text_candidate(

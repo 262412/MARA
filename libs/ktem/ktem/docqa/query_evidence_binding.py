@@ -165,7 +165,7 @@ def _candidate_ids_for_slot(
         for score, _index, item in ranked:
             if score <= 0:
                 continue
-            attributes = revolving_agreement_attributes(evidence_text(item))
+            attributes = _agreement_attributes(item)
             facility = attributes["facility_identity"] or attributes["facility_type"]
             if not facility or facility in facilities:
                 continue
@@ -409,7 +409,7 @@ def _finance_operand_matches(
     if slot.metric not in FINANCE_METRIC_ALIASES:
         return True
     if slot.metric == "revolving credit capacity" and slot.entity.startswith("active"):
-        attributes = revolving_agreement_attributes(text)
+        attributes = _agreement_attributes(item)
         if attributes["agreement_lifecycle_status"] != "active":
             return False
         as_of_date = slot.entity.removeprefix("active_at:")
@@ -444,6 +444,22 @@ def _finance_operand_matches(
     return (not slot.period or observed_period == slot.period) and item.get(
         "value"
     ) not in (None, "")
+
+
+def _agreement_attributes(item: dict[str, Any]) -> dict[str, str]:
+    metadata = item.get("metadata")
+    nested = metadata if isinstance(metadata, dict) else {}
+    observed = revolving_agreement_attributes(evidence_text(item))
+    for key in (
+        "agreement_lifecycle_status",
+        "facility_type",
+        "effective_date",
+        "facility_identity",
+    ):
+        value = str(item.get(key) or nested.get(key) or "").strip()
+        if value:
+            observed[key] = value
+    return observed
 
 
 def _slot_score(

@@ -180,4 +180,7 @@ def test_finance_execution_slots_remain_retrieval_hard_gates():
 
     assert all(slot.required_for_retrieval for slot in plan.evidence_slots)
     assert all(slot.required_for_execution for slot in plan.evidence_slots)
-    assert missing_slot_queries(plan) == ["revenue 2021", "revenue 2022"]
+    assert missing_slot_queries(plan) == [
+        "revenue consolidated statements of income 2021",
+        "revenue consolidated statements of income 2022",
+    ]

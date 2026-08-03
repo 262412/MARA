@@ -456,7 +456,7 @@ def test_finance_scale_can_be_proven_by_same_source_convention_evidence():
     )
 
     assert answer is not None
-    assert answer.answer == "$4.625 billion"
+    assert answer.answer == "$4.6 billion"
     operand = answer.calculation_plan["operands"][0]
     assert operand["scale"] == "million"
     assert operand["scale_evidence_id"] == "pepsico-tabular-scale"

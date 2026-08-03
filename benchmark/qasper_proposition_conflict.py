@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from ktem.docqa.boolean_evidence_scope import classify_boolean_evidence_set
+from ktem.docqa.evidence_identity import identity_of
 
 from .qasper_boolean import boolean_quote_supports_relation, stemmed_content_tokens
 
@@ -19,6 +20,7 @@ def resolve_boolean_conflict(
     verdict: str,
     evidence_items: list[dict[str, Any]] | None = None,
     authoritative_claim_key: tuple[str, ...] | None = None,
+    authoritative_evidence_id: str = "",
     authoritative_polarity: str = "",
 ) -> tuple[str, str, dict[str, str]]:
     candidate_scores = _support_scores(
@@ -32,11 +34,18 @@ def resolve_boolean_conflict(
     opposite = (
         "no" if conflict_polarity == "yes" else "yes" if conflict_polarity else ""
     )
+    conflict_items = evidence_items
+    if evidence_items is not None and authoritative_evidence_id:
+        conflict_items = [
+            item
+            for item in evidence_items
+            if identity_of(item).key != authoritative_evidence_id
+        ]
     opposite_scores = _support_scores(
         evidence,
         question,
         opposite,
-        evidence_items=evidence_items,
+        evidence_items=conflict_items,
     )
     common_keys = set(candidate_scores) & set(opposite_scores)
     if authoritative_claim_key is not None:
@@ -120,17 +129,6 @@ def _boolean_answer_action(
     same_proposition_conflict: bool,
 ) -> tuple[str, str, str]:
     if verdict not in {"yes", "no"}:
-        if (
-            candidate_polarity
-            and candidate_support_score >= MIN_BOOLEAN_SUPPORT_SCORE
-            and candidate_support_score - contradiction_score
-            >= MIN_BOOLEAN_SUPPORT_MARGIN
-        ):
-            return (
-                "preserved_candidate_conflict_warning",
-                candidate_polarity,
-                "candidate_support_dominates",
-            )
         action = (
             "abstained_insufficient_evidence"
             if candidate_polarity
@@ -148,28 +146,13 @@ def _boolean_answer_action(
             return "recovered_boolean_from_abstention", verdict, "none"
         return "preserved_boolean_abstention", "unanswerable", "insufficient_evidence"
     if verdict == candidate_polarity:
-        if candidate_support_score >= MIN_BOOLEAN_SUPPORT_SCORE:
+        if verdict_support_score >= MIN_BOOLEAN_SUPPORT_SCORE:
             return "confirmed_candidate", verdict, "none"
         return (
             "abstained_insufficient_evidence",
             "unanswerable",
             "insufficient_evidence",
         )
-    if (
-        candidate_support_score >= MIN_BOOLEAN_SUPPORT_SCORE
-        and candidate_support_score - contradiction_score >= MIN_BOOLEAN_SUPPORT_MARGIN
-    ):
-        return (
-            "preserved_candidate_conflict_warning",
-            candidate_polarity,
-            "candidate_support_dominates",
-        )
-    if (
-        same_proposition_conflict
-        and candidate_support_score >= MIN_BOOLEAN_SUPPORT_SCORE
-        and contradiction_score >= MIN_BOOLEAN_SUPPORT_SCORE
-    ):
-        return "abstained_polarity_conflict", "unanswerable", "balanced_conflict"
     if verdict_support_score >= MIN_BOOLEAN_SUPPORT_SCORE:
         return "corrected_polarity", verdict, "opposite_support_only"
     return "abstained_insufficient_evidence", "unanswerable", "insufficient_evidence"

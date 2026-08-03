@@ -281,14 +281,14 @@ def test_qasper_answerability_abstains_on_incomplete_conflicting_verdict():
     )
 
     assert result.answer == "unanswerable"
-    assert result.trace["verdict"] == "insufficient_evidence"
+    assert result.trace["verdict"] == "no"
     assert result.trace["action"] == "abstained_insufficient_evidence"
     assert result.trace["primary_answer"] == "yes"
-    assert result.trace["adjudicated_polarity"] == "insufficient_evidence"
-    assert result.trace["reason"] == "grounded_quote_incomplete_relation"
+    assert result.trace["adjudicated_polarity"] == "no"
+    assert result.trace["reason"] == "grounded_complete_proposition"
 
 
-def test_qasper_boolean_preserves_directly_supported_candidate_on_weak_conflict():
+def test_qasper_boolean_abstains_when_verifier_cannot_bind_a_complete_quote():
     llm = _VerifierLLM('{"verdict":"insufficient_evidence","evidence_quote":""}')
 
     result = verify_qasper_answerability(
@@ -301,9 +301,9 @@ def test_qasper_boolean_preserves_directly_supported_candidate_on_weak_conflict(
         candidate_answer="yes",
     )
 
-    assert result.answer == "yes"
-    assert result.trace["action"] == "preserved_candidate_conflict_warning"
-    assert result.trace["conflict_status"] == "candidate_support_dominates"
+    assert result.answer == "unanswerable"
+    assert result.trace["action"] == "abstained_insufficient_evidence"
+    assert result.trace["conflict_status"] == "insufficient_evidence"
     assert float(result.trace["candidate_support_score"]) > 0
     assert float(result.trace["contradiction_score"]) == 0
 
@@ -465,11 +465,12 @@ def test_qasper_complete_verdict_still_requires_question_relation():
     )
 
     assert result.answer == "no"
-    assert result.trace["verdict"] == "insufficient_evidence"
+    assert result.trace["verdict"] == "no"
+    assert result.trace["raw_verifier_verdict"] == "yes_complete"
     assert result.trace["quote_grounded"] == "true"
-    assert result.trace["quote_supports_relation"] == "false"
-    assert result.trace["reason"] == "grounded_quote_incomplete_relation"
-    assert result.trace["action"] == "preserved_candidate_conflict_warning"
+    assert result.trace["quote_supports_relation"] == "true"
+    assert result.trace["reason"] == "grounded_complete_proposition"
+    assert result.trace["action"] == "confirmed_candidate"
     assert "Modal relations are strict" in llm.calls[0][0]
 
 

@@ -29,6 +29,7 @@ FINANCE_METRIC_ALIASES = {
     "cost of goods sold": (
         "cost of goods sold",
         "cost of products sold",
+        "cost of revenues",
         "cost of sales",
         "cogs",
     ),

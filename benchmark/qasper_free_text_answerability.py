@@ -9,7 +9,11 @@ from .qasper_answerability_prompts import (
     json_structure_repair_prompt,
 )
 from .qasper_boolean import stemmed_content_tokens
-from .qasper_prompt_budget import fit_qasper_verifier_items, fit_qasper_verifier_prompt
+from .qasper_prompt_budget import (
+    compact_qasper_candidate,
+    fit_qasper_verifier_items,
+    fit_qasper_verifier_prompt,
+)
 
 _ALLOWED_VERDICTS = (
     "supported",
@@ -188,26 +192,39 @@ def _fit_free_text_verifier_prompt(
     claim_support_evidence_ids: list[str] | None,
     claim_contradiction_evidence_ids: list[str] | None,
 ) -> tuple[str, str, dict[str, str]]:
+    bounded_candidate = compact_qasper_candidate(candidate)
+
     def prompt_builder(bounded: str) -> str:
         return answerability_prompt(
             question=question,
             evidence=bounded,
-            candidate_answer=candidate,
+            candidate_answer=bounded_candidate,
         )
 
     if evidence_items is None:
-        return fit_qasper_verifier_prompt(evidence, prompt_builder)
-    return fit_qasper_verifier_items(
-        evidence_items,
-        prompt_builder,
-        question=question,
-        candidate_answer=candidate,
-        required_evidence_ids=required_evidence_ids,
-        required_slot_ids=required_slot_ids,
-        priority_evidence_ids=priority_evidence_ids,
-        claim_support_evidence_ids=claim_support_evidence_ids,
-        claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
+        prompt, bounded_evidence, trace = fit_qasper_verifier_prompt(
+            evidence,
+            prompt_builder,
+        )
+    else:
+        prompt, bounded_evidence, trace = fit_qasper_verifier_items(
+            evidence_items,
+            prompt_builder,
+            question=question,
+            candidate_answer=bounded_candidate,
+            required_evidence_ids=required_evidence_ids,
+            required_slot_ids=required_slot_ids,
+            priority_evidence_ids=priority_evidence_ids,
+            claim_support_evidence_ids=claim_support_evidence_ids,
+            claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
+        )
+    trace.update(
+        {
+            "candidate_chars_original": str(len(candidate)),
+            "candidate_chars_used": str(len(bounded_candidate)),
+        }
     )
+    return prompt, bounded_evidence, trace
 
 
 def _supported_candidate_core(

@@ -13,8 +13,97 @@ def parse_scoped_header_cells(
     text: str,
     lines: list[str],
 ) -> tuple[Any, ...]:
+    reported_adjusted = _reported_adjusted_measure_cells(item, text, lines)
+    if reported_adjusted:
+        return reported_adjusted
+    dual_period = _dual_period_measure_cells(item, text, lines)
+    if dual_period:
+        return dual_period
     quarterly = _quarterly_fiscal_table_cells(item, text, lines)
     return quarterly or _consolidating_table_cells(item, text, lines)
+
+
+def _reported_adjusted_measure_cells(
+    item: dict[str, Any],
+    text: str,
+    lines: list[str],
+) -> tuple[Any, ...]:
+    header = next(
+        (line for line in lines if "adjusted non-gaap results" in line.lower()),
+        "",
+    )
+    periods = tuple(re.findall(r"\b(?:19|20)\d{2}\b", header))
+    if len(periods) < 2:
+        return ()
+    metric_patterns = (
+        ("Adjusted EBITDA", re.compile(r"^EBITDA\b", re.IGNORECASE)),
+        ("Adjusted EBIT", re.compile(r"^EBIT\b", re.IGNORECASE)),
+        ("Adjusted Net Income", re.compile(r"^Net income\b", re.IGNORECASE)),
+        ("Adjusted EPS", re.compile(r"^EPS\b", re.IGNORECASE)),
+    )
+    number_pattern = re.compile(r"(?<![A-Za-z0-9])\(?-?\d[\d,]*(?:\.\d+)?\)?")
+    rows = []
+    for metric, pattern in metric_patterns:
+        line = next((value for value in lines if pattern.search(value.strip())), "")
+        values = tuple(
+            decimal_value(match.group(0)) for match in number_pattern.finditer(line)
+        )
+        if len(values) >= 2 and values[0] is not None and values[1] is not None:
+            rows.append((metric, (values[0], values[1])))
+    if not rows:
+        return ()
+    paired_columns = tuple(
+        (period, period, "fiscal_year", "fiscal_year", "") for period in periods[:2]
+    )
+    return _scoped_cells(item, text, rows, paired_columns)
+
+
+def _dual_period_measure_cells(
+    item: dict[str, Any],
+    text: str,
+    lines: list[str],
+) -> tuple[Any, ...]:
+    header = re.search(
+        r"Twelve Months Ended.*?\b((?:19|20)\d{2})\b.*?"
+        r"Twelve Months Ended.*?\b((?:19|20)\d{2})\b",
+        " ".join(lines),
+        flags=re.IGNORECASE,
+    )
+    normalized = " ".join(re.findall(r"[a-z0-9]+", text.lower()))
+    if header is None or not all(
+        metric in normalized for metric in ("ebitda", "income", "eps")
+    ):
+        return ()
+    rows = []
+    number_pattern = re.compile(r"(?<![A-Za-z0-9])\(?-?\d[\d,]*(?:\.\d+)?\)?")
+    for line in lines:
+        matches = list(number_pattern.finditer(line))
+        if len(matches) != 8:
+            continue
+        label = line[: matches[0].start()].strip(" ,:.-")
+        values = tuple(decimal_value(match.group(0)) for match in matches)
+        if label and all(value is not None for value in values):
+            rows.append((label, values))
+    if not rows:
+        return ()
+    periods = header.groups()
+    metrics = ("EBITDA", "EBIT", "Net Income", "EPS")
+    expanded_rows = []
+    for label, values in rows:
+        adjusted = label.lower().startswith("adjusted ")
+        for metric_index, metric in enumerate(metrics):
+            metric_label = f"Adjusted {metric}" if adjusted else metric
+            expanded_rows.append(
+                (
+                    metric_label,
+                    (values[metric_index], values[metric_index + len(metrics)]),
+                )
+            )
+    paired_columns = (
+        (periods[0], periods[0], "fiscal_year", "fiscal_year", ""),
+        (periods[1], periods[1], "fiscal_year", "fiscal_year", ""),
+    )
+    return _scoped_cells(item, text, expanded_rows, paired_columns)
 
 
 def table_dimensions(

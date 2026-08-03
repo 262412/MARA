@@ -3,14 +3,9 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field
-from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from .finance_agreement_identity import (
-    revolving_agreement_attributes,
-    revolving_capacity_amount,
-)
-from .finance_query_planning import FINANCE_METRIC_ALIASES
+from .financial_numeric_span import financial_numeric_facts
 from .financial_statement_identity import financial_statement_identity
 
 SUPPORTED_ELEMENT_MODALITIES = {"table", "figure", "formula", "slide"}
@@ -217,36 +212,17 @@ def parse_financial_numeric_span_records(
     modality = str(
         metadata.get("modality") or metadata.get("element_type") or ""
     ).strip()
-    if modality in SUPPORTED_ELEMENT_MODALITIES:
+    evidence_level = str(metadata.get("evidence_level") or "").strip().lower()
+    if modality in SUPPORTED_ELEMENT_MODALITIES and evidence_level != "page":
         return []
 
     parent_element_id = str(metadata.get("element_id") or "").strip()
     records: list[dict[str, Any]] = []
-    agreement_context: dict[str, str] = {}
-    for span_index, clause in enumerate(_financial_fact_clauses(text), start=1):
-        metric = _finance_metric(clause)
-        amounts = _financial_amounts(clause)
-        agreement_attributes = revolving_agreement_attributes(
-            clause,
-            default_date=agreement_context.get("effective_date", ""),
-            default_facility_type=agreement_context.get("facility_type", ""),
-            default_lifecycle_status=agreement_context.get(
-                "agreement_lifecycle_status",
-                "",
-            ),
-        )
-        if "credit agreement" in clause.lower():
-            agreement_context = agreement_attributes
-        if metric == "revolving credit capacity":
-            capacity_amount = revolving_capacity_amount(clause)
-            amounts = (capacity_amount,) if capacity_amount is not None else ()
-        if not metric or len(amounts) != 1:
-            continue
-        value, scale, currency = amounts[0]
-        period_match = re.search(r"\b(?:19|20)\d{2}\b", clause)
+    for fact in financial_numeric_facts(text):
+        period_match = re.search(r"\b(?:19|20)\d{2}\b", fact.clause)
         period = period_match.group(0) if period_match else ""
         digest = hashlib.sha256(
-            f"{doc_id}:{span_index}:{clause}".encode("utf-8")
+            f"{doc_id}:{fact.span_index}:{fact.clause}".encode("utf-8")
         ).hexdigest()[:16]
         element_id = f"span-{digest}"
         parser_metadata = _parser_metadata(doc_id)
@@ -254,8 +230,8 @@ def parse_financial_numeric_span_records(
         parser_metadata.update(
             {
                 key: value
-                for key, value in agreement_attributes.items()
-                if value and metric == "revolving credit capacity"
+                for key, value in fact.agreement_attributes.items()
+                if value and fact.metric == "revolving credit capacity"
             }
         )
         records.append(
@@ -268,14 +244,14 @@ def parse_financial_numeric_span_records(
                 modality="text",
                 evidence_level="span",
                 parent_element_id=parent_element_id,
-                row_label=metric,
+                row_label=fact.metric,
                 column_label=period,
                 period=period,
-                value=str(value),
-                scale=scale,
-                currency=currency,
-                caption=metric,
-                text=clause,
+                value=str(fact.value),
+                scale=fact.scale,
+                currency=fact.currency,
+                caption=fact.metric,
+                text=fact.clause,
                 source_backrefs=[f"{file_id}#page:{page_label}"],
                 metadata=parser_metadata,
             ).as_dict()
@@ -417,70 +393,6 @@ def _period_kind(text: str) -> str:
     if "twelve months ended" in lowered or "fiscal year" in lowered:
         return "fiscal_year"
     return ""
-
-
-def _financial_fact_clauses(text: str) -> tuple[str, ...]:
-    return tuple(
-        " ".join(clause.split())
-        for paragraph in re.split(r"(?:\r?\n){2,}", str(text or ""))
-        for clause in re.split(
-            r"(?<=[.!?])\s+(?=[A-Z])|[;]+",
-            " ".join(line.strip() for line in paragraph.splitlines()),
-        )
-        if clause.strip()
-    )
-
-
-def _finance_metric(text: str) -> str:
-    normalized = _normalized_words(text)
-    if "credit agreement" in normalized and "borrow up to" in normalized:
-        return "revolving credit capacity"
-    for metric, aliases in FINANCE_METRIC_ALIASES.items():
-        if any(
-            f" {_normalized_words(alias)} " in f" {normalized} " for alias in aliases
-        ):
-            return metric
-    return ""
-
-
-def _financial_amounts(text: str) -> tuple[tuple[Decimal, str, str], ...]:
-    pattern = re.compile(
-        r"(?:(?P<currency>[$€£¥])\s*)?"
-        r"(?P<value>\(?[+-]?\d[\d,]*(?:\.\d+)?\)?)"
-        r"(?:\s*(?P<scale>thousands?|millions?|billions?))?",
-        flags=re.IGNORECASE,
-    )
-    values: list[tuple[Decimal, str, str]] = []
-    for match in pattern.finditer(text):
-        currency_symbol = str(match.group("currency") or "")
-        scale = str(match.group("scale") or "").lower().rstrip("s")
-        if not currency_symbol and not scale:
-            continue
-        value = _decimal_amount(match.group("value"))
-        if value is None:
-            continue
-        currency = {
-            "$": "USD",
-            "€": "EUR",
-            "£": "GBP",
-            "¥": "JPY",
-        }.get(currency_symbol, "")
-        values.append((value, scale, currency))
-    return tuple(values)
-
-
-def _decimal_amount(value: str) -> Decimal | None:
-    normalized = str(value or "").replace(",", "").strip()
-    negative = normalized.startswith("(") and normalized.endswith(")")
-    try:
-        parsed = Decimal(normalized.strip("()"))
-    except InvalidOperation:
-        return None
-    return -parsed if negative else parsed
-
-
-def _normalized_words(value: str) -> str:
-    return " ".join(re.findall(r"[a-z0-9]+", str(value or "").lower()))
 
 
 def _element_modality(metadata: dict[str, Any], text: str) -> str:

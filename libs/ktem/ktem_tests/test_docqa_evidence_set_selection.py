@@ -68,6 +68,7 @@ def test_selection_restores_required_slot_evidence_below_rerank_cutoff():
         row_label="Total current assets",
         period="2021",
         value="19815",
+        statement_kind="balance_sheet",
     )
 
     selected, trace, bound = select_evidence_for_plan(
@@ -415,6 +416,7 @@ def test_reranker_cannot_override_incompatible_metric_or_period() -> None:
         row_label="Current assets",
         period="2021",
         value="120",
+        statement_kind="balance_sheet",
     )
 
     selected, trace, bound = select_evidence_for_plan(
@@ -491,6 +493,7 @@ def _cell_item(
     row_label,
     period,
     value,
+    statement_kind="income_statement",
 ):
     return {
         **_item(evidence_id, page, text, score),
@@ -503,6 +506,6 @@ def _cell_item(
         "column_label": period,
         "period": period,
         "value": value,
-        "statement_kind": "income_statement",
+        "statement_kind": statement_kind,
         "financial_scope": "consolidated",
     }

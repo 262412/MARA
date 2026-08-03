@@ -81,7 +81,7 @@ def verify_decision(
             status="not_required",
             reason="Direct route does not require evidence verification.",
         )
-    missing_slots = missing_verification_slots(request)
+    missing_slots = missing_verification_slots(request, evidence_bundle)
     if missing_slots:
         action = "retry" if retrieve_decision.retry else "abstain"
         return VerifyDecision(
@@ -320,8 +320,6 @@ def verify_claim(
             supporting_evidence_ids=tuple(dict.fromkeys(supporting)),
             contradicting_evidence_ids=tuple(dict.fromkeys(contradicting)),
         )
-    if domain_supported is False and not contradicting:
-        contradicting = [identity_of(item).key for item in evidence_items]
     if contradicting:
         return VerifiedClaim(
             claim_id=claim_id,

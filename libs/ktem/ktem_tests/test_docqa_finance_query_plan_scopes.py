@@ -85,10 +85,11 @@ def test_finance_fact_plan_tracks_adjusted_non_gaap_ebitda_period():
         verification_domain="finance",
     )
 
+    assert plan.answer_type == "numeric"
     assert [(slot.role, slot.metric, slot.period) for slot in plan.evidence_slots] == [
-        ("support", "adjusted ebitda", "2023")
+        ("operand", "adjusted ebitda", "2023")
     ]
-    assert plan.subqueries == ("adjusted ebitda 2023",)
+    assert plan.subqueries == ("adjusted ebitda non-GAAP reconciliation 2023",)
 
 
 def test_finance_segment_fact_plan_normalizes_short_fiscal_years():

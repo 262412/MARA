@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from ktem.docqa.calculation_claim_verification import calculation_claim_result
 from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.finance_calculation_adapter import finance_calculation_audit
 from ktem.docqa.finance_formula_inputs import formula_input_specs
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
@@ -353,8 +355,27 @@ def test_fiscal_quarter_comparison_binds_distinct_atomic_periods() -> None:
 
     answer = finance_numeric_answer(question, cells, query_plan=plan.as_dict())
     assert answer is not None
-    assert answer.answer == "41.7%"
+    assert answer.answer == "Yes, a 41.7% decrease"
     assert answer.calculation_execution["status"] == "ok"
+    assert answer.calculation_execution["signed_value"].startswith("-41.675")
+    assert answer.calculation_execution["direction"] == "decrease"
+    assert answer.calculation_execution["magnitude"].startswith("41.675")
+    bundle = EvidenceBundle(
+        route="doc_text",
+        items=cells,
+        metadata={"finance_numeric_trace": answer.as_trace()},
+    )
+    verification = calculation_claim_result(
+        bundle,
+        answer.answer,
+        [answer.answer],
+        domain="finance",
+        prompt=question,
+    )
+
+    assert verification is not None
+    assert verification.status == "supported"
+    assert verification.contradicting_evidence_ids == ()
 
 
 def test_formula_input_and_operand_references_are_bidirectional() -> None:

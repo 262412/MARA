@@ -29,16 +29,7 @@ def financial_statement_identity(
         text = str(value or "")
     normalized = _normalize(text)
     atomic_kind = _atomic_metric_statement_kind(value)
-    inherited_override = (
-        atomic_kind == "non_gaap_performance" and explicit_kind == "cash_flow_statement"
-    ) or (
-        atomic_kind == "cash_flow_statement" and explicit_kind == "non_gaap_performance"
-    )
-    kind = (
-        atomic_kind
-        if atomic_kind and (not explicit_kind or inherited_override)
-        else explicit_kind or _statement_kind(normalized)
-    )
+    kind = explicit_kind or atomic_kind or _statement_kind(normalized)
     scope = explicit_scope or _financial_scope(normalized, kind)
     return kind, scope
 
@@ -59,7 +50,11 @@ def required_financial_identity(metric: str) -> tuple[str, str]:
         "revenue",
     }:
         return "income_statement", "consolidated"
-    if normalized == "net property plant and equipment":
+    if normalized in {
+        "net property plant and equipment",
+        "total current assets",
+        "current assets",
+    }:
         return "balance_sheet", "consolidated"
     if normalized in {"capital expenditure", "operating cash flow"}:
         return "cash_flow_statement", "consolidated"
@@ -116,6 +111,7 @@ def _statement_kind(text: str) -> str:
             "reconciliation of non gaap",
             "non gaap financial measure",
             "non gaap measures",
+            "adjusted non gaap results",
         )
     ):
         return "non_gaap_performance"

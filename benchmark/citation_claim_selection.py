@@ -35,6 +35,9 @@ def _scope_valid_group(
     deterministic = _deterministic_qasper_support(prediction, items)
     if deterministic:
         return deterministic
+    authoritative = _authoritative_qasper_support(prediction, items)
+    if authoritative:
+        return authoritative
     return scope_valid_support_items(
         str(prediction.get("question") or ""),
         span,
@@ -52,6 +55,20 @@ def _deterministic_qasper_support(
         return []
     support_ids = deterministic_support_ids(trace)
     return [item for item in items if identity_of(item).key in support_ids]
+
+
+def _authoritative_qasper_support(
+    prediction: dict[str, Any],
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    metadata = prediction.get("evidence_metadata")
+    trace = metadata.get("qasper_answerability") if isinstance(metadata, dict) else None
+    if not isinstance(trace, dict):
+        return []
+    support_id = str(trace.get("authoritative_quote_evidence_id") or "").strip()
+    if not support_id:
+        return []
+    return [item for item in items if identity_of(item).key == support_id]
 
 
 def _best_item(

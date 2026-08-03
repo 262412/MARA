@@ -4,13 +4,13 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from . import finance_numeric_values
 from .evidence_text import evidence_text
 from .finance_calculation_adapter import finance_calculation_audit
 from .finance_fixed_asset_turnover import (
     fixed_asset_turnover_answer_fields,
     is_fixed_asset_turnover,
 )
-from .finance_numeric_values import amount_unit as _amount_unit
 from .finance_numeric_values import (
     asks_for_causal_explanation as _asks_for_causal_explanation,
 )
@@ -104,13 +104,18 @@ def finance_numeric_answer(
         evidence_text(evidence_items),
         answer_scale=audit.plan.answer_scale,
     )
+    execution = finance_numeric_values.execution_payload(
+        answer.question_type,
+        audit.execution.value,
+        audit.execution.as_dict(),
+    )
     return replace(
         answer,
         answer=verified_answer,
         inputs=_audit_inputs(audit),
         calculation_plan=audit.plan.as_dict(),
         calculation_verification=audit.verification.as_dict(),
-        calculation_execution=audit.execution.as_dict(),
+        calculation_execution=execution,
         authoritative_query_plan=synchronize_authoritative_query_plan(
             provisional_query_plan,
             audit.plan.as_dict(),
@@ -285,7 +290,7 @@ def _free_cash_flow_answer(
     operating_cash_flow, capital_expenditure = inputs
     capital_expenditure = abs(capital_expenditure)
     value = operating_cash_flow - capital_expenditure
-    unit = _amount_unit(text)
+    unit = finance_numeric_values.amount_unit(text)
     return FinanceNumericAnswer(
         answer=_format_currency_with_unit(value, unit),
         confidence=0.9,
@@ -319,7 +324,7 @@ def _multi_period_average_answer(
     percentage = "%" in text and any(
         term in lowered_question for term in ("margin", "percent", "percentage")
     )
-    unit = _amount_unit(text)
+    unit = finance_numeric_values.amount_unit(text)
     return FinanceNumericAnswer(
         answer=(
             _format_percentage(average)
@@ -585,7 +590,7 @@ def _period_change_answer(
             formula="(current - prior) / abs(prior) * 100",
         )
     value = current - prior
-    unit = _amount_unit(text)
+    unit = finance_numeric_values.amount_unit(text)
     return FinanceNumericAnswer(
         answer=_format_currency_with_unit(value, unit),
         confidence=0.82,

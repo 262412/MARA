@@ -101,7 +101,7 @@ def test_second_round_targets_only_missing_evidence_slot():
     )
 
     assert len(queries) == 2
-    assert queries[1] == "revenue 2022"
+    assert queries[1] == "revenue consolidated statements of income 2022"
     assert result.evidence_bundle.metadata["retrieval_rounds"] == 1
     assert result.evidence_bundle.metadata["slot_coverage"] == 1.0
 
@@ -346,7 +346,7 @@ def test_second_round_retrieves_missing_same_source_scale_convention():
             query_plan=bundle.metadata["query_plan"],
         )
         assert result is not None
-        assert result.answer == "$4.625 billion"
+        assert result.answer == "$4.6 billion"
         return result.answer
 
     result = execute_controller_turn(

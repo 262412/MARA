@@ -15,13 +15,12 @@ from .qasper_answerability import (
     QasperAnswerabilityResult,
     verify_qasper_answerability,
 )
-from .qasper_boolean_scope import scope_valid_support_items
 from .qasper_candidate_state import (
     AnswerabilityCandidate,
     select_answerability_candidate,
 )
-from .qasper_deterministic_support import deterministic_support_ids
 from .qasper_evidence_priorities import qasper_evidence_priorities
+from .qasper_support_binding import bind_answerability_support
 
 
 def apply_task_answer_contract(
@@ -161,6 +160,7 @@ def _adjudicate_qasper_answer(
             priorities.claim_contradiction_evidence_ids
         ),
         candidate_answer="unanswerable" if typed_boolean_recheck else candidate,
+        answer_type=str(prediction.get("answer_type") or ""),
     )
     if not typed_boolean_recheck:
         return result
@@ -291,90 +291,12 @@ def _bind_answerability_support(
     answer: str,
     trace: dict[str, Any],
 ) -> None:
-    if is_abstention_answer(answer):
-        return
-    quote = str(trace.get("evidence_quote") or "").strip()
-    if str(trace.get("quote_grounded") or "").lower() != "true" or not quote:
-        return
-    items = [
-        item
-        for item in _prediction_evidence_items(prediction)
-        if _normalized_answer(quote) in _normalized_answer(_item_text(item))
-    ]
-    if str(prediction.get("answer_type") or "").strip().lower() == "boolean":
-        items = _validated_boolean_support(prediction, answer, trace, items)
-    if not items:
-        return
-    support = min(items, key=lambda item: len(_item_text(item)))
-    support_id = identity_of(support).key
-    question = str(prediction.get("question") or "")
-    claim = (
-        f"{_normalized_answer(answer)}: {question}"
-        if str(prediction.get("answer_type") or "").strip().lower() == "boolean"
-        else answer
-    )
-    decision_payload = {
-        "mode": "strict",
-        "status": "supported",
-        "reason": "QASPER typed answerability grounded the final claim.",
-        "action": "return",
-        "claims": [claim],
-        "unsupported_claims": [],
-        "unknown_claims": [],
-        "verified_citations": [support_id],
-        "claim_results": [
-            {
-                "claim_id": "qasper:answerability",
-                "claim": claim,
-                "status": "supported",
-                "supporting_evidence_ids": [support_id],
-                "contradicting_evidence_ids": [],
-            }
-        ],
-    }
-    prediction["verify_decision"] = decision_payload
-    prediction["claim_verification"] = {
-        "contract_id": "qasper_typed_post_contract_verification.v1",
-        "status": "supported",
-        "claim_results": decision_payload["claim_results"],
-        "unsupported_claims": [],
-        "unknown_claims": [],
-    }
-    prediction["post_contract_verification"] = {
-        "contract_id": "qasper_typed_post_contract_verification.v1",
-        "answer": answer,
-        "status": "supported",
-        "verify_decision": decision_payload,
-    }
-    targets = [metadata]
-    bundle = prediction.get("evidence_bundle")
-    bundle_metadata = bundle.get("metadata") if isinstance(bundle, dict) else None
-    if isinstance(bundle_metadata, dict):
-        targets.append(bundle_metadata)
-    for target in targets:
-        target["verify_decision"] = decision_payload
-        target["claim_verification"] = prediction["claim_verification"]
-        target["verified_evidence"] = [support]
-        target["verified_claim_support_evidence"] = [support]
-        target["verified_claim_support_by_claim"] = {
-            "qasper:answerability": [support_id]
-        }
-        target["answer_dependent_state"] = "post_contract_verified"
-
-
-def _validated_boolean_support(
-    prediction: dict[str, Any],
-    answer: str,
-    trace: dict[str, Any],
-    items: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    deterministic_ids = deterministic_support_ids(trace)
-    if deterministic_ids:
-        return [item for item in items if identity_of(item).key in deterministic_ids]
-    return scope_valid_support_items(
-        str(prediction.get("question") or ""),
-        answer,
-        items,
+    bind_answerability_support(
+        prediction,
+        metadata,
+        answer=answer,
+        trace=trace,
+        evidence_items=_prediction_evidence_items(prediction),
     )
 
 
@@ -384,6 +306,7 @@ def _clear_stale_answer_citations(
 ) -> None:
     prediction["structured_citations"] = []
     prediction["predicted_citations"] = []
+    prediction.pop("predicted_evidence", None)
     for key in (
         "verify_decision",
         "claim_verification",
@@ -395,6 +318,7 @@ def _clear_stale_answer_citations(
         "cited_evidence",
         "emitted_citation_evidence",
         "verified_claim_support_evidence",
+        "verified_claim_support_spans",
     ):
         metadata[key] = []
     for key in (
@@ -413,6 +337,7 @@ def _clear_stale_answer_citations(
             "cited_evidence",
             "emitted_citation_evidence",
             "verified_claim_support_evidence",
+            "verified_claim_support_spans",
         ):
             bundle_metadata[key] = []
         for key in (

@@ -30,7 +30,19 @@ def claim_support_identities_by_claim(
     return output
 
 
-def verification_slots(request: Any) -> list[Any]:
+def verification_slots(request: Any, evidence_bundle: Any | None = None) -> list[Any]:
+    metadata = getattr(evidence_bundle, "metadata", None)
+    bundle_plan = metadata.get("query_plan") if isinstance(metadata, dict) else None
+    if (
+        isinstance(bundle_plan, dict)
+        and bundle_plan.get("state_authority") == "verified_calculation_plan"
+        and isinstance(bundle_plan.get("evidence_slots"), list)
+    ):
+        return [
+            slot
+            for slot in bundle_plan["evidence_slots"]
+            if isinstance(slot, dict) and bool(slot.get("required_for_verification"))
+        ]
     plan = getattr(request, "query_plan", None)
     return [
         slot
@@ -39,11 +51,18 @@ def verification_slots(request: Any) -> list[Any]:
     ]
 
 
-def missing_verification_slots(request: Any) -> list[str]:
+def missing_verification_slots(
+    request: Any,
+    evidence_bundle: Any | None = None,
+) -> list[str]:
     return [
-        str(getattr(slot, "slot_id", "") or "")
-        for slot in verification_slots(request)
-        if str(getattr(slot, "status", "") or "")
+        str(_slot_value(slot, "slot_id") or "")
+        for slot in verification_slots(request, evidence_bundle)
+        if str(_slot_value(slot, "status") or "")
         not in {"filled", "retrieved_unverified", "verified_support"}
-        or not tuple(getattr(slot, "evidence_ids", ()) or ())
+        or not tuple(_slot_value(slot, "evidence_ids") or ())
     ]
+
+
+def _slot_value(slot: Any, key: str) -> Any:
+    return slot.get(key) if isinstance(slot, dict) else getattr(slot, key, None)

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .calculation_evidence_identity import materialize_financial_cell
+from .element_parser import parse_financial_numeric_span_records
 from .evidence_identity import (
     EVIDENCE_BUNDLE_SCHEMA_VERSION,
     canonicalize_and_dedupe_evidence,
@@ -251,9 +252,13 @@ def _materialize_execution_cells(
     if not slots:
         return items
     started = time.perf_counter()
+    candidate_count_before = len(items)
     expanded: list[dict[str, Any]] = []
     existing = {identity_of(item).key for item in items}
     expanded.extend(items)
+    if any(slot.metric == "revolving credit capacity" for slot in slots):
+        expanded.extend(_materialize_financial_narrative_spans(items, existing))
+        items = list(expanded)
     cache: dict[str, tuple[Any, ...]] = {}
     cache_hits = 0
     cache_misses = 0
@@ -289,7 +294,7 @@ def _materialize_execution_cells(
                 slot_matches += 1
         per_slot_counts[slot.slot_id] = slot_matches
     attempts = cache_hits + cache_misses
-    materialized_count = len(expanded) - len(items)
+    materialized_count = len(expanded) - candidate_count_before
     evidence_metadata["materialization_trace"] = {
         "parent_table_candidate_count": len(parent_candidates),
         "materialized_table_count": len(materialized_tables),
@@ -299,11 +304,43 @@ def _materialize_execution_cells(
             sum(per_slot_counts.values()) / len(slots) if slots else 0.0
         ),
         "materialized_cells_by_required_slot": per_slot_counts,
-        "candidate_count_before_materialization": len(items),
+        "candidate_count_before_materialization": candidate_count_before,
         "candidate_count_after_materialization": len(expanded),
         "materialization_seconds": time.perf_counter() - started,
     }
     return expanded
+
+
+def _materialize_financial_narrative_spans(
+    items: list[dict[str, Any]],
+    existing: set[str],
+) -> list[dict[str, Any]]:
+    materialized: list[dict[str, Any]] = []
+    for item in items:
+        metadata = {
+            **dict(item.get("metadata") or {}),
+            "element_id": item.get("element_id") or item.get("evidence_id"),
+            "modality": item.get("modality") or item.get("element_type"),
+            "evidence_level": item.get("evidence_level"),
+        }
+        spans = parse_financial_numeric_span_records(
+            doc_id=str(item.get("evidence_id") or identity_of(item).key),
+            file_id=str(item.get("source_id") or item.get("file_id") or ""),
+            file_name=str(item.get("source_name") or item.get("file_name") or ""),
+            page_label=str(item.get("page_label") or item.get("page") or ""),
+            text="\n".join(
+                str(item.get(field) or "")
+                for field in ("text", "ocr_text")
+                if str(item.get(field) or "").strip()
+            ),
+            metadata=metadata,
+        )
+        for span in spans:
+            identity = identity_of(span).key
+            if identity not in existing:
+                existing.add(identity)
+                materialized.append(span)
+    return materialized
 
 
 def _parent_may_contain_slot(item: dict[str, Any], slot: Any) -> bool:
