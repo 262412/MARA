@@ -4,6 +4,7 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from .finance_agreement_identity import agreement_date
 from .finance_evidence_dimensions import requested_scale
 from .finance_query_planning import (
     finance_fact_specs,
@@ -41,6 +42,8 @@ _NUMERIC_TERMS = {
     "change",
     "count",
     "difference",
+    "decline",
+    "drop",
     "margin",
     "million",
     "millions",
@@ -70,7 +73,9 @@ def build_query_plan(
     registry_status = finance_formula_status(question, periods_in_question(question))
     finance_domain = "finance" in str(verification_domain or "").lower()
     if planned is not None and not (
-        finance_domain and registry_status in {"supported", "unsupported"}
+        finance_domain
+        and planned.answer_type == "numeric"
+        and registry_status in {"supported", "unsupported"}
     ):
         return planned
     return _build_heuristic_query_plan(
@@ -130,7 +135,12 @@ def _build_heuristic_query_plan(
         segment_comparison=segment_comparison,
         capabilities=capabilities,
     )
-    _add_finance_formula_constraint(constraints, text, periods, finance_domain)
+    _add_finance_formula_constraint(
+        constraints,
+        text,
+        periods,
+        finance_domain and normalized_type == "numeric",
+    )
     _add_distinct_slot_constraint(constraints, slots)
     plan = QueryPlan(
         answer_type=normalized_type,
@@ -193,25 +203,60 @@ def _heuristic_evidence_slots(
     if "total" in text.lower() and any(
         slot.metric == "revolving credit capacity" for slot in slots
     ):
+        active_date = agreement_date(text)
         slots = tuple(
-            replace(slot, cardinality=2, operator_role="collection")
+            replace(
+                slot,
+                cardinality=2,
+                operator_role="collection",
+                entity=f"active_at:{active_date}" if active_date else "active",
+            )
             if slot.metric == "revolving credit capacity"
             else slot
             for slot in slots
         )
+    slots = _apply_fiscal_quarter_qualifiers(text, slots)
     return slots, finance_domain, segment_comparison
+
+
+def _apply_fiscal_quarter_qualifiers(
+    question: str,
+    slots: tuple[EvidenceSlot, ...],
+) -> tuple[EvidenceSlot, ...]:
+    qualifiers = {
+        match.group("year"): match.group("quarter").lower()
+        for match in re.finditer(
+            r"\b(?P<quarter>q[1-4])\s+(?:of\s+)?fy\s*(?P<year>(?:19|20)\d{2})\b",
+            question,
+            flags=re.IGNORECASE,
+        )
+    }
+    if not qualifiers:
+        return slots
+    return tuple(
+        replace(
+            slot,
+            period_kind="quarter",
+            entity=f"fiscal_quarter:{qualifiers[slot.period]}",
+        )
+        if slot.period in qualifiers
+        else slot
+        for slot in slots
+    )
 
 
 def _add_finance_formula_constraint(
     constraints: dict[str, Any],
     question: str,
     periods: list[str],
-    finance_domain: bool,
+    calculation_authoritative: bool,
 ) -> None:
-    formula_spec = finance_formula_spec(question, periods) if finance_domain else None
+    formula_spec = (
+        finance_formula_spec(question, periods) if calculation_authoritative else None
+    )
     constraints["finance_formula_status"] = (
         finance_formula_status(question, periods)
-        if finance_domain
+        if calculation_authoritative
         else "not_applicable"
     )
     if formula_spec is not None:
@@ -380,7 +425,11 @@ def _finance_slots(
                 statement_kind=statement_kind,
                 financial_scope=financial_scope,
                 required_for_execution=role == "operand",
-                query=" ".join(value for value in (metric, period) if value),
+                query=_finance_retrieval_query(
+                    metric,
+                    period,
+                    statement_kind=statement_kind,
+                ),
                 locator=_finance_slot_locator(
                     index,
                     slot_count=len(specs),
@@ -400,6 +449,22 @@ def _finance_slots(
             query="tabular dollars unit scale convention",
         ),
     )
+
+
+def _finance_retrieval_query(
+    metric: str,
+    period: str,
+    *,
+    statement_kind: str,
+) -> str:
+    terms = [metric]
+    if metric == "capital expenditure":
+        terms.append("capital spending")
+    if statement_kind == "cash_flow_statement":
+        terms.append("consolidated statement of cash flows")
+    if period:
+        terms.append(period)
+    return " ".join(terms)
 
 
 def _explicit_page_labels(capabilities: dict[str, object]) -> tuple[str, ...]:

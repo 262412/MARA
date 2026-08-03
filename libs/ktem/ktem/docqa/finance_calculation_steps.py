@@ -22,7 +22,16 @@ def calculation_steps(
     if question_type in {"operating_margin", "gross_margin"}:
         return _margin_steps(input_ids)
     if question_type == "percentage_change":
-        operands = input_ids if len(input_ids) == 2 else ("prior", "current")
+        operands: tuple[str, ...] = (
+            input_ids if len(input_ids) == 2 else ("prior", "current")
+        )
+        return (
+            (CalculationStep("result", "percent_change", operands),),
+            "result",
+            "percent",
+        )
+    if question_type == "percentage_decrease":
+        operands = input_ids
         return (
             (CalculationStep("result", "percent_change", operands),),
             "result",
@@ -96,12 +105,11 @@ def _margin_steps(
 def _free_cash_flow_steps(
     question_type: str,
 ) -> tuple[tuple[CalculationStep, ...], str, str]:
-    operator = "add" if question_type == "free_cash_flow_negative_capex" else "subtract"
     return (
         (
             CalculationStep(
                 "result",
-                operator,
+                "subtract",
                 ("operating_cash_flow", "capital_expenditure"),
             ),
         ),

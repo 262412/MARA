@@ -13,7 +13,7 @@ from .evidence_selection_budget import (
 from .execution_slot_lineage import execution_slot_lineage
 from .finance_query_planning import finance_metric_evidence_matches
 from .query_planning import QueryPlan, slot_coverage
-from .required_slot_selection import slot_score
+from .required_slot_selection import slot_requires_selection, slot_score
 from .selection_score_normalization import SELECTION_SCORE_CONTRACT
 
 _TOKEN_RE = re.compile(r"[\w.%$€£¥-]+", re.UNICODE)
@@ -71,7 +71,7 @@ def _required_slot_bindings(
 ) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for slot in plan.evidence_slots:
-        if not slot.required_for_retrieval:
+        if not slot_requires_selection(slot):
             continue
         parent_available = _parent_retrieval_candidate(slot, candidates)
         output.append(
@@ -81,6 +81,11 @@ def _required_slot_bindings(
                 "retrieval_satisfied": bool(slot.evidence_ids or parent_available),
                 "execution_satisfied": (
                     slot.status == "filled" if slot.required_for_execution else None
+                ),
+                "verification_satisfied": (
+                    slot.status == "verified_support"
+                    if slot.required_for_verification
+                    else None
                 ),
                 "reason": (
                     "parent_evidence_not_materialized"

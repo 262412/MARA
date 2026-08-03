@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from typing import Any
 
-from ktem.docqa.boolean_proposition_evidence import boolean_proposition_binding_trace
 from ktem.docqa.claim_filtering import clean_answer_text
 
 from .metrics import is_abstention_answer
@@ -29,6 +27,11 @@ from .qasper_boolean_scope import BooleanScopeDecision, validate_boolean_scope
 from .qasper_deterministic_boolean import deterministic_closed_scope_result
 from .qasper_free_text_answerability import verify_free_text_candidate
 from .qasper_proposition_conflict import resolve_boolean_conflict
+from .qasper_quote_support import (
+    authoritative_quote_binding_trace,
+    parse_boolean_verdict,
+    resolve_verified_quote_support,
+)
 
 QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v14"
 QASPER_ANSWERABILITY_SEED = 20260724
@@ -195,7 +198,7 @@ def _verify_boolean_candidate(
         llm,
         prompt,
         response_format=QASPER_BOOLEAN_ANSWERABILITY_RESPONSE_FORMAT,
-        parser=_boolean_verdict,
+        parser=parse_boolean_verdict,
         allowed_values=(
             "yes_complete",
             "no_complete",
@@ -251,6 +254,19 @@ def _adjudicated_boolean_result(
         quote=quote,
         evidence_items=evidence_items,
     )
+    (
+        verdict,
+        quote_supports_relation,
+        reason,
+        authoritative_support,
+    ) = resolve_verified_quote_support(
+        question,
+        quote,
+        verdict,
+        reason,
+        quote_supports_relation,
+        evidence_items,
+    )
     scope_valid = relation_trace.get("boolean_scope_valid") != "false"
     conflict_evidence = evidence if scope_valid else ""
     conflict_candidate = candidate_polarity if scope_valid else ""
@@ -260,15 +276,22 @@ def _adjudicated_boolean_result(
         candidate_polarity=conflict_candidate,
         verdict=verdict,
         evidence_items=evidence_items if scope_valid else [],
+        authoritative_claim_key=(
+            authoritative_support.claim_key if authoritative_support else None
+        ),
+        authoritative_polarity=(
+            authoritative_support.polarity if authoritative_support else ""
+        ),
     )
     relation_trace.update(conflict_trace)
     selected_answer = answer if answer in {"yes", "no"} else candidate_polarity
     if selected_answer:
         relation_trace.update(
-            boolean_proposition_binding_trace(
+            authoritative_quote_binding_trace(
                 question,
                 selected_answer,
                 evidence_items or [],
+                authoritative_support,
             )
         )
     return QasperAnswerabilityResult(
@@ -533,27 +556,6 @@ def _has_repairable_verdict(
 
 def _clean_candidate(answer: str) -> str:
     return clean_answer_text(_THINK_BLOCK_RE.sub("", str(answer or ""))).rstrip(".")
-
-
-def _boolean_verdict(answer: str) -> tuple[str, str]:
-    try:
-        payload = json.loads(str(answer or ""))
-    except json.JSONDecodeError:
-        return "", ""
-    if not isinstance(payload, dict):
-        return "", ""
-    value = str(payload.get("verdict") or "")
-    quote = str(payload.get("evidence_quote") or "").strip()
-    allowed = {
-        "yes_complete",
-        "no_complete",
-        "yes_partial",
-        "no_partial",
-        "yes",
-        "no",
-        "insufficient_evidence",
-    }
-    return (value, quote) if value in allowed else ("", "")
 
 
 def _trace(

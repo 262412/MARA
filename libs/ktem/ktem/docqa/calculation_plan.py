@@ -60,6 +60,7 @@ class CalculationOperand:
     period_kind: str = ""
     entity: str = ""
     source: str = "evidence"
+    value_semantics: str = ""
     cell_id: str = ""
     row_label: str = ""
     column_label: str = ""
@@ -82,6 +83,7 @@ class CalculationOperand:
             "query_slot_id",
             "evidence_identity",
             "source_id",
+            "value_semantics",
             "row_label",
             "column_label",
             "period_kind",

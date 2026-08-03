@@ -28,6 +28,7 @@ from .finance_calculation_binding import shared_scale as _shared_scale
 from .finance_calculation_binding import (
     single_question_period as _single_question_period,
 )
+from .finance_calculation_contract import uses_positive_magnitude
 from .finance_calculation_steps import calculation_steps
 from .finance_formula_inputs import FormulaInputSpec, formula_input_specs
 from .finance_query_planning import FINANCE_METRIC_ALIASES
@@ -167,6 +168,7 @@ def _formula_operands(
             evidence_items=operand_evidence,
             excluded_evidence_ids=used_evidence_ids,
             query_slot_id=spec.query_slot_id,
+            expected_period_kind=str((slot or {}).get("period_kind") or ""),
         )
         operands.append(operand)
         repeated_value = list(inputs.values()).count(value) > 1
@@ -263,10 +265,11 @@ def _operand_from_input(
     evidence_items: list[dict[str, Any]],
     excluded_evidence_ids: set[str],
     query_slot_id: str,
+    expected_period_kind: str = "",
 ) -> CalculationOperand:
     decimal_value = Decimal(str(value))
     period = _operand_period(name, question)
-    period_kind = period_kind_in_question(question)
+    period_kind = expected_period_kind or period_kind_in_question(question)
     if (
         period
         and _single_question_period(question) == period
@@ -294,6 +297,7 @@ def _operand_from_input(
         statement_kind=statement_kind,
         financial_scope=financial_scope,
     )
+    normalize_magnitude = uses_positive_magnitude(name, question_type)
     if semantic_cell is not None:
         return _operand_from_cell(
             name,
@@ -301,10 +305,7 @@ def _operand_from_input(
             semantic_cell,
             evidence_items,
             query_slot_id=query_slot_id,
-            normalize_magnitude=(
-                question_type in {"capital_expenditure", "multi_period_ratio_average"}
-                and name.startswith("capital_expenditure")
-            ),
+            normalize_magnitude=normalize_magnitude,
         )
     item = _matching_item(
         name,
@@ -327,6 +328,7 @@ def _operand_from_input(
         item,
         evidence_items,
         query_slot_id=query_slot_id,
+        normalize_magnitude=normalize_magnitude,
     )
 
 
@@ -367,6 +369,7 @@ def _operand_from_cell(
         evidence_id=cell.evidence_id,
         evidence_identity=_item_identity(item, cell_id=cell.cell_id),
         value=bound_value,
+        value_semantics="positive_magnitude" if normalize_magnitude else "",
         query_slot_id=query_slot_id,
         source_id=_item_dimension(item, "source_id"),
         unit=cell.unit,
@@ -400,6 +403,7 @@ def _operand_from_item(
     evidence_items: list[dict[str, Any]],
     *,
     query_slot_id: str = "",
+    normalize_magnitude: bool = False,
 ) -> CalculationOperand:
     text = _item_text(item) if item is not None else ""
     statement_kind, financial_scope = (
@@ -411,12 +415,16 @@ def _operand_from_item(
         scale, scale_evidence_id = _source_scale_evidence(item, evidence_items)
     scale_item = _item_for_id(scale_evidence_id, evidence_items)
     bound_value = _atomic_item_value(item) if item is not None else None
+    resolved_value = bound_value if bound_value is not None else value
+    if normalize_magnitude:
+        resolved_value = abs(resolved_value)
     return CalculationOperand(
         operand_id=name,
         input_id=name,
         evidence_id=_item_id(item),
         evidence_identity=_item_identity(item),
-        value=bound_value if bound_value is not None else value,
+        value=resolved_value,
+        value_semantics="positive_magnitude" if normalize_magnitude else "",
         query_slot_id=query_slot_id,
         source_id=_item_dimension(item, "source_id"),
         unit=_item_dimension(item, "unit"),

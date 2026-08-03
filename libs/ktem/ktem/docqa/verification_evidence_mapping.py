@@ -43,6 +43,7 @@ def missing_verification_slots(request: Any) -> list[str]:
     return [
         str(getattr(slot, "slot_id", "") or "")
         for slot in verification_slots(request)
-        if str(getattr(slot, "status", "") or "") != "filled"
+        if str(getattr(slot, "status", "") or "")
+        not in {"filled", "retrieved_unverified", "verified_support"}
         or not tuple(getattr(slot, "evidence_ids", ()) or ())
     ]

@@ -18,6 +18,8 @@ def resolve_boolean_conflict(
     candidate_polarity: str,
     verdict: str,
     evidence_items: list[dict[str, Any]] | None = None,
+    authoritative_claim_key: tuple[str, ...] | None = None,
+    authoritative_polarity: str = "",
 ) -> tuple[str, str, dict[str, str]]:
     candidate_scores = _support_scores(
         evidence,
@@ -26,8 +28,9 @@ def resolve_boolean_conflict(
         evidence_items=evidence_items,
     )
     candidate_score = max(candidate_scores.values(), default=0.0)
+    conflict_polarity = authoritative_polarity or candidate_polarity
     opposite = (
-        "no" if candidate_polarity == "yes" else "yes" if candidate_polarity else ""
+        "no" if conflict_polarity == "yes" else "yes" if conflict_polarity else ""
     )
     opposite_scores = _support_scores(
         evidence,
@@ -36,26 +39,37 @@ def resolve_boolean_conflict(
         evidence_items=evidence_items,
     )
     common_keys = set(candidate_scores) & set(opposite_scores)
-    contradiction_score = max(
-        (opposite_scores[key] for key in common_keys),
-        default=(
-            max(opposite_scores.values(), default=0.0) if not candidate_scores else 0.0
-        ),
-    )
+    if authoritative_claim_key is not None:
+        contradiction_score = opposite_scores.get(authoritative_claim_key, 0.0)
+        same_proposition_conflict = authoritative_claim_key in opposite_scores
+    else:
+        contradiction_score = max(
+            (opposite_scores[key] for key in common_keys),
+            default=(
+                max(opposite_scores.values(), default=0.0)
+                if not candidate_scores
+                else 0.0
+            ),
+        )
+        same_proposition_conflict = bool(common_keys)
     verdict_scores = _support_scores(
         evidence,
         question,
         verdict,
         evidence_items=evidence_items,
     )
-    verdict_score = max(verdict_scores.values(), default=0.0)
+    verdict_score = (
+        1.0
+        if authoritative_claim_key is not None and verdict == authoritative_polarity
+        else max(verdict_scores.values(), default=0.0)
+    )
     action, answer, conflict_status = _boolean_answer_action(
         candidate_polarity,
         verdict,
         candidate_support_score=candidate_score,
         contradiction_score=contradiction_score,
         verdict_support_score=verdict_score,
-        same_proposition_conflict=bool(common_keys),
+        same_proposition_conflict=same_proposition_conflict,
     )
     return (
         action,
@@ -123,6 +137,12 @@ def _boolean_answer_action(
             else "preserved_boolean_abstention"
         )
         return action, "unanswerable", "insufficient_evidence"
+    if (
+        same_proposition_conflict
+        and verdict_support_score >= MIN_BOOLEAN_SUPPORT_SCORE
+        and contradiction_score >= MIN_BOOLEAN_SUPPORT_SCORE
+    ):
+        return "abstained_polarity_conflict", "unanswerable", "balanced_conflict"
     if not candidate_polarity:
         if verdict_support_score >= MIN_BOOLEAN_SUPPORT_SCORE:
             return "recovered_boolean_from_abstention", verdict, "none"

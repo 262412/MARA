@@ -26,7 +26,7 @@ def test_numeric_comparison_plan_has_distinct_required_period_operands():
     assert plan.plan_id.startswith("plan:")
 
 
-def test_boolean_question_builds_required_proposition_slot():
+def test_boolean_question_builds_verification_only_proposition_slot():
     plan = build_query_plan(
         "Does the proposed model outperform the baseline?",
         answer_type="boolean",
@@ -36,7 +36,7 @@ def test_boolean_question_builds_required_proposition_slot():
     [slot] = plan.evidence_slots
     assert slot.slot_id == "support:boolean_proposition"
     assert slot.role == "support"
-    assert slot.required_for_retrieval is True
+    assert slot.required_for_retrieval is False
     assert slot.required_for_verification is True
     assert slot.query == "Does the proposed model outperform the baseline?"
 
@@ -392,7 +392,7 @@ def test_direct_finance_value_plan_has_one_metric_slot():
         ("dimension:scale", "dimension", "", "", ""),
     ]
     assert plan.subqueries == (
-        "capital expenditure 2021",
+        "capital expenditure capital spending consolidated statement of cash flows 2021",
         "tabular dollars unit scale convention",
     )
 

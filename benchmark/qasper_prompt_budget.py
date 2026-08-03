@@ -152,6 +152,7 @@ def _ranked_evidence_records(
     query_tokens = _content_tokens(f"{question} {substantive_candidate}")
     rows = _evidence_rows(
         evidence_items,
+        question=question,
         query_tokens=query_tokens,
         required=required,
         priority=priority,
@@ -192,6 +193,7 @@ def _ranked_evidence_records(
 def _evidence_rows(
     evidence_items: list[dict[str, Any]],
     *,
+    question: str,
     query_tokens: set[str],
     required: set[str],
     priority: set[str],
@@ -212,14 +214,22 @@ def _evidence_rows(
         if evidence_id in seen:
             continue
         seen.add(evidence_id)
-        relevance = len(query_tokens & _content_tokens(text))
-        rendered = f"[evidence_id={evidence_id}]\n{text}"
+        rendered_text = text
+        lineage = ""
+        if _looks_boolean(question) and len(text) > 1200:
+            rendered_text, span_start, span_end = _boolean_proposition_snippet(
+                text,
+                question,
+            )
+            lineage = f" span_start={span_start} span_end={span_end}"
+        relevance = len(query_tokens & _content_tokens(rendered_text))
+        rendered = f"[evidence_id={evidence_id}{lineage}]\n{rendered_text}"
         rows.append(
             _EvidenceRow(
                 identity=evidence_id,
                 aliases=frozenset(aliases),
                 rendered=rendered,
-                text=text,
+                text=rendered_text,
                 index=index,
                 relevance=relevance,
                 required=bool(required & aliases),
@@ -239,6 +249,47 @@ def _evidence_rows(
         )
     )
     return rows
+
+
+def _boolean_proposition_snippet(
+    text: str,
+    question: str,
+) -> tuple[str, int, int]:
+    statements = [
+        (match.start(), match.end(), match.group(0).strip())
+        for match in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", text)
+        if match.group(0).strip()
+    ]
+    if not statements:
+        bounded = _truncate_evidence(text, 900)
+        return bounded, 0, len(bounded)
+    question_tokens = stemmed_content_tokens(question)
+    ranked = sorted(
+        statements,
+        key=lambda row: (
+            -len(question_tokens & stemmed_content_tokens(row[2])),
+            -int(_has_negation(row[2])),
+            len(row[2]),
+            row[0],
+        ),
+    )
+    best = ranked[0]
+    selected = [best]
+    best_negative = _has_negation(best[2])
+    opposite = next(
+        (
+            row
+            for row in ranked[1:]
+            if _has_negation(row[2]) is not best_negative
+            and question_tokens & stemmed_content_tokens(row[2])
+        ),
+        None,
+    )
+    if opposite is not None:
+        selected.append(opposite)
+    selected.sort(key=lambda row: row[0])
+    snippet = " … ".join(_truncate_evidence(row[2], 900) for row in selected)
+    return snippet, selected[0][0], selected[-1][1]
 
 
 def _append_relation_priority(

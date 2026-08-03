@@ -18,7 +18,7 @@ def calculation_evidence_items(
 ) -> list[dict[str, Any]]:
     expanded: list[dict[str, Any]] = []
     identities: set[str] = set()
-    for item in items:
+    for item in reconcile_materialized_cells(items):
         candidates = [
             item,
             *(
@@ -33,6 +33,62 @@ def calculation_evidence_items(
             identities.add(identity)
             expanded.append(candidate)
     return expanded
+
+
+def reconcile_materialized_cells(
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    child_parent_ids = {
+        parent_id for item in items if (parent_id := _structured_child_parent_id(item))
+    }
+    if not child_parent_ids:
+        return items
+    available_parent_aliases = set().union(
+        *(
+            _parent_aliases(item)
+            for item in items
+            if _parent_aliases(item) & child_parent_ids
+        ),
+        set(),
+    )
+    if not available_parent_aliases:
+        return items
+    reconciled: list[dict[str, Any]] = []
+    for item in items:
+        parent_id = _structured_child_parent_id(item)
+        if parent_id and parent_id in available_parent_aliases:
+            continue
+        reconciled.append(item)
+        if _parent_aliases(item) & child_parent_ids:
+            reconciled.extend(
+                materialize_financial_cell(item, cell)
+                for cell in parse_financial_table_cells_with_context(item, items)
+            )
+    return reconciled
+
+
+def _structured_child_parent_id(item: dict[str, Any]) -> str:
+    if str(item.get("evidence_level") or "").strip().lower() != "cell":
+        return ""
+    if not int(item.get("row_index") or 0) or not int(item.get("column_index") or 0):
+        return ""
+    return str(
+        item.get("materialization_source_id") or item.get("parent_element_id") or ""
+    ).strip()
+
+
+def _parent_aliases(item: dict[str, Any]) -> set[str]:
+    return {
+        str(item.get(field) or "").strip()
+        for field in (
+            "evidence_id",
+            "canonical_id",
+            "element_id",
+            "table_id",
+            "table_instance_id",
+        )
+        if str(item.get(field) or "").strip()
+    }
 
 
 def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any]:
@@ -91,6 +147,8 @@ def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any
         }
     )
     metadata = dict(materialized.get("metadata") or {})
+    if cell.column_header_path:
+        metadata["column_header_path"] = list(cell.column_header_path)
     for key in (
         "evaluation_identity",
         "late_interaction_tokens",

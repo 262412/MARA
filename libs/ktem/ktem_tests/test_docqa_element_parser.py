@@ -237,6 +237,54 @@ def test_financial_narrative_emits_distinct_atomic_amount_spans():
     assert all(span["source_backrefs"] == ["file-1#page:2"] for span in spans)
 
 
+def test_revolving_credit_spans_retain_facility_lifecycle_identity():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "On May 26, 2023, PepsiCo terminated its $3.8 billion 364-day "
+                "revolving credit agreement, which had enabled it to borrow up "
+                "to $3.8 billion. On May 26, 2023, PepsiCo entered into a new "
+                "$4.2 billion 364-day revolving credit agreement that enables "
+                "it to borrow up to $4.2 billion. On the same date it terminated "
+                "its $3.8 billion five-year revolving credit agreement, which had "
+                "enabled it to borrow up to $3.8 billion. It then entered into a "
+                "new $4.2 billion five-year revolving credit agreement that "
+                "enables it to borrow up to $4.2 billion."
+            ),
+            id_="credit-lifecycle-page",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "credit-agreements.pdf",
+                "page_label": "2",
+                "element_id": "page-text-2",
+                "element_type": "text",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+    spans = [record for record in records if record.get("evidence_level") == "span"]
+    active = [
+        span
+        for span in spans
+        if span["metadata"].get("agreement_lifecycle_status") == "active"
+    ]
+    inactive = [
+        span
+        for span in spans
+        if span["metadata"].get("agreement_lifecycle_status") == "terminated"
+    ]
+
+    assert {span["metadata"]["facility_type"] for span in active} == {
+        "364_day",
+        "five_year",
+    }
+    assert {span["value"] for span in active} == {"4.2"}
+    assert {span["value"] for span in inactive} == {"3.8"}
+    assert {span["scale"] for span in spans} == {"billion"}
+    assert all(span["metadata"]["effective_date"] == "2023-05-26" for span in active)
+
+
 def test_financial_narrative_restores_pdf_soft_wrap_before_span_split():
     docs = [
         RetrievedDocument(
@@ -266,8 +314,9 @@ def test_financial_narrative_restores_pdf_soft_wrap_before_span_split():
         and record.get("value") == "4200000000"
     ]
 
-    assert len(spans) == 2
-    assert len({span["evidence_id"] for span in spans}) == 2
+    assert len(spans) == 1
+    assert spans[0]["metadata"]["facility_type"] == "364_day"
+    assert spans[0]["metadata"]["agreement_lifecycle_status"] == "active"
     assert all(span["parent_element_id"] == "page-text-2" for span in spans)
     assert all(span["source_backrefs"] == ["file-1#page:2"] for span in spans)
 

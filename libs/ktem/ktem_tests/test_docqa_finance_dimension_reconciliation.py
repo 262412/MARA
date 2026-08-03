@@ -122,6 +122,61 @@ def test_missing_real_scale_provenance_still_fails_closed() -> None:
     )
 
 
+def test_parent_header_scale_binds_to_atomic_ppe_cell_by_parent_identity() -> None:
+    question = "What was FY2018 net property, plant and equipment in USD millions?"
+    parent = {
+        "evidence_id": "ppe-table-parent",
+        "element_id": "ppe-table-parent",
+        "source_id": "boeing",
+        "page_label": "90",
+        "element_type": "table",
+        "text": "Consolidated balance sheets (in millions)",
+    }
+    cell = {
+        **_cell(
+            "ppe-2018",
+            "Property, plant and equipment, net",
+            "12645",
+            period="2018",
+        ),
+        "source_id": "boeing",
+        "page_label": "90",
+        "parent_element_id": "ppe-table-parent",
+        "table_id": "ppe-table-parent",
+        "table_instance_id": "ppe-table-parent",
+        "statement_kind": "balance_sheet",
+        "financial_scope": "consolidated",
+        "scale": "",
+        "text": "Property, plant and equipment, net 2018 12645 USD",
+    }
+
+    assert source_scale_evidence(cell, [parent, cell]) == (
+        "million",
+        "ppe-table-parent",
+    )
+    plan = bind_evidence_slots(
+        build_query_plan(
+            question,
+            answer_type="numeric",
+            verification_domain="finance",
+        ),
+        [parent, cell],
+    )
+    dimension = next(slot for slot in plan.evidence_slots if slot.role == "dimension")
+    assert dimension.status == "filled"
+    assert dimension.evidence_ids == (identity_of(parent).key,)
+
+    answer = finance_numeric_answer(
+        question,
+        [parent, cell],
+        query_plan=plan.as_dict(),
+    )
+
+    assert answer is not None
+    assert answer.answer == "$12,645 million"
+    assert answer.calculation_verification["valid"] is True
+
+
 def test_bind_numeric_query_plan_replaces_only_unresolved_binding() -> None:
     question = "What were FY2019 net sales?"
     total = {
@@ -195,3 +250,46 @@ def test_selection_keeps_linked_dimensions_when_context_budget_is_full() -> None
     )
 
     assert "selected-financial-data-page" in {item["evidence_id"] for item in selected}
+
+
+def test_scale_binding_matches_prefixed_table_identity_to_page_table():
+    question = (
+        "What is Boeing's year end FY2018 net property, plant, and equipment "
+        "in USD millions?"
+    )
+    cell = {
+        **_cell(
+            "ppe-2018",
+            "Property, plant and equipment, net",
+            "12645",
+            period="2018",
+        ),
+        "source_id": "boeing",
+        "page_label": "52",
+        "table_id": "table-balance-uuid",
+        "table_instance_id": "table-balance-uuid",
+        "statement_kind": "balance_sheet",
+        "financial_scope": "consolidated",
+        "text": "Property, plant and equipment, net 2018 12645 USD",
+    }
+    page_table = {
+        "evidence_id": "balance-uuid",
+        "element_id": "balance-uuid",
+        "source_id": "boeing",
+        "page_label": "52",
+        "text": (
+            "Consolidated Statements of Financial Position "
+            "(Dollars in millions, except per share data)"
+        ),
+    }
+
+    bound = bind_evidence_slots(
+        build_query_plan(
+            question, answer_type="numeric", verification_domain="finance"
+        ),
+        [cell, page_table],
+    )
+    dimension = next(slot for slot in bound.evidence_slots if slot.role == "dimension")
+
+    assert dimension.status == "filled"
+    assert dimension.evidence_ids == (identity_of(page_table).key,)

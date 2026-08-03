@@ -1,10 +1,13 @@
 from decimal import Decimal
 from typing import Any
 
+from ktem.docqa.calculation_evidence_identity import calculation_evidence_items
 from ktem.docqa.calculation_plan import verify_calculation_plan
+from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 from ktem.docqa.finance_scale import source_scale_evidence
 from ktem.docqa.financial_table import find_financial_cell, parse_financial_table_cells
+from ktem.docqa.query_planning import bind_evidence_slots, build_query_plan
 
 LOCKHEED_BALANCE_SHEET = """
 CONSOLIDATED BALANCE SHEETS
@@ -175,7 +178,7 @@ def test_free_cash_flow_uses_the_requested_period_column_not_result_distractor()
     assert answer.answer == "$3,215.4 million"
     assert answer.inputs == {
         "operating_cash_flow": 3676.2,
-        "capital_expenditure": -460.8,
+        "capital_expenditure": 460.8,
     }
     operands = {
         operand["operand_id"]: operand
@@ -219,6 +222,191 @@ def test_free_cash_flow_preserves_table_boundary_before_numeric_source_name():
     assert answer.answer == "$3,215.4 million"
     assert answer.inputs["capital_expenditure"] == 460.8
     assert answer.calculation_verification["valid"] is True
+
+
+def test_free_cash_flow_rebuilds_inputs_from_authoritative_bound_operands():
+    question = (
+        "What is FY2020 free cash flow, defined as operating cash flow minus "
+        "capital expenditures? Answer in USD millions."
+    )
+    misleading_page = {
+        "evidence_id": "narrative",
+        "source_id": "GENERALMILLS_2020_10K",
+        "page_label": "20",
+        "text": (
+            "In FY2020 operating cash flow was 3,676.2 million and an earlier "
+            "capital spending estimate was 684.4 million."
+        ),
+    }
+    cash_flow = _table_item(
+        """
+        CONSOLIDATED STATEMENTS OF CASH FLOWS
+        (In millions) 2020 2019
+        Net cash provided by operating activities 3,676.2 3,100.0
+        Purchases of land, buildings, and equipment (460.8) (400.0)
+        """
+    )
+    evidence: list[dict[str, Any]] = [misleading_page, cash_flow]
+    plan = bind_evidence_slots(
+        build_query_plan(
+            question,
+            answer_type="numeric",
+            verification_domain="finance",
+        ),
+        evidence,
+    )
+
+    answer = finance_numeric_answer(question, evidence, query_plan=plan.as_dict())
+
+    assert answer is not None
+    assert answer.answer == "$3,215.4 million"
+    assert answer.inputs == {
+        "operating_cash_flow": 3676.2,
+        "capital_expenditure": 460.8,
+    }
+    operands = {
+        operand["operand_id"]: operand
+        for operand in answer.calculation_plan["operands"]
+    }
+    assert operands["capital_expenditure"]["value"] == "460.8"
+    assert operands["capital_expenditure"]["value_semantics"] == "positive_magnitude"
+    assert answer.calculation_plan["steps"][0]["operator"] == "subtract"
+    assert answer.calculation_execution["value"] == "3215.4"
+
+
+def test_consolidating_table_preserves_column_scope_path():
+    consolidating = _table_item(
+        """
+        The Kraft Heinz Company
+        Condensed Consolidating Statements of Income
+        For the Year Ended December 28, 2019
+        (in millions)
+        Parent Guarantor Subsidiary Issuer Non-Guarantor
+        Subsidiaries Eliminations Consolidated
+        Net sales — 16,852 8,588 (463) 24,977
+        Cost of products sold — 11,042 6,251 (463) 16,830
+        """
+    )
+
+    cells = [
+        cell
+        for cell in parse_financial_table_cells(consolidating)
+        if cell.row_label == "Cost of products sold"
+    ]
+
+    assert len(cells) == 5
+    assert [cell.financial_scope for cell in cells] == [
+        "parent",
+        "guarantor_subsidiary_issuer",
+        "non_guarantor_subsidiaries",
+        "eliminations",
+        "consolidated",
+    ]
+    assert cells[-1].column_header_path == ("Consolidated", "2019")
+    assert cells[-1].value == Decimal("16830")
+
+
+def test_primary_consolidated_statement_outranks_consolidating_schedule():
+    consolidating = _table_item(
+        """
+        Condensed Consolidating Statements of Income
+        For the Year Ended December 28, 2019
+        (in millions)
+        Parent Guarantor Subsidiary Issuer Non-Guarantor
+        Subsidiaries Eliminations Consolidated
+        Cost of products sold — 11,042 6,251 (463) 16,830
+        """
+    )
+    primary = {
+        **_table_item(
+            """
+            Consolidated Statements of Income
+            (in millions) 2019 2018
+            Cost of products sold 16,830 17,347
+            """
+        ),
+        "evidence_id": "primary-income-statement",
+        "element_id": "primary-income-statement",
+        "table_id": "primary-income-statement",
+    }
+
+    cell = find_financial_cell(
+        [consolidating, primary],
+        aliases=("cost of products sold",),
+        period="2019",
+        statement_kind="income_statement",
+        financial_scope="consolidated",
+    )
+
+    assert cell is not None
+    assert cell.value == Decimal("16830")
+    assert cell.table_id == "primary-income-statement"
+
+
+def test_adjusted_ebitda_continuation_table_materializes_atomic_fy2023_cell():
+    page = {
+        "evidence_id": "amcor-reconciliation-page",
+        "source_id": "amcor",
+        "source_name": "AMCOR_2023Q4_EARNINGS.pdf",
+        "page_label": "12",
+        "text": """
+        Twelve Months Ended June 30, 2022 Twelve Months Ended June 30, 2023
+        ($ million) EBITDA EBIT Net Income EPS EBITDA EBIT Net Income EPS
+        Adjusted EBITDA, EBIT, Net income and EPS 2,117 1,701 1,224 80.5 2,018 1,608 1,089 73.3
+        Reconciliation of adjusted growth to comparable constant currency growth
+        Adjusted EBITDA 2,117 2,018
+        Adjusted Free Cash Flow 1,066 848
+        """,
+    }
+
+    items = calculation_evidence_items([page])
+    plan = bind_evidence_slots(
+        build_query_plan(
+            "What was AMCOR's adjusted non-GAAP EBITDA for FY2023?",
+            answer_type="numeric",
+            verification_domain="finance",
+        ),
+        items,
+    )
+    [slot] = [value for value in plan.evidence_slots if value.role == "operand"]
+
+    assert slot.status == "filled"
+    [evidence_id] = slot.evidence_ids
+    selected = next(item for item in items if identity_of(item).key == evidence_id)
+    assert selected["evidence_level"] == "cell"
+    assert selected["row_label"] == "Adjusted EBITDA"
+    assert selected["period"] == "2023"
+    assert selected["value"] == "2018"
+
+
+def test_quarterly_report_dates_map_to_fiscal_period_cells():
+    page = {
+        "evidence_id": "best-buy-balance-sheet",
+        "source_id": "best-buy",
+        "source_name": "BESTBUY_2024Q2_10Q.pdf",
+        "page_label": "3",
+        "text": """
+        Condensed Consolidated Balance Sheets
+        $ in millions, except per share amounts (unaudited)
+        July 29, 2023 January 28, 2023 July 30, 2022
+        Assets
+        Cash and cash equivalents $ 1,093 $ 1,874 $ 840
+        """,
+    }
+
+    cells = [
+        cell
+        for cell in parse_financial_table_cells(page)
+        if cell.row_label == "Cash and cash equivalents"
+    ]
+
+    assert [
+        (cell.column_label, cell.period, cell.period_kind, cell.value) for cell in cells
+    ] == [
+        ("July 29, 2023", "2024", "quarter", Decimal("1093")),
+        ("January 28, 2023", "2023", "fiscal_year", Decimal("1874")),
+        ("July 30, 2022", "2023", "quarter", Decimal("840")),
+    ]
 
 
 def test_financial_table_parser_does_not_treat_bare_period_as_cell_value():

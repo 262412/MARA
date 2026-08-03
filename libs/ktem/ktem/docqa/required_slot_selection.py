@@ -24,7 +24,7 @@ def required_slot_candidate_limit(
             else 0
         )
         for slot in plan.evidence_slots
-        if slot.required_for_retrieval
+        if slot_requires_selection(slot)
     )
     return max(base_limit, quota)
 
@@ -36,7 +36,7 @@ def required_slot_shortlist(
     candidate_limit: int,
 ) -> tuple[list[dict[str, Any]], int]:
     required_slots = [
-        slot for slot in plan.evidence_slots if slot.required_for_retrieval
+        slot for slot in plan.evidence_slots if slot_requires_selection(slot)
     ]
     if not required_slots or candidate_limit <= 0:
         return list(items[: max(0, candidate_limit)]), 0
@@ -196,6 +196,16 @@ def _is_atomic_operand_candidate(item: dict[str, Any]) -> bool:
     return identity_of(item).kind in {"cell", "span"} and item.get("value") not in (
         None,
         "",
+    )
+
+
+def slot_requires_selection(slot: Any) -> bool:
+    return bool(
+        slot.required_for_retrieval
+        or (
+            slot.required_for_verification
+            and slot.statement_kind == "boolean_proposition"
+        )
     )
 
 

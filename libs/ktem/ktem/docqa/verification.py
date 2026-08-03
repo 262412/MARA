@@ -189,6 +189,7 @@ def normalize_verification_mode(value: Any) -> str:
 def with_verification_evidence(
     bundle: EvidenceBundle,
     decision: VerifyDecision,
+    request: Any | None = None,
 ) -> EvidenceBundle:
     if decision.status not in {"supported", "unsupported", "unknown"}:
         return bundle
@@ -215,7 +216,33 @@ def with_verification_evidence(
         decision.claim_results,
         lookup,
     )
+    if request is not None:
+        metadata["verification_slot_states"] = _verification_slot_states(
+            request,
+            {identity_of(item).key for item in verified},
+        )
     return EvidenceBundle(route=bundle.route, items=bundle.items, metadata=metadata)
+
+
+def _verification_slot_states(
+    request: Any,
+    verified_evidence_ids: set[str],
+) -> list[dict[str, Any]]:
+    states: list[dict[str, Any]] = []
+    for slot in verification_slots(request):
+        evidence_ids = list(getattr(slot, "evidence_ids", ()) or ())
+        states.append(
+            {
+                "slot_id": str(getattr(slot, "slot_id", "") or ""),
+                "status": (
+                    "verified_support"
+                    if set(evidence_ids) & verified_evidence_ids
+                    else str(getattr(slot, "status", "") or "missing")
+                ),
+                "evidence_ids": evidence_ids,
+            }
+        )
+    return states
 
 
 def verified_citations(

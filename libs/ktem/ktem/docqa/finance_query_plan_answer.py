@@ -9,6 +9,7 @@ from .calculation_evidence_identity import (
     calculation_evidence_lookup,
 )
 from .evidence_identity import identity_of
+from .finance_calculation_contract import finance_calculation_authoritative
 from .query_evidence_binding import bind_evidence_slots_monotonic
 from .query_evidence_constraints import executable_operand_evidence
 from .query_plan_schema import plan_from_payload
@@ -41,6 +42,8 @@ def bind_numeric_query_plan(
     if not isinstance(query_plan, dict):
         return None
     query_plan = _calculation_query_plan(query_plan)
+    if not finance_calculation_authoritative(query_plan):
+        return None
     constraints = dict(query_plan.get("constraints") or {})
     plan = plan_from_payload(
         prompt,
@@ -211,6 +214,18 @@ def _generic_plan_answer(
             question_type="revolving_credit_capacity",
             inputs=inputs,
             formula=" + ".join(inputs),
+        )
+    if (
+        len(bound) == 2
+        and len(metrics) == 1
+        and any(phrase in lowered for phrase in ("drop", "decrease", "decline"))
+    ):
+        return FinanceNumericAnswer(
+            answer="",
+            confidence=0.95,
+            question_type="percentage_decrease",
+            inputs={_slot_operand_id(slot): float(value) for slot, value in bound},
+            formula="(prior - current) / abs(prior) * 100",
         )
     if (
         len(bound) == 2

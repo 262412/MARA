@@ -52,8 +52,9 @@ def verified_claim_support_groups(
                 identity = identity_of(item).key
                 if all(identity_of(existing).key != identity for existing in group):
                     group.append(item)
-    if groups:
-        return [group for group in groups.values() if group]
+    resolved_groups = [group for group in groups.values() if group]
+    if resolved_groups:
+        return resolved_groups
     flat = verified_claim_support_items(prediction, candidates)
     return [[item] for item in flat]
 

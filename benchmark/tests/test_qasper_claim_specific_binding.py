@@ -116,7 +116,7 @@ def test_query_plan_binding_is_polarity_neutral_then_answer_specific() -> None:
     trace = boolean_proposition_binding_trace(question, "no", [negative])
 
     [slot] = bound.evidence_slots
-    assert slot.status == "filled"
+    assert slot.status == "retrieved_unverified"
     assert slot.evidence_ids == (identity_of(negative).key,)
     assert trace["final_support_evidence_ids"] == [identity_of(negative).key]
     assert trace["final_contradiction_evidence_ids"] == []

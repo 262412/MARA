@@ -494,7 +494,7 @@ def _run_post_contract_verification(
             answer,
         )
         decision_payload = decision.as_dict()
-        bundle = with_verification_evidence(bundle, decision)
+        bundle = with_verification_evidence(bundle, decision, request=request)
     prediction["verify_decision"] = decision_payload
     prediction["claim_verification"] = {
         "contract_id": "post_task_answer_verification.v1",

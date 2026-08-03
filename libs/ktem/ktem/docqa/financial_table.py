@@ -14,6 +14,7 @@ from .financial_table_parser import section_rows as _section_rows
 from .financial_table_parser import (
     trailing_period_header_label as _trailing_period_header_label,
 )
+from .financial_table_scoped_headers import parse_scoped_header_cells, table_dimensions
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +80,7 @@ class FinancialTableCell:
     currency: str = ""
     statement_kind: str = ""
     financial_scope: str = ""
+    column_header_path: tuple[str, ...] = ()
 
     @property
     def physical_identity(self) -> PhysicalCellIdentity:
@@ -108,6 +110,7 @@ class FinancialTableCell:
             for value in (
                 self.row_label,
                 self.column_label,
+                " > ".join(self.column_header_path),
                 self.period_kind,
                 str(self.value),
                 self.unit,
@@ -131,20 +134,17 @@ def parse_financial_table_cells(
     if not text:
         return ()
     lines = [line.strip() for line in text.splitlines() if line.strip()]
+    specialized_cells = parse_scoped_header_cells(item, text, lines)
+    if specialized_cells:
+        return specialized_cells
     sections = _period_sections(lines, item)
     if not sections:
         return ()
 
     identity = _table_identity(item)
-    text_statement_kind, text_financial_scope = financial_statement_identity(text)
-    explicit_statement_kind, explicit_financial_scope = financial_statement_identity(
-        item
+    statement_kind, financial_scope, unit, scale, currency = table_dimensions(
+        item, text
     )
-    statement_kind = text_statement_kind or explicit_statement_kind
-    financial_scope = text_financial_scope or explicit_financial_scope
-    scale = _dimension(item, "scale") or _scale(text)
-    currency = _dimension(item, "currency") or _currency(text)
-    unit = _dimension(item, "unit")
     cells: list[FinancialTableCell] = []
     row_index = 0
     disambiguate_period_kind = len(sections) > 1
@@ -197,6 +197,7 @@ def parse_financial_table_cells(
                         currency=currency,
                         statement_kind=statement_kind,
                         financial_scope=financial_scope,
+                        column_header_path=(period,),
                     )
                 )
     return tuple(cells)
@@ -304,7 +305,7 @@ def find_financial_cell(
     financial_scope: str = "",
 ) -> FinancialTableCell | None:
     excluded = excluded_cell_ids or set()
-    ranked: list[tuple[int, int, int, FinancialTableCell]] = []
+    ranked: list[tuple[int, int, int, int, FinancialTableCell]] = []
     for item_index, item in enumerate(evidence_items):
         for cell in parse_financial_table_cells(item):
             if cell.cell_id in excluded:
@@ -331,12 +332,20 @@ def find_financial_cell(
             value_match = int(
                 expected_value is not None and cell.value == expected_value
             )
-            ranked.append((-value_match, -support, item_index, cell))
+            ranked.append(
+                (
+                    -_statement_authority(cell),
+                    -value_match,
+                    -support,
+                    item_index,
+                    cell,
+                )
+            )
     if not ranked:
         return None
-    if expected_value is not None and not any(row[0] == -1 for row in ranked):
+    if expected_value is not None and not any(row[1] == -1 for row in ranked):
         return None
-    return min(ranked, key=lambda row: row[:3])[3]
+    return min(ranked, key=lambda row: row[:4])[4]
 
 
 def find_financial_cell_by_id(
@@ -395,6 +404,14 @@ def _explicit_cell(item: dict[str, Any]) -> FinancialTableCell | None:
     statement_kind, financial_scope = financial_statement_identity(item)
     row_index = int(item.get("row_index") or 0)
     column_index = int(item.get("column_index") or 0)
+    metadata = item.get("metadata")
+    nested = metadata if isinstance(metadata, dict) else {}
+    raw_header_path = item.get("column_header_path") or nested.get("column_header_path")
+    column_header_path = tuple(
+        str(value).strip()
+        for value in raw_header_path or ()
+        if str(value or "").strip()
+    )
     physical_identity = PhysicalCellIdentity(
         source_id=identity["source_id"],
         page_label=identity["page_label"],
@@ -426,7 +443,14 @@ def _explicit_cell(item: dict[str, Any]) -> FinancialTableCell | None:
         currency=_dimension(item, "currency"),
         statement_kind=statement_kind,
         financial_scope=financial_scope,
+        column_header_path=column_header_path or (column_label,),
     )
+
+
+def _statement_authority(cell: FinancialTableCell) -> int:
+    if cell.financial_scope != "consolidated":
+        return 0
+    return 1 if len(cell.column_header_path) > 1 else 2
 
 
 def _table_identity(item: dict[str, Any]) -> dict[str, str]:

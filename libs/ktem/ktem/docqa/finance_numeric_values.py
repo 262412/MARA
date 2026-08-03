@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .finance_agreement_identity import revolving_agreement_attributes
+
 DIRECT_VALUE_METRICS = (
     (
         "adjusted_ebitda",
@@ -318,6 +320,9 @@ def revolving_credit_capacities(text: str) -> list[float]:
         )
         clause = source[clause_start : match.end()].lower()
         agreement_context = source[max(0, match.start() - 240) : match.end()].lower()
+        attributes = revolving_agreement_attributes(agreement_context)
+        if attributes["agreement_lifecycle_status"] == "terminated":
+            continue
         kinds = [
             (candidate.end(), kind)
             for pattern_text, kind in (
@@ -327,7 +332,7 @@ def revolving_credit_capacities(text: str) -> list[float]:
             )
             for candidate in re.finditer(pattern_text, agreement_context)
         ]
-        agreement_kind = (
+        agreement_kind = attributes["facility_type"] or (
             max(kinds)[1] if kinds else " ".join(re.findall(r"[a-z0-9]+", clause))
         )
         agreement = (agreement_kind, value)
@@ -478,6 +483,8 @@ def render_execution_answer(
     if value is None:
         return ""
     question_type = template.question_type
+    if question_type == "percentage_decrease":
+        return format_percentage(abs(float(value)))
     if question_type in {
         "current_ratio",
         "debt_to_equity",
@@ -492,6 +499,7 @@ def render_execution_answer(
         "multi_period_ratio_average",
         "multi_period_percentage_average",
         "operating_margin",
+        "percentage_decrease",
         "percentage_change",
     }:
         return format_percentage(value)

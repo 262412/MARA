@@ -169,6 +169,84 @@ def test_revolving_total_query_plan_declares_collection_cardinality() -> None:
     [slot] = [value for value in plan.evidence_slots if value.role == "operand"]
     assert slot.cardinality == 2
     assert slot.operator_role == "collection"
+    assert slot.entity == "active_at:2023-05-26"
+
+
+def test_revolving_collection_excludes_terminated_facilities() -> None:
+    question = (
+        "As of May 26, 2023, what is the total amount the company may "
+        "borrow under its revolving credit agreements?"
+    )
+    spans = [
+        {
+            **_cell(
+                "terminated-364",
+                "Revolving credit agreement may borrow",
+                "3800000000",
+                period="2023",
+            ),
+            "text": (
+                "On May 26, 2023 the 364-day revolving agreement was terminated; "
+                "it had allowed borrowing up to $3.8 billion."
+            ),
+        },
+        {
+            **_cell(
+                "terminated-five-year",
+                "Revolving credit agreement may borrow",
+                "3800000000",
+                period="2023",
+            ),
+            "text": (
+                "On May 26, 2023 the five-year revolving agreement was terminated; "
+                "it had allowed borrowing up to $3.8 billion."
+            ),
+        },
+        {
+            **_cell(
+                "active-364",
+                "Revolving credit agreement may borrow",
+                "4200000000",
+                period="2023",
+            ),
+            "text": (
+                "On May 26, 2023 the company entered a new 364-day revolving "
+                "agreement enabling borrowing up to $4.2 billion."
+            ),
+        },
+        {
+            **_cell(
+                "active-five-year",
+                "Revolving credit agreement may borrow",
+                "4200000000",
+                period="2023",
+            ),
+            "text": (
+                "On May 26, 2023 the company entered a new five-year revolving "
+                "agreement enabling borrowing up to $4.2 billion."
+            ),
+        },
+    ]
+    plan = bind_evidence_slots(
+        build_query_plan(
+            question,
+            answer_type="numeric",
+            verification_domain="finance",
+        ),
+        spans,
+    )
+
+    [slot] = [value for value in plan.evidence_slots if value.role == "operand"]
+    assert slot.evidence_ids == (
+        identity_of(spans[2]).key,
+        identity_of(spans[3]).key,
+    )
+
+    answer = finance_numeric_answer(question, spans, query_plan=plan.as_dict())
+
+    assert answer is not None
+    assert answer.answer == "$8,400,000,000"
+    assert answer.calculation_execution["status"] == "ok"
 
 
 def test_revolving_collection_executes_two_ordered_evidence_identities() -> None:
@@ -177,18 +255,30 @@ def test_revolving_collection_executes_two_ordered_evidence_identities() -> None
         "borrow under its revolving credit agreements?"
     )
     cells = [
-        _cell(
-            "facility-364-day",
-            "Revolving credit agreement may borrow",
-            "4200000000",
-            period="2023",
-        ),
-        _cell(
-            "facility-five-year",
-            "Revolving credit agreement may borrow",
-            "4200000000",
-            period="2023",
-        ),
+        {
+            **_cell(
+                "facility-364-day",
+                "Revolving credit agreement may borrow",
+                "4200000000",
+                period="2023",
+            ),
+            "text": (
+                "On May 26, 2023 the company entered a new 364-day revolving "
+                "agreement enabling borrowing up to $4.2 billion."
+            ),
+        },
+        {
+            **_cell(
+                "facility-five-year",
+                "Revolving credit agreement may borrow",
+                "4200000000",
+                period="2023",
+            ),
+            "text": (
+                "On May 26, 2023 the company entered a new five-year revolving "
+                "agreement enabling borrowing up to $4.2 billion."
+            ),
+        },
     ]
     plan = bind_evidence_slots(
         build_query_plan(
@@ -214,6 +304,57 @@ def test_revolving_collection_executes_two_ordered_evidence_identities() -> None
         operand["query_slot_id"] == "operand:revolving_credit_capacity:2023"
         for operand in operands
     )
+
+
+def test_fiscal_quarter_comparison_binds_distinct_atomic_periods() -> None:
+    question = (
+        "Was there any drop in cash and cash equivalents between FY2023 "
+        "and Q2 of FY2024?"
+    )
+    cells = [
+        {
+            **_cell(
+                "cash-fy2023",
+                "Cash and cash equivalents",
+                "1874",
+                period="2023",
+            ),
+            "period_kind": "fiscal_year",
+        },
+        {
+            **_cell(
+                "cash-q2-fy2024",
+                "Cash and cash equivalents",
+                "1093",
+                period="2024",
+            ),
+            "period_kind": "quarter",
+            "entity": "fiscal_quarter:q2",
+        },
+    ]
+    plan = bind_evidence_slots(
+        build_query_plan(
+            question,
+            answer_type="extractive",
+            verification_domain="finance",
+        ),
+        cells,
+    )
+    operand_slots = [slot for slot in plan.evidence_slots if slot.role == "operand"]
+
+    assert [(slot.period, slot.period_kind, slot.entity) for slot in operand_slots] == [
+        ("2023", "fiscal_year", ""),
+        ("2024", "quarter", "fiscal_quarter:q2"),
+    ]
+    assert [slot.evidence_ids for slot in operand_slots] == [
+        (identity_of(cells[0]).key,),
+        (identity_of(cells[1]).key,),
+    ]
+
+    answer = finance_numeric_answer(question, cells, query_plan=plan.as_dict())
+    assert answer is not None
+    assert answer.answer == "41.7%"
+    assert answer.calculation_execution["status"] == "ok"
 
 
 def test_formula_input_and_operand_references_are_bidirectional() -> None:

@@ -6,6 +6,10 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from .finance_agreement_identity import (
+    revolving_agreement_attributes,
+    revolving_capacity_amount,
+)
 from .finance_query_planning import FINANCE_METRIC_ALIASES
 from .financial_statement_identity import financial_statement_identity
 
@@ -218,9 +222,24 @@ def parse_financial_numeric_span_records(
 
     parent_element_id = str(metadata.get("element_id") or "").strip()
     records: list[dict[str, Any]] = []
+    agreement_context: dict[str, str] = {}
     for span_index, clause in enumerate(_financial_fact_clauses(text), start=1):
         metric = _finance_metric(clause)
         amounts = _financial_amounts(clause)
+        agreement_attributes = revolving_agreement_attributes(
+            clause,
+            default_date=agreement_context.get("effective_date", ""),
+            default_facility_type=agreement_context.get("facility_type", ""),
+            default_lifecycle_status=agreement_context.get(
+                "agreement_lifecycle_status",
+                "",
+            ),
+        )
+        if "credit agreement" in clause.lower():
+            agreement_context = agreement_attributes
+        if metric == "revolving credit capacity":
+            capacity_amount = revolving_capacity_amount(clause)
+            amounts = (capacity_amount,) if capacity_amount is not None else ()
         if not metric or len(amounts) != 1:
             continue
         value, scale, currency = amounts[0]
@@ -232,6 +251,13 @@ def parse_financial_numeric_span_records(
         element_id = f"span-{digest}"
         parser_metadata = _parser_metadata(doc_id)
         parser_metadata["parser_record_type"] = "financial_numeric_span"
+        parser_metadata.update(
+            {
+                key: value
+                for key, value in agreement_attributes.items()
+                if value and metric == "revolving credit capacity"
+            }
+        )
         records.append(
             ElementIndexRecord(
                 evidence_id=f"span:{file_id}:{page_label}:{element_id}",
@@ -341,6 +367,9 @@ def _with_financial_cells(record: dict[str, Any]) -> list[dict[str, Any]]:
     metadata = dict(record.get("metadata") or {})
     cell_records = []
     for cell in cells:
+        cell_metadata = dict(metadata)
+        if cell.column_header_path:
+            cell_metadata["column_header_path"] = list(cell.column_header_path)
         cell_records.append(
             ElementIndexRecord(
                 evidence_id=cell.cell_id,
@@ -375,7 +404,7 @@ def _with_financial_cells(record: dict[str, Any]) -> list[dict[str, Any]]:
                 caption=cell.row_label,
                 text=cell.verification_text(),
                 source_backrefs=list(record.get("source_backrefs") or []),
-                metadata=metadata,
+                metadata=cell_metadata,
             ).as_dict()
         )
     return [record, *cell_records]

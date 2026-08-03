@@ -188,7 +188,9 @@ def build_controller_outputs(
         evidence_bundle,
         answer,
     )
-    evidence_bundle = with_verification_evidence(evidence_bundle, verify_decision)
+    evidence_bundle = with_verification_evidence(
+        evidence_bundle, verify_decision, request
+    )
     controller_trace = ControllerTrace(
         [
             {

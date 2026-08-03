@@ -113,6 +113,8 @@ def dimension_binding_scope(
         return ""
     if _is_materialization_parent(item, dimension_item):
         return "table"
+    if _same_table_lineage(item, dimension_item):
+        return "table"
     if _same_field(item, dimension_item, "table_instance_id"):
         return "table"
     if _same_field(item, dimension_item, "table_group_id"):
@@ -133,6 +135,8 @@ def compatible_dimension_scope(
     if _source_id(item) != _source_id(dimension_item):
         return False
     if _source_wide_scale_convention(dimension_item):
+        return True
+    if _same_table_lineage(item, dimension_item):
         return True
     table_instance_id = _item_dimension(item, "table_instance_id")
     dimension_table_instance_id = _item_dimension(
@@ -185,15 +189,61 @@ def _is_materialization_parent(
     item: dict[str, Any],
     candidate: dict[str, Any],
 ) -> bool:
-    parent_id = str(item.get("materialization_source_id") or "").strip()
-    if not parent_id:
+    parent_ids = {
+        str(item.get(field) or "").strip()
+        for field in ("materialization_source_id", "parent_element_id", "table_id")
+        if str(item.get(field) or "").strip()
+    }
+    if not parent_ids:
         return False
     candidate_ids = {
         str(candidate.get(field) or "").strip()
-        for field in ("evidence_id", "canonical_id", "element_id")
+        for field in (
+            "evidence_id",
+            "canonical_id",
+            "element_id",
+            "table_id",
+            "table_instance_id",
+        )
         if str(candidate.get(field) or "").strip()
     }
-    return parent_id in candidate_ids
+    if parent_ids & candidate_ids:
+        return True
+    parent_keys = {_normalized_table_key(value) for value in parent_ids}
+    candidate_keys = {_normalized_table_key(value) for value in candidate_ids}
+    return bool((parent_keys - {""}) & (candidate_keys - {""}))
+
+
+def _same_table_lineage(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> bool:
+    left_keys = _table_keys(left)
+    right_keys = _table_keys(right)
+    return bool(left_keys and right_keys and left_keys & right_keys)
+
+
+def _table_keys(item: dict[str, Any]) -> set[str]:
+    for fields in (
+        ("table_instance_id",),
+        ("table_id", "materialization_source_id", "parent_element_id"),
+        ("table_group_id",),
+    ):
+        structured = {
+            _normalized_table_key(_item_dimension(item, field)) for field in fields
+        } - {""}
+        if structured:
+            return structured
+    return {
+        _normalized_table_key(str(item.get(field) or ""))
+        for field in ("element_id", "evidence_id", "canonical_id")
+    } - {""}
+
+
+def _normalized_table_key(value: str) -> str:
+    token = str(value or "").strip().lower().split(":")[-1]
+    token = re.sub(r"^table[-_]", "", token)
+    return re.sub(r"-block-\d+$", "", token)
 
 
 def _binding_distance(

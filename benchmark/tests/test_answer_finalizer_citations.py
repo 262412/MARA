@@ -121,3 +121,35 @@ def test_finalizer_attaches_financebench_citation_from_canonical_source():
     assert prediction["structured_citations"][0]["source_id"] == "MMM_2022_10K"
     assert prediction["structured_citations"][0]["page_label"] == "42"
     assert prediction["predicted_citations"] == ["MMM_2022_10K#page:42"]
+
+
+def test_finalizer_falls_back_to_explicit_verified_support_after_rebind():
+    support = {
+        "evidence_id": "support",
+        "source_id": "paper",
+        "text": "We report experiments only on English data.",
+    }
+    prediction: dict[str, Any] = {
+        "predicted_answer": "yes",
+        "answer_type": "boolean",
+        "question": "Do they report results only on English data?",
+        "gold_evidence": [{"source_id": "paper"}],
+        "evidence_bundle": {"items": [], "metadata": {}},
+        "evidence_metadata": {
+            "verified_claim_support_by_claim": {
+                "qasper:answerability": ["evidence:paper:support"]
+            },
+            "verified_claim_support_evidence": [support],
+        },
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["predicted_citations"] == ["paper#source"]
+    assert prediction["structured_citations"][0]["evidence_id"] == (
+        "evidence:paper:support"
+    )

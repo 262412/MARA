@@ -12,6 +12,7 @@ from .query_plan_schema import QueryPlan
 from .required_slot_selection import (
     EXECUTION_SLOT_PARENT_QUOTA,
     REQUIRED_SLOT_CANDIDATE_QUOTA,
+    slot_requires_selection,
     slot_score,
 )
 
@@ -96,7 +97,9 @@ def selection_trace_consistency_errors(
     errors: list[str] = []
     for slot in plan.evidence_slots:
         evidence_ids = set(slot.evidence_ids)
-        if (slot.status == "filled") != bool(evidence_ids):
+        if (
+            slot.status in {"filled", "retrieved_unverified", "verified_support"}
+        ) != bool(evidence_ids):
             errors.append(f"slot_status_identity_mismatch:{slot.slot_id}")
         for evidence_id in evidence_ids - candidate_ids:
             errors.append(f"bound_identity_not_retrieved:{slot.slot_id}:{evidence_id}")
@@ -163,7 +166,7 @@ def _candidate_reason(identity: str, reason: str, score: float) -> dict[str, Any
 
 def _candidate_budget_partitions(plan: QueryPlan) -> dict[str, int]:
     required_slots = [
-        slot for slot in plan.evidence_slots if slot.required_for_retrieval
+        slot for slot in plan.evidence_slots if slot_requires_selection(slot)
     ]
     execution_operands = [
         slot

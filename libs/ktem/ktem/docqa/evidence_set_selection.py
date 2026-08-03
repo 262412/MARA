@@ -16,6 +16,7 @@ from .query_planning import QueryPlan, bind_evidence_slots, retrieval_budget
 from .required_slot_selection import (
     required_slot_candidate_limit,
     required_slot_shortlist,
+    slot_requires_selection,
 )
 from .required_slot_selection import slot_score as _slot_score
 from .selection_query_anchors import anchor_coverage, phrase_bigram_coverage
@@ -284,7 +285,7 @@ def _select_required_slot_evidence(
     required_slots = [
         slot
         for slot in plan.evidence_slots
-        if slot.required_for_retrieval and _slot_selection_phase(slot) == phase
+        if slot_requires_selection(slot) and _slot_selection_phase(slot) == phase
     ]
     required_slots.sort(
         key=lambda slot: (

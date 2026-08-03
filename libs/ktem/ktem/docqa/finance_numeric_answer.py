@@ -90,6 +90,7 @@ def finance_numeric_answer(
         return replace(
             answer,
             answer="",
+            inputs=_audit_inputs(audit),
             confidence=0.0,
             calculation_plan=audit.plan.as_dict(),
             calculation_verification=audit.verification.as_dict(),
@@ -106,6 +107,7 @@ def finance_numeric_answer(
     return replace(
         answer,
         answer=verified_answer,
+        inputs=_audit_inputs(audit),
         calculation_plan=audit.plan.as_dict(),
         calculation_verification=audit.verification.as_dict(),
         calculation_execution=audit.execution.as_dict(),
@@ -281,29 +283,23 @@ def _free_cash_flow_answer(
     if inputs is None:
         return None
     operating_cash_flow, capital_expenditure = inputs
-    signed_capex = capital_expenditure < 0
-    value = (
-        operating_cash_flow + capital_expenditure
-        if signed_capex
-        else operating_cash_flow - capital_expenditure
-    )
+    capital_expenditure = abs(capital_expenditure)
+    value = operating_cash_flow - capital_expenditure
     unit = _amount_unit(text)
     return FinanceNumericAnswer(
         answer=_format_currency_with_unit(value, unit),
         confidence=0.9,
-        question_type=(
-            "free_cash_flow_negative_capex" if signed_capex else "free_cash_flow"
-        ),
+        question_type="free_cash_flow",
         inputs={
             "operating_cash_flow": operating_cash_flow,
             "capital_expenditure": capital_expenditure,
         },
-        formula=(
-            "operating_cash_flow + capital_spending"
-            if signed_capex
-            else "operating_cash_flow - capital_expenditure"
-        ),
+        formula="operating_cash_flow - capital_expenditure",
     )
+
+
+def _audit_inputs(audit: Any) -> dict[str, float]:
+    return {operand.operand_id: float(operand.value) for operand in audit.plan.operands}
 
 
 def _multi_period_average_answer(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .calculation_evidence_identity import calculation_evidence_lookup
+from .finance_calculation_contract import finance_calculation_authoritative
 from .finance_numeric_answer import finance_numeric_answer
 from .query_planning import request_planning_question
 
@@ -16,13 +17,16 @@ def ensure_finance_numeric_trace(request: Any, bundle: Any) -> None:
     domain = str(getattr(request, "verification_domain", "") or "").strip().lower()
     if domain not in _FINANCE_DOMAINS:
         return
+    query_plan = dict(metadata.get("query_plan") or {})
+    if query_plan and not finance_calculation_authoritative(query_plan):
+        return
     evidence_items = [
         item for item in getattr(bundle, "items", []) or [] if isinstance(item, dict)
     ]
     result = finance_numeric_answer(
         request_planning_question(request),
         evidence_items,
-        query_plan=dict(metadata.get("query_plan") or {}),
+        query_plan=query_plan,
     )
     if result is not None:
         trace = result.as_trace()
@@ -82,6 +86,8 @@ def typed_calculation_adequacy(
         or {}
     )
     constraints = dict(query_plan.get("constraints") or {})
+    if not finance_calculation_authoritative(query_plan):
+        return "not_applicable", "non_numeric_query_plan"
     if constraints.get("finance_formula_status") == "unsupported":
         return "not_applicable", "unsupported_formula"
     if not isinstance(trace, dict):

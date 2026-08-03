@@ -307,8 +307,10 @@ def test_boolean_required_slot_reserves_best_proposition_evidence():
     )
 
     assert "release-evidence" in {item["evidence_id"] for item in selected}
-    assert bound.evidence_slots[0].status == "filled"
+    assert bound.evidence_slots[0].status == "retrieved_unverified"
     assert trace["required_slot_bindings"][0]["slot_id"] == (
         "support:boolean_proposition"
     )
+    assert trace["required_slot_bindings"][0]["status"] == "retrieved_unverified"
+    assert trace["required_slot_bindings"][0]["verification_satisfied"] is False
     assert trace["required_slot_bindings"][0]["selected_evidence_ids"]

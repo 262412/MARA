@@ -11,6 +11,7 @@ from benchmark.answer_finalizer import finalize_prediction_answer
 from benchmark.contract_invariant_metrics import contract_invariant_summary
 from benchmark.qasper_answerability import verify_qasper_answerability
 from benchmark.qasper_contract_invariants import qasper_contract_metric_values
+from benchmark.qasper_prompt_budget import fit_qasper_verifier_items
 from benchmark.qasper_proposition_conflict import resolve_boolean_conflict
 from benchmark.task_answer_contracts import (
     apply_task_answer_contract,
@@ -43,6 +44,32 @@ def _item(
         "section_id": section,
         "text": text,
     }
+
+
+def test_boolean_verifier_packs_quote_scoped_snippet_with_lineage():
+    decisive = (
+        "We do not release the training data because the source license forbids it."
+    )
+    long_item = _item(
+        "release-policy",
+        ("Unrelated background sentence. " * 500) + decisive,
+    )
+
+    _prompt, bounded, trace = fit_qasper_verifier_items(
+        [long_item],
+        lambda evidence: f"QUESTION\n{evidence}",
+        question="Did the authors release the training data?",
+        candidate_answer="no",
+        required_evidence_ids=["evidence:paper:release-policy"],
+        required_slot_ids=["support:boolean_proposition"],
+    )
+
+    assert decisive in bounded
+    assert "span_start=" in bounded
+    assert "span_end=" in bounded
+    assert len(bounded) < 1500
+    assert trace["verifier_required_evidence_coverage"] == "1.000000"
+    assert trace["verifier_required_slot_ids"] == "support:boolean_proposition"
 
 
 def test_unrelated_relation_is_not_contradiction() -> None:
@@ -329,6 +356,72 @@ def test_supported_boolean_answer_is_not_false_abstained() -> None:
     )
 
     assert result.answer == "yes"
+
+
+def test_grounded_complete_no_is_authoritative_for_its_exact_evidence_identity() -> None:
+    quote = (
+        "While we can generate systematically controlled data without manual "
+        "annotation, it is much harder to validate the quality of such data."
+    )
+    item = _item(
+        "quality-control",
+        (
+            "The paper discusses synthetic challenge datasets at length. "
+            f"{quote} Additional discussion covers model robustness."
+        ),
+    )
+
+    result = verify_qasper_answerability(
+        _Verifier("no_complete", quote),
+        question="Are the automatically constructed datasets subject to quality control?",
+        evidence=item["text"],
+        evidence_items=[item],
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "no"
+    assert result.trace["reason"] == "grounded_complete_proposition"
+    assert result.trace["authoritative_quote_evidence_id"] == (
+        "evidence:paper:quality-control"
+    )
+    assert result.trace["final_support_evidence_ids"] == [
+        "evidence:paper:quality-control"
+    ]
+
+
+def test_grounded_complete_quote_still_abstains_on_same_proposition_conflict() -> None:
+    quote = "We evaluated the model on clinical tasks."
+    support = _item("support", quote)
+    contradiction = _item(
+        "contradiction",
+        "We did not evaluate the model on clinical tasks.",
+    )
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote),
+        question="Did the authors evaluate the model on clinical tasks?",
+        evidence=f"{quote} {contradiction['text']}",
+        evidence_items=[support, contradiction],
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["conflict_status"] == "balanced_conflict"
+
+
+def test_grounded_complete_quote_without_unique_evidence_identity_is_rejected() -> None:
+    quote = "We evaluated the model on clinical tasks."
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote),
+        question="Did the authors evaluate the model on clinical tasks?",
+        evidence=f"{quote}\n\n{quote}",
+        evidence_items=[_item("first", quote), _item("second", quote)],
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "quote_identity_unresolved"
 
 
 def test_deterministic_experiment_resolution_keeps_its_selected_evidence() -> None:

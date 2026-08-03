@@ -122,6 +122,8 @@ def _boolean_slots(
                 role="support",
                 metric=metric,
                 modality="auto",
+                required_for_retrieval=not typed_scope,
+                required_for_verification=True,
                 statement_kind=statement_kind,
                 query=query,
                 locator=EvidenceLocator(

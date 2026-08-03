@@ -28,10 +28,16 @@ def financial_statement_identity(
         explicit_scope = ""
         text = str(value or "")
     normalized = _normalize(text)
+    atomic_kind = _atomic_metric_statement_kind(value)
+    inherited_override = (
+        atomic_kind == "non_gaap_performance" and explicit_kind == "cash_flow_statement"
+    ) or (
+        atomic_kind == "cash_flow_statement" and explicit_kind == "non_gaap_performance"
+    )
     kind = (
-        explicit_kind
-        or _atomic_metric_statement_kind(value)
-        or _statement_kind(normalized)
+        atomic_kind
+        if atomic_kind and (not explicit_kind or inherited_override)
+        else explicit_kind or _statement_kind(normalized)
     )
     scope = explicit_scope or _financial_scope(normalized, kind)
     return kind, scope
@@ -182,6 +188,13 @@ def _atomic_metric_statement_kind(value: str | dict[str, Any]) -> str:
     row_label = _normalize(str(value.get("row_label") or ""))
     if evidence_level in {"cell", "span"} and row_label == "adjusted ebitda":
         return "non_gaap_performance"
+    if evidence_level in {"cell", "span"} and row_label in {
+        "capital spending",
+        "capital expenditure",
+        "capital expenditures",
+        "purchases of property plant and equipment",
+    }:
+        return "cash_flow_statement"
     return ""
 
 

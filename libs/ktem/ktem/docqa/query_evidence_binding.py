@@ -5,9 +5,11 @@ from dataclasses import replace
 from typing import Any
 
 from .boolean_evidence_scope import boolean_proposition_evidence_score
+from .calculation_evidence_identity import reconcile_materialized_cells
 from .evidence_identity import identity_of
 from .evidence_locators import locator_matches, locator_requirement_count
 from .evidence_modality import modality_matches
+from .finance_agreement_identity import revolving_agreement_attributes
 from .finance_evidence_dimensions import evidence_scale
 from .finance_query_planning import (
     FINANCE_METRIC_ALIASES,
@@ -54,6 +56,8 @@ def _bind_evidence_slots(
     *,
     preserve_existing: bool,
 ) -> tuple[QueryPlan, list[dict[str, Any]]]:
+    if any(slot.required_for_execution for slot in plan.evidence_slots):
+        evidence_items = reconcile_materialized_cells(evidence_items)
     bound_slots = []
     binding_trace: list[dict[str, Any]] = []
     used_generic_operand_ids: set[str] = set()
@@ -102,7 +106,7 @@ def _bind_evidence_slots(
         bound_slots.append(
             replace(
                 slot,
-                status="filled" if evidence_ids else "missing",
+                status=_bound_slot_status(slot, evidence_ids),
                 evidence_ids=evidence_ids,
             )
         )
@@ -155,6 +159,21 @@ def _candidate_ids_for_slot(
     used_comparison_ids: set[str],
     used_cross_page_locators: set[tuple[str, str]],
 ) -> list[str]:
+    if slot.metric == "revolving credit capacity" and slot.entity.startswith("active"):
+        selected: list[str] = []
+        facilities: set[str] = set()
+        for score, _index, item in ranked:
+            if score <= 0:
+                continue
+            attributes = revolving_agreement_attributes(evidence_text(item))
+            facility = attributes["facility_identity"] or attributes["facility_type"]
+            if not facility or facility in facilities:
+                continue
+            facilities.add(facility)
+            selected.append(identity_of(item).key)
+            if len(selected) >= max(1, slot.cardinality):
+                break
+        return selected
     candidate_ids = (
         _dimension_candidate_ids(slot, ranked, bound_operand_items)
         if slot.role == "dimension"
@@ -208,7 +227,10 @@ def _existing_binding_state(
     *,
     requires_structure: bool,
 ) -> tuple[bool, str]:
-    if slot.status != "filled" or not slot.evidence_ids:
+    if (
+        slot.status not in {"filled", "retrieved_unverified", "verified_support"}
+        or not slot.evidence_ids
+    ):
         return False, "missing_existing_binding"
     if len(slot.evidence_ids) < max(1, slot.cardinality):
         return False, "incomplete_existing_binding"
@@ -231,6 +253,18 @@ def _existing_binding_state(
     ):
         return False, "incompatible_existing_binding"
     return True, ""
+
+
+def _bound_slot_status(slot: EvidenceSlot, evidence_ids: tuple[str, ...]) -> str:
+    if not evidence_ids:
+        return "missing"
+    if (
+        slot.statement_kind == "boolean_proposition"
+        and slot.required_for_verification
+        and not slot.required_for_retrieval
+    ):
+        return "retrieved_unverified"
+    return "filled"
 
 
 def _binding_trace(
@@ -374,6 +408,18 @@ def _finance_operand_matches(
 ) -> bool:
     if slot.metric not in FINANCE_METRIC_ALIASES:
         return True
+    if slot.metric == "revolving credit capacity" and slot.entity.startswith("active"):
+        attributes = revolving_agreement_attributes(text)
+        if attributes["agreement_lifecycle_status"] != "active":
+            return False
+        as_of_date = slot.entity.removeprefix("active_at:")
+        effective_date = attributes["effective_date"]
+        if (
+            slot.entity.startswith("active_at:")
+            and effective_date
+            and effective_date > as_of_date
+        ):
+            return False
     if slot.required_for_execution and not executable_operand_evidence(item):
         return False
     if not atomic_evidence(item):

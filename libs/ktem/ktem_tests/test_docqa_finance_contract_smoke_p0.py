@@ -526,6 +526,8 @@ def test_required_slot_retrieval_runs_one_query_per_missing_slot():
             )
         )
         metric, period = request.retrieval_query.rsplit(" ", 1)
+        if metric.startswith("capital expenditure"):
+            metric = "capital expenditure"
         statement_kind = (
             "cash_flow_statement"
             if metric == "capital expenditure"
