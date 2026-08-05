@@ -19,50 +19,12 @@ def grounded_boolean_relation(
 ) -> tuple[str, bool, str, bool | None]:
     complete = {"yes_complete": "yes", "no_complete": "no"}
     if raw_verdict in complete:
-        polarity = complete[raw_verdict]
-        quality_control_polarity = (
-            quality_control_relation_polarity(question, quote)
-            if quote_grounded
-            else ""
-        )
-        if quality_control_polarity:
-            return (
-                quality_control_polarity,
-                True,
-                "grounded_complete_proposition",
-                quality_control_polarity != polarity,
-            )
-        relation_supported = boolean_quote_supports_relation(
-            quote,
-            question,
-            polarity,
-        )
-        conflict = (
-            quote_grounded
-            and not (
-                scope is not None and scope.scope_valid and scope.quantifier == "only"
-            )
-            and boolean_complete_quote_conflicts(quote, question, polarity)
-        )
-        corrected = corrected_complete_requirement_polarity(
-            quote,
-            question,
-            polarity,
-        )
-        if quote_grounded and corrected:
-            return corrected, True, "grounded_complete_proposition", True
-        supported = quote_grounded and (relation_supported or conflict)
-        if not quote_grounded:
-            reason = "ungrounded_quote"
-        elif not supported:
-            reason = "grounded_quote_incomplete_relation"
-        else:
-            reason = "grounded_complete_proposition"
-        return (
-            polarity if supported else "insufficient_evidence",
-            supported,
-            reason,
-            bool(corrected),
+        return _ground_complete_boolean_relation(
+            complete[raw_verdict],
+            question=question,
+            quote=quote,
+            quote_grounded=quote_grounded,
+            scope=scope,
         )
     quality_control_polarity = (
         quality_control_relation_polarity(question, quote) if quote_grounded else ""
@@ -92,4 +54,54 @@ def grounded_boolean_relation(
         supported,
         reason,
         None,
+    )
+
+
+def _ground_complete_boolean_relation(
+    polarity: str,
+    *,
+    question: str,
+    quote: str,
+    quote_grounded: bool,
+    scope: BooleanScopeDecision | None,
+) -> tuple[str, bool, str, bool | None]:
+    quality_control_polarity = (
+        quality_control_relation_polarity(question, quote) if quote_grounded else ""
+    )
+    if quality_control_polarity:
+        return (
+            quality_control_polarity,
+            True,
+            "grounded_complete_proposition",
+            quality_control_polarity != polarity,
+        )
+    relation_supported = boolean_quote_supports_relation(
+        quote,
+        question,
+        polarity,
+    )
+    conflict = (
+        quote_grounded
+        and not (scope is not None and scope.scope_valid and scope.quantifier == "only")
+        and boolean_complete_quote_conflicts(quote, question, polarity)
+    )
+    corrected = corrected_complete_requirement_polarity(
+        quote,
+        question,
+        polarity,
+    )
+    if quote_grounded and corrected:
+        return corrected, True, "grounded_complete_proposition", True
+    supported = quote_grounded and (relation_supported or conflict)
+    if not quote_grounded:
+        reason = "ungrounded_quote"
+    elif not supported:
+        reason = "grounded_quote_incomplete_relation"
+    else:
+        reason = "grounded_complete_proposition"
+    return (
+        polarity if supported else "insufficient_evidence",
+        supported,
+        reason,
+        bool(corrected),
     )

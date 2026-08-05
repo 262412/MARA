@@ -199,6 +199,13 @@ def test_qasper_boolean_conflict_does_not_preserve_wrong_answer():
         llm,
         question="Did the authors release the code?",
         evidence="The authors released their source code with the paper.",
+        evidence_items=[
+            {
+                "source_id": "paper",
+                "span_id": "source-release",
+                "text": "The authors released their source code with the paper.",
+            }
+        ],
         candidate_answer="no",
     )
 

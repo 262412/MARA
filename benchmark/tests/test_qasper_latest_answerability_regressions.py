@@ -107,9 +107,7 @@ def test_complete_semantic_verdict_is_not_reversed_by_lexical_polarity(
     verdict: str,
     expected: str,
 ) -> None:
-    llm = _VerifierLLM(
-        '{"verdict":"' + verdict + '","evidence_quote":"' + quote + '"}'
-    )
+    llm = _VerifierLLM('{"verdict":"' + verdict + '","evidence_quote":"' + quote + '"}')
 
     result = verify_qasper_answerability(
         llm,
@@ -136,9 +134,7 @@ def test_quality_control_partial_quote_uses_unique_explicit_relation_support():
     )
     item_text = f"{verifier_quote} {authoritative_quote}"
     llm = _VerifierLLM(
-        '{"verdict":"yes_partial","evidence_quote":"'
-        + verifier_quote
-        + '"}'
+        '{"verdict":"yes_partial","evidence_quote":"' + verifier_quote + '"}'
     )
 
     result = verify_qasper_answerability(

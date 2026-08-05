@@ -281,11 +281,11 @@ def test_qasper_answerability_abstains_on_incomplete_conflicting_verdict():
     )
 
     assert result.answer == "unanswerable"
-    assert result.trace["verdict"] == "no"
+    assert result.trace["verdict"] == "insufficient_evidence"
     assert result.trace["action"] == "abstained_insufficient_evidence"
     assert result.trace["primary_answer"] == "yes"
-    assert result.trace["adjudicated_polarity"] == "no"
-    assert result.trace["reason"] == "grounded_complete_proposition"
+    assert result.trace["adjudicated_polarity"] == "insufficient_evidence"
+    assert result.trace["reason"] == "opposite_polarity_authority_unproven"
 
 
 def test_qasper_boolean_abstains_when_verifier_cannot_bind_a_complete_quote():
@@ -325,8 +325,9 @@ def test_qasper_boolean_abstains_when_direct_polarities_are_balanced():
     )
 
     assert result.answer == "unanswerable"
-    assert result.trace["action"] == "abstained_polarity_conflict"
-    assert result.trace["conflict_status"] == "balanced_conflict"
+    assert result.trace["action"] == "abstained_insufficient_evidence"
+    assert result.trace["conflict_status"] == "insufficient_evidence"
+    assert result.trace["reason"] == "opposite_polarity_authority_unproven"
 
 
 def test_qasper_boolean_question_reconsiders_primary_unanswerable():

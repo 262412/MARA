@@ -28,6 +28,7 @@ from .qasper_proposition_conflict import resolve_boolean_conflict
 from .qasper_quote_support import (
     authoritative_quote_binding_trace,
     parse_boolean_verdict,
+    quality_control_quote_for_verdict,
     resolve_verified_quote_support,
 )
 
@@ -222,7 +223,7 @@ def _verify_boolean_candidate(
                 primary_answer=candidate_polarity or "unanswerable",
             ),
         )
-    quote = _quality_control_quote_for_verdict(
+    quote = quality_control_quote_for_verdict(
         verdict,
         question,
         evidence_items or [],
@@ -275,6 +276,7 @@ def _adjudicated_boolean_result(
         reason,
         quote_supports_relation,
         evidence_items,
+        candidate_polarity=candidate_polarity,
     )
     action, answer, conflict_trace = _resolve_grounded_boolean_conflict(
         question,
@@ -417,38 +419,6 @@ def _ground_boolean_verdict(
         reason,
         relation_trace,
     )
-
-
-def _explicit_quality_control_quote(
-    question: str,
-    evidence_items: list[dict[str, Any]],
-) -> str:
-    matches: dict[str, str] = {}
-    for item in evidence_items:
-        for sentence in re.split(r"(?<=[.!?])\s+|\n+", evidence_item_text(item)):
-            quote = sentence.strip()
-            if _quality_control_relation_polarity(question, quote):
-                matches[" ".join(quote.lower().split())] = quote
-    if len(matches) != 1:
-        return ""
-    return next(iter(matches.values()))
-
-
-def _quality_control_quote_for_verdict(
-    verdict: str,
-    question: str,
-    evidence_items: list[dict[str, Any]],
-    *,
-    fallback: str,
-) -> str:
-    if verdict not in {
-        "no_complete",
-        "yes_partial",
-        "no_partial",
-        "insufficient_evidence",
-    }:
-        return fallback
-    return _explicit_quality_control_quote(question, evidence_items) or fallback
 
 
 def _verify_free_text_candidate(
