@@ -39,7 +39,7 @@ def dataset_native_score_metadata(dataset_name: str) -> dict[str, Any]:
             ),
         },
         "qasper": {
-            "contract_id": "qasper_answer_evidence_f1_v2",
+            "contract_id": "qasper_answer_evidence_f1_v3",
             "primary_metric": "qasper_f1",
             "native_metrics": (
                 "qasper_f1",
@@ -410,6 +410,12 @@ def _qasper_evidence_f1(prediction: dict[str, Any]) -> float | None:
             for reference in gold_references
         )
     )
+
+
+def qasper_evidence_f1_for_prediction(prediction: dict[str, Any]) -> float | None:
+    """Recompute QASPER Evidence F1 under the current deterministic contract."""
+
+    return _qasper_evidence_f1(prediction)
 
 
 def _qasper_gold_evidence_references(

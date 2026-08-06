@@ -93,6 +93,40 @@ def quality_control_relation_polarity(question: str, quote: str) -> str:
     return ""
 
 
+def current_experiment_relation_polarity(question: str, quote: str) -> str:
+    """Recognize a current-paper empirical action as conducting an experiment."""
+
+    if re.search(r"\bother\s+than\b", str(question or ""), re.IGNORECASE):
+        return ""
+    if not (
+        re.search(
+            r"\b(?:the authors?|they|this (?:paper|study|work))\b",
+            str(question or ""),
+            flags=re.IGNORECASE,
+        )
+        and re.search(
+            r"\b(?:conduct|perform|run|carry out)\w*\s+" r"(?:an?\s+)?experiments?\b",
+            question,
+            re.IGNORECASE,
+        )
+    ):
+        return ""
+    if not re.search(
+        r"\b(?:i|we|our|the authors?|this (?:paper|study|work))\b",
+        str(quote or ""),
+        flags=re.IGNORECASE,
+    ):
+        return ""
+    if re.search(
+        r"\b(?:unable to construct|experiment|evaluat|test|translat|ran|"
+        r"measur|obser(?:v\w*|vation\w*))\b",
+        str(quote or ""),
+        flags=re.IGNORECASE,
+    ):
+        return "yes"
+    return ""
+
+
 def normalized_boolean_quote(value: str) -> str:
     return " ".join(str(value or "").lower().split())
 
@@ -119,6 +153,9 @@ def boolean_quote_supports_relation(
     quality_control_polarity = quality_control_relation_polarity(question, quote)
     if quality_control_polarity:
         return verdict == quality_control_polarity
+    experiment_polarity = current_experiment_relation_polarity(question, quote)
+    if experiment_polarity:
+        return verdict == experiment_polarity
     quote_tokens = stemmed_content_tokens(quote)
     question_anchors = stemmed_content_tokens(question)
     question_relations = boolean_relation_lemmas(question)

@@ -11,26 +11,41 @@ from ktem.docqa.boolean_proposition_evidence import (
 )
 from ktem.docqa.evidence_identity import identity_of
 
-from .qasper_boolean import quality_control_relation_polarity
+from .qasper_boolean import (
+    current_experiment_relation_polarity,
+    quality_control_relation_polarity,
+)
 from .qasper_boolean_scope import evidence_item_text
+from .qasper_evidence_identity import CanonicalQuoteSpan, canonical_quote_spans
 
 
 @dataclass(frozen=True)
 class AuthoritativeQuoteSupport:
     evidence_id: str
+    evidence_ref: str
     span_id: str
+    quote: str
     claim_key: tuple[str, ...]
     polarity: str
 
 
-def parse_boolean_verdict(answer: str) -> tuple[str, str]:
+@dataclass(frozen=True)
+class _BoundQuote:
+    evidence_id: str
+    evidence_ref: str
+    item: dict[str, Any]
+    span: CanonicalQuoteSpan
+
+
+def parse_boolean_verdict(answer: str) -> tuple[str, str, str]:
     try:
         payload = json.loads(str(answer or ""))
     except json.JSONDecodeError:
-        return "", ""
+        return "", "", ""
     if not isinstance(payload, dict):
-        return "", ""
+        return "", "", ""
     value = str(payload.get("verdict") or "")
+    evidence_ref = str(payload.get("evidence_ref") or "").strip()
     quote = str(payload.get("evidence_quote") or "").strip()
     allowed = {
         "yes_complete",
@@ -41,7 +56,11 @@ def parse_boolean_verdict(answer: str) -> tuple[str, str]:
         "no",
         "insufficient_evidence",
     }
-    return (value, quote) if value in allowed else ("", "")
+    if value not in allowed:
+        return "", "", ""
+    if value == "insufficient_evidence":
+        return value, "", ""
+    return value, evidence_ref, quote
 
 
 def quality_control_quote_for_verdict(
@@ -69,29 +88,57 @@ def quality_control_quote_for_verdict(
     return next(iter(matches.values()))
 
 
+def evidence_ref_for_quote(
+    quote: str,
+    evidence_items: list[dict[str, Any]],
+    alias_mapping: str,
+) -> str:
+    matches = []
+    for entry in _alias_entries(alias_mapping):
+        bound = _bound_quote_for_alias(entry, quote, evidence_items)
+        if bound is not None:
+            matches.append(bound.evidence_ref)
+    return matches[0] if len(set(matches)) == 1 else ""
+
+
+def bind_evidence_ref_to_quote(
+    evidence_ref: str,
+    quote: str,
+    evidence_items: list[dict[str, Any]],
+    alias_mapping: str,
+) -> tuple[str, str]:
+    bound, status = _bind_authoritative_quote(
+        evidence_ref,
+        quote,
+        evidence_items,
+        alias_mapping=alias_mapping,
+    )
+    if bound is None:
+        return "", status
+    resolved_ref = bound.evidence_ref or evidence_ref_for_quote(
+        quote,
+        evidence_items,
+        alias_mapping,
+    )
+    return resolved_ref, "bound" if resolved_ref else "evidence_ref_unresolved"
+
+
 def resolve_verified_quote_support(
     question: str,
+    evidence_ref: str,
     quote: str,
     verdict: str,
     reason: str,
     quote_supports_relation: bool,
     evidence_items: list[dict[str, Any]] | None,
     *,
-    candidate_polarity: str = "",
+    alias_mapping: str = "",
 ) -> tuple[str, bool, str, AuthoritativeQuoteSupport | None]:
     support = None
-    if verdict in {"yes", "no"} and reason == "grounded_complete_proposition":
-        strict_authority = (
-            candidate_polarity in {"yes", "no"} and candidate_polarity != verdict
-        )
-        support = resolve_authoritative_quote_support(
-            question,
-            quote,
-            verdict,
-            evidence_items,
-        )
-        if support is None and evidence_items is not None:
-            return "insufficient_evidence", False, "quote_identity_unresolved", None
+    if verdict in {"yes", "no"} and reason in {
+        "grounded_complete_proposition",
+        "grounded_complete_relation",
+    }:
         if not _other_than_quote_supports_polarity(question, quote, verdict):
             return (
                 "insufficient_evidence",
@@ -99,21 +146,27 @@ def resolve_verified_quote_support(
                 "other_than_alternative_unproven",
                 None,
             )
-        if strict_authority:
-            support = resolve_authoritative_quote_support(
-                question,
-                quote,
-                verdict,
-                evidence_items,
-                strict_authority=True,
+        bound, binding_status = _bind_authoritative_quote(
+            evidence_ref,
+            quote,
+            evidence_items,
+            alias_mapping=alias_mapping,
+        )
+        if bound is None:
+            return "insufficient_evidence", False, binding_status, None
+        support = _authoritative_support_from_bound(
+            question,
+            verdict,
+            quote,
+            bound,
+        )
+        if support is None:
+            return (
+                "insufficient_evidence",
+                False,
+                "polarity_authority_unproven",
+                None,
             )
-            if support is None:
-                return (
-                    "insufficient_evidence",
-                    False,
-                    "opposite_polarity_authority_unproven",
-                    None,
-                )
     return verdict, quote_supports_relation, reason, support
 
 
@@ -133,6 +186,7 @@ def authoritative_quote_binding_trace(
     trace.update(
         {
             "authoritative_quote_evidence_id": support.evidence_id,
+            "evidence_ref": support.evidence_ref,
             "authoritative_quote_span_id": support.span_id,
             "bound_support_evidence_ids": [support.evidence_id],
             "final_support_evidence_ids": [support.evidence_id],
@@ -148,31 +202,30 @@ def resolve_authoritative_quote_support(
     polarity: str,
     evidence_items: list[dict[str, Any]] | None,
     *,
-    strict_authority: bool = False,
+    evidence_ref: str = "",
+    alias_mapping: str = "",
 ) -> AuthoritativeQuoteSupport | None:
-    if evidence_items is None:
-        return None
-    normalized_quote = " ".join(str(quote or "").lower().split())
-    if not normalized_quote:
-        return None
-    matches: dict[str, dict[str, Any]] = {}
-    for item in evidence_items:
-        normalized_text = " ".join(evidence_item_text(item).lower().split())
-        if normalized_quote in normalized_text:
-            matches[identity_of(item).key] = item
-    if len(matches) != 1:
-        return None
-    evidence_id, item = next(iter(matches.items()))
-    text = evidence_item_text(item)
-    quote_pattern = r"\s+".join(
-        re.escape(part) for part in str(quote or "").strip().split()
+    bound, _status = _bind_authoritative_quote(
+        evidence_ref,
+        quote,
+        evidence_items,
+        alias_mapping=alias_mapping,
     )
-    span_match = re.search(quote_pattern, text, flags=re.IGNORECASE)
-    if span_match is None:
+    if bound is None:
         return None
+    return _authoritative_support_from_bound(question, polarity, quote, bound)
+
+
+def _authoritative_support_from_bound(
+    question: str,
+    polarity: str,
+    quote: str,
+    bound: _BoundQuote,
+) -> AuthoritativeQuoteSupport | None:
+    item = bound.item
     quote_item = {
         **item,
-        "text": span_match.group(0),
+        "text": evidence_item_text(item)[bound.span.item_start : bound.span.item_end],
         "ocr_text": "",
         "vlm_text": "",
         "caption": "",
@@ -187,25 +240,27 @@ def resolve_authoritative_quote_support(
         )
         if not assessments:
             return None
-        eligible = list(assessments)
-        if strict_authority:
-            eligible = [
-                assessment
-                for assessment in assessments
-                if _opposite_polarity_authority_is_proven(
-                    question,
-                    quote,
-                    polarity,
-                    assessment,
-                )
-            ]
+        eligible = [
+            assessment
+            for assessment in assessments
+            if _polarity_authority_is_proven(
+                question,
+                quote,
+                polarity,
+                assessment,
+            )
+        ]
         if not eligible:
             return None
         assessment = max(eligible, key=_assessment_score)
         claim_key = assessment.proposition.claim_key
     return AuthoritativeQuoteSupport(
-        evidence_id=evidence_id,
-        span_id=f"{evidence_id}#quote:{span_match.start()}:{span_match.end()}",
+        evidence_id=bound.evidence_id,
+        evidence_ref=bound.evidence_ref,
+        span_id=bound.span.identity,
+        quote=evidence_item_text(bound.item)[
+            bound.span.item_start : bound.span.item_end
+        ],
         claim_key=claim_key,
         polarity=polarity,
     )
@@ -218,25 +273,213 @@ def _assessment_score(value: Any) -> tuple[float, float]:
     )
 
 
-def _opposite_polarity_authority_is_proven(
+def _polarity_authority_is_proven(
     question: str,
     quote: str,
     polarity: str,
     assessment: Any,
 ) -> bool:
-    if assessment.classification == "supports":
-        return True
-    if not (
-        assessment.actor_score > 0
-        and assessment.scope_score > 0
-        and assessment.relation_score > 0
+    if (
+        assessment.classification == "supports"
+        and assessment.proposition.polarity == polarity
     ):
+        return True
+    if not (assessment.actor_score > 0 and assessment.scope_score > 0):
+        return False
+    if _explicit_semantic_polarity(question, quote) == polarity:
+        return True
+    if assessment.relation_score <= 0:
         return False
     if _other_than_exclusion(question):
         return _other_than_quote_supports_polarity(question, quote, polarity)
     if _effective_dependency_polarity(question, quote) == polarity:
         return True
     return _third_party_comparison_polarity(question, quote) == polarity
+
+
+def _explicit_semantic_polarity(question: str, quote: str) -> str:
+    for resolver in (
+        _requirement_polarity,
+        _qualitative_risk_polarity,
+        _double_annotation_polarity,
+        current_experiment_relation_polarity,
+    ):
+        polarity = resolver(question, quote)
+        if polarity:
+            return polarity
+    return ""
+
+
+def _requirement_polarity(question: str, quote: str) -> str:
+    if not re.search(
+        r"\b(?:require|required|requires|necessary|must)\b",
+        str(question or ""),
+        flags=re.IGNORECASE,
+    ):
+        return ""
+    lowered = str(quote or "").lower()
+    if re.search(
+        r"\b(?:without|unnecessary|not required|does not require|"
+        r"do not require|requires? no|optional|drop-in)\b",
+        lowered,
+    ):
+        return "no"
+    if re.search(r"\b(?:require|required|requires|necessary|must)\b", lowered):
+        return "yes"
+    return ""
+
+
+def _qualitative_risk_polarity(question: str, quote: str) -> str:
+    if not re.search(
+        r"\b(?:downside|disadvantage|drawback|risk|harm|limitation)\b",
+        str(question or ""),
+        flags=re.IGNORECASE,
+    ):
+        return ""
+    return (
+        "yes"
+        if re.search(
+            r"\b(?:not a silver bullet|remove useful|risk|harm|degrad|"
+            r"worse|limitation|drawback|disadvantage)\w*\b",
+            str(quote or ""),
+            flags=re.IGNORECASE,
+        )
+        else ""
+    )
+
+
+def _double_annotation_polarity(question: str, quote: str) -> str:
+    if not re.search(
+        r"\b(?:double|twice|two)\s+annotat\w*\b|\bannotat\w*\s+(?:twice|double)\b",
+        str(question or ""),
+        flags=re.IGNORECASE,
+    ):
+        return ""
+    return (
+        "yes"
+        if re.search(
+            r"\b(?:two|2)\s+annotators?\b|\bannotat\w*\s+(?:twice|independently by two)\b",
+            str(quote or ""),
+            flags=re.IGNORECASE,
+        )
+        else ""
+    )
+
+
+def _bind_authoritative_quote(
+    evidence_ref: str,
+    quote: str,
+    evidence_items: list[dict[str, Any]] | None,
+    *,
+    alias_mapping: str,
+) -> tuple[_BoundQuote | None, str]:
+    if evidence_items is None:
+        return None, "quote_identity_unresolved"
+    normalized_quote = " ".join(str(quote or "").casefold().split())
+    if not normalized_quote:
+        return None, "quote_identity_unresolved"
+    aliases = _alias_entries(alias_mapping)
+    if evidence_ref:
+        entries = [
+            entry for entry in aliases if entry.get("evidence_ref") == evidence_ref
+        ]
+        if len(entries) != 1:
+            return None, "evidence_ref_unresolved"
+        bound = _bound_quote_for_alias(entries[0], quote, evidence_items)
+        if bound is None:
+            return None, "evidence_ref_quote_mismatch"
+        return bound, "bound"
+
+    matches: dict[str, list[_BoundQuote]] = {}
+    for item in evidence_items:
+        text = evidence_item_text(item)
+        try:
+            evidence_id = identity_of(item).key
+        except ValueError:
+            continue
+        for span in canonical_quote_spans(item, quote, text=text):
+            matches.setdefault(span.identity, []).append(
+                _BoundQuote(
+                    evidence_id=evidence_id,
+                    evidence_ref="",
+                    item=item,
+                    span=span,
+                )
+            )
+    if len(matches) != 1:
+        return None, "quote_identity_unresolved"
+    candidates = next(iter(matches.values()))
+    return (
+        min(
+            candidates,
+            key=lambda value: (
+                len(evidence_item_text(value.item)),
+                value.span.text_hash,
+            ),
+        ),
+        "bound",
+    )
+
+
+def _bound_quote_for_alias(
+    entry: dict[str, Any],
+    quote: str,
+    evidence_items: list[dict[str, Any]],
+) -> _BoundQuote | None:
+    runtime_evidence_id = str(entry.get("runtime_evidence_id") or "").strip()
+    item_start = _optional_int(entry.get("item_span_start"))
+    item_end = _optional_int(entry.get("item_span_end"))
+    if item_start is None or item_end is None:
+        return None
+    matching_items = []
+    for item in evidence_items:
+        try:
+            if identity_of(item).key == runtime_evidence_id:
+                matching_items.append(item)
+        except ValueError:
+            continue
+    if len(matching_items) != 1:
+        return None
+    item = matching_items[0]
+    text = evidence_item_text(item)
+    if not (0 <= item_start < item_end <= len(text)):
+        return None
+    bounded = " ".join(text[item_start:item_end].casefold().split())
+    normalized_quote = " ".join(str(quote or "").casefold().split())
+    if not normalized_quote or normalized_quote not in bounded:
+        return None
+    spans = [
+        span
+        for span in canonical_quote_spans(item, quote, text=text)
+        if item_start <= span.item_start and span.item_end <= item_end
+    ]
+    if len(spans) != 1:
+        return None
+    return _BoundQuote(
+        evidence_id=runtime_evidence_id,
+        evidence_ref=str(entry.get("evidence_ref") or ""),
+        item=item,
+        span=spans[0],
+    )
+
+
+def _alias_entries(value: str) -> list[dict[str, Any]]:
+    try:
+        payload = json.loads(str(value or ""))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [entry for entry in payload if isinstance(entry, dict)]
+
+
+def _optional_int(value: Any) -> int | None:
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _effective_dependency_polarity(question: str, quote: str) -> str:

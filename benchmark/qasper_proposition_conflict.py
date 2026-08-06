@@ -22,6 +22,7 @@ def resolve_boolean_conflict(
     authoritative_claim_key: tuple[str, ...] | None = None,
     authoritative_evidence_id: str = "",
     authoritative_polarity: str = "",
+    authoritative_quote: str = "",
 ) -> tuple[str, str, dict[str, str]]:
     candidate_scores = _support_scores(
         evidence,
@@ -34,18 +35,13 @@ def resolve_boolean_conflict(
     opposite = (
         "no" if conflict_polarity == "yes" else "yes" if conflict_polarity else ""
     )
-    conflict_items = evidence_items
-    if evidence_items is not None and authoritative_evidence_id:
-        conflict_items = [
-            item
-            for item in evidence_items
-            if identity_of(item).key != authoritative_evidence_id
-        ]
     opposite_scores = _support_scores(
         evidence,
         question,
         opposite,
-        evidence_items=conflict_items,
+        evidence_items=evidence_items,
+        excluded_evidence_id=authoritative_evidence_id,
+        excluded_quote=authoritative_quote,
     )
     common_keys = set(candidate_scores) & set(opposite_scores)
     if authoritative_claim_key is not None:
@@ -100,6 +96,8 @@ def _support_scores(
     polarity: str,
     *,
     evidence_items: list[dict[str, Any]] | None,
+    excluded_evidence_id: str = "",
+    excluded_quote: str = "",
 ) -> dict[tuple[str, ...], float]:
     if evidence_items is not None:
         classified = classify_boolean_evidence_set(
@@ -109,6 +107,12 @@ def _support_scores(
         )
         scores: dict[tuple[str, ...], float] = {}
         for assessment in classified.supports:
+            if _is_excluded_authoritative_span(
+                assessment,
+                evidence_id=excluded_evidence_id,
+                quote=excluded_quote,
+            ):
+                continue
             key = assessment.proposition.claim_key
             scores[key] = max(
                 scores.get(key, 0.0),
@@ -117,6 +121,21 @@ def _support_scores(
         return scores
     score = _proposition_support_score(evidence, question, polarity)
     return {("legacy_text",): score} if score > 0 else {}
+
+
+def _is_excluded_authoritative_span(
+    assessment: Any,
+    *,
+    evidence_id: str,
+    quote: str,
+) -> bool:
+    if not evidence_id or not quote:
+        return False
+    if identity_of(assessment.item).key != evidence_id:
+        return False
+    normalized_span = " ".join(str(assessment.span_text or "").casefold().split())
+    normalized_quote = " ".join(str(quote or "").casefold().split())
+    return bool(normalized_span) and normalized_span in normalized_quote
 
 
 def _boolean_answer_action(

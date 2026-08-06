@@ -13,7 +13,10 @@ def qasper_paragraph_f1(
         return 0.0
     predicted_set = _normalized_evidence_set(predicted_evidence)
     gold_set = _normalized_evidence_set(gold_evidence)
-    matches = _qasper_evidence_match_count(list(predicted_set), list(gold_set))
+    matches = _qasper_evidence_match_count(
+        sorted(predicted_set),
+        sorted(gold_set),
+    )
     if matches == 0:
         return 0.0
     precision = matches / len(predicted_set)
@@ -29,17 +32,24 @@ def _qasper_evidence_match_count(
     predicted_evidence: list[str],
     gold_evidence: list[str],
 ) -> int:
-    used_gold_indexes: set[int] = set()
-    matches = 0
-    for predicted in predicted_evidence:
-        for index, gold in enumerate(gold_evidence):
-            if index in used_gold_indexes:
+    gold_match = [-1] * len(gold_evidence)
+
+    def augment(predicted_index: int, seen: set[int]) -> bool:
+        predicted = predicted_evidence[predicted_index]
+        for gold_index, gold in enumerate(gold_evidence):
+            if gold_index in seen or not _qasper_evidence_matches(predicted, gold):
                 continue
-            if _qasper_evidence_matches(predicted, gold):
-                used_gold_indexes.add(index)
-                matches += 1
-                break
-    return matches
+            seen.add(gold_index)
+            previous = gold_match[gold_index]
+            if previous == -1 or augment(previous, seen):
+                gold_match[gold_index] = predicted_index
+                return True
+        return False
+
+    return sum(
+        int(augment(predicted_index, set()))
+        for predicted_index in range(len(predicted_evidence))
+    )
 
 
 def _qasper_evidence_matches(predicted: str, gold: str) -> bool:

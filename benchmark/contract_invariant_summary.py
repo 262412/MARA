@@ -216,6 +216,10 @@ def _verification_summary(
             metrics,
             "qasper_stale_verifier_state_count",
         ),
+        "stored_recomputed_qasper_evidence_f1_mismatch_count": _sum(
+            metrics,
+            "stored_recomputed_qasper_evidence_f1_mismatch_count",
+        ),
         "abstention_candidate_sent_as_semantic_answer_count": _sum(
             metrics,
             "abstention_candidate_sent_as_semantic_answer_count",

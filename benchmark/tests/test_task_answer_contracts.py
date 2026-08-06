@@ -47,7 +47,7 @@ def test_qasper_answerability_contract_runs_after_engine_projection():
     assert trace["pre_contract_verification"] == {}
     assert trace["post_contract_verification"]["answer"] == "yes"
     assert prediction["task_answer_contract"] == {
-        "contract_id": "qasper_answerability.v14",
+        "contract_id": "qasper_answerability.v15",
         "status": "applied",
     }
     assert len(llm.calls) == 1

@@ -62,7 +62,7 @@ def validate_boolean_scope(
 ) -> BooleanScopeDecision:
     matching_item = _matching_item(quote, evidence_items or [])
     section_role = _section_role(matching_item, quote)
-    actor = _actor(quote, section_role)
+    actor = _actor(_bound_local_context(matching_item, quote), section_role)
     quantifier = "only" if _has_closed_quantifier(question) else "none"
     scope_rejection = _scope_rejection(
         question,
@@ -164,7 +164,7 @@ def resolve_closed_scope_boolean(
         return experiment_resolution
     if not (_language_data_question(question) and _has_closed_quantifier(question)):
         return None
-    supported: dict[str, list[tuple[dict[str, Any], BooleanScopeDecision]]] = {
+    supported: dict[str, list[tuple[dict[str, Any], BooleanScopeDecision, str]]] = {
         "yes": [],
         "no": [],
     }
@@ -173,25 +173,28 @@ def resolve_closed_scope_boolean(
         if not text:
             continue
         for polarity in supported:
+            quote = _scope_excerpt(text, polarity)
+            if not quote:
+                continue
             decision = validate_boolean_scope(
                 question,
-                text,
+                quote,
                 polarity,
                 evidence_items=[item],
             )
             if decision.scope_valid:
-                supported[polarity].append((item, decision))
+                supported[polarity].append((item, decision, quote))
     polarities = [polarity for polarity, values in supported.items() if values]
     if len(polarities) != 1:
         return None
     polarity = polarities[0]
-    item, decision = min(
+    item, decision, quote = min(
         supported[polarity],
-        key=lambda value: len(evidence_item_text(value[0])),
+        key=lambda value: (len(value[2]), value[2]),
     )
     return ClosedScopeResolution(
         polarity=polarity,
-        evidence_quote=_scope_excerpt(evidence_item_text(item), polarity),
+        evidence_quote=quote,
         decision=decision,
         evidence_item=item,
     )
@@ -364,7 +367,49 @@ def _section_role(item: dict[str, Any], quote: str) -> str:
     explicit_role = _section_role_from_text(" ".join(explicit_values))
     if explicit_role:
         return explicit_role
+    heading_role = _section_role_from_text(_nearest_heading(item, quote))
+    if heading_role:
+        return heading_role
     return _section_role_from_text(str(quote or "")) or "unknown"
+
+
+def _bound_local_context(item: dict[str, Any], quote: str) -> str:
+    text = evidence_item_text(item)
+    normalized_quote = _normalized(quote)
+    if not text or not normalized_quote:
+        return str(quote or "")
+    normalized_text = _normalized(text)
+    if normalized_quote not in normalized_text:
+        return str(quote or "")
+    parts = str(quote or "").strip().split()
+    pattern = re.compile(
+        r"\s+".join(re.escape(part) for part in parts),
+        flags=re.IGNORECASE,
+    )
+    match = pattern.search(text)
+    if match is None:
+        return str(quote or "")
+    heading = _nearest_heading(item, quote)
+    start = max(0, match.start() - 320)
+    end = min(len(text), match.end() + 320)
+    return "\n".join(part for part in (heading, text[start:end]) if part)
+
+
+def _nearest_heading(item: dict[str, Any], quote: str) -> str:
+    text = evidence_item_text(item)
+    if not text:
+        return ""
+    parts = str(quote or "").strip().split()
+    if not parts:
+        return ""
+    match = re.search(
+        r"\s+".join(re.escape(part) for part in parts),
+        text,
+        flags=re.IGNORECASE,
+    )
+    prefix = text[: match.start()] if match is not None else text
+    headings = re.findall(r"(?m)^\s{0,3}#{1,6}\s+(.+?)\s*$", prefix)
+    return headings[-1].strip() if headings else ""
 
 
 def _section_role_from_text(value: str) -> str:
@@ -492,20 +537,34 @@ def _english_closed_scope(quote: str) -> bool:
     )
 
 
-def _scope_excerpt(text: str, polarity: str) -> str:
-    lowered = text.lower()
-    markers = (
-        ("non-english", "greek", "german", "french", "multilingual")
-        if polarity == "no"
-        else ("english-speaking countries", "english datasets", "english data")
+def _scope_excerpt(text: str, polarity: str) -> str | None:
+    statements = [
+        (match.start(), match.end(), match.group(0).strip())
+        for match in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", str(text or ""))
+        if match.group(0).strip()
+    ]
+    windows = list(statements)
+    windows.extend(
+        (left[0], right[1], text[left[0] : right[1]].strip())
+        for left, right in zip(statements, statements[1:])
     )
-    position = next(
-        (lowered.find(marker) for marker in markers if marker in lowered),
-        0,
-    )
-    start = max(0, position - 360)
-    end = min(len(text), position + 280)
-    return text[start:end].strip()
+    candidates = []
+    for start, end, excerpt in windows:
+        if polarity == "no":
+            valid = _non_english_counterexample(excerpt)
+        else:
+            valid = _english_closed_scope(excerpt) and bool(
+                re.search(
+                    r"\b(?:report|result|evaluat|experiment|test|dataset|corpus|data)\w*\b",
+                    excerpt,
+                    flags=re.IGNORECASE,
+                )
+            )
+        if valid:
+            candidates.append((end - start, start, excerpt))
+    if not candidates:
+        return None
+    return min(candidates)[2]
 
 
 def _normalized(value: str) -> str:

@@ -1,0 +1,27 @@
+{
+  "contract_id": "qasper_fresh_run_acceptance.v1",
+  "changes": [
+    {"example_id": "6236762b5631d9e395f81e1ebccc4bf3ab9b24ac", "route": "text_rag", "category": "target", "allow_terminal_drift": true},
+    {"example_id": "5f2bade0881c719ab026bc2e2962e2ada96cdb25", "route": "text_rag", "category": "target", "allow_terminal_drift": true},
+    {"example_id": "5f2bade0881c719ab026bc2e2962e2ada96cdb25", "route": "controller_auto", "category": "target", "allow_terminal_drift": true},
+    {"example_id": "5f2bade0881c719ab026bc2e2962e2ada96cdb25", "route": "crag_guarded", "category": "target", "allow_terminal_drift": true},
+    {"example_id": "50cb50657572e315fd452a89f3e0be465094b66f", "route": "controller_auto", "category": "target", "allow_terminal_drift": true},
+    {"example_id": "bfbd6040cb95b179118557352e8e3899ef25c525", "route": "crag_guarded", "category": "target", "allow_terminal_drift": true},
+    {"example_id": "0737954caf66f2b4c898b356d2a3c43748b9706b", "route": "text_rag", "category": "harmful", "allow_terminal_drift": true},
+    {"example_id": "0737954caf66f2b4c898b356d2a3c43748b9706b", "route": "controller_auto", "category": "harmful", "allow_terminal_drift": true},
+    {"example_id": "0737954caf66f2b4c898b356d2a3c43748b9706b", "route": "crag_guarded", "category": "harmful", "allow_terminal_drift": true},
+    {"example_id": "784ce5a983c5f2cc95a2c60ce66f2a8a50f3636f", "route": "text_rag", "category": "harmful", "allow_terminal_drift": true},
+    {"example_id": "784ce5a983c5f2cc95a2c60ce66f2a8a50f3636f", "route": "controller_auto", "category": "harmful", "allow_terminal_drift": true},
+    {"example_id": "784ce5a983c5f2cc95a2c60ce66f2a8a50f3636f", "route": "crag_guarded", "category": "harmful", "allow_terminal_drift": true},
+    {"example_id": "1f085b9bb7bfd0d6c8cba1a9d73f08fcf2da7590", "route": "text_rag", "category": "harmful", "allow_terminal_drift": true},
+    {"example_id": "8ce11515634236165cdb06ba80b9a36a8b9099a2", "route": "text_rag", "category": "harmful", "allow_terminal_drift": true},
+    {"example_id": "a69a59b6c0ab27bcee1a780d6867df21e30aec08", "route": "crag_guarded", "category": "harmful", "allow_terminal_drift": true},
+    {"example_id": "8b9c12df9f89040f1485b3847a29f11b5c9262e0", "route": "text_rag", "category": "harmful", "allow_terminal_drift": true},
+    {"example_id": "2b3cac7af10d358d4081083962d03ea2798cf622", "route": "text_rag", "category": "improvement", "allow_terminal_drift": true},
+    {"example_id": "42084c41343e5a6ae58a22e5bfc5ce987b5173de", "route": "text_rag", "category": "improvement", "allow_terminal_drift": true},
+    {"example_id": "8b9c12df9f89040f1485b3847a29f11b5c9262e0", "route": "crag_guarded", "category": "improvement", "allow_terminal_drift": true},
+    {"example_id": "8bf7f1f93d0a2816234d36395ab40c481be9a0e0", "route": "text_rag", "category": "improvement", "allow_terminal_drift": true},
+    {"example_id": "8ce11515634236165cdb06ba80b9a36a8b9099a2", "route": "controller_auto", "category": "improvement", "allow_terminal_drift": true},
+    {"example_id": "8bb0011ad1d63996d5650770f3be18abdd9f7fc6", "route": "text_rag", "category": "contract_error", "allow_terminal_drift": true}
+  ]
+}

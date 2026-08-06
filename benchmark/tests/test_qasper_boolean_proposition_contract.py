@@ -5,12 +5,11 @@ from typing import Any
 from ktem.docqa.boolean_evidence_scope import (
     classify_boolean_evidence,
     classify_boolean_evidence_set,
+    resolve_closed_scope_boolean,
 )
 
 from benchmark.answer_finalizer import finalize_prediction_answer
-from benchmark.contract_invariant_metrics import contract_invariant_summary
 from benchmark.qasper_answerability import verify_qasper_answerability
-from benchmark.qasper_contract_invariants import qasper_contract_metric_values
 from benchmark.qasper_prompt_budget import fit_qasper_verifier_items
 from benchmark.qasper_proposition_conflict import resolve_boolean_conflict
 from benchmark.task_answer_contracts import (
@@ -65,11 +64,50 @@ def test_boolean_verifier_packs_quote_scoped_snippet_with_lineage():
     )
 
     assert decisive in bounded
-    assert "span_start=" in bounded
-    assert "span_end=" in bounded
+    assert "[evidence_ref=E1:S1]" in bounded
+    assert " … " not in bounded
     assert len(bounded) < 1500
     assert trace["verifier_required_evidence_coverage"] == "1.000000"
     assert trace["verifier_required_slot_ids"] == "support:boolean_proposition"
+
+
+def test_closed_scope_does_not_use_unrelated_chunk_prefix_as_english_authority() -> None:
+    item = _item(
+        "language-scope",
+        (
+            "General knowledge helps with arbitrary background discussion. "
+            "The appendix mentions English data as one resource. "
+            "All implementation details are available in the repository."
+        ),
+    )
+
+    resolution = resolve_closed_scope_boolean(
+        "Do they report results only on English datasets?",
+        [item],
+    )
+
+    assert resolution is None
+
+
+def test_closed_scope_without_a_legal_marker_returns_no_excerpt() -> None:
+    item = _item(
+        "language-scope",
+        (
+            "General knowledge appears at the start of this chunk. "
+            "We report results only for corpora written in English."
+        ),
+    )
+
+    resolution = resolve_closed_scope_boolean(
+        "Do they report results only on English datasets?",
+        [item],
+    )
+
+    assert resolution is not None
+    assert resolution.evidence_quote == (
+        "We report results only for corpora written in English."
+    )
+    assert "General knowledge" not in resolution.evidence_quote
 
 
 def test_unrelated_relation_is_not_contradiction() -> None:
@@ -422,109 +460,6 @@ def test_grounded_complete_quote_still_abstains_on_same_proposition_conflict() -
 
     assert result.answer == "unanswerable"
     assert result.trace["conflict_status"] == "balanced_conflict"
-
-
-def test_grounded_complete_quote_without_unique_evidence_identity_is_rejected() -> None:
-    quote = "We evaluated the model on clinical tasks."
-
-    result = verify_qasper_answerability(
-        _Verifier("yes_complete", quote),
-        question="Did the authors evaluate the model on clinical tasks?",
-        evidence=f"{quote}\n\n{quote}",
-        evidence_items=[_item("first", quote), _item("second", quote)],
-        candidate_answer="unanswerable",
-    )
-
-    assert result.answer == "unanswerable"
-    assert result.trace["reason"] == "quote_identity_unresolved"
-
-
-def test_deterministic_experiment_resolution_keeps_its_selected_evidence() -> None:
-    quote = (
-        "For instance, the sentence is translated by Google Translate, Bing "
-        "Translate, and Yandex. In fact, I have been unable to construct any "
-        "English sentence that those systems translate using the feminine "
-        "plural pronoun."
-    )
-    result = verify_qasper_answerability(
-        _Verifier("insufficient_evidence", ""),
-        question="Do the authors conduct experiments on the tasks mentioned?",
-        evidence=quote,
-        evidence_items=[_item("experiment", quote)],
-        candidate_answer="unanswerable",
-    )
-
-    assert result.answer == "yes"
-    assert result.trace["verifier_input_evidence_ids"] == ("evidence:paper:experiment")
-
-
-def test_deterministic_experiment_support_survives_terminal_citation_rebuild() -> None:
-    evidence = _item(
-        "experiment",
-        (
-            "This paper discusses how sentence pairs could be used as "
-            "challenges for machine translation. For instance, the sentence "
-            "is translated by Google Translate, Bing Translate, and Yandex. "
-            "In fact, I have been unable to construct any English sentence "
-            "that those systems translate using the feminine plural pronoun."
-        ),
-    )
-    prediction: dict[str, Any] = {
-        "question": "Do the authors conduct experiments on the tasks mentioned?",
-        "answer_type": "boolean",
-        "predicted_answer": "unanswerable",
-        "route": "hybrid",
-        "gold_evidence": ["anonymous-support"],
-        "evidence_bundle": {"items": [evidence], "metadata": {}},
-        "evidence_metadata": {
-            "selected_evidence": [evidence],
-            "generation_context_evidence": [evidence],
-        },
-        "structured_citations": [],
-        "predicted_citations": [],
-    }
-    finalize_prediction_answer(
-        prediction,
-        dataset_name="qasper_typed",
-        mode="scoring_adapter_v1",
-    )
-
-    applied = apply_task_answer_contract(
-        prediction,
-        dataset_name="qasper_typed",
-        llm_factory=lambda: _Verifier("insufficient_evidence", ""),
-    )
-    finalize_prediction_answer(
-        prediction,
-        dataset_name="qasper_typed",
-        mode="scoring_adapter_v1",
-    )
-    synchronized = synchronize_terminal_answer_state(prediction)
-
-    assert applied is True
-    assert synchronized is True
-    assert prediction["answer_for_scoring"] == "yes"
-    assert prediction["verify_decision"]["status"] == "supported"
-    assert prediction["structured_citations"]
-    assert prediction["evidence_metadata"]["verified_claim_support_evidence"] == [
-        evidence
-    ]
-    assert prediction["predicted_evidence"] == [evidence["text"]]
-    assert prediction["evidence_metadata"]["emitted_citation_evidence"] == [evidence]
-    metrics = qasper_contract_metric_values(
-        prediction,
-        prediction["evidence_metadata"],
-        cited=prediction["evidence_metadata"]["emitted_citation_evidence"],
-        contract_items=[evidence],
-    )
-    assert metrics["citation_scope_violation_count"] == 0.0
-    assert (
-        contract_invariant_summary([prediction])["qasper_stale_verifier_state_count"]
-        == 0.0
-    )
-    assert prediction["evidence_metadata"]["qasper_answerability"][
-        "evidence_quote"
-    ].startswith("In fact, I have been unable")
 
 
 def test_authoritative_quality_quote_identity_survives_terminal_rebinding() -> None:

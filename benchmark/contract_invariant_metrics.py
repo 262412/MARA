@@ -10,6 +10,7 @@ from ktem.docqa.evidence_locators import normalized_source_page_locators
 
 from .contract_gate_metrics import prediction_gate_metrics
 from .contract_invariant_summary import summarize_contract_invariants
+from .dataset_native_scores import qasper_evidence_f1_for_prediction
 from .execution_slot_contract_metrics import required_slot_reference_metrics
 from .finance_contract_violation_summary import (
     query_plan_calculation_plan_state_mismatch,
@@ -164,6 +165,9 @@ def _prediction_contract_metrics(
         "qasper_stale_verifier_state_count": float(
             _qasper_stale_verifier_state(prediction, metadata)
         ),
+        "stored_recomputed_qasper_evidence_f1_mismatch_count": float(
+            _stored_recomputed_qasper_evidence_f1_mismatch(prediction)
+        ),
         **qasper_contract_metric_values(
             prediction,
             metadata,
@@ -181,6 +185,21 @@ def _prediction_contract_metrics(
             generation_context=generation_context,
         ),
     }
+
+
+def _stored_recomputed_qasper_evidence_f1_mismatch(
+    prediction: dict[str, Any],
+) -> bool:
+    stored = (prediction.get("metrics") or {}).get("qasper_evidence_f1")
+    if stored is None:
+        return False
+    recomputed = qasper_evidence_f1_for_prediction(prediction)
+    if recomputed is None:
+        return False
+    try:
+        return abs(float(stored) - float(recomputed)) > 1e-9
+    except (TypeError, ValueError):
+        return True
 
 
 def _finance_state_metrics(

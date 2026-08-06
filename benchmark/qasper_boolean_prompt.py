@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .qasper_answerability_prompts import boolean_answerability_prompt
-from .qasper_prompt_budget import fit_qasper_verifier_items, fit_qasper_verifier_prompt
+from .qasper_prompt_budget import fit_qasper_verifier_items
 
 
 def fit_boolean_verifier_prompt(
@@ -25,7 +25,15 @@ def fit_boolean_verifier_prompt(
         )
 
     if evidence_items is None:
-        return fit_qasper_verifier_prompt(evidence, prompt_builder)
+        evidence_items = [
+            {
+                "evidence_id": "raw-evidence",
+                "source_id": "raw-evidence",
+                "evaluation_source_id": "raw-evidence",
+                "document_id": "raw-evidence",
+                "text": evidence,
+            }
+        ]
     return fit_qasper_verifier_items(
         evidence_items,
         prompt_builder,

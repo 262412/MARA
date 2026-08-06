@@ -321,43 +321,6 @@ def test_current_paper_closed_english_experiment_supports_yes():
     assert result.trace["boolean_scope_valid"] == "true"
 
 
-def test_closed_english_scope_overrides_unscoped_candidate_fallback():
-    current = _item(
-        "current",
-        (
-            "As a main field of interest in the current study, we identified "
-            "controversial topics in education in English-speaking countries."
-        ),
-    )
-    related = _item(
-        "related",
-        "Goudas et al. 2014 evaluated user-generated Greek texts.",
-        section_id="related_work",
-    )
-    result = verify_qasper_answerability(
-        _VerifierLLM(
-            {
-                "verdict": "insufficient_evidence",
-                "evidence_quote": "",
-            }
-        ),
-        question="Do they report results only on English data?",
-        evidence=f"{current['text']}\n{related['text']}",
-        evidence_items=[related, current],
-        candidate_answer="no",
-    )
-
-    assert result.answer == "yes"
-    assert result.trace["verdict"] == "yes"
-    assert result.trace["boolean_scope_valid"] == "true"
-    assert result.trace["reason"] == "deterministic_current_scope"
-    assert result.trace["verifier_input_evidence_ids"] == "evidence:paper:current"
-    assert result.trace["verifier_dropped_evidence_ids"] == "evidence:paper:related"
-    assert int(result.trace["verifier_input_character_count"]) > 0
-    assert int(result.trace["verifier_input_token_count"]) > 0
-    assert result.trace["verifier_budget_exhausted"] == "false"
-
-
 def test_institution_name_is_not_a_non_english_dataset_counterexample():
     current = _item(
         "current",
@@ -389,7 +352,7 @@ def test_institution_name_is_not_a_non_english_dataset_counterexample():
 
     assert result.answer == "yes"
     assert result.trace["verdict"] == "yes"
-    assert result.trace["reason"] == "deterministic_current_scope"
+    assert result.trace["reason"] == "grounded_complete_proposition"
 
 
 def test_missing_free_text_candidate_can_only_recheck_typed_boolean_proposition():

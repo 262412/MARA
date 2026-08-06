@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -164,6 +165,7 @@ class DocQAIndexCache:
             "size": size,
             "mtime_ns": mtime_ns,
             "requires_element": requires_element,
+            "deterministic_chunk_ids": _is_qasper_suite(self.config),
         }
         key = (
             app_data_dir,
@@ -171,6 +173,7 @@ class DocQAIndexCache:
             size,
             mtime_ns,
             requires_element,
+            identity["deterministic_chunk_ids"],
         )
         return key, identity
 
@@ -206,7 +209,11 @@ class DocQAIndexCache:
             indexed_paths=self.indexed_paths,
         )
         if paths:
-            runtime.index_paths(paths, reindex=False)
+            settings = qasper_deterministic_index_settings(self.config, runtime)
+            if settings is None:
+                runtime.index_paths(paths, reindex=False)
+            else:
+                runtime.index_paths(paths, reindex=False, settings=settings)
             self.indexed_paths.update(paths)
 
     def _reindex_incomplete_documents(
@@ -216,7 +223,11 @@ class DocQAIndexCache:
     ) -> None:
         paths = document_paths(documents)
         if paths:
-            runtime.index_paths(paths, reindex=True)
+            settings = qasper_deterministic_index_settings(self.config, runtime)
+            if settings is None:
+                runtime.index_paths(paths, reindex=True)
+            else:
+                runtime.index_paths(paths, reindex=True, settings=settings)
             self.indexed_paths.update(paths)
 
 
@@ -245,3 +256,21 @@ def route_requires_element(config: Any) -> bool:
         }
         or "doc_element" in allowed_routes
     )
+
+
+def qasper_deterministic_index_settings(
+    config: Any,
+    runtime: Any,
+) -> dict[str, Any] | None:
+    if not _is_qasper_suite(config):
+        return None
+    runtime_settings = deepcopy(runtime.load_settings())
+    runtime_settings[
+        f"index.options.{runtime.file_index.id}.deterministic_chunk_ids"
+    ] = True
+    return runtime_settings
+
+
+def _is_qasper_suite(config: Any) -> bool:
+    suite_name = str(config_value(config, "suite_name", "") or "").casefold()
+    return "qasper" in suite_name

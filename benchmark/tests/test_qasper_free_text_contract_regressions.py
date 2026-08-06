@@ -45,6 +45,75 @@ def test_question_restatement_cannot_mask_missing_answer_terms():
     assert result.trace["verdict"] == "unsupported"
 
 
+def test_free_text_verifier_binds_positive_quote_to_stable_ref() -> None:
+    quote = "The classification model uses labeled features."
+    support = {
+        "source_id": "paper",
+        "span_id": "support",
+        "canonical_start": 100,
+        "canonical_end": 100 + len(quote),
+        "text": quote,
+    }
+
+    result = verify_qasper_answerability(
+        _VerifierLLM(
+            {
+                "verdict": "supported",
+                "evidence_ref": "E1:S1",
+                "evidence_quote": quote,
+                "revised_answer": "",
+            }
+        ),
+        question="What features does the classification model use?",
+        evidence=quote,
+        evidence_items=[support],
+        candidate_answer="labeled features",
+    )
+
+    assert result.answer == "labeled features"
+    assert result.trace["evidence_ref"] == "E1:S1"
+
+
+def test_free_text_verifier_rejects_ref_quote_mismatch() -> None:
+    quote = "The classification model uses labeled features."
+    distractor = "The appendix lists optimizer settings."
+
+    result = verify_qasper_answerability(
+        _VerifierLLM(
+            {
+                "verdict": "supported",
+                "evidence_ref": "E2:S1",
+                "evidence_quote": quote,
+                "revised_answer": "",
+            }
+        ),
+        question="What features does the classification model use?",
+        evidence=f"{quote} {distractor}",
+        evidence_items=[
+            {
+                "source_id": "paper",
+                "span_id": "support",
+                "canonical_start": 0,
+                "canonical_end": len(quote),
+                "text": quote,
+            },
+            {
+                "source_id": "paper",
+                "span_id": "distractor",
+                "canonical_start": 100,
+                "canonical_end": 100 + len(distractor),
+                "text": distractor,
+            },
+        ],
+        candidate_answer="labeled features",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "evidence_ref_quote_mismatch"
+    assert result.trace.get("evidence_ref", "") == ""
+    assert result.trace.get("evidence_quote", "") == ""
+
+
 def test_terminal_punctuation_does_not_create_stale_verifier_state():
     decision = {
         "mode": "strict",

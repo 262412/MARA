@@ -59,6 +59,7 @@ from kotaemon.loaders import MathpixPDFReader
 from .artifact_cleanup import FileArtifactCleaner
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
 from .deletion import DeletionCoordinator
+from .deterministic_chunks import prepare_chunks_for_indexing
 from .element_index import docstore_batches_and_index_rows
 from .office_policy import prepare_office_parse_file
 from .source_storage import store_source_file
@@ -365,6 +366,7 @@ class IndexPipeline(BaseComponent):
     collection_name: str = "default"
     private: bool = False
     run_embedding_in_thread: bool = False
+    deterministic_chunk_ids: bool = False
     embedding: BaseEmbeddings
     last_indexing_status: dict | None = None
     parse_cache_dir: str | None = getattr(settings, "KH_PARSE_CACHE_DIR", None)
@@ -430,23 +432,20 @@ class IndexPipeline(BaseComponent):
             else:
                 non_text_docs.append(doc)
 
-        logger.debug("Got %d page thumbnails", len(thumbnail_docs))
-        page_label_to_thumbnail = {
-            doc.metadata["page_label"]: doc.doc_id for doc in thumbnail_docs
-        }
-
         if self.splitter:
             all_chunks = self.splitter(text_docs)
         else:
             all_chunks = text_docs
 
-        # add the thumbnails doc_id to the chunks
-        for chunk in all_chunks:
-            page_label = chunk.metadata.get("page_label", None)
-            if page_label and page_label in page_label_to_thumbnail:
-                chunk.metadata["thumbnail_doc_id"] = page_label_to_thumbnail[page_label]
+        logger.debug("Got %d page thumbnails", len(thumbnail_docs))
+        to_index_chunks = prepare_chunks_for_indexing(
+            all_chunks,
+            non_text_docs,
+            thumbnail_docs,
+            file_name=file_name,
+            deterministic_chunk_ids=self.deterministic_chunk_ids,
+        )
 
-        to_index_chunks = all_chunks + non_text_docs + thumbnail_docs
         status_tracker.start("chunk", count=len(to_index_chunks))
         status_tracker.finish("chunk", count=len(to_index_chunks))
         update_status()
@@ -755,6 +754,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
     reader_mode: str = Param("default", help="The reader mode")
     embedding: BaseEmbeddings
     run_embedding_in_thread: bool = False
+    deterministic_chunk_ids: bool = False
 
     @Param.auto(depends_on="reader_mode")
     def readers(self):
@@ -806,6 +806,9 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
             ],
             run_embedding_in_thread=use_quick_index_mode,
             reader_mode=user_settings.get("reader_mode", "default"),
+            deterministic_chunk_ids=bool(
+                user_settings.get("deterministic_chunk_ids", False)
+            ),
         )
         return obj
 
@@ -857,6 +860,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
             user_id=self.user_id,
             private=self.private,
             embedding=self.embedding,
+            deterministic_chunk_ids=self.deterministic_chunk_ids,
         )
 
         return pipeline

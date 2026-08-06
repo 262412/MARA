@@ -27,7 +27,7 @@ def test_qasper_native_score_computes_dataset_token_f1_as_mara_score():
 
     add_mara_oriented_metrics(prediction, dataset_name="qasper-dev")
 
-    assert prediction["mara_scoring_contract"] == "qasper_answer_evidence_f1_v2"
+    assert prediction["mara_scoring_contract"] == "qasper_answer_evidence_f1_v3"
     assert prediction["mara_primary_metric"] == "qasper_f1"
     assert prediction["mara_native_metrics"] == [
         "qasper_f1",
@@ -119,7 +119,7 @@ def test_qasper_native_score_computes_token_f1_when_metric_is_missing():
         dataset_name="qasper-dev",
     )
 
-    assert metadata["contract_id"] == "qasper_answer_evidence_f1_v2"
+    assert metadata["contract_id"] == "qasper_answer_evidence_f1_v3"
     assert metadata["answer_token_f1_contract"] == "token_f1_v2"
     assert metrics["qasper_f1"] == 0.5
     assert metrics["native_score"] == 0.5

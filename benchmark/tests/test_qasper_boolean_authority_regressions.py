@@ -8,6 +8,7 @@ import pytest
 from benchmark.answer_finalizer import finalize_prediction_answer
 from benchmark.contract_invariant_metrics import contract_invariant_summary
 from benchmark.qasper_answerability import verify_qasper_answerability
+from benchmark.qasper_evidence_identity import canonical_quote_spans
 from benchmark.task_answer_contracts import (
     apply_task_answer_contract,
     synchronize_terminal_answer_state,
@@ -15,9 +16,13 @@ from benchmark.task_answer_contracts import (
 
 
 class _Verifier:
-    def __init__(self, verdict: str, quote: str) -> None:
+    def __init__(self, verdict: str, quote: str, evidence_ref: str = "") -> None:
         self.response = json.dumps(
-            {"verdict": verdict, "evidence_quote": quote},
+            {
+                "verdict": verdict,
+                "evidence_ref": evidence_ref,
+                "evidence_quote": quote,
+            },
             ensure_ascii=False,
         )
 
@@ -34,6 +39,53 @@ def _item(evidence_id: str, text: str) -> dict[str, str]:
     }
 
 
+@pytest.mark.parametrize("candidate", ("yes", "no", "unanswerable"))
+def test_unrelated_transformers_quote_never_gains_candidate_dependent_authority(
+    candidate: str,
+) -> None:
+    question = "Is jiant compatible with models in any programming language?"
+    quote = (
+        "jiant provides support for a variety of model architectures, including "
+        "support for HuggingFace's Transformers."
+    )
+
+    result = verify_qasper_answerability(
+        _Verifier("no_complete", quote, "E1:S1"),
+        question=question,
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("jiant", quote)],
+        candidate_answer=candidate,
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["verdict"] == "insufficient_evidence"
+    assert result.trace["reason"] == "polarity_authority_unproven"
+    assert result.trace.get("evidence_ref", "") == ""
+    assert result.trace.get("evidence_quote", "") == ""
+    assert result.trace["quote_grounded"] == "false"
+    assert "authoritative_quote_evidence_id" not in result.trace
+
+
+def test_verifier_ref_must_bind_the_exact_contiguous_quote() -> None:
+    support = _item("support", "We evaluated the model on clinical tasks.")
+    distractor = _item("distractor", "The appendix lists training parameters.")
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", support["text"], "E2:S1"),
+        question="Did the authors evaluate the model on clinical tasks?",
+        answer_type="boolean",
+        evidence=f"{support['text']} {distractor['text']}",
+        evidence_items=[support, distractor],
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "evidence_ref_quote_mismatch"
+    assert result.trace.get("evidence_ref", "") == ""
+    assert result.trace.get("evidence_quote", "") == ""
+
+
 @pytest.mark.parametrize(
     ("case_id", "question", "quote", "expected_reason"),
     (
@@ -45,7 +97,7 @@ def _item(evidence_id: str, text: str) -> dict[str, str]:
                 "model with attention and conflict combined does better on cases "
                 "where pairs are non-duplicate and has very small difference."
             ),
-            "opposite_polarity_authority_unproven",
+            "polarity_authority_unproven",
         ),
         (
             "5f2bad",
@@ -55,7 +107,7 @@ def _item(evidence_id: str, text: str) -> dict[str, str]:
                 "computer vision and natural language processing based on Apache "
                 "MXNet (incubating)."
             ),
-            "opposite_polarity_authority_unproven",
+            "polarity_authority_unproven",
         ),
         (
             "50cb50",
@@ -145,8 +197,13 @@ def test_other_than_yes_binds_the_independent_alternative_span() -> None:
     assert result.answer == "yes"
     assert result.trace["action"] == "corrected_polarity"
     assert result.trace["authoritative_quote_evidence_id"] == ("evidence:paper:mctest")
-    assert result.trace["authoritative_quote_span_id"] == (
-        f"evidence:paper:mctest#quote:0:{len(mctest_quote)}"
+    assert (
+        result.trace["authoritative_quote_span_id"]
+        == canonical_quote_spans(
+            mctest,
+            mctest_quote,
+            text=mctest_quote,
+        )[0].identity
     )
     assert result.trace["final_support_evidence_ids"] == ["evidence:paper:mctest"]
 
@@ -198,8 +255,13 @@ def test_quality_control_exception_preserves_exact_authority_identity() -> None:
     assert result.answer == "no"
     assert result.trace["action"] == "corrected_polarity"
     assert result.trace["authoritative_quote_evidence_id"] == ("evidence:paper:quality")
-    assert result.trace["authoritative_quote_span_id"] == (
-        f"evidence:paper:quality#quote:0:{len(quote)}"
+    assert (
+        result.trace["authoritative_quote_span_id"]
+        == canonical_quote_spans(
+            _item("quality", quote),
+            quote,
+            text=quote,
+        )[0].identity
     )
     assert result.trace["final_support_evidence_ids"] == ["evidence:paper:quality"]
 
@@ -302,7 +364,7 @@ def test_rejected_authority_clears_terminal_support_and_citation_state() -> None
     assert synchronized is True
     assert prediction["answer_for_scoring"] == "unanswerable"
     assert prediction["terminal_answer_state"]["answer"] == "unanswerable"
-    assert trace["reason"] == "opposite_polarity_authority_unproven"
+    assert trace["reason"] == "polarity_authority_unproven"
     assert "authoritative_quote_evidence_id" not in trace
     assert prediction["evidence_metadata"]["verified_claim_support_evidence"] == []
     assert prediction["structured_citations"] == []

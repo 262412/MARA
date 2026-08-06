@@ -7,15 +7,32 @@ def json_structure_repair_prompt(
     response: str,
     *,
     allowed_values: tuple[str, ...],
+    include_evidence_ref: bool = False,
+    include_revised_answer: bool = False,
 ) -> str:
     values = ", ".join(f'"{value}"' for value in allowed_values)
+    keys = ["verdict"]
+    if include_evidence_ref:
+        keys.append("evidence_ref")
+    keys.append("evidence_quote")
+    if include_revised_answer:
+        keys.append("revised_answer")
+    rendered_keys = ", ".join(f'"{key}"' for key in keys[:-1])
+    if rendered_keys:
+        rendered_keys = f"{rendered_keys}, and "
+    rendered_keys = f'{rendered_keys}"{keys[-1]}"'
+    ref_instruction = (
+        " Preserve the original evidence_ref exactly when present."
+        if include_evidence_ref
+        else ""
+    )
     return (
         "/no_think\n"
         "Repair only the JSON structure of the verifier response below. "
         "Do not reconsider the evidence, question, candidate, verdict, or "
         "evidence quote. Preserve the original verdict and quote exactly when "
-        "they are present. Return one JSON object with exactly the keys "
-        '"verdict" and "evidence_quote". The allowed verdict values are: '
+        f"they are present.{ref_instruction} Return one JSON object with exactly "
+        f"the keys {rendered_keys}. The allowed verdict values are: "
         f"{values}.\n\n"
         f"VERIFIER RESPONSE:\n{response}"
     )
@@ -42,19 +59,23 @@ def answerability_prompt(
         "contradicts the core answer, and insufficient_core_evidence when the "
         "core relation is not established. For a positive verdict, quote "
         "the shortest exact evidence span, at most 20 words, that states the "
-        "question-candidate relation. If no such exact span exists, return "
-        "insufficient_core_evidence with an empty evidence_quote.\n\n"
+        "question-candidate relation, and copy the stable evidence_ref label "
+        "attached to that exact span. Never combine text from different refs. "
+        "If no such exact span exists, return insufficient_core_evidence with "
+        "an empty evidence_ref and evidence_quote.\n\n"
         f"QUESTION:\n{question}\n\n"
         f"RETRIEVED PAPER EVIDENCE:\n{evidence}\n\n"
         f"CANDIDATE ANSWER:\n{candidate_answer}\n\n"
-        'Return exactly {"verdict":"supported","evidence_quote":"...",'
-        '"revised_answer":""}, {"verdict":"supported_with_pruning",'
+        'Return exactly {"verdict":"supported","evidence_ref":"E1:S1",'
+        '"evidence_quote":"...","revised_answer":""}, '
+        '{"verdict":"supported_with_pruning","evidence_ref":"E1:S1",'
         '"evidence_quote":"...","revised_answer":"..."}, '
-        '{"verdict":"partially_supported","evidence_quote":"...",'
-        '"revised_answer":"..."}, {"verdict":"conflicting_core",'
+        '{"verdict":"partially_supported","evidence_ref":"E1:S1",'
+        '"evidence_quote":"...","revised_answer":"..."}, '
+        '{"verdict":"conflicting_core","evidence_ref":"E1:S1",'
         '"evidence_quote":"...","revised_answer":""}, or '
-        '{"verdict":"insufficient_core_evidence","evidence_quote":"",'
-        '"revised_answer":""}.'
+        '{"verdict":"insufficient_core_evidence","evidence_ref":"",'
+        '"evidence_quote":"","revised_answer":""}.'
     )
 
 
@@ -83,14 +104,19 @@ def boolean_answerability_prompt(*, question: str, evidence: str) -> str:
         "neither polarity is established. Absence of a statement never proves "
         "no. For complete or partial verdicts, include the shortest exact "
         "contiguous evidence span, at most 60 words, that supports the verdict. "
-        "Use an empty evidence_quote only for insufficient_evidence.\n\n"
+        "Copy the stable evidence_ref label attached to that exact span. Never "
+        "combine text from different refs. Use empty evidence_ref and "
+        "evidence_quote only for insufficient_evidence.\n\n"
         f"QUESTION:\n{question}\n\n"
         f"RETRIEVED PAPER EVIDENCE:\n{evidence}\n\n"
-        'Return exactly {"verdict":"yes_complete","evidence_quote":"..."}, '
-        '{"verdict":"no_complete","evidence_quote":"..."}, '
-        '{"verdict":"yes_partial","evidence_quote":"..."}, '
-        '{"verdict":"no_partial","evidence_quote":"..."}, or '
-        '{"verdict":"insufficient_evidence","evidence_quote":""}.'
+        'Return exactly {"verdict":"yes_complete","evidence_ref":"E1:S1",'
+        '"evidence_quote":"..."}, {"verdict":"no_complete",'
+        '"evidence_ref":"E1:S1","evidence_quote":"..."}, '
+        '{"verdict":"yes_partial","evidence_ref":"E1:S1",'
+        '"evidence_quote":"..."}, {"verdict":"no_partial",'
+        '"evidence_ref":"E1:S1","evidence_quote":"..."}, or '
+        '{"verdict":"insufficient_evidence","evidence_ref":"",'
+        '"evidence_quote":""}.'
     )
 
 

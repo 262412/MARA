@@ -38,7 +38,7 @@ def test_qasper_answerability_bounds_long_retrieved_evidence_before_llm_call():
     assert result.answer == "yes"
     assert len(llm.calls) == 1
     assert len(llm.calls[0][0]) <= 7000
-    assert result.trace["evidence_budget_status"] == "truncated"
+    assert result.trace["evidence_budget_status"] == "item_packed"
     assert int(result.trace["evidence_chars_used"]) < int(
         result.trace["evidence_chars_original"]
     )
@@ -285,7 +285,7 @@ def test_qasper_answerability_abstains_on_incomplete_conflicting_verdict():
     assert result.trace["action"] == "abstained_insufficient_evidence"
     assert result.trace["primary_answer"] == "yes"
     assert result.trace["adjudicated_polarity"] == "insufficient_evidence"
-    assert result.trace["reason"] == "opposite_polarity_authority_unproven"
+    assert result.trace["reason"] == "current_paper_scope_not_established"
 
 
 def test_qasper_boolean_abstains_when_verifier_cannot_bind_a_complete_quote():
@@ -325,9 +325,8 @@ def test_qasper_boolean_abstains_when_direct_polarities_are_balanced():
     )
 
     assert result.answer == "unanswerable"
-    assert result.trace["action"] == "abstained_insufficient_evidence"
-    assert result.trace["conflict_status"] == "insufficient_evidence"
-    assert result.trace["reason"] == "opposite_polarity_authority_unproven"
+    assert result.trace["action"] == "abstained_polarity_conflict"
+    assert result.trace["conflict_status"] == "balanced_conflict"
 
 
 def test_qasper_boolean_question_reconsiders_primary_unanswerable():
@@ -491,7 +490,7 @@ def test_qasper_complete_verdict_rejects_topical_quote_without_action_relation()
 
     assert result.answer == "unanswerable"
     assert result.trace["verdict"] == "insufficient_evidence"
-    assert result.trace["quote_grounded"] == "true"
+    assert result.trace["quote_grounded"] == "false"
     assert result.trace["quote_supports_relation"] == "false"
     assert result.trace["reason"] == "grounded_quote_incomplete_relation"
 
@@ -589,5 +588,5 @@ def test_qasper_boolean_verifier_requires_quote_to_support_question_relation():
     assert result.answer == "unanswerable"
     assert result.trace["verdict"] == "insufficient_evidence"
     assert result.trace["action"] == "abstained_insufficient_evidence"
-    assert result.trace["quote_grounded"] == "true"
+    assert result.trace["quote_grounded"] == "false"
     assert result.trace["quote_supports_relation"] == "false"
