@@ -18,6 +18,9 @@ class SuccessfulIndexService:
     def list_sessions(self) -> list[dict]:
         return []
 
+    def get_session(self, conversation_id: str) -> dict:
+        return {"conversation_id": conversation_id}
+
     def get_import_capabilities(self) -> dict[str, list[str]]:
         return {"supported_extensions": [".txt"]}
 
