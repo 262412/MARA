@@ -158,28 +158,55 @@ class DeletionCoordinator:
     ) -> None:
         if not target_ids or store is None:
             return
-        refresh_docstore_index = False
+        try:
+            self._delete_store_batch(stage, store, target_ids)
+        except Exception as exc:
+            if not _is_missing_error(exc):
+                raise _stage_error(stage, file_id, exc) from exc
+            self._delete_store_individually(stage, store, target_ids, file_id)
+        if stage == "docstore":
+            self._refresh_docstore_index(store, file_id)
+
+    def _delete_store_batch(
+        self,
+        stage: str,
+        store: Any,
+        target_ids: tuple[str, ...],
+    ) -> None:
+        if stage == "docstore":
+            self._delete_docstore_entries(store, target_ids)
+        else:
+            store.delete(list(target_ids))
+
+    def _delete_store_individually(
+        self,
+        stage: str,
+        store: Any,
+        target_ids: tuple[str, ...],
+        file_id: str,
+    ) -> None:
         for target_id in target_ids:
             try:
                 if stage == "docstore":
-                    self._delete_docstore_entry(store, target_id)
-                    refresh_docstore_index = True
+                    self._delete_docstore_entries(store, (target_id,))
                 else:
                     store.delete([target_id])
             except Exception as exc:
                 if _is_missing_error(exc):
                     continue
                 raise _stage_error(stage, file_id, exc) from exc
-        if stage == "docstore" and refresh_docstore_index:
-            self._refresh_docstore_index(store, file_id)
 
-    def _delete_docstore_entry(self, store: Any, target_id: str) -> None:
+    def _delete_docstore_entries(
+        self,
+        store: Any,
+        target_ids: tuple[str, ...],
+    ) -> None:
         try:
-            store.delete([target_id], refresh_indices=False)
+            store.delete(list(target_ids), refresh_indices=False)
         except TypeError as exc:
             if "refresh_indices" not in str(exc):
                 raise
-            store.delete([target_id])
+            store.delete(list(target_ids))
 
     def _refresh_docstore_index(self, store: Any, file_id: str) -> None:
         create_fts_index = getattr(store, "create_fts_index", None)

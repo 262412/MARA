@@ -196,15 +196,58 @@ def test_deletes_all_docstore_relations_then_sql(deletion_db):
 
     assert (result.file_id, result.name) == ("file-1", "report.pdf")
     assert vectors.calls == [["vector-1"]]
-    assert documents.calls == [["document-1"], ["element-1"], ["graph-1"]]
-    assert documents.delete_kwargs == [
-        {"refresh_indices": False},
-        {"refresh_indices": False},
-        {"refresh_indices": False},
-    ]
+    assert documents.calls == [["document-1", "element-1", "graph-1"]]
+    assert documents.delete_kwargs == [{"refresh_indices": False}]
     assert documents.refresh_calls == 1
     assert not (deletion_db[3] / "stored.bin").exists()
     assert _row_counts(deletion_db) == (0, 0)
+
+
+def test_large_relation_sets_are_deleted_in_one_call_per_store(deletion_db):
+    _seed_file(deletion_db)
+    engine, _source_table, index_table, _storage = deletion_db
+    vector_ids = {"vector-1", *(f"vector-{index}" for index in range(2, 102))}
+    document_ids = {
+        "document-1",
+        "element-1",
+        "graph-1",
+        *(f"document-{index}" for index in range(2, 102)),
+    }
+    with Session(engine) as session:
+        session.add_all(
+            [
+                index_table(
+                    source_id="file-1",
+                    target_id=target_id,
+                    relation_type=relation_type,
+                    user="user-1",
+                )
+                for relation_type, target_ids in (
+                    ("vector", vector_ids - {"vector-1"}),
+                    (
+                        "document",
+                        document_ids - {"document-1", "element-1", "graph-1"},
+                    ),
+                )
+                for target_id in target_ids
+            ]
+        )
+        session.commit()
+    vectors = _Store(vector_ids)
+    documents = _Store(document_ids)
+
+    _coordinator(
+        deletion_db,
+        vector_store=vectors,
+        doc_store=documents,
+    ).delete("file-1", user_id="user-1")
+
+    assert len(vectors.calls) == 1
+    assert set(vectors.calls[0]) == vector_ids
+    assert len(documents.calls) == 1
+    assert set(documents.calls[0]) == document_ids
+    assert documents.delete_kwargs == [{"refresh_indices": False}]
+    assert documents.refresh_calls == 1
 
 
 @pytest.mark.parametrize("failed_stage", ["vector", "docstore"])
