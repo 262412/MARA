@@ -6,7 +6,7 @@ import threading
 import unittest
 from pathlib import Path
 
-from .index_tasks import IndexTaskConflictError, IndexTaskManager
+from .index_tasks import IndexTaskConflictError, IndexTaskManager, _missing_module_name
 
 
 class StubIndexService:
@@ -49,6 +49,14 @@ def wait_for_terminal(manager: IndexTaskManager, task_id: str) -> dict:
 
 
 class IndexTaskManagerTest(unittest.TestCase):
+    def test_missing_module_diagnostic_is_narrow_and_path_free(self) -> None:
+        missing = ModuleNotFoundError(name="lancedb.fts")
+        unsafe = ModuleNotFoundError(name="/private/source/module.py")
+
+        self.assertEqual(_missing_module_name(missing), "lancedb.fts")
+        self.assertEqual(_missing_module_name(unsafe), "unknown")
+        self.assertEqual(_missing_module_name(RuntimeError("failed")), "none")
+
     def test_runs_in_background_deduplicates_and_retries_only_failed_sources(
         self,
     ) -> None:

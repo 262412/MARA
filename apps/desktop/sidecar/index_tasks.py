@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import errno
 import logging
+import re
 import sqlite3
 import threading
 import time
@@ -242,12 +243,7 @@ class IndexTaskManager:
                     reindex=task.reindex,
                 )
             except Exception as exc:
-                LOGGER.error(
-                    "Index task failed task_id=%s file_name=%s error_type=%s",
-                    task_id,
-                    source.name,
-                    type(exc).__name__,
-                )
+                LOGGER.error("%s", _index_failure_log(task_id, source.name, exc))
                 result = {
                     "successes": [],
                     "failures": [_failure_from_exception(source.name, exc)],
@@ -432,6 +428,23 @@ def _safe_failure(name: str) -> dict[str, Any]:
         "message": "MARA could not index this file.",
         "retryable": True,
     }
+
+
+def _index_failure_log(task_id: str, file_name: str, error: Exception) -> str:
+    return (
+        f"Index task failed task_id={task_id} file_name={file_name} "
+        f"error_type={type(error).__name__} "
+        f"missing_module={_missing_module_name(error)}"
+    )
+
+
+def _missing_module_name(error: Exception) -> str:
+    if not isinstance(error, ModuleNotFoundError):
+        return "none"
+    name = error.name
+    if isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9_.]+", name):
+        return name
+    return "unknown"
 
 
 def _known_failure(name: str, code: str, message: str) -> dict[str, Any]:
