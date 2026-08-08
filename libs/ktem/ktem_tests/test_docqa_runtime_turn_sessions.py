@@ -130,6 +130,44 @@ def test_runtime_turn_collects_generator_returned_chat_document():
     }
 
 
+def test_runtime_turn_passes_explicit_generation_contract_to_pipeline():
+    pipeline = _GenerationCapturePipeline()
+    prepared = _PreparedPipeline(
+        pipeline=pipeline,
+        reasoning_state={"pipeline": {"step": "done"}},
+        selected_file_ids=[],
+        active_file_id="",
+        active_file_name="",
+        qa_scope="document",
+        page_number=None,
+        selected_text="",
+        graph_context={},
+        settings={},
+        reasoning_id="mara",
+    )
+    request = DocQARequest(
+        prompt="Question",
+        state={"app": {}},
+        generation_temperature=0,
+        generation_top_p=1,
+        generation_seed=20260724,
+    )
+
+    _runtime_turn.collect_stream_result(
+        prepared,
+        request,
+        conversation_id="conv-1",
+        history=[],
+        empty_message="empty",
+    )
+
+    assert pipeline.generation_kwargs == {
+        "temperature": 0,
+        "top_p": 1,
+        "seed": 20260724,
+    }
+
+
 def test_runtime_sessions_prepares_append_and_regen_histories():
     appended = _runtime_sessions.prepare_conversation_histories(
         retrieval_message="refs-2",
@@ -273,3 +311,16 @@ class _ReturnedChatPipeline:
             },
         )
         return Document(channel="chat", content="returned final answer")
+
+
+class _GenerationCapturePipeline:
+    def __init__(self):
+        self.generation_kwargs = {}
+
+    @staticmethod
+    def get_info():
+        return {"id": "mara"}
+
+    def stream(self, _prompt, _conversation_id, _history, **kwargs):
+        self.generation_kwargs = dict(kwargs)
+        yield Document(channel="chat", content="answer")

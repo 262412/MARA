@@ -6,6 +6,7 @@ from typing import Any
 
 from ktem.docqa.evidence_identity import identity_of
 
+from .generation_contract import benchmark_generation_trace
 from .qasper_answerability_prompts import (
     answerability_prompt,
     json_structure_repair_prompt,
@@ -394,6 +395,7 @@ def _call_verifier(
         max_tokens=max_tokens,
         response_format=QASPER_ANSWERABILITY_RESPONSE_FORMAT,
         temperature=0,
+        top_p=1,
         seed=seed,
     )
     response_text = getattr(response, "text", "") or str(response)
@@ -404,7 +406,7 @@ def _call_verifier(
             evidence_ref,
             quote,
             revised_answer,
-            _initial_parse_trace(verdict, response_text),
+            _initial_parse_trace(verdict, response_text, seed=seed),
         )
 
     repair_response = llm(
@@ -417,6 +419,7 @@ def _call_verifier(
         max_tokens=max_tokens,
         response_format=QASPER_ANSWERABILITY_RESPONSE_FORMAT,
         temperature=0,
+        top_p=1,
         seed=seed,
     )
     repaired_text = getattr(repair_response, "text", "") or str(repair_response)
@@ -432,14 +435,21 @@ def _call_verifier(
             "repair_status": "ok" if verdict else "error",
             "initial_response": str(response_text),
             "repair_response": str(repaired_text),
+            **benchmark_generation_trace(seed),
         },
     )
 
 
-def _initial_parse_trace(verdict: str, response: str) -> dict[str, str]:
+def _initial_parse_trace(
+    verdict: str,
+    response: str,
+    *,
+    seed: int,
+) -> dict[str, str]:
     trace = {
         "parser_status": "ok" if verdict else "error",
         "repair_attempted": "false",
+        **benchmark_generation_trace(seed),
     }
     if not verdict:
         trace.update(

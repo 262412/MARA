@@ -117,7 +117,9 @@ def prediction_gate_metrics(
     selected: list[dict[str, Any]],
     generation_context: list[dict[str, Any]],
 ) -> dict[str, float | None]:
-    answerable = _answerable_document_qa(prediction)
+    answerable = _answerable_document_qa(prediction) and _document_qa_applicable(
+        prediction
+    )
     evidence_metrics = _evidence_gate_metrics(
         answerable,
         metadata,
@@ -178,7 +180,8 @@ def _citation_gate_metrics(
     answerable: bool,
 ) -> dict[str, float | None]:
     accepted = _accepted_answer(prediction)
-    required = accepted and bool(prediction.get("gold_evidence"))
+    applicable = _document_qa_applicable(prediction)
+    required = applicable and accepted and bool(prediction.get("gold_evidence"))
     emitted = _has_emitted_citation(prediction, metadata)
     execution = _calculation_executed(metadata) or _bundle_calculation_executed(
         prediction
@@ -195,9 +198,18 @@ def _citation_gate_metrics(
             execution_provenance,
         ),
         "accepted_answer_count": float(accepted),
-        "accepted_answer_citation_emission": _when(accepted, emitted),
-        "verified_claim_support_coverage": _when(accepted, verified_support),
-        "final_answer_citation_emission": _when(accepted, emitted),
+        "accepted_answer_citation_emission": _when(
+            applicable and accepted,
+            emitted,
+        ),
+        "verified_claim_support_coverage": _when(
+            applicable and accepted,
+            verified_support,
+        ),
+        "final_answer_citation_emission": _when(
+            applicable and accepted,
+            emitted,
+        ),
     }
 
 
@@ -321,6 +333,17 @@ def _answerable_document_qa(prediction: dict[str, Any]) -> bool:
         str(answer or "").strip() and not is_abstention_answer(str(answer))
         for answer in prediction.get("gold_answers") or []
     )
+
+
+def _document_qa_applicable(prediction: dict[str, Any]) -> bool:
+    role = str(prediction.get("benchmark_role") or "").strip().lower()
+    route = (
+        str(prediction.get("route") or prediction.get("route_id") or "")
+        .strip()
+        .lower()
+        .replace("-", "_")
+    )
+    return role != "diagnostic" and route not in {"direct", "direct_answer"}
 
 
 def _has_emitted_citation(

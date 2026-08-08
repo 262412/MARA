@@ -106,7 +106,15 @@ def consume_stream_result(
     history: list,
     result: TurnStreamResult,
 ) -> Iterator[dict[str, Any]]:
-    stream = iter(prepared.pipeline.stream(request.prompt, conversation_id, history))
+    generation_kwargs = _generation_kwargs_for_request(request)
+    stream = iter(
+        prepared.pipeline.stream(
+            request.prompt,
+            conversation_id,
+            history,
+            **generation_kwargs,
+        )
+    )
     while True:
         try:
             response = next(stream)
@@ -116,6 +124,15 @@ def consume_stream_result(
                 yield from _ingest_response_event(response, prepared, result)
             break
         yield from _ingest_response_event(response, prepared, result)
+
+
+def _generation_kwargs_for_request(request: DocQARequest) -> dict[str, Any]:
+    values = {
+        "temperature": request.generation_temperature,
+        "top_p": request.generation_top_p,
+        "seed": request.generation_seed,
+    }
+    return {key: value for key, value in values.items() if value is not None}
 
 
 def _ingest_response_event(

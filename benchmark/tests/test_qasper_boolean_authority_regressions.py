@@ -67,7 +67,7 @@ def test_unrelated_transformers_quote_never_gains_candidate_dependent_authority(
     assert "authoritative_quote_evidence_id" not in result.trace
 
 
-def test_verifier_ref_must_bind_the_exact_contiguous_quote() -> None:
+def test_verifier_ref_is_rebound_when_quote_has_one_canonical_prompt_span() -> None:
     support = _item("support", "We evaluated the model on clinical tasks.")
     distractor = _item("distractor", "The appendix lists training parameters.")
 
@@ -80,10 +80,225 @@ def test_verifier_ref_must_bind_the_exact_contiguous_quote() -> None:
         candidate_answer="unanswerable",
     )
 
+    assert result.answer == "yes"
+    assert result.trace["reason"] == "grounded_complete_proposition"
+    assert result.trace["evidence_ref"] == "E1:S1"
+    assert result.trace["evidence_ref_rebound"] == "true"
+    assert result.trace["authoritative_quote_evidence_id"] == "evidence:paper:support"
+
+
+def test_verifier_ref_mismatch_is_rejected_when_quote_occurs_more_than_once() -> None:
+    quote = "We evaluated the model on clinical tasks."
+    repeated = _item("repeated", f"{quote} {quote}")
+    distractor = _item("distractor", "The appendix lists training parameters.")
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote, "E2:S1"),
+        question="Did the authors evaluate the model on clinical tasks?",
+        answer_type="boolean",
+        evidence=f"{repeated['text']} {distractor['text']}",
+        evidence_items=[repeated, distractor],
+        candidate_answer="unanswerable",
+    )
+
     assert result.answer == "unanswerable"
     assert result.trace["reason"] == "evidence_ref_quote_mismatch"
     assert result.trace.get("evidence_ref", "") == ""
     assert result.trace.get("evidence_quote", "") == ""
+
+
+def test_all_quantifier_rejects_all_applied_to_an_unrelated_object() -> None:
+    question = "Did they evaluate all datasets?"
+    quote = "We evaluated all models, but one dataset was described in the appendix."
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote, "E1:S1"),
+        question=question,
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("wrong-all-object", quote)],
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "quantified_object_scope_incomplete"
+
+
+@pytest.mark.parametrize("marker", ("every", "each"))
+def test_every_and_each_use_closed_all_scope(marker: str) -> None:
+    question = f"Did they evaluate {marker} dataset?"
+    quote = f"We evaluated {marker} dataset."
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote, "E1:S1"),
+        question=question,
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("all-synonym", quote)],
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["boolean_quantifier"] == "all"
+    assert result.trace["boolean_scope_reason"] == "quantified_object_scope_complete"
+
+
+def test_all_with_explicit_count_uses_closed_object_scope() -> None:
+    question = "Did they evaluate all 3 datasets?"
+    quote = "We evaluated all 3 datasets."
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote, "E1:S1"),
+        question=question,
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("all-explicit-count", quote)],
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["boolean_quantifier"] == "all"
+    assert result.trace["boolean_scope_reason"] == "quantified_object_scope_complete"
+
+
+@pytest.mark.parametrize("marker", ("every", "each"))
+def test_every_and_each_reject_explicit_exceptions(marker: str) -> None:
+    question = f"Did they evaluate {marker} dataset?"
+    quote = f"We evaluated {marker} dataset except one."
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote, "E1:S1"),
+        question=question,
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("all-synonym-exception", quote)],
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "quantified_object_scope_incomplete"
+
+
+@pytest.mark.parametrize(
+    "quote",
+    (
+        "We evaluated all models and one dataset.",
+        "We evaluated every model, including one dataset.",
+    ),
+)
+def test_all_quantifier_does_not_float_across_a_mixed_object_clause(quote: str) -> None:
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote, "E1:S1"),
+        question="Did they evaluate all datasets?",
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("floating-all", quote)],
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "quantified_object_scope_incomplete"
+
+
+def test_only_quantifier_does_not_float_across_a_mixed_object_clause() -> None:
+    quote = "We evaluated only models and one dataset."
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote, "E1:S1"),
+        question="Did they evaluate only datasets?",
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("floating-only", quote)],
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "quantified_object_scope_incomplete"
+
+
+@pytest.mark.parametrize(
+    "quote",
+    (
+        "We evaluated only datasets, but also models.",
+        "We evaluated only datasets, but we also evaluated models.",
+        "We evaluated only datasets and we evaluated models.",
+        "We evaluated only datasets and one model.",
+        "Only datasets and one model were evaluated.",
+        "Only datasets and models were evaluated.",
+        "We evaluated only datasets, with models as well.",
+        "We evaluated only datasets, except models.",
+    ),
+)
+def test_only_quantifier_rejects_additional_target_objects(quote: str) -> None:
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote, "E1:S1"),
+        question="Did they evaluate only datasets?",
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("only-extra-object", quote)],
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "quantified_object_scope_incomplete"
+
+
+@pytest.mark.parametrize(
+    "quote",
+    (
+        "We evaluated all datasets, but did not evaluate one dataset.",
+        "We evaluated all datasets; however, one dataset was not evaluated.",
+        "We evaluated all datasets, whereas one dataset was omitted.",
+        "We evaluated all datasets except one.",
+        "All datasets except one were evaluated.",
+        "We evaluated all datasets, but one was omitted.",
+    ),
+)
+def test_all_quantifier_rejects_explicit_target_object_exceptions(quote: str) -> None:
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote, "E1:S1"),
+        question="Did they evaluate all datasets?",
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("all-object-exception", quote)],
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "quantified_object_scope_incomplete"
+
+
+def test_only_quantifier_accepts_explicit_exclusion_of_other_objects() -> None:
+    quote = "We evaluated only datasets, no models."
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote, "E1:S1"),
+        question="Did they evaluate only datasets?",
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("only-explicit-exclusion", quote)],
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["boolean_scope_reason"] == "quantified_object_scope_complete"
+
+
+def test_count_quantifier_rejects_another_papers_complete_count() -> None:
+    question = "Did they collect the two datasets?"
+    quote = "Another paper collected both datasets."
+
+    result = verify_qasper_answerability(
+        _Verifier("yes_complete", quote, "E1:S1"),
+        question=question,
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("third-party-count", quote)],
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "cited_work_does_not_establish_current_paper_claim"
 
 
 @pytest.mark.parametrize(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .deterministic_ranking import quantized_score, ranking_contract_trace
 from .evidence_identity import identity_of
 
 
@@ -24,7 +25,7 @@ def ranking_trace(
     backend_output_identities: list[str] | None = None,
     scored_count: int | None = None,
 ) -> dict[str, object]:
-    return {
+    trace = {
         "candidate_stage": "post_fusion",
         "candidate_limit": candidate_limit,
         "candidate_input_count": input_count,
@@ -59,6 +60,8 @@ def ranking_trace(
         ),
         "failure_reason": failure_reason,
     }
+    trace.update(ranking_contract_trace())
+    return trace
 
 
 def materialize_reranked_candidates(
@@ -112,7 +115,12 @@ def materialize_reranked_candidates(
             loaded=bool(backend),
             failure_reason="missing_complete_execution_trace",
         )
-    scored.sort(key=lambda row: (-float(row[0] or 0.0), row[1]))
+    scored.sort(
+        key=lambda row: (
+            -quantized_score(row[0]),
+            identity_of(row[2]).key,
+        )
+    )
     output = [item for _score, _index, item in scored[:limit]]
     output = _dedupe_ranked(output)
     return output, ranking_trace(
@@ -200,7 +208,10 @@ def _observed_reranker_output(
     ranked = sorted(
         by_identity.items(),
         key=lambda item: (
-            -max(float(observation["score"]) for observation in observations[item[0]]),
+            -max(
+                quantized_score(observation["score"])
+                for observation in observations[item[0]]
+            ),
             item[0],
         ),
     )
@@ -384,16 +395,8 @@ def _materialize_from_execution_trace(
     configured = bool(trace.get("configured"))
     loaded = bool(trace.get("loaded"))
     executed = bool(trace.get("executed"))
-    input_identities = [
-        str(value).strip()
-        for value in trace.get("input_identities") or []
-        if str(value).strip()
-    ]
-    output_identities = [
-        str(value).strip()
-        for value in trace.get("output_identities") or []
-        if str(value).strip()
-    ]
+    input_identities = _trace_values(trace, "input_identities")
+    output_identities = _trace_values(trace, "output_identities")
     backend = str(trace.get("backend") or "").strip()
     model = str(trace.get("model") or "").strip()
     score_field = str(trace.get("score_field") or "reranker_score").strip()
@@ -424,7 +427,12 @@ def _materialize_from_execution_trace(
             or str(item.get("canonical_id") or "") in input_set
         )
     ]
-    scored.sort(key=lambda row: (-float(row[0] or 0.0), row[1]))
+    scored.sort(
+        key=lambda row: (
+            -quantized_score(row[0]),
+            identity_of(row[2]).key,
+        )
+    )
     backend_output_count = int(
         trace.get("backend_output_count")
         or trace.get("output_count")

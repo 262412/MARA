@@ -57,6 +57,7 @@ def route_ragtruth_answer(pipeline: Any, request: Any, bundle: Any) -> str | Non
     answering_pipeline = getattr(pipeline, "answering_pipeline")
     llm = getattr(answering_pipeline, "llm")
     prompt = str(getattr(request, "prompt", "") or "")
+    generation_contract = _generation_contract(request)
     candidate_response = llm(
         [
             SystemMessage(content=RAGTRUTH_SYSTEM_PROMPT),
@@ -64,9 +65,9 @@ def route_ragtruth_answer(pipeline: Any, request: Any, bundle: Any) -> str | Non
         ],
         max_tokens=768,
         response_format=RAGTRUTH_RESPONSE_FORMAT,
-        temperature=0,
-        seed=RAGTRUTH_JUDGE_SEED,
+        **generation_contract,
     )
+    bundle.metadata["generation_contract"] = generation_contract
     bundle.metadata["ragtruth_task_prompt_chars"] = len(prompt)
     candidate_answer = str(getattr(candidate_response, "text", "") or "")
     blocks = ragtruth_task_blocks(prompt)
@@ -88,8 +89,7 @@ def route_ragtruth_answer(pipeline: Any, request: Any, bundle: Any) -> str | Non
         ],
         max_tokens=256,
         response_format=claim_verifier_response_format(len(claims)),
-        temperature=0,
-        seed=RAGTRUTH_JUDGE_SEED,
+        **generation_contract,
     )
     candidates = candidate_claim_indices(candidate_answer, claims)
     unsupported = unsupported_claim_indices(
@@ -125,6 +125,17 @@ def route_ragtruth_answer(pipeline: Any, request: Any, bundle: Any) -> str | Non
         selected_unsupported=selected_unsupported,
     )
     return answer
+
+
+def _generation_contract(request: Any) -> dict[str, float | int]:
+    temperature = getattr(request, "generation_temperature", None)
+    top_p = getattr(request, "generation_top_p", None)
+    seed = getattr(request, "generation_seed", None)
+    return {
+        "temperature": 0 if temperature is None else float(temperature),
+        "top_p": 1 if top_p is None else float(top_p),
+        "seed": RAGTRUTH_JUDGE_SEED if seed is None else int(seed),
+    }
 
 
 def _record_detector_trace(

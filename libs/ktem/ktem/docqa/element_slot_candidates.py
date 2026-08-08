@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
+from .deterministic_ranking import quantized_score
 from .evidence_identity import identity_of
 from .finance_query_planning import finance_metric_evidence_matches
 from .financial_statement_identity import matches_required_financial_identity
@@ -100,7 +101,10 @@ def _execution_parent_candidates(
                 for index, item in enumerate(ranked)
                 if _execution_parent_score(slot, item) > 0
             ),
-            key=lambda row: (-row[0], row[1]),
+            key=lambda row: (
+                -quantized_score(row[0]),
+                identity_of(row[2]).key,
+            ),
         )
         for _score, _index, parent in parents[:EXECUTION_PARENT_CANDIDATE_QUOTA]:
             identity = identity_of(parent).key

@@ -74,6 +74,7 @@ def compare_prediction_runs(
         "canonical_retrieved_evidence_order_drift_count": _count(
             rows, "canonical_retrieved_evidence_order_drift"
         ),
+        "candidate_state_drift_count": _count(rows, "candidate_state_drift"),
         "raw_verdict_drift_count": _count(rows, "raw_verdict_drift"),
         "quote_drift_count": _count(rows, "quote_drift"),
         "reason_drift_count": _count(rows, "reason_drift"),
@@ -125,6 +126,8 @@ def _prediction_diff(
         != set(candidate_retrieval),
         "canonical_retrieved_evidence_order_drift": baseline_retrieval
         != candidate_retrieval,
+        "candidate_state_drift": _candidate_state(baseline)
+        != _candidate_state(candidate),
         "raw_verdict_drift": _normalized(baseline_trace.get("raw_verifier_verdict"))
         != _normalized(candidate_trace.get("raw_verifier_verdict")),
         "quote_drift": _normalized(baseline_trace.get("evidence_quote"))
@@ -281,8 +284,31 @@ def _canonical_citations(prediction: dict[str, Any]) -> set[str]:
 
 def _authority_state(prediction: dict[str, Any]) -> tuple[str, ...]:
     trace = _qasper_trace(prediction)
+    authoritative_id = str(trace.get("authoritative_quote_evidence_id") or "")
+    authoritative_item = _runtime_alias_lookup(prediction).get(authoritative_id)
+    canonical_authoritative_id = (
+        _canonical_evidence_key(authoritative_item)
+        if authoritative_item is not None
+        else authoritative_id
+    )
+    claim_key = trace.get("authoritative_claim_key")
+    if isinstance(claim_key, (list, tuple, dict)):
+        canonical_claim_key = json.dumps(
+            claim_key,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    else:
+        canonical_claim_key = _normalized(claim_key)
     return tuple(sorted(_canonical_support(prediction))) + (
+        _normalized(trace.get("adjudicated_polarity")),
+        canonical_authoritative_id,
+        str(trace.get("authoritative_quote_span_id") or ""),
+        canonical_claim_key,
         str(trace.get("binding_status") or ""),
+        str(trace.get("evidence_ref_binding_status") or ""),
+        str(trace.get("evidence_ref_rebound") or ""),
     )
 
 
@@ -303,6 +329,18 @@ def _qasper_trace(prediction: dict[str, Any]) -> dict[str, Any]:
     metadata = prediction.get("evidence_metadata") or {}
     trace = metadata.get("qasper_answerability") if isinstance(metadata, dict) else {}
     return trace if isinstance(trace, dict) else {}
+
+
+def _candidate_state(prediction: dict[str, Any]) -> str:
+    metadata = prediction.get("evidence_metadata") or {}
+    trace = _qasper_trace(prediction)
+    if isinstance(metadata, dict):
+        candidate = metadata.get("pre_verification_answer")
+        if candidate is not None:
+            return _normalized(candidate)
+    return _normalized(
+        trace.get("candidate_for_answerability") or trace.get("primary_answer")
+    )
 
 
 def _answer_status(prediction: dict[str, Any]) -> tuple[str, str]:

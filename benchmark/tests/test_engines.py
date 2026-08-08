@@ -79,6 +79,61 @@ def _install_fake_docqa_runtime(monkeypatch, doc_path):
     return fake_runtime
 
 
+def _assert_runtime_request_contract(request):
+    assert request.selected_file_ids == ["file-1"]
+    assert "Benchmark prompt contract:" in request.prompt
+    assert "Answer formatting requirements:" not in request.prompt
+    assert "Return the final answer as Markdown" not in request.prompt
+    assert request.qa_scope == "document"
+    assert request.max_context_length == 3000
+    assert request.llm == "Deepseek"
+    assert request.use_citation == "off"
+    assert request.reasoning_type == "mara"
+    assert request.agent_mode == "thorough"
+    assert request.task_type == "quiz"
+    assert request.artifact_type == "quiz"
+    assert request.controller_mode == "llm"
+    assert request.route_policy == "graph"
+    assert request.planner_backend == "heuristic_local"
+    assert request.planner_model == "gpt-4o-mini"
+    assert request.allowed_routes == ["doc_text", "graph_global"]
+    assert request.verification_mode == "strict"
+    assert request.verification_domain == "finance"
+    assert request.graph_mode == "global"
+    assert request.route_timeout_seconds == 45
+    assert request.generation_temperature == 0
+    assert request.generation_top_p == 1
+    assert request.generation_seed == 20260724
+
+
+def _assert_runtime_result_contract(result):
+    assert result.answer == "runtime answer"
+    assert result.predicted_pages == ["1"]
+    assert result.predicted_sources == ["doc#page:1"]
+    assert result.agent_trace == [{"stage": "planner", "decision": "retrieve"}]
+    assert result.evidence_metadata["has_formula_evidence"] is True
+    assert result.controller_trace == [{"stage": "planner", "route": "graph_global"}]
+    assert result.controller_decision == {"route": "graph_rag"}
+    assert result.route_decision == {"route": "graph_global"}
+    assert result.retrieve_decision == {"status": "good"}
+    assert result.verify_decision == {"status": "supported"}
+    assert result.guardrail_decision == {"status": "ok", "action": "return"}
+    assert result.evidence_bundle == {"route": "graph_global", "items": []}
+    assert result.workflow_plan == {
+        "route": "graph_global",
+        "steps": [{"executor": "retrieve_graph"}],
+    }
+    assert result.claim_verification == {"rewrite_skipped": True}
+    assert result.presentation == {"markdown_normalized": True}
+    expected_generation = {"temperature": 0, "top_p": 1, "seed": 20260724}
+    assert (
+        result.evidence_metadata["benchmark_generation_config"] == expected_generation
+    )
+    assert (
+        result.retrieval_trace[-1]["benchmark_generation_config"] == expected_generation
+    )
+
+
 def test_engine_run_result_exposes_phase_two_fields():
     result = EngineRunResult(answer="answer")
 
@@ -275,45 +330,8 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     )
 
     assert fake_runtime.indexed == [([str(doc_path)], False)]
-    assert fake_runtime.requests[0].selected_file_ids == ["file-1"]
-    assert "Benchmark prompt contract:" in fake_runtime.requests[0].prompt
-    assert "Answer formatting requirements:" not in fake_runtime.requests[0].prompt
-    assert "Return the final answer as Markdown" not in fake_runtime.requests[0].prompt
-    assert fake_runtime.requests[0].qa_scope == "document"
-    assert fake_runtime.requests[0].max_context_length == 3000
-    assert fake_runtime.requests[0].llm == "Deepseek"
-    assert fake_runtime.requests[0].use_citation == "off"
-    assert fake_runtime.requests[0].reasoning_type == "mara"
-    assert fake_runtime.requests[0].agent_mode == "thorough"
-    assert fake_runtime.requests[0].task_type == "quiz"
-    assert fake_runtime.requests[0].artifact_type == "quiz"
-    assert fake_runtime.requests[0].controller_mode == "llm"
-    assert fake_runtime.requests[0].route_policy == "graph"
-    assert fake_runtime.requests[0].planner_backend == "heuristic_local"
-    assert fake_runtime.requests[0].planner_model == "gpt-4o-mini"
-    assert fake_runtime.requests[0].allowed_routes == ["doc_text", "graph_global"]
-    assert fake_runtime.requests[0].verification_mode == "strict"
-    assert fake_runtime.requests[0].verification_domain == "finance"
-    assert fake_runtime.requests[0].graph_mode == "global"
-    assert fake_runtime.requests[0].route_timeout_seconds == 45
-    assert result.answer == "runtime answer"
-    assert result.predicted_pages == ["1"]
-    assert result.predicted_sources == ["doc#page:1"]
-    assert result.agent_trace == [{"stage": "planner", "decision": "retrieve"}]
-    assert result.evidence_metadata["has_formula_evidence"] is True
-    assert result.controller_trace == [{"stage": "planner", "route": "graph_global"}]
-    assert result.controller_decision == {"route": "graph_rag"}
-    assert result.route_decision == {"route": "graph_global"}
-    assert result.retrieve_decision == {"status": "good"}
-    assert result.verify_decision == {"status": "supported"}
-    assert result.guardrail_decision == {"status": "ok", "action": "return"}
-    assert result.evidence_bundle == {"route": "graph_global", "items": []}
-    assert result.workflow_plan == {
-        "route": "graph_global",
-        "steps": [{"executor": "retrieve_graph"}],
-    }
-    assert result.claim_verification == {"rewrite_skipped": True}
-    assert result.presentation == {"markdown_normalized": True}
+    _assert_runtime_request_contract(fake_runtime.requests[0])
+    _assert_runtime_result_contract(result)
 
 
 def test_docqa_runtime_engine_reuses_prepared_document_identity(monkeypatch, tmp_path):

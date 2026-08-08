@@ -170,6 +170,15 @@ SEMANTIC_EVALUATOR="$(
 log "semantic_evaluator=${SEMANTIC_EVALUATOR}"
 
 mara_bootstrap_benchmark_runtime
+export MARA_BENCHMARK_EMBEDDING_CONTRACT="$(
+  sha256sum \
+    "${HPC_HOME}/serve_retrieval.sh" \
+    "${HPC_HOME}/env-retrieval.sh" \
+    "${HPC_HOME}/local_retrieval_server.py" \
+    "${HPC_HOME}/configure_mara_local_models.py" |
+    sha256sum |
+    awk '{print $1}'
+)"
 export MARA_BENCHMARK_SERVICE_CONTRACT="$(
   sha256sum \
     "${HPC_HOME}/serve_qwen3_8b.sh" \
@@ -178,6 +187,7 @@ export MARA_BENCHMARK_SERVICE_CONTRACT="$(
     sha256sum |
     awk '{print $1}'
 )"
+log "embedding_contract=${MARA_BENCHMARK_EMBEDDING_CONTRACT}"
 log "service_contract=${MARA_BENCHMARK_SERVICE_CONTRACT}"
 
 if ! http_ok "${TEXT_LLM_BASE_URL}/models"; then

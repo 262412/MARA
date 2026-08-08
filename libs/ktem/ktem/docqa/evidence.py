@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .calculation_evidence_identity import materialize_financial_cell
+from .deterministic_ranking import quantized_score
 from .element_parser import parse_financial_numeric_span_records
 from .evidence_identity import (
     EVIDENCE_BUNDLE_SCHEMA_VERSION,
@@ -489,7 +490,12 @@ def _rank_route_items(
         (_route_item_score(item, request, query_tokens, route), index, item)
         for index, item in enumerate(items)
     ]
-    ranked.sort(key=lambda item: (-item[0], item[1]))
+    ranked.sort(
+        key=lambda item: (
+            -quantized_score(item[0]),
+            identity_of(item[2]).key,
+        )
+    )
     return [item for _, _, item in ranked]
 
 

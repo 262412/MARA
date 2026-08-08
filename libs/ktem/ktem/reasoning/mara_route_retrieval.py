@@ -16,6 +16,12 @@ from ktem.docqa.query_planning import build_query_plan
 from ktem.docqa.visual_retriever import rank_page_image_records
 
 from .mara_element_ingestion_trace import element_ingestion_trace
+from .mara_route_retrieval_trace import (
+    bounded_retrieval_attempts as _bounded_retrieval_attempts,
+)
+from .mara_route_retrieval_trace import (
+    reranker_execution_traces as _reranker_execution_traces,
+)
 
 TextRetrieveFn = Callable[[], tuple[list[Any], list[Any]]]
 MetadataBuilderFn = Callable[[list[Any], dict[str, Any]], dict[str, Any]]
@@ -68,11 +74,17 @@ def route_retrieval_metadata(
     *,
     text_retrieve: TextRetrieveFn,
     metadata_builder: MetadataBuilderFn,
+    request: Any | None = None,
 ) -> dict[str, Any]:
     if route == "page_image_rag":
         return _page_image_metadata(pipeline, understanding)
     if route == "element_rag":
-        return _element_metadata(pipeline, understanding, query=message)
+        return _element_metadata(
+            pipeline,
+            understanding,
+            query=message,
+            request=request,
+        )
     if route == "graph_rag":
         return _graph_metadata(pipeline, understanding)
     if route == "hybrid_rag":
@@ -90,7 +102,12 @@ def route_retrieval_metadata(
             )
         _merge_element_metadata(
             metadata,
-            _element_metadata(pipeline, understanding, query=message),
+            _element_metadata(
+                pipeline,
+                understanding,
+                query=message,
+                request=request,
+            ),
         )
         _merge_graph_metadata(metadata, _graph_metadata(pipeline, understanding))
         return metadata
@@ -128,37 +145,6 @@ def _text_metadata(
         metadata["retrieval_attempts"] = attempts
     metadata["retrieval_info_count"] = len(info)
     return metadata
-
-
-def _reranker_execution_traces(pipeline: Any) -> list[dict[str, Any]]:
-    traces: list[dict[str, Any]] = []
-    for retriever in getattr(pipeline, "retrievers", None) or []:
-        vector_retrieval = getattr(retriever, "vector_retrieval", None)
-        last_trace = getattr(vector_retrieval, "last_trace", None)
-        metadata = (
-            dict(last_trace.get("metadata") or {})
-            if isinstance(last_trace, dict)
-            else {}
-        )
-        trace = metadata.get("reranker_execution")
-        if isinstance(trace, dict):
-            traces.append(dict(trace))
-    return traces
-
-
-def _bounded_retrieval_attempts(attempts: Any) -> list[dict[str, Any]]:
-    bounded: list[dict[str, Any]] = []
-    for attempt in attempts or []:
-        if not isinstance(attempt, dict):
-            continue
-        bounded.append(
-            {
-                "attempt": int(attempt.get("attempt") or 0),
-                "evidence_count": int(attempt.get("evidence_count") or 0),
-                "retry_reason": str(attempt.get("retry_reason") or ""),
-            }
-        )
-    return bounded
 
 
 def _page_image_metadata(
@@ -371,6 +357,7 @@ def _element_metadata(
     understanding: dict[str, Any],
     *,
     query: str = "",
+    request: Any | None = None,
 ) -> dict[str, Any]:
     records = element_slot_candidates.element_records_for_pipeline(pipeline)
     if not records:
@@ -391,7 +378,9 @@ def _element_metadata(
         retriever=getattr(pipeline, "element_retriever", None),
         evidence_hints=_element_evidence_hints(understanding, pipeline),
     )
-    request = getattr(pipeline, "docqa_request", None)
+    request = (
+        request if request is not None else getattr(pipeline, "docqa_request", None)
+    )
     plan = build_query_plan(
         str(understanding.get("question") or ""),
         answer_type=str(

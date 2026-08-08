@@ -6,6 +6,7 @@ from typing import Any
 
 from .boolean_evidence_scope import (
     _actor,
+    _closed_quantifier,
     _english_closed_scope,
     _has_closed_quantifier,
     _language_data_question,
@@ -14,6 +15,12 @@ from .boolean_evidence_scope import (
     _scope_rejection,
     _section_role,
     evidence_item_text,
+    validate_boolean_scope,
+)
+from .boolean_proposition_tokens import (
+    _content_tokens,
+    _object_token,
+    _relation_surface_tokens,
 )
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
 from .evidence_identity import identity_of
@@ -115,7 +122,7 @@ def _assess_proposition_span(
 ) -> BooleanEvidenceAssessment:
     section_role = _section_role(item, span)
     actor = _actor(span, section_role)
-    quantifier = "only" if _has_closed_quantifier(question) else "none"
+    quantifier = _closed_quantifier(question)
     evidence_polarity = _evidence_polarity(
         question,
         span,
@@ -148,25 +155,19 @@ def _assess_proposition_span(
         if section_role not in {"related_work", "future_work"} and not scope_rejection
         else 0.0
     )
-    if (
-        actor in {"cited_work", "other_authors"}
-        or section_role in {"related_work", "future_work"}
-        or scope_rejection
-    ):
-        classification = "insufficient_scope"
-        reason = scope_rejection or f"excluded_{section_role or actor}_scope"
-    elif relation_score <= 0 or object_score < 0.6:
-        classification = "unrelated"
-        reason = "claim_relation_or_object_incompatible"
-    elif not desired_polarity or not evidence_polarity:
-        classification = "unrelated"
-        reason = "missing_typed_polarity"
-    elif desired_polarity == evidence_polarity:
-        classification = "supports"
-        reason = "claim_scope_relation_and_polarity_compatible"
-    else:
-        classification = "contradicts"
-        reason = "scope_valid_opposite_proposition"
+    classification, reason = _classify_proposition_span(
+        question,
+        desired_polarity,
+        evidence_polarity,
+        item,
+        span,
+        actor=actor,
+        section_role=section_role,
+        quantifier=quantifier,
+        relation_score=relation_score,
+        object_score=object_score,
+        scope_rejection=scope_rejection,
+    )
     return BooleanEvidenceAssessment(
         item=item,
         classification=classification,
@@ -179,6 +180,53 @@ def _assess_proposition_span(
         actor_score=actor_score,
         scope_score=scope_score,
     )
+
+
+def _classify_proposition_span(
+    question: str,
+    desired_polarity: str,
+    evidence_polarity: str,
+    item: dict[str, Any],
+    span: str,
+    *,
+    actor: str,
+    section_role: str,
+    quantifier: str,
+    relation_score: float,
+    object_score: float,
+    scope_rejection: str,
+) -> tuple[str, str]:
+    if (
+        actor in {"cited_work", "other_authors"}
+        or section_role in {"related_work", "future_work"}
+        or scope_rejection
+    ):
+        classification = "insufficient_scope"
+        reason = scope_rejection or f"excluded_{section_role or actor}_scope"
+    elif relation_score <= 0 or object_score < 0.6:
+        classification = "unrelated"
+        reason = "claim_relation_or_object_incompatible"
+    elif (
+        quantifier != "none"
+        and not validate_boolean_scope(
+            question,
+            span,
+            evidence_polarity or desired_polarity,
+            evidence_items=[item],
+        ).scope_valid
+    ):
+        classification = "unrelated"
+        reason = "quantified_object_scope_incomplete"
+    elif not desired_polarity or not evidence_polarity:
+        classification = "unrelated"
+        reason = "missing_typed_polarity"
+    elif desired_polarity == evidence_polarity:
+        classification = "supports"
+        reason = "claim_scope_relation_and_polarity_compatible"
+    else:
+        classification = "contradicts"
+        reason = "scope_valid_opposite_proposition"
+    return classification, reason
 
 
 def _assessment_rank(assessment: BooleanEvidenceAssessment) -> tuple[int, float, float]:
@@ -377,7 +425,9 @@ def _target_relation_is_negated(question: str, text: str) -> bool:
     if not relation_matches:
         return bool(
             re.search(
-                r"\b(?:doesn't|does not|don't|do not|did not|no|not|never|without)\b",
+                r"\b(?:can't|cannot|couldn't|could not|didn't|doesn't|does not|"
+                r"don't|do not|did not|fail(?:ed|s)? to|not able to|unable to|"
+                r"no|not|never|without)\b",
                 lowered,
             )
         )
@@ -389,12 +439,26 @@ def _target_relation_is_negated(question: str, text: str) -> bool:
             for value in (".", ";", ":", ",", " but ", " however ", " yet ")
         )
         local_prefix = prefix[boundary + 1 :]
+        suffix = lowered[match.end() :]
+        suffix_boundary = min(
+            (
+                index
+                for value in (".", ";", ":", ",", " but ", " however ", " yet ")
+                if (index := suffix.find(value)) >= 0
+            ),
+            default=len(suffix),
+        )
+        local_suffix = suffix[:suffix_boundary]
         polarities.append(
             bool(
                 re.search(
-                    r"\b(?:doesn't|does not|don't|do not|did not|no|not|never|without)\b",
+                    r"\b(?:can't|cannot|couldn't|could not|didn't|doesn't|does not|"
+                    r"don't|do not|did not|fail(?:ed|s)?\s+to|not\s+able\s+to|"
+                    r"unable\s+to|omit(?:ted|s)?|exclud(?:e|ed|es)|"
+                    r"skip(?:ped|s)?|no|not|never|without)\b",
                     local_prefix,
                 )
+                or re.search(r"^\s+(?:no|not\s+any)\b", local_suffix)
             )
         )
     return all(polarities)
@@ -477,82 +541,3 @@ def _split_target_conjunction(value: str, target: str) -> list[str]:
     target_parts = [part for part in parts if target in boolean_relation_lemmas(part)]
     relational_parts = [part for part in parts if boolean_relation_lemmas(part)]
     return target_parts if len(relational_parts) > 1 and target_parts else [value]
-
-
-def _relation_surface_tokens(relation: str) -> set[str]:
-    surfaces = {
-        "annotate": {"annotate", "construct", "label"},
-        "compare": {"compare", "contrast", "outperform"},
-        "create": {
-            "build",
-            "built",
-            "collect",
-            "compile",
-            "construct",
-            "create",
-            "develop",
-        },
-        "evaluate": {
-            "assess",
-            "benchmark",
-            "conduct",
-            "evaluate",
-            "experiment",
-            "perform",
-            "present",
-            "report",
-            "results",
-            "run",
-            "test",
-        },
-        "provide": {"available", "provide", "publish", "release"},
-        "train": {"finetune", "fine-tune", "train"},
-        "use": {
-            "apply",
-            "employ",
-            "incorporate",
-            "introduce",
-            "rely",
-            "use",
-            "used",
-        },
-    }
-    return surfaces.get(relation, {relation})
-
-
-def _object_token(token: str) -> str:
-    aliases = {
-        "components": "component",
-        "systems": "component",
-        "system": "component",
-        "packaged": "off_the_shelf",
-        "shelf": "off_the_shelf",
-        "datasets": "dataset",
-        "tasks": "task",
-        "authors": "",
-        "author": "",
-    }
-    return aliases.get(token, token.rstrip("s") if token.endswith("s") else token)
-
-
-def _content_tokens(value: str) -> set[str]:
-    stopwords = {
-        "are",
-        "both",
-        "did",
-        "does",
-        "never",
-        "no",
-        "not",
-        "only",
-        "the",
-        "they",
-        "was",
-        "were",
-        "without",
-    }
-    return {
-        token
-        for token in re.findall(r"[a-z0-9]+", str(value or "").lower())
-        if len(token) > 2 and token not in stopwords
-    }

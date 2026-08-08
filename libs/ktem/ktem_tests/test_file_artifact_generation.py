@@ -472,6 +472,7 @@ def test_quick_handle_docs_exposes_background_writer_future(tmp_path):
         chunk_batch_size=200,
         last_indexing_status=None,
         splitter=None,
+        deterministic_chunk_ids=True,
         run_embedding_in_thread=True,
         VS=None,
         handle_chunks_docstore=lambda *_args: None,

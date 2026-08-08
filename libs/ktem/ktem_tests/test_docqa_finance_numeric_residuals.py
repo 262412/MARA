@@ -1,7 +1,7 @@
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 
 
-def test_finance_free_cash_flow_rejects_unresolved_slot_evidence_ids():
+def test_finance_free_cash_flow_rebinds_unresolved_slots_to_atomic_evidence():
     answer = finance_numeric_answer(
         "What was free cash flow in 2020?",
         [
@@ -64,12 +64,16 @@ def test_finance_free_cash_flow_rejects_unresolved_slot_evidence_ids():
     )
 
     assert answer is not None
-    assert answer.answer == ""
-    assert answer.attempt_status == "verification_failed"
-    assert answer.calculation_verification["valid"] is False
-    assert any(
-        error.startswith("operand_evidence_missing:")
-        for error in answer.calculation_verification["errors"]
+    assert answer.answer == "$3,215.4 million"
+    assert answer.attempt_status == "executed"
+    assert answer.calculation_verification["valid"] is True
+    assert {
+        trace["replacement_reason"]
+        for trace in answer.authoritative_query_plan["binding_trace"]
+    } == {"unresolved_existing_identity"}
+    assert answer.calculation_verification["citation_ids"] == (
+        "cell::operating-cash-flow-2020",
+        "cell::capital-expenditure-2020",
     )
 
 

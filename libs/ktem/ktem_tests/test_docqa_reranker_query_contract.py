@@ -214,6 +214,39 @@ def test_partial_reranker_pool_materializes_real_stage():
     assert [item["span_id"] for item in output or []] == ["a"]
 
 
+def test_reranker_top_k_quantizes_near_scores_and_uses_canonical_identity():
+    candidates = [
+        {
+            "source_id": "paper",
+            "span_id": "b",
+            "reranker_score": 0.90000049,
+            "reranker_backend": "fixture",
+        },
+        {
+            "source_id": "paper",
+            "span_id": "a",
+            "reranker_score": 0.90000041,
+            "reranker_backend": "fixture",
+        },
+    ]
+
+    forward, forward_trace = materialize_reranked_candidates(
+        candidates,
+        {},
+        limit=1,
+    )
+    reverse, reverse_trace = materialize_reranked_candidates(
+        list(reversed(candidates)),
+        {},
+        limit=1,
+    )
+
+    assert [item["span_id"] for item in forward or []] == ["a"]
+    assert [item["span_id"] for item in reverse or []] == ["a"]
+    assert forward_trace["tie_breaker"] == "canonical_evidence_identity"
+    assert reverse_trace["score_tie_precision_decimals"] == 6
+
+
 def test_materialized_cell_does_not_inherit_parent_reranker_observation():
     parent = {
         "source_id": "report",

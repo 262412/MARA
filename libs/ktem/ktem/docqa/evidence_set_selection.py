@@ -500,7 +500,7 @@ def _relevance(query: str, item: dict[str, Any]) -> float:
     )
     normalized_sources = set(_string_values(item.get("_selection_relevance_sources")))
     score_weight = (
-        2.0
+        3.0
         if normalized_sources & {"learned_score", "reranking_score", "reranker_score"}
         else 1.0
     )

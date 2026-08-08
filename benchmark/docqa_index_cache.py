@@ -159,13 +159,34 @@ class DocQAIndexCache:
             config_value(self.config, "app_data_dir", "")
             or os.environ.get("KH_APP_DATA_DIR", "")
         )
+        deterministic_chunk_ids = _is_qasper_suite(self.config)
+        index_contract = str(
+            config_value(self.config, "index_contract", "")
+            or os.environ.get("MARA_BENCHMARK_INDEX_CONTRACT", "not_declared")
+        )
+        embedding_contract = str(
+            config_value(self.config, "embedding_contract", "")
+            or os.environ.get("MARA_BENCHMARK_EMBEDDING_CONTRACT", "not_declared")
+        )
+        chunking_contract = {
+            "chunk_size": config_value(self.config, "chunk_size", None),
+            "chunk_overlap": config_value(self.config, "chunk_overlap", None),
+            "deterministic_chunk_ids": deterministic_chunk_ids,
+        }
+        source_revision = str(
+            os.environ.get("MARA_BENCHMARK_GIT_COMMIT", "not_declared")
+        )
         identity = {
             "document_id": document.document_id,
             "path": normalized_path(str(path)),
             "size": size,
             "mtime_ns": mtime_ns,
             "requires_element": requires_element,
-            "deterministic_chunk_ids": _is_qasper_suite(self.config),
+            "deterministic_chunk_ids": deterministic_chunk_ids,
+            "index_contract": index_contract,
+            "embedding_contract": embedding_contract,
+            "chunking_contract": chunking_contract,
+            "source_revision": source_revision,
         }
         key = (
             app_data_dir,
@@ -174,6 +195,11 @@ class DocQAIndexCache:
             mtime_ns,
             requires_element,
             identity["deterministic_chunk_ids"],
+            index_contract,
+            embedding_contract,
+            chunking_contract["chunk_size"],
+            chunking_contract["chunk_overlap"],
+            source_revision,
         )
         return key, identity
 

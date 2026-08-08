@@ -27,6 +27,14 @@ class FakeStreamingLLM(ChatLLM):
             yield LLMInterface(content=chunk, logprobs=[])
 
 
+class RecordingGenerationLLM(ChatLLM):
+    calls: list[dict[str, Any]] = []
+
+    def stream(self, _messages, **kwargs):
+        self.calls.append(dict(kwargs))
+        yield LLMInterface(content="Supported answer.", logprobs=[])
+
+
 @dataclass
 class FakeClaimVerifier:
     result: dict[str, Any]
@@ -115,6 +123,31 @@ def test_stream_surfaces_citation_tool_call_configuration_errors():
                 evidence="Supported answer.",
             )
         )
+
+
+@pytest.mark.parametrize(
+    "pipeline_type",
+    [AnswerWithContextPipeline, AnswerWithInlineCitation],
+)
+def test_answer_generation_forwards_explicit_sampling_contract(pipeline_type):
+    llm = RecordingGenerationLLM(calls=[])
+    pipeline = pipeline_type(
+        llm=llm,
+        citation_pipeline=lambda **kwargs: None,
+        create_mindmap_pipeline=lambda **kwargs: None,
+    )
+
+    _consume_stream(
+        pipeline.stream(
+            question="What is supported?",
+            evidence="",
+            temperature=0,
+            top_p=1,
+            seed=20260724,
+        )
+    )
+
+    assert llm.calls == [{"temperature": 0, "top_p": 1, "seed": 20260724}]
 
 
 def test_stream_records_supported_claim_when_claim_verification_enabled():

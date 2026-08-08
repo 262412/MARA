@@ -21,19 +21,20 @@ def call_boolean_verifier(
         max_tokens=max_tokens,
         response_format=response_format,
         temperature=0,
+        top_p=1,
         seed=seed,
     )
     initial_response = getattr(response, "text", "") or str(response)
     verdict, evidence_ref, quote = parser(initial_response)
     if verdict:
-        return verdict, evidence_ref, quote, _parse_trace("ok", False)
+        return verdict, evidence_ref, quote, _parse_trace("ok", False, seed)
     if not _has_repairable_verdict(initial_response, allowed_values):
         return (
             "",
             "",
             "",
             {
-                **_parse_trace("error", False),
+                **_parse_trace("error", False, seed),
                 "repair_status": "not_repairable",
                 "initial_response": str(initial_response),
             },
@@ -47,6 +48,7 @@ def call_boolean_verifier(
         max_tokens=max_tokens,
         response_format=response_format,
         temperature=0,
+        top_p=1,
         seed=seed,
     )
     repaired_text = getattr(repair_response, "text", "") or str(repair_response)
@@ -56,7 +58,7 @@ def call_boolean_verifier(
         evidence_ref,
         quote,
         {
-            **_parse_trace("ok" if verdict else "error", True),
+            **_parse_trace("ok" if verdict else "error", True, seed),
             "repair_status": "ok" if verdict else "error",
             "initial_response": str(initial_response),
             "repair_response": str(repaired_text),
@@ -64,10 +66,13 @@ def call_boolean_verifier(
     )
 
 
-def _parse_trace(status: str, repaired: bool) -> dict[str, str]:
+def _parse_trace(status: str, repaired: bool, seed: int) -> dict[str, str]:
     return {
         "parser_status": status,
         "repair_attempted": str(repaired).lower(),
+        "verifier_temperature": "0",
+        "verifier_top_p": "1",
+        "verifier_seed": str(seed),
     }
 
 

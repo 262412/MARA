@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .deterministic_ranking import quantized_score
 from .evidence_identity import evidence_aliases, identity_of
 from .finance_query_planning import finance_metric_evidence_matches
 from .finance_scale import source_scale_evidence
@@ -35,9 +36,7 @@ def required_slot_shortlist(
     *,
     candidate_limit: int,
 ) -> tuple[list[dict[str, Any]], int]:
-    required_slots = [
-        slot for slot in plan.evidence_slots if slot_requires_selection(slot)
-    ]
+    required_slots = _ranked_required_slots(plan, items)
     if not required_slots or candidate_limit <= 0:
         return list(items[: max(0, candidate_limit)]), 0
     per_slot_quota = max(
@@ -53,19 +52,17 @@ def required_slot_shortlist(
         plan.constraints.get("requires_distinct_source_pages")
     )
     original_index = {identity_of(item).key: index for index, item in enumerate(items)}
-    required_slots.sort(
-        key=lambda slot: (
-            sum(slot_score(plan, slot, item) > 0 for item in items),
-            slot.slot_id,
-        )
-    )
     for slot in required_slots:
         ranked = sorted(
             (
                 (slot_score(plan, slot, item), index, item)
                 for index, item in enumerate(items)
             ),
-            key=lambda row: (-row[0], -_reranker_score(row[2]), row[1]),
+            key=lambda row: (
+                -quantized_score(row[0]),
+                -quantized_score(_reranker_score(row[2])),
+                identity_of(row[2]).key,
+            ),
         )
         if slot.required_for_execution and slot.role == "operand":
             _add_slot_candidates(
@@ -111,6 +108,16 @@ def required_slot_shortlist(
     )
 
 
+def _ranked_required_slots(plan: QueryPlan, items: list[dict[str, Any]]) -> list[Any]:
+    return sorted(
+        (slot for slot in plan.evidence_slots if slot_requires_selection(slot)),
+        key=lambda slot: (
+            sum(slot_score(plan, slot, item) > 0 for item in items),
+            slot.slot_id,
+        ),
+    )
+
+
 def _ordered_shortlist(
     items: list[dict[str, Any]],
     selected_ids: set[str],
@@ -118,17 +125,43 @@ def _ordered_shortlist(
     candidate_limit: int,
     original_index: dict[str, int],
 ) -> tuple[list[dict[str, Any]], int]:
-    for item in items:
+    ranked_items = sorted(
+        items,
+        key=lambda item: (
+            -quantized_score(_upstream_ranking_score(item)),
+            identity_of(item).key,
+        ),
+    )
+    for item in ranked_items:
         if len(selected_ids) >= candidate_limit:
             break
         selected_ids.add(identity_of(item).key)
-    candidates = [item for item in items if identity_of(item).key in selected_ids][
-        :candidate_limit
-    ]
+    candidates = [
+        item for item in ranked_items if identity_of(item).key in selected_ids
+    ][:candidate_limit]
     restored = sum(
         original_index[identity_of(item).key] >= candidate_limit for item in candidates
     )
     return candidates, restored
+
+
+def _upstream_ranking_score(item: dict[str, Any]) -> float:
+    metadata = dict(item.get("metadata") or {})
+    for field in (
+        "reranking_score",
+        "reranker_score",
+        "hybrid_fusion_score",
+        "visual_retriever_score",
+        "element_retriever_score",
+        "retriever_score",
+        "score",
+    ):
+        value = item.get(field, metadata.get(field))
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return 0.0
 
 
 def _add_execution_dimension_candidates(

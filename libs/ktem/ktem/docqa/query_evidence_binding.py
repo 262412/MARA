@@ -6,6 +6,7 @@ from typing import Any
 
 from .boolean_evidence_scope import boolean_proposition_evidence_score
 from .calculation_evidence_identity import reconcile_materialized_cells
+from .deterministic_ranking import quantized_score
 from .evidence_identity import identity_of
 from .evidence_locators import locator_matches, locator_requirement_count
 from .evidence_modality import modality_matches
@@ -143,9 +144,9 @@ def _ranked_evidence(
     return sorted(
         ranked,
         key=lambda row: (
-            -(row[0] + _binding_quality(slot, row[2])),
-            -row[0],
-            row[1],
+            -quantized_score(row[0] + _binding_quality(slot, row[2])),
+            -quantized_score(row[0]),
+            identity_of(row[2]).key,
         ),
     )
 

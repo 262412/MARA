@@ -78,6 +78,7 @@ FINANCE_METRIC_ALIASES = {
         "credit facility",
         "credit facilities",
         "may borrow",
+        "borrow up to",
     ),
     "shareholders equity": (
         "shareholders equity",

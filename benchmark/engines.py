@@ -9,6 +9,7 @@ from kotaemon.base import RetrievedDocument
 from kotaemon.docqa_request_policies import BENCHMARK_REQUEST_POLICY
 
 from . import controller_fields as cf
+from . import generation_contract
 from .alce_answer_grounding import (
     alce_grounding_stage_event,
     apply_alce_answer_grounding,
@@ -280,6 +281,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                 "route_timeout_seconds",
                 None,
             ),
+            **generation_contract.benchmark_request_generation_config(),
             "reasoning_type": config_value(self.config, "reasoning_type", None),
             "agent_mode": config_value(self.config, "agent_mode", None),
             "artifact_type": config_value(self.config, "artifact_type", None),
@@ -408,6 +410,8 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             documents=documents,
             selected_file_ids=selected_file_ids,
         )
+        generation_config = generation_contract.benchmark_generation_config()
+        evidence_metadata["benchmark_generation_config"] = generation_config
         answer, grounding_trace, grounding_seconds = apply_alce_answer_grounding(
             suite_name=str(config_value(self.config, "suite_name", "") or ""),
             llm_factory=lambda: self._get_text_system().llm,
@@ -457,6 +461,7 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
                         None,
                     ),
                     "agent_mode": config_value(self.config, "agent_mode", None),
+                    "benchmark_generation_config": generation_config,
                     "references_text": response.references_text[:2000],
                 },
             ],

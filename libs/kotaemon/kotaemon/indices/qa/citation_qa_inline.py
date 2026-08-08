@@ -1,18 +1,26 @@
 import logging
-import re
 import threading
-from collections import defaultdict
-from dataclasses import dataclass
 from typing import Generator
 
 import numpy as np
 
-from kotaemon.base import AIMessage, Document, HumanMessage, SystemMessage
+from kotaemon.base import Document
 from kotaemon.llms import PromptTemplate
 
-from .citation_qa import CITATION_TIMEOUT, MAX_IMAGES, AnswerWithContextPipeline
-from .format_context import EVIDENCE_MODE_FIGURE
-from .utils import find_start_end_phrase
+from .citation_qa import (
+    CITATION_TIMEOUT,
+    AnswerWithContextPipeline,
+    _llm_generation_kwargs,
+)
+from .citation_qa_inline_helpers import (
+    START_ANSWER,
+    START_CITATION,
+    InlineEvidence,
+    answer_to_citations,
+    build_inline_messages,
+    match_evidence_with_context,
+    replace_citation_with_link,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,21 +82,6 @@ QUESTION: {question}\n
 ANSWER:
 """  # noqa
 
-START_ANSWER = "FINAL ANSWER"
-START_CITATION = "CITATION LIST"
-CITATION_PATTERN = r"citation【(\d+)】"
-START_ANSWER_PATTERN = "start_phrase:"
-END_ANSWER_PATTERN = "end_phrase:"
-
-
-@dataclass
-class InlineEvidence:
-    """List of evidences to support the answer."""
-
-    start_phrase: str | None = None
-    end_phrase: str | None = None
-    idx: int | None = None
-
 
 class AnswerWithInlineCitation(AnswerWithContextPipeline):
     """Answer the question based on the evidence with inline citation"""
@@ -108,94 +101,10 @@ class AnswerWithInlineCitation(AnswerWithContextPipeline):
         return prompt, evidence
 
     def answer_to_citations(self, answer) -> list[InlineEvidence]:
-        citations: list[InlineEvidence] = []
-        lines = answer.split("\n")
-
-        current_evidence = None
-
-        for line in lines:
-            # check citation idx using regex
-            match = re.match(CITATION_PATTERN, line.lower())
-
-            if match:
-                try:
-                    parsed_citation_idx = int(match.group(1))
-                except ValueError:
-                    parsed_citation_idx = None
-
-                # conclude the current evidence if exists
-                if current_evidence:
-                    citations.append(current_evidence)
-                    current_evidence = None
-
-                current_evidence = InlineEvidence(idx=parsed_citation_idx)
-            else:
-                for keyword in [START_ANSWER_PATTERN, END_ANSWER_PATTERN]:
-                    if line.lower().startswith(keyword):
-                        matched_phrase = line[len(keyword) :].strip()
-                        if not current_evidence:
-                            current_evidence = InlineEvidence(idx=None)
-
-                        if keyword == START_ANSWER_PATTERN:
-                            current_evidence.start_phrase = matched_phrase
-                        else:
-                            current_evidence.end_phrase = matched_phrase
-
-                        break
-
-            if (
-                current_evidence
-                and current_evidence.end_phrase
-                and current_evidence.start_phrase
-            ):
-                citations.append(current_evidence)
-                current_evidence = None
-
-        if current_evidence:
-            citations.append(current_evidence)
-
-        return citations
+        return answer_to_citations(answer)
 
     def replace_citation_with_link(self, answer: str):
-        # Define the regex pattern to match 【number】
-        pattern = r"【\d+】"
-        alternate_pattern = r"\[\d+\]"
-
-        # Regular expression to match merged citations
-        multi_pattern = r"【([\d,\s]+)】"
-
-        # Function to replace merged citations with independent ones
-        def split_citations(match):
-            # Extract the numbers, split by comma, and create individual citations
-            numbers = match.group(1).split(",")
-            return "".join(f"【{num.strip()}】" for num in numbers)
-
-        # Replace merged citations in the text
-        answer = re.sub(multi_pattern, split_citations, answer)
-
-        # Find all citations in the answer
-        matches = list(re.finditer(pattern, answer))
-        if not matches:
-            matches = list(re.finditer(alternate_pattern, answer))
-
-        matched_citations = set()
-        for match in matches:
-            citation = match.group()
-            matched_citations.add(citation)
-
-        for citation in matched_citations:
-            citation_id = citation[1:-1]
-            answer = answer.replace(
-                citation,
-                (
-                    "<a href='#' class='citation' "
-                    f"id='mark-{citation_id}'>【{citation_id}】</a>"
-                ),
-            )
-
-        answer = answer.replace(START_CITATION, "")
-
-        return answer
+        return replace_citation_with_link(answer)
 
     def stream(  # type: ignore
         self,
@@ -231,40 +140,15 @@ class AnswerWithInlineCitation(AnswerWithContextPipeline):
                 mindmap_thread = threading.Thread(target=mindmap_call)
                 mindmap_thread.start()
 
-        messages = []
-        if self.system_prompt:
-            messages.append(SystemMessage(content=self.system_prompt))
-
-        for human, ai in history[-self.n_last_interactions :]:
-            messages.append(HumanMessage(content=human))
-            messages.append(AIMessage(content=ai))
-
-        if self.use_multimodal and evidence_mode == EVIDENCE_MODE_FIGURE:
-            # create image message:
-            messages.append(
-                HumanMessage(
-                    content=[
-                        {"type": "text", "text": prompt},
-                    ]
-                    + [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": image},
-                        }
-                        for image in images[:MAX_IMAGES]
-                    ],
-                )
-            )
-        else:
-            # append main prompt
-            messages.append(HumanMessage(content=prompt))
+        messages = build_inline_messages(self, history, prompt, evidence_mode, images)
 
         final_answer = ""
 
         try:
             # try streaming first
             logger.debug("Trying LLM streaming for inline citation QA")
-            for out_msg in self.llm.stream(messages):
+            generation_kwargs = _llm_generation_kwargs(kwargs)
+            for out_msg in self.llm.stream(messages, **generation_kwargs):
                 if evidence:
                     if START_ANSWER in output:
                         if not final_answer:
@@ -295,7 +179,7 @@ class AnswerWithInlineCitation(AnswerWithContextPipeline):
             logger.debug(
                 "Streaming is not supported for inline citation QA; falling back"
             )
-            output = self.llm(messages).text
+            output = self.llm(messages, **generation_kwargs).text
             yield Document(channel="chat", content=output)
 
         if logprobs:
@@ -361,42 +245,5 @@ class AnswerWithInlineCitation(AnswerWithContextPipeline):
         return answer
 
     def match_evidence_with_context(self, answer, docs) -> dict[str, list[dict]]:
-        """Match the evidence with the context"""
-        spans: dict[str, list[dict]] = defaultdict(list)
-
-        if not answer.metadata["citation"]:
-            return spans
-
-        evidences = answer.metadata["citation"]
-
-        for e_id, evidence in enumerate(evidences):
-            start_phrase, end_phrase = evidence.start_phrase, evidence.end_phrase
-            evidence_idx = evidence.idx
-
-            if evidence_idx is None:
-                evidence_idx = e_id + 1
-
-            best_match = None
-            best_match_length = 0
-            best_match_doc_idx = None
-
-            for doc in docs:
-                match, match_length = find_start_end_phrase(
-                    start_phrase, end_phrase, doc.text
-                )
-                if best_match is None or (
-                    match is not None and match_length > best_match_length
-                ):
-                    best_match = match
-                    best_match_length = match_length
-                    best_match_doc_idx = doc.doc_id
-
-            if best_match is not None and best_match_doc_idx is not None:
-                spans[best_match_doc_idx].append(
-                    {
-                        "start": best_match[0],
-                        "end": best_match[1],
-                        "idx": evidence_idx,
-                    }
-                )
-        return spans
+        """Match the evidence with the context."""
+        return match_evidence_with_context(answer, docs)

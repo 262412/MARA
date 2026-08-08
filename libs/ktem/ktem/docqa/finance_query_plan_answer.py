@@ -199,6 +199,18 @@ def _generic_plan_answer(
     metrics = {str(slot.get("metric") or "") for slot, _value in bound}
     lowered = str(prompt or "").lower()
     if (
+        len(bound) == 2
+        and metrics == {"operating cash flow", "capital expenditure"}
+        and ("free cash flow" in lowered or "fcf" in lowered)
+    ):
+        return FinanceNumericAnswer(
+            answer="",
+            confidence=0.95,
+            question_type="free_cash_flow",
+            inputs={_slot_operand_id(slot): float(value) for slot, value in bound},
+            formula="operating_cash_flow - capital_expenditure",
+        )
+    if (
         len(bound) >= 2
         and metrics == {"revolving credit capacity"}
         and "total" in lowered

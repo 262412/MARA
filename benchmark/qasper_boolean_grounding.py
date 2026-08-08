@@ -216,14 +216,20 @@ def _ground_complete_boolean_relation(
             "grounded_complete_proposition",
             quality_control_polarity != polarity,
         )
-    relation_supported = boolean_quote_supports_relation(
-        quote,
-        question,
-        polarity,
-    ) or bool(scope is not None and scope.scope_valid and scope.quantifier == "only")
+    quantified_scope = (
+        scope is not None and scope.scope_valid and scope.quantifier == "only"
+    )
+    relation_supported = (
+        boolean_quote_supports_relation(
+            quote,
+            question,
+            polarity,
+        )
+        or quantified_scope
+    )
     conflict = (
         quote_grounded
-        and not (scope is not None and scope.scope_valid and scope.quantifier == "only")
+        and not quantified_scope
         and boolean_complete_quote_conflicts(quote, question, polarity)
     )
     corrected = corrected_complete_requirement_polarity(

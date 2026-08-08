@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-import threading
+import os
 import uuid
 from time import perf_counter
 from typing import Optional, Sequence, cast
@@ -24,9 +24,18 @@ from .indexing_status import IndexingStatusTracker, refresh_vector_store
 from .performance_cache import JsonDiskCache, content_hash, stable_cache_key
 from .rankings import BaseReranking
 from .reranker_execution_trace import execute_rerankers
-from .retrieval_identity import reciprocal_rank_fuse
+from .retrieval_identity import (
+    deterministic_ranking_contract,
+    reciprocal_rank_fuse,
+    stable_scored_documents,
+)
 from .retrieval_quality import QueryRoute, route_query
 from .retrieval_trace import RetrievalCostStats, RetrievalTrace
+from .vectorindex_helpers import (
+    embedding_contract,
+    normalized_chunk_text,
+    retrieve_candidates,
+)
 
 VECTOR_STORE_FNAME = "vectorstore"
 DOC_STORE_FNAME = "docstore"
@@ -51,11 +60,19 @@ class VectorIndexing(BaseIndexing):
     embedding_cache_dir: Optional[str] = getattr(
         flowsettings, "KH_EMBEDDING_CACHE_DIR", None
     )
+    index_contract: str = ""
+    embedding_contract: Optional[dict[str, object]] = None
     refresh_after_batch: bool = getattr(
         flowsettings, "KH_REFRESH_VECTOR_STORE_AFTER_BATCH", True
     )
     last_embedding_cache_stats: dict[str, int] = {"hits": 0, "misses": 0, "writes": 0}
     last_indexing_status: dict | None = None
+
+    def __init__(self, *args, **kwargs):
+        embedding = kwargs.get("embedding")
+        if embedding is not None and kwargs.get("embedding_contract") is None:
+            kwargs["embedding_contract"] = embedding_contract(embedding)
+        super().__init__(*args, **kwargs)
 
     def to_retrieval_pipeline(self, *args, **kwargs):
         """Convert the indexing pipeline to a retrieval pipeline"""
@@ -63,6 +80,8 @@ class VectorIndexing(BaseIndexing):
             vector_store=self.vector_store,
             doc_store=self.doc_store,
             embedding=self.embedding,
+            index_contract=self._resolved_index_contract(),
+            embedding_contract=dict(self.embedding_contract or {}),
             **kwargs,
         )
 
@@ -119,7 +138,8 @@ class VectorIndexing(BaseIndexing):
             return cast(list[DocumentWithEmbedding], embedded_docs)
 
         cache = JsonDiskCache(self.embedding_cache_dir, "embedding")
-        model_key = self._embedding_model_key()
+        embedding_contract = self._resolved_embedding_contract()
+        index_contract = self._resolved_index_contract()
         embeddings: list[DocumentWithEmbedding | None] = [None] * len(docs)
         missing_docs: list[Document] = []
         missing_positions: list[int] = []
@@ -130,7 +150,11 @@ class VectorIndexing(BaseIndexing):
                 "embedding",
                 {
                     "chunk_hash": content_hash(self._embedding_cache_payload(doc)),
-                    "embedding_model": model_key,
+                    "embedding_contract": embedding_contract,
+                    "index_contract": index_contract,
+                    "source_revision": os.environ.get(
+                        "MARA_BENCHMARK_GIT_COMMIT", "not_declared"
+                    ),
                 },
             )
             cached_embedding = cache.get(key)
@@ -165,20 +189,22 @@ class VectorIndexing(BaseIndexing):
     def _embedding_cache_payload(self, doc: Document) -> dict:
         metadata = doc.metadata or {}
         return {
-            "text": doc.text,
+            "normalized_text": normalized_chunk_text(doc.text),
             "element_type": metadata.get("element_type") or metadata.get("type"),
         }
 
-    def _embedding_model_key(self) -> str:
-        candidates = [
-            getattr(self.embedding, "model", None),
-            getattr(self.embedding, "model_name", None),
-            getattr(self.embedding, "azure_deployment", None),
-            getattr(self.embedding, "deployment_name", None),
-            getattr(self.embedding, "engine", None),
-        ]
-        model = next((str(value) for value in candidates if value), None)
-        return model or self.embedding.__class__.__name__
+    def _resolved_index_contract(self) -> str:
+        return str(
+            self.index_contract
+            or os.environ.get("MARA_BENCHMARK_INDEX_CONTRACT")
+            or "not_declared"
+        )
+
+    def _resolved_embedding_contract(self) -> dict[str, object]:
+        declared = os.environ.get("MARA_BENCHMARK_EMBEDDING_CONTRACT")
+        if declared:
+            return {"declared_contract": declared}
+        return dict(self.embedding_contract or embedding_contract(self.embedding))
 
     def run(self, text: str | list[str] | Document | list[Document]):
         input_: list[Document] = []
@@ -262,6 +288,8 @@ class VectorRetrieval(BaseRetrieval):
     rrf_k: int = 60
     modality_boost: float = 0.05
     retrieval_mode: str = "hybrid"  # vector, text, hybrid
+    index_contract: str = "not_declared"
+    embedding_contract: Optional[dict[str, object]] = None
     last_trace: dict | None = None
     _reciprocal_rank_fuse = staticmethod(reciprocal_rank_fuse)
 
@@ -282,10 +310,10 @@ class VectorRetrieval(BaseRetrieval):
                     **document.retrieval_metadata,
                     "query_modality": route.modality,
                 }
-            return documents
+            return stable_scored_documents(documents)
 
         boosted = []
-        for index, document in enumerate(documents):
+        for document in documents:
             element_type = self._normalize_element_type(
                 document.metadata.get("element_type", document.metadata.get("type"))
             )
@@ -304,14 +332,9 @@ class VectorRetrieval(BaseRetrieval):
                 "query_modality_weights": route.modality_weights,
                 "query_boost_element_types": list(boost_element_types),
             }
-            boosted.append((index, boosted_document))
+            boosted.append(boosted_document)
 
-        return [
-            document
-            for _, document in sorted(
-                boosted, key=lambda item: (-item[1].score, item[0])
-            )
-        ]
+        return stable_scored_documents(boosted)
 
     @staticmethod
     def _normalize_element_type(value: object) -> str:
@@ -366,96 +389,17 @@ class VectorRetrieval(BaseRetrieval):
         scope = kwargs.pop("scope", None)
         query = text.text if isinstance(text, Document) else text
         query_route = route_query(query)
-        emb: list[float]
 
-        if self.retrieval_mode == "vector":
-            emb = self.embedding(text)[0].embedding
-            _, scores, ids = self.vector_store.query(
-                embedding=emb, top_k=dense_top_k, doc_ids=scope, **kwargs
-            )
-            docs = self.doc_store.get(ids)
-            result = []
-            for doc, score in zip(docs, scores):
-                retrieved = RetrievedDocument(**doc.to_dict(), score=score)
-                retrieved.retrieval_metadata = {
-                    **retrieved.retrieval_metadata,
-                    "retrieval_path": ["vector"],
-                    "vector_score": score,
-                }
-                result.append(retrieved)
-        elif self.retrieval_mode == "text":
-            docs = []
-            if scope:
-                docs = self.doc_store.query(query, top_k=sparse_top_k, doc_ids=scope)
-            result = []
-            for doc in docs:
-                retrieved = RetrievedDocument(**doc.to_dict(), score=-1.0)
-                retrieved.retrieval_metadata = {
-                    **retrieved.retrieval_metadata,
-                    "retrieval_path": ["text"],
-                }
-                result.append(retrieved)
-        elif self.retrieval_mode == "hybrid":
-            # similarity search section
-            emb = self.embedding(text)[0].embedding
-            vs_docs: list[RetrievedDocument] = []
-            vs_ids: list[str] = []
-            vs_scores: list[float] = []
-
-            def query_vectorstore():
-                nonlocal vs_docs
-                nonlocal vs_scores
-                nonlocal vs_ids
-
-                assert self.doc_store is not None
-                _, vs_scores, vs_ids = self.vector_store.query(
-                    embedding=emb, top_k=dense_top_k, doc_ids=scope, **kwargs
-                )
-                if vs_ids:
-                    vs_docs = self.doc_store.get(vs_ids)
-
-            # full-text search section
-            ds_docs: list[RetrievedDocument] = []
-
-            def query_docstore():
-                nonlocal ds_docs
-
-                assert self.doc_store is not None
-                if scope:
-                    ds_docs = self.doc_store.query(
-                        query, top_k=sparse_top_k, doc_ids=scope
-                    )
-
-            vs_query_thread = threading.Thread(target=query_vectorstore)
-            ds_query_thread = threading.Thread(target=query_docstore)
-
-            vs_query_thread.start()
-            ds_query_thread.start()
-
-            vs_query_thread.join()
-            ds_query_thread.join()
-
-            ds_result = []
-            for doc in ds_docs:
-                retrieved = RetrievedDocument(**doc.to_dict(), score=-1.0)
-                retrieved.retrieval_metadata = {
-                    **retrieved.retrieval_metadata,
-                    "retrieval_path": ["text"],
-                }
-                ds_result.append(retrieved)
-
-            vs_result = []
-            for doc, score in zip(vs_docs, vs_scores):
-                retrieved = RetrievedDocument(**doc.to_dict(), score=score)
-                retrieved.retrieval_metadata = {
-                    **retrieved.retrieval_metadata,
-                    "retrieval_path": ["vector"],
-                    "vector_score": score,
-                }
-                vs_result.append(retrieved)
-            result = self._reciprocal_rank_fuse(vs_result, ds_result, k=rrf_k)
-            logger.debug("Got %s from vectorstore", len(vs_docs))
-            logger.debug("Got %s from docstore", len(ds_docs))
+        result = retrieve_candidates(
+            self,
+            text=text,
+            query=query,
+            scope=scope,
+            dense_top_k=dense_top_k,
+            sparse_top_k=sparse_top_k,
+            rrf_k=rrf_k,
+            query_kwargs=kwargs,
+        )
 
         result = self._apply_query_route_boost(result, query_route)
         retrieval_latency_ms = round((perf_counter() - retrieval_started_at) * 1000, 3)
@@ -468,6 +412,9 @@ class VectorRetrieval(BaseRetrieval):
             output_top_k=top_k,
             filter_docs=lambda docs, limit: self._filter_docs(docs, top_k=limit),
         )
+
+        if not self.rerankers:
+            result = stable_scored_documents(result)
 
         result = self._filter_docs(result, top_k=top_k)
         logger.debug("Got raw %s retrieved documents", len(result))
@@ -546,7 +493,19 @@ class VectorRetrieval(BaseRetrieval):
                     "scope_count": len(scope) if scope is not None else None,
                 },
             ),
-            metadata={"reranker_execution": reranker_trace},
+            metadata={
+                "reranker_execution": reranker_trace,
+                "deterministic_ranking": deterministic_ranking_contract(),
+                "embedding_contract": {
+                    **dict(
+                        self.embedding_contract or embedding_contract(self.embedding)
+                    ),
+                    "index_contract": self.index_contract,
+                    "source_revision": os.environ.get(
+                        "MARA_BENCHMARK_GIT_COMMIT", "not_declared"
+                    ),
+                },
+            },
         ).to_dict()
 
         return result

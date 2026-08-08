@@ -105,6 +105,8 @@ def test_qasper_answerability_rejects_related_but_unsupported_candidate():
     assert result.trace["verdict"] == "unsupported"
     assert "Topic overlap or a plausible answer is not sufficient" in llm.calls[0][0]
     assert llm.calls[0][1]["temperature"] == 0
+    assert llm.calls[0][1]["top_p"] == 1
+    assert llm.calls[0][1]["seed"] == 20260724
     assert llm.calls[0][1]["response_format"]["json_schema"]["strict"] is True
 
 

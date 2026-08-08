@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
+from .deterministic_ranking import quantized_score, ranking_contract_trace
 from .evidence_field_values import retrieval_lineage_values
 from .evidence_identity import identity_of
+from .hybrid_text_scoring import item_text as _item_text
+from .hybrid_text_scoring import item_tokens as _item_tokens
+from .hybrid_text_scoring import modality_intent_score as _modality_intent_score
+from .hybrid_text_scoring import tokens as _tokens
 from .retrieval_adequacy import financial_statement_match_count
 
 FUSION_RANKER = "retriever_reciprocal_rank_fusion_v2"
@@ -18,13 +22,6 @@ MODALITY_WEIGHTS = {
     "slide": 1.2,
     "table": 1.1,
     "graph": 0.9,
-}
-MODALITY_TERMS = {
-    "page_image": {"chart", "diagram", "figure", "image", "plot", "slide", "visual"},
-    "figure": {"chart", "diagram", "figure", "image", "plot", "visual"},
-    "formula": {"equation", "formula", "latex", "math"},
-    "slide": {"deck", "presentation", "ppt", "pptx", "slide"},
-    "table": {"column", "row", "table"},
 }
 
 
@@ -113,8 +110,8 @@ def _best_single_route(rows: list[dict[str, Any]]) -> str:
         rows,
         key=lambda row: (
             -_locator_confidence(row),
-            -float(row.get("final_score") or 0.0),
-            int(row.get("index") or 0),
+            -quantized_score(row.get("final_score")),
+            identity_of(dict(row.get("item") or {})).key,
         ),
     )
     return str(ranked[0].get("group") or "")
@@ -175,12 +172,20 @@ def _fuse_with_weighted_scores(
         item_scores[identity_of(scored).key] = score
         scored_items.append((score, index, scored))
 
-    scored_items.sort(key=lambda row: (-row[0], row[1]))
-    return [item for _, _, item in scored_items], {
+    scored_items.sort(
+        key=lambda row: (
+            -quantized_score(row[0]),
+            _modality_tie_priority(row[2]),
+            identity_of(row[2]).key,
+        )
+    )
+    trace = {
         "ranker": WEIGHTED_RANKER,
         "modality_weights": dict(MODALITY_WEIGHTS),
         "item_scores": item_scores,
     }
+    trace.update(ranking_contract_trace())
+    return [item for _, _, item in scored_items], trace
 
 
 def _fuse_with_rrf(
@@ -209,7 +214,13 @@ def _fuse_with_rrf(
         item_scores[identity] = rrf_score
         scored_items.append((rrf_score, index, scored))
 
-    scored_items.sort(key=lambda row: (-row[0], row[1]))
+    scored_items.sort(
+        key=lambda row: (
+            -quantized_score(row[0]),
+            _modality_tie_priority(row[2]),
+            identity_of(row[2]).key,
+        )
+    )
     max_score = scored_items[0][0] if scored_items else 0.0
     fused = [
         _with_evidence_confidence(
@@ -246,6 +257,7 @@ def _fuse_with_rrf(
         "item_scores": item_scores,
         "dropped_noise_count": max(0, len(items) - len(fused)),
     }
+    trace.update(ranking_contract_trace())
     trace.update(element_gate_trace)
     trace.update(guard_trace)
     return fused, trace
@@ -303,16 +315,24 @@ def _fuse_with_learned_ranker(
         item_scores[identity_of(scored).key] = learned_score
         scored_items.append((learned_score, index, scored))
 
-    scored_items.sort(key=lambda row: (-row[0], row[1]))
+    scored_items.sort(
+        key=lambda row: (
+            -quantized_score(row[0]),
+            _modality_tie_priority(row[2]),
+            identity_of(row[2]).key,
+        )
+    )
     reranked = [
         _with_reranker_lineage(item, ranker_name, rank)
         for rank, (_score, _index, item) in enumerate(scored_items, start=1)
     ]
-    return reranked, {
+    trace = {
         "ranker": ranker_name,
         "ranker_type": "learned_cross_modal",
         "item_scores": item_scores,
     }
+    trace.update(ranking_contract_trace())
+    return reranked, trace
 
 
 def _fusion_score(
@@ -386,7 +406,14 @@ def _rrf_scores_by_item(
     contributions: dict[str, dict[str, float]] = {}
     rank_lists = _retriever_rank_lists(weighted_rows)
     for retriever, rows in rank_lists.items():
-        ranked = sorted(rows, key=lambda row: (-row[0], row[1]))
+        ranked = sorted(
+            rows,
+            key=lambda row: (
+                -quantized_score(row[0]),
+                _modality_tie_priority(row[2]),
+                identity_of(row[2]).key,
+            ),
+        )
         seen_identities: set[str] = set()
         unique_ranked = []
         for row in ranked:
@@ -495,6 +522,15 @@ def _modality_group(item: dict[str, Any]) -> str:
     return "element"
 
 
+def _modality_tie_priority(item: dict[str, Any]) -> int:
+    return {
+        "text": 0,
+        "page_image": 1,
+        "element": 2,
+        "graph": 3,
+    }.get(_modality_group(item), 4)
+
+
 def _with_evidence_confidence(
     item: dict[str, Any],
     *,
@@ -527,11 +563,6 @@ def _with_evidence_confidence(
     return scored
 
 
-def _modality_intent_score(query: str, modality: str) -> float:
-    query_tokens = _tokens(query)
-    return 0.5 if query_tokens & MODALITY_TERMS.get(modality, set()) else 0.0
-
-
 def _retriever_score(item: dict[str, Any]) -> float:
     metadata = dict(item.get("metadata") or {})
     for key in (
@@ -543,40 +574,3 @@ def _retriever_score(item: dict[str, Any]) -> float:
         if value is not None and value != "":
             return round(float(str(value)) * 10.0, 4)
     return 0.0
-
-
-def _item_tokens(item: dict[str, Any]) -> set[str]:
-    return _tokens(_item_text(item))
-
-
-def _item_text(item: dict[str, Any]) -> str:
-    metadata = dict(item.get("metadata") or {})
-    metadata_text = " ".join(
-        str(part)
-        for value in metadata.values()
-        for part in (value if isinstance(value, list) else [value])
-    )
-    return (
-        " ".join(
-            str(item.get(key) or "")
-            for key in (
-                "caption",
-                "element_id",
-                "modality",
-                "ocr_text",
-                "source_name",
-                "text",
-                "vlm_text",
-            )
-        )
-        + " "
-        + metadata_text
-    )
-
-
-def _tokens(value: str) -> set[str]:
-    return {
-        token
-        for token in re.findall(r"[a-zA-Z0-9]+", str(value or "").lower())
-        if len(token) > 2
-    }

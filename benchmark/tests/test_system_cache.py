@@ -32,9 +32,11 @@ class _StaticReader:
 class _PromptRecordingLLM:
     def __init__(self):
         self.prompts: list[str] = []
+        self.calls = []
 
-    def __call__(self, prompt: str) -> str:
+    def __call__(self, prompt: str, **kwargs) -> str:
         self.prompts.append(prompt)
+        self.calls.append((prompt, kwargs))
         return "alpha"
 
 
@@ -78,6 +80,36 @@ def test_text_rag_system_uses_parse_cache_for_same_file_across_documents(
     assert second.parse_cache_hit is True
     assert second.parse_cache_stats == {"hits": 1, "misses": 0, "writes": 0}
     assert second.parsed_documents[0].metadata["file_id"] == "doc-b"
+
+
+def test_text_rag_parse_cache_partitions_chunking_contract(monkeypatch, tmp_path):
+    doc_path = tmp_path / "doc.txt"
+    doc_path.write_text("alpha", encoding="utf-8")
+    reader = _CountingReader()
+
+    def build(chunk_size):
+        system = KotaemonTextRAGSystem(
+            BenchmarkConfig(
+                suite_name="cache",
+                output_dir=tmp_path / "out",
+                retrieval_mode="text",
+                use_generation=False,
+                cache_mode="warm",
+                chunk_size=chunk_size,
+                chunk_overlap=8,
+            )
+        )
+        monkeypatch.setattr(system, "_get_reader", lambda _path: reader)
+        return system._build_index(
+            BenchmarkDocument(document_id="doc", path=doc_path, format_type="txt")
+        )
+
+    first = build(64)
+    second = build(128)
+
+    assert reader.calls == 2
+    assert first.parse_cache_hit is False
+    assert second.parse_cache_hit is False
 
 
 def test_text_rag_system_bypasses_parse_cache_when_requested(monkeypatch, tmp_path):
@@ -218,6 +250,36 @@ def test_text_rag_system_lexical_helpers_cover_empty_and_ranked_queries(tmp_path
     assert system._combine_hits("alpha beta", [], hits) == [hits[0]]
 
 
+def test_text_rag_ranking_quantizes_near_ties_and_uses_canonical_identity(tmp_path):
+    system = KotaemonTextRAGSystem(
+        BenchmarkConfig(
+            suite_name="determinism",
+            output_dir=tmp_path / "out",
+            retrieval_mode="hybrid",
+            use_generation=False,
+            top_k=1,
+        )
+    )
+    first = RetrievedDocument(
+        text="same relevance a",
+        id_="doc-a",
+        metadata={"source_id": "paper", "element_id": "a"},
+        score=0.90000041,
+    )
+    second = RetrievedDocument(
+        text="same relevance b",
+        id_="doc-b",
+        metadata={"source_id": "paper", "element_id": "b"},
+        score=0.90000049,
+    )
+
+    forward = system._combine_hits("query", [second, first], [])
+    reverse = system._combine_hits("query", [first, second], [])
+
+    assert [hit.doc_id for hit in forward] == ["doc-a"]
+    assert [hit.doc_id for hit in reverse] == ["doc-a"]
+
+
 def test_text_rag_system_selects_configured_pdf_reader_and_cold_cache(tmp_path):
     expected_readers = {
         "adobe": system_module.adobe_reader,
@@ -292,6 +354,12 @@ def test_text_rag_generation_uses_benchmark_prompt_not_user_template(
     assert "USER SIDE TEMPLATE" not in prompt
     assert "Use the following context" not in prompt
     assert "Return the final answer as Markdown" not in prompt
+    assert llm.calls[0][1] == {
+        "temperature": 0,
+        "top_p": 1,
+        "seed": 20260724,
+    }
+    assert _metadata["generation_contract"] == llm.calls[0][1]
 
 
 def test_qasper_text_rag_defers_answerability_to_runner_task_contract(

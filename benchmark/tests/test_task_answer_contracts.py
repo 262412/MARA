@@ -53,6 +53,37 @@ def test_qasper_answerability_contract_runs_after_engine_projection():
     assert len(llm.calls) == 1
 
 
+def test_boolean_evidence_priorities_are_candidate_independent(monkeypatch):
+    import benchmark.task_answer_contracts as contracts
+
+    observed_candidates: list[str] = []
+    original = contracts.qasper_evidence_priorities
+
+    def capture_candidate(*args, **kwargs):
+        observed_candidates.append(kwargs["candidate_answer"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(contracts, "qasper_evidence_priorities", capture_candidate)
+    prediction: dict[str, Any] = {
+        "question": "Did the authors release the code?",
+        "predicted_answer": "yes",
+        "answer_type": "boolean",
+        "context_preview": "The authors released the code.",
+        "evidence_metadata": {},
+    }
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper",
+        llm_factory=lambda: _VerifierLLM(
+            '{"verdict":"yes_complete","evidence_quote":'
+            '"The authors released the code."}'
+        ),
+    )
+
+    assert observed_candidates == [""]
+
+
 def test_qasper_answerability_contract_does_not_run_twice():
     prediction: dict[str, Any] = {
         "question": "Did the authors release the code?",

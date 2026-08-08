@@ -181,6 +181,61 @@ def test_rrf_does_not_treat_reranker_score_as_first_stage_retrieval():
     assert trace["retriever_lists"] == ["text"]
 
 
+def test_equal_score_fusion_order_uses_canonical_identity_not_input_order():
+    items = [
+        {
+            "evidence_id": evidence_id,
+            "source_id": "report",
+            "text": "Identical retrieval evidence.",
+            "metadata": {"retriever_score": 0.5},
+        }
+        for evidence_id in ("b", "a")
+    ]
+
+    for strategy in ("weighted", "rrf"):
+        forward, forward_trace = fuse_hybrid_evidence(
+            "retrieval evidence",
+            items,
+            strategy=strategy,
+        )
+        reverse, reverse_trace = fuse_hybrid_evidence(
+            "retrieval evidence",
+            list(reversed(items)),
+            strategy=strategy,
+        )
+
+        assert [item["evidence_id"] for item in forward] == ["a", "b"]
+        assert [item["evidence_id"] for item in reverse] == ["a", "b"]
+        assert forward_trace["tie_breaker"] == "canonical_evidence_identity"
+        assert reverse_trace["score_tie_precision_decimals"] == 6
+
+
+def test_near_equal_retriever_scores_use_fixed_precision_then_identity():
+    items = [
+        {
+            "evidence_id": "b",
+            "source_id": "report",
+            "text": "Identical retrieval evidence.",
+            "retrieval_lineage": [{"retriever_name": "dense", "raw_score": 0.90000049}],
+        },
+        {
+            "evidence_id": "a",
+            "source_id": "report",
+            "text": "Identical retrieval evidence.",
+            "retrieval_lineage": [{"retriever_name": "dense", "raw_score": 0.90000041}],
+        },
+    ]
+
+    fused, trace = fuse_hybrid_evidence(
+        "retrieval evidence",
+        items,
+        strategy="rrf",
+    )
+
+    assert [item["evidence_id"] for item in fused] == ["a", "b"]
+    assert trace["score_tie_precision_decimals"] == 6
+
+
 def test_hybrid_route_can_use_rrf_fusion_strategy():
     request = DocQARequest(
         prompt="Explain revenue chart and table.", route_policy="hybrid"
@@ -290,7 +345,7 @@ def test_fused_lineage_records_the_actual_post_fusion_ranking_output():
         name = "fixture_promote_last"
 
         def score(self, query, item):
-            return 10.0 if item["evidence_id"] == "text-81" else 0.0
+            return 10.0 if item["evidence_id"] == "text-081" else 0.0
 
     request = DocQARequest(
         prompt="Find the promoted financial evidence.",
@@ -300,7 +355,7 @@ def test_fused_lineage_records_the_actual_post_fusion_ranking_output():
         "hybrid_fusion_ranker": PromoteLastRanker(),
         "evidence": [
             {
-                "evidence_id": f"text-{index}",
+                "evidence_id": f"text-{index:03d}",
                 "source_id": "report",
                 "page_label": str(index),
                 "text": f"Distinct financial statement evidence row {index}.",
@@ -316,10 +371,10 @@ def test_fused_lineage_records_the_actual_post_fusion_ranking_output():
     }
     fused_ids = {item["evidence_id"] for item in bundle.metadata["fused_evidence"]}
     assert len(candidate_ids) == 81
-    assert "text-81" in candidate_ids
-    assert "text-81" in fused_ids
+    assert "text-081" in candidate_ids
+    assert "text-081" in fused_ids
     assert fused_ids <= candidate_ids
-    assert "text-81" not in {
+    assert "text-081" not in {
         item["evidence_id"] for item in bundle.metadata["reranked_evidence"]
     }
     assert bundle.metadata["ranking_trace"]["backend_execution"] is True

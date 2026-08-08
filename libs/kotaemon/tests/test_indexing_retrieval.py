@@ -155,6 +155,27 @@ def test_rrf_fusion_orders_by_combined_rank_not_append_order():
     assert fused[0].score == (1 / 63) + (1 / 61)
 
 
+def test_rrf_equal_scores_use_canonical_identity_not_path_order():
+    first = RetrievedDocument(
+        text="First distinct span.",
+        id_="runtime-b",
+        score=0.5,
+        metadata={"file_id": "report", "element_id": "b"},
+    )
+    second = RetrievedDocument(
+        text="Second distinct span.",
+        id_="runtime-a",
+        score=0.5,
+        metadata={"file_id": "report", "element_id": "a"},
+    )
+
+    forward = VectorRetrieval._reciprocal_rank_fuse([first], [second])
+    reverse = VectorRetrieval._reciprocal_rank_fuse([second], [first])
+
+    assert [item.metadata["element_id"] for item in forward] == ["a", "b"]
+    assert [item.metadata["element_id"] for item in reverse] == ["a", "b"]
+
+
 def test_rrf_fusion_keeps_single_path_modes_unchanged():
     vector_docs = [_retrieved_doc("vector-only", score=0.42)]
     text_docs = [_retrieved_doc("text-only", score=-1.0)]
@@ -254,6 +275,15 @@ class _RecordingReranker(BaseReranking):
         return self._received_doc_ids
 
 
+class _MetadataScoreReranker(BaseReranking):
+    def run(self, documents, query):
+        for document in documents:
+            document.metadata["local_reranking_score"] = (
+                1.0 if document.doc_id == "doc-b" else 0.0
+            )
+        return list(reversed(documents))
+
+
 def test_hybrid_retrieval_defaults_match_wide_recall_contract():
     retrieval = VectorRetrieval(
         vector_store=_RecordingVectorStore([]),
@@ -317,6 +347,25 @@ def test_hybrid_retrieval_limits_documents_before_local_reranking():
     assert trace["input_identities"] == reranker.received_doc_ids
     assert all(doc.metadata["reranker_input_identity"] for doc in result)
     assert all(doc.metadata["reranker_rank"] > 0 for doc in result)
+
+
+def test_reranker_score_remains_authoritative_over_original_retrieval_score():
+    ids = ["doc-a", "doc-b"]
+    retrieval = VectorRetrieval(
+        vector_store=_RecordingVectorStore(ids),
+        doc_store=_RecordingDocStore(ids),
+        embedding=_RecordingEmbedding(),
+        retrieval_mode="vector",
+        rerankers=[_MetadataScoreReranker()],
+        dense_top_k=2,
+        rerank_top_k=2,
+        top_k=1,
+    )
+
+    result = retrieval(text="query", scope=ids, do_extend=True)
+
+    assert [doc.doc_id for doc in result] == ["doc-b"]
+    assert result[0].metadata["reranker_score"] == 1.0
 
 
 def test_hybrid_retrieval_boosts_query_routed_element_types():

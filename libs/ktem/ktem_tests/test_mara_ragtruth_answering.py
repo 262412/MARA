@@ -87,6 +87,12 @@ def test_ragtruth_answering_calls_llm_with_task_prompt_without_retrieved_context
             },
         },
         "temperature": 0,
+        "top_p": 1,
+        "seed": 20260724,
+    }
+    assert bundle.metadata["generation_contract"] == {
+        "temperature": 0,
+        "top_p": 1,
         "seed": 20260724,
     }
     assert bundle.metadata["generation_backend"] == "ragtruth_task_llm"

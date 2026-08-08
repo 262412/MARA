@@ -364,7 +364,11 @@ def test_second_round_retrieves_missing_same_source_scale_convention():
 
     assert queries == [
         "capital expenditure capital spending consolidated statement of cash flows 2021",
-        "tabular dollars unit scale convention",
+        (
+            "tabular dollars unit scale convention capital expenditure 2021 "
+            "capital expenditure capital spending consolidated statement of cash "
+            "flows 2021"
+        ),
     ]
     assert result.evidence_bundle.metadata["retrieval_rounds"] == 1
     assert result.evidence_bundle.metadata["slot_coverage"] == 1.0

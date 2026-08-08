@@ -474,6 +474,7 @@ class MaraAgentPipeline(FullQAPipeline):
                     history,
                 ),
                 metadata_builder=self.build_evidence_metadata,
+                request=_request,
             )
 
         def generate(_request: Any, _decision: Any, _bundle: Any) -> str:

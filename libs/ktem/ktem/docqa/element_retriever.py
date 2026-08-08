@@ -4,6 +4,7 @@ import re
 from copy import deepcopy
 from typing import Any, Protocol
 
+from .deterministic_ranking import quantized_score
 from .evidence_identity import identity_of
 
 
@@ -52,11 +53,10 @@ def rank_element_records(
     backend = retriever or LocalElementRetriever()
     hints = _normalize_hints(evidence_hints)
     scored = [
-        (_score_record(backend, query, record, hints), index, record)
-        for index, record in enumerate(records)
+        (_score_record(backend, query, record, hints), record) for record in records
     ]
-    scored.sort(key=lambda item: (-item[0], item[1]))
-    scores = {identity_of(record).key: score for score, _, record in scored}
+    scored.sort(key=lambda item: (-quantized_score(item[0]), identity_of(item[1]).key))
+    scores = {identity_of(record).key: score for score, record in scored}
     ranked = [
         _with_score_metadata(
             record,
@@ -65,7 +65,7 @@ def rank_element_records(
             getattr(backend, "backend_type", "custom"),
             _hint_matches(record, hints),
         )
-        for score, _, record in scored
+        for score, record in scored
     ]
     return ranked, scores
 

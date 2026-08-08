@@ -4,6 +4,16 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .boolean_scope_quantifiers import (
+    _closed_quantifier,
+    _english_closed_scope,
+    _has_closed_quantifier,
+    _language_data_question,
+    _non_english_counterexample,
+    _quantified_object_scope_complete,
+    _scope_excerpt,
+)
+
 
 @dataclass(frozen=True)
 class BooleanScopeDecision:
@@ -63,7 +73,7 @@ def validate_boolean_scope(
     matching_item = _matching_item(quote, evidence_items or [])
     section_role = _section_role(matching_item, quote)
     actor = _actor(_bound_local_context(matching_item, quote), section_role)
-    quantifier = "only" if _has_closed_quantifier(question) else "none"
+    quantifier = _closed_quantifier(question)
     scope_rejection = _scope_rejection(
         question,
         actor=actor,
@@ -78,7 +88,7 @@ def validate_boolean_scope(
             False,
             scope_rejection,
         )
-    if quantifier != "only":
+    if quantifier == "none":
         return BooleanScopeDecision(
             actor,
             section_role,
@@ -87,13 +97,57 @@ def validate_boolean_scope(
             "non_quantified_proposition",
         )
     if not _language_data_question(question):
-        return BooleanScopeDecision(
-            actor,
-            section_role,
-            quantifier,
-            actor == "current_paper",
-            "quantified_scope_requires_current_paper_actor",
+        return _quantified_scope_decision(
+            question,
+            quote,
+            actor=actor,
+            section_role=section_role,
+            quantifier=quantifier,
         )
+    return _language_scope_decision(
+        actor,
+        section_role,
+        quantifier,
+        quote,
+        verdict,
+    )
+
+
+def _quantified_scope_decision(
+    question: str,
+    quote: str,
+    *,
+    actor: str,
+    section_role: str,
+    quantifier: str,
+) -> BooleanScopeDecision:
+    complete = _quantified_object_scope_complete(
+        question,
+        quote,
+        quantifier=quantifier,
+    )
+    return BooleanScopeDecision(
+        actor,
+        section_role,
+        quantifier,
+        actor == "current_paper" and complete,
+        (
+            "quantified_scope_requires_current_paper_actor"
+            if actor != "current_paper"
+            else "quantified_object_scope_complete"
+            if complete
+            else "quantified_object_scope_incomplete"
+        ),
+    )
+
+
+def _language_scope_decision(
+    actor: str,
+    section_role: str,
+    quantifier: str,
+    quote: str,
+    verdict: str,
+) -> BooleanScopeDecision:
     if actor != "current_paper" or section_role not in {
         "experiments",
         "methods",
@@ -119,13 +173,7 @@ def validate_boolean_scope(
     else:
         valid = False
         reason = "no_typed_boolean_polarity"
-    return BooleanScopeDecision(
-        actor,
-        section_role,
-        quantifier,
-        valid,
-        reason,
-    )
+    return BooleanScopeDecision(actor, section_role, quantifier, valid, reason)
 
 
 def scope_valid_support_items(
@@ -317,11 +365,25 @@ def _matching_item(
 
 def _actor(quote: str, section_role: str) -> str:
     lowered = str(quote or "").lower()
+    if re.search(
+        r"\b(?:external|independent|different|outside)\s+"
+        r"(?:authors?|researchers?|papers?|stud(?:y|ies)|work)\b",
+        lowered,
+    ) or re.search(
+        r"\bby\s+(?:an?\s+|the\s+)?(?:external|independent|different|outside)\s+"
+        r"(?:authors?|researchers?|papers?|stud(?:y|ies)|work)\b",
+        lowered,
+    ):
+        return "other_authors"
     if any(
         marker in lowered
         for marker in (
             "other authors",
+            "another paper",
+            "another study",
             "other researchers",
+            "other paper",
+            "other study",
             "other studies",
             "other work",
         )
@@ -336,6 +398,17 @@ def _actor(quote: str, section_role: str) -> str:
     if (
         section_role == "related_work"
         or any(marker in lowered for marker in cited_markers)
+        or re.search(
+            r"\b(?:prior|previous|earlier|cited|related)\s+"
+            r"(?:paper|article|study|research|work)\b",
+            lowered,
+        )
+        or re.search(
+            r"\baccording\s+to\s+(?:prior|previous|earlier|cited|related)\s+"
+            r"(?:research|work|stud(?:y|ies))\b",
+            lowered,
+        )
+        or re.search(r"\b(?:19|20)\d{2}\s+(?:paper|study|work)\b", lowered)
         or re.search(r"\b[a-z]+(?:\.[a-z]+)+\.\d{4}\b", lowered)
         or re.search(r"\b[a-z][a-z-]+\s+et\s+al\.?\s*(?:19|20)\d{2}\b", lowered)
     ):
@@ -491,80 +564,6 @@ def _current_paper_section_roles(question: str) -> set[str]:
     if re.search(r"\b(?:method|approach|propose|introduce|train|use)\w*\b", lowered):
         return {"introduction", "methods", "results"}
     return {"introduction", "experiments", "methods", "results"}
-
-
-def _has_closed_quantifier(question: str) -> bool:
-    return bool(
-        re.search(
-            r"\b(?:only|exclusively|solely|all)\b",
-            str(question or ""),
-            flags=re.IGNORECASE,
-        )
-    )
-
-
-def _language_data_question(question: str) -> bool:
-    lowered = str(question or "").lower()
-    return "english" in lowered and bool(
-        re.search(r"\b(?:data|dataset|corpus|language|result|experiment)\w*\b", lowered)
-    )
-
-
-def _non_english_counterexample(quote: str) -> bool:
-    for statement in re.split(r"(?:\r?\n)+|(?<=[.!?])\s+", str(quote or "")):
-        lowered = statement.lower()
-        if re.search(
-            r"\b(?:non-english|greek|german|french|spanish|chinese|"
-            r"japanese|arabic|multilingual)\b",
-            lowered,
-        ) and re.search(
-            r"\b(?:evaluate|evaluated|evaluation|experiment|report|results?|"
-            r"test|tested|dataset|corpus)\w*\b",
-            lowered,
-        ):
-            return True
-    return False
-
-
-def _english_closed_scope(quote: str) -> bool:
-    lowered = str(quote or "").lower()
-    return "english" in lowered and bool(
-        re.search(
-            r"\b(?:only|exclusively|solely|all (?:the )?(?:data|datasets|corpora)|"
-            r"english-speaking countries)\b",
-            lowered,
-        )
-    )
-
-
-def _scope_excerpt(text: str, polarity: str) -> str | None:
-    statements = [
-        (match.start(), match.end(), match.group(0).strip())
-        for match in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", str(text or ""))
-        if match.group(0).strip()
-    ]
-    windows = list(statements)
-    windows.extend(
-        (left[0], right[1], text[left[0] : right[1]].strip())
-        for left, right in zip(statements, statements[1:])
-    )
-    candidates = []
-    for start, end, excerpt in windows:
-        if polarity == "no":
-            valid = _non_english_counterexample(excerpt)
-        else:
-            valid = _english_closed_scope(excerpt) and bool(
-                re.search(
-                    r"\b(?:report|result|evaluat|experiment|test|dataset|corpus|data)\w*\b",
-                    excerpt,
-                    flags=re.IGNORECASE,
-                )
-            )
-        if valid:
-            candidates.append((end - start, start, excerpt))
-    if not candidates:
-        return None
-    return min(candidates)[2]
 
 
 def _normalized(value: str) -> str:

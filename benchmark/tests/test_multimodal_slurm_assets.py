@@ -318,6 +318,17 @@ def test_slurm_scripts_export_content_digest_index_contract():
         )
 
 
+def test_slurm_scripts_export_exact_embedding_service_contract():
+    for script in (TEXT_SLURM_SCRIPT, SLURM_SCRIPT):
+        text = script.read_text(encoding="utf-8")
+        assert "MARA_BENCHMARK_EMBEDDING_CONTRACT" in text
+        assert "local_retrieval_server.py" in text
+        assert "env-retrieval.sh" in text
+        assert text.index("MARA_BENCHMARK_EMBEDDING_CONTRACT") < text.index(
+            "python -m benchmark run"
+        )
+
+
 def test_index_contract_changes_when_document_content_changes(tmp_path):
     document = tmp_path / "document.txt"
     manifest = tmp_path / "manifest.json"

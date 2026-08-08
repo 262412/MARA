@@ -38,7 +38,7 @@ def calculation_steps(
             "percent",
         )
     if question_type in {"free_cash_flow", "free_cash_flow_negative_capex"}:
-        return _free_cash_flow_steps(question_type)
+        return _free_cash_flow_steps(input_ids)
     if question_type in {
         "multi_period_average",
         "multi_period_percentage_average",
@@ -103,14 +103,22 @@ def _margin_steps(
 
 
 def _free_cash_flow_steps(
-    question_type: str,
+    input_ids: tuple[str, ...],
 ) -> tuple[tuple[CalculationStep, ...], str, str]:
+    operating_cash_flow = next(
+        (value for value in input_ids if value.startswith("operating_cash_flow")),
+        "operating_cash_flow",
+    )
+    capital_expenditure = next(
+        (value for value in input_ids if value.startswith("capital_expenditure")),
+        "capital_expenditure",
+    )
     return (
         (
             CalculationStep(
                 "result",
                 "subtract",
-                ("operating_cash_flow", "capital_expenditure"),
+                (operating_cash_flow, capital_expenditure),
             ),
         ),
         "result",

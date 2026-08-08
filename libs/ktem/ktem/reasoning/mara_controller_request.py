@@ -51,6 +51,21 @@ def controller_execution_request(
             or ""
         ),
         controller_mode=controller_mode or "llm",
+        generation_temperature=getattr(
+            docqa_request,
+            "generation_temperature",
+            getattr(pipeline, "generation_temperature", None),
+        ),
+        generation_top_p=getattr(
+            docqa_request,
+            "generation_top_p",
+            getattr(pipeline, "generation_top_p", None),
+        ),
+        generation_seed=getattr(
+            docqa_request,
+            "generation_seed",
+            getattr(pipeline, "generation_seed", None),
+        ),
         route_policy=getattr(pipeline, "route_policy", None) or "auto",
         allowed_routes=list(getattr(pipeline, "allowed_routes", None) or []),
         verification_mode=getattr(pipeline, "verification_mode", None) or "light",

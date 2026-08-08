@@ -6,6 +6,14 @@ from typing import Any, Callable, Sequence
 from kotaemon.base import RetrievedDocument
 
 from .rankings import BaseReranking, LLMReranking
+from .retrieval_identity import stable_scored_documents
+
+_RERANKER_SCORE_FIELDS = (
+    "reranking_score",
+    "local_reranking_score",
+    "llm_reranking_score",
+    "llm_trulens_score",
+)
 
 
 def execute_rerankers(
@@ -39,6 +47,9 @@ def execute_rerankers(
             if isinstance(reranker, LLMReranking):
                 output = filter_docs(output, output_top_k)
             output = reranker.run(documents=output, query=query)
+            output, score_field = stable_reranker_output(output, reranker)
+            if score_field:
+                trace["score_field"] = score_field
         trace.update(
             {
                 "executed": True,
@@ -96,11 +107,11 @@ def stamp_reranker_output(
     for rank, document in enumerate(documents, start=1):
         metadata = dict(document.metadata or {})
         retrieval_metadata = dict(document.retrieval_metadata or {})
-        score = metadata.get("reranking_score")
-        if score is None:
-            score = retrieval_metadata.get("reranking_score")
+        score = _declared_reranker_score(metadata, retrieval_metadata)
         if score is None:
             score = getattr(document, "score", None)
+        if score is not None:
+            document.score = float(str(score))
         fields = {
             "reranker_input_identity": retrieved_identity(document),
             "reranker_score": score,
@@ -113,3 +124,32 @@ def stamp_reranker_output(
         retrieval_metadata.update(fields)
         document.metadata = metadata
         document.retrieval_metadata = retrieval_metadata
+
+
+def stable_reranker_output(
+    documents: list[RetrievedDocument],
+    reranker: BaseReranking,
+) -> tuple[list[RetrievedDocument], str]:
+    preferred = str(getattr(reranker, "score_metadata_key", "") or "")
+    fields = tuple(dict.fromkeys((preferred, *_RERANKER_SCORE_FIELDS)))
+    for field in fields:
+        if not field:
+            continue
+        scores = [dict(document.metadata or {}).get(field) for document in documents]
+        if scores and all(score is not None for score in scores):
+            for document, score in zip(documents, scores):
+                document.score = float(str(score))
+            return stable_scored_documents(documents), field
+    return documents, ""
+
+
+def _declared_reranker_score(
+    metadata: dict[str, object],
+    retrieval_metadata: dict[str, object],
+) -> object | None:
+    for field in _RERANKER_SCORE_FIELDS:
+        if metadata.get(field) is not None:
+            return metadata[field]
+        if retrieval_metadata.get(field) is not None:
+            return retrieval_metadata[field]
+    return None

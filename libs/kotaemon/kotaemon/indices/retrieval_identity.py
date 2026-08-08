@@ -9,6 +9,8 @@ from kotaemon.base import RetrievedDocument
 from .performance_cache import content_hash
 
 _TOKEN_RE = re.compile(r"\s+")
+SCORE_TIE_PRECISION_DECIMALS = 6
+CANONICAL_TIE_BREAKER = "canonical_retrieval_identity"
 
 
 def reciprocal_rank_fuse(
@@ -48,9 +50,34 @@ def reciprocal_rank_fuse(
                 fused_docs[key] = merge_retrieval_documents(current, document)
     return sorted(
         (_with_score(fused_docs[key], score) for key, score in fused_scores.items()),
-        key=lambda document: document.score,
-        reverse=True,
+        key=stable_retrieval_sort_key,
     )
+
+
+def stable_retrieval_sort_key(document: RetrievedDocument) -> tuple[float, str]:
+    return (
+        -round(float(document.score or 0.0), SCORE_TIE_PRECISION_DECIMALS),
+        canonical_retrieval_identity(document),
+    )
+
+
+def canonical_retrieval_identity(document: RetrievedDocument) -> str:
+    return str(
+        document.retrieval_metadata.get("canonical_id") or _canonical_id(document)
+    )
+
+
+def stable_scored_documents(
+    documents: list[RetrievedDocument],
+) -> list[RetrievedDocument]:
+    return sorted(documents, key=stable_retrieval_sort_key)
+
+
+def deterministic_ranking_contract() -> dict[str, Any]:
+    return {
+        "score_tie_precision_decimals": SCORE_TIE_PRECISION_DECIMALS,
+        "tie_breaker": CANONICAL_TIE_BREAKER,
+    }
 
 
 def canonicalize_ranked_documents(

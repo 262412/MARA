@@ -189,6 +189,7 @@ def _heuristic_evidence_slots(
             role="operand" if finance_specs else "support",
             period_kind=period_kind,
             page_labels=_explicit_page_labels(capabilities),
+            query_context=text,
         )
         if finance_specs or finance_support_specs
         else heuristic_slots(
@@ -411,6 +412,7 @@ def _finance_slots(
     role: str = "operand",
     period_kind: str = "",
     page_labels: tuple[str, ...] = (),
+    query_context: str = "",
 ) -> tuple[EvidenceSlot, ...]:
     slots = []
     for index, (slot_id, metric, period) in enumerate(specs):
@@ -430,6 +432,7 @@ def _finance_slots(
                     metric,
                     period,
                     statement_kind=statement_kind,
+                    query_context=query_context,
                 ),
                 locator=_finance_slot_locator(
                     index,
@@ -441,13 +444,14 @@ def _finance_slots(
     slots_tuple = tuple(slots)
     if not require_scale:
         return slots_tuple
+    dimension_query = _finance_dimension_query(slots_tuple, query_context)
     return (
         *slots_tuple,
         EvidenceSlot(
             slot_id="dimension:scale",
             role="dimension",
             required_for_execution=True,
-            query="tabular dollars unit scale convention",
+            query=dimension_query,
         ),
     )
 
@@ -457,6 +461,7 @@ def _finance_retrieval_query(
     period: str,
     *,
     statement_kind: str,
+    query_context: str = "",
 ) -> str:
     terms = [metric]
     aliases = {
@@ -467,8 +472,19 @@ def _finance_retrieval_query(
             "cost of sales",
             "COGS",
         ),
+        "operating cash flow": (
+            "cash from operations",
+            "net cash provided by operating activities",
+        ),
+        "revolving credit capacity": (
+            "revolving credit agreement",
+            "revolving credit agreements",
+            "borrow up to",
+        ),
     }
     terms.extend(aliases.get(metric, ()))
+    if metric == "capital expenditure" and _is_free_cash_flow_query(query_context):
+        terms.extend(("capex", "purchases of land buildings and equipment"))
     headings = {
         "balance_sheet": "consolidated balance sheet",
         "cash_flow_statement": "consolidated statement of cash flows",
@@ -482,15 +498,47 @@ def _finance_retrieval_query(
     return " ".join(terms)
 
 
+def _is_free_cash_flow_query(question: str) -> bool:
+    lowered = str(question or "").lower()
+    return "free cash flow" in lowered or bool(re.search(r"\bfcf\b", lowered))
+
+
+def _finance_dimension_query(
+    slots: tuple[EvidenceSlot, ...],
+    query_context: str,
+) -> str:
+    terms = ["tabular dollars unit scale convention"]
+    for slot in slots:
+        terms.extend((slot.metric, slot.period, slot.query))
+    if _is_free_cash_flow_query(query_context):
+        terms.extend(
+            (
+                "consolidated statement of cash flows",
+                "net cash provided by operating activities",
+                "purchases of land buildings and equipment",
+            )
+        )
+    return " ".join(dict.fromkeys(term for term in terms if term))
+
+
 def _second_round_slot_query(slot: EvidenceSlot) -> str:
     if slot.role == "dimension":
-        return "parent table dollars scale unit convention for required operands"
+        return " ".join(
+            dict.fromkeys(
+                (
+                    slot.query,
+                    "parent table dollars scale unit convention",
+                    "statement locator",
+                )
+            )
+        )
     expanded = _finance_retrieval_query(
         slot.metric,
         slot.period,
         statement_kind=slot.statement_kind,
+        query_context=slot.query,
     )
-    identity_terms = [slot.slot_id.replace(":", " "), expanded]
+    identity_terms = [slot.slot_id.replace(":", " "), slot.query, expanded]
     if slot.financial_scope:
         identity_terms.append(slot.financial_scope)
     return " ".join(dict.fromkeys(term for term in identity_terms if term))

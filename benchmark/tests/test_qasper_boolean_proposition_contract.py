@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from ktem.docqa.boolean_evidence_scope import (
     classify_boolean_evidence,
     classify_boolean_evidence_set,
@@ -347,6 +348,67 @@ def test_balanced_conflict_requires_the_same_proposition_key() -> None:
     assert action == "abstained_polarity_conflict"
     assert answer == "unanswerable"
     assert trace["conflict_status"] == "balanced_conflict"
+
+
+@pytest.mark.parametrize(
+    "quote",
+    (
+        "A prior paper evaluated the dataset.",
+        "An earlier study evaluated the dataset.",
+        "A cited paper evaluated the dataset.",
+        "A related paper evaluated the dataset.",
+        "The dataset was evaluated by a different study.",
+        "External researchers evaluated the dataset.",
+    ),
+)
+def test_third_party_actor_markers_never_bind_current_paper_support(quote: str) -> None:
+    assessment = classify_boolean_evidence(
+        "Did they evaluate the dataset?",
+        "yes",
+        _item("third-party", quote),
+    )
+
+    assert assessment.classification == "insufficient_scope"
+    assert assessment.proposition.actor in {"cited_work", "other_authors"}
+
+
+@pytest.mark.parametrize(
+    "quote",
+    (
+        "We didn't evaluate the dataset.",
+        "We failed to evaluate the dataset.",
+        "We were unable to evaluate the dataset.",
+        "We evaluated no dataset.",
+        "We omitted evaluating the dataset.",
+        "We excluded evaluating the dataset.",
+        "We skipped evaluating the dataset.",
+    ),
+)
+def test_explicit_negative_predicates_are_opposite_polarity(quote: str) -> None:
+    assessment = classify_boolean_evidence(
+        "Did they evaluate the dataset?",
+        "yes",
+        _item("negative", quote),
+    )
+
+    assert assessment.classification == "contradicts"
+    assert assessment.proposition.polarity == "no"
+
+
+def test_positive_and_failed_target_relation_in_one_item_is_a_real_conflict() -> None:
+    classified = classify_boolean_evidence_set(
+        "Did they evaluate the dataset?",
+        "yes",
+        [
+            _item(
+                "mixed",
+                "We evaluated the dataset. We failed to evaluate the dataset.",
+            )
+        ],
+    )
+
+    assert classified.supports
+    assert classified.contradicts
 
 
 def test_only_quantifier_requires_scope_valid_counterexample() -> None:

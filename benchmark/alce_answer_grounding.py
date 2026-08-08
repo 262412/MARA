@@ -7,6 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .generation_contract import benchmark_generation_config
+
 ALCE_ANSWER_GROUNDING_CONTRACT = "alce_short_answer_grounding.v2"
 ALCE_ANSWER_GROUNDING_SEED = 20260724
 ALCE_MAX_GROUNDING_EVIDENCE = 8
@@ -110,6 +112,7 @@ def ground_alce_short_answer(
             answer=candidate_answer,
             trace=_trace("not_required"),
         )
+    generation_contract = benchmark_generation_config()
     response = llm(
         _grounding_prompt(
             question=question,
@@ -118,8 +121,7 @@ def ground_alce_short_answer(
         ),
         max_tokens=192,
         response_format=ALCE_ANSWER_GROUNDING_RESPONSE_FORMAT,
-        temperature=0,
-        seed=ALCE_ANSWER_GROUNDING_SEED,
+        **generation_contract,
     )
     payload = _grounding_payload(getattr(response, "text", "") or str(response))
     if payload is None:
@@ -316,4 +318,5 @@ def _trace(
         "verdict": verdict,
         "evidence_id": evidence_id,
         "answer_changed": answer_changed,
+        "generation_contract": benchmark_generation_config(),
     }

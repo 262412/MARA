@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from .deterministic_ranking import quantized_score
+from .evidence_identity import identity_of as evidence_identity_of
+
 SELECTION_SCORE_CONTRACT = "single_stage_per_query_rank_normalized_v2"
 _SCORE_FIELDS = (
     "learned_score",
@@ -74,7 +77,13 @@ def _ranked_field_rows(
         value = _score_field_value(item, field)
         if value is not None:
             rows.append((value, index, item))
-    return sorted(rows, key=lambda row: (-row[0], row[1]))
+    return sorted(
+        rows,
+        key=lambda row: (
+            -quantized_score(row[0]),
+            evidence_identity_of(row[2]).key,
+        ),
+    )
 
 
 def _score_field_value(item: dict[str, Any], field: str) -> float | None:

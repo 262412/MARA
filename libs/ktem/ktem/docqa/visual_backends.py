@@ -136,12 +136,16 @@ class QwenVLVisualGenerator:
             }
         ]
         content.extend(_image_parts(items, limit=self.max_images))
+        generation_contract = _generation_contract(request)
         response = self._client().chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": content}],
-            temperature=0,
+            **generation_contract,
             max_tokens=_effective_max_output_tokens(request, self.max_output_tokens),
         )
+        metadata = getattr(bundle, "metadata", None)
+        if isinstance(metadata, dict):
+            metadata["generation_contract"] = generation_contract
         return str(response.choices[0].message.content or "").strip()
 
     def _client(self):
@@ -152,6 +156,17 @@ class QwenVLVisualGenerator:
             base_url=self.base_url,
             timeout=self.timeout,
         )
+
+
+def _generation_contract(request: Any) -> dict[str, float | int]:
+    temperature = getattr(request, "generation_temperature", None)
+    top_p = getattr(request, "generation_top_p", None)
+    seed = getattr(request, "generation_seed", None)
+    return {
+        "temperature": 0 if temperature is None else float(temperature),
+        "top_p": 1 if top_p is None else float(top_p),
+        "seed": 20260724 if seed is None else int(seed),
+    }
 
 
 _RETRIEVERS: dict[str, VisualBackendSpec] = {

@@ -363,6 +363,9 @@ def copy_request_fields(target: Any, source: Any) -> None:
     target.max_context_length = source.max_context_length
     target.route_timeout_seconds = source.route_timeout_seconds
     target.route_deadline_monotonic = source.route_deadline_monotonic
+    target.generation_temperature = source.generation_temperature
+    target.generation_top_p = source.generation_top_p
+    target.generation_seed = source.generation_seed
 
 
 def selected_ids(runtime: Any, user_id: Any, selected_inputs: dict[int, Any]):

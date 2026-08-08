@@ -51,8 +51,15 @@ def test_alce_grounding_rejects_unsafe_correction_of_nonempty_candidate():
         "verdict": "corrected",
         "evidence_id": "speaker-range",
         "answer_changed": False,
+        "generation_contract": {
+            "temperature": 0,
+            "top_p": 1,
+            "seed": 20260724,
+        },
     }
     assert llm.calls[0][1]["temperature"] == 0
+    assert llm.calls[0][1]["top_p"] == 1
+    assert llm.calls[0][1]["seed"] == 20260724
     assert llm.calls[0][1]["response_format"]["type"] == "json_schema"
 
 

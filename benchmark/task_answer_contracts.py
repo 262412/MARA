@@ -121,15 +121,16 @@ def _adjudicate_qasper_answer(
 ) -> QasperAnswerabilityResult:
     candidate = candidate_state.candidate_for_answerability
     question = str(prediction.get("question") or "")
+    answer_type = str(prediction.get("answer_type") or "").strip().lower()
     priorities = qasper_evidence_priorities(
         prediction,
         evidence_items,
         question=question,
-        candidate_answer=candidate,
+        candidate_answer="" if answer_type == "boolean" else candidate,
     )
     typed_boolean_recheck = bool(
         not candidate
-        and str(prediction.get("answer_type") or "").strip().lower() == "boolean"
+        and answer_type == "boolean"
         and (
             priorities.required_evidence_ids
             or priorities.generation_evidence_ids
@@ -160,7 +161,7 @@ def _adjudicate_qasper_answer(
             priorities.claim_contradiction_evidence_ids
         ),
         candidate_answer="unanswerable" if typed_boolean_recheck else candidate,
-        answer_type=str(prediction.get("answer_type") or ""),
+        answer_type=answer_type,
     )
     if not typed_boolean_recheck:
         return result

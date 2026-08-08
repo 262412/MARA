@@ -398,7 +398,11 @@ def test_direct_finance_value_plan_has_one_metric_slot():
     ]
     assert plan.subqueries == (
         "capital expenditure capital spending consolidated statement of cash flows 2021",
-        "tabular dollars unit scale convention",
+        (
+            "tabular dollars unit scale convention capital expenditure 2021 "
+            "capital expenditure capital spending consolidated statement of cash "
+            "flows 2021"
+        ),
     )
 
 

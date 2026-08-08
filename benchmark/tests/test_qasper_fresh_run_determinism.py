@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from benchmark.docqa_response_projection import response_evidence_outputs
+from benchmark.qasper_boolean_prompt import fit_boolean_verifier_prompt
 from benchmark.qasper_evidence import qasper_paragraph_f1
 from benchmark.qasper_evidence_identity import stabilize_qasper_evidence_projection
 from benchmark.qasper_fresh_run_diff import compare_prediction_runs
@@ -75,6 +76,62 @@ def test_verifier_prompt_and_fingerprint_ignore_runtime_uuid_and_input_order() -
         entry["evidence_ref"] for entry in aliases_b
     ]
     assert aliases_a[0]["runtime_evidence_id"] != aliases_b[0]["runtime_evidence_id"]
+
+
+def test_boolean_verifier_prompt_and_fingerprint_ignore_generator_candidate() -> None:
+    question = "Did the authors evaluate the model on clinical tasks?"
+    evidence_items = [
+        _evidence(
+            "runtime-support",
+            "We evaluated the model on clinical tasks.",
+            text_hash="support-hash",
+        ),
+        _evidence(
+            "runtime-contradiction",
+            "We did not evaluate the model on legal tasks.",
+            text_hash="contradiction-hash",
+        ),
+        _evidence(
+            "runtime-candidate-overlap",
+            "The appendix discusses a biomedical encoder and optimizer settings.",
+            text_hash="candidate-overlap-hash",
+        ),
+    ]
+
+    outputs = []
+    for candidate in (
+        "yes",
+        "no",
+        "The biomedical encoder was evaluated on clinical tasks.",
+        "unanswerable",
+    ):
+        outputs.append(
+            fit_boolean_verifier_prompt(
+                question=question,
+                evidence="\n".join(str(item["text"]) for item in evidence_items),
+                evidence_items=evidence_items,
+                candidate_answer=candidate,
+                required_evidence_ids=None,
+                required_slot_ids=None,
+                priority_evidence_ids=None,
+                claim_support_evidence_ids=None,
+                claim_contradiction_evidence_ids=None,
+            )
+        )
+
+    prompts = {prompt for prompt, _bounded, _trace in outputs}
+    bounded_inputs = {bounded for _prompt, bounded, _trace in outputs}
+    fingerprints = {
+        trace["canonical_prompt_fingerprint"] for _prompt, _bounded, trace in outputs
+    }
+    alias_mappings = {
+        trace["verifier_evidence_alias_mapping"] for _prompt, _bounded, trace in outputs
+    }
+
+    assert len(prompts) == 1
+    assert len(bounded_inputs) == 1
+    assert len(fingerprints) == 1
+    assert len(alias_mappings) == 1
 
 
 def test_qasper_projection_order_uses_canonical_provenance_not_runtime_ids() -> None:
@@ -222,12 +279,37 @@ def test_fresh_run_diff_ignores_runtime_ids_but_reports_semantic_drift() -> None
     uuid_only["retrieved_hits"][0]["evidence_id"] = "fresh-a"
     semantic = deepcopy(uuid_only)
     semantic["predicted_answer"] = "no"
+    candidate_only = deepcopy(uuid_only)
+    candidate_only["evidence_metadata"][
+        "pre_verification_answer"
+    ] = "A different generator candidate."
+    authority_only = deepcopy(uuid_only)
+    authority_only["evidence_metadata"]["qasper_answerability"].update(
+        {
+            "adjudicated_polarity": "no",
+            "authoritative_quote_evidence_id": "fresh-a",
+            "authoritative_claim_key": [
+                "current_paper",
+                "evaluate",
+                "dataset",
+                "",
+                "",
+            ],
+        }
+    )
 
     ignored = compare_prediction_runs([baseline], [uuid_only])
     drifted = compare_prediction_runs([baseline], [semantic])
+    candidate_drifted = compare_prediction_runs([baseline], [candidate_only])
+    authority_drifted = compare_prediction_runs([baseline], [authority_only])
 
     assert ignored["aligned_prediction_count"] == 1
     assert ignored["runtime_only_identity_drift_count"] == 1
     assert ignored["canonical_retrieved_evidence_set_drift_count"] == 0
     assert ignored["unexpected_terminal_state_drift_count"] == 0
     assert drifted["unexpected_terminal_state_drift_count"] == 1
+    assert candidate_drifted["candidate_state_drift_count"] == 1
+    assert candidate_drifted["canonical_prompt_fingerprint_drift_count"] == 0
+    assert candidate_drifted["unexpected_terminal_state_drift_count"] == 0
+    assert authority_drifted["authority_drift_count"] == 1
+    assert authority_drifted["unexpected_terminal_state_drift_count"] == 0

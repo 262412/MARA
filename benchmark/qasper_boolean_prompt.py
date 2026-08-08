@@ -38,7 +38,10 @@ def fit_boolean_verifier_prompt(
         evidence_items,
         prompt_builder,
         question=question,
-        candidate_answer=candidate_answer,
+        # The generator candidate is advisory for Boolean questions.  Keeping it
+        # out of evidence packing makes the verifier input a pure function of the
+        # canonical question, evidence, and explicit evidence identities.
+        candidate_answer="",
         required_evidence_ids=required_evidence_ids,
         required_slot_ids=required_slot_ids,
         priority_evidence_ids=priority_evidence_ids,
