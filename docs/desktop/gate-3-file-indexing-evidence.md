@@ -7,7 +7,9 @@ Gate 3 的首个纵向切片是“原生文件导入 → 后台索引 → Files 
 当前状态为 **In progress**。只有 Windows、Ubuntu 原生组合包均完成真实索引/删除
 smoke，并补齐产品 VM、支持格式与异常场景验收后，才能升级为 `Verified`。提交
 `fce9843` 已关闭 Windows Server 2022、Ubuntu 22.04/24.04 的轻量格式矩阵自动化
-缺口；剩余项不再包含原生构建流水线或文本类格式的跨平台 smoke。
+缺口；提交 `e0bff90` 又关闭磁盘满、数据库锁和 5 MiB 文件的 Windows/Ubuntu
+原生组合包验证。剩余项不再包含原生构建流水线、文本类格式跨平台 smoke 或这些
+故障恢复场景。
 
 本切片不复制 Gradio callback 或 DocQA 索引/删除业务逻辑，也不修改 `MARA`、
 `MARA-cli` 命令、Click 参数、Gradio 事件链、数据库 schema 或现有会话字段。
@@ -86,26 +88,27 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 
 ## 当前验收状态
 
-| 项目                                      | 状态    |
-| ----------------------------------------- | ------- |
-| 现有 CLI 行为特征测试                     | 已通过  |
-| MARA application service 单元/集成测试    | 已通过  |
-| Sidecar 认证、参数、响应和事件契约        | 已通过  |
-| Electron IPC sender、参数和原生选择器测试 | 已通过  |
-| React 索引/删除状态覆盖                   | 已通过  |
-| Linux 开发态真实索引/刷新/删除 smoke      | 已通过  |
-| Linux 开发态轻量支持格式矩阵              | 已通过  |
-| Linux 开发态模型故障与运行中取消恢复      | 已通过  |
-| Linux 开发态部分失败与定向重试            | 已通过  |
-| Linux 开发态 Sidecar 中断与重启恢复       | 已通过  |
-| Linux 开发态 5 MiB 容量 canary            | 已通过  |
-| 磁盘满/数据库锁单元与 Sidecar 契约        | 已通过  |
-| Windows/Ubuntu 磁盘满与数据库锁组合包     | 待新 CI |
-| 当前代码的 Linux 自包含组合包 smoke       | 已通过  |
-| 完整 `ktem` package gate                  | 已通过  |
-| 完整 `slide_cli` package gate             | 已通过  |
-| 当前代码的 Windows 原生组合包/Defender    | 已通过  |
-| 当前代码的 Ubuntu 22.04/24.04 smoke       | 已通过  |
+| 项目                                      | 状态   |
+| ----------------------------------------- | ------ |
+| 现有 CLI 行为特征测试                     | 已通过 |
+| MARA application service 单元/集成测试    | 已通过 |
+| Sidecar 认证、参数、响应和事件契约        | 已通过 |
+| Electron IPC sender、参数和原生选择器测试 | 已通过 |
+| React 索引/删除状态覆盖                   | 已通过 |
+| Linux 开发态真实索引/刷新/删除 smoke      | 已通过 |
+| Linux 开发态轻量支持格式矩阵              | 已通过 |
+| Linux 开发态模型故障与运行中取消恢复      | 已通过 |
+| Linux 开发态部分失败与定向重试            | 已通过 |
+| Linux 开发态 Sidecar 中断与重启恢复       | 已通过 |
+| Linux 开发态 5 MiB 容量 canary            | 已通过 |
+| 磁盘满/数据库锁单元与 Sidecar 契约        | 已通过 |
+| Windows/Ubuntu 磁盘满与数据库锁组合包     | 已通过 |
+| Windows/Ubuntu 5 MiB 容量 canary          | 已通过 |
+| 当前代码的 Linux 自包含组合包 smoke       | 已通过 |
+| 完整 `ktem` package gate                  | 已通过 |
+| 完整 `slide_cli` package gate             | 已通过 |
+| 当前代码的 Windows 原生组合包/Defender    | 已通过 |
+| 当前代码的 Ubuntu 22.04/24.04 smoke       | 已通过 |
 
 当前基线重新验证已取得完整 package green：`ktem` 为 1,632 passed，`slide_cli`
 完整测试包也全部通过。Canonical runtime 新增的生成参数已同步到兼容 facade，并以
@@ -298,7 +301,41 @@ Ubuntu 24.04 复用 Ubuntu 22.04 的同一组合包和中断恢复后重新生�
 同一 Windows 运行记录首段 smoke 用时 13.139 秒、峰值工作集 97,476,608 bytes，
 发布目录 997,322,310 bytes、2,705 个文件。
 
-## 大文件开发态容量证据
+## 存储故障与大文件跨平台证据
+
+2026-08-08 的
+[Desktop Gate 3 运行 31275825336](https://github.com/262412/MARA/actions/runs/31275825336)
+基于提交 `e0bff900441f78e85c681d5b18f1a0f116e77077`，Windows Server 2022、Ubuntu
+22.04 原生包和 Ubuntu 24.04 跨版本任务全部成功。
+
+- Windows 与 Ubuntu 22.04 均在第一次任务日志写入处触发真实 `ENOSPC`，得到
+  `index_storage_full`、`retryable=true`，不留下未调度任务；恢复写入后重新创建
+  任务，真实索引、删除成功。
+- 两平台均在第一次 application service 索引调用触发 SQLite
+  `database is locked`，任务得到 `index_database_locked`、`retryable=true`；重试
+  原任务后真实索引、删除成功。
+- 两平台存储故障摘要分别为
+  `gate3_storage_fault=disk_full status=failed retry=status_success` 和
+  `gate3_storage_fault=database_locked status=failed retry=status_success`；故障 stderr
+  只记录请求/任务标识、文件名、错误类型或稳定错误码，不含 Desktop 数据根。
+- 两平台随后真实索引和删除 5,242,880 bytes 文本，正式 CLI 复核磁盘满、数据库锁
+  和大文件三个阶段均为 `record_count=0`。Ubuntu 24.04 使用 Ubuntu 22.04 的同一
+  组合包和恢复后数据快照完成跨版本复验。
+
+| 平台/产物               | Artifact ID | 压缩大小    | Actions digest                                                     |
+| ----------------------- | ----------- | ----------- | ------------------------------------------------------------------ |
+| Windows 完整组合包      | 9027040501  | 395,906,306 | `f6227a03b20ab699f7ba7c5c487d56e31825df4049494385b0cdd7c6e9c0b4dd` |
+| Windows smoke 诊断      | 9027033347  | 5,275       | `bfd65862f1d37a613647f17e3e3efa519614e6f87d2e3ed0ac424c31d67f7061` |
+| Windows Defender 诊断   | 9027033448  | 359         | `65810edeb1be2a0a37a40fa1b13a474f09ac10028acb7af555d691c5f538286c` |
+| Ubuntu 22.04 完整组合包 | 9027036448  | 412,939,786 | `8009ecfe83b3da8d947cb8b18eef5770aa56aef07a741d011eaffc7a042c2a34` |
+| Ubuntu 22.04 包体测量   | 9027036574  | 7,219       | `34386306ff67fcaed699be4c25d7672890f6feff354b2ea0f74d622e969c3597` |
+
+Windows 大文件索引 31.932 秒、删除 4.140 秒，总进程 38.767 秒，峰值工作集
+99,684,352 bytes；Ubuntu 22.04 索引 20.720 秒、删除 1.934 秒，总进程 25.45 秒，
+最大 RSS 653,388 KiB。Windows Defender 同时确认引擎和服务开启、移除 `D:\` 整盘
+排除、启用 archive scanning，并得到 `scan_result=no_detections`。
+
+## 大文件问题发现与修复
 
 2026-08-08 在独立 fastscratch 数据根运行 5,242,880 bytes 的确定性纯文本 canary。
 真实 Electron/Sidecar/DocQA runtime 完成解析、分块、embedding 和 Files 记录；首次
@@ -311,7 +348,8 @@ Ubuntu 24.04 复用 Ubuntu 22.04 的同一组合包和中断恢复后重新生�
 22.04 原生包及 Ubuntu 24.04 复验通过；Windows 在 338.183 秒后因删除超过 300 秒
 上限而得到 `sidecar_unavailable`。根因是共享 `DeletionCoordinator` 对每个向量和
 docstore ID 分别提交删除。提交 `14ea717` 将每个存储改为一次批量删除，并保留“批量
-遇到缺失目标时逐项幂等清理”的兼容路径；Windows 原生复验尚待新 CI。
+遇到缺失目标时逐项幂等清理”的兼容路径；上述运行已完成 Windows 原生复验，并把
+删除从超过 300 秒降至 4.140 秒。
 
 ## Linux 开发机参考测量
 
@@ -347,14 +385,14 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
    数据目录和残留进程验收。
 2. 增加拖放、批量选择，以及 PDF、Office 和图片的支持格式矩阵。文本、Markdown、
    CSV、HTML、MHTML 和 ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。
-3. 磁盘满和数据库锁的组合包故障注入已经实现，尚待 Windows/Ubuntu 原生 CI 证据。
-   模型 503 → 脱敏失败 → 原任务重试成功已通过 Windows/Ubuntu 原生组合包。运行中
+3. 磁盘满/数据库锁 → 稳定可重试错误 → 恢复成功，以及模型 503 → 脱敏失败 → 原
+   任务重试成功，均已通过 Windows/Ubuntu 原生组合包。运行中
    取消 → 文件边界停止 → 只重试剩余文件已通过 Windows/Ubuntu 原生组合包。取消
    不会强杀正在执行的单文件 parser/vector write。部分失败 → 只重试失败文件也已
    通过 Windows/Ubuntu 原生组合包。Sidecar 强制退出 → 自动重启 → 持久任务恢复
-   → 重试成功也已通过 Windows/Ubuntu 原生组合包。5 MiB 大文件已通过 Linux
-   开发态真实 runtime；Ubuntu 原生包已通过，Windows 暴露逐项删除瓶颈并已改为
-   批量删除，尚待复验。其索引、删除耗时必须继续作为性能基线跟踪。
+   → 重试成功也已通过 Windows/Ubuntu 原生组合包。5 MiB 大文件已通过两平台原生
+   包，Windows 暴露的逐项删除瓶颈已改为批量删除并完成复验。其索引、删除耗时必须
+   继续作为性能基线跟踪。
 4. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，

@@ -88,11 +88,11 @@ Beta 稳定化阶段，`Later` 表示不阻塞首发。状态在正式开发开�
 Gate 3 从“原生文件导入 → 后台索引 → Files 刷新/删除”开始。以下状态只表示该
 切片的进度，不代表文件格式矩阵、拖放、批量操作或整个 Gate 3 已完成。
 
-| 能力                   | 状态        | 当前证据                                                                                                          | 升级为 Verified 仍需                                 |
-| ---------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| 原生选择器导入         | In progress | Main 持有原生路径；格式来自认证 FileIndex 能力契约；sender/参数测试；Renderer 无路径                              | Windows 10/11 产品 VM 原生选择器验收、拖放与批量选择 |
-| 后台索引任务           | In progress | 真实 DocQA runtime；模型 503、取消、部分失败和 Sidecar 中断跨平台恢复；ENOSPC/数据库锁契约；5 MiB Ubuntu 原生通过 | PDF/Office/图片、Windows 大文件复验及存储故障原生 CI |
-| Files 完成后刷新与删除 | In progress | 终态只刷新一次；真实 deletion coordinator；Windows/Ubuntu 非空删除；Ubuntu CLI 写入 → Desktop 删除 → CLI 空       | 批量删除                                             |
+| 能力                   | 状态        | 当前证据                                                                                                             | 升级为 Verified 仍需                                 |
+| ---------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| 原生选择器导入         | In progress | Main 持有原生路径；格式来自认证 FileIndex 能力契约；sender/参数测试；Renderer 无路径                                 | Windows 10/11 产品 VM 原生选择器验收、拖放与批量选择 |
+| 后台索引任务           | In progress | 真实 DocQA runtime；模型 503、取消、部分失败、Sidecar 中断、ENOSPC/数据库锁跨平台恢复；5 MiB Windows/Ubuntu 原生通过 | PDF/Office/图片支持格式矩阵                          |
+| Files 完成后刷新与删除 | In progress | 终态只刷新一次；真实 deletion coordinator；Windows/Ubuntu 非空删除；Ubuntu CLI 写入 → Desktop 删除 → CLI 空          | 批量删除                                             |
 
 实现、测试、包体测量与剩余风险见
 [Gate 3 文件索引纵向切片证据](gate-3-file-indexing-evidence.md)。
