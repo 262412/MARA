@@ -88,22 +88,25 @@ class DesktopApplicationService:
         self._collect_import_capabilities = collect_import_capabilities
         self._create_runtime = create_runtime
         self._runtime: Any | None = None
-        self._mutation_lock = threading.Lock()
+        self._runtime_lock = threading.Lock()
 
     def get_doctor(self) -> dict[str, Any]:
-        return self._collect_doctor()
+        with self._runtime_lock:
+            return self._collect_doctor()
 
     def list_files(self) -> list[dict[str, Any]]:
-        return [
-            {field: record.get(field) for field in FILE_RESPONSE_FIELDS}
-            for record in self._collect_files()
-        ]
+        with self._runtime_lock:
+            return [
+                {field: record.get(field) for field in FILE_RESPONSE_FIELDS}
+                for record in self._collect_files()
+            ]
 
     def list_sessions(self) -> list[dict[str, Any]]:
-        return self._collect_sessions()
+        with self._runtime_lock:
+            return self._collect_sessions()
 
     def get_session(self, conversation_id: str) -> dict[str, Any]:
-        with self._mutation_lock:
+        with self._runtime_lock:
             session = self._get_runtime().load_session(conversation_id)
         if session is None:
             raise DesktopSessionNotFoundError(conversation_id)
@@ -127,7 +130,8 @@ class DesktopApplicationService:
         }
 
     def get_import_capabilities(self) -> dict[str, list[str]]:
-        return self._collect_import_capabilities()
+        with self._runtime_lock:
+            return self._collect_import_capabilities()
 
     def index_files(
         self,
@@ -135,7 +139,7 @@ class DesktopApplicationService:
         *,
         reindex: bool = False,
     ) -> dict[str, list[dict[str, Any]]]:
-        with self._mutation_lock:
+        with self._runtime_lock:
             result = self._get_runtime().index_paths(paths, reindex=reindex).as_dict()
         return {
             "successes": [
@@ -155,7 +159,7 @@ class DesktopApplicationService:
 
     def delete_files(self, file_ids: list[str]) -> list[dict[str, str]]:
         try:
-            with self._mutation_lock:
+            with self._runtime_lock:
                 records = self._get_runtime().delete_files(file_ids)
         except ValueError as exc:
             raise DesktopFileNotFoundError(",".join(file_ids)) from exc

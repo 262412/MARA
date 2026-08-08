@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -217,6 +219,53 @@ class DesktopApplicationServiceTest(unittest.TestCase):
         )
         with self.assertRaises(DesktopSessionNotFoundError):
             service.get_session("session-missing")
+
+    def test_serializes_collectors_with_runtime_initialization(self) -> None:
+        collector_started = threading.Event()
+        release_collector = threading.Event()
+        runtime_started = threading.Event()
+
+        def collect_doctor() -> dict:
+            collector_started.set()
+            if not release_collector.wait(timeout=2):
+                raise RuntimeError("Test collector was not released")
+            return {"ok": True}
+
+        class Runtime:
+            def load_session(self, conversation_id):
+                return SimpleNamespace(
+                    conversation_id=conversation_id,
+                    name="Serialized session",
+                    messages=[],
+                    graph_source_ids=[],
+                    origin="desktop",
+                    is_public=False,
+                    date_created=None,
+                    date_updated=None,
+                )
+
+        def create_runtime():
+            runtime_started.set()
+            return Runtime()
+
+        service = DesktopApplicationService(
+            collect_doctor=collect_doctor,
+            create_runtime=create_runtime,
+        )
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                doctor = executor.submit(service.get_doctor)
+                self.assertTrue(collector_started.wait(timeout=1))
+                session = executor.submit(service.get_session, "session-1")
+                self.assertFalse(runtime_started.wait(timeout=0.1))
+                release_collector.set()
+                self.assertEqual(doctor.result(timeout=1), {"ok": True})
+                self.assertEqual(
+                    session.result(timeout=1)["conversation_id"],
+                    "session-1",
+                )
+        finally:
+            release_collector.set()
 
     def test_configures_an_independent_desktop_data_tree(self) -> None:
         environment_names = [
