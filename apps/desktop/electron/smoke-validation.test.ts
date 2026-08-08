@@ -71,6 +71,34 @@ test("accepts the deterministic non-empty packaged smoke snapshot", () => {
   );
 });
 
+test("accepts an additional CLI-indexed file in the shared smoke data", () => {
+  const cliFiles: DesktopResult<FileRecord[]> = {
+    ok: true,
+    data: [
+      ...files.data,
+      {
+        file_id: "cli-indexed-file",
+        name: "gate3-cli-compat.txt",
+        size: 31,
+        tokens: 5,
+        loader: "TextReader",
+        date_created: "2026-08-08T11:00:00+00:00",
+      },
+    ],
+  };
+  const cliDoctor: DesktopResult<DoctorPayload> = {
+    ok: true,
+    data: { ...doctor.data, file_count: 2 },
+  };
+
+  assert.doesNotThrow(() =>
+    assertPackagedSmoke(
+      { status, doctor: cliDoctor, files: cliFiles, sessions },
+      true,
+    ),
+  );
+});
+
 test("rejects empty data when the packaged smoke requires real records", () => {
   assert.throws(
     () =>

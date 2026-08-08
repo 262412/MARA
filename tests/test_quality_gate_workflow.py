@@ -316,6 +316,34 @@ def test_desktop_jobs_smoke_deterministic_nonempty_data():
     assert "--smoke-test-nonempty" in linux_24_commands
 
 
+def test_desktop_smoke_proves_cli_data_compatibility_without_retaining_paths():
+    workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
+    jobs = workflow["jobs"]
+    linux_commands = _commands(jobs["package-linux-22"])
+    windows = jobs["package-windows"]
+    windows_commands = _commands(windows)
+
+    assert ".venv/bin/MARA docqa index" in linux_commands
+    assert linux_commands.count("MARA docqa files --json") == 2
+    assert "--expect-name gate3-cli-compat.txt" in linux_commands
+    assert "--expect-empty" in linux_commands
+    assert "KH_APP_DATA_DIR" in linux_commands
+
+    assert '".venv/Scripts/MARA.exe" docqa files --json' in windows_commands
+    assert "--expect-name gate2-smoke.txt" in windows_commands
+    assert "--expect-empty" in windows_commands
+    diagnostics = next(
+        step
+        for step in windows["steps"]
+        if step["name"] == "Upload Windows smoke diagnostics"
+    )
+    diagnostic_paths = diagnostics["with"]["path"]
+    assert "windows-cli-compat-before.txt" in diagnostic_paths
+    assert "windows-cli-compat-after.txt" in diagnostic_paths
+    assert "cli_compatibility_probe.py" in linux_commands
+    assert "cli_compatibility_probe.py" in windows_commands
+
+
 def test_windows_smoke_seeds_the_same_system_appdata_used_by_electron():
     workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
     job = workflow["jobs"]["package-windows"]

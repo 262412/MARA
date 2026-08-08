@@ -49,9 +49,9 @@ export function assertPackagedSmoke(
   );
   if (
     !doctor.data.ok ||
-    doctor.data.file_count !== 1 ||
-    doctor.data.session_count !== 1 ||
-    files.data.length !== 1 ||
+    doctor.data.file_count !== files.data.length ||
+    doctor.data.session_count !== sessions.data.length ||
+    files.data.length < 1 ||
     sessions.data.length !== 1 ||
     !fixtureFile ||
     !fixtureSession

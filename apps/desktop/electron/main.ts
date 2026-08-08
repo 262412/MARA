@@ -232,15 +232,28 @@ app.whenReady().then(async () => {
           terminal,
           filesAfterIndex,
         );
-        const deletedFixture = await sidecar.deleteFile(GATE2_SMOKE_FILE_ID);
-        const deletedIndexed = await sidecar.deleteFile(indexedFileId);
+        const initialFileIds = files.ok
+          ? files.data.map((record) => record.file_id)
+          : [GATE2_SMOKE_FILE_ID];
+        const fileIdsToDelete = [...new Set([...initialFileIds, indexedFileId])];
+        const deleteResults: Array<{
+          fileId: string;
+          result: DesktopResult<string[]>;
+        }> = [];
+        for (const fileId of fileIdsToDelete) {
+          deleteResults.push({
+            fileId,
+            result: await sidecar.deleteFile(fileId),
+          });
+        }
         const filesAfterDelete = await sidecar.listFiles();
-        assertGate3DeleteSmoke(deletedFixture, filesAfterDelete);
-        assertGate3DeleteSmoke(
-          deletedIndexed,
-          filesAfterDelete,
-          indexedFileId,
-        );
+        for (const deletion of deleteResults) {
+          assertGate3DeleteSmoke(
+            deletion.result,
+            filesAfterDelete,
+            deletion.fileId,
+          );
+        }
       }
     }, () => sidecar.stop());
     quitting = true;

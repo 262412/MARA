@@ -91,10 +91,28 @@ jobs:
           export no_proxy="$NO_PROXY"
           export http_proxy="$HTTP_PROXY"
           export https_proxy="$HTTPS_PROXY"
+          export KH_APP_DATA_DIR=/tmp/mara-desktop/data/MARA/state/ktem_app_data
+          export THEFLOW_SETTINGS_MODULE=ktem.default_flowsettings
+          export KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED=1
           mkdir -p apps/desktop/release/metrics
+          cli_input=/tmp/mara-desktop/data/MARA/tmp/gate3-cli-compat.txt
+          printf '%s\n' 'MARA CLI to Desktop Gate 3 compatibility fixture.' \
+            > "$cli_input"
+          .venv/bin/MARA docqa index "$cli_input" --json > /dev/null
+          set -o pipefail
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase cli-indexed \
+                --expect-name gate3-cli-compat.txt \
+                --summary-file apps/desktop/release/metrics/linux-22-cli-before.txt
           /usr/bin/time -v -o apps/desktop/release/metrics/linux-22-time.txt \
             xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
               --smoke-test-nonempty --smoke-test-gate3
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase desktop-deleted \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-cli-after.txt
           du -sb apps/desktop/release/MARA-linux-x64 \
             > apps/desktop/release/metrics/linux-22-size.txt
           find apps/desktop/release/MARA-linux-x64 -type f | wc -l \
@@ -256,6 +274,23 @@ jobs:
           $env:NO_PROXY = "127.0.0.1,localhost"
           $env:HTTP_PROXY = "http://127.0.0.1:9"
           $env:HTTPS_PROXY = "http://127.0.0.1:9"
+          $env:KH_APP_DATA_DIR = Join-Path $dataRoot "state/ktem_app_data"
+          $env:THEFLOW_SETTINGS_MODULE = "ktem.default_flowsettings"
+          $env:KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED = "1"
+          $cliBefore = "apps/desktop/release/windows-cli-compat-before.txt"
+          $cliAfter = "apps/desktop/release/windows-cli-compat-after.txt"
+          $beforeRecords = & ".venv/Scripts/MARA.exe" docqa files --json |
+            Out-String
+          if ($LASTEXITCODE -ne 0) {
+            throw "MARA CLI could not read the Desktop smoke data."
+          }
+          $beforeRecords | & $python `
+            "apps/desktop/sidecar/cli_compatibility_probe.py" `
+            --phase cli-read --expect-name gate2-smoke.txt `
+            --summary-file $cliBefore
+          if ($LASTEXITCODE -ne 0) {
+            throw "MARA CLI did not observe the Desktop fixture."
+          }
           $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
           $process = Start-Process $executable `
             -ArgumentList "--smoke-test-nonempty --smoke-test-gate3" `
@@ -281,6 +316,17 @@ jobs:
           }
           if ($process.ExitCode -ne 0) {
             exit $process.ExitCode
+          }
+          $afterRecords = & ".venv/Scripts/MARA.exe" docqa files --json |
+            Out-String
+          if ($LASTEXITCODE -ne 0) {
+            throw "MARA CLI could not read the post-Desktop data."
+          }
+          $afterRecords | & $python `
+            "apps/desktop/sidecar/cli_compatibility_probe.py" `
+            --phase desktop-deleted --expect-empty --summary-file $cliAfter
+          if ($LASTEXITCODE -ne 0) {
+            throw "MARA CLI still observes records deleted by Desktop."
           }
           $files = Get-ChildItem "apps/desktop/release/MARA-win32-x64" -Recurse -File
           $bytes = ($files | Measure-Object Length -Sum).Sum
@@ -351,6 +397,8 @@ jobs:
             apps/desktop/release/windows-smoke-stdout.txt
             apps/desktop/release/windows-smoke-stderr.txt
             apps/desktop/release/windows-metrics.txt
+            apps/desktop/release/windows-cli-compat-before.txt
+            apps/desktop/release/windows-cli-compat-after.txt
           if-no-files-found: warn
       - name: Upload Windows Defender diagnostics
         if: ${{ always() }}
