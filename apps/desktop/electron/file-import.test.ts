@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 
-import { chooseFilesForIndex } from "./file-import";
+import {
+  chooseFilesForIndex,
+  validateDroppedPathsForIndex,
+} from "./file-import";
 
 test("native import keeps selected paths in Main and supports cancellation", async () => {
   let receivedOptions: unknown;
@@ -34,6 +38,28 @@ test("native import keeps selected paths in Main and supports cancellation", asy
       [".txt"],
     ),
     [],
+  );
+});
+
+test("dropped import accepts only absolute paths with supported extensions", () => {
+  const paper = path.resolve("private", "source", "paper.pdf");
+  const notes = path.resolve("private", "source", "notes.md");
+
+  assert.deepEqual(
+    validateDroppedPathsForIndex([paper, notes], [".pdf", ".md"]),
+    [paper, notes],
+  );
+  assert.throws(
+    () => validateDroppedPathsForIndex(["relative/paper.pdf"], [".pdf"]),
+    /invalid dropped file path/,
+  );
+  assert.throws(
+    () => validateDroppedPathsForIndex([paper], [".txt"]),
+    /unsupported dropped file type/,
+  );
+  assert.throws(
+    () => validateDroppedPathsForIndex([paper, paper], [".pdf"]),
+    /must be unique/,
   );
 });
 

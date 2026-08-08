@@ -72,6 +72,11 @@ Gate 3 批量删除只接受 1–1,000 个唯一、不透明的文件 ID。Sidec
 分别校验数量与标识符格式，Renderer 不提交本地路径；删除继续按当前用户作用域由
 现有 DocQA runtime 解析 ID，避免把批量操作变成任意文件能力。
 
+文件拖放不恢复已被 Electron 移除的 Renderer `File.path`。页面只把 Web `File`
+对象传入 Preload；Preload 用 `webUtils.getPathForFile()` 解析后直接调用专用 IPC，
+Main 再校验绝对路径、数量、唯一性和受支持扩展名。合成 File、相对路径、重复路径和
+不支持格式均失败关闭，完整路径不进入 Renderer 响应或错误。
+
 ## 4. 安全验收场景
 
 1. 修改 Renderer 尝试调用未公开 IPC，必须失败。

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -18,7 +19,10 @@ import type {
   RuntimeStatus,
 } from "../shared/runtime-contracts";
 import { resolveDesktopDataRoot } from "./desktop-data";
-import { chooseFilesForIndex } from "./file-import";
+import {
+  chooseFilesForIndex,
+  validateDroppedPathsForIndex,
+} from "./file-import";
 import { registerDesktopIpc } from "./ipc";
 import { contentTypeFor, resolveAppAsset } from "./protocol";
 import { SidecarManager } from "./sidecar-manager";
@@ -190,11 +194,17 @@ async function deleteSmokeFiles(
   for (const fileId of fileIds) {
     assertGate3DeleteSmoke(deletion, filesAfterDelete, fileId);
   }
+  if (fileIds.length > 1) {
+    process.stdout.write(
+      `gate3_batch_delete=count_${fileIds.length} status_success\n`,
+    );
+  }
 }
 
 async function runGate3IndexAndDeleteSmoke(
   initialFiles: FileRecord[],
   requireFormats: boolean,
+  supportedExtensions: string[],
 ): Promise<void> {
   const indexInput = path.join(
     desktopDataRoot,
@@ -214,7 +224,11 @@ async function runGate3IndexAndDeleteSmoke(
       ),
     );
   }
-  const created = await sidecar.createIndexTask(indexInputs);
+  const droppedPaths = validateDroppedPathsForIndex(
+    indexInputs,
+    supportedExtensions,
+  );
+  const created = await sidecar.createIndexTask(droppedPaths);
   const terminal = created.ok
     ? await waitForIndexTaskTerminal(created.data.task_id)
     : created;
@@ -229,6 +243,7 @@ async function runGate3IndexAndDeleteSmoke(
     expectedNames,
   );
   process.stdout.write(`gate3_indexed_records=${expectedNames.join(",")}\n`);
+  process.stdout.write("gate3_drop_handoff=validated status_success\n");
   await deleteSmokeFiles(initialFiles, indexedFileIds);
 }
 
@@ -550,6 +565,44 @@ async function runGate3CancellationSmoke(
   await deleteSmokeFiles(currentFiles, indexedFileIds);
 }
 
+async function createWatchedIndexTask(
+  filePaths: string[],
+): Promise<DesktopResult<IndexTask>> {
+  const result = await sidecar.createIndexTask(filePaths);
+  if (result.ok) {
+    watchIndexTask(result.data);
+  }
+  return result;
+}
+
+async function importDroppedFiles(
+  filePaths: string[],
+): Promise<DesktopResult<IndexTask>> {
+  const capabilities = await sidecar.getImportCapabilities();
+  if (!capabilities.ok) {
+    return { ok: false, error: capabilities.error };
+  }
+  let validatedPaths: string[];
+  try {
+    validatedPaths = validateDroppedPathsForIndex(
+      filePaths,
+      capabilities.data.supported_extensions,
+    );
+  } catch {
+    return {
+      ok: false,
+      error: {
+        code: "invalid_dropped_files",
+        message: "One or more dropped files cannot be imported.",
+        details: null,
+        retryable: false,
+        request_id: randomUUID(),
+      },
+    };
+  }
+  return createWatchedIndexTask(validatedPaths);
+}
+
 function registerIpc(): void {
   registerDesktopIpc(ipcMain, {
     getRuntimeStatus: () => sidecar.getStatus(),
@@ -571,12 +624,9 @@ function registerIpc(): void {
       if (paths.length === 0) {
         return { ok: true, data: null };
       }
-      const result = await sidecar.createIndexTask(paths);
-      if (result.ok) {
-        watchIndexTask(result.data);
-      }
-      return result;
+      return createWatchedIndexTask(paths);
     },
+    importDroppedFiles,
     getLatestIndexTask: () => sidecar.getLatestIndexTask(),
     cancelIndexTask: async (taskId) => {
       const result = await sidecar.cancelIndexTask(taskId);
@@ -717,7 +767,13 @@ app.whenReady().then(async () => {
       } else if (requireGate3Cancellation) {
         await runGate3CancellationSmoke(initialFiles);
       } else if (requireGate3Delete) {
-        await runGate3IndexAndDeleteSmoke(initialFiles, requireGate3Formats);
+        await runGate3IndexAndDeleteSmoke(
+          initialFiles,
+          requireGate3Formats,
+          importCapabilities.ok
+            ? importCapabilities.data.supported_extensions
+            : [],
+        );
       }
     }, () => sidecar.stop());
     quitting = true;

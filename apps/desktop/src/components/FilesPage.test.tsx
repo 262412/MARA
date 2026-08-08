@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { FileRecord } from "../../shared/file-contracts";
 import type { IndexTask } from "../../shared/index-task-contracts";
 import type { ResourceState } from "../resource-state";
-import { FilesPage } from "./FilesPage";
+import { FilesPage, isFileDrag } from "./FilesPage";
 
 const file: FileRecord = {
   file_id: "file-1",
@@ -48,6 +48,7 @@ function render(
       indexTask={indexTask}
       onCancelIndexTask={() => undefined}
       onDelete={() => undefined}
+      onDropFiles={() => undefined}
       onImport={() => undefined}
       onRetry={(): void => undefined}
       onRetryIndexTask={() => undefined}
@@ -79,6 +80,8 @@ test("Files page exposes import, progress, cancellation, retry, and deletion", (
   assert.match(running, /删除 paper\.pdf/);
   assert.match(running, /选择 paper\.pdf/);
   assert.match(running, /选择全部文件/);
+  assert.match(running, /将文件拖到此页面/);
+  assert.match(running, /Ctrl\+O/);
 
   const failed = render(
     { status: "success", data: [file] },
@@ -123,4 +126,9 @@ test("Files page exposes accessible bulk selection and destructive action state"
   assert.match(selected, /删除所选/);
   assert.match(selected, /aria-selected="true"/);
   assert.match(selected, /aria-label="选择全部文件"/);
+});
+
+test("Files page activates its drop target only for file payloads", () => {
+  assert.equal(isFileDrag(["Files"]), true);
+  assert.equal(isFileDrag(["text/plain"]), false);
 });

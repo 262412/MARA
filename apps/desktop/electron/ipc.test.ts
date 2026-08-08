@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 
 import type { IpcMain } from "electron";
@@ -7,6 +8,7 @@ import {
   createTrustedIdentifierIpcHandler,
   createTrustedIdentifierListIpcHandler,
   createTrustedIpcHandler,
+  createTrustedPathListIpcHandler,
   registerDesktopIpc,
 } from "./ipc";
 
@@ -24,6 +26,39 @@ test("trusted desktop IPC accepts only the packaged renderer and no arguments", 
   await assert.rejects(
     handler({ senderFrame: { url: "mara://app/" } }, { path: "/etc/passwd" }),
     /does not accept arguments/,
+  );
+});
+
+test("dropped-file IPC accepts only trusted absolute path lists", async () => {
+  const selectedPath = path.resolve("private", "source", "paper.pdf");
+  const calls: string[][] = [];
+  const handler = createTrustedPathListIpcHandler(async (filePaths) => {
+    calls.push(filePaths);
+    return "ok";
+  });
+
+  assert.equal(
+    await handler({ senderFrame: { url: "mara://app/" } }, [selectedPath]),
+    "ok",
+  );
+  assert.deepEqual(calls, [[selectedPath]]);
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "https://attacker.invalid/" } },
+      [selectedPath],
+    ),
+    /Untrusted IPC sender/,
+  );
+  await assert.rejects(
+    handler({ senderFrame: { url: "mara://app/" } }, ["relative/paper.pdf"]),
+    /invalid file list/,
+  );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      [selectedPath, selectedPath],
+    ),
+    /invalid file list/,
   );
 });
 
@@ -109,6 +144,7 @@ test("registers only explicit Gate 2 and Gate 3 desktop capabilities", () => {
     listFiles: async () => ({ ok: true, data: [] }),
     listSessions: async () => ({ ok: true, data: [] }),
     importFiles: async () => ({ ok: true, data: null }),
+    importDroppedFiles: async () => ({ ok: true, data: {} as never }),
     getLatestIndexTask: async () => ({ ok: true, data: null }),
     cancelIndexTask: async () => ({ ok: true, data: {} as never }),
     retryIndexTask: async () => ({ ok: true, data: {} as never }),
@@ -122,6 +158,7 @@ test("registers only explicit Gate 2 and Gate 3 desktop capabilities", () => {
     "desktop:list-files",
     "desktop:list-sessions",
     "desktop:import-files",
+    "desktop:import-dropped-files",
     "desktop:get-latest-index-task",
     "desktop:cancel-index-task",
     "desktop:retry-index-task",

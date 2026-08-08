@@ -97,32 +97,59 @@ export default function App() {
     };
   }, [updateIndexTask]);
 
-  const importFiles = useCallback(async () => {
-    if (indexActionLock.current) {
-      return;
-    }
-    indexActionLock.current = true;
-    setIndexActionPending(true);
-    setFileActionError(undefined);
-    try {
-      const result = await (
-        window.desktop?.importFiles() ??
-        unavailableResult<IndexTask | null>(
-          "文件导入仅能在 MARA Desktop 中使用。",
-        )
-      );
-      if (!result.ok) {
-        setFileActionError(result.error.message);
-      } else if (result.data) {
-        updateIndexTask(result.data);
+  const runFileImport = useCallback(
+    async (
+      operation: () => Promise<DesktopResult<IndexTask | null>>,
+      failureMessage: string,
+    ) => {
+      if (indexActionLock.current) {
+        return;
       }
-    } catch {
-      setFileActionError("文件导入未能完成。");
-    } finally {
-      indexActionLock.current = false;
-      setIndexActionPending(false);
-    }
-  }, [updateIndexTask]);
+      indexActionLock.current = true;
+      setIndexActionPending(true);
+      setFileActionError(undefined);
+      try {
+        const result = await operation();
+        if (!result.ok) {
+          setFileActionError(result.error.message);
+        } else if (result.data) {
+          updateIndexTask(result.data);
+        }
+      } catch {
+        setFileActionError(failureMessage);
+      } finally {
+        indexActionLock.current = false;
+        setIndexActionPending(false);
+      }
+    },
+    [updateIndexTask],
+  );
+
+  const importFiles = useCallback(
+    () =>
+      runFileImport(
+        () =>
+          window.desktop?.importFiles() ??
+          unavailableResult<IndexTask | null>(
+            "文件导入仅能在 MARA Desktop 中使用。",
+          ),
+        "文件导入未能完成。",
+      ),
+    [runFileImport],
+  );
+
+  const importDroppedFiles = useCallback(
+    (droppedFiles: File[]) =>
+      runFileImport(
+        () =>
+          window.desktop?.importDroppedFiles(droppedFiles) ??
+          unavailableResult<IndexTask>(
+            "文件拖放仅能在 MARA Desktop 中使用。",
+          ),
+        "拖放文件未能导入。",
+      ),
+    [runFileImport],
+  );
 
   const cancelIndexTask = useCallback(async () => {
     if (!indexTask) {
@@ -275,6 +302,9 @@ export default function App() {
             indexTask={indexTask}
             onCancelIndexTask={() => void cancelIndexTask()}
             onDelete={(targets) => void deleteFiles(targets)}
+            onDropFiles={(droppedFiles) =>
+              void importDroppedFiles(droppedFiles)
+            }
             onImport={() => void importFiles()}
             onRetry={() => void files.retry()}
             onRetryIndexTask={() => void retryIndexTask()}

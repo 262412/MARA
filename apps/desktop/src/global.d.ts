@@ -13,6 +13,7 @@ type DesktopBridge = {
   listFiles(): Promise<DesktopResult<FileRecord[]>>;
   listSessions(): Promise<DesktopResult<SessionSummary[]>>;
   importFiles(): Promise<DesktopResult<IndexTask | null>>;
+  importDroppedFiles(files: File[]): Promise<DesktopResult<IndexTask>>;
   getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>>;
   cancelIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;

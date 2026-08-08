@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
@@ -8,6 +8,7 @@ import type {
   RuntimeStatus,
 } from "../shared/runtime-contracts";
 import type { SessionSummary } from "../shared/session-contracts";
+import { resolveDroppedFilePaths } from "./dropped-file-import";
 
 contextBridge.exposeInMainWorld("desktop", {
   getRuntimeStatus: (): Promise<RuntimeStatus> =>
@@ -20,6 +21,12 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.invoke("desktop:list-sessions"),
   importFiles: (): Promise<DesktopResult<IndexTask | null>> =>
     ipcRenderer.invoke("desktop:import-files"),
+  importDroppedFiles: (files: File[]): Promise<DesktopResult<IndexTask>> => {
+    const filePaths = resolveDroppedFilePaths(files, (file) =>
+      webUtils.getPathForFile(file),
+    );
+    return ipcRenderer.invoke("desktop:import-dropped-files", filePaths);
+  },
   getLatestIndexTask: (): Promise<DesktopResult<IndexTask | null>> =>
     ipcRenderer.invoke("desktop:get-latest-index-task"),
   cancelIndexTask: (taskId: string): Promise<DesktopResult<IndexTask>> =>

@@ -1,6 +1,8 @@
-import type {
-  DoctorPayload,
-} from "../shared/doctor-contracts";
+import path from "node:path";
+
+import type { IpcMain } from "electron";
+
+import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
 import type {
@@ -8,7 +10,6 @@ import type {
   RuntimeStatus,
 } from "../shared/runtime-contracts";
 import type { SessionSummary } from "../shared/session-contracts";
-import type { IpcMain } from "electron";
 
 type IpcEvent = {
   senderFrame?: {
@@ -23,6 +24,7 @@ export type DesktopIpcOperations = {
   listFiles(): Promise<DesktopResult<FileRecord[]>>;
   listSessions(): Promise<DesktopResult<SessionSummary[]>>;
   importFiles(): Promise<DesktopResult<IndexTask | null>>;
+  importDroppedFiles(filePaths: string[]): Promise<DesktopResult<IndexTask>>;
   getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>>;
   cancelIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
@@ -92,6 +94,38 @@ export function createTrustedIdentifierListIpcHandler<T>(
   };
 }
 
+export function createTrustedPathListIpcHandler<T>(
+  operation: (filePaths: string[]) => T | Promise<T>,
+): IpcHandler<T> {
+  return async (event, ...args) => {
+    if (!event.senderFrame?.url.startsWith("mara://app/")) {
+      throw new Error("Untrusted IPC sender");
+    }
+    if (
+      args.length !== 1 ||
+      !Array.isArray(args[0]) ||
+      args[0].length === 0 ||
+      args[0].length > 64
+    ) {
+      throw new Error("Desktop IPC requires one non-empty file list");
+    }
+    const filePaths = args[0];
+    if (
+      filePaths.some(
+        (filePath) =>
+          typeof filePath !== "string" ||
+          !path.isAbsolute(filePath) ||
+          filePath.includes("\0") ||
+          filePath.length > 32_768,
+      ) ||
+      new Set(filePaths).size !== filePaths.length
+    ) {
+      throw new Error("Desktop IPC received an invalid file list");
+    }
+    return operation(filePaths);
+  };
+}
+
 export function registerDesktopIpc(
   registrar: IpcMain,
   operations: DesktopIpcOperations,
@@ -115,6 +149,12 @@ export function registerDesktopIpc(
   registrar.handle(
     "desktop:import-files",
     createTrustedIpcHandler(() => operations.importFiles()),
+  );
+  registrar.handle(
+    "desktop:import-dropped-files",
+    createTrustedPathListIpcHandler((filePaths) =>
+      operations.importDroppedFiles(filePaths),
+    ),
   );
   registrar.handle(
     "desktop:get-latest-index-task",

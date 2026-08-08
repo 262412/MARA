@@ -1,4 +1,9 @@
-import { useEffect, useRef } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
 
 import type { FileRecord } from "../../shared/file-contracts";
 import type { IndexTask } from "../../shared/index-task-contracts";
@@ -13,6 +18,7 @@ type FilesPageProps = {
   indexTask?: IndexTask;
   onCancelIndexTask: () => void;
   onDelete: (files: FileRecord[]) => void;
+  onDropFiles: (files: File[]) => void;
   onImport: () => void;
   onRetry: () => void;
   onRetryIndexTask: () => void;
@@ -28,12 +34,15 @@ export function FilesPage({
   indexTask,
   onCancelIndexTask,
   onDelete,
+  onDropFiles,
   onImport,
   onRetry,
   onRetryIndexTask,
   onSelectionChange,
   selectedFileIds,
 }: FilesPageProps) {
+  const [dropActive, setDropActive] = useState(false);
+  const dragDepth = useRef(0);
   const availableFiles = files.status === "success" ? files.data : [];
   const selectedSet = new Set(selectedFileIds);
   const selectedFiles = availableFiles.filter((file) =>
@@ -43,8 +52,60 @@ export function FilesPage({
     availableFiles.length > 0 && selectedFiles.length === availableFiles.length;
   const selectionDisabled = deletingFileIds.length > 0;
 
+  const handleDragEnter = (event: DragEvent<HTMLElement>) => {
+    if (!hasFilePayload(event)) {
+      return;
+    }
+    event.preventDefault();
+    dragDepth.current += 1;
+    if (!indexActionPending) {
+      setDropActive(true);
+    }
+  };
+  const handleDragOver = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    if (!hasFilePayload(event)) {
+      event.dataTransfer.dropEffect = "none";
+      return;
+    }
+    event.dataTransfer.dropEffect = indexActionPending ? "none" : "copy";
+  };
+  const handleDragLeave = () => {
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) {
+      setDropActive(false);
+    }
+  };
+  const handleDrop = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    if (!hasFilePayload(event)) {
+      return;
+    }
+    dragDepth.current = 0;
+    setDropActive(false);
+    if (indexActionPending) {
+      return;
+    }
+    const droppedFiles = Array.from(event.dataTransfer.files);
+    if (droppedFiles.length > 0) {
+      onDropFiles(droppedFiles);
+    }
+  };
+
   return (
-    <main className="workspace files-page" id="main-workspace">
+    <main
+      aria-busy={indexActionPending}
+      aria-describedby="file-drop-instructions"
+      className={`workspace files-page${dropActive ? " drop-active" : ""}`}
+      id="main-workspace"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      <span className="sr-only" id="file-drop-instructions">
+        将文件拖到此页面，或按 Ctrl+O 使用原生文件选择器。
+      </span>
       <header className="workspace-toolbar">
         <div>
           <p className="eyebrow">本地数据空间</p>
@@ -80,6 +141,12 @@ export function FilesPage({
         </div>
       </header>
       <div className="files-content">
+        {dropActive ? (
+          <div className="file-drop-overlay" role="status" aria-live="polite">
+            <strong>释放文件以开始索引</strong>
+            <span>也可以按 Ctrl+O 使用原生文件选择器</span>
+          </div>
+        ) : null}
         {indexTask ? (
           <IndexTaskStatus
             onCancel={onCancelIndexTask}
@@ -188,6 +255,14 @@ export function FilesPage({
       </div>
     </main>
   );
+}
+
+function hasFilePayload(event: DragEvent<HTMLElement>): boolean {
+  return isFileDrag(Array.from(event.dataTransfer.types));
+}
+
+export function isFileDrag(types: readonly string[]): boolean {
+  return types.includes("Files");
 }
 
 function SelectAllCheckbox({

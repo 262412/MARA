@@ -78,6 +78,7 @@ Renderer 到 Main 只开放按能力命名的方法，例如：
 - `desktop.listFiles()`
 - `desktop.listSessions()`
 - `desktop.importFiles()`
+- `desktop.importDroppedFiles(files)`
 - `desktop.getLatestIndexTask()`
 - `desktop.cancelIndexTask(taskId)`
 - `desktop.retryIndexTask(taskId)`
@@ -101,6 +102,13 @@ Gate 3 的文件导入由 Main 打开原生选择器；Renderer 不传选择器�
 失败会投影为脱敏、可重试状态。磁盘满和数据库锁分别使用稳定的
 `index_storage_full`、`index_database_locked` 错误码，原始异常和本地路径不进入
 Renderer。
+
+拖放沿用同一边界：Renderer 只把浏览器 `File` 对象交给
+`desktop.importDroppedFiles(files)`；Preload 在隔离上下文中使用 Electron
+`webUtils.getPathForFile()` 取得磁盘路径，并直接发送到专用 IPC，不把路径返回
+Renderer。Main 再校验 sender、1–64 个绝对且唯一的路径及当前 FileIndex 支持扩展名，
+随后复用相同的 Sidecar 索引任务。合成的 JavaScript `File` 没有磁盘路径，必须失败
+关闭。
 
 批量删除使用认证的 `POST /v1/file-deletions`，请求只包含 1–1,000 个唯一、不透明的
 文件 ID，并要求 idempotency key。Preload 和 Main 对同一 ID 列表再次执行 sender、
