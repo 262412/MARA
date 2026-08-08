@@ -6,6 +6,7 @@ from typing import Any
 
 from ktem.docqa.evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from ktem.docqa.evidence_identity import exact_evidence_aliases, identity_of
+from ktem.docqa.required_slot_selection import REQUIRED_SLOT_CANDIDATE_QUOTA
 
 
 @dataclass(frozen=True)
@@ -72,8 +73,13 @@ def _required_slot_representatives(
             for reference in references
             if (item := lookup.get(reference)) is not None
         }
+        candidate_limit = (
+            REQUIRED_SLOT_CANDIDATE_QUOTA
+            if str(slot.get("statement_kind") or "") == "boolean_proposition"
+            else 1
+        )
         if resolved:
-            representative = max(
+            representatives = sorted(
                 resolved,
                 key=lambda identity: (
                     int(_aliases_overlap(resolved[identity], preferred_ids)),
@@ -81,11 +87,13 @@ def _required_slot_representatives(
                     -len(_item_text(resolved[identity])),
                     identity,
                 ),
-            )
+                reverse=True,
+            )[:candidate_limit]
         else:
-            representative = references[0]
-        if representative not in output:
-            output.append(representative)
+            representatives = references[:candidate_limit]
+        for representative in representatives:
+            if representative not in output:
+                output.append(representative)
         slot_id = str(slot.get("slot_id") or "").strip()
         if slot_id:
             slot_ids.append(slot_id)

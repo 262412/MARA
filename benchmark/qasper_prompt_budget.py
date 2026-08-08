@@ -11,6 +11,7 @@ from ktem.docqa.evidence_identity import exact_evidence_aliases, identity_of
 
 from .metrics import is_abstention_answer
 from .qasper_boolean import stemmed_content_tokens
+from .qasper_boolean_scope import resolve_closed_scope_boolean
 from .qasper_evidence_identity import canonical_evidence_sort_key, canonical_prompt_span
 
 QASPER_VERIFIER_PROMPT_MAX_CHARS = 7000
@@ -328,7 +329,7 @@ def _boolean_proposition_snippet(
             row[0],
         ),
     )
-    best = ranked[0]
+    best = _closed_scope_statement(text, question) or ranked[0]
     selected = [best]
     best_negative = _has_negation(best[2])
     opposite = next(
@@ -349,6 +350,20 @@ def _boolean_proposition_snippet(
         for row, bounded in zip(selected, bounded_statements)
     )
     return tuple(bounded_statements), spans
+
+
+def _closed_scope_statement(
+    text: str,
+    question: str,
+) -> tuple[int, int, str] | None:
+    resolution = resolve_closed_scope_boolean(question, [{"text": text}])
+    if resolution is None:
+        return None
+    quote = resolution.evidence_quote.strip()
+    start = text.find(quote)
+    if start < 0:
+        return None
+    return start, start + len(quote), quote
 
 
 def _fit_evidence_row(row: _EvidenceRow, limit: int) -> _EvidenceRow:

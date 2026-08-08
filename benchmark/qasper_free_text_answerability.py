@@ -12,6 +12,10 @@ from .qasper_answerability_prompts import (
     json_structure_repair_prompt,
 )
 from .qasper_boolean import stemmed_content_tokens
+from .qasper_free_text_candidate import (
+    candidate_answer_clauses,
+    candidate_subject_phrase,
+)
 from .qasper_prompt_budget import compact_qasper_candidate, fit_qasper_verifier_items
 from .qasper_quote_support import bind_evidence_ref_to_quote
 
@@ -323,13 +327,23 @@ def _supported_candidate_core(
     revised = str(revised_answer or "").strip()
     if revised and _quote_supports_relation(quote, question, revised):
         return revised
-    clauses = _candidate_answer_clauses(candidate, question=question)
-    supported = [
-        clause
-        for clause in clauses
-        if _candidate_clause_is_grounded(quote, question, clause)
-    ]
-    return "; ".join(supported)
+    clauses = candidate_answer_clauses(candidate, question=question)
+    supported: list[str] = []
+    for clause in clauses:
+        if _candidate_clause_is_grounded(quote, question, clause):
+            supported.append(clause)
+            continue
+        subject = candidate_subject_phrase(clause)
+        if subject and _candidate_clause_is_grounded(quote, question, subject):
+            supported.append(subject)
+    unique_supported: list[str] = []
+    seen: set[str] = set()
+    for clause in supported:
+        normalized = _normalized(clause)
+        if normalized not in seen:
+            seen.add(normalized)
+            unique_supported.append(clause)
+    return "; ".join(unique_supported)
 
 
 def _candidate_clause_is_grounded(quote: str, question: str, clause: str) -> bool:
@@ -341,42 +355,6 @@ def _candidate_clause_is_grounded(quote: str, question: str, clause: str) -> boo
         return False
     quote_tokens = stemmed_content_tokens(quote)
     return len(quote_tokens & answer_tokens) / len(answer_tokens) >= 0.75
-
-
-def _candidate_answer_clauses(candidate: str, *, question: str) -> list[str]:
-    text = str(candidate or "")
-    latex_phrases = [
-        " ".join(match.split())
-        for match in re.findall(r"\\text\{([^{}]+)\}", text)
-        if " ".join(match.split())
-    ]
-    question_tokens = stemmed_content_tokens(question)
-    answer_phrases = [
-        phrase
-        for phrase in latex_phrases
-        if stemmed_content_tokens(phrase) - question_tokens
-    ]
-    if answer_phrases:
-        return list(dict.fromkeys(answer_phrases))
-    clauses: list[str] = []
-    for sentence in re.split(r"(?<=[.!?])\s+", text):
-        sentence = re.sub(
-            r"^.*?\b(?:include(?:s|d|ing)?|consists?\s+of|comprises?)\s+",
-            "",
-            sentence,
-            count=1,
-            flags=re.IGNORECASE,
-        )
-        clauses.extend(
-            clause.strip(" ,.;:")
-            for clause in re.split(
-                r"\s*[,;]\s*|\s+(?:and|but|while|whereas)\s+|\s*\+\s*",
-                sentence,
-                flags=re.IGNORECASE,
-            )
-            if clause.strip(" ,.;:")
-        )
-    return list(dict.fromkeys(clauses))
 
 
 def _normalized(value: str) -> str:

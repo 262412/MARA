@@ -509,6 +509,22 @@ def _english_closed_scope(quote: str) -> bool:
     )
 
 
+def _current_language_data_context(text: str) -> bool:
+    current_actor = re.compile(
+        r"\b(?:we|our|current study|this (?:paper|study|work|section))\b",
+        flags=re.IGNORECASE,
+    )
+    data_relation = re.compile(
+        r"\b(?:collect|compil|creat|data selection|dataset|corpus|corpora|"
+        r"evaluat|experiment|report|results?)\w*\b",
+        flags=re.IGNORECASE,
+    )
+    return any(
+        current_actor.search(statement) and data_relation.search(statement)
+        for statement in re.split(r"(?:\r?\n)+|(?<=[.!?])\s+", str(text or ""))
+    )
+
+
 def _scope_excerpt(text: str, polarity: str) -> str | None:
     statements = [
         (match.start(), match.end(), match.group(0).strip())
@@ -521,15 +537,20 @@ def _scope_excerpt(text: str, polarity: str) -> str | None:
         for left, right in zip(statements, statements[1:])
     )
     candidates = []
+    item_has_current_data_context = _current_language_data_context(text)
     for start, end, excerpt in windows:
         if polarity == "no":
             valid = _non_english_counterexample(excerpt)
         else:
-            valid = _english_closed_scope(excerpt) and bool(
-                re.search(
-                    r"\b(?:report|result|evaluat|experiment|test|dataset|corpus|data)\w*\b",
-                    excerpt,
-                    flags=re.IGNORECASE,
+            valid = _english_closed_scope(excerpt) and (
+                item_has_current_data_context
+                or bool(
+                    re.search(
+                        r"\b(?:report|result|evaluat|experiment|test|dataset|"
+                        r"corpus|data)\w*\b",
+                        excerpt,
+                        flags=re.IGNORECASE,
+                    )
                 )
             )
         if valid:

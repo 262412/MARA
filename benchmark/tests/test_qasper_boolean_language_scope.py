@@ -60,3 +60,39 @@ def test_english_topic_without_result_relation_cannot_override_candidate():
     assert int(result.trace["verifier_input_character_count"]) > 0
     assert int(result.trace["verifier_input_token_count"]) > 0
     assert result.trace["verifier_budget_exhausted"] == "false"
+
+
+def test_closed_english_scope_uses_same_item_corpus_context_across_sections():
+    decisive = (
+        "In cooperation with education researchers, we identified current "
+        "controversial topics in education in English-speaking countries."
+    )
+    current = _item(
+        "current",
+        (
+            "This section describes our data selection, annotation, and evaluation "
+            "process for creating a new corpus. "
+            "The overview is intentionally detailed for reproducibility. "
+            "The project covers a broad range of perspectives. "
+            + decisive
+            + " We included four registers in the collection. "
+            "The registers cover several kinds of user-generated content. "
+            "Given the selected topics and registers, we compiled a collection of "
+            "plain-text documents called the raw corpus."
+        ),
+        section_id="methods",
+    )
+
+    result = verify_qasper_answerability(
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("deterministic closed-scope evidence must bypass the model")
+        ),
+        question="Do they report results only on English data?",
+        evidence=current["text"],
+        evidence_items=[current],
+        candidate_answer="no",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["parser_status"] == "not_called_deterministic_scope"
+    assert result.trace["evidence_quote"] == decisive

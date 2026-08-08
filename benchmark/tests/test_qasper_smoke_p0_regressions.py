@@ -245,6 +245,34 @@ def test_grounded_core_is_pruned_even_when_whole_answer_verdict_is_unsupported()
     assert result.trace["action"] == "pruned_unsupported_extension"
 
 
+def test_free_text_verifier_prunes_subject_phrase_from_prose_candidate():
+    quote = (
+        "We address the robustness problem on top of GE-FL, a GE method which "
+        "leverages labeled features as prior knowledge."
+    )
+    result = verify_qasper_answerability(
+        _VerifierLLM(
+            {
+                "verdict": "supported",
+                "evidence_quote": quote,
+                "revised_answer": "",
+            }
+        ),
+        question="What background knowledge do they leverage?",
+        evidence=quote,
+        candidate_answer=(
+            "Labeled features are manually provided indicators of specific classes, "
+            'such as words like "amazing" for the positive class in sentiment '
+            "classification. Class distribution refers to the proportion of each "
+            "class in the dataset, which can guide the model's predictions."
+        ),
+    )
+
+    assert result.answer == "Labeled features"
+    assert result.trace["verdict"] == "supported_with_pruning"
+    assert result.trace["action"] == "pruned_unsupported_extension"
+
+
 def test_qasper_boolean_slot_rejects_cited_work_and_selects_current_scope():
     plan = build_query_plan(
         "Do they report results only on English data?",
