@@ -79,6 +79,8 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
                 service = None
                 from chromadb.api.client import SharedSystemClient
 
+                for system in tuple(SharedSystemClient._identifier_to_system.values()):
+                    system.stop()
                 SharedSystemClient.clear_system_cache()
                 engine.dispose()
                 gc.collect()
