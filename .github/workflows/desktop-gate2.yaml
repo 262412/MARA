@@ -70,10 +70,12 @@ jobs:
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
           embedding_port_file=/tmp/mara-desktop/embedding-port.txt
+          embedding_failure_file=/tmp/mara-desktop/embedding-model-unavailable
           (
             cd apps/desktop
             ../../.venv/bin/python -m sidecar.smoke_embedding_server \
-              --port-file "$embedding_port_file"
+              --port-file "$embedding_port_file" \
+              --failure-marker "$embedding_failure_file"
           ) &
           embedding_pid=$!
           trap 'kill "$embedding_pid" 2>/dev/null || true' EXIT
@@ -114,6 +116,19 @@ jobs:
                 --phase desktop-deleted \
                 --expect-empty \
                 --summary-file apps/desktop/release/metrics/linux-22-cli-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          touch "$embedding_failure_file"
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-model-unavailable
+          find "$embedding_failure_file" -maxdepth 0 -type f -delete
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-retry
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase fault-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-fault-after.txt
           du -sb apps/desktop/release/MARA-linux-x64 \
             > apps/desktop/release/metrics/linux-22-size.txt
           find apps/desktop/release/MARA-linux-x64 -type f | wc -l \
@@ -250,15 +265,21 @@ jobs:
           $diagnostics = "apps/desktop/release/windows-smoke-diagnostics.txt"
           $stdout = "apps/desktop/release/windows-smoke-stdout.txt"
           $stderr = "apps/desktop/release/windows-smoke-stderr.txt"
+          $faultStdout = "apps/desktop/release/windows-fault-stdout.txt"
+          $faultStderr = "apps/desktop/release/windows-fault-stderr.txt"
+          $retryStdout = "apps/desktop/release/windows-retry-stdout.txt"
+          $retryStderr = "apps/desktop/release/windows-retry-stderr.txt"
           $executable = "apps/desktop/release/MARA-win32-x64/MARA.exe"
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
           $portFile = Join-Path $env:RUNNER_TEMP "mara-embedding-port.txt"
+          $failureMarker = Join-Path $env:RUNNER_TEMP "mara-model-unavailable"
           $python = (Resolve-Path ".venv/Scripts/python.exe").Path
           $embeddingServer = Start-Process -FilePath $python `
             -ArgumentList @(
               "-m", "sidecar.smoke_embedding_server",
-              "--port-file", $portFile
+              "--port-file", $portFile,
+              "--failure-marker", $failureMarker
             ) `
             -WorkingDirectory "apps/desktop" -PassThru -WindowStyle Hidden
           for ($attempt = 0; $attempt -lt 100; $attempt++) {
@@ -307,7 +328,6 @@ jobs:
             Start-Sleep -Milliseconds 100
           }
           $stopwatch.Stop()
-          Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
           @(
             "exit_code=$($process.ExitCode)"
             "elapsed_ms=$($stopwatch.ElapsedMilliseconds)"
@@ -320,7 +340,44 @@ jobs:
             Get-Content $stderr | Write-Host
           }
           if ($process.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
             exit $process.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          "model_unavailable" | Set-Content $failureMarker
+          $faultProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-model-unavailable" `
+            -RedirectStandardOutput $faultStdout `
+            -RedirectStandardError $faultStderr -PassThru
+          $faultProcess.WaitForExit()
+          Remove-Item $failureMarker -Force
+          "fault_exit_code=$($faultProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $faultStdout) {
+            Get-Content $faultStdout | Write-Host
+          }
+          if (Test-Path $faultStderr) {
+            Get-Content $faultStderr | Write-Host
+          }
+          if ($faultProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $faultProcess.ExitCode
+          }
+          $retryProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-retry" `
+            -RedirectStandardOutput $retryStdout `
+            -RedirectStandardError $retryStderr -PassThru
+          $retryProcess.WaitForExit()
+          Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+          "retry_exit_code=$($retryProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $retryStdout) {
+            Get-Content $retryStdout | Write-Host
+          }
+          if (Test-Path $retryStderr) {
+            Get-Content $retryStderr | Write-Host
+          }
+          if ($retryProcess.ExitCode -ne 0) {
+            exit $retryProcess.ExitCode
           }
           $afterRecords = & ".venv/Scripts/MARA.exe" docqa files --json |
             Out-String
@@ -401,6 +458,10 @@ jobs:
             apps/desktop/release/windows-smoke-diagnostics.txt
             apps/desktop/release/windows-smoke-stdout.txt
             apps/desktop/release/windows-smoke-stderr.txt
+            apps/desktop/release/windows-fault-stdout.txt
+            apps/desktop/release/windows-fault-stderr.txt
+            apps/desktop/release/windows-retry-stdout.txt
+            apps/desktop/release/windows-retry-stderr.txt
             apps/desktop/release/windows-metrics.txt
             apps/desktop/release/windows-cli-compat-before.txt
             apps/desktop/release/windows-cli-compat-after.txt

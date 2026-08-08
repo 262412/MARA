@@ -10,11 +10,12 @@ import {
   session,
 } from "electron";
 
+import type { FileRecord } from "../shared/file-contracts";
+import type { IndexTask } from "../shared/index-task-contracts";
 import type {
   DesktopResult,
   RuntimeStatus,
 } from "../shared/runtime-contracts";
-import type { IndexTask } from "../shared/index-task-contracts";
 import { resolveDesktopDataRoot } from "./desktop-data";
 import { chooseFilesForIndex } from "./file-import";
 import { registerDesktopIpc } from "./ipc";
@@ -22,11 +23,13 @@ import { contentTypeFor, resolveAppAsset } from "./protocol";
 import { SidecarManager } from "./sidecar-manager";
 import { runDesktopSmoke } from "./smoke-runner";
 import {
-  GATE2_SMOKE_FILE_ID,
   GATE3_FORMAT_INPUT_NAMES,
   GATE3_FORMAT_RECORD_NAMES,
+  GATE3_MODEL_UNAVAILABLE_INPUT_NAME,
   assertGate3DeleteSmoke,
   assertGate3IndexSmoke,
+  assertGate3ModelUnavailableSmoke,
+  assertGate3RetrySource,
   assertPackagedSmoke,
 } from "./smoke-validation";
 
@@ -100,6 +103,109 @@ async function waitForIndexTaskTerminal(
     current = await sidecar.getIndexTask(taskId);
   }
   return current;
+}
+
+async function deleteSmokeFiles(
+  initialFiles: FileRecord[],
+  indexedFileIds: string[],
+): Promise<void> {
+  const initialFileIds = initialFiles.map((record) => record.file_id);
+  const fileIds = [...new Set([...initialFileIds, ...indexedFileIds])];
+  const deletions: Array<{
+    fileId: string;
+    result: DesktopResult<string[]>;
+  }> = [];
+  for (const fileId of fileIds) {
+    deletions.push({ fileId, result: await sidecar.deleteFile(fileId) });
+  }
+  const filesAfterDelete = await sidecar.listFiles();
+  for (const deletion of deletions) {
+    assertGate3DeleteSmoke(
+      deletion.result,
+      filesAfterDelete,
+      deletion.fileId,
+    );
+  }
+}
+
+async function runGate3IndexAndDeleteSmoke(
+  initialFiles: FileRecord[],
+  requireFormats: boolean,
+): Promise<void> {
+  const indexInput = path.join(
+    desktopDataRoot,
+    "tmp",
+    "gate3-index-smoke.txt",
+  );
+  await writeFile(
+    indexInput,
+    "MARA Desktop Gate 3 deterministic indexing smoke fixture.\n",
+    "utf8",
+  );
+  const indexInputs = [indexInput];
+  if (requireFormats) {
+    indexInputs.push(
+      ...GATE3_FORMAT_INPUT_NAMES.map((name) =>
+        path.join(desktopDataRoot, "tmp", name),
+      ),
+    );
+  }
+  const created = await sidecar.createIndexTask(indexInputs);
+  const terminal = created.ok
+    ? await waitForIndexTaskTerminal(created.data.task_id)
+    : created;
+  const filesAfterIndex = await sidecar.listFiles();
+  const expectedNames = requireFormats
+    ? GATE3_FORMAT_RECORD_NAMES
+    : ["gate3-index-smoke.txt"];
+  const indexedFileIds = assertGate3IndexSmoke(
+    created,
+    terminal,
+    filesAfterIndex,
+    expectedNames,
+  );
+  process.stdout.write(`gate3_indexed_records=${expectedNames.join(",")}\n`);
+  await deleteSmokeFiles(initialFiles, indexedFileIds);
+}
+
+async function runGate3ModelUnavailableSmoke(): Promise<void> {
+  const inputPath = path.join(
+    desktopDataRoot,
+    "tmp",
+    GATE3_MODEL_UNAVAILABLE_INPUT_NAME,
+  );
+  await writeFile(
+    inputPath,
+    "MARA Desktop Gate 3 model unavailable smoke fixture.\n",
+    "utf8",
+  );
+  const created = await sidecar.createIndexTask([inputPath]);
+  const terminal = created.ok
+    ? await waitForIndexTaskTerminal(created.data.task_id)
+    : created;
+  assertGate3ModelUnavailableSmoke(created, terminal);
+  process.stdout.write(
+    "gate3_fault=model_unavailable status=failed retryable=true\n",
+  );
+}
+
+async function runGate3RetrySmoke(initialFiles: FileRecord[]): Promise<void> {
+  const latest = await sidecar.getLatestIndexTask();
+  const failedTaskId = assertGate3RetrySource(latest);
+  const retried = await sidecar.retryIndexTask(failedTaskId);
+  const terminal = retried.ok
+    ? await waitForIndexTaskTerminal(retried.data.task_id)
+    : retried;
+  const filesAfterRetry = await sidecar.listFiles();
+  const indexedFileIds = assertGate3IndexSmoke(
+    retried,
+    terminal,
+    filesAfterRetry,
+    [GATE3_MODEL_UNAVAILABLE_INPUT_NAME],
+  );
+  process.stdout.write("gate3_fault_recovery=status_success\n");
+  const currentFiles = filesAfterRetry.ok ? filesAfterRetry.data : initialFiles;
+  await deleteSmokeFiles(currentFiles, indexedFileIds);
 }
 
 function registerIpc(): void {
@@ -207,10 +313,17 @@ app.whenReady().then(async () => {
   const requireGate3Formats = process.argv.includes(
     "--smoke-test-gate3-formats",
   );
+  const requireGate3ModelUnavailable = process.argv.includes(
+    "--smoke-test-gate3-model-unavailable",
+  );
+  const requireGate3Retry = process.argv.includes("--smoke-test-gate3-retry");
   const requireGate3Delete =
     process.argv.includes("--smoke-test-gate3") || requireGate3Formats;
   const requireNonEmptyFixture =
-    process.argv.includes("--smoke-test-nonempty") || requireGate3Delete;
+    process.argv.includes("--smoke-test-nonempty") ||
+    requireGate3Delete ||
+    requireGate3ModelUnavailable ||
+    requireGate3Retry;
   if (process.argv.includes("--smoke-test") || requireNonEmptyFixture) {
     const exitCode = await runDesktopSmoke(async () => {
       const [status, doctor, files, sessions, importCapabilities] =
@@ -225,62 +338,13 @@ app.whenReady().then(async () => {
         { status, doctor, files, sessions, importCapabilities },
         requireNonEmptyFixture,
       );
-      if (requireGate3Delete) {
-        const indexInput = path.join(
-          desktopDataRoot,
-          "tmp",
-          "gate3-index-smoke.txt",
-        );
-        await writeFile(
-          indexInput,
-          "MARA Desktop Gate 3 deterministic indexing smoke fixture.\n",
-          "utf8",
-        );
-        const indexInputs = [indexInput];
-        if (requireGate3Formats) {
-          indexInputs.push(
-            ...GATE3_FORMAT_INPUT_NAMES.map((name) =>
-              path.join(desktopDataRoot, "tmp", name),
-            ),
-          );
-        }
-        const created = await sidecar.createIndexTask(indexInputs);
-        const terminal = created.ok
-          ? await waitForIndexTaskTerminal(created.data.task_id)
-          : created;
-        const filesAfterIndex = await sidecar.listFiles();
-        const indexedFileIds = assertGate3IndexSmoke(
-          created,
-          terminal,
-          filesAfterIndex,
-          requireGate3Formats
-            ? GATE3_FORMAT_RECORD_NAMES
-            : ["gate3-index-smoke.txt"],
-        );
-        const initialFileIds = files.ok
-          ? files.data.map((record) => record.file_id)
-          : [GATE2_SMOKE_FILE_ID];
-        const fileIdsToDelete = [
-          ...new Set([...initialFileIds, ...indexedFileIds]),
-        ];
-        const deleteResults: Array<{
-          fileId: string;
-          result: DesktopResult<string[]>;
-        }> = [];
-        for (const fileId of fileIdsToDelete) {
-          deleteResults.push({
-            fileId,
-            result: await sidecar.deleteFile(fileId),
-          });
-        }
-        const filesAfterDelete = await sidecar.listFiles();
-        for (const deletion of deleteResults) {
-          assertGate3DeleteSmoke(
-            deletion.result,
-            filesAfterDelete,
-            deletion.fileId,
-          );
-        }
+      const initialFiles = files.ok ? files.data : [];
+      if (requireGate3ModelUnavailable) {
+        await runGate3ModelUnavailableSmoke();
+      } else if (requireGate3Retry) {
+        await runGate3RetrySmoke(initialFiles);
+      } else if (requireGate3Delete) {
+        await runGate3IndexAndDeleteSmoke(initialFiles, requireGate3Formats);
       }
     }, () => sidecar.stop());
     quitting = true;

@@ -6,8 +6,8 @@ Gate 3 的首个纵向切片是“原生文件导入 → 后台索引 → Files 
 贯通 React、Preload、Electron Main、认证 Sidecar 和现有 MARA DocQA runtime，
 当前状态为 **In progress**。只有 Windows、Ubuntu 原生组合包均完成真实索引/删除
 smoke，并补齐产品 VM、支持格式与异常场景验收后，才能升级为 `Verified`。提交
-`f35a9b4` 已关闭 Windows Server 2022、Ubuntu 22.04/24.04 自动化缺口；剩余项
-不再包含原生构建流水线。
+`fce9843` 已关闭 Windows Server 2022、Ubuntu 22.04/24.04 的轻量格式矩阵自动化
+缺口；剩余项不再包含原生构建流水线或文本类格式的跨平台 smoke。
 
 本切片不复制 Gradio callback 或 DocQA 索引/删除业务逻辑，也不修改 `MARA`、
 `MARA-cli` 命令、Click 参数、Gradio 事件链、数据库 schema 或现有会话字段。
@@ -142,6 +142,29 @@ artifact `9025008201`；只保留阶段、记录数和文件名，不保留 CLI 
 `d819d0092bdf01ba13e3249f418194193002332f32d6dbb69681552e0289f8d2` 和
 `8489e02f519f1ac93c70631c67667eb5cd25ace1c38b11a069b28c70b0ec6e17`。
 
+## 轻量格式矩阵 CI 证据
+
+2026-08-08 的
+[Desktop Gate 3 运行 31269454199](https://github.com/262412/MARA/actions/runs/31269454199)
+基于提交 `fce98436687886d3fc8b28587dabc095943c133b`，Windows Server 2022、Ubuntu
+22.04 和 Ubuntu 24.04 三任务全部成功。打包应用在真实 DocQA runtime 中逐项要求
+TXT、Markdown、CSV、HTML、MHTML 和 ZIP 解出的 Markdown 记录存在、响应不含
+路径，再删除全部记录；任一格式缺失都会使进程非零退出。Ubuntu 24.04 继续复用
+Ubuntu 22.04 的同一组合包和数据快照。
+
+| 平台/产物               | Artifact ID | 压缩大小    | Actions digest                                                     |
+| ----------------------- | ----------- | ----------- | ------------------------------------------------------------------ |
+| Windows 完整组合包      | 9025204769  | 395,898,518 | `c223d4986a6f9732ea41a992e77554e7c309022cc7c68210bed3f8884cc76725` |
+| Windows smoke 诊断      | 9025199251  | 1,442       | `091c184f193082a96d94041f88da0cf9eb2694adbb2a4f95e742830b3d93e701` |
+| Windows Defender 诊断   | 9025199390  | 359         | `238641bdad2bfe7ad5089ded2e3a02b6abad647ba8b100bd781ae0cd07610773` |
+| Ubuntu 22.04 完整组合包 | 9025203227  | 412,481,830 | `1054f7ad4675bad8002720d40865112fff0b325455aabf9db7db9a69ab36a220` |
+| Ubuntu 22.04 包体测量   | 9025203384  | 1,853       | `7f19c306ad7186d6908ffcf117c4b405a616cc66fdcb315dee5566925181df23` |
+
+本轮 Windows smoke 用时 18.666 秒、峰值工作集 99,999,744 bytes；Ubuntu 22.04
+用时 13.93 秒、最大 RSS 482,120 KiB。Windows 发布目录为 997,302,646 bytes、
+2,705 个文件，Ubuntu 发布目录为 1,086,013,990 bytes、2,106 个文件；Linux
+`ldd` 无缺失依赖。两平台最终 CLI/Files 复核均为 0 项。
+
 ## Linux 开发机参考测量
 
 2026-08-08 在当前 Linux 开发机对自包含 Electron + PyInstaller 组合包执行断网
@@ -175,11 +198,12 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
 1. 在 Windows 10/11 产品 VM 对当前 Gate 3 包执行原生选择器、重复启动、任务恢复、
    数据目录和残留进程验收。
 2. 增加拖放、批量选择，以及 PDF、Office 和图片的支持格式矩阵。文本、Markdown、
-   CSV、HTML、MHTML 和 ZIP 已通过开发态真实索引/删除；当前提交已把同一矩阵接入
-   Windows/Ubuntu 原生打包 CI，但在对应运行成功并登记产物前仍不标记为跨平台通过。
+   CSV、HTML、MHTML 和 ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。
 3. 增加大文件、部分失败、运行中取消、模型不可用、磁盘满、数据库锁和 Sidecar
-   强制退出的组合包故障注入。当前取消在文件边界协作式生效，不会强杀正在执行的
-   单文件 parser/vector write；该边界必须在长文件验收中明确验证。
+   强制退出的组合包故障注入。模型 503 → 脱敏失败 → 原任务重试成功已通过 Linux
+   开发态真实 runtime，并已接入 Windows/Ubuntu 打包工作流，仍需取得当前提交的
+   原生 CI 证据。当前取消在文件边界协作式生效，不会强杀正在执行的单文件
+   parser/vector write；该边界必须在长文件验收中明确验证。
 4. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，

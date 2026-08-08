@@ -140,7 +140,7 @@ class IndexTaskManager:
             retried = _IndexTask(
                 task_id=str(uuid4()),
                 idempotency_key=idempotency_key,
-                reindex=original.reindex,
+                reindex=True,
                 sources=[
                     _TaskSource(path=source.path, name=source.name)
                     for source in sources

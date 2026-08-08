@@ -85,6 +85,7 @@ class IndexTaskManagerTest(unittest.TestCase):
                 success = wait_for_terminal(manager, retried["task_id"])
                 self.assertEqual(success["status"], "success")
                 self.assertEqual(service.calls[-1][0], ["/private/broken.pdf"])
+                self.assertTrue(service.calls[-1][1])
                 with self.assertRaises(IndexTaskConflictError):
                     manager.retry_task(
                         success["task_id"],

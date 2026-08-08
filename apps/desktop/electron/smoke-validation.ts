@@ -12,6 +12,8 @@ import type { SessionSummary } from "../shared/session-contracts";
 
 export const GATE2_SMOKE_FILE_ID = "gate2-smoke-file";
 export const GATE2_SMOKE_SESSION_ID = "gate2-smoke-session";
+export const GATE3_MODEL_UNAVAILABLE_INPUT_NAME =
+  "gate3-model-unavailable.txt";
 export const GATE3_FORMAT_INPUT_NAMES = [
   "gate3-format.md",
   "gate3-format.csv",
@@ -152,4 +154,50 @@ export function assertGate3IndexSmoke(
     indexed.push(record);
   }
   return indexed.map((record) => record.file_id);
+}
+
+export function assertGate3ModelUnavailableSmoke(
+  created: DesktopResult<IndexTask>,
+  terminal: DesktopResult<IndexTask>,
+): string {
+  if (!created.ok) {
+    throw new Error(`Gate 3 fault task creation failed: ${created.error.code}`);
+  }
+  if (!terminal.ok) {
+    throw new Error(`Gate 3 fault task request failed: ${terminal.error.code}`);
+  }
+  const task = terminal.data;
+  if (task.task_id !== created.data.task_id) {
+    throw new Error("Gate 3 fault task identity changed while running");
+  }
+  if (
+    task.status !== "failed" ||
+    task.error?.code !== "index_failed" ||
+    !task.retryable ||
+    task.completed_files !== 1 ||
+    task.success_count !== 0 ||
+    task.failure_count !== 1 ||
+    task.file_names[0] !== GATE3_MODEL_UNAVAILABLE_INPUT_NAME ||
+    task.failures[0]?.name !== GATE3_MODEL_UNAVAILABLE_INPUT_NAME
+  ) {
+    throw new Error("Gate 3 model-unavailable fault was not reported safely");
+  }
+  return task.task_id;
+}
+
+export function assertGate3RetrySource(
+  latest: DesktopResult<IndexTask | null>,
+): string {
+  if (!latest.ok) {
+    throw new Error(`Gate 3 retry source request failed: ${latest.error.code}`);
+  }
+  if (
+    latest.data === null ||
+    latest.data.status !== "failed" ||
+    !latest.data.retryable ||
+    latest.data.file_names[0] !== GATE3_MODEL_UNAVAILABLE_INPUT_NAME
+  ) {
+    throw new Error("Gate 3 retry did not find the model-unavailable task");
+  }
+  return latest.data.task_id;
 }

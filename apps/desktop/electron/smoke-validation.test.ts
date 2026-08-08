@@ -10,8 +10,11 @@ import {
   GATE2_SMOKE_FILE_ID,
   GATE2_SMOKE_SESSION_ID,
   GATE3_FORMAT_RECORD_NAMES,
+  GATE3_MODEL_UNAVAILABLE_INPUT_NAME,
   assertGate3DeleteSmoke,
   assertGate3IndexSmoke,
+  assertGate3ModelUnavailableSmoke,
+  assertGate3RetrySource,
   assertPackagedSmoke,
 } from "./smoke-validation";
 
@@ -301,5 +304,67 @@ test("requires every lightweight format record in the packaged matrix", () => {
         GATE3_FORMAT_RECORD_NAMES,
       ),
     /fixtures are missing/,
+  );
+});
+
+test("requires a safe retryable model-unavailable task before recovery", () => {
+  const created = {
+    ok: true as const,
+    data: {
+      task_id: "fault-task",
+      status: "queued" as const,
+      stage: "queued",
+      completed_files: 0,
+      total_files: 1,
+      file_names: [GATE3_MODEL_UNAVAILABLE_INPUT_NAME],
+      success_count: 0,
+      failure_count: 0,
+      failures: [],
+      error: null,
+      retryable: false,
+      created_at: "2026-08-08T10:00:00Z",
+      updated_at: "2026-08-08T10:00:00Z",
+      version: 1,
+    },
+  };
+  const failed = {
+    ok: true as const,
+    data: {
+      ...created.data,
+      status: "failed" as const,
+      stage: "completed",
+      completed_files: 1,
+      failure_count: 1,
+      failures: [
+        {
+          name: GATE3_MODEL_UNAVAILABLE_INPUT_NAME,
+          code: "index_failed",
+          message: "MARA could not index this file.",
+          retryable: true,
+        },
+      ],
+      error: {
+        code: "index_failed",
+        message: "MARA could not index the selected files.",
+        retryable: true,
+      },
+      retryable: true,
+      version: 3,
+    },
+  };
+
+  assert.equal(assertGate3ModelUnavailableSmoke(created, failed), "fault-task");
+  assert.equal(assertGate3RetrySource(failed), "fault-task");
+  assert.throws(
+    () =>
+      assertGate3ModelUnavailableSmoke(created, {
+        ...failed,
+        data: { ...failed.data, status: "success" },
+      }),
+    /not reported safely/,
+  );
+  assert.throws(
+    () => assertGate3RetrySource({ ok: true, data: null }),
+    /did not find/,
   );
 });

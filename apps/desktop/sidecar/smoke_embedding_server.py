@@ -19,7 +19,12 @@ def _embedding(value: str | list[int]) -> list[float]:
     return [value / magnitude for value in values]
 
 
-def create_server(token: str, port: int = 0) -> ThreadingHTTPServer:
+def create_server(
+    token: str,
+    port: int = 0,
+    *,
+    failure_marker: Path | None = None,
+) -> ThreadingHTTPServer:
     if not token:
         raise ValueError("Smoke embedding token is required")
 
@@ -43,6 +48,18 @@ def create_server(token: str, port: int = 0) -> ThreadingHTTPServer:
                 inputs = _normalize_inputs(payload.get("input"))
             except (AttributeError, json.JSONDecodeError, ValueError):
                 self._write_json(400, {"error": {"message": "Invalid request"}})
+                return
+            if failure_marker is not None and failure_marker.exists():
+                self._write_json(
+                    503,
+                    {
+                        "error": {
+                            "message": "The smoke embedding model is unavailable.",
+                            "type": "server_error",
+                            "code": "model_unavailable",
+                        }
+                    },
+                )
                 return
             data = [
                 {
@@ -104,10 +121,14 @@ def main() -> int:
     )
     parser.add_argument("--port-file", required=True, type=Path)
     parser.add_argument("--token", default="mara-desktop-smoke")
+    parser.add_argument("--failure-marker", type=Path)
     arguments = parser.parse_args()
-    server = create_server(arguments.token)
+    server = create_server(
+        arguments.token,
+        failure_marker=arguments.failure_marker,
+    )
     arguments.port_file.parent.mkdir(parents=True, exist_ok=True)
-    arguments.port_file.write_text(str(server.server_port), encoding="utf-8")
+    arguments.port_file.write_text(f"{server.server_port}\n", encoding="utf-8")
     try:
         server.serve_forever()
     finally:
