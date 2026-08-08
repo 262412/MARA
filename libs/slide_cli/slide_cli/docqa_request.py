@@ -55,6 +55,9 @@ RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
     "command_state",
     "route_timeout_seconds",
     "route_deadline_monotonic",
+    "generation_temperature",
+    "generation_top_p",
+    "generation_seed",
     "user_id",
     "origin",
 )
@@ -118,6 +121,9 @@ class DocQARequest:
     query_plan_state_version: int = 0
     source_identity_crosswalk: list[dict[str, Any]] | None = None
     reranker_name: str | None = None
+    generation_temperature: float | None = None
+    generation_top_p: float | None = None
+    generation_seed: int | None = None
 
 
 def to_runtime_docqa_request(request: DocQARequest):
@@ -184,6 +190,9 @@ def to_runtime_docqa_request(request: DocQARequest):
         command_state=deepcopy(request.command_state),
         route_timeout_seconds=deepcopy(request.route_timeout_seconds),
         route_deadline_monotonic=deepcopy(request.route_deadline_monotonic),
+        generation_temperature=deepcopy(request.generation_temperature),
+        generation_top_p=deepcopy(request.generation_top_p),
+        generation_seed=deepcopy(request.generation_seed),
         user_id=deepcopy(request.user_id),
         origin=deepcopy(request.origin),
     )

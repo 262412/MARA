@@ -63,6 +63,9 @@ CANONICAL_REQUEST_FIELDS = (
     "command_state",
     "route_timeout_seconds",
     "route_deadline_monotonic",
+    "generation_temperature",
+    "generation_top_p",
+    "generation_seed",
     "user_id",
     "origin",
 )
@@ -123,6 +126,9 @@ APPENDED_FACADE_FIELDS = (
     "query_plan_state_version",
     "source_identity_crosswalk",
     "reranker_name",
+    "generation_temperature",
+    "generation_top_p",
+    "generation_seed",
 )
 
 
