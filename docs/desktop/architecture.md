@@ -99,7 +99,10 @@ service 直接复用 `DocQARuntime.load_session()` 的所有者/公开会话授�
 投影会话 ID、名称、用户/助手文本、来源 ID、origin、公开标记和时间，不返回
 `data_source`、用户 ID、settings、检索内部状态或本地路径。Main 与 Sidecar 都校验
 不透明会话 ID；Renderer 在用户选择后才请求，并丢弃切换任务产生的过期响应。该
-只读切片不启用 reasoning、模型调用或通用请求能力。
+只读切片不启用 reasoning、模型调用或通用请求能力。Sidecar 把共享 DocQA
+collectors 和 runtime 初始化放在同一 application-service 锁内，避免并行首启请求
+覆盖全局 runtime 能力裁剪；冻结包必须用并行 Doctor、Files、Sessions 和会话详情
+请求回归该边界。
 
 Gate 3 的文件导入由 Main 打开原生选择器；Renderer 不传选择器参数，也不会收到
 绝对路径。Main 只把选择结果送入带认证的 Sidecar 索引命令。Sidecar 返回脱敏的

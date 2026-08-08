@@ -33,6 +33,10 @@
 9. 技术原型（`apps/desktop/README.md`）：可运行的三栏壳层与 Sidecar 生命周期验证。
 10. [Gate 2 纵向切片证据](gate-2-vertical-slice-evidence.md)：Doctor、Files、
     Sessions 的实现、测试、Linux 包指标和跨平台待验收项。
+11. [Gate 3 文件索引纵向切片证据](gate-3-file-indexing-evidence.md)：原生导入、
+    后台索引、刷新/删除、格式矩阵和故障恢复证据。
+12. [Gate 3 会话详情纵向切片证据](gate-3-session-detail-evidence.md)：真实会话读取、
+    窄 IPC、首次并发初始化回归和跨平台组合包证据。
 
 ## 阶段门
 

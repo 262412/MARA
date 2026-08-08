@@ -83,16 +83,18 @@ Beta 稳定化阶段，`Later` 表示不阻塞首发。状态在正式开发开�
 详细命令、指标、已解决问题和剩余验收项见
 [Gate 2 纵向切片证据](gate-2-vertical-slice-evidence.md)。
 
-## 5. Gate 3 首个纵向切片状态
+## 5. Gate 3 纵向切片状态
 
 Gate 3 从“原生文件导入 → 后台索引 → Files 刷新/删除”开始。以下状态只表示该
-切片的进度，不代表文件格式矩阵、拖放、批量操作或整个 Gate 3 已完成。
+能力切片的进度，不代表未列出的 P0 功能或整个 Gate 3 已完成。
 
 | 能力                   | 状态        | 当前证据                                                                                         | 升级为 Verified 仍需                   |
 | ---------------------- | ----------- | ------------------------------------------------------------------------------------------------ | -------------------------------------- |
 | 原生选择器导入         | In progress | Main 持有原生路径和多文件选择；拖放路径不返回 Renderer；Windows/Ubuntu handoff 组合包通过        | Windows 10/11 原生选择器与真实 OS 拖放 |
 | 后台索引任务           | In progress | 真实 DocQA runtime；故障恢复与 5 MiB 原生通过；DOCX/XLSX/PPTX 直接文本索引跨平台通过             | PDF、图片、DOC/XLS/PPT 格式矩阵        |
 | Files 完成后刷新与删除 | In progress | 终态只刷新一次；真实 deletion coordinator；1–1,000 个 ID 的窄批量契约；Windows/Ubuntu 组合包通过 | Windows 10/11 产品 VM                  |
+| 会话详情读取           | In progress | 真实 `load_session()`；五态、重试与过期响应保护；Windows、Ubuntu 22/24 非空组合包通过            | 当前 Gate 3 包的 Windows 10/11 产品 VM |
 
 实现、测试、包体测量与剩余风险见
-[Gate 3 文件索引纵向切片证据](gate-3-file-indexing-evidence.md)。
+[Gate 3 文件索引纵向切片证据](gate-3-file-indexing-evidence.md)和
+[Gate 3 会话详情纵向切片证据](gate-3-session-detail-evidence.md)。
