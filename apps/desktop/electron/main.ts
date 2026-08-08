@@ -29,6 +29,8 @@ import {
   GATE3_CANCEL_BLOCK_MARKER_NAME,
   GATE3_CANCEL_INPUT_NAMES,
   GATE3_CANCEL_REQUEST_MARKER_NAME,
+  GATE3_DATABASE_LOCKED_INPUT_NAME,
+  GATE3_DISK_FULL_INPUT_NAME,
   GATE3_INTERRUPTED_INPUT_NAME,
   GATE3_LARGE_FILE_BYTES,
   GATE3_LARGE_FILE_INPUT_NAME,
@@ -36,7 +38,9 @@ import {
   GATE3_PARTIAL_INPUT_NAMES,
   assertGate3CancellationSmoke,
   assertGate3CancelRetrySmoke,
+  assertGate3DatabaseLockedSmoke,
   assertGate3DeleteSmoke,
+  assertGate3DiskFullSmoke,
   assertGate3IndexSmoke,
   assertGate3InterruptedRetrySmoke,
   assertGate3InterruptedSmoke,
@@ -65,6 +69,21 @@ let quitting = false;
 let recoverIndexTaskAfterRestart = false;
 const watchedIndexTasks = new Set<string>();
 
+const requireGate3DiskFull = process.argv.includes(
+  "--smoke-test-gate3-disk-full",
+);
+const requireGate3DatabaseLock = process.argv.includes(
+  "--smoke-test-gate3-database-lock",
+);
+if (requireGate3DiskFull && requireGate3DatabaseLock) {
+  throw new Error("Only one Gate 3 storage fault can be injected per launch");
+}
+const gate3SmokeFault = requireGate3DiskFull
+  ? "disk_full"
+  : requireGate3DatabaseLock
+    ? "database_locked"
+    : undefined;
+
 const desktopDataRoot = resolveDesktopDataRoot(
   process.platform,
   process.env,
@@ -76,6 +95,7 @@ const sidecar = new SidecarManager({
   dataRoot: desktopDataRoot,
   isPackaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
+  smokeFault: gate3SmokeFault,
   onStatus: handleSidecarStatus,
 });
 
@@ -411,6 +431,79 @@ async function runGate3LargeFileSmoke(
   );
 }
 
+async function runGate3DiskFullSmoke(
+  initialFiles: FileRecord[],
+): Promise<void> {
+  const inputPath = path.join(
+    desktopDataRoot,
+    "tmp",
+    GATE3_DISK_FULL_INPUT_NAME,
+  );
+  await writeFile(
+    inputPath,
+    "MARA Desktop Gate 3 disk-full recovery smoke fixture.\n",
+    "utf8",
+  );
+  const failed = await sidecar.createIndexTask([inputPath]);
+  assertGate3DiskFullSmoke(failed);
+  const recovered = await sidecar.createIndexTask([inputPath]);
+  const terminal = recovered.ok
+    ? await waitForIndexTaskTerminal(recovered.data.task_id)
+    : recovered;
+  const filesAfterRecovery = await sidecar.listFiles();
+  const indexedFileIds = assertGate3IndexSmoke(
+    recovered,
+    terminal,
+    filesAfterRecovery,
+    [GATE3_DISK_FULL_INPUT_NAME],
+  );
+  process.stdout.write(
+    "gate3_storage_fault=disk_full status=failed retry=status_success\n",
+  );
+  const currentFiles = filesAfterRecovery.ok
+    ? filesAfterRecovery.data
+    : initialFiles;
+  await deleteSmokeFiles(currentFiles, indexedFileIds);
+}
+
+async function runGate3DatabaseLockSmoke(
+  initialFiles: FileRecord[],
+): Promise<void> {
+  const inputPath = path.join(
+    desktopDataRoot,
+    "tmp",
+    GATE3_DATABASE_LOCKED_INPUT_NAME,
+  );
+  await writeFile(
+    inputPath,
+    "MARA Desktop Gate 3 database-lock recovery smoke fixture.\n",
+    "utf8",
+  );
+  const created = await sidecar.createIndexTask([inputPath]);
+  const failed = created.ok
+    ? await waitForIndexTaskTerminal(created.data.task_id)
+    : created;
+  const failedTaskId = assertGate3DatabaseLockedSmoke(created, failed);
+  const retried = await sidecar.retryIndexTask(failedTaskId);
+  const terminal = retried.ok
+    ? await waitForIndexTaskTerminal(retried.data.task_id)
+    : retried;
+  const filesAfterRecovery = await sidecar.listFiles();
+  const indexedFileIds = assertGate3IndexSmoke(
+    retried,
+    terminal,
+    filesAfterRecovery,
+    [GATE3_DATABASE_LOCKED_INPUT_NAME],
+  );
+  process.stdout.write(
+    "gate3_storage_fault=database_locked status=failed retry=status_success\n",
+  );
+  const currentFiles = filesAfterRecovery.ok
+    ? filesAfterRecovery.data
+    : initialFiles;
+  await deleteSmokeFiles(currentFiles, indexedFileIds);
+}
+
 async function runGate3CancellationSmoke(
   initialFiles: FileRecord[],
 ): Promise<void> {
@@ -598,6 +691,8 @@ app.whenReady().then(async () => {
     requireGate3Cancellation ||
     requireGate3Partial ||
     requireGate3SidecarExit ||
+    requireGate3DiskFull ||
+    requireGate3DatabaseLock ||
     requireGate3LargeFile;
   if (process.argv.includes("--smoke-test") || requireNonEmptyFixture) {
     const exitCode = await runDesktopSmoke(async () => {
@@ -622,6 +717,10 @@ app.whenReady().then(async () => {
         await runGate3PartialFailureSmoke(initialFiles);
       } else if (requireGate3SidecarExit) {
         await runGate3SidecarInterruptionSmoke(initialFiles);
+      } else if (requireGate3DiskFull) {
+        await runGate3DiskFullSmoke(initialFiles);
+      } else if (requireGate3DatabaseLock) {
+        await runGate3DatabaseLockSmoke(initialFiles);
       } else if (requireGate3LargeFile) {
         await runGate3LargeFileSmoke(initialFiles);
       } else if (requireGate3Cancellation) {

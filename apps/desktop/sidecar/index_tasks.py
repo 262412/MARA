@@ -1,15 +1,25 @@
 from __future__ import annotations
 
-import json
+import errno
 import logging
+import sqlite3
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
+
+from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
+
+from .index_task_journal import (
+    IndexTaskJournal,
+    IndexTaskPersistenceError,
+    JsonIndexTaskJournal,
+)
 
 TERMINAL_STATUSES = {"partial", "success", "failed", "cancelled"}
 ACTIVE_STATUSES = {"queued", "running"}
@@ -64,9 +74,10 @@ class IndexTaskManager:
         service: IndexService,
         *,
         journal_path: Path | None = None,
+        journal: IndexTaskJournal | None = None,
     ) -> None:
         self._service = service
-        self._journal_path = journal_path
+        self._journal = journal or JsonIndexTaskJournal(journal_path)
         self._tasks: dict[str, _IndexTask] = {}
         self._idempotency: dict[str, str] = {}
         self._condition = threading.Condition(threading.RLock())
@@ -85,7 +96,7 @@ class IndexTaskManager:
         idempotency_key: str,
     ) -> dict[str, Any]:
         with self._condition:
-            self._require_open()
+            _require_open(self._closed)
             existing = self._task_for_idempotency(idempotency_key)
             if existing is not None:
                 return self._snapshot(existing)
@@ -98,9 +109,12 @@ class IndexTaskManager:
                     for path in paths
                 ],
             )
-            self._tasks[task.task_id] = task
-            self._idempotency[idempotency_key] = task.task_id
-            self._save_journal()
+            _persist_new_task(
+                self._tasks,
+                self._idempotency,
+                task,
+                self._save_journal,
+            )
             snapshot = self._snapshot(task)
             self._executor.submit(self._run_task, task.task_id)
             return snapshot
@@ -123,7 +137,7 @@ class IndexTaskManager:
         idempotency_key: str,
     ) -> dict[str, Any]:
         with self._condition:
-            self._require_open()
+            _require_open(self._closed)
             existing = self._task_for_idempotency(idempotency_key)
             if existing is not None:
                 return self._snapshot(existing)
@@ -146,9 +160,12 @@ class IndexTaskManager:
                     for source in sources
                 ],
             )
-            self._tasks[retried.task_id] = retried
-            self._idempotency[idempotency_key] = retried.task_id
-            self._save_journal()
+            _persist_new_task(
+                self._tasks,
+                self._idempotency,
+                retried,
+                self._save_journal,
+            )
             snapshot = self._snapshot(retried)
             self._executor.submit(self._run_task, retried.task_id)
             return snapshot
@@ -193,6 +210,17 @@ class IndexTaskManager:
         self._executor.shutdown(wait=False, cancel_futures=True)
 
     def _run_task(self, task_id: str) -> None:
+        try:
+            self._execute_task(task_id)
+        except IndexTaskPersistenceError as error:
+            _record_persistence_failure(
+                self._condition,
+                self._tasks,
+                task_id,
+                error,
+            )
+
+    def _execute_task(self, task_id: str) -> None:
         with self._condition:
             task = self._require_task(task_id)
             if task.cancel_requested:
@@ -215,14 +243,14 @@ class IndexTaskManager:
                 )
             except Exception as exc:
                 LOGGER.error(
-                    "Index task failed task_id=%s file_name=%s",
+                    "Index task failed task_id=%s file_name=%s error_type=%s",
                     task_id,
                     source.name,
-                    exc_info=exc,
+                    type(exc).__name__,
                 )
                 result = {
                     "successes": [],
-                    "failures": [_safe_failure(source.name)],
+                    "failures": [_failure_from_exception(source.name, exc)],
                 }
             with self._condition:
                 task = self._require_task(task_id)
@@ -257,11 +285,7 @@ class IndexTaskManager:
             else:
                 task.status = "failed"
                 task.stage = "completed"
-                task.error = {
-                    "code": "index_failed",
-                    "message": "MARA could not index the selected files.",
-                    "retryable": bool(failures),
-                }
+                task.error = _task_failure(task.sources, bool(failures))
             self._touch(task)
 
     def _finish_cancelled(self, task: _IndexTask) -> None:
@@ -290,10 +314,6 @@ class IndexTaskManager:
             raise IndexTaskNotFoundError(task_id)
         return task
 
-    def _require_open(self) -> None:
-        if self._closed:
-            raise IndexTaskConflictError("The index task manager is stopping.")
-
     def _snapshot(self, task: _IndexTask) -> dict[str, Any]:
         success_count = sum(source.status == "success" for source in task.sources)
         failures = [source.error for source in task.sources if source.error]
@@ -317,9 +337,9 @@ class IndexTaskManager:
         }
 
     def _load_journal(self) -> None:
-        if self._journal_path is None or not self._journal_path.exists():
+        payload = self._journal.load()
+        if payload is None:
             return
-        payload = json.loads(self._journal_path.read_text(encoding="utf-8"))
         if payload.get("journal_version") != JOURNAL_VERSION:
             raise RuntimeError("Unsupported Desktop index task journal version.")
         interrupted = False
@@ -342,22 +362,67 @@ class IndexTaskManager:
             self._save_journal()
 
     def _save_journal(self) -> None:
-        if self._journal_path is None:
-            return
-        self._journal_path.parent.mkdir(parents=True, exist_ok=True)
-        temporary_path = self._journal_path.with_suffix(".tmp")
-        temporary_path.write_text(
-            json.dumps(
-                {
-                    "journal_version": JOURNAL_VERSION,
-                    "tasks": [_task_to_dict(task) for task in self._tasks.values()],
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
+        self._journal.save(
+            {
+                "journal_version": JOURNAL_VERSION,
+                "tasks": [_task_to_dict(task) for task in self._tasks.values()],
+            }
         )
-        temporary_path.replace(self._journal_path)
+
+
+def _persist_new_task(
+    tasks: dict[str, _IndexTask],
+    idempotency: dict[str, str],
+    task: _IndexTask,
+    save: Callable[[], None],
+) -> None:
+    tasks[task.task_id] = task
+    idempotency[task.idempotency_key] = task.task_id
+    try:
+        save()
+    except IndexTaskPersistenceError:
+        tasks.pop(task.task_id, None)
+        idempotency.pop(task.idempotency_key, None)
+        raise
+
+
+def _require_open(closed: bool) -> None:
+    if closed:
+        raise IndexTaskConflictError("The index task manager is stopping.")
+
+
+def _record_persistence_failure(
+    condition: threading.Condition,
+    tasks: dict[str, _IndexTask],
+    task_id: str,
+    error: IndexTaskPersistenceError,
+) -> None:
+    LOGGER.error(
+        "Index task persistence failed task_id=%s error_code=%s",
+        task_id,
+        error.code,
+    )
+    with condition:
+        _set_persistence_failure(tasks[task_id], error)
+        condition.notify_all()
+
+
+def _set_persistence_failure(
+    task: _IndexTask,
+    error: IndexTaskPersistenceError,
+) -> None:
+    for source in task.sources:
+        source.status = "failed"
+        source.error = _known_failure(source.name, error.code, error.message)
+    task.status = "failed"
+    task.stage = "storage_error"
+    task.error = {
+        "code": error.code,
+        "message": error.message,
+        "retryable": True,
+    }
+    task.version += 1
+    task.updated_at = _now()
 
 
 def _safe_failure(name: str) -> dict[str, Any]:
@@ -366,6 +431,58 @@ def _safe_failure(name: str) -> dict[str, Any]:
         "code": "index_failed",
         "message": "MARA could not index this file.",
         "retryable": True,
+    }
+
+
+def _known_failure(name: str, code: str, message: str) -> dict[str, Any]:
+    return {
+        "name": name,
+        "code": code,
+        "message": message,
+        "retryable": True,
+    }
+
+
+def _failure_from_exception(name: str, error: Exception) -> dict[str, Any]:
+    if isinstance(error, OSError) and (
+        error.errno == errno.ENOSPC or getattr(error, "winerror", None) == 112
+    ):
+        return _known_failure(
+            name,
+            "index_storage_full",
+            "MARA does not have enough free storage to index this file.",
+        )
+    if isinstance(error, (sqlite3.OperationalError, SqlAlchemyOperationalError)) and (
+        "locked" in str(error).lower() or "busy" in str(error).lower()
+    ):
+        return _known_failure(
+            name,
+            "index_database_locked",
+            "MARA data is temporarily busy. Try indexing this file again.",
+        )
+    return _safe_failure(name)
+
+
+def _task_failure(
+    sources: list[_TaskSource],
+    retryable: bool,
+) -> dict[str, Any]:
+    failures = [source.error for source in sources if source.error]
+    codes = {failure["code"] for failure in failures}
+    if len(codes) == 1 and next(iter(codes)) in {
+        "index_storage_full",
+        "index_database_locked",
+    }:
+        failure = failures[0]
+        return {
+            "code": failure["code"],
+            "message": failure["message"],
+            "retryable": bool(failure["retryable"]),
+        }
+    return {
+        "code": "index_failed",
+        "message": "MARA could not index the selected files.",
+        "retryable": retryable,
     }
 
 

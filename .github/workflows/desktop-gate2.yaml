@@ -169,6 +169,32 @@ jobs:
                 --summary-file apps/desktop/release/metrics/linux-22-sidecar-exit-after.txt
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-disk-full \
+            > apps/desktop/release/metrics/linux-22-disk-full-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-disk-full-stderr.txt
+          ! grep -F "/tmp/mara-desktop/data/MARA" \
+            apps/desktop/release/metrics/linux-22-disk-full-stderr.txt
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase disk-full-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-disk-full-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-database-lock \
+            > apps/desktop/release/metrics/linux-22-database-lock-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-database-lock-stderr.txt
+          ! grep -F "/tmp/mara-desktop/data/MARA" \
+            apps/desktop/release/metrics/linux-22-database-lock-stderr.txt
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase database-lock-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-database-lock-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
           /usr/bin/time -v \
             -o apps/desktop/release/metrics/linux-22-large-file-time.txt \
             xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
@@ -326,6 +352,10 @@ jobs:
           $partialStderr = "apps/desktop/release/windows-partial-stderr.txt"
           $sidecarExitStdout = "apps/desktop/release/windows-sidecar-exit-stdout.txt"
           $sidecarExitStderr = "apps/desktop/release/windows-sidecar-exit-stderr.txt"
+          $diskFullStdout = "apps/desktop/release/windows-disk-full-stdout.txt"
+          $diskFullStderr = "apps/desktop/release/windows-disk-full-stderr.txt"
+          $databaseLockStdout = "apps/desktop/release/windows-database-lock-stdout.txt"
+          $databaseLockStderr = "apps/desktop/release/windows-database-lock-stderr.txt"
           $largeFileStdout = "apps/desktop/release/windows-large-file-stdout.txt"
           $largeFileStderr = "apps/desktop/release/windows-large-file-stderr.txt"
           $executable = "apps/desktop/release/MARA-win32-x64/MARA.exe"
@@ -500,6 +530,48 @@ jobs:
           }
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
+          $diskFullProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-disk-full" `
+            -RedirectStandardOutput $diskFullStdout `
+            -RedirectStandardError $diskFullStderr -PassThru
+          $diskFullProcess.WaitForExit()
+          "disk_full_exit_code=$($diskFullProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $diskFullStdout) {
+            Get-Content $diskFullStdout | Write-Host
+          }
+          if (Test-Path $diskFullStderr) {
+            Get-Content $diskFullStderr | Write-Host
+            if (Select-String -Path $diskFullStderr -SimpleMatch $dataRoot -Quiet) {
+              throw "The disk-full diagnostics exposed the Desktop data path."
+            }
+          }
+          if ($diskFullProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $diskFullProcess.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          $databaseLockProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-database-lock" `
+            -RedirectStandardOutput $databaseLockStdout `
+            -RedirectStandardError $databaseLockStderr -PassThru
+          $databaseLockProcess.WaitForExit()
+          "database_lock_exit_code=$($databaseLockProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $databaseLockStdout) {
+            Get-Content $databaseLockStdout | Write-Host
+          }
+          if (Test-Path $databaseLockStderr) {
+            Get-Content $databaseLockStderr | Write-Host
+            if (Select-String -Path $databaseLockStderr -SimpleMatch $dataRoot -Quiet) {
+              throw "The database-lock diagnostics exposed the Desktop data path."
+            }
+          }
+          if ($databaseLockProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $databaseLockProcess.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
           $largeFileStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
           $largeFileProcess = Start-Process $executable `
             -ArgumentList "--smoke-test-gate3-large-file" `
@@ -619,6 +691,10 @@ jobs:
             apps/desktop/release/windows-partial-stderr.txt
             apps/desktop/release/windows-sidecar-exit-stdout.txt
             apps/desktop/release/windows-sidecar-exit-stderr.txt
+            apps/desktop/release/windows-disk-full-stdout.txt
+            apps/desktop/release/windows-disk-full-stderr.txt
+            apps/desktop/release/windows-database-lock-stdout.txt
+            apps/desktop/release/windows-database-lock-stderr.txt
             apps/desktop/release/windows-large-file-stdout.txt
             apps/desktop/release/windows-large-file-stderr.txt
             apps/desktop/release/windows-metrics.txt

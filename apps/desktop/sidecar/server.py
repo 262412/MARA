@@ -29,11 +29,13 @@ from sidecar.contracts import (
     SidecarError,
 )
 from sidecar.file_routes import register_gate3_routes
+from sidecar.index_task_journal import IndexTaskPersistenceError, JsonIndexTaskJournal
 from sidecar.index_tasks import (
     IndexTaskConflictError,
     IndexTaskManager,
     IndexTaskNotFoundError,
 )
+from sidecar.smoke_faults import inject_smoke_fault
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 PROTOCOL_VERSION = 1
@@ -156,6 +158,8 @@ def create_app(
     token: str,
     application_service: ApplicationService | None = None,
     index_task_manager: IndexTaskManager | None = None,
+    *,
+    smoke_fault: str | None = None,
 ) -> FastAPI:
     if not token:
         raise ValueError("Sidecar token is required")
@@ -175,10 +179,14 @@ def create_app(
         },
     )
     service = application_service or DesktopApplicationService()
-    task_manager = index_task_manager or IndexTaskManager(
-        service,
-        journal_path=_index_task_journal_path(),
-    )
+    task_manager = index_task_manager
+    if task_manager is None:
+        index_service, journal = inject_smoke_fault(
+            service,
+            JsonIndexTaskJournal(_index_task_journal_path()),
+            smoke_fault,
+        )
+        task_manager = IndexTaskManager(index_service, journal=journal)
     app.state.token = token
     app.state.application_service = service
     app.state.index_task_manager = task_manager
@@ -283,6 +291,23 @@ def _register_exception_handlers(app: FastAPI) -> None:
 
 
 def _register_task_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(IndexTaskPersistenceError)
+    async def handle_task_persistence_error(
+        request: Request, error: IndexTaskPersistenceError
+    ) -> JSONResponse:
+        LOGGER.error(
+            "Index task persistence unavailable request_id=%s error_code=%s",
+            _request_id(request),
+            error.code,
+        )
+        return _error_response(
+            request,
+            status_code=503,
+            code=error.code,
+            message=error.message,
+            retryable=True,
+        )
+
     @app.exception_handler(IndexTaskNotFoundError)
     async def handle_task_not_found(
         request: Request, error: IndexTaskNotFoundError
@@ -430,7 +455,10 @@ def main() -> int:
         return 2
 
     configure_desktop_data_root(Path(data_root))
-    app = create_app(token)
+    app = create_app(
+        token,
+        smoke_fault=os.environ.get("MARA_DESKTOP_SMOKE_FAULT") or None,
+    )
     listener = _create_listener()
     host, port = listener.getsockname()
     config = uvicorn.Config(

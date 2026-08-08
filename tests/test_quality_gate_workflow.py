@@ -329,7 +329,7 @@ def test_desktop_smoke_proves_cli_data_compatibility_without_retaining_paths():
     windows_commands = _commands(windows)
 
     assert ".venv/bin/MARA docqa index" in linux_commands
-    assert linux_commands.count("MARA docqa files --json") == 7
+    assert linux_commands.count("MARA docqa files --json") == 9
     assert "--expect-name gate3-cli-compat.txt" in linux_commands
     assert "--expect-empty" in linux_commands
     assert "KH_APP_DATA_DIR" in linux_commands

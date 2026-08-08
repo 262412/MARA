@@ -95,7 +95,11 @@ Gate 3 的文件导入由 Main 打开原生选择器；Renderer 不传选择器�
 绝对路径。Main 只把选择结果送入带认证的 Sidecar 索引命令。Sidecar 返回脱敏的
 任务 ID、文件名、计数和状态，事件通过 SSE 送到 Main 后再投影为明确的 IPC 事件。
 索引任务日志位于独立 Desktop 数据根，应用重启后会把中断任务标记为可重试失败，
-不会静默丢失任务。
+不会静默丢失任务。日志通过同目录临时文件原子替换；首次持久化遇到磁盘满时，
+任务和 idempotency 登记一起回滚，不会留下永远不执行的 queued 任务。运行中持久化
+失败会投影为脱敏、可重试状态。磁盘满和数据库锁分别使用稳定的
+`index_storage_full`、`index_database_locked` 错误码，原始异常和本地路径不进入
+Renderer。
 
 原生选择器的扩展名过滤器来自认证后的 `GET /v1/import-capabilities`。该端点读取
 当前持久化 FileIndex 配置；尚未创建索引时回退到 MARA 默认 FileIndex 定义。Main

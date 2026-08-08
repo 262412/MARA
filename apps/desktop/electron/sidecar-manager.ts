@@ -42,6 +42,7 @@ type SidecarManagerOptions = {
   dataRoot: string;
   isPackaged: boolean;
   resourcesPath: string;
+  smokeFault?: "disk_full" | "database_locked";
   onStatus?: (status: RuntimeStatus) => void;
 };
 
@@ -334,6 +335,7 @@ export class SidecarManager {
         ),
         MARA_DESKTOP_DATA_DIR: this.options.dataRoot,
         MARA_DESKTOP_TOKEN: token,
+        MARA_DESKTOP_SMOKE_FAULT: this.options.smokeFault ?? "",
       },
       cwd: this.options.isPackaged ? undefined : this.options.appPath,
       stdio: ["pipe", "pipe", "pipe"],

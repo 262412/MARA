@@ -26,7 +26,8 @@ smoke，并补齐产品 VM、支持格式与异常场景验收后，才能升级
 - 可重试写操作使用 idempotency key。Renderer 可见数据只包含任务 ID、文件名、
   计数、状态和脱敏错误，不包含导入路径或 Sidecar 端口/令牌。
 - 索引任务日志保存在独立 Desktop 数据根；启动时把未完成任务标记为
-  `index_interrupted`，用户可以重试失败或未完成文件。
+  `index_interrupted`，用户可以重试失败或未完成文件。日志写入使用临时文件原子
+  替换；首次写入失败会同时回滚任务和 idempotency 登记。
 
 ## 业务逻辑复用
 
@@ -74,29 +75,37 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 - `--smoke-test-gate3-large-file` 生成确定性 5 MiB 文本，真实执行解析、分块、
   embedding、Files 刷新和删除；单独记录 index/delete 耗时和进程峰值内存。该
   canary 是容量回归点，不代表产品最大文件限制。
+- `--smoke-test-gate3-disk-full` 在第一次任务 journal 写入处注入真实 ENOSPC，要求
+  Sidecar 返回稳定、可重试的 `index_storage_full`，不保留未调度任务；同一进程
+  恢复写入后重新创建任务并完成真实索引/删除。
+- `--smoke-test-gate3-database-lock` 在第一次 application service 索引调用注入
+  SQLite 锁，要求任务以 `index_database_locked` 脱敏失败；重试原任务后完成真实
+  索引/删除。两项开关只存在于 Main 到 Sidecar 的组合包 smoke 环境，不进入 IPC。
 - CI 使用仅绑定 loopback 的确定性 OpenAI-compatible embedding 端点，避免真实
   模型服务、网络和凭据影响打包验收。
 
 ## 当前验收状态
 
-| 项目                                      | 状态   |
-| ----------------------------------------- | ------ |
-| 现有 CLI 行为特征测试                     | 已通过 |
-| MARA application service 单元/集成测试    | 已通过 |
-| Sidecar 认证、参数、响应和事件契约        | 已通过 |
-| Electron IPC sender、参数和原生选择器测试 | 已通过 |
-| React 索引/删除状态覆盖                   | 已通过 |
-| Linux 开发态真实索引/刷新/删除 smoke      | 已通过 |
-| Linux 开发态轻量支持格式矩阵              | 已通过 |
-| Linux 开发态模型故障与运行中取消恢复      | 已通过 |
-| Linux 开发态部分失败与定向重试            | 已通过 |
-| Linux 开发态 Sidecar 中断与重启恢复       | 已通过 |
-| Linux 开发态 5 MiB 容量 canary            | 已通过 |
-| 当前代码的 Linux 自包含组合包 smoke       | 已通过 |
-| 完整 `ktem` package gate                  | 已通过 |
-| 完整 `slide_cli` package gate             | 已通过 |
-| 当前代码的 Windows 原生组合包/Defender    | 已通过 |
-| 当前代码的 Ubuntu 22.04/24.04 smoke       | 已通过 |
+| 项目                                      | 状态    |
+| ----------------------------------------- | ------- |
+| 现有 CLI 行为特征测试                     | 已通过  |
+| MARA application service 单元/集成测试    | 已通过  |
+| Sidecar 认证、参数、响应和事件契约        | 已通过  |
+| Electron IPC sender、参数和原生选择器测试 | 已通过  |
+| React 索引/删除状态覆盖                   | 已通过  |
+| Linux 开发态真实索引/刷新/删除 smoke      | 已通过  |
+| Linux 开发态轻量支持格式矩阵              | 已通过  |
+| Linux 开发态模型故障与运行中取消恢复      | 已通过  |
+| Linux 开发态部分失败与定向重试            | 已通过  |
+| Linux 开发态 Sidecar 中断与重启恢复       | 已通过  |
+| Linux 开发态 5 MiB 容量 canary            | 已通过  |
+| 磁盘满/数据库锁单元与 Sidecar 契约        | 已通过  |
+| Windows/Ubuntu 磁盘满与数据库锁组合包     | 待新 CI |
+| 当前代码的 Linux 自包含组合包 smoke       | 已通过  |
+| 完整 `ktem` package gate                  | 已通过  |
+| 完整 `slide_cli` package gate             | 已通过  |
+| 当前代码的 Windows 原生组合包/Defender    | 已通过  |
+| 当前代码的 Ubuntu 22.04/24.04 smoke       | 已通过  |
 
 当前基线重新验证已取得完整 package green：`ktem` 为 1,632 passed，`slide_cli`
 完整测试包也全部通过。Canonical runtime 新增的生成参数已同步到兼容 facade，并以
@@ -297,7 +306,12 @@ Ubuntu 24.04 复用 Ubuntu 22.04 的同一组合包和中断恢复后重新生�
 `sidecar_unavailable`。修复后只有认证的 `DELETE /v1/files/{id}` 使用 300 秒上限，
 其他请求仍保持 30 秒。完整索引、删除和 CLI 零残留复核通过，总耗时 3:18.90，
 最大 RSS 643,000 KiB；删除约 140 秒，是明确的性能风险而不是隐藏成本。该场景已
-接入 Windows 和 Ubuntu 22.04 原生包工作流，跨平台 CI 证据尚待对应提交完成。
+接入 Windows 和 Ubuntu 22.04 原生包工作流。提交 `faf0cf5` 的运行
+[31274522573](https://github.com/262412/MARA/actions/runs/31274522573) 中，Ubuntu
+22.04 原生包及 Ubuntu 24.04 复验通过；Windows 在 338.183 秒后因删除超过 300 秒
+上限而得到 `sidecar_unavailable`。根因是共享 `DeletionCoordinator` 对每个向量和
+docstore ID 分别提交删除。提交 `14ea717` 将每个存储改为一次批量删除，并保留“批量
+遇到缺失目标时逐项幂等清理”的兼容路径；Windows 原生复验尚待新 CI。
 
 ## Linux 开发机参考测量
 
@@ -333,14 +347,14 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
    数据目录和残留进程验收。
 2. 增加拖放、批量选择，以及 PDF、Office 和图片的支持格式矩阵。文本、Markdown、
    CSV、HTML、MHTML 和 ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。
-3. 增加磁盘满和数据库锁的组合包故障注入。
+3. 磁盘满和数据库锁的组合包故障注入已经实现，尚待 Windows/Ubuntu 原生 CI 证据。
    模型 503 → 脱敏失败 → 原任务重试成功已通过 Windows/Ubuntu 原生组合包。运行中
    取消 → 文件边界停止 → 只重试剩余文件已通过 Windows/Ubuntu 原生组合包。取消
    不会强杀正在执行的单文件 parser/vector write。部分失败 → 只重试失败文件也已
    通过 Windows/Ubuntu 原生组合包。Sidecar 强制退出 → 自动重启 → 持久任务恢复
    → 重试成功也已通过 Windows/Ubuntu 原生组合包。5 MiB 大文件已通过 Linux
-   开发态真实 runtime 并接入原生打包工作流，尚待跨平台 CI 证据；其删除耗时必须
-   继续作为性能基线跟踪。
+   开发态真实 runtime；Ubuntu 原生包已通过，Windows 暴露逐项删除瓶颈并已改为
+   批量删除，尚待复验。其索引、删除耗时必须继续作为性能基线跟踪。
 4. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，

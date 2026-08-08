@@ -21,6 +21,8 @@ export const GATE3_PARTIAL_INPUT_NAMES = [
 export const GATE3_INTERRUPTED_INPUT_NAME = "gate3-sidecar-interrupted.txt";
 export const GATE3_LARGE_FILE_INPUT_NAME = "gate3-large-file.txt";
 export const GATE3_LARGE_FILE_BYTES = 5 * 1024 * 1024;
+export const GATE3_DISK_FULL_INPUT_NAME = "gate3-disk-full.txt";
+export const GATE3_DATABASE_LOCKED_INPUT_NAME = "gate3-database-locked.txt";
 export const GATE3_CANCEL_INPUT_NAMES = [
   "gate3-cancel-first.txt",
   "gate3-cancel-second.txt",
@@ -363,6 +365,45 @@ export function assertGate3LargeFileSmoke(
     throw new Error("Gate 3 large-file record size changed");
   }
   return fileIds;
+}
+
+export function assertGate3DiskFullSmoke(
+  failed: DesktopResult<IndexTask>,
+): void {
+  if (
+    failed.ok ||
+    failed.error.code !== "index_storage_full" ||
+    !failed.error.retryable ||
+    JSON.stringify(failed.error).includes("/private")
+  ) {
+    throw new Error("Gate 3 disk-full fault was not reported safely");
+  }
+}
+
+export function assertGate3DatabaseLockedSmoke(
+  created: DesktopResult<IndexTask>,
+  terminal: DesktopResult<IndexTask>,
+): string {
+  if (!created.ok || !terminal.ok) {
+    throw new Error("Gate 3 database-lock task request failed");
+  }
+  const task = terminal.data;
+  if (
+    task.task_id !== created.data.task_id ||
+    task.status !== "failed" ||
+    task.error?.code !== "index_database_locked" ||
+    !task.retryable ||
+    task.completed_files !== 1 ||
+    task.success_count !== 0 ||
+    task.failure_count !== 1 ||
+    task.file_names[0] !== GATE3_DATABASE_LOCKED_INPUT_NAME ||
+    task.failures[0]?.code !== "index_database_locked" ||
+    task.failures[0]?.name !== GATE3_DATABASE_LOCKED_INPUT_NAME ||
+    JSON.stringify(task).includes("/private")
+  ) {
+    throw new Error("Gate 3 database-lock fault was not reported safely");
+  }
+  return task.task_id;
 }
 
 export function assertGate3CancellationSmoke(
