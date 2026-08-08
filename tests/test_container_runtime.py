@@ -161,7 +161,11 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
     )
 
     expected_constraints = {
+        "aiohttp>=3.14.3",
+        "cryptography>=50.0.0",
+        "h2>=4.4.1",
         "mcp==1.12.4",
+        "onnx>=1.22.0,<1.23; python_version < '3.13'",
         "pyarrow==21.0.0",
         "pydantic-settings==2.13.1",
         "pywin32==311; sys_platform == 'win32'",
