@@ -14,6 +14,10 @@ export const GATE2_SMOKE_FILE_ID = "gate2-smoke-file";
 export const GATE2_SMOKE_SESSION_ID = "gate2-smoke-session";
 export const GATE3_MODEL_UNAVAILABLE_INPUT_NAME =
   "gate3-model-unavailable.txt";
+export const GATE3_PARTIAL_INPUT_NAMES = [
+  "gate3-partial-already-indexed.txt",
+  "gate3-partial-success.txt",
+] as const;
 export const GATE3_CANCEL_INPUT_NAMES = [
   "gate3-cancel-first.txt",
   "gate3-cancel-second.txt",
@@ -206,6 +210,83 @@ export function assertGate3RetrySource(
     throw new Error("Gate 3 retry did not find the model-unavailable task");
   }
   return latest.data.task_id;
+}
+
+export function assertGate3PartialSmoke(
+  created: DesktopResult<IndexTask>,
+  terminal: DesktopResult<IndexTask>,
+  filesAfterPartial: DesktopResult<FileRecord[]>,
+): string {
+  if (!created.ok || !terminal.ok) {
+    throw new Error("Gate 3 partial-failure task request failed");
+  }
+  const task = terminal.data;
+  if (
+    task.task_id !== created.data.task_id ||
+    task.status !== "partial" ||
+    task.error?.code !== "index_partial_failure" ||
+    !task.retryable ||
+    task.completed_files !== 2 ||
+    task.success_count !== 1 ||
+    task.failure_count !== 1 ||
+    task.file_names.join(",") !== GATE3_PARTIAL_INPUT_NAMES.join(",") ||
+    task.failures.length !== 1 ||
+    task.failures[0]?.name !== GATE3_PARTIAL_INPUT_NAMES[0] ||
+    !task.failures[0]?.retryable
+  ) {
+    const diagnostic = {
+      status: task.status,
+      error_code: task.error?.code ?? null,
+      completed_files: task.completed_files,
+      success_count: task.success_count,
+      failure_count: task.failure_count,
+      file_names: task.file_names,
+      failure_names: task.failures.map((failure) => failure.name),
+    };
+    throw new Error(
+      `Gate 3 partial failure was not reported safely: ${JSON.stringify(diagnostic)}`,
+    );
+  }
+  if (!filesAfterPartial.ok) {
+    throw new Error(
+      `Gate 3 partial refresh failed: ${filesAfterPartial.error.code}`,
+    );
+  }
+  const existing = filesAfterPartial.data.find(
+    (record) => record.name === GATE3_PARTIAL_INPUT_NAMES[0],
+  );
+  const succeeded = filesAfterPartial.data.find(
+    (record) => record.name === GATE3_PARTIAL_INPUT_NAMES[1],
+  );
+  if (
+    !existing ||
+    !succeeded ||
+    Object.hasOwn(existing, "path") ||
+    Object.hasOwn(succeeded, "path")
+  ) {
+    throw new Error("Gate 3 partial failure did not preserve both file records");
+  }
+  return task.task_id;
+}
+
+export function assertGate3PartialRetrySmoke(
+  retried: DesktopResult<IndexTask>,
+  terminal: DesktopResult<IndexTask>,
+  filesAfterRetry: DesktopResult<FileRecord[]>,
+): string[] {
+  if (
+    !retried.ok ||
+    retried.data.total_files !== 1 ||
+    retried.data.file_names[0] !== GATE3_PARTIAL_INPUT_NAMES[0]
+  ) {
+    throw new Error("Gate 3 partial retry selected the wrong files");
+  }
+  return assertGate3IndexSmoke(
+    retried,
+    terminal,
+    filesAfterRetry,
+    GATE3_PARTIAL_INPUT_NAMES,
+  );
 }
 
 export function assertGate3CancellationSmoke(

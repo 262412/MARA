@@ -65,6 +65,8 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
   可重试状态失败；解除故障后 `--smoke-test-gate3-retry` 重试原任务并清空 Files。
 - `--smoke-test-gate3-cancel` 在首文件 embedding 请求处确定性暂停，确认运行中取消
   只在首文件完成后生效，再只重试第二个文件并清空 Files，避免用时序猜测制造竞态。
+- `--smoke-test-gate3-partial` 先真实索引首文件，再提交“已存在文件 + 新文件”的批量
+  任务，要求任务一成一败，重试只选择失败首项并以 `reindex` 恢复，最后清空 Files。
 - CI 使用仅绑定 loopback 的确定性 OpenAI-compatible embedding 端点，避免真实
   模型服务、网络和凭据影响打包验收。
 
@@ -80,6 +82,7 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 | Linux 开发态真实索引/刷新/删除 smoke      | 已通过 |
 | Linux 开发态轻量支持格式矩阵              | 已通过 |
 | Linux 开发态模型故障与运行中取消恢复      | 已通过 |
+| Linux 开发态部分失败与定向重试            | 已通过 |
 | 当前代码的 Linux 自包含组合包 smoke       | 已通过 |
 | 完整 `ktem` package gate                  | 已通过 |
 | 完整 `slide_cli` package gate             | 已通过 |
@@ -216,6 +219,16 @@ Defender 同时确认引擎与服务开启、移除 `D:\` 整盘排除、启用 
 发布目录 997,310,895 bytes、2,705 个文件。Ubuntu 24.04 复用 Ubuntu 22.04 的
 同一组合包及取消恢复后重新生成的数据快照，提供发行版兼容复验。
 
+## 部分失败开发态证据
+
+2026-08-08 在独立 fastscratch 数据根运行真实 Electron、Sidecar 和 DocQA runtime：
+先索引 `gate3-partial-already-indexed.txt`，再批量提交该文件和一个新文件。任务以
+`partial`、`success_count=1`、`failure_count=1` 结束，失败条目只有已存在文件；
+重试任务只包含该失败文件并使用 `reindex` 成功恢复。安全摘要为
+`gate3_partial=duplicate_1 success_1 retry=failed_only_success`，随后正式
+`MARA docqa files --json` 复核 `record_count=0`。该场景已经接入 Windows 和 Ubuntu
+22.04 原生包工作流，跨平台 CI 证据尚待对应提交运行完成。
+
 ## Linux 开发机参考测量
 
 2026-08-08 在当前 Linux 开发机对自包含 Electron + PyInstaller 组合包执行断网
@@ -250,11 +263,12 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
    数据目录和残留进程验收。
 2. 增加拖放、批量选择，以及 PDF、Office 和图片的支持格式矩阵。文本、Markdown、
    CSV、HTML、MHTML 和 ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。
-3. 增加大文件、部分失败、磁盘满、数据库锁和 Sidecar 强制退出的组合包故障注入。
+3. 增加大文件、磁盘满、数据库锁和 Sidecar 强制退出的组合包故障注入。
    模型 503 → 脱敏失败 → 原任务重试成功已通过 Windows/Ubuntu 原生组合包。运行中
    取消 → 文件边界停止 → 只重试剩余文件已通过 Windows/Ubuntu 原生组合包。取消
-   不会强杀正在执行的单文件 parser/vector write，大文件场景仍须单独验证资源和
-   等待边界。
+   不会强杀正在执行的单文件 parser/vector write。部分失败 → 只重试失败文件已
+   通过 Linux 开发态真实 runtime 并接入原生打包工作流，尚待取得对应提交的跨平台
+   CI 证据；大文件场景仍须单独验证资源和等待边界。
 4. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，

@@ -30,11 +30,14 @@ import {
   GATE3_CANCEL_INPUT_NAMES,
   GATE3_CANCEL_REQUEST_MARKER_NAME,
   GATE3_MODEL_UNAVAILABLE_INPUT_NAME,
+  GATE3_PARTIAL_INPUT_NAMES,
   assertGate3CancellationSmoke,
   assertGate3CancelRetrySmoke,
   assertGate3DeleteSmoke,
   assertGate3IndexSmoke,
   assertGate3ModelUnavailableSmoke,
+  assertGate3PartialRetrySmoke,
+  assertGate3PartialSmoke,
   assertGate3RetrySource,
   assertPackagedSmoke,
 } from "./smoke-validation";
@@ -224,6 +227,60 @@ async function runGate3RetrySmoke(initialFiles: FileRecord[]): Promise<void> {
   await deleteSmokeFiles(currentFiles, indexedFileIds);
 }
 
+async function runGate3PartialFailureSmoke(
+  initialFiles: FileRecord[],
+): Promise<void> {
+  const inputPaths = GATE3_PARTIAL_INPUT_NAMES.map((name) =>
+    path.join(desktopDataRoot, "tmp", name),
+  );
+  await writeFile(
+    inputPaths[0],
+    "MARA Desktop Gate 3 pre-indexed partial failure fixture.\n",
+    "utf8",
+  );
+  await writeFile(
+    inputPaths[1],
+    "MARA Desktop Gate 3 successful partial task fixture.\n",
+    "utf8",
+  );
+  const seeded = await sidecar.createIndexTask([inputPaths[0]]);
+  const seedTerminal = seeded.ok
+    ? await waitForIndexTaskTerminal(seeded.data.task_id)
+    : seeded;
+  const filesAfterSeed = await sidecar.listFiles();
+  assertGate3IndexSmoke(
+    seeded,
+    seedTerminal,
+    filesAfterSeed,
+    [GATE3_PARTIAL_INPUT_NAMES[0]],
+  );
+  const created = await sidecar.createIndexTask(inputPaths);
+  const terminal = created.ok
+    ? await waitForIndexTaskTerminal(created.data.task_id)
+    : created;
+  const filesAfterPartial = await sidecar.listFiles();
+  const partialTaskId = assertGate3PartialSmoke(
+    created,
+    terminal,
+    filesAfterPartial,
+  );
+  const retried = await sidecar.retryIndexTask(partialTaskId);
+  const retryTerminal = retried.ok
+    ? await waitForIndexTaskTerminal(retried.data.task_id)
+    : retried;
+  const filesAfterRetry = await sidecar.listFiles();
+  const indexedFileIds = assertGate3PartialRetrySmoke(
+    retried,
+    retryTerminal,
+    filesAfterRetry,
+  );
+  process.stdout.write(
+    "gate3_partial=duplicate_1 success_1 retry=failed_only_success\n",
+  );
+  const currentFiles = filesAfterRetry.ok ? filesAfterRetry.data : initialFiles;
+  await deleteSmokeFiles(currentFiles, indexedFileIds);
+}
+
 async function runGate3CancellationSmoke(
   initialFiles: FileRecord[],
 ): Promise<void> {
@@ -392,6 +449,9 @@ app.whenReady().then(async () => {
   const requireGate3Cancellation = process.argv.includes(
     "--smoke-test-gate3-cancel",
   );
+  const requireGate3Partial = process.argv.includes(
+    "--smoke-test-gate3-partial",
+  );
   const requireGate3Delete =
     process.argv.includes("--smoke-test-gate3") || requireGate3Formats;
   const requireNonEmptyFixture =
@@ -399,7 +459,8 @@ app.whenReady().then(async () => {
     requireGate3Delete ||
     requireGate3ModelUnavailable ||
     requireGate3Retry ||
-    requireGate3Cancellation;
+    requireGate3Cancellation ||
+    requireGate3Partial;
   if (process.argv.includes("--smoke-test") || requireNonEmptyFixture) {
     const exitCode = await runDesktopSmoke(async () => {
       const [status, doctor, files, sessions, importCapabilities] =
@@ -419,6 +480,8 @@ app.whenReady().then(async () => {
         await runGate3ModelUnavailableSmoke();
       } else if (requireGate3Retry) {
         await runGate3RetrySmoke(initialFiles);
+      } else if (requireGate3Partial) {
+        await runGate3PartialFailureSmoke(initialFiles);
       } else if (requireGate3Cancellation) {
         await runGate3CancellationSmoke(initialFiles);
       } else if (requireGate3Delete) {
