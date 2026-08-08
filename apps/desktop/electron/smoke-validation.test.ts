@@ -254,7 +254,7 @@ test("accepts a successful packaged background index and refreshed Files", () =>
   );
 });
 
-test("requires every lightweight format record in the packaged matrix", () => {
+test("requires every selected format record to contain parsed content", () => {
   const formatFiles: DesktopResult<FileRecord[]> = {
     ok: true,
     data: GATE3_FORMAT_RECORD_NAMES.map((name, index) => ({
@@ -273,7 +273,7 @@ test("requires every lightweight format record in the packaged matrix", () => {
       status: "queued" as const,
       stage: "queued",
       completed_files: 0,
-      total_files: 6,
+      total_files: GATE3_FORMAT_RECORD_NAMES.length,
       file_names: ["format fixtures"],
       success_count: 0,
       failure_count: 0,
@@ -291,8 +291,8 @@ test("requires every lightweight format record in the packaged matrix", () => {
       ...created.data,
       status: "success" as const,
       stage: "completed",
-      completed_files: 6,
-      success_count: 6,
+      completed_files: GATE3_FORMAT_RECORD_NAMES.length,
+      success_count: GATE3_FORMAT_RECORD_NAMES.length,
     },
   };
 
@@ -314,6 +314,21 @@ test("requires every lightweight format record in the packaged matrix", () => {
         GATE3_FORMAT_RECORD_NAMES,
       ),
     /fixtures are missing/,
+  );
+  assert.throws(
+    () =>
+      assertGate3IndexSmoke(
+        created,
+        terminal,
+        {
+          ok: true,
+          data: formatFiles.data.map((record, index) =>
+            index === 0 ? { ...record, tokens: 0 } : record,
+          ),
+        },
+        GATE3_FORMAT_RECORD_NAMES,
+      ),
+    /no parsed content/,
   );
 });
 

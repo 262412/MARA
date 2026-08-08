@@ -33,7 +33,7 @@ test("excludes optional indexing accelerators and provider SDKs", () => {
   }
 });
 
-test("includes the storage and remote embedding modules used by Gate 3 indexing", () => {
+test("includes the storage, embedding, and modern Office modules used by Gate 3", () => {
   for (const moduleName of [
     "chromadb",
     "chromadb.api.segment",
@@ -46,6 +46,7 @@ test("includes the storage and remote embedding modules used by Gate 3 indexing"
     "chromadb.segment.impl.vector.local_persistent_hnsw",
     "chromadb.telemetry.product.posthog",
     "chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2",
+    "docx",
     "ktem.docqa",
     "ktem.index.file.pipelines",
     "kotaemon.embeddings.openai",
@@ -54,7 +55,10 @@ test("includes the storage and remote embedding modules used by Gate 3 indexing"
     "lancedb",
     "llama_index.vector_stores.chroma",
     "openai",
+    "openpyxl",
     "onnxruntime",
+    "pandas",
+    "pptx",
     "theflow.backends",
     "theflow.cache",
     "theflow.callbacks",
@@ -64,6 +68,8 @@ test("includes the storage and remote embedding modules used by Gate 3 indexing"
     "tiktoken_ext.openai_public",
     "tokenizers",
     "tqdm",
+    "unstructured.partition.auto",
+    "unstructured.partition.pptx",
   ]) {
     assert.ok(requiredSidecarModules.includes(moduleName), moduleName);
   }

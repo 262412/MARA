@@ -16,10 +16,38 @@ from .smoke_fixture import (
 
 
 def assert_gate3_format_inputs(test: unittest.TestCase, data_root: Path) -> None:
+    from docx import Document
+    from openpyxl import load_workbook
+    from pptx import Presentation
+
+    input_root = data_root / "tmp"
     test.assertTrue(
-        all((data_root / "tmp" / name).is_file() for name in GATE3_FORMAT_INPUT_NAMES)
+        all((input_root / name).is_file() for name in GATE3_FORMAT_INPUT_NAMES)
     )
-    with zipfile.ZipFile(data_root / "tmp" / "gate3-format.zip") as archive:
+    document = Document(input_root / "gate3-format.docx")
+    test.assertIn(
+        "MARA modern Office format matrix fixture.",
+        [paragraph.text for paragraph in document.paragraphs],
+    )
+    workbook = load_workbook(input_root / "gate3-format.xlsx", read_only=True)
+    try:
+        test.assertEqual(workbook["MARA"]["A2"].value, "indexed_files")
+    finally:
+        workbook.close()
+    presentation = Presentation(input_root / "gate3-format.pptx")
+    test.assertEqual(presentation.slides[0].shapes.title.text, "Gate 3 PPTX")
+    from kotaemon.indices.ingests.files import KH_DEFAULT_FILE_EXTRACTORS
+
+    for name, marker in (
+        ("gate3-format.docx", "MARA modern Office format matrix fixture."),
+        ("gate3-format.xlsx", "indexed_files"),
+        ("gate3-format.pptx", "MARA modern Office format matrix fixture."),
+    ):
+        reader = KH_DEFAULT_FILE_EXTRACTORS[Path(name).suffix]
+        documents = reader.load_data(input_root / name)
+        searchable_text = "\n".join(document.text for document in documents)
+        test.assertIn(marker, searchable_text, name)
+    with zipfile.ZipFile(input_root / "gate3-format.zip") as archive:
         test.assertEqual(archive.namelist(), ["gate3-zip-note.md"])
 
 

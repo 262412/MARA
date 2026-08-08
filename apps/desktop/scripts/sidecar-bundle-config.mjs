@@ -46,6 +46,7 @@ export const requiredSidecarModules = [
   "chromadb.segment.impl.vector.local_persistent_hnsw",
   "chromadb.telemetry.product.posthog",
   "chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2",
+  "docx",
   "ktem.default_flowsettings",
   "ktem.docqa",
   "ktem.index.file.pipelines",
@@ -56,7 +57,10 @@ export const requiredSidecarModules = [
   "lancedb",
   "llama_index.vector_stores.chroma",
   "openai",
+  "openpyxl",
   "onnxruntime",
+  "pandas",
+  "pptx",
   "slide_cli.docqa_runtime",
   "theflow.backends",
   "theflow.cache",
@@ -68,6 +72,8 @@ export const requiredSidecarModules = [
   "tiktoken_ext.openai_public",
   "tokenizers",
   "tqdm",
+  "unstructured.partition.auto",
+  "unstructured.partition.pptx",
 ];
 
 export const requiredSidecarDataPackages = ["chromadb", "llama_index.core"];

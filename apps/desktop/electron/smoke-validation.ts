@@ -10,6 +10,11 @@ import type {
 } from "../shared/runtime-contracts";
 import type { SessionSummary } from "../shared/session-contracts";
 
+export {
+  GATE3_FORMAT_INPUT_NAMES,
+  GATE3_FORMAT_RECORD_NAMES,
+} from "./smoke-format-fixtures";
+
 export const GATE2_SMOKE_FILE_ID = "gate2-smoke-file";
 export const GATE2_SMOKE_SESSION_ID = "gate2-smoke-session";
 export const GATE3_MODEL_UNAVAILABLE_INPUT_NAME =
@@ -29,22 +34,6 @@ export const GATE3_CANCEL_INPUT_NAMES = [
 ] as const;
 export const GATE3_CANCEL_BLOCK_MARKER_NAME = "gate3-embedding-block";
 export const GATE3_CANCEL_REQUEST_MARKER_NAME = "gate3-embedding-request";
-export const GATE3_FORMAT_INPUT_NAMES = [
-  "gate3-format.md",
-  "gate3-format.csv",
-  "gate3-format.html",
-  "gate3-format.mhtml",
-  "gate3-format.zip",
-] as const;
-export const GATE3_FORMAT_RECORD_NAMES = [
-  "gate3-index-smoke.txt",
-  "gate3-format.md",
-  "gate3-format.csv",
-  "gate3-format.html",
-  "gate3-format.mhtml",
-  "gate3-zip-note.md",
-] as const;
-
 type PackagedSmokeSnapshot = {
   status: RuntimeStatus;
   doctor: DesktopResult<DoctorPayload>;
@@ -165,6 +154,9 @@ export function assertGate3IndexSmoke(
     }
     if (Object.hasOwn(record, "path")) {
       throw new Error("Gate 3 indexed fixture exposed a local path");
+    }
+    if (record.tokens < 1 || record.loader.trim().length === 0) {
+      throw new Error("Gate 3 indexed fixture has no parsed content");
     }
     indexed.push(record);
   }

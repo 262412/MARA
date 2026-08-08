@@ -16,6 +16,9 @@ GATE3_FORMAT_INPUT_NAMES = (
     "gate3-format.csv",
     "gate3-format.html",
     "gate3-format.mhtml",
+    "gate3-format.docx",
+    "gate3-format.xlsx",
+    "gate3-format.pptx",
     "gate3-format.zip",
 )
 
@@ -171,11 +174,42 @@ def _seed_gate3_format_inputs(data_root: Path) -> None:
         "--mara-gate3--\n",
         encoding="utf-8",
     )
+    _seed_gate3_office_inputs(input_root)
     with zipfile.ZipFile(input_root / "gate3-format.zip", "w") as archive:
         archive.writestr(
             "gate3-zip-note.md",
             "# Gate 3 ZIP\n\nSafely extracted MARA fixture.\n",
         )
+
+
+def _seed_gate3_office_inputs(input_root: Path) -> None:
+    from docx import Document
+    from openpyxl import Workbook
+    from pptx import Presentation
+
+    document = Document()
+    document.add_heading("Gate 3 DOCX", level=1)
+    document.add_paragraph("MARA modern Office format matrix fixture.")
+    document.save(input_root / "gate3-format.docx")
+
+    workbook = Workbook()
+    sheet = workbook.active
+    if sheet is None:
+        raise RuntimeError("Gate 3 XLSX fixture requires an active worksheet")
+    sheet.title = "MARA"
+    sheet.append(["metric", "value"])
+    sheet.append(["indexed_files", len(GATE3_FORMAT_INPUT_NAMES) + 1])
+    workbook.save(input_root / "gate3-format.xlsx")
+    workbook.close()
+
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+    title = slide.shapes.title
+    if title is None:
+        raise RuntimeError("Gate 3 PPTX fixture requires a title placeholder")
+    title.text = "Gate 3 PPTX"
+    slide.placeholders[1].text = "MARA modern Office format matrix fixture."
+    presentation.save(input_root / "gate3-format.pptx")
 
 
 def seed_smoke_fixture(data_root: Path) -> None:
