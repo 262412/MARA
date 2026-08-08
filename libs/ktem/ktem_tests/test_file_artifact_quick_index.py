@@ -7,6 +7,10 @@ from types import SimpleNamespace
 
 import pytest
 from ktem.index.file._indexing_service import _quick_index_settings
+from ktem.index.file.artifact_lifecycle import (
+    begin_file_artifacts,
+    finish_file_artifacts,
+)
 
 from kotaemon.artifact_namespace import finish_and_publish_artifacts
 from kotaemon.artifact_pipeline import consume_in_background
@@ -25,6 +29,19 @@ def _settings(tmp_path):
 
 def test_quick_index_settings_enable_background_writer_by_default():
     assert _quick_index_settings(7, {})["index.options.7.quick_index_mode"] is True
+
+
+def test_indexing_can_disable_artifact_generation_for_a_bounded_runtime():
+    pipeline = SimpleNamespace()
+    metadata = {"file_id": "file-owner"}
+    settings = SimpleNamespace(KH_FILE_INDEX_ARTIFACTS_ENABLED=False)
+
+    generation = begin_file_artifacts(pipeline, metadata, settings)
+
+    assert generation is None
+    assert pipeline._artifact_generation is None
+    assert pipeline._artifact_writer_future is None
+    assert metadata == {"file_id": "file-owner"}
 
 
 def test_manifest_finalization_propagates_background_writer_failure(tmp_path):
@@ -53,6 +70,23 @@ def test_manifest_finalization_propagates_background_writer_failure(tmp_path):
         / "manifest.json"
     )
     assert not manifest.exists()
+
+
+def test_file_index_finalization_can_skip_manifest_publication(tmp_path):
+    calls = []
+    writer: Future[None] = Future()
+    writer.set_result(None)
+    pipeline = SimpleNamespace(
+        _artifact_writer_future=writer,
+        finish=lambda file_id, source_path: calls.append((file_id, source_path)),
+    )
+    source = tmp_path / "source.txt"
+    settings = SimpleNamespace(KH_FILE_INDEX_ARTIFACTS_ENABLED=False)
+
+    finish_file_artifacts(pipeline, "file-owner", source, settings)
+
+    assert calls == [("file-owner", source)]
+    assert not (tmp_path / "zip").exists()
 
 
 def test_manifest_finalization_waits_for_writer_before_finish(tmp_path):

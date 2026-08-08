@@ -197,7 +197,7 @@ def test_create_docqa_runtime_bootstraps_before_import(monkeypatch):
     assert events == ["bootstrap", "runtime"]
 
 
-def test_create_docqa_runtime_can_skip_query_feature_registration(monkeypatch):
+def test_create_docqa_runtime_can_limit_desktop_only_features(monkeypatch):
     import slide_cli.docqa_runtime as module
 
     events: list[str] = []
@@ -213,6 +213,7 @@ def test_create_docqa_runtime_can_skip_query_feature_registration(monkeypatch):
     fake_settings = types.SimpleNamespace(
         KH_REASONINGS=["reasoning.module"],
         KH_WEB_SEARCH_BACKEND="web_search.module",
+        KH_FILE_INDEX_ARTIFACTS_ENABLED=True,
     )
     fake_settings_module = types.ModuleType("theflow.settings")
     setattr(fake_settings_module, "settings", fake_settings)
@@ -229,11 +230,15 @@ def test_create_docqa_runtime_can_skip_query_feature_registration(monkeypatch):
     monkeypatch.setitem(sys.modules, "theflow.settings", fake_settings_module)
     monkeypatch.setitem(sys.modules, "ktem.docqa", fake_docqa_module)
 
-    runtime = module.create_docqa_runtime(include_query_features=False)
+    runtime = module.create_docqa_runtime(
+        include_query_features=False,
+        include_file_artifacts=False,
+    )
 
     assert type(runtime).__name__ == "_FakeRuntime"
     assert fake_settings.KH_REASONINGS == []
     assert fake_settings.KH_WEB_SEARCH_BACKEND == ""
+    assert fake_settings.KH_FILE_INDEX_ARTIFACTS_ENABLED is False
     assert events == ["bootstrap", "runtime"]
 
 

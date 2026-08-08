@@ -32,8 +32,11 @@ Desktop application service 延迟创建现有 `DocQARuntime`，索引直接调�
 Desktop 中复制另一套 DocQA 实现。
 
 Desktop 的仅索引 runtime 不注册问答 reasoning 和 Web Search backend，避免把
-本切片不使用的查询组件装入 Sidecar；`create_docqa_runtime()` 默认仍注册完整
-查询能力，CLI 和 Web 路径保持原行为。
+本切片不使用的查询组件装入 Sidecar，也不发布尚未由 Desktop 暴露的文件导出
+artifact。artifact 安全层在不支持 POSIX `dir_fd` 的平台会 fail-closed，不能为
+Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等价的安全句柄后端。
+`create_docqa_runtime()` 默认仍注册完整查询与 artifact 能力，CLI 和 Web 路径保持
+原行为。
 
 新增的 CLI 特征测试锁定 `MARA docqa index` 与 `MARA-cli docqa index` 的路径、
 `--reindex`、JSON 输出和部分失败退出码，防止 application service 复用过程中

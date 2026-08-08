@@ -86,7 +86,11 @@ def _load_json_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
-def create_docqa_runtime(*, include_query_features: bool = True) -> "DocQARuntime":
+def create_docqa_runtime(
+    *,
+    include_query_features: bool = True,
+    include_file_artifacts: bool | None = None,
+) -> "DocQARuntime":
     ensure_llama_index_nltk_cache()
     ensure_tiktoken_cache()
     os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
@@ -106,11 +110,14 @@ def create_docqa_runtime(*, include_query_features: bool = True) -> "DocQARuntim
     from ktem.runtime_bootstrap import bootstrap_runtime_settings
 
     bootstrap_runtime_settings()
-    if not include_query_features:
+    if not include_query_features or include_file_artifacts is not None:
         from theflow.settings import settings as flowsettings
 
-        flowsettings.KH_REASONINGS = []
-        flowsettings.KH_WEB_SEARCH_BACKEND = ""
+        if not include_query_features:
+            flowsettings.KH_REASONINGS = []
+            flowsettings.KH_WEB_SEARCH_BACKEND = ""
+        if include_file_artifacts is not None:
+            flowsettings.KH_FILE_INDEX_ARTIFACTS_ENABLED = include_file_artifacts
     from ktem.docqa import DocQARuntime
 
     return DocQARuntime()

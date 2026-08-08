@@ -46,7 +46,10 @@ def _collect_sessions() -> list[dict[str, Any]]:
 def _create_runtime() -> Any:
     from slide_cli.docqa_runtime import create_docqa_runtime
 
-    return create_docqa_runtime(include_query_features=False)
+    return create_docqa_runtime(
+        include_query_features=False,
+        include_file_artifacts=False,
+    )
 
 
 class DesktopFileNotFoundError(LookupError):

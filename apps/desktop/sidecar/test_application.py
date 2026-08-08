@@ -5,11 +5,23 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from .application import DesktopApplicationService, configure_desktop_data_root
 
 
 class DesktopApplicationServiceTest(unittest.TestCase):
+    def test_desktop_runtime_enables_only_the_gate3_indexing_capability(self) -> None:
+        with patch("slide_cli.docqa_runtime.create_docqa_runtime") as create_runtime:
+            from .application import _create_runtime
+
+            _create_runtime()
+
+        create_runtime.assert_called_once_with(
+            include_query_features=False,
+            include_file_artifacts=False,
+        )
+
     def test_reuses_existing_docqa_service_functions_without_click(self) -> None:
         calls: list[str] = []
 

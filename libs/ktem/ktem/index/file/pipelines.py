@@ -38,7 +38,6 @@ from theflow.settings import settings
 from theflow.utils.modules import import_dotted_string
 
 from kotaemon import artifact_pipeline as artifacts
-from kotaemon.artifact_namespace import finish_and_publish_artifacts
 from kotaemon.base import BaseComponent, Document, Node, Param, RetrievedDocument
 from kotaemon.embeddings import BaseEmbeddings
 from kotaemon.indices import VectorIndexing, VectorRetrieval
@@ -57,6 +56,7 @@ from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
 from kotaemon.loaders import MathpixPDFReader
 
 from .artifact_cleanup import FileArtifactCleaner
+from .artifact_lifecycle import begin_file_artifacts, finish_file_artifacts
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
 from .deletion import DeletionCoordinator
 from .deterministic_chunks import prepare_chunks_for_indexing
@@ -717,7 +717,7 @@ class IndexPipeline(BaseComponent):
 
         extra_info["file_id"] = file_id
         extra_info["collection_name"] = self.collection_name
-        artifact_generation = artifacts.begin_artifact_generation(self, extra_info)
+        artifact_generation = begin_file_artifacts(self, extra_info, settings)
 
         yield Document(f" => Converting {file_name} to text", channel="debug")
         parse_result = self.load_docs_with_parse_cache(file_path, extra_info)
@@ -733,7 +733,7 @@ class IndexPipeline(BaseComponent):
         )
         yield from self.handle_docs(docs, file_id, file_name, artifact_generation)
 
-        finish_and_publish_artifacts(self, file_id, stored_file_path, settings)
+        finish_file_artifacts(self, file_id, stored_file_path, settings)
 
         yield Document(f" => Finished indexing {file_name}", channel="debug")
         return file_id, docs

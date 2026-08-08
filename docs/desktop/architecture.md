@@ -97,6 +97,11 @@ Gate 3 的文件导入由 Main 打开原生选择器；Renderer 不传选择器�
 索引任务日志位于独立 Desktop 数据根，应用重启后会把中断任务标记为可重试失败，
 不会静默丢失任务。
 
+Gate 3 的仅索引 runtime 同时关闭问答注册和文件导出 artifact 发布。后者当前依赖
+POSIX `dir_fd` 的 fail-closed 安全边界，不能在 Windows 上用普通路径操作降级。
+Desktop 到 Studio/原生导出切片时，必须先实现等价的 Windows 安全文件句柄后端，
+再启用该能力；现有 Web/CLI runtime 默认仍生成完整 artifact 与 manifest。
+
 ## 3. Sidecar 生命周期
 
 ```mermaid

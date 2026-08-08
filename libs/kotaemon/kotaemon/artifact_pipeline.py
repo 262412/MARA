@@ -17,6 +17,19 @@ def begin_artifact_generation(pipeline: Any, extra_info: dict) -> str:
     return generation
 
 
+def begin_indexing_artifacts(
+    pipeline: Any,
+    extra_info: dict,
+    *,
+    enabled: bool,
+) -> str | None:
+    if enabled:
+        return begin_artifact_generation(pipeline, extra_info)
+    pipeline._artifact_generation = None
+    pipeline._artifact_writer_future = None
+    return None
+
+
 def strip_artifact_generation(documents: list[Any]) -> list[Any]:
     for document in documents:
         document.metadata.pop("artifact_generation", None)
@@ -58,9 +71,18 @@ def schedule_writer(
     return factory()
 
 
+def finish_indexing(pipeline: Any, file_id: object, source_path: object) -> Any:
+    writer = getattr(pipeline, "_artifact_writer_future", None)
+    if writer is not None:
+        writer.result()
+    return pipeline.finish(file_id, source_path)
+
+
 __all__ = [
     "begin_artifact_generation",
+    "begin_indexing_artifacts",
     "consume_in_background",
+    "finish_indexing",
     "schedule_writer",
     "strip_artifact_generation",
 ]

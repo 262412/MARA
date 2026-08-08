@@ -9,6 +9,7 @@ from .artifact_manifest import ARTIFACT_KINDS, MANIFEST_VERSION
 from .artifact_manifest import load_manifest_artifacts as _load_manifest_artifacts
 from .artifact_manifest import publish_artifact_manifest as _publish_artifact_manifest
 from .artifact_manifest import resolve_manifest_entry
+from .artifact_pipeline import finish_indexing
 from .artifact_producers import (
     artifact_output_path,
     write_chunk_artifacts,
@@ -75,10 +76,7 @@ def finish_and_publish_artifacts(
     settings: Any,
 ) -> Path:
     generation = namespace_token(getattr(pipeline, "_artifact_generation", None))
-    writer = getattr(pipeline, "_artifact_writer_future", None)
-    if writer is not None:
-        writer.result()
-    pipeline.finish(file_id, source_path)
+    finish_indexing(pipeline, file_id, source_path)
     return publish_runtime_manifest(
         file_id,
         settings,
