@@ -9,8 +9,9 @@ smoke，并补齐产品 VM、支持格式与异常场景验收后，才能升级
 `fce9843` 已关闭 Windows Server 2022、Ubuntu 22.04/24.04 的轻量格式矩阵自动化
 缺口；提交 `e0bff90` 又关闭磁盘满、数据库锁和 5 MiB 文件的 Windows/Ubuntu
 原生组合包验证；提交 `894c994` 进一步关闭批量删除和安全拖放 handoff 的
-Windows/Ubuntu 组合包验证。剩余项不再包含原生构建流水线、文本类格式跨平台
-smoke、批量删除、拖放 handoff 或这些故障恢复场景。
+Windows/Ubuntu 组合包验证；提交 `d087be1` 又关闭 DOCX、XLSX 和 PPTX 的现代
+Office 直接文本索引矩阵。剩余项不再包含原生构建流水线、文本类或现代 Office
+格式跨平台 smoke、批量删除、拖放 handoff 或这些故障恢复场景。
 
 本切片不复制 Gradio callback 或 DocQA 索引/删除业务逻辑，也不修改 `MARA`、
 `MARA-cli` 命令、Click 参数、Gradio 事件链、数据库 schema 或现有会话字段。
@@ -69,8 +70,9 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
   任务；输入先通过与拖放相同的 Main 路径/扩展名校验，并记录
   `gate3_drop_handoff=validated status_success`。随后验证 Files 中出现脱敏记录，通过
   一次批量调用删除预置和新建记录，最后验证列表为空。
-- `--smoke-test-gate3-formats` 在同一真实链路增加 Markdown、CSV、HTML、MHTML 和
-  安全 ZIP；ZIP 最终验证解出的 Markdown 记录，而不是把归档本身伪装为已索引。
+- `--smoke-test-gate3-formats` 在同一真实链路增加 Markdown、CSV、HTML、MHTML、
+  DOCX、XLSX、PPTX 和安全 ZIP；每条记录必须有非零 tokens、明确 loader 且不含
+  路径。ZIP 最终验证解出的 Markdown 记录，而不是把归档本身伪装为已索引。
 - `--smoke-test-gate3-model-unavailable` 让确定性模型返回 503，要求任务以脱敏、
   可重试状态失败；解除故障后 `--smoke-test-gate3-retry` 重试原任务并清空 Files。
 - `--smoke-test-gate3-cancel` 在首文件 embedding 请求处确定性暂停，确认运行中取消
@@ -115,6 +117,7 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 | Windows/Ubuntu 批量删除组合包             | 已通过 |
 | 拖放 Preload/Main/IPC/React 契约          | 已通过 |
 | Windows/Ubuntu 拖放 handoff 组合包        | 已通过 |
+| Windows/Ubuntu 现代 Office 索引组合包     | 已通过 |
 | 当前代码的 Linux 自包含组合包 smoke       | 已通过 |
 | 完整 `ktem` package gate                  | 已通过 |
 | 完整 `slide_cli` package gate             | 已通过 |
@@ -204,6 +207,39 @@ Ubuntu 22.04 的同一组合包和数据快照。
 用时 13.93 秒、最大 RSS 482,120 KiB。Windows 发布目录为 997,302,646 bytes、
 2,705 个文件，Ubuntu 发布目录为 1,086,013,990 bytes、2,106 个文件；Linux
 `ldd` 无缺失依赖。两平台最终 CLI/Files 复核均为 0 项。
+
+## 现代 Office 索引 CI 证据
+
+首个 canary
+[运行 31279600739](https://github.com/262412/MARA/actions/runs/31279600739)
+基于提交 `59cf195a046186ffb469832db2dc33ea5b5d1b1a`。Windows 与 Ubuntu 原生包均
+正常构建，但首段格式 smoke 在 DOCX 处以 `partial` 失败：现有 Web/预览默认策略
+要求先用 LibreOffice 或 Microsoft Word 转 PDF，而自包含 Desktop 包不携带这些
+外部程序。该失败同时证明不能把开发环境里可直接读取的 Office 文件当作打包证据。
+
+提交 `d087be17b9c1736153c1950e3e60844ba21ce1b3` 在 Desktop settings 初始化前固定
+`KH_OFFICE_TO_PDF_INDEXING=false`，让 Gate 3 索引直接复用 MARA 的 DOCX、XLSX 和
+PPTX 文本读取器；CLI 和 Web 的默认布局保真策略不变。随后
+[Desktop Gate 3 运行 31279873378](https://github.com/262412/MARA/actions/runs/31279873378)
+在 Windows Server 2022、Ubuntu 22.04 和 Ubuntu 24.04 三任务全部成功。
+
+- 三个平台逐项看到 `gate3-format.docx`、`gate3-format.xlsx` 和
+  `gate3-format.pptx`，且共同断言每条格式记录 tokens 非零、loader 非空、响应无
+  本地路径；任务最终为 `success`。
+- Windows 首段一次删除 10 条记录，Ubuntu 22.04 因另有 CLI 兼容记录一次删除 11
+  条，Ubuntu 24.04 一次删除 10 条；最终 Files/CLI 复核为空。
+- Windows 全部故障恢复 smoke 退出码为 0，Defender 得到
+  `scan_result=no_detections`。成功运行的日志不再包含 `converter_failed`。
+- 该证据验证可搜索文本索引，不代表 Office 布局保真预览、旧式 DOC/XLS/PPT 或
+  原文件打开降级已经完成。
+
+| 平台/产物               | Artifact ID | 压缩大小    | Actions digest                                                     |
+| ----------------------- | ----------- | ----------- | ------------------------------------------------------------------ |
+| Windows 完整组合包      | 9028194876  | 395,909,390 | `ed694407c89d87eeac4ee164e809f7b9483e7f2ce9958b3591ee2868fbe6c0b3` |
+| Windows smoke 诊断      | 9028187819  | 5,494       | `de7231eabea8c932ca650ce90d7909a5135d16e3f36bf603fa56138738c9d2c2` |
+| Windows Defender 诊断   | 9028188021  | 358         | `668699518fa754e9811d49b6bb6151035c1d2e032c58836550af7a856afe0551` |
+| Ubuntu 22.04 完整组合包 | 9028169829  | 412,995,354 | `5990f72aeb7017c53266e85c93bc0c849f26808f66c451ef2e89f76e6e686cc5` |
+| Ubuntu 22.04 包体测量   | 9028169977  | 7,461       | `80c36f67581b517e53c08128c4b92ac6afb62e2e69b82b66027fb656347945d4` |
 
 ## 模型不可用恢复 CI 证据
 
@@ -421,11 +457,11 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
 
 1. 在 Windows 10/11 产品 VM 对当前 Gate 3 包执行原生选择器、重复启动、任务恢复、
    数据目录和残留进程验收。
-2. 增加 PDF、Office 和图片的支持格式矩阵。文本、Markdown、CSV、HTML、MHTML 和
-   ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。批量选择/删除与安全拖放均已
-   贯通 React、Preload、窄 IPC、认证 Sidecar 和真实 DocQA runtime，并接入组合包
-   smoke 且通过 Windows Server 2022、Ubuntu 22.04/24.04；真实 OS 拖放仍需
-   Windows 10/11 产品 VM 验收。
+2. 增加 PDF、图片和旧式 Office（DOC/XLS/PPT）的支持格式矩阵。文本、Markdown、
+   CSV、HTML、MHTML、DOCX、XLSX、PPTX 和 ZIP 已通过 Windows/Ubuntu 原生组合包
+   真实索引/删除。批量选择/删除与安全拖放均已贯通 React、Preload、窄 IPC、认证
+   Sidecar 和真实 DocQA runtime，并接入组合包 smoke 且通过 Windows Server 2022、
+   Ubuntu 22.04/24.04；真实 OS 拖放仍需 Windows 10/11 产品 VM 验收。
 3. 磁盘满/数据库锁 → 稳定可重试错误 → 恢复成功，以及模型 503 → 脱敏失败 → 原
    任务重试成功，均已通过 Windows/Ubuntu 原生组合包。运行中
    取消 → 文件边界停止 → 只重试剩余文件已通过 Windows/Ubuntu 原生组合包。取消
