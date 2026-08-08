@@ -253,19 +253,37 @@ Defender 确认引擎与服务开启、移除 `D:\` 整盘排除、启用 archiv
 同一 Windows 运行记录首段 smoke 用时 10.150 秒、峰值工作集 97,132,544 bytes，
 发布目录 997,315,259 bytes、2,705 个文件。
 
-## Sidecar 中断开发态证据
+## Sidecar 中断恢复 CI 证据
 
-2026-08-08 在独立 fastscratch 数据根运行真实 Electron、Sidecar 和 DocQA runtime：
-首文件 embedding 请求被确定性暂停后，Main 强制终止 Sidecar 子进程，runtime 进入
-`failed`；监督器按 250/500/1,000 ms 退避且最多三次自动启动新的 Sidecar，持久任务
-日志把原任务恢复为
+2026-08-08 的
+[Desktop Gate 3 运行 31273511473](https://github.com/262412/MARA/actions/runs/31273511473)
+基于提交 `ac3c4f897de85af3fc786a63192cc7523ecc25fc`，三个任务全部成功。Windows
+Server 2022 和 Ubuntu 22.04 原生包在首文件 embedding 请求被确定性暂停后，由
+Main 强制终止 Sidecar 子进程；runtime 进入 `failed`，监督器按
+250/500/1,000 ms 退避且最多三次自动启动新的 Sidecar，持久任务日志把原任务恢复为
 `status=failed`、`stage=interrupted`、`error.code=index_interrupted` 和
-`retryable=true`。Main 在恢复 healthy 后重新发布最新任务，使 Renderer 不会停留在
-旧的 running 状态。重试只包含唯一未完成文件并成功，安全摘要为
-`gate3_sidecar_exit=failed interrupted retry=status_success`；正式
-`MARA docqa files --json` 最终复核 `record_count=0`。预期的客户端断连由确定性
-embedding 测试服务器窄化处理，不再输出带构建路径的 BrokenPipe 栈。该场景已经
-接入 Windows 和 Ubuntu 22.04 原生包工作流，跨平台 CI 证据尚待对应提交运行完成。
+`retryable=true`。Main 在恢复 healthy 后重新发布最新任务，重试只包含唯一未完成
+文件并成功。两平台安全摘要均为
+`gate3_sidecar_exit=failed interrupted retry=status_success`，正式
+`MARA docqa files --json` 最终复核 `record_count=0`。
+
+Windows 诊断记录 `sidecar_exit_code=0`，Windows 和 Ubuntu 22.04 的独立 Sidecar
+中断 stderr 均为 0 bytes。预期的客户端断连由确定性 embedding 测试服务器窄化
+处理，不输出带构建路径的 BrokenPipe 栈。Defender 确认引擎与服务开启、移除
+`D:\` 整盘排除、启用 archive scanning，并得到 `scan_result=no_detections`。
+Ubuntu 24.04 复用 Ubuntu 22.04 的同一组合包和中断恢复后重新生成的数据快照完成
+跨版本复验。
+
+| 平台/产物               | Artifact ID | 压缩大小    | Actions digest                                                     |
+| ----------------------- | ----------- | ----------- | ------------------------------------------------------------------ |
+| Windows 完整组合包      | 9026392438  | 395,901,619 | `4a97b97b079d47d8aed7d53d20ffd7f9b6bedef691448953cc74179b3f66c50c` |
+| Windows smoke 诊断      | 9026385581  | 3,874       | `ed51ed96f19ebab52af1835df835afe780a12c6b5808731a33d37a6eefdf2d5d` |
+| Windows Defender 诊断   | 9026385809  | 359         | `274b6ad7521997620725860d6966d6ff4514113230f25c7f2830d48c30a88394` |
+| Ubuntu 22.04 完整组合包 | 9026385546  | 412,503,075 | `aba6fb0525d410c11eaa930746292bd118a8c86b1c2abe066bfbeb354b62d7ef` |
+| Ubuntu 22.04 包体测量   | 9026385739  | 4,000       | `be627f455a4b12cb4271bbb426960a8fa3d4ea8b7b604643e4230c30d76361fe` |
+
+同一 Windows 运行记录首段 smoke 用时 13.139 秒、峰值工作集 97,476,608 bytes，
+发布目录 997,322,310 bytes、2,705 个文件。
 
 ## Linux 开发机参考测量
 
@@ -305,9 +323,9 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
    模型 503 → 脱敏失败 → 原任务重试成功已通过 Windows/Ubuntu 原生组合包。运行中
    取消 → 文件边界停止 → 只重试剩余文件已通过 Windows/Ubuntu 原生组合包。取消
    不会强杀正在执行的单文件 parser/vector write。部分失败 → 只重试失败文件也已
-   通过 Windows/Ubuntu 原生组合包。Sidecar 强制退出 → 持久任务恢复 → 重试成功已
-   通过 Linux 开发态真实 runtime 并接入原生打包工作流，尚待跨平台 CI 证据；
-   大文件场景仍须单独验证资源和等待边界。
+   通过 Windows/Ubuntu 原生组合包。Sidecar 强制退出 → 自动重启 → 持久任务恢复
+   → 重试成功也已通过 Windows/Ubuntu 原生组合包；大文件场景仍须单独验证资源和
+   等待边界。
 4. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，
