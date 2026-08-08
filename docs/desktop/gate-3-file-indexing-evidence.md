@@ -219,15 +219,34 @@ Defender 同时确认引擎与服务开启、移除 `D:\` 整盘排除、启用 
 发布目录 997,310,895 bytes、2,705 个文件。Ubuntu 24.04 复用 Ubuntu 22.04 的
 同一组合包及取消恢复后重新生成的数据快照，提供发行版兼容复验。
 
-## 部分失败开发态证据
+## 部分失败恢复 CI 证据
 
-2026-08-08 在独立 fastscratch 数据根运行真实 Electron、Sidecar 和 DocQA runtime：
-先索引 `gate3-partial-already-indexed.txt`，再批量提交该文件和一个新文件。任务以
-`partial`、`success_count=1`、`failure_count=1` 结束，失败条目只有已存在文件；
-重试任务只包含该失败文件并使用 `reindex` 成功恢复。安全摘要为
-`gate3_partial=duplicate_1 success_1 retry=failed_only_success`，随后正式
-`MARA docqa files --json` 复核 `record_count=0`。该场景已经接入 Windows 和 Ubuntu
-22.04 原生包工作流，跨平台 CI 证据尚待对应提交运行完成。
+2026-08-08 的
+[Desktop Gate 3 运行 31272503516](https://github.com/262412/MARA/actions/runs/31272503516)
+基于提交 `757a7b24d084d118a8cf7cc147351723fa6de022`，三个任务全部成功。Windows
+Server 2022 和 Ubuntu 22.04 原生包先索引 `gate3-partial-already-indexed.txt`，
+再批量提交该文件和一个新文件。任务以 `partial`、`success_count=1`、
+`failure_count=1` 结束，失败条目只有已存在文件；重试任务只包含该失败文件并使用
+`reindex` 成功恢复。安全摘要为
+`gate3_partial=duplicate_1 success_1 retry=failed_only_success`，两平台随后均由
+正式 `MARA docqa files --json` 复核为 `record_count=0`。
+
+Windows 诊断记录 `partial_exit_code=0`；错误输出只包含脱敏文件名和冻结后的相对
+模块栈，不包含用户文件路径。Ubuntu 22.04 的独立 partial stderr 为 0 bytes。
+Defender 确认引擎与服务开启、移除 `D:\` 整盘排除、启用 archive scanning，并
+得到 `scan_result=no_detections`。Ubuntu 24.04 复用 Ubuntu 22.04 的同一组合包和
+部分失败恢复后重新生成的数据快照完成跨版本复验。
+
+| 平台/产物               | Artifact ID | 压缩大小    | Actions digest                                                     |
+| ----------------------- | ----------- | ----------- | ------------------------------------------------------------------ |
+| Windows 完整组合包      | 9026087168  | 395,899,748 | `58508918250ffa353c4f95fae3767d23ab99938ffce9d5c46a159daff513ccf0` |
+| Windows smoke 诊断      | 9026081470  | 3,498       | `fcc36f201ea26430994d3d8b2815bcf5a612bbea8b4970a967fa9deccfb791d7` |
+| Windows Defender 诊断   | 9026081671  | 359         | `afd59b95ba33fd82e56fd701bdecd3424bcdfa39250756161d0b1ccfad662fb2` |
+| Ubuntu 22.04 完整组合包 | 9026092184  | 412,489,180 | `2b65e6ac4c3f8ac672bb4148b71cec96f6afd2fb928845cfe3b4da7a0df7d20f` |
+| Ubuntu 22.04 包体测量   | 9026092438  | 3,166       | `e2563d9661d79652722616a9ef64e4e1b0d940e03b0a20bcec15f97bcf3c3312` |
+
+同一 Windows 运行记录首段 smoke 用时 10.150 秒、峰值工作集 97,132,544 bytes，
+发布目录 997,315,259 bytes、2,705 个文件。
 
 ## Linux 开发机参考测量
 
@@ -266,9 +285,8 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
 3. 增加大文件、磁盘满、数据库锁和 Sidecar 强制退出的组合包故障注入。
    模型 503 → 脱敏失败 → 原任务重试成功已通过 Windows/Ubuntu 原生组合包。运行中
    取消 → 文件边界停止 → 只重试剩余文件已通过 Windows/Ubuntu 原生组合包。取消
-   不会强杀正在执行的单文件 parser/vector write。部分失败 → 只重试失败文件已
-   通过 Linux 开发态真实 runtime 并接入原生打包工作流，尚待取得对应提交的跨平台
-   CI 证据；大文件场景仍须单独验证资源和等待边界。
+   不会强杀正在执行的单文件 parser/vector write。部分失败 → 只重试失败文件也已
+   通过 Windows/Ubuntu 原生组合包；大文件场景仍须单独验证资源和等待边界。
 4. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，
