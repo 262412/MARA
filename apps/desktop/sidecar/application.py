@@ -167,6 +167,7 @@ def configure_desktop_data_root(data_root: Path) -> Path:
     app_data_dir.mkdir(parents=True, exist_ok=True)
     os.environ["MARA_DESKTOP_DATA_DIR"] = str(resolved_root)
     os.environ["KH_APP_DATA_DIR"] = str(app_data_dir)
+    os.environ["KH_OFFICE_TO_PDF_INDEXING"] = "false"
     os.environ["THEFLOW_SETTINGS_MODULE"] = "ktem.default_flowsettings"
     os.environ["KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED"] = "1"
     return app_data_dir

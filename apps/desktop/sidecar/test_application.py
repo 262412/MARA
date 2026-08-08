@@ -167,6 +167,7 @@ class DesktopApplicationServiceTest(unittest.TestCase):
     def test_configures_an_independent_desktop_data_tree(self) -> None:
         environment_names = [
             "KH_APP_DATA_DIR",
+            "KH_OFFICE_TO_PDF_INDEXING",
             "KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED",
             "MARA_DESKTOP_DATA_DIR",
             "THEFLOW_SETTINGS_MODULE",
@@ -183,6 +184,10 @@ class DesktopApplicationServiceTest(unittest.TestCase):
                     resolved_root / "state" / "ktem_app_data",
                 )
                 self.assertEqual(os.environ["KH_APP_DATA_DIR"], str(app_data))
+                self.assertEqual(
+                    os.environ["KH_OFFICE_TO_PDF_INDEXING"],
+                    "false",
+                )
                 self.assertEqual(
                     os.environ["THEFLOW_SETTINGS_MODULE"],
                     "ktem.default_flowsettings",

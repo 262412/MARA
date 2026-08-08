@@ -45,7 +45,7 @@ flowchart LR
 | R07 | 旧数据库迁移失败或并发写损坏                   | 用户数据丢失                | 只读探测、备份、staging 迁移、原子切换、回滚                                        | 故障注入迁移演练通过                      |
 | R08 | Gradio callback 与领域逻辑耦合                 | Desktop 复制逻辑或行为漂移  | 先加特征测试，再提取 application service                                            | Web/Desktop 契约共同通过                  |
 | R09 | 引用身份在新 API 中被简化                      | 引用跳错文件或页面          | 冻结 file/page/element/citation identity；端到端追踪                                | 多文档重名和页码用例通过                  |
-| R10 | Office/PPT/表格预览依赖 LibreOffice 或平台组件 | 功能对齐失败                | 打包/检测依赖；明确降级；原文件打开兜底                                             | 格式矩阵和缺依赖提示通过                  |
+| R10 | Office/PPT/表格预览依赖 LibreOffice 或平台组件 | 功能对齐失败                | Gate 3 索引固定直接文本读取；预览切片检测转换器、明确降级并保留原文件打开兜底       | 索引格式矩阵和预览缺依赖提示通过          |
 | R11 | 当前 UI/PDFJS 仍依赖 CDN                       | 离线或受限网络白屏          | 所有前端资源随包分发；CSP 禁止远程代码                                              | 断网 E2E 通过                             |
 | R12 | Linux `safeStorage` 无安全后端                 | 密钥明文存储                | 启动检测 backend；会话密钥或阻止持久化                                              | 无 Secret Service 场景测试                |
 | R13 | Windows/Linux 更新机制不同                     | 更新失败或版本碎片          | Windows Squirrel/NSIS 更新；Linux 包管理/下载提示；共同版本元数据                   | 升级、失败回滚测试通过                    |

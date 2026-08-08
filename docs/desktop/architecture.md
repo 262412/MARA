@@ -121,6 +121,12 @@ Renderer。Main 再校验 sender、1–64 个绝对且唯一的路径及当前 F
 或本地路径。OpenAPI 生成类型和打包 smoke 同时锁定该契约，避免 Desktop 手写一份
 会与 Web/CLI 漂移的格式列表。
 
+Gate 3 的 Desktop Sidecar 在 runtime settings 初始化前固定
+`KH_OFFICE_TO_PDF_INDEXING=false`。自包含包不依赖用户另装 LibreOffice 或
+Microsoft Word，DOCX、XLSX 和 PPTX 索引直接复用 MARA 现有文本读取器。该策略只
+提供可搜索文本，不声称布局保真或 Office 预览已经完成；后续预览切片必须单独检测
+转换器、明确降级并完成格式视觉验收。CLI 和 Web 的默认 Office 转 PDF 策略不变。
+
 Gate 3 的仅索引 runtime 同时关闭问答注册和文件导出 artifact 发布。后者当前依赖
 POSIX `dir_fd` 的 fail-closed 安全边界，不能在 Windows 上用普通路径操作降级。
 Desktop 到 Studio/原生导出切片时，必须先实现等价的 Windows 安全文件句柄后端，
