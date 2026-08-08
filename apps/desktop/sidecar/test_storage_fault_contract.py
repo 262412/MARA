@@ -34,6 +34,9 @@ class SuccessfulIndexService:
 class StorageFaultContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.token = "test-token"
+        self.source_path = str(
+            (Path.cwd() / "private" / "source" / "paper.txt").resolve()
+        )
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "X-Request-ID": "storage-fault-request",
@@ -48,7 +51,7 @@ class StorageFaultContractTest(unittest.TestCase):
         return client.post(
             "/v1/index-tasks",
             headers={**self.headers, "Idempotency-Key": key},
-            json={"paths": ["/private/source/paper.txt"], "reindex": False},
+            json={"paths": [self.source_path], "reindex": False},
         )
 
     def _wait_for_terminal(self, client: TestClient, task_id: str) -> dict:
@@ -82,8 +85,8 @@ class StorageFaultContractTest(unittest.TestCase):
                 failed.json()["request_id"],
                 "storage-fault-request",
             )
-            self.assertNotIn("/private", failed.text)
-            self.assertNotIn("/private", "\n".join(logs.output))
+            self.assertNotIn(self.source_path, failed.text)
+            self.assertNotIn(self.source_path, "\n".join(logs.output))
 
             recovered = self._create_task(client, key="disk-full-2")
             self.assertEqual(recovered.status_code, 202)
@@ -116,7 +119,7 @@ class StorageFaultContractTest(unittest.TestCase):
                 "index_database_locked",
             )
             self.assertTrue(failed["retryable"])
-            self.assertNotIn("/private", str(failed))
+            self.assertNotIn(self.source_path, str(failed))
 
             retried = client.post(
                 f"/v1/index-tasks/{failed['task_id']}/retry",
