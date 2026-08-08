@@ -18,6 +18,7 @@ export const GATE3_PARTIAL_INPUT_NAMES = [
   "gate3-partial-already-indexed.txt",
   "gate3-partial-success.txt",
 ] as const;
+export const GATE3_INTERRUPTED_INPUT_NAME = "gate3-sidecar-interrupted.txt";
 export const GATE3_CANCEL_INPUT_NAMES = [
   "gate3-cancel-first.txt",
   "gate3-cancel-second.txt",
@@ -286,6 +287,56 @@ export function assertGate3PartialRetrySmoke(
     terminal,
     filesAfterRetry,
     GATE3_PARTIAL_INPUT_NAMES,
+  );
+}
+
+export function assertGate3InterruptedSmoke(
+  created: DesktopResult<IndexTask>,
+  failedRuntime: RuntimeStatus,
+  restartedRuntime: RuntimeStatus,
+  latest: DesktopResult<IndexTask | null>,
+): string {
+  if (!created.ok || !latest.ok || latest.data === null) {
+    throw new Error("Gate 3 interrupted task request failed");
+  }
+  const task = latest.data;
+  if (
+    failedRuntime.state !== "failed" ||
+    restartedRuntime.state !== "healthy" ||
+    task.task_id !== created.data.task_id ||
+    task.status !== "failed" ||
+    task.stage !== "interrupted" ||
+    task.error?.code !== "index_interrupted" ||
+    !task.retryable ||
+    task.completed_files !== 0 ||
+    task.total_files !== 1 ||
+    task.success_count !== 0 ||
+    task.failure_count !== 0 ||
+    task.failures.length !== 0 ||
+    task.file_names[0] !== GATE3_INTERRUPTED_INPUT_NAME
+  ) {
+    throw new Error("Gate 3 Sidecar interruption was not restored safely");
+  }
+  return task.task_id;
+}
+
+export function assertGate3InterruptedRetrySmoke(
+  retried: DesktopResult<IndexTask>,
+  terminal: DesktopResult<IndexTask>,
+  filesAfterRetry: DesktopResult<FileRecord[]>,
+): string[] {
+  if (
+    !retried.ok ||
+    retried.data.total_files !== 1 ||
+    retried.data.file_names[0] !== GATE3_INTERRUPTED_INPUT_NAME
+  ) {
+    throw new Error("Gate 3 interrupted retry selected the wrong files");
+  }
+  return assertGate3IndexSmoke(
+    retried,
+    terminal,
+    filesAfterRetry,
+    [GATE3_INTERRUPTED_INPUT_NAME],
   );
 }
 

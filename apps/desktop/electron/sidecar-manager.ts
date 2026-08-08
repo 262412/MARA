@@ -367,6 +367,32 @@ export class SidecarManager {
     }
   }
 
+  async crashForSmoke(): Promise<void> {
+    const child = this.child;
+    if (!child) {
+      throw new Error("Sidecar is not running for the interruption smoke");
+    }
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        child.off("exit", onExit);
+        reject(new Error("Sidecar did not exit during the interruption smoke"));
+      }, 5_000);
+      const onExit = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      child.once("exit", onExit);
+      if (!child.kill("SIGKILL")) {
+        clearTimeout(timer);
+        child.off("exit", onExit);
+        reject(new Error("Sidecar could not be terminated for the smoke"));
+      }
+    });
+    if (this.child) {
+      throw new Error("Sidecar process remained attached after termination");
+    }
+  }
+
   async stop(): Promise<void> {
     const child = this.child;
     if (!child) {

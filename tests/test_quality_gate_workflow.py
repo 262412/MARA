@@ -329,7 +329,7 @@ def test_desktop_smoke_proves_cli_data_compatibility_without_retaining_paths():
     windows_commands = _commands(windows)
 
     assert ".venv/bin/MARA docqa index" in linux_commands
-    assert linux_commands.count("MARA docqa files --json") == 5
+    assert linux_commands.count("MARA docqa files --json") == 6
     assert "--expect-name gate3-cli-compat.txt" in linux_commands
     assert "--expect-empty" in linux_commands
     assert "KH_APP_DATA_DIR" in linux_commands
@@ -414,7 +414,7 @@ def test_windows_packaged_smoke_always_uploads_process_diagnostics():
     assert "windows-smoke-diagnostics.txt" in diagnostics["with"]["path"]
     assert "windows-smoke-stdout.txt" in diagnostics["with"]["path"]
     assert "windows-smoke-stderr.txt" in diagnostics["with"]["path"]
-    for phase in ("fault", "retry", "cancel", "partial"):
+    for phase in ("fault", "retry", "cancel", "partial", "sidecar-exit"):
         assert f"windows-{phase}-stdout.txt" in diagnostics["with"]["path"]
         assert f"windows-{phase}-stderr.txt" in diagnostics["with"]["path"]
     assert "windows-metrics.txt" in diagnostics["with"]["path"]

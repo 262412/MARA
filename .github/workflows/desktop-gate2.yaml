@@ -154,6 +154,19 @@ jobs:
                 --phase partial-recovered \
                 --expect-empty \
                 --summary-file apps/desktop/release/metrics/linux-22-partial-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          touch "$embedding_block_file"
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-sidecar-exit \
+            > apps/desktop/release/metrics/linux-22-sidecar-exit-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-sidecar-exit-stderr.txt
+          test ! -e "$embedding_block_file"
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase sidecar-exit-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-sidecar-exit-after.txt
           du -sb apps/desktop/release/MARA-linux-x64 \
             > apps/desktop/release/metrics/linux-22-size.txt
           find apps/desktop/release/MARA-linux-x64 -type f | wc -l \
@@ -298,6 +311,8 @@ jobs:
           $cancelStderr = "apps/desktop/release/windows-cancel-stderr.txt"
           $partialStdout = "apps/desktop/release/windows-partial-stdout.txt"
           $partialStderr = "apps/desktop/release/windows-partial-stderr.txt"
+          $sidecarExitStdout = "apps/desktop/release/windows-sidecar-exit-stdout.txt"
+          $sidecarExitStderr = "apps/desktop/release/windows-sidecar-exit-stderr.txt"
           $executable = "apps/desktop/release/MARA-win32-x64/MARA.exe"
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
@@ -438,7 +453,6 @@ jobs:
             -RedirectStandardOutput $partialStdout `
             -RedirectStandardError $partialStderr -PassThru
           $partialProcess.WaitForExit()
-          Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
           "partial_exit_code=$($partialProcess.ExitCode)" | Add-Content $diagnostics
           if (Test-Path $partialStdout) {
             Get-Content $partialStdout | Write-Host
@@ -447,7 +461,27 @@ jobs:
             Get-Content $partialStderr | Write-Host
           }
           if ($partialProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
             exit $partialProcess.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          "block" | Set-Content $blockMarker
+          $sidecarExitProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-sidecar-exit" `
+            -RedirectStandardOutput $sidecarExitStdout `
+            -RedirectStandardError $sidecarExitStderr -PassThru
+          $sidecarExitProcess.WaitForExit()
+          Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+          "sidecar_exit_code=$($sidecarExitProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $sidecarExitStdout) {
+            Get-Content $sidecarExitStdout | Write-Host
+          }
+          if (Test-Path $sidecarExitStderr) {
+            Get-Content $sidecarExitStderr | Write-Host
+          }
+          if ($sidecarExitProcess.ExitCode -ne 0) {
+            exit $sidecarExitProcess.ExitCode
           }
           $afterRecords = & ".venv/Scripts/MARA.exe" docqa files --json |
             Out-String
@@ -456,7 +490,7 @@ jobs:
           }
           $afterRecords | & $python `
             "apps/desktop/sidecar/cli_compatibility_probe.py" `
-            --phase partial-recovered --expect-empty --summary-file $cliAfter
+            --phase sidecar-exit-recovered --expect-empty --summary-file $cliAfter
           if ($LASTEXITCODE -ne 0) {
             throw "MARA CLI still observes records deleted by Desktop."
           }
@@ -536,6 +570,8 @@ jobs:
             apps/desktop/release/windows-cancel-stderr.txt
             apps/desktop/release/windows-partial-stdout.txt
             apps/desktop/release/windows-partial-stderr.txt
+            apps/desktop/release/windows-sidecar-exit-stdout.txt
+            apps/desktop/release/windows-sidecar-exit-stderr.txt
             apps/desktop/release/windows-metrics.txt
             apps/desktop/release/windows-cli-compat-before.txt
             apps/desktop/release/windows-cli-compat-after.txt

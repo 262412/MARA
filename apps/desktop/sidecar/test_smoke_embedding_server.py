@@ -6,13 +6,28 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from .smoke_embedding_server import create_server
+from .smoke_embedding_server import _EmbeddingHandler, create_server
+
+
+class _DisconnectedWriter:
+    def write(self, _body: bytes) -> None:
+        raise BrokenPipeError
 
 
 class SmokeEmbeddingServerTest(unittest.TestCase):
+    def test_ignores_a_client_disconnect_while_writing_a_smoke_response(self) -> None:
+        handler: Any = object.__new__(_EmbeddingHandler)
+        handler.wfile = _DisconnectedWriter()
+        handler.send_response = lambda _status_code: None
+        handler.send_header = lambda _name, _value: None
+        handler.end_headers = lambda: None
+
+        handler._write_json(200, {"data": []})
+
     def test_serves_deterministic_openai_compatible_embeddings(self) -> None:
         server = create_server("smoke-token")
         thread = threading.Thread(target=server.serve_forever, daemon=True)

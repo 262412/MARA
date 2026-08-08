@@ -67,6 +67,9 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
   只在首文件完成后生效，再只重试第二个文件并清空 Files，避免用时序猜测制造竞态。
 - `--smoke-test-gate3-partial` 先真实索引首文件，再提交“已存在文件 + 新文件”的批量
   任务，要求任务一成一败，重试只选择失败首项并以 `reindex` 恢复，最后清空 Files。
+- `--smoke-test-gate3-sidecar-exit` 在真实 embedding 请求进行中只由 Main 强制终止
+  Sidecar，要求 runtime 失败、同一数据根重启后任务变为 `index_interrupted`，再
+  重试唯一未完成文件并清空 Files；该测试控制不进入 Preload 或 Renderer IPC。
 - CI 使用仅绑定 loopback 的确定性 OpenAI-compatible embedding 端点，避免真实
   模型服务、网络和凭据影响打包验收。
 
@@ -83,6 +86,7 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 | Linux 开发态轻量支持格式矩阵              | 已通过 |
 | Linux 开发态模型故障与运行中取消恢复      | 已通过 |
 | Linux 开发态部分失败与定向重试            | 已通过 |
+| Linux 开发态 Sidecar 中断与重启恢复       | 已通过 |
 | 当前代码的 Linux 自包含组合包 smoke       | 已通过 |
 | 完整 `ktem` package gate                  | 已通过 |
 | 完整 `slide_cli` package gate             | 已通过 |
@@ -248,6 +252,18 @@ Defender 确认引擎与服务开启、移除 `D:\` 整盘排除、启用 archiv
 同一 Windows 运行记录首段 smoke 用时 10.150 秒、峰值工作集 97,132,544 bytes，
 发布目录 997,315,259 bytes、2,705 个文件。
 
+## Sidecar 中断开发态证据
+
+2026-08-08 在独立 fastscratch 数据根运行真实 Electron、Sidecar 和 DocQA runtime：
+首文件 embedding 请求被确定性暂停后，Main 强制终止 Sidecar 子进程，runtime 进入
+`failed`；随后同一数据根启动新的 Sidecar，持久任务日志把原任务恢复为
+`status=failed`、`stage=interrupted`、`error.code=index_interrupted` 和
+`retryable=true`。重试只包含唯一未完成文件并成功，安全摘要为
+`gate3_sidecar_exit=failed interrupted retry=status_success`；正式
+`MARA docqa files --json` 最终复核 `record_count=0`。预期的客户端断连由确定性
+embedding 测试服务器窄化处理，不再输出带构建路径的 BrokenPipe 栈。该场景已经
+接入 Windows 和 Ubuntu 22.04 原生包工作流，跨平台 CI 证据尚待对应提交运行完成。
+
 ## Linux 开发机参考测量
 
 2026-08-08 在当前 Linux 开发机对自包含 Electron + PyInstaller 组合包执行断网
@@ -282,11 +298,13 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
    数据目录和残留进程验收。
 2. 增加拖放、批量选择，以及 PDF、Office 和图片的支持格式矩阵。文本、Markdown、
    CSV、HTML、MHTML 和 ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。
-3. 增加大文件、磁盘满、数据库锁和 Sidecar 强制退出的组合包故障注入。
+3. 增加大文件、磁盘满和数据库锁的组合包故障注入。
    模型 503 → 脱敏失败 → 原任务重试成功已通过 Windows/Ubuntu 原生组合包。运行中
    取消 → 文件边界停止 → 只重试剩余文件已通过 Windows/Ubuntu 原生组合包。取消
    不会强杀正在执行的单文件 parser/vector write。部分失败 → 只重试失败文件也已
-   通过 Windows/Ubuntu 原生组合包；大文件场景仍须单独验证资源和等待边界。
+   通过 Windows/Ubuntu 原生组合包。Sidecar 强制退出 → 持久任务恢复 → 重试成功已
+   通过 Linux 开发态真实 runtime 并接入原生打包工作流，尚待跨平台 CI 证据；
+   大文件场景仍须单独验证资源和等待边界。
 4. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，
