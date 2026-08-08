@@ -14,6 +14,7 @@ from .execution_slot_lineage import (
 )
 from .query_planning import QueryPlan, bind_evidence_slots, retrieval_budget
 from .required_slot_selection import (
+    REQUIRED_SLOT_CANDIDATE_QUOTA,
     required_slot_candidate_limit,
     required_slot_shortlist,
     slot_requires_selection,
@@ -302,19 +303,18 @@ def _select_required_slot_evidence(
                 _identity(item),
             ),
         )
-        match = next(
-            (
-                item
-                for item in ranked
-                if _slot_score(plan, slot, item) > 0
+        remaining_quota = _required_slot_context_quota(slot)
+        for match in ranked:
+            if not (
+                _slot_score(plan, slot, match) > 0
                 and (
                     not (slot.required_for_execution and slot.role == "operand")
-                    or is_atomic_operand_candidate(item)
+                    or is_atomic_operand_candidate(match)
                 )
-                and _identity(item) not in selected_ids
+                and _identity(match) not in selected_ids
                 and (
                     (slot.required_for_execution and slot.role == "operand")
-                    or _page_allowed(item, selected, max_pages)
+                    or _page_allowed(match, selected, max_pages)
                 )
                 and (
                     not plan.constraints.get("requires_distinct_source_pages")
@@ -323,12 +323,12 @@ def _select_required_slot_evidence(
                         not distinct_slot_ids
                         and slot.role not in {"support", "operand"}
                     )
-                    or (all(_page(item)) and _page(item) not in used_required_locators)
+                    or (
+                        all(_page(match)) and _page(match) not in used_required_locators
+                    )
                 )
-            ),
-            None,
-        )
-        if match is not None:
+            ):
+                continue
             _append_selected(match, selected, selected_ids)
             if (
                 plan.constraints.get("requires_distinct_source_pages")
@@ -339,6 +339,15 @@ def _select_required_slot_evidence(
                 and all(_page(match))
             ):
                 used_required_locators.add(_page(match))
+            remaining_quota -= 1
+            if remaining_quota == 0:
+                break
+
+
+def _required_slot_context_quota(slot: Any) -> int:
+    if slot.required_for_verification and slot.statement_kind == "boolean_proposition":
+        return REQUIRED_SLOT_CANDIDATE_QUOTA
+    return 1
 
 
 def _slot_selection_phase(slot: Any) -> str:

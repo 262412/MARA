@@ -314,3 +314,63 @@ def test_boolean_required_slot_reserves_best_proposition_evidence():
     assert trace["required_slot_bindings"][0]["status"] == "retrieved_unverified"
     assert trace["required_slot_bindings"][0]["verification_satisfied"] is False
     assert trace["required_slot_bindings"][0]["selected_evidence_ids"]
+
+
+def test_boolean_required_slot_retains_competing_scope_candidates():
+    question = "Do they report results only on English data?"
+    plan = build_query_plan(
+        question,
+        answer_type="qasper_qa",
+        verification_domain="qasper",
+    )
+    current_scope_candidates = [
+        {
+            "evidence_id": "current-non-english",
+            "source_id": "paper",
+            "text": (
+                "In our experiments, we report results on English and German data."
+            ),
+            "metadata": {"reranker_score": 1.0},
+        },
+        {
+            "evidence_id": "current-english-only",
+            "source_id": "paper",
+            "text": (
+                "In our current study, the reported results cover data from "
+                "English-speaking countries."
+            ),
+            "metadata": {"reranker_score": 0.01},
+        },
+    ]
+    cited_work_distractors = [
+        {
+            "evidence_id": f"cited-work-{index}",
+            "source_id": "paper",
+            "text": (
+                "Related work reports results on English data and German data "
+                f"in dataset study {index}."
+            ),
+            "metadata": {"reranker_score": 0.99 - index / 100},
+        }
+        for index in range(12)
+    ]
+
+    selected, trace, bound = select_evidence_for_plan(
+        question,
+        [*current_scope_candidates, *cited_work_distractors],
+        plan,
+    )
+
+    selected_ids = {item["evidence_id"] for item in selected}
+    assert selected_ids >= {"current-non-english", "current-english-only"}
+    [slot] = bound.evidence_slots
+    assert set(slot.evidence_ids) >= {
+        "evidence:paper:current-non-english",
+        "evidence:paper:current-english-only",
+    }
+    [binding] = trace["required_slot_bindings"]
+    assert not [
+        reason
+        for reason in binding["candidate_drop_reasons"]
+        if reason["slot_score"] > 0
+    ]
