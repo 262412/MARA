@@ -310,10 +310,12 @@ def test_desktop_jobs_smoke_deterministic_nonempty_data():
         commands = _commands(jobs[job_name])
         assert "sidecar.smoke_fixture" in commands
         assert "--smoke-test-nonempty" in commands
+        assert "--smoke-test-gate3-formats" in commands
 
     linux_24_commands = _commands(jobs["smoke-linux-24"])
     assert "gate2-smoke-data" in linux_24_commands
     assert "--smoke-test-nonempty" in linux_24_commands
+    assert "--smoke-test-gate3-formats" in linux_24_commands
 
 
 def test_desktop_smoke_proves_cli_data_compatibility_without_retaining_paths():

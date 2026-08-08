@@ -40,6 +40,15 @@ export type FileRecord = {
   tokens: number;
 };
 
+export type ImportCapabilities = {
+  supported_extensions: Array<string>;
+};
+
+export type ImportCapabilitiesResponse = {
+  import_capabilities: ImportCapabilities;
+  request_id: string;
+};
+
 export type IndexTask = {
   completed_files: number;
   created_at: string;

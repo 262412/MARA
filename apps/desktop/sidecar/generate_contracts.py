@@ -26,6 +26,9 @@ class _SchemaApplicationService:
     def list_sessions(self) -> list[dict[str, Any]]:
         raise AssertionError("Schema generation must not call application services")
 
+    def get_import_capabilities(self) -> dict[str, list[str]]:
+        raise AssertionError("Schema generation must not call application services")
+
     def index_files(
         self,
         paths: list[str],

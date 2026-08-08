@@ -279,6 +279,14 @@ def _resolve_file_index_definition(
     return configured_name, None, configured_private, issues
 
 
+def collect_docqa_import_capabilities() -> dict[str, list[str]]:
+    from .docqa_import_capabilities import (
+        collect_docqa_import_capabilities as _collect_docqa_import_capabilities,
+    )
+
+    return _collect_docqa_import_capabilities()
+
+
 def _count_indexed_files(
     engine,
     *,

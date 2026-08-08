@@ -1,5 +1,8 @@
 import type { DoctorPayload } from "../shared/doctor-contracts";
-import type { FileRecord } from "../shared/file-contracts";
+import type {
+  FileRecord,
+  ImportCapabilities,
+} from "../shared/file-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
 import type {
   DesktopResult,
@@ -9,11 +12,27 @@ import type { SessionSummary } from "../shared/session-contracts";
 
 export const GATE2_SMOKE_FILE_ID = "gate2-smoke-file";
 export const GATE2_SMOKE_SESSION_ID = "gate2-smoke-session";
+export const GATE3_FORMAT_INPUT_NAMES = [
+  "gate3-format.md",
+  "gate3-format.csv",
+  "gate3-format.html",
+  "gate3-format.mhtml",
+  "gate3-format.zip",
+] as const;
+export const GATE3_FORMAT_RECORD_NAMES = [
+  "gate3-index-smoke.txt",
+  "gate3-format.md",
+  "gate3-format.csv",
+  "gate3-format.html",
+  "gate3-format.mhtml",
+  "gate3-zip-note.md",
+] as const;
 
 type PackagedSmokeSnapshot = {
   status: RuntimeStatus;
   doctor: DesktopResult<DoctorPayload>;
   files: DesktopResult<FileRecord[]>;
+  importCapabilities: DesktopResult<ImportCapabilities>;
   sessions: DesktopResult<SessionSummary[]>;
 };
 
@@ -21,7 +40,7 @@ export function assertPackagedSmoke(
   snapshot: PackagedSmokeSnapshot,
   requireNonEmptyFixture: boolean,
 ): void {
-  const { status, doctor, files, sessions } = snapshot;
+  const { status, doctor, files, importCapabilities, sessions } = snapshot;
   if (status.state !== "healthy") {
     throw new Error(`Sidecar did not become healthy: ${status.state}`);
   }
@@ -33,6 +52,12 @@ export function assertPackagedSmoke(
   }
   if (!sessions.ok) {
     throw new Error(`Sessions request failed: ${sessions.error.code}`);
+  }
+  if (
+    !importCapabilities.ok ||
+    !importCapabilities.data.supported_extensions.includes(".txt")
+  ) {
+    throw new Error("Packaged app did not load the import capabilities");
   }
   if (files.data.some((record) => Object.hasOwn(record, "path"))) {
     throw new Error("Files response exposed a local path");
@@ -97,7 +122,8 @@ export function assertGate3IndexSmoke(
   created: DesktopResult<IndexTask>,
   terminal: DesktopResult<IndexTask>,
   filesAfterIndex: DesktopResult<FileRecord[]>,
-): string {
+  expectedFileNames: readonly string[] = ["gate3-index-smoke.txt"],
+): string[] {
   if (!created.ok) {
     throw new Error(`Gate 3 index task creation failed: ${created.error.code}`);
   }
@@ -111,14 +137,19 @@ export function assertGate3IndexSmoke(
   if (!filesAfterIndex.ok) {
     throw new Error(`Gate 3 Files refresh failed: ${filesAfterIndex.error.code}`);
   }
-  const indexed = filesAfterIndex.data.find(
-    (record) => record.name === "gate3-index-smoke.txt",
-  );
-  if (!indexed) {
-    throw new Error("Gate 3 indexed fixture is missing after Files refresh");
+  const indexed: FileRecord[] = [];
+  for (const name of expectedFileNames) {
+    const record = filesAfterIndex.data.find((candidate) => candidate.name === name);
+    if (!record) {
+      const foundNames = filesAfterIndex.data.map((candidate) => candidate.name);
+      throw new Error(
+        `Gate 3 indexed fixtures are missing after Files refresh: ${JSON.stringify(foundNames)}`,
+      );
+    }
+    if (Object.hasOwn(record, "path")) {
+      throw new Error("Gate 3 indexed fixture exposed a local path");
+    }
+    indexed.push(record);
   }
-  if (Object.hasOwn(indexed, "path")) {
-    throw new Error("Gate 3 indexed fixture exposed a local path");
-  }
-  return indexed.file_id;
+  return indexed.map((record) => record.file_id);
 }

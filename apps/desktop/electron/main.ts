@@ -23,6 +23,8 @@ import { SidecarManager } from "./sidecar-manager";
 import { runDesktopSmoke } from "./smoke-runner";
 import {
   GATE2_SMOKE_FILE_ID,
+  GATE3_FORMAT_INPUT_NAMES,
+  GATE3_FORMAT_RECORD_NAMES,
   assertGate3DeleteSmoke,
   assertGate3IndexSmoke,
   assertPackagedSmoke,
@@ -107,10 +109,16 @@ function registerIpc(): void {
     listFiles: () => sidecar.listFiles(),
     listSessions: () => sidecar.listSessions(),
     importFiles: async () => {
-      const paths = await chooseFilesForIndex((options) =>
-        mainWindow
-          ? dialog.showOpenDialog(mainWindow, options)
-          : dialog.showOpenDialog(options),
+      const capabilities = await sidecar.getImportCapabilities();
+      if (!capabilities.ok) {
+        return { ok: false, error: capabilities.error };
+      }
+      const paths = await chooseFilesForIndex(
+        (options) =>
+          mainWindow
+            ? dialog.showOpenDialog(mainWindow, options)
+            : dialog.showOpenDialog(options),
+        capabilities.data.supported_extensions,
       );
       if (paths.length === 0) {
         return { ok: true, data: null };
@@ -196,19 +204,25 @@ app.whenReady().then(async () => {
   registerIpc();
   const startup = sidecar.start();
   createWindow();
-  const requireGate3Delete = process.argv.includes("--smoke-test-gate3");
+  const requireGate3Formats = process.argv.includes(
+    "--smoke-test-gate3-formats",
+  );
+  const requireGate3Delete =
+    process.argv.includes("--smoke-test-gate3") || requireGate3Formats;
   const requireNonEmptyFixture =
     process.argv.includes("--smoke-test-nonempty") || requireGate3Delete;
   if (process.argv.includes("--smoke-test") || requireNonEmptyFixture) {
     const exitCode = await runDesktopSmoke(async () => {
-      const [status, doctor, files, sessions] = await Promise.all([
-        startup,
-        sidecar.getDoctor(),
-        sidecar.listFiles(),
-        sidecar.listSessions(),
-      ]);
+      const [status, doctor, files, sessions, importCapabilities] =
+        await Promise.all([
+          startup,
+          sidecar.getDoctor(),
+          sidecar.listFiles(),
+          sidecar.listSessions(),
+          sidecar.getImportCapabilities(),
+        ]);
       assertPackagedSmoke(
-        { status, doctor, files, sessions },
+        { status, doctor, files, sessions, importCapabilities },
         requireNonEmptyFixture,
       );
       if (requireGate3Delete) {
@@ -222,20 +236,33 @@ app.whenReady().then(async () => {
           "MARA Desktop Gate 3 deterministic indexing smoke fixture.\n",
           "utf8",
         );
-        const created = await sidecar.createIndexTask([indexInput]);
+        const indexInputs = [indexInput];
+        if (requireGate3Formats) {
+          indexInputs.push(
+            ...GATE3_FORMAT_INPUT_NAMES.map((name) =>
+              path.join(desktopDataRoot, "tmp", name),
+            ),
+          );
+        }
+        const created = await sidecar.createIndexTask(indexInputs);
         const terminal = created.ok
           ? await waitForIndexTaskTerminal(created.data.task_id)
           : created;
         const filesAfterIndex = await sidecar.listFiles();
-        const indexedFileId = assertGate3IndexSmoke(
+        const indexedFileIds = assertGate3IndexSmoke(
           created,
           terminal,
           filesAfterIndex,
+          requireGate3Formats
+            ? GATE3_FORMAT_RECORD_NAMES
+            : ["gate3-index-smoke.txt"],
         );
         const initialFileIds = files.ok
           ? files.data.map((record) => record.file_id)
           : [GATE2_SMOKE_FILE_ID];
-        const fileIdsToDelete = [...new Set([...initialFileIds, indexedFileId])];
+        const fileIdsToDelete = [
+          ...new Set([...initialFileIds, ...indexedFileIds]),
+        ];
         const deleteResults: Array<{
           fileId: string;
           result: DesktopResult<string[]>;

@@ -23,6 +23,7 @@ from sidecar.application import DesktopApplicationService, configure_desktop_dat
 from sidecar.contracts import (
     DoctorResponse,
     FileListResponse,
+    ImportCapabilitiesResponse,
     RuntimeHealth,
     SessionListResponse,
     SidecarError,
@@ -47,6 +48,7 @@ CAPABILITIES = [
     "index_tasks",
     "task_events",
     "file_delete",
+    "import_capabilities",
 ]
 LOGGER = logging.getLogger("mara.desktop.sidecar")
 
@@ -59,6 +61,9 @@ class ApplicationService(Protocol):
         ...
 
     def list_sessions(self) -> list[dict[str, Any]]:
+        ...
+
+    def get_import_capabilities(self) -> dict[str, list[str]]:
         ...
 
     def index_files(
@@ -374,6 +379,17 @@ def _register_data_routes(app: FastAPI) -> None:
         return SessionListResponse(
             request_id=_request_id(request),
             sessions=_call_service(request, "list_sessions"),
+        )
+
+    @app.get(
+        "/v1/import-capabilities",
+        response_model=ImportCapabilitiesResponse,
+        dependencies=protected_without_query,
+    )
+    def get_import_capabilities(request: Request) -> ImportCapabilitiesResponse:
+        return ImportCapabilitiesResponse(
+            request_id=_request_id(request),
+            import_capabilities=_call_service(request, "get_import_capabilities"),
         )
 
     register_gate3_routes(app, protected_without_query)

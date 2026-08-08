@@ -4,10 +4,12 @@ import test from "node:test";
 import type { DesktopResult, RuntimeStatus } from "../shared/runtime-contracts";
 import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
+import type { ImportCapabilities } from "../shared/file-contracts";
 import type { SessionSummary } from "../shared/session-contracts";
 import {
   GATE2_SMOKE_FILE_ID,
   GATE2_SMOKE_SESSION_ID,
+  GATE3_FORMAT_RECORD_NAMES,
   assertGate3DeleteSmoke,
   assertGate3IndexSmoke,
   assertPackagedSmoke,
@@ -64,10 +66,19 @@ const sessions: DesktopResult<SessionSummary[]> = {
     },
   ],
 };
+const importCapabilities: DesktopResult<ImportCapabilities> = {
+  ok: true,
+  data: {
+    supported_extensions: [".pdf", ".docx", ".txt", ".md", ".zip"],
+  },
+};
 
 test("accepts the deterministic non-empty packaged smoke snapshot", () => {
   assert.doesNotThrow(() =>
-    assertPackagedSmoke({ status, doctor, files, sessions }, true),
+    assertPackagedSmoke(
+      { status, doctor, files, sessions, importCapabilities },
+      true,
+    ),
   );
 });
 
@@ -93,7 +104,7 @@ test("accepts an additional CLI-indexed file in the shared smoke data", () => {
 
   assert.doesNotThrow(() =>
     assertPackagedSmoke(
-      { status, doctor: cliDoctor, files: cliFiles, sessions },
+      { status, doctor: cliDoctor, files: cliFiles, sessions, importCapabilities },
       true,
     ),
   );
@@ -111,6 +122,7 @@ test("rejects empty data when the packaged smoke requires real records", () => {
           },
           files: { ok: true, data: [] },
           sessions: { ok: true, data: [] },
+          importCapabilities,
         },
         true,
       ),
@@ -125,8 +137,29 @@ test("rejects a file response that exposes a local path", () => {
   } as unknown as DesktopResult<FileRecord[]>;
 
   assert.throws(
-    () => assertPackagedSmoke({ status, doctor, files: leakedFiles, sessions }, true),
+    () =>
+      assertPackagedSmoke(
+        { status, doctor, files: leakedFiles, sessions, importCapabilities },
+        true,
+      ),
     /local path/,
+  );
+});
+
+test("rejects packaged smoke without the configured import format contract", () => {
+  assert.throws(
+    () =>
+      assertPackagedSmoke(
+        {
+          status,
+          doctor,
+          files,
+          sessions,
+          importCapabilities: { ok: true, data: { supported_extensions: [] } },
+        },
+        true,
+      ),
+    /import capabilities/,
   );
 });
 
@@ -193,9 +226,9 @@ test("accepts a successful packaged background index and refreshed Files", () =>
     ],
   };
 
-  assert.equal(
+  assert.deepEqual(
     assertGate3IndexSmoke(created, terminal, indexedFiles),
-    "gate3-indexed-file",
+    ["gate3-indexed-file"],
   );
   assert.throws(
     () =>
@@ -205,5 +238,68 @@ test("accepts a successful packaged background index and refreshed Files", () =>
         indexedFiles,
       ),
     /did not succeed/,
+  );
+});
+
+test("requires every lightweight format record in the packaged matrix", () => {
+  const formatFiles: DesktopResult<FileRecord[]> = {
+    ok: true,
+    data: GATE3_FORMAT_RECORD_NAMES.map((name, index) => ({
+      file_id: `format-${index}`,
+      name,
+      size: 32,
+      tokens: 5,
+      loader: "fixture-loader",
+      date_created: "2026-08-08T10:00:02Z",
+    })),
+  };
+  const created = {
+    ok: true as const,
+    data: {
+      task_id: "format-task",
+      status: "queued" as const,
+      stage: "queued",
+      completed_files: 0,
+      total_files: 6,
+      file_names: ["format fixtures"],
+      success_count: 0,
+      failure_count: 0,
+      failures: [],
+      error: null,
+      retryable: false,
+      created_at: "2026-08-08T10:00:00Z",
+      updated_at: "2026-08-08T10:00:00Z",
+      version: 1,
+    },
+  };
+  const terminal = {
+    ok: true as const,
+    data: {
+      ...created.data,
+      status: "success" as const,
+      stage: "completed",
+      completed_files: 6,
+      success_count: 6,
+    },
+  };
+
+  assert.equal(
+    assertGate3IndexSmoke(
+      created,
+      terminal,
+      formatFiles,
+      GATE3_FORMAT_RECORD_NAMES,
+    ).length,
+    GATE3_FORMAT_RECORD_NAMES.length,
+  );
+  assert.throws(
+    () =>
+      assertGate3IndexSmoke(
+        created,
+        terminal,
+        { ok: true, data: formatFiles.data.slice(0, -1) },
+        GATE3_FORMAT_RECORD_NAMES,
+      ),
+    /fixtures are missing/,
   );
 });

@@ -3,14 +3,24 @@ from __future__ import annotations
 import gc
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from .application import DesktopApplicationService
 from .smoke_fixture import (
     GATE2_SMOKE_FILE_ID,
     GATE2_SMOKE_SESSION_ID,
+    GATE3_FORMAT_INPUT_NAMES,
     seed_smoke_fixture,
 )
+
+
+def assert_gate3_format_inputs(test: unittest.TestCase, data_root: Path) -> None:
+    test.assertTrue(
+        all((data_root / "tmp" / name).is_file() for name in GATE3_FORMAT_INPUT_NAMES)
+    )
+    with zipfile.ZipFile(data_root / "tmp" / "gate3-format.zip") as archive:
+        test.assertEqual(archive.namelist(), ["gate3-zip-note.md"])
 
 
 class Gate2SmokeFixtureTest(unittest.TestCase):
@@ -41,6 +51,7 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
                 doctor = service.get_doctor()
                 files = service.list_files()
                 sessions = service.list_sessions()
+                import_capabilities = service.get_import_capabilities()
 
                 self.assertTrue(doctor["ok"])
                 self.assertEqual(doctor["file_count"], 1)
@@ -54,6 +65,11 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
                     [record["conversation_id"] for record in sessions],
                     [GATE2_SMOKE_SESSION_ID],
                 )
+                self.assertTrue(
+                    {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md", ".zip"}
+                    <= set(import_capabilities["supported_extensions"])
+                )
+                assert_gate3_format_inputs(self, data_root)
                 self.assertEqual(
                     service.delete_file(GATE2_SMOKE_FILE_ID),
                     [

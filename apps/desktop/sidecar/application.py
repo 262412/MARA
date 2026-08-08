@@ -43,6 +43,12 @@ def _collect_sessions() -> list[dict[str, Any]]:
     return collect_docqa_session_summaries()
 
 
+def _collect_import_capabilities() -> dict[str, list[str]]:
+    from slide_cli.docqa_runtime import collect_docqa_import_capabilities
+
+    return collect_docqa_import_capabilities()
+
+
 def _create_runtime() -> Any:
     from slide_cli.docqa_runtime import create_docqa_runtime
 
@@ -67,11 +73,15 @@ class DesktopApplicationService:
         collect_doctor: Callable[[], dict[str, Any]] = _collect_doctor,
         collect_files: Callable[[], list[dict[str, Any]]] = _collect_files,
         collect_sessions: Callable[[], list[dict[str, Any]]] = _collect_sessions,
+        collect_import_capabilities: Callable[
+            [], dict[str, list[str]]
+        ] = _collect_import_capabilities,
         create_runtime: Callable[[], Any] = _create_runtime,
     ) -> None:
         self._collect_doctor = collect_doctor
         self._collect_files = collect_files
         self._collect_sessions = collect_sessions
+        self._collect_import_capabilities = collect_import_capabilities
         self._create_runtime = create_runtime
         self._runtime: Any | None = None
         self._mutation_lock = threading.Lock()
@@ -87,6 +97,9 @@ class DesktopApplicationService:
 
     def list_sessions(self) -> list[dict[str, Any]]:
         return self._collect_sessions()
+
+    def get_import_capabilities(self) -> dict[str, list[str]]:
+        return self._collect_import_capabilities()
 
     def index_files(
         self,

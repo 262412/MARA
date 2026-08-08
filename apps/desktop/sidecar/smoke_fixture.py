@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,13 @@ from sidecar.application import configure_desktop_data_root
 GATE2_SMOKE_FILE_ID = "gate2-smoke-file"
 GATE2_SMOKE_SESSION_ID = "gate2-smoke-session"
 GATE2_SMOKE_TIMESTAMP = datetime(2026, 7, 30, 12, 0, tzinfo=timezone.utc)
+GATE3_FORMAT_INPUT_NAMES = (
+    "gate3-format.md",
+    "gate3-format.csv",
+    "gate3-format.html",
+    "gate3-format.mhtml",
+    "gate3-format.zip",
+)
 
 
 def _get_or_create_file_index_id(engine: Any, flowsettings: Any) -> int:
@@ -137,6 +145,39 @@ def _seed_conversation(engine: Any, conversation_model: Any) -> None:
         session.commit()
 
 
+def _seed_gate3_format_inputs(data_root: Path) -> None:
+    input_root = data_root / "tmp"
+    input_root.mkdir(parents=True, exist_ok=True)
+    (input_root / "gate3-format.md").write_text(
+        "# Gate 3 Markdown\n\nMARA format matrix fixture.\n",
+        encoding="utf-8",
+    )
+    (input_root / "gate3-format.csv").write_text(
+        "metric,value\nindexed_files,6\n",
+        encoding="utf-8",
+    )
+    (input_root / "gate3-format.html").write_text(
+        "<html><body><h1>Gate 3 HTML</h1><p>MARA fixture.</p></body></html>\n",
+        encoding="utf-8",
+    )
+    (input_root / "gate3-format.mhtml").write_text(
+        "MIME-Version: 1.0\n"
+        'Content-Type: multipart/related; boundary="mara-gate3"\n\n'
+        "--mara-gate3\n"
+        "Content-Type: text/html; charset=utf-8\n"
+        "Content-Transfer-Encoding: 8bit\n\n"
+        "<html><head><title>Gate 3 MHTML</title></head>"
+        "<body><p>MARA fixture.</p></body></html>\n"
+        "--mara-gate3--\n",
+        encoding="utf-8",
+    )
+    with zipfile.ZipFile(input_root / "gate3-format.zip", "w") as archive:
+        archive.writestr(
+            "gate3-zip-note.md",
+            "# Gate 3 ZIP\n\nSafely extracted MARA fixture.\n",
+        )
+
+
 def seed_smoke_fixture(data_root: Path) -> None:
     resolved_root = data_root.expanduser().resolve()
     configure_desktop_data_root(resolved_root)
@@ -163,6 +204,7 @@ def seed_smoke_fixture(data_root: Path) -> None:
     )
     _seed_file_record(engine, source_table, file_path, stored_path)
     _seed_conversation(engine, Conversation)
+    _seed_gate3_format_inputs(resolved_root)
 
 
 def main() -> int:

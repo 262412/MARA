@@ -107,7 +107,8 @@ jobs:
                 --summary-file apps/desktop/release/metrics/linux-22-cli-before.txt
           /usr/bin/time -v -o apps/desktop/release/metrics/linux-22-time.txt \
             xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
-              --smoke-test-nonempty --smoke-test-gate3
+              --smoke-test-nonempty --smoke-test-gate3 \
+              --smoke-test-gate3-formats
           .venv/bin/MARA docqa files --json \
             | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
                 --phase desktop-deleted \
@@ -200,7 +201,8 @@ jobs:
           export http_proxy="$HTTP_PROXY"
           export https_proxy="$HTTPS_PROXY"
           xvfb-run -a desktop-artifact/MARA-linux-x64/MARA \
-            --smoke-test-nonempty --smoke-test-gate3
+            --smoke-test-nonempty --smoke-test-gate3 \
+            --smoke-test-gate3-formats
 
   package-windows:
     name: Package, smoke, and Defender scan on Windows
@@ -293,7 +295,10 @@ jobs:
           }
           $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
           $process = Start-Process $executable `
-            -ArgumentList "--smoke-test-nonempty --smoke-test-gate3" `
+            -ArgumentList (
+              "--smoke-test-nonempty --smoke-test-gate3 " +
+              "--smoke-test-gate3-formats"
+            ) `
             -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
           $peakWorkingSet = 0
           while (-not $process.HasExited) {

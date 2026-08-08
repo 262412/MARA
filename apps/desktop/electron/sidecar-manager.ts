@@ -11,6 +11,8 @@ import type {
   FileDeleteResponse,
   FileListResponse,
   FileRecord,
+  ImportCapabilities,
+  ImportCapabilitiesResponse,
 } from "../shared/file-contracts";
 import type {
   IndexTask,
@@ -145,6 +147,18 @@ export class SidecarManager {
       await waitForRequestReadiness(() => this.getStatus(), this.startup);
       const response = await this.requestJson<FileListResponse>("/v1/files", {}, true);
       return response.files;
+    });
+  }
+
+  async getImportCapabilities(): Promise<DesktopResult<ImportCapabilities>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<ImportCapabilitiesResponse>(
+        "/v1/import-capabilities",
+        {},
+        true,
+      );
+      return response.import_capabilities;
     });
   }
 

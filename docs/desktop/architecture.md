@@ -97,6 +97,12 @@ Gate 3 的文件导入由 Main 打开原生选择器；Renderer 不传选择器�
 索引任务日志位于独立 Desktop 数据根，应用重启后会把中断任务标记为可重试失败，
 不会静默丢失任务。
 
+原生选择器的扩展名过滤器来自认证后的 `GET /v1/import-capabilities`。该端点读取
+当前持久化 FileIndex 配置；尚未创建索引时回退到 MARA 默认 FileIndex 定义。Main
+只接受规范化的 `.extension` 列表并去掉前导点交给 Electron，Renderer 不接收配置
+或本地路径。OpenAPI 生成类型和打包 smoke 同时锁定该契约，避免 Desktop 手写一份
+会与 Web/CLI 漂移的格式列表。
+
 Gate 3 的仅索引 runtime 同时关闭问答注册和文件导出 artifact 发布。后者当前依赖
 POSIX `dir_fd` 的 fail-closed 安全边界，不能在 Windows 上用普通路径操作降级。
 Desktop 到 Studio/原生导出切片时，必须先实现等价的 Windows 安全文件句柄后端，

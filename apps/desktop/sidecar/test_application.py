@@ -47,10 +47,15 @@ class DesktopApplicationServiceTest(unittest.TestCase):
             calls.append("sessions")
             return [{"conversation_id": "session-1"}]
 
+        def collect_import_capabilities() -> dict:
+            calls.append("import-capabilities")
+            return {"supported_extensions": [".pdf", ".md"]}
+
         service = DesktopApplicationService(
             collect_doctor=collect_doctor,
             collect_files=collect_files,
             collect_sessions=collect_sessions,
+            collect_import_capabilities=collect_import_capabilities,
         )
 
         self.assertEqual(service.get_doctor(), {"ok": True})
@@ -71,7 +76,14 @@ class DesktopApplicationServiceTest(unittest.TestCase):
             service.list_sessions(),
             [{"conversation_id": "session-1"}],
         )
-        self.assertEqual(calls, ["doctor", "files", "sessions"])
+        self.assertEqual(
+            service.get_import_capabilities(),
+            {"supported_extensions": [".pdf", ".md"]},
+        )
+        self.assertEqual(
+            calls,
+            ["doctor", "files", "sessions", "import-capabilities"],
+        )
 
     def test_reuses_runtime_index_and_delete_services_without_exposing_paths(
         self,

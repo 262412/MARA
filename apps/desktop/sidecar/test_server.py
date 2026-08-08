@@ -55,6 +55,22 @@ class StubApplicationService:
             }
         ]
 
+    def get_import_capabilities(self) -> dict:
+        return {
+            "supported_extensions": [
+                ".pdf",
+                ".docx",
+                ".xlsx",
+                ".pptx",
+                ".csv",
+                ".html",
+                ".mhtml",
+                ".txt",
+                ".md",
+                ".zip",
+            ]
+        }
+
     def index_files(self, paths: list[str], *, reindex: bool = False) -> dict:
         return {
             "successes": [{"name": Path(path).name} for path in paths],
@@ -159,6 +175,21 @@ class SidecarContractTest(unittest.TestCase):
         self.assertEqual(files["request_id"], "request-123")
         self.assertEqual(sessions["sessions"][0]["conversation_id"], "session-1")
         self.assertEqual(sessions["request_id"], "request-123")
+
+    def test_import_capabilities_are_authenticated_and_path_free(self) -> None:
+        response = self.authenticated_get("/v1/import-capabilities")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["request_id"], "request-123")
+        self.assertIn(
+            ".pdf", response.json()["import_capabilities"]["supported_extensions"]
+        )
+        self.assertNotIn("path", response.text.lower())
+
+        unauthenticated = self.client.get("/v1/import-capabilities")
+        self.assertEqual(unauthenticated.status_code, 401)
+        rejected_query = self.authenticated_get("/v1/import-capabilities?all=true")
+        self.assertEqual(rejected_query.status_code, 422)
 
     def test_unknown_query_parameters_use_the_stable_validation_error(self) -> None:
         response = self.authenticated_get("/v1/files?path=/etc/passwd")
@@ -286,6 +317,7 @@ class SidecarContractTest(unittest.TestCase):
         self.assertIn("/v1/doctor", schema["paths"])
         self.assertIn("/v1/files", schema["paths"])
         self.assertIn("/v1/sessions", schema["paths"])
+        self.assertIn("/v1/import-capabilities", schema["paths"])
         self.assertIn("/v1/index-tasks", schema["paths"])
         self.assertIn("/v1/index-tasks/latest", schema["paths"])
         self.assertIn("/v1/index-tasks/{task_id}/events", schema["paths"])

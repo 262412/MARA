@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -56,6 +57,30 @@ class FileListResponse(BaseModel):
 
     request_id: str
     files: list[FileRecord]
+
+
+class ImportCapabilities(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    supported_extensions: list[str] = Field(min_length=1, max_length=64)
+
+    @field_validator("supported_extensions")
+    @classmethod
+    def validate_extensions(cls, extensions: list[str]) -> list[str]:
+        if any(
+            not re.fullmatch(r"\.[a-z0-9]{1,16}", extension) for extension in extensions
+        ):
+            raise ValueError("Import extensions must use a stable suffix format.")
+        if len(set(extensions)) != len(extensions):
+            raise ValueError("Import extensions must be unique.")
+        return extensions
+
+
+class ImportCapabilitiesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str
+    import_capabilities: ImportCapabilities
 
 
 class IndexTaskFailure(BaseModel):

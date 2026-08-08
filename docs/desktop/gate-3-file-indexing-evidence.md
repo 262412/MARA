@@ -16,6 +16,8 @@ smoke，并补齐产品 VM、支持格式与异常场景验收后，才能升级
 
 - Main 通过原生选择器取得文件路径；Renderer 只调用 `desktop.importFiles()`，
   不提供路径、选择器参数或任意文件读取能力。
+- Main 通过认证 Sidecar 的 `/v1/import-capabilities` 读取当前 FileIndex 支持扩展名，
+  原生选择器不再维护一份手写格式清单；空列表或畸形扩展会失败关闭。
 - Preload 新增明确的 `getLatestIndexTask`、`cancelIndexTask`、
   `retryIndexTask`、`deleteFile` 和 `onIndexTaskStatus`；没有通用
   `invoke`、`request` 或 `readFile`。
@@ -53,8 +55,12 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 - React：loading、success、empty、failed，以及 queued、running、partial、
   success、failed、cancelled、取消、重试和删除中状态。
 - OpenAPI 继续生成 checked-in TypeScript 契约，`npm run contracts:check` 检查漂移。
+- 支持格式能力契约覆盖 application service、认证 Sidecar、OpenAPI、Main 原生过滤器
+  和打包 smoke；真实内容矩阵仍按格式逐项验收，能力声明不等于格式已 Verified。
 - `--smoke-test-gate3` 在独立数据根预置 Gate 2 非空数据，再创建一个真实文本索引
   任务，验证 Files 中出现脱敏记录，删除预置和新建记录，最后验证列表为空。
+- `--smoke-test-gate3-formats` 在同一真实链路增加 Markdown、CSV、HTML、MHTML 和
+  安全 ZIP；ZIP 最终验证解出的 Markdown 记录，而不是把归档本身伪装为已索引。
 - CI 使用仅绑定 loopback 的确定性 OpenAI-compatible embedding 端点，避免真实
   模型服务、网络和凭据影响打包验收。
 
@@ -68,6 +74,7 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 | Electron IPC sender、参数和原生选择器测试 | 已通过 |
 | React 索引/删除状态覆盖                   | 已通过 |
 | Linux 开发态真实索引/刷新/删除 smoke      | 已通过 |
+| Linux 开发态轻量支持格式矩阵              | 已通过 |
 | 当前代码的 Linux 自包含组合包 smoke       | 已通过 |
 | 完整 `ktem` package gate                  | 已通过 |
 | 完整 `slide_cli` package gate             | 已通过 |
@@ -113,6 +120,28 @@ Defender 证据还确认实时防病毒与反恶意软件服务开启，移除�
 排除，启用了 archive scanning，并得到零检出结果。Ubuntu 24.04 没有重新构建，而是
 复用 Ubuntu 22.04 的同一产物和数据快照，因此该任务提供的是发行版兼容证据。
 
+## CLI/Desktop 数据兼容证据
+
+2026-08-08 的
+[Desktop Gate 3 运行 31268799913](https://github.com/262412/MARA/actions/runs/31268799913)
+基于提交 `3796e57dfb14893735faabc38b8e83f7676d3d26`，再次取得 Windows、Ubuntu
+22.04 和 Ubuntu 24.04 三任务成功：
+
+- Ubuntu 22.04 先由正式 `MARA docqa index` 在 Desktop 数据副本中索引
+  `gate3-cli-compat.txt`；CLI 随后看到预置记录和 CLI 新记录共 2 项。
+- 同一打包 Desktop 读取这 2 项，再真实索引自己的文本记录，并通过现有
+  `DeletionCoordinator` 删除全部记录；CLI 复查为 0 项。
+- Windows 上 CLI 在启动打包应用前读取到同一 Desktop 预置记录，Desktop 删除后
+  CLI 复查为 0 项。Windows CLI 写入不作为本项证据，避免绕过文件 artifact 的
+  fail-closed 安全边界。
+- Ubuntu 24.04 继续复用 Ubuntu 22.04 组合包和数据快照完成跨版本 smoke。
+
+脱敏摘要位于 Linux metrics artifact `9025007551` 和 Windows smoke diagnostics
+artifact `9025008201`；只保留阶段、记录数和文件名，不保留 CLI 返回的本地路径。
+对应 Actions digest 分别为
+`d819d0092bdf01ba13e3249f418194193002332f32d6dbb69681552e0289f8d2` 和
+`8489e02f519f1ac93c70631c67667eb5cd25ace1c38b11a069b28c70b0ec6e17`。
+
 ## Linux 开发机参考测量
 
 2026-08-08 在当前 Linux 开发机对自包含 Electron + PyInstaller 组合包执行断网
@@ -145,8 +174,9 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
 
 1. 在 Windows 10/11 产品 VM 对当前 Gate 3 包执行原生选择器、重复启动、任务恢复、
    数据目录和残留进程验收。
-2. 增加拖放、批量选择，以及 PDF、Office、图片、Markdown、文本、表格、HTML、
-   MHTML、CSV、ZIP 的支持格式矩阵；当前确定性打包 smoke 只覆盖文本。
+2. 增加拖放、批量选择，以及 PDF、Office 和图片的支持格式矩阵。文本、Markdown、
+   CSV、HTML、MHTML 和 ZIP 已通过开发态真实索引/删除；当前提交已把同一矩阵接入
+   Windows/Ubuntu 原生打包 CI，但在对应运行成功并登记产物前仍不标记为跨平台通过。
 3. 增加大文件、部分失败、运行中取消、模型不可用、磁盘满、数据库锁和 Sidecar
    强制退出的组合包故障注入。当前取消在文件边界协作式生效，不会强杀正在执行的
    单文件 parser/vector write；该边界必须在长文件验收中明确验证。
@@ -154,5 +184,7 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，
    才能进入 Verified 格式矩阵。
-5. 验证同一数据副本在 CLI 与 Desktop 间的索引和删除兼容性后，再考虑显式旧数据
-   空间迁移；开发期继续只写独立 Desktop 数据根。
+
+CLI/Desktop 同一数据副本的索引、读取和删除语义兼容已由自动化关闭；这不授权
+Desktop 直接写入用户现有 `KH_APP_DATA_DIR`。旧数据空间探测、迁移、备份、回滚和
+并发写入仍属于后续独立迁移切片，开发期继续只写独立 Desktop 数据根。
