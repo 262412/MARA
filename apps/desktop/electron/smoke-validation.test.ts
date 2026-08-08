@@ -5,7 +5,10 @@ import type { DesktopResult, RuntimeStatus } from "../shared/runtime-contracts";
 import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
 import type { ImportCapabilities } from "../shared/file-contracts";
-import type { SessionSummary } from "../shared/session-contracts";
+import type {
+  SessionDetail,
+  SessionSummary,
+} from "../shared/session-contracts";
 import {
   GATE2_SMOKE_FILE_ID,
   GATE2_SMOKE_SESSION_ID,
@@ -63,7 +66,7 @@ const sessions: DesktopResult<SessionSummary[]> = {
     {
       conversation_id: GATE2_SMOKE_SESSION_ID,
       name: "Gate 2 smoke session",
-      message_count: 2,
+      message_count: 1,
       graph_source_count: 1,
       origin: "desktop-gate2-smoke",
       is_public: false,
@@ -71,6 +74,22 @@ const sessions: DesktopResult<SessionSummary[]> = {
       date_updated: "2026-07-30T12:00:00+00:00",
     },
   ],
+};
+const session: DesktopResult<SessionDetail | null> = {
+  ok: true,
+  data: {
+    conversation_id: GATE2_SMOKE_SESSION_ID,
+    name: "Gate 2 smoke session",
+    messages: [
+      { role: "user", content: "What is this fixture?" },
+      { role: "assistant", content: "A packaged Desktop smoke record." },
+    ],
+    graph_source_ids: [GATE2_SMOKE_FILE_ID],
+    origin: "desktop-gate2-smoke",
+    is_public: false,
+    date_created: "2026-07-30T12:00:00+00:00",
+    date_updated: "2026-07-30T12:00:00+00:00",
+  },
 };
 const importCapabilities: DesktopResult<ImportCapabilities> = {
   ok: true,
@@ -82,7 +101,7 @@ const importCapabilities: DesktopResult<ImportCapabilities> = {
 test("accepts the deterministic non-empty packaged smoke snapshot", () => {
   assert.doesNotThrow(() =>
     assertPackagedSmoke(
-      { status, doctor, files, sessions, importCapabilities },
+      { status, doctor, files, sessions, session, importCapabilities },
       true,
     ),
   );
@@ -110,7 +129,14 @@ test("accepts an additional CLI-indexed file in the shared smoke data", () => {
 
   assert.doesNotThrow(() =>
     assertPackagedSmoke(
-      { status, doctor: cliDoctor, files: cliFiles, sessions, importCapabilities },
+      {
+        status,
+        doctor: cliDoctor,
+        files: cliFiles,
+        sessions,
+        session,
+        importCapabilities,
+      },
       true,
     ),
   );
@@ -128,6 +154,7 @@ test("rejects empty data when the packaged smoke requires real records", () => {
           },
           files: { ok: true, data: [] },
           sessions: { ok: true, data: [] },
+          session,
           importCapabilities,
         },
         true,
@@ -145,7 +172,14 @@ test("rejects a file response that exposes a local path", () => {
   assert.throws(
     () =>
       assertPackagedSmoke(
-        { status, doctor, files: leakedFiles, sessions, importCapabilities },
+        {
+          status,
+          doctor,
+          files: leakedFiles,
+          sessions,
+          session,
+          importCapabilities,
+        },
         true,
       ),
     /local path/,
@@ -161,6 +195,7 @@ test("rejects packaged smoke without the configured import format contract", () 
           doctor,
           files,
           sessions,
+          session,
           importCapabilities: { ok: true, data: { supported_extensions: [] } },
         },
         true,

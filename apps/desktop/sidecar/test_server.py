@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from .application import DesktopSessionNotFoundError
 from .server import PROTOCOL_VERSION, create_app
 
 
@@ -54,6 +55,26 @@ class StubApplicationService:
                 "date_updated": "2026-07-30T10:05:00",
             }
         ]
+
+    def get_session(self, conversation_id: str) -> dict:
+        if conversation_id != "session-1":
+            raise DesktopSessionNotFoundError(conversation_id)
+        return {
+            "conversation_id": conversation_id,
+            "name": "Research session",
+            "messages": [
+                {"role": "user", "content": "What is MARA?"},
+                {
+                    "role": "assistant",
+                    "content": "A local research assistant.",
+                },
+            ],
+            "graph_source_ids": ["file-1"],
+            "origin": "desktop",
+            "is_public": False,
+            "date_created": "2026-07-30T10:00:00",
+            "date_updated": "2026-07-30T10:05:00",
+        }
 
     def get_import_capabilities(self) -> dict:
         return {
@@ -178,6 +199,29 @@ class SidecarContractTest(unittest.TestCase):
         self.assertEqual(files["request_id"], "request-123")
         self.assertEqual(sessions["sessions"][0]["conversation_id"], "session-1")
         self.assertEqual(sessions["request_id"], "request-123")
+
+    def test_session_detail_is_authenticated_validated_and_path_free(self) -> None:
+        response = self.authenticated_get("/v1/sessions/session-1")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["request_id"], "request-123")
+        self.assertEqual(payload["session"]["conversation_id"], "session-1")
+        self.assertEqual(
+            payload["session"]["messages"][1],
+            {"role": "assistant", "content": "A local research assistant."},
+        )
+        self.assertNotIn("path", response.text.lower())
+
+        unauthenticated = self.client.get("/v1/sessions/session-1")
+        self.assertEqual(unauthenticated.status_code, 401)
+        invalid = self.authenticated_get("/v1/sessions/session!1")
+        self.assertEqual(invalid.status_code, 422)
+        rejected_query = self.authenticated_get("/v1/sessions/session-1?raw=true")
+        self.assertEqual(rejected_query.status_code, 422)
+        missing = self.authenticated_get("/v1/sessions/session-missing")
+        self.assertEqual(missing.status_code, 404)
+        self.assertEqual(missing.json()["code"], "session_not_found")
 
     def test_import_capabilities_are_authenticated_and_path_free(self) -> None:
         response = self.authenticated_get("/v1/import-capabilities")
@@ -314,12 +358,13 @@ class SidecarContractTest(unittest.TestCase):
         self.assertEqual(response.json()["code"], "index_task_not_found")
         self.assertFalse(response.json()["retryable"])
 
-    def test_openapi_declares_gate_two_and_first_gate_three_endpoints(self) -> None:
+    def test_openapi_declares_explicit_desktop_endpoints(self) -> None:
         schema = create_app(self.token, StubApplicationService()).openapi()
 
         self.assertIn("/v1/doctor", schema["paths"])
         self.assertIn("/v1/files", schema["paths"])
         self.assertIn("/v1/sessions", schema["paths"])
+        self.assertIn("/v1/sessions/{conversation_id}", schema["paths"])
         self.assertIn("/v1/import-capabilities", schema["paths"])
         self.assertIn("/v1/index-tasks", schema["paths"])
         self.assertIn("/v1/index-tasks/latest", schema["paths"])

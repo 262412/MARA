@@ -106,9 +106,30 @@ export type RuntimeHealth = {
   version: string;
 };
 
+export type SessionDetail = {
+  conversation_id: string;
+  date_created: string | null;
+  date_updated: string | null;
+  graph_source_ids: Array<string>;
+  is_public: boolean;
+  messages: Array<SessionMessage>;
+  name: string;
+  origin: string;
+};
+
+export type SessionDetailResponse = {
+  request_id: string;
+  session: SessionDetail;
+};
+
 export type SessionListResponse = {
   request_id: string;
   sessions: Array<SessionSummary>;
+};
+
+export type SessionMessage = {
+  content: string;
+  role: "user" | "assistant";
 };
 
 export type SessionSummary = {

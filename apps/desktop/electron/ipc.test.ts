@@ -130,7 +130,7 @@ test("mutation IPC validates the packaged sender and one opaque identifier", asy
   );
 });
 
-test("registers only explicit Gate 2 and Gate 3 desktop capabilities", () => {
+test("registers only explicit desktop capabilities", () => {
   const channels: string[] = [];
   const registrar = {
     handle(channel: string) {
@@ -143,6 +143,7 @@ test("registers only explicit Gate 2 and Gate 3 desktop capabilities", () => {
     getDoctor: async () => ({ ok: true, data: {} as never }),
     listFiles: async () => ({ ok: true, data: [] }),
     listSessions: async () => ({ ok: true, data: [] }),
+    getSession: async () => ({ ok: true, data: {} as never }),
     importFiles: async () => ({ ok: true, data: null }),
     importDroppedFiles: async () => ({ ok: true, data: {} as never }),
     getLatestIndexTask: async () => ({ ok: true, data: null }),
@@ -157,6 +158,7 @@ test("registers only explicit Gate 2 and Gate 3 desktop capabilities", () => {
     "desktop:get-doctor",
     "desktop:list-files",
     "desktop:list-sessions",
+    "desktop:get-session",
     "desktop:import-files",
     "desktop:import-dropped-files",
     "desktop:get-latest-index-task",

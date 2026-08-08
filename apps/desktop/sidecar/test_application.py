@@ -3,11 +3,16 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from .application import DesktopApplicationService, configure_desktop_data_root
+from .application import (
+    DesktopApplicationService,
+    DesktopSessionNotFoundError,
+    configure_desktop_data_root,
+)
 
 
 class DesktopApplicationServiceTest(unittest.TestCase):
@@ -163,6 +168,55 @@ class DesktopApplicationServiceTest(unittest.TestCase):
                 ("delete", ["file-1", "file-2"]),
             ],
         )
+
+    def test_loads_authorized_runtime_session_without_exposing_internal_state(
+        self,
+    ) -> None:
+        created = datetime(2026, 8, 8, 10, 0, tzinfo=timezone.utc)
+
+        class Runtime:
+            def load_session(self, conversation_id):
+                if conversation_id != "session-1":
+                    return None
+                return SimpleNamespace(
+                    conversation_id=conversation_id,
+                    name="Research session",
+                    messages=[
+                        ("What is MARA?", "A local research assistant."),
+                        ("", ""),
+                    ],
+                    graph_source_ids=["file-1"],
+                    origin="desktop",
+                    is_public=False,
+                    date_created=created,
+                    date_updated=None,
+                    data_source={"path": "/private/session/source"},
+                    user_id="default",
+                )
+
+        service = DesktopApplicationService(create_runtime=Runtime)
+
+        self.assertEqual(
+            service.get_session("session-1"),
+            {
+                "conversation_id": "session-1",
+                "name": "Research session",
+                "messages": [
+                    {"role": "user", "content": "What is MARA?"},
+                    {
+                        "role": "assistant",
+                        "content": "A local research assistant.",
+                    },
+                ],
+                "graph_source_ids": ["file-1"],
+                "origin": "desktop",
+                "is_public": False,
+                "date_created": "2026-08-08T10:00:00+00:00",
+                "date_updated": None,
+            },
+        )
+        with self.assertRaises(DesktopSessionNotFoundError):
+            service.get_session("session-missing")
 
     def test_configures_an_independent_desktop_data_tree(self) -> None:
         environment_names = [

@@ -51,6 +51,21 @@ def assert_gate3_format_inputs(test: unittest.TestCase, data_root: Path) -> None
         test.assertEqual(archive.namelist(), ["gate3-zip-note.md"])
 
 
+def assert_gate2_session_detail(test: unittest.TestCase, session: dict) -> None:
+    test.assertEqual(
+        session["messages"],
+        [
+            {"role": "user", "content": "What is this fixture?"},
+            {
+                "role": "assistant",
+                "content": "A packaged Desktop smoke record.",
+            },
+        ],
+    )
+    test.assertNotIn("data_source", session)
+    test.assertNotIn("user_id", session)
+
+
 class Gate2SmokeFixtureTest(unittest.TestCase):
     def test_seeds_one_file_and_one_session_for_the_real_application_service(
         self,
@@ -79,6 +94,7 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
                 doctor = service.get_doctor()
                 files = service.list_files()
                 sessions = service.list_sessions()
+                session = service.get_session(GATE2_SMOKE_SESSION_ID)
                 import_capabilities = service.get_import_capabilities()
 
                 self.assertTrue(doctor["ok"])
@@ -93,6 +109,7 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
                     [record["conversation_id"] for record in sessions],
                     [GATE2_SMOKE_SESSION_ID],
                 )
+                assert_gate2_session_detail(self, session)
                 self.assertTrue(
                     {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md", ".zip"}
                     <= set(import_capabilities["supported_extensions"])

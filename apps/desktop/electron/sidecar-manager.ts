@@ -27,6 +27,8 @@ import {
   type SidecarError,
 } from "../shared/runtime-contracts";
 import type {
+  SessionDetail,
+  SessionDetailResponse,
   SessionListResponse,
   SessionSummary,
 } from "../shared/session-contracts";
@@ -208,6 +210,20 @@ export class SidecarManager {
         true,
       );
       return response.sessions;
+    });
+  }
+
+  async getSession(
+    conversationId: string,
+  ): Promise<DesktopResult<SessionDetail>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<SessionDetailResponse>(
+        `/v1/sessions/${encodeURIComponent(conversationId)}`,
+        {},
+        true,
+      );
+      return response.session;
     });
   }
 

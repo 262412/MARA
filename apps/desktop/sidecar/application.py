@@ -62,6 +62,10 @@ class DesktopFileNotFoundError(LookupError):
     pass
 
 
+class DesktopSessionNotFoundError(LookupError):
+    pass
+
+
 class DesktopMutationError(RuntimeError):
     pass
 
@@ -97,6 +101,30 @@ class DesktopApplicationService:
 
     def list_sessions(self) -> list[dict[str, Any]]:
         return self._collect_sessions()
+
+    def get_session(self, conversation_id: str) -> dict[str, Any]:
+        with self._mutation_lock:
+            session = self._get_runtime().load_session(conversation_id)
+        if session is None:
+            raise DesktopSessionNotFoundError(conversation_id)
+        messages: list[dict[str, str]] = []
+        for user_message, assistant_message in session.messages:
+            if str(user_message):
+                messages.append({"role": "user", "content": str(user_message)})
+            if str(assistant_message):
+                messages.append(
+                    {"role": "assistant", "content": str(assistant_message)}
+                )
+        return {
+            "conversation_id": str(session.conversation_id),
+            "name": str(session.name or ""),
+            "messages": messages,
+            "graph_source_ids": [str(file_id) for file_id in session.graph_source_ids],
+            "origin": str(session.origin or ""),
+            "is_public": bool(session.is_public),
+            "date_created": _serialize_datetime(session.date_created),
+            "date_updated": _serialize_datetime(session.date_updated),
+        }
 
     def get_import_capabilities(self) -> dict[str, list[str]]:
         return self._collect_import_capabilities()
@@ -152,6 +180,14 @@ def _index_result_name(item: dict[str, Any]) -> str:
     if file_name:
         return Path(file_name).name
     return Path(str(item.get("file_path", "") or "")).name or "Unknown file"
+
+
+def _serialize_datetime(value: Any) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return str(value.isoformat())
+    return str(value)
 
 
 def configure_desktop_data_root(data_root: Path) -> Path:

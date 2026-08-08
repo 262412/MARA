@@ -11,20 +11,27 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Annotated, Any, Protocol
 from uuid import uuid4
 
 import uvicorn
-from fastapi import BackgroundTasks, Depends, FastAPI, Request
+from fastapi import BackgroundTasks, Depends, FastAPI
+from fastapi import Path as FastApiPath
+from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sidecar.api_errors import SidecarApiError
-from sidecar.application import DesktopApplicationService, configure_desktop_data_root
+from sidecar.application import (
+    DesktopApplicationService,
+    DesktopSessionNotFoundError,
+    configure_desktop_data_root,
+)
 from sidecar.contracts import (
     DoctorResponse,
     FileListResponse,
     ImportCapabilitiesResponse,
     RuntimeHealth,
+    SessionDetailResponse,
     SessionListResponse,
     SidecarError,
 )
@@ -39,7 +46,7 @@ from sidecar.smoke_faults import inject_smoke_fault
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 PROTOCOL_VERSION = 1
-SIDECAR_VERSION = "0.3.0"
+SIDECAR_VERSION = "0.4.0"
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 CAPABILITIES = [
     "health",
@@ -47,6 +54,7 @@ CAPABILITIES = [
     "doctor",
     "files",
     "sessions",
+    "session_detail",
     "index_tasks",
     "task_events",
     "file_delete",
@@ -64,6 +72,9 @@ class ApplicationService(Protocol):
         ...
 
     def list_sessions(self) -> list[dict[str, Any]]:
+        ...
+
+    def get_session(self, conversation_id: str) -> dict[str, Any]:
         ...
 
     def get_import_capabilities(self) -> dict[str, list[str]]:
@@ -143,6 +154,31 @@ def _call_service(request: Request, operation: str) -> Any:
     service: ApplicationService = request.app.state.application_service
     try:
         return getattr(service, operation)()
+    except Exception as exc:
+        LOGGER.error(
+            "Desktop application service failed request_id=%s operation=%s",
+            _request_id(request),
+            operation,
+            exc_info=exc,
+        )
+        raise SidecarApiError(
+            503,
+            "application_service_unavailable",
+            "MARA data is temporarily unavailable.",
+            retryable=True,
+        ) from exc
+
+
+def _call_service_with_identifier(
+    request: Request,
+    operation: str,
+    identifier: str,
+) -> Any:
+    service: ApplicationService = request.app.state.application_service
+    try:
+        return getattr(service, operation)(identifier)
+    except DesktopSessionNotFoundError:
+        raise
     except Exception as exc:
         LOGGER.error(
             "Desktop application service failed request_id=%s operation=%s",
@@ -295,6 +331,17 @@ def _register_exception_handlers(app: FastAPI) -> None:
 
 
 def _register_task_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(DesktopSessionNotFoundError)
+    async def handle_session_not_found(
+        request: Request, error: DesktopSessionNotFoundError
+    ) -> JSONResponse:
+        return _error_response(
+            request,
+            status_code=404,
+            code="session_not_found",
+            message="The requested session no longer exists.",
+        )
+
     @app.exception_handler(IndexTaskPersistenceError)
     async def handle_task_persistence_error(
         request: Request, error: IndexTaskPersistenceError
@@ -408,6 +455,27 @@ def _register_data_routes(app: FastAPI) -> None:
         return SessionListResponse(
             request_id=_request_id(request),
             sessions=_call_service(request, "list_sessions"),
+        )
+
+    @app.get(
+        "/v1/sessions/{conversation_id}",
+        response_model=SessionDetailResponse,
+        dependencies=protected_without_query,
+    )
+    def get_session(
+        request: Request,
+        conversation_id: Annotated[
+            str,
+            FastApiPath(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$"),
+        ],
+    ) -> SessionDetailResponse:
+        return SessionDetailResponse(
+            request_id=_request_id(request),
+            session=_call_service_with_identifier(
+                request,
+                "get_session",
+                conversation_id,
+            ),
         )
 
     @app.get(

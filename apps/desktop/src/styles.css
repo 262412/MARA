@@ -664,6 +664,30 @@ kbd {
   overflow-y: auto;
 }
 
+.workspace-state {
+  display: flex;
+  max-width: 520px;
+  min-height: 150px;
+  padding: 28px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  margin: 36px auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--secondary);
+  text-align: center;
+}
+
+.workspace-state button {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--panel-elevated);
+}
+
 .message {
   max-width: 740px;
   margin: 0 auto 24px;
@@ -833,6 +857,10 @@ kbd {
 .composer:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgb(112 184 156 / 12%), var(--shadow);
+}
+
+.composer-disabled {
+  opacity: 0.68;
 }
 
 .composer textarea {

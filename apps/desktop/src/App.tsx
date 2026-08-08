@@ -11,11 +11,13 @@ import type {
   DesktopResult,
   RuntimeStatus,
 } from "../shared/runtime-contracts";
+import type { SessionDetail } from "../shared/session-contracts";
 import { FilesPage } from "./components/FilesPage";
 import { Inspector, type InspectorTab } from "./components/Inspector";
 import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
 import { refreshFilesForTerminalTask } from "./index-task-state";
+import type { ResourceState } from "./resource-state";
 import { useDesktopResource } from "./useDesktopResource";
 
 const unavailableRuntime: RuntimeStatus = {
@@ -28,6 +30,10 @@ const unavailableRuntime: RuntimeStatus = {
 export default function App() {
   const [activeNav, setActiveNav] = useState("workbench");
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
+  const [selectedSession, setSelectedSession] = useState<
+    ResourceState<SessionDetail> | undefined
+  >();
+  const [sessionReload, setSessionReload] = useState(0);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("preview");
   const [indexTask, setIndexTask] = useState<IndexTask>();
@@ -38,6 +44,7 @@ export default function App() {
   const lastTaskRefresh = useRef<string | undefined>(undefined);
   const fileDeletionLock = useRef(false);
   const indexActionLock = useRef(false);
+  const sessionRequestGeneration = useRef(0);
   const [runtime, setRuntime] = useState<RuntimeStatus>(
     window.desktop
       ? { state: "starting", protocol: 1, capabilities: [] }
@@ -64,6 +71,45 @@ export default function App() {
   const doctor = useDesktopResource(loadDoctor);
   const files = useDesktopResource(loadFiles);
   const sessions = useDesktopResource(loadSessions);
+
+  useEffect(() => {
+    const generation = ++sessionRequestGeneration.current;
+    if (!selectedSessionId) {
+      setSelectedSession(undefined);
+      return;
+    }
+    setSelectedSession({ status: "loading" });
+    void (async () => {
+      let result: DesktopResult<SessionDetail>;
+      try {
+        result = await (
+          window.desktop?.getSession(selectedSessionId) ??
+          unavailableResult<SessionDetail>(
+            "会话详情仅能在 MARA Desktop 中使用。",
+          )
+        );
+      } catch {
+        result = await unavailableResult<SessionDetail>("会话读取未能完成。");
+      }
+      if (generation !== sessionRequestGeneration.current) {
+        return;
+      }
+      setSelectedSession(
+        result.ok
+          ? { status: "success", data: result.data }
+          : {
+              status: "failed",
+              message: result.error.message,
+              error: result.error,
+            },
+      );
+    })();
+    return () => {
+      if (generation === sessionRequestGeneration.current) {
+        sessionRequestGeneration.current += 1;
+      }
+    };
+  }, [selectedSessionId, sessionReload]);
   const updateIndexTask = useCallback(
     (task: IndexTask) => {
       setIndexTask(task);
@@ -274,10 +320,10 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [importFiles]);
 
-  const openCitation = () => {
-    setInspectorOpen(true);
-    setInspectorTab("preview");
-  };
+  const selectSession = useCallback((sessionId: string) => {
+    setActiveNav("workbench");
+    setSelectedSessionId(sessionId);
+  }, []);
 
   return (
     <>
@@ -287,7 +333,7 @@ export default function App() {
           active={activeNav}
           onNavigate={setActiveNav}
           onRetrySessions={sessions.retry}
-          onSelectSession={setSelectedSessionId}
+          onSelectSession={selectSession}
           selectedSessionId={selectedSessionId}
           sessions={sessions.resource}
         />
@@ -313,8 +359,9 @@ export default function App() {
           />
         ) : (
           <Workspace
-            onOpenCitation={openCitation}
+            onRetrySession={() => setSessionReload((value) => value + 1)}
             onToggleInspector={() => setInspectorOpen((value) => !value)}
+            session={selectedSession}
           />
         )}
         {inspectorOpen ? (

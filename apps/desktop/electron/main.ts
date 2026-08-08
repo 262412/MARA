@@ -28,6 +28,7 @@ import { contentTypeFor, resolveAppAsset } from "./protocol";
 import { SidecarManager } from "./sidecar-manager";
 import { runDesktopSmoke } from "./smoke-runner";
 import {
+  GATE2_SMOKE_SESSION_ID,
   GATE3_FORMAT_INPUT_NAMES,
   GATE3_FORMAT_RECORD_NAMES,
   GATE3_CANCEL_BLOCK_MARKER_NAME,
@@ -609,6 +610,7 @@ function registerIpc(): void {
     getDoctor: () => sidecar.getDoctor(),
     listFiles: () => sidecar.listFiles(),
     listSessions: () => sidecar.listSessions(),
+    getSession: (conversationId) => sidecar.getSession(conversationId),
     importFiles: async () => {
       const capabilities = await sidecar.getImportCapabilities();
       if (!capabilities.ok) {
@@ -737,16 +739,19 @@ app.whenReady().then(async () => {
     requireGate3LargeFile;
   if (process.argv.includes("--smoke-test") || requireNonEmptyFixture) {
     const exitCode = await runDesktopSmoke(async () => {
-      const [status, doctor, files, sessions, importCapabilities] =
+      const [status, doctor, files, sessions, session, importCapabilities] =
         await Promise.all([
           startup,
           sidecar.getDoctor(),
           sidecar.listFiles(),
           sidecar.listSessions(),
+          requireNonEmptyFixture
+            ? sidecar.getSession(GATE2_SMOKE_SESSION_ID)
+            : Promise.resolve({ ok: true as const, data: null }),
           sidecar.getImportCapabilities(),
         ]);
       assertPackagedSmoke(
-        { status, doctor, files, sessions, importCapabilities },
+        { status, doctor, files, sessions, session, importCapabilities },
         requireNonEmptyFixture,
       );
       const initialFiles = files.ok ? files.data : [];

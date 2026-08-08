@@ -134,11 +134,10 @@ def _seed_conversation(engine: Any, conversation_model: Any) -> None:
                     "origin": "desktop-gate2-smoke",
                     "graph_source_ids": [GATE2_SMOKE_FILE_ID],
                     "messages": [
-                        {"role": "user", "content": "What is this fixture?"},
-                        {
-                            "role": "assistant",
-                            "content": "A packaged Desktop smoke record.",
-                        },
+                        [
+                            "What is this fixture?",
+                            "A packaged Desktop smoke record.",
+                        ],
                     ],
                 },
                 date_created=GATE2_SMOKE_TIMESTAMP,

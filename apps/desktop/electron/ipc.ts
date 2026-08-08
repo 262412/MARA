@@ -9,7 +9,10 @@ import type {
   DesktopResult,
   RuntimeStatus,
 } from "../shared/runtime-contracts";
-import type { SessionSummary } from "../shared/session-contracts";
+import type {
+  SessionDetail,
+  SessionSummary,
+} from "../shared/session-contracts";
 
 type IpcEvent = {
   senderFrame?: {
@@ -23,6 +26,7 @@ export type DesktopIpcOperations = {
   getDoctor(): Promise<DesktopResult<DoctorPayload>>;
   listFiles(): Promise<DesktopResult<FileRecord[]>>;
   listSessions(): Promise<DesktopResult<SessionSummary[]>>;
+  getSession(conversationId: string): Promise<DesktopResult<SessionDetail>>;
   importFiles(): Promise<DesktopResult<IndexTask | null>>;
   importDroppedFiles(filePaths: string[]): Promise<DesktopResult<IndexTask>>;
   getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>>;
@@ -145,6 +149,12 @@ export function registerDesktopIpc(
   registrar.handle(
     "desktop:list-sessions",
     createTrustedIpcHandler(() => operations.listSessions()),
+  );
+  registrar.handle(
+    "desktop:get-session",
+    createTrustedIdentifierIpcHandler((conversationId) =>
+      operations.getSession(conversationId),
+    ),
   );
   registrar.handle(
     "desktop:import-files",

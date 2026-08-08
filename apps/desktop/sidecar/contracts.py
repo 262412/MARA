@@ -188,11 +188,38 @@ class SessionSummary(BaseModel):
     date_updated: str | None
 
 
+class SessionMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=1_000_000)
+
+
+class SessionDetail(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    conversation_id: str
+    name: str
+    messages: list[SessionMessage] = Field(max_length=10_000)
+    graph_source_ids: list[str] = Field(max_length=10_000)
+    origin: str
+    is_public: bool
+    date_created: str | None
+    date_updated: str | None
+
+
 class SessionListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     request_id: str
     sessions: list[SessionSummary]
+
+
+class SessionDetailResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str
+    session: SessionDetail
 
 
 class SidecarError(BaseModel):

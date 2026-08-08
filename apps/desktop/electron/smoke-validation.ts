@@ -8,7 +8,10 @@ import type {
   DesktopResult,
   RuntimeStatus,
 } from "../shared/runtime-contracts";
-import type { SessionSummary } from "../shared/session-contracts";
+import type {
+  SessionDetail,
+  SessionSummary,
+} from "../shared/session-contracts";
 
 export {
   GATE3_FORMAT_INPUT_NAMES,
@@ -39,6 +42,7 @@ type PackagedSmokeSnapshot = {
   doctor: DesktopResult<DoctorPayload>;
   files: DesktopResult<FileRecord[]>;
   importCapabilities: DesktopResult<ImportCapabilities>;
+  session: DesktopResult<SessionDetail | null>;
   sessions: DesktopResult<SessionSummary[]>;
 };
 
@@ -46,7 +50,8 @@ export function assertPackagedSmoke(
   snapshot: PackagedSmokeSnapshot,
   requireNonEmptyFixture: boolean,
 ): void {
-  const { status, doctor, files, importCapabilities, sessions } = snapshot;
+  const { status, doctor, files, importCapabilities, session, sessions } =
+    snapshot;
   if (status.state !== "healthy") {
     throw new Error(`Sidecar did not become healthy: ${status.state}`);
   }
@@ -71,6 +76,9 @@ export function assertPackagedSmoke(
   if (!requireNonEmptyFixture) {
     return;
   }
+  if (!session.ok) {
+    throw new Error(`Session detail request failed: ${session.error.code}`);
+  }
 
   const fixtureFile = files.data.find(
     (record) => record.file_id === GATE2_SMOKE_FILE_ID,
@@ -85,7 +93,14 @@ export function assertPackagedSmoke(
     files.data.length < 1 ||
     sessions.data.length !== 1 ||
     !fixtureFile ||
-    !fixtureSession
+    !fixtureSession ||
+    !session.data ||
+    session.data.conversation_id !== GATE2_SMOKE_SESSION_ID ||
+    session.data.messages.length !== 2 ||
+    session.data.messages[0]?.role !== "user" ||
+    session.data.messages[1]?.role !== "assistant" ||
+    Object.hasOwn(session.data, "data_source") ||
+    Object.hasOwn(session.data, "user_id")
   ) {
     const diagnostic = {
       doctor_ok: doctor.data.ok,
@@ -94,6 +109,8 @@ export function assertPackagedSmoke(
       doctor_issue_count: doctor.data.issues.length,
       file_ids: files.data.map((record) => record.file_id),
       session_ids: sessions.data.map((record) => record.conversation_id),
+      session_detail_id: session.data?.conversation_id,
+      session_message_count: session.data?.messages.length,
     };
     throw new Error(
       `Packaged app did not load the non-empty Gate 2 fixture: ${JSON.stringify(diagnostic)}`,

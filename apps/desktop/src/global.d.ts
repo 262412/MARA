@@ -5,13 +5,17 @@ import type {
   DesktopResult,
   RuntimeStatus,
 } from "../shared/runtime-contracts";
-import type { SessionSummary } from "../shared/session-contracts";
+import type {
+  SessionDetail,
+  SessionSummary,
+} from "../shared/session-contracts";
 
 type DesktopBridge = {
   getRuntimeStatus(): Promise<RuntimeStatus>;
   getDoctor(): Promise<DesktopResult<DoctorPayload>>;
   listFiles(): Promise<DesktopResult<FileRecord[]>>;
   listSessions(): Promise<DesktopResult<SessionSummary[]>>;
+  getSession(conversationId: string): Promise<DesktopResult<SessionDetail>>;
   importFiles(): Promise<DesktopResult<IndexTask | null>>;
   importDroppedFiles(files: File[]): Promise<DesktopResult<IndexTask>>;
   getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>>;

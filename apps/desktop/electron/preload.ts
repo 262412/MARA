@@ -7,7 +7,10 @@ import type {
   DesktopResult,
   RuntimeStatus,
 } from "../shared/runtime-contracts";
-import type { SessionSummary } from "../shared/session-contracts";
+import type {
+  SessionDetail,
+  SessionSummary,
+} from "../shared/session-contracts";
 import { resolveDroppedFilePaths } from "./dropped-file-import";
 
 contextBridge.exposeInMainWorld("desktop", {
@@ -19,6 +22,8 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.invoke("desktop:list-files"),
   listSessions: (): Promise<DesktopResult<SessionSummary[]>> =>
     ipcRenderer.invoke("desktop:list-sessions"),
+  getSession: (conversationId: string): Promise<DesktopResult<SessionDetail>> =>
+    ipcRenderer.invoke("desktop:get-session", conversationId),
   importFiles: (): Promise<DesktopResult<IndexTask | null>> =>
     ipcRenderer.invoke("desktop:import-files"),
   importDroppedFiles: (files: File[]): Promise<DesktopResult<IndexTask>> => {

@@ -77,6 +77,7 @@ Renderer 到 Main 只开放按能力命名的方法，例如：
 - `desktop.getDoctor()`
 - `desktop.listFiles()`
 - `desktop.listSessions()`
+- `desktop.getSession(sessionId)`
 - `desktop.importFiles()`
 - `desktop.importDroppedFiles(files)`
 - `desktop.getLatestIndexTask()`
@@ -92,6 +93,13 @@ Renderer 到 Main 只开放按能力命名的方法，例如：
 
 不得暴露通用 `invoke(channel, ...args)`、任意 shell、任意 URL 打开或任意文件读取。
 Main 必须校验 IPC sender、参数、文件句柄和允许的外部 URL 协议。
+
+会话详情通过认证后的 `GET /v1/sessions/{conversation_id}` 读取，application
+service 直接复用 `DocQARuntime.load_session()` 的所有者/公开会话授权语义。响应只
+投影会话 ID、名称、用户/助手文本、来源 ID、origin、公开标记和时间，不返回
+`data_source`、用户 ID、settings、检索内部状态或本地路径。Main 与 Sidecar 都校验
+不透明会话 ID；Renderer 在用户选择后才请求，并丢弃切换任务产生的过期响应。该
+只读切片不启用 reasoning、模型调用或通用请求能力。
 
 Gate 3 的文件导入由 Main 打开原生选择器；Renderer 不传选择器参数，也不会收到
 绝对路径。Main 只把选择结果送入带认证的 Sidecar 索引命令。Sidecar 返回脱敏的
