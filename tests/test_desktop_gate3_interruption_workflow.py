@@ -23,6 +23,14 @@ def test_native_package_jobs_prove_sidecar_interruption_recovery() -> None:
     linux_commands = _commands(jobs["package-linux-22"])
     assert "linux-22-sidecar-exit-stdout.txt" in linux_commands
     assert "--phase sidecar-exit-recovered" in linux_commands
+    assert "linux-22-phase.txt" in linux_commands
+    assert "record_phase cancellation-cli-verify" in linux_commands
+    linux_metrics = next(
+        step
+        for step in jobs["package-linux-22"]["steps"]
+        if step["name"] == "Upload Ubuntu 22.04 metrics"
+    )
+    assert linux_metrics["if"] == "${{ always() }}"
 
     windows = jobs["package-windows"]
     windows_commands = _commands(windows)

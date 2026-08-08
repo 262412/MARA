@@ -67,6 +67,12 @@ jobs:
       - name: Smoke packaged vertical slice and record metrics
         shell: bash
         run: |
+          mkdir -p apps/desktop/release/metrics
+          phase_file=apps/desktop/release/metrics/linux-22-phase.txt
+          record_phase() {
+            printf 'phase=%s\n' "$1" > "$phase_file"
+          }
+          record_phase seed-initial-data
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
           embedding_port_file=/tmp/mara-desktop/embedding-port.txt
@@ -100,10 +106,10 @@ jobs:
           export KH_APP_DATA_DIR=/tmp/mara-desktop/data/MARA/state/ktem_app_data
           export THEFLOW_SETTINGS_MODULE=ktem.default_flowsettings
           export KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED=1
-          mkdir -p apps/desktop/release/metrics
           cli_input=/tmp/mara-desktop/data/MARA/tmp/gate3-cli-compat.txt
           printf '%s\n' 'MARA CLI to Desktop Gate 3 compatibility fixture.' \
             > "$cli_input"
+          record_phase cli-index
           .venv/bin/MARA docqa index "$cli_input" --json > /dev/null
           set -o pipefail
           .venv/bin/MARA docqa files --json \
@@ -111,6 +117,7 @@ jobs:
                 --phase cli-indexed \
                 --expect-name gate3-cli-compat.txt \
                 --summary-file apps/desktop/release/metrics/linux-22-cli-before.txt
+          record_phase index-delete-smoke
           /usr/bin/time -v -o apps/desktop/release/metrics/linux-22-time.txt \
             xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
               --smoke-test-nonempty --smoke-test-gate3 \
@@ -123,9 +130,11 @@ jobs:
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
           touch "$embedding_failure_file"
+          record_phase model-unavailable-smoke
           xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
             --smoke-test-gate3-model-unavailable
           find "$embedding_failure_file" -maxdepth 0 -type f -delete
+          record_phase model-retry-smoke
           xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
             --smoke-test-gate3-retry
           .venv/bin/MARA docqa files --json \
@@ -136,8 +145,10 @@ jobs:
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
           touch "$embedding_block_file"
+          record_phase cancellation-smoke
           xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
             --smoke-test-gate3-cancel
+          record_phase cancellation-cli-verify
           .venv/bin/MARA docqa files --json \
             | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
                 --phase cancellation-recovered \
@@ -145,6 +156,7 @@ jobs:
                 --summary-file apps/desktop/release/metrics/linux-22-cancel-after.txt
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
+          record_phase partial-recovery-smoke
           xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
             --smoke-test-gate3-partial \
             > apps/desktop/release/metrics/linux-22-partial-stdout.txt \
@@ -157,6 +169,7 @@ jobs:
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
           touch "$embedding_block_file"
+          record_phase sidecar-exit-smoke
           xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
             --smoke-test-gate3-sidecar-exit \
             > apps/desktop/release/metrics/linux-22-sidecar-exit-stdout.txt \
@@ -169,6 +182,7 @@ jobs:
                 --summary-file apps/desktop/release/metrics/linux-22-sidecar-exit-after.txt
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
+          record_phase disk-full-smoke
           xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
             --smoke-test-gate3-disk-full \
             > apps/desktop/release/metrics/linux-22-disk-full-stdout.txt \
@@ -182,6 +196,7 @@ jobs:
                 --summary-file apps/desktop/release/metrics/linux-22-disk-full-after.txt
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
+          record_phase database-lock-smoke
           xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
             --smoke-test-gate3-database-lock \
             > apps/desktop/release/metrics/linux-22-database-lock-stdout.txt \
@@ -195,6 +210,7 @@ jobs:
                 --summary-file apps/desktop/release/metrics/linux-22-database-lock-after.txt
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
+          record_phase large-file-smoke
           /usr/bin/time -v \
             -o apps/desktop/release/metrics/linux-22-large-file-time.txt \
             xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
@@ -221,6 +237,7 @@ jobs:
           cat apps/desktop/release/metrics/linux-22-size.txt >> "$GITHUB_STEP_SUMMARY"
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
+          record_phase complete
           kill "$embedding_pid" 2>/dev/null || true
           wait "$embedding_pid" 2>/dev/null || true
           trap - EXIT
@@ -235,6 +252,7 @@ jobs:
           path: apps/desktop/release/mara-linux-22.tar.gz
           if-no-files-found: error
       - name: Upload Ubuntu 22.04 metrics
+        if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mara-desktop-linux-22-metrics
