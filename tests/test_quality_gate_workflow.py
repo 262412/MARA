@@ -89,6 +89,7 @@ def test_static_and_test_jobs_enforce_the_repository_contracts():
     assert "ruff check" in static_commands
     audit = jobs["dependency-audit"]
     assert audit["strategy"]["fail-fast"] is False
+    assert audit["strategy"]["max-parallel"] == 1
     assert audit["strategy"]["matrix"]["include"] == [
         {"label": "root-py310", "project": ".", "python-version": "3.10"},
         {"label": "root-py311", "project": ".", "python-version": "3.11"},

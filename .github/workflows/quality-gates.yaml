@@ -74,6 +74,7 @@ jobs:
       UV_PYTHON_DOWNLOADS: never
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - label: root-py310
