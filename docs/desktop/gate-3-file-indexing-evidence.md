@@ -4,8 +4,10 @@
 
 Gate 3 的首个纵向切片是“原生文件导入 → 后台索引 → Files 刷新/删除”。实现已
 贯通 React、Preload、Electron Main、认证 Sidecar 和现有 MARA DocQA runtime，
-当前状态为 **In progress**。只有当前提交的 Windows、Ubuntu 原生组合包均完成
-真实索引/删除 smoke，并补齐支持格式与异常场景验收后，才能升级为 `Verified`。
+当前状态为 **In progress**。只有 Windows、Ubuntu 原生组合包均完成真实索引/删除
+smoke，并补齐产品 VM、支持格式与异常场景验收后，才能升级为 `Verified`。提交
+`f35a9b4` 已关闭 Windows Server 2022、Ubuntu 22.04/24.04 自动化缺口；剩余项
+不再包含原生构建流水线。
 
 本切片不复制 Gradio callback 或 DocQA 索引/删除业务逻辑，也不修改 `MARA`、
 `MARA-cli` 命令、Click 参数、Gradio 事件链、数据库 schema 或现有会话字段。
@@ -58,25 +60,60 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 
 ## 当前验收状态
 
-| 项目                                      | 状态        |
-| ----------------------------------------- | ----------- |
-| 现有 CLI 行为特征测试                     | 已通过      |
-| MARA application service 单元/集成测试    | 已通过      |
-| Sidecar 认证、参数、响应和事件契约        | 已通过      |
-| Electron IPC sender、参数和原生选择器测试 | 已通过      |
-| React 索引/删除状态覆盖                   | 已通过      |
-| Linux 开发态真实索引/刷新/删除 smoke      | 已通过      |
-| 当前代码的 Linux 自包含组合包 smoke       | 已通过      |
-| 完整 `ktem` package gate                  | 已通过      |
-| 完整 `slide_cli` package gate             | 已通过      |
-| 当前代码的 Windows 原生组合包/Defender    | 尚未产生 CI |
-| 当前代码的 Ubuntu 22.04/24.04 smoke       | 尚未产生 CI |
+| 项目                                      | 状态   |
+| ----------------------------------------- | ------ |
+| 现有 CLI 行为特征测试                     | 已通过 |
+| MARA application service 单元/集成测试    | 已通过 |
+| Sidecar 认证、参数、响应和事件契约        | 已通过 |
+| Electron IPC sender、参数和原生选择器测试 | 已通过 |
+| React 索引/删除状态覆盖                   | 已通过 |
+| Linux 开发态真实索引/刷新/删除 smoke      | 已通过 |
+| 当前代码的 Linux 自包含组合包 smoke       | 已通过 |
+| 完整 `ktem` package gate                  | 已通过 |
+| 完整 `slide_cli` package gate             | 已通过 |
+| 当前代码的 Windows 原生组合包/Defender    | 已通过 |
+| 当前代码的 Ubuntu 22.04/24.04 smoke       | 已通过 |
 
 当前基线重新验证已取得完整 package green：`ktem` 为 1,632 passed，`slide_cli`
 完整测试包也全部通过。Canonical runtime 新增的生成参数已同步到兼容 facade，并以
 独立提交锁定公开请求契约和历史位置参数 ABI。
 
-## Linux 本地打包测量
+## 跨平台 CI 证据
+
+2026-08-08 的
+[Desktop Gate 3 运行 31267984102](https://github.com/262412/MARA/actions/runs/31267984102)
+基于提交 `f35a9b4e0c2b9ce45776d827347ed40d1f6e6759`，三个任务全部成功：
+
+- Windows Server 2022：原生构建、非空 Doctor/Files/Sessions、真实后台文本索引、
+  Files 刷新、删除预置与新索引记录、最终空列表，以及 Defender 扫描。
+- Ubuntu 22.04：原生构建并完成同一真实索引/刷新/删除 smoke。
+- Ubuntu 24.04：使用 Ubuntu 22.04 的同一组合包和数据快照完成跨版本复验。
+
+| 平台/产物               | Artifact ID | 压缩大小    | Actions digest                                                     |
+| ----------------------- | ----------- | ----------- | ------------------------------------------------------------------ |
+| Windows 完整组合包      | 9024781798  | 395,896,042 | `eb5aaf9c28b85b424a9991c5260b8f7eb4096867fa081c6fb47728a4c940f210` |
+| Windows smoke 诊断      | 9024774847  | 1,040       | `d03645c9686e4daea687815e02860bb7cc3293c2ffda39fd27081eb4c40106d6` |
+| Windows Defender 诊断   | 9024775013  | 359         | `5d153c261bc917a0b05e886cbab0fee0757847d7f730f0be7dcc95b4e63b4df5` |
+| Ubuntu 22.04 完整组合包 | 9024780867  | 412,444,792 | `ec4cf85d9f034e6524e44b14c3f9e434ef8a76b00380f51c78c24d382dfbaedb` |
+| Ubuntu 22.04 包体测量   | 9024781056  | 1,457       | `057e35a7550fa0ca98e41c68df7f235d16a5d167b017c99beb8a29e752fd75fe` |
+
+Artifact digest 均为 GitHub Actions 返回的 SHA-256。完整 Windows 包只有 Defender
+扫描成功后才会上传；诊断证据独立使用 `always()`，扫描失败不会保存完整可执行包。
+
+| 指标                   | Windows Server 2022                                                | Ubuntu 22.04                                                       |
+| ---------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| 发布目录 apparent size | 997,297,210 bytes                                                  | 1,086,008,815 bytes                                                |
+| 发布目录文件数         | 2,705                                                              | 2,106                                                              |
+| smoke 总耗时           | 9.044 秒                                                           | 12.22 秒                                                           |
+| smoke 峰值常驻内存     | 101,060,608 bytes，约 96.4 MiB                                     | 451,636 KiB，约 441 MiB                                            |
+| Sidecar SHA-256        | `3bc72162d769e600e913b63cc7a25441624792d0c57f6c2557891d735b780ab1` | `485a579c74160b53dec3e6cdcda0d42de10fe6ff157024339718bb14b8d6500b` |
+| 原生依赖缺失           | 打包启动和真实索引通过                                             | `ldd` 无 `not found`                                               |
+
+Defender 证据还确认实时防病毒与反恶意软件服务开启，移除了 runner 的 `D:\` 整盘
+排除，启用了 archive scanning，并得到零检出结果。Ubuntu 24.04 没有重新构建，而是
+复用 Ubuntu 22.04 的同一产物和数据快照，因此该任务提供的是发行版兼容证据。
+
+## Linux 开发机参考测量
 
 2026-08-08 在当前 Linux 开发机对自包含 Electron + PyInstaller 组合包执行断网
 smoke。测试把外部 HTTP/HTTPS 代理指向不可达 loopback，只允许本地确定性
@@ -106,18 +143,16 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
 
 ## 剩余验收与风险
 
-1. 取得当前提交的 Windows Server 2022、Ubuntu 22.04 原生构建和 Ubuntu 24.04
-   跨版本真实索引/删除 smoke，并保留 Defender 结果与产物指标。
-2. 在 Windows 10/11 产品 VM 对当前 Gate 3 包执行原生选择器、重复启动、任务恢复、
+1. 在 Windows 10/11 产品 VM 对当前 Gate 3 包执行原生选择器、重复启动、任务恢复、
    数据目录和残留进程验收。
-3. 增加拖放、批量选择，以及 PDF、Office、图片、Markdown、文本、表格、HTML、
+2. 增加拖放、批量选择，以及 PDF、Office、图片、Markdown、文本、表格、HTML、
    MHTML、CSV、ZIP 的支持格式矩阵；当前确定性打包 smoke 只覆盖文本。
-4. 增加大文件、部分失败、运行中取消、模型不可用、磁盘满、数据库锁和 Sidecar
+3. 增加大文件、部分失败、运行中取消、模型不可用、磁盘满、数据库锁和 Sidecar
    强制退出的组合包故障注入。当前取消在文件边界协作式生效，不会强杀正在执行的
    单文件 parser/vector write；该边界必须在长文件验收中明确验证。
-5. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
+4. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，
    才能进入 Verified 格式矩阵。
-6. 验证同一数据副本在 CLI 与 Desktop 间的索引和删除兼容性后，再考虑显式旧数据
+5. 验证同一数据副本在 CLI 与 Desktop 间的索引和删除兼容性后，再考虑显式旧数据
    空间迁移；开发期继续只写独立 Desktop 数据根。
