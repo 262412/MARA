@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -10,6 +11,9 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASELINE = REPO_ROOT / "scripts" / "dependency_audit_baseline.json"
+TREE_PACKAGE_PATTERN = re.compile(
+    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*) v(?P<version>[^\s]+)"
+)
 
 
 @dataclass(frozen=True)
@@ -18,6 +22,14 @@ class AuditComparison:
     resolved_findings: tuple[str, ...]
     new_adverse_statuses: tuple[str, ...]
     resolved_adverse_statuses: tuple[str, ...]
+
+
+def _normalized_name(name: str) -> str:
+    return name.lower().replace("_", "-")
+
+
+def _dependency_version_key(name: str, version: str) -> str:
+    return f"{_normalized_name(name)}=={version}"
 
 
 def _finding_key(finding: dict[str, Any]) -> str:
@@ -30,6 +42,34 @@ def _finding_key(finding: dict[str, Any]) -> str:
     if not name or not version or not finding_id:
         raise ValueError("audit finding is missing name, version, or id")
     return f"{name}=={version}|{finding_id}"
+
+
+def filter_report_to_active_versions(
+    report: dict[str, Any], active_versions: set[str]
+) -> dict[str, Any]:
+    active_names = {item.split("==", 1)[0] for item in active_versions}
+    vulnerabilities: list[dict[str, Any]] = []
+    for finding in report.get("vulnerabilities", []):
+        dependency = finding.get("dependency")
+        if not isinstance(dependency, dict):
+            vulnerabilities.append(finding)
+            continue
+        name = str(dependency.get("name") or "").strip()
+        version = str(dependency.get("version") or "").strip()
+        if not name or not version:
+            vulnerabilities.append(finding)
+            continue
+        normalized_name = _normalized_name(name)
+        if normalized_name not in active_names:
+            raise ValueError(
+                f"audited dependency {name!r} is absent from the active dependency tree"
+            )
+        if _dependency_version_key(name, version) in active_versions:
+            vulnerabilities.append(finding)
+
+    filtered = dict(report)
+    filtered["vulnerabilities"] = vulnerabilities
+    return filtered
 
 
 def _status_key(status: dict[str, Any]) -> str:
@@ -122,6 +162,48 @@ def _run_uv_audit(
     return report
 
 
+def _run_uv_tree(
+    *,
+    project: str,
+    python_version: str,
+    python_platform: str,
+) -> set[str]:
+    command = [
+        "uv",
+        "tree",
+        "--project",
+        project,
+        "--frozen",
+        "--no-dev",
+        "--python-version",
+        python_version,
+        "--python-platform",
+        python_platform,
+        "--color",
+        "never",
+    ]
+    completed = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if completed.stderr:
+        print(completed.stderr, file=sys.stderr, end="")
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"uv tree failed with exit code {completed.returncode}: {completed.stdout}"
+        )
+    active_versions = {
+        _dependency_version_key(match.group("name"), match.group("version"))
+        for match in TREE_PACKAGE_PATTERN.finditer(completed.stdout)
+    }
+    if not active_versions:
+        raise ValueError("active dependency tree did not contain versioned packages")
+    return active_versions
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Fail on dependency findings outside the reviewed baseline."
@@ -148,6 +230,12 @@ def main(argv: list[str] | None = None) -> int:
             python_version=args.python_version,
             python_platform=args.python_platform,
         )
+        active_versions = _run_uv_tree(
+            project=args.project,
+            python_version=args.python_version,
+            python_platform=args.python_platform,
+        )
+        report = filter_report_to_active_versions(report, active_versions)
         comparison = compare_audit_report(report, baseline)
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
         print(f"dependency audit failed closed: {error}", file=sys.stderr)

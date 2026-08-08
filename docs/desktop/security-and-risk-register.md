@@ -57,6 +57,11 @@ flowchart LR
 | R19 | Renderer 在 Sidecar healthy 前读取真实数据     | 首屏永久停留在可重试错误   | 查询等待同一 startup Promise；延迟启动回归；并发打包 smoke                          | healthy 后 Doctor/Files/Sessions 自动成功 |
 | R20 | OpenAPI 与 TypeScript 响应类型静默漂移         | Main/Renderer 运行时失配   | 从 FastAPI OpenAPI 生成类型；提交生成文件；CI 检查差异                              | 生成漂移门通过                            |
 | R21 | 索引任务把源路径泄漏到 Renderer、事件或日志    | 本地身份和目录结构泄漏     | Main 持有选择结果；任务响应仅含文件名；错误脱敏；内部 journal 约束在 Desktop 数据根 | 路径泄漏契约测试和打包 smoke 通过         |
+| R22 | 恶意 PDF 字体映射耗尽资源                      | Sidecar 资源耗尽           | PDF 暂不进入 Verified 格式矩阵；详见下文                                            | 资源限制和故障注入通过                    |
+
+R22 当前由 `pypdf 4.2` 的 GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42
+触发。LlamaIndex 0.10 暂时阻止升级到修复版；后续必须升级 reader 或回移上游资源
+限制，完成恶意 PDF 故障注入后才能放行。
 
 ## 4. 安全验收场景
 
