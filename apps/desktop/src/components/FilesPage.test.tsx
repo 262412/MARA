@@ -37,11 +37,12 @@ function render(
   state: ResourceState<FileRecord[]>,
   indexTask?: IndexTask,
   actionError?: string,
+  selectedFileIds: string[] = [],
 ) {
   return renderToStaticMarkup(
     <FilesPage
       actionError={actionError}
-      deletingFileId={undefined}
+      deletingFileIds={[]}
       files={state}
       indexActionPending={false}
       indexTask={indexTask}
@@ -50,6 +51,8 @@ function render(
       onImport={() => undefined}
       onRetry={(): void => undefined}
       onRetryIndexTask={() => undefined}
+      onSelectionChange={() => undefined}
+      selectedFileIds={selectedFileIds}
     />,
   );
 }
@@ -74,6 +77,8 @@ test("Files page exposes import, progress, cancellation, retry, and deletion", (
   assert.match(running, /正在索引 1\/2/);
   assert.match(running, /取消索引/);
   assert.match(running, /删除 paper\.pdf/);
+  assert.match(running, /选择 paper\.pdf/);
+  assert.match(running, /选择全部文件/);
 
   const failed = render(
     { status: "success", data: [file] },
@@ -99,4 +104,23 @@ test("Files page exposes import, progress, cancellation, retry, and deletion", (
   );
   assert.match(cancelled, /索引已取消/);
   assert.doesNotMatch(cancelled, /下一个纵向切片/);
+});
+
+test("Files page exposes accessible bulk selection and destructive action state", () => {
+  const secondFile: FileRecord = {
+    ...file,
+    file_id: "file-2",
+    name: "notes.md",
+  };
+  const selected = render(
+    { status: "success", data: [file, secondFile] },
+    undefined,
+    undefined,
+    ["file-1", "file-2"],
+  );
+
+  assert.match(selected, /已选 2 个/);
+  assert.match(selected, /删除所选/);
+  assert.match(selected, /aria-selected="true"/);
+  assert.match(selected, /aria-label="选择全部文件"/);
 });

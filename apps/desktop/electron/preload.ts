@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.invoke("desktop:retry-index-task", taskId),
   deleteFile: (fileId: string): Promise<DesktopResult<string[]>> =>
     ipcRenderer.invoke("desktop:delete-file", fileId),
+  deleteFiles: (fileIds: string[]): Promise<DesktopResult<string[]>> =>
+    ipcRenderer.invoke("desktop:delete-files", fileIds),
   onRuntimeStatus: (listener: (status: RuntimeStatus) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, status: RuntimeStatus) => {
       listener(status);

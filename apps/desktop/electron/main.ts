@@ -185,20 +185,10 @@ async function deleteSmokeFiles(
 ): Promise<void> {
   const initialFileIds = initialFiles.map((record) => record.file_id);
   const fileIds = [...new Set([...initialFileIds, ...indexedFileIds])];
-  const deletions: Array<{
-    fileId: string;
-    result: DesktopResult<string[]>;
-  }> = [];
-  for (const fileId of fileIds) {
-    deletions.push({ fileId, result: await sidecar.deleteFile(fileId) });
-  }
+  const deletion = await sidecar.deleteFiles(fileIds);
   const filesAfterDelete = await sidecar.listFiles();
-  for (const deletion of deletions) {
-    assertGate3DeleteSmoke(
-      deletion.result,
-      filesAfterDelete,
-      deletion.fileId,
-    );
+  for (const fileId of fileIds) {
+    assertGate3DeleteSmoke(deletion, filesAfterDelete, fileId);
   }
 }
 
@@ -603,6 +593,7 @@ function registerIpc(): void {
       return result;
     },
     deleteFile: (fileId) => sidecar.deleteFile(fileId),
+    deleteFiles: (fileIds) => sidecar.deleteFiles(fileIds),
   });
 }
 

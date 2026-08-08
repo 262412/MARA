@@ -5,6 +5,7 @@ import type { IpcMain } from "electron";
 
 import {
   createTrustedIdentifierIpcHandler,
+  createTrustedIdentifierListIpcHandler,
   createTrustedIpcHandler,
   registerDesktopIpc,
 } from "./ipc";
@@ -23,6 +24,48 @@ test("trusted desktop IPC accepts only the packaged renderer and no arguments", 
   await assert.rejects(
     handler({ senderFrame: { url: "mara://app/" } }, { path: "/etc/passwd" }),
     /does not accept arguments/,
+  );
+});
+
+test("batch mutation IPC validates a bounded list of opaque identifiers", async () => {
+  const calls: string[][] = [];
+  const handler = createTrustedIdentifierListIpcHandler(async (identifiers) => {
+    calls.push(identifiers);
+    return "ok";
+  });
+
+  assert.equal(
+    await handler(
+      { senderFrame: { url: "mara://app/" } },
+      ["file-1", "file-2"],
+    ),
+    "ok",
+  );
+  assert.deepEqual(calls, [["file-1", "file-2"]]);
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "https://attacker.invalid/" } },
+      ["file-1"],
+    ),
+    /Untrusted IPC sender/,
+  );
+  await assert.rejects(
+    handler({ senderFrame: { url: "mara://app/" } }, []),
+    /non-empty identifier list/,
+  );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      ["file-1", "/etc/passwd"],
+    ),
+    /invalid identifier list/,
+  );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      ["file-1", "file-1"],
+    ),
+    /invalid identifier list/,
   );
 });
 
@@ -70,6 +113,7 @@ test("registers only explicit Gate 2 and Gate 3 desktop capabilities", () => {
     cancelIndexTask: async () => ({ ok: true, data: {} as never }),
     retryIndexTask: async () => ({ ok: true, data: {} as never }),
     deleteFile: async () => ({ ok: true, data: ["file-1"] }),
+    deleteFiles: async () => ({ ok: true, data: ["file-1", "file-2"] }),
   });
 
   assert.deepEqual(channels, [
@@ -82,5 +126,6 @@ test("registers only explicit Gate 2 and Gate 3 desktop capabilities", () => {
     "desktop:cancel-index-task",
     "desktop:retry-index-task",
     "desktop:delete-file",
+    "desktop:delete-files",
   ]);
 });

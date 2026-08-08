@@ -32,9 +32,11 @@ export default function App() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("preview");
   const [indexTask, setIndexTask] = useState<IndexTask>();
   const [indexActionPending, setIndexActionPending] = useState(false);
-  const [deletingFileId, setDeletingFileId] = useState<string>();
+  const [deletingFileIds, setDeletingFileIds] = useState<string[]>([]);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [fileActionError, setFileActionError] = useState<string>();
   const lastTaskRefresh = useRef<string | undefined>(undefined);
+  const fileDeletionLock = useRef(false);
   const indexActionLock = useRef(false);
   const [runtime, setRuntime] = useState<RuntimeStatus>(
     window.desktop
@@ -178,31 +180,61 @@ export default function App() {
     }
   }, [indexTask, updateIndexTask]);
 
-  const deleteFile = useCallback(
-    async (file: FileRecord) => {
-      if (!window.confirm(`删除“${file.name}”的索引和受管副本？`)) {
+  const deleteFiles = useCallback(
+    async (targets: FileRecord[]) => {
+      if (targets.length === 0) {
         return;
       }
-      setDeletingFileId(file.file_id);
+      if (fileDeletionLock.current) {
+        return;
+      }
+      const confirmation =
+        targets.length === 1
+          ? `删除“${targets[0].name || "未命名文件"}”的索引和受管副本？`
+          : `删除选中的 ${targets.length} 个文件索引和受管副本？此操作不可撤销。`;
+      if (!window.confirm(confirmation)) {
+        return;
+      }
+      fileDeletionLock.current = true;
+      const fileIds = targets.map((file) => file.file_id);
+      setDeletingFileIds(fileIds);
       setFileActionError(undefined);
       try {
         const result = await (
-          window.desktop?.deleteFile(file.file_id) ??
+          window.desktop?.deleteFiles(fileIds) ??
           unavailableResult<string[]>("文件删除仅能在 MARA Desktop 中使用。")
         );
         if (result.ok) {
-          void files.retry();
+          setSelectedFileIds((selected) =>
+            selected.filter((fileId) => !result.data.includes(fileId)),
+          );
+          files.retry();
         } else {
           setFileActionError(result.error.message);
+          files.retry();
         }
       } catch {
         setFileActionError("文件删除未能完成。");
+        files.retry();
       } finally {
-        setDeletingFileId(undefined);
+        fileDeletionLock.current = false;
+        setDeletingFileIds([]);
       }
     },
     [files.retry],
   );
+
+  useEffect(() => {
+    if (files.resource.status !== "success") {
+      return;
+    }
+    const availableIds = new Set(
+      files.resource.data.map((file) => file.file_id),
+    );
+    setSelectedFileIds((selected) =>
+      selected.filter((fileId) => availableIds.has(fileId)),
+    );
+  }, [files.resource]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -235,15 +267,19 @@ export default function App() {
         {activeNav === "files" ? (
           <FilesPage
             actionError={fileActionError}
-            deletingFileId={deletingFileId}
+            deletingFileIds={deletingFileIds}
             files={files.resource}
-            indexActionPending={indexActionPending}
+            indexActionPending={
+              indexActionPending || deletingFileIds.length > 0
+            }
             indexTask={indexTask}
             onCancelIndexTask={() => void cancelIndexTask()}
-            onDelete={(file) => void deleteFile(file)}
+            onDelete={(targets) => void deleteFiles(targets)}
             onImport={() => void importFiles()}
             onRetry={() => void files.retry()}
             onRetryIndexTask={() => void retryIndexTask()}
+            onSelectionChange={setSelectedFileIds}
+            selectedFileIds={selectedFileIds}
           />
         ) : (
           <Workspace

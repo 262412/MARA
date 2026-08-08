@@ -11,7 +11,7 @@ from .server import PROTOCOL_VERSION, create_app
 
 class StubApplicationService:
     def __init__(self) -> None:
-        self.delete_calls: list[str] = []
+        self.delete_calls: list[list[str]] = []
 
     def get_doctor(self) -> dict:
         return {
@@ -78,8 +78,11 @@ class StubApplicationService:
         }
 
     def delete_file(self, file_id: str) -> list[dict]:
-        self.delete_calls.append(file_id)
-        return [{"file_id": file_id, "name": "paper.pdf"}]
+        return self.delete_files([file_id])
+
+    def delete_files(self, file_ids: list[str]) -> list[dict]:
+        self.delete_calls.append(file_ids)
+        return [{"file_id": file_id, "name": f"{file_id}.pdf"} for file_id in file_ids]
 
 
 class FailingApplicationService(StubApplicationService):
@@ -302,7 +305,7 @@ class SidecarContractTest(unittest.TestCase):
             idempotency_key="delete-file-1",
         )
         self.assertEqual(duplicate.json()["deleted_file_ids"], ["file-1"])
-        self.assertEqual(self.service.delete_calls, ["file-1"])
+        self.assertEqual(self.service.delete_calls, [["file-1"]])
 
     def test_unknown_index_task_uses_stable_not_found_error(self) -> None:
         response = self.authenticated_get("/v1/index-tasks/task-missing")
@@ -322,6 +325,7 @@ class SidecarContractTest(unittest.TestCase):
         self.assertIn("/v1/index-tasks/latest", schema["paths"])
         self.assertIn("/v1/index-tasks/{task_id}/events", schema["paths"])
         self.assertIn("/v1/files/{file_id}", schema["paths"])
+        self.assertIn("/v1/file-deletions", schema["paths"])
         self.assertIn("SidecarError", schema["components"]["schemas"])
 
 

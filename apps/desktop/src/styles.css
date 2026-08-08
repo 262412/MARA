@@ -50,6 +50,7 @@ button {
 }
 
 button:focus-visible,
+input:focus-visible,
 textarea:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--focus);
@@ -385,6 +386,21 @@ kbd {
   background: var(--accent-strong);
 }
 
+.danger-button {
+  padding: 7px 11px;
+  border: 1px solid #9f6255;
+  border-radius: 8px;
+  color: #ffd5cc;
+  font-size: 11px;
+  font-weight: 700;
+  background: #3a2521;
+}
+
+.danger-button:hover {
+  border-color: #c37a69;
+  background: #4a2d27;
+}
+
 .index-task-card {
   display: flex;
   padding: 14px 16px;
@@ -479,6 +495,7 @@ kbd {
   display: grid;
   padding: 0 14px;
   grid-template-columns:
+    36px
     minmax(220px, 2fr)
     minmax(100px, 1fr)
     90px
@@ -511,6 +528,31 @@ kbd {
 
 .file-table-row:hover {
   background: rgb(255 255 255 / 3%);
+}
+
+.file-table-row[aria-selected="true"] {
+  box-shadow: inset 3px 0 var(--accent);
+  background: var(--accent-muted);
+}
+
+.file-select-control {
+  display: grid;
+  width: 36px;
+  height: 40px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.file-select-control input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.file-select-control input:disabled {
+  cursor: not-allowed;
 }
 
 .file-name {

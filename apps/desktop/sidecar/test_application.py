@@ -118,10 +118,11 @@ class DesktopApplicationServiceTest(unittest.TestCase):
                 calls.append(("delete", refs))
                 return [
                     SimpleNamespace(
-                        file_id="file-1",
-                        name="paper.pdf",
-                        path="/private/storage/paper.pdf",
+                        file_id=file_id,
+                        name=f"{file_id}.pdf",
+                        path=f"/private/storage/{file_id}.pdf",
                     )
+                    for file_id in refs
                 ]
 
         runtime = Runtime()
@@ -145,8 +146,11 @@ class DesktopApplicationServiceTest(unittest.TestCase):
             },
         )
         self.assertEqual(
-            service.delete_file("file-1"),
-            [{"file_id": "file-1", "name": "paper.pdf"}],
+            service.delete_files(["file-1", "file-2"]),
+            [
+                {"file_id": "file-1", "name": "file-1.pdf"},
+                {"file_id": "file-2", "name": "file-2.pdf"},
+            ],
         )
         self.assertEqual(
             calls,
@@ -156,7 +160,7 @@ class DesktopApplicationServiceTest(unittest.TestCase):
                     ["/private/source/paper.pdf", "/private/source/broken.pdf"],
                     True,
                 ),
-                ("delete", ["file-1"]),
+                ("delete", ["file-1", "file-2"]),
             ],
         )
 

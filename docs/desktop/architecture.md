@@ -82,6 +82,7 @@ Renderer 到 Main 只开放按能力命名的方法，例如：
 - `desktop.cancelIndexTask(taskId)`
 - `desktop.retryIndexTask(taskId)`
 - `desktop.deleteFile(fileId)`
+- `desktop.deleteFiles(fileIds)`
 - `desktop.onIndexTaskStatus(listener)`
 - `desktop.saveArtifact(options)`
 - `desktop.revealPath(handle)`
@@ -100,6 +101,11 @@ Gate 3 的文件导入由 Main 打开原生选择器；Renderer 不传选择器�
 失败会投影为脱敏、可重试状态。磁盘满和数据库锁分别使用稳定的
 `index_storage_full`、`index_database_locked` 错误码，原始异常和本地路径不进入
 Renderer。
+
+批量删除使用认证的 `POST /v1/file-deletions`，请求只包含 1–1,000 个唯一、不透明的
+文件 ID，并要求 idempotency key。Preload 和 Main 对同一 ID 列表再次执行 sender、
+数量、格式和去重校验；Renderer 不能用该方法提交文件路径。Sidecar 仍把整个列表
+交给现有 `DocQARuntime.delete_files()`，不复制 Web/CLI 删除逻辑。
 
 原生选择器的扩展名过滤器来自认证后的 `GET /v1/import-capabilities`。该端点读取
 当前持久化 FileIndex 配置；尚未创建索引时回退到 MARA 默认 FileIndex 定义。Main

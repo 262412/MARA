@@ -8,6 +8,7 @@ import type {
   DoctorResponse,
 } from "../shared/doctor-contracts";
 import type {
+  FileBatchDeleteRequest,
   FileDeleteResponse,
   FileListResponse,
   FileRecord,
@@ -74,7 +75,8 @@ export function sidecarRequestTimeout(
   pathname: string,
   method = "GET",
 ): number {
-  return method === "DELETE" && pathname.startsWith("/v1/files/")
+  return (method === "DELETE" && pathname.startsWith("/v1/files/")) ||
+    (method === "POST" && pathname === "/v1/file-deletions")
     ? FILE_DELETE_TIMEOUT_MS
     : DEFAULT_REQUEST_TIMEOUT_MS;
 }
@@ -253,6 +255,23 @@ export class SidecarManager {
         {
           method: "DELETE",
           headers: { "Idempotency-Key": randomUUID() },
+        },
+        true,
+      );
+      return response.deleted_file_ids;
+    });
+  }
+
+  async deleteFiles(fileIds: string[]): Promise<DesktopResult<string[]>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const payload: FileBatchDeleteRequest = { file_ids: fileIds };
+      const response = await this.requestJson<FileDeleteResponse>(
+        "/v1/file-deletions",
+        {
+          method: "POST",
+          headers: { "Idempotency-Key": randomUUID() },
+          body: JSON.stringify(payload),
         },
         true,
       );

@@ -160,6 +160,21 @@ class FileDeleteResponse(BaseModel):
     deleted_file_ids: list[str]
 
 
+class FileBatchDeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file_ids: list[str] = Field(min_length=1, max_length=1000)
+
+    @field_validator("file_ids")
+    @classmethod
+    def validate_file_ids(cls, file_ids: list[str]) -> list[str]:
+        if any(not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", value) for value in file_ids):
+            raise ValueError("File identifiers must use the stable identifier format.")
+        if len(set(file_ids)) != len(file_ids):
+            raise ValueError("File identifiers must be unique.")
+        return file_ids
+
+
 class SessionSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

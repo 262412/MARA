@@ -27,6 +27,7 @@ export type DesktopIpcOperations = {
   cancelIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   deleteFile(fileId: string): Promise<DesktopResult<string[]>>;
+  deleteFiles(fileIds: string[]): Promise<DesktopResult<string[]>>;
 };
 
 export function createTrustedIpcHandler<T>(
@@ -58,6 +59,36 @@ export function createTrustedIdentifierIpcHandler<T>(
       throw new Error("Desktop IPC received an invalid identifier");
     }
     return operation(identifier);
+  };
+}
+
+export function createTrustedIdentifierListIpcHandler<T>(
+  operation: (identifiers: string[]) => T | Promise<T>,
+): IpcHandler<T> {
+  return async (event, ...args) => {
+    if (!event.senderFrame?.url.startsWith("mara://app/")) {
+      throw new Error("Untrusted IPC sender");
+    }
+    if (
+      args.length !== 1 ||
+      !Array.isArray(args[0]) ||
+      args[0].length === 0 ||
+      args[0].length > 1_000
+    ) {
+      throw new Error("Desktop IPC requires one non-empty identifier list");
+    }
+    const identifiers = args[0];
+    if (
+      identifiers.some(
+        (identifier) =>
+          typeof identifier !== "string" ||
+          !/^[A-Za-z0-9._-]{1,128}$/.test(identifier),
+      ) ||
+      new Set(identifiers).size !== identifiers.length
+    ) {
+      throw new Error("Desktop IPC received an invalid identifier list");
+    }
+    return operation(identifiers);
   };
 }
 
@@ -104,5 +135,11 @@ export function registerDesktopIpc(
   registrar.handle(
     "desktop:delete-file",
     createTrustedIdentifierIpcHandler((fileId) => operations.deleteFile(fileId)),
+  );
+  registrar.handle(
+    "desktop:delete-files",
+    createTrustedIdentifierListIpcHandler((fileIds) =>
+      operations.deleteFiles(fileIds),
+    ),
   );
 }

@@ -40,6 +40,9 @@ class _SchemaApplicationService:
     def delete_file(self, file_id: str) -> list[dict[str, str]]:
         raise AssertionError("Schema generation must not call application services")
 
+    def delete_files(self, file_ids: list[str]) -> list[dict[str, str]]:
+        raise AssertionError("Schema generation must not call application services")
+
 
 def _typescript_literal(value: Any) -> str:
     if value is None:

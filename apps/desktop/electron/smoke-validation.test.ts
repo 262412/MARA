@@ -172,8 +172,15 @@ test("rejects packaged smoke without the configured import format contract", () 
 test("accepts packaged deletion only when the real fixture disappears", () => {
   assert.doesNotThrow(() =>
     assertGate3DeleteSmoke(
-      { ok: true, data: [GATE2_SMOKE_FILE_ID] },
+      { ok: true, data: [GATE2_SMOKE_FILE_ID, "gate3-indexed-file"] },
       { ok: true, data: [] },
+    ),
+  );
+  assert.doesNotThrow(() =>
+    assertGate3DeleteSmoke(
+      { ok: true, data: [GATE2_SMOKE_FILE_ID, "gate3-indexed-file"] },
+      { ok: true, data: [] },
+      "gate3-indexed-file",
     ),
   );
   assert.throws(

@@ -125,18 +125,21 @@ class DesktopApplicationService:
             ],
         }
 
-    def delete_file(self, file_id: str) -> list[dict[str, str]]:
+    def delete_files(self, file_ids: list[str]) -> list[dict[str, str]]:
         try:
             with self._mutation_lock:
-                records = self._get_runtime().delete_files([file_id])
+                records = self._get_runtime().delete_files(file_ids)
         except ValueError as exc:
-            raise DesktopFileNotFoundError(file_id) from exc
+            raise DesktopFileNotFoundError(",".join(file_ids)) from exc
         except Exception as exc:
-            raise DesktopMutationError(file_id) from exc
+            raise DesktopMutationError(",".join(file_ids)) from exc
         return [
             {"file_id": str(record.file_id), "name": str(record.name)}
             for record in records
         ]
+
+    def delete_file(self, file_id: str) -> list[dict[str, str]]:
+        return self.delete_files([file_id])
 
     def _get_runtime(self) -> Any:
         if self._runtime is None:

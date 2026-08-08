@@ -30,6 +30,9 @@ class SuccessfulIndexService:
     def delete_file(self, file_id: str) -> list[dict[str, str]]:
         return []
 
+    def delete_files(self, file_ids: list[str]) -> list[dict[str, str]]:
+        return []
+
 
 class StorageFaultContractTest(unittest.TestCase):
     def setUp(self) -> None:

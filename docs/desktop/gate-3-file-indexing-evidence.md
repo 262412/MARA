@@ -21,9 +21,10 @@ smoke，并补齐产品 VM、支持格式与异常场景验收后，才能升级
 - Main 通过认证 Sidecar 的 `/v1/import-capabilities` 读取当前 FileIndex 支持扩展名，
   原生选择器不再维护一份手写格式清单；空列表或畸形扩展会失败关闭。
 - Preload 新增明确的 `getLatestIndexTask`、`cancelIndexTask`、
-  `retryIndexTask`、`deleteFile` 和 `onIndexTaskStatus`；没有通用
+  `retryIndexTask`、`deleteFile`、`deleteFiles` 和 `onIndexTaskStatus`；没有通用
   `invoke`、`request` 或 `readFile`。
-- Sidecar 新增版本化索引任务、SSE 事件和单文件删除端点。所有端点继续执行
+- Sidecar 新增版本化索引任务、SSE 事件、单文件和批量删除端点。批量请求只接受
+  1–1,000 个唯一不透明文件 ID；所有端点继续执行
   Bearer 认证、Origin 拒绝、请求 ID、参数校验和稳定错误契约。
 - 可重试写操作使用 idempotency key。Renderer 可见数据只包含任务 ID、文件名、
   计数、状态和脱敏错误，不包含导入路径或 Sidecar 端口/令牌。
@@ -34,7 +35,7 @@ smoke，并补齐产品 VM、支持格式与异常场景验收后，才能升级
 ## 业务逻辑复用
 
 Desktop application service 延迟创建现有 `DocQARuntime`，索引直接调用
-`index_paths()`，删除直接调用 `delete_files()`。删除继续由现有
+`index_paths()`，单项和批量删除都直接调用 `delete_files()`。删除继续由现有
 `DeletionCoordinator` 处理关系记录、向量索引、数据库记录和受管文件，不在
 Desktop 中复制另一套 DocQA 实现。
 
@@ -47,21 +48,23 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 
 新增的 CLI 特征测试锁定 `MARA docqa index` 与 `MARA-cli docqa index` 的路径、
 `--reindex`、JSON 输出和部分失败退出码，防止 application service 复用过程中
-改变已有命令行为。
+改变已有命令行为；另一个特征测试锁定 `MARA docqa delete REF... --json` 的多文件
+解析、输出顺序和删除结果。
 
 ## 自动化与 smoke
 
-- Sidecar：索引/删除 application service、认证、参数、响应、idempotency、SSE、
+- Sidecar：索引/单项与批量删除 application service、认证、参数、响应、idempotency、SSE、
   取消、部分失败重试、重启恢复和路径脱敏。
 - Electron：原生选择器所有权、窄 IPC sender/参数验证、Sidecar 请求和 SSE 解析、
   打包 smoke 的失败退出码。
 - React：loading、success、empty、failed，以及 queued、running、partial、
-  success、failed、cancelled、取消、重试和删除中状态。
+  success、failed、cancelled、取消、重试、可访问多选和批量删除中状态。
 - OpenAPI 继续生成 checked-in TypeScript 契约，`npm run contracts:check` 检查漂移。
 - 支持格式能力契约覆盖 application service、认证 Sidecar、OpenAPI、Main 原生过滤器
   和打包 smoke；真实内容矩阵仍按格式逐项验收，能力声明不等于格式已 Verified。
 - `--smoke-test-gate3` 在独立数据根预置 Gate 2 非空数据，再创建一个真实文本索引
-  任务，验证 Files 中出现脱敏记录，删除预置和新建记录，最后验证列表为空。
+  任务，验证 Files 中出现脱敏记录，通过一次批量调用删除预置和新建记录，最后验证
+  列表为空。
 - `--smoke-test-gate3-formats` 在同一真实链路增加 Markdown、CSV、HTML、MHTML 和
   安全 ZIP；ZIP 最终验证解出的 Markdown 记录，而不是把归档本身伪装为已索引。
 - `--smoke-test-gate3-model-unavailable` 让确定性模型返回 503，要求任务以脱敏、
@@ -88,27 +91,29 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 
 ## 当前验收状态
 
-| 项目                                      | 状态   |
-| ----------------------------------------- | ------ |
-| 现有 CLI 行为特征测试                     | 已通过 |
-| MARA application service 单元/集成测试    | 已通过 |
-| Sidecar 认证、参数、响应和事件契约        | 已通过 |
-| Electron IPC sender、参数和原生选择器测试 | 已通过 |
-| React 索引/删除状态覆盖                   | 已通过 |
-| Linux 开发态真实索引/刷新/删除 smoke      | 已通过 |
-| Linux 开发态轻量支持格式矩阵              | 已通过 |
-| Linux 开发态模型故障与运行中取消恢复      | 已通过 |
-| Linux 开发态部分失败与定向重试            | 已通过 |
-| Linux 开发态 Sidecar 中断与重启恢复       | 已通过 |
-| Linux 开发态 5 MiB 容量 canary            | 已通过 |
-| 磁盘满/数据库锁单元与 Sidecar 契约        | 已通过 |
-| Windows/Ubuntu 磁盘满与数据库锁组合包     | 已通过 |
-| Windows/Ubuntu 5 MiB 容量 canary          | 已通过 |
-| 当前代码的 Linux 自包含组合包 smoke       | 已通过 |
-| 完整 `ktem` package gate                  | 已通过 |
-| 完整 `slide_cli` package gate             | 已通过 |
-| 当前代码的 Windows 原生组合包/Defender    | 已通过 |
-| 当前代码的 Ubuntu 22.04/24.04 smoke       | 已通过 |
+| 项目                                      | 状态    |
+| ----------------------------------------- | ------- |
+| 现有 CLI 行为特征测试                     | 已通过  |
+| MARA application service 单元/集成测试    | 已通过  |
+| Sidecar 认证、参数、响应和事件契约        | 已通过  |
+| Electron IPC sender、参数和原生选择器测试 | 已通过  |
+| React 索引/删除状态覆盖                   | 已通过  |
+| Linux 开发态真实索引/刷新/删除 smoke      | 已通过  |
+| Linux 开发态轻量支持格式矩阵              | 已通过  |
+| Linux 开发态模型故障与运行中取消恢复      | 已通过  |
+| Linux 开发态部分失败与定向重试            | 已通过  |
+| Linux 开发态 Sidecar 中断与重启恢复       | 已通过  |
+| Linux 开发态 5 MiB 容量 canary            | 已通过  |
+| 磁盘满/数据库锁单元与 Sidecar 契约        | 已通过  |
+| Windows/Ubuntu 磁盘满与数据库锁组合包     | 已通过  |
+| Windows/Ubuntu 5 MiB 容量 canary          | 已通过  |
+| 批量删除 application/Sidecar/IPC/React    | 已通过  |
+| Windows/Ubuntu 批量删除组合包             | 待新 CI |
+| 当前代码的 Linux 自包含组合包 smoke       | 已通过  |
+| 完整 `ktem` package gate                  | 已通过  |
+| 完整 `slide_cli` package gate             | 已通过  |
+| 当前代码的 Windows 原生组合包/Defender    | 已通过  |
+| 当前代码的 Ubuntu 22.04/24.04 smoke       | 已通过  |
 
 当前基线重新验证已取得完整 package green：`ktem` 为 1,632 passed，`slide_cli`
 完整测试包也全部通过。Canonical runtime 新增的生成参数已同步到兼容 facade，并以
@@ -383,8 +388,9 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
 
 1. 在 Windows 10/11 产品 VM 对当前 Gate 3 包执行原生选择器、重复启动、任务恢复、
    数据目录和残留进程验收。
-2. 增加拖放、批量选择，以及 PDF、Office 和图片的支持格式矩阵。文本、Markdown、
-   CSV、HTML、MHTML 和 ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。
+2. 增加拖放，以及 PDF、Office 和图片的支持格式矩阵。文本、Markdown、CSV、HTML、
+   MHTML 和 ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。批量选择/删除已贯通
+   React、窄 IPC、认证 Sidecar 和真实 DocQA runtime，并接入组合包 smoke，待新 CI。
 3. 磁盘满/数据库锁 → 稳定可重试错误 → 恢复成功，以及模型 503 → 脱敏失败 → 原
    任务重试成功，均已通过 Windows/Ubuntu 原生组合包。运行中
    取消 → 文件边界停止 → 只重试剩余文件已通过 Windows/Ubuntu 原生组合包。取消

@@ -68,6 +68,10 @@ R23 的组合包故障开关只由 Electron Main 的显式 smoke 参数传给 Si
 Preload、Renderer 或常规 Sidecar API。诊断只记录任务 ID、文件名、错误类型/错误码，
 不得记录数据库位置或导入文件绝对路径。
 
+Gate 3 批量删除只接受 1–1,000 个唯一、不透明的文件 ID。Sidecar、Main 和 IPC
+分别校验数量与标识符格式，Renderer 不提交本地路径；删除继续按当前用户作用域由
+现有 DocQA runtime 解析 ID，避免把批量操作变成任意文件能力。
+
 ## 4. 安全验收场景
 
 1. 修改 Renderer 尝试调用未公开 IPC，必须失败。

@@ -17,6 +17,7 @@ type DesktopBridge = {
   cancelIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   deleteFile(fileId: string): Promise<DesktopResult<string[]>>;
+  deleteFiles(fileIds: string[]): Promise<DesktopResult<string[]>>;
   onRuntimeStatus(listener: (status: RuntimeStatus) => void): () => void;
   onIndexTaskStatus(listener: (task: IndexTask) => void): () => void;
   platform: NodeJS.Platform;

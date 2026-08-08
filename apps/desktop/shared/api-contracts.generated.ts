@@ -21,6 +21,10 @@ export type DoctorResponse = {
   request_id: string;
 };
 
+export type FileBatchDeleteRequest = {
+  file_ids: Array<string>;
+};
+
 export type FileDeleteResponse = {
   deleted_file_ids: Array<string>;
   request_id: string;

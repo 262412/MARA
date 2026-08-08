@@ -50,6 +50,7 @@ CAPABILITIES = [
     "index_tasks",
     "task_events",
     "file_delete",
+    "file_batch_delete",
     "import_capabilities",
 ]
 LOGGER = logging.getLogger("mara.desktop.sidecar")
@@ -77,6 +78,9 @@ class ApplicationService(Protocol):
         ...
 
     def delete_file(self, file_id: str) -> list[dict[str, str]]:
+        ...
+
+    def delete_files(self, file_ids: list[str]) -> list[dict[str, str]]:
         ...
 
 

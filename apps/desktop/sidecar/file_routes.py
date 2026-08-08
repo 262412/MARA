@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from .api_errors import SidecarApiError
 from .application import DesktopFileNotFoundError, DesktopMutationError
 from .contracts import (
+    FileBatchDeleteRequest,
     FileDeleteResponse,
     IndexTask,
     IndexTaskCreateRequest,
@@ -131,30 +132,52 @@ def _register_file_delete(app: FastAPI, dependencies: list[Any]) -> None:
         file_id: str,
         idempotency_key: IdempotencyKey,
     ) -> FileDeleteResponse:
-        with request.app.state.file_delete_lock:
-            existing = request.app.state.file_delete_results.get(idempotency_key)
-            if existing is not None:
-                return _delete_response(request, existing)
-            try:
-                records = request.app.state.application_service.delete_file(
-                    _validated_identifier(file_id)
-                )
-            except DesktopFileNotFoundError as exc:
-                raise SidecarApiError(
-                    404,
-                    "file_not_found",
-                    "The indexed file no longer exists.",
-                ) from exc
-            except DesktopMutationError as exc:
-                raise SidecarApiError(
-                    503,
-                    "file_delete_failed",
-                    "MARA could not delete the indexed file.",
-                    retryable=True,
-                ) from exc
-            deleted_ids = [str(record["file_id"]) for record in records]
-            request.app.state.file_delete_results[idempotency_key] = deleted_ids
-            return _delete_response(request, deleted_ids)
+        return _delete_files(
+            request,
+            [_validated_identifier(file_id)],
+            idempotency_key,
+        )
+
+    @app.post(
+        "/v1/file-deletions",
+        response_model=FileDeleteResponse,
+        dependencies=dependencies,
+    )
+    def delete_files(
+        request: Request,
+        payload: FileBatchDeleteRequest,
+        idempotency_key: IdempotencyKey,
+    ) -> FileDeleteResponse:
+        return _delete_files(request, payload.file_ids, idempotency_key)
+
+
+def _delete_files(
+    request: Request,
+    file_ids: list[str],
+    idempotency_key: str,
+) -> FileDeleteResponse:
+    with request.app.state.file_delete_lock:
+        existing = request.app.state.file_delete_results.get(idempotency_key)
+        if existing is not None:
+            return _delete_response(request, existing)
+        try:
+            records = request.app.state.application_service.delete_files(file_ids)
+        except DesktopFileNotFoundError as exc:
+            raise SidecarApiError(
+                404,
+                "file_not_found",
+                "One or more indexed files no longer exist.",
+            ) from exc
+        except DesktopMutationError as exc:
+            raise SidecarApiError(
+                503,
+                "file_delete_failed",
+                "MARA could not delete the indexed files.",
+                retryable=True,
+            ) from exc
+        deleted_ids = [str(record["file_id"]) for record in records]
+        request.app.state.file_delete_results[idempotency_key] = deleted_ids
+        return _delete_response(request, deleted_ids)
 
 
 async def _stream_task_events(

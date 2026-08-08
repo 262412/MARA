@@ -11,6 +11,7 @@ import {
 
 test("allows bounded long file deletion without relaxing other requests", () => {
   assert.equal(sidecarRequestTimeout("/v1/files/file-1", "DELETE"), 300_000);
+  assert.equal(sidecarRequestTimeout("/v1/file-deletions", "POST"), 300_000);
   assert.equal(sidecarRequestTimeout("/v1/files", "GET"), 30_000);
   assert.equal(sidecarRequestTimeout("/v1/doctor", "GET"), 30_000);
 });
