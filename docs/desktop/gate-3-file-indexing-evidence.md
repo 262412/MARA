@@ -8,8 +8,9 @@ Gate 3 的首个纵向切片是“原生文件导入 → 后台索引 → Files 
 smoke，并补齐产品 VM、支持格式与异常场景验收后，才能升级为 `Verified`。提交
 `fce9843` 已关闭 Windows Server 2022、Ubuntu 22.04/24.04 的轻量格式矩阵自动化
 缺口；提交 `e0bff90` 又关闭磁盘满、数据库锁和 5 MiB 文件的 Windows/Ubuntu
-原生组合包验证。剩余项不再包含原生构建流水线、文本类格式跨平台 smoke 或这些
-故障恢复场景。
+原生组合包验证；提交 `894c994` 进一步关闭批量删除和安全拖放 handoff 的
+Windows/Ubuntu 组合包验证。剩余项不再包含原生构建流水线、文本类格式跨平台
+smoke、批量删除、拖放 handoff 或这些故障恢复场景。
 
 本切片不复制 Gradio callback 或 DocQA 索引/删除业务逻辑，也不修改 `MARA`、
 `MARA-cli` 命令、Click 参数、Gradio 事件链、数据库 schema 或现有会话字段。
@@ -94,31 +95,31 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 
 ## 当前验收状态
 
-| 项目                                      | 状态    |
-| ----------------------------------------- | ------- |
-| 现有 CLI 行为特征测试                     | 已通过  |
-| MARA application service 单元/集成测试    | 已通过  |
-| Sidecar 认证、参数、响应和事件契约        | 已通过  |
-| Electron IPC sender、参数和原生选择器测试 | 已通过  |
-| React 索引/删除状态覆盖                   | 已通过  |
-| Linux 开发态真实索引/刷新/删除 smoke      | 已通过  |
-| Linux 开发态轻量支持格式矩阵              | 已通过  |
-| Linux 开发态模型故障与运行中取消恢复      | 已通过  |
-| Linux 开发态部分失败与定向重试            | 已通过  |
-| Linux 开发态 Sidecar 中断与重启恢复       | 已通过  |
-| Linux 开发态 5 MiB 容量 canary            | 已通过  |
-| 磁盘满/数据库锁单元与 Sidecar 契约        | 已通过  |
-| Windows/Ubuntu 磁盘满与数据库锁组合包     | 已通过  |
-| Windows/Ubuntu 5 MiB 容量 canary          | 已通过  |
-| 批量删除 application/Sidecar/IPC/React    | 已通过  |
-| Windows/Ubuntu 批量删除组合包             | 待新 CI |
-| 拖放 Preload/Main/IPC/React 契约          | 已通过  |
-| Windows/Ubuntu 拖放 handoff 组合包        | 待新 CI |
-| 当前代码的 Linux 自包含组合包 smoke       | 已通过  |
-| 完整 `ktem` package gate                  | 已通过  |
-| 完整 `slide_cli` package gate             | 已通过  |
-| 当前代码的 Windows 原生组合包/Defender    | 已通过  |
-| 当前代码的 Ubuntu 22.04/24.04 smoke       | 已通过  |
+| 项目                                      | 状态   |
+| ----------------------------------------- | ------ |
+| 现有 CLI 行为特征测试                     | 已通过 |
+| MARA application service 单元/集成测试    | 已通过 |
+| Sidecar 认证、参数、响应和事件契约        | 已通过 |
+| Electron IPC sender、参数和原生选择器测试 | 已通过 |
+| React 索引/删除状态覆盖                   | 已通过 |
+| Linux 开发态真实索引/刷新/删除 smoke      | 已通过 |
+| Linux 开发态轻量支持格式矩阵              | 已通过 |
+| Linux 开发态模型故障与运行中取消恢复      | 已通过 |
+| Linux 开发态部分失败与定向重试            | 已通过 |
+| Linux 开发态 Sidecar 中断与重启恢复       | 已通过 |
+| Linux 开发态 5 MiB 容量 canary            | 已通过 |
+| 磁盘满/数据库锁单元与 Sidecar 契约        | 已通过 |
+| Windows/Ubuntu 磁盘满与数据库锁组合包     | 已通过 |
+| Windows/Ubuntu 5 MiB 容量 canary          | 已通过 |
+| 批量删除 application/Sidecar/IPC/React    | 已通过 |
+| Windows/Ubuntu 批量删除组合包             | 已通过 |
+| 拖放 Preload/Main/IPC/React 契约          | 已通过 |
+| Windows/Ubuntu 拖放 handoff 组合包        | 已通过 |
+| 当前代码的 Linux 自包含组合包 smoke       | 已通过 |
+| 完整 `ktem` package gate                  | 已通过 |
+| 完整 `slide_cli` package gate             | 已通过 |
+| 当前代码的 Windows 原生组合包/Defender    | 已通过 |
+| 当前代码的 Ubuntu 22.04/24.04 smoke       | 已通过 |
 
 当前基线重新验证已取得完整 package green：`ktem` 为 1,632 passed，`slide_cli`
 完整测试包也全部通过。Canonical runtime 新增的生成参数已同步到兼容 facade，并以
@@ -345,6 +346,33 @@ Windows 大文件索引 31.932 秒、删除 4.140 秒，总进程 38.767 秒，�
 最大 RSS 653,388 KiB。Windows Defender 同时确认引擎和服务开启、移除 `D:\` 整盘
 排除、启用 archive scanning，并得到 `scan_result=no_detections`。
 
+## 批量删除与安全拖放跨平台证据
+
+2026-08-08 的
+[Desktop Gate 3 运行 31278562223](https://github.com/262412/MARA/actions/runs/31278562223)
+基于提交 `894c9942e8cf55d449f4410189be8f4b98d0bdaa`，Windows Server 2022、Ubuntu
+22.04 原生包和 Ubuntu 24.04 跨版本任务全部成功。
+
+- Windows 首段组合包 smoke 记录
+  `gate3_drop_handoff=validated status_success` 和
+  `gate3_batch_delete=count_7 status_success`；其余模型故障、取消、部分失败、
+  Sidecar 中断、存储故障和大文件恢复也都通过批量删除完成清理，所有诊断退出码为
+  0。Defender 结果为 `scan_result=no_detections`。
+- Ubuntu 22.04 在同一真实索引链记录拖放 handoff 验证成功，并用一次请求批量删除
+  8 条记录；Ubuntu 24.04 复用同一组合包和数据快照，记录 handoff 成功并一次删除
+  7 条记录。
+- handoff smoke 把输入送入与真实拖放相同的 Main 数量、绝对路径和动态扩展名校验，
+  并验证路径不返回 Renderer；它不伪装成真实操作系统鼠标事件。Windows 10/11
+  产品 VM 的物理拖放仍是人工验收项。
+
+| 平台/产物               | Artifact ID | 压缩大小    | Actions digest                                                     |
+| ----------------------- | ----------- | ----------- | ------------------------------------------------------------------ |
+| Windows 完整组合包      | 9027809001  | 395,907,975 | `8ac433fa887940d95e163a8211cd2a1bb9de2f8b6cc2fe975a8f384235a8e0ab` |
+| Windows smoke 诊断      | 9027801984  | 5,476       | `723334e5fcfa19061b449b164da82f05575378b57a3d8e98c2260b8f6b110ba1` |
+| Windows Defender 诊断   | 9027802225  | 358         | `278abea4aa6dd539d66e2f80252ac554d15706705f935ecb7f4246e5ff1ae7ae` |
+| Ubuntu 22.04 完整组合包 | 9027804344  | 412,914,524 | `fb338d467055bf1941c6600f14975088b0bacddf52a6162133a5aad14ebdc336` |
+| Ubuntu 22.04 包体测量   | 9027804559  | 7,464       | `335fa3545bb46cf3883dcb27266d86226d7cfa6bad8bb2b024f3a383140b1504` |
+
 ## 大文件问题发现与修复
 
 2026-08-08 在独立 fastscratch 数据根运行 5,242,880 bytes 的确定性纯文本 canary。
@@ -396,7 +424,8 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
 2. 增加 PDF、Office 和图片的支持格式矩阵。文本、Markdown、CSV、HTML、MHTML 和
    ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。批量选择/删除与安全拖放均已
    贯通 React、Preload、窄 IPC、认证 Sidecar 和真实 DocQA runtime，并接入组合包
-   smoke，待新 CI；真实 OS 拖放仍需 Windows 10/11 产品 VM 验收。
+   smoke 且通过 Windows Server 2022、Ubuntu 22.04/24.04；真实 OS 拖放仍需
+   Windows 10/11 产品 VM 验收。
 3. 磁盘满/数据库锁 → 稳定可重试错误 → 恢复成功，以及模型 503 → 脱敏失败 → 原
    任务重试成功，均已通过 Windows/Ubuntu 原生组合包。运行中
    取消 → 文件边界停止 → 只重试剩余文件已通过 Windows/Ubuntu 原生组合包。取消
