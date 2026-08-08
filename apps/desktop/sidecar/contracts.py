@@ -222,6 +222,24 @@ class SessionDetailResponse(BaseModel):
     session: SessionDetail
 
 
+class SessionRenameRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, name: Any) -> Any:
+        return name.strip() if isinstance(name, str) else name
+
+
+class SessionDeleteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str
+    deleted_conversation_id: str
+
+
 class SidecarError(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

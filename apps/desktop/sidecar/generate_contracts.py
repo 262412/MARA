@@ -29,6 +29,12 @@ class _SchemaApplicationService:
     def get_session(self, conversation_id: str) -> dict[str, Any]:
         raise AssertionError("Schema generation must not call application services")
 
+    def rename_session(self, conversation_id: str, name: str) -> dict[str, Any]:
+        raise AssertionError("Schema generation must not call application services")
+
+    def delete_session(self, conversation_id: str) -> str:
+        raise AssertionError("Schema generation must not call application services")
+
     def get_import_capabilities(self) -> dict[str, list[str]]:
         raise AssertionError("Schema generation must not call application services")
 

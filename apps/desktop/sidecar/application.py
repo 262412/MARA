@@ -110,24 +110,27 @@ class DesktopApplicationService:
             session = self._get_runtime().load_session(conversation_id)
         if session is None:
             raise DesktopSessionNotFoundError(conversation_id)
-        messages: list[dict[str, str]] = []
-        for user_message, assistant_message in session.messages:
-            if str(user_message):
-                messages.append({"role": "user", "content": str(user_message)})
-            if str(assistant_message):
-                messages.append(
-                    {"role": "assistant", "content": str(assistant_message)}
-                )
-        return {
-            "conversation_id": str(session.conversation_id),
-            "name": str(session.name or ""),
-            "messages": messages,
-            "graph_source_ids": [str(file_id) for file_id in session.graph_source_ids],
-            "origin": str(session.origin or ""),
-            "is_public": bool(session.is_public),
-            "date_created": _serialize_datetime(session.date_created),
-            "date_updated": _serialize_datetime(session.date_updated),
-        }
+        return _session_detail(session)
+
+    def rename_session(self, conversation_id: str, name: str) -> dict[str, Any]:
+        with self._runtime_lock:
+            runtime = self._get_runtime()
+            try:
+                runtime.rename_session(conversation_id, name)
+            except PermissionError as exc:
+                raise DesktopSessionNotFoundError(conversation_id) from exc
+            session = runtime.load_session(conversation_id)
+        if session is None:
+            raise DesktopSessionNotFoundError(conversation_id)
+        return _session_detail(session)
+
+    def delete_session(self, conversation_id: str) -> str:
+        with self._runtime_lock:
+            try:
+                self._get_runtime().delete_session(conversation_id)
+            except PermissionError as exc:
+                raise DesktopSessionNotFoundError(conversation_id) from exc
+        return conversation_id
 
     def get_import_capabilities(self) -> dict[str, list[str]]:
         with self._runtime_lock:
@@ -177,6 +180,25 @@ class DesktopApplicationService:
         if self._runtime is None:
             self._runtime = self._create_runtime()
         return self._runtime
+
+
+def _session_detail(session: Any) -> dict[str, Any]:
+    messages: list[dict[str, str]] = []
+    for user_message, assistant_message in session.messages:
+        if str(user_message):
+            messages.append({"role": "user", "content": str(user_message)})
+        if str(assistant_message):
+            messages.append({"role": "assistant", "content": str(assistant_message)})
+    return {
+        "conversation_id": str(session.conversation_id),
+        "name": str(session.name or ""),
+        "messages": messages,
+        "graph_source_ids": [str(file_id) for file_id in session.graph_source_ids],
+        "origin": str(session.origin or ""),
+        "is_public": bool(session.is_public),
+        "date_created": _serialize_datetime(session.date_created),
+        "date_updated": _serialize_datetime(session.date_updated),
+    }
 
 
 def _index_result_name(item: dict[str, Any]) -> str:

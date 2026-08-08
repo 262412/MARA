@@ -20,6 +20,7 @@ export {
 
 export const GATE2_SMOKE_FILE_ID = "gate2-smoke-file";
 export const GATE2_SMOKE_SESSION_ID = "gate2-smoke-session";
+export const GATE3_RENAMED_SESSION_NAME = "Gate 3 renamed session";
 export const GATE3_MODEL_UNAVAILABLE_INPUT_NAME =
   "gate3-model-unavailable.txt";
 export const GATE3_PARTIAL_INPUT_NAMES = [
@@ -138,6 +139,47 @@ export function assertGate3DeleteSmoke(
     )
   ) {
     throw new Error("Gate 3 fixture is still present after deletion");
+  }
+}
+
+export function assertGate3SessionMutationSmoke(
+  renamed: DesktopResult<SessionDetail>,
+  reloaded: DesktopResult<SessionDetail>,
+  sessionsAfterRename: DesktopResult<SessionSummary[]>,
+  deleted: DesktopResult<string>,
+  sessionsAfterDelete: DesktopResult<SessionSummary[]>,
+): void {
+  if (!renamed.ok || !reloaded.ok || !sessionsAfterRename.ok) {
+    throw new Error("Gate 3 session rename request failed");
+  }
+  const renamedSummary = sessionsAfterRename.data.find(
+    (candidate) => candidate.conversation_id === GATE2_SMOKE_SESSION_ID,
+  );
+  if (
+    renamed.data.conversation_id !== GATE2_SMOKE_SESSION_ID ||
+    renamed.data.name !== GATE3_RENAMED_SESSION_NAME ||
+    reloaded.data.name !== GATE3_RENAMED_SESSION_NAME ||
+    renamedSummary?.name !== GATE3_RENAMED_SESSION_NAME ||
+    Object.hasOwn(renamed.data, "path") ||
+    Object.hasOwn(renamed.data, "data_source") ||
+    Object.hasOwn(renamed.data, "user_id")
+  ) {
+    throw new Error("Gate 3 session rename did not persist safely");
+  }
+  if (!deleted.ok || deleted.data !== GATE2_SMOKE_SESSION_ID) {
+    throw new Error("Gate 3 session delete did not return the fixture ID");
+  }
+  if (!sessionsAfterDelete.ok) {
+    throw new Error(
+      `Gate 3 Sessions refresh failed: ${sessionsAfterDelete.error.code}`,
+    );
+  }
+  if (
+    sessionsAfterDelete.data.some(
+      (candidate) => candidate.conversation_id === GATE2_SMOKE_SESSION_ID,
+    )
+  ) {
+    throw new Error("Gate 3 fixture session is still present after deletion");
   }
 }
 

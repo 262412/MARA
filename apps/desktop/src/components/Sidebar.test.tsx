@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { SessionSummary } from "../../shared/session-contracts";
 import type { ResourceState } from "../resource-state";
-import { Sidebar } from "./Sidebar";
+import { filterSessions, Sidebar } from "./Sidebar";
 
 const session: SessionSummary = {
   conversation_id: "session-1",
@@ -17,14 +17,37 @@ const session: SessionSummary = {
   date_updated: "2026-07-30T10:05:00",
 };
 
-function render(sessions: ResourceState<SessionSummary[]>) {
+function render(
+  sessions: ResourceState<SessionSummary[]>,
+  options: {
+    searchQuery?: string;
+    editingSessionId?: string;
+    editingSessionName?: string;
+    sessionAction?: {
+      conversationId: string;
+      action: "rename" | "delete";
+    };
+    sessionActionError?: string;
+  } = {},
+) {
   return renderToStaticMarkup(
     <Sidebar
       active="workbench"
+      editingSessionId={options.editingSessionId}
+      editingSessionName={options.editingSessionName ?? ""}
+      onCancelRename={() => undefined}
+      onDeleteSession={() => undefined}
+      onEditingSessionNameChange={() => undefined}
       onNavigate={() => undefined}
+      onRenameSession={() => undefined}
       onRetrySessions={() => undefined}
+      onSearchQueryChange={() => undefined}
       onSelectSession={() => undefined}
+      onStartRename={() => undefined}
+      searchQuery={options.searchQuery ?? ""}
       selectedSessionId={undefined}
+      sessionAction={options.sessionAction}
+      sessionActionError={options.sessionActionError}
       sessions={sessions}
     />,
   );
@@ -41,5 +64,62 @@ test("Sessions list covers loading, success, empty, and failed states", () => {
   assert.match(
     render({ status: "failed", message: "无法读取会话" }),
     /重试/,
+  );
+});
+
+test("Sessions search is case-insensitive and renders a no-match state", () => {
+  const other = {
+    ...session,
+    conversation_id: "session-2",
+    name: "Finance review",
+  };
+
+  assert.deepEqual(
+    filterSessions([session, other], "  FINANCE ").map(
+      (item) => item.conversation_id,
+    ),
+    ["session-2"],
+  );
+  const filtered = render(
+    { status: "success", data: [session, other] },
+    { searchQuery: "finance" },
+  );
+  assert.doesNotMatch(filtered, />Research session</);
+  assert.match(filtered, /Finance review/);
+  assert.match(
+    render(
+      { status: "success", data: [session] },
+      { searchQuery: "missing" },
+    ),
+    /未找到匹配的任务/,
+  );
+});
+
+test("Session actions cover editing, pending, and failed states", () => {
+  const editing = render(
+    { status: "success", data: [session] },
+    {
+      editingSessionId: "session-1",
+      editingSessionName: "Renamed session",
+    },
+  );
+  assert.match(editing, /任务名称/);
+  assert.match(editing, /value="Renamed session"/);
+  assert.match(editing, /保存/);
+  assert.match(editing, /取消/);
+
+  const deleting = render(
+    { status: "success", data: [session] },
+    {
+      sessionAction: { conversationId: "session-1", action: "delete" },
+    },
+  );
+  assert.match(deleting, /正在删除/);
+  assert.match(
+    render(
+      { status: "success", data: [session] },
+      { sessionActionError: "会话删除失败" },
+    ),
+    /role="alert">会话删除失败/,
   );
 });

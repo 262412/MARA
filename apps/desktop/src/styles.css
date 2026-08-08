@@ -40,6 +40,7 @@ body,
 }
 
 button,
+input,
 textarea {
   color: inherit;
   font: inherit;
@@ -243,6 +244,37 @@ kbd {
   text-transform: uppercase;
 }
 
+.session-search {
+  display: flex;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0 4px 7px;
+  align-items: center;
+  gap: 7px;
+  color: var(--secondary);
+  background: var(--panel);
+}
+
+.session-search:focus-within {
+  border-color: var(--focus);
+}
+
+.session-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font-size: 11px;
+  background: transparent;
+}
+
+.session-search input::placeholder {
+  color: var(--tertiary);
+}
+
 .task-list {
   min-height: 0;
   overflow-y: auto;
@@ -281,6 +313,91 @@ kbd {
   gap: 3px;
   text-align: left;
   background: transparent;
+}
+
+.task-row {
+  display: grid;
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px;
+}
+
+.task-row:hover .task-actions,
+.task-row:focus-within .task-actions {
+  opacity: 1;
+}
+
+.task-actions {
+  display: flex;
+  padding-right: 3px;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+}
+
+.task-actions button,
+.session-editor-actions button {
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--secondary);
+  font-size: 9px;
+  background: transparent;
+}
+
+.task-actions button:hover,
+.session-editor-actions button:hover {
+  color: var(--text);
+  background: var(--subtle-strong);
+}
+
+.task-actions button:last-child:hover {
+  color: #efb2a2;
+}
+
+.session-editor {
+  display: grid;
+  padding: 8px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  margin: 2px 0;
+  gap: 6px;
+  background: var(--panel-elevated);
+}
+
+.session-editor input {
+  width: 100%;
+  padding: 6px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 11px;
+  background: var(--panel);
+}
+
+.session-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.session-action-status {
+  padding: 0 6px;
+  color: var(--secondary);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.session-action-error {
+  padding: 8px 10px;
+  border: 1px solid #7d554b;
+  border-radius: 7px;
+  margin: 0 0 5px;
+  color: #efb2a2;
+  font-size: 10px;
+  line-height: 1.4;
+  background: #2f211e;
 }
 
 .task:hover {

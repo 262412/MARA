@@ -72,7 +72,7 @@ def _register_index_task_commands(app: FastAPI, dependencies: list[Any]) -> None
         idempotency_key: IdempotencyKey,
     ) -> IndexTaskResponse:
         task = _task_manager(request).retry_task(
-            _validated_identifier(task_id),
+            validated_identifier(task_id),
             idempotency_key=idempotency_key,
         )
         return _task_response(request, task)
@@ -83,7 +83,7 @@ def _register_index_task_commands(app: FastAPI, dependencies: list[Any]) -> None
         dependencies=dependencies,
     )
     def cancel_index_task(request: Request, task_id: str) -> IndexTaskResponse:
-        task = _task_manager(request).cancel_task(_validated_identifier(task_id))
+        task = _task_manager(request).cancel_task(validated_identifier(task_id))
         return _task_response(request, task)
 
 
@@ -106,7 +106,7 @@ def _register_index_task_queries(app: FastAPI, dependencies: list[Any]) -> None:
         dependencies=dependencies,
     )
     def get_index_task(request: Request, task_id: str) -> IndexTaskResponse:
-        task = _task_manager(request).get_task(_validated_identifier(task_id))
+        task = _task_manager(request).get_task(validated_identifier(task_id))
         return _task_response(request, task)
 
     @app.get(
@@ -115,7 +115,7 @@ def _register_index_task_queries(app: FastAPI, dependencies: list[Any]) -> None:
     )
     async def index_task_events(request: Request, task_id: str) -> StreamingResponse:
         manager = _task_manager(request)
-        normalized_task_id = _validated_identifier(task_id)
+        normalized_task_id = validated_identifier(task_id)
         initial = manager.get_task(normalized_task_id)
         events = _stream_task_events(request, manager, normalized_task_id, initial)
         return StreamingResponse(events, media_type="text/event-stream")
@@ -134,7 +134,7 @@ def _register_file_delete(app: FastAPI, dependencies: list[Any]) -> None:
     ) -> FileDeleteResponse:
         return _delete_files(
             request,
-            [_validated_identifier(file_id)],
+            [validated_identifier(file_id)],
             idempotency_key,
         )
 
@@ -223,7 +223,7 @@ def _request_id(request: Request) -> str:
     return str(getattr(request.state, "request_id", uuid4()))
 
 
-def _validated_identifier(value: str) -> str:
+def validated_identifier(value: str) -> str:
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", value):
         raise SidecarApiError(
             422,

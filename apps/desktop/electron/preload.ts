@@ -24,6 +24,13 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.invoke("desktop:list-sessions"),
   getSession: (conversationId: string): Promise<DesktopResult<SessionDetail>> =>
     ipcRenderer.invoke("desktop:get-session", conversationId),
+  renameSession: (
+    conversationId: string,
+    name: string,
+  ): Promise<DesktopResult<SessionDetail>> =>
+    ipcRenderer.invoke("desktop:rename-session", conversationId, name),
+  deleteSession: (conversationId: string): Promise<DesktopResult<string>> =>
+    ipcRenderer.invoke("desktop:delete-session", conversationId),
   importFiles: (): Promise<DesktopResult<IndexTask | null>> =>
     ipcRenderer.invoke("desktop:import-files"),
   importDroppedFiles: (files: File[]): Promise<DesktopResult<IndexTask>> => {

@@ -27,6 +27,11 @@ export type DesktopIpcOperations = {
   listFiles(): Promise<DesktopResult<FileRecord[]>>;
   listSessions(): Promise<DesktopResult<SessionSummary[]>>;
   getSession(conversationId: string): Promise<DesktopResult<SessionDetail>>;
+  renameSession(
+    conversationId: string,
+    name: string,
+  ): Promise<DesktopResult<SessionDetail>>;
+  deleteSession(conversationId: string): Promise<DesktopResult<string>>;
   importFiles(): Promise<DesktopResult<IndexTask | null>>;
   importDroppedFiles(filePaths: string[]): Promise<DesktopResult<IndexTask>>;
   getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>>;
@@ -98,6 +103,35 @@ export function createTrustedIdentifierListIpcHandler<T>(
   };
 }
 
+export function createTrustedSessionRenameIpcHandler<T>(
+  operation: (conversationId: string, name: string) => T | Promise<T>,
+): IpcHandler<T> {
+  return async (event, ...args) => {
+    if (!event.senderFrame?.url.startsWith("mara://app/")) {
+      throw new Error("Untrusted IPC sender");
+    }
+    if (
+      args.length !== 2 ||
+      typeof args[0] !== "string" ||
+      typeof args[1] !== "string"
+    ) {
+      throw new Error(
+        "Desktop IPC requires exactly one identifier and one name",
+      );
+    }
+    const [conversationId, rawName] = args;
+    const name = rawName.trim();
+    if (
+      !/^[A-Za-z0-9._-]{1,128}$/.test(conversationId) ||
+      name.length === 0 ||
+      Array.from(name).length > 200
+    ) {
+      throw new Error("Desktop IPC received an invalid session rename");
+    }
+    return operation(conversationId, name);
+  };
+}
+
 export function createTrustedPathListIpcHandler<T>(
   operation: (filePaths: string[]) => T | Promise<T>,
 ): IpcHandler<T> {
@@ -154,6 +188,18 @@ export function registerDesktopIpc(
     "desktop:get-session",
     createTrustedIdentifierIpcHandler((conversationId) =>
       operations.getSession(conversationId),
+    ),
+  );
+  registrar.handle(
+    "desktop:rename-session",
+    createTrustedSessionRenameIpcHandler((conversationId, name) =>
+      operations.renameSession(conversationId, name),
+    ),
+  );
+  registrar.handle(
+    "desktop:delete-session",
+    createTrustedIdentifierIpcHandler((conversationId) =>
+      operations.deleteSession(conversationId),
     ),
   );
   registrar.handle(

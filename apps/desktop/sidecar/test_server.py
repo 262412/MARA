@@ -76,6 +76,15 @@ class StubApplicationService:
             "date_updated": "2026-07-30T10:05:00",
         }
 
+    def rename_session(self, conversation_id: str, name: str) -> dict:
+        session = self.get_session(conversation_id)
+        session["name"] = name
+        return session
+
+    def delete_session(self, conversation_id: str) -> str:
+        self.get_session(conversation_id)
+        return conversation_id
+
     def get_import_capabilities(self) -> dict:
         return {
             "supported_extensions": [
@@ -365,6 +374,8 @@ class SidecarContractTest(unittest.TestCase):
         self.assertIn("/v1/files", schema["paths"])
         self.assertIn("/v1/sessions", schema["paths"])
         self.assertIn("/v1/sessions/{conversation_id}", schema["paths"])
+        self.assertIn("patch", schema["paths"]["/v1/sessions/{conversation_id}"])
+        self.assertIn("delete", schema["paths"]["/v1/sessions/{conversation_id}"])
         self.assertIn("/v1/import-capabilities", schema["paths"])
         self.assertIn("/v1/index-tasks", schema["paths"])
         self.assertIn("/v1/index-tasks/latest", schema["paths"])
@@ -372,6 +383,8 @@ class SidecarContractTest(unittest.TestCase):
         self.assertIn("/v1/files/{file_id}", schema["paths"])
         self.assertIn("/v1/file-deletions", schema["paths"])
         self.assertIn("SidecarError", schema["components"]["schemas"])
+        self.assertIn("SessionRenameRequest", schema["components"]["schemas"])
+        self.assertIn("SessionDeleteResponse", schema["components"]["schemas"])
 
 
 if __name__ == "__main__":

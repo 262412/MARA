@@ -42,11 +42,12 @@ from sidecar.index_tasks import (
     IndexTaskManager,
     IndexTaskNotFoundError,
 )
+from sidecar.session_routes import register_session_mutation_routes
 from sidecar.smoke_faults import inject_smoke_fault
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 PROTOCOL_VERSION = 1
-SIDECAR_VERSION = "0.4.0"
+SIDECAR_VERSION = "0.5.0"
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 CAPABILITIES = [
     "health",
@@ -55,6 +56,7 @@ CAPABILITIES = [
     "files",
     "sessions",
     "session_detail",
+    "session_mutations",
     "index_tasks",
     "task_events",
     "file_delete",
@@ -75,6 +77,12 @@ class ApplicationService(Protocol):
         ...
 
     def get_session(self, conversation_id: str) -> dict[str, Any]:
+        ...
+
+    def rename_session(self, conversation_id: str, name: str) -> dict[str, Any]:
+        ...
+
+    def delete_session(self, conversation_id: str) -> str:
         ...
 
     def get_import_capabilities(self) -> dict[str, list[str]]:
@@ -490,6 +498,7 @@ def _register_data_routes(app: FastAPI) -> None:
         )
 
     register_gate3_routes(app, protected_without_query)
+    register_session_mutation_routes(app, protected_without_query)
 
 
 def _index_task_journal_path() -> Path | None:

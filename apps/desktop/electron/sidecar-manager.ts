@@ -27,9 +27,11 @@ import {
   type SidecarError,
 } from "../shared/runtime-contracts";
 import type {
+  SessionDeleteResponse,
   SessionDetail,
   SessionDetailResponse,
   SessionListResponse,
+  SessionRenameRequest,
   SessionSummary,
 } from "../shared/session-contracts";
 
@@ -90,6 +92,21 @@ export function batchFileDeleteRequest(
   const payload: FileBatchDeleteRequest = { file_ids: fileIds };
   return {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify(payload),
+  };
+}
+
+export function sessionRenameRequest(
+  name: string,
+  idempotencyKey: string,
+): RequestInit {
+  const payload: SessionRenameRequest = { name };
+  return {
+    method: "PATCH",
     headers: {
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey,
@@ -224,6 +241,38 @@ export class SidecarManager {
         true,
       );
       return response.session;
+    });
+  }
+
+  async renameSession(
+    conversationId: string,
+    name: string,
+  ): Promise<DesktopResult<SessionDetail>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<SessionDetailResponse>(
+        `/v1/sessions/${encodeURIComponent(conversationId)}`,
+        sessionRenameRequest(name, randomUUID()),
+        true,
+      );
+      return response.session;
+    });
+  }
+
+  async deleteSession(
+    conversationId: string,
+  ): Promise<DesktopResult<string>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<SessionDeleteResponse>(
+        `/v1/sessions/${encodeURIComponent(conversationId)}`,
+        {
+          method: "DELETE",
+          headers: { "Idempotency-Key": randomUUID() },
+        },
+        true,
+      );
+      return response.deleted_conversation_id;
     });
   }
 

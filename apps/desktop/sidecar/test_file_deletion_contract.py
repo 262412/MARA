@@ -25,6 +25,12 @@ class BatchDeleteApplicationService:
     def get_session(self, conversation_id: str) -> dict:
         return {"conversation_id": conversation_id}
 
+    def rename_session(self, conversation_id: str, name: str) -> dict:
+        return {"conversation_id": conversation_id, "name": name}
+
+    def delete_session(self, conversation_id: str) -> str:
+        return conversation_id
+
     def get_import_capabilities(self) -> dict[str, list[str]]:
         return {"supported_extensions": [".txt"]}
 

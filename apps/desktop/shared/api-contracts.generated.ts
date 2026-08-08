@@ -106,6 +106,11 @@ export type RuntimeHealth = {
   version: string;
 };
 
+export type SessionDeleteResponse = {
+  deleted_conversation_id: string;
+  request_id: string;
+};
+
 export type SessionDetail = {
   conversation_id: string;
   date_created: string | null;
@@ -130,6 +135,10 @@ export type SessionListResponse = {
 export type SessionMessage = {
   content: string;
   role: "user" | "assistant";
+};
+
+export type SessionRenameRequest = {
+  name: string;
 };
 
 export type SessionSummary = {

@@ -40,6 +40,7 @@ import {
   GATE3_LARGE_FILE_BYTES,
   GATE3_LARGE_FILE_INPUT_NAME,
   GATE3_MODEL_UNAVAILABLE_INPUT_NAME,
+  GATE3_RENAMED_SESSION_NAME,
   GATE3_PARTIAL_INPUT_NAMES,
   assertGate3CancellationSmoke,
   assertGate3CancelRetrySmoke,
@@ -54,6 +55,7 @@ import {
   assertGate3PartialRetrySmoke,
   assertGate3PartialSmoke,
   assertGate3RetrySource,
+  assertGate3SessionMutationSmoke,
   assertPackagedSmoke,
 } from "./smoke-validation";
 
@@ -200,6 +202,29 @@ async function deleteSmokeFiles(
       `gate3_batch_delete=count_${fileIds.length} status_success\n`,
     );
   }
+}
+
+async function runGate3SessionMutationSmoke(): Promise<void> {
+  const renamed = await sidecar.renameSession(
+    GATE2_SMOKE_SESSION_ID,
+    GATE3_RENAMED_SESSION_NAME,
+  );
+  const [reloaded, sessionsAfterRename] = await Promise.all([
+    sidecar.getSession(GATE2_SMOKE_SESSION_ID),
+    sidecar.listSessions(),
+  ]);
+  const deleted = await sidecar.deleteSession(GATE2_SMOKE_SESSION_ID);
+  const sessionsAfterDelete = await sidecar.listSessions();
+  assertGate3SessionMutationSmoke(
+    renamed,
+    reloaded,
+    sessionsAfterRename,
+    deleted,
+    sessionsAfterDelete,
+  );
+  process.stdout.write(
+    "gate3_session_mutation=rename_delete status_success\n",
+  );
 }
 
 async function runGate3IndexAndDeleteSmoke(
@@ -611,6 +636,9 @@ function registerIpc(): void {
     listFiles: () => sidecar.listFiles(),
     listSessions: () => sidecar.listSessions(),
     getSession: (conversationId) => sidecar.getSession(conversationId),
+    renameSession: (conversationId, name) =>
+      sidecar.renameSession(conversationId, name),
+    deleteSession: (conversationId) => sidecar.deleteSession(conversationId),
     importFiles: async () => {
       const capabilities = await sidecar.getImportCapabilities();
       if (!capabilities.ok) {
@@ -772,6 +800,7 @@ app.whenReady().then(async () => {
       } else if (requireGate3Cancellation) {
         await runGate3CancellationSmoke(initialFiles);
       } else if (requireGate3Delete) {
+        await runGate3SessionMutationSmoke();
         await runGate3IndexAndDeleteSmoke(
           initialFiles,
           requireGate3Formats,

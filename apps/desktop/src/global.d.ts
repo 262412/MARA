@@ -16,6 +16,11 @@ type DesktopBridge = {
   listFiles(): Promise<DesktopResult<FileRecord[]>>;
   listSessions(): Promise<DesktopResult<SessionSummary[]>>;
   getSession(conversationId: string): Promise<DesktopResult<SessionDetail>>;
+  renameSession(
+    conversationId: string,
+    name: string,
+  ): Promise<DesktopResult<SessionDetail>>;
+  deleteSession(conversationId: string): Promise<DesktopResult<string>>;
   importFiles(): Promise<DesktopResult<IndexTask | null>>;
   importDroppedFiles(files: File[]): Promise<DesktopResult<IndexTask>>;
   getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>>;

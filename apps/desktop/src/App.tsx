@@ -11,7 +11,10 @@ import type {
   DesktopResult,
   RuntimeStatus,
 } from "../shared/runtime-contracts";
-import type { SessionDetail } from "../shared/session-contracts";
+import type {
+  SessionDetail,
+  SessionSummary,
+} from "../shared/session-contracts";
 import { FilesPage } from "./components/FilesPage";
 import { Inspector, type InspectorTab } from "./components/Inspector";
 import { Sidebar } from "./components/Sidebar";
@@ -34,6 +37,13 @@ export default function App() {
     ResourceState<SessionDetail> | undefined
   >();
   const [sessionReload, setSessionReload] = useState(0);
+  const [sessionSearchQuery, setSessionSearchQuery] = useState("");
+  const [editingSessionId, setEditingSessionId] = useState<string>();
+  const [editingSessionName, setEditingSessionName] = useState("");
+  const [sessionAction, setSessionAction] = useState<
+    { conversationId: string; action: "rename" | "delete" } | undefined
+  >();
+  const [sessionActionError, setSessionActionError] = useState<string>();
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("preview");
   const [indexTask, setIndexTask] = useState<IndexTask>();
@@ -45,6 +55,7 @@ export default function App() {
   const fileDeletionLock = useRef(false);
   const indexActionLock = useRef(false);
   const sessionRequestGeneration = useRef(0);
+  const sessionMutationLock = useRef(false);
   const [runtime, setRuntime] = useState<RuntimeStatus>(
     window.desktop
       ? { state: "starting", protocol: 1, capabilities: [] }
@@ -323,7 +334,110 @@ export default function App() {
   const selectSession = useCallback((sessionId: string) => {
     setActiveNav("workbench");
     setSelectedSessionId(sessionId);
+    setSessionActionError(undefined);
   }, []);
+
+  const startSessionRename = useCallback((session: SessionSummary) => {
+    setEditingSessionId(session.conversation_id);
+    setEditingSessionName(session.name || "未命名任务");
+    setSessionActionError(undefined);
+  }, []);
+
+  const cancelSessionRename = useCallback(() => {
+    if (sessionMutationLock.current) {
+      return;
+    }
+    setEditingSessionId(undefined);
+    setEditingSessionName("");
+    setSessionActionError(undefined);
+  }, []);
+
+  const renameSession = useCallback(
+    async (conversationId: string, rawName: string) => {
+      const name = rawName.trim();
+      if (
+        sessionMutationLock.current ||
+        name.length === 0 ||
+        Array.from(name).length > 200
+      ) {
+        return;
+      }
+      sessionMutationLock.current = true;
+      setSessionAction({ conversationId, action: "rename" });
+      setSessionActionError(undefined);
+      try {
+        const result = await (
+          window.desktop?.renameSession(conversationId, name) ??
+          unavailableResult<SessionDetail>(
+            "会话重命名仅能在 MARA Desktop 中使用。",
+          )
+        );
+        if (result.ok) {
+          if (selectedSessionId === conversationId) {
+            setSelectedSession({ status: "success", data: result.data });
+          }
+          setEditingSessionId(undefined);
+          setEditingSessionName("");
+          sessions.retry();
+        } else {
+          setSessionActionError(result.error.message);
+        }
+      } catch {
+        setSessionActionError("会话重命名未能完成。");
+      } finally {
+        sessionMutationLock.current = false;
+        setSessionAction(undefined);
+      }
+    },
+    [selectedSessionId, sessions.retry],
+  );
+
+  const deleteSession = useCallback(
+    async (session: SessionSummary) => {
+      if (sessionMutationLock.current) {
+        return;
+      }
+      const name = session.name || "未命名任务";
+      if (
+        !window.confirm(
+          `删除“${name}”会永久删除该会话及其消息记录；此操作不可撤销。`,
+        )
+      ) {
+        return;
+      }
+      const conversationId = session.conversation_id;
+      sessionMutationLock.current = true;
+      setSessionAction({ conversationId, action: "delete" });
+      setSessionActionError(undefined);
+      try {
+        const result = await (
+          window.desktop?.deleteSession(conversationId) ??
+          unavailableResult<string>("会话删除仅能在 MARA Desktop 中使用。")
+        );
+        if (result.ok) {
+          if (selectedSessionId === conversationId) {
+            setSelectedSessionId(undefined);
+            setSelectedSession(undefined);
+          }
+          if (editingSessionId === conversationId) {
+            setEditingSessionId(undefined);
+            setEditingSessionName("");
+          }
+          sessions.retry();
+        } else {
+          setSessionActionError(result.error.message);
+          sessions.retry();
+        }
+      } catch {
+        setSessionActionError("会话删除未能完成。");
+        sessions.retry();
+      } finally {
+        sessionMutationLock.current = false;
+        setSessionAction(undefined);
+      }
+    },
+    [editingSessionId, selectedSessionId, sessions.retry],
+  );
 
   return (
     <>
@@ -334,6 +448,19 @@ export default function App() {
           onNavigate={setActiveNav}
           onRetrySessions={sessions.retry}
           onSelectSession={selectSession}
+          onSearchQueryChange={setSessionSearchQuery}
+          searchQuery={sessionSearchQuery}
+          editingSessionId={editingSessionId}
+          editingSessionName={editingSessionName}
+          onStartRename={startSessionRename}
+          onEditingSessionNameChange={setEditingSessionName}
+          onCancelRename={cancelSessionRename}
+          onRenameSession={(conversationId, name) =>
+            void renameSession(conversationId, name)
+          }
+          onDeleteSession={(session) => void deleteSession(session)}
+          sessionAction={sessionAction}
+          sessionActionError={sessionActionError}
           selectedSessionId={selectedSessionId}
           sessions={sessions.resource}
         />

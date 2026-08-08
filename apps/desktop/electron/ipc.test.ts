@@ -9,6 +9,7 @@ import {
   createTrustedIdentifierListIpcHandler,
   createTrustedIpcHandler,
   createTrustedPathListIpcHandler,
+  createTrustedSessionRenameIpcHandler,
   registerDesktopIpc,
 } from "./ipc";
 
@@ -130,6 +131,67 @@ test("mutation IPC validates the packaged sender and one opaque identifier", asy
   );
 });
 
+test("session rename IPC validates one identifier and one bounded name", async () => {
+  const calls: Array<[string, string]> = [];
+  const handler = createTrustedSessionRenameIpcHandler(
+    async (conversationId, name) => {
+      calls.push([conversationId, name]);
+      return "ok";
+    },
+  );
+
+  assert.equal(
+    await handler(
+      { senderFrame: { url: "mara://app/" } },
+      "session-1",
+      "  Renamed session  ",
+    ),
+    "ok",
+  );
+  assert.deepEqual(calls, [["session-1", "Renamed session"]]);
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "https://attacker.invalid/" } },
+      "session-1",
+      "Rejected",
+    ),
+    /Untrusted IPC sender/,
+  );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      "/etc/passwd",
+      "Rejected",
+    ),
+    /invalid session rename/,
+  );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      "session-1",
+      "   ",
+    ),
+    /invalid session rename/,
+  );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      "session-1",
+      "x".repeat(201),
+    ),
+    /invalid session rename/,
+  );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      "session-1",
+      "Name",
+      "extra",
+    ),
+    /exactly one identifier and one name/,
+  );
+});
+
 test("registers only explicit desktop capabilities", () => {
   const channels: string[] = [];
   const registrar = {
@@ -144,6 +206,8 @@ test("registers only explicit desktop capabilities", () => {
     listFiles: async () => ({ ok: true, data: [] }),
     listSessions: async () => ({ ok: true, data: [] }),
     getSession: async () => ({ ok: true, data: {} as never }),
+    renameSession: async () => ({ ok: true, data: {} as never }),
+    deleteSession: async () => ({ ok: true, data: "session-1" }),
     importFiles: async () => ({ ok: true, data: null }),
     importDroppedFiles: async () => ({ ok: true, data: {} as never }),
     getLatestIndexTask: async () => ({ ok: true, data: null }),
@@ -159,6 +223,8 @@ test("registers only explicit desktop capabilities", () => {
     "desktop:list-files",
     "desktop:list-sessions",
     "desktop:get-session",
+    "desktop:rename-session",
+    "desktop:delete-session",
     "desktop:import-files",
     "desktop:import-dropped-files",
     "desktop:get-latest-index-task",

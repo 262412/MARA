@@ -15,12 +15,14 @@ import {
   GATE3_CANCEL_INPUT_NAMES,
   GATE3_FORMAT_RECORD_NAMES,
   GATE3_MODEL_UNAVAILABLE_INPUT_NAME,
+  GATE3_RENAMED_SESSION_NAME,
   assertGate3DeleteSmoke,
   assertGate3CancellationSmoke,
   assertGate3CancelRetrySmoke,
   assertGate3IndexSmoke,
   assertGate3ModelUnavailableSmoke,
   assertGate3RetrySource,
+  assertGate3SessionMutationSmoke,
   assertPackagedSmoke,
 } from "./smoke-validation";
 
@@ -223,6 +225,46 @@ test("accepts packaged deletion only when the real fixture disappears", () => {
       assertGate3DeleteSmoke(
         { ok: true, data: [GATE2_SMOKE_FILE_ID] },
         files,
+      ),
+    /still present/,
+  );
+});
+
+test("accepts packaged session rename and deletion only after real refreshes", () => {
+  const renamed = {
+    ok: true as const,
+    data: {
+      ...(session.ok && session.data ? session.data : ({} as SessionDetail)),
+      name: GATE3_RENAMED_SESSION_NAME,
+    },
+  };
+  const renamedSessions = {
+    ok: true as const,
+    data: sessions.ok
+      ? sessions.data.map((item) => ({
+          ...item,
+          name: GATE3_RENAMED_SESSION_NAME,
+        }))
+      : [],
+  };
+
+  assert.doesNotThrow(() =>
+    assertGate3SessionMutationSmoke(
+      renamed,
+      renamed,
+      renamedSessions,
+      { ok: true, data: GATE2_SMOKE_SESSION_ID },
+      { ok: true, data: [] },
+    ),
+  );
+  assert.throws(
+    () =>
+      assertGate3SessionMutationSmoke(
+        renamed,
+        renamed,
+        renamedSessions,
+        { ok: true, data: GATE2_SMOKE_SESSION_ID },
+        renamedSessions,
       ),
     /still present/,
   );
