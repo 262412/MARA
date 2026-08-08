@@ -215,6 +215,9 @@ jobs:
         run: |
           $env:APPDATA = Join-Path $env:RUNNER_TEMP "mara-desktop-appdata"
           $metrics = "apps/desktop/release/windows-metrics.txt"
+          $diagnostics = "apps/desktop/release/windows-smoke-diagnostics.txt"
+          $stdout = "apps/desktop/release/windows-smoke-stdout.txt"
+          $stderr = "apps/desktop/release/windows-smoke-stderr.txt"
           $executable = "apps/desktop/release/MARA-win32-x64/MARA.exe"
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root (Join-Path $env:APPDATA "MARA")
@@ -243,7 +246,8 @@ jobs:
           $env:HTTPS_PROXY = "http://127.0.0.1:9"
           $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
           $process = Start-Process $executable `
-            -ArgumentList "--smoke-test-nonempty --smoke-test-gate3" -PassThru
+            -ArgumentList "--smoke-test-nonempty --smoke-test-gate3" `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
           $peakWorkingSet = 0
           while (-not $process.HasExited) {
             $process.Refresh()
@@ -252,6 +256,17 @@ jobs:
           }
           $stopwatch.Stop()
           Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+          @(
+            "exit_code=$($process.ExitCode)"
+            "elapsed_ms=$($stopwatch.ElapsedMilliseconds)"
+            "peak_working_set_bytes=$peakWorkingSet"
+          ) | Set-Content $diagnostics
+          if (Test-Path $stdout) {
+            Get-Content $stdout | Write-Host
+          }
+          if (Test-Path $stderr) {
+            Get-Content $stderr | Write-Host
+          }
           if ($process.ExitCode -ne 0) {
             exit $process.ExitCode
           }
@@ -310,6 +325,16 @@ jobs:
           }
           "scan_result=no_detections" | Add-Content $evidence
           Get-Content $evidence | Add-Content $env:GITHUB_STEP_SUMMARY
+      - name: Upload Windows smoke diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mara-desktop-windows-smoke-diagnostics
+          path: |
+            apps/desktop/release/windows-smoke-diagnostics.txt
+            apps/desktop/release/windows-smoke-stdout.txt
+            apps/desktop/release/windows-smoke-stderr.txt
+          if-no-files-found: warn
       - name: Upload Windows Defender diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

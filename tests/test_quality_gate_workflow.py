@@ -333,6 +333,28 @@ def test_windows_defender_failure_uploads_diagnostics_but_not_the_package():
     assert "windows-defender.txt" not in package["with"]["path"]
 
 
+def test_windows_packaged_smoke_always_uploads_process_diagnostics():
+    workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
+    steps = workflow["jobs"]["package-windows"]["steps"]
+    smoke = next(
+        step
+        for step in steps
+        if step["name"] == "Smoke packaged vertical slice and record metrics"
+    )
+    diagnostics = next(
+        step for step in steps if step["name"] == "Upload Windows smoke diagnostics"
+    )
+
+    assert "-RedirectStandardOutput $stdout" in smoke["run"]
+    assert "-RedirectStandardError $stderr" in smoke["run"]
+    assert '"exit_code=$($process.ExitCode)"' in smoke["run"]
+    assert diagnostics["if"] == "${{ always() }}"
+    assert "windows-smoke-diagnostics.txt" in diagnostics["with"]["path"]
+    assert "windows-smoke-stdout.txt" in diagnostics["with"]["path"]
+    assert "windows-smoke-stderr.txt" in diagnostics["with"]["path"]
+    assert "MARA-win32-x64" not in diagnostics["with"]["path"]
+
+
 def test_workflows_do_not_grant_blanket_write_permissions():
     for path in (REPO_ROOT / ".github" / "workflows").glob("*.y*ml"):
         assert "write-all" not in path.read_text(encoding="utf-8"), path.name
