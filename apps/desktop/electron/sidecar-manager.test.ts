@@ -4,9 +4,16 @@ import test from "node:test";
 import {
   parseIndexTaskEvent,
   parseReadyMessage,
+  sidecarRequestTimeout,
   sidecarRestartDelay,
   waitForRequestReadiness,
 } from "./sidecar-manager";
+
+test("allows bounded long file deletion without relaxing other requests", () => {
+  assert.equal(sidecarRequestTimeout("/v1/files/file-1", "DELETE"), 300_000);
+  assert.equal(sidecarRequestTimeout("/v1/files", "GET"), 30_000);
+  assert.equal(sidecarRequestTimeout("/v1/doctor", "GET"), 30_000);
+});
 
 test("bounds automatic Sidecar restarts to three exponential delays", () => {
   assert.deepEqual(

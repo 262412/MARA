@@ -71,6 +71,9 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
   Sidecar，要求 runtime 失败、监督器按指数退避自动重启、同一数据根中的任务变为
   `index_interrupted`，再重试唯一未完成文件并清空 Files；该测试控制不进入 Preload
   或 Renderer IPC。
+- `--smoke-test-gate3-large-file` 生成确定性 5 MiB 文本，真实执行解析、分块、
+  embedding、Files 刷新和删除；单独记录 index/delete 耗时和进程峰值内存。该
+  canary 是容量回归点，不代表产品最大文件限制。
 - CI 使用仅绑定 loopback 的确定性 OpenAI-compatible embedding 端点，避免真实
   模型服务、网络和凭据影响打包验收。
 
@@ -88,6 +91,7 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 | Linux 开发态模型故障与运行中取消恢复      | 已通过 |
 | Linux 开发态部分失败与定向重试            | 已通过 |
 | Linux 开发态 Sidecar 中断与重启恢复       | 已通过 |
+| Linux 开发态 5 MiB 容量 canary            | 已通过 |
 | 当前代码的 Linux 自包含组合包 smoke       | 已通过 |
 | 完整 `ktem` package gate                  | 已通过 |
 | 完整 `slide_cli` package gate             | 已通过 |
@@ -285,6 +289,16 @@ Ubuntu 24.04 复用 Ubuntu 22.04 的同一组合包和中断恢复后重新生�
 同一 Windows 运行记录首段 smoke 用时 13.139 秒、峰值工作集 97,476,608 bytes，
 发布目录 997,322,310 bytes、2,705 个文件。
 
+## 大文件开发态容量证据
+
+2026-08-08 在独立 fastscratch 数据根运行 5,242,880 bytes 的确定性纯文本 canary。
+真实 Electron/Sidecar/DocQA runtime 完成解析、分块、embedding 和 Files 记录；首次
+运行暴露所有 Sidecar 请求共用 30 秒超时，导致大索引删除被误报为
+`sidecar_unavailable`。修复后只有认证的 `DELETE /v1/files/{id}` 使用 300 秒上限，
+其他请求仍保持 30 秒。完整索引、删除和 CLI 零残留复核通过，总耗时 3:18.90，
+最大 RSS 643,000 KiB；删除约 140 秒，是明确的性能风险而不是隐藏成本。该场景已
+接入 Windows 和 Ubuntu 22.04 原生包工作流，跨平台 CI 证据尚待对应提交完成。
+
 ## Linux 开发机参考测量
 
 2026-08-08 在当前 Linux 开发机对自包含 Electron + PyInstaller 组合包执行断网
@@ -319,13 +333,14 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
    数据目录和残留进程验收。
 2. 增加拖放、批量选择，以及 PDF、Office 和图片的支持格式矩阵。文本、Markdown、
    CSV、HTML、MHTML 和 ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。
-3. 增加大文件、磁盘满和数据库锁的组合包故障注入。
+3. 增加磁盘满和数据库锁的组合包故障注入。
    模型 503 → 脱敏失败 → 原任务重试成功已通过 Windows/Ubuntu 原生组合包。运行中
    取消 → 文件边界停止 → 只重试剩余文件已通过 Windows/Ubuntu 原生组合包。取消
    不会强杀正在执行的单文件 parser/vector write。部分失败 → 只重试失败文件也已
    通过 Windows/Ubuntu 原生组合包。Sidecar 强制退出 → 自动重启 → 持久任务恢复
-   → 重试成功也已通过 Windows/Ubuntu 原生组合包；大文件场景仍须单独验证资源和
-   等待边界。
+   → 重试成功也已通过 Windows/Ubuntu 原生组合包。5 MiB 大文件已通过 Linux
+   开发态真实 runtime 并接入原生打包工作流，尚待跨平台 CI 证据；其删除耗时必须
+   继续作为性能基线跟踪。
 4. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，

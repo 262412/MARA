@@ -30,6 +30,8 @@ import {
   GATE3_CANCEL_INPUT_NAMES,
   GATE3_CANCEL_REQUEST_MARKER_NAME,
   GATE3_INTERRUPTED_INPUT_NAME,
+  GATE3_LARGE_FILE_BYTES,
+  GATE3_LARGE_FILE_INPUT_NAME,
   GATE3_MODEL_UNAVAILABLE_INPUT_NAME,
   GATE3_PARTIAL_INPUT_NAMES,
   assertGate3CancellationSmoke,
@@ -38,6 +40,7 @@ import {
   assertGate3IndexSmoke,
   assertGate3InterruptedRetrySmoke,
   assertGate3InterruptedSmoke,
+  assertGate3LargeFileSmoke,
   assertGate3ModelUnavailableSmoke,
   assertGate3PartialRetrySmoke,
   assertGate3PartialSmoke,
@@ -119,8 +122,9 @@ function watchIndexTask(task: IndexTask): void {
 
 async function waitForIndexTaskTerminal(
   taskId: string,
+  timeoutMs = 60_000,
 ): Promise<DesktopResult<IndexTask>> {
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + timeoutMs;
   let current = await sidecar.getIndexTask(taskId);
   while (
     current.ok &&
@@ -371,6 +375,42 @@ async function runGate3SidecarInterruptionSmoke(
   await deleteSmokeFiles(currentFiles, indexedFileIds);
 }
 
+async function runGate3LargeFileSmoke(
+  initialFiles: FileRecord[],
+): Promise<void> {
+  const inputPath = path.join(
+    desktopDataRoot,
+    "tmp",
+    GATE3_LARGE_FILE_INPUT_NAME,
+  );
+  await writeFile(
+    inputPath,
+    Buffer.alloc(
+      GATE3_LARGE_FILE_BYTES,
+      "MARA Desktop Gate 3 large file capacity fixture.\n",
+    ),
+  );
+  const indexStartedAt = Date.now();
+  const created = await sidecar.createIndexTask([inputPath]);
+  const terminal = created.ok
+    ? await waitForIndexTaskTerminal(created.data.task_id, 180_000)
+    : created;
+  const filesAfterIndex = await sidecar.listFiles();
+  const indexedFileIds = assertGate3LargeFileSmoke(
+    created,
+    terminal,
+    filesAfterIndex,
+  );
+  const indexElapsedMs = Date.now() - indexStartedAt;
+  const currentFiles = filesAfterIndex.ok ? filesAfterIndex.data : initialFiles;
+  const deleteStartedAt = Date.now();
+  await deleteSmokeFiles(currentFiles, indexedFileIds);
+  const deleteElapsedMs = Date.now() - deleteStartedAt;
+  process.stdout.write(
+    `gate3_large_file=bytes_${GATE3_LARGE_FILE_BYTES} index_ms=${indexElapsedMs} delete_ms=${deleteElapsedMs} status_success\n`,
+  );
+}
+
 async function runGate3CancellationSmoke(
   initialFiles: FileRecord[],
 ): Promise<void> {
@@ -545,6 +585,9 @@ app.whenReady().then(async () => {
   const requireGate3SidecarExit = process.argv.includes(
     "--smoke-test-gate3-sidecar-exit",
   );
+  const requireGate3LargeFile = process.argv.includes(
+    "--smoke-test-gate3-large-file",
+  );
   const requireGate3Delete =
     process.argv.includes("--smoke-test-gate3") || requireGate3Formats;
   const requireNonEmptyFixture =
@@ -554,7 +597,8 @@ app.whenReady().then(async () => {
     requireGate3Retry ||
     requireGate3Cancellation ||
     requireGate3Partial ||
-    requireGate3SidecarExit;
+    requireGate3SidecarExit ||
+    requireGate3LargeFile;
   if (process.argv.includes("--smoke-test") || requireNonEmptyFixture) {
     const exitCode = await runDesktopSmoke(async () => {
       const [status, doctor, files, sessions, importCapabilities] =
@@ -578,6 +622,8 @@ app.whenReady().then(async () => {
         await runGate3PartialFailureSmoke(initialFiles);
       } else if (requireGate3SidecarExit) {
         await runGate3SidecarInterruptionSmoke(initialFiles);
+      } else if (requireGate3LargeFile) {
+        await runGate3LargeFileSmoke(initialFiles);
       } else if (requireGate3Cancellation) {
         await runGate3CancellationSmoke(initialFiles);
       } else if (requireGate3Delete) {

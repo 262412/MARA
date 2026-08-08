@@ -62,9 +62,20 @@ function sidecarNotReadyFailure(): SidecarRequestFailure {
 }
 
 const SIDECAR_RESTART_DELAYS_MS = [250, 500, 1_000] as const;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const FILE_DELETE_TIMEOUT_MS = 300_000;
 
 export function sidecarRestartDelay(attempt: number): number | undefined {
   return SIDECAR_RESTART_DELAYS_MS[attempt];
+}
+
+export function sidecarRequestTimeout(
+  pathname: string,
+  method = "GET",
+): number {
+  return method === "DELETE" && pathname.startsWith("/v1/files/")
+    ? FILE_DELETE_TIMEOUT_MS
+    : DEFAULT_REQUEST_TIMEOUT_MS;
 }
 
 export async function waitForRequestReadiness(
@@ -570,7 +581,7 @@ export class SidecarManager {
         "X-Request-ID": requestId,
         ...init.headers,
       },
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(sidecarRequestTimeout(pathname, init.method)),
     });
     const payload: unknown = await response.json();
     if (!response.ok) {

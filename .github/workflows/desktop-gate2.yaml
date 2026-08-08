@@ -167,6 +167,19 @@ jobs:
                 --phase sidecar-exit-recovered \
                 --expect-empty \
                 --summary-file apps/desktop/release/metrics/linux-22-sidecar-exit-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          /usr/bin/time -v \
+            -o apps/desktop/release/metrics/linux-22-large-file-time.txt \
+            xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+              --smoke-test-gate3-large-file \
+            > apps/desktop/release/metrics/linux-22-large-file-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-large-file-stderr.txt
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase large-file-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-large-file-after.txt
           du -sb apps/desktop/release/MARA-linux-x64 \
             > apps/desktop/release/metrics/linux-22-size.txt
           find apps/desktop/release/MARA-linux-x64 -type f | wc -l \
@@ -313,6 +326,8 @@ jobs:
           $partialStderr = "apps/desktop/release/windows-partial-stderr.txt"
           $sidecarExitStdout = "apps/desktop/release/windows-sidecar-exit-stdout.txt"
           $sidecarExitStderr = "apps/desktop/release/windows-sidecar-exit-stderr.txt"
+          $largeFileStdout = "apps/desktop/release/windows-large-file-stdout.txt"
+          $largeFileStderr = "apps/desktop/release/windows-large-file-stderr.txt"
           $executable = "apps/desktop/release/MARA-win32-x64/MARA.exe"
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
@@ -472,7 +487,6 @@ jobs:
             -RedirectStandardOutput $sidecarExitStdout `
             -RedirectStandardError $sidecarExitStderr -PassThru
           $sidecarExitProcess.WaitForExit()
-          Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
           "sidecar_exit_code=$($sidecarExitProcess.ExitCode)" | Add-Content $diagnostics
           if (Test-Path $sidecarExitStdout) {
             Get-Content $sidecarExitStdout | Write-Host
@@ -481,7 +495,40 @@ jobs:
             Get-Content $sidecarExitStderr | Write-Host
           }
           if ($sidecarExitProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
             exit $sidecarExitProcess.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          $largeFileStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+          $largeFileProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-large-file" `
+            -RedirectStandardOutput $largeFileStdout `
+            -RedirectStandardError $largeFileStderr -PassThru
+          $largeFilePeakWorkingSet = 0
+          while (-not $largeFileProcess.HasExited) {
+            $largeFileProcess.Refresh()
+            $largeFilePeakWorkingSet = [Math]::Max(
+              $largeFilePeakWorkingSet,
+              $largeFileProcess.WorkingSet64
+            )
+            Start-Sleep -Milliseconds 100
+          }
+          $largeFileStopwatch.Stop()
+          Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+          @(
+            "large_file_exit_code=$($largeFileProcess.ExitCode)"
+            "large_file_elapsed_ms=$($largeFileStopwatch.ElapsedMilliseconds)"
+            "large_file_peak_working_set_bytes=$largeFilePeakWorkingSet"
+          ) | Add-Content $diagnostics
+          if (Test-Path $largeFileStdout) {
+            Get-Content $largeFileStdout | Write-Host
+          }
+          if (Test-Path $largeFileStderr) {
+            Get-Content $largeFileStderr | Write-Host
+          }
+          if ($largeFileProcess.ExitCode -ne 0) {
+            exit $largeFileProcess.ExitCode
           }
           $afterRecords = & ".venv/Scripts/MARA.exe" docqa files --json |
             Out-String
@@ -490,7 +537,7 @@ jobs:
           }
           $afterRecords | & $python `
             "apps/desktop/sidecar/cli_compatibility_probe.py" `
-            --phase sidecar-exit-recovered --expect-empty --summary-file $cliAfter
+            --phase large-file-recovered --expect-empty --summary-file $cliAfter
           if ($LASTEXITCODE -ne 0) {
             throw "MARA CLI still observes records deleted by Desktop."
           }
@@ -572,6 +619,8 @@ jobs:
             apps/desktop/release/windows-partial-stderr.txt
             apps/desktop/release/windows-sidecar-exit-stdout.txt
             apps/desktop/release/windows-sidecar-exit-stderr.txt
+            apps/desktop/release/windows-large-file-stdout.txt
+            apps/desktop/release/windows-large-file-stderr.txt
             apps/desktop/release/windows-metrics.txt
             apps/desktop/release/windows-cli-compat-before.txt
             apps/desktop/release/windows-cli-compat-after.txt

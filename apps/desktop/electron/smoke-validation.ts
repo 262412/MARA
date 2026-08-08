@@ -19,6 +19,8 @@ export const GATE3_PARTIAL_INPUT_NAMES = [
   "gate3-partial-success.txt",
 ] as const;
 export const GATE3_INTERRUPTED_INPUT_NAME = "gate3-sidecar-interrupted.txt";
+export const GATE3_LARGE_FILE_INPUT_NAME = "gate3-large-file.txt";
+export const GATE3_LARGE_FILE_BYTES = 5 * 1024 * 1024;
 export const GATE3_CANCEL_INPUT_NAMES = [
   "gate3-cancel-first.txt",
   "gate3-cancel-second.txt",
@@ -338,6 +340,29 @@ export function assertGate3InterruptedRetrySmoke(
     filesAfterRetry,
     [GATE3_INTERRUPTED_INPUT_NAME],
   );
+}
+
+export function assertGate3LargeFileSmoke(
+  created: DesktopResult<IndexTask>,
+  terminal: DesktopResult<IndexTask>,
+  filesAfterIndex: DesktopResult<FileRecord[]>,
+): string[] {
+  const fileIds = assertGate3IndexSmoke(
+    created,
+    terminal,
+    filesAfterIndex,
+    [GATE3_LARGE_FILE_INPUT_NAME],
+  );
+  if (!filesAfterIndex.ok) {
+    throw new Error("Gate 3 large-file refresh failed");
+  }
+  const record = filesAfterIndex.data.find(
+    (candidate) => candidate.name === GATE3_LARGE_FILE_INPUT_NAME,
+  );
+  if (!record || record.size !== GATE3_LARGE_FILE_BYTES) {
+    throw new Error("Gate 3 large-file record size changed");
+  }
+  return fileIds;
 }
 
 export function assertGate3CancellationSmoke(
