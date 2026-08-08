@@ -14,6 +14,12 @@ export const GATE2_SMOKE_FILE_ID = "gate2-smoke-file";
 export const GATE2_SMOKE_SESSION_ID = "gate2-smoke-session";
 export const GATE3_MODEL_UNAVAILABLE_INPUT_NAME =
   "gate3-model-unavailable.txt";
+export const GATE3_CANCEL_INPUT_NAMES = [
+  "gate3-cancel-first.txt",
+  "gate3-cancel-second.txt",
+] as const;
+export const GATE3_CANCEL_BLOCK_MARKER_NAME = "gate3-embedding-block";
+export const GATE3_CANCEL_REQUEST_MARKER_NAME = "gate3-embedding-request";
 export const GATE3_FORMAT_INPUT_NAMES = [
   "gate3-format.md",
   "gate3-format.csv",
@@ -200,4 +206,64 @@ export function assertGate3RetrySource(
     throw new Error("Gate 3 retry did not find the model-unavailable task");
   }
   return latest.data.task_id;
+}
+
+export function assertGate3CancellationSmoke(
+  created: DesktopResult<IndexTask>,
+  cancelling: DesktopResult<IndexTask>,
+  terminal: DesktopResult<IndexTask>,
+  filesAfterCancel: DesktopResult<FileRecord[]>,
+): string {
+  if (!created.ok || !cancelling.ok || !terminal.ok) {
+    throw new Error("Gate 3 cancellation task request failed");
+  }
+  const task = terminal.data;
+  if (
+    cancelling.data.task_id !== created.data.task_id ||
+    cancelling.data.status !== "running" ||
+    cancelling.data.stage !== "cancelling" ||
+    task.task_id !== created.data.task_id ||
+    task.status !== "cancelled" ||
+    task.error?.code !== "index_cancelled" ||
+    !task.retryable ||
+    task.completed_files !== 1 ||
+    task.success_count !== 1 ||
+    task.failure_count !== 0 ||
+    task.file_names.join(",") !== GATE3_CANCEL_INPUT_NAMES.join(",")
+  ) {
+    throw new Error("Gate 3 task did not cancel at the file boundary");
+  }
+  if (!filesAfterCancel.ok) {
+    throw new Error(`Gate 3 cancel refresh failed: ${filesAfterCancel.error.code}`);
+  }
+  const first = filesAfterCancel.data.find(
+    (record) => record.name === GATE3_CANCEL_INPUT_NAMES[0],
+  );
+  const second = filesAfterCancel.data.find(
+    (record) => record.name === GATE3_CANCEL_INPUT_NAMES[1],
+  );
+  if (!first || second || Object.hasOwn(first, "path")) {
+    throw new Error("Gate 3 cancellation crossed the expected file boundary");
+  }
+  return first.file_id;
+}
+
+export function assertGate3CancelRetrySmoke(
+  retried: DesktopResult<IndexTask>,
+  terminal: DesktopResult<IndexTask>,
+  filesAfterRetry: DesktopResult<FileRecord[]>,
+): string[] {
+  if (
+    !retried.ok ||
+    retried.data.total_files !== 1 ||
+    retried.data.file_names[0] !== GATE3_CANCEL_INPUT_NAMES[1]
+  ) {
+    throw new Error("Gate 3 cancellation retry selected the wrong files");
+  }
+  return assertGate3IndexSmoke(
+    retried,
+    terminal,
+    filesAfterRetry,
+    GATE3_CANCEL_INPUT_NAMES,
+  );
 }

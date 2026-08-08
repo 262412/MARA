@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -25,7 +26,12 @@ import { runDesktopSmoke } from "./smoke-runner";
 import {
   GATE3_FORMAT_INPUT_NAMES,
   GATE3_FORMAT_RECORD_NAMES,
+  GATE3_CANCEL_BLOCK_MARKER_NAME,
+  GATE3_CANCEL_INPUT_NAMES,
+  GATE3_CANCEL_REQUEST_MARKER_NAME,
   GATE3_MODEL_UNAVAILABLE_INPUT_NAME,
+  assertGate3CancellationSmoke,
+  assertGate3CancelRetrySmoke,
   assertGate3DeleteSmoke,
   assertGate3IndexSmoke,
   assertGate3ModelUnavailableSmoke,
@@ -103,6 +109,16 @@ async function waitForIndexTaskTerminal(
     current = await sidecar.getIndexTask(taskId);
   }
   return current;
+}
+
+async function waitForSmokeMarker(markerPath: string): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  while (!existsSync(markerPath) && Date.now() < deadline) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  }
+  if (!existsSync(markerPath)) {
+    throw new Error("Gate 3 embedding request did not reach the smoke server");
+  }
 }
 
 async function deleteSmokeFiles(
@@ -204,6 +220,62 @@ async function runGate3RetrySmoke(initialFiles: FileRecord[]): Promise<void> {
     [GATE3_MODEL_UNAVAILABLE_INPUT_NAME],
   );
   process.stdout.write("gate3_fault_recovery=status_success\n");
+  const currentFiles = filesAfterRetry.ok ? filesAfterRetry.data : initialFiles;
+  await deleteSmokeFiles(currentFiles, indexedFileIds);
+}
+
+async function runGate3CancellationSmoke(
+  initialFiles: FileRecord[],
+): Promise<void> {
+  const inputPaths = GATE3_CANCEL_INPUT_NAMES.map((name) =>
+    path.join(desktopDataRoot, "tmp", name),
+  );
+  for (const inputPath of inputPaths) {
+    await writeFile(
+      inputPath,
+      "MARA Desktop Gate 3 cancellation smoke fixture.\n",
+      "utf8",
+    );
+  }
+  const blockMarker = path.join(
+    desktopDataRoot,
+    "tmp",
+    GATE3_CANCEL_BLOCK_MARKER_NAME,
+  );
+  const requestMarker = path.join(
+    desktopDataRoot,
+    "tmp",
+    GATE3_CANCEL_REQUEST_MARKER_NAME,
+  );
+  const created = await sidecar.createIndexTask(inputPaths);
+  if (!created.ok) {
+    throw new Error(`Gate 3 cancel task creation failed: ${created.error.code}`);
+  }
+  await waitForSmokeMarker(requestMarker);
+  const cancelling = await sidecar.cancelIndexTask(created.data.task_id);
+  await unlink(blockMarker);
+  const terminal = await waitForIndexTaskTerminal(created.data.task_id);
+  await unlink(requestMarker);
+  const filesAfterCancel = await sidecar.listFiles();
+  assertGate3CancellationSmoke(
+    created,
+    cancelling,
+    terminal,
+    filesAfterCancel,
+  );
+  const retried = await sidecar.retryIndexTask(created.data.task_id);
+  const retryTerminal = retried.ok
+    ? await waitForIndexTaskTerminal(retried.data.task_id)
+    : retried;
+  const filesAfterRetry = await sidecar.listFiles();
+  const indexedFileIds = assertGate3CancelRetrySmoke(
+    retried,
+    retryTerminal,
+    filesAfterRetry,
+  );
+  process.stdout.write(
+    "gate3_cancel=cancelled_at_file_boundary retry=status_success\n",
+  );
   const currentFiles = filesAfterRetry.ok ? filesAfterRetry.data : initialFiles;
   await deleteSmokeFiles(currentFiles, indexedFileIds);
 }
@@ -317,13 +389,17 @@ app.whenReady().then(async () => {
     "--smoke-test-gate3-model-unavailable",
   );
   const requireGate3Retry = process.argv.includes("--smoke-test-gate3-retry");
+  const requireGate3Cancellation = process.argv.includes(
+    "--smoke-test-gate3-cancel",
+  );
   const requireGate3Delete =
     process.argv.includes("--smoke-test-gate3") || requireGate3Formats;
   const requireNonEmptyFixture =
     process.argv.includes("--smoke-test-nonempty") ||
     requireGate3Delete ||
     requireGate3ModelUnavailable ||
-    requireGate3Retry;
+    requireGate3Retry ||
+    requireGate3Cancellation;
   if (process.argv.includes("--smoke-test") || requireNonEmptyFixture) {
     const exitCode = await runDesktopSmoke(async () => {
       const [status, doctor, files, sessions, importCapabilities] =
@@ -343,6 +419,8 @@ app.whenReady().then(async () => {
         await runGate3ModelUnavailableSmoke();
       } else if (requireGate3Retry) {
         await runGate3RetrySmoke(initialFiles);
+      } else if (requireGate3Cancellation) {
+        await runGate3CancellationSmoke(initialFiles);
       } else if (requireGate3Delete) {
         await runGate3IndexAndDeleteSmoke(initialFiles, requireGate3Formats);
       }

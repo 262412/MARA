@@ -71,11 +71,15 @@ jobs:
             --data-root /tmp/mara-desktop/data/MARA
           embedding_port_file=/tmp/mara-desktop/embedding-port.txt
           embedding_failure_file=/tmp/mara-desktop/embedding-model-unavailable
+          embedding_block_file=/tmp/mara-desktop/data/MARA/tmp/gate3-embedding-block
+          embedding_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-embedding-request
           (
             cd apps/desktop
             ../../.venv/bin/python -m sidecar.smoke_embedding_server \
               --port-file "$embedding_port_file" \
-              --failure-marker "$embedding_failure_file"
+              --failure-marker "$embedding_failure_file" \
+              --block-marker "$embedding_block_file" \
+              --request-marker "$embedding_request_file"
           ) &
           embedding_pid=$!
           trap 'kill "$embedding_pid" 2>/dev/null || true' EXIT
@@ -129,6 +133,16 @@ jobs:
                 --phase fault-recovered \
                 --expect-empty \
                 --summary-file apps/desktop/release/metrics/linux-22-fault-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          touch "$embedding_block_file"
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-cancel
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase cancellation-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-cancel-after.txt
           du -sb apps/desktop/release/MARA-linux-x64 \
             > apps/desktop/release/metrics/linux-22-size.txt
           find apps/desktop/release/MARA-linux-x64 -type f | wc -l \
@@ -269,17 +283,23 @@ jobs:
           $faultStderr = "apps/desktop/release/windows-fault-stderr.txt"
           $retryStdout = "apps/desktop/release/windows-retry-stdout.txt"
           $retryStderr = "apps/desktop/release/windows-retry-stderr.txt"
+          $cancelStdout = "apps/desktop/release/windows-cancel-stdout.txt"
+          $cancelStderr = "apps/desktop/release/windows-cancel-stderr.txt"
           $executable = "apps/desktop/release/MARA-win32-x64/MARA.exe"
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
           $portFile = Join-Path $env:RUNNER_TEMP "mara-embedding-port.txt"
           $failureMarker = Join-Path $env:RUNNER_TEMP "mara-model-unavailable"
+          $blockMarker = Join-Path $dataRoot "tmp/gate3-embedding-block"
+          $requestMarker = Join-Path $dataRoot "tmp/gate3-embedding-request"
           $python = (Resolve-Path ".venv/Scripts/python.exe").Path
           $embeddingServer = Start-Process -FilePath $python `
             -ArgumentList @(
               "-m", "sidecar.smoke_embedding_server",
               "--port-file", $portFile,
-              "--failure-marker", $failureMarker
+              "--failure-marker", $failureMarker,
+              "--block-marker", $blockMarker,
+              "--request-marker", $requestMarker
             ) `
             -WorkingDirectory "apps/desktop" -PassThru -WindowStyle Hidden
           for ($attempt = 0; $attempt -lt 100; $attempt++) {
@@ -368,7 +388,6 @@ jobs:
             -RedirectStandardOutput $retryStdout `
             -RedirectStandardError $retryStderr -PassThru
           $retryProcess.WaitForExit()
-          Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
           "retry_exit_code=$($retryProcess.ExitCode)" | Add-Content $diagnostics
           if (Test-Path $retryStdout) {
             Get-Content $retryStdout | Write-Host
@@ -377,7 +396,27 @@ jobs:
             Get-Content $retryStderr | Write-Host
           }
           if ($retryProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
             exit $retryProcess.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          "block" | Set-Content $blockMarker
+          $cancelProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-cancel" `
+            -RedirectStandardOutput $cancelStdout `
+            -RedirectStandardError $cancelStderr -PassThru
+          $cancelProcess.WaitForExit()
+          Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+          "cancel_exit_code=$($cancelProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $cancelStdout) {
+            Get-Content $cancelStdout | Write-Host
+          }
+          if (Test-Path $cancelStderr) {
+            Get-Content $cancelStderr | Write-Host
+          }
+          if ($cancelProcess.ExitCode -ne 0) {
+            exit $cancelProcess.ExitCode
           }
           $afterRecords = & ".venv/Scripts/MARA.exe" docqa files --json |
             Out-String
@@ -462,6 +501,8 @@ jobs:
             apps/desktop/release/windows-fault-stderr.txt
             apps/desktop/release/windows-retry-stdout.txt
             apps/desktop/release/windows-retry-stderr.txt
+            apps/desktop/release/windows-cancel-stdout.txt
+            apps/desktop/release/windows-cancel-stderr.txt
             apps/desktop/release/windows-metrics.txt
             apps/desktop/release/windows-cli-compat-before.txt
             apps/desktop/release/windows-cli-compat-after.txt

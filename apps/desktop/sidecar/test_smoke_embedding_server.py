@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from urllib.error import HTTPError
@@ -71,6 +72,43 @@ class SmokeEmbeddingServerTest(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=2)
 
+    def test_block_marker_pauses_one_request_until_it_is_released(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            marker_root = Path(temporary_directory)
+            block_marker = marker_root / "block"
+            request_marker = marker_root / "request"
+            block_marker.touch()
+            server = create_server(
+                "smoke-token",
+                block_marker=block_marker,
+                request_marker=request_marker,
+            )
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            outcomes: list[int | OSError] = []
+
+            def request_embedding() -> None:
+                try:
+                    with urlopen(
+                        _embedding_request(server.server_port), timeout=2
+                    ) as response:
+                        outcomes.append(response.status)
+                except OSError as exc:
+                    outcomes.append(exc)
+
+            request_thread = threading.Thread(target=request_embedding, daemon=True)
+            request_thread.start()
+            try:
+                self.assertTrue(_wait_for_path(request_marker))
+                self.assertTrue(request_thread.is_alive())
+                block_marker.unlink()
+                request_thread.join(timeout=2)
+                self.assertEqual(outcomes, [200])
+            finally:
+                server.shutdown()
+                server.server_close()
+                server_thread.join(timeout=2)
+
 
 def _embedding_request(port: int) -> Request:
     return Request(
@@ -84,3 +122,12 @@ def _embedding_request(port: int) -> Request:
         },
         method="POST",
     )
+
+
+def _wait_for_path(path: Path) -> bool:
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        if path.exists():
+            return True
+        time.sleep(0.01)
+    return False

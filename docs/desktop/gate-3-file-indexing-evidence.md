@@ -61,6 +61,10 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
   任务，验证 Files 中出现脱敏记录，删除预置和新建记录，最后验证列表为空。
 - `--smoke-test-gate3-formats` 在同一真实链路增加 Markdown、CSV、HTML、MHTML 和
   安全 ZIP；ZIP 最终验证解出的 Markdown 记录，而不是把归档本身伪装为已索引。
+- `--smoke-test-gate3-model-unavailable` 让确定性模型返回 503，要求任务以脱敏、
+  可重试状态失败；解除故障后 `--smoke-test-gate3-retry` 重试原任务并清空 Files。
+- `--smoke-test-gate3-cancel` 在首文件 embedding 请求处确定性暂停，确认运行中取消
+  只在首文件完成后生效，再只重试第二个文件并清空 Files，避免用时序猜测制造竞态。
 - CI 使用仅绑定 loopback 的确定性 OpenAI-compatible embedding 端点，避免真实
   模型服务、网络和凭据影响打包验收。
 
@@ -75,6 +79,7 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 | React 索引/删除状态覆盖                   | 已通过 |
 | Linux 开发态真实索引/刷新/删除 smoke      | 已通过 |
 | Linux 开发态轻量支持格式矩阵              | 已通过 |
+| Linux 开发态模型故障与运行中取消恢复      | 已通过 |
 | 当前代码的 Linux 自包含组合包 smoke       | 已通过 |
 | 完整 `ktem` package gate                  | 已通过 |
 | 完整 `slide_cli` package gate             | 已通过 |
@@ -165,6 +170,25 @@ Ubuntu 22.04 的同一组合包和数据快照。
 2,705 个文件，Ubuntu 发布目录为 1,086,013,990 bytes、2,106 个文件；Linux
 `ldd` 无缺失依赖。两平台最终 CLI/Files 复核均为 0 项。
 
+## 模型不可用恢复 CI 证据
+
+2026-08-08 的
+[Desktop Gate 3 运行 31270428345](https://github.com/262412/MARA/actions/runs/31270428345)
+基于提交 `199f3807008fae231f0c71ce467d10203dcd549d`，三个任务全部成功。Windows
+和 Ubuntu 22.04 组合包均让确定性模型返回 503，验证任务以 `index_failed`、
+`retryable=true` 和脱敏文件名结束；解除故障后重试原任务成功，CLI 最终复核为
+0 项。Windows 诊断明确记录 `fault_exit_code=0`、`retry_exit_code=0`，对应安全
+摘要为 `gate3_fault=model_unavailable status=failed retryable=true` 和
+`gate3_fault_recovery=status_success`。
+
+Windows smoke 诊断 artifact 为 `9025483013`，Actions digest 为
+`1fcbbf31501f5a3094422736e805763235649d89e3a440cf95a6b8d155eea27a`；Ubuntu
+22.04 metrics artifact 为 `9025487490`，digest 为
+`a21039aa06654b5b2468d213c0f0db9e86f751ee7bd68b67a7a9d7d31ef7205c`。完整
+Windows 包 artifact `9025489782`、Ubuntu 包 `9025487365` 均未过期。Defender
+artifact `9025483181` 确认引擎和服务开启、移除 `D:\` 整盘排除、启用 archive
+scanning，并得到 `scan_result=no_detections`。
+
 ## Linux 开发机参考测量
 
 2026-08-08 在当前 Linux 开发机对自包含 Electron + PyInstaller 组合包执行断网
@@ -199,11 +223,11 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
    数据目录和残留进程验收。
 2. 增加拖放、批量选择，以及 PDF、Office 和图片的支持格式矩阵。文本、Markdown、
    CSV、HTML、MHTML 和 ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。
-3. 增加大文件、部分失败、运行中取消、模型不可用、磁盘满、数据库锁和 Sidecar
-   强制退出的组合包故障注入。模型 503 → 脱敏失败 → 原任务重试成功已通过 Linux
-   开发态真实 runtime，并已接入 Windows/Ubuntu 打包工作流，仍需取得当前提交的
-   原生 CI 证据。当前取消在文件边界协作式生效，不会强杀正在执行的单文件
-   parser/vector write；该边界必须在长文件验收中明确验证。
+3. 增加大文件、部分失败、磁盘满、数据库锁和 Sidecar 强制退出的组合包故障注入。
+   模型 503 → 脱敏失败 → 原任务重试成功已通过 Windows/Ubuntu 原生组合包。运行中
+   取消 → 文件边界停止 → 只重试剩余文件已通过 Linux 开发态真实 runtime 并接入
+   Windows/Ubuntu 打包工作流，仍需取得当前提交的原生 CI 证据。取消不会强杀正在
+   执行的单文件 parser/vector write，大文件场景仍须单独验证资源和等待边界。
 4. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，

@@ -313,6 +313,7 @@ def test_desktop_jobs_smoke_deterministic_nonempty_data():
         assert "--failure-marker" in commands
         assert "--smoke-test-gate3-model-unavailable" in commands
         assert "--smoke-test-gate3-retry" in commands
+        assert "--smoke-test-gate3-cancel" in commands
 
     linux_24_commands = _commands(jobs["smoke-linux-24"])
     assert "gate2-smoke-data" in linux_24_commands
@@ -328,7 +329,7 @@ def test_desktop_smoke_proves_cli_data_compatibility_without_retaining_paths():
     windows_commands = _commands(windows)
 
     assert ".venv/bin/MARA docqa index" in linux_commands
-    assert linux_commands.count("MARA docqa files --json") == 3
+    assert linux_commands.count("MARA docqa files --json") == 4
     assert "--expect-name gate3-cli-compat.txt" in linux_commands
     assert "--expect-empty" in linux_commands
     assert "KH_APP_DATA_DIR" in linux_commands
@@ -413,10 +414,9 @@ def test_windows_packaged_smoke_always_uploads_process_diagnostics():
     assert "windows-smoke-diagnostics.txt" in diagnostics["with"]["path"]
     assert "windows-smoke-stdout.txt" in diagnostics["with"]["path"]
     assert "windows-smoke-stderr.txt" in diagnostics["with"]["path"]
-    assert "windows-fault-stdout.txt" in diagnostics["with"]["path"]
-    assert "windows-fault-stderr.txt" in diagnostics["with"]["path"]
-    assert "windows-retry-stdout.txt" in diagnostics["with"]["path"]
-    assert "windows-retry-stderr.txt" in diagnostics["with"]["path"]
+    for phase in ("fault", "retry", "cancel"):
+        assert f"windows-{phase}-stdout.txt" in diagnostics["with"]["path"]
+        assert f"windows-{phase}-stderr.txt" in diagnostics["with"]["path"]
     assert "windows-metrics.txt" in diagnostics["with"]["path"]
     assert "MARA-win32-x64" not in diagnostics["with"]["path"]
     assert "sidecar_sha256=$sidecarSha256" in smoke["run"]

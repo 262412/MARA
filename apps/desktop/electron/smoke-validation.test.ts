@@ -9,9 +9,12 @@ import type { SessionSummary } from "../shared/session-contracts";
 import {
   GATE2_SMOKE_FILE_ID,
   GATE2_SMOKE_SESSION_ID,
+  GATE3_CANCEL_INPUT_NAMES,
   GATE3_FORMAT_RECORD_NAMES,
   GATE3_MODEL_UNAVAILABLE_INPUT_NAME,
   assertGate3DeleteSmoke,
+  assertGate3CancellationSmoke,
+  assertGate3CancelRetrySmoke,
   assertGate3IndexSmoke,
   assertGate3ModelUnavailableSmoke,
   assertGate3RetrySource,
@@ -366,5 +369,124 @@ test("requires a safe retryable model-unavailable task before recovery", () => {
   assert.throws(
     () => assertGate3RetrySource({ ok: true, data: null }),
     /did not find/,
+  );
+});
+
+test("locks cancellation to a completed file boundary and retries the rest", () => {
+  const created = {
+    ok: true as const,
+    data: {
+      task_id: "cancel-task",
+      status: "queued" as const,
+      stage: "queued",
+      completed_files: 0,
+      total_files: 2,
+      file_names: [...GATE3_CANCEL_INPUT_NAMES],
+      success_count: 0,
+      failure_count: 0,
+      failures: [],
+      error: null,
+      retryable: false,
+      created_at: "2026-08-08T10:00:00Z",
+      updated_at: "2026-08-08T10:00:00Z",
+      version: 1,
+    },
+  };
+  const cancelling = {
+    ok: true as const,
+    data: {
+      ...created.data,
+      status: "running" as const,
+      stage: "cancelling",
+      version: 3,
+    },
+  };
+  const cancelled = {
+    ok: true as const,
+    data: {
+      ...cancelling.data,
+      status: "cancelled" as const,
+      stage: "completed",
+      completed_files: 1,
+      success_count: 1,
+      error: {
+        code: "index_cancelled",
+        message: "Indexing was cancelled.",
+        retryable: true,
+      },
+      retryable: true,
+      version: 5,
+    },
+  };
+  const filesAfterCancel: DesktopResult<FileRecord[]> = {
+    ok: true,
+    data: [
+      {
+        file_id: "first-file",
+        name: GATE3_CANCEL_INPUT_NAMES[0],
+        size: 32,
+        tokens: 5,
+        loader: "TextReader",
+        date_created: "2026-08-08T10:00:02Z",
+      },
+    ],
+  };
+  assert.equal(
+    assertGate3CancellationSmoke(
+      created,
+      cancelling,
+      cancelled,
+      filesAfterCancel,
+    ),
+    "first-file",
+  );
+
+  const retried = {
+    ok: true as const,
+    data: {
+      ...created.data,
+      task_id: "retry-task",
+      total_files: 1,
+      file_names: [GATE3_CANCEL_INPUT_NAMES[1]],
+    },
+  };
+  const retryTerminal = {
+    ok: true as const,
+    data: {
+      ...retried.data,
+      status: "success" as const,
+      stage: "completed",
+      completed_files: 1,
+      success_count: 1,
+      version: 3,
+    },
+  };
+  const filesAfterRetry: DesktopResult<FileRecord[]> = {
+    ok: true,
+    data: [
+      ...filesAfterCancel.data,
+      {
+        file_id: "second-file",
+        name: GATE3_CANCEL_INPUT_NAMES[1],
+        size: 32,
+        tokens: 5,
+        loader: "TextReader",
+        date_created: "2026-08-08T10:00:03Z",
+      },
+    ],
+  };
+  assert.deepEqual(
+    assertGate3CancelRetrySmoke(retried, retryTerminal, filesAfterRetry),
+    ["first-file", "second-file"],
+  );
+  assert.throws(
+    () =>
+      assertGate3CancellationSmoke(
+        created,
+        cancelling,
+        { ...cancelled, data: { ...cancelled.data, completed_files: 2 } },
+        filesAfterRetry,
+      ),
+    /file boundary/,
   );
 });
