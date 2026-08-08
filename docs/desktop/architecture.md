@@ -78,6 +78,8 @@ Renderer 到 Main 只开放按能力命名的方法，例如：
 - `desktop.listFiles()`
 - `desktop.listSessions()`
 - `desktop.getSession(sessionId)`
+- `desktop.renameSession(sessionId, name)`
+- `desktop.deleteSession(sessionId)`
 - `desktop.importFiles()`
 - `desktop.importDroppedFiles(files)`
 - `desktop.getLatestIndexTask()`
@@ -103,6 +105,16 @@ service 直接复用 `DocQARuntime.load_session()` 的所有者/公开会话授�
 collectors 和 runtime 初始化放在同一 application-service 锁内，避免并行首启请求
 覆盖全局 runtime 能力裁剪；冻结包必须用并行 Doctor、Files、Sessions 和会话详情
 请求回归该边界。
+
+会话管理继续使用相同的窄边界：认证 Sidecar 只增加
+`PATCH /v1/sessions/{conversation_id}` 和
+`DELETE /v1/sessions/{conversation_id}`，两者都要求 idempotency key。重命名名称去除
+首尾空白后必须为 1–200 个 Unicode 字符，删除只返回不透明会话 ID；Sidecar 直接调用
+现有 `DocQARuntime.rename_session()` / `delete_session()`，继续使用 owner scope，且不
+改变 `Conversation` schema 或 `data_source` 形状。Preload 仅暴露
+`desktop.renameSession(sessionId, name)` 和 `desktop.deleteSession(sessionId)`，Main
+重新验证 sender、参数数量、ID 和名称。左栏搜索只过滤已经脱敏的 Session summaries，
+不会新增任意查询或本地路径能力。
 
 Gate 3 的文件导入由 Main 打开原生选择器；Renderer 不传选择器参数，也不会收到
 绝对路径。Main 只把选择结果送入带认证的 Sidecar 索引命令。Sidecar 返回脱敏的

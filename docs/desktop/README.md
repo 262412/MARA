@@ -37,6 +37,8 @@
     后台索引、刷新/删除、格式矩阵和故障恢复证据。
 12. [Gate 3 会话详情纵向切片证据](gate-3-session-detail-evidence.md)：真实会话读取、
     窄 IPC、首次并发初始化回归和跨平台组合包证据。
+13. [Gate 3 会话管理纵向切片证据](gate-3-session-management-evidence.md)：搜索、
+    重命名、删除、幂等契约和跨平台组合包证据。
 
 ## 阶段门
 

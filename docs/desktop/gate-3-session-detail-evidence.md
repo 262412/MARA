@@ -112,7 +112,9 @@ Artifact ID、大小、未过期状态和 digest 均由 GitHub Actions API 重�
 
 1. 在 Windows 10 和 Windows 11 产品 VM 上使用 artifact `9028836199` 复验首次
    启动、快速切换会话、重复启动、数据目录、Defender 和退出后残留进程。
-2. 会话新建、重命名、删除、固定和搜索尚未实现；删除前必须展示影响范围。
+2. 后续会话管理切片已实现搜索、重命名和带影响说明的删除；证据见
+   [Gate 3 会话管理纵向切片证据](gate-3-session-management-evidence.md)。会话新建和
+   固定仍未实现。
 3. Composer 仍保持禁用。下一问答切片必须复用 `DocQARuntime.stream_turn()`，并
    同时完成来源范围、流式事件、停止、重试、引用身份、模型配置和凭据边界，不能用
    固定回答或绕过 application service 的 Sidecar 逻辑代替。
