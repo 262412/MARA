@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,6 +25,7 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
 
             from ktem.db.models import engine
 
+            service: DesktopApplicationService | None = None
             try:
                 self.assertFalse(
                     (
@@ -74,7 +76,12 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
                     ).exists()
                 )
             finally:
+                service = None
+                from chromadb.api.client import SharedSystemClient
+
+                SharedSystemClient.clear_system_cache()
                 engine.dispose()
+                gc.collect()
 
 
 if __name__ == "__main__":

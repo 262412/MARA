@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -56,7 +57,7 @@ class StubApplicationService:
 
     def index_files(self, paths: list[str], *, reindex: bool = False) -> dict:
         return {
-            "successes": [{"name": path.rsplit("/", 1)[-1]} for path in paths],
+            "successes": [{"name": Path(path).name} for path in paths],
             "failures": [],
         }
 
@@ -189,13 +190,16 @@ class SidecarContractTest(unittest.TestCase):
     def test_index_task_contract_is_authenticated_idempotent_and_path_free(
         self,
     ) -> None:
+        private_root = Path.cwd().resolve() / "private" / "source"
+        source_path = str(private_root / "paper.pdf")
+        ignored_path = str(private_root / "ignored.pdf")
         self.assertIsNone(
             self.authenticated_get("/v1/index-tasks/latest").json()["task"]
         )
         response = self.authenticated_request(
             "POST",
             "/v1/index-tasks",
-            json={"paths": ["/private/source/paper.pdf"], "reindex": False},
+            json={"paths": [source_path], "reindex": False},
             idempotency_key="import-request-1",
         )
 
@@ -204,7 +208,7 @@ class SidecarContractTest(unittest.TestCase):
         duplicate = self.authenticated_request(
             "POST",
             "/v1/index-tasks",
-            json={"paths": ["/private/source/ignored.pdf"], "reindex": True},
+            json={"paths": [ignored_path], "reindex": True},
             idempotency_key="import-request-1",
         ).json()["task"]
         self.assertEqual(duplicate["task_id"], created["task_id"])
@@ -218,12 +222,12 @@ class SidecarContractTest(unittest.TestCase):
         while task["status"] in {"queued", "running"}:
             task = self.authenticated_get(f"/v1/index-tasks/{task_id}").json()["task"]
         self.assertEqual(task["status"], "success")
-        self.assertNotIn("/private", json.dumps(task))
+        self.assertNotIn(str(private_root), json.dumps(task))
 
         events = self.authenticated_get(f"/v1/index-tasks/{task_id}/events")
         self.assertEqual(events.status_code, 200)
         self.assertIn("event: task", events.text)
-        self.assertNotIn("/private", events.text)
+        self.assertNotIn(str(private_root), events.text)
 
     def test_index_tasks_validate_authentication_parameters_and_idempotency(
         self,

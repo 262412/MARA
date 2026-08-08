@@ -90,6 +90,19 @@ def test_storage_lease_publish_is_atomic_and_idempotent(tmp_path):
     assert not list(storage.glob("*.tmp"))
 
 
+def test_directory_sync_is_a_noop_on_windows(monkeypatch, tmp_path):
+    module = _storage_api()
+
+    monkeypatch.setattr(module.os, "name", "nt")
+    monkeypatch.setattr(
+        module.os,
+        "open",
+        lambda *_args, **_kwargs: pytest.fail("Windows must not open a directory"),
+    )
+
+    module._fsync_directory(tmp_path)
+
+
 def test_storage_lease_rejects_symlink_and_directory_blob(tmp_path):
     storage = tmp_path / "storage"
     storage.mkdir()

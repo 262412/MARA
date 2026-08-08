@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -9,11 +9,15 @@ import {
   requiredSidecarDataDirectories,
   requiredSidecarDataPackages,
   requiredSidecarModules,
+  requiredTiktokenEncodings,
+  tiktokenCacheDestination,
 } from "./sidecar-bundle-config.mjs";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = path.resolve(desktopRoot, "..", "..");
 const buildRoot = path.join(desktopRoot, "build", "sidecar");
+const generatedDataRoot = path.join(desktopRoot, "build", "sidecar-data");
+const tiktokenCacheRoot = path.join(generatedDataRoot, "tiktoken-cache");
 const outputRoot = path.join(desktopRoot, "resources", "sidecar");
 const source = path.join(desktopRoot, "sidecar", "server.py");
 const workspacePython = path.resolve(
@@ -26,7 +30,7 @@ const workspacePackageRoots = [
   path.join(repositoryRoot, "libs", "ktem"),
   path.join(repositoryRoot, "libs", "kotaemon"),
 ];
-for (const target of [buildRoot, outputRoot]) {
+for (const target of [buildRoot, generatedDataRoot, outputRoot]) {
   if (!target.startsWith(`${desktopRoot}${path.sep}`)) {
     throw new Error(`Refusing to clean path outside desktop root: ${target}`);
   }
@@ -40,6 +44,29 @@ const python =
     : process.platform === "win32"
       ? "python"
       : "python3");
+mkdirSync(tiktokenCacheRoot, { recursive: true });
+const cacheResult = spawnSync(
+  python,
+  [
+    "-c",
+    "import sys, tiktoken; [tiktoken.get_encoding(name) for name in sys.argv[1:]]",
+    ...requiredTiktokenEncodings,
+  ],
+  {
+    cwd: desktopRoot,
+    env: { ...process.env, TIKTOKEN_CACHE_DIR: tiktokenCacheRoot },
+    stdio: "inherit",
+  },
+);
+if (cacheResult.error) {
+  throw cacheResult.error;
+}
+const cacheFiles = readdirSync(tiktokenCacheRoot).filter(
+  (fileName) => statSync(path.join(tiktokenCacheRoot, fileName)).size > 0,
+);
+if (cacheResult.status !== 0 || cacheFiles.length < requiredTiktokenEncodings.length) {
+  throw new Error("Failed to prepare the checked tiktoken cache for the Sidecar.");
+}
 const result = spawnSync(
   python,
   [
@@ -68,6 +95,8 @@ const result = spawnSync(
       "--add-data",
       `${path.join(desktopRoot, source)}:${destination}`,
     ]),
+    "--add-data",
+    `${tiktokenCacheRoot}:${tiktokenCacheDestination}`,
     ...[desktopRoot, ...workspacePackageRoots].flatMap((modulePath) => [
       "--paths",
       modulePath,

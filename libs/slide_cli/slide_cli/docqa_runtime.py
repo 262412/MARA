@@ -10,6 +10,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import click
+from slide_cli.runtime_assets import (
+    ensure_llama_index_nltk_cache,
+    ensure_tiktoken_cache,
+)
 
 if TYPE_CHECKING:
     from ktem.docqa import DocQARuntime
@@ -82,28 +86,9 @@ def _load_json_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
-def _find_bundled_llama_index_nltk_cache() -> Path | None:
-    for entry in sys.path:
-        if not entry:
-            continue
-        candidate = (
-            Path(entry).resolve() / "llama_index" / "core" / "_static" / "nltk_cache"
-        )
-        if candidate.is_dir():
-            return candidate
-    return None
-
-
-def ensure_llama_index_nltk_cache() -> None:
-    cache_dir = _find_bundled_llama_index_nltk_cache()
-    if cache_dir is None:
-        return
-
-    os.environ.setdefault("NLTK_DATA", str(cache_dir))
-
-
 def create_docqa_runtime(*, include_query_features: bool = True) -> "DocQARuntime":
     ensure_llama_index_nltk_cache()
+    ensure_tiktoken_cache()
     os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
     os.environ.setdefault("GLOG_minloglevel", "3")
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")

@@ -72,6 +72,9 @@ export const requiredSidecarModules = [
 
 export const requiredSidecarDataPackages = ["chromadb", "llama_index.core"];
 
+export const requiredTiktokenEncodings = ["cl100k_base"];
+export const tiktokenCacheDestination = "tiktoken_cache";
+
 export const requiredSidecarDataDirectories = [
   {
     source: "sidecar/nltk_data/tokenizers/punkt",

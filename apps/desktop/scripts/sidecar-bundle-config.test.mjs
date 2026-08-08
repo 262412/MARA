@@ -9,6 +9,8 @@ import {
   requiredSidecarDataDirectories,
   requiredSidecarDataPackages,
   requiredSidecarModules,
+  requiredTiktokenEncodings,
+  tiktokenCacheDestination,
 } from "./sidecar-bundle-config.mjs";
 
 const desktopRoot = path.resolve(
@@ -77,6 +79,8 @@ test("includes the storage and remote embedding modules used by Gate 3 indexing"
     assert.ok(!excludedSidecarModules.includes(moduleName), moduleName);
   }
   assert.deepEqual(requiredSidecarDataPackages, ["chromadb", "llama_index.core"]);
+  assert.deepEqual(requiredTiktokenEncodings, ["cl100k_base"]);
+  assert.equal(tiktokenCacheDestination, "tiktoken_cache");
   assert.deepEqual(requiredSidecarDataDirectories, [
     {
       source: "sidecar/nltk_data/tokenizers/punkt",

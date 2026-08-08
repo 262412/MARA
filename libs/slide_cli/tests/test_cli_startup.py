@@ -257,6 +257,24 @@ def test_ensure_llama_index_nltk_cache_sets_bundled_cache_without_heavy_imports(
     assert "nltk" not in sys.modules
 
 
+def test_ensure_tiktoken_cache_sets_bundled_cache_without_importing_tiktoken(
+    monkeypatch, tmp_path
+):
+    import slide_cli.docqa_runtime as module
+
+    cache_dir = tmp_path / "tiktoken_cache"
+    cache_dir.mkdir()
+
+    monkeypatch.setattr(module.sys, "path", [str(tmp_path)])
+    monkeypatch.delenv("TIKTOKEN_CACHE_DIR", raising=False)
+    monkeypatch.delitem(sys.modules, "tiktoken", raising=False)
+
+    module.ensure_tiktoken_cache()
+
+    assert os.environ["TIKTOKEN_CACHE_DIR"] == str(cache_dir)
+    assert "tiktoken" not in sys.modules
+
+
 def test_importing_docqa_cli_does_not_emit_nltk_download_chatter():
     repo_root = Path(__file__).resolve().parents[3]
     env = dict(os.environ)
