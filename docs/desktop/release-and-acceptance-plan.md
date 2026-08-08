@@ -36,6 +36,8 @@ Linux 二进制在 Ubuntu 22.04 构建以维持最低 glibc 基线。
 - API Schema 生成与 TypeScript 类型漂移检查。
 - 现有 MARA 相关测试与代码卫生门；不得刷新卫生 baseline 来规避失败。
 - 至少 Windows/Linux build smoke，不要求每次生成公开签名包。
+- 文件索引切片使用确定性的本地 embedding 端点验证“真实索引 → Files 刷新 →
+  删除 → 再刷新”，不以空数据或外部模型服务代替组合包验收。
 
 ### 每日或候选版本
 

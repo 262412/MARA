@@ -77,7 +77,12 @@ Renderer 到 Main 只开放按能力命名的方法，例如：
 - `desktop.getDoctor()`
 - `desktop.listFiles()`
 - `desktop.listSessions()`
-- `desktop.chooseFiles(options)`
+- `desktop.importFiles()`
+- `desktop.getLatestIndexTask()`
+- `desktop.cancelIndexTask(taskId)`
+- `desktop.retryIndexTask(taskId)`
+- `desktop.deleteFile(fileId)`
+- `desktop.onIndexTaskStatus(listener)`
 - `desktop.saveArtifact(options)`
 - `desktop.revealPath(handle)`
 - `desktop.getCredentialState(provider)`
@@ -85,6 +90,12 @@ Renderer 到 Main 只开放按能力命名的方法，例如：
 
 不得暴露通用 `invoke(channel, ...args)`、任意 shell、任意 URL 打开或任意文件读取。
 Main 必须校验 IPC sender、参数、文件句柄和允许的外部 URL 协议。
+
+Gate 3 的文件导入由 Main 打开原生选择器；Renderer 不传选择器参数，也不会收到
+绝对路径。Main 只把选择结果送入带认证的 Sidecar 索引命令。Sidecar 返回脱敏的
+任务 ID、文件名、计数和状态，事件通过 SSE 送到 Main 后再投影为明确的 IPC 事件。
+索引任务日志位于独立 Desktop 数据根，应用重启后会把中断任务标记为可重试失败，
+不会静默丢失任务。
 
 ## 3. Sidecar 生命周期
 

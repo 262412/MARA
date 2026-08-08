@@ -8,9 +8,15 @@ import type {
   DoctorResponse,
 } from "../shared/doctor-contracts";
 import type {
+  FileDeleteResponse,
   FileListResponse,
   FileRecord,
 } from "../shared/file-contracts";
+import type {
+  IndexTask,
+  IndexTaskResponse,
+  LatestIndexTaskResponse,
+} from "../shared/index-task-contracts";
 import {
   SIDECAR_PROTOCOL_VERSION,
   type DesktopResult,
@@ -86,6 +92,28 @@ export function parseReadyMessage(line: string): SidecarReadyMessage {
   return message as SidecarReadyMessage;
 }
 
+export function parseIndexTaskEvent(
+  block: string,
+  expectedRequestId?: string,
+): IndexTask {
+  const lines = block.split(/\r?\n/);
+  if (!lines.includes("event: task")) {
+    throw new Error("Sidecar task stream returned an unexpected event");
+  }
+  const data = lines
+    .filter((line) => line.startsWith("data: "))
+    .map((line) => line.slice(6))
+    .join("\n");
+  const payload: unknown = JSON.parse(data);
+  if (!isIndexTaskResponse(payload)) {
+    throw new Error("Sidecar task stream returned an invalid task response");
+  }
+  if (expectedRequestId && payload.request_id !== expectedRequestId) {
+    throw new Error("Sidecar task stream returned a mismatched response");
+  }
+  return payload.task;
+}
+
 export class SidecarManager {
   private child?: ChildProcessWithoutNullStreams;
   private token?: string;
@@ -130,6 +158,97 @@ export class SidecarManager {
       );
       return response.sessions;
     });
+  }
+
+  async createIndexTask(paths: string[]): Promise<DesktopResult<IndexTask>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<IndexTaskResponse>(
+        "/v1/index-tasks",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": randomUUID(),
+          },
+          body: JSON.stringify({ paths, reindex: false }),
+        },
+        true,
+      );
+      return response.task;
+    });
+  }
+
+  async getIndexTask(taskId: string): Promise<DesktopResult<IndexTask>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<IndexTaskResponse>(
+        `/v1/index-tasks/${encodeURIComponent(taskId)}`,
+        {},
+        true,
+      );
+      return response.task;
+    });
+  }
+
+  async getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<LatestIndexTaskResponse>(
+        "/v1/index-tasks/latest",
+        {},
+        true,
+      );
+      return response.task;
+    });
+  }
+
+  async cancelIndexTask(taskId: string): Promise<DesktopResult<IndexTask>> {
+    return this.mutateIndexTask(taskId, "cancel");
+  }
+
+  async retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>> {
+    return this.mutateIndexTask(taskId, "retry", true);
+  }
+
+  async deleteFile(fileId: string): Promise<DesktopResult<string[]>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<FileDeleteResponse>(
+        `/v1/files/${encodeURIComponent(fileId)}`,
+        {
+          method: "DELETE",
+          headers: { "Idempotency-Key": randomUUID() },
+        },
+        true,
+      );
+      return response.deleted_file_ids;
+    });
+  }
+
+  async watchIndexTask(
+    taskId: string,
+    onTask: (task: IndexTask) => void,
+  ): Promise<void> {
+    await waitForRequestReadiness(() => this.getStatus(), this.startup);
+    while (this.getStatus().state === "healthy") {
+      try {
+        if (await this.consumeIndexTaskEvents(taskId, onTask)) {
+          return;
+        }
+      } catch {
+        // The authenticated status request below is the reconnect fallback.
+      }
+      const current = await this.getIndexTask(taskId);
+      if (!current.ok) {
+        return;
+      }
+      onTask(current.data);
+      if (isTerminalIndexTask(current.data)) {
+        return;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    }
   }
 
   start(): Promise<RuntimeStatus> {
@@ -403,6 +522,74 @@ export class SidecarManager {
     return payload as T;
   }
 
+  private async mutateIndexTask(
+    taskId: string,
+    action: "cancel" | "retry",
+    idempotent = false,
+  ): Promise<DesktopResult<IndexTask>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<IndexTaskResponse>(
+        `/v1/index-tasks/${encodeURIComponent(taskId)}/${action}`,
+        {
+          method: "POST",
+          headers: idempotent ? { "Idempotency-Key": randomUUID() } : {},
+        },
+        true,
+      );
+      return response.task;
+    });
+  }
+
+  private async consumeIndexTaskEvents(
+    taskId: string,
+    onTask: (task: IndexTask) => void,
+  ): Promise<boolean> {
+    if (!this.port || !this.token) {
+      throw sidecarNotReadyFailure();
+    }
+    const requestId = randomUUID();
+    const response = await fetch(
+      `http://127.0.0.1:${this.port}/v1/index-tasks/${encodeURIComponent(taskId)}/events`,
+      {
+        headers: {
+          Accept: "text/event-stream",
+          Authorization: `Bearer ${this.token}`,
+          "X-Request-ID": requestId,
+        },
+      },
+    );
+    if (!response.ok || !response.body) {
+      throw new Error("Sidecar task event stream is unavailable");
+    }
+    if (response.headers.get("X-Request-ID") !== requestId) {
+      throw new Error("Sidecar task event stream returned a mismatched response");
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        const block = buffer.slice(0, boundary).trim();
+        buffer = buffer.slice(boundary + 2);
+        if (block) {
+          const task = parseIndexTaskEvent(block, requestId);
+          onTask(task);
+          if (isTerminalIndexTask(task)) {
+            return true;
+          }
+        }
+        boundary = buffer.indexOf("\n\n");
+      }
+      if (done) {
+        return false;
+      }
+    }
+  }
+
   private async runRequest<T>(
     operation: () => Promise<T>,
   ): Promise<DesktopResult<T>> {
@@ -443,4 +630,48 @@ function isSidecarError(value: unknown): value is SidecarError {
     typeof error.request_id === "string" &&
     Object.hasOwn(error, "details")
   );
+}
+
+function isIndexTaskResponse(value: unknown): value is IndexTaskResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const response = value as Record<string, unknown>;
+  return typeof response.request_id === "string" && isIndexTask(response.task);
+}
+
+function isIndexTask(value: unknown): value is IndexTask {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const task = value as Record<string, unknown>;
+  const statuses = new Set([
+    "queued",
+    "running",
+    "partial",
+    "success",
+    "failed",
+    "cancelled",
+  ]);
+  return (
+    typeof task.task_id === "string" &&
+    typeof task.status === "string" &&
+    statuses.has(task.status) &&
+    typeof task.stage === "string" &&
+    typeof task.completed_files === "number" &&
+    typeof task.total_files === "number" &&
+    Array.isArray(task.file_names) &&
+    typeof task.success_count === "number" &&
+    typeof task.failure_count === "number" &&
+    Array.isArray(task.failures) &&
+    (task.error === null || typeof task.error === "object") &&
+    typeof task.retryable === "boolean" &&
+    typeof task.created_at === "string" &&
+    typeof task.updated_at === "string" &&
+    typeof task.version === "number"
+  );
+}
+
+function isTerminalIndexTask(task: IndexTask): boolean {
+  return ["partial", "success", "failed", "cancelled"].includes(task.status);
 }

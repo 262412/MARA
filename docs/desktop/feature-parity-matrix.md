@@ -74,11 +74,25 @@ Beta 稳定化阶段，`Later` 表示不阻塞首发。状态在正式开发开�
 `Verified` 仍以两平台原生构建、打包后真实 smoke 和风险登记册中的平台证据为
 准。开发机或单一平台通过不能提前升级状态。
 
-| 切片     | 状态        | 当前证据                                                                                                     | 升级为 Verified 仍需           |
-| -------- | ----------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| Doctor   | In progress | CLI/application/Sidecar/IPC/React；启动等待回归；OpenAPI 漂移门；Windows Server 2022、Ubuntu 22/24 CI 已通过 | Windows 10/11 干净 VM 产品验收 |
-| Files    | In progress | 真实记录且路径不进入 Renderer；四态；Windows、Ubuntu 22/24 非空打包 smoke 已通过                             | Windows 10/11 干净 VM 产品验收 |
-| Sessions | In progress | 真实会话；左栏四态；Windows、Ubuntu 22/24 非空打包 smoke 已通过                                              | Windows 10/11 干净 VM 产品验收 |
+| 切片     | 状态     | 当前证据                                                                                                                          | 升级为 Verified 仍需 |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Doctor   | Verified | CLI/application/Sidecar/IPC/React；启动等待回归；OpenAPI 漂移门；Windows Server 2022、Ubuntu 22/24 CI；Windows 10/11 干净 VM 验收 | —                    |
+| Files    | Verified | 真实记录且路径不进入 Renderer；四态；Windows、Ubuntu 22/24 非空打包 smoke；Windows 10/11 干净 VM 验收                             | —                    |
+| Sessions | Verified | 真实会话；左栏四态；Windows、Ubuntu 22/24 非空打包 smoke；Windows 10/11 干净 VM 验收                                              | —                    |
 
 详细命令、指标、已解决问题和剩余验收项见
 [Gate 2 纵向切片证据](gate-2-vertical-slice-evidence.md)。
+
+## 5. Gate 3 首个纵向切片状态
+
+Gate 3 从“原生文件导入 → 后台索引 → Files 刷新/删除”开始。以下状态只表示该
+切片的进度，不代表文件格式矩阵、拖放、批量操作或整个 Gate 3 已完成。
+
+| 能力                   | 状态        | 当前证据                                                               | 升级为 Verified 仍需                                      |
+| ---------------------- | ----------- | ---------------------------------------------------------------------- | --------------------------------------------------------- |
+| 原生选择器导入         | In progress | Main 持有原生路径；窄 IPC 无参数；sender/参数测试；Renderer 不接收路径 | 当前提交的 Windows/Ubuntu 原生组合包 smoke                |
+| 后台索引任务           | In progress | 真实 DocQA runtime；持久任务日志；SSE；本地 Linux 离线打包 smoke       | 双平台真实索引 smoke、支持格式矩阵和长任务故障注入        |
+| Files 完成后刷新与删除 | In progress | 终态只刷新一次；真实 deletion coordinator；本地打包删除 smoke          | 双平台非空删除 smoke、批量删除和 CLI/Desktop 兼容数据验收 |
+
+实现、测试、包体测量与剩余风险见
+[Gate 3 文件索引纵向切片证据](gate-3-file-indexing-evidence.md)。

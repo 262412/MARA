@@ -197,6 +197,46 @@ def test_create_docqa_runtime_bootstraps_before_import(monkeypatch):
     assert events == ["bootstrap", "runtime"]
 
 
+def test_create_docqa_runtime_can_skip_query_feature_registration(monkeypatch):
+    import slide_cli.docqa_runtime as module
+
+    events: list[str] = []
+    monkeypatch.setattr(module, "ensure_llama_index_nltk_cache", lambda: None)
+
+    fake_bootstrap_module = types.ModuleType("ktem.runtime_bootstrap")
+
+    def _bootstrap():
+        events.append("bootstrap")
+
+    setattr(fake_bootstrap_module, "bootstrap_runtime_settings", _bootstrap)
+
+    fake_settings = types.SimpleNamespace(
+        KH_REASONINGS=["reasoning.module"],
+        KH_WEB_SEARCH_BACKEND="web_search.module",
+    )
+    fake_settings_module = types.ModuleType("theflow.settings")
+    setattr(fake_settings_module, "settings", fake_settings)
+
+    fake_docqa_module = types.ModuleType("ktem.docqa")
+
+    class _FakeRuntime:
+        def __init__(self):
+            events.append("runtime")
+
+    setattr(fake_docqa_module, "DocQARuntime", _FakeRuntime)
+
+    monkeypatch.setitem(sys.modules, "ktem.runtime_bootstrap", fake_bootstrap_module)
+    monkeypatch.setitem(sys.modules, "theflow.settings", fake_settings_module)
+    monkeypatch.setitem(sys.modules, "ktem.docqa", fake_docqa_module)
+
+    runtime = module.create_docqa_runtime(include_query_features=False)
+
+    assert type(runtime).__name__ == "_FakeRuntime"
+    assert fake_settings.KH_REASONINGS == []
+    assert fake_settings.KH_WEB_SEARCH_BACKEND == ""
+    assert events == ["bootstrap", "runtime"]
+
+
 def test_ensure_llama_index_nltk_cache_sets_bundled_cache_without_heavy_imports(
     monkeypatch, tmp_path
 ):

@@ -4,7 +4,12 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { excludedSidecarModules } from "./sidecar-bundle-config.mjs";
+import {
+  excludedSidecarModules,
+  requiredSidecarDataDirectories,
+  requiredSidecarDataPackages,
+  requiredSidecarModules,
+} from "./sidecar-bundle-config.mjs";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = path.resolve(desktopRoot, "..", "..");
@@ -51,12 +56,18 @@ const result = spawnSync(
     buildRoot,
     "--specpath",
     buildRoot,
-    ...[
-      "ktem.default_flowsettings",
-      "ktem.runtime_defaults",
-      "slide_cli.docqa_runtime",
-      "theflow.settings.default",
-    ].flatMap((moduleName) => ["--hidden-import", moduleName]),
+    ...requiredSidecarModules.flatMap((moduleName) => [
+      "--hidden-import",
+      moduleName,
+    ]),
+    ...requiredSidecarDataPackages.flatMap((packageName) => [
+      "--collect-data",
+      packageName,
+    ]),
+    ...requiredSidecarDataDirectories.flatMap(({ source, destination }) => [
+      "--add-data",
+      `${path.join(desktopRoot, source)}:${destination}`,
+    ]),
     ...[desktopRoot, ...workspacePackageRoots].flatMap((modulePath) => [
       "--paths",
       modulePath,

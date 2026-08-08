@@ -1,20 +1,32 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   protocol,
   session,
 } from "electron";
 
-import type { RuntimeStatus } from "../shared/runtime-contracts";
+import type {
+  DesktopResult,
+  RuntimeStatus,
+} from "../shared/runtime-contracts";
+import type { IndexTask } from "../shared/index-task-contracts";
 import { resolveDesktopDataRoot } from "./desktop-data";
+import { chooseFilesForIndex } from "./file-import";
 import { registerDesktopIpc } from "./ipc";
 import { contentTypeFor, resolveAppAsset } from "./protocol";
 import { SidecarManager } from "./sidecar-manager";
-import { assertPackagedSmoke } from "./smoke-validation";
+import { runDesktopSmoke } from "./smoke-runner";
+import {
+  GATE2_SMOKE_FILE_ID,
+  assertGate3DeleteSmoke,
+  assertGate3IndexSmoke,
+  assertPackagedSmoke,
+} from "./smoke-validation";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -30,6 +42,7 @@ app.enableSandbox();
 
 let mainWindow: BrowserWindow | undefined;
 let quitting = false;
+const watchedIndexTasks = new Set<string>();
 
 const desktopDataRoot = resolveDesktopDataRoot(
   process.platform,
@@ -51,12 +64,79 @@ function broadcastRuntimeStatus(status: RuntimeStatus): void {
   }
 }
 
+function broadcastIndexTask(task: IndexTask): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("index-task:status", task);
+  }
+}
+
+function watchIndexTask(task: IndexTask): void {
+  broadcastIndexTask(task);
+  if (
+    ["partial", "success", "failed", "cancelled"].includes(task.status) ||
+    watchedIndexTasks.has(task.task_id)
+  ) {
+    return;
+  }
+  watchedIndexTasks.add(task.task_id);
+  void sidecar
+    .watchIndexTask(task.task_id, broadcastIndexTask)
+    .finally(() => watchedIndexTasks.delete(task.task_id));
+}
+
+async function waitForIndexTaskTerminal(
+  taskId: string,
+): Promise<DesktopResult<IndexTask>> {
+  const deadline = Date.now() + 60_000;
+  let current = await sidecar.getIndexTask(taskId);
+  while (
+    current.ok &&
+    ["queued", "running"].includes(current.data.status) &&
+    Date.now() < deadline
+  ) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    current = await sidecar.getIndexTask(taskId);
+  }
+  return current;
+}
+
 function registerIpc(): void {
   registerDesktopIpc(ipcMain, {
     getRuntimeStatus: () => sidecar.getStatus(),
     getDoctor: () => sidecar.getDoctor(),
     listFiles: () => sidecar.listFiles(),
     listSessions: () => sidecar.listSessions(),
+    importFiles: async () => {
+      const paths = await chooseFilesForIndex((options) =>
+        mainWindow
+          ? dialog.showOpenDialog(mainWindow, options)
+          : dialog.showOpenDialog(options),
+      );
+      if (paths.length === 0) {
+        return { ok: true, data: null };
+      }
+      const result = await sidecar.createIndexTask(paths);
+      if (result.ok) {
+        watchIndexTask(result.data);
+      }
+      return result;
+    },
+    getLatestIndexTask: () => sidecar.getLatestIndexTask(),
+    cancelIndexTask: async (taskId) => {
+      const result = await sidecar.cancelIndexTask(taskId);
+      if (result.ok) {
+        watchIndexTask(result.data);
+      }
+      return result;
+    },
+    retryIndexTask: async (taskId) => {
+      const result = await sidecar.retryIndexTask(taskId);
+      if (result.ok) {
+        watchIndexTask(result.data);
+      }
+      return result;
+    },
+    deleteFile: (fileId) => sidecar.deleteFile(fileId),
   });
 }
 
@@ -116,24 +196,56 @@ app.whenReady().then(async () => {
   registerIpc();
   const startup = sidecar.start();
   createWindow();
-  const requireNonEmptyFixture = process.argv.includes("--smoke-test-nonempty");
+  const requireGate3Delete = process.argv.includes("--smoke-test-gate3");
+  const requireNonEmptyFixture =
+    process.argv.includes("--smoke-test-nonempty") || requireGate3Delete;
   if (process.argv.includes("--smoke-test") || requireNonEmptyFixture) {
-    const [status, doctor, files, sessions] = await Promise.all([
-      startup,
-      sidecar.getDoctor(),
-      sidecar.listFiles(),
-      sidecar.listSessions(),
-    ]);
-    try {
+    const exitCode = await runDesktopSmoke(async () => {
+      const [status, doctor, files, sessions] = await Promise.all([
+        startup,
+        sidecar.getDoctor(),
+        sidecar.listFiles(),
+        sidecar.listSessions(),
+      ]);
       assertPackagedSmoke(
         { status, doctor, files, sessions },
         requireNonEmptyFixture,
       );
-    } catch (error) {
-      console.error(error);
-      process.exitCode = 1;
-    }
-    app.quit();
+      if (requireGate3Delete) {
+        const indexInput = path.join(
+          desktopDataRoot,
+          "tmp",
+          "gate3-index-smoke.txt",
+        );
+        await writeFile(
+          indexInput,
+          "MARA Desktop Gate 3 deterministic indexing smoke fixture.\n",
+          "utf8",
+        );
+        const created = await sidecar.createIndexTask([indexInput]);
+        const terminal = created.ok
+          ? await waitForIndexTaskTerminal(created.data.task_id)
+          : created;
+        const filesAfterIndex = await sidecar.listFiles();
+        const indexedFileId = assertGate3IndexSmoke(
+          created,
+          terminal,
+          filesAfterIndex,
+        );
+        const deletedFixture = await sidecar.deleteFile(GATE2_SMOKE_FILE_ID);
+        const deletedIndexed = await sidecar.deleteFile(indexedFileId);
+        const filesAfterDelete = await sidecar.listFiles();
+        assertGate3DeleteSmoke(deletedFixture, filesAfterDelete);
+        assertGate3DeleteSmoke(
+          deletedIndexed,
+          filesAfterDelete,
+          indexedFileId,
+        );
+      }
+    }, () => sidecar.stop());
+    quitting = true;
+    app.exit(exitCode);
+    return;
   } else {
     await startup;
   }

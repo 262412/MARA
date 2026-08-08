@@ -1,5 +1,6 @@
 import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
+import type { IndexTask } from "../shared/index-task-contracts";
 import type {
   DesktopResult,
   RuntimeStatus,
@@ -11,7 +12,13 @@ type DesktopBridge = {
   getDoctor(): Promise<DesktopResult<DoctorPayload>>;
   listFiles(): Promise<DesktopResult<FileRecord[]>>;
   listSessions(): Promise<DesktopResult<SessionSummary[]>>;
+  importFiles(): Promise<DesktopResult<IndexTask | null>>;
+  getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>>;
+  cancelIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
+  retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
+  deleteFile(fileId: string): Promise<DesktopResult<string[]>>;
   onRuntimeStatus(listener: (status: RuntimeStatus) => void): () => void;
+  onIndexTaskStatus(listener: (task: IndexTask) => void): () => void;
   platform: NodeJS.Platform;
 };
 

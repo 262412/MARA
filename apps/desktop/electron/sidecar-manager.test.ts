@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  parseIndexTaskEvent,
   parseReadyMessage,
   waitForRequestReadiness,
 } from "./sidecar-manager";
@@ -69,4 +70,32 @@ test("data requests wait for a delayed Sidecar startup to become healthy", async
   });
   await pending;
   assert.equal(settled, true);
+});
+
+test("parses typed index task SSE events without accepting arbitrary payloads", () => {
+  const task = parseIndexTaskEvent(
+    'event: task\ndata: {"request_id":"request-1","task":{"task_id":"task-1","status":"running","stage":"indexing","completed_files":0,"total_files":1,"file_names":["paper.pdf"],"success_count":0,"failure_count":0,"failures":[],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:01Z","version":2}}',
+  );
+
+  assert.equal(task.task_id, "task-1");
+  assert.equal(task.status, "running");
+  assert.equal(
+    parseIndexTaskEvent(
+      'event: task\ndata: {"request_id":"request-1","task":{"task_id":"task-1","status":"running","stage":"indexing","completed_files":0,"total_files":1,"file_names":["paper.pdf"],"success_count":0,"failure_count":0,"failures":[],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:01Z","version":2}}',
+      "request-1",
+    ).task_id,
+    "task-1",
+  );
+  assert.throws(() =>
+    parseIndexTaskEvent(
+      'event: task\ndata: {"request_id":"request-1","task":{"task_id":"task-1","status":"running","stage":"indexing","completed_files":0,"total_files":1,"file_names":["paper.pdf"],"success_count":0,"failure_count":0,"failures":[],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:01Z","version":2}}',
+      "request-2",
+    ),
+  );
+  assert.throws(() => parseIndexTaskEvent("event: message\ndata: {}"));
+  assert.throws(() =>
+    parseIndexTaskEvent(
+      'event: task\ndata: {"request_id":"request-1","task":{"path":"/etc/passwd"}}',
+    ),
+  );
 });

@@ -52,6 +52,27 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
                     [record["conversation_id"] for record in sessions],
                     [GATE2_SMOKE_SESSION_ID],
                 )
+                self.assertEqual(
+                    service.delete_file(GATE2_SMOKE_FILE_ID),
+                    [
+                        {
+                            "file_id": GATE2_SMOKE_FILE_ID,
+                            "name": "gate2-smoke.txt",
+                        }
+                    ],
+                )
+                self.assertEqual(service.list_files(), [])
+                self.assertFalse(
+                    (
+                        data_root
+                        / "state"
+                        / "ktem_app_data"
+                        / "user_data"
+                        / "files"
+                        / "index_1"
+                        / "gate2-smoke.txt"
+                    ).exists()
+                )
             finally:
                 engine.dispose()
 

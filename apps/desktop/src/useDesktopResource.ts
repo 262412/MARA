@@ -62,6 +62,6 @@ export function useDesktopResource<T>(
 
   return {
     resource,
-    retry: () => void load(),
+    retry: load,
   };
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,20 @@ def _collect_sessions() -> list[dict[str, Any]]:
     return collect_docqa_session_summaries()
 
 
+def _create_runtime() -> Any:
+    from slide_cli.docqa_runtime import create_docqa_runtime
+
+    return create_docqa_runtime(include_query_features=False)
+
+
+class DesktopFileNotFoundError(LookupError):
+    pass
+
+
+class DesktopMutationError(RuntimeError):
+    pass
+
+
 class DesktopApplicationService:
     def __init__(
         self,
@@ -49,10 +64,14 @@ class DesktopApplicationService:
         collect_doctor: Callable[[], dict[str, Any]] = _collect_doctor,
         collect_files: Callable[[], list[dict[str, Any]]] = _collect_files,
         collect_sessions: Callable[[], list[dict[str, Any]]] = _collect_sessions,
+        create_runtime: Callable[[], Any] = _create_runtime,
     ) -> None:
         self._collect_doctor = collect_doctor
         self._collect_files = collect_files
         self._collect_sessions = collect_sessions
+        self._create_runtime = create_runtime
+        self._runtime: Any | None = None
+        self._mutation_lock = threading.Lock()
 
     def get_doctor(self) -> dict[str, Any]:
         return self._collect_doctor()
@@ -65,6 +84,55 @@ class DesktopApplicationService:
 
     def list_sessions(self) -> list[dict[str, Any]]:
         return self._collect_sessions()
+
+    def index_files(
+        self,
+        paths: list[str],
+        *,
+        reindex: bool = False,
+    ) -> dict[str, list[dict[str, Any]]]:
+        with self._mutation_lock:
+            result = self._get_runtime().index_paths(paths, reindex=reindex).as_dict()
+        return {
+            "successes": [
+                {"name": _index_result_name(item)}
+                for item in result.get("successes", [])
+            ],
+            "failures": [
+                {
+                    "name": _index_result_name(item),
+                    "code": "index_failed",
+                    "message": "MARA could not index this file.",
+                    "retryable": True,
+                }
+                for item in result.get("failures", [])
+            ],
+        }
+
+    def delete_file(self, file_id: str) -> list[dict[str, str]]:
+        try:
+            with self._mutation_lock:
+                records = self._get_runtime().delete_files([file_id])
+        except ValueError as exc:
+            raise DesktopFileNotFoundError(file_id) from exc
+        except Exception as exc:
+            raise DesktopMutationError(file_id) from exc
+        return [
+            {"file_id": str(record.file_id), "name": str(record.name)}
+            for record in records
+        ]
+
+    def _get_runtime(self) -> Any:
+        if self._runtime is None:
+            self._runtime = self._create_runtime()
+        return self._runtime
+
+
+def _index_result_name(item: dict[str, Any]) -> str:
+    file_name = str(item.get("file_name", "") or "").strip()
+    if file_name:
+        return Path(file_name).name
+    return Path(str(item.get("file_path", "") or "")).name or "Unknown file"
 
 
 def configure_desktop_data_root(data_root: Path) -> Path:

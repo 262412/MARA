@@ -62,11 +62,25 @@ def _create_source_table(engine: Any, index_id: int) -> Any:
         Column("user", String, nullable=False),
         Column("note", JSON, nullable=False),
     )
+    Table(
+        f"index__{index_id}__index",
+        metadata,
+        Column("id", Integer, primary_key=True, autoincrement=True),
+        Column("source_id", String),
+        Column("target_id", String),
+        Column("relation_type", String),
+        Column("user", String, nullable=False, default=""),
+    )
     metadata.create_all(engine)
     return source_table
 
 
-def _seed_file_record(engine: Any, source_table: Any, file_path: Path) -> None:
+def _seed_file_record(
+    engine: Any,
+    source_table: Any,
+    file_path: Path,
+    stored_path: Path,
+) -> None:
     from sqlalchemy import delete as sql_delete
     from sqlalchemy import select as sql_select
 
@@ -81,7 +95,7 @@ def _seed_file_record(engine: Any, source_table: Any, file_path: Path) -> None:
             source_table.insert().values(
                 id=GATE2_SMOKE_FILE_ID,
                 name=file_path.name,
-                path=str(file_path),
+                path=str(stored_path),
                 size=file_path.stat().st_size,
                 date_created=GATE2_SMOKE_TIMESTAMP,
                 user="default",
@@ -132,12 +146,22 @@ def seed_smoke_fixture(data_root: Path) -> None:
 
     index_id = _get_or_create_file_index_id(engine, flowsettings)
     source_table = _create_source_table(engine, index_id)
-    file_path = resolved_root / "documents" / "gate2-smoke.txt"
+    storage_root = (
+        resolved_root
+        / "state"
+        / "ktem_app_data"
+        / "user_data"
+        / "files"
+        / f"index_{index_id}"
+    )
+    stored_path = Path("gate2-smoke.txt")
+    file_path = storage_root / stored_path
+    file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(
         "MARA Desktop Gate 2 deterministic smoke fixture.\n",
         encoding="utf-8",
     )
-    _seed_file_record(engine, source_table, file_path)
+    _seed_file_record(engine, source_table, file_path, stored_path)
     _seed_conversation(engine, Conversation)
 
 

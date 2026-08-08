@@ -3,6 +3,7 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { FileRecord } from "../../shared/file-contracts";
+import type { IndexTask } from "../../shared/index-task-contracts";
 import type { ResourceState } from "../resource-state";
 import { FilesPage } from "./FilesPage";
 
@@ -15,8 +16,42 @@ const file: FileRecord = {
   date_created: "2026-07-30T10:00:00",
 };
 
-function render(state: ResourceState<FileRecord[]>) {
-  return renderToStaticMarkup(<FilesPage files={state} onRetry={() => undefined} />);
+const task: IndexTask = {
+  task_id: "task-1",
+  status: "running",
+  stage: "indexing",
+  completed_files: 1,
+  total_files: 2,
+  file_names: ["paper.pdf", "notes.md"],
+  success_count: 1,
+  failure_count: 0,
+  failures: [],
+  error: null,
+  retryable: false,
+  created_at: "2026-08-08T10:00:00Z",
+  updated_at: "2026-08-08T10:00:01Z",
+  version: 2,
+};
+
+function render(
+  state: ResourceState<FileRecord[]>,
+  indexTask?: IndexTask,
+  actionError?: string,
+) {
+  return renderToStaticMarkup(
+    <FilesPage
+      actionError={actionError}
+      deletingFileId={undefined}
+      files={state}
+      indexActionPending={false}
+      indexTask={indexTask}
+      onCancelIndexTask={() => undefined}
+      onDelete={() => undefined}
+      onImport={() => undefined}
+      onRetry={(): void => undefined}
+      onRetryIndexTask={() => undefined}
+    />,
+  );
 }
 
 test("Files page covers loading, success, empty, and failed states", () => {
@@ -31,4 +66,37 @@ test("Files page covers loading, success, empty, and failed states", () => {
     render({ status: "failed", message: "无法读取文件" }),
     /重试/,
   );
+});
+
+test("Files page exposes import, progress, cancellation, retry, and deletion", () => {
+  const running = render({ status: "success", data: [file] }, task);
+  assert.match(running, /添加文件/);
+  assert.match(running, /正在索引 1\/2/);
+  assert.match(running, /取消索引/);
+  assert.match(running, /删除 paper\.pdf/);
+
+  const failed = render(
+    { status: "success", data: [file] },
+    {
+      ...task,
+      status: "failed",
+      error: {
+        code: "index_failed",
+        message: "MARA could not index the selected files.",
+        retryable: true,
+      },
+      retryable: true,
+    },
+    "无法删除文件",
+  );
+  assert.match(failed, /索引失败/);
+  assert.match(failed, /重试索引/);
+  assert.match(failed, /无法删除文件/);
+
+  const cancelled = render(
+    { status: "success", data: [] },
+    { ...task, status: "cancelled", retryable: true },
+  );
+  assert.match(cancelled, /索引已取消/);
+  assert.doesNotMatch(cancelled, /下一个纵向切片/);
 });

@@ -21,6 +21,11 @@ export type DoctorResponse = {
   request_id: string;
 };
 
+export type FileDeleteResponse = {
+  deleted_file_ids: Array<string>;
+  request_id: string;
+};
+
 export type FileListResponse = {
   files: Array<FileRecord>;
   request_id: string;
@@ -33,6 +38,51 @@ export type FileRecord = {
   name: string;
   size: number;
   tokens: number;
+};
+
+export type IndexTask = {
+  completed_files: number;
+  created_at: string;
+  error: IndexTaskError | null;
+  failure_count: number;
+  failures: Array<IndexTaskFailure>;
+  file_names: Array<string>;
+  retryable: boolean;
+  stage: string;
+  status: "queued" | "running" | "partial" | "success" | "failed" | "cancelled";
+  success_count: number;
+  task_id: string;
+  total_files: number;
+  updated_at: string;
+  version: number;
+};
+
+export type IndexTaskCreateRequest = {
+  paths: Array<string>;
+  reindex?: boolean;
+};
+
+export type IndexTaskError = {
+  code: string;
+  message: string;
+  retryable: boolean;
+};
+
+export type IndexTaskFailure = {
+  code: string;
+  message: string;
+  name: string;
+  retryable: boolean;
+};
+
+export type IndexTaskResponse = {
+  request_id: string;
+  task: IndexTask;
+};
+
+export type LatestIndexTaskResponse = {
+  request_id: string;
+  task: IndexTask | null;
 };
 
 export type RuntimeHealth = {

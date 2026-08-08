@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from fastapi.testclient import TestClient
@@ -8,6 +9,9 @@ from .server import PROTOCOL_VERSION, create_app
 
 
 class StubApplicationService:
+    def __init__(self) -> None:
+        self.delete_calls: list[str] = []
+
     def get_doctor(self) -> dict:
         return {
             "ok": True,
@@ -50,6 +54,16 @@ class StubApplicationService:
             }
         ]
 
+    def index_files(self, paths: list[str], *, reindex: bool = False) -> dict:
+        return {
+            "successes": [{"name": path.rsplit("/", 1)[-1]} for path in paths],
+            "failures": [],
+        }
+
+    def delete_file(self, file_id: str) -> list[dict]:
+        self.delete_calls.append(file_id)
+        return [{"file_id": file_id, "name": "paper.pdf"}]
+
 
 class FailingApplicationService(StubApplicationService):
     def get_doctor(self) -> dict:
@@ -59,7 +73,11 @@ class FailingApplicationService(StubApplicationService):
 class SidecarContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.token = "test-token"
-        self.client = TestClient(create_app(self.token, StubApplicationService()))
+        self.service = StubApplicationService()
+        self.client = TestClient(create_app(self.token, self.service))
+
+    def tearDown(self) -> None:
+        self.client.app.state.index_task_manager.close()
 
     def authenticated_get(
         self,
@@ -76,6 +94,23 @@ class SidecarContractTest(unittest.TestCase):
         if origin is not None:
             headers["Origin"] = origin
         return self.client.get(path, headers=headers)
+
+    def authenticated_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: dict | None = None,
+        idempotency_key: str | None = None,
+        request_id: str = "request-123",
+    ):
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "X-Request-ID": request_id,
+        }
+        if idempotency_key is not None:
+            headers["Idempotency-Key"] = idempotency_key
+        return self.client.request(method, path, headers=headers, json=json)
 
     def test_health_rejects_missing_credentials_with_stable_error(self) -> None:
         response = self.client.get("/health", headers={"X-Request-ID": "request-401"})
@@ -151,12 +186,106 @@ class SidecarContractTest(unittest.TestCase):
         self.assertNotIn("traceback", response.text.lower())
         self.assertNotIn("database is locked", response.text.lower())
 
-    def test_openapi_declares_all_gate_two_endpoints(self) -> None:
+    def test_index_task_contract_is_authenticated_idempotent_and_path_free(
+        self,
+    ) -> None:
+        self.assertIsNone(
+            self.authenticated_get("/v1/index-tasks/latest").json()["task"]
+        )
+        response = self.authenticated_request(
+            "POST",
+            "/v1/index-tasks",
+            json={"paths": ["/private/source/paper.pdf"], "reindex": False},
+            idempotency_key="import-request-1",
+        )
+
+        self.assertEqual(response.status_code, 202)
+        created = response.json()["task"]
+        duplicate = self.authenticated_request(
+            "POST",
+            "/v1/index-tasks",
+            json={"paths": ["/private/source/ignored.pdf"], "reindex": True},
+            idempotency_key="import-request-1",
+        ).json()["task"]
+        self.assertEqual(duplicate["task_id"], created["task_id"])
+        self.assertEqual(
+            self.authenticated_get("/v1/index-tasks/latest").json()["task"]["task_id"],
+            created["task_id"],
+        )
+
+        task_id = created["task_id"]
+        task = self.authenticated_get(f"/v1/index-tasks/{task_id}").json()["task"]
+        while task["status"] in {"queued", "running"}:
+            task = self.authenticated_get(f"/v1/index-tasks/{task_id}").json()["task"]
+        self.assertEqual(task["status"], "success")
+        self.assertNotIn("/private", json.dumps(task))
+
+        events = self.authenticated_get(f"/v1/index-tasks/{task_id}/events")
+        self.assertEqual(events.status_code, 200)
+        self.assertIn("event: task", events.text)
+        self.assertNotIn("/private", events.text)
+
+    def test_index_tasks_validate_authentication_parameters_and_idempotency(
+        self,
+    ) -> None:
+        unauthenticated = self.client.post(
+            "/v1/index-tasks",
+            json={"paths": ["/private/source/paper.pdf"]},
+        )
+        self.assertEqual(unauthenticated.status_code, 401)
+
+        missing_key = self.authenticated_request(
+            "POST",
+            "/v1/index-tasks",
+            json={"paths": ["/private/source/paper.pdf"]},
+        )
+        self.assertEqual(missing_key.status_code, 422)
+        self.assertEqual(missing_key.json()["code"], "invalid_request")
+
+        relative_path = self.authenticated_request(
+            "POST",
+            "/v1/index-tasks",
+            json={"paths": ["relative/paper.pdf"]},
+            idempotency_key="import-relative",
+        )
+        self.assertEqual(relative_path.status_code, 422)
+        self.assertEqual(relative_path.json()["code"], "invalid_request")
+
+    def test_delete_uses_stable_file_id_and_returns_no_local_path(self) -> None:
+        response = self.authenticated_request(
+            "DELETE",
+            "/v1/files/file-1",
+            idempotency_key="delete-file-1",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["deleted_file_ids"], ["file-1"])
+        self.assertNotIn("path", response.text)
+        duplicate = self.authenticated_request(
+            "DELETE",
+            "/v1/files/file-1",
+            idempotency_key="delete-file-1",
+        )
+        self.assertEqual(duplicate.json()["deleted_file_ids"], ["file-1"])
+        self.assertEqual(self.service.delete_calls, ["file-1"])
+
+    def test_unknown_index_task_uses_stable_not_found_error(self) -> None:
+        response = self.authenticated_get("/v1/index-tasks/task-missing")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["code"], "index_task_not_found")
+        self.assertFalse(response.json()["retryable"])
+
+    def test_openapi_declares_gate_two_and_first_gate_three_endpoints(self) -> None:
         schema = create_app(self.token, StubApplicationService()).openapi()
 
         self.assertIn("/v1/doctor", schema["paths"])
         self.assertIn("/v1/files", schema["paths"])
         self.assertIn("/v1/sessions", schema["paths"])
+        self.assertIn("/v1/index-tasks", schema["paths"])
+        self.assertIn("/v1/index-tasks/latest", schema["paths"])
+        self.assertIn("/v1/index-tasks/{task_id}/events", schema["paths"])
+        self.assertIn("/v1/files/{file_id}", schema["paths"])
         self.assertIn("SidecarError", schema["components"]["schemas"])
 
 

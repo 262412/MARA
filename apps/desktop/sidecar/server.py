@@ -18,14 +18,36 @@ import uvicorn
 from fastapi import BackgroundTasks, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from sidecar.api_errors import SidecarApiError
 from sidecar.application import DesktopApplicationService, configure_desktop_data_root
+from sidecar.contracts import (
+    DoctorResponse,
+    FileListResponse,
+    RuntimeHealth,
+    SessionListResponse,
+    SidecarError,
+)
+from sidecar.file_routes import register_gate3_routes
+from sidecar.index_tasks import (
+    IndexTaskConflictError,
+    IndexTaskManager,
+    IndexTaskNotFoundError,
+)
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 PROTOCOL_VERSION = 1
-SIDECAR_VERSION = "0.2.0"
+SIDECAR_VERSION = "0.3.0"
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
-CAPABILITIES = ["health", "lifecycle", "doctor", "files", "sessions"]
+CAPABILITIES = [
+    "health",
+    "lifecycle",
+    "doctor",
+    "files",
+    "sessions",
+    "index_tasks",
+    "task_events",
+    "file_delete",
+]
 LOGGER = logging.getLogger("mara.desktop.sidecar")
 
 
@@ -39,105 +61,16 @@ class ApplicationService(Protocol):
     def list_sessions(self) -> list[dict[str, Any]]:
         ...
 
-
-class RuntimeHealth(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    state: str
-    protocol: int
-    version: str
-    capabilities: list[str]
-    request_id: str
-
-
-class DoctorPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    ok: bool
-    app_name: str
-    default_user_id: str
-    index_name: str
-    index_id: int | None
-    llm_default: str
-    embedding_default: str
-    file_count: int
-    session_count: int
-    graph_cache_dir: str
-    issues: list[str]
-    warnings: list[str]
-
-
-class DoctorResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    request_id: str
-    doctor: DoctorPayload
-
-
-class FileRecord(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    file_id: str
-    name: str
-    size: int
-    tokens: int
-    loader: str
-    date_created: str | None
-
-
-class FileListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    request_id: str
-    files: list[FileRecord]
-
-
-class SessionSummary(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    conversation_id: str
-    name: str
-    message_count: int
-    graph_source_count: int
-    origin: str
-    is_public: bool
-    date_created: str | None
-    date_updated: str | None
-
-
-class SessionListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    request_id: str
-    sessions: list[SessionSummary]
-
-
-class SidecarError(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    code: str
-    message: str
-    details: Any | None
-    retryable: bool
-    request_id: str
-
-
-class SidecarApiError(Exception):
-    def __init__(
+    def index_files(
         self,
-        status_code: int,
-        code: str,
-        message: str,
+        paths: list[str],
         *,
-        details: Any | None = None,
-        retryable: bool = False,
-    ) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-        self.code = code
-        self.message = message
-        self.details = details
-        self.retryable = retryable
+        reindex: bool = False,
+    ) -> dict[str, list[dict[str, Any]]]:
+        ...
+
+    def delete_file(self, file_id: str) -> list[dict[str, str]]:
+        ...
 
 
 def _request_id(request: Request) -> str:
@@ -217,6 +150,7 @@ def _call_service(request: Request, operation: str) -> Any:
 def create_app(
     token: str,
     application_service: ApplicationService | None = None,
+    index_task_manager: IndexTaskManager | None = None,
 ) -> FastAPI:
     if not token:
         raise ValueError("Sidecar token is required")
@@ -229,15 +163,25 @@ def create_app(
         responses={
             401: {"model": SidecarError},
             403: {"model": SidecarError},
+            404: {"model": SidecarError},
+            409: {"model": SidecarError},
             422: {"model": SidecarError},
             503: {"model": SidecarError},
         },
     )
+    service = application_service or DesktopApplicationService()
+    task_manager = index_task_manager or IndexTaskManager(
+        service,
+        journal_path=_index_task_journal_path(),
+    )
     app.state.token = token
-    app.state.application_service = application_service or DesktopApplicationService()
+    app.state.application_service = service
+    app.state.index_task_manager = task_manager
     app.state.request_shutdown = None
+    app.add_event_handler("shutdown", task_manager.close)
     _register_request_middleware(app)
     _register_exception_handlers(app)
+    _register_task_exception_handlers(app)
     _register_lifecycle_routes(app)
     _register_data_routes(app)
     return app
@@ -281,12 +225,20 @@ def _register_exception_handlers(app: FastAPI) -> None:
     async def handle_validation_error(
         request: Request, error: RequestValidationError
     ) -> JSONResponse:
+        errors = [
+            {
+                "type": item.get("type"),
+                "location": [str(part) for part in item.get("loc", ())],
+                "message": item.get("msg"),
+            }
+            for item in error.errors()
+        ]
         return _error_response(
             request,
             status_code=422,
             code="invalid_request",
             message="The Sidecar request is invalid.",
-            details={"errors": error.errors()},
+            details={"errors": errors},
         )
 
     @app.exception_handler(StarletteHTTPException)
@@ -322,6 +274,30 @@ def _register_exception_handlers(app: FastAPI) -> None:
             code="internal_error",
             message="The Sidecar encountered an unexpected error.",
             retryable=True,
+        )
+
+
+def _register_task_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(IndexTaskNotFoundError)
+    async def handle_task_not_found(
+        request: Request, error: IndexTaskNotFoundError
+    ) -> JSONResponse:
+        return _error_response(
+            request,
+            status_code=404,
+            code="index_task_not_found",
+            message="The index task no longer exists.",
+        )
+
+    @app.exception_handler(IndexTaskConflictError)
+    async def handle_task_conflict(
+        request: Request, error: IndexTaskConflictError
+    ) -> JSONResponse:
+        return _error_response(
+            request,
+            status_code=409,
+            code="index_task_conflict",
+            message="The index task cannot perform that action in its current state.",
         )
 
 
@@ -399,6 +375,13 @@ def _register_data_routes(app: FastAPI) -> None:
             request_id=_request_id(request),
             sessions=_call_service(request, "list_sessions"),
         )
+
+    register_gate3_routes(app, protected_without_query)
+
+
+def _index_task_journal_path() -> Path | None:
+    data_root = os.environ.get("MARA_DESKTOP_DATA_DIR", "")
+    return Path(data_root) / "state" / "index-tasks.json" if data_root else None
 
 
 def _watch_parent_pipe(server: uvicorn.Server) -> None:

@@ -1,5 +1,6 @@
 import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
+import type { IndexTask } from "../shared/index-task-contracts";
 import type {
   DesktopResult,
   RuntimeStatus,
@@ -57,4 +58,57 @@ export function assertPackagedSmoke(
   ) {
     throw new Error("Packaged app did not load the non-empty Gate 2 fixture");
   }
+}
+
+export function assertGate3DeleteSmoke(
+  deleted: DesktopResult<string[]>,
+  filesAfterDelete: DesktopResult<FileRecord[]>,
+  expectedFileId = GATE2_SMOKE_FILE_ID,
+): void {
+  if (!deleted.ok) {
+    throw new Error(`Gate 3 delete failed: ${deleted.error.code}`);
+  }
+  if (!deleted.data.includes(expectedFileId)) {
+    throw new Error("Gate 3 delete did not return the fixture file ID");
+  }
+  if (!filesAfterDelete.ok) {
+    throw new Error(`Gate 3 Files refresh failed: ${filesAfterDelete.error.code}`);
+  }
+  if (
+    filesAfterDelete.data.some(
+      (record) => record.file_id === expectedFileId,
+    )
+  ) {
+    throw new Error("Gate 3 fixture is still present after deletion");
+  }
+}
+
+export function assertGate3IndexSmoke(
+  created: DesktopResult<IndexTask>,
+  terminal: DesktopResult<IndexTask>,
+  filesAfterIndex: DesktopResult<FileRecord[]>,
+): string {
+  if (!created.ok) {
+    throw new Error(`Gate 3 index task creation failed: ${created.error.code}`);
+  }
+  if (!terminal.ok || terminal.data.status !== "success") {
+    const state = terminal.ok ? terminal.data.status : terminal.error.code;
+    throw new Error(`Gate 3 index task did not succeed: ${state}`);
+  }
+  if (terminal.data.task_id !== created.data.task_id) {
+    throw new Error("Gate 3 index task identity changed while running");
+  }
+  if (!filesAfterIndex.ok) {
+    throw new Error(`Gate 3 Files refresh failed: ${filesAfterIndex.error.code}`);
+  }
+  const indexed = filesAfterIndex.data.find(
+    (record) => record.name === "gate3-index-smoke.txt",
+  );
+  if (!indexed) {
+    throw new Error("Gate 3 indexed fixture is missing after Files refresh");
+  }
+  if (Object.hasOwn(indexed, "path")) {
+    throw new Error("Gate 3 indexed fixture exposed a local path");
+  }
+  return indexed.file_id;
 }

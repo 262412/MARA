@@ -5,9 +5,13 @@
 Doctor、Files、Sessions 的端到端纵向切片已经实现。提交
 `e04514110277b9147e02b01ec241e955ceaa803b` 的 Windows Server 2022、
 Ubuntu 22.04 原生打包，以及 Ubuntu 24.04 跨版本非空 smoke 均已通过；
-Windows Defender 实际扫描也已通过。整体 Gate 2 状态仍为 **In progress**，
-不能标记为 `Verified`：还需要 Windows 10 和 Windows 11 干净虚拟机上的产品
-验收。
+Windows Defender 实际扫描也已通过。Windows 10 和 Windows 11 x64 干净
+虚拟机产品验收已于 2026-08-08 由验收方确认通过。整体 Gate 2 状态为
+**Verified**，可以开始 Gate 3 开发。
+
+Windows 10/11 的 OS build、artifact SHA-256、截图、日志和启动测量保存在产品
+验收记录中；这些可能包含机器标识与本地路径的原始材料不提交到仓库。本文件
+只记录验收结论，不补写当前仓库中无法独立核验的具体值。
 
 ## 当前自动化证据
 
@@ -21,7 +25,7 @@ Windows Defender 实际扫描也已通过。整体 Gate 2 状态仍为 **In prog
 | Quality gates        | [run 30562506257](https://github.com/262412/MARA/actions/runs/30562506257)，20 个任务全部成功              |
 
 Windows Server 2022 runner 是自动化构建证据，不等同于 Windows 10/11 干净
-虚拟机验收。
+虚拟机验收；后者已由产品验收方在 2026-08-08 单独完成并放行 Gate 2。
 
 ## 公共表面与边界
 
@@ -98,7 +102,8 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
     以及 File 响应不包含本地路径。Ubuntu 22.04 产物携带同一数据快照供
     Ubuntu 24.04 跨版本复验。
 
-这些修正关闭代码和策略层阻塞，但不替代 Windows 10/11 干净虚拟机验收。
+这些修正关闭代码和策略层阻塞；Windows 10/11 干净虚拟机验收随后于
+2026-08-08 完成。
 
 ## 测试结果
 
@@ -175,5 +180,5 @@ Files API 只投影稳定元数据，不把服务返回的本地 `path` 暴露�
 - Defender 诊断证据始终上传；完整 Windows 包仅在扫描成功后上传。
 - PR 以及 `main`/`Dev` 直接 push 的 Desktop 路径过滤触发。
 
-确定性非空 smoke 的本地和双平台 CI 回归均已通过。在 Windows 10/11 干净 VM
-验收完成前，功能矩阵中的三个切片都保持 `In progress`。
+确定性非空 smoke 的本地和双平台 CI 回归均已通过。Windows 10/11 干净 VM
+验收也已完成，功能矩阵中的三个 Gate 2 切片均可标记为 `Verified`。

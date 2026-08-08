@@ -102,7 +102,7 @@ def ensure_llama_index_nltk_cache() -> None:
     os.environ.setdefault("NLTK_DATA", str(cache_dir))
 
 
-def create_docqa_runtime() -> "DocQARuntime":
+def create_docqa_runtime(*, include_query_features: bool = True) -> "DocQARuntime":
     ensure_llama_index_nltk_cache()
     os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
     os.environ.setdefault("GLOG_minloglevel", "3")
@@ -121,6 +121,11 @@ def create_docqa_runtime() -> "DocQARuntime":
     from ktem.runtime_bootstrap import bootstrap_runtime_settings
 
     bootstrap_runtime_settings()
+    if not include_query_features:
+        from theflow.settings import settings as flowsettings
+
+        flowsettings.KH_REASONINGS = []
+        flowsettings.KH_WEB_SEARCH_BACKEND = ""
     from ktem.docqa import DocQARuntime
 
     return DocQARuntime()

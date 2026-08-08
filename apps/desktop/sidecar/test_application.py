@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from .application import DesktopApplicationService, configure_desktop_data_root
 
@@ -59,6 +60,81 @@ class DesktopApplicationServiceTest(unittest.TestCase):
             [{"conversation_id": "session-1"}],
         )
         self.assertEqual(calls, ["doctor", "files", "sessions"])
+
+    def test_reuses_runtime_index_and_delete_services_without_exposing_paths(
+        self,
+    ) -> None:
+        calls: list[tuple] = []
+
+        class Runtime:
+            def index_paths(self, paths, reindex=False):
+                calls.append(("index", paths, reindex))
+                return SimpleNamespace(
+                    as_dict=lambda: {
+                        "successes": [
+                            {
+                                "file_name": "paper.pdf",
+                                "file_path": "/private/source/paper.pdf",
+                                "status": "success",
+                            }
+                        ],
+                        "failures": [
+                            {
+                                "file_name": "broken.pdf",
+                                "file_path": "/private/source/broken.pdf",
+                                "status": "failed",
+                                "message": "failed at /private/source/broken.pdf",
+                            }
+                        ],
+                        "debug_messages": ["private runtime details"],
+                    }
+                )
+
+            def delete_files(self, refs):
+                calls.append(("delete", refs))
+                return [
+                    SimpleNamespace(
+                        file_id="file-1",
+                        name="paper.pdf",
+                        path="/private/storage/paper.pdf",
+                    )
+                ]
+
+        runtime = Runtime()
+        service = DesktopApplicationService(create_runtime=lambda: runtime)
+
+        self.assertEqual(
+            service.index_files(
+                ["/private/source/paper.pdf", "/private/source/broken.pdf"],
+                reindex=True,
+            ),
+            {
+                "successes": [{"name": "paper.pdf"}],
+                "failures": [
+                    {
+                        "name": "broken.pdf",
+                        "code": "index_failed",
+                        "message": "MARA could not index this file.",
+                        "retryable": True,
+                    }
+                ],
+            },
+        )
+        self.assertEqual(
+            service.delete_file("file-1"),
+            [{"file_id": "file-1", "name": "paper.pdf"}],
+        )
+        self.assertEqual(
+            calls,
+            [
+                (
+                    "index",
+                    ["/private/source/paper.pdf", "/private/source/broken.pdf"],
+                    True,
+                ),
+                ("delete", ["file-1"]),
+            ],
+        )
 
     def test_configures_an_independent_desktop_data_tree(self) -> None:
         environment_names = [
