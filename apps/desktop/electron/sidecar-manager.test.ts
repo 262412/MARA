@@ -2,12 +2,27 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  batchFileDeleteRequest,
   parseIndexTaskEvent,
   parseReadyMessage,
   sidecarRequestTimeout,
   sidecarRestartDelay,
   waitForRequestReadiness,
 } from "./sidecar-manager";
+
+test("sends batch deletion as authenticated idempotent JSON", () => {
+  assert.deepEqual(
+    batchFileDeleteRequest(["file-1", "file-2"], "delete-request-1"),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": "delete-request-1",
+      },
+      body: JSON.stringify({ file_ids: ["file-1", "file-2"] }),
+    },
+  );
+});
 
 test("allows bounded long file deletion without relaxing other requests", () => {
   assert.equal(sidecarRequestTimeout("/v1/files/file-1", "DELETE"), 300_000);

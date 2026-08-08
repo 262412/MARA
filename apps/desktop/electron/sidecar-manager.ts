@@ -81,6 +81,21 @@ export function sidecarRequestTimeout(
     : DEFAULT_REQUEST_TIMEOUT_MS;
 }
 
+export function batchFileDeleteRequest(
+  fileIds: string[],
+  idempotencyKey: string,
+): RequestInit {
+  const payload: FileBatchDeleteRequest = { file_ids: fileIds };
+  return {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify(payload),
+  };
+}
+
 export async function waitForRequestReadiness(
   getStatus: () => RuntimeStatus,
   startup?: Promise<RuntimeStatus>,
@@ -265,14 +280,9 @@ export class SidecarManager {
   async deleteFiles(fileIds: string[]): Promise<DesktopResult<string[]>> {
     return this.runRequest(async () => {
       await waitForRequestReadiness(() => this.getStatus(), this.startup);
-      const payload: FileBatchDeleteRequest = { file_ids: fileIds };
       const response = await this.requestJson<FileDeleteResponse>(
         "/v1/file-deletions",
-        {
-          method: "POST",
-          headers: { "Idempotency-Key": randomUUID() },
-          body: JSON.stringify(payload),
-        },
+        batchFileDeleteRequest(fileIds, randomUUID()),
         true,
       );
       return response.deleted_file_ids;
