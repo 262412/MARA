@@ -56,7 +56,17 @@ export function assertPackagedSmoke(
     !fixtureFile ||
     !fixtureSession
   ) {
-    throw new Error("Packaged app did not load the non-empty Gate 2 fixture");
+    const diagnostic = {
+      doctor_ok: doctor.data.ok,
+      doctor_file_count: doctor.data.file_count,
+      doctor_session_count: doctor.data.session_count,
+      doctor_issue_count: doctor.data.issues.length,
+      file_ids: files.data.map((record) => record.file_id),
+      session_ids: sessions.data.map((record) => record.conversation_id),
+    };
+    throw new Error(
+      `Packaged app did not load the non-empty Gate 2 fixture: ${JSON.stringify(diagnostic)}`,
+    );
   }
 }
 

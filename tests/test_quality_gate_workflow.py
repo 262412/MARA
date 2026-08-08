@@ -316,6 +316,24 @@ def test_desktop_jobs_smoke_deterministic_nonempty_data():
     assert "--smoke-test-nonempty" in linux_24_commands
 
 
+def test_linux_desktop_uploads_a_small_metrics_artifact():
+    workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
+    steps = workflow["jobs"]["package-linux-22"]["steps"]
+    smoke = next(
+        step
+        for step in steps
+        if step["name"] == "Smoke packaged vertical slice and record metrics"
+    )
+    metrics = next(
+        step for step in steps if step["name"] == "Upload Ubuntu 22.04 metrics"
+    )
+
+    assert "linux-22-sidecar-sha256.txt" in smoke["run"]
+    assert metrics["with"]["name"] == "mara-desktop-linux-22-metrics"
+    assert metrics["with"]["path"] == "apps/desktop/release/metrics/"
+    assert "MARA-linux-x64" not in metrics["with"]["path"]
+
+
 def test_windows_defender_failure_uploads_diagnostics_but_not_the_package():
     workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
     steps = workflow["jobs"]["package-windows"]["steps"]
@@ -352,7 +370,9 @@ def test_windows_packaged_smoke_always_uploads_process_diagnostics():
     assert "windows-smoke-diagnostics.txt" in diagnostics["with"]["path"]
     assert "windows-smoke-stdout.txt" in diagnostics["with"]["path"]
     assert "windows-smoke-stderr.txt" in diagnostics["with"]["path"]
+    assert "windows-metrics.txt" in diagnostics["with"]["path"]
     assert "MARA-win32-x64" not in diagnostics["with"]["path"]
+    assert "sidecar_sha256=$sidecarSha256" in smoke["run"]
 
 
 def test_workflows_do_not_grant_blanket_write_permissions():

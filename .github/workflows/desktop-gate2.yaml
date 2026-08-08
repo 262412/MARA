@@ -101,6 +101,8 @@ jobs:
             > apps/desktop/release/metrics/linux-22-file-count.txt
           ldd apps/desktop/release/MARA-linux-x64/resources/sidecar/mara-desktop-sidecar/mara-desktop-sidecar \
             > apps/desktop/release/metrics/linux-22-sidecar-ldd.txt
+          sha256sum apps/desktop/release/MARA-linux-x64/resources/sidecar/mara-desktop-sidecar/mara-desktop-sidecar \
+            > apps/desktop/release/metrics/linux-22-sidecar-sha256.txt
           if grep -q "not found" apps/desktop/release/metrics/linux-22-sidecar-ldd.txt; then
             exit 1
           fi
@@ -120,6 +122,12 @@ jobs:
         with:
           name: mara-desktop-linux-22
           path: apps/desktop/release/mara-linux-22.tar.gz
+          if-no-files-found: error
+      - name: Upload Ubuntu 22.04 metrics
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mara-desktop-linux-22-metrics
+          path: apps/desktop/release/metrics/
           if-no-files-found: error
 
   smoke-linux-24:
@@ -272,12 +280,16 @@ jobs:
           }
           $files = Get-ChildItem "apps/desktop/release/MARA-win32-x64" -Recurse -File
           $bytes = ($files | Measure-Object Length -Sum).Sum
+          $sidecar = "apps/desktop/release/MARA-win32-x64/resources/sidecar/mara-desktop-sidecar/mara-desktop-sidecar.exe"
+          $sidecarSha256 = (Get-FileHash $sidecar -Algorithm SHA256).Hash.ToLowerInvariant()
           @(
             "elapsed_ms=$($stopwatch.ElapsedMilliseconds)"
             "peak_working_set_bytes=$peakWorkingSet"
             "package_bytes=$bytes"
             "file_count=$($files.Count)"
+            "sidecar_sha256=$sidecarSha256"
           ) | Set-Content $metrics
+          Get-Content $metrics | Add-Content $diagnostics
           Get-Content $metrics | Add-Content $env:GITHUB_STEP_SUMMARY
       - name: Scan package with Windows Defender
         shell: pwsh
@@ -334,6 +346,7 @@ jobs:
             apps/desktop/release/windows-smoke-diagnostics.txt
             apps/desktop/release/windows-smoke-stdout.txt
             apps/desktop/release/windows-smoke-stderr.txt
+            apps/desktop/release/windows-metrics.txt
           if-no-files-found: warn
       - name: Upload Windows Defender diagnostics
         if: ${{ always() }}

@@ -86,7 +86,7 @@ test("rejects empty data when the packaged smoke requires real records", () => {
         },
         true,
       ),
-    /non-empty Gate 2 fixture/,
+    /non-empty Gate 2 fixture:.*"doctor_file_count":0.*"file_ids":\[\]/,
   );
 });
 
