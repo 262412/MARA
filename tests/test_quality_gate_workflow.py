@@ -316,6 +316,17 @@ def test_desktop_jobs_smoke_deterministic_nonempty_data():
     assert "--smoke-test-nonempty" in linux_24_commands
 
 
+def test_windows_smoke_seeds_the_same_system_appdata_used_by_electron():
+    workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
+    job = workflow["jobs"]["package-windows"]
+    commands = _commands(job)
+
+    assert "[Environment+SpecialFolder]::ApplicationData" in commands
+    assert '$dataRoot = Join-Path $appData "MARA"' in commands
+    assert "--data-root $dataRoot" in commands
+    assert 'Join-Path $env:RUNNER_TEMP "mara-desktop-appdata"' not in commands
+
+
 def test_linux_desktop_uploads_a_small_metrics_artifact():
     workflow = _load_workflow(DESKTOP_WORKFLOW_PATH)
     steps = workflow["jobs"]["package-linux-22"]["steps"]

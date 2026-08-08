@@ -221,14 +221,18 @@ jobs:
       - name: Smoke packaged vertical slice and record metrics
         shell: pwsh
         run: |
-          $env:APPDATA = Join-Path $env:RUNNER_TEMP "mara-desktop-appdata"
+          $appData = [Environment]::GetFolderPath(
+            [Environment+SpecialFolder]::ApplicationData
+          )
+          $env:APPDATA = $appData
+          $dataRoot = Join-Path $appData "MARA"
           $metrics = "apps/desktop/release/windows-metrics.txt"
           $diagnostics = "apps/desktop/release/windows-smoke-diagnostics.txt"
           $stdout = "apps/desktop/release/windows-smoke-stdout.txt"
           $stderr = "apps/desktop/release/windows-smoke-stderr.txt"
           $executable = "apps/desktop/release/MARA-win32-x64/MARA.exe"
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
-            --data-root (Join-Path $env:APPDATA "MARA")
+            --data-root $dataRoot
           $portFile = Join-Path $env:RUNNER_TEMP "mara-embedding-port.txt"
           $python = (Resolve-Path ".venv/Scripts/python.exe").Path
           $embeddingServer = Start-Process -FilePath $python `
