@@ -189,6 +189,33 @@ Windows 包 artifact `9025489782`、Ubuntu 包 `9025487365` 均未过期。Defen
 artifact `9025483181` 确认引擎和服务开启、移除 `D:\` 整盘排除、启用 archive
 scanning，并得到 `scan_result=no_detections`。
 
+## 运行中取消恢复 CI 证据
+
+2026-08-08 的
+[Desktop Gate 3 运行 31271484535](https://github.com/262412/MARA/actions/runs/31271484535)
+基于提交 `68245834200a820a53384860602391d8c4ab2dd3`，Windows Server 2022、
+Ubuntu 22.04 原生包和 Ubuntu 24.04 跨版本任务全部成功。Windows 与 Ubuntu
+22.04 均在首文件的真实 embedding 请求处暂停，发出取消后只让首文件完成，任务以
+`index_cancelled` 结束；重试只选择第二个文件，最终两个记录均成功并被删除。
+
+Windows 诊断记录 `cancel_exit_code=0`，标准输出为
+`gate3_cancel=cancelled_at_file_boundary retry=status_success`，标准错误为 0 bytes；
+Ubuntu 22.04 的 CLI 复核记录 `phase=cancellation-recovered`、`record_count=0`。
+Defender 同时确认引擎与服务开启、移除 `D:\` 整盘排除、启用 archive scanning，
+并得到 `scan_result=no_detections`。
+
+| 平台/产物               | Artifact ID | 压缩大小    | Actions digest                                                     |
+| ----------------------- | ----------- | ----------- | ------------------------------------------------------------------ |
+| Windows 完整组合包      | 9025794373  | 395,900,224 | `cf672f226723c7f0a071fb845ef38bfd3deacaaba214c2082eed6823165e7bc5` |
+| Windows smoke 诊断      | 9025788548  | 2,960       | `8ca770b122ac18431f21c1c85078fd1c5a51de2ca4e93d18b58b66a1b1ecfe0a` |
+| Windows Defender 诊断   | 9025788744  | 359         | `5e65dce8ff53fe8b424ad572fa67ce8624abc8b1ff33293fb948e2db99997b71` |
+| Ubuntu 22.04 完整组合包 | 9025803423  | 412,480,543 | `c898f28f87a30d5818ee552c71c8b22f945a94daf182ee5e6aded0ad57e1a5e6` |
+| Ubuntu 22.04 包体测量   | 9025803649  | 2,234       | `9454519b5e7d60cab77d910fefe5b3bf5b3ce0e611376994833d585d1cf2db84` |
+
+同一 Windows 运行记录首段 smoke 用时 16.605 秒、峰值工作集 100,421,632 bytes，
+发布目录 997,310,895 bytes、2,705 个文件。Ubuntu 24.04 复用 Ubuntu 22.04 的
+同一组合包及取消恢复后重新生成的数据快照，提供发行版兼容复验。
+
 ## Linux 开发机参考测量
 
 2026-08-08 在当前 Linux 开发机对自包含 Electron + PyInstaller 组合包执行断网
@@ -225,9 +252,9 @@ Gate 3 引入的 LanceDB/Lance/PyArrow 存储链使包体和内存显著高于 G
    CSV、HTML、MHTML 和 ZIP 已通过 Windows/Ubuntu 原生组合包真实索引/删除。
 3. 增加大文件、部分失败、磁盘满、数据库锁和 Sidecar 强制退出的组合包故障注入。
    模型 503 → 脱敏失败 → 原任务重试成功已通过 Windows/Ubuntu 原生组合包。运行中
-   取消 → 文件边界停止 → 只重试剩余文件已通过 Linux 开发态真实 runtime 并接入
-   Windows/Ubuntu 打包工作流，仍需取得当前提交的原生 CI 证据。取消不会强杀正在
-   执行的单文件 parser/vector write，大文件场景仍须单独验证资源和等待边界。
+   取消 → 文件边界停止 → 只重试剩余文件已通过 Windows/Ubuntu 原生组合包。取消
+   不会强杀正在执行的单文件 parser/vector write，大文件场景仍须单独验证资源和
+   等待边界。
 4. 当前 LlamaIndex 0.10 将 `pypdf` 限制在 4.x，无法直接采用修复
    GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42 的 6.15.0。两项恶意 PDF
    资源耗尽风险已登记为 R22；PDF 必须完成资源限制回移或 reader 升级及故障注入，
