@@ -61,6 +61,12 @@ function sidecarNotReadyFailure(): SidecarRequestFailure {
   });
 }
 
+const SIDECAR_RESTART_DELAYS_MS = [250, 500, 1_000] as const;
+
+export function sidecarRestartDelay(attempt: number): number | undefined {
+  return SIDECAR_RESTART_DELAYS_MS[attempt];
+}
+
 export async function waitForRequestReadiness(
   getStatus: () => RuntimeStatus,
   startup?: Promise<RuntimeStatus>,
@@ -121,6 +127,8 @@ export class SidecarManager {
   private token?: string;
   private port?: number;
   private startup?: Promise<RuntimeStatus>;
+  private restartTimer?: ReturnType<typeof setTimeout>;
+  private restartAttempts = 0;
   private stopping = false;
   private status: RuntimeStatus = {
     state: "stopped",
@@ -272,6 +280,9 @@ export class SidecarManager {
     if (this.status.state === "healthy") {
       return Promise.resolve(this.getStatus());
     }
+    if (this.status.state === "stopped" && !this.restartTimer) {
+      this.restartAttempts = 0;
+    }
 
     const startup = this.launch();
     this.startup = startup;
@@ -335,6 +346,7 @@ export class SidecarManager {
           capabilities: [],
           message: `Sidecar exited unexpectedly (${signal ?? code ?? "unknown"}).`,
         });
+        this.scheduleRestart();
       }
     });
 
@@ -393,9 +405,38 @@ export class SidecarManager {
     }
   }
 
+  private scheduleRestart(): void {
+    if (this.stopping || this.child || this.restartTimer) {
+      return;
+    }
+    const delay = sidecarRestartDelay(this.restartAttempts);
+    if (delay === undefined) {
+      this.setStatus({
+        state: "failed",
+        protocol: SIDECAR_PROTOCOL_VERSION,
+        capabilities: [],
+        message: "Sidecar automatic restart budget was exhausted.",
+      });
+      return;
+    }
+    this.restartAttempts += 1;
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = undefined;
+      if (!this.stopping && !this.child) {
+        void this.start();
+      }
+    }, delay);
+  }
+
   async stop(): Promise<void> {
+    this.stopping = true;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = undefined;
+    }
     const child = this.child;
     if (!child) {
+      this.restartAttempts = 0;
       this.setStatus({
         state: "stopped",
         protocol: SIDECAR_PROTOCOL_VERSION,
@@ -404,7 +445,6 @@ export class SidecarManager {
       return;
     }
 
-    this.stopping = true;
     try {
       await this.requestJson("/shutdown", { method: "POST" });
       await Promise.race([
@@ -420,6 +460,7 @@ export class SidecarManager {
     this.child = undefined;
     this.port = undefined;
     this.token = undefined;
+    this.restartAttempts = 0;
     this.setStatus({
       state: "stopped",
       protocol: SIDECAR_PROTOCOL_VERSION,

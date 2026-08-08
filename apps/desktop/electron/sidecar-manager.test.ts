@@ -4,8 +4,16 @@ import test from "node:test";
 import {
   parseIndexTaskEvent,
   parseReadyMessage,
+  sidecarRestartDelay,
   waitForRequestReadiness,
 } from "./sidecar-manager";
+
+test("bounds automatic Sidecar restarts to three exponential delays", () => {
+  assert.deepEqual(
+    [0, 1, 2, 3].map((attempt) => sidecarRestartDelay(attempt)),
+    [250, 500, 1_000, undefined],
+  );
+});
 
 test("accepts the versioned sidecar ready message", () => {
   assert.deepEqual(

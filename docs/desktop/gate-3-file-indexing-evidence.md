@@ -68,8 +68,9 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 - `--smoke-test-gate3-partial` 先真实索引首文件，再提交“已存在文件 + 新文件”的批量
   任务，要求任务一成一败，重试只选择失败首项并以 `reindex` 恢复，最后清空 Files。
 - `--smoke-test-gate3-sidecar-exit` 在真实 embedding 请求进行中只由 Main 强制终止
-  Sidecar，要求 runtime 失败、同一数据根重启后任务变为 `index_interrupted`，再
-  重试唯一未完成文件并清空 Files；该测试控制不进入 Preload 或 Renderer IPC。
+  Sidecar，要求 runtime 失败、监督器按指数退避自动重启、同一数据根中的任务变为
+  `index_interrupted`，再重试唯一未完成文件并清空 Files；该测试控制不进入 Preload
+  或 Renderer IPC。
 - CI 使用仅绑定 loopback 的确定性 OpenAI-compatible embedding 端点，避免真实
   模型服务、网络和凭据影响打包验收。
 
@@ -256,9 +257,11 @@ Defender 确认引擎与服务开启、移除 `D:\` 整盘排除、启用 archiv
 
 2026-08-08 在独立 fastscratch 数据根运行真实 Electron、Sidecar 和 DocQA runtime：
 首文件 embedding 请求被确定性暂停后，Main 强制终止 Sidecar 子进程，runtime 进入
-`failed`；随后同一数据根启动新的 Sidecar，持久任务日志把原任务恢复为
+`failed`；监督器按 250/500/1,000 ms 退避且最多三次自动启动新的 Sidecar，持久任务
+日志把原任务恢复为
 `status=failed`、`stage=interrupted`、`error.code=index_interrupted` 和
-`retryable=true`。重试只包含唯一未完成文件并成功，安全摘要为
+`retryable=true`。Main 在恢复 healthy 后重新发布最新任务，使 Renderer 不会停留在
+旧的 running 状态。重试只包含唯一未完成文件并成功，安全摘要为
 `gate3_sidecar_exit=failed interrupted retry=status_success`；正式
 `MARA docqa files --json` 最终复核 `record_count=0`。预期的客户端断连由确定性
 embedding 测试服务器窄化处理，不再输出带构建路径的 BrokenPipe 栈。该场景已经

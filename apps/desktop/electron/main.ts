@@ -59,6 +59,7 @@ app.enableSandbox();
 
 let mainWindow: BrowserWindow | undefined;
 let quitting = false;
+let recoverIndexTaskAfterRestart = false;
 const watchedIndexTasks = new Set<string>();
 
 const desktopDataRoot = resolveDesktopDataRoot(
@@ -72,7 +73,7 @@ const sidecar = new SidecarManager({
   dataRoot: desktopDataRoot,
   isPackaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
-  onStatus: (status) => broadcastRuntimeStatus(status),
+  onStatus: handleSidecarStatus,
 });
 
 function broadcastRuntimeStatus(status: RuntimeStatus): void {
@@ -84,6 +85,21 @@ function broadcastRuntimeStatus(status: RuntimeStatus): void {
 function broadcastIndexTask(task: IndexTask): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("index-task:status", task);
+  }
+}
+
+function handleSidecarStatus(status: RuntimeStatus): void {
+  if (status.state === "failed") {
+    recoverIndexTaskAfterRestart = true;
+  }
+  broadcastRuntimeStatus(status);
+  if (status.state === "healthy" && recoverIndexTaskAfterRestart) {
+    recoverIndexTaskAfterRestart = false;
+    void sidecar.getLatestIndexTask().then((latest) => {
+      if (latest.ok && latest.data) {
+        watchIndexTask(latest.data);
+      }
+    });
   }
 }
 
@@ -125,6 +141,18 @@ async function waitForSmokeMarker(markerPath: string): Promise<void> {
   if (!existsSync(markerPath)) {
     throw new Error("Gate 3 embedding request did not reach the smoke server");
   }
+}
+
+async function waitForHealthySidecar(): Promise<RuntimeStatus> {
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const status = sidecar.getStatus();
+    if (status.state === "healthy") {
+      return status;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("Gate 3 Sidecar did not restart automatically");
 }
 
 async function deleteSmokeFiles(
@@ -318,7 +346,7 @@ async function runGate3SidecarInterruptionSmoke(
   const failedRuntime = sidecar.getStatus();
   await unlink(blockMarker);
   await unlink(requestMarker);
-  const restartedRuntime = await sidecar.start();
+  const restartedRuntime = await waitForHealthySidecar();
   const latest = await sidecar.getLatestIndexTask();
   const interruptedTaskId = assertGate3InterruptedSmoke(
     created,
