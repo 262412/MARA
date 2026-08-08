@@ -36,10 +36,7 @@ class BatchDeleteApplicationService:
 
     def delete_files(self, file_ids: list[str]) -> list[dict[str, str]]:
         self.delete_calls.append(file_ids)
-        return [
-            {"file_id": file_id, "name": f"{file_id}.txt"}
-            for file_id in file_ids
-        ]
+        return [{"file_id": file_id, "name": f"{file_id}.txt"} for file_id in file_ids]
 
 
 class FailingBatchDeleteApplicationService(BatchDeleteApplicationService):
