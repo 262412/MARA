@@ -47,7 +47,7 @@ from sidecar.smoke_faults import inject_smoke_fault
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 PROTOCOL_VERSION = 1
-SIDECAR_VERSION = "0.5.0"
+SIDECAR_VERSION = "0.6.0"
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 CAPABILITIES = [
     "health",
@@ -56,6 +56,7 @@ CAPABILITIES = [
     "files",
     "sessions",
     "session_detail",
+    "session_create",
     "session_mutations",
     "index_tasks",
     "task_events",
@@ -77,6 +78,9 @@ class ApplicationService(Protocol):
         ...
 
     def get_session(self, conversation_id: str) -> dict[str, Any]:
+        ...
+
+    def create_session(self) -> dict[str, Any]:
         ...
 
     def rename_session(self, conversation_id: str, name: str) -> dict[str, Any]:

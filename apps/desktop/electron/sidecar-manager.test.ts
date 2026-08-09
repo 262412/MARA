@@ -5,11 +5,23 @@ import {
   batchFileDeleteRequest,
   parseIndexTaskEvent,
   parseReadyMessage,
+  sessionCreateRequest,
   sessionRenameRequest,
   sidecarRequestTimeout,
   sidecarRestartDelay,
   waitForRequestReadiness,
 } from "./sidecar-manager";
+
+test("sends session creation as authenticated idempotent JSON", () => {
+  assert.deepEqual(sessionCreateRequest("create-request-1"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": "create-request-1",
+    },
+    body: JSON.stringify({}),
+  });
+});
 
 test("sends session rename as authenticated idempotent JSON", () => {
   assert.deepEqual(sessionRenameRequest("Renamed session", "rename-request-1"), {

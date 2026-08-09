@@ -44,6 +44,7 @@ export default function App() {
     { conversationId: string; action: "rename" | "delete" } | undefined
   >();
   const [sessionActionError, setSessionActionError] = useState<string>();
+  const [sessionCreatePending, setSessionCreatePending] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("preview");
   const [indexTask, setIndexTask] = useState<IndexTask>();
@@ -56,6 +57,7 @@ export default function App() {
   const indexActionLock = useRef(false);
   const sessionRequestGeneration = useRef(0);
   const sessionMutationLock = useRef(false);
+  const sessionCreateLock = useRef(false);
   const [runtime, setRuntime] = useState<RuntimeStatus>(
     window.desktop
       ? { state: "starting", protocol: 1, capabilities: [] }
@@ -320,16 +322,52 @@ export default function App() {
     );
   }, [files.resource]);
 
+  const createSession = useCallback(async () => {
+    if (sessionCreateLock.current || sessionMutationLock.current) {
+      return;
+    }
+    sessionCreateLock.current = true;
+    setSessionCreatePending(true);
+    setSessionActionError(undefined);
+    try {
+      const result = await (
+        window.desktop?.createSession() ??
+        unavailableResult<SessionDetail>(
+          "新建任务仅能在 MARA Desktop 中使用。",
+        )
+      );
+      if (result.ok) {
+        setActiveNav("workbench");
+        setSessionSearchQuery("");
+        setSelectedSessionId(result.data.conversation_id);
+        sessions.retry();
+      } else {
+        setSessionActionError(result.error.message);
+      }
+    } catch {
+      setSessionActionError("新建任务未能完成。");
+    } finally {
+      sessionCreateLock.current = false;
+      setSessionCreatePending(false);
+    }
+  }, [sessions.retry]);
+
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "o") {
         event.preventDefault();
         void importFiles();
+      } else if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === "n"
+      ) {
+        event.preventDefault();
+        void createSession();
       }
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [importFiles]);
+  }, [createSession, importFiles]);
 
   const selectSession = useCallback((sessionId: string) => {
     setActiveNav("workbench");
@@ -357,6 +395,7 @@ export default function App() {
       const name = rawName.trim();
       if (
         sessionMutationLock.current ||
+        sessionCreateLock.current ||
         name.length === 0 ||
         Array.from(name).length > 200
       ) {
@@ -394,7 +433,7 @@ export default function App() {
 
   const deleteSession = useCallback(
     async (session: SessionSummary) => {
-      if (sessionMutationLock.current) {
+      if (sessionMutationLock.current || sessionCreateLock.current) {
         return;
       }
       const name = session.name || "未命名任务";
@@ -455,12 +494,14 @@ export default function App() {
           onStartRename={startSessionRename}
           onEditingSessionNameChange={setEditingSessionName}
           onCancelRename={cancelSessionRename}
+          onCreateSession={() => void createSession()}
           onRenameSession={(conversationId, name) =>
             void renameSession(conversationId, name)
           }
           onDeleteSession={(session) => void deleteSession(session)}
           sessionAction={sessionAction}
           sessionActionError={sessionActionError}
+          sessionCreatePending={sessionCreatePending}
           selectedSessionId={selectedSessionId}
           sessions={sessions.resource}
         />

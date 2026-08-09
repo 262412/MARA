@@ -80,7 +80,7 @@ export function Workspace({
 
       <div className="composer-wrap">
         <div className="prototype-notice" role="status">
-          真实会话读取已接通；新问题与流式回答将在下一纵向切片启用。
+          真实会话读取和新建任务已接通；新问题与流式回答将在下一纵向切片启用。
         </div>
         <div className="context-row">
           <button className="context-chip" disabled type="button">

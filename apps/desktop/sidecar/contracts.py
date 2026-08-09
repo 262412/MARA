@@ -222,6 +222,10 @@ class SessionDetailResponse(BaseModel):
     session: SessionDetail
 
 
+class SessionCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
 class SessionRenameRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

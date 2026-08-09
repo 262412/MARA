@@ -9,6 +9,7 @@ type SidebarProps = {
   selectedSessionId: string | undefined;
   onSelectSession: (sessionId: string) => void;
   onRetrySessions: () => void;
+  onCreateSession: () => void;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   editingSessionId: string | undefined;
@@ -22,6 +23,7 @@ type SidebarProps = {
     | { conversationId: string; action: "rename" | "delete" }
     | undefined;
   sessionActionError: string | undefined;
+  sessionCreatePending: boolean;
 };
 
 const navigation: Array<{ id: string; label: string; icon: IconName }> = [
@@ -38,6 +40,7 @@ export function Sidebar({
   selectedSessionId,
   onSelectSession,
   onRetrySessions,
+  onCreateSession,
   searchQuery,
   onSearchQueryChange,
   editingSessionId,
@@ -49,12 +52,13 @@ export function Sidebar({
   onDeleteSession,
   sessionAction,
   sessionActionError,
+  sessionCreatePending,
 }: SidebarProps) {
   const visibleSessions =
     sessions.status === "success"
       ? filterSessions(sessions.data, searchQuery)
       : [];
-  const actionPending = sessionAction !== undefined;
+  const actionPending = sessionAction !== undefined || sessionCreatePending;
 
   return (
     <aside className="sidebar" aria-label="应用导航">
@@ -68,12 +72,12 @@ export function Sidebar({
 
       <button
         className="new-task"
-        disabled
-        title="新建任务将在问答切片开放"
+        disabled={sessionCreatePending || actionPending}
+        onClick={onCreateSession}
         type="button"
       >
         <Icon name="add" />
-        新建任务
+        {sessionCreatePending ? "正在新建…" : "新建任务"}
         <kbd>Ctrl N</kbd>
       </button>
 

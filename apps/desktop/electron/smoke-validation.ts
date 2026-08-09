@@ -143,12 +143,39 @@ export function assertGate3DeleteSmoke(
 }
 
 export function assertGate3SessionMutationSmoke(
+  created: DesktopResult<SessionDetail>,
+  createdReloaded: DesktopResult<SessionDetail>,
+  sessionsAfterCreate: DesktopResult<SessionSummary[]>,
+  createdDeleted: DesktopResult<string>,
   renamed: DesktopResult<SessionDetail>,
   reloaded: DesktopResult<SessionDetail>,
   sessionsAfterRename: DesktopResult<SessionSummary[]>,
   deleted: DesktopResult<string>,
   sessionsAfterDelete: DesktopResult<SessionSummary[]>,
 ): void {
+  if (!created.ok || !createdReloaded.ok || !sessionsAfterCreate.ok) {
+    throw new Error("Gate 3 session creation request failed");
+  }
+  const createdSummary = sessionsAfterCreate.data.find(
+    (candidate) => candidate.conversation_id === created.data.conversation_id,
+  );
+  if (
+    !/^[A-Za-z0-9._-]{1,128}$/.test(created.data.conversation_id) ||
+    createdReloaded.data.conversation_id !== created.data.conversation_id ||
+    created.data.messages.length !== 0 ||
+    !createdSummary ||
+    Object.hasOwn(created.data, "path") ||
+    Object.hasOwn(created.data, "data_source") ||
+    Object.hasOwn(created.data, "user_id")
+  ) {
+    throw new Error("Gate 3 session creation did not persist safely");
+  }
+  if (
+    !createdDeleted.ok ||
+    createdDeleted.data !== created.data.conversation_id
+  ) {
+    throw new Error("Gate 3 created session cleanup failed");
+  }
   if (!renamed.ok || !reloaded.ok || !sessionsAfterRename.ok) {
     throw new Error("Gate 3 session rename request failed");
   }
@@ -176,7 +203,9 @@ export function assertGate3SessionMutationSmoke(
   }
   if (
     sessionsAfterDelete.data.some(
-      (candidate) => candidate.conversation_id === GATE2_SMOKE_SESSION_ID,
+      (candidate) =>
+        candidate.conversation_id === GATE2_SMOKE_SESSION_ID ||
+        candidate.conversation_id === created.data.conversation_id,
     )
   ) {
     throw new Error("Gate 3 fixture session is still present after deletion");

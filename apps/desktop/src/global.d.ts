@@ -16,6 +16,7 @@ type DesktopBridge = {
   listFiles(): Promise<DesktopResult<FileRecord[]>>;
   listSessions(): Promise<DesktopResult<SessionSummary[]>>;
   getSession(conversationId: string): Promise<DesktopResult<SessionDetail>>;
+  createSession(): Promise<DesktopResult<SessionDetail>>;
   renameSession(
     conversationId: string,
     name: string,

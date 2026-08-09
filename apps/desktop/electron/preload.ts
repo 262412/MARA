@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.invoke("desktop:list-sessions"),
   getSession: (conversationId: string): Promise<DesktopResult<SessionDetail>> =>
     ipcRenderer.invoke("desktop:get-session", conversationId),
+  createSession: (): Promise<DesktopResult<SessionDetail>> =>
+    ipcRenderer.invoke("desktop:create-session"),
   renameSession: (
     conversationId: string,
     name: string,

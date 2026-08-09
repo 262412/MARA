@@ -231,6 +231,35 @@ test("accepts packaged deletion only when the real fixture disappears", () => {
 });
 
 test("accepts packaged session rename and deletion only after real refreshes", () => {
+  const createdSession: DesktopResult<SessionDetail> = {
+    ok: true,
+    data: {
+      conversation_id: "created-session",
+      name: "Untitled Conversation",
+      messages: [],
+      graph_source_ids: [],
+      origin: "",
+      is_public: false,
+      date_created: "2026-08-08T12:00:00+00:00",
+      date_updated: "2026-08-08T12:00:00+00:00",
+    },
+  };
+  const sessionsWithCreated: DesktopResult<SessionSummary[]> = {
+    ok: true,
+    data: [
+      ...sessions.data,
+      {
+        conversation_id: "created-session",
+        name: "Untitled Conversation",
+        message_count: 0,
+        graph_source_count: 0,
+        origin: "",
+        is_public: false,
+        date_created: "2026-08-08T12:00:00+00:00",
+        date_updated: "2026-08-08T12:00:00+00:00",
+      },
+    ],
+  };
   const renamed = {
     ok: true as const,
     data: {
@@ -250,6 +279,10 @@ test("accepts packaged session rename and deletion only after real refreshes", (
 
   assert.doesNotThrow(() =>
     assertGate3SessionMutationSmoke(
+      createdSession,
+      createdSession,
+      sessionsWithCreated,
+      { ok: true, data: "created-session" },
       renamed,
       renamed,
       renamedSessions,
@@ -260,6 +293,10 @@ test("accepts packaged session rename and deletion only after real refreshes", (
   assert.throws(
     () =>
       assertGate3SessionMutationSmoke(
+        createdSession,
+        createdSession,
+        sessionsWithCreated,
+        { ok: true, data: "created-session" },
         renamed,
         renamed,
         renamedSessions,

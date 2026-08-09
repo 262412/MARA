@@ -27,6 +27,7 @@ import {
   type SidecarError,
 } from "../shared/runtime-contracts";
 import type {
+  SessionCreateRequest,
   SessionDeleteResponse,
   SessionDetail,
   SessionDetailResponse,
@@ -107,6 +108,18 @@ export function sessionRenameRequest(
   const payload: SessionRenameRequest = { name };
   return {
     method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify(payload),
+  };
+}
+
+export function sessionCreateRequest(idempotencyKey: string): RequestInit {
+  const payload: SessionCreateRequest = {};
+  return {
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey,
@@ -238,6 +251,18 @@ export class SidecarManager {
       const response = await this.requestJson<SessionDetailResponse>(
         `/v1/sessions/${encodeURIComponent(conversationId)}`,
         {},
+        true,
+      );
+      return response.session;
+    });
+  }
+
+  async createSession(): Promise<DesktopResult<SessionDetail>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<SessionDetailResponse>(
+        "/v1/sessions",
+        sessionCreateRequest(randomUUID()),
         true,
       );
       return response.session;

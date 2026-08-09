@@ -112,6 +112,11 @@ class DesktopApplicationService:
             raise DesktopSessionNotFoundError(conversation_id)
         return _session_detail(session)
 
+    def create_session(self) -> dict[str, Any]:
+        with self._runtime_lock:
+            session = self._get_runtime().create_session()
+        return _session_detail(session)
+
     def rename_session(self, conversation_id: str, name: str) -> dict[str, Any]:
         with self._runtime_lock:
             runtime = self._get_runtime()

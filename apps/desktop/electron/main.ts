@@ -205,6 +205,14 @@ async function deleteSmokeFiles(
 }
 
 async function runGate3SessionMutationSmoke(): Promise<void> {
+  const created = await sidecar.createSession();
+  const createdReloaded = created.ok
+    ? await sidecar.getSession(created.data.conversation_id)
+    : created;
+  const sessionsAfterCreate = await sidecar.listSessions();
+  const createdDeleted: DesktopResult<string> = created.ok
+    ? await sidecar.deleteSession(created.data.conversation_id)
+    : { ok: false, error: created.error };
   const renamed = await sidecar.renameSession(
     GATE2_SMOKE_SESSION_ID,
     GATE3_RENAMED_SESSION_NAME,
@@ -216,6 +224,10 @@ async function runGate3SessionMutationSmoke(): Promise<void> {
   const deleted = await sidecar.deleteSession(GATE2_SMOKE_SESSION_ID);
   const sessionsAfterDelete = await sidecar.listSessions();
   assertGate3SessionMutationSmoke(
+    created,
+    createdReloaded,
+    sessionsAfterCreate,
+    createdDeleted,
     renamed,
     reloaded,
     sessionsAfterRename,
@@ -223,7 +235,7 @@ async function runGate3SessionMutationSmoke(): Promise<void> {
     sessionsAfterDelete,
   );
   process.stdout.write(
-    "gate3_session_mutation=rename_delete status_success\n",
+    "gate3_session_mutation=create_rename_delete status_success\n",
   );
 }
 
@@ -636,6 +648,7 @@ function registerIpc(): void {
     listFiles: () => sidecar.listFiles(),
     listSessions: () => sidecar.listSessions(),
     getSession: (conversationId) => sidecar.getSession(conversationId),
+    createSession: () => sidecar.createSession(),
     renameSession: (conversationId, name) =>
       sidecar.renameSession(conversationId, name),
     deleteSession: (conversationId) => sidecar.deleteSession(conversationId),

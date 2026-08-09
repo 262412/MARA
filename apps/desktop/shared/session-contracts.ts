@@ -1,4 +1,5 @@
 export type {
+  SessionCreateRequest,
   SessionDeleteResponse,
   SessionDetail,
   SessionDetailResponse,

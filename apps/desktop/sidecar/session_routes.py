@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from .api_errors import SidecarApiError
 from .application import DesktopSessionNotFoundError
 from .contracts import (
+    SessionCreateRequest,
     SessionDeleteResponse,
     SessionDetailResponse,
     SessionRenameRequest,
@@ -23,6 +24,7 @@ def register_session_mutation_routes(
     app: FastAPI,
     dependencies: list[Any],
 ) -> None:
+    _register_session_create_route(app, dependencies)
     app.state.session_rename_results = {}
     app.state.session_rename_lock = threading.Lock()
     app.state.session_delete_results = {}
@@ -80,6 +82,36 @@ def register_session_mutation_routes(
         return SessionDeleteResponse(
             request_id=_request_id(request),
             deleted_conversation_id=existing,
+        )
+
+
+def _register_session_create_route(
+    app: FastAPI,
+    dependencies: list[Any],
+) -> None:
+    app.state.session_create_results = {}
+    app.state.session_create_lock = threading.Lock()
+
+    @app.post(
+        "/v1/sessions",
+        response_model=SessionDetailResponse,
+        status_code=201,
+        dependencies=dependencies,
+    )
+    def create_session(
+        request: Request,
+        payload: SessionCreateRequest,
+        idempotency_key: IdempotencyKey,
+    ) -> SessionDetailResponse:
+        del payload
+        with request.app.state.session_create_lock:
+            existing = request.app.state.session_create_results.get(idempotency_key)
+            if existing is None:
+                existing = _call_session_service(request, "create_session")
+                request.app.state.session_create_results[idempotency_key] = existing
+        return SessionDetailResponse(
+            request_id=_request_id(request),
+            session=existing,
         )
 
 

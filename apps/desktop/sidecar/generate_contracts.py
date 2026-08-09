@@ -29,6 +29,9 @@ class _SchemaApplicationService:
     def get_session(self, conversation_id: str) -> dict[str, Any]:
         raise AssertionError("Schema generation must not call application services")
 
+    def create_session(self) -> dict[str, Any]:
+        raise AssertionError("Schema generation must not call application services")
+
     def rename_session(self, conversation_id: str, name: str) -> dict[str, Any]:
         raise AssertionError("Schema generation must not call application services")
 
@@ -96,7 +99,11 @@ def _schema_type(schema: dict[str, Any]) -> str:
 def _inline_object(schema: dict[str, Any]) -> str:
     properties = schema.get("properties", {})
     if not properties:
-        return "Record<string, unknown>"
+        return (
+            "Record<string, never>"
+            if schema.get("additionalProperties") is False
+            else "Record<string, unknown>"
+        )
     required = set(schema.get("required", []))
     fields = [
         f"{name}{'' if name in required else '?'}: {_schema_type(value)};"

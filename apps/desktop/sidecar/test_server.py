@@ -76,6 +76,12 @@ class StubApplicationService:
             "date_updated": "2026-07-30T10:05:00",
         }
 
+    def create_session(self) -> dict:
+        session = self.get_session("session-1")
+        session["conversation_id"] = "session-created"
+        session["messages"] = []
+        return session
+
     def rename_session(self, conversation_id: str, name: str) -> dict:
         session = self.get_session(conversation_id)
         session["name"] = name
@@ -184,6 +190,7 @@ class SidecarContractTest(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["state"], "healthy")
         self.assertEqual(payload["protocol"], PROTOCOL_VERSION)
+        self.assertIn("session_create", payload["capabilities"])
         self.assertNotIn("token", payload)
         self.assertNotIn("port", payload)
 
@@ -373,6 +380,7 @@ class SidecarContractTest(unittest.TestCase):
         self.assertIn("/v1/doctor", schema["paths"])
         self.assertIn("/v1/files", schema["paths"])
         self.assertIn("/v1/sessions", schema["paths"])
+        self.assertIn("post", schema["paths"]["/v1/sessions"])
         self.assertIn("/v1/sessions/{conversation_id}", schema["paths"])
         self.assertIn("patch", schema["paths"]["/v1/sessions/{conversation_id}"])
         self.assertIn("delete", schema["paths"]["/v1/sessions/{conversation_id}"])

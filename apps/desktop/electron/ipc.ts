@@ -27,6 +27,7 @@ export type DesktopIpcOperations = {
   listFiles(): Promise<DesktopResult<FileRecord[]>>;
   listSessions(): Promise<DesktopResult<SessionSummary[]>>;
   getSession(conversationId: string): Promise<DesktopResult<SessionDetail>>;
+  createSession(): Promise<DesktopResult<SessionDetail>>;
   renameSession(
     conversationId: string,
     name: string,
@@ -189,6 +190,10 @@ export function registerDesktopIpc(
     createTrustedIdentifierIpcHandler((conversationId) =>
       operations.getSession(conversationId),
     ),
+  );
+  registrar.handle(
+    "desktop:create-session",
+    createTrustedIpcHandler(() => operations.createSession()),
   );
   registrar.handle(
     "desktop:rename-session",

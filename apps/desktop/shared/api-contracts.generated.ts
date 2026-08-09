@@ -106,6 +106,8 @@ export type RuntimeHealth = {
   version: string;
 };
 
+export type SessionCreateRequest = Record<string, never>;
+
 export type SessionDeleteResponse = {
   deleted_conversation_id: string;
   request_id: string;

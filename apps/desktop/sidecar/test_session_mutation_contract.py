@@ -11,6 +11,7 @@ from .server import create_app
 
 class SessionMutationService:
     def __init__(self) -> None:
+        self.create_calls = 0
         self.rename_calls: list[tuple[str, str]] = []
         self.delete_calls: list[str] = []
         self.name = "Research session"
@@ -28,6 +29,10 @@ class SessionMutationService:
         if conversation_id != "session-1":
             raise DesktopSessionNotFoundError(conversation_id)
         return self._session(conversation_id)
+
+    def create_session(self) -> dict:
+        self.create_calls += 1
+        return self._session("session-created")
 
     def rename_session(self, conversation_id: str, name: str) -> dict:
         if conversation_id != "session-1":
@@ -71,6 +76,9 @@ class SessionMutationService:
 
 
 class FailingSessionMutationService(SessionMutationService):
+    def create_session(self) -> dict:
+        raise RuntimeError("failed at /private/session.json")
+
     def rename_session(self, conversation_id: str, name: str) -> dict:
         raise RuntimeError("failed at /private/session.json")
 
@@ -108,6 +116,51 @@ class SessionMutationContractTest(unittest.TestCase):
             headers=headers,
             json=payload,
         )
+
+    def create_request(
+        self,
+        *,
+        key: str | None,
+        payload: dict | None = None,
+        query: str = "",
+        authenticated: bool = True,
+    ):
+        headers = {"X-Request-ID": "request-post"}
+        if authenticated:
+            headers["Authorization"] = f"Bearer {self.token}"
+        if key is not None:
+            headers["Idempotency-Key"] = key
+        return self.client.post(
+            f"/v1/sessions{query}",
+            headers=headers,
+            json={} if payload is None else payload,
+        )
+
+    def test_create_is_idempotent_authenticated_and_path_free(self) -> None:
+        created = self.create_request(key="create-session-1")
+        duplicate = self.create_request(key="create-session-1")
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.json()["request_id"], "request-post")
+        self.assertEqual(
+            created.json()["session"]["conversation_id"],
+            "session-created",
+        )
+        self.assertEqual(created.json(), duplicate.json())
+        self.assertEqual(self.service.create_calls, 1)
+        self.assertNotIn("path", created.text.lower())
+
+        for rejected in (
+            self.create_request(key="unauthenticated", authenticated=False),
+            self.create_request(key=None),
+            self.create_request(key="query", query="?name=private"),
+            self.create_request(
+                key="extra",
+                payload={"path": "/private/session.json"},
+            ),
+        ):
+            self.assertIn(rejected.status_code, (401, 422))
+        self.assertEqual(self.service.create_calls, 1)
 
     def test_rename_and_delete_are_idempotent_and_path_free(self) -> None:
         renamed = self.request(
@@ -207,8 +260,14 @@ class SessionMutationContractTest(unittest.TestCase):
                     "/v1/sessions/session-1",
                     headers={**headers, "X-Request-ID": "delete-failure"},
                 )
+                created = client.post(
+                    "/v1/sessions",
+                    headers={**headers, "X-Request-ID": "create-failure"},
+                    json={},
+                )
 
         for response, request_id in (
+            (created, "create-failure"),
             (renamed, "rename-failure"),
             (deleted, "delete-failure"),
         ):

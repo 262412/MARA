@@ -28,6 +28,7 @@ function render(
       action: "rename" | "delete";
     };
     sessionActionError?: string;
+    sessionCreatePending?: boolean;
   } = {},
 ) {
   return renderToStaticMarkup(
@@ -36,6 +37,7 @@ function render(
       editingSessionId={options.editingSessionId}
       editingSessionName={options.editingSessionName ?? ""}
       onCancelRename={() => undefined}
+      onCreateSession={() => undefined}
       onDeleteSession={() => undefined}
       onEditingSessionNameChange={() => undefined}
       onNavigate={() => undefined}
@@ -48,6 +50,7 @@ function render(
       selectedSessionId={undefined}
       sessionAction={options.sessionAction}
       sessionActionError={options.sessionActionError}
+      sessionCreatePending={options.sessionCreatePending ?? false}
       sessions={sessions}
     />,
   );
@@ -96,6 +99,13 @@ test("Sessions search is case-insensitive and renders a no-match state", () => {
 });
 
 test("Session actions cover editing, pending, and failed states", () => {
+  assert.match(
+    render(
+      { status: "success", data: [session] },
+      { sessionCreatePending: true },
+    ),
+    /正在新建/,
+  );
   const editing = render(
     { status: "success", data: [session] },
     {
