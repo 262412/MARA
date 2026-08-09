@@ -12,6 +12,7 @@ source ~/.bashrc
 set -euo pipefail
 
 PROJECT_ROOT="${MARA_PROJECT_ROOT:-/mnt/scratch/users/tbczhang/projects/MARA}"
+export MARA_PROJECT_ROOT="$PROJECT_ROOT"
 HPC_HOME="${MARA_HPC_HOME:-/mnt/scratch/users/tbczhang/mara-hpc}"
 RUN_ROOT="${MARA_TEXT_RUN_ROOT:-${MARA_FINAL_RUN_ROOT:-/mnt/scratch/users/tbczhang/outputs/MARA/text_route_slurm}}"
 OUT_ROOT="${MARA_TEXT_OUTPUT_DIR:-${MARA_FINAL_OUTPUT_DIR:-${RUN_ROOT}/01_core_text}}"
@@ -120,6 +121,9 @@ require_path output "$OUT_ROOT" \
   "/users/tbczhang/scratch/outputs/MARA"
 
 source "${PROJECT_ROOT}/scripts/slurm/benchmark_runtime_isolation.sh"
+mara_install_benchmark_runtime_cleanup
+# normalize_semantic_evaluator.py is invoked with the fresh interpreter below.
+# mara_bootstrap_benchmark_runtime performs uv sync --frozen --no-dev --extra mara
 mara_configure_benchmark_runtime "$SUITE_NAME"
 mara_assert_isolated_kh_app_data
 require_path runtime "$KH_APP_DATA_DIR" \
@@ -141,8 +145,9 @@ if [[ -n "$GIT_STATUS" && "${MARA_ALLOW_DIRTY_BENCHMARK:-0}" != "1" ]]; then
   exit 2
 fi
 export MARA_BENCHMARK_GIT_COMMIT="$GIT_COMMIT"
+mara_bootstrap_benchmark_runtime
 export MARA_BENCHMARK_INDEX_CONTRACT="$(
-  uv run --python 3.10 python \
+  "$MARA_BENCHMARK_PYTHON" \
     "${PROJECT_ROOT}/scripts/slurm/benchmark_index_contract.py" \
     "$MANIFEST"
 )"
@@ -152,6 +157,13 @@ log "git_commit=${GIT_COMMIT} git_dirty=${GIT_DIRTY}"
 log "index_contract=${MARA_BENCHMARK_INDEX_CONTRACT}"
 log "run_root=${RUN_ROOT}"
 log "kh_app_data_dir=${KH_APP_DATA_DIR}"
+log "theflow_settings_module=${THEFLOW_SETTINGS_MODULE}"
+log "theflow_settings_path=${MARA_BENCHMARK_FLOWSETTINGS_PATH}"
+log "theflow_storage_prefix=${MARA_BENCHMARK_STORAGE_PREFIX}"
+log "theflow_temp_path=${THEFLOW_TEMP_PATH}"
+log "uv_project_environment=${UV_PROJECT_ENVIRONMENT}"
+log "benchmark_python=${MARA_BENCHMARK_PYTHON}"
+log "runtime_contract=${MARA_BENCHMARK_RUNTIME_CONTRACT}"
 log "manifest=${MANIFEST}"
 log "output=${OUT_ROOT}"
 log "suite=${SUITE_NAME}"
@@ -163,13 +175,12 @@ log "node=${SLURMD_NODENAME:-$(hostname)}"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader || true
 
 SEMANTIC_EVALUATOR="$(
-  uv run --python 3.10 python \
+  "$MARA_BENCHMARK_PYTHON" \
     "${PROJECT_ROOT}/scripts/slurm/normalize_semantic_evaluator.py" \
     "$SEMANTIC_EVALUATOR"
 )"
 log "semantic_evaluator=${SEMANTIC_EVALUATOR}"
 
-mara_bootstrap_benchmark_runtime
 export MARA_BENCHMARK_EMBEDDING_CONTRACT="$(
   sha256sum \
     "${HPC_HOME}/serve_retrieval.sh" \
@@ -208,7 +219,7 @@ fi
 wait_http text_llm "${TEXT_LLM_BASE_URL}/models" 600
 wait_http retrieval "${RETRIEVAL_BASE_URL}/health" 240
 
-uv run --python 3.10 python \
+"$MARA_BENCHMARK_PYTHON" \
   "${PROJECT_ROOT}/scripts/slurm/smoke_openai_tool_calls.py" \
   --base-url "$TEXT_LLM_BASE_URL" \
   --output "$TOOL_CALL_SMOKE_JSON" |
@@ -216,9 +227,9 @@ uv run --python 3.10 python \
 grep -Fx "citation_tool_call_error_count=0" "$TOOL_CALL_SMOKE_LOG"
 grep -Fx "inline_structured_citation_path_executed=true" "$TOOL_CALL_SMOKE_LOG"
 
-uv run --python 3.10 python "${HPC_HOME}/configure_mara_local_models.py"
+"$MARA_BENCHMARK_PYTHON" "${HPC_HOME}/configure_mara_local_models.py"
 
-uv run --python 3.10 python - \
+"$MARA_BENCHMARK_PYTHON" - \
   "$HEALTH_JSON" \
   "${TEXT_LLM_BASE_URL}/models" \
   "${RETRIEVAL_BASE_URL}/health" <<'PY'
@@ -255,7 +266,8 @@ if [[ -n "$SHARD_INDEX" ]]; then
   SHARD_ARGS+=(--shard-index "$SHARD_INDEX")
 fi
 
-uv run --python 3.10 python -m benchmark run \
+# python -m benchmark run executes through the job-owned interpreter below.
+"$MARA_BENCHMARK_PYTHON" -m benchmark run \
   --manifest "$MANIFEST" \
   --suite-name "$SUITE_NAME" \
   --route "$ROUTE" \
@@ -285,7 +297,7 @@ VALIDATION_ARGS=(--require-all-usable)
 if [[ "${SUITE_NAME,,}" == *qasper* ]]; then
   VALIDATION_ARGS+=(--require-qasper-answerability)
 fi
-uv run --python 3.10 python \
+"$MARA_BENCHMARK_PYTHON" \
   "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \
   "$RUN_DIR/predictions.jsonl" \
   "${VALIDATION_ARGS[@]}"
@@ -294,7 +306,7 @@ if [[ "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
     log "MARA_CONTRACT_SMOKE_SUITE_KIND is required for contract smoke validation"
     exit 2
   fi
-  uv run --python 3.10 python \
+  "$MARA_BENCHMARK_PYTHON" \
     "${PROJECT_ROOT}/scripts/slurm/validate_contract_smoke.py" \
     "$RUN_DIR" \
     --suite-kind "$CONTRACT_SMOKE_SUITE_KIND"

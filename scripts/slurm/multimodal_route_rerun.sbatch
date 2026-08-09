@@ -12,6 +12,7 @@ source ~/.bashrc
 set -euo pipefail
 
 PROJECT_ROOT="${MARA_PROJECT_ROOT:-/mnt/scratch/users/tbczhang/projects/MARA}"
+export MARA_PROJECT_ROOT="$PROJECT_ROOT"
 HPC_HOME="${MARA_HPC_HOME:-/mnt/scratch/users/tbczhang/mara-hpc}"
 OUT_ROOT="${MARA_MULTIMODAL_OUTPUT_DIR:-${MARA_PHASE3_OUTPUT_DIR:-/mnt/scratch/users/tbczhang/outputs/MARA/multimodal_route_slurm}}"
 MANIFEST="${MARA_MULTIMODAL_MANIFEST:-${MARA_PHASE3_MANIFEST:-/mnt/scratch/users/tbczhang/outputs/MARA/manifests/plan5/current-direct-fix-20260621/slidevqa-test-shard0.multimodal.routes.json}}"
@@ -118,6 +119,9 @@ require_path output "$OUT_ROOT" \
   "/users/tbczhang/scratch/outputs/MARA"
 
 source "${PROJECT_ROOT}/scripts/slurm/benchmark_runtime_isolation.sh"
+mara_install_benchmark_runtime_cleanup
+# normalize_semantic_evaluator.py is invoked with the fresh interpreter below.
+# mara_bootstrap_benchmark_runtime performs uv sync --frozen --no-dev --extra mara
 mara_configure_benchmark_runtime "$SUITE_NAME"
 mara_assert_isolated_kh_app_data
 require_path runtime "$KH_APP_DATA_DIR" \
@@ -139,8 +143,9 @@ if [[ -n "$GIT_STATUS" && "${MARA_ALLOW_DIRTY_BENCHMARK:-0}" != "1" ]]; then
   exit 2
 fi
 export MARA_BENCHMARK_GIT_COMMIT="$GIT_COMMIT"
+mara_bootstrap_benchmark_runtime
 export MARA_BENCHMARK_INDEX_CONTRACT="$(
-  uv run --python 3.10 python \
+  "$MARA_BENCHMARK_PYTHON" \
     "${PROJECT_ROOT}/scripts/slurm/benchmark_index_contract.py" \
     "$MANIFEST"
 )"
@@ -149,6 +154,13 @@ log "repo=$(pwd)"
 log "git_commit=${GIT_COMMIT} git_dirty=${GIT_DIRTY}"
 log "index_contract=${MARA_BENCHMARK_INDEX_CONTRACT}"
 log "kh_app_data_dir=${KH_APP_DATA_DIR}"
+log "theflow_settings_module=${THEFLOW_SETTINGS_MODULE}"
+log "theflow_settings_path=${MARA_BENCHMARK_FLOWSETTINGS_PATH}"
+log "theflow_storage_prefix=${MARA_BENCHMARK_STORAGE_PREFIX}"
+log "theflow_temp_path=${THEFLOW_TEMP_PATH}"
+log "uv_project_environment=${UV_PROJECT_ENVIRONMENT}"
+log "benchmark_python=${MARA_BENCHMARK_PYTHON}"
+log "runtime_contract=${MARA_BENCHMARK_RUNTIME_CONTRACT}"
 log "manifest=${MANIFEST}"
 log "output=${OUT_ROOT}"
 log "suite=${SUITE_NAME}"
@@ -156,13 +168,12 @@ log "node=${SLURMD_NODENAME:-$(hostname)}"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader || true
 
 SEMANTIC_EVALUATOR="$(
-  uv run --python 3.10 python \
+  "$MARA_BENCHMARK_PYTHON" \
     "${PROJECT_ROOT}/scripts/slurm/normalize_semantic_evaluator.py" \
     "$SEMANTIC_EVALUATOR"
 )"
 log "semantic_evaluator=${SEMANTIC_EVALUATOR}"
 
-mara_bootstrap_benchmark_runtime
 export MARA_BENCHMARK_EMBEDDING_CONTRACT="$(
   sha256sum \
     "${HPC_HOME}/serve_retrieval.sh" \
@@ -213,9 +224,9 @@ wait_http vlm "http://127.0.0.1:8001/v1/models" 600
 wait_http retrieval "http://127.0.0.1:8002/health" 240
 wait_http colvision "http://127.0.0.1:8003/health" 240
 
-uv run --python 3.10 python "${HPC_HOME}/configure_mara_local_models.py"
+"$MARA_BENCHMARK_PYTHON" "${HPC_HOME}/configure_mara_local_models.py"
 
-uv run --python 3.10 python - <<'PY'
+"$MARA_BENCHMARK_PYTHON" - <<'PY'
 from ktem.docqa.visual_backends import visual_backend_health
 
 print(
@@ -232,7 +243,7 @@ print(
 )
 PY
 
-uv run --python 3.10 python -m benchmark check-multimodal-backends \
+"$MARA_BENCHMARK_PYTHON" -m benchmark check-multimodal-backends \
   --output "$BACKEND_HEALTH_JSON" \
   --timeout-seconds "${MARA_MULTIMODAL_HEALTH_TIMEOUT_SECONDS:-3}" \
   --strict
@@ -252,7 +263,8 @@ LIMIT="${MARA_MULTIMODAL_LIMIT:-${MARA_PHASE3_LIMIT:-20}}"
 SAMPLE_SEED="${MARA_MULTIMODAL_SAMPLE_SEED:-${MARA_PHASE3_SAMPLE_SEED:-0}}"
 ROUTE_TIMEOUT_SECONDS="${MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS:-${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-240}}"
 
-uv run --python 3.10 python -m benchmark run \
+# python -m benchmark run executes through the job-owned interpreter below.
+"$MARA_BENCHMARK_PYTHON" -m benchmark run \
   --manifest "$MANIFEST" \
   --suite-name "$SUITE_NAME" \
   --route "$ROUTE" \
@@ -281,12 +293,12 @@ VALIDATION_ARGS=(--require-all-usable)
 if [[ "$REQUIRE_HYBRID_ELIGIBLE" == "1" ]]; then
   VALIDATION_ARGS+=(--require-hybrid-eligible)
 fi
-uv run --python 3.10 python \
+"$MARA_BENCHMARK_PYTHON" \
   "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \
   "$RUN_DIR/predictions.jsonl" \
   "${VALIDATION_ARGS[@]}"
 
-uv run --python 3.10 python - "$RUN_DIR" <<'PY'
+"$MARA_BENCHMARK_PYTHON" - "$RUN_DIR" <<'PY'
 import json
 import sys
 from pathlib import Path
