@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.query_evidence_binding import bind_evidence_slots
+from ktem.docqa.query_planning import build_query_plan
+
 from benchmark.answer_finalizer import finalize_prediction_answer
 from benchmark.contract_invariant_metrics import contract_invariant_summary
 from benchmark.qasper_answerability import verify_qasper_answerability
@@ -32,6 +36,51 @@ def _item(evidence_id: str, text: str) -> dict[str, Any]:
         "section_id": "results",
         "text": text,
     }
+
+
+def _artifact_experiment_evidence() -> dict[str, Any]:
+    evidence = _item(
+        "experiment",
+        (
+            "Sentence pairs are useful challenges for machine translation, but "
+            "their construction is difficult to automate.\n\n"
+            "## Current state of the art\n"
+            "Machine translation systems provide broad coverage, although their "
+            "handling of grammatical gender remains uneven across languages.\n\n"
+            "For instance, the sentence is translated by Google Translate, Bing "
+            "Translate, and Yandex. In fact, I have been unable to construct any "
+            "English sentence that those systems translate using the feminine "
+            "plural pronoun.\n\n"
+            "The following discussion compares these observations with prior work."
+        ),
+    )
+    evidence.update(
+        {
+            "canonical_start": 200,
+            "canonical_end": 200 + len(evidence["text"]),
+        }
+    )
+    evidence.pop("section_id")
+    return evidence
+
+
+def _apply_qasper_contract(prediction: dict[str, Any]) -> tuple[bool, bool]:
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_typed",
+        mode="scoring_adapter_v1",
+    )
+    applied = apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: _Verifier("insufficient_evidence", ""),
+    )
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_typed",
+        mode="scoring_adapter_v1",
+    )
+    return applied, synchronize_terminal_answer_state(prediction)
 
 
 def test_grounded_complete_quote_without_unique_evidence_identity_is_rejected() -> None:
@@ -96,22 +145,17 @@ def test_deterministic_experiment_resolution_keeps_its_selected_evidence() -> No
 
 
 def test_deterministic_experiment_support_survives_terminal_citation_rebuild() -> None:
-    evidence = _item(
-        "experiment",
-        (
-            "This paper discusses how sentence pairs could be used as "
-            "challenges for machine translation. For instance, the sentence "
-            "is translated by Google Translate, Bing Translate, and Yandex. "
-            "In fact, I have been unable to construct any English sentence "
-            "that those systems translate using the feminine plural pronoun."
+    evidence = _artifact_experiment_evidence()
+    plan = bind_evidence_slots(
+        build_query_plan(
+            "Do the authors conduct experiments on the tasks mentioned?",
+            answer_type="boolean",
+            verification_domain="qasper",
         ),
+        [evidence],
     )
-    evidence.update(
-        {
-            "canonical_start": 200,
-            "canonical_end": 200 + len(evidence["text"]),
-        }
-    )
+    [bound_slot] = plan.evidence_slots
+    assert bound_slot.evidence_ids == (identity_of(evidence).key,)
     prediction: dict[str, Any] = {
         "question": "Do the authors conduct experiments on the tasks mentioned?",
         "answer_type": "boolean",
@@ -122,26 +166,12 @@ def test_deterministic_experiment_support_survives_terminal_citation_rebuild() -
         "evidence_metadata": {
             "selected_evidence": [evidence],
             "generation_context_evidence": [evidence],
+            "query_plan": plan.as_dict(),
         },
         "structured_citations": [],
         "predicted_citations": [],
     }
-    finalize_prediction_answer(
-        prediction,
-        dataset_name="qasper_typed",
-        mode="scoring_adapter_v1",
-    )
-    applied = apply_task_answer_contract(
-        prediction,
-        dataset_name="qasper_typed",
-        llm_factory=lambda: _Verifier("insufficient_evidence", ""),
-    )
-    finalize_prediction_answer(
-        prediction,
-        dataset_name="qasper_typed",
-        mode="scoring_adapter_v1",
-    )
-    synchronized = synchronize_terminal_answer_state(prediction)
+    applied, synchronized = _apply_qasper_contract(prediction)
 
     assert applied is True
     assert synchronized is True
@@ -167,3 +197,18 @@ def test_deterministic_experiment_support_survives_terminal_citation_rebuild() -
     assert prediction["evidence_metadata"]["qasper_answerability"][
         "evidence_quote"
     ].startswith("In fact, I have been unable")
+    answerability = prediction["evidence_metadata"]["qasper_answerability"]
+    assert answerability["verifier_required_evidence_coverage"] == "1.000000"
+    assert answerability["verifier_required_slot_authority_count"] == "1"
+    assert answerability["authoritative_quote_evidence_id"] == identity_of(evidence).key
+    assert (
+        answerability["authoritative_quote_evidence_id"]
+        in answerability["final_support_evidence_ids"]
+    )
+    assert answerability["evidence_quote"] in evidence["text"]
+    emitted = prediction["evidence_metadata"]["emitted_citation_evidence"]
+    assert [identity_of(item).key for item in emitted] == [identity_of(evidence).key]
+    assert (
+        prediction["structured_citations"][0]["evidence_id"]
+        == identity_of(evidence).key
+    )

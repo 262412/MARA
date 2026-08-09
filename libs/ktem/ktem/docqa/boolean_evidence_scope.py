@@ -4,6 +4,15 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .boolean_current_experiment import (
+    current_experiment_excerpt as _current_experiment_excerpt,
+)
+from .boolean_current_experiment import (
+    is_current_experiment_question as _is_current_experiment_question,
+)
+from .boolean_current_experiment import (
+    is_direct_current_empirical_action as _is_direct_current_empirical_action,
+)
 from .boolean_retrieval_queries import (
     boolean_retrieval_query as _boolean_retrieval_query,
 )
@@ -77,7 +86,12 @@ def validate_boolean_scope(
 ) -> BooleanScopeDecision:
     matching_item = _matching_item(quote, evidence_items or [])
     section_role = _section_role(matching_item, quote)
-    actor = _actor(_bound_local_context(matching_item, quote), section_role)
+    context = (
+        str(quote or "")
+        if _is_current_experiment_question(question)
+        else _bound_local_context(matching_item, quote)
+    )
+    actor = _actor(context, section_role)
     quantifier = _closed_quantifier(question)
     scope_rejection = _scope_rejection(
         question,
@@ -92,6 +106,16 @@ def validate_boolean_scope(
             quantifier,
             False,
             scope_rejection,
+        )
+    if _is_current_experiment_question(
+        question
+    ) and not _is_direct_current_empirical_action(quote):
+        return BooleanScopeDecision(
+            actor,
+            section_role,
+            quantifier,
+            False,
+            "current_experiment_action_not_established",
         )
     if quantifier == "none":
         return BooleanScopeDecision(
@@ -242,32 +266,32 @@ def _resolve_current_experiment_question(
     question: str,
     evidence_items: list[dict[str, Any]],
 ) -> ClosedScopeResolution | None:
-    lowered = str(question or "").lower()
-    if not (
-        re.search(r"\b(?:the authors?|they|this (?:paper|study|work))\b", lowered)
-        and re.search(
-            r"\b(?:conduct|perform|run|carry out)\w*\s+(?:an?\s+)?experiments?\b",
-            lowered,
-        )
-        and re.search(r"\b(?:tasks?|benchmarks?)\b", lowered)
-    ):
+    if not _is_current_experiment_question(question):
         return None
     candidates: list[tuple[dict[str, Any], str, BooleanScopeDecision]] = []
     for item in evidence_items:
         text = evidence_item_text(item)
         if not text:
             continue
+        quote = _current_experiment_excerpt(text)
+        if not quote:
+            continue
+        scope_item = {
+            **item,
+            "text": quote,
+            "ocr_text": "",
+            "vlm_text": "",
+            "caption": "",
+        }
         decision = validate_boolean_scope(
             question,
-            text,
+            quote,
             "yes",
-            evidence_items=[item],
+            evidence_items=[scope_item],
         )
         if not decision.scope_valid:
             continue
-        quote = _current_experiment_excerpt(text)
-        if quote:
-            candidates.append((item, quote, decision))
+        candidates.append((item, quote, decision))
     if not candidates:
         return None
     item, quote, decision = min(candidates, key=lambda value: len(value[1]))
@@ -277,49 +301,6 @@ def _resolve_current_experiment_question(
         decision=decision,
         evidence_item=item,
     )
-
-
-def _current_experiment_excerpt(text: str) -> str:
-    statements = [
-        statement.strip()
-        for statement in re.split(r"(?:\r?\n)+|(?<=[.!?])\s+", str(text or ""))
-        if statement.strip()
-    ]
-    current_actor = re.compile(
-        r"\b(?:i|we|our|the authors?|this (?:paper|study|work))\b",
-        flags=re.IGNORECASE,
-    )
-    empirical_action = re.compile(
-        r"\b(?:experiment|evaluat|test|translat|unable to construct|"
-        r"ran|measur|observation|observe)\w*\b",
-        flags=re.IGNORECASE,
-    )
-    candidates = [
-        statement
-        for statement in statements
-        if current_actor.search(statement) and empirical_action.search(statement)
-    ]
-    return max(
-        candidates,
-        key=_current_experiment_statement_score,
-        default="",
-    )
-
-
-def _current_experiment_statement_score(statement: str) -> int:
-    lowered = statement.lower()
-    score = 0
-    if re.search(r"\b(?:i|we|our|the authors?)\b", lowered):
-        score += 2
-    if re.search(
-        r"\b(?:unable to construct|evaluat|experiment|measur|"
-        r"observe|observed|observes|observing|observation|ran|tested)\w*\b",
-        lowered,
-    ):
-        score += 2
-    if re.search(r"\b(?:could|may|might|will|would)\b", lowered):
-        score -= 3
-    return score
 
 
 def boolean_proposition_evidence_score(
@@ -406,8 +387,8 @@ def _actor(quote: str, section_role: str) -> str:
     if re.search(r"\b[a-z][a-z-]+\s+et\s+al\.?", lowered):
         return "other_authors"
     if re.search(
-        r"\b(?:i|we|our|current study|this (?:paper|article|study|work)|"
-        r"the authors)\b",
+        r"\b(?:i|we|our|current (?:paper|study|work)|"
+        r"(?:this (?:paper|article|study|work))|(?:the\s+)?authors?)\b",
         lowered,
     ):
         return "current_paper"

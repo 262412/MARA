@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import pytest
+from ktem.docqa import boolean_evidence_scope as scope_evidence
 from ktem.docqa.boolean_claim_verification import boolean_evidence_assessment
 from ktem.docqa.boolean_evidence_scope import (
+    BooleanScopeDecision,
+    ClosedScopeResolution,
     boolean_proposition_evidence_score,
     boolean_retrieval_query,
     resolve_closed_scope_boolean,
     validate_boolean_scope,
 )
+from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.query_evidence_binding import bind_evidence_slots
+from ktem.docqa.query_planning import build_query_plan
 
 
 def test_current_paper_question_rejects_unknown_actor_and_scope() -> None:
@@ -69,6 +76,151 @@ def test_current_paper_experiment_question_uses_direct_empirical_evidence() -> N
     assert "I have been unable to construct" in resolution.evidence_quote
     assert resolution.decision.actor == "current_paper"
     assert resolution.decision.section_role == "experiments"
+
+
+def test_current_experiment_slot_score_and_binding_reuse_single_candidate_resolver() -> None:
+    question = "Do the authors conduct experiments on the tasks mentioned?"
+    item = {
+        "evidence_id": "experiment",
+        "source_id": "paper",
+        "text": (
+            "Sentence pairs are useful challenges for machine translation, but "
+            "their construction is difficult to automate.\n\n"
+            "## Current state of the art\n"
+            "Machine translation systems provide broad coverage, although their "
+            "handling of grammatical gender remains uneven across languages.\n\n"
+            "For instance, the sentence is translated by Google Translate, Bing "
+            "Translate, and Yandex. In fact, I have been unable to construct any "
+            "English sentence that those systems translate using the feminine "
+            "plural pronoun.\n\n"
+            "The following discussion compares these observations with prior work."
+        ),
+    }
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+
+    [slot] = plan.evidence_slots
+    assert slot.statement_kind == "boolean_proposition"
+    assert boolean_proposition_evidence_score(slot.metric, item) > 0
+
+    bound = bind_evidence_slots(plan, [item])
+
+    [bound_slot] = bound.evidence_slots
+    assert bound_slot.evidence_ids == (identity_of(item).key,)
+    assert bound_slot.status == "retrieved_unverified"
+
+
+@pytest.mark.parametrize(
+    "item",
+    (
+        {
+            "evidence_id": "related-work",
+            "source_id": "paper",
+            "section_id": "related_work",
+            "text": "Previous work conducted experiments on the tasks mentioned.",
+        },
+        {
+            "evidence_id": "other-paper",
+            "source_id": "paper",
+            "section_id": "results",
+            "text": "Smith et al. conducted experiments on the tasks mentioned.",
+        },
+        {
+            "evidence_id": "future",
+            "source_id": "paper",
+            "section_id": "future_work",
+            "text": "In future work, we will conduct experiments on the tasks mentioned.",
+        },
+        {
+            "evidence_id": "hypothetical",
+            "source_id": "paper",
+            "section_id": "results",
+            "text": "We might conduct experiments on the tasks mentioned in future work.",
+        },
+        {
+            "evidence_id": "future-marker",
+            "source_id": "paper",
+            "section_id": "results",
+            "text": "Our future experiments will test the tasks mentioned.",
+        },
+        {
+            "evidence_id": "topical-only",
+            "source_id": "paper",
+            "section_id": "results",
+            "text": "The tasks mentioned are standard benchmarks for this field.",
+        },
+        {
+            "evidence_id": "translation-description",
+            "source_id": "paper",
+            "text": "We describe how systems translate the tasks mentioned.",
+        },
+        {
+            "evidence_id": "negated-experiment",
+            "source_id": "paper",
+            "text": "We did not conduct experiments on the tasks mentioned.",
+        },
+        {
+            "evidence_id": "intended-experiment",
+            "source_id": "paper",
+            "text": "We intend to conduct experiments on the tasks mentioned.",
+        },
+    ),
+)
+def test_current_experiment_slot_rejects_non_authoritative_scopes(item) -> None:
+    assert (
+        boolean_proposition_evidence_score(
+            "Do the authors conduct experiments on the tasks mentioned?",
+            item,
+        )
+        == 0.0
+    )
+
+
+@pytest.mark.parametrize("mismatch", ("identity", "quote"))
+def test_current_experiment_slot_rejects_unbound_quote_and_identity(
+    monkeypatch,
+    mismatch: str,
+) -> None:
+    question = "Do the authors conduct experiments on the tasks mentioned?"
+    candidate = {
+        "evidence_id": "candidate",
+        "source_id": "paper",
+        "section_id": "results",
+        "text": "We conducted experiments on the tasks mentioned.",
+    }
+    resolved_item = {
+        "evidence_id": "other" if mismatch == "identity" else "candidate",
+        "source_id": "paper",
+        "section_id": "results",
+        "text": "We conducted experiments on the tasks mentioned.",
+    }
+    resolved_quote = (
+        resolved_item["text"]
+        if mismatch == "identity"
+        else "A quote that is not a substring of the candidate."
+    )
+    resolution = ClosedScopeResolution(
+        polarity="yes",
+        evidence_quote=resolved_quote,
+        decision=BooleanScopeDecision(
+            actor="current_paper",
+            section_role="experiments",
+            quantifier="none",
+            scope_valid=True,
+            reason="non_quantified_proposition",
+        ),
+        evidence_item=resolved_item,
+    )
+    monkeypatch.setattr(
+        scope_evidence,
+        "resolve_closed_scope_boolean",
+        lambda _question, _items: resolution,
+    )
+
+    assert boolean_proposition_evidence_score(question, candidate) == 0.0
 
 
 def test_related_work_does_not_resolve_current_paper_experiment_question() -> None:

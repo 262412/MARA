@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .boolean_current_experiment import current_experiment_slot_score
 from .boolean_evidence_scope import (
     _actor,
     _closed_quantifier,
@@ -281,6 +282,9 @@ def boolean_proposition_evidence_score(
         return 3.0
     if quality_kind == "annotation_artifact_control":
         return 1.0
+    current_experiment_score = current_experiment_slot_score(question, item)
+    if current_experiment_score is not None:
+        return current_experiment_score
     assessments = classify_boolean_evidence_candidates(question, "", item)
     compatible = [
         assessment
