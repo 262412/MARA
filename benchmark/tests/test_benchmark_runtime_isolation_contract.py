@@ -92,6 +92,17 @@ def _editable_install_fingerprint() -> dict[str, tuple[int, int, str]]:
     }
 
 
+def _canonical_venv_identity() -> tuple[bool, str, int, int]:
+    path = PROJECT_ROOT / ".venv"
+    metadata = path.lstat()
+    return (
+        path.is_symlink(),
+        os.readlink(path) if path.is_symlink() else "",
+        metadata.st_dev,
+        metadata.st_ino,
+    )
+
+
 def test_configure_assigns_exclusive_theflow_settings_and_python_runtime(tmp_path):
     runtime_root = tmp_path / "benchmark_runs"
     result = _bash(
@@ -343,7 +354,7 @@ def test_two_fresh_docqa_subprocesses_keep_runtime_and_source_storage_disjoint(
 
 def test_runtime_bootstrap_does_not_change_canonical_venv_or_editable_origins(tmp_path):
     fake_uv = _fake_uv(tmp_path)
-    before_link = os.readlink(PROJECT_ROOT / ".venv")
+    before_venv = _canonical_venv_identity()
     before_editable = _editable_install_fingerprint()
     result = _bash(
         _fresh_runtime_command(
@@ -354,7 +365,7 @@ def test_runtime_bootstrap_does_not_change_canonical_venv_or_editable_origins(tm
         )
     )
     assert result.returncode == 0, result.stderr
-    assert os.readlink(PROJECT_ROOT / ".venv") == before_link
+    assert _canonical_venv_identity() == before_venv
     assert _editable_install_fingerprint() == before_editable
 
 
