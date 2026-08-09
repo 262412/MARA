@@ -29,6 +29,11 @@ from .verification_evidence_mapping import (
     missing_verification_slots,
     verification_slots,
 )
+from .verification_slot_support import (
+    claim_aware_slot_support,
+    enforce_verification_slot_support,
+    slot_value,
+)
 
 
 @dataclass(frozen=True)
@@ -107,11 +112,7 @@ def verify_decision(
         )
     calculation_claims = split_claim_clauses(claims) if domain == "finance" else claims
     typed_calculation = calculation_claim_result(
-        evidence_bundle,
-        answer,
-        calculation_claims,
-        domain=domain,
-        prompt=prompt,
+        evidence_bundle, answer, calculation_claims, domain=domain, prompt=prompt
     )
     if typed_calculation is not None:
         claims = calculation_claims
@@ -141,7 +142,9 @@ def verify_decision(
         prompt=prompt,
         domain=domain,
     )
-    return _enforce_verification_slot_support(request, decision)
+    return enforce_verification_slot_support(
+        request, decision, evidence_bundle, prompt=prompt, domain=domain
+    )
 
 
 def _calculation_verification_results(
@@ -217,9 +220,20 @@ def with_verification_evidence(
         lookup,
     )
     if request is not None:
+        verified_ids = {identity_of(item).key for item in verified}
+        reconciled_slots = claim_aware_slot_support(
+            request,
+            decision,
+            bundle,
+            prompt=request_planning_question(request),
+            domain=normalize_verification_domain(
+                getattr(request, "verification_domain", None)
+            ),
+        )
         metadata["verification_slot_states"] = _verification_slot_states(
             request,
-            {identity_of(item).key for item in verified},
+            verified_ids,
+            reconciled_slots=reconciled_slots,
         )
     return EvidenceBundle(route=bundle.route, items=bundle.items, metadata=metadata)
 
@@ -227,17 +241,24 @@ def with_verification_evidence(
 def _verification_slot_states(
     request: Any,
     verified_evidence_ids: set[str],
+    *,
+    reconciled_slots: dict[str, tuple[str, ...]] | None = None,
 ) -> list[dict[str, Any]]:
     states: list[dict[str, Any]] = []
+    reconciled_slots = reconciled_slots or {}
     for slot in verification_slots(request):
-        evidence_ids = list(getattr(slot, "evidence_ids", ()) or ())
+        slot_id = str(slot_value(slot, "slot_id") or "")
+        evidence_ids = list(slot_value(slot, "evidence_ids") or ())
+        for evidence_id in reconciled_slots.get(slot_id, ()):
+            if evidence_id not in evidence_ids:
+                evidence_ids.append(evidence_id)
         states.append(
             {
-                "slot_id": str(getattr(slot, "slot_id", "") or ""),
+                "slot_id": slot_id,
                 "status": (
                     "verified_support"
                     if set(evidence_ids) & verified_evidence_ids
-                    else str(getattr(slot, "status", "") or "missing")
+                    else str(slot_value(slot, "status") or "missing")
                 ),
                 "evidence_ids": evidence_ids,
             }
@@ -555,39 +576,15 @@ def _boolean_verification(
 def _enforce_verification_slot_support(
     request: Any,
     decision: VerifyDecision,
+    evidence_bundle: EvidenceBundle | None = None,
+    *,
+    prompt: str = "",
+    domain: str = "",
 ) -> VerifyDecision:
-    if decision.status != "supported":
-        return decision
-    supporting_ids = {
-        evidence_id
-        for result in decision.claim_results
-        for evidence_id in result.get("supporting_evidence_ids") or []
-    }
-    unsupported_slots = [
-        str(getattr(slot, "slot_id", "") or "")
-        for slot in verification_slots(request)
-        if str(getattr(slot, "role", "") or "") == "support"
-        and not (
-            supporting_ids
-            & {
-                str(value).strip()
-                for value in getattr(slot, "evidence_ids", ()) or ()
-                if str(value).strip()
-            }
-        )
-    ]
-    if not unsupported_slots:
-        return decision
-    return VerifyDecision(
-        mode=decision.mode,
-        status="unknown",
-        reason=(
-            "Verification-required slots did not support any verified claim: "
-            + ", ".join(unsupported_slots)
-        ),
-        action="abstain",
-        claims=decision.claims,
-        unknown_claims=decision.claims,
-        verified_citations=decision.verified_citations,
-        claim_results=decision.claim_results,
+    return enforce_verification_slot_support(
+        request,
+        decision,
+        evidence_bundle,
+        prompt=prompt,
+        domain=domain,
     )

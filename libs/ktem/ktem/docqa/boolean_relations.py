@@ -3,10 +3,27 @@ from __future__ import annotations
 import re
 
 _RELATION_GROUPS = {
-    "annotate": {"annotate", "construct", "label"},
+    "annotate": {
+        "annotate",
+        "construct",
+        "crowdsource",
+        "crowdsourced",
+        "crowdsourcing",
+        "crowd-sourcing",
+        "label",
+    },
     "associate": {"associate", "connect", "link", "relate"},
     "compare": {"compare", "contrast", "outperform"},
-    "create": {"build", "collect", "compile", "create", "develop"},
+    "create": {
+        "assemble",
+        "build",
+        "collect",
+        "compile",
+        "create",
+        "develop",
+        "gather",
+        "generate",
+    },
     "demonstrate": {"demonstrate", "establish", "prove", "show"},
     "evaluate": {
         "assess",
@@ -30,12 +47,27 @@ _RELATION_GROUPS = {
         "study",
     },
     "learn": {"capture", "learn"},
-    "provide": {"available", "provide", "publish", "release"},
+    "provide": {"available", "distribute", "provide", "publish", "release", "share"},
     "recommend": {"recommend", "suggest"},
     "require": {"must", "need", "require"},
-    "train": {"finetune", "fine-tune", "train"},
+    "train": {
+        "finetune",
+        "fine-tune",
+        "optimize",
+        "pretrain",
+        "pretrained",
+        "train",
+    },
     "translate": {"translate"},
-    "use": {"apply", "employ", "incorporate", "introduce", "rely", "use"},
+    "use": {
+        "apply",
+        "employ",
+        "incorporate",
+        "leverage",
+        "rely",
+        "utilize",
+        "use",
+    },
     "validate": {"check", "control", "validate", "verify"},
 }
 _RELATION_BY_FORM = {

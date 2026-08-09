@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .financial_statement_identity import source_identity
+
 
 def scale_from_text(text: str, *, aliases: tuple[str, ...] = ()) -> str:
     lowered = text.lower()
@@ -283,14 +285,7 @@ def _item_id(item: dict[str, Any] | None) -> str:
 def _source_id(item: dict[str, Any] | None) -> str:
     if item is None:
         return ""
-    metadata = dict(item.get("metadata") or {})
-    return str(
-        item.get("source_id")
-        or item.get("file_id")
-        or item.get("document_id")
-        or metadata.get("source_id")
-        or ""
-    ).strip()
+    return source_identity(item)
 
 
 def _item_text(item: dict[str, Any] | None) -> str:

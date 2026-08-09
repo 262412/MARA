@@ -3,6 +3,7 @@ from __future__ import annotations
 from ktem.docqa.boolean_claim_verification import boolean_evidence_assessment
 from ktem.docqa.boolean_evidence_scope import (
     boolean_proposition_evidence_score,
+    boolean_retrieval_query,
     resolve_closed_scope_boolean,
     validate_boolean_scope,
 )
@@ -118,3 +119,49 @@ def test_boolean_slot_accepts_evidence_with_requested_action_and_object() -> Non
     )
 
     assert score > 0.0
+
+
+def test_quality_validation_evidence_is_retained_for_quality_control_slot() -> None:
+    question = "Are the automatically constructed datasets subject to quality control?"
+    item = {
+        "source_id": "paper",
+        "span_id": "quality-validation",
+        "section_title": "Dataset Probes",
+        "text": (
+            "It is much harder to validate the quality of such data at such a "
+            "scale and such varying levels of complexity."
+        ),
+    }
+
+    assert boolean_proposition_evidence_score(question, item) == 3.0
+    assert (
+        boolean_proposition_evidence_score(
+            "are automatically constructed datasets subject quality control",
+            item,
+        )
+        == 3.0
+    )
+
+
+def test_annotation_artifact_control_is_not_complete_quality_validation() -> None:
+    question = "Are the automatically constructed datasets subject to quality control?"
+    item = {
+        "source_id": "paper",
+        "span_id": "artifact-control",
+        "section_title": "Dataset Probes",
+        "text": (
+            "We find automatically constructing probes to be vulnerable to "
+            "annotation artifacts, which we carefully control for."
+        ),
+    }
+
+    assert boolean_proposition_evidence_score(question, item) == 1.0
+
+
+def test_quality_control_query_retrieves_validation_terms() -> None:
+    query = boolean_retrieval_query(
+        "Are the automatically constructed datasets subject to quality control?"
+    )
+
+    assert "validate quality" in query
+    assert "annotation artifacts" in query

@@ -255,7 +255,7 @@ def _counted_object_scope_complete(span: str, noun: str, *, required: int) -> bo
     noun_mentions = re.findall(rf"\b{re.escape(noun)}s?\b", span, re.IGNORECASE)
     if len(noun_mentions) >= required:
         return True
-    return _coordinated_object_count(span) >= required
+    return _coordinated_object_count(span, noun=noun) >= required
 
 
 def _span_mentions_object_noun(span: str, noun: str) -> bool:
@@ -439,22 +439,36 @@ def _trim_object_phrase(value: str) -> str:
     return " ".join(tokens)
 
 
-def _coordinated_object_count(value: str) -> int:
-    text = str(value or "")
-    named = {
-        token.casefold()
-        for token in re.findall(r"\b[A-Z][A-Za-z0-9_-]*[A-Za-z0-9]\b", text)
-        if token.casefold()
-        not in {"the", "we", "our", "this", "did", "does", "were", "was"}
-    }
-    if len(named) >= 2 and re.search(r"\b(?:and|,)\b", text):
-        return len(named)
-    coordinated = re.search(
-        r"\b([a-z][a-z0-9_-]*)\s+(?:and|,)\s+" r"([a-z][a-z0-9_-]*)\s+[a-z][a-z-]*s\b",
-        text,
-        flags=re.IGNORECASE,
+def _coordinated_object_count(value: str, *, noun: str) -> int:
+    """Count explicitly coordinated entities immediately bound to the noun.
+
+    Capitalized words elsewhere in a passage are not object evidence: papers
+    routinely mention languages, locations, topic labels, and abbreviations in
+    the same sentence as a single dataset.  A count is therefore accepted only
+    when two proper-name entities are coordinated directly before ``noun``.
+    """
+
+    if not noun:
+        return 0
+    entity = r"[A-Z][A-Za-z0-9_-]*[A-Za-z0-9]"
+    coordinated = re.compile(
+        rf"\b(?P<objects>{entity}(?:\s*,?\s*(?:and|or)\s*{entity})+)\s+"
+        rf"{re.escape(noun)}s?\b",
     )
-    return 2 if coordinated else 0
+    for match in coordinated.finditer(str(value or "")):
+        names = re.findall(rf"\b{entity}\b", match.group("objects"))
+        if len(names) >= 2 and all(_looks_like_named_dataset(name) for name in names):
+            return len(names)
+    return 0
+
+
+def _looks_like_named_dataset(value: str) -> bool:
+    token = str(value or "")
+    # The object-coordination matcher already requires two names to appear
+    # directly before the dataset noun.  Acronym-style dataset names such as
+    # ``MNLI`` and ``SNLI`` therefore remain safe even when they are all caps;
+    # isolated abbreviations elsewhere in a passage never reach this helper.
+    return bool(re.search(r"[A-Z].*[A-Z]", token))
 
 
 def _normalized_object_phrase(value: str) -> str:

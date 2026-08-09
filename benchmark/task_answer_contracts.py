@@ -155,6 +155,8 @@ def _adjudicate_qasper_answer(
         evidence_items=evidence_items or None,
         required_evidence_ids=list(priorities.required_evidence_ids),
         required_slot_ids=list(priorities.required_slot_ids),
+        missing_required_slot_ids=list(priorities.missing_required_slot_ids),
+        missing_required_evidence_ids=list(priorities.missing_required_evidence_ids),
         priority_evidence_ids=list(priorities.generation_evidence_ids),
         claim_support_evidence_ids=list(priorities.claim_support_evidence_ids),
         claim_contradiction_evidence_ids=list(

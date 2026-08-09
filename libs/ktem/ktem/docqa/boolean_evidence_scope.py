@@ -4,6 +4,9 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .boolean_retrieval_queries import (
+    boolean_retrieval_query as _boolean_retrieval_query,
+)
 from .boolean_scope_quantifiers import (
     _closed_quantifier,
     _english_closed_scope,
@@ -13,6 +16,8 @@ from .boolean_scope_quantifiers import (
     _quantified_object_scope_complete,
     _scope_excerpt,
 )
+
+boolean_retrieval_query = _boolean_retrieval_query
 
 
 @dataclass(frozen=True)
@@ -183,21 +188,6 @@ def scope_valid_support_items(
 ) -> list[dict[str, Any]]:
     classified = classify_boolean_evidence_set(question, answer, items)
     return [assessment.item for assessment in classified.supports]
-
-
-def boolean_retrieval_query(question: str) -> str:
-    text = " ".join(str(question or "").split())
-    lowered = text.lower()
-    if _language_data_question(text) and _has_closed_quantifier(text):
-        expansion = (
-            "current study experiments results English data "
-            "English-speaking countries non-English datasets"
-        )
-    elif re.search(r"\b(?:experiment|evaluate|test|task)\w*\b", lowered):
-        expansion = "current study authors experiments evaluate tested examples results"
-    else:
-        return text
-    return f"{text} {expansion}".strip()
 
 
 def resolve_closed_scope_boolean(

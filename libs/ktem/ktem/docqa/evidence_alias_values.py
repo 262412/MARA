@@ -20,6 +20,10 @@ def exact_alias_values(
         aliases.add(canonical_id)
     if identity_kind == "cell":
         _add_alias(aliases, item.get("cell_id"))
+        metadata = item.get("metadata")
+        values = metadata.get("cell_id_aliases") if isinstance(metadata, dict) else ()
+        for value in values or ():
+            _add_alias(aliases, value)
     elif identity_kind == "span":
         _add_alias(aliases, item.get("span_id"))
         if not str(item.get("span_id") or "").strip():

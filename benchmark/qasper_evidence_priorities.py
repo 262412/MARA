@@ -13,6 +13,8 @@ from ktem.docqa.required_slot_selection import REQUIRED_SLOT_CANDIDATE_QUOTA
 class QasperEvidencePriorities:
     required_evidence_ids: tuple[str, ...]
     required_slot_ids: tuple[str, ...]
+    missing_required_slot_ids: tuple[str, ...]
+    missing_required_evidence_ids: tuple[str, ...]
     generation_evidence_ids: tuple[str, ...]
     claim_support_evidence_ids: tuple[str, ...]
     claim_contradiction_evidence_ids: tuple[str, ...]
@@ -27,7 +29,12 @@ def qasper_evidence_priorities(
 ) -> QasperEvidencePriorities:
     support, contradiction = _claim_evidence_ids(prediction)
     generation = _stage_evidence_ids(prediction, "generation_context_evidence")
-    required, slot_ids = _required_slot_representatives(
+    (
+        required,
+        slot_ids,
+        missing_slot_ids,
+        missing_evidence_ids,
+    ) = _required_slot_representatives(
         prediction,
         evidence_items,
         question=question,
@@ -37,6 +44,8 @@ def qasper_evidence_priorities(
     return QasperEvidencePriorities(
         required_evidence_ids=tuple(required),
         required_slot_ids=tuple(slot_ids),
+        missing_required_slot_ids=tuple(missing_slot_ids),
+        missing_required_evidence_ids=tuple(missing_evidence_ids),
         generation_evidence_ids=tuple(generation),
         claim_support_evidence_ids=tuple(support),
         claim_contradiction_evidence_ids=tuple(contradiction),
@@ -50,29 +59,42 @@ def _required_slot_representatives(
     question: str,
     candidate_answer: str,
     preferred_ids: set[str],
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str], list[str]]:
     payload = _query_plan_payload(prediction)
     if not isinstance(payload, dict):
-        return [], []
+        return [], [], [], []
     lookup = unambiguous_evidence_alias_lookup(evidence_items)
     query_tokens = _tokens(f"{question} {candidate_answer}")
     output: list[str] = []
     slot_ids: list[str] = []
+    missing_slot_ids: list[str] = []
+    missing_evidence_ids: list[str] = []
     for slot in payload.get("evidence_slots") or []:
         if not isinstance(slot, dict) or not _slot_required(slot):
             continue
+        slot_id = str(slot.get("slot_id") or "").strip()
+        if slot_id and slot_id not in slot_ids:
+            slot_ids.append(slot_id)
         references = [
             str(value).strip()
             for value in slot.get("evidence_ids") or []
             if str(value).strip()
         ]
         if not references:
+            if slot_id and slot_id not in missing_slot_ids:
+                missing_slot_ids.append(slot_id)
             continue
         resolved = {
             identity_of(item).key: item
             for reference in references
             if (item := lookup.get(reference)) is not None
         }
+        unresolved = [reference for reference in references if reference not in lookup]
+        for reference in unresolved:
+            if reference not in missing_evidence_ids:
+                missing_evidence_ids.append(reference)
+        if unresolved and slot_id and slot_id not in missing_slot_ids:
+            missing_slot_ids.append(slot_id)
         candidate_limit = (
             REQUIRED_SLOT_CANDIDATE_QUOTA
             if str(slot.get("statement_kind") or "") == "boolean_proposition"
@@ -90,14 +112,13 @@ def _required_slot_representatives(
                 reverse=True,
             )[:candidate_limit]
         else:
-            representatives = references[:candidate_limit]
+            representatives = []
+            if slot_id and slot_id not in missing_slot_ids:
+                missing_slot_ids.append(slot_id)
         for representative in representatives:
             if representative not in output:
                 output.append(representative)
-        slot_id = str(slot.get("slot_id") or "").strip()
-        if slot_id:
-            slot_ids.append(slot_id)
-    return output, slot_ids
+    return output, slot_ids, missing_slot_ids, missing_evidence_ids
 
 
 def _claim_evidence_ids(

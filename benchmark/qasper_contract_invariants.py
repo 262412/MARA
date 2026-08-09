@@ -44,6 +44,7 @@ def _answerability_metrics(
         and not is_abstention_answer(answer)
         and str(trace.get("boolean_scope_valid") or "").lower() == "false"
     )
+    authority = _required_authority_metrics(trace)
     return {
         "abstention_candidate_sent_as_semantic_answer_count": float(
             bool(candidate and is_abstention_answer(candidate))
@@ -56,7 +57,76 @@ def _answerability_metrics(
         ),
         "boolean_scope_violation_count": float(scope_violation),
         "wrong_polarity_count": float(_wrong_boolean_polarity(prediction, answer)),
+        **authority,
     }
+
+
+def _required_authority_metrics(trace: dict[str, Any]) -> dict[str, float]:
+    slot_ids = _trace_ids(trace.get("verifier_required_slot_ids"))
+    required_ids = _trace_ids(trace.get("verifier_required_evidence_ids"))
+    missing_ids = _trace_ids(trace.get("verifier_missing_required_slot_ids"))
+    status = str(trace.get("verifier_required_authority_status") or "")
+    coverage = _optional_float(trace.get("verifier_required_evidence_coverage"))
+    authority_missing = bool(
+        slot_ids
+        and (
+            status in {"missing_required_evidence", "required_evidence_not_selected"}
+            or (not required_ids and coverage != 1.0)
+        )
+    )
+    missing_count = (
+        len(missing_ids) if missing_ids else len(slot_ids) if authority_missing else 0
+    )
+    raw_verdict = str(trace.get("raw_verifier_verdict") or "")
+    final_answer = str(trace.get("final_post_contract_answer") or "").strip()
+    if not final_answer:
+        final_answer = str(trace.get("post_contract_answer") or "").strip()
+    complete_abstention = raw_verdict in {
+        "yes_complete",
+        "no_complete",
+    } and is_abstention_answer(final_answer)
+    reason = str(trace.get("reason") or "")
+    semantic_veto = reason in _SEMANTIC_VETO_REASONS and complete_abstention
+    identity_clear = complete_abstention and reason in {
+        "quote_identity_unresolved",
+        "evidence_ref_unresolved",
+    }
+    ref_mismatch = complete_abstention and reason == "evidence_ref_quote_mismatch"
+    semantic_audit_violation = semantic_veto and not (
+        str(trace.get("evidence_ref") or "").strip()
+        and str(trace.get("evidence_quote") or "").strip()
+    )
+    return {
+        "qasper_required_slot_authority_empty_count": float(
+            len(slot_ids) if authority_missing and not required_ids else 0
+        ),
+        "qasper_required_slot_authority_missing_count": float(missing_count),
+        "qasper_complete_to_unanswerable_empty_authority_count": float(
+            complete_abstention and authority_missing
+        ),
+        "qasper_complete_to_unanswerable_identity_count": float(identity_clear),
+        "qasper_complete_to_unanswerable_ref_mismatch_count": float(ref_mismatch),
+        "qasper_semantic_veto_audit_violation_count": float(semantic_audit_violation),
+    }
+
+
+_SEMANTIC_VETO_REASONS = {
+    "quantified_object_scope_incomplete",
+    "quantified_scope_requires_current_paper_actor",
+    "cited_work_does_not_establish_current_paper_claim",
+    "language_scope_requires_current_experiment_evidence",
+    "english_scope_not_closed",
+    "no_non_english_counterexample",
+    "current_paper_scope_not_established",
+}
+
+
+def _trace_ids(value: Any) -> list[str]:
+    if isinstance(value, (list, tuple, set)):
+        return list(
+            dict.fromkeys(str(item).strip() for item in value if str(item).strip())
+        )
+    return [token.strip() for token in str(value or "").split(",") if token.strip()]
 
 
 def _citation_support_metrics(
@@ -159,6 +229,12 @@ def _empty_answerability_metrics() -> dict[str, float | None]:
         "answerable_false_abstention_count": 0.0,
         "boolean_scope_violation_count": 0.0,
         "wrong_polarity_count": 0.0,
+        "qasper_required_slot_authority_empty_count": 0.0,
+        "qasper_required_slot_authority_missing_count": 0.0,
+        "qasper_complete_to_unanswerable_empty_authority_count": 0.0,
+        "qasper_complete_to_unanswerable_identity_count": 0.0,
+        "qasper_complete_to_unanswerable_ref_mismatch_count": 0.0,
+        "qasper_semantic_veto_audit_violation_count": 0.0,
     }
 
 

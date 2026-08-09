@@ -49,6 +49,26 @@ def test_financial_table_parser_emits_metric_period_cell_identity():
     assert current_assets.semantic_key.metric == "current_assets"
 
 
+def test_file_id_only_table_uses_file_id_for_physical_cell_identity():
+    item = {
+        "evidence_id": "element:balance-sheet",
+        "file_id": "report-file",
+        "page_label": "68",
+        "element_type": "table",
+        "table_id": "balance-sheet",
+        "text": "Consolidated Balance Sheets (in millions)\n"
+        "2021 2020\nTotal current assets 19,815 19,378",
+    }
+
+    cell = next(
+        cell for cell in parse_financial_table_cells(item) if cell.period == "2021"
+    )
+
+    assert cell.source_id == "report-file"
+    assert cell.physical_identity.source_id == "report-file"
+    assert "source:unknown" not in cell.cell_id
+
+
 def test_financial_table_parser_skips_numeric_descriptor_columns():
     item = _table_item(
         """

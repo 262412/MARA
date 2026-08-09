@@ -106,6 +106,12 @@ FINANCE_HARD_GATES = {
 QASPER_HARD_GATES = {
     "abstention_candidate_sent_as_semantic_answer_count": ("eq", 0.0),
     "verifier_required_evidence_coverage": ("eq", 1.0),
+    "qasper_required_slot_authority_empty_count": ("eq", 0.0),
+    "qasper_required_slot_authority_missing_count": ("eq", 0.0),
+    "qasper_complete_to_unanswerable_empty_authority_count": ("eq", 0.0),
+    "qasper_complete_to_unanswerable_identity_count": ("eq", 0.0),
+    "qasper_complete_to_unanswerable_ref_mismatch_count": ("eq", 0.0),
+    "qasper_semantic_veto_audit_violation_count": ("eq", 0.0),
     "answerable_false_abstention_count": ("eq", 0.0),
     "boolean_scope_violation_count": ("eq", 0.0),
     "wrong_polarity_count": ("eq", 0.0),

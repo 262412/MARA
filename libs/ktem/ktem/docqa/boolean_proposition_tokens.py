@@ -5,7 +5,13 @@ import re
 
 def _relation_surface_tokens(relation: str) -> set[str]:
     surfaces = {
-        "annotate": {"annotate", "construct", "label"},
+        "annotate": {
+            "annotate",
+            "construct",
+            "crowdsource",
+            "crowdsourced",
+            "label",
+        },
         "compare": {"compare", "contrast", "outperform"},
         "create": {
             "build",
@@ -15,6 +21,8 @@ def _relation_surface_tokens(relation: str) -> set[str]:
             "construct",
             "create",
             "develop",
+            "gather",
+            "generate",
         },
         "evaluate": {
             "assess",
@@ -29,17 +37,34 @@ def _relation_surface_tokens(relation: str) -> set[str]:
             "run",
             "test",
         },
-        "provide": {"available", "provide", "publish", "release"},
-        "train": {"finetune", "fine-tune", "train"},
+        "provide": {
+            "available",
+            "distribute",
+            "provide",
+            "publish",
+            "release",
+            "share",
+        },
+        "train": {
+            "finetune",
+            "fine-tune",
+            "optimize",
+            "pretrain",
+            "pretrained",
+            "train",
+        },
         "use": {
             "apply",
             "employ",
             "incorporate",
             "introduce",
+            "leverage",
             "rely",
             "use",
             "used",
+            "utilize",
         },
+        "validate": {"check", "control", "validate", "verify"},
     }
     return surfaces.get(relation, {relation})
 
@@ -47,6 +72,12 @@ def _relation_surface_tokens(relation: str) -> set[str]:
 def _object_token(token: str) -> str:
     aliases = {
         "components": "component",
+        "own": "",
+        "our": "",
+        "their": "",
+        "this": "",
+        "these": "",
+        "those": "",
         "systems": "component",
         "system": "component",
         "packaged": "off_the_shelf",
@@ -84,6 +115,12 @@ def _content_tokens(value: str) -> set[str]:
         "was",
         "were",
         "without",
+        "our",
+        "own",
+        "their",
+        "this",
+        "these",
+        "those",
     }
     return {
         token

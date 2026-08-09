@@ -22,6 +22,7 @@ from .boolean_proposition_tokens import (
     _object_token,
     _relation_surface_tokens,
 )
+from .boolean_quality_control_evidence import quality_control_evidence_kind
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
 from .evidence_identity import identity_of
 
@@ -275,6 +276,11 @@ def boolean_proposition_evidence_score(
     text = evidence_item_text(item)
     if not text:
         return 0.0
+    quality_kind = quality_control_evidence_kind(question, text)
+    if quality_kind == "quality_validation":
+        return 3.0
+    if quality_kind == "annotation_artifact_control":
+        return 1.0
     assessments = classify_boolean_evidence_candidates(question, "", item)
     compatible = [
         assessment
@@ -299,7 +305,7 @@ def boolean_proposition_evidence_score(
         }:
             return 1.0 + assessment.relation_score + assessment.object_score
         return 0.0
-    question_tokens = _content_tokens(question)
+    question_tokens = _proposition_content_tokens(question)
     evidence_tokens = _content_tokens(text)
     if not question_tokens:
         return 0.0
@@ -307,6 +313,42 @@ def boolean_proposition_evidence_score(
     if coverage < 0.35:
         return 0.0
     return 1.0 + coverage + 0.5 * assessment.relation_score
+
+
+def boolean_proposition_authority_level(
+    question: str,
+    item: dict[str, Any],
+) -> str:
+    """Classify retrieval support before answer-specific verification."""
+
+    text = evidence_item_text(item)
+    if not text:
+        return "none"
+    quality_kind = quality_control_evidence_kind(question, text)
+    if quality_kind == "annotation_artifact_control":
+        return "partial"
+    return (
+        "complete" if boolean_proposition_evidence_score(question, item) > 0 else "none"
+    )
+
+
+def _proposition_content_tokens(value: str) -> set[str]:
+    relation_tokens = {
+        token
+        for relation in boolean_relation_lemmas(value)
+        for token in _relation_surface_tokens(relation)
+    }
+    return (
+        _content_tokens(value)
+        - relation_tokens
+        - {
+            "author",
+            "authors",
+            "paper",
+            "study",
+            "work",
+        }
+    )
 
 
 def boolean_proposition_binding_trace(

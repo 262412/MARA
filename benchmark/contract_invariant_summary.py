@@ -237,6 +237,30 @@ def _verification_summary(
             "boolean_scope_violation_count",
         ),
         "wrong_polarity_count": _sum(metrics, "wrong_polarity_count"),
+        "qasper_required_slot_authority_empty_count": _sum(
+            metrics,
+            "qasper_required_slot_authority_empty_count",
+        ),
+        "qasper_required_slot_authority_missing_count": _sum(
+            metrics,
+            "qasper_required_slot_authority_missing_count",
+        ),
+        "qasper_complete_to_unanswerable_empty_authority_count": _sum(
+            metrics,
+            "qasper_complete_to_unanswerable_empty_authority_count",
+        ),
+        "qasper_complete_to_unanswerable_identity_count": _sum(
+            metrics,
+            "qasper_complete_to_unanswerable_identity_count",
+        ),
+        "qasper_complete_to_unanswerable_ref_mismatch_count": _sum(
+            metrics,
+            "qasper_complete_to_unanswerable_ref_mismatch_count",
+        ),
+        "qasper_semantic_veto_audit_violation_count": _sum(
+            metrics,
+            "qasper_semantic_veto_audit_violation_count",
+        ),
         "citation_claim_support_violation_count": _sum(
             metrics,
             "citation_claim_support_violation_count",

@@ -5,7 +5,8 @@ from dataclasses import asdict, dataclass
 from decimal import Decimal
 from typing import Any
 
-from .financial_statement_identity import financial_statement_identity
+from .financial_statement_identity import financial_statement_identity, source_identity
+from .financial_table_parser import cell_id_aliases as _cell_id_aliases
 from .financial_table_parser import decimal_value as _decimal
 from .financial_table_parser import period_header_records as _period_header_records
 from .financial_table_parser import period_kind as _period_kind
@@ -81,6 +82,7 @@ class FinancialTableCell:
     statement_kind: str = ""
     financial_scope: str = ""
     column_header_path: tuple[str, ...] = ()
+    cell_id_aliases: tuple[str, ...] = ()
 
     @property
     def physical_identity(self) -> PhysicalCellIdentity:
@@ -420,8 +422,25 @@ def _explicit_cell(item: dict[str, Any]) -> FinancialTableCell | None:
         row_index=row_index,
         column_index=column_index,
     )
+    explicit_cell_id = str(item.get("cell_id") or "").strip()
+    has_physical_coordinates = row_index > 0 and column_index > 0
+    resolved_cell_id = (
+        physical_identity.key
+        if has_physical_coordinates or not explicit_cell_id
+        else explicit_cell_id
+    )
+    aliases = tuple(
+        dict.fromkeys(
+            value
+            for value in (
+                explicit_cell_id,
+                *(_cell_id_aliases(item)),
+            )
+            if value and value != resolved_cell_id
+        )
+    )
     return FinancialTableCell(
-        cell_id=str(item.get("cell_id") or "").strip() or physical_identity.key,
+        cell_id=resolved_cell_id,
         evidence_id=identity["evidence_id"],
         canonical_id=identity["canonical_id"],
         source_id=identity["source_id"],
@@ -444,6 +463,7 @@ def _explicit_cell(item: dict[str, Any]) -> FinancialTableCell | None:
         statement_kind=statement_kind,
         financial_scope=financial_scope,
         column_header_path=column_header_path or (column_label,),
+        cell_id_aliases=aliases,
     )
 
 
@@ -462,11 +482,7 @@ def _table_identity(item: dict[str, Any]) -> dict[str, str]:
         item.get("canonical_id"),
     )
     canonical_id = _first(item.get("canonical_id"), evidence_id, "financial-table")
-    source_id = _first(
-        item.get("source_id"),
-        item.get("document_id"),
-        nested.get("source_id"),
-    )
+    source_id = source_identity(item, nested)
     page_label = _first(
         item.get("page_label"),
         item.get("page"),

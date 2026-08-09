@@ -346,6 +346,8 @@ def _with_financial_cells(record: dict[str, Any]) -> list[dict[str, Any]]:
         cell_metadata = dict(metadata)
         if cell.column_header_path:
             cell_metadata["column_header_path"] = list(cell.column_header_path)
+        if cell.cell_id_aliases:
+            cell_metadata["cell_id_aliases"] = list(cell.cell_id_aliases)
         cell_records.append(
             ElementIndexRecord(
                 evidence_id=cell.cell_id,

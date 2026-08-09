@@ -12,7 +12,7 @@ from .evidence_selection_budget import (
 )
 from .execution_slot_lineage import execution_slot_lineage
 from .finance_query_planning import finance_metric_evidence_matches
-from .query_planning import QueryPlan, slot_coverage
+from .query_planning import QueryPlan, slot_coverage, slot_needs_second_round
 from .required_slot_selection import slot_requires_selection, slot_score
 from .selection_score_normalization import SELECTION_SCORE_CONTRACT
 
@@ -39,8 +39,7 @@ def build_selection_trace(
         ],
         "slot_coverage": slot_coverage(bound),
         "missing_required_slot_count": sum(
-            slot.required_for_retrieval and slot.status != "filled"
-            for slot in bound.evidence_slots
+            slot_needs_second_round(slot) for slot in bound.evidence_slots
         ),
         **context,
         **evidence_selection_budget_trace(bound, candidates, selected),

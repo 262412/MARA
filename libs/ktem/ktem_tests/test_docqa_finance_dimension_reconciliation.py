@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.calculation_evidence_identity import calculation_evidence_lookup
+from ktem.docqa.evidence_identity import exact_evidence_aliases, identity_of
 from ktem.docqa.evidence_set_selection import select_evidence_for_plan
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 from ktem.docqa.finance_query_plan_answer import bind_numeric_query_plan
 from ktem.docqa.finance_scale import source_scale_evidence
+from ktem.docqa.financial_table import parse_financial_table_cells
 from ktem.docqa.query_planning import bind_evidence_slots, build_query_plan
 
 from .test_docqa_execution_binding_regressions import _multi_period_ratio_evidence
@@ -293,3 +295,95 @@ def test_scale_binding_matches_prefixed_table_identity_to_page_table():
 
     assert dimension.status == "filled"
     assert dimension.evidence_ids == (identity_of(page_table).key,)
+
+
+def test_malformed_cell_identity_is_reconciled_to_physical_identity_with_alias():
+    malformed = {
+        "evidence_id": "legacy-cell-record",
+        "file_id": "report-file",
+        "page_label": "68",
+        "element_type": "table",
+        "table_id": "balance-sheet",
+        "table_instance_id": "balance-sheet-instance",
+        "block_id": "balance-sheet-block",
+        "row_index": 1,
+        "column_index": 1,
+        "cell_id": "source:report-file#page:1#table-instance:old#row:9#column:9",
+        "row_label": "Total current assets",
+        "column_label": "2021",
+        "period": "2021",
+        "value": "19815",
+        "scale": "million",
+        "statement_kind": "balance_sheet",
+        "text": "Total current assets 2021 19815 million",
+    }
+
+    [cell] = parse_financial_table_cells(malformed)
+    expected_identity = cell.physical_identity.key
+    lookup = calculation_evidence_lookup([malformed])
+
+    assert cell.cell_id == expected_identity
+    assert expected_identity in lookup
+    assert malformed["cell_id"] in exact_evidence_aliases(lookup[expected_identity])
+
+
+def test_current_liability_cell_reconciles_stale_cash_flow_statement_kind():
+    item = {
+        "evidence_id": "legacy-liability-cell",
+        "file_id": "report-file",
+        "page_label": "68",
+        "element_type": "table",
+        "evidence_level": "cell",
+        "table_id": "balance-sheet",
+        "table_instance_id": "balance-sheet-instance",
+        "block_id": "balance-sheet-block",
+        "row_index": 2,
+        "column_index": 1,
+        "cell_id": "legacy-liability-cell",
+        "row_label": "Total current liabilities",
+        "column_label": "2021",
+        "period": "2021",
+        "value": "13997",
+        "scale": "million",
+        "statement_kind": "cash_flow_statement",
+        "text": "Total current liabilities 2021 13997 million cash flow statement",
+    }
+
+    [cell] = parse_financial_table_cells(item)
+
+    assert cell.statement_kind == "balance_sheet"
+
+
+def test_only_placeholder_source_id_keeps_legacy_identity_value():
+    item = {
+        "evidence_id": "legacy-element",
+        "source_id": "unknown",
+        "page_label": "68",
+        "element_id": "legacy-element",
+        "text": "A legacy evidence record.",
+    }
+
+    assert identity_of(item).source_id == "unknown"
+
+
+def test_file_id_reconciles_placeholder_source_for_dimension_and_lineage():
+    item = {
+        "evidence_id": "legacy-cell",
+        "source_id": "unknown",
+        "file_id": "report-file",
+        "page_label": "4",
+        "table_instance_id": "balance-sheet",
+        "text": "Total current assets 2021 100 million",
+    }
+    dimension = {
+        "evidence_id": "table-header",
+        "file_id": "report-file",
+        "page_label": "4",
+        "table_instance_id": "balance-sheet",
+        "text": "Consolidated balance sheet (in millions)",
+    }
+
+    assert source_scale_evidence(item, [item, dimension]) == (
+        "million",
+        "table-header",
+    )

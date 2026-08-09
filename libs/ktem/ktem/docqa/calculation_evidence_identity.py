@@ -4,7 +4,38 @@ from typing import Any
 
 from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from .evidence_identity import identity_of
+from .financial_statement_identity import source_identity
 from .financial_table import parse_financial_table_cells_with_context
+
+_RUNTIME_IDENTITY_FIELDS = (
+    "evaluation_identity",
+    "reranker_backend",
+    "reranker_input_identity",
+    "reranker_model",
+    "reranker_observations",
+    "reranker_rank",
+    "reranker_score",
+    "reranking_score",
+    "runtime_identity",
+)
+_TRANSIENT_METADATA_FIELDS = (
+    "evaluation_identity",
+    "late_interaction_tokens",
+    "representations",
+    "caption",
+    "ocr_text",
+    "vlm_text",
+    "reranker_backend",
+    "reranker_execution_trace",
+    "reranker_execution_traces",
+    "reranker_input_identity",
+    "reranker_model",
+    "reranker_observations",
+    "reranker_rank",
+    "reranker_score",
+    "reranking_score",
+    "runtime_identity",
+)
 
 
 def calculation_evidence_lookup(
@@ -95,18 +126,7 @@ def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any
     materialized = dict(item)
     materialized.pop("identity", None)
     materialized.pop("canonical_id", None)
-    for key in (
-        "evaluation_identity",
-        "reranker_backend",
-        "reranker_input_identity",
-        "reranker_model",
-        "reranker_observations",
-        "reranker_rank",
-        "reranker_score",
-        "reranking_score",
-        "runtime_identity",
-    ):
-        materialized.pop(key, None)
+    _drop_fields(materialized, _RUNTIME_IDENTITY_FIELDS)
     parent_evidence_id = str(
         item.get("evidence_id")
         or item.get("canonical_id")
@@ -117,6 +137,8 @@ def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any
         {
             "evidence_id": cell.cell_id,
             "cell_id": cell.cell_id,
+            "source_id": cell.source_id,
+            "file_id": cell.source_id or item.get("file_id") or "",
             "cell_role": cell.cell_role,
             "evidence_level": "cell",
             "table_id": cell.table_id,
@@ -149,28 +171,17 @@ def materialize_financial_cell(item: dict[str, Any], cell: Any) -> dict[str, Any
     metadata = dict(materialized.get("metadata") or {})
     if cell.column_header_path:
         metadata["column_header_path"] = list(cell.column_header_path)
-    for key in (
-        "evaluation_identity",
-        "late_interaction_tokens",
-        "representations",
-        "caption",
-        "ocr_text",
-        "vlm_text",
-        "reranker_backend",
-        "reranker_execution_trace",
-        "reranker_execution_traces",
-        "reranker_input_identity",
-        "reranker_model",
-        "reranker_observations",
-        "reranker_rank",
-        "reranker_score",
-        "reranking_score",
-        "runtime_identity",
-    ):
-        metadata.pop(key, None)
+    if cell.cell_id_aliases:
+        metadata["cell_id_aliases"] = list(cell.cell_id_aliases)
+    _drop_fields(metadata, _TRANSIENT_METADATA_FIELDS)
     materialized["metadata"] = metadata
     materialized["canonical_id"] = identity_of(materialized).key
     return materialized
+
+
+def _drop_fields(payload: dict[str, Any], fields: tuple[str, ...]) -> None:
+    for field in fields:
+        payload.pop(field, None)
 
 
 def calculation_operand_identity(item: dict[str, Any], operand: Any) -> str:
@@ -215,11 +226,4 @@ def _explicit_parent_child_lineage(
 
 
 def _source_id(item: dict[str, Any]) -> str:
-    metadata = dict(item.get("metadata") or {})
-    return str(
-        item.get("source_id")
-        or item.get("file_id")
-        or item.get("document_id")
-        or metadata.get("source_id")
-        or ""
-    ).strip()
+    return source_identity(item)

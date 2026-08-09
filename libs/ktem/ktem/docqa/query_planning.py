@@ -4,6 +4,7 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from .boolean_evidence_scope import boolean_retrieval_query
 from .finance_agreement_identity import agreement_date
 from .finance_evidence_dimensions import requested_scale
 from .finance_query_planning import (
@@ -359,11 +360,19 @@ def _segment_comparison_slots(
 
 
 def missing_required_slots(plan: QueryPlan) -> list[EvidenceSlot]:
-    return [
-        slot
-        for slot in plan.evidence_slots
-        if slot.required_for_retrieval and slot.status != "filled"
-    ]
+    return [slot for slot in plan.evidence_slots if slot_needs_second_round(slot)]
+
+
+def slot_needs_second_round(slot: EvidenceSlot) -> bool:
+    if slot.status == "filled":
+        return False
+    if slot.required_for_retrieval:
+        return True
+    return bool(
+        slot.required_for_verification
+        and slot.statement_kind == "boolean_proposition"
+        and slot.status in {"missing", "retrieved_partial"}
+    )
 
 
 def missing_slot_queries(plan: QueryPlan) -> list[str]:
@@ -522,6 +531,11 @@ def _finance_dimension_query(
 
 
 def _second_round_slot_query(slot: EvidenceSlot) -> str:
+    if slot.statement_kind == "boolean_proposition":
+        return boolean_retrieval_query(
+            slot.query or slot.metric,
+            second_round=True,
+        )
     if slot.role == "dimension":
         return " ".join(
             dict.fromkeys(

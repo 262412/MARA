@@ -98,7 +98,13 @@ def selection_trace_consistency_errors(
     for slot in plan.evidence_slots:
         evidence_ids = set(slot.evidence_ids)
         if (
-            slot.status in {"filled", "retrieved_unverified", "verified_support"}
+            slot.status
+            in {
+                "filled",
+                "retrieved_partial",
+                "retrieved_unverified",
+                "verified_support",
+            }
         ) != bool(evidence_ids):
             errors.append(f"slot_status_identity_mismatch:{slot.slot_id}")
         for evidence_id in evidence_ids - candidate_ids:

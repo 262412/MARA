@@ -11,6 +11,7 @@ from .qasper_answerability_prompts import (
     answerability_prompt,
     json_structure_repair_prompt,
 )
+from .qasper_authority import required_authority_is_missing
 from .qasper_boolean import stemmed_content_tokens
 from .qasper_free_text_candidate import (
     candidate_answer_clauses,
@@ -69,6 +70,8 @@ def verify_free_text_candidate(
     evidence_items: list[dict[str, Any]] | None = None,
     required_evidence_ids: list[str] | None = None,
     required_slot_ids: list[str] | None = None,
+    missing_required_slot_ids: list[str] | None = None,
+    missing_required_evidence_ids: list[str] | None = None,
     priority_evidence_ids: list[str] | None = None,
     claim_support_evidence_ids: list[str] | None = None,
     claim_contradiction_evidence_ids: list[str] | None = None,
@@ -90,10 +93,21 @@ def verify_free_text_candidate(
         candidate=candidate,
         required_evidence_ids=required_evidence_ids,
         required_slot_ids=required_slot_ids,
+        missing_required_slot_ids=missing_required_slot_ids,
+        missing_required_evidence_ids=missing_required_evidence_ids,
         priority_evidence_ids=priority_evidence_ids,
         claim_support_evidence_ids=claim_support_evidence_ids,
         claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,
     )
+    if required_authority_is_missing(budget_trace):
+        return "unanswerable", _trace(
+            contract_id,
+            "ok",
+            "insufficient_core_evidence",
+            "abstained_missing_required_evidence",
+            reason="missing_required_evidence_authority",
+            parse_trace=budget_trace,
+        )
     verdict, evidence_ref, quote, revised_answer, parse_trace = _call_verifier(
         llm,
         prompt,
@@ -263,6 +277,8 @@ def _fit_free_text_verifier_prompt(
     candidate: str,
     required_evidence_ids: list[str] | None,
     required_slot_ids: list[str] | None,
+    missing_required_slot_ids: list[str] | None,
+    missing_required_evidence_ids: list[str] | None,
     priority_evidence_ids: list[str] | None,
     claim_support_evidence_ids: list[str] | None,
     claim_contradiction_evidence_ids: list[str] | None,
@@ -283,6 +299,8 @@ def _fit_free_text_verifier_prompt(
         candidate_answer=bounded_candidate,
         required_evidence_ids=required_evidence_ids,
         required_slot_ids=required_slot_ids,
+        missing_required_slot_ids=missing_required_slot_ids,
+        missing_required_evidence_ids=missing_required_evidence_ids,
         priority_evidence_ids=priority_evidence_ids,
         claim_support_evidence_ids=claim_support_evidence_ids,
         claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,

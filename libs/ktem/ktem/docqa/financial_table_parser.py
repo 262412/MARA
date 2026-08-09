@@ -186,6 +186,15 @@ def decimal_value(value: Any) -> Decimal | None:
     return -parsed if negative else parsed
 
 
+def cell_id_aliases(item: dict[str, Any]) -> tuple[str, ...]:
+    metadata = item.get("metadata")
+    nested = metadata if isinstance(metadata, dict) else {}
+    raw = item.get("cell_id_aliases") or nested.get("cell_id_aliases") or ()
+    if isinstance(raw, str):
+        raw = (raw,)
+    return tuple(str(value).strip() for value in raw if str(value).strip())
+
+
 def _table_like_period_header(line: str, periods: tuple[str, ...]) -> bool:
     remainder = str(line)
     for period in periods:

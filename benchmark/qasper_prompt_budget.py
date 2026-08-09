@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from collections.abc import Callable
@@ -10,9 +9,13 @@ from typing import Any
 from ktem.docqa.evidence_identity import exact_evidence_aliases, identity_of
 
 from .metrics import is_abstention_answer
+from .qasper_authority import required_authority_audit
 from .qasper_boolean import stemmed_content_tokens
 from .qasper_boolean_scope import resolve_closed_scope_boolean
 from .qasper_evidence_identity import canonical_evidence_sort_key, canonical_prompt_span
+from .qasper_prompt_budget_utils import budget_trace as _budget_trace
+from .qasper_prompt_budget_utils import content_tokens as _content_tokens
+from .qasper_prompt_budget_utils import truncate_evidence as _truncate_evidence
 
 QASPER_VERIFIER_PROMPT_MAX_CHARS = 7000
 
@@ -51,6 +54,8 @@ def fit_qasper_verifier_items(
     candidate_answer: str,
     required_evidence_ids: list[str] | None = None,
     required_slot_ids: list[str] | None = None,
+    missing_required_slot_ids: list[str] | None = None,
+    missing_required_evidence_ids: list[str] | None = None,
     priority_evidence_ids: list[str] | None = None,
     claim_support_evidence_ids: list[str] | None = None,
     claim_contradiction_evidence_ids: list[str] | None = None,
@@ -87,6 +92,8 @@ def fit_qasper_verifier_items(
         original_records=original_records,
         required=required,
         required_slot_ids=required_slot_ids,
+        missing_required_slot_ids=missing_required_slot_ids,
+        missing_required_evidence_ids=missing_required_evidence_ids,
         bounded=bounded,
         prompt=prompt,
     )
@@ -100,6 +107,8 @@ def _verifier_item_trace(
     original_records: list[_EvidenceRow],
     required: set[str],
     required_slot_ids: list[str] | None,
+    missing_required_slot_ids: list[str] | None,
+    missing_required_evidence_ids: list[str] | None,
     bounded: str,
     prompt: str,
 ) -> dict[str, str]:
@@ -110,12 +119,6 @@ def _verifier_item_trace(
         used=bounded,
         prompt=prompt,
     )
-    required_selected = {
-        required_id
-        for required_id in required
-        if any(required_id in row.aliases for row in selected)
-    }
-    required_coverage = len(required_selected) / len(required) if required else 1.0
     trace.update(
         {
             "verifier_input_evidence_ids": ",".join(row.identity for row in selected),
@@ -126,9 +129,6 @@ def _verifier_item_trace(
             "verifier_input_character_count": str(len(bounded)),
             "verifier_input_token_count": str(len(re.findall(r"\S+", bounded))),
             "verifier_budget_exhausted": str(bool(dropped)).lower(),
-            "verifier_required_evidence_ids": ",".join(sorted(required)),
-            "verifier_required_slot_ids": ",".join(required_slot_ids or []),
-            "verifier_required_evidence_coverage": f"{required_coverage:.6f}",
             "verifier_input_evidence_spans": json.dumps(
                 [
                     {
@@ -161,6 +161,15 @@ def _verifier_item_trace(
                 separators=(",", ":"),
             ),
         }
+    )
+    trace.update(
+        required_authority_audit(
+            required=required,
+            selected_aliases=(row.aliases for row in selected),
+            required_slot_ids=required_slot_ids,
+            missing_required_slot_ids=missing_required_slot_ids,
+            missing_required_evidence_ids=missing_required_evidence_ids,
+        )
     )
     return trace
 
@@ -329,7 +338,11 @@ def _boolean_proposition_snippet(
             row[0],
         ),
     )
-    best = _closed_scope_statement(text, question) or ranked[0]
+    best = (
+        _closed_scope_statement(text, question)
+        or _quality_control_statement(statements, question)
+        or ranked[0]
+    )
     selected = [best]
     best_negative = _has_negation(best[2])
     opposite = next(
@@ -364,6 +377,28 @@ def _closed_scope_statement(
     if start < 0:
         return None
     return start, start + len(quote), quote
+
+
+def _quality_control_statement(
+    statements: list[tuple[int, int, str]],
+    question: str,
+) -> tuple[int, int, str] | None:
+    lowered_question = str(question or "").lower()
+    if not re.search(r"\bquality\s+control\b", lowered_question):
+        return None
+    candidates = [
+        row
+        for row in statements
+        if re.search(
+            r"\b(?:harder|difficult|impossible)\s+to\s+validate\s+the\s+quality\b"
+            r"|\bvalidat\w*\s+(?:the\s+)?quality\b",
+            row[2],
+            flags=re.IGNORECASE,
+        )
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda row: (len(row[2]), row[0]))
 
 
 def _fit_evidence_row(row: _EvidenceRow, limit: int) -> _EvidenceRow:
@@ -523,14 +558,6 @@ def _normalized_ids(values: list[str] | None) -> set[str]:
     return {str(value).strip() for value in values or [] if str(value).strip()}
 
 
-def _content_tokens(value: str) -> set[str]:
-    return {
-        token
-        for token in re.findall(r"[a-z0-9]+", str(value or "").casefold())
-        if len(token) > 3
-    }
-
-
 def _item_text(item: dict[str, Any]) -> str:
     return "\n".join(
         str(item.get(field) or "").strip()
@@ -557,36 +584,3 @@ def _has_negation(value: str) -> bool:
             flags=re.IGNORECASE,
         )
     )
-
-
-def _truncate_evidence(evidence: str, limit: int) -> str:
-    if limit <= 0:
-        return ""
-    if len(evidence) <= limit:
-        return evidence
-    prefix = evidence[:limit].rstrip()
-    paragraph_boundary = prefix.rfind("\n\n")
-    sentence_boundary = prefix.rfind(". ")
-    boundary = max(paragraph_boundary, sentence_boundary)
-    if boundary >= limit // 2:
-        prefix = prefix[: boundary + (1 if boundary == sentence_boundary else 0)]
-    return prefix.rstrip()
-
-
-def _budget_trace(
-    *,
-    status: str,
-    original: str,
-    used: str,
-    prompt: str,
-) -> dict[str, str]:
-    return {
-        "evidence_budget_status": status,
-        "evidence_chars_original": str(len(original)),
-        "evidence_chars_used": str(len(used)),
-        "verifier_prompt_chars": str(len(prompt)),
-        "verifier_prompt_char_limit": str(QASPER_VERIFIER_PROMPT_MAX_CHARS),
-        "canonical_prompt_fingerprint": hashlib.sha256(
-            prompt.encode("utf-8")
-        ).hexdigest(),
-    }

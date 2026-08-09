@@ -8,9 +8,11 @@ from collections import Counter
 from collections.abc import Callable
 from statistics import mean
 
+from .numeric_equivalence import numeric_tolerance_score as _numeric_tolerance_score
+
+numeric_tolerance_score = _numeric_tolerance_score
 PUNCT_TABLE = str.maketrans("", "", string.punctuation)
 WHITESPACE_RE = re.compile(r"\s+")
-NUMBER_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
 ABSTENTION_RE = re.compile(
     r"^\s*(?:"
     r"unanswerable\b.*|"
@@ -473,56 +475,6 @@ def formula_normalized_match_score(
             for answer in gold_answers
         )
     )
-
-
-def _extract_number(text: str) -> float | None:
-    value = str(text or "")
-    matches = list(NUMBER_RE.finditer(value))
-    if not matches:
-        return None
-    selected = next(
-        (match for match in matches if not _looks_like_year(value, match)),
-        matches[0],
-    )
-    return float(selected.group(0).replace(",", ""))
-
-
-def _looks_like_year(text: str, match: re.Match[str]) -> bool:
-    raw = match.group(0)
-    if "." in raw or re.search(r"\d,\d{3}", raw):
-        return False
-    try:
-        number = int(raw.rstrip(","))
-    except ValueError:
-        return False
-    if not 1900 <= number <= 2099:
-        return False
-    prefix = text[max(0, match.start() - 2) : match.start()]
-    suffix = text[match.end() : match.end() + 12].lower()
-    if "$" in prefix or re.match(
-        r"\s*(?:%|percent|thousand|million|billion|trillion)\b",
-        suffix,
-    ):
-        return False
-    return True
-
-
-def numeric_tolerance_score(
-    prediction: str,
-    gold_answers: list[str],
-    tolerance: float = 0.001,
-) -> float:
-    predicted = _extract_number(prediction)
-    if predicted is None or not gold_answers:
-        return 0.0
-    for answer in gold_answers:
-        gold = _extract_number(answer)
-        if gold is None:
-            continue
-        allowed_delta = abs(gold) * tolerance
-        if abs(predicted - gold) <= allowed_delta:
-            return 1.0
-    return 0.0
 
 
 def is_abstention_answer(prediction: str) -> bool:

@@ -4,6 +4,29 @@ import re
 from typing import Any
 
 
+def source_identity(
+    item: dict[str, Any], metadata: dict[str, Any] | None = None
+) -> str:
+    nested = metadata if isinstance(metadata, dict) else item.get("metadata")
+    nested = nested if isinstance(nested, dict) else {}
+    fallback = ""
+    for key in ("source_id", "file_id", "document_id", "runtime_source_id"):
+        for raw_value in (item.get(key), nested.get(key)):
+            value = str(raw_value or "").strip()
+            if not value:
+                continue
+            fallback = fallback or value
+            if value.lower() not in {
+                "unknown",
+                "source:unknown",
+                "none",
+                "null",
+                "n/a",
+            }:
+                return value
+    return fallback
+
+
 def financial_statement_identity(
     value: str | dict[str, Any],
 ) -> tuple[str, str]:
@@ -29,7 +52,14 @@ def financial_statement_identity(
         text = str(value or "")
     normalized = _normalize(text)
     atomic_kind = _atomic_metric_statement_kind(value)
-    kind = explicit_kind or atomic_kind or _statement_kind(normalized)
+    stale_balance_sheet_kind = (
+        atomic_kind == "balance_sheet" and explicit_kind == "cash_flow_statement"
+    )
+    kind = (
+        atomic_kind
+        if stale_balance_sheet_kind
+        else explicit_kind or atomic_kind or _statement_kind(normalized)
+    )
     scope = explicit_scope or _financial_scope(normalized, kind)
     return kind, scope
 
@@ -54,6 +84,8 @@ def required_financial_identity(metric: str) -> tuple[str, str]:
         "net property plant and equipment",
         "total current assets",
         "current assets",
+        "total current liabilities",
+        "current liabilities",
     }:
         return "balance_sheet", "consolidated"
     if normalized in {"capital expenditure", "operating cash flow"}:
@@ -191,6 +223,15 @@ def _atomic_metric_statement_kind(value: str | dict[str, Any]) -> str:
         "purchases of property plant and equipment",
     }:
         return "cash_flow_statement"
+    if evidence_level in {"cell", "span"} and row_label in {
+        "current assets",
+        "total current assets",
+        "current liabilities",
+        "total current liabilities",
+        "net property plant and equipment",
+        "property plant and equipment net",
+    }:
+        return "balance_sheet"
     return ""
 
 

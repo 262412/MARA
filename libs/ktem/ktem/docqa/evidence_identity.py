@@ -20,6 +20,7 @@ from .evidence_representations import (
     stable_dict_union,
 )
 from .evidence_similarity import cosine_item_similarity, minhash_text_similarity
+from .financial_statement_identity import source_identity
 
 EVIDENCE_BUNDLE_SCHEMA_VERSION = "evidence_bundle.v2"
 OVERLAP_THRESHOLD = 0.75
@@ -81,14 +82,7 @@ def grouping_evidence_aliases(item: dict[str, Any]) -> set[str]:
 
 def identity_of(item: dict[str, Any]) -> EvidenceIdentity:
     metadata = _merged_metadata(item)
-    source_id = _first(
-        item,
-        metadata,
-        "source_id",
-        "file_id",
-        "document_id",
-        "runtime_source_id",
-    )
+    source_id = source_identity(item, metadata)
     cell_id = _first(item, metadata, "cell_id")
     if cell_id:
         return EvidenceIdentity(source_id, "cell", cell_id)
@@ -214,14 +208,7 @@ def canonicalize_evidence_item(item: dict[str, Any]) -> dict[str, Any]:
     expected_identity = item.get("identity")
     output.pop("identity", None)
     metadata = _merged_metadata(item)
-    source_id = _first(
-        item,
-        metadata,
-        "source_id",
-        "file_id",
-        "document_id",
-        "runtime_source_id",
-    )
+    source_id = source_identity(item, metadata)
     page_label = _first(item, metadata, "page_label", "page_number", "page", "page_idx")
     element_id = _first(item, metadata, "element_id")
     parent_id = _first(item, metadata, "parent_element_id", "parent_id")

@@ -17,6 +17,12 @@ QUESTION = (
     "What was FY2021 net working capital, defined as current assets less "
     "current liabilities?"
 )
+LOCKHEED_BALANCE_SHEET_2021 = """
+CONSOLIDATED BALANCE SHEETS
+(In millions, except per share data) 2021 2020
+Total current assets 19,815 19,378
+Total current liabilities 13,997 13,933
+"""
 
 
 def _cell(
@@ -263,6 +269,71 @@ def test_correct_execution_reaches_final_answer() -> None:
     assert answer.answer == "$5,818.0"
 
 
+def test_lockheed_balance_sheet_materializes_selected_bound_operands_end_to_end() -> (
+    None
+):
+    question = (
+        "What is FY2021 net working capital, defined as total current assets "
+        "less total current liabilities? Answer in USD millions."
+    )
+    parent = {
+        "evidence_id": "element:report-file:balance-sheet",
+        "file_id": "report-file",
+        "page_label": "68",
+        "element_type": "table",
+        "modality": "table",
+        "table_id": "balance-sheet",
+        "table_instance_id": "evidence_balance-sheet",
+        "table_group_id": "balance-sheet",
+        "block_id": "evidence_balance-sheet",
+        "text": LOCKHEED_BALANCE_SHEET_2021,
+    }
+    plan = build_query_plan(
+        question,
+        answer_type="numeric",
+        verification_domain="finance",
+    )
+    request = SimpleNamespace(
+        prompt=question,
+        task_type="numeric",
+        verification_domain="finance",
+        query_plan=plan,
+    )
+    metadata: dict[str, Any] = {}
+    materialized = _materialize_execution_cells(request, [parent], metadata)
+    atomic = [item for item in materialized if item.get("evidence_level") == "cell"]
+    assert {(item["row_label"], item["period"], item["value"]) for item in atomic} >= {
+        ("Total current assets", "2021", "19815"),
+        ("Total current liabilities", "2021", "13997"),
+    }
+    assert all(item["source_id"] == "report-file" for item in atomic)
+    assert all("source:unknown" not in item["cell_id"] for item in atomic)
+    assert all(
+        item["canonical_id"] == identity_of(item).key
+        and item["physical_cell_identity"]["source_id"] == "report-file"
+        for item in atomic
+    )
+    selected, trace, bound = select_evidence_for_plan(question, materialized, plan)
+    selected_ids = {identity_of(item).key for item in selected}
+    operand_slots = [slot for slot in bound.evidence_slots if slot.role == "operand"]
+    assert {slot.statement_kind for slot in operand_slots} == {"balance_sheet"}
+    assert all(slot.status == "filled" for slot in operand_slots)
+    assert all(slot.evidence_ids[0] in selected_ids for slot in operand_slots)
+    assert all(
+        binding["selected_cell"] and binding["execution_operand"]
+        for binding in trace["execution_slot_lineage"]
+        if binding["slot_id"].startswith("operand:")
+    )
+    answer = finance_numeric_answer(
+        question,
+        selected,
+        query_plan=bound.as_dict(),
+    )
+    assert answer is not None
+    assert answer.answer == "$5,818.0 million"
+    assert answer.calculation_execution["status"] == "ok"
+
+
 def test_inventory_turnover_query_plan_executes_bound_atomic_cells() -> None:
     question = (
         "What is FY2019 inventory turnover, defined as FY2019 COGS divided "
@@ -503,7 +574,9 @@ def test_revolving_credit_execution_deduplicates_page_and_atomic_spans() -> None
     )
 
 
-def test_materialization_parent_is_valid_dimension_scope_without_table_metadata() -> None:
+def test_materialization_parent_is_valid_dimension_scope_without_table_metadata() -> (
+    None
+):
     parent = {
         "evidence_id": "page-table-parent",
         "source_id": "report",

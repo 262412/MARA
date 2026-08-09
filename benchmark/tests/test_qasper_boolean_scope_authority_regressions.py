@@ -6,10 +6,17 @@ from typing import Any
 import pytest
 
 from benchmark.qasper_answerability import verify_qasper_answerability
+from benchmark.qasper_contract_invariants import qasper_contract_metric_values
+from benchmark.qasper_evidence_priorities import qasper_evidence_priorities
+from benchmark.qasper_prompt_budget import (
+    _boolean_proposition_snippet,
+    fit_qasper_verifier_items,
+)
 
 
 class _Verifier:
     def __init__(self, verdict: str, quote: str, evidence_ref: str = "") -> None:
+        self.calls = 0
         self.response = json.dumps(
             {
                 "verdict": verdict,
@@ -20,6 +27,7 @@ class _Verifier:
         )
 
     def __call__(self, _prompt: str, **_kwargs: Any) -> Any:
+        self.calls += 1
         return type("Result", (), {"text": self.response})()
 
 
@@ -30,6 +38,280 @@ def _item(evidence_id: str, text: str) -> dict[str, str]:
         "section_id": "results",
         "text": text,
     }
+
+
+def test_required_verification_slot_without_references_remains_visible_as_missing_authority() -> None:
+    prediction = {
+        "evidence_metadata": {
+            "query_plan": {
+                "evidence_slots": [
+                    {
+                        "slot_id": "support:boolean_proposition",
+                        "required_for_verification": True,
+                        "evidence_ids": [],
+                    }
+                ]
+            }
+        }
+    }
+
+    priorities = qasper_evidence_priorities(
+        prediction,
+        [_item("support", "The authors evaluate the model.")],
+        question="Did the authors evaluate the model?",
+        candidate_answer="yes",
+    )
+
+    assert priorities.required_evidence_ids == ()
+    assert priorities.required_slot_ids == ("support:boolean_proposition",)
+    assert priorities.missing_required_slot_ids == ("support:boolean_proposition",)
+
+
+def test_empty_required_authority_is_not_full_verifier_coverage() -> None:
+    _prompt, _bounded, trace = fit_qasper_verifier_items(
+        [_item("support", "The authors evaluate the model.")],
+        lambda evidence: f"QUESTION\n{evidence}",
+        question="Did the authors evaluate the model?",
+        candidate_answer="yes",
+        required_evidence_ids=[],
+        required_slot_ids=["support:boolean_proposition"],
+    )
+
+    assert trace["verifier_required_evidence_coverage"] == "0.000000"
+    assert trace["verifier_required_authority_status"] == "missing_required_evidence"
+    assert trace["verifier_required_slot_authority_count"] == "0"
+
+
+def test_required_reference_and_prompt_quote_share_canonical_lineage() -> None:
+    item = _item("support", "The authors evaluate the model on clinical tasks.")
+    item["span_id"] = "support"
+    prediction = {
+        "evidence_metadata": {
+            "query_plan": {
+                "evidence_slots": [
+                    {
+                        "slot_id": "support:boolean_proposition",
+                        "required_for_verification": True,
+                        "evidence_ids": ["span:paper:support"],
+                    }
+                ]
+            }
+        }
+    }
+
+    priorities = qasper_evidence_priorities(
+        prediction,
+        [item],
+        question="Did the authors evaluate the model on clinical tasks?",
+        candidate_answer="yes",
+    )
+    _prompt, _bounded, trace = fit_qasper_verifier_items(
+        [item],
+        lambda evidence: f"QUESTION\n{evidence}",
+        question="Did the authors evaluate the model on clinical tasks?",
+        candidate_answer="yes",
+        required_evidence_ids=list(priorities.required_evidence_ids),
+        required_slot_ids=list(priorities.required_slot_ids),
+    )
+
+    assert priorities.required_evidence_ids == ("span:paper:support",)
+    assert trace["verifier_required_evidence_coverage"] == "1.000000"
+    assert trace["verifier_input_evidence_ids"] == "span:paper:support"
+    assert (
+        '"runtime_evidence_id":"span:paper:support"'
+        in trace["verifier_evidence_alias_mapping"]
+    )
+
+
+def test_partial_required_slot_authority_cannot_report_full_coverage() -> None:
+    first = _item("first", "The authors evaluate the model on clinical tasks.")
+    first["span_id"] = "first"
+    prediction = {
+        "evidence_metadata": {
+            "query_plan": {
+                "evidence_slots": [
+                    {
+                        "slot_id": "support:clinical",
+                        "required_for_verification": True,
+                        "evidence_ids": ["span:paper:first"],
+                    },
+                    {
+                        "slot_id": "support:missing",
+                        "required_for_verification": True,
+                        "evidence_ids": [],
+                    },
+                ]
+            }
+        }
+    }
+
+    priorities = qasper_evidence_priorities(
+        prediction,
+        [first],
+        question="Did the authors evaluate the model on clinical tasks?",
+        candidate_answer="yes",
+    )
+    _prompt, _bounded, trace = fit_qasper_verifier_items(
+        [first],
+        lambda evidence: f"QUESTION\n{evidence}",
+        question="Did the authors evaluate the model on clinical tasks?",
+        candidate_answer="yes",
+        required_evidence_ids=list(priorities.required_evidence_ids),
+        required_slot_ids=list(priorities.required_slot_ids),
+        missing_required_slot_ids=list(priorities.missing_required_slot_ids),
+        missing_required_evidence_ids=list(priorities.missing_required_evidence_ids),
+    )
+
+    assert priorities.required_slot_ids == (
+        "support:clinical",
+        "support:missing",
+    )
+    assert priorities.missing_required_slot_ids == ("support:missing",)
+    assert trace["verifier_required_evidence_coverage"] == "0.000000"
+    assert trace["verifier_required_slot_authority_count"] == "1"
+    assert trace["verifier_required_authority_status"] == "missing_required_evidence"
+
+
+def test_unresolved_required_reference_marks_its_slot_missing() -> None:
+    item = _item("support", "The authors evaluate the model on clinical tasks.")
+    prediction = {
+        "evidence_metadata": {
+            "query_plan": {
+                "evidence_slots": [
+                    {
+                        "slot_id": "support:boolean_proposition",
+                        "required_for_verification": True,
+                        "evidence_ids": ["span:paper:not-selected"],
+                    }
+                ]
+            }
+        }
+    }
+
+    priorities = qasper_evidence_priorities(
+        prediction,
+        [item],
+        question="Did the authors evaluate the model on clinical tasks?",
+        candidate_answer="yes",
+    )
+
+    assert priorities.required_evidence_ids == ()
+    assert priorities.missing_required_slot_ids == ("support:boolean_proposition",)
+    assert priorities.missing_required_evidence_ids == ("span:paper:not-selected",)
+
+
+def test_quality_control_prompt_snippet_keeps_quality_validation_sentence() -> None:
+    text = (
+        "We find automatically constructing probes to be vulnerable to annotation "
+        "artifacts, which we carefully control for. It is much harder to validate "
+        "the quality of such data at such a scale and such varying levels of "
+        "complexity."
+    )
+
+    snippets, _spans = _boolean_proposition_snippet(
+        text,
+        "Are the automatically constructed datasets subject to quality control?",
+    )
+
+    assert any("validate the quality" in snippet for snippet in snippets)
+
+
+def test_quality_validation_quote_remains_grounded_no() -> None:
+    quote = (
+        "It is much harder to validate the quality of such data at such a scale "
+        "and such varying levels of complexity."
+    )
+    result = verify_qasper_answerability(
+        _Verifier("no_complete", quote, "E1:S1"),
+        question="Are the automatically constructed datasets subject to quality control?",
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("quality-validation", quote)],
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "no"
+    assert result.trace["reason"] == "grounded_complete_proposition"
+    assert result.trace["evidence_ref"] == "E1:S1"
+    assert result.trace["evidence_quote"] == quote
+
+
+def test_free_text_missing_required_authority_abstains_before_verifier_call() -> None:
+    verifier = _Verifier(
+        "supported",
+        "The authors evaluate the model on clinical tasks.",
+        "E1:S1",
+    )
+    result = verify_qasper_answerability(
+        verifier,
+        question="What did the authors evaluate?",
+        answer_type="free_text",
+        evidence="The authors evaluate the model on clinical tasks.",
+        evidence_items=[
+            _item("support", "The authors evaluate the model on clinical tasks.")
+        ],
+        required_evidence_ids=[],
+        required_slot_ids=["support:boolean_proposition"],
+        candidate_answer="the model on clinical tasks",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "missing_required_evidence_authority"
+    assert result.trace["action"] == "abstained_missing_required_evidence"
+    assert verifier.calls == 0
+
+
+def test_complete_verdict_with_empty_required_authority_is_cleared_safely() -> None:
+    quote = "The authors evaluate the model on clinical tasks."
+    verifier = _Verifier("yes_complete", quote, "E1:S1")
+    result = verify_qasper_answerability(
+        verifier,
+        question="Did the authors evaluate the model on clinical tasks?",
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("support", quote)],
+        required_evidence_ids=[],
+        required_slot_ids=["support:boolean_proposition"],
+        candidate_answer="yes",
+    )
+
+    assert result.answer == "unanswerable"
+    assert result.trace["reason"] == "missing_required_evidence_authority"
+    assert result.trace["verdict"] == "insufficient_evidence"
+    assert result.trace.get("evidence_ref", "") == ""
+    assert result.trace.get("evidence_quote", "") == ""
+    assert verifier.calls == 0
+
+
+def test_empty_authority_abstention_does_not_count_as_complete_verdict_cleanup() -> None:
+    quote = "The authors evaluate the model on clinical tasks."
+    verifier = _Verifier("yes_complete", quote, "E1:S1")
+    result = verify_qasper_answerability(
+        verifier,
+        question="Did the authors evaluate the model on clinical tasks?",
+        answer_type="boolean",
+        evidence=quote,
+        evidence_items=[_item("support", quote)],
+        required_evidence_ids=[],
+        required_slot_ids=["support:boolean_proposition"],
+        candidate_answer="yes",
+    )
+    prediction: dict[str, Any] = {
+        "answer_type": "boolean",
+        "predicted_answer": result.answer,
+        "gold_answers": ["yes"],
+        "evidence_metadata": {"qasper_answerability": result.trace},
+    }
+
+    metrics = qasper_contract_metric_values(
+        prediction,
+        prediction["evidence_metadata"],
+        cited=[],
+        contract_items=[_item("support", quote)],
+    )
+
+    assert metrics["qasper_required_slot_authority_empty_count"] == 1.0
+    assert metrics["qasper_complete_to_unanswerable_empty_authority_count"] == 0.0
 
 
 def test_two_object_quantifier_rejects_quote_proving_only_one_dataset() -> None:
@@ -48,8 +330,9 @@ def test_two_object_quantifier_rejects_quote_proving_only_one_dataset() -> None:
     assert result.answer == "unanswerable"
     assert result.trace["verdict"] == "insufficient_evidence"
     assert result.trace["reason"] == "quantified_object_scope_incomplete"
-    assert result.trace.get("evidence_ref", "") == ""
-    assert result.trace.get("evidence_quote", "") == ""
+    assert result.trace["evidence_ref"] == "E1:S1"
+    assert result.trace["evidence_quote"] == quote
+    assert result.trace["boolean_scope_reason"] == "quantified_object_scope_incomplete"
 
 
 def test_two_object_quantifier_accepts_both_named_datasets_for_same_relation() -> None:
@@ -84,6 +367,9 @@ def test_two_object_quantifier_rejects_unrelated_count_in_same_quote() -> None:
 
     assert result.answer == "unanswerable"
     assert result.trace["reason"] == "quantified_object_scope_incomplete"
+    assert result.trace["evidence_ref"] == "E1:S1"
+    assert result.trace["evidence_quote"] == quote
+    assert result.trace["boolean_scope_reason"] == "quantified_object_scope_incomplete"
 
 
 def test_named_both_quantifier_requires_and_accepts_each_named_object() -> None:

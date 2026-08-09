@@ -5,6 +5,7 @@ from dataclasses import replace
 from typing import Any
 
 from .boolean_evidence_scope import boolean_proposition_evidence_score
+from .boolean_proposition_evidence import boolean_proposition_authority_level
 from .calculation_evidence_identity import reconcile_materialized_cells
 from .deterministic_ranking import quantized_score
 from .evidence_identity import identity_of
@@ -107,7 +108,11 @@ def _bind_evidence_slots(
         bound_slots.append(
             replace(
                 slot,
-                status=_bound_slot_status(slot, evidence_ids),
+                status=_bound_slot_status(
+                    slot,
+                    evidence_ids,
+                    evidence_by_identity,
+                ),
                 evidence_ids=evidence_ids,
             )
         )
@@ -229,7 +234,13 @@ def _existing_binding_state(
     requires_structure: bool,
 ) -> tuple[bool, str]:
     if (
-        slot.status not in {"filled", "retrieved_unverified", "verified_support"}
+        slot.status
+        not in {
+            "filled",
+            "retrieved_partial",
+            "retrieved_unverified",
+            "verified_support",
+        }
         or not slot.evidence_ids
     ):
         return False, "missing_existing_binding"
@@ -256,7 +267,11 @@ def _existing_binding_state(
     return True, ""
 
 
-def _bound_slot_status(slot: EvidenceSlot, evidence_ids: tuple[str, ...]) -> str:
+def _bound_slot_status(
+    slot: EvidenceSlot,
+    evidence_ids: tuple[str, ...],
+    evidence_by_identity: dict[str, dict[str, Any]],
+) -> str:
     if not evidence_ids:
         return "missing"
     if (
@@ -264,6 +279,16 @@ def _bound_slot_status(slot: EvidenceSlot, evidence_ids: tuple[str, ...]) -> str
         and slot.required_for_verification
         and not slot.required_for_retrieval
     ):
+        levels = [
+            boolean_proposition_authority_level(
+                slot.metric,
+                evidence_by_identity[evidence_id],
+            )
+            for evidence_id in evidence_ids
+            if evidence_id in evidence_by_identity
+        ]
+        if levels and "complete" not in levels and "partial" in levels:
+            return "retrieved_partial"
         return "retrieved_unverified"
     return "filled"
 

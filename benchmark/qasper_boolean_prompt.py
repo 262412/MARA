@@ -17,6 +17,8 @@ def fit_boolean_verifier_prompt(
     priority_evidence_ids: list[str] | None,
     claim_support_evidence_ids: list[str] | None,
     claim_contradiction_evidence_ids: list[str] | None,
+    missing_required_slot_ids: list[str] | None = None,
+    missing_required_evidence_ids: list[str] | None = None,
 ) -> tuple[str, str, dict[str, str]]:
     def prompt_builder(bounded_evidence: str) -> str:
         return boolean_answerability_prompt(
@@ -44,6 +46,8 @@ def fit_boolean_verifier_prompt(
         candidate_answer="",
         required_evidence_ids=required_evidence_ids,
         required_slot_ids=required_slot_ids,
+        missing_required_slot_ids=missing_required_slot_ids,
+        missing_required_evidence_ids=missing_required_evidence_ids,
         priority_evidence_ids=priority_evidence_ids,
         claim_support_evidence_ids=claim_support_evidence_ids,
         claim_contradiction_evidence_ids=claim_contradiction_evidence_ids,

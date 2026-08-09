@@ -200,6 +200,23 @@ def test_numeric_tolerance_still_matches_answer_shaped_currency_values():
     assert numeric_tolerance_score("$16,525", ["$16,525.00"]) == 1.0
 
 
+def test_numeric_tolerance_accepts_explicitly_approximate_rounded_percentages():
+    assert (
+        numeric_tolerance_score(
+            "Yes, a 41.7% decrease",
+            ["Yes, there was a decline of ~42% between FY2023 and Q2 of FY2024."],
+        )
+        == 1.0
+    )
+    assert numeric_tolerance_score("41.7 percent", ["approximately 42 percent"]) == 1.0
+
+
+def test_numeric_tolerance_does_not_globally_relax_percentage_matching():
+    assert numeric_tolerance_score("41.7%", ["42%"]) == 0.0
+    assert numeric_tolerance_score("41.4%", ["~42%"]) == 0.0
+    assert numeric_tolerance_score("41.7", ["~42%"]) == 0.0
+
+
 def test_false_abstention_flags_supported_answers_rewritten_to_no_evidence():
     assert is_abstention_answer("文档证据无法支持该回答") is True
     assert false_abstention_score("文档证据无法支持该回答", ["Transformer"]) == 1.0
