@@ -22,6 +22,9 @@ class BatchDeleteApplicationService:
     def list_sessions(self) -> list[dict]:
         return []
 
+    def create_session(self) -> dict:
+        return {"conversation_id": "created-session"}
+
     def get_session(self, conversation_id: str) -> dict:
         return {"conversation_id": conversation_id}
 
