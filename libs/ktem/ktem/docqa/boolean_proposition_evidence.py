@@ -26,6 +26,7 @@ from .boolean_proposition_tokens import (
 from .boolean_quality_control_evidence import quality_control_evidence_kind
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
 from .evidence_identity import identity_of
+from .query_phrase_extraction import semantic_boolean_proposition_question
 
 
 @dataclass(frozen=True)
@@ -122,21 +123,27 @@ def _assess_proposition_span(
     *,
     span_index: int,
 ) -> BooleanEvidenceAssessment:
+    semantic_question = semantic_boolean_proposition_question(question)
     section_role = _section_role(item, span)
     actor = _actor(span, section_role)
-    quantifier = _closed_quantifier(question)
+    quantifier = _closed_quantifier(semantic_question)
     evidence_polarity = _evidence_polarity(
-        question,
+        semantic_question,
         span,
         desired_polarity=desired_polarity,
     )
-    relation_score = _relation_compatibility(question, span)
-    object_score, proposition_object = _object_compatibility(question, span)
+    relation_score = _relation_compatibility(semantic_question, span)
+    object_score, proposition_object = _object_compatibility(semantic_question, span)
     proposition = BooleanProposition(
         actor=actor,
         action=primary_boolean_relation(span),
         object=proposition_object,
-        section_scope=section_role,
+        section_scope=(
+            "current_paper"
+            if actor == "current_paper"
+            and semantic_question != str(question or "").strip()
+            else section_role
+        ),
         polarity=evidence_polarity,
         quantifier=quantifier,
     )
@@ -274,6 +281,7 @@ def boolean_proposition_evidence_score(
     question: str,
     item: dict[str, Any],
 ) -> float:
+    question = semantic_boolean_proposition_question(question)
     text = evidence_item_text(item)
     if not text:
         return 0.0
@@ -325,6 +333,7 @@ def boolean_proposition_authority_level(
 ) -> str:
     """Classify retrieval support before answer-specific verification."""
 
+    question = semantic_boolean_proposition_question(question)
     text = evidence_item_text(item)
     if not text:
         return "none"
@@ -360,8 +369,9 @@ def boolean_proposition_binding_trace(
     answer: str,
     items: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    question_relation = primary_boolean_relation(question)
-    question_object = _object_compatibility(question, question)[1]
+    semantic_question = semantic_boolean_proposition_question(question)
+    question_relation = primary_boolean_relation(semantic_question)
+    question_object = _object_compatibility(semantic_question, semantic_question)[1]
     question_actor = (
         "current_paper"
         if _requires_current_paper_scope(question)

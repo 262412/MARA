@@ -8,6 +8,13 @@ _YEAR_RE = re.compile(
     r"\b(?:fy\s*)?((?:19|20)\d{2})\b|\bfy\s*(\d{2})\b",
     re.IGNORECASE,
 )
+_EXPLICIT_PAGE_PAIR_RE = re.compile(
+    r"\b(?:(?:across|between|from|on|using)\s+)?"
+    r"pages?\s+\d+\s*"
+    r"(?:and|with|to|through|versus|vs\.?|[-–—]|,\s*(?:and\s+)?)\s*"
+    r"(?:pages?\s+)?\d+\b\s*[,;:]?",
+    re.IGNORECASE,
+)
 _METRIC_STOPWORDS = {
     "a",
     "an",
@@ -49,6 +56,25 @@ def metric_phrase(
         and token not in set(periods)
     ]
     return " ".join(values)
+
+
+def semantic_boolean_proposition_question(question: str) -> str:
+    """Remove only explicit two-page locators from proposition semantics."""
+
+    text = str(question or "").strip()
+    cleaned, count = _EXPLICIT_PAGE_PAIR_RE.subn(" ", text)
+    if not count:
+        return text
+    cleaned = re.sub(r"\s+([,;:?.!])", r"\1", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip(" ,;:")
+
+
+def semantic_boolean_proposition_metric(question: str, fallback: str) -> str:
+    semantic_question = semantic_boolean_proposition_question(question)
+    return (
+        metric_phrase(semantic_question, [], numeric_terms=set())
+        or str(fallback or "").strip()
+    )
 
 
 def periods_in_question(question: str) -> list[str]:

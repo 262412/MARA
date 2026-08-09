@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from .boolean_evidence_scope import boolean_retrieval_query
 from .query_evidence_text import requires_multiple_operands
-from .query_phrase_extraction import cross_page_support_queries, modality_hint
+from .query_phrase_extraction import (
+    cross_page_support_queries,
+    modality_hint,
+    semantic_boolean_proposition_metric,
+)
 from .query_plan_schema import EvidenceLocator, EvidenceSlot
 
 
@@ -135,7 +139,7 @@ def _boolean_slots(
         EvidenceSlot(
             slot_id="support:proposition",
             role="support",
-            metric=metric,
+            metric=semantic_boolean_proposition_metric(question, metric),
             modality="auto",
             required_for_retrieval=False,
             statement_kind=statement_kind,

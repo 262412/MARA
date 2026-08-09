@@ -7,6 +7,7 @@ from typing import Any
 from .boolean_evidence_scope import boolean_proposition_evidence_score
 from .boolean_proposition_evidence import boolean_proposition_authority_level
 from .calculation_evidence_identity import reconcile_materialized_cells
+from .cross_page_boolean_authority import reconcile_cross_page_boolean_proposition
 from .deterministic_ranking import quantized_score
 from .evidence_identity import identity_of
 from .evidence_locators import locator_matches, locator_requirement_count
@@ -126,6 +127,9 @@ def _bind_evidence_slots(
                     replacement_reason=replacement_reason,
                 )
             )
+    bound_slots = reconcile_cross_page_boolean_proposition(
+        plan, bound_slots, evidence_by_identity, status_for=_bound_slot_status
+    )
     return replace(plan, evidence_slots=tuple(bound_slots)), binding_trace
 
 
