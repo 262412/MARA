@@ -97,6 +97,11 @@ Gate 3 从“原生文件导入 → 后台索引 → Files 刷新/删除”开�
 | 会话新建、搜索、重命名与删除 | In progress | 真实 create/rename/delete；客户端搜索；认证、幂等、写互斥与窄 IPC；Windows、Ubuntu 22/24 包通过  | 当前包 Windows 10/11 VM；固定           |
 | 文档/多文档问答、流式与引用  | In progress | 真实 `stream_turn()`；来源 ID、SSE、partial、取消/原范围重试与安全引用；三平台组合包通过         | Windows 10/11 VM；页/选中文本；引用定位 |
 
+当前 Gate 3 打包基线为 `2878e815a55970201136c4dc8817ad9a4ca53883`。所有原生 smoke
+除业务断言外，还必须证明沙箱 Renderer 获得完整 `window.desktop`，并通过 Preload
+真实调用 Runtime、Doctor、Files 和 Sessions IPC；只从 Main 直接访问 Sidecar 不再视为
+充分的打包证据。
+
 实现、测试、包体测量与剩余风险见
 [Gate 3 文件索引纵向切片证据](gate-3-file-indexing-evidence.md)和
 [Gate 3 会话详情纵向切片证据](gate-3-session-detail-evidence.md)、

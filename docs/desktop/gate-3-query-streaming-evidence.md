@@ -21,6 +21,42 @@ Ubuntu 24.04 对 Ubuntu 22.04 同一包和同一数据快照的复验也通过�
 Windows 10/11 产品 VM 上复验。Preview、Notes、Studio、Knowledge Graph、Resources、
 Settings、Help 和迁移等 P0 能力同样未关闭。
 
+## 2026-08-09 沙箱 Preload 发布修复
+
+首次公开的 `ce5816e` 预览包存在发布阻断缺陷：TypeScript 产出的 Preload 保留
+`require("./dropped-file-import")`，Electron sandbox loader 因而拒绝加载整个脚本。
+真实页面中 `window.desktop` 为 `undefined`，Doctor、Files、Sessions、导入和问答均
+进入“仅能在 MARA Desktop 中使用”的浏览器降级分支。此前组合包 smoke 直接从 Main
+访问 Sidecar，未覆盖 Renderer → Preload → IPC，所以没有捕获该问题。
+
+修复提交 `2878e815a55970201136c4dc8817ad9a4ca53883` 使用现有 Vite 构建器把 Preload
+及本地辅助模块输出为一个 CommonJS 文件，唯一外置模块为 `electron`；
+`sandbox: true`、`contextIsolation: true` 和 `nodeIntegration: false` 均由回归测试锁定。
+每次开发态和打包 smoke 现在都从 Renderer 主世界验证完整桥接并真实调用 Runtime、
+Doctor、Files 和 Sessions IPC，成功标记为：
+
+```text
+renderer_bridge=window.desktop real_ipc=runtime,doctor,files,sessions status_success
+```
+
+[Desktop 运行 31311652117](https://github.com/262412/MARA/actions/runs/31311652117)
+已 3/3 成功：Windows 每个组合 smoke、Ubuntu 22.04 主/故障 smoke 和 Ubuntu 24.04
+跨版本复验均输出该标记；Defender 为 `scan_result=no_detections`。
+[Quality gates 31311652197](https://github.com/262412/MARA/actions/runs/31311652197)
+已 20/20 成功。
+
+| artifact                        | ID           | Actions digest                                                     |
+| ------------------------------- | ------------ | ------------------------------------------------------------------ |
+| `mara-desktop-windows`          | `9037631862` | `6b0a00fb26a8627a1a5478e818981dd76aa20daf071345ca4a10be761eba0420` |
+| `mara-desktop-linux-22`         | `9037625142` | `831f3a20539719bca9132274c94a7603f6889fc51bc345cd323d07500d6041b5` |
+| `mara-desktop-windows-defender` | `9037625132` | `966d3eb9c337139377e7d496a01c690d13f103820610bad3007622499762a0da` |
+
+[修复版 GitHub Pre-release](https://github.com/262412/MARA/releases/tag/desktop-gate3-preview-2878e81)
+提供 Windows x64 ZIP、Linux x64 TAR.GZ 和 SHA-256 清单。发布资产校验值分别为
+`330b284620a12152833e97bb128786d476157991a54c04d1fc7a157617cfba4a` 和
+`f8eb89c61324f61073afa847d4e26956548724bb851d17a78233f68b16a64eb7`。
+旧 `desktop-gate3-preview-ce5816e` 已转回 Draft，保留审计资产但不再公开下载。
+
 ## 公共表面与复用边界
 
 - Sidecar 版本提升到 `0.7.0`，增加 `query_stream`、`query_cancel` 和 `query_retry`
@@ -113,7 +149,8 @@ Ubuntu 22.04 已通过，但 Ubuntu 24.04 复用数据快照时因数据库持�
 
 ## 剩余验收与下一切片
 
-1. 在 Windows 10 和 Windows 11 产品 VM 上使用 artifact `9031157175` 复验单/多文件
+1. 在 Windows 10 和 Windows 11 产品 VM 上使用 artifact `9037631862` 或修复版
+   Pre-release 复验单/多文件
    提问、键盘发送/停止、partial、重试、重启恢复、Defender 和退出后残留进程。
 2. 增加“全部来源/本次上传”、页级和选中文本范围，并为四种 QA scope 取得共享 runtime、
    Sidecar、IPC、React 和打包 E2E 证据。
