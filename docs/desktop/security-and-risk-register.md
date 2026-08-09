@@ -59,6 +59,7 @@ flowchart LR
 | R21 | 索引任务把源路径泄漏到 Renderer、事件或日志    | 本地身份和目录结构泄漏      | Main 持有选择结果；任务响应仅含文件名；错误脱敏；内部 journal 约束在 Desktop 数据根 | 路径泄漏契约测试和打包 smoke 通过         |
 | R22 | 恶意 PDF 字体映射耗尽资源                      | Sidecar 资源耗尽            | PDF 暂不进入 Verified 格式矩阵；详见下文                                            | 资源限制和故障注入通过                    |
 | R23 | 磁盘满或数据库锁使索引任务卡死                 | 任务假 queued、重复写或丢失 | 原子 journal；登记失败回滚；稳定可重试错误；恢复后重试                              | 单元/契约与两平台组合包故障注入通过       |
+| R24 | 问答范围或引用投影泄漏路径/跨文件身份          | 本地信息泄漏或引用错配      | 只接受已索引 ID；安全身份 crosswalk；引用 allowlist；原范围重试；路径泄漏测试       | 多文件契约和三平台真实问答 smoke 通过     |
 
 R22 当前由 `pypdf 4.2` 的 GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42
 触发。LlamaIndex 0.10 暂时阻止升级到修复版；后续必须升级 reader 或回移上游资源
@@ -71,6 +72,12 @@ Preload、Renderer 或常规 Sidecar API。诊断只记录任务 ID、文件名�
 Gate 3 批量删除只接受 1–1,000 个唯一、不透明的文件 ID。Sidecar、Main 和 IPC
 分别校验数量与标识符格式，Renderer 不提交本地路径；删除继续按当前用户作用域由
 现有 DocQA runtime 解析 ID，避免把批量操作变成任意文件能力。
+
+Gate 3 问答只接受会话 ID、prompt 和已索引文件 ID。application service 先在当前用户
+可见的脱敏 Files 记录中解析范围，再把安全 crosswalk 交给共享 DocQA runtime；返回引用
+只能指向本次选中的文件。任务 journal 保存在独立 Desktop 数据根，错误仅返回稳定码和
+可重试状态。Renderer 不能指定模型、reasoning、外部 URL、凭据或本地路径，重试也不能
+改写原始范围。
 
 文件拖放不恢复已被 Electron 移除的 Renderer `File.path`。页面只把 Web `File`
 对象传入 Preload；Preload 用 `webUtils.getPathForFile()` 解析后直接调用专用 IPC，

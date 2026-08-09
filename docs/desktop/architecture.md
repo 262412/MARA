@@ -81,6 +81,11 @@ Renderer 到 Main 只开放按能力命名的方法，例如：
 - `desktop.createSession()`
 - `desktop.renameSession(sessionId, name)`
 - `desktop.deleteSession(sessionId)`
+- `desktop.submitQuestion(payload)`
+- `desktop.getLatestAnswerTask()`
+- `desktop.cancelAnswer(taskId)`
+- `desktop.retryAnswer(taskId)`
+- `desktop.onAnswerTaskStatus(listener)`
 - `desktop.importFiles()`
 - `desktop.importDroppedFiles(files)`
 - `desktop.getLatestIndexTask()`
@@ -119,6 +124,20 @@ scope，且不改变 `Conversation` schema 或 `data_source` 形状。Preload �
 搜索只过滤已经脱敏的 Session summaries；新建与其他会话写操作互斥，不会新增任意查询
 或本地路径能力。
 
+真实问答通过认证后的 `POST /v1/query-tasks` 创建后台任务，使用
+`GET /v1/query-tasks/{task_id}/events` 的 SSE 状态流，并为查询、取消和重试分别提供
+明确端点。请求只包含会话 ID、1–20,000 字符的 prompt 和 1–64 个已索引文件 ID；
+Main 与 Sidecar 都拒绝额外字段、任意模型参数、凭据、URL 和本地路径。application
+service 把所选安全文件身份交给现有 `DocQARuntime.stream_turn()`，单文件固定为
+`document`、多文件固定为 `multi_document`，使用现有 `simple` reasoning 和 inline
+citation 语义。引用只投影已选文件的稳定 ID、文件名、可选页码/元素定位和证据文本，
+不把 runtime metadata 或路径交给 Renderer。
+
+问答任务 journal 位于独立 Desktop 数据根，保存原始范围、partial answer、状态和安全
+引用；应用重启后未完成任务转换为可重试的 `query_interrupted`，不会被误报成功。重试
+从 journal 复制原会话、prompt 和文件 ID，不接受 Renderer 替换范围。Preload 只暴露
+上述五个问答方法；Renderer 不知道 SSE URL、Sidecar 端口、令牌或模型密钥。
+
 Gate 3 的文件导入由 Main 打开原生选择器；Renderer 不传选择器参数，也不会收到
 绝对路径。Main 只把选择结果送入带认证的 Sidecar 索引命令。Sidecar 返回脱敏的
 任务 ID、文件名、计数和状态，事件通过 SSE 送到 Main 后再投影为明确的 IPC 事件。
@@ -153,10 +172,11 @@ Microsoft Word，DOCX、XLSX 和 PPTX 索引直接复用 MARA 现有文本读取
 提供可搜索文本，不声称布局保真或 Office 预览已经完成；后续预览切片必须单独检测
 转换器、明确降级并完成格式视觉验收。CLI 和 Web 的默认 Office 转 PDF 策略不变。
 
-Gate 3 的仅索引 runtime 同时关闭问答注册和文件导出 artifact 发布。后者当前依赖
-POSIX `dir_fd` 的 fail-closed 安全边界，不能在 Windows 上用普通路径操作降级。
-Desktop 到 Studio/原生导出切片时，必须先实现等价的 Windows 安全文件句柄后端，
-再启用该能力；现有 Web/CLI runtime 默认仍生成完整 artifact 与 manifest。
+Gate 3 Desktop runtime 已从“仅索引”收窄升级为只注册 `simple` 问答 reasoning；当前
+API 不暴露任意 reasoning、Web search、模型或凭据选择。文件导出 artifact 发布仍关闭，
+因为它依赖 POSIX `dir_fd` 的 fail-closed 安全边界，不能在 Windows 上用普通路径操作
+降级。Desktop 到 Studio/原生导出切片时，必须先实现等价的 Windows 安全文件句柄
+后端，再启用该能力；现有 Web/CLI runtime 默认仍生成完整 artifact 与 manifest。
 
 ## 3. Sidecar 生命周期
 

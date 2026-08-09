@@ -13,10 +13,13 @@
    DocQA runtime，并通过组合包 smoke。
 7. 会话详情、新建任务、客户端搜索、重命名和删除通过 owner-scoped application
    service、认证 Sidecar 与明确 IPC 贯通。
+8. 文档/多文档问答复用 `DocQARuntime.stream_turn()`；流式状态、停止、原范围重试、
+   partial answer 和安全引用身份通过窄任务 API 与组合包 smoke 贯通。
 
-它**不是完整 MARA Desktop**。问答、引用、预览、Notes、Studio、Resources、
-Settings、Help 和迁移仍按功能矩阵逐个切片接入。当前 Sidecar 只开放版本化、按能力
-命名的 Doctor、Files、Sessions、会话管理和索引任务端点，不提供通用 URL 请求。
+它**不是完整 MARA Desktop**。页级/选中文本问答范围、引用跳页、预览、Notes、
+Studio、Resources、Settings、Help 和迁移仍按功能矩阵逐个切片接入。当前 Sidecar
+只开放版本化、按能力命名的 Doctor、Files、Sessions、会话管理、索引和问答任务
+端点，不提供通用 URL 请求。
 
 ## 目录
 
@@ -96,7 +99,8 @@ Gate 3 的当前实现与剩余验收记录在
 [Gate 3 文件索引纵向切片证据](../../docs/desktop/gate-3-file-indexing-evidence.md)、
 [Gate 3 会话详情纵向切片证据](../../docs/desktop/gate-3-session-detail-evidence.md)和
 [Gate 3 会话管理纵向切片证据](../../docs/desktop/gate-3-session-management-evidence.md)、
-[Gate 3 会话新建纵向切片证据](../../docs/desktop/gate-3-session-creation-evidence.md)。
+[Gate 3 会话新建纵向切片证据](../../docs/desktop/gate-3-session-creation-evidence.md)、
+[Gate 3 真实问答纵向切片证据](../../docs/desktop/gate-3-query-streaming-evidence.md)。
 其余项目由
 [发布与验收计划](../../docs/desktop/release-and-acceptance-plan.md)
 中的 Gate 2–5 覆盖。
