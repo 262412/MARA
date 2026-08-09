@@ -11,7 +11,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Annotated, Any, Protocol
+from typing import Annotated, Any, Protocol, cast
 from uuid import uuid4
 
 import uvicorn
@@ -36,18 +36,17 @@ from sidecar.contracts import (
     SidecarError,
 )
 from sidecar.file_routes import register_gate3_routes
-from sidecar.index_task_journal import IndexTaskPersistenceError, JsonIndexTaskJournal
-from sidecar.index_tasks import (
-    IndexTaskConflictError,
-    IndexTaskManager,
-    IndexTaskNotFoundError,
-)
+from sidecar.index_task_journal import JsonIndexTaskJournal
+from sidecar.index_tasks import IndexTaskManager
+from sidecar.query_routes import register_query_routes
+from sidecar.query_tasks import QueryService, QueryTaskManager
 from sidecar.session_routes import register_session_mutation_routes
 from sidecar.smoke_faults import inject_smoke_fault
+from sidecar.task_error_handlers import register_task_exception_handlers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 PROTOCOL_VERSION = 1
-SIDECAR_VERSION = "0.6.0"
+SIDECAR_VERSION = "0.7.0"
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 CAPABILITIES = [
     "health",
@@ -63,6 +62,9 @@ CAPABILITIES = [
     "file_delete",
     "file_batch_delete",
     "import_capabilities",
+    "query_stream",
+    "query_cancel",
+    "query_retry",
 ]
 LOGGER = logging.getLogger("mara.desktop.sidecar")
 
@@ -210,6 +212,7 @@ def create_app(
     token: str,
     application_service: ApplicationService | None = None,
     index_task_manager: IndexTaskManager | None = None,
+    query_task_manager: QueryTaskManager | None = None,
     *,
     smoke_fault: str | None = None,
 ) -> FastAPI:
@@ -239,14 +242,25 @@ def create_app(
             smoke_fault,
         )
         task_manager = IndexTaskManager(index_service, journal=journal)
+    answer_task_manager = query_task_manager or QueryTaskManager(
+        cast(QueryService, service),
+        journal_path=_query_task_journal_path(),
+    )
     app.state.token = token
     app.state.application_service = service
     app.state.index_task_manager = task_manager
+    app.state.query_task_manager = answer_task_manager
     app.state.request_shutdown = None
     app.add_event_handler("shutdown", task_manager.close)
+    app.add_event_handler("shutdown", answer_task_manager.close)
     _register_request_middleware(app)
     _register_exception_handlers(app)
-    _register_task_exception_handlers(app)
+    register_task_exception_handlers(
+        app,
+        error_response=_error_response,
+        request_id=_request_id,
+        logger=LOGGER,
+    )
     _register_lifecycle_routes(app)
     _register_data_routes(app)
     return app
@@ -339,58 +353,6 @@ def _register_exception_handlers(app: FastAPI) -> None:
             code="internal_error",
             message="The Sidecar encountered an unexpected error.",
             retryable=True,
-        )
-
-
-def _register_task_exception_handlers(app: FastAPI) -> None:
-    @app.exception_handler(DesktopSessionNotFoundError)
-    async def handle_session_not_found(
-        request: Request, error: DesktopSessionNotFoundError
-    ) -> JSONResponse:
-        return _error_response(
-            request,
-            status_code=404,
-            code="session_not_found",
-            message="The requested session no longer exists.",
-        )
-
-    @app.exception_handler(IndexTaskPersistenceError)
-    async def handle_task_persistence_error(
-        request: Request, error: IndexTaskPersistenceError
-    ) -> JSONResponse:
-        LOGGER.error(
-            "Index task persistence unavailable request_id=%s error_code=%s",
-            _request_id(request),
-            error.code,
-        )
-        return _error_response(
-            request,
-            status_code=503,
-            code=error.code,
-            message=error.message,
-            retryable=True,
-        )
-
-    @app.exception_handler(IndexTaskNotFoundError)
-    async def handle_task_not_found(
-        request: Request, error: IndexTaskNotFoundError
-    ) -> JSONResponse:
-        return _error_response(
-            request,
-            status_code=404,
-            code="index_task_not_found",
-            message="The index task no longer exists.",
-        )
-
-    @app.exception_handler(IndexTaskConflictError)
-    async def handle_task_conflict(
-        request: Request, error: IndexTaskConflictError
-    ) -> JSONResponse:
-        return _error_response(
-            request,
-            status_code=409,
-            code="index_task_conflict",
-            message="The index task cannot perform that action in its current state.",
         )
 
 
@@ -503,11 +465,17 @@ def _register_data_routes(app: FastAPI) -> None:
 
     register_gate3_routes(app, protected_without_query)
     register_session_mutation_routes(app, protected_without_query)
+    register_query_routes(app, protected_without_query)
 
 
 def _index_task_journal_path() -> Path | None:
     data_root = os.environ.get("MARA_DESKTOP_DATA_DIR", "")
     return Path(data_root) / "state" / "index-tasks.json" if data_root else None
+
+
+def _query_task_journal_path() -> Path | None:
+    data_root = os.environ.get("MARA_DESKTOP_DATA_DIR", "")
+    return Path(data_root) / "state" / "query-tasks.json" if data_root else None
 
 
 def _watch_parent_pipe(server: uvicorn.Server) -> None:

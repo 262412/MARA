@@ -65,6 +65,29 @@ def test_verify_unsupported_claim():
     assert result.claims[0].status == ClaimSupportStatus.UNSUPPORTED
 
 
+def test_inline_citation_number_does_not_conflict_with_a_numbered_filename():
+    result = verify_claims(
+        answer="MARA Desktop preserves grounded evidence identities.【1】",
+        evidence_texts=[
+            "gate3-query-source.txt: MARA Desktop preserves grounded evidence "
+            "identities."
+        ],
+    )
+
+    assert result.has_unsupported_claims is False
+    assert result.claims[0].status == ClaimSupportStatus.SUPPORTED
+
+
+def test_inline_citation_does_not_hide_a_real_number_conflict():
+    result = verify_claims(
+        answer="The project launched in 2025.【1】",
+        evidence_texts=["gate3-report.txt: The project launched in 2024."],
+    )
+
+    assert result.has_unsupported_claims is True
+    assert result.claims[0].status == ClaimSupportStatus.UNSUPPORTED
+
+
 def test_revision_removes_unsupported_claims_and_keeps_supported_claims():
     result = verify_claims(
         answer=(

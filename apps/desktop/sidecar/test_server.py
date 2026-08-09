@@ -388,11 +388,18 @@ class SidecarContractTest(unittest.TestCase):
         self.assertIn("/v1/index-tasks", schema["paths"])
         self.assertIn("/v1/index-tasks/latest", schema["paths"])
         self.assertIn("/v1/index-tasks/{task_id}/events", schema["paths"])
+        self.assertIn("/v1/query-tasks", schema["paths"])
+        self.assertIn("/v1/query-tasks/latest", schema["paths"])
+        self.assertIn("/v1/query-tasks/{task_id}/events", schema["paths"])
+        self.assertIn("/v1/query-tasks/{task_id}/retry", schema["paths"])
+        self.assertIn("/v1/query-tasks/{task_id}/cancel", schema["paths"])
         self.assertIn("/v1/files/{file_id}", schema["paths"])
         self.assertIn("/v1/file-deletions", schema["paths"])
         self.assertIn("SidecarError", schema["components"]["schemas"])
         self.assertIn("SessionRenameRequest", schema["components"]["schemas"])
         self.assertIn("SessionDeleteResponse", schema["components"]["schemas"])
+        self.assertIn("QueryTaskCreateRequest", schema["components"]["schemas"])
+        self.assertIn("QueryTaskResponse", schema["components"]["schemas"])
 
 
 if __name__ == "__main__":

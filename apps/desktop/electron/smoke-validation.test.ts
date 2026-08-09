@@ -5,6 +5,7 @@ import type { DesktopResult, RuntimeStatus } from "../shared/runtime-contracts";
 import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
 import type { ImportCapabilities } from "../shared/file-contracts";
+import type { QueryTask } from "../shared/query-contracts";
 import type {
   SessionDetail,
   SessionSummary,
@@ -21,10 +22,40 @@ import {
   assertGate3CancelRetrySmoke,
   assertGate3IndexSmoke,
   assertGate3ModelUnavailableSmoke,
+  assertGate3QueryCancelSmoke,
+  assertGate3QueryRetrySmoke,
+  assertGate3QuerySuccessSmoke,
   assertGate3RetrySource,
   assertGate3SessionMutationSmoke,
   assertPackagedSmoke,
 } from "./smoke-validation";
+
+const queryTask: QueryTask = {
+  task_id: "query-1",
+  retry_of_task_id: null,
+  conversation_id: GATE2_SMOKE_SESSION_ID,
+  prompt: "What is the fixture?",
+  selected_file_ids: [GATE2_SMOKE_FILE_ID],
+  qa_scope: "document",
+  status: "success",
+  stage: "completed",
+  answer: "MARA Desktop preserves grounded evidence identities.",
+  citations: [
+    {
+      citation_id: "chunk-1",
+      file_id: GATE2_SMOKE_FILE_ID,
+      file_name: "gate2-smoke.txt",
+      page_label: null,
+      element_id: "element-1",
+      quote: "MARA Desktop Gate 2 deterministic smoke fixture.",
+    },
+  ],
+  error: null,
+  retryable: false,
+  created_at: "2026-08-08T10:00:00Z",
+  updated_at: "2026-08-08T10:00:01Z",
+  version: 3,
+};
 
 const status: RuntimeStatus = {
   state: "healthy",
@@ -106,6 +137,72 @@ test("accepts the deterministic non-empty packaged smoke snapshot", () => {
       { status, doctor, files, sessions, session, importCapabilities },
       true,
     ),
+  );
+});
+
+test("requires grounded query success, partial cancellation, and scoped retry", () => {
+  const reloaded = {
+    ok: true as const,
+    data: {
+      ...(session.ok && session.data ? session.data : ({} as SessionDetail)),
+      messages: [
+        ...(session.ok && session.data ? session.data.messages : []),
+        { role: "user" as const, content: queryTask.prompt },
+        { role: "assistant" as const, content: queryTask.answer },
+      ],
+      graph_source_ids: [GATE2_SMOKE_FILE_ID],
+    },
+  };
+  assert.doesNotThrow(() =>
+    assertGate3QuerySuccessSmoke(
+      { ok: true, data: { ...queryTask, status: "queued", answer: "", citations: [] } },
+      { ok: true, data: queryTask },
+      reloaded,
+    ),
+  );
+
+  const cancelled = {
+    ...queryTask,
+    task_id: "query-cancelled",
+    status: "cancelled" as const,
+    answer: "MARA Desktop ",
+    citations: [],
+    error: {
+      code: "query_cancelled",
+      message: "Answer generation was cancelled.",
+      retryable: true,
+    },
+    retryable: true,
+  };
+  assert.doesNotThrow(() =>
+    assertGate3QueryCancelSmoke(
+      { ok: true, data: { ...cancelled, status: "running", error: null } },
+      { ok: true, data: { ...cancelled, status: "running", stage: "cancelling" } },
+      { ok: true, data: cancelled },
+    ),
+  );
+
+  const retried = {
+    ...queryTask,
+    task_id: "query-retried",
+    retry_of_task_id: cancelled.task_id,
+  };
+  assert.doesNotThrow(() =>
+    assertGate3QueryRetrySmoke(
+      { ok: true, data: { ...retried, status: "queued", answer: "", citations: [] } },
+      { ok: true, data: retried },
+      reloaded,
+      cancelled,
+    ),
+  );
+  assert.throws(
+    () =>
+      assertGate3QuerySuccessSmoke(
+        { ok: true, data: queryTask },
+        { ok: true, data: { ...queryTask, citations: [] } },
+        reloaded,
+      ),
+    /citation identity/,
   );
 });
 

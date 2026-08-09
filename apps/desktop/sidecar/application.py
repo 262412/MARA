@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -53,9 +53,16 @@ def _create_runtime() -> Any:
     from slide_cli.docqa_runtime import create_docqa_runtime
 
     return create_docqa_runtime(
-        include_query_features=False,
+        include_query_features=True,
         include_file_artifacts=False,
+        reasoning_paths=("ktem.reasoning.simple.FullQAPipeline",),
     )
+
+
+def _create_query_request(**values: Any) -> Any:
+    from ktem.docqa import DocQARequest
+
+    return DocQARequest(**values)
 
 
 class DesktopFileNotFoundError(LookupError):
@@ -81,12 +88,14 @@ class DesktopApplicationService:
             [], dict[str, list[str]]
         ] = _collect_import_capabilities,
         create_runtime: Callable[[], Any] = _create_runtime,
+        create_query_request: Callable[..., Any] = _create_query_request,
     ) -> None:
         self._collect_doctor = collect_doctor
         self._collect_files = collect_files
         self._collect_sessions = collect_sessions
         self._collect_import_capabilities = collect_import_capabilities
         self._create_runtime = create_runtime
+        self._create_query_request = create_query_request
         self._runtime: Any | None = None
         self._runtime_lock = threading.Lock()
 
@@ -116,6 +125,39 @@ class DesktopApplicationService:
         with self._runtime_lock:
             session = self._get_runtime().create_session()
         return _session_detail(session)
+
+    def stream_query(
+        self,
+        conversation_id: str,
+        prompt: str,
+        selected_file_ids: list[str],
+    ) -> Iterator[dict[str, Any]]:
+        with self._runtime_lock:
+            source_records = _selected_source_records(
+                self._collect_files(),
+                selected_file_ids,
+            )
+            source_names = {
+                str(record["file_id"]): str(record["name"]) for record in source_records
+            }
+            runtime = self._get_runtime()
+            if runtime.load_session(conversation_id) is None:
+                raise DesktopSessionNotFoundError(conversation_id)
+            request = self._create_query_request(
+                prompt=prompt,
+                conversation_id=conversation_id,
+                selected_file_ids=list(selected_file_ids),
+                source_identity_crosswalk=_source_identity_crosswalk(source_records),
+                qa_scope=(
+                    "document" if len(selected_file_ids) == 1 else "multi_document"
+                ),
+                reasoning_type="simple",
+                use_citation="inline",
+                llm=None,
+                origin="desktop",
+            )
+            for update in runtime.stream_turn(request):
+                yield _query_update(update, source_names)
 
     def rename_session(self, conversation_id: str, name: str) -> dict[str, Any]:
         with self._runtime_lock:
@@ -204,6 +246,184 @@ def _session_detail(session: Any) -> dict[str, Any]:
         "date_created": _serialize_datetime(session.date_created),
         "date_updated": _serialize_datetime(session.date_updated),
     }
+
+
+def _selected_source_records(
+    records: list[dict[str, Any]],
+    selected_file_ids: list[str],
+) -> list[dict[str, Any]]:
+    by_id = {str(record.get("file_id") or ""): record for record in records}
+    missing = [file_id for file_id in selected_file_ids if file_id not in by_id]
+    if missing:
+        raise DesktopFileNotFoundError(",".join(missing))
+    return [by_id[file_id] for file_id in selected_file_ids]
+
+
+def _source_identity_crosswalk(
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "canonical_dataset_id": str(record["file_id"]),
+            "runtime_file_id": str(record["file_id"]),
+            "runtime_source_id": str(record["file_id"]),
+            "filename": Path(str(record.get("name") or "")).name,
+            "aliases": [Path(str(record.get("name") or "")).name],
+        }
+        for record in records
+    ]
+
+
+def _query_update(
+    update: Any,
+    source_names: dict[str, str],
+) -> dict[str, Any]:
+    response = getattr(update, "response", None)
+    if response is not None:
+        return {
+            "stage": "completed",
+            "answer": str(response.answer or ""),
+            "final": True,
+            "citations": _query_citations(response, source_names),
+        }
+    event = getattr(update, "event", {})
+    channel = str(event.get("channel") or "") if isinstance(event, dict) else ""
+    stage = "generating" if channel == "chat" else "retrieving"
+    return {
+        "stage": stage,
+        "answer": str(getattr(update, "answer", "") or ""),
+        "final": False,
+        "citations": [],
+    }
+
+
+def _query_citations(
+    response: Any,
+    source_names: dict[str, str],
+) -> list[dict[str, str]]:
+    bundle = (
+        response.evidence_bundle if isinstance(response.evidence_bundle, dict) else {}
+    )
+    items = bundle.get("items")
+    if not isinstance(items, list) or not items:
+        metadata = (
+            response.evidence_metadata
+            if isinstance(response.evidence_metadata, dict)
+            else {}
+        )
+        items = metadata.get("evidence", [])
+    citations: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        file_ids = _citation_file_ids(item, source_names)
+        for file_id in file_ids:
+            citation_id = _citation_identifier(
+                item,
+                file_id,
+                disambiguate=len(file_ids) > 1,
+            )
+            if citation_id in seen:
+                continue
+            seen.add(citation_id)
+            citations.append(
+                {
+                    "citation_id": citation_id,
+                    "file_id": file_id,
+                    "file_name": source_names[file_id],
+                    "page_label": _safe_locator(item.get("page_label")),
+                    "element_id": _safe_locator(item.get("element_id")),
+                    "quote": _citation_quote(item),
+                }
+            )
+    return citations
+
+
+def _citation_file_ids(
+    item: dict[str, Any],
+    source_names: dict[str, str],
+) -> list[str]:
+    raw_metadata = item.get("metadata")
+    metadata: dict[str, Any] = (
+        dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
+    )
+    direct: list[str] = []
+    for value in (
+        item.get("runtime_source_id"),
+        item.get("source_id"),
+        item.get("file_id"),
+        metadata.get("file_id"),
+        metadata.get("source_id"),
+    ):
+        candidate = str(value or "")
+        if candidate in source_names and candidate not in direct:
+            direct.append(candidate)
+    if direct:
+        return direct
+
+    source_text = "\n".join(
+        str(value or "")
+        for value in (
+            item.get("source_name"),
+            item.get("file_name"),
+            item.get("text"),
+            item.get("caption"),
+            metadata.get("source_name"),
+            metadata.get("file_name"),
+        )
+    ).casefold()
+    matched = [
+        file_id
+        for file_id, name in source_names.items()
+        if Path(name).name and Path(name).name.casefold() in source_text
+    ]
+    if matched:
+        return matched
+
+    generic_reference = (
+        str(item.get("source_id") or "").casefold() == "refs"
+        or str(metadata.get("source") or "").casefold() == "references_html"
+    )
+    if generic_reference and len(source_names) == 1:
+        return list(source_names)
+    return []
+
+
+def _citation_identifier(
+    item: dict[str, Any],
+    file_id: str,
+    *,
+    disambiguate: bool = False,
+) -> str:
+    import hashlib
+    import json
+
+    for key in ("evidence_id", "canonical_id", "runtime_identity"):
+        candidate = _safe_locator(item.get(key), max_length=256)
+        if candidate:
+            if disambiguate:
+                suffix = hashlib.sha256(file_id.encode("utf-8")).hexdigest()[:8]
+                return f"{candidate}-{suffix}"
+            return candidate
+    payload = json.dumps(item, ensure_ascii=False, sort_keys=True, default=str)
+    digest = hashlib.sha256(f"{file_id}|{payload}".encode("utf-8")).hexdigest()
+    return f"citation-{digest[:24]}"
+
+
+def _safe_locator(value: Any, *, max_length: int = 128) -> str:
+    text = str(value or "").strip()
+    if not text or len(text) > max_length or any(char in text for char in "/\\\x00"):
+        return ""
+    return text
+
+
+def _citation_quote(item: dict[str, Any]) -> str:
+    for key in ("text", "caption", "ocr_text", "vlm_text"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value[:4_000]
+    return ""
 
 
 def _index_result_name(item: dict[str, Any]) -> str:

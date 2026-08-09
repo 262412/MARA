@@ -3,6 +3,7 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { DoctorPayload } from "../../shared/doctor-contracts";
+import type { FileRecord } from "../../shared/file-contracts";
 import type { RuntimeStatus } from "../../shared/runtime-contracts";
 import type { ResourceState } from "../resource-state";
 import { Inspector } from "./Inspector";
@@ -33,10 +34,14 @@ function render(state: ResourceState<DoctorPayload>) {
     <Inspector
       activeTab="run"
       doctor={state}
+      files={{ status: "success", data: [] }}
       onClose={() => undefined}
+      onRetryFiles={() => undefined}
       onRetryDoctor={() => undefined}
+      onToggleSource={() => undefined}
       onSelectTab={() => undefined}
       runtime={runtime}
+      selectedSourceIds={[]}
     />,
   );
 }
@@ -59,4 +64,34 @@ test("Doctor panel covers loading, success, failed, and degraded states", () => 
     }),
     /默认索引不可用/,
   );
+});
+
+test("Sources panel renders real file states and selected identities", () => {
+  const file: FileRecord = {
+    file_id: "file-1",
+    name: "real-paper.pdf",
+    size: 1024,
+    tokens: 42,
+    loader: "PDFReader",
+    date_created: "2026-08-08T10:00:00Z",
+  };
+  const markup = renderToStaticMarkup(
+    <Inspector
+      activeTab="sources"
+      doctor={{ status: "success", data: doctor }}
+      files={{ status: "success", data: [file] }}
+      onClose={() => undefined}
+      onRetryDoctor={() => undefined}
+      onRetryFiles={() => undefined}
+      onSelectTab={() => undefined}
+      onToggleSource={() => undefined}
+      runtime={runtime}
+      selectedSourceIds={["file-1"]}
+    />,
+  );
+
+  assert.match(markup, /real-paper.pdf/);
+  assert.match(markup, /42 tokens/);
+  assert.match(markup, /已选择 1 个来源/);
+  assert.doesNotMatch(markup, /agent_verifiable_trajectories/);
 });

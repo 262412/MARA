@@ -72,6 +72,9 @@ _SENTENCE_END_RE = re.compile(r"[.!?\u3002\uff01\uff1f]$")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?\u3002\uff01\uff1f])\s+")
 _TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 _NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?%?")
+_CITATION_MARKER_RE = re.compile(
+    r"(?:【\s*\d+(?:\s*[,，]\s*\d+)*\s*】|" r"\[\s*\d+(?:\s*,\s*\d+)*\s*\])"
+)
 _FORMULA_TERM = r"[A-Za-z0-9]\w*"
 _FORMULA_RE = re.compile(
     rf"\b[A-Za-z]\w*\s*=\s*{_FORMULA_TERM}(?:\s*[+\-*/^]\s*{_FORMULA_TERM})*|"
@@ -121,6 +124,7 @@ def extract_claims(answer: str) -> list[str]:
         if not _is_candidate_claim_line(line):
             continue
         line = _BULLET_RE.sub("", line).strip()
+        line = _strip_citation_markers(line).strip()
         claims.extend(_split_claim_sentences(line))
     return claims
 
@@ -199,6 +203,7 @@ def _is_candidate_claim_line(line: str) -> bool:
     if _DISCLAIMER_RE.search(line):
         return False
     content = _BULLET_RE.sub("", line).strip()
+    content = _strip_citation_markers(content).strip()
     if not content:
         return False
     if len(_tokens(content)) < 3:
@@ -303,10 +308,15 @@ def _content_tokens(text: str) -> set[str]:
 
 
 def _numbers(text: str) -> set[str]:
+    text = _strip_citation_markers(text)
     return {
         number.replace(",", "").lower().rstrip("%")
         for number in _NUMBER_RE.findall(text)
     }
+
+
+def _strip_citation_markers(text: str) -> str:
+    return _CITATION_MARKER_RE.sub(" ", text)
 
 
 def _numbers_match(claim_text: str, evidence_text: str) -> bool:

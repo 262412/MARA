@@ -7,6 +7,7 @@ import {
 
 import type { FileRecord } from "../shared/file-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
+import type { QueryTask } from "../shared/query-contracts";
 import type {
   DesktopResult,
   RuntimeStatus,
@@ -48,16 +49,23 @@ export default function App() {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("preview");
   const [indexTask, setIndexTask] = useState<IndexTask>();
+  const [answerTask, setAnswerTask] = useState<QueryTask>();
+  const [answerActionPending, setAnswerActionPending] = useState(false);
+  const [answerActionError, setAnswerActionError] = useState<string>();
   const [indexActionPending, setIndexActionPending] = useState(false);
   const [deletingFileIds, setDeletingFileIds] = useState<string[]>([]);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [fileActionError, setFileActionError] = useState<string>();
   const lastTaskRefresh = useRef<string | undefined>(undefined);
+  const lastAnswerRefresh = useRef<string | undefined>(undefined);
   const fileDeletionLock = useRef(false);
   const indexActionLock = useRef(false);
   const sessionRequestGeneration = useRef(0);
   const sessionMutationLock = useRef(false);
   const sessionCreateLock = useRef(false);
+  const answerActionLock = useRef(false);
+  const sourceSelectionSession = useRef<string | undefined>(undefined);
   const [runtime, setRuntime] = useState<RuntimeStatus>(
     window.desktop
       ? { state: "starting", protocol: 1, capabilities: [] }
@@ -134,6 +142,24 @@ export default function App() {
     },
     [files.retry],
   );
+  const updateAnswerTask = useCallback(
+    (task: QueryTask) => {
+      setAnswerTask(task);
+      if (task.status !== "success") {
+        return;
+      }
+      const refreshKey = `${task.task_id}:${task.version}`;
+      if (lastAnswerRefresh.current === refreshKey) {
+        return;
+      }
+      lastAnswerRefresh.current = refreshKey;
+      sessions.retry();
+      if (task.conversation_id === selectedSessionId) {
+        setSessionReload((value) => value + 1);
+      }
+    },
+    [selectedSessionId, sessions.retry],
+  );
 
   useEffect(() => {
     if (!window.desktop) {
@@ -148,13 +174,20 @@ export default function App() {
         updateIndexTask(result.data);
       }
     });
+    void window.desktop.getLatestAnswerTask().then((result) => {
+      if (result.ok && result.data) {
+        updateAnswerTask(result.data);
+      }
+    });
     const removeRuntimeListener = window.desktop.onRuntimeStatus(setRuntime);
     const removeTaskListener = window.desktop.onIndexTaskStatus(updateIndexTask);
+    const removeAnswerListener = window.desktop.onAnswerTaskStatus(updateAnswerTask);
     return () => {
       removeRuntimeListener();
       removeTaskListener();
+      removeAnswerListener();
     };
-  }, [updateIndexTask]);
+  }, [updateAnswerTask, updateIndexTask]);
 
   const runFileImport = useCallback(
     async (
@@ -294,6 +327,9 @@ export default function App() {
           setSelectedFileIds((selected) =>
             selected.filter((fileId) => !result.data.includes(fileId)),
           );
+          setSelectedSourceIds((selected) =>
+            selected.filter((fileId) => !result.data.includes(fileId)),
+          );
           files.retry();
         } else {
           setFileActionError(result.error.message);
@@ -320,7 +356,124 @@ export default function App() {
     setSelectedFileIds((selected) =>
       selected.filter((fileId) => availableIds.has(fileId)),
     );
+    setSelectedSourceIds((selected) =>
+      selected.filter((fileId) => availableIds.has(fileId)),
+    );
   }, [files.resource]);
+
+  useEffect(() => {
+    if (
+      selectedSession?.status !== "success" ||
+      files.resource.status !== "success" ||
+      sourceSelectionSession.current === selectedSession.data.conversation_id
+    ) {
+      return;
+    }
+    const availableIds = new Set(
+      files.resource.data.map((file) => file.file_id),
+    );
+    setSelectedSourceIds(
+      selectedSession.data.graph_source_ids.filter((fileId) =>
+        availableIds.has(fileId),
+      ),
+    );
+    sourceSelectionSession.current = selectedSession.data.conversation_id;
+  }, [files.resource, selectedSession]);
+
+  const toggleSource = useCallback((fileId: string) => {
+    setSelectedSourceIds((selected) =>
+      selected.includes(fileId)
+        ? selected.filter((candidate) => candidate !== fileId)
+        : [...selected, fileId],
+    );
+  }, []);
+
+  const submitQuestion = useCallback(
+    async (prompt: string) => {
+      if (
+        !selectedSessionId ||
+        selectedSourceIds.length === 0 ||
+        answerActionLock.current ||
+        answerTask?.status === "queued" ||
+        answerTask?.status === "running"
+      ) {
+        return;
+      }
+      answerActionLock.current = true;
+      setAnswerActionPending(true);
+      setAnswerActionError(undefined);
+      try {
+        const result = await (
+          window.desktop?.submitQuestion({
+            conversation_id: selectedSessionId,
+            prompt,
+            selected_file_ids: selectedSourceIds,
+          }) ?? unavailableResult<QueryTask>("问答仅能在 MARA Desktop 中使用。")
+        );
+        if (result.ok) {
+          updateAnswerTask(result.data);
+        } else {
+          setAnswerActionError(result.error.message);
+        }
+      } catch {
+        setAnswerActionError("问题未能提交。");
+      } finally {
+        answerActionLock.current = false;
+        setAnswerActionPending(false);
+      }
+    },
+    [answerTask?.status, selectedSessionId, selectedSourceIds, updateAnswerTask],
+  );
+
+  const cancelAnswer = useCallback(async () => {
+    if (!answerTask || answerActionLock.current) {
+      return;
+    }
+    answerActionLock.current = true;
+    setAnswerActionPending(true);
+    setAnswerActionError(undefined);
+    try {
+      const result = await (
+        window.desktop?.cancelAnswer(answerTask.task_id) ??
+        unavailableResult<QueryTask>("回答任务仅能在 MARA Desktop 中管理。")
+      );
+      if (result.ok) {
+        updateAnswerTask(result.data);
+      } else {
+        setAnswerActionError(result.error.message);
+      }
+    } catch {
+      setAnswerActionError("停止回答未能完成。");
+    } finally {
+      answerActionLock.current = false;
+      setAnswerActionPending(false);
+    }
+  }, [answerTask, updateAnswerTask]);
+
+  const retryAnswer = useCallback(async () => {
+    if (!answerTask || answerActionLock.current) {
+      return;
+    }
+    answerActionLock.current = true;
+    setAnswerActionPending(true);
+    setAnswerActionError(undefined);
+    try {
+      const result = await (
+        window.desktop?.retryAnswer(answerTask.task_id) ??
+        unavailableResult<QueryTask>("回答任务仅能在 MARA Desktop 中管理。")
+      );
+      if (result.ok) {
+        updateAnswerTask(result.data);
+      } else {
+        setAnswerActionError(result.error.message);
+      }
+    } catch {
+      setAnswerActionError("重试回答未能完成。");
+    } finally {
+      answerActionLock.current = false;
+      setAnswerActionPending(false);
+    }
+  }, [answerTask, updateAnswerTask]);
 
   const createSession = useCallback(async () => {
     if (sessionCreateLock.current || sessionMutationLock.current) {
@@ -340,6 +493,8 @@ export default function App() {
         setActiveNav("workbench");
         setSessionSearchQuery("");
         setSelectedSessionId(result.data.conversation_id);
+        sourceSelectionSession.current = undefined;
+        setSelectedSourceIds([]);
         sessions.retry();
       } else {
         setSessionActionError(result.error.message);
@@ -372,6 +527,8 @@ export default function App() {
   const selectSession = useCallback((sessionId: string) => {
     setActiveNav("workbench");
     setSelectedSessionId(sessionId);
+    sourceSelectionSession.current = undefined;
+    setAnswerActionError(undefined);
     setSessionActionError(undefined);
   }, []);
 
@@ -457,6 +614,11 @@ export default function App() {
           if (selectedSessionId === conversationId) {
             setSelectedSessionId(undefined);
             setSelectedSession(undefined);
+            setSelectedSourceIds([]);
+            sourceSelectionSession.current = undefined;
+            if (answerTask?.conversation_id === conversationId) {
+              setAnswerTask(undefined);
+            }
           }
           if (editingSessionId === conversationId) {
             setEditingSessionId(undefined);
@@ -475,7 +637,7 @@ export default function App() {
         setSessionAction(undefined);
       }
     },
-    [editingSessionId, selectedSessionId, sessions.retry],
+    [answerTask?.conversation_id, editingSessionId, selectedSessionId, sessions.retry],
   );
 
   return (
@@ -527,8 +689,20 @@ export default function App() {
           />
         ) : (
           <Workspace
+            answerActionError={answerActionError}
+            answerActionPending={answerActionPending}
+            answerTask={answerTask}
+            modelName={doctor.resource.status === "success" ? doctor.resource.data.llm_default : undefined}
+            onCancelAnswer={() => void cancelAnswer()}
+            onOpenSources={() => {
+              setInspectorOpen(true);
+              setInspectorTab("sources");
+            }}
+            onRetryAnswer={() => void retryAnswer()}
             onRetrySession={() => setSessionReload((value) => value + 1)}
+            onSubmitQuestion={(prompt) => void submitQuestion(prompt)}
             onToggleInspector={() => setInspectorOpen((value) => !value)}
+            selectedSourceCount={selectedSourceIds.length}
             session={selectedSession}
           />
         )}
@@ -536,10 +710,14 @@ export default function App() {
           <Inspector
             activeTab={inspectorTab}
             doctor={doctor.resource}
+            files={files.resource}
             onClose={() => setInspectorOpen(false)}
             onRetryDoctor={doctor.retry}
+            onRetryFiles={files.retry}
             onSelectTab={setInspectorTab}
+            onToggleSource={toggleSource}
             runtime={runtime}
+            selectedSourceIds={selectedSourceIds}
           />
         ) : null}
       </div>

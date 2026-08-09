@@ -90,6 +90,7 @@ def create_docqa_runtime(
     *,
     include_query_features: bool = True,
     include_file_artifacts: bool | None = None,
+    reasoning_paths: tuple[str, ...] | None = None,
 ) -> "DocQARuntime":
     ensure_llama_index_nltk_cache()
     ensure_tiktoken_cache()
@@ -110,14 +111,13 @@ def create_docqa_runtime(
     from ktem.runtime_bootstrap import bootstrap_runtime_settings
 
     bootstrap_runtime_settings()
-    if not include_query_features or include_file_artifacts is not None:
-        from theflow.settings import settings as flowsettings
+    from .docqa_runtime_profile import configure_docqa_runtime_profile
 
-        if not include_query_features:
-            flowsettings.KH_REASONINGS = []
-            flowsettings.KH_WEB_SEARCH_BACKEND = ""
-        if include_file_artifacts is not None:
-            flowsettings.KH_FILE_INDEX_ARTIFACTS_ENABLED = include_file_artifacts
+    configure_docqa_runtime_profile(
+        include_query_features=include_query_features,
+        include_file_artifacts=include_file_artifacts,
+        reasoning_paths=reasoning_paths,
+    )
     from ktem.docqa import DocQARuntime
 
     return DocQARuntime()

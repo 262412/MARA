@@ -2,6 +2,10 @@ import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
 import type {
+  QueryTask,
+  QueryTaskCreateRequest,
+} from "../shared/query-contracts";
+import type {
   DesktopResult,
   RuntimeStatus,
 } from "../shared/runtime-contracts";
@@ -29,8 +33,13 @@ type DesktopBridge = {
   retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   deleteFile(fileId: string): Promise<DesktopResult<string[]>>;
   deleteFiles(fileIds: string[]): Promise<DesktopResult<string[]>>;
+  submitQuestion(payload: QueryTaskCreateRequest): Promise<DesktopResult<QueryTask>>;
+  getLatestAnswerTask(): Promise<DesktopResult<QueryTask | null>>;
+  cancelAnswer(taskId: string): Promise<DesktopResult<QueryTask>>;
+  retryAnswer(taskId: string): Promise<DesktopResult<QueryTask>>;
   onRuntimeStatus(listener: (status: RuntimeStatus) => void): () => void;
   onIndexTaskStatus(listener: (task: IndexTask) => void): () => void;
+  onAnswerTaskStatus(listener: (task: QueryTask) => void): () => void;
   platform: NodeJS.Platform;
 };
 

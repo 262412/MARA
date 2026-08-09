@@ -9,9 +9,55 @@ import {
   createTrustedIdentifierListIpcHandler,
   createTrustedIpcHandler,
   createTrustedPathListIpcHandler,
+  createTrustedQuestionIpcHandler,
   createTrustedSessionRenameIpcHandler,
   registerDesktopIpc,
 } from "./ipc";
+
+test("question IPC validates only a conversation, prompt, and source ids", async () => {
+  const calls: unknown[] = [];
+  const handler = createTrustedQuestionIpcHandler(async (request) => {
+    calls.push(request);
+    return "ok";
+  });
+  const valid = {
+    conversation_id: "session-1",
+    prompt: "  Compare the evidence.  ",
+    selected_file_ids: ["file-1", "file-2"],
+  };
+
+  assert.equal(
+    await handler({ senderFrame: { url: "mara://app/" } }, valid),
+    "ok",
+  );
+  assert.deepEqual(calls, [
+    {
+      ...valid,
+      prompt: "Compare the evidence.",
+    },
+  ]);
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "https://attacker.invalid/" } },
+      valid,
+    ),
+    /Untrusted IPC sender/,
+  );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      { ...valid, model: "private-model" },
+    ),
+    /invalid question/,
+  );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      { ...valid, selected_file_ids: ["file-1", "/private/paper.pdf"] },
+    ),
+    /invalid question/,
+  );
+});
 
 test("trusted desktop IPC accepts only the packaged renderer and no arguments", async () => {
   const handler = createTrustedIpcHandler(async () => "ok");
@@ -216,6 +262,10 @@ test("registers only explicit desktop capabilities", () => {
     retryIndexTask: async () => ({ ok: true, data: {} as never }),
     deleteFile: async () => ({ ok: true, data: ["file-1"] }),
     deleteFiles: async () => ({ ok: true, data: ["file-1", "file-2"] }),
+    submitQuestion: async () => ({ ok: true, data: {} as never }),
+    getLatestAnswerTask: async () => ({ ok: true, data: null }),
+    cancelAnswer: async () => ({ ok: true, data: {} as never }),
+    retryAnswer: async () => ({ ok: true, data: {} as never }),
   });
 
   assert.deepEqual(channels, [
@@ -234,5 +284,9 @@ test("registers only explicit desktop capabilities", () => {
     "desktop:retry-index-task",
     "desktop:delete-file",
     "desktop:delete-files",
+    "desktop:submit-question",
+    "desktop:get-latest-answer-task",
+    "desktop:cancel-answer",
+    "desktop:retry-answer",
   ]);
 });

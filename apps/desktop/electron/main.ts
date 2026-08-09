@@ -14,6 +14,7 @@ import {
 
 import type { FileRecord } from "../shared/file-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
+import type { QueryTask } from "../shared/query-contracts";
 import type {
   DesktopResult,
   RuntimeStatus,
@@ -40,6 +41,11 @@ import {
   GATE3_LARGE_FILE_BYTES,
   GATE3_LARGE_FILE_INPUT_NAME,
   GATE3_MODEL_UNAVAILABLE_INPUT_NAME,
+  GATE3_QUERY_BLOCK_MARKER_NAME,
+  GATE3_QUERY_PROMPT,
+  GATE3_QUERY_REQUEST_MARKER_NAME,
+  GATE3_QUERY_RETRY_PROMPT,
+  GATE3_QUERY_SOURCE_NAME,
   GATE3_RENAMED_SESSION_NAME,
   GATE3_PARTIAL_INPUT_NAMES,
   assertGate3CancellationSmoke,
@@ -54,6 +60,9 @@ import {
   assertGate3ModelUnavailableSmoke,
   assertGate3PartialRetrySmoke,
   assertGate3PartialSmoke,
+  assertGate3QueryCancelSmoke,
+  assertGate3QueryRetrySmoke,
+  assertGate3QuerySuccessSmoke,
   assertGate3RetrySource,
   assertGate3SessionMutationSmoke,
   assertPackagedSmoke,
@@ -74,7 +83,9 @@ app.enableSandbox();
 let mainWindow: BrowserWindow | undefined;
 let quitting = false;
 let recoverIndexTaskAfterRestart = false;
+let recoverQueryTaskAfterRestart = false;
 const watchedIndexTasks = new Set<string>();
+const watchedQueryTasks = new Set<string>();
 
 const requireGate3DiskFull = process.argv.includes(
   "--smoke-test-gate3-disk-full",
@@ -118,9 +129,16 @@ function broadcastIndexTask(task: IndexTask): void {
   }
 }
 
+function broadcastQueryTask(task: QueryTask): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("answer-task:status", task);
+  }
+}
+
 function handleSidecarStatus(status: RuntimeStatus): void {
   if (status.state === "failed") {
     recoverIndexTaskAfterRestart = true;
+    recoverQueryTaskAfterRestart = true;
   }
   broadcastRuntimeStatus(status);
   if (status.state === "healthy" && recoverIndexTaskAfterRestart) {
@@ -128,6 +146,14 @@ function handleSidecarStatus(status: RuntimeStatus): void {
     void sidecar.getLatestIndexTask().then((latest) => {
       if (latest.ok && latest.data) {
         watchIndexTask(latest.data);
+      }
+    });
+  }
+  if (status.state === "healthy" && recoverQueryTaskAfterRestart) {
+    recoverQueryTaskAfterRestart = false;
+    void sidecar.getLatestQueryTask().then((latest) => {
+      if (latest.ok && latest.data) {
+        watchQueryTask(latest.data);
       }
     });
   }
@@ -147,6 +173,20 @@ function watchIndexTask(task: IndexTask): void {
     .finally(() => watchedIndexTasks.delete(task.task_id));
 }
 
+function watchQueryTask(task: QueryTask): void {
+  broadcastQueryTask(task);
+  if (
+    ["success", "failed", "cancelled"].includes(task.status) ||
+    watchedQueryTasks.has(task.task_id)
+  ) {
+    return;
+  }
+  watchedQueryTasks.add(task.task_id);
+  void sidecar
+    .watchQueryTask(task.task_id, broadcastQueryTask)
+    .finally(() => watchedQueryTasks.delete(task.task_id));
+}
+
 async function waitForIndexTaskTerminal(
   taskId: string,
   timeoutMs = 60_000,
@@ -162,6 +202,35 @@ async function waitForIndexTaskTerminal(
     current = await sidecar.getIndexTask(taskId);
   }
   return current;
+}
+
+async function waitForQueryTaskTerminal(
+  taskId: string,
+  timeoutMs = 60_000,
+): Promise<DesktopResult<QueryTask>> {
+  const deadline = Date.now() + timeoutMs;
+  let current = await sidecar.getQueryTask(taskId);
+  while (
+    current.ok &&
+    ["queued", "running"].includes(current.data.status) &&
+    Date.now() < deadline
+  ) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    current = await sidecar.getQueryTask(taskId);
+  }
+  return current;
+}
+
+async function waitForQueryPartial(taskId: string): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const current = await sidecar.getQueryTask(taskId);
+    if (current.ok && current.data.answer.length > 0) {
+      return;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("Gate 3 query did not expose a partial answer");
 }
 
 async function waitForSmokeMarker(markerPath: string): Promise<void> {
@@ -603,6 +672,122 @@ async function runGate3CancellationSmoke(
   await deleteSmokeFiles(currentFiles, indexedFileIds);
 }
 
+async function runGate3QuerySmoke(initialFiles: FileRecord[]): Promise<void> {
+  const inputPath = path.join(
+    desktopDataRoot,
+    "tmp",
+    GATE3_QUERY_SOURCE_NAME,
+  );
+  await writeFile(
+    inputPath,
+    GATE3_QUERY_PROMPT,
+    "utf8",
+  );
+  const indexed = await sidecar.createIndexTask([inputPath]);
+  const indexTerminal = indexed.ok
+    ? await waitForIndexTaskTerminal(indexed.data.task_id)
+    : indexed;
+  const filesAfterIndex = await sidecar.listFiles();
+  const [queryFileId] = assertGate3IndexSmoke(
+    indexed,
+    indexTerminal,
+    filesAfterIndex,
+    [GATE3_QUERY_SOURCE_NAME],
+  );
+  const created = await sidecar.createQueryTask({
+    conversation_id: GATE2_SMOKE_SESSION_ID,
+    prompt: GATE3_QUERY_PROMPT,
+    selected_file_ids: [queryFileId],
+  });
+  const terminal = created.ok
+    ? await waitForQueryTaskTerminal(created.data.task_id)
+    : created;
+  const reloaded = await sidecar.getSession(GATE2_SMOKE_SESSION_ID);
+  assertGate3QuerySuccessSmoke(
+    created,
+    terminal,
+    reloaded,
+    queryFileId,
+    GATE3_QUERY_SOURCE_NAME,
+  );
+  process.stdout.write(
+    "gate3_query=streaming_grounded_citations status_success\n",
+  );
+
+  const blockMarker = path.join(
+    desktopDataRoot,
+    "tmp",
+    GATE3_QUERY_BLOCK_MARKER_NAME,
+  );
+  const requestMarker = path.join(
+    desktopDataRoot,
+    "tmp",
+    GATE3_QUERY_REQUEST_MARKER_NAME,
+  );
+  await writeFile(blockMarker, "block\n", "utf8");
+  if (existsSync(requestMarker)) {
+    await unlink(requestMarker);
+  }
+  const cancelCreated = await sidecar.createQueryTask({
+    conversation_id: GATE2_SMOKE_SESSION_ID,
+    prompt: GATE3_QUERY_RETRY_PROMPT,
+    selected_file_ids: [queryFileId],
+  });
+  if (!cancelCreated.ok) {
+    await unlink(blockMarker);
+    throw new Error(
+      `Gate 3 query cancellation setup failed: ${cancelCreated.error.code}`,
+    );
+  }
+  let cancelling: DesktopResult<QueryTask>;
+  try {
+    await waitForSmokeMarker(requestMarker);
+    await waitForQueryPartial(cancelCreated.data.task_id);
+    cancelling = await sidecar.cancelQueryTask(cancelCreated.data.task_id);
+  } finally {
+    if (existsSync(blockMarker)) {
+      await unlink(blockMarker);
+    }
+  }
+  const cancelTerminal = await waitForQueryTaskTerminal(
+    cancelCreated.data.task_id,
+  );
+  const cancelled = assertGate3QueryCancelSmoke(
+    cancelCreated,
+    cancelling,
+    cancelTerminal,
+    queryFileId,
+  );
+  const retried = await sidecar.retryQueryTask(cancelled.task_id);
+  const retryTerminal = retried.ok
+    ? await waitForQueryTaskTerminal(retried.data.task_id)
+    : retried;
+  const retryReloaded = await sidecar.getSession(GATE2_SMOKE_SESSION_ID);
+  assertGate3QueryRetrySmoke(
+    retried,
+    retryTerminal,
+    retryReloaded,
+    cancelled,
+    queryFileId,
+    GATE3_QUERY_SOURCE_NAME,
+  );
+  if (existsSync(requestMarker)) {
+    await unlink(requestMarker);
+  }
+  process.stdout.write(
+    "gate3_query_cancel=partial_preserved retry=status_success\n",
+  );
+  const deleted = await sidecar.deleteFiles([queryFileId]);
+  const filesAfterDelete = await sidecar.listFiles();
+  assertGate3DeleteSmoke(deleted, filesAfterDelete, queryFileId);
+  if (
+    !filesAfterDelete.ok ||
+    filesAfterDelete.data.length !== initialFiles.length
+  ) {
+    throw new Error("Gate 3 query source cleanup changed the initial file set");
+  }
+}
+
 async function createWatchedIndexTask(
   filePaths: string[],
 ): Promise<DesktopResult<IndexTask>> {
@@ -687,6 +872,28 @@ function registerIpc(): void {
     },
     deleteFile: (fileId) => sidecar.deleteFile(fileId),
     deleteFiles: (fileIds) => sidecar.deleteFiles(fileIds),
+    submitQuestion: async (payload) => {
+      const result = await sidecar.createQueryTask(payload);
+      if (result.ok) {
+        watchQueryTask(result.data);
+      }
+      return result;
+    },
+    getLatestAnswerTask: () => sidecar.getLatestQueryTask(),
+    cancelAnswer: async (taskId) => {
+      const result = await sidecar.cancelQueryTask(taskId);
+      if (result.ok) {
+        watchQueryTask(result.data);
+      }
+      return result;
+    },
+    retryAnswer: async (taskId) => {
+      const result = await sidecar.retryQueryTask(taskId);
+      if (result.ok) {
+        watchQueryTask(result.data);
+      }
+      return result;
+    },
   });
 }
 
@@ -813,6 +1020,7 @@ app.whenReady().then(async () => {
       } else if (requireGate3Cancellation) {
         await runGate3CancellationSmoke(initialFiles);
       } else if (requireGate3Delete) {
+        await runGate3QuerySmoke(initialFiles);
         await runGate3SessionMutationSmoke();
         await runGate3IndexAndDeleteSmoke(
           initialFiles,

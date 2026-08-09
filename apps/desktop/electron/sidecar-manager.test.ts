@@ -4,13 +4,40 @@ import test from "node:test";
 import {
   batchFileDeleteRequest,
   parseIndexTaskEvent,
+  parseQueryTaskEvent,
   parseReadyMessage,
+  queryTaskCreateRequest,
   sessionCreateRequest,
   sessionRenameRequest,
   sidecarRequestTimeout,
   sidecarRestartDelay,
   waitForRequestReadiness,
 } from "./sidecar-manager";
+
+test("sends a bounded query scope without model or credential fields", () => {
+  assert.deepEqual(
+    queryTaskCreateRequest(
+      {
+        conversation_id: "session-1",
+        prompt: "What changed?",
+        selected_file_ids: ["file-1", "file-2"],
+      },
+      "query-request-1",
+    ),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": "query-request-1",
+      },
+      body: JSON.stringify({
+        conversation_id: "session-1",
+        prompt: "What changed?",
+        selected_file_ids: ["file-1", "file-2"],
+      }),
+    },
+  );
+});
 
 test("sends session creation as authenticated idempotent JSON", () => {
   assert.deepEqual(sessionCreateRequest("create-request-1"), {
@@ -151,6 +178,22 @@ test("parses typed index task SSE events without accepting arbitrary payloads", 
   assert.throws(() =>
     parseIndexTaskEvent(
       'event: task\ndata: {"request_id":"request-1","task":{"path":"/etc/passwd"}}',
+    ),
+  );
+});
+
+test("parses query SSE events and rejects raw path-shaped payloads", () => {
+  const event =
+    'event: query\ndata: {"request_id":"request-1","task":{"task_id":"query-1","retry_of_task_id":null,"conversation_id":"session-1","prompt":"Question","selected_file_ids":["file-1"],"qa_scope":"document","status":"success","stage":"completed","answer":"Grounded answer","citations":[{"citation_id":"chunk-1","file_id":"file-1","file_name":"paper.pdf","page_label":"2","element_id":null,"quote":"Evidence"}],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:01Z","version":3}}';
+  const task = parseQueryTaskEvent(event, "request-1");
+
+  assert.equal(task.answer, "Grounded answer");
+  assert.equal(task.citations[0]?.file_name, "paper.pdf");
+  assert.throws(() => parseQueryTaskEvent(event, "request-2"));
+  assert.throws(() => parseQueryTaskEvent("event: task\ndata: {}"));
+  assert.throws(() =>
+    parseQueryTaskEvent(
+      'event: query\ndata: {"request_id":"request-1","task":{"path":"/private/paper.pdf"}}',
     ),
   );
 });

@@ -1,4 +1,5 @@
 import type { DoctorPayload } from "../../shared/doctor-contracts";
+import type { FileRecord } from "../../shared/file-contracts";
 import type { RuntimeStatus } from "../../shared/runtime-contracts";
 import type { ResourceState } from "../resource-state";
 import { Icon } from "./Icon";
@@ -7,20 +8,28 @@ export type InspectorTab = "preview" | "sources" | "run";
 
 type InspectorProps = {
   activeTab: InspectorTab;
-  onClose: () => void;
-  onSelectTab: (tab: InspectorTab) => void;
-  runtime: RuntimeStatus;
   doctor: ResourceState<DoctorPayload>;
+  files: ResourceState<FileRecord[]>;
+  onClose: () => void;
   onRetryDoctor: () => void;
+  onRetryFiles: () => void;
+  onSelectTab: (tab: InspectorTab) => void;
+  onToggleSource: (fileId: string) => void;
+  runtime: RuntimeStatus;
+  selectedSourceIds: string[];
 };
 
 export function Inspector({
   activeTab,
-  onClose,
-  onSelectTab,
-  runtime,
   doctor,
+  files,
+  onClose,
   onRetryDoctor,
+  onRetryFiles,
+  onSelectTab,
+  onToggleSource,
+  runtime,
+  selectedSourceIds,
 }: InspectorProps) {
   return (
     <aside className="inspector" aria-label="上下文检查器">
@@ -51,8 +60,17 @@ export function Inspector({
         </button>
       </div>
 
-      {activeTab === "preview" ? <Preview /> : null}
-      {activeTab === "sources" ? <Sources /> : null}
+      {activeTab === "preview" ? (
+        <Preview files={files} selectedSourceIds={selectedSourceIds} />
+      ) : null}
+      {activeTab === "sources" ? (
+        <Sources
+          files={files}
+          onRetryFiles={onRetryFiles}
+          onToggleSource={onToggleSource}
+          selectedSourceIds={selectedSourceIds}
+        />
+      ) : null}
       {activeTab === "run" ? (
         <RunStatus
           doctor={doctor}
@@ -64,76 +82,96 @@ export function Inspector({
   );
 }
 
-function Preview() {
+function Preview({
+  files,
+  selectedSourceIds,
+}: {
+  files: ResourceState<FileRecord[]>;
+  selectedSourceIds: string[];
+}) {
+  const selected =
+    files.status === "success"
+      ? files.data.filter((file) => selectedSourceIds.includes(file.file_id))
+      : [];
   return (
     <div className="inspector-content preview-content" role="tabpanel">
-      <div className="file-heading">
-        <span className="file-type">PDF</span>
-        <div>
-          <strong>agent_verifiable_trajectories.pdf</strong>
-          <span>第 4 页，共 18 页</span>
-        </div>
-        <button aria-label="在文件管理器中显示" className="icon-button" type="button">
-          <Icon name="files" size={16} />
-        </button>
-      </div>
-      <div className="preview-toolbar">
-        <button type="button">−</button>
-        <span>84%</span>
-        <button type="button">＋</button>
-        <span className="page-control">4 / 18</span>
-      </div>
-      <div className="document-stage">
-        <article className="paper">
-          <div className="paper-kicker">RESEARCH OVERVIEW</div>
-          <h2>Verifiable Interactive Trajectories for Generalist Agents</h2>
-          <p className="paper-authors">MARA Research Collection · 2026</p>
-          <h3>2. Verification across the execution chain</h3>
-          <p>
-            Reliable evaluation requires stable identities for the source,
-            action, observation and evidence attached to every step.
-          </p>
-          <p className="highlight">
-            Trajectory verification should connect formal constraints,
-            executable outcomes and evidence provenance.
-          </p>
-          <p>
-            This identity chain allows failures to be attributed to planning,
-            tool execution, environment response or the evaluator itself.
-          </p>
-        </article>
+      <div className="preview-unavailable">
+        <Icon name="files" size={22} />
+        <h2>预览尚未接入</h2>
+        <p>本切片只显示真实来源身份；原生文档预览将在后续 Gate 3 切片实现。</p>
+        {selected.length > 0 ? (
+          <ul>
+            {selected.map((file) => <li key={file.file_id}>{file.name}</li>)}
+          </ul>
+        ) : (
+          <span>请先在 Sources 中选择文件。</span>
+        )}
       </div>
     </div>
   );
 }
 
-function Sources() {
+function Sources({
+  files,
+  onRetryFiles,
+  onToggleSource,
+  selectedSourceIds,
+}: {
+  files: ResourceState<FileRecord[]>;
+  onRetryFiles: () => void;
+  onToggleSource: (fileId: string) => void;
+  selectedSourceIds: string[];
+}) {
   return (
     <div className="inspector-content sources-content" role="tabpanel">
       <div className="section-heading">
         <div>
           <h2>当前来源</h2>
-          <p>8 个文件已选择，全部索引完成</p>
+          <p>已选择 {selectedSourceIds.length} 个来源</p>
         </div>
-        <button className="small-button" type="button">管理</button>
       </div>
-      {[
-        ["agent_verifiable_trajectories.pdf", "18 页 · PDF"],
-        ["long_horizon_synthesis.docx", "24 页 · DOCX"],
-        ["multi_agent_coordination.pdf", "31 页 · PDF"],
-        ["recursive_agents_notes.md", "6 页 · Markdown"],
-      ].map(([name, detail], index) => (
-        <button className="source-row" key={name} type="button">
-          <span className="source-index">{index + 1}</span>
-          <span>
-            <strong>{name}</strong>
-            <small>{detail}</small>
-          </span>
-          <span className="indexed">已索引</span>
-        </button>
-      ))}
+      {files.status === "loading" ? <InspectorState>正在读取来源…</InspectorState> : null}
+      {files.status === "failed" ? (
+        <InspectorState role="alert">
+          <span>{files.message}</span>
+          <button className="small-button" onClick={onRetryFiles} type="button">重试</button>
+        </InspectorState>
+      ) : null}
+      {files.status === "success" && files.data.length === 0 ? (
+        <InspectorState>还没有已索引文件。请先从 Files 导入并完成索引。</InspectorState>
+      ) : null}
+      {files.status === "success"
+        ? files.data.map((file, index) => {
+            const selected = selectedSourceIds.includes(file.file_id);
+            return (
+              <label className={`source-row${selected ? " selected" : ""}`} key={file.file_id}>
+                <input
+                  checked={selected}
+                  onChange={() => onToggleSource(file.file_id)}
+                  type="checkbox"
+                />
+                <span className="source-index">{index + 1}</span>
+                <span>
+                  <strong>{file.name || "未命名文件"}</strong>
+                  <small>{file.tokens.toLocaleString()} tokens · {file.loader || "未知读取器"}</small>
+                </span>
+                <span className="indexed">{selected ? "已选择" : "已索引"}</span>
+              </label>
+            );
+          })
+        : null}
     </div>
   );
+}
+
+function InspectorState({
+  children,
+  role,
+}: {
+  children: React.ReactNode;
+  role?: "alert";
+}) {
+  return <div className="inspector-state" role={role}>{children}</div>;
 }
 
 function RunStatus({
@@ -172,10 +210,8 @@ function RunStatus({
           </button>
         </div>
       ) : null}
-      {doctor.status === "success" ? (
-        <DoctorSummary doctor={doctor.data} />
-      ) : null}
-      <button className="diagnostics-button" type="button">打开诊断中心</button>
+      {doctor.status === "success" ? <DoctorSummary doctor={doctor.data} /> : null}
+      <button className="diagnostics-button" disabled type="button">诊断中心将在后续切片启用</button>
     </div>
   );
 }
@@ -185,29 +221,13 @@ function DoctorSummary({ doctor }: { doctor: DoctorPayload }) {
     <div className={doctor.ok ? "doctor-summary" : "doctor-summary degraded"}>
       <strong>{doctor.ok ? "Doctor 通过" : "Doctor 发现问题"}</strong>
       <dl>
-        <div>
-          <dt>文件</dt>
-          <dd>{doctor.file_count}</dd>
-        </div>
-        <div>
-          <dt>会话</dt>
-          <dd>{doctor.session_count}</dd>
-        </div>
-        <div>
-          <dt>LLM</dt>
-          <dd>{doctor.llm_default || "未配置"}</dd>
-        </div>
-        <div>
-          <dt>Embedding</dt>
-          <dd>{doctor.embedding_default || "未配置"}</dd>
-        </div>
+        <div><dt>文件</dt><dd>{doctor.file_count}</dd></div>
+        <div><dt>会话</dt><dd>{doctor.session_count}</dd></div>
+        <div><dt>LLM</dt><dd>{doctor.llm_default || "未配置"}</dd></div>
+        <div><dt>Embedding</dt><dd>{doctor.embedding_default || "未配置"}</dd></div>
       </dl>
-      {doctor.issues.map((issue) => (
-        <p className="doctor-issue" key={issue}>{issue}</p>
-      ))}
-      {doctor.warnings.map((warning) => (
-        <p className="doctor-warning" key={warning}>{warning}</p>
-      ))}
+      {doctor.issues.map((issue) => <p className="doctor-issue" key={issue}>{issue}</p>)}
+      {doctor.warnings.map((warning) => <p className="doctor-warning" key={warning}>{warning}</p>)}
     </div>
   );
 }

@@ -17,16 +17,55 @@ from .application import (
 )
 
 
+class _StreamingQueryRuntime:
+    def __init__(self, requests: list[SimpleNamespace]) -> None:
+        self.requests = requests
+
+    def load_session(self, conversation_id):
+        return SimpleNamespace(conversation_id=conversation_id)
+
+    def stream_turn(self, request):
+        self.requests.append(request)
+        yield SimpleNamespace(
+            answer="Partial answer",
+            event={"channel": "chat", "content": "/private/partial"},
+            response=None,
+        )
+        yield SimpleNamespace(
+            answer="Grounded answer [1]",
+            event={},
+            response=SimpleNamespace(
+                conversation_id="session-1",
+                answer="Grounded answer [1]",
+                selected_file_ids=["file-1"],
+                evidence_bundle={
+                    "items": [
+                        {
+                            "evidence_id": "chunk-1",
+                            "source_id": "file-1",
+                            "source_name": "/private/source/paper.pdf",
+                            "page_label": "3",
+                            "element_id": "paragraph-7",
+                            "text": "The grounded evidence.",
+                        }
+                    ]
+                },
+                evidence_metadata={},
+            ),
+        )
+
+
 class DesktopApplicationServiceTest(unittest.TestCase):
-    def test_desktop_runtime_enables_only_the_gate3_indexing_capability(self) -> None:
+    def test_desktop_runtime_enables_only_the_gate3_query_profile(self) -> None:
         with patch("slide_cli.docqa_runtime.create_docqa_runtime") as create_runtime:
             from .application import _create_runtime
 
             _create_runtime()
 
         create_runtime.assert_called_once_with(
-            include_query_features=False,
+            include_query_features=True,
             include_file_artifacts=False,
+            reasoning_paths=("ktem.reasoning.simple.FullQAPipeline",),
         )
 
     def test_reuses_existing_docqa_service_functions_without_click(self) -> None:
@@ -220,6 +259,8 @@ class DesktopApplicationServiceTest(unittest.TestCase):
         with self.assertRaises(DesktopSessionNotFoundError):
             service.get_session("session-missing")
 
+
+class DesktopApplicationRuntimeTest(unittest.TestCase):
     def test_serializes_collectors_with_runtime_initialization(self) -> None:
         collector_started = threading.Event()
         release_collector = threading.Event()
@@ -315,6 +356,161 @@ class DesktopApplicationServiceTest(unittest.TestCase):
                     os.environ.pop(name, None)
                 else:
                     os.environ[name] = value
+
+
+class DesktopQueryApplicationServiceTest(unittest.TestCase):
+    def test_streams_a_real_docqa_turn_with_safe_source_identity(self) -> None:
+        requests: list[SimpleNamespace] = []
+        runtime = _StreamingQueryRuntime(requests)
+
+        service = DesktopApplicationService(
+            collect_files=lambda: [
+                {
+                    "file_id": "file-1",
+                    "name": "paper.pdf",
+                    "size": 1024,
+                    "tokens": 42,
+                    "loader": "PDFLoader",
+                    "path": "/private/source/paper.pdf",
+                    "date_created": None,
+                }
+            ],
+            create_runtime=lambda: runtime,
+            create_query_request=lambda **values: SimpleNamespace(**values),
+        )
+
+        updates = list(
+            service.stream_query(
+                "session-1",
+                "What does the paper say?",
+                ["file-1"],
+            )
+        )
+
+        self.assertEqual(
+            updates,
+            [
+                {
+                    "stage": "generating",
+                    "answer": "Partial answer",
+                    "final": False,
+                    "citations": [],
+                },
+                {
+                    "stage": "completed",
+                    "answer": "Grounded answer [1]",
+                    "final": True,
+                    "citations": [
+                        {
+                            "citation_id": "chunk-1",
+                            "file_id": "file-1",
+                            "file_name": "paper.pdf",
+                            "page_label": "3",
+                            "element_id": "paragraph-7",
+                            "quote": "The grounded evidence.",
+                        }
+                    ],
+                },
+            ],
+        )
+        request = requests[0]
+        self.assertEqual(request.conversation_id, "session-1")
+        self.assertEqual(request.prompt, "What does the paper say?")
+        self.assertEqual(request.selected_file_ids, ["file-1"])
+        self.assertEqual(request.qa_scope, "document")
+        self.assertEqual(request.reasoning_type, "simple")
+        self.assertEqual(request.use_citation, "inline")
+        self.assertEqual(request.origin, "desktop")
+        self.assertIsNone(request.llm)
+        self.assertEqual(
+            request.source_identity_crosswalk,
+            [
+                {
+                    "canonical_dataset_id": "file-1",
+                    "runtime_file_id": "file-1",
+                    "runtime_source_id": "file-1",
+                    "filename": "paper.pdf",
+                    "aliases": ["paper.pdf"],
+                }
+            ],
+        )
+        self.assertNotIn("/private", str(updates))
+        self.assertNotIn("/private", str(request.source_identity_crosswalk))
+
+    def test_query_never_creates_a_replacement_for_a_missing_session(self) -> None:
+        class Runtime:
+            def load_session(self, conversation_id):
+                return None
+
+            def stream_turn(self, request):
+                raise AssertionError("A missing session must not start a turn")
+
+        service = DesktopApplicationService(
+            collect_files=lambda: [
+                {
+                    "file_id": "file-1",
+                    "name": "paper.pdf",
+                }
+            ],
+            create_runtime=Runtime,
+            create_query_request=lambda **values: SimpleNamespace(**values),
+        )
+
+        with self.assertRaises(DesktopSessionNotFoundError):
+            list(service.stream_query("session-missing", "Question", ["file-1"]))
+
+    def test_projects_generated_reference_evidence_to_selected_files(self) -> None:
+        class Runtime:
+            def load_session(self, conversation_id):
+                return SimpleNamespace(conversation_id=conversation_id)
+
+            def stream_turn(self, _request):
+                yield SimpleNamespace(
+                    answer="Grounded answer",
+                    event={},
+                    response=SimpleNamespace(
+                        answer="Grounded answer",
+                        evidence_bundle={
+                            "items": [
+                                {
+                                    "evidence_id": "citation-refs",
+                                    "source_id": "refs",
+                                    "source_name": "Generated citations",
+                                    "text": "paper.pdf evidence and notes.md evidence",
+                                    "metadata": {"source": "references_html"},
+                                }
+                            ]
+                        },
+                        evidence_metadata={},
+                    ),
+                )
+
+        service = DesktopApplicationService(
+            collect_files=lambda: [
+                {"file_id": "file-1", "name": "paper.pdf"},
+                {"file_id": "file-2", "name": "notes.md"},
+            ],
+            create_runtime=Runtime,
+            create_query_request=lambda **values: SimpleNamespace(**values),
+        )
+
+        [update] = list(
+            service.stream_query(
+                "session-1",
+                "Compare the sources",
+                ["file-1", "file-2"],
+            )
+        )
+
+        self.assertEqual(
+            [citation["file_id"] for citation in update["citations"]],
+            ["file-1", "file-2"],
+        )
+        self.assertEqual(
+            len({citation["citation_id"] for citation in update["citations"]}),
+            2,
+        )
+        self.assertNotIn("/private", str(update))
 
 
 class DesktopSessionMutationApplicationServiceTest(unittest.TestCase):

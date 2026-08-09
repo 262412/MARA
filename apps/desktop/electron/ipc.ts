@@ -6,6 +6,10 @@ import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
 import type {
+  QueryTask,
+  QueryTaskCreateRequest,
+} from "../shared/query-contracts";
+import type {
   DesktopResult,
   RuntimeStatus,
 } from "../shared/runtime-contracts";
@@ -40,6 +44,10 @@ export type DesktopIpcOperations = {
   retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   deleteFile(fileId: string): Promise<DesktopResult<string[]>>;
   deleteFiles(fileIds: string[]): Promise<DesktopResult<string[]>>;
+  submitQuestion(payload: QueryTaskCreateRequest): Promise<DesktopResult<QueryTask>>;
+  getLatestAnswerTask(): Promise<DesktopResult<QueryTask | null>>;
+  cancelAnswer(taskId: string): Promise<DesktopResult<QueryTask>>;
+  retryAnswer(taskId: string): Promise<DesktopResult<QueryTask>>;
 };
 
 export function createTrustedIpcHandler<T>(
@@ -130,6 +138,46 @@ export function createTrustedSessionRenameIpcHandler<T>(
       throw new Error("Desktop IPC received an invalid session rename");
     }
     return operation(conversationId, name);
+  };
+}
+
+export function createTrustedQuestionIpcHandler<T>(
+  operation: (payload: QueryTaskCreateRequest) => T | Promise<T>,
+): IpcHandler<T> {
+  return async (event, ...args) => {
+    if (!event.senderFrame?.url.startsWith("mara://app/")) {
+      throw new Error("Untrusted IPC sender");
+    }
+    if (args.length !== 1 || !args[0] || typeof args[0] !== "object") {
+      throw new Error("Desktop IPC received an invalid question");
+    }
+    const payload = args[0] as Record<string, unknown>;
+    const keys = Object.keys(payload).sort();
+    const prompt = typeof payload.prompt === "string" ? payload.prompt.trim() : "";
+    const selectedFileIds = payload.selected_file_ids;
+    if (
+      keys.join(",") !== "conversation_id,prompt,selected_file_ids" ||
+      typeof payload.conversation_id !== "string" ||
+      !/^[A-Za-z0-9._-]{1,128}$/.test(payload.conversation_id) ||
+      prompt.length === 0 ||
+      Array.from(prompt).length > 20_000 ||
+      !Array.isArray(selectedFileIds) ||
+      selectedFileIds.length === 0 ||
+      selectedFileIds.length > 1_000 ||
+      selectedFileIds.some(
+        (fileId) =>
+          typeof fileId !== "string" ||
+          !/^[A-Za-z0-9._-]{1,128}$/.test(fileId),
+      ) ||
+      new Set(selectedFileIds).size !== selectedFileIds.length
+    ) {
+      throw new Error("Desktop IPC received an invalid question");
+    }
+    return operation({
+      conversation_id: payload.conversation_id,
+      prompt,
+      selected_file_ids: selectedFileIds,
+    });
   };
 }
 
@@ -241,6 +289,28 @@ export function registerDesktopIpc(
     "desktop:delete-files",
     createTrustedIdentifierListIpcHandler((fileIds) =>
       operations.deleteFiles(fileIds),
+    ),
+  );
+  registrar.handle(
+    "desktop:submit-question",
+    createTrustedQuestionIpcHandler((payload) =>
+      operations.submitQuestion(payload),
+    ),
+  );
+  registrar.handle(
+    "desktop:get-latest-answer-task",
+    createTrustedIpcHandler(() => operations.getLatestAnswerTask()),
+  );
+  registrar.handle(
+    "desktop:cancel-answer",
+    createTrustedIdentifierIpcHandler((taskId) =>
+      operations.cancelAnswer(taskId),
+    ),
+  );
+  registrar.handle(
+    "desktop:retry-answer",
+    createTrustedIdentifierIpcHandler((taskId) =>
+      operations.retryAnswer(taskId),
     ),
   );
 }

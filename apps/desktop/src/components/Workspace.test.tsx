@@ -3,6 +3,7 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { SessionDetail } from "../../shared/session-contracts";
+import type { QueryTask } from "../../shared/query-contracts";
 import type { ResourceState } from "../resource-state";
 import { Workspace } from "./Workspace";
 
@@ -20,11 +21,50 @@ const detail: SessionDetail = {
   date_updated: "2026-08-08T10:05:00Z",
 };
 
-function render(session: ResourceState<SessionDetail> | undefined) {
+const queryTask: QueryTask = {
+  task_id: "query-1",
+  retry_of_task_id: null,
+  conversation_id: "session-1",
+  prompt: "What changed?",
+  selected_file_ids: ["file-1"],
+  qa_scope: "document",
+  status: "success",
+  stage: "completed",
+  answer: "The evidence changed.",
+  citations: [
+    {
+      citation_id: "chunk-1",
+      file_id: "file-1",
+      file_name: "paper.pdf",
+      page_label: "2",
+      element_id: null,
+      quote: "Grounded evidence",
+    },
+  ],
+  error: null,
+  retryable: false,
+  created_at: "2026-08-08T10:00:00Z",
+  updated_at: "2026-08-08T10:00:01Z",
+  version: 3,
+};
+
+function render(
+  session: ResourceState<SessionDetail> | undefined,
+  answerTask?: QueryTask,
+  selectedSourceCount = 1,
+) {
   return renderToStaticMarkup(
     <Workspace
+      answerActionPending={false}
+      answerTask={answerTask}
+      modelName="local-model"
+      onCancelAnswer={() => undefined}
+      onOpenSources={() => undefined}
       onRetrySession={() => undefined}
+      onRetryAnswer={() => undefined}
+      onSubmitQuestion={() => undefined}
       onToggleInspector={() => undefined}
+      selectedSourceCount={selectedSourceCount}
       session={session}
     />,
   );
@@ -52,4 +92,66 @@ test("Workspace covers unselected, loading, success, empty, and failed sessions"
   const failed = render({ status: "failed", message: "无法读取会话" });
   assert.match(failed, /无法读取会话/);
   assert.match(failed, /重试/);
+});
+
+test("Workspace renders streaming, success, failed, and cancelled answers", () => {
+  const session = { status: "success" as const, data: detail };
+  const running = render(session, {
+    ...queryTask,
+    status: "running",
+    stage: "generating",
+    answer: "Partial answer",
+    citations: [],
+  });
+  assert.match(running, /正在生成/);
+  assert.match(running, /Partial answer/);
+  assert.match(running, /停止/);
+
+  const success = render(session, queryTask);
+  assert.match(success, /The evidence changed/);
+  assert.match(success, /paper.pdf/);
+  assert.match(success, /第 2 页/);
+  assert.match(success, /Grounded evidence/);
+
+  const failed = render(session, {
+    ...queryTask,
+    status: "failed",
+    error: {
+      code: "query_failed",
+      message: "MARA could not complete the answer.",
+      retryable: true,
+    },
+    retryable: true,
+  });
+  assert.match(failed, /MARA could not complete the answer/);
+  assert.match(failed, /重试回答/);
+
+  const cancelled = render(session, {
+    ...queryTask,
+    status: "cancelled",
+    error: {
+      code: "query_cancelled",
+      message: "Answer generation was cancelled.",
+      retryable: true,
+    },
+    retryable: true,
+  });
+  assert.match(cancelled, /生成已停止/);
+  assert.match(cancelled, /重试回答/);
+});
+
+test("Workspace truthfully explains why the composer is unavailable", () => {
+  const session = { status: "success" as const, data: detail };
+  assert.match(render(undefined), /先选择或新建任务/);
+  assert.match(render(session, undefined, 0), /请先在 Sources 中选择来源/);
+  assert.match(
+    render(session, {
+      ...queryTask,
+      conversation_id: "session-2",
+      status: "running",
+      stage: "generating",
+    }),
+    /另一个任务的回答仍在生成/,
+  );
+  assert.match(render(session), /local-model/);
 });

@@ -153,6 +153,89 @@ class IndexTaskCreateRequest(BaseModel):
         return normalized
 
 
+class QueryCitation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    citation_id: str = Field(min_length=1, max_length=256)
+    file_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._-]+$",
+    )
+    file_name: str = Field(min_length=1, max_length=1024)
+    page_label: str | None = Field(default=None, max_length=128)
+    element_id: str | None = Field(default=None, max_length=128)
+    quote: str | None = Field(default=None, max_length=4000)
+
+
+class QueryTaskError(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    message: str
+    retryable: bool
+
+
+class QueryTask(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str
+    retry_of_task_id: str | None
+    conversation_id: str
+    prompt: str = Field(max_length=20_000)
+    selected_file_ids: list[str] = Field(min_length=1, max_length=1000)
+    qa_scope: Literal["document", "multi_document"]
+    status: Literal["queued", "running", "success", "failed", "cancelled"]
+    stage: str
+    answer: str = Field(max_length=1_000_000)
+    citations: list[QueryCitation] = Field(max_length=10_000)
+    error: QueryTaskError | None
+    retryable: bool
+    created_at: str
+    updated_at: str
+    version: int
+
+
+class QueryTaskResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str
+    task: QueryTask
+
+
+class LatestQueryTaskResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str
+    task: QueryTask | None
+
+
+class QueryTaskCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    conversation_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._-]+$",
+    )
+    prompt: str = Field(min_length=1, max_length=20_000)
+    selected_file_ids: list[str] = Field(min_length=1, max_length=1000)
+
+    @field_validator("prompt", mode="before")
+    @classmethod
+    def strip_prompt(cls, prompt: Any) -> Any:
+        return prompt.strip() if isinstance(prompt, str) else prompt
+
+    @field_validator("selected_file_ids")
+    @classmethod
+    def validate_selected_file_ids(cls, file_ids: list[str]) -> list[str]:
+        if any(not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", value) for value in file_ids):
+            raise ValueError("File identifiers must use the stable identifier format.")
+        if len(set(file_ids)) != len(file_ids):
+            raise ValueError("File identifiers must be unique.")
+        return file_ids
+
+
 class FileDeleteResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -4,6 +4,7 @@ import type {
   ImportCapabilities,
 } from "../shared/file-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
+import type { QueryTask } from "../shared/query-contracts";
 import type {
   DesktopResult,
   RuntimeStatus,
@@ -38,6 +39,12 @@ export const GATE3_CANCEL_INPUT_NAMES = [
 ] as const;
 export const GATE3_CANCEL_BLOCK_MARKER_NAME = "gate3-embedding-block";
 export const GATE3_CANCEL_REQUEST_MARKER_NAME = "gate3-embedding-request";
+export const GATE3_QUERY_BLOCK_MARKER_NAME = "gate3-query-block";
+export const GATE3_QUERY_REQUEST_MARKER_NAME = "gate3-query-request";
+export const GATE3_QUERY_SOURCE_NAME = "gate3-query-source.txt";
+export const GATE3_QUERY_PROMPT =
+  "The deterministic query source says that MARA Desktop preserves grounded evidence identities.";
+export const GATE3_QUERY_RETRY_PROMPT = GATE3_QUERY_PROMPT;
 type PackagedSmokeSnapshot = {
   status: RuntimeStatus;
   doctor: DesktopResult<DoctorPayload>;
@@ -140,6 +147,121 @@ export function assertGate3DeleteSmoke(
   ) {
     throw new Error("Gate 3 fixture is still present after deletion");
   }
+}
+
+export function assertGate3QuerySuccessSmoke(
+  created: DesktopResult<QueryTask>,
+  terminal: DesktopResult<QueryTask>,
+  reloaded: DesktopResult<SessionDetail>,
+  expectedFileId = GATE2_SMOKE_FILE_ID,
+  expectedFileName = "gate2-smoke.txt",
+): void {
+  if (!created.ok) {
+    throw new Error(`Gate 3 query creation failed: ${created.error.code}`);
+  }
+  if (!terminal.ok || terminal.data.status !== "success") {
+    const state = terminal.ok ? terminal.data.status : terminal.error.code;
+    throw new Error(`Gate 3 query did not succeed: ${state}`);
+  }
+  const task = terminal.data;
+  if (
+    task.task_id !== created.data.task_id ||
+    task.conversation_id !== GATE2_SMOKE_SESSION_ID ||
+    task.selected_file_ids.length !== 1 ||
+    task.selected_file_ids[0] !== expectedFileId ||
+    task.qa_scope !== "document" ||
+    !task.answer.includes("MARA Desktop preserves grounded evidence identities.")
+  ) {
+    const diagnostic = {
+      task_identity_matches: task.task_id === created.data.task_id,
+      conversation_id: task.conversation_id,
+      selected_file_ids: task.selected_file_ids,
+      qa_scope: task.qa_scope,
+      status: task.status,
+      answer: task.answer.slice(0, 200),
+      citation_count: task.citations.length,
+    };
+    throw new Error(
+      `Gate 3 query lost its conversation or source scope: ${JSON.stringify(diagnostic)}`,
+    );
+  }
+  const citation = task.citations[0];
+  if (
+    !citation ||
+    citation.file_id !== expectedFileId ||
+    citation.file_name !== expectedFileName ||
+    citation.citation_id.length === 0 ||
+    Object.hasOwn(citation, "path") ||
+    JSON.stringify(citation).includes("/tmp/")
+  ) {
+    throw new Error("Gate 3 query did not preserve a safe citation identity");
+  }
+  if (!reloaded.ok) {
+    throw new Error(`Gate 3 query session reload failed: ${reloaded.error.code}`);
+  }
+  const messages = reloaded.data.messages;
+  if (
+    messages.at(-2)?.role !== "user" ||
+    messages.at(-2)?.content !== task.prompt ||
+    messages.at(-1)?.role !== "assistant" ||
+    messages.at(-1)?.content !== task.answer ||
+    !reloaded.data.graph_source_ids.includes(expectedFileId)
+  ) {
+    throw new Error("Gate 3 query was not persisted in the real session");
+  }
+}
+
+export function assertGate3QueryCancelSmoke(
+  created: DesktopResult<QueryTask>,
+  cancelling: DesktopResult<QueryTask>,
+  terminal: DesktopResult<QueryTask>,
+  expectedFileId = GATE2_SMOKE_FILE_ID,
+): QueryTask {
+  if (!created.ok || !cancelling.ok || !terminal.ok) {
+    throw new Error("Gate 3 query cancellation request failed");
+  }
+  const task = terminal.data;
+  if (
+    task.task_id !== created.data.task_id ||
+    cancelling.data.task_id !== created.data.task_id ||
+    task.status !== "cancelled" ||
+    task.error?.code !== "query_cancelled" ||
+    !task.retryable ||
+    task.answer.length === 0 ||
+    task.selected_file_ids[0] !== expectedFileId
+  ) {
+    throw new Error("Gate 3 query cancellation did not preserve partial state");
+  }
+  return task;
+}
+
+export function assertGate3QueryRetrySmoke(
+  retried: DesktopResult<QueryTask>,
+  terminal: DesktopResult<QueryTask>,
+  reloaded: DesktopResult<SessionDetail>,
+  cancelled: QueryTask,
+  expectedFileId = GATE2_SMOKE_FILE_ID,
+  expectedFileName = "gate2-smoke.txt",
+): void {
+  if (!retried.ok || !terminal.ok) {
+    throw new Error("Gate 3 query retry request failed");
+  }
+  if (
+    retried.data.task_id === cancelled.task_id ||
+    retried.data.retry_of_task_id !== cancelled.task_id ||
+    retried.data.prompt !== cancelled.prompt ||
+    retried.data.selected_file_ids.join(",") !==
+      cancelled.selected_file_ids.join(",")
+  ) {
+    throw new Error("Gate 3 query retry changed the original scope");
+  }
+  assertGate3QuerySuccessSmoke(
+    retried,
+    terminal,
+    reloaded,
+    expectedFileId,
+    expectedFileName,
+  );
 }
 
 export function assertGate3SessionMutationSmoke(

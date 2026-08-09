@@ -1,22 +1,106 @@
-import type { ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 
-import type { SessionDetail } from "../../shared/session-contracts";
+import type { QueryCitation, QueryTask } from "../../shared/query-contracts";
+import type { SessionDetail, SessionMessage } from "../../shared/session-contracts";
 import type { ResourceState } from "../resource-state";
 import { Icon } from "./Icon";
 
 type WorkspaceProps = {
+  answerActionError?: string;
+  answerActionPending: boolean;
+  answerTask?: QueryTask;
+  modelName?: string;
+  onCancelAnswer: () => void;
+  onOpenSources: () => void;
+  onRetryAnswer: () => void;
   onRetrySession: () => void;
+  onSubmitQuestion: (prompt: string) => void;
   onToggleInspector: () => void;
+  selectedSourceCount: number;
   session: ResourceState<SessionDetail> | undefined;
 };
 
 export function Workspace({
+  answerActionError,
+  answerActionPending,
+  answerTask,
+  modelName,
+  onCancelAnswer,
+  onOpenSources,
+  onRetryAnswer,
   onRetrySession,
+  onSubmitQuestion,
   onToggleInspector,
+  selectedSourceCount,
   session,
 }: WorkspaceProps) {
+  const [prompt, setPrompt] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const detail = session?.status === "success" ? session.data : undefined;
-  const sourceCount = detail?.graph_source_ids.length ?? 0;
+  const visibleTask =
+    answerTask && answerTask.conversation_id === detail?.conversation_id
+      ? answerTask
+      : undefined;
+  const active = visibleTask?.status === "queued" || visibleTask?.status === "running";
+  const backgroundActive = Boolean(
+    answerTask &&
+      answerTask !== visibleTask &&
+      (answerTask.status === "queued" || answerTask.status === "running"),
+  );
+  const history = useMemo(
+    () => messagesBeforeVisibleTask(detail, visibleTask),
+    [detail, visibleTask],
+  );
+  const disabledReason = composerDisabledReason(
+    detail,
+    selectedSourceCount,
+    active,
+    backgroundActive,
+    answerActionPending,
+  );
+  const canSubmit = !disabledReason && prompt.trim().length > 0;
+
+  useEffect(() => {
+    if (visibleTask?.prompt === prompt.trim()) {
+      setPrompt("");
+    }
+  }, [prompt, visibleTask]);
+
+  useEffect(() => {
+    const handleShortcut = (event: globalThis.KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "l") {
+        event.preventDefault();
+        inputRef.current?.focus();
+      } else if (event.key === "Escape" && active) {
+        event.preventDefault();
+        if (window.confirm("停止当前回答？已经生成的内容会保留。")) {
+          onCancelAnswer();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [active, onCancelAnswer]);
+
+  const submit = () => {
+    const normalized = prompt.trim();
+    if (canSubmit && normalized) {
+      onSubmitQuestion(normalized);
+    }
+  };
+  const handlePromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      submit();
+    }
+  };
 
   return (
     <main className="workspace" id="main-workspace">
@@ -26,7 +110,9 @@ export function Workspace({
           <h1>{detail?.name || "工作台"}</h1>
         </div>
         <div className="toolbar-actions">
-          <span className="source-count">{sourceCount} 个来源</span>
+          <button className="source-count" onClick={onOpenSources} type="button">
+            {selectedSourceCount} 个已选来源
+          </button>
           <button
             aria-label="显示或隐藏检查器"
             className="icon-button"
@@ -51,57 +137,64 @@ export function Workspace({
             <button onClick={onRetrySession} type="button">重试</button>
           </WorkspaceState>
         ) : null}
-        {detail && detail.messages.length === 0 ? (
-          <WorkspaceState>这个任务还没有消息。</WorkspaceState>
+        {detail && history.length === 0 && !visibleTask ? (
+          <WorkspaceState>这个任务还没有消息。选择来源后即可提问。</WorkspaceState>
         ) : null}
-        {detail?.messages.map((message, index) =>
-          message.role === "user" ? (
-            <div className="message user-message" key={`user-${index}`}>
-              <div className="message-label">你</div>
-              <p>{message.content}</p>
-            </div>
-          ) : (
-            <article
-              className="message assistant-message"
-              key={`assistant-${index}`}
-            >
-              <div className="assistant-heading">
-                <span className="assistant-mark" aria-hidden="true">M</span>
-                <div>
-                  <div className="message-label">MARA</div>
-                  <small>已保存的回答</small>
-                </div>
-              </div>
-              <p>{message.content}</p>
-            </article>
-          ),
-        )}
+        {history.map((message, index) => (
+          <SavedMessage key={`${message.role}-${index}`} message={message} />
+        ))}
+        {visibleTask ? (
+          <CurrentAnswer
+            actionPending={answerActionPending}
+            onCancel={onCancelAnswer}
+            onRetry={onRetryAnswer}
+            task={visibleTask}
+          />
+        ) : null}
       </section>
 
       <div className="composer-wrap">
-        <div className="prototype-notice" role="status">
-          真实会话读取和新建任务已接通；新问题与流式回答将在下一纵向切片启用。
-        </div>
+        {answerActionError ? (
+          <div className="answer-action-error" role="alert">{answerActionError}</div>
+        ) : null}
+        {disabledReason ? (
+          <div className="composer-notice" role="status">{disabledReason}</div>
+        ) : null}
         <div className="context-row">
-          <button className="context-chip" disabled type="button">
+          <button className="context-chip" onClick={onOpenSources} type="button">
             <Icon name="files" size={14} />
-            {sourceCount} 个来源
+            {selectedSourceCount} 个来源
           </button>
+          <span className="context-model" title="模型由 MARA 本地配置提供">
+            {modelName || "默认模型路由"}
+          </span>
         </div>
-        <div className="composer composer-disabled">
-          <label className="sr-only" htmlFor="task-input">描述研究任务</label>
+        <div className={`composer${disabledReason ? " composer-disabled" : ""}`}>
+          <label className="sr-only" htmlFor="task-input">向所选来源提问</label>
           <textarea
-            disabled
+            disabled={Boolean(disabledReason)}
             id="task-input"
-            placeholder="问答能力尚未启用"
+            maxLength={20_000}
+            onChange={(event) => setPrompt(event.target.value)}
+            onKeyDown={handlePromptKeyDown}
+            placeholder={disabledReason || "向所选来源提问…"}
+            ref={inputRef}
             rows={2}
+            value={prompt}
           />
           <div className="composer-footer">
-            <button className="add-source" disabled type="button">
+            <button className="add-source" onClick={onOpenSources} type="button">
               <Icon name="add" size={16} />
-              添加
+              来源
             </button>
-            <button aria-label="发送" className="send-button" disabled type="button">
+            <button
+              aria-label="发送问题"
+              className="send-button"
+              disabled={!canSubmit}
+              onClick={submit}
+              title="Ctrl/⌘ + Enter"
+              type="button"
+            >
               <Icon name="send" size={17} />
             </button>
           </div>
@@ -109,6 +202,158 @@ export function Workspace({
       </div>
     </main>
   );
+}
+
+function SavedMessage({ message }: { message: SessionMessage }) {
+  if (message.role === "user") {
+    return (
+      <div className="message user-message">
+        <div className="message-label">你</div>
+        <p>{message.content}</p>
+      </div>
+    );
+  }
+  return (
+    <article className="message assistant-message">
+      <AssistantHeading detail="已保存的回答" />
+      <p>{message.content}</p>
+    </article>
+  );
+}
+
+function CurrentAnswer({
+  actionPending,
+  onCancel,
+  onRetry,
+  task,
+}: {
+  actionPending: boolean;
+  onCancel: () => void;
+  onRetry: () => void;
+  task: QueryTask;
+}) {
+  const active = task.status === "queued" || task.status === "running";
+  return (
+    <div className="current-answer" aria-busy={active} aria-live="polite">
+      <div className="message user-message">
+        <div className="message-label">你</div>
+        <p>{task.prompt}</p>
+      </div>
+      <article className={`message assistant-message answer-${task.status}`}>
+        <AssistantHeading detail={answerStatus(task)} />
+        {task.answer ? <p className="answer-content">{task.answer}</p> : null}
+        {active && !task.answer ? <p className="answer-placeholder">正在检索所选来源…</p> : null}
+        {task.error ? (
+          <div className="answer-error" role="alert">
+            {task.status === "cancelled" ? "生成已停止。" : task.error.message}
+          </div>
+        ) : null}
+        {task.citations.length > 0 ? <Citations citations={task.citations} /> : null}
+        <div className="answer-actions">
+          {active ? (
+            <button disabled={actionPending} onClick={onCancel} type="button">
+              {actionPending ? "正在停止…" : "停止"}
+            </button>
+          ) : null}
+          {task.retryable ? (
+            <button disabled={actionPending} onClick={onRetry} type="button">
+              {actionPending ? "正在重试…" : "重试回答"}
+            </button>
+          ) : null}
+        </div>
+      </article>
+    </div>
+  );
+}
+
+function AssistantHeading({ detail }: { detail: string }) {
+  return (
+    <div className="assistant-heading">
+      <span className="assistant-mark" aria-hidden="true">M</span>
+      <div>
+        <div className="message-label">MARA</div>
+        <small>{detail}</small>
+      </div>
+    </div>
+  );
+}
+
+function Citations({ citations }: { citations: QueryCitation[] }) {
+  return (
+    <ol className="answer-citations" aria-label="回答引用">
+      {citations.map((citation, index) => (
+        <li key={citation.citation_id}>
+          <span className="citation-number">{index + 1}</span>
+          <div>
+            <strong>{citation.file_name}</strong>
+            <small>
+              {citation.page_label ? `第 ${citation.page_label} 页` : "文件级证据"}
+              {citation.element_id ? ` · ${citation.element_id}` : ""}
+            </small>
+            {citation.quote ? <blockquote>{citation.quote}</blockquote> : null}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function messagesBeforeVisibleTask(
+  detail: SessionDetail | undefined,
+  task: QueryTask | undefined,
+): SessionMessage[] {
+  if (!detail || !task || detail.messages.length < 2 || !task.answer) {
+    return detail?.messages ?? [];
+  }
+  const user = detail.messages.at(-2);
+  const assistant = detail.messages.at(-1);
+  return user?.role === "user" &&
+    user.content === task.prompt &&
+    assistant?.role === "assistant" &&
+    assistant.content === task.answer
+    ? detail.messages.slice(0, -2)
+    : detail.messages;
+}
+
+function composerDisabledReason(
+  detail: SessionDetail | undefined,
+  selectedSourceCount: number,
+  active: boolean,
+  backgroundActive: boolean,
+  actionPending: boolean,
+): string | undefined {
+  if (!detail) {
+    return "先选择或新建任务。";
+  }
+  if (selectedSourceCount === 0) {
+    return "请先在 Sources 中选择来源。";
+  }
+  if (actionPending) {
+    return "正在处理回答操作…";
+  }
+  if (active) {
+    return "当前回答仍在生成；可先停止，再提交新问题。";
+  }
+  if (backgroundActive) {
+    return "另一个任务的回答仍在生成；请返回该任务停止或等待完成。";
+  }
+  return undefined;
+}
+
+function answerStatus(task: QueryTask): string {
+  if (task.status === "queued") {
+    return "正在排队";
+  }
+  if (task.status === "running") {
+    return "正在生成";
+  }
+  if (task.status === "success") {
+    return "回答已保存";
+  }
+  if (task.status === "cancelled") {
+    return "生成已停止";
+  }
+  return "生成失败";
 }
 
 function WorkspaceState({

@@ -79,13 +79,18 @@ jobs:
           embedding_failure_file=/tmp/mara-desktop/embedding-model-unavailable
           embedding_block_file=/tmp/mara-desktop/data/MARA/tmp/gate3-embedding-block
           embedding_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-embedding-request
+          query_block_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-block
+          query_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-request
           (
             cd apps/desktop
             ../../.venv/bin/python -m sidecar.smoke_embedding_server \
               --port-file "$embedding_port_file" \
+              --constant-embeddings \
               --failure-marker "$embedding_failure_file" \
               --block-marker "$embedding_block_file" \
-              --request-marker "$embedding_request_file"
+              --request-marker "$embedding_request_file" \
+              --chat-block-marker "$query_block_file" \
+              --chat-request-marker "$query_request_file"
           ) &
           embedding_pid=$!
           trap 'kill "$embedding_pid" 2>/dev/null || true' EXIT
@@ -97,6 +102,7 @@ jobs:
           export OPENAI_API_KEY=mara-desktop-smoke
           export OPENAI_API_BASE="http://127.0.0.1:$(cat "$embedding_port_file")/v1"
           export OPENAI_EMBEDDINGS_MODEL=smoke-embedding
+          export OPENAI_CHAT_MODEL=smoke-chat
           export NO_PROXY=127.0.0.1,localhost
           export HTTP_PROXY=http://127.0.0.1:9
           export HTTPS_PROXY=http://127.0.0.1:9
@@ -289,10 +295,15 @@ jobs:
         shell: bash
         run: |
           embedding_port_file=/tmp/mara-desktop/embedding-port.txt
+          query_block_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-block
+          query_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-request
           (
             cd apps/desktop
             python3 -m sidecar.smoke_embedding_server \
-              --port-file "$embedding_port_file"
+              --port-file "$embedding_port_file" \
+              --constant-embeddings \
+              --chat-block-marker "$query_block_file" \
+              --chat-request-marker "$query_request_file"
           ) &
           embedding_pid=$!
           trap 'kill "$embedding_pid" 2>/dev/null || true' EXIT
@@ -304,6 +315,7 @@ jobs:
           export OPENAI_API_KEY=mara-desktop-smoke
           export OPENAI_API_BASE="http://127.0.0.1:$(cat "$embedding_port_file")/v1"
           export OPENAI_EMBEDDINGS_MODEL=smoke-embedding
+          export OPENAI_CHAT_MODEL=smoke-chat
           export NO_PROXY=127.0.0.1,localhost
           export HTTP_PROXY=http://127.0.0.1:9
           export HTTPS_PROXY=http://127.0.0.1:9
@@ -383,14 +395,19 @@ jobs:
           $failureMarker = Join-Path $env:RUNNER_TEMP "mara-model-unavailable"
           $blockMarker = Join-Path $dataRoot "tmp/gate3-embedding-block"
           $requestMarker = Join-Path $dataRoot "tmp/gate3-embedding-request"
+          $queryBlockMarker = Join-Path $dataRoot "tmp/gate3-query-block"
+          $queryRequestMarker = Join-Path $dataRoot "tmp/gate3-query-request"
           $python = (Resolve-Path ".venv/Scripts/python.exe").Path
           $embeddingServer = Start-Process -FilePath $python `
             -ArgumentList @(
               "-m", "sidecar.smoke_embedding_server",
               "--port-file", $portFile,
+              "--constant-embeddings",
               "--failure-marker", $failureMarker,
               "--block-marker", $blockMarker,
-              "--request-marker", $requestMarker
+              "--request-marker", $requestMarker,
+              "--chat-block-marker", $queryBlockMarker,
+              "--chat-request-marker", $queryRequestMarker
             ) `
             -WorkingDirectory "apps/desktop" -PassThru -WindowStyle Hidden
           for ($attempt = 0; $attempt -lt 100; $attempt++) {
@@ -405,6 +422,7 @@ jobs:
           $env:OPENAI_API_KEY = "mara-desktop-smoke"
           $env:OPENAI_API_BASE = "http://127.0.0.1:$embeddingPort/v1"
           $env:OPENAI_EMBEDDINGS_MODEL = "smoke-embedding"
+          $env:OPENAI_CHAT_MODEL = "smoke-chat"
           $env:NO_PROXY = "127.0.0.1,localhost"
           $env:HTTP_PROXY = "http://127.0.0.1:9"
           $env:HTTPS_PROXY = "http://127.0.0.1:9"

@@ -98,6 +98,55 @@ export type LatestIndexTaskResponse = {
   task: IndexTask | null;
 };
 
+export type LatestQueryTaskResponse = {
+  request_id: string;
+  task: QueryTask | null;
+};
+
+export type QueryCitation = {
+  citation_id: string;
+  element_id?: string | null;
+  file_id: string;
+  file_name: string;
+  page_label?: string | null;
+  quote?: string | null;
+};
+
+export type QueryTask = {
+  answer: string;
+  citations: Array<QueryCitation>;
+  conversation_id: string;
+  created_at: string;
+  error: QueryTaskError | null;
+  prompt: string;
+  qa_scope: "document" | "multi_document";
+  retry_of_task_id: string | null;
+  retryable: boolean;
+  selected_file_ids: Array<string>;
+  stage: string;
+  status: "queued" | "running" | "success" | "failed" | "cancelled";
+  task_id: string;
+  updated_at: string;
+  version: number;
+};
+
+export type QueryTaskCreateRequest = {
+  conversation_id: string;
+  prompt: string;
+  selected_file_ids: Array<string>;
+};
+
+export type QueryTaskError = {
+  code: string;
+  message: string;
+  retryable: boolean;
+};
+
+export type QueryTaskResponse = {
+  request_id: string;
+  task: QueryTask;
+};
+
 export type RuntimeHealth = {
   capabilities: Array<string>;
   protocol: number;

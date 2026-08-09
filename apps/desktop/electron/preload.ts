@@ -4,6 +4,10 @@ import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
 import type {
+  QueryTask,
+  QueryTaskCreateRequest,
+} from "../shared/query-contracts";
+import type {
   DesktopResult,
   RuntimeStatus,
 } from "../shared/runtime-contracts";
@@ -51,6 +55,16 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.invoke("desktop:delete-file", fileId),
   deleteFiles: (fileIds: string[]): Promise<DesktopResult<string[]>> =>
     ipcRenderer.invoke("desktop:delete-files", fileIds),
+  submitQuestion: (
+    payload: QueryTaskCreateRequest,
+  ): Promise<DesktopResult<QueryTask>> =>
+    ipcRenderer.invoke("desktop:submit-question", payload),
+  getLatestAnswerTask: (): Promise<DesktopResult<QueryTask | null>> =>
+    ipcRenderer.invoke("desktop:get-latest-answer-task"),
+  cancelAnswer: (taskId: string): Promise<DesktopResult<QueryTask>> =>
+    ipcRenderer.invoke("desktop:cancel-answer", taskId),
+  retryAnswer: (taskId: string): Promise<DesktopResult<QueryTask>> =>
+    ipcRenderer.invoke("desktop:retry-answer", taskId),
   onRuntimeStatus: (listener: (status: RuntimeStatus) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, status: RuntimeStatus) => {
       listener(status);
@@ -64,6 +78,13 @@ contextBridge.exposeInMainWorld("desktop", {
     };
     ipcRenderer.on("index-task:status", handler);
     return () => ipcRenderer.removeListener("index-task:status", handler);
+  },
+  onAnswerTaskStatus: (listener: (task: QueryTask) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, task: QueryTask) => {
+      listener(task);
+    };
+    ipcRenderer.on("answer-task:status", handler);
+    return () => ipcRenderer.removeListener("answer-task:status", handler);
   },
   platform: process.platform,
 });

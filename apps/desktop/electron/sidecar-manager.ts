@@ -20,6 +20,13 @@ import type {
   IndexTaskResponse,
   LatestIndexTaskResponse,
 } from "../shared/index-task-contracts";
+import type {
+  LatestQueryTaskResponse,
+  QueryCitation,
+  QueryTask,
+  QueryTaskCreateRequest,
+  QueryTaskResponse,
+} from "../shared/query-contracts";
 import {
   SIDECAR_PROTOCOL_VERSION,
   type DesktopResult,
@@ -128,6 +135,20 @@ export function sessionCreateRequest(idempotencyKey: string): RequestInit {
   };
 }
 
+export function queryTaskCreateRequest(
+  payload: QueryTaskCreateRequest,
+  idempotencyKey: string,
+): RequestInit {
+  return {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify(payload),
+  };
+}
+
 export async function waitForRequestReadiness(
   getStatus: () => RuntimeStatus,
   startup?: Promise<RuntimeStatus>,
@@ -179,6 +200,28 @@ export function parseIndexTaskEvent(
   }
   if (expectedRequestId && payload.request_id !== expectedRequestId) {
     throw new Error("Sidecar task stream returned a mismatched response");
+  }
+  return payload.task;
+}
+
+export function parseQueryTaskEvent(
+  block: string,
+  expectedRequestId?: string,
+): QueryTask {
+  const lines = block.split(/\r?\n/);
+  if (!lines.includes("event: query")) {
+    throw new Error("Sidecar query stream returned an unexpected event");
+  }
+  const data = lines
+    .filter((line) => line.startsWith("data: "))
+    .map((line) => line.slice(6))
+    .join("\n");
+  const payload: unknown = JSON.parse(data);
+  if (!isQueryTaskResponse(payload)) {
+    throw new Error("Sidecar query stream returned an invalid task response");
+  }
+  if (expectedRequestId && payload.request_id !== expectedRequestId) {
+    throw new Error("Sidecar query stream returned a mismatched response");
   }
   return payload.task;
 }
@@ -352,6 +395,52 @@ export class SidecarManager {
     return this.mutateIndexTask(taskId, "retry", true);
   }
 
+  async createQueryTask(
+    payload: QueryTaskCreateRequest,
+  ): Promise<DesktopResult<QueryTask>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<QueryTaskResponse>(
+        "/v1/query-tasks",
+        queryTaskCreateRequest(payload, randomUUID()),
+        true,
+      );
+      return response.task;
+    });
+  }
+
+  async getQueryTask(taskId: string): Promise<DesktopResult<QueryTask>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<QueryTaskResponse>(
+        `/v1/query-tasks/${encodeURIComponent(taskId)}`,
+        {},
+        true,
+      );
+      return response.task;
+    });
+  }
+
+  async getLatestQueryTask(): Promise<DesktopResult<QueryTask | null>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<LatestQueryTaskResponse>(
+        "/v1/query-tasks/latest",
+        {},
+        true,
+      );
+      return response.task;
+    });
+  }
+
+  async cancelQueryTask(taskId: string): Promise<DesktopResult<QueryTask>> {
+    return this.mutateQueryTask(taskId, "cancel");
+  }
+
+  async retryQueryTask(taskId: string): Promise<DesktopResult<QueryTask>> {
+    return this.mutateQueryTask(taskId, "retry", true);
+  }
+
   async deleteFile(fileId: string): Promise<DesktopResult<string[]>> {
     return this.runRequest(async () => {
       await waitForRequestReadiness(() => this.getStatus(), this.startup);
@@ -398,6 +487,31 @@ export class SidecarManager {
       }
       onTask(current.data);
       if (isTerminalIndexTask(current.data)) {
+        return;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    }
+  }
+
+  async watchQueryTask(
+    taskId: string,
+    onTask: (task: QueryTask) => void,
+  ): Promise<void> {
+    await waitForRequestReadiness(() => this.getStatus(), this.startup);
+    while (this.getStatus().state === "healthy") {
+      try {
+        if (await this.consumeQueryTaskEvents(taskId, onTask)) {
+          return;
+        }
+      } catch {
+        // The authenticated status request below is the reconnect fallback.
+      }
+      const current = await this.getQueryTask(taskId);
+      if (!current.ok) {
+        return;
+      }
+      onTask(current.data);
+      if (isTerminalQueryTask(current.data)) {
         return;
       }
       await new Promise<void>((resolve) => setTimeout(resolve, 500));
@@ -754,6 +868,25 @@ export class SidecarManager {
     });
   }
 
+  private async mutateQueryTask(
+    taskId: string,
+    action: "cancel" | "retry",
+    idempotent = false,
+  ): Promise<DesktopResult<QueryTask>> {
+    return this.runRequest(async () => {
+      await waitForRequestReadiness(() => this.getStatus(), this.startup);
+      const response = await this.requestJson<QueryTaskResponse>(
+        `/v1/query-tasks/${encodeURIComponent(taskId)}/${action}`,
+        {
+          method: "POST",
+          headers: idempotent ? { "Idempotency-Key": randomUUID() } : {},
+        },
+        true,
+      );
+      return response.task;
+    });
+  }
+
   private async consumeIndexTaskEvents(
     taskId: string,
     onTask: (task: IndexTask) => void,
@@ -792,6 +925,55 @@ export class SidecarManager {
           const task = parseIndexTaskEvent(block, requestId);
           onTask(task);
           if (isTerminalIndexTask(task)) {
+            return true;
+          }
+        }
+        boundary = buffer.indexOf("\n\n");
+      }
+      if (done) {
+        return false;
+      }
+    }
+  }
+
+  private async consumeQueryTaskEvents(
+    taskId: string,
+    onTask: (task: QueryTask) => void,
+  ): Promise<boolean> {
+    if (!this.port || !this.token) {
+      throw sidecarNotReadyFailure();
+    }
+    const requestId = randomUUID();
+    const response = await fetch(
+      `http://127.0.0.1:${this.port}/v1/query-tasks/${encodeURIComponent(taskId)}/events`,
+      {
+        headers: {
+          Accept: "text/event-stream",
+          Authorization: `Bearer ${this.token}`,
+          "X-Request-ID": requestId,
+        },
+      },
+    );
+    if (!response.ok || !response.body) {
+      throw new Error("Sidecar query event stream is unavailable");
+    }
+    if (response.headers.get("X-Request-ID") !== requestId) {
+      throw new Error("Sidecar query event stream returned a mismatched response");
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        const block = buffer.slice(0, boundary).trim();
+        buffer = buffer.slice(boundary + 2);
+        if (block) {
+          const task = parseQueryTaskEvent(block, requestId);
+          onTask(task);
+          if (isTerminalQueryTask(task)) {
             return true;
           }
         }
@@ -885,6 +1067,73 @@ function isIndexTask(value: unknown): value is IndexTask {
   );
 }
 
+function isQueryTaskResponse(value: unknown): value is QueryTaskResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const response = value as Record<string, unknown>;
+  return typeof response.request_id === "string" && isQueryTask(response.task);
+}
+
+function isQueryTask(value: unknown): value is QueryTask {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const task = value as Record<string, unknown>;
+  return (
+    typeof task.task_id === "string" &&
+    (task.retry_of_task_id === null || typeof task.retry_of_task_id === "string") &&
+    typeof task.conversation_id === "string" &&
+    typeof task.prompt === "string" &&
+    Array.isArray(task.selected_file_ids) &&
+    task.selected_file_ids.every((item) => typeof item === "string") &&
+    (task.qa_scope === "document" || task.qa_scope === "multi_document") &&
+    ["queued", "running", "success", "failed", "cancelled"].includes(
+      String(task.status),
+    ) &&
+    typeof task.stage === "string" &&
+    typeof task.answer === "string" &&
+    Array.isArray(task.citations) &&
+    task.citations.every(isQueryCitation) &&
+    (task.error === null || isQueryError(task.error)) &&
+    typeof task.retryable === "boolean" &&
+    typeof task.created_at === "string" &&
+    typeof task.updated_at === "string" &&
+    typeof task.version === "number"
+  );
+}
+
+function isQueryCitation(value: unknown): value is QueryCitation {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const citation = value as Record<string, unknown>;
+  return (
+    typeof citation.citation_id === "string" &&
+    typeof citation.file_id === "string" &&
+    typeof citation.file_name === "string" &&
+    (citation.page_label === null || typeof citation.page_label === "string") &&
+    (citation.element_id === null || typeof citation.element_id === "string") &&
+    (citation.quote === null || typeof citation.quote === "string")
+  );
+}
+
+function isQueryError(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const error = value as Record<string, unknown>;
+  return (
+    typeof error.code === "string" &&
+    typeof error.message === "string" &&
+    typeof error.retryable === "boolean"
+  );
+}
+
 function isTerminalIndexTask(task: IndexTask): boolean {
   return ["partial", "success", "failed", "cancelled"].includes(task.status);
+}
+
+function isTerminalQueryTask(task: QueryTask): boolean {
+  return ["success", "failed", "cancelled"].includes(task.status);
 }

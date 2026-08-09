@@ -242,6 +242,39 @@ def test_create_docqa_runtime_can_limit_desktop_only_features(monkeypatch):
     assert events == ["bootstrap", "runtime"]
 
 
+def test_create_docqa_runtime_can_select_a_narrow_reasoning_profile(monkeypatch):
+    import slide_cli.docqa_runtime as module
+
+    monkeypatch.setattr(module, "ensure_llama_index_nltk_cache", lambda: None)
+    monkeypatch.setattr(module, "ensure_tiktoken_cache", lambda: None)
+
+    fake_bootstrap_module = types.ModuleType("ktem.runtime_bootstrap")
+    setattr(fake_bootstrap_module, "bootstrap_runtime_settings", lambda: None)
+    fake_settings = types.SimpleNamespace(
+        KH_REASONINGS=["reasoning.default"],
+        KH_WEB_SEARCH_BACKEND="web_search.module",
+        KH_FILE_INDEX_ARTIFACTS_ENABLED=True,
+    )
+    fake_settings_module = types.ModuleType("theflow.settings")
+    setattr(fake_settings_module, "settings", fake_settings)
+    fake_docqa_module = types.ModuleType("ktem.docqa")
+    setattr(fake_docqa_module, "DocQARuntime", lambda: object())
+
+    monkeypatch.setitem(sys.modules, "ktem.runtime_bootstrap", fake_bootstrap_module)
+    monkeypatch.setitem(sys.modules, "theflow.settings", fake_settings_module)
+    monkeypatch.setitem(sys.modules, "ktem.docqa", fake_docqa_module)
+
+    module.create_docqa_runtime(
+        include_query_features=True,
+        include_file_artifacts=False,
+        reasoning_paths=("ktem.reasoning.mara.MaraAgentPipeline",),
+    )
+
+    assert fake_settings.KH_REASONINGS == ["ktem.reasoning.mara.MaraAgentPipeline"]
+    assert fake_settings.KH_WEB_SEARCH_BACKEND == "web_search.module"
+    assert fake_settings.KH_FILE_INDEX_ARTIFACTS_ENABLED is False
+
+
 def test_ensure_llama_index_nltk_cache_sets_bundled_cache_without_heavy_imports(
     monkeypatch, tmp_path
 ):
