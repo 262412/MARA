@@ -26,6 +26,7 @@ import {
 } from "./file-import";
 import { registerDesktopIpc } from "./ipc";
 import { contentTypeFor, resolveAppAsset } from "./protocol";
+import { runRendererBridgeSmoke } from "./renderer-bridge-smoke";
 import { SidecarManager } from "./sidecar-manager";
 import { runDesktopSmoke } from "./smoke-runner";
 import {
@@ -1002,6 +1003,10 @@ app.whenReady().then(async () => {
         { status, doctor, files, sessions, session, importCapabilities },
         requireNonEmptyFixture,
       );
+      if (!mainWindow) {
+        throw new Error("Packaged renderer bridge smoke has no main window");
+      }
+      await runRendererBridgeSmoke(mainWindow.webContents);
       const initialFiles = files.ok ? files.data : [];
       if (requireGate3ModelUnavailable) {
         await runGate3ModelUnavailableSmoke();

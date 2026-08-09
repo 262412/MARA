@@ -14,7 +14,7 @@ const sourceDirectoryPattern = new RegExp(
   "^/(?:build|dist-tests|electron|node_modules|public|release|resources|scripts|shared|sidecar|src)(?:/|$)",
 );
 const sourceFilePattern = new RegExp(
-  "^/(?:README\\.md|index\\.html|package-lock\\.json|tsconfig(?:\\.electron)?\\.json|vite\\.config\\.ts)$",
+  "^/(?:README\\.md|index\\.html|package-lock\\.json|tsconfig(?:\\.electron)?\\.json|vite(?:\\.preload)?\\.config\\.ts)$",
 );
 const compiledTestPattern = new RegExp(
   "^/dist-electron/.+\\.test\\.js$",

@@ -6,7 +6,7 @@
   "main": "dist-electron/electron/main.js",
   "scripts": {
     "build": "npm run build:electron && npm run build:renderer",
-    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:electron": "tsc -p tsconfig.electron.json && vite build --config vite.preload.config.ts",
     "build:renderer": "vite build",
     "contracts:generate": "node scripts/run-python.mjs -m sidecar.generate_contracts",
     "contracts:check": "node scripts/run-python.mjs -m sidecar.generate_contracts --check",
