@@ -400,6 +400,12 @@ class SidecarContractTest(unittest.TestCase):
         self.assertIn("SessionDeleteResponse", schema["components"]["schemas"])
         self.assertIn("QueryTaskCreateRequest", schema["components"]["schemas"])
         self.assertIn("QueryTaskResponse", schema["components"]["schemas"])
+        self.assertEqual(
+            schema["components"]["schemas"]["QueryTaskCreateRequest"]["properties"][
+                "selected_file_ids"
+            ]["maxItems"],
+            64,
+        )
 
 
 if __name__ == "__main__":

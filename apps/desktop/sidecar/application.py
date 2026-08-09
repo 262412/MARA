@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -131,6 +132,7 @@ class DesktopApplicationService:
         conversation_id: str,
         prompt: str,
         selected_file_ids: list[str],
+        cancel_event: threading.Event | None = None,
     ) -> Iterator[dict[str, Any]]:
         with self._runtime_lock:
             source_records = _selected_source_records(
@@ -140,7 +142,7 @@ class DesktopApplicationService:
             source_names = {
                 str(record["file_id"]): str(record["name"]) for record in source_records
             }
-            runtime = self._get_runtime()
+            runtime = self._create_runtime()
             if runtime.load_session(conversation_id) is None:
                 raise DesktopSessionNotFoundError(conversation_id)
             request = self._create_query_request(
@@ -156,8 +158,28 @@ class DesktopApplicationService:
                 llm=None,
                 origin="desktop",
             )
-            for update in runtime.stream_turn(request):
-                yield _query_update(update, source_names)
+        if cancel_event is not None and cancel_event.is_set():
+            return
+        updates = (
+            runtime.stream_turn(request, cancel_event=cancel_event)
+            if cancel_event is not None
+            else runtime.stream_turn(request)
+        )
+        for update in updates:
+            if cancel_event is not None and cancel_event.is_set():
+                return
+            yield _query_update(update, source_names)
+
+    def validate_query(
+        self,
+        conversation_id: str,
+        _prompt: str,
+        selected_file_ids: list[str],
+    ) -> None:
+        with self._runtime_lock:
+            _selected_source_records(self._collect_files(), selected_file_ids)
+            if self._get_runtime().load_session(conversation_id) is None:
+                raise DesktopSessionNotFoundError(conversation_id)
 
     def rename_session(self, conversation_id: str, name: str) -> dict[str, Any]:
         with self._runtime_lock:
@@ -313,7 +335,7 @@ def _query_citations(
         )
         items = metadata.get("evidence", [])
     citations: list[dict[str, str]] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     for item in items if isinstance(items, list) else []:
         if not isinstance(item, dict):
             continue
@@ -322,11 +344,11 @@ def _query_citations(
             citation_id = _citation_identifier(
                 item,
                 file_id,
-                disambiguate=len(file_ids) > 1,
             )
-            if citation_id in seen:
+            identity = (file_id, citation_id)
+            if identity in seen:
                 continue
-            seen.add(citation_id)
+            seen.add(identity)
             citations.append(
                 {
                     "citation_id": citation_id,
@@ -348,39 +370,12 @@ def _citation_file_ids(
     metadata: dict[str, Any] = (
         dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
     )
-    direct: list[str] = []
-    for value in (
-        item.get("runtime_source_id"),
-        item.get("source_id"),
-        item.get("file_id"),
-        metadata.get("file_id"),
-        metadata.get("source_id"),
-    ):
-        candidate = str(value or "")
-        if candidate in source_names and candidate not in direct:
-            direct.append(candidate)
+    direct = _direct_citation_file_ids(item, metadata, source_names)
     if direct:
         return direct
-
-    source_text = "\n".join(
-        str(value or "")
-        for value in (
-            item.get("source_name"),
-            item.get("file_name"),
-            item.get("text"),
-            item.get("caption"),
-            metadata.get("source_name"),
-            metadata.get("file_name"),
-        )
-    ).casefold()
-    matched = [
-        file_id
-        for file_id, name in source_names.items()
-        if Path(name).name and Path(name).name.casefold() in source_text
-    ]
+    matched = _alias_citation_file_ids(item, metadata, source_names)
     if matched:
         return matched
-
     generic_reference = (
         str(item.get("source_id") or "").casefold() == "refs"
         or str(metadata.get("source") or "").casefold() == "references_html"
@@ -390,11 +385,83 @@ def _citation_file_ids(
     return []
 
 
+def _direct_citation_file_ids(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    source_names: dict[str, str],
+) -> list[str]:
+    direct: list[str] = []
+    for value in (
+        item.get("runtime_source_id"),
+        item.get("evaluation_source_id"),
+        item.get("document_id"),
+        item.get("source_id"),
+        item.get("file_id"),
+        metadata.get("file_id"),
+        metadata.get("source_id"),
+    ):
+        candidate = str(value or "")
+        if candidate in source_names and candidate not in direct:
+            direct.append(candidate)
+    for raw_backrefs in (
+        item.get("source_backrefs"),
+        metadata.get("source_backrefs"),
+    ):
+        if not isinstance(raw_backrefs, list):
+            continue
+        for value in raw_backrefs:
+            candidate = str(value or "").split("#", 1)[0]
+            if candidate in source_names and candidate not in direct:
+                direct.append(candidate)
+    return direct
+
+
+def _alias_citation_file_ids(
+    item: dict[str, Any],
+    metadata: dict[str, Any],
+    source_names: dict[str, str],
+) -> list[str]:
+    aliases: dict[str, set[str]] = {}
+    for file_id, name in source_names.items():
+        alias = Path(name).name.casefold()
+        if alias:
+            aliases.setdefault(alias, set()).add(file_id)
+    matched: list[str] = []
+    source_fields = (
+        item.get("source_name"),
+        item.get("file_name"),
+        metadata.get("source_name"),
+        metadata.get("file_name"),
+    )
+    for value in source_fields:
+        alias = Path(str(value or "")).name.casefold()
+        targets = aliases.get(alias, set())
+        if len(targets) == 1:
+            file_id = next(iter(targets))
+            if file_id not in matched:
+                matched.append(file_id)
+    source_text = "\n".join(
+        str(value or "").casefold()
+        for value in (
+            item.get("text"),
+            item.get("caption"),
+            item.get("ocr_text"),
+            item.get("vlm_text"),
+        )
+    )
+    for alias, targets in aliases.items():
+        if (
+            len(targets) == 1
+            and _contains_exact_alias(source_text, alias)
+            and (file_id := next(iter(targets))) not in matched
+        ):
+            matched.append(file_id)
+    return matched
+
+
 def _citation_identifier(
     item: dict[str, Any],
     file_id: str,
-    *,
-    disambiguate: bool = False,
 ) -> str:
     import hashlib
     import json
@@ -402,13 +469,25 @@ def _citation_identifier(
     for key in ("evidence_id", "canonical_id", "runtime_identity"):
         candidate = _safe_locator(item.get(key), max_length=256)
         if candidate:
-            if disambiguate:
-                suffix = hashlib.sha256(file_id.encode("utf-8")).hexdigest()[:8]
-                return f"{candidate}-{suffix}"
-            return candidate
+            digest = hashlib.sha256(
+                f"{file_id}\0{candidate}".encode("utf-8")
+            ).hexdigest()
+            return f"citation-{digest[:24]}"
     payload = json.dumps(item, ensure_ascii=False, sort_keys=True, default=str)
     digest = hashlib.sha256(f"{file_id}|{payload}".encode("utf-8")).hexdigest()
     return f"citation-{digest[:24]}"
+
+
+def _contains_exact_alias(text: str, alias: str) -> bool:
+    if not text or not alias:
+        return False
+    return (
+        re.search(
+            rf"(?<![\w.-]){re.escape(alias)}(?![\w.-])",
+            text,
+        )
+        is not None
+    )
 
 
 def _safe_locator(value: Any, *, max_length: int = 128) -> str:

@@ -41,10 +41,25 @@ export const GATE3_CANCEL_BLOCK_MARKER_NAME = "gate3-embedding-block";
 export const GATE3_CANCEL_REQUEST_MARKER_NAME = "gate3-embedding-request";
 export const GATE3_QUERY_BLOCK_MARKER_NAME = "gate3-query-block";
 export const GATE3_QUERY_REQUEST_MARKER_NAME = "gate3-query-request";
-export const GATE3_QUERY_SOURCE_NAME = "gate3-query-source.txt";
+export const GATE3_QUERY_SOURCES = [
+  {
+    name: "report.txt",
+    content:
+      "The deterministic query source alpha says that MARA Desktop preserves grounded evidence identities.\n",
+  },
+  {
+    name: "report.txt.bak.txt",
+    content:
+      "The deterministic query source beta says that MARA Desktop keeps cross-file citations distinct.\n",
+  },
+] as const;
 export const GATE3_QUERY_PROMPT =
-  "The deterministic query source says that MARA Desktop preserves grounded evidence identities.";
+  "Compare what the deterministic query source alpha and beta records say.";
 export const GATE3_QUERY_RETRY_PROMPT = GATE3_QUERY_PROMPT;
+type ExpectedQuerySource = Readonly<{ file_id: string; file_name: string }>;
+const DEFAULT_QUERY_SOURCES: readonly ExpectedQuerySource[] = [
+  { file_id: GATE2_SMOKE_FILE_ID, file_name: "gate2-smoke.txt" },
+];
 type PackagedSmokeSnapshot = {
   status: RuntimeStatus;
   doctor: DesktopResult<DoctorPayload>;
@@ -153,8 +168,7 @@ export function assertGate3QuerySuccessSmoke(
   created: DesktopResult<QueryTask>,
   terminal: DesktopResult<QueryTask>,
   reloaded: DesktopResult<SessionDetail>,
-  expectedFileId = GATE2_SMOKE_FILE_ID,
-  expectedFileName = "gate2-smoke.txt",
+  expectedSources: readonly ExpectedQuerySource[] = DEFAULT_QUERY_SOURCES,
 ): void {
   if (!created.ok) {
     throw new Error(`Gate 3 query creation failed: ${created.error.code}`);
@@ -164,13 +178,16 @@ export function assertGate3QuerySuccessSmoke(
     throw new Error(`Gate 3 query did not succeed: ${state}`);
   }
   const task = terminal.data;
+  const expectedFileIds = expectedSources.map((source) => source.file_id);
+  const expectedScope = expectedSources.length === 1 ? "document" : "multi_document";
   if (
     task.task_id !== created.data.task_id ||
     task.conversation_id !== GATE2_SMOKE_SESSION_ID ||
-    task.selected_file_ids.length !== 1 ||
-    task.selected_file_ids[0] !== expectedFileId ||
-    task.qa_scope !== "document" ||
-    !task.answer.includes("MARA Desktop preserves grounded evidence identities.")
+    task.selected_file_ids.join("\0") !== expectedFileIds.join("\0") ||
+    task.qa_scope !== expectedScope ||
+    !task.answer.includes("MARA Desktop preserves grounded evidence identities") ||
+    (expectedSources.length > 1 &&
+      !task.answer.includes("cross-file citations distinct"))
   ) {
     const diagnostic = {
       task_identity_matches: task.task_id === created.data.task_id,
@@ -185,14 +202,25 @@ export function assertGate3QuerySuccessSmoke(
       `Gate 3 query lost its conversation or source scope: ${JSON.stringify(diagnostic)}`,
     );
   }
-  const citation = task.citations[0];
+  const citationIds = new Set(task.citations.map((citation) => citation.citation_id));
+  const citationsAreSafe = task.citations.every(
+    (citation) =>
+      citation.citation_id.length > 0 &&
+      expectedFileIds.includes(citation.file_id) &&
+      !Object.hasOwn(citation, "path") &&
+      !JSON.stringify(citation).includes("/tmp/"),
+  );
+  const allSourcesCited = expectedSources.every((source) =>
+    task.citations.some(
+      (citation) =>
+        citation.file_id === source.file_id &&
+        citation.file_name === source.file_name,
+    ),
+  );
   if (
-    !citation ||
-    citation.file_id !== expectedFileId ||
-    citation.file_name !== expectedFileName ||
-    citation.citation_id.length === 0 ||
-    Object.hasOwn(citation, "path") ||
-    JSON.stringify(citation).includes("/tmp/")
+    !citationsAreSafe ||
+    !allSourcesCited ||
+    citationIds.size !== task.citations.length
   ) {
     throw new Error("Gate 3 query did not preserve a safe citation identity");
   }
@@ -205,7 +233,9 @@ export function assertGate3QuerySuccessSmoke(
     messages.at(-2)?.content !== task.prompt ||
     messages.at(-1)?.role !== "assistant" ||
     messages.at(-1)?.content !== task.answer ||
-    !reloaded.data.graph_source_ids.includes(expectedFileId)
+    expectedFileIds.some(
+      (fileId) => !reloaded.data.graph_source_ids.includes(fileId),
+    )
   ) {
     throw new Error("Gate 3 query was not persisted in the real session");
   }
@@ -215,7 +245,7 @@ export function assertGate3QueryCancelSmoke(
   created: DesktopResult<QueryTask>,
   cancelling: DesktopResult<QueryTask>,
   terminal: DesktopResult<QueryTask>,
-  expectedFileId = GATE2_SMOKE_FILE_ID,
+  expectedFileIds: readonly string[] = [GATE2_SMOKE_FILE_ID],
 ): QueryTask {
   if (!created.ok || !cancelling.ok || !terminal.ok) {
     throw new Error("Gate 3 query cancellation request failed");
@@ -228,7 +258,7 @@ export function assertGate3QueryCancelSmoke(
     task.error?.code !== "query_cancelled" ||
     !task.retryable ||
     task.answer.length === 0 ||
-    task.selected_file_ids[0] !== expectedFileId
+    task.selected_file_ids.join("\0") !== expectedFileIds.join("\0")
   ) {
     throw new Error("Gate 3 query cancellation did not preserve partial state");
   }
@@ -240,8 +270,7 @@ export function assertGate3QueryRetrySmoke(
   terminal: DesktopResult<QueryTask>,
   reloaded: DesktopResult<SessionDetail>,
   cancelled: QueryTask,
-  expectedFileId = GATE2_SMOKE_FILE_ID,
-  expectedFileName = "gate2-smoke.txt",
+  expectedSources: readonly ExpectedQuerySource[] = DEFAULT_QUERY_SOURCES,
 ): void {
   if (!retried.ok || !terminal.ok) {
     throw new Error("Gate 3 query retry request failed");
@@ -250,6 +279,7 @@ export function assertGate3QueryRetrySmoke(
     retried.data.task_id === cancelled.task_id ||
     retried.data.retry_of_task_id !== cancelled.task_id ||
     retried.data.prompt !== cancelled.prompt ||
+    retried.data.answer !== cancelled.answer ||
     retried.data.selected_file_ids.join(",") !==
       cancelled.selected_file_ids.join(",")
   ) {
@@ -259,8 +289,7 @@ export function assertGate3QueryRetrySmoke(
     retried,
     terminal,
     reloaded,
-    expectedFileId,
-    expectedFileName,
+    expectedSources,
   );
 }
 

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from .application import DesktopFileNotFoundError
 from .query_task_journal import QueryTaskPersistenceError
 from .query_tasks import QueryTaskManager
 from .server import create_app
@@ -87,7 +88,7 @@ class QueryContractTest(unittest.TestCase):
         self,
     ) -> None:
         created = self.create_query()
-        duplicate = self.create_query(prompt="Ignored duplicate")
+        duplicate = self.create_query()
 
         self.assertEqual(created.status_code, 202)
         self.assertEqual(created.json()["request_id"], "query-contract-request")
@@ -158,6 +159,9 @@ class QueryContractTest(unittest.TestCase):
             ),
             self.create_query(path="/private/source/paper.pdf"),
             self.create_query(selected_file_ids=["file-1", "file-1"]),
+            self.create_query(
+                selected_file_ids=[f"file-{index}" for index in range(65)]
+            ),
             self.create_query(prompt="   "),
         ]
         missing_key = self.client.post(
@@ -176,6 +180,39 @@ class QueryContractTest(unittest.TestCase):
             self.assertEqual(response.status_code, 422)
             self.assertEqual(response.json()["code"], "invalid_request")
         self.assertEqual(self.query_service.calls, [])
+
+    def test_query_prevalidation_returns_specific_missing_source_error(self) -> None:
+        class MissingSourceService(StubQueryService):
+            def validate_query(
+                self,
+                conversation_id: str,
+                prompt: str,
+                selected_file_ids: list[str],
+            ) -> None:
+                raise DesktopFileNotFoundError(selected_file_ids[0])
+
+        manager = QueryTaskManager(MissingSourceService())
+        app = create_app(
+            self.token,
+            ApplicationService(),
+            query_task_manager=manager,
+        )
+        client = TestClient(app)
+        try:
+            response = client.post(
+                "/v1/query-tasks",
+                headers=self.headers,
+                json={
+                    "conversation_id": "session-1",
+                    "prompt": "Question",
+                    "selected_file_ids": ["file-missing"],
+                },
+            )
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.json()["code"], "file_not_found")
+        finally:
+            app.state.index_task_manager.close()
+            manager.close()
 
     def test_query_errors_are_stable_for_missing_conflicting_and_storage_states(
         self,
@@ -201,6 +238,16 @@ class QueryContractTest(unittest.TestCase):
         self.assertEqual(missing.json()["code"], "query_task_not_found")
         self.assertEqual(conflict.status_code, 409)
         self.assertEqual(conflict.json()["code"], "query_task_conflict")
+
+        unrelated_replay = self.client.post(
+            "/v1/query-tasks/query-missing/retry",
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Idempotency-Key": "query-create-1",
+            },
+        )
+        self.assertEqual(unrelated_replay.status_code, 404)
+        self.assertEqual(unrelated_replay.json()["code"], "query_task_not_found")
 
         class FailingJournal:
             def load(self):

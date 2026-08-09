@@ -83,6 +83,10 @@ export function sidecarRestartDelay(attempt: number): number | undefined {
   return SIDECAR_RESTART_DELAYS_MS[attempt];
 }
 
+export function queryWatchRetryDelay(attempt: number): number {
+  return [250, 500, 1_000, 2_000, 5_000][Math.min(attempt, 4)] ?? 5_000;
+}
+
 export function sidecarRequestTimeout(
   pathname: string,
   method = "GET",
@@ -498,6 +502,7 @@ export class SidecarManager {
     onTask: (task: QueryTask) => void,
   ): Promise<void> {
     await waitForRequestReadiness(() => this.getStatus(), this.startup);
+    let retryAttempt = 0;
     while (this.getStatus().state === "healthy") {
       try {
         if (await this.consumeQueryTaskEvents(taskId, onTask)) {
@@ -508,8 +513,15 @@ export class SidecarManager {
       }
       const current = await this.getQueryTask(taskId);
       if (!current.ok) {
-        return;
+        if (!current.error.retryable) {
+          return;
+        }
+        const delay = queryWatchRetryDelay(retryAttempt);
+        retryAttempt += 1;
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        continue;
       }
+      retryAttempt = 0;
       onTask(current.data);
       if (isTerminalQueryTask(current.data)) {
         return;

@@ -1,3 +1,4 @@
+import threading
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -216,6 +217,32 @@ def test_runtime_stream_turn_does_not_replace_substantial_answer_with_late_label
     assert final.response is not None
     assert "local-first document question-answering workbench" in final.response.answer
     assert "Short answer." not in final.response.answer
+
+
+def test_runtime_stream_turn_cancellation_skips_finalization_and_persistence(
+    monkeypatch,
+):
+    monkeypatch.setattr(runtime_module, "reasonings", {"mara": _StreamingMaraReasoning})
+    monkeypatch.setattr(
+        runtime_module._nb,
+        "save_captured_artifact",
+        lambda *_args, **_kwargs: None,
+    )
+    runtime = _make_runtime()
+    runtime._finalize_turn_response = lambda **_kwargs: (_ for _ in ()).throw(
+        AssertionError("A cancelled turn must not be finalized")
+    )
+    cancelled = threading.Event()
+    updates = runtime.stream_turn(
+        runtime_module.DocQARequest(prompt="Summarize this source."),
+        cancel_event=cancelled,
+    )
+
+    first = next(updates)
+    cancelled.set()
+
+    assert first.is_final is False
+    assert list(updates) == []
 
 
 def test_finalize_stream_result_ignores_trailing_unclosed_think_block():

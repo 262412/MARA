@@ -6,7 +6,11 @@ import threading
 import unittest
 from pathlib import Path
 
-from .query_tasks import QueryTaskConflictError, QueryTaskManager
+from .query_tasks import (
+    QueryTaskConflictError,
+    QueryTaskManager,
+    QueryTaskNotFoundError,
+)
 
 
 class StubQueryService:
@@ -17,11 +21,20 @@ class StubQueryService:
         self.partial_emitted = threading.Event()
         self.release = threading.Event()
 
+    def validate_query(
+        self,
+        conversation_id: str,
+        prompt: str,
+        selected_file_ids: list[str],
+    ) -> None:
+        return None
+
     def stream_query(
         self,
         conversation_id: str,
         prompt: str,
         selected_file_ids: list[str],
+        cancel_event: threading.Event | None = None,
     ):
         self.calls.append((conversation_id, prompt, selected_file_ids))
         yield {
@@ -38,7 +51,9 @@ class StubQueryService:
         }
         self.partial_emitted.set()
         if self.block_after_partial:
-            self.release.wait(timeout=5)
+            while not self.release.wait(timeout=0.01):
+                if cancel_event is not None and cancel_event.is_set():
+                    return
         if self.fail_after_partial:
             raise RuntimeError("failed at /private/model/config.json")
         yield {
@@ -81,9 +96,9 @@ class QueryTaskManagerTest(unittest.TestCase):
                 idempotency_key="query-1",
             )
             duplicate = manager.create_task(
-                "ignored-session",
-                "Ignored duplicate",
-                ["file-2"],
+                "session-1",
+                "What does the paper say?",
+                ["file-1"],
                 idempotency_key="query-1",
             )
 
@@ -127,6 +142,7 @@ class QueryTaskManagerTest(unittest.TestCase):
                 created["task_id"],
                 idempotency_key="query-retry",
             )
+            self.assertEqual(retried["answer"], "Partial answer")
             completed = wait_for_terminal(manager, retried["task_id"])
             self.assertEqual(completed["status"], "success")
             self.assertEqual(completed["retry_of_task_id"], created["task_id"])
@@ -139,6 +155,145 @@ class QueryTaskManagerTest(unittest.TestCase):
                     completed["task_id"],
                     idempotency_key="retry-success",
                 )
+        finally:
+            manager.close()
+
+    def test_cancel_terminates_a_never_yielding_stream_and_releases_worker(
+        self,
+    ) -> None:
+        class NeverYieldThenSuccessService(StubQueryService):
+            def stream_query(
+                self,
+                conversation_id: str,
+                prompt: str,
+                selected_file_ids: list[str],
+                cancel_event: threading.Event | None = None,
+            ):
+                if prompt == "Never returns":
+                    self.partial_emitted.set()
+                    threading.Event().wait()
+                    yield  # pragma: no cover
+                yield {
+                    "stage": "completed",
+                    "answer": "Second task completed",
+                    "final": True,
+                    "citations": [],
+                }
+
+        service = NeverYieldThenSuccessService()
+        manager = QueryTaskManager(service, stream_idle_timeout=2)
+        try:
+            first = manager.create_task(
+                "session-1",
+                "Never returns",
+                ["file-1"],
+                idempotency_key="never-yields",
+            )
+            self.assertTrue(service.partial_emitted.wait(timeout=1))
+            manager.cancel_task(first["task_id"])
+            cancelled = wait_for_terminal(manager, first["task_id"])
+            self.assertEqual(cancelled["status"], "cancelled")
+
+            second = manager.create_task(
+                "session-1",
+                "Can still run",
+                ["file-1"],
+                idempotency_key="after-cancel",
+            )
+            completed = wait_for_terminal(manager, second["task_id"])
+            self.assertEqual(completed["status"], "success")
+            self.assertEqual(completed["answer"], "Second task completed")
+        finally:
+            manager.close()
+
+    def test_idempotency_keys_are_bound_to_operation_and_target_task(self) -> None:
+        manager = QueryTaskManager(StubQueryService())
+        try:
+            created = manager.create_task(
+                "session-1",
+                "Question",
+                ["file-1"],
+                idempotency_key="shared-key",
+            )
+            wait_for_terminal(manager, created["task_id"])
+
+            with self.assertRaises(QueryTaskNotFoundError):
+                manager.retry_task(
+                    "missing-task",
+                    idempotency_key="shared-key",
+                )
+            with self.assertRaises(QueryTaskConflictError):
+                manager.create_task(
+                    "session-1",
+                    "Different question",
+                    ["file-1"],
+                    idempotency_key="shared-key",
+                )
+        finally:
+            manager.close()
+
+    def test_journal_writes_are_coalesced_and_terminal_history_is_bounded(
+        self,
+    ) -> None:
+        class CountingJournal:
+            def __init__(self) -> None:
+                self.payload = None
+                self.save_count = 0
+
+            def load(self):
+                return self.payload
+
+            def save(self, payload):
+                self.save_count += 1
+                self.payload = json.loads(json.dumps(payload))
+
+        class ManyUpdatesService(StubQueryService):
+            def stream_query(
+                self,
+                conversation_id: str,
+                prompt: str,
+                selected_file_ids: list[str],
+                cancel_event: threading.Event | None = None,
+            ):
+                for index in range(100):
+                    yield {
+                        "stage": "generating",
+                        "answer": "x" * (index + 1),
+                        "final": False,
+                        "citations": [],
+                    }
+                yield {
+                    "stage": "completed",
+                    "answer": prompt,
+                    "final": True,
+                    "citations": [],
+                }
+
+        journal = CountingJournal()
+        manager = QueryTaskManager(
+            ManyUpdatesService(),
+            journal=journal,
+            journal_flush_interval=0.25,
+            max_retained_tasks=2,
+        )
+        task_ids: list[str] = []
+        try:
+            for index in range(3):
+                created = manager.create_task(
+                    "session-1",
+                    f"Question {index}",
+                    ["file-1"],
+                    idempotency_key=f"bounded-{index}",
+                )
+                task_ids.append(created["task_id"])
+                wait_for_terminal(manager, created["task_id"])
+
+            self.assertLess(journal.save_count, 20)
+            payload = journal.payload
+            assert payload is not None
+            self.assertEqual(len(payload["tasks"]), 2)
+            with self.assertRaises(QueryTaskNotFoundError):
+                manager.get_task(task_ids[0])
         finally:
             manager.close()
 

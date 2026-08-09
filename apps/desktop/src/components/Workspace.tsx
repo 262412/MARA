@@ -10,6 +10,7 @@ import {
 import type { QueryCitation, QueryTask } from "../../shared/query-contracts";
 import type { SessionDetail, SessionMessage } from "../../shared/session-contracts";
 import type { ResourceState } from "../resource-state";
+import { submittedPromptTransition } from "../query-task-state";
 import { Icon } from "./Icon";
 
 type WorkspaceProps = {
@@ -43,6 +44,7 @@ export function Workspace({
 }: WorkspaceProps) {
   const [prompt, setPrompt] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const consumedPromptTaskId = useRef<string | undefined>(undefined);
   const detail = session?.status === "success" ? session.data : undefined;
   const visibleTask =
     answerTask && answerTask.conversation_id === detail?.conversation_id
@@ -68,8 +70,14 @@ export function Workspace({
   const canSubmit = !disabledReason && prompt.trim().length > 0;
 
   useEffect(() => {
-    if (visibleTask?.prompt === prompt.trim()) {
-      setPrompt("");
+    const transition = submittedPromptTransition(
+      prompt,
+      visibleTask,
+      consumedPromptTaskId.current,
+    );
+    consumedPromptTaskId.current = transition.consumedTaskId;
+    if (transition.prompt !== prompt) {
+      setPrompt(transition.prompt);
     }
   }, [prompt, visibleTask]);
 

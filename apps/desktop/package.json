@@ -17,7 +17,7 @@
     "start": "npm run build && electron .",
     "test": "npm run test:electron && npm run test:renderer && npm run test:sidecar && npm run test:packaging",
     "test:electron": "npm run build:electron && node --test dist-electron/**/*.test.js",
-    "test:renderer": "tsc -p tsconfig.renderer-test.json && node --test dist-tests/src/**/*.test.js",
+    "test:renderer": "tsc -p tsconfig.renderer-test.json && node --test dist-tests/src/*.test.js dist-tests/src/**/*.test.js",
     "test:sidecar": "node scripts/run-python.mjs -m unittest discover -s sidecar -t . -p test_*.py",
     "test:packaging": "node --test scripts/sidecar-bundle-config.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",

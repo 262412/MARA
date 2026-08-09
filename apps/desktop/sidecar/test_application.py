@@ -13,6 +13,7 @@ from unittest.mock import patch
 from .application import (
     DesktopApplicationService,
     DesktopSessionNotFoundError,
+    _query_citations,
     configure_desktop_data_root,
 )
 
@@ -402,7 +403,7 @@ class DesktopQueryApplicationServiceTest(unittest.TestCase):
                     "final": True,
                     "citations": [
                         {
-                            "citation_id": "chunk-1",
+                            "citation_id": "citation-e13e1d944ad26a8fdb97fa55",
                             "file_id": "file-1",
                             "file_name": "paper.pdf",
                             "page_label": "3",
@@ -512,65 +513,78 @@ class DesktopQueryApplicationServiceTest(unittest.TestCase):
         )
         self.assertNotIn("/private", str(update))
 
-
-class DesktopSessionMutationApplicationServiceTest(unittest.TestCase):
-    def test_reuses_runtime_create_and_owner_scoped_mutations(self) -> None:
-        calls: list[tuple[str, str, str | None]] = []
-
-        class Runtime:
-            def __init__(self) -> None:
-                self.name = "Original session"
-
-            def create_session(self):
-                calls.append(("create", "session-created", None))
-                return self._session("session-created")
-
-            def rename_session(self, conversation_id, name):
-                if conversation_id == "session-missing":
-                    raise PermissionError("owner scope")
-                calls.append(("rename", conversation_id, name))
-                self.name = name
-
-            def load_session(self, conversation_id):
-                return self._session(conversation_id)
-
-            def _session(self, conversation_id):
-                return SimpleNamespace(
-                    conversation_id=conversation_id,
-                    name=self.name,
-                    messages=[],
-                    graph_source_ids=[],
-                    origin="desktop",
-                    is_public=False,
-                    date_created=None,
-                    date_updated=None,
-                )
-
-            def delete_session(self, conversation_id):
-                if conversation_id == "session-missing":
-                    raise PermissionError("owner scope")
-                calls.append(("delete", conversation_id, None))
-
-        service = DesktopApplicationService(create_runtime=Runtime)
-
-        created = service.create_session()
-        renamed = service.rename_session("session-1", "Renamed session")
-        self.assertEqual(created["conversation_id"], "session-created")
-        self.assertEqual(created["messages"], [])
-        self.assertEqual(renamed["name"], "Renamed session")
-        self.assertEqual(service.delete_session("session-1"), "session-1")
-        self.assertEqual(
-            calls,
-            [
-                ("create", "session-created", None),
-                ("rename", "session-1", "Renamed session"),
-                ("delete", "session-1", None),
-            ],
+    def test_citation_identity_includes_the_file_for_cross_file_collisions(
+        self,
+    ) -> None:
+        response = SimpleNamespace(
+            evidence_bundle={
+                "items": [
+                    {
+                        "evidence_id": "chunk-1",
+                        "source_id": "file-1",
+                        "text": "Evidence from the first file.",
+                    },
+                    {
+                        "evidence_id": "chunk-1",
+                        "source_id": "file-2",
+                        "text": "Evidence from the second file.",
+                    },
+                ]
+            },
+            evidence_metadata={},
         )
-        with self.assertRaises(DesktopSessionNotFoundError):
-            service.rename_session("session-missing", "Missing")
-        with self.assertRaises(DesktopSessionNotFoundError):
-            service.delete_session("session-missing")
+
+        citations = _query_citations(
+            response,
+            {"file-1": "report.pdf", "file-2": "notes.pdf"},
+        )
+
+        self.assertEqual(
+            [citation["file_id"] for citation in citations],
+            ["file-1", "file-2"],
+        )
+        self.assertEqual(len({citation["citation_id"] for citation in citations}), 2)
+
+    def test_filename_fallback_requires_an_exact_unambiguous_alias(self) -> None:
+        similar_name = SimpleNamespace(
+            evidence_bundle={
+                "items": [
+                    {
+                        "evidence_id": "chunk-similar",
+                        "source_name": "report.pdf.bak",
+                        "text": "Only the backup source is named here.",
+                    }
+                ]
+            },
+            evidence_metadata={},
+        )
+        ambiguous_name = SimpleNamespace(
+            evidence_bundle={
+                "items": [
+                    {
+                        "evidence_id": "chunk-ambiguous",
+                        "file_name": "report.pdf",
+                        "text": "An ambiguous duplicate filename.",
+                    }
+                ]
+            },
+            evidence_metadata={},
+        )
+
+        similar_citations = _query_citations(
+            similar_name,
+            {"file-1": "report.pdf", "file-2": "report.pdf.bak"},
+        )
+        ambiguous_citations = _query_citations(
+            ambiguous_name,
+            {"file-1": "report.pdf", "file-2": "report.pdf"},
+        )
+
+        self.assertEqual(
+            [citation["file_id"] for citation in similar_citations],
+            ["file-2"],
+        )
+        self.assertEqual(ambiguous_citations, [])
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from .application import DesktopSessionNotFoundError
+from .application import DesktopFileNotFoundError, DesktopSessionNotFoundError
 from .index_task_journal import IndexTaskPersistenceError
 from .index_tasks import IndexTaskConflictError, IndexTaskNotFoundError
 from .query_task_journal import QueryTaskPersistenceError
@@ -24,6 +24,7 @@ def register_task_exception_handlers(
     logger: logging.Logger,
 ) -> None:
     _register_session_error(app, error_response)
+    _register_file_error(app, error_response)
     _register_index_task_errors(app, error_response, request_id, logger)
     _register_query_task_errors(app, error_response, request_id, logger)
 
@@ -41,6 +42,22 @@ def _register_session_error(
             status_code=404,
             code="session_not_found",
             message="The requested session no longer exists.",
+        )
+
+
+def _register_file_error(
+    app: FastAPI,
+    error_response: ErrorResponse,
+) -> None:
+    @app.exception_handler(DesktopFileNotFoundError)
+    async def handle_file_not_found(
+        request: Request, _error: DesktopFileNotFoundError
+    ) -> JSONResponse:
+        return error_response(
+            request,
+            status_code=404,
+            code="file_not_found",
+            message="One or more selected files no longer exist.",
         )
 
 

@@ -189,7 +189,15 @@ test("requires grounded query success, partial cancellation, and scoped retry", 
   };
   assert.doesNotThrow(() =>
     assertGate3QueryRetrySmoke(
-      { ok: true, data: { ...retried, status: "queued", answer: "", citations: [] } },
+      {
+        ok: true,
+        data: {
+          ...retried,
+          status: "queued",
+          answer: cancelled.answer,
+          citations: [],
+        },
+      },
       { ok: true, data: retried },
       reloaded,
       cancelled,
@@ -203,6 +211,49 @@ test("requires grounded query success, partial cancellation, and scoped retry", 
         reloaded,
       ),
     /citation identity/,
+  );
+});
+
+test("requires real multi-document smoke to retain both source identities", () => {
+  const expectedSources = [
+    { file_id: "query-source-1", file_name: "report.txt" },
+    { file_id: "query-source-2", file_name: "report.txt.bak.txt" },
+  ];
+  const multiTask: QueryTask = {
+    ...queryTask,
+    answer:
+      "MARA Desktop preserves grounded evidence identities and keeps cross-file citations distinct.",
+    selected_file_ids: expectedSources.map((source) => source.file_id),
+    qa_scope: "multi_document",
+    citations: expectedSources.map((source, index) => ({
+      citation_id: `citation-${index + 1}`,
+      file_id: source.file_id,
+      file_name: source.file_name,
+      page_label: null,
+      element_id: null,
+      quote: `Evidence ${index + 1}`,
+    })),
+  };
+  const reloaded = {
+    ok: true as const,
+    data: {
+      ...(session.ok && session.data ? session.data : ({} as SessionDetail)),
+      messages: [
+        ...(session.ok && session.data ? session.data.messages : []),
+        { role: "user" as const, content: multiTask.prompt },
+        { role: "assistant" as const, content: multiTask.answer },
+      ],
+      graph_source_ids: multiTask.selected_file_ids,
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertGate3QuerySuccessSmoke(
+      { ok: true, data: { ...multiTask, status: "queued" } },
+      { ok: true, data: multiTask },
+      reloaded,
+      expectedSources,
+    ),
   );
 });
 

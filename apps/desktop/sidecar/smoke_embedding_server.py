@@ -161,10 +161,14 @@ class _EmbeddingHandler(BaseHTTPRequestHandler):
         answer = (
             "CITATION LIST\n\n"
             "CITATION【1】\n\n"
-            "START_PHRASE: The deterministic query source says\n"
+            "START_PHRASE: The deterministic query source alpha says\n"
             "END_PHRASE: preserves grounded evidence identities.\n\n"
+            "CITATION【2】\n\n"
+            "START_PHRASE: The deterministic query source beta says\n"
+            "END_PHRASE: keeps cross-file citations distinct.\n\n"
             "FINAL ANSWER\n"
-            "MARA Desktop preserves grounded evidence identities.【1】"
+            "MARA Desktop preserves grounded evidence identities and keeps "
+            "cross-file citations distinct.【1】【2】"
         )
         if not payload.get("stream"):
             self._write_json(
@@ -197,12 +201,15 @@ class _EmbeddingHandler(BaseHTTPRequestHandler):
             (
                 "CITATION LIST\n\n"
                 "CITATION【1】\n\n"
-                "START_PHRASE: The deterministic query source says\n"
+                "START_PHRASE: The deterministic query source alpha says\n"
                 "END_PHRASE: preserves grounded evidence identities.\n\n"
+                "CITATION【2】\n\n"
+                "START_PHRASE: The deterministic query source beta says\n"
+                "END_PHRASE: keeps cross-file citations distinct.\n\n"
                 "FINAL ANSWER\n"
             ),
-            "MARA Desktop preserves grounded evidence identities.",
-            "【1】",
+            "MARA Desktop preserves grounded evidence identities and keeps ",
+            "cross-file citations distinct.【1】【2】",
         ]
         for index, content in enumerate(chunks):
             if index == 2 and self.chat_block_marker is not None:

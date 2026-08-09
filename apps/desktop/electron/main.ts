@@ -46,7 +46,7 @@ import {
   GATE3_QUERY_PROMPT,
   GATE3_QUERY_REQUEST_MARKER_NAME,
   GATE3_QUERY_RETRY_PROMPT,
-  GATE3_QUERY_SOURCE_NAME,
+  GATE3_QUERY_SOURCES,
   GATE3_RENAMED_SESSION_NAME,
   GATE3_PARTIAL_INPUT_NAMES,
   assertGate3CancellationSmoke,
@@ -674,31 +674,33 @@ async function runGate3CancellationSmoke(
 }
 
 async function runGate3QuerySmoke(initialFiles: FileRecord[]): Promise<void> {
-  const inputPath = path.join(
-    desktopDataRoot,
-    "tmp",
-    GATE3_QUERY_SOURCE_NAME,
+  const inputPaths = GATE3_QUERY_SOURCES.map((source) =>
+    path.join(desktopDataRoot, "tmp", source.name),
   );
-  await writeFile(
-    inputPath,
-    GATE3_QUERY_PROMPT,
-    "utf8",
+  await Promise.all(
+    GATE3_QUERY_SOURCES.map((source, index) =>
+      writeFile(inputPaths[index]!, source.content, "utf8"),
+    ),
   );
-  const indexed = await sidecar.createIndexTask([inputPath]);
+  const indexed = await sidecar.createIndexTask(inputPaths);
   const indexTerminal = indexed.ok
     ? await waitForIndexTaskTerminal(indexed.data.task_id)
     : indexed;
   const filesAfterIndex = await sidecar.listFiles();
-  const [queryFileId] = assertGate3IndexSmoke(
+  const queryFileIds = assertGate3IndexSmoke(
     indexed,
     indexTerminal,
     filesAfterIndex,
-    [GATE3_QUERY_SOURCE_NAME],
+    GATE3_QUERY_SOURCES.map((source) => source.name),
   );
+  const expectedSources = queryFileIds.map((fileId, index) => ({
+    file_id: fileId,
+    file_name: GATE3_QUERY_SOURCES[index]!.name,
+  }));
   const created = await sidecar.createQueryTask({
     conversation_id: GATE2_SMOKE_SESSION_ID,
     prompt: GATE3_QUERY_PROMPT,
-    selected_file_ids: [queryFileId],
+    selected_file_ids: queryFileIds,
   });
   const terminal = created.ok
     ? await waitForQueryTaskTerminal(created.data.task_id)
@@ -708,11 +710,10 @@ async function runGate3QuerySmoke(initialFiles: FileRecord[]): Promise<void> {
     created,
     terminal,
     reloaded,
-    queryFileId,
-    GATE3_QUERY_SOURCE_NAME,
+    expectedSources,
   );
   process.stdout.write(
-    "gate3_query=streaming_grounded_citations status_success\n",
+    "gate3_query=real_multi_document_grounded_citations status_success\n",
   );
 
   const blockMarker = path.join(
@@ -732,7 +733,7 @@ async function runGate3QuerySmoke(initialFiles: FileRecord[]): Promise<void> {
   const cancelCreated = await sidecar.createQueryTask({
     conversation_id: GATE2_SMOKE_SESSION_ID,
     prompt: GATE3_QUERY_RETRY_PROMPT,
-    selected_file_ids: [queryFileId],
+    selected_file_ids: queryFileIds,
   });
   if (!cancelCreated.ok) {
     await unlink(blockMarker);
@@ -757,7 +758,7 @@ async function runGate3QuerySmoke(initialFiles: FileRecord[]): Promise<void> {
     cancelCreated,
     cancelling,
     cancelTerminal,
-    queryFileId,
+    queryFileIds,
   );
   const retried = await sidecar.retryQueryTask(cancelled.task_id);
   const retryTerminal = retried.ok
@@ -769,8 +770,7 @@ async function runGate3QuerySmoke(initialFiles: FileRecord[]): Promise<void> {
     retryTerminal,
     retryReloaded,
     cancelled,
-    queryFileId,
-    GATE3_QUERY_SOURCE_NAME,
+    expectedSources,
   );
   if (existsSync(requestMarker)) {
     await unlink(requestMarker);
@@ -778,9 +778,11 @@ async function runGate3QuerySmoke(initialFiles: FileRecord[]): Promise<void> {
   process.stdout.write(
     "gate3_query_cancel=partial_preserved retry=status_success\n",
   );
-  const deleted = await sidecar.deleteFiles([queryFileId]);
+  const deleted = await sidecar.deleteFiles(queryFileIds);
   const filesAfterDelete = await sidecar.listFiles();
-  assertGate3DeleteSmoke(deleted, filesAfterDelete, queryFileId);
+  for (const queryFileId of queryFileIds) {
+    assertGate3DeleteSmoke(deleted, filesAfterDelete, queryFileId);
+  }
   if (
     !filesAfterDelete.ok ||
     filesAfterDelete.data.length !== initialFiles.length

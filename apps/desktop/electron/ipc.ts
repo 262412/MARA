@@ -163,7 +163,7 @@ export function createTrustedQuestionIpcHandler<T>(
       Array.from(prompt).length > 20_000 ||
       !Array.isArray(selectedFileIds) ||
       selectedFileIds.length === 0 ||
-      selectedFileIds.length > 1_000 ||
+      selectedFileIds.length > 64 ||
       selectedFileIds.some(
         (fileId) =>
           typeof fileId !== "string" ||

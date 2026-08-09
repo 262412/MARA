@@ -57,6 +57,16 @@ test("question IPC validates only a conversation, prompt, and source ids", async
     ),
     /invalid question/,
   );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      {
+        ...valid,
+        selected_file_ids: Array.from({ length: 65 }, (_, index) => `file-${index}`),
+      },
+    ),
+    /invalid question/,
+  );
 });
 
 test("trusted desktop IPC accepts only the packaged renderer and no arguments", async () => {

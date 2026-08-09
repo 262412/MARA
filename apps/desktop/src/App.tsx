@@ -21,6 +21,7 @@ import { Inspector, type InspectorTab } from "./components/Inspector";
 import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
 import { refreshFilesForTerminalTask } from "./index-task-state";
+import { mergeQueryTaskSnapshot } from "./query-task-state";
 import type { ResourceState } from "./resource-state";
 import { useDesktopResource } from "./useDesktopResource";
 
@@ -143,23 +144,28 @@ export default function App() {
     [files.retry],
   );
   const updateAnswerTask = useCallback(
-    (task: QueryTask) => {
-      setAnswerTask(task);
-      if (task.status !== "success") {
-        return;
-      }
-      const refreshKey = `${task.task_id}:${task.version}`;
-      if (lastAnswerRefresh.current === refreshKey) {
-        return;
-      }
-      lastAnswerRefresh.current = refreshKey;
-      sessions.retry();
-      if (task.conversation_id === selectedSessionId) {
-        setSessionReload((value) => value + 1);
-      }
+    (task: QueryTask, replace = false) => {
+      setAnswerTask((current) =>
+        mergeQueryTaskSnapshot(current, task, replace),
+      );
     },
-    [selectedSessionId, sessions.retry],
+    [],
   );
+
+  useEffect(() => {
+    if (answerTask?.status !== "success") {
+      return;
+    }
+    const refreshKey = `${answerTask.task_id}:${answerTask.version}`;
+    if (lastAnswerRefresh.current === refreshKey) {
+      return;
+    }
+    lastAnswerRefresh.current = refreshKey;
+    sessions.retry();
+    if (answerTask.conversation_id === selectedSessionId) {
+      setSessionReload((value) => value + 1);
+    }
+  }, [answerTask, selectedSessionId, sessions.retry]);
 
   useEffect(() => {
     if (!window.desktop) {
@@ -411,7 +417,7 @@ export default function App() {
           }) ?? unavailableResult<QueryTask>("问答仅能在 MARA Desktop 中使用。")
         );
         if (result.ok) {
-          updateAnswerTask(result.data);
+          updateAnswerTask(result.data, true);
         } else {
           setAnswerActionError(result.error.message);
         }
@@ -463,7 +469,7 @@ export default function App() {
         unavailableResult<QueryTask>("回答任务仅能在 MARA Desktop 中管理。")
       );
       if (result.ok) {
-        updateAnswerTask(result.data);
+        updateAnswerTask(result.data, true);
       } else {
         setAnswerActionError(result.error.message);
       }

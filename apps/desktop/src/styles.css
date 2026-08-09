@@ -1440,6 +1440,7 @@ kbd {
   height: 15px;
   margin: 0;
   accent-color: var(--accent);
+}
 
 .source-index {
   display: grid;

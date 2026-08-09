@@ -6,9 +6,11 @@ import {
   parseIndexTaskEvent,
   parseQueryTaskEvent,
   parseReadyMessage,
+  queryWatchRetryDelay,
   queryTaskCreateRequest,
   sessionCreateRequest,
   sessionRenameRequest,
+  SidecarManager,
   sidecarRequestTimeout,
   sidecarRestartDelay,
   waitForRequestReadiness,
@@ -86,6 +88,13 @@ test("bounds automatic Sidecar restarts to three exponential delays", () => {
   assert.deepEqual(
     [0, 1, 2, 3].map((attempt) => sidecarRestartDelay(attempt)),
     [250, 500, 1_000, undefined],
+  );
+});
+
+test("bounds query watcher reconnect delays without giving up on transient failures", () => {
+  assert.deepEqual(
+    [0, 1, 2, 3, 4, 20].map((attempt) => queryWatchRetryDelay(attempt)),
+    [250, 500, 1_000, 2_000, 5_000, 5_000],
   );
 });
 
@@ -196,4 +205,56 @@ test("parses query SSE events and rejects raw path-shaped payloads", () => {
       'event: query\ndata: {"request_id":"request-1","task":{"path":"/private/paper.pdf"}}',
     ),
   );
+});
+
+test("query watcher survives one retryable fallback GET failure", async () => {
+  const manager = Object.create(SidecarManager.prototype) as SidecarManager;
+  const testable = manager as unknown as {
+    status: {
+      state: "healthy";
+      protocol: number;
+      version: string;
+      capabilities: string[];
+    };
+    startup: undefined;
+    consumeQueryTaskEvents: () => Promise<boolean>;
+  };
+  testable.status = {
+    state: "healthy",
+    protocol: 1,
+    version: "0.7.0",
+    capabilities: ["query_stream"],
+  };
+  testable.startup = undefined;
+  testable.consumeQueryTaskEvents = async () => {
+    throw new Error("temporary disconnect");
+  };
+  let requests = 0;
+  manager.getQueryTask = async () => {
+    requests += 1;
+    if (requests === 1) {
+      return {
+        ok: false,
+        error: {
+          code: "sidecar_request_failed",
+          message: "Temporary failure",
+          details: null,
+          retryable: true,
+          request_id: "watch-retry-1",
+        },
+      };
+    }
+    return {
+      ok: true,
+      data: parseQueryTaskEvent(
+        'event: query\ndata: {"request_id":"request-2","task":{"task_id":"query-1","retry_of_task_id":null,"conversation_id":"session-1","prompt":"Question","selected_file_ids":["file-1"],"qa_scope":"document","status":"success","stage":"completed","answer":"Recovered","citations":[],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:02Z","version":4}}',
+      ),
+    };
+  };
+  const updates: string[] = [];
+
+  await manager.watchQueryTask("query-1", (task) => updates.push(task.answer));
+
+  assert.equal(requests, 2);
+  assert.deepEqual(updates, ["Recovered"]);
 });

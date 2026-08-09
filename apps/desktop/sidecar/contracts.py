@@ -183,7 +183,7 @@ class QueryTask(BaseModel):
     retry_of_task_id: str | None
     conversation_id: str
     prompt: str = Field(max_length=20_000)
-    selected_file_ids: list[str] = Field(min_length=1, max_length=1000)
+    selected_file_ids: list[str] = Field(min_length=1, max_length=64)
     qa_scope: Literal["document", "multi_document"]
     status: Literal["queued", "running", "success", "failed", "cancelled"]
     stage: str
@@ -219,7 +219,7 @@ class QueryTaskCreateRequest(BaseModel):
         pattern=r"^[A-Za-z0-9._-]+$",
     )
     prompt: str = Field(min_length=1, max_length=20_000)
-    selected_file_ids: list[str] = Field(min_length=1, max_length=1000)
+    selected_file_ids: list[str] = Field(min_length=1, max_length=64)
 
     @field_validator("prompt", mode="before")
     @classmethod

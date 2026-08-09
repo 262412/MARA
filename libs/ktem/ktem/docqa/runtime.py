@@ -602,7 +602,14 @@ class DocQARuntime(RuntimeSessionMutationFacade):
             stream_result=stream_result,
         )
 
-    def stream_turn(self, request: DocQARequest) -> Iterator[DocQATurnUpdate]:
+    def stream_turn(
+        self,
+        request: DocQARequest,
+        *,
+        cancel_event: Any = None,
+    ) -> Iterator[DocQATurnUpdate]:
+        if cancel_event is not None and cancel_event.is_set():
+            return
         (
             resolved_user_id,
             session_info,
@@ -611,6 +618,8 @@ class DocQARuntime(RuntimeSessionMutationFacade):
             prepared,
             history,
         ) = self._prepare_turn_execution(request)
+        if cancel_event is not None and cancel_event.is_set():
+            return
         stream_result = _turn.create_stream_result(request_to_run)
 
         for event in _turn.consume_stream_result(
@@ -620,6 +629,8 @@ class DocQARuntime(RuntimeSessionMutationFacade):
             history=history,
             result=stream_result,
         ):
+            if cancel_event is not None and cancel_event.is_set():
+                return
             partial_answer = _turn.partial_answer_text(stream_result.text)
             yield DocQATurnUpdate(
                 event=dict(event),
@@ -630,7 +641,11 @@ class DocQARuntime(RuntimeSessionMutationFacade):
                 state=_serialize_value(stream_result.state),
                 stream_events=list(stream_result.stream_events),
             )
+            if cancel_event is not None and cancel_event.is_set():
+                return
 
+        if cancel_event is not None and cancel_event.is_set():
+            return
         _turn.finalize_stream_result(stream_result, self._empty_chat_message())
         response = self._finalize_turn_response(
             original_request=request,
