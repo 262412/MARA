@@ -99,8 +99,9 @@ Defender 扫描成功后上传，诊断证据独立保留。
 
 1. 在 Windows 10 和 Windows 11 产品 VM 上使用 artifact `9029407407` 复验搜索、
    重命名、删除确认、首次/重复启动、数据目录、Defender 和退出后残留进程。
-2. 会话新建与固定仍未实现；“新建任务”保持禁用并明确说明将在问答切片开放，不提供
-   无行为的伪入口。
+2. 后续会话新建切片已接通真实 `DocQARuntime.create_session()`；证据见
+   [Gate 3 会话新建纵向切片证据](gate-3-session-creation-evidence.md)。会话固定仍未
+   实现。
 3. Composer 仍保持禁用。下一问答切片必须复用 `DocQARuntime.stream_turn()`，并
    同时关闭来源范围、流式事件、停止/重试、引用身份、模型配置和凭据边界，不能以
    固定回答或通用请求接口替代。

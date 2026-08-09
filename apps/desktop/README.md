@@ -11,8 +11,8 @@
    类型并由验证脚本检查漂移。
 6. 原生文件选择/拖放、后台索引、取消/重试、Files 批量删除和故障恢复复用现有
    DocQA runtime，并通过组合包 smoke。
-7. 会话详情、客户端搜索、重命名和删除通过 owner-scoped application service、
-   认证 Sidecar 与明确 IPC 贯通。
+7. 会话详情、新建任务、客户端搜索、重命名和删除通过 owner-scoped application
+   service、认证 Sidecar 与明确 IPC 贯通。
 
 它**不是完整 MARA Desktop**。问答、引用、预览、Notes、Studio、Resources、
 Settings、Help 和迁移仍按功能矩阵逐个切片接入。当前 Sidecar 只开放版本化、按能力
@@ -95,7 +95,8 @@ Gate 2 的本地 Linux 指标和跨平台 CI 边界记录在
 Gate 3 的当前实现与剩余验收记录在
 [Gate 3 文件索引纵向切片证据](../../docs/desktop/gate-3-file-indexing-evidence.md)、
 [Gate 3 会话详情纵向切片证据](../../docs/desktop/gate-3-session-detail-evidence.md)和
-[Gate 3 会话管理纵向切片证据](../../docs/desktop/gate-3-session-management-evidence.md)。
+[Gate 3 会话管理纵向切片证据](../../docs/desktop/gate-3-session-management-evidence.md)、
+[Gate 3 会话新建纵向切片证据](../../docs/desktop/gate-3-session-creation-evidence.md)。
 其余项目由
 [发布与验收计划](../../docs/desktop/release-and-acceptance-plan.md)
 中的 Gate 2–5 覆盖。

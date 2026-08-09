@@ -39,6 +39,8 @@
     窄 IPC、首次并发初始化回归和跨平台组合包证据。
 13. [Gate 3 会话管理纵向切片证据](gate-3-session-management-evidence.md)：搜索、
     重命名、删除、幂等契约和跨平台组合包证据。
+14. [Gate 3 会话新建纵向切片证据](gate-3-session-creation-evidence.md)：真实新建、
+    快捷键、并发互斥和跨平台组合包证据。
 
 ## 阶段门
 
