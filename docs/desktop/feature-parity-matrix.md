@@ -88,16 +88,16 @@ Beta 稳定化阶段，`Later` 表示不阻塞首发。状态在正式开发开�
 Gate 3 从“原生文件导入 → 后台索引 → Files 刷新/删除”开始。以下状态只表示该
 能力切片的进度，不代表未列出的 P0 功能或整个 Gate 3 已完成。
 
-| 能力                         | 状态        | 当前证据                                                                                         | 升级为 Verified 仍需                    |
-| ---------------------------- | ----------- | ------------------------------------------------------------------------------------------------ | --------------------------------------- |
-| 原生选择器导入               | In progress | Main 持有原生路径和多文件选择；拖放路径不返回 Renderer；Windows/Ubuntu handoff 组合包通过        | Windows 10/11 原生选择器与真实 OS 拖放  |
-| 后台索引任务                 | In progress | 真实 DocQA runtime；故障恢复与 5 MiB 原生通过；DOCX/XLSX/PPTX 直接文本索引跨平台通过             | PDF、图片、DOC/XLS/PPT 格式矩阵         |
-| Files 完成后刷新与删除       | In progress | 终态只刷新一次；真实 deletion coordinator；1–1,000 个 ID 的窄批量契约；Windows/Ubuntu 组合包通过 | Windows 10/11 产品 VM                   |
-| 会话详情读取                 | In progress | 真实 `load_session()`；五态、重试与过期响应保护；Windows、Ubuntu 22/24 非空组合包通过            | 当前 Gate 3 包的 Windows 10/11 产品 VM  |
-| 会话新建、搜索、重命名与删除 | In progress | 真实 create/rename/delete；客户端搜索；认证、幂等、写互斥与窄 IPC；Windows、Ubuntu 22/24 包通过  | 当前包 Windows 10/11 VM；固定           |
-| 文档/多文档问答、流式与引用  | In progress | 真实 `stream_turn()`；来源 ID、SSE、partial、取消/原范围重试与安全引用；三平台组合包通过         | Windows 10/11 VM；页/选中文本；引用定位 |
+| 能力                         | 状态        | 当前证据                                                                                          | 升级为 Verified 仍需                    |
+| ---------------------------- | ----------- | ------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 原生选择器导入               | In progress | Main 持有原生路径和多文件选择；拖放路径不返回 Renderer；Windows/Ubuntu handoff 组合包通过         | Windows 10/11 原生选择器与真实 OS 拖放  |
+| 后台索引任务                 | In progress | 真实 DocQA runtime；故障恢复与 5 MiB 原生通过；DOCX/XLSX/PPTX 直接文本索引跨平台通过              | PDF、图片、DOC/XLS/PPT 格式矩阵         |
+| Files 完成后刷新与删除       | In progress | 终态只刷新一次；真实 deletion coordinator；1–1,000 个 ID 的窄批量契约；Windows/Ubuntu 组合包通过  | Windows 10/11 产品 VM                   |
+| 会话详情读取                 | In progress | 真实 `load_session()`；五态、重试与过期响应保护；Windows、Ubuntu 22/24 非空组合包通过             | 当前 Gate 3 包的 Windows 10/11 产品 VM  |
+| 会话新建、搜索、重命名与删除 | In progress | 真实 create/rename/delete；客户端搜索；认证、幂等、写互斥与窄 IPC；Windows、Ubuntu 22/24 包通过   | 当前包 Windows 10/11 VM；固定           |
+| 文档/多文档问答、流式与引用  | In progress | 真实 `stream_turn()`；64 来源；单调 SSE；双文件相同 evidence ID 碰撞、partial 取消/重试三平台通过 | Windows 10/11 VM；页/选中文本；引用定位 |
 
-当前 Gate 3 打包基线为 `2878e815a55970201136c4dc8817ad9a4ca53883`。所有原生 smoke
+当前 Gate 3 打包基线为 `06fd7a456d1c4cf4981902d0ccb248b3a0c0d32e`。所有原生 smoke
 除业务断言外，还必须证明沙箱 Renderer 获得完整 `window.desktop`，并通过 Preload
 真实调用 Runtime、Doctor、Files 和 Sessions IPC；只从 Main 直接访问 Sidecar 不再视为
 充分的打包证据。
