@@ -5,7 +5,12 @@ from typing import Any
 
 from ktem.docqa.evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from ktem.docqa.evidence_identity import identity_of
-from ktem.docqa.finance_scale import compatible_dimension_scope
+from ktem.docqa.finance_scale import (
+    compatible_dimension_scope,
+    dimension_binding_scope,
+    valid_dimension_binding_scope,
+    valid_dimension_evidence_identity,
+)
 from ktem.docqa.query_evidence_constraints import executable_operand_evidence
 from ktem.docqa.query_plan_schema import plan_from_payload
 from ktem.docqa.query_planning import score_evidence_for_slot
@@ -56,6 +61,13 @@ def required_slot_reference_metrics(
                 audit_execution=audit_execution,
             )
         )
+    counts.update(
+        _audit_effective_scale_coverage(
+            calculation_operands,
+            lookup,
+            audit_execution=audit_execution,
+        )
+    )
     return _metric_payload(counts)
 
 
@@ -266,7 +278,67 @@ def _metric_payload(counts: Counter[str]) -> dict[str, float | None]:
         "dimension_scope_violation_count": float(
             dimension_count - counts["scope_valid_dimension_slots"]
         ),
+        "effective_scale_operand_count": float(counts["effective_scale_operand_count"]),
+        "effective_scale_bound_operand_count": float(
+            counts["effective_scale_bound_operand_count"]
+        ),
+        "effective_scale_coverage_rate": _rate(
+            counts["effective_scale_bound_operand_count"],
+            counts["effective_scale_operand_count"],
+        ),
+        "effective_scale_missing_count": float(counts["effective_scale_missing_count"]),
     }
+
+
+def _audit_effective_scale_coverage(
+    calculation_operands: list[dict[str, Any]],
+    lookup: dict[str, dict[str, Any]],
+    *,
+    audit_execution: bool,
+) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    if not audit_execution:
+        return counts
+    operands = [
+        operand
+        for operand in calculation_operands
+        if str(operand.get("query_slot_id") or "").startswith("operand:")
+        or not str(operand.get("query_slot_id") or "").strip()
+    ]
+    counts["effective_scale_operand_count"] = len(operands)
+    counts["effective_scale_bound_operand_count"] = sum(
+        _has_effective_scale_provenance(operand, lookup) for operand in operands
+    )
+    counts["effective_scale_missing_count"] = (
+        counts["effective_scale_operand_count"]
+        - counts["effective_scale_bound_operand_count"]
+    )
+    return counts
+
+
+def _has_effective_scale_provenance(
+    operand: dict[str, Any],
+    lookup: dict[str, dict[str, Any]],
+) -> bool:
+    scale = str(operand.get("scale") or "").strip().lower()
+    operand_identity = str(
+        operand.get("evidence_identity") or operand.get("evidence_id") or ""
+    ).strip()
+    evidence_identity = str(
+        operand.get("scale_evidence_identity") or operand.get("scale_evidence_id") or ""
+    ).strip()
+    scope = str(operand.get("dimension_binding_scope") or "").strip()
+    operand_item = lookup.get(operand_identity)
+    dimension_item = lookup.get(evidence_identity)
+    return bool(
+        scale
+        and valid_dimension_evidence_identity(evidence_identity)
+        and valid_dimension_binding_scope(scope)
+        and operand_item
+        and dimension_item
+        and compatible_dimension_scope(operand_item, dimension_item)
+        and dimension_binding_scope(operand_item, dimension_item) == scope
+    )
 
 
 def _calculation_operands(metadata: dict[str, Any]) -> list[dict[str, Any]]:

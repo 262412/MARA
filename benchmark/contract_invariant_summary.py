@@ -197,6 +197,14 @@ def _dimension_binding_summary(
         ),
         "dimension_binding_rate": _mean(metrics, "dimension_binding_rate"),
         "dimension_scope_rate": _mean(metrics, "dimension_scope_rate"),
+        "effective_scale_coverage_rate": _mean(
+            metrics,
+            "effective_scale_coverage_rate",
+        ),
+        "effective_scale_missing_count": _sum(
+            metrics,
+            "effective_scale_missing_count",
+        ),
         "dimension_binding_violation_count": _sum(
             metrics,
             "dimension_binding_violation_count",

@@ -10,6 +10,10 @@ from .calculation_evidence_identity import (
 )
 from .evidence_identity import identity_of
 from .finance_calculation_contract import finance_calculation_authoritative
+from .finance_scale import (
+    valid_dimension_binding_scope,
+    valid_dimension_evidence_identity,
+)
 from .query_evidence_binding import bind_evidence_slots_monotonic
 from .query_evidence_constraints import executable_operand_evidence
 from .query_plan_schema import plan_from_payload
@@ -473,40 +477,56 @@ def _dimension_slot_state(
     dimension = slot_id.rsplit(":", 1)[-1]
     evidence_field = f"{dimension}_evidence_identity"
     raw_evidence_field = f"{dimension}_evidence_id"
-    values = [
-        str(operand.get(dimension) or "")
-        for operand in operands
-        if str(operand.get(dimension) or "")
+    operand_values = list(operands)
+    provenance = [
+        (
+            operand,
+            str(operand.get(dimension) or "").strip(),
+            str(operand.get(evidence_field) or "").strip(),
+            str(operand.get(raw_evidence_field) or "").strip(),
+            str(operand.get("dimension_binding_scope") or "").strip(),
+        )
+        for operand in operand_values
+        if isinstance(operand, dict)
     ]
+    bound_provenance = [
+        (operand, value, identity or raw_identity, scope)
+        for operand, value, identity, raw_identity, scope in provenance
+        if value
+        and valid_dimension_evidence_identity(identity or raw_identity)
+        and valid_dimension_binding_scope(scope)
+    ]
+    values = [value for _operand, value, _identity, _scope in bound_provenance]
     evidence_ids = list(
         dict.fromkeys(
-            str(operand.get(evidence_field) or operand.get(raw_evidence_field) or "")
-            for operand in operands
-            if str(operand.get(evidence_field) or operand.get(raw_evidence_field) or "")
+            identity
+            for _operand, _value, identity, _scope in bound_provenance
+            if identity
         )
     )
-    state: dict[str, Any] = {
-        "status": "filled" if values and evidence_ids else "missing",
-        "evidence_ids": evidence_ids,
-    }
-    if len(set(values)) == 1:
-        state[dimension] = values[0]
-    scopes = list(
-        dict.fromkeys(
-            str(operand.get("dimension_binding_scope") or "")
-            for operand in operands
-            if str(operand.get("dimension_binding_scope") or "")
-        )
-    )
-    if len(scopes) == 1:
-        state["dimension_binding_scope"] = scopes[0]
-    state["applied_query_slot_ids"] = list(
+    applied_query_slot_ids = list(
         dict.fromkeys(
             str(operand.get("query_slot_id") or "")
-            for operand in operands
+            for operand, _value, _identity, _scope in bound_provenance
             if str(operand.get("query_slot_id") or "")
         )
     )
+    all_operands_bound = bool(operand_values) and len(bound_provenance) == len(
+        operand_values
+    )
+    uniform_value = len(set(values)) == 1 if values else False
+    state: dict[str, Any] = {
+        "status": "filled" if all_operands_bound and uniform_value else "missing",
+        "evidence_ids": evidence_ids,
+        "applied_query_slot_ids": applied_query_slot_ids,
+    }
+    if all_operands_bound and uniform_value:
+        state[dimension] = values[0]
+    scopes = list(
+        dict.fromkeys(scope for _operand, _value, _identity, scope in bound_provenance)
+    )
+    if len(scopes) == 1:
+        state["dimension_binding_scope"] = scopes[0]
     return state
 
 

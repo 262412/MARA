@@ -128,6 +128,15 @@ def dimension_binding_scope(
     return ""
 
 
+def valid_dimension_evidence_identity(value: str) -> bool:
+    normalized = str(value or "").strip().lower()
+    return ":" in normalized and normalized not in {"unknown", "none", "null"}
+
+
+def valid_dimension_binding_scope(value: str) -> bool:
+    return str(value or "").strip() in {"table", "table_group", "page", "source"}
+
+
 def compatible_dimension_scope(
     item: dict[str, Any],
     dimension_item: dict[str, Any],
@@ -136,6 +145,11 @@ def compatible_dimension_scope(
         return True
     if _source_id(item) != _source_id(dimension_item):
         return False
+    if _page_local_scale_convention(dimension_item):
+        return _same_page(item, dimension_item) or _explicit_dimension_link(
+            item,
+            dimension_item,
+        )
     if _source_wide_scale_convention(dimension_item):
         return True
     if _same_table_lineage(item, dimension_item):
@@ -168,23 +182,73 @@ def compatible_dimension_scope(
     return True
 
 
-def _source_wide_scale_convention(item: dict[str, Any]) -> bool:
+def _page_local_scale_convention(item: dict[str, Any]) -> bool:
     text = " ".join(_item_text(item).lower().split())
     return bool(
-        (
-            "unless otherwise noted" in text
-            and (
-                "tabular dollars" in text
-                or "all dollar amounts" in text
-                or "all amounts" in text
-            )
-        )
-        or re.search(
+        "otherwise indicated" not in text
+        and re.search(
             r"all amounts.{0,80}?following tables?.{0,40}?"
             r"(?:are\s+)?in\s+(?:thousands?|millions?|billions?)\b",
             text,
         )
     )
+
+
+def _source_wide_scale_convention(item: dict[str, Any]) -> bool:
+    text = " ".join(_item_text(item).lower().split())
+    return bool(
+        ("unless otherwise noted" in text or "otherwise indicated" in text)
+        and (
+            "tabular dollars" in text
+            or "all dollar amounts" in text
+            or "all amounts" in text
+        )
+    )
+
+
+def _same_page(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    left_page = _item_dimension(left, "page_label")
+    right_page = _item_dimension(right, "page_label")
+    return bool(left_page and right_page and left_page == right_page)
+
+
+def _explicit_dimension_link(
+    item: dict[str, Any],
+    dimension_item: dict[str, Any],
+) -> bool:
+    linked_ids = {
+        str(item.get(field) or "").strip()
+        for field in (
+            "dimension_evidence_id",
+            "dimension_source_id",
+            "scale_evidence_id",
+            "scale_source_id",
+        )
+        if str(item.get(field) or "").strip()
+    }
+    linked_ids.update(
+        str(value).strip()
+        for field in ("dimension_evidence_ids", "scale_evidence_ids")
+        for value in item.get(field) or ()
+        if str(value).strip()
+    )
+    if not linked_ids:
+        return False
+    return bool(linked_ids & _evidence_aliases(dimension_item))
+
+
+def _evidence_aliases(item: dict[str, Any]) -> set[str]:
+    return {
+        str(item.get(field) or "").strip()
+        for field in (
+            "evidence_id",
+            "canonical_id",
+            "element_id",
+            "cell_id",
+            "span_id",
+        )
+        if str(item.get(field) or "").strip()
+    }
 
 
 def _is_materialization_parent(

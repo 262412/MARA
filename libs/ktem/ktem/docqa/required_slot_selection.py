@@ -99,6 +99,7 @@ def required_slot_shortlist(
         items,
         selected_ids,
         candidate_limit=candidate_limit,
+        plan=plan,
     )
     return _ordered_shortlist(
         items,
@@ -169,6 +170,7 @@ def _add_execution_dimension_candidates(
     selected_ids: set[str],
     *,
     candidate_limit: int,
+    plan: QueryPlan | None = None,
 ) -> None:
     operands = [
         item
@@ -176,8 +178,6 @@ def _add_execution_dimension_candidates(
         if identity_of(item).key in selected_ids and _is_atomic_operand_candidate(item)
     ]
     for operand in operands:
-        if len(selected_ids) >= candidate_limit:
-            return
         _scale, evidence_id = source_scale_evidence(operand, items)
         dimension = next(
             (
@@ -187,8 +187,96 @@ def _add_execution_dimension_candidates(
             ),
             None,
         )
-        if dimension is not None:
-            selected_ids.add(identity_of(dimension).key)
+        if dimension is None:
+            continue
+        dimension_id = identity_of(dimension).key
+        if dimension_id in selected_ids:
+            continue
+        if len(selected_ids) < candidate_limit:
+            selected_ids.add(dimension_id)
+            continue
+        eviction = _dimension_eviction_candidate(
+            items,
+            selected_ids,
+            plan=plan,
+        )
+        if eviction is None:
+            return
+        selected_ids.remove(eviction)
+        selected_ids.add(dimension_id)
+
+
+def _dimension_eviction_candidate(
+    items: list[dict[str, Any]],
+    selected_ids: set[str],
+    *,
+    plan: QueryPlan | None,
+) -> str | None:
+    selected = [item for item in items if identity_of(item).key in selected_ids]
+    if not selected:
+        return None
+    protected: set[str] = set()
+    if plan is not None:
+        execution_slots = [
+            slot
+            for slot in plan.evidence_slots
+            if slot.required_for_execution and slot.role == "operand"
+        ]
+        for slot in execution_slots:
+            best = max(
+                (
+                    item
+                    for item in selected
+                    if _is_atomic_operand_candidate(item)
+                    and slot_score(plan, slot, item) > 0
+                ),
+                key=lambda item: (
+                    quantized_score(slot_score(plan, slot, item)),
+                    quantized_score(_reranker_score(item)),
+                    identity_of(item).key,
+                ),
+                default=None,
+            )
+            if best is not None:
+                protected.add(identity_of(best).key)
+    for item in selected:
+        if not _is_atomic_operand_candidate(item):
+            continue
+        _scale, evidence_id = source_scale_evidence(item, items)
+        if not evidence_id:
+            continue
+        protected.update(
+            identity_of(candidate).key
+            for candidate in items
+            if evidence_id in evidence_aliases(candidate)
+        )
+    evictable = [item for item in selected if identity_of(item).key not in protected]
+    if not evictable:
+        return None
+    execution_scores: list[tuple[Any, dict[str, Any], float]] = []
+    if plan is not None:
+        execution_scores = [
+            (slot, item, slot_score(plan, slot, item))
+            for slot in plan.evidence_slots
+            for item in evictable
+            if slot.required_for_execution and slot.role == "operand"
+        ]
+
+    def rank(item: dict[str, Any]) -> tuple[int, int, float, float, str]:
+        scores = [
+            score for slot, candidate, score in execution_scores if candidate is item
+        ]
+        max_score = max(scores, default=0.0)
+        return (
+            int(max_score > 0),
+            int(_is_atomic_operand_candidate(item)),
+            quantized_score(max_score),
+            quantized_score(_reranker_score(item)),
+            identity_of(item).key,
+        )
+
+    eviction = min(evictable, key=rank)
+    return identity_of(eviction).key
 
 
 def _add_slot_candidates(

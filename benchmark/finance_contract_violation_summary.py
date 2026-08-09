@@ -11,6 +11,7 @@ FINANCE_VIOLATION_KEYS = (
     "source_page_cross_join_count",
     "dimension_binding_violation_count",
     "dimension_scope_violation_count",
+    "effective_scale_missing_count",
     "query_plan_calculation_plan_state_mismatch_count",
 )
 FINANCE_DIAGNOSTIC_KEYS = ("verified_execution_gold_discrepancy_count",)
