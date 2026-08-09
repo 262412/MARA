@@ -5,7 +5,9 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from . import query_tasks as query_tasks_module
 from .query_tasks import (
     QueryTaskConflictError,
     QueryTaskManager,
@@ -278,15 +280,20 @@ class QueryTaskManagerTest(unittest.TestCase):
         )
         task_ids: list[str] = []
         try:
-            for index in range(3):
-                created = manager.create_task(
-                    "session-1",
-                    f"Question {index}",
-                    ["file-1"],
-                    idempotency_key=f"bounded-{index}",
-                )
-                task_ids.append(created["task_id"])
-                wait_for_terminal(manager, created["task_id"])
+            with patch.object(
+                query_tasks_module,
+                "_now",
+                return_value="2026-08-09T10:00:00+00:00",
+            ):
+                for index in range(3):
+                    created = manager.create_task(
+                        "session-1",
+                        f"Question {index}",
+                        ["file-1"],
+                        idempotency_key=f"bounded-{index}",
+                    )
+                    task_ids.append(created["task_id"])
+                    wait_for_terminal(manager, created["task_id"])
 
             self.assertLess(journal.save_count, 20)
             payload = journal.payload

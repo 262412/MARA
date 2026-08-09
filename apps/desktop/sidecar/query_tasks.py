@@ -144,7 +144,7 @@ class _QueryTaskPersistence:
             ]
             if not candidates:
                 break
-            oldest = min(candidates, key=lambda task: (task.created_at, task.task_id))
+            oldest = min(candidates, key=lambda task: task.created_at)
             self._tasks.pop(oldest.task_id, None)
             self._idempotency.pop(oldest.idempotency_key, None)
             removed.append(oldest)
