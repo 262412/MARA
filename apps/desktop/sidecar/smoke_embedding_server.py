@@ -285,11 +285,12 @@ def _input_size(value: str | list[int]) -> int:
     return len(value) if isinstance(value, list) else len(value.split())
 
 
-def main() -> int:
+def _parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Serve deterministic embeddings for packaged Desktop smoke tests."
     )
     parser.add_argument("--port-file", required=True, type=Path)
+    parser.add_argument("--port", default=0, type=int)
     parser.add_argument("--token", default="mara-desktop-smoke")
     parser.add_argument(
         "--constant-embeddings",
@@ -301,9 +302,14 @@ def main() -> int:
     parser.add_argument("--request-marker", type=Path)
     parser.add_argument("--chat-block-marker", type=Path)
     parser.add_argument("--chat-request-marker", type=Path)
-    arguments = parser.parse_args()
+    return parser.parse_args(arguments)
+
+
+def main() -> int:
+    arguments = _parse_arguments()
     server = create_server(
         arguments.token,
+        arguments.port,
         constant_embeddings=arguments.constant_embeddings,
         failure_marker=arguments.failure_marker,
         block_marker=arguments.block_marker,

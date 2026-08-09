@@ -10,7 +10,12 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from .smoke_embedding_server import _embedding, _EmbeddingHandler, create_server
+from .smoke_embedding_server import (
+    _embedding,
+    _EmbeddingHandler,
+    _parse_arguments,
+    create_server,
+)
 
 
 class _DisconnectedWriter:
@@ -19,6 +24,13 @@ class _DisconnectedWriter:
 
 
 class SmokeEmbeddingServerTest(unittest.TestCase):
+    def test_accepts_a_deterministic_port_for_cross_version_smoke(self) -> None:
+        arguments = _parse_arguments(
+            ["--port-file", "/tmp/mara-smoke-port", "--port", "43127"]
+        )
+
+        self.assertEqual(arguments.port, 43127)
+
     def test_query_smoke_phrases_share_one_deterministic_embedding(self) -> None:
         self.assertEqual(
             _embedding("What does the deterministic query source say?"),

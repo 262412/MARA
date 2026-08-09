@@ -75,6 +75,7 @@ jobs:
           record_phase seed-initial-data
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
+          smoke_model_port=43127
           embedding_port_file=/tmp/mara-desktop/embedding-port.txt
           embedding_failure_file=/tmp/mara-desktop/embedding-model-unavailable
           embedding_block_file=/tmp/mara-desktop/data/MARA/tmp/gate3-embedding-block
@@ -85,6 +86,7 @@ jobs:
             cd apps/desktop
             ../../.venv/bin/python -m sidecar.smoke_embedding_server \
               --port-file "$embedding_port_file" \
+              --port "$smoke_model_port" \
               --constant-embeddings \
               --failure-marker "$embedding_failure_file" \
               --block-marker "$embedding_block_file" \
@@ -294,6 +296,9 @@ jobs:
       - name: Smoke packaged vertical slice
         shell: bash
         run: |
+          # The shared snapshot persists its model base URL, so both runners must
+          # expose the deterministic smoke model at the same loopback port.
+          smoke_model_port=43127
           embedding_port_file=/tmp/mara-desktop/embedding-port.txt
           query_block_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-block
           query_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-request
@@ -301,6 +306,7 @@ jobs:
             cd apps/desktop
             python3 -m sidecar.smoke_embedding_server \
               --port-file "$embedding_port_file" \
+              --port "$smoke_model_port" \
               --constant-embeddings \
               --chat-block-marker "$query_block_file" \
               --chat-request-marker "$query_request_file"
