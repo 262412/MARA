@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.finance_gross_margin_profile import finance_gross_margin_profile_answer
 from ktem.docqa.finance_narrative_answer import finance_narrative_answer
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 from ktem.docqa.finance_segment_comparison import finance_segment_comparison_answer
@@ -22,6 +23,16 @@ def route_finance_numeric_answer(
     evidence_items = [
         item for item in getattr(bundle, "items", []) or [] if isinstance(item, dict)
     ]
+    gross_margin_profile = finance_gross_margin_profile_answer(
+        request_planning_question(request),
+        evidence_items,
+    )
+    if gross_margin_profile is not None:
+        bundle.metadata["generation_backend"] = "finance_gross_margin_profile_answerer"
+        bundle.metadata[
+            "finance_gross_margin_profile_trace"
+        ] = gross_margin_profile.as_trace()
+        return gross_margin_profile.answer
     narrative = finance_narrative_answer(
         request_planning_question(request),
         evidence_items,
@@ -32,6 +43,7 @@ def route_finance_numeric_answer(
     comparison = finance_segment_comparison_answer(
         request_planning_question(request),
         evidence_items,
+        query_plan=dict(getattr(bundle, "metadata", {}).get("query_plan") or {}),
     )
     if comparison is not None:
         bundle.metadata["finance_comparison_trace"] = comparison.as_trace()

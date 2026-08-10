@@ -25,9 +25,7 @@ def required_authority_audit(
     missing_slots = _normalized_values(missing_required_slot_ids)
     missing_evidence = _normalized_values(missing_required_evidence_ids)
     authority_slot_count = max(0, len(slot_ids) - len(missing_slots))
-    coverage = (
-        len(required_selected) / len(required) if required else 0.0 if slot_ids else 1.0
-    )
+    coverage = len(required_selected) / len(required) if required else 0.0
     if missing_slots or (slot_ids and not required):
         coverage = 0.0
     if not slot_ids:
@@ -50,7 +48,9 @@ def required_authority_audit(
         ),
         "verifier_missing_required_evidence_ids": ",".join(missing_evidence),
         "verifier_required_authority_status": status,
-        "verifier_required_evidence_coverage": f"{coverage:.6f}",
+        "verifier_required_evidence_coverage": (
+            f"{coverage:.6f}" if slot_ids or required else ""
+        ),
     }
 
 

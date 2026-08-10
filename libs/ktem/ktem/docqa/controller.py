@@ -291,9 +291,7 @@ def evaluate_retrieval_quality(
                 origin,
             ),
         )
-        missing_required_slots = int(
-            evidence_metadata.get("missing_required_slot_count") or 0
-        )
+        missing_required_slots = _missing_retrieval_slot_count(evidence_metadata)
         typed_execution_is_authoritative = (
             evidence_metadata.get("typed_adequacy_status") == "good"
             and evidence_metadata.get("adequacy_decision_authority")
@@ -344,6 +342,24 @@ def _finance_benchmark_origin(
         "finance",
         "financial",
     }
+
+
+def _missing_retrieval_slot_count(evidence_metadata: dict[str, Any]) -> int:
+    for key in ("bound_query_plan", "query_plan"):
+        plan = evidence_metadata.get(key)
+        if not isinstance(plan, dict) or not isinstance(
+            plan.get("evidence_slots"), list
+        ):
+            continue
+        slots = [slot for slot in plan["evidence_slots"] if isinstance(slot, dict)]
+        if not any("required_for_retrieval" in slot for slot in slots):
+            continue
+        return sum(
+            bool(slot.get("required_for_retrieval"))
+            and str(slot.get("status") or "missing") != "filled"
+            for slot in slots
+        )
+    return int(evidence_metadata.get("missing_required_slot_count") or 0)
 
 
 def _route_decision(

@@ -377,6 +377,7 @@ def _static_result(
     retrieve_decision = evaluate_retrieval_quality(decision.legacy_route, {})
     verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
     return _result(
+        request,
         decision,
         retrieve_decision,
         verify_decision,
@@ -405,6 +406,7 @@ def _guarded_result(
             reason="RAGTruth task contract handled empty retrieval.",
         )
         return _result(
+            request,
             decision,
             retrieve_decision,
             verify_decision,
@@ -422,6 +424,7 @@ def _guarded_result(
         reason=retrieve_decision.reason,
     )
     return _result(
+        request,
         decision,
         retrieve_decision,
         verify_decision,
@@ -461,6 +464,7 @@ def _verified_result(
         ragtruth_empty_answer=RAGTRUTH_EMPTY_ANSWER,
     )
     return _result(
+        request,
         decision,
         retrieve_decision,
         verify_decision,
@@ -474,6 +478,7 @@ def _verified_result(
 
 
 def _result(
+    request: Any,
     decision: ControllerDecision,
     retrieve_decision: RetrieveDecision,
     verify_decision: VerifyDecision,
@@ -484,7 +489,7 @@ def _result(
     trace_prefix: list[dict[str, Any]] | None = None,
     stage_timings: PipelineStageTimings | None = None,
 ) -> RouteExecutionResult:
-    bundle = with_verification_evidence(bundle, verify_decision)
+    bundle = with_verification_evidence(bundle, verify_decision, request)
     (stage_timings or PipelineStageTimings()).record(bundle)
     prefix = [
         item

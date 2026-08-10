@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ktem.docqa.finance_retrieval_focus import finance_retrieval_focus_terms
+
 ANSWER_FORMAT_MARKER = "\n\nAnswer formatting requirements:"
 _GENERIC_STRUCTURED_CALCULATION_TERMS = (
     "amount",
@@ -178,21 +180,35 @@ _FINANCE_FOCUS_RULES: tuple[
         ("operating margin", "gross margin"),
         (
             "Consolidated Statement of Income",
+            "Consolidated Statements of Operations",
             "Net sales",
-            "Operating income",
+            "Total revenues",
+            "Total costs and expenses",
             "Gross profit",
+            "Operating income",
             "Selling, general and administrative",
         ),
     ),
     (
         (),
-        ("primary customers", "customers", "customer base"),
+        ("primary customers", "customer base"),
         (
-            "customers",
-            "commercial airlines",
+            "major customers",
+            "limited number of commercial airlines",
             "U.S. government contracts",
-            "revenues from a limited number",
+            "percent of revenues",
             "substantial portion of our revenue",
+        ),
+    ),
+    (
+        (),
+        ("customer concentration", "major customer"),
+        (
+            "customer concentration",
+            "major customer",
+            "one customer accounted for",
+            "consolidated net revenue",
+            "concentration of credit risk",
         ),
     ),
     (
@@ -241,9 +257,12 @@ _FINANCE_FOCUS_RULES: tuple[
         (),
         ("acquisition", "acquisitions", "acquired"),
         (
+            "Note Acquisitions",
             "acquisition",
             "acquisitions",
             "completed the acquisition",
+            "acquired all outstanding shares",
+            "wholly owned subsidiary",
             "business combinations",
             "purchase price",
         ),
@@ -252,10 +271,35 @@ _FINANCE_FOCUS_RULES: tuple[
         (),
         ("debt securities", "registered", "trading symbol"),
         (
+            "Section 12(b)",
+            "Section 12(g)",
             "Title of each class",
             "Trading Symbol",
             "Name of each exchange",
             "New York Stock Exchange",
+            "None",
+        ),
+    ),
+    (
+        (),
+        ("retiree", "retirees", "future benefit payments"),
+        (
+            "Estimated Future Benefit Payments",
+            "benefit payments to retirees",
+            "Pension Benefits",
+            "Health Care and Life",
+            "dollars in millions",
+        ),
+    ),
+    (
+        (),
+        ("what industry", "primarily operate", "industry does"),
+        (
+            "Item 1 Business",
+            "company overview",
+            "global leader",
+            "developing and producing",
+            "products and services",
         ),
     ),
     (
@@ -319,7 +363,7 @@ def _is_structured_calculation_question(question: str) -> bool:
 
 def _finance_retrieval_focus_terms(question: str) -> list[str]:
     normalized = str(question or "").lower()
-    terms: list[str] = []
+    terms = list(finance_retrieval_focus_terms(question))
     for required_terms, alternative_terms, focus_terms in _FINANCE_FOCUS_RULES:
         if _matches_focus_rule(normalized, required_terms, alternative_terms):
             _extend_unique(terms, list(focus_terms))

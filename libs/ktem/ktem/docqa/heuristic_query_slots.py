@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .boolean_evidence_scope import boolean_retrieval_query
+from .finance_retrieval_focus import finance_retrieval_query
 from .query_evidence_text import requires_multiple_operands
 from .query_phrase_extraction import (
     cross_page_support_queries,
@@ -103,7 +104,7 @@ def _primary_support_slots(
             role="support",
             metric=metric or question,
             modality="auto",
-            query=question,
+            query=finance_retrieval_query(question),
             locator=EvidenceLocator(page_label=page_labels[0] if page_labels else ""),
         ),
     )

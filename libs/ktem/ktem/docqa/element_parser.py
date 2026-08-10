@@ -234,6 +234,8 @@ def parse_financial_numeric_span_records(
                 if value and fact.metric == "revolving credit capacity"
             }
         )
+        if fact.scale == "one" and fact.currency:
+            parser_metadata["scale_provenance"] = "local_currency_amount"
         records.append(
             ElementIndexRecord(
                 evidence_id=f"span:{file_id}:{page_label}:{element_id}",
@@ -248,6 +250,7 @@ def parse_financial_numeric_span_records(
                 column_label=period,
                 period=period,
                 value=str(fact.value),
+                unit=fact.currency,
                 scale=fact.scale,
                 currency=fact.currency,
                 caption=fact.metric,

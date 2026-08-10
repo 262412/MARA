@@ -32,7 +32,7 @@ def _item(
     }
 
 
-def test_missing_boolean_verification_slot_requests_expanded_second_round_query():
+def test_missing_boolean_verification_slot_does_not_request_second_round():
     plan = build_query_plan(
         QUALITY_CONTROL_QUESTION,
         answer_type="boolean",
@@ -46,13 +46,10 @@ def test_missing_boolean_verification_slot_requests_expanded_second_round_query(
 
     requests = missing_slot_requests(plan)
 
-    assert len(requests) == 1
-    assert requests[0]["slot_id"] == "support:boolean_proposition"
-    assert "validate" in requests[0]["query"]
-    assert "quality" in requests[0]["query"]
+    assert requests == []
 
 
-def test_e971_first_round_artifact_candidate_triggers_round2_without_execution_slot():
+def test_e971_first_round_artifact_candidate_stays_pending_verification():
     request = DocQARequest(
         prompt=QUALITY_CONTROL_QUESTION,
         controller_question=QUALITY_CONTROL_QUESTION,
@@ -72,11 +69,8 @@ def test_e971_first_round_artifact_candidate_triggers_round2_without_execution_s
         ],
     )
 
-    assert metadata["missing_required_slot_count"] == 1
-    [second_round] = metadata["second_round_requests"]
-    assert second_round["slot_id"] == "support:boolean_proposition"
-    assert "validate" in second_round["query"]
-    assert "quality" in second_round["query"]
+    assert metadata["missing_required_slot_count"] == 0
+    assert metadata["second_round_requests"] == []
     assert not request.query_plan.evidence_slots[0].required_for_execution
 
 
@@ -104,7 +98,7 @@ def test_boolean_relation_synonyms_improve_candidate_score_without_scope_leakage
     )
 
 
-def test_e971_missing_artifact_slot_retrieves_decisive_validation_paragraph_on_round2():
+def test_e971_pending_verification_does_not_trigger_retrieval_round_two():
     request = DocQARequest(
         prompt=QUALITY_CONTROL_QUESTION,
         controller_question=QUALITY_CONTROL_QUESTION,
@@ -113,10 +107,6 @@ def test_e971_missing_artifact_slot_retrieves_decisive_validation_paragraph_on_r
         verification_domain="qasper",
     )
     calls: list[tuple[int, str, str]] = []
-    decisive = (
-        "It is much harder to validate the quality of such data at such a scale "
-        "and such varying levels of complexity."
-    )
 
     def retrieve(current_request, _decision):
         calls.append(
@@ -126,22 +116,10 @@ def test_e971_missing_artifact_slot_retrieves_decisive_validation_paragraph_on_r
                 current_request.retrieval_slot_id,
             )
         )
-        if current_request.retrieval_round_id == 1:
-            return {"evidence": [_item("artifact-control", ARTIFACT_CONTROL)]}
-        return {
-            "evidence": [
-                _item(
-                    "quality-validation",
-                    decisive,
-                    section_title="Dataset Probes and Construction",
-                )
-            ]
-        }
+        return {"evidence": [_item("artifact-control", ARTIFACT_CONTROL)]}
 
     def evaluate(_route, metadata, *, attempted_retry, **_kwargs):
-        if not attempted_retry:
-            assert metadata["missing_required_slot_count"] == 1
-            return SimpleNamespace(status="ambiguous", retry=True)
+        assert not attempted_retry
         assert metadata["missing_required_slot_count"] == 0
         return SimpleNamespace(status="good", retry=False)
 
@@ -153,14 +131,10 @@ def test_e971_missing_artifact_slot_retrieves_decisive_validation_paragraph_on_r
         retry_poor=False,
     )
 
-    assert len(calls) == 2
+    assert len(calls) == 1
     assert calls[0][0] == 1
-    assert calls[1][0] == 2
-    assert calls[1][2] == "support:boolean_proposition"
-    assert "validate" in calls[1][1]
-    assert "quality" in calls[1][1]
-    assert any(decisive in item["text"] for item in bundle.items)
-    assert bundle.metadata["retrieval_rounds"] == 2
+    assert any(ARTIFACT_CONTROL in item["text"] for item in bundle.items)
+    assert bundle.metadata["retrieval_rounds"] == 1
 
 
 def test_generic_boolean_second_round_queries_cover_evidence_stage_gap_families():

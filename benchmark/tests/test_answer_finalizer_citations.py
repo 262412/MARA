@@ -1,5 +1,7 @@
 from typing import Any
 
+from ktem.docqa.evidence_identity import identity_of
+
 from benchmark.answer_finalizer import finalize_prediction_answer
 
 
@@ -7,6 +9,30 @@ def _verified_bundle(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "items": [item],
         "metadata": {"verified_claim_support_evidence": [item]},
+    }
+
+
+def _authoritative_finance_bundle(item: dict[str, Any]) -> dict[str, Any]:
+    evidence_id = identity_of(item).key
+    return {
+        "items": [item],
+        "metadata": {
+            "selected_evidence": [item],
+            "generation_context_evidence": [item],
+            "verified_claim_support_evidence": [item],
+            "query_plan": {
+                "state_authority": "verified_claim_support.v1",
+                "evidence_slots": [
+                    {
+                        "slot_id": "support:primary",
+                        "role": "support",
+                        "required_for_verification": True,
+                        "status": "verified_support",
+                        "evidence_ids": [evidence_id],
+                    }
+                ],
+            },
+        },
     }
 
 
@@ -106,7 +132,8 @@ def test_finalizer_attaches_financebench_citation_from_canonical_source():
     prediction: dict[str, Any] = {
         "predicted_answer": "0.96",
         "answer_type": "extractive",
-        "evidence_bundle": _verified_bundle(item),
+        "evidence_bundle": _authoritative_finance_bundle(item),
+        "verify_decision": {"status": "supported"},
         "scored_predicted_sources": ["MMM_2022_10K#page:42"],
         "gold_evidence": [{"source_id": "MMM_2022_10K", "page_label": "42"}],
     }

@@ -20,6 +20,10 @@ from .citation_stage_projection import (
     record_emitted_citation_evidence,
     source_ref_uses_uuid_like_source,
 )
+from .finance_answer_finalization import (
+    enforce_finance_citation_authority,
+    metadata_citations_allowed,
+)
 from .finance_citation_contract import (
     clear_answer_citation_state,
     record_execution_operand_evidence,
@@ -65,6 +69,7 @@ def finalize_prediction_answer(
         _citation_candidate_items(prediction),
         _canonical_source_refs(prediction),
     )
+    enforce_finance_citation_authority(prediction, dataset_name=dataset_name)
     (
         answer_for_user,
         answer_text_for_user,
@@ -104,9 +109,8 @@ def finalize_prediction_answer(
         repetition_removed=repetition_removed,
         repetition_kind=repetition_kind,
     )
-    prediction["answer_finalization"][
-        "qasper_contract_normalized"
-    ] = qasper_contract_normalized
+    finalization = prediction["answer_finalization"]
+    finalization["qasper_contract_normalized"] = qasper_contract_normalized
     record_emitted_citation_evidence(
         prediction,
         citations=_existing_structured_citations(
@@ -128,6 +132,8 @@ def _prepare_standard_answer(
     truncated_answer = ""
     answer_for_scoring_source = raw_answer
     if structured_answer is not None:
+        if prediction.get("finance_citation_authority_status"):
+            structured_answer = {**structured_answer, "citations": []}
         answer_text_for_user = structured_answer["answer"]
         answer_for_user = _render_structured_answer_for_user(structured_answer)
         prediction["structured_citations"] = structured_answer["citations"]
@@ -139,9 +145,7 @@ def _prepare_standard_answer(
         answer_for_user = truncated_answer or raw_answer
         answer_text_for_user = answer_for_user
         answer_for_scoring_source = answer_for_user
-        if mode != "product" and _should_attach_metadata_citations(
-            dataset_name, prediction
-        ):
+        if mode != "product" and metadata_citations_allowed(dataset_name, prediction):
             citations = attach_structured_citations_from_evidence(
                 prediction,
                 span=answer_for_user,
@@ -152,9 +156,7 @@ def _prepare_standard_answer(
                 answer_for_user = _render_structured_answer_for_user(
                     {"answer": answer_for_user, "citations": citations}
                 )
-    if mode != "product" and _should_attach_metadata_citations(
-        dataset_name, prediction
-    ):
+    if mode != "product" and metadata_citations_allowed(dataset_name, prediction):
         citations = _canonicalized_existing_citations(
             prediction,
             span=answer_text_for_user,
@@ -408,17 +410,6 @@ def _unique_citations(citations: list[dict[str, str]]) -> list[dict[str, str]]:
         seen.add(key)
         output.append(citation)
     return output
-
-
-def _should_attach_metadata_citations(
-    dataset_name: str,
-    prediction: dict[str, Any],
-) -> bool:
-    dataset = str(dataset_name or "").lower()
-    return bool(prediction.get("gold_evidence")) or any(
-        family in dataset
-        for family in ("financebench", "slidevqa", "mmdocrag", "vidore")
-    )
 
 
 def _extract_structured_answer(answer: str) -> dict[str, Any] | None:

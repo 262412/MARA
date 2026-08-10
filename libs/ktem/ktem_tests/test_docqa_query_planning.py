@@ -325,9 +325,11 @@ def test_simple_fact_plan_reserves_primary_support_evidence():
     assert plan.evidence_slots[0].slot_id == "support:primary"
     assert plan.evidence_slots[0].required_for_retrieval is True
     assert plan.evidence_slots[0].required_for_verification is True
-    assert plan.evidence_slots[0].query == (
+    assert plan.evidence_slots[0].query.startswith(
         "What industry does AMCOR primarily operate in?"
     )
+    assert "Item 1 Business" in plan.evidence_slots[0].query
+    assert "global leader" in plan.evidence_slots[0].query
 
 
 def test_generic_numeric_slots_bind_distinct_canonical_evidence():

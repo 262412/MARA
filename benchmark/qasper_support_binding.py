@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from ktem.docqa.evidence_alias_lookup import unambiguous_evidence_alias_lookup
@@ -80,6 +81,69 @@ def bind_answerability_support(
         }
         target["verified_claim_support_spans"] = support_spans
         target["answer_dependent_state"] = "post_contract_verified"
+    _promote_authoritative_query_plan(targets, support_id)
+
+
+def _promote_authoritative_query_plan(
+    targets: list[dict[str, Any]],
+    support_id: str,
+) -> None:
+    source_plan = next(
+        (
+            target.get("query_plan")
+            for target in targets
+            if isinstance(target.get("query_plan"), dict)
+        ),
+        None,
+    )
+    if not isinstance(source_plan, dict):
+        return
+    slots: list[dict[str, Any]] = []
+    promoted = False
+    for raw_slot in source_plan.get("evidence_slots") or []:
+        if not isinstance(raw_slot, dict):
+            continue
+        slot = dict(raw_slot)
+        if (
+            str(slot.get("role") or "") == "support"
+            and bool(slot.get("required_for_verification"))
+            and str(slot.get("statement_kind") or "") == "boolean_proposition"
+        ):
+            slot["status"] = "verified_support"
+            slot["evidence_ids"] = [support_id]
+            promoted = True
+        slots.append(slot)
+    if not promoted:
+        return
+    state_version = (
+        max(
+            int(source_plan.get("state_version") or 0),
+            *(int(target.get("query_plan_state_version") or 0) for target in targets),
+        )
+        + 1
+    )
+    authoritative = {
+        **source_plan,
+        "evidence_slots": slots,
+        "stage": "verified",
+        "state_version": state_version,
+        "state_authority": "verified_claim_support.v1",
+    }
+    slot_states = [
+        {
+            "slot_id": str(slot.get("slot_id") or ""),
+            "status": "verified_support",
+            "evidence_ids": [support_id],
+        }
+        for slot in slots
+        if str(slot.get("status") or "") == "verified_support"
+    ]
+    for target in targets:
+        target["query_plan"] = deepcopy(authoritative)
+        target["bound_query_plan"] = deepcopy(authoritative)
+        target["query_plan_state_version"] = state_version
+        target["verification_slot_states"] = deepcopy(slot_states)
+        target.pop("pending_verification_slot_ids", None)
 
 
 def _supported_decision_payload(

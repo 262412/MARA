@@ -4,12 +4,27 @@ from typing import Any
 
 from .deterministic_ranking import quantized_score
 from .evidence_identity import evidence_aliases, identity_of
+from .finance_narrative_evidence import finance_narrative_support_quality
 from .finance_query_planning import finance_metric_evidence_matches
 from .finance_scale import source_scale_evidence
 from .query_planning import QueryPlan, score_evidence_for_slot
 
 REQUIRED_SLOT_CANDIDATE_QUOTA = 2
 EXECUTION_SLOT_PARENT_QUOTA = 1
+
+
+def required_slot_context_quota(
+    slot: Any,
+    candidates: list[dict[str, Any]],
+) -> int:
+    if slot.required_for_verification and slot.statement_kind == "boolean_proposition":
+        return REQUIRED_SLOT_CANDIDATE_QUOTA
+    narrative_authority_count = sum(
+        finance_narrative_support_quality(slot.metric, item) > 0 for item in candidates
+    )
+    if slot.role == "support" and narrative_authority_count > 1:
+        return min(3, narrative_authority_count)
+    return 1
 
 
 def required_slot_candidate_limit(
