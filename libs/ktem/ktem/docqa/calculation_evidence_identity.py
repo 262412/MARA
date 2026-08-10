@@ -6,6 +6,7 @@ from typing import Any
 
 from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from .evidence_identity import identity_of
+from .finance_scale import source_scale_evidence
 from .financial_statement_identity import source_identity
 from .financial_table import parse_financial_table_cells_with_context
 
@@ -76,30 +77,55 @@ def reconcile_materialized_cells(
         for index, item in enumerate(items)
         if (parent_id := _structured_child_parent_id(item))
     ]
-    if not child_items:
+    cross_parser_child_items = [
+        (index, item, parent_id)
+        for index, item in enumerate(items)
+        if (parent_id := _logical_child_parent_id(item))
+    ]
+    if not child_items and not cross_parser_child_items:
         return items
     child_parent_ids = {parent_id for _index, _item, parent_id in child_items}
     parent_cells: dict[int, tuple[Any, ...]] = {}
+    cross_parser_parents: list[tuple[dict[str, Any], tuple[Any, ...]]] = []
     replacements: dict[int, dict[str, Any]] = {}
     replacement_ranks: dict[int, tuple[int, int, int, int, int]] = {}
     for parent_index, parent in enumerate(items):
-        if _is_cell_item(parent) or not (_parent_aliases(parent) & child_parent_ids):
+        if _is_cell_item(parent):
+            continue
+        direct_parent = bool(_parent_aliases(parent) & child_parent_ids)
+        cross_parser_parent = any(
+            _cross_parser_parent_candidate(child, parent)
+            for _index, child, _parent_id in cross_parser_child_items
+        )
+        if not direct_parent and not cross_parser_parent:
             continue
         cells = parse_financial_table_cells_with_context(parent, items)
         if not cells:
             continue
-        parent_cells[parent_index] = cells
-        for child_index, child, parent_id in child_items:
-            if parent_id not in _parent_aliases(parent):
-                continue
-            cell = _replacement_cell(child, cells)
-            if cell is not None:
-                rank = _replacement_rank(child, cell)
-                if rank > replacement_ranks.get(child_index, (-1, -1, -1, -1, -1)):
-                    replacement_ranks[child_index] = rank
-                    replacements[child_index] = materialize_financial_cell(parent, cell)
+        if cross_parser_parent:
+            cross_parser_parents.append((parent, cells))
+        if direct_parent:
+            parent_cells[parent_index] = cells
+            for child_index, child, parent_id in child_items:
+                if parent_id not in _parent_aliases(parent):
+                    continue
+                cell = _replacement_cell(child, cells)
+                if cell is not None:
+                    rank = _replacement_rank(child, cell)
+                    if rank > replacement_ranks.get(child_index, (-1, -1, -1, -1, -1)):
+                        replacement_ranks[child_index] = rank
+                        replacements[child_index] = materialize_financial_cell(
+                            parent, cell
+                        )
 
-    if not parent_cells:
+    for child_index, child, _parent_id in cross_parser_child_items:
+        if child_index in replacements:
+            continue
+        replacement = _cross_parser_replacement(child, cross_parser_parents)
+        if replacement is not None:
+            replacements[child_index] = replacement
+
+    if not parent_cells and not replacements:
         return items
     reconciled: list[dict[str, Any]] = []
     for index, item in enumerate(items):
@@ -114,6 +140,141 @@ def reconcile_materialized_cells(
                 materialize_financial_cell(item, cell) for cell in parent_cells_for_item
             )
     return reconciled
+
+
+def _cross_parser_parent_candidate(
+    child: dict[str, Any],
+    parent: dict[str, Any],
+) -> bool:
+    child_source = source_identity(child)
+    parent_source = source_identity(parent)
+    child_page = _normalized_text(child.get("page_label") or child.get("page"))
+    parent_page = _normalized_text(parent.get("page_label") or parent.get("page"))
+    return bool(
+        not _normalized_text(child.get("scale"))
+        and child_source
+        and parent_source
+        and child_source == parent_source
+        and child_page
+        and child_page == parent_page
+        and _parent_aliases(parent)
+    )
+
+
+def _logical_child_parent_id(item: dict[str, Any]) -> str:
+    if str(item.get("evidence_level") or "").strip().lower() != "cell":
+        return ""
+    if any(
+        value in (None, "")
+        for value in (
+            source_identity(item),
+            item.get("page_label") or item.get("page"),
+            item.get("row_label"),
+            item.get("period") or item.get("column_label"),
+            item.get("value"),
+        )
+    ):
+        return ""
+    return str(
+        item.get("materialization_source_id") or item.get("parent_element_id") or ""
+    ).strip()
+
+
+def _cross_parser_replacement(
+    child: dict[str, Any],
+    parents: list[tuple[dict[str, Any], tuple[Any, ...]]],
+) -> dict[str, Any] | None:
+    matches: dict[str, dict[str, Any]] = {}
+    for parent, cells in parents:
+        for cell in cells:
+            if not _cross_parser_atomic_cell_match(child, cell):
+                continue
+            candidate = materialize_financial_cell(parent, cell)
+            if not _local_scale_parent_provenance(candidate, parent, cell.scale):
+                continue
+            matches[identity_of(candidate).key] = candidate
+    if len(matches) != 1:
+        return None
+    return next(iter(matches.values()))
+
+
+def _cross_parser_atomic_cell_match(child: dict[str, Any], cell: Any) -> bool:
+    if not _is_canonical_cell(cell) or not _normalized_text(cell.scale):
+        return False
+    required_pairs = (
+        (source_identity(child), cell.source_id),
+        (child.get("page_label") or child.get("page"), cell.page_label),
+        (child.get("row_label"), cell.row_label),
+        (child.get("period") or child.get("column_label"), cell.period),
+    )
+    if any(
+        not _normalized_text(left) or _normalized_text(left) != _normalized_text(right)
+        for left, right in required_pairs
+    ):
+        return False
+    if not _required_value_match(child.get("value"), cell.value):
+        return False
+    if any(
+        not _compatible_dimension(str(left or ""), str(right or ""))
+        for left, right in (
+            (child.get("statement_kind"), cell.statement_kind),
+            (child.get("financial_scope"), cell.financial_scope),
+            (child.get("currency"), cell.currency),
+        )
+    ):
+        return False
+    child_coordinates = _item_coordinates(child)
+    cell_coordinates = (int(cell.row_index or 0), int(cell.column_index or 0))
+    if all(child_coordinates) and all(cell_coordinates):
+        return child_coordinates == cell_coordinates
+    return _strict_coordinate_free_match(child, cell)
+
+
+def _strict_coordinate_free_match(child: dict[str, Any], cell: Any) -> bool:
+    return bool(
+        _normalized_text(child.get("column_label"))
+        and _normalized_text(child.get("column_label"))
+        == _normalized_text(cell.column_label)
+        and all(
+            _normalized_text(left) and _normalized_text(left) == _normalized_text(right)
+            for left, right in (
+                (child.get("statement_kind"), cell.statement_kind),
+                (child.get("financial_scope"), cell.financial_scope),
+                (child.get("currency"), cell.currency),
+            )
+        )
+    )
+
+
+def _local_scale_parent_provenance(
+    candidate: dict[str, Any],
+    parent: dict[str, Any],
+    expected_scale: str,
+) -> bool:
+    scale, evidence_id = source_scale_evidence(candidate, [parent, candidate])
+    return bool(
+        _normalized_text(scale) == _normalized_text(expected_scale)
+        and evidence_id
+        and evidence_id in _parent_aliases(parent)
+        and candidate.get("materialization_source_id")
+    )
+
+
+def _required_value_match(left: Any, right: Any) -> bool:
+    return (
+        left not in (None, "")
+        and right not in (None, "")
+        and _compatible_value(left, right)
+    )
+
+
+def _item_coordinates(item: dict[str, Any]) -> tuple[int, int]:
+    physical = item.get("physical_cell_identity")
+    nested = physical if isinstance(physical, dict) else {}
+    return (
+        int(item.get("row_index") or nested.get("row_index") or 0),
+        int(item.get("column_index") or nested.get("column_index") or 0),
+    )
 
 
 def _replacement_cell(
