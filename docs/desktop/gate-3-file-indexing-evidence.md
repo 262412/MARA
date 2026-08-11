@@ -190,6 +190,14 @@ archive scanning，并得到 `scan_result=no_detections`。完整 Windows 包仍
 `31b754809feda4db698ff5a91ad0b37a37e9737e6f7f39c390ee13770b04e137`、归档
 `2b32ac9eeaf15466c350a8d5171d219851e805c5dd62b94f6755da335adda6f9`。
 
+可下载包已发布到
+[Gate 3 Indexing Preview 4112e99](https://github.com/262412/MARA/releases/tag/desktop-gate3-preview-4112e99)：
+[Windows x64 ZIP](https://github.com/262412/MARA/releases/download/desktop-gate3-preview-4112e99/MARA-Desktop-Gate3-4112e99-Windows-x64.zip)、
+[Linux x64 tar.gz](https://github.com/262412/MARA/releases/download/desktop-gate3-preview-4112e99/MARA-Desktop-Gate3-4112e99-Linux-x64.tar.gz)和
+[SHA256SUMS](https://github.com/262412/MARA/releases/download/desktop-gate3-preview-4112e99/SHA256SUMS.txt)。
+该发布明确标记为 prerelease；它提供当前自动化验收包，不替代 Windows 10/11 产品
+VM 验收。
+
 ## 跨平台 CI 证据
 
 2026-08-08 的
