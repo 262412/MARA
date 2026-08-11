@@ -457,7 +457,8 @@ jobs:
           $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
           & icacls $readOnlyCwd /inheritance:r `
             /grant:r "SYSTEM:(OI)(CI)(F)" `
-            /grant:r "${currentUser}:(OI)(CI)(RX)" | Out-Null
+            /grant:r "${currentUser}:(OI)(CI)(RX)" `
+            /deny "${currentUser}:(OI)(CI)(W)" | Out-Null
           if ($LASTEXITCODE -ne 0) {
             throw "Could not apply the read-only working-directory ACL."
           }

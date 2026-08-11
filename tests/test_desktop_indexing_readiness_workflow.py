@@ -28,6 +28,7 @@ def test_native_packages_cover_read_only_cwd_and_unconfigured_first_start() -> N
 
     windows_commands = _commands(jobs["package-windows"])
     assert "icacls" in windows_commands
+    assert "/deny" in windows_commands
     assert "-WorkingDirectory $readOnlyCwd" in windows_commands
     assert "embedding_not_configured" in windows_commands
 
