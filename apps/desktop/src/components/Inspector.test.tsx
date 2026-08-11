@@ -27,6 +27,11 @@ const doctor: DoctorPayload = {
   graph_cache_dir: "/desktop/state/knowledge_graph/conversations",
   issues: [],
   warnings: [],
+  indexing_ready: true,
+  indexing_issue_code: null,
+  indexing_message: "File indexing is ready.",
+  indexing_action: "none",
+  request_id: "doctor-request",
 };
 
 function render(state: ResourceState<DoctorPayload>) {

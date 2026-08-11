@@ -10,6 +10,7 @@ import {
   requiredSidecarDataPackages,
   requiredSidecarModules,
   requiredTiktokenEncodings,
+  supportedDesktopEmbeddingProviders,
   tiktokenCacheDestination,
 } from "./sidecar-bundle-config.mjs";
 
@@ -30,6 +31,22 @@ test("excludes optional indexing accelerators and provider SDKs", () => {
     "numba",
   ]) {
     assert.ok(excludedSidecarModules.includes(moduleName), moduleName);
+  }
+});
+
+test("declares only providers whose dependencies are native bundle requirements", () => {
+  assert.deepEqual(supportedDesktopEmbeddingProviders, [
+    {
+      module: "openai",
+      types: [
+        "kotaemon.embeddings.OpenAIEmbeddings",
+        "kotaemon.embeddings.AzureOpenAIEmbeddings",
+      ],
+    },
+  ]);
+  for (const provider of supportedDesktopEmbeddingProviders) {
+    assert.ok(requiredSidecarModules.includes(provider.module), provider.module);
+    assert.ok(!excludedSidecarModules.includes(provider.module), provider.module);
   }
 });
 

@@ -4,8 +4,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { FileRecord } from "../../shared/file-contracts";
 import type { IndexTask } from "../../shared/index-task-contracts";
+import type { SidecarError } from "../../shared/runtime-contracts";
 import type { ResourceState } from "../resource-state";
-import { FilesPage, isFileDrag } from "./FilesPage";
+import {
+  FilesPage,
+  canAcceptFileDrop,
+  isFileDrag,
+} from "./FilesPage";
 
 const file: FileRecord = {
   file_id: "file-1",
@@ -33,23 +38,48 @@ const task: IndexTask = {
   version: 2,
 };
 
+type IndexingReadiness = {
+  indexing_ready: boolean;
+  indexing_issue_code: string | null;
+  indexing_message: string;
+  indexing_action:
+    | "none"
+    | "configure_embedding"
+    | "repair_installation"
+    | "check_connection"
+    | "free_storage"
+    | "contact_support";
+  request_id: string;
+};
+
+const readyIndexing: IndexingReadiness = {
+  indexing_ready: true,
+  indexing_issue_code: null,
+  indexing_message: "File indexing is ready.",
+  indexing_action: "none",
+  request_id: "doctor-ready",
+};
+
 function render(
   state: ResourceState<FileRecord[]>,
   indexTask?: IndexTask,
-  actionError?: string,
+  actionError?: SidecarError,
   selectedFileIds: string[] = [],
+  indexing = readyIndexing,
 ) {
   return renderToStaticMarkup(
     <FilesPage
       actionError={actionError}
       deletingFileIds={[]}
       files={state}
+      indexing={indexing}
       indexActionPending={false}
       indexTask={indexTask}
       onCancelIndexTask={() => undefined}
       onDelete={() => undefined}
       onDropFiles={() => undefined}
       onImport={() => undefined}
+      onOpenEmbeddingConfiguration={() => undefined}
       onRetry={(): void => undefined}
       onRetryIndexTask={() => undefined}
       onSelectionChange={() => undefined}
@@ -95,7 +125,13 @@ test("Files page exposes import, progress, cancellation, retry, and deletion", (
       },
       retryable: true,
     },
-    "无法删除文件",
+    {
+      code: "file_delete_failed",
+      message: "无法删除文件",
+      details: null,
+      retryable: true,
+      request_id: "delete-request",
+    },
   );
   assert.match(failed, /索引失败/);
   assert.match(failed, /重试索引/);
@@ -131,4 +167,31 @@ test("Files page exposes accessible bulk selection and destructive action state"
 test("Files page activates its drop target only for file payloads", () => {
   assert.equal(isFileDrag(["Files"]), true);
   assert.equal(isFileDrag(["text/plain"]), false);
+  assert.equal(canAcceptFileDrop(true, false), true);
+  assert.equal(canAcceptFileDrop(false, false), false);
+  assert.equal(canAcceptFileDrop(true, true), false);
+});
+
+test("Files page blocks import and drop until embedding is configured", () => {
+  const blocked = render(
+    { status: "success", data: [] },
+    undefined,
+    undefined,
+    [],
+    {
+      indexing_ready: false,
+      indexing_issue_code: "embedding_not_configured",
+      indexing_message: "Configure an embedding model before indexing files.",
+      indexing_action: "configure_embedding",
+      request_id: "doctor-no-embedding",
+    },
+  );
+
+  assert.match(blocked, /配置 Embedding/);
+  assert.match(blocked, /embedding_not_configured/);
+  assert.match(blocked, /doctor-no-embedding/);
+  assert.match(blocked, /保存配置后重启 MARA Desktop/);
+  assert.match(blocked, /添加文件<\/button>/);
+  assert.match(blocked, /disabled=""/);
+  assert.doesNotMatch(blocked, /释放文件以开始索引/);
 });

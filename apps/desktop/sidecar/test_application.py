@@ -16,6 +16,7 @@ from .application import (
     _query_citations,
     configure_desktop_data_root,
 )
+from .indexing_readiness import IndexingReadiness
 
 
 class _StreamingQueryRuntime:
@@ -69,6 +70,35 @@ class DesktopApplicationServiceTest(unittest.TestCase):
             reasoning_paths=("ktem.reasoning.simple.FullQAPipeline",),
         )
 
+    def test_unconfigured_embedding_is_blocked_before_runtime_or_task_work(
+        self,
+    ) -> None:
+        runtime_created = False
+
+        def create_runtime():
+            nonlocal runtime_created
+            runtime_created = True
+            raise AssertionError("runtime must not be created")
+
+        blocked = IndexingReadiness.blocked(
+            code="embedding_not_configured",
+            message="Configure an embedding model before indexing files.",
+            action="configure_embedding",
+            retryable=False,
+        )
+        service = DesktopApplicationService(
+            create_runtime=create_runtime,
+            collect_indexing_readiness=lambda: blocked,
+        )
+
+        with self.assertRaisesRegex(
+            Exception,
+            "Configure an embedding model",
+        ):
+            service.validate_indexing(["/private/source/paper.txt"])
+
+        self.assertFalse(runtime_created)
+
     def test_reuses_existing_docqa_service_functions_without_click(self) -> None:
         calls: list[str] = []
 
@@ -98,14 +128,28 @@ class DesktopApplicationServiceTest(unittest.TestCase):
             calls.append("import-capabilities")
             return {"supported_extensions": [".pdf", ".md"]}
 
+        def collect_indexing_readiness() -> IndexingReadiness:
+            calls.append("indexing-readiness")
+            return IndexingReadiness.ready()
+
         service = DesktopApplicationService(
             collect_doctor=collect_doctor,
             collect_files=collect_files,
             collect_sessions=collect_sessions,
             collect_import_capabilities=collect_import_capabilities,
+            collect_indexing_readiness=collect_indexing_readiness,
         )
 
-        self.assertEqual(service.get_doctor(), {"ok": True})
+        self.assertEqual(
+            service.get_doctor(),
+            {
+                "ok": True,
+                "indexing_ready": True,
+                "indexing_issue_code": None,
+                "indexing_message": "File indexing is ready.",
+                "indexing_action": "none",
+            },
+        )
         self.assertEqual(
             service.list_files(),
             [
@@ -129,7 +173,13 @@ class DesktopApplicationServiceTest(unittest.TestCase):
         )
         self.assertEqual(
             calls,
-            ["doctor", "files", "sessions", "import-capabilities"],
+            [
+                "doctor",
+                "indexing-readiness",
+                "files",
+                "sessions",
+                "import-capabilities",
+            ],
         )
 
     def test_reuses_runtime_index_and_delete_services_without_exposing_paths(
@@ -210,6 +260,57 @@ class DesktopApplicationServiceTest(unittest.TestCase):
                 ("delete", ["file-1", "file-2"]),
             ],
         )
+
+    def test_classifies_runtime_provider_failures_without_exposing_diagnostics(
+        self,
+    ) -> None:
+        class Runtime:
+            def __init__(self, message: str) -> None:
+                self.message = message
+
+            def index_paths(self, paths, reindex=False):
+                return SimpleNamespace(
+                    as_dict=lambda: {
+                        "successes": [],
+                        "failures": [
+                            {
+                                "file_name": Path(paths[0]).name,
+                                "file_path": paths[0],
+                                "status": "failed",
+                                "message": self.message,
+                            }
+                        ],
+                        "debug_messages": [],
+                    }
+                )
+
+        cases = [
+            (
+                "Error code: 401 - invalid API key at /private/config",
+                "embedding_not_configured",
+                False,
+            ),
+            (
+                "Error code: 503 - provider unavailable at /private/config",
+                "embedding_unavailable",
+                True,
+            ),
+            (
+                "No module named 'google.generativeai' from /private/install",
+                "embedding_dependency_missing",
+                False,
+            ),
+        ]
+        for message, code, retryable in cases:
+            with self.subTest(code=code):
+                service = DesktopApplicationService(
+                    create_runtime=lambda: Runtime(message),
+                )
+                result = service.index_files(["/private/source/paper.txt"])
+
+                self.assertEqual(result["failures"][0]["code"], code)
+                self.assertEqual(result["failures"][0]["retryable"], retryable)
+                self.assertNotIn("/private", str(result))
 
     def test_loads_authorized_runtime_session_without_exposing_internal_state(
         self,

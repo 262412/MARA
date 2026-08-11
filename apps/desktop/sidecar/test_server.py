@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from .application import DesktopSessionNotFoundError
+from .indexing_readiness import DesktopIndexingPreflightError
 from .server import PROTOCOL_VERSION, create_app
 
 
@@ -28,6 +29,10 @@ class StubApplicationService:
             "graph_cache_dir": "/desktop/state/knowledge_graph/conversations",
             "issues": [],
             "warnings": [],
+            "indexing_ready": True,
+            "indexing_issue_code": None,
+            "indexing_message": "File indexing is ready.",
+            "indexing_action": "none",
         }
 
     def list_files(self) -> list[dict]:
@@ -113,6 +118,9 @@ class StubApplicationService:
             "failures": [],
         }
 
+    def validate_indexing(self, _paths: list[str]) -> None:
+        return None
+
     def delete_file(self, file_id: str) -> list[dict]:
         return self.delete_files([file_id])
 
@@ -124,6 +132,16 @@ class StubApplicationService:
 class FailingApplicationService(StubApplicationService):
     def get_doctor(self) -> dict:
         raise RuntimeError("database is locked")
+
+
+class UnconfiguredEmbeddingService(StubApplicationService):
+    def validate_indexing(self, _paths: list[str]) -> None:
+        raise DesktopIndexingPreflightError(
+            "embedding_not_configured",
+            "Configure an embedding model before indexing files.",
+            retryable=False,
+            status_code=409,
+        )
 
 
 class SidecarContractTest(unittest.TestCase):
@@ -215,6 +233,10 @@ class SidecarContractTest(unittest.TestCase):
         self.assertEqual(files["request_id"], "request-123")
         self.assertEqual(sessions["sessions"][0]["conversation_id"], "session-1")
         self.assertEqual(sessions["request_id"], "request-123")
+
+        self.assertTrue(doctor["doctor"]["indexing_ready"])
+        self.assertIsNone(doctor["doctor"]["indexing_issue_code"])
+        self.assertEqual(doctor["doctor"]["request_id"], "request-123")
 
     def test_session_detail_is_authenticated_validated_and_path_free(self) -> None:
         response = self.authenticated_get("/v1/sessions/session-1")
@@ -348,6 +370,35 @@ class SidecarContractTest(unittest.TestCase):
         )
         self.assertEqual(relative_path.status_code, 422)
         self.assertEqual(relative_path.json()["code"], "invalid_request")
+
+    def test_unconfigured_embedding_is_rejected_before_task_creation(self) -> None:
+        client = TestClient(create_app(self.token, UnconfiguredEmbeddingService()))
+        try:
+            response = client.post(
+                "/v1/index-tasks",
+                headers={
+                    "Authorization": f"Bearer {self.token}",
+                    "X-Request-ID": "request-no-embedding",
+                    "Idempotency-Key": "import-no-embedding",
+                },
+                json={"paths": ["/private/source/paper.txt"]},
+            )
+            latest = client.get(
+                "/v1/index-tasks/latest",
+                headers={
+                    "Authorization": f"Bearer {self.token}",
+                    "X-Request-ID": "request-latest",
+                },
+            )
+
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json()["code"], "embedding_not_configured")
+            self.assertFalse(response.json()["retryable"])
+            self.assertEqual(response.json()["request_id"], "request-no-embedding")
+            self.assertNotIn("/private", response.text)
+            self.assertIsNone(latest.json()["task"])
+        finally:
+            client.app.state.index_task_manager.close()
 
     def test_delete_uses_stable_file_id_and_returns_no_local_path(self) -> None:
         response = self.authenticated_request(

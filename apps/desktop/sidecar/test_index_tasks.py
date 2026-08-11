@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import errno
 import json
+import sqlite3
 import tempfile
 import threading
 import unittest
 from pathlib import Path
 
-from .index_tasks import IndexTaskConflictError, IndexTaskManager, _missing_module_name
+from .indexing_readiness import DesktopIndexingPreflightError
+from .index_tasks import (
+    IndexTaskConflictError,
+    IndexTaskManager,
+    _failure_from_exception,
+    _missing_module_name,
+)
 
 
 class StubIndexService:
@@ -49,6 +57,83 @@ def wait_for_terminal(manager: IndexTaskManager, task_id: str) -> dict:
 
 
 class IndexTaskManagerTest(unittest.TestCase):
+    def test_preflight_failure_never_creates_or_schedules_a_task(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            journal = Path(temporary_directory) / "index-tasks.json"
+            service = StubIndexService()
+
+            def reject(_paths: list[str]) -> None:
+                raise DesktopIndexingPreflightError(
+                    "embedding_not_configured",
+                    "Configure an embedding model before indexing files.",
+                    retryable=False,
+                    status_code=409,
+                )
+
+            manager = IndexTaskManager(
+                service,
+                journal_path=journal,
+                validator=reject,
+            )
+            try:
+                with self.assertRaises(DesktopIndexingPreflightError):
+                    manager.create_task(
+                        ["/private/source/paper.txt"],
+                        reindex=False,
+                        idempotency_key="no-model",
+                    )
+
+                self.assertIsNone(manager.get_latest_task())
+                self.assertFalse(journal.exists())
+                self.assertEqual(service.calls, [])
+            finally:
+                manager.close()
+
+    def test_runtime_failures_use_stable_retry_semantics(self) -> None:
+        class StatusError(RuntimeError):
+            def __init__(self, status_code: int) -> None:
+                super().__init__(f"provider failed with {status_code} at /private")
+                self.status_code = status_code
+
+        cases = [
+            (
+                ModuleNotFoundError(name="google.generativeai"),
+                "embedding_dependency_missing",
+                False,
+            ),
+            (StatusError(401), "embedding_not_configured", False),
+            (StatusError(403), "embedding_not_configured", False),
+            (StatusError(503), "embedding_unavailable", True),
+            (
+                ConnectionError("network to /private failed"),
+                "embedding_unavailable",
+                True,
+            ),
+            (
+                OSError(errno.ENOSPC, "full", "/private/vector.lance"),
+                "index_storage_full",
+                True,
+            ),
+            (
+                sqlite3.OperationalError("database is locked at /private/mara.db"),
+                "index_database_locked",
+                True,
+            ),
+            (
+                PermissionError(13, "denied", "/private/source/paper.txt"),
+                "source_permission_denied",
+                False,
+            ),
+            (RuntimeError("unknown failure at /private"), "index_failed", True),
+        ]
+
+        for error, expected_code, retryable in cases:
+            with self.subTest(error=type(error).__name__, code=expected_code):
+                failure = _failure_from_exception("paper.txt", error)
+                self.assertEqual(failure["code"], expected_code)
+                self.assertEqual(failure["retryable"], retryable)
+                self.assertNotIn("/private", json.dumps(failure))
+
     def test_missing_module_diagnostic_is_narrow_and_path_free(self) -> None:
         missing = ModuleNotFoundError(name="lancedb.fts")
         unsafe = ModuleNotFoundError(name="/private/source/module.py")
