@@ -113,6 +113,12 @@ def dimension_binding_scope(
 ) -> str:
     if item is None or dimension_item is None:
         return ""
+    if (
+        _item_id(item)
+        and _item_id(item) == _item_id(dimension_item)
+        and _item_dimension(item, "scale_provenance") == "local_currency_amount"
+    ):
+        return "operand_local"
     if _is_materialization_parent(item, dimension_item):
         return "table"
     if _same_table_lineage(item, dimension_item):

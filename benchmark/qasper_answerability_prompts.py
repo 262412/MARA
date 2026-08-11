@@ -9,6 +9,9 @@ def json_structure_repair_prompt(
     allowed_values: tuple[str, ...],
     include_evidence_ref: bool = False,
     include_revised_answer: bool = False,
+    evidence_context: str = "",
+    allowed_evidence_refs: tuple[str, ...] = (),
+    preserve_evidence_ref: bool = True,
 ) -> str:
     values = ", ".join(f'"{value}"' for value in allowed_values)
     keys = ["verdict"]
@@ -23,7 +26,19 @@ def json_structure_repair_prompt(
     rendered_keys = f'{rendered_keys}"{keys[-1]}"'
     ref_instruction = (
         " Preserve the original evidence_ref exactly when present."
-        if include_evidence_ref
+        if include_evidence_ref and preserve_evidence_ref
+        else ""
+    )
+    allowed_ref_instruction = (
+        " Select evidence_ref only from: " + ", ".join(allowed_evidence_refs) + "."
+        if allowed_evidence_refs
+        else ""
+    )
+    evidence_instruction = (
+        " Use only the bounded verifier context and evidence_ref labels below; "
+        "do not invent or combine references.\n\nBOUNDED VERIFIER CONTEXT:\n"
+        + evidence_context
+        if evidence_context
         else ""
     )
     return (
@@ -31,10 +46,10 @@ def json_structure_repair_prompt(
         "Repair only the JSON structure of the verifier response below. "
         "Do not reconsider the evidence, question, candidate, verdict, or "
         "evidence quote. Preserve the original verdict and quote exactly when "
-        f"they are present.{ref_instruction} Return one JSON object with exactly "
+        f"they are present.{ref_instruction}{allowed_ref_instruction} Return one JSON object with exactly "
         f"the keys {rendered_keys}. The allowed verdict values are: "
         f"{values}.\n\n"
-        f"VERIFIER RESPONSE:\n{response}"
+        f"VERIFIER RESPONSE:\n{response}{evidence_instruction}"
     )
 
 

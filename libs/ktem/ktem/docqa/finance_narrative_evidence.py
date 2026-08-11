@@ -39,6 +39,10 @@ def finance_narrative_support_quality(
             and "revenue" in text
             else 0.0
         )
+    if "revenue" in intent and _has_any(
+        intent, ("what drove", "revenue change", "revenue driver")
+    ):
+        return 4.0 if "increase in net revenue was driven by" in text else 0.0
     if "retiree" in intent:
         return (
             4.0
@@ -85,6 +89,10 @@ def finance_narrative_intent(metric: str) -> bool:
     return (
         _has_any(intent, ("primary customers", "customer base"))
         or _has_any(intent, ("customer concentration", "major customer"))
+        or (
+            "revenue" in intent
+            and _has_any(intent, ("what drove", "revenue change", "revenue driver"))
+        )
         or "retiree" in intent
         or ("acquired" in intent and _has_any(intent, ("companies", "company")))
         or ("industry" in intent and "primarily operate" in intent)

@@ -10,6 +10,7 @@ from .calculation_evidence_identity import (
 )
 from .evidence_identity import identity_of
 from .finance_calculation_contract import finance_calculation_authoritative
+from .finance_dimension_trace import finance_dimension_bindings
 from .finance_scale import (
     valid_dimension_binding_scope,
     valid_dimension_evidence_identity,
@@ -34,7 +35,7 @@ class FinanceNumericAnswer:
 
     def as_trace(self) -> dict[str, Any]:
         trace = asdict(self)
-        trace["dimension_bindings"] = _dimension_bindings(self.calculation_plan)
+        trace["dimension_bindings"] = finance_dimension_bindings(self.calculation_plan)
         return trace
 
 
@@ -309,37 +310,6 @@ def _failed_plan_attempt(
     )
 
 
-def _dimension_bindings(
-    calculation_plan: dict[str, Any],
-) -> list[dict[str, Any]]:
-    bindings: dict[tuple[str, str, str], dict[str, Any]] = {}
-    for operand in calculation_plan.get("operands") or []:
-        if not isinstance(operand, dict):
-            continue
-        evidence_id = str(
-            operand.get("scale_evidence_identity")
-            or operand.get("scale_evidence_id")
-            or ""
-        ).strip()
-        scale = str(operand.get("scale") or "").strip()
-        if not evidence_id or not scale:
-            continue
-        scope = str(operand.get("dimension_binding_scope") or "").strip()
-        key = (evidence_id, scale, scope)
-        binding = bindings.setdefault(
-            key,
-            {
-                "dimension_slot_id": "dimension:scale",
-                "dimension_evidence_id": evidence_id,
-                "detected_scale": scale,
-                "applied_operand_ids": [],
-                "binding_scope": scope,
-            },
-        )
-        binding["applied_operand_ids"].append(str(operand.get("operand_id") or ""))
-    return list(bindings.values())
-
-
 def synchronize_authoritative_query_plan(
     query_plan: dict[str, Any] | None,
     calculation_plan: dict[str, Any],
@@ -405,7 +375,14 @@ def _reconciled_query_plan(
             slot.update(_dimension_slot_state(slot_id, operand_values))
         slots.append(slot)
     existing_slot_ids = {str(slot.get("slot_id") or "") for slot in slots}
-    scale_slot = _new_dimension_slot("scale", operand_values)
+    scale_slot = (
+        _new_dimension_slot("scale", operand_values)
+        if (
+            "dimension:scale" in existing_slot_ids
+            or _has_shared_dimension_binding(operand_values)
+        )
+        else None
+    )
     if scale_slot is not None and "dimension:scale" not in existing_slot_ids:
         slots.append(scale_slot)
     authoritative["evidence_slots"] = slots
@@ -560,6 +537,14 @@ def _new_dimension_slot(
         "locator": None,
         **state,
     }
+
+
+def _has_shared_dimension_binding(operands: Any) -> bool:
+    return any(
+        valid_dimension_binding_scope(str(operand.get("dimension_binding_scope") or ""))
+        for operand in operands
+        if isinstance(operand, dict)
+    )
 
 
 def _direct_question_type(metric: str) -> str | None:

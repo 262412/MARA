@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from decimal import Decimal
 from typing import Any
 
+from .calculation_evidence_identity import calculation_evidence_items
 from .evidence_identity import exact_evidence_aliases, identity_of
 from .finance_segment_table import (
     revenue_section_item,
@@ -51,6 +52,7 @@ class _SegmentMatrix:
     unit: str
     scale: str
     source_page: tuple[str, str]
+    table_lineage: str
 
 
 def finance_segment_comparison_answer(
@@ -61,6 +63,7 @@ def finance_segment_comparison_answer(
 ) -> FinanceSegmentComparisonAnswer | None:
     if not _is_segment_comparison(question):
         return None
+    evidence_items = segment_comparison_evidence_items(evidence_items)
     periods = _question_periods(question)
     excluded = _excluded_entities(question)
     if len(periods) != 2:
@@ -113,6 +116,26 @@ def finance_segment_comparison_answer(
     )
 
 
+def segment_comparison_evidence_items(
+    evidence_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    revenue_items = [
+        item
+        if item.get("cell_id")
+        or str(item.get("evidence_level") or "").lower() == "cell"
+        else revenue_section_item(item) or item
+        for item in evidence_items
+    ]
+    expanded = calculation_evidence_items(revenue_items)
+    cells = [
+        item
+        for item in expanded
+        if item.get("cell_id")
+        or str(item.get("evidence_level") or "").lower() == "cell"
+    ]
+    return cells or expanded
+
+
 def coherent_segment_evidence_items(
     query_plan: Any,
     evidence_items: list[dict[str, Any]],
@@ -159,6 +182,7 @@ def _coherent_segment_matrices(
     for matrix in matrices:
         signature = (
             matrix.source_page,
+            matrix.table_lineage,
             tuple(
                 (entity, tuple(sorted(values.items())))
                 for entity, values in sorted(matrix.values.items())
@@ -200,7 +224,7 @@ def _matrix_from_group(
             entity = _entity_label(cell.row_label)
             if not _valid_segment_entity(entity) or _excluded(entity, excluded):
                 continue
-            if not cell.scale:
+            if not _segment_dimension_provenance(item, cell):
                 continue
             observed = True
             dimensions.add((cell.unit or cell.currency, cell.scale))
@@ -245,6 +269,14 @@ def _matrix_from_group(
         unit=unit,
         scale=scale,
         source_page=_source_page(items[0]),
+        table_lineage=_table_lineage(items[0]),
+    )
+
+
+def _segment_dimension_provenance(item: dict[str, Any], cell: Any) -> bool:
+    return bool(
+        cell.scale
+        and ((cell.unit or cell.currency) or item.get("materialization_source_id"))
     )
 
 
@@ -257,6 +289,8 @@ def _merge_vertical_item(
     dimensions: set[tuple[str, str]],
 ) -> tuple[bool, bool]:
     vertical_values, vertical_ids, unit, scale = vertical_segment_matrix(item, periods)
+    if not unit or not scale:
+        return False, False
     observed = False
     conflicts = False
     for entity, period_values in vertical_values.items():
@@ -292,19 +326,32 @@ def _segment_evidence_groups(
         nested = metadata if isinstance(metadata, dict) else {}
         source_id = str(item.get("source_id") or nested.get("source_id") or "")
         page_label = str(item.get("page_label") or nested.get("page_label") or "")
-        lineage = str(
-            item.get("table_group_id")
-            or nested.get("table_group_id")
-            or item.get("table_instance_id")
-            or nested.get("table_instance_id")
-            or item.get("table_id")
-            or nested.get("table_id")
-            or item.get("parent_element_id")
-            or item.get("materialization_source_id")
-            or "page-table"
-        )
+        lineage = _table_lineage(item)
         groups.setdefault((source_id, page_label, lineage), []).append(item)
     return list(groups.values())
+
+
+def _table_lineage(item: dict[str, Any]) -> str:
+    metadata = item.get("metadata")
+    nested = metadata if isinstance(metadata, dict) else {}
+    table_lineage = tuple(
+        (label, str(value))
+        for label, value in (
+            ("group", item.get("table_group_id") or nested.get("table_group_id")),
+            (
+                "instance",
+                item.get("table_instance_id") or nested.get("table_instance_id"),
+            ),
+            ("table", item.get("table_id") or nested.get("table_id")),
+        )
+        if value
+    )
+    if table_lineage:
+        return "|".join(f"{label}:{value}" for label, value in table_lineage)
+    parent = str(
+        item.get("parent_element_id") or item.get("materialization_source_id") or ""
+    )
+    return f"parent:{parent}" if parent else f"unscoped:{identity_of(item).key}"
 
 
 def _result(
@@ -456,7 +503,8 @@ def _valid_segment_entity(entity: str) -> bool:
 
 def _item_id(item: dict[str, Any]) -> str:
     return str(
-        item.get("evidence_id")
+        item.get("materialization_source_id")
+        or item.get("evidence_id")
         or item.get("element_id")
         or item.get("canonical_id")
         or ""

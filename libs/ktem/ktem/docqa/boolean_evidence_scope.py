@@ -13,6 +13,7 @@ from .boolean_current_experiment import (
 from .boolean_current_experiment import (
     is_direct_current_empirical_action as _is_direct_current_empirical_action,
 )
+from .boolean_ownership_provenance import own_data_provenance_rejection
 from .boolean_retrieval_queries import (
     boolean_retrieval_query as _boolean_retrieval_query,
 )
@@ -98,6 +99,7 @@ def validate_boolean_scope(
         actor=actor,
         section_role=section_role,
         structured_scope_available=bool(matching_item),
+        quote=quote,
     )
     if scope_rejection:
         return BooleanScopeDecision(
@@ -500,7 +502,11 @@ def _scope_rejection(
     actor: str,
     section_role: str,
     structured_scope_available: bool,
+    quote: str = "",
 ) -> str:
+    ownership_rejection = own_data_provenance_rejection(question, quote)
+    if ownership_rejection:
+        return ownership_rejection
     if actor in {"cited_work", "other_authors"}:
         return "cited_work_does_not_establish_current_paper_claim"
     if not _requires_current_paper_scope(question):

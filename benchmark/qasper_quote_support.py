@@ -72,6 +72,10 @@ def parse_boolean_verdict(answer: str) -> tuple[str, str, str]:
         return "", "", ""
     if value == "insufficient_evidence":
         return value, "", ""
+    if value in {"yes_complete", "no_complete", "yes_partial", "no_partial"} and (
+        not evidence_ref or not quote
+    ):
+        return "", "", ""
     return value, evidence_ref, quote
 
 

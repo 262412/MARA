@@ -109,6 +109,37 @@ def _rebuild_abstention(prediction: dict[str, Any]) -> None:
         },
         emitted_citations=[],
     )
+    _clear_abstained_query_plan_state(prediction)
+
+
+def _clear_abstained_query_plan_state(prediction: dict[str, Any]) -> None:
+    """Remove stale verified FinanceBench state when terminal authority fails."""
+
+    for metadata in _metadata_targets(prediction):
+        for key in ("query_plan", "bound_query_plan", "terminal_query_plan"):
+            if not isinstance(metadata.get(key), dict):
+                continue
+            plan = dict(metadata[key])
+            plan["state_authority"] = "abstained.v1"
+            plan["evidence_slots"] = [
+                _abstained_slot(slot)
+                for slot in plan.get("evidence_slots") or []
+                if isinstance(slot, dict)
+            ]
+            metadata[key] = plan
+        if isinstance(metadata.get("verification_slot_states"), list):
+            metadata["verification_slot_states"] = [
+                _abstained_slot(state)
+                for state in metadata["verification_slot_states"]
+                if isinstance(state, dict)
+            ]
+
+
+def _abstained_slot(slot: dict[str, Any]) -> dict[str, Any]:
+    state = dict(slot)
+    state["status"] = "missing"
+    state["evidence_ids"] = []
+    return state
 
 
 def _metadata_targets(prediction: dict[str, Any]) -> list[dict[str, Any]]:

@@ -57,10 +57,28 @@ class DocQAIndexCache:
             ) or self.shared_prepared_file_ids.get(cache_key)
             if cached_file_id:
                 cache_hits += 1
-                identities.append({**identity, "cache_status": "hit"})
-                selected_ids.append(cached_file_id)
-                self.indexed_paths.add(str(document.path))
-                self.prepared_file_ids[cache_key] = cached_file_id
+                current_file_id = self.resolve_indexed_file_id(runtime, document)
+                current_ready = bool(
+                    current_file_id
+                    and has_search_index(runtime, current_file_id)
+                    and self.element_index_ready(
+                        runtime,
+                        file_id=current_file_id,
+                        document=document,
+                    )
+                )
+                if current_ready:
+                    selected_file_id = current_file_id
+                    self.prepared_file_ids[cache_key] = selected_file_id
+                    self.shared_prepared_file_ids[cache_key] = selected_file_id
+                    identities.append({**identity, "cache_status": "hit"})
+                    selected_ids.append(selected_file_id)
+                    self.indexed_paths.add(str(document.path))
+                else:
+                    identities.append({**identity, "cache_status": "hit_stale"})
+                    self.prepared_file_ids.pop(cache_key, None)
+                    self.shared_prepared_file_ids.pop(cache_key, None)
+                    reindex_documents.append(document)
                 continue
 
             cache_misses += 1

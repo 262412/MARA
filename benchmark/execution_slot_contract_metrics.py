@@ -5,6 +5,7 @@ from typing import Any
 
 from ktem.docqa.evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.finance_calculation_binding import item_dimension
 from ktem.docqa.finance_scale import (
     compatible_dimension_scope,
     dimension_binding_scope,
@@ -330,6 +331,20 @@ def _has_effective_scale_provenance(
     scope = str(operand.get("dimension_binding_scope") or "").strip()
     operand_item = lookup.get(operand_identity)
     dimension_item = lookup.get(evidence_identity)
+    if (
+        scale == "one"
+        and scope == "operand_local"
+        and operand_identity
+        and operand_identity == evidence_identity
+        and operand_item
+        and dimension_item
+    ):
+        return bool(
+            str(operand.get("unit") or operand.get("currency") or "").strip()
+            and item_dimension(operand_item, "scale_provenance")
+            == "local_currency_amount"
+            and dimension_binding_scope(operand_item, dimension_item) == scope
+        )
     return bool(
         scale
         and valid_dimension_evidence_identity(evidence_identity)

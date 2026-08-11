@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
@@ -13,21 +12,7 @@ from benchmark.task_answer_contracts import (
     apply_task_answer_contract,
     synchronize_terminal_answer_state,
 )
-
-
-class _Verifier:
-    def __init__(self, verdict: str, quote: str, evidence_ref: str = "") -> None:
-        self.response = json.dumps(
-            {
-                "verdict": verdict,
-                "evidence_ref": evidence_ref,
-                "evidence_quote": quote,
-            },
-            ensure_ascii=False,
-        )
-
-    def __call__(self, _prompt: str, **_kwargs: Any) -> Any:
-        return type("Result", (), {"text": self.response})()
+from benchmark.tests.qasper_test_support import BooleanVerifier as _Verifier
 
 
 def _item(evidence_id: str, text: str) -> dict[str, str]:
@@ -93,7 +78,7 @@ def test_verifier_ref_mismatch_is_rejected_when_quote_occurs_more_than_once() ->
     distractor = _item("distractor", "The appendix lists training parameters.")
 
     result = verify_qasper_answerability(
-        _Verifier("yes_complete", quote, "E2:S1"),
+        _Verifier("yes_complete", quote, "E2:S1", "E1:S1"),
         question="Did the authors evaluate the model on clinical tasks?",
         answer_type="boolean",
         evidence=f"{repeated['text']} {distractor['text']}",

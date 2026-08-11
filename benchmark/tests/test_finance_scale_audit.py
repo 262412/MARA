@@ -49,6 +49,73 @@ def test_dimension_binding_rate_does_not_hide_missing_operand_scale_provenance()
     assert contract_summary["finance_contract_violation_unique_example_count"] == 1
 
 
+def test_operand_local_scale_is_effective_without_a_shared_dimension_slot() -> None:
+    amount = {
+        "evidence_id": "capacity-amount",
+        "source_id": "report",
+        "page_label": "2",
+        "span_id": "capacity-amount",
+        "evidence_level": "span",
+        "value": "4200000000",
+        "unit": "USD",
+        "currency": "USD",
+        "scale": "one",
+        "scale_provenance": "local_currency_amount",
+        "text": "$4,200,000,000",
+    }
+    amount_id = identity_of(amount).key
+    metadata = {
+        "query_plan": {
+            "answer_type": "numeric",
+            "question_type": "calculation",
+            "constraints": {"verification_domain": "finance"},
+            "evidence_slots": [
+                {
+                    "slot_id": "operand:capacity",
+                    "role": "operand",
+                    "required_for_execution": True,
+                    "status": "filled",
+                    "evidence_ids": [amount_id],
+                }
+            ],
+        },
+        "finance_numeric_trace": {
+            "calculation_plan": {
+                "operands": [
+                    {
+                        "operand_id": "capacity",
+                        "query_slot_id": "operand:capacity",
+                        "evidence_identity": amount_id,
+                        "unit": "USD",
+                        "scale": "one",
+                        "scale_evidence_identity": amount_id,
+                        "dimension_binding_scope": "operand_local",
+                    }
+                ]
+            },
+            "calculation_verification": {
+                "valid": True,
+                "verified_required_slot_ids": ["operand:capacity"],
+            },
+            "calculation_execution": {"status": "ok"},
+        },
+    }
+
+    metrics = required_slot_reference_metrics(
+        {
+            "question": "What is the available borrowing capacity?",
+            "answer_type": "numeric",
+            "gold_answers": ["$4.2 billion"],
+        },
+        metadata,
+        [amount],
+    )
+
+    assert metrics["effective_scale_coverage_rate"] == 1.0
+    assert metrics["effective_scale_missing_count"] == 0.0
+    assert metrics["execution_dimension_slot_count"] == 0.0
+
+
 def _evidence_records() -> tuple[dict[str, Any], dict[str, Any]]:
     operand = {
         "source_id": "report",

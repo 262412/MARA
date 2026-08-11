@@ -19,6 +19,7 @@ _FOCUS_RULES: tuple[_FocusRule, ...] = (
         (
             "one customer accounted for",
             "consolidated net revenue",
+            "year ended",
             "major customer",
         ),
     ),

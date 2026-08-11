@@ -4,6 +4,8 @@ import re
 from typing import Any
 
 from .qasper_answerability_prompts import json_structure_repair_prompt
+from .qasper_prompt_budget import QASPER_VERIFIER_PROMPT_MAX_CHARS
+from .qasper_prompt_budget_utils import truncate_evidence
 
 
 def call_boolean_verifier(
@@ -15,20 +17,21 @@ def call_boolean_verifier(
     allowed_values: tuple[str, ...],
     max_tokens: int,
     seed: int,
+    repair_context: str = "",
+    allowed_evidence_refs: tuple[str, ...] = (),
 ) -> tuple[str, str, str, dict[str, str]]:
-    response = llm(
-        prompt,
-        max_tokens=max_tokens,
-        response_format=response_format,
-        temperature=0,
-        top_p=1,
-        seed=seed,
-    )
+    response = _call_verifier(llm, prompt, max_tokens, response_format, seed)
     initial_response = getattr(response, "text", "") or str(response)
     verdict, evidence_ref, quote = parser(initial_response)
-    if verdict:
+    needs_repair = _needs_structural_repair(
+        verdict,
+        evidence_ref,
+        quote,
+        allowed_evidence_refs,
+    )
+    if verdict and not needs_repair:
         return verdict, evidence_ref, quote, _parse_trace("ok", False, seed)
-    if not _has_repairable_verdict(initial_response, allowed_values):
+    if not verdict and not _has_repairable_verdict(initial_response, allowed_values):
         return (
             "",
             "",
@@ -39,31 +42,162 @@ def call_boolean_verifier(
                 "initial_response": str(initial_response),
             },
         )
-    repair_response = llm(
-        json_structure_repair_prompt(
-            initial_response,
-            allowed_values=allowed_values,
-            include_evidence_ref=True,
-        ),
+    preserve_evidence_ref = bool(evidence_ref) and (
+        not allowed_evidence_refs or evidence_ref in allowed_evidence_refs
+    )
+    repair_prompt, repair_prompt_truncated = _bounded_repair_prompt(
+        initial_response,
+        allowed_values=allowed_values,
+        repair_context=repair_context,
+        allowed_evidence_refs=allowed_evidence_refs,
+        preserve_evidence_ref=preserve_evidence_ref,
+    )
+    repair_response = _call_verifier(
+        llm, repair_prompt, max_tokens, response_format, seed
+    )
+    repaired_text = getattr(repair_response, "text", "") or str(repair_response)
+    verdict, evidence_ref, quote = parser(repaired_text)
+    repaired_needs_repair = _needs_structural_repair(
+        verdict,
+        evidence_ref,
+        quote,
+        allowed_evidence_refs,
+    )
+    return (
+        ("" if repaired_needs_repair else verdict),
+        ("" if repaired_needs_repair else evidence_ref),
+        ("" if repaired_needs_repair else quote),
+        {
+            **_parse_trace(
+                "ok" if verdict and not repaired_needs_repair else "error", True, seed
+            ),
+            "repair_status": "ok" if verdict and not repaired_needs_repair else "error",
+            "repair_prompt_chars": str(len(repair_prompt)),
+            "repair_prompt_truncated": str(repair_prompt_truncated).lower(),
+            "initial_response": str(initial_response),
+            "repair_response": str(repaired_text),
+        },
+    )
+
+
+def _call_verifier(
+    llm: Any,
+    prompt: str,
+    max_tokens: int,
+    response_format: dict[str, Any],
+    seed: int,
+) -> Any:
+    return llm(
+        prompt,
         max_tokens=max_tokens,
         response_format=response_format,
         temperature=0,
         top_p=1,
         seed=seed,
     )
-    repaired_text = getattr(repair_response, "text", "") or str(repair_response)
-    verdict, evidence_ref, quote = parser(repaired_text)
-    return (
-        verdict,
-        evidence_ref,
-        quote,
-        {
-            **_parse_trace("ok" if verdict else "error", True, seed),
-            "repair_status": "ok" if verdict else "error",
-            "initial_response": str(initial_response),
-            "repair_response": str(repaired_text),
-        },
+
+
+def _bounded_repair_prompt(
+    response: str,
+    *,
+    allowed_values: tuple[str, ...],
+    repair_context: str,
+    allowed_evidence_refs: tuple[str, ...],
+    preserve_evidence_ref: bool,
+) -> tuple[str, bool]:
+    repair_response_text = response
+
+    def render(context: str, refs: tuple[str, ...]) -> str:
+        return json_structure_repair_prompt(
+            repair_response_text,
+            allowed_values=allowed_values,
+            include_evidence_ref=True,
+            evidence_context=context,
+            allowed_evidence_refs=refs,
+            preserve_evidence_ref=preserve_evidence_ref,
+        )
+
+    prompt = render(repair_context, allowed_evidence_refs)
+    if len(prompt) <= QASPER_VERIFIER_PROMPT_MAX_CHARS:
+        return prompt, False
+
+    refs = allowed_evidence_refs
+    base = render("", refs)
+    if len(base) >= QASPER_VERIFIER_PROMPT_MAX_CHARS:
+        refs = ()
+        base = render("", refs)
+    if len(base) >= QASPER_VERIFIER_PROMPT_MAX_CHARS:
+        repair_response_text = _repairable_response_excerpt(
+            response,
+            allowed_values,
+        )
+        base = render("", refs)
+    context_marker = render("x", refs)
+    context_overhead = len(context_marker) - len(base) - 1
+    context_limit = max(
+        0,
+        QASPER_VERIFIER_PROMPT_MAX_CHARS - len(base) - context_overhead,
     )
+    bounded_context = truncate_evidence(repair_context, context_limit)
+    prompt = render(bounded_context, refs)
+    if len(prompt) > QASPER_VERIFIER_PROMPT_MAX_CHARS:
+        overflow = len(prompt) - QASPER_VERIFIER_PROMPT_MAX_CHARS
+        bounded_context = truncate_evidence(
+            bounded_context,
+            max(0, len(bounded_context) - overflow),
+        )
+        prompt = render(bounded_context, refs)
+    truncated = (
+        bounded_context != repair_context
+        or refs != allowed_evidence_refs
+        or repair_response_text != response
+    )
+    return prompt, truncated
+
+
+def _repairable_response_excerpt(
+    response: str,
+    allowed_values: tuple[str, ...],
+    *,
+    max_chars: int = 1200,
+) -> str:
+    text = str(response or "")
+    match = next(
+        (
+            match
+            for value in allowed_values
+            if (
+                match := re.search(
+                    rf'["\']?verdict["\']?\s*[:=]\s*["\']?{re.escape(value)}\b',
+                    text,
+                    flags=re.IGNORECASE,
+                )
+            )
+        ),
+        None,
+    )
+    if match is None:
+        return truncate_evidence(text, max_chars)
+    start = max(0, match.start() - max_chars // 4)
+    return truncate_evidence(text[start:], max_chars)
+
+
+def _needs_structural_repair(
+    verdict: str,
+    evidence_ref: str,
+    quote: str,
+    allowed_evidence_refs: tuple[str, ...],
+) -> bool:
+    if verdict == "insufficient_evidence":
+        return False
+    # A complete/partial proposition must carry both pieces of quote lineage.
+    if verdict not in {"yes_complete", "no_complete", "yes_partial", "no_partial"}:
+        return False
+    if not evidence_ref or not quote:
+        return True
+    if allowed_evidence_refs and evidence_ref not in allowed_evidence_refs:
+        return True
+    return False
 
 
 def _parse_trace(status: str, repaired: bool, seed: int) -> dict[str, str]:

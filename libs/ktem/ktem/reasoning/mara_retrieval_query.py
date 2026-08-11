@@ -208,6 +208,7 @@ _FINANCE_FOCUS_RULES: tuple[
             "major customer",
             "one customer accounted for",
             "consolidated net revenue",
+            "year ended",
             "concentration of credit risk",
         ),
     ),

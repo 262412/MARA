@@ -41,6 +41,14 @@ def test_boolean_question_builds_verification_only_proposition_slot():
     assert slot.query == "Does the proposed model outperform the baseline?"
 
 
+def test_explicit_source_collection_comparison_remains_multi_evidence() -> None:
+    plan = build_query_plan("Compare themes across sources.")
+
+    assert plan.question_type == "cross_page"
+    assert plan.constraints["requires_multiple_evidence"] is True
+    assert plan.constraints["requires_distinct_evidence"] is True
+
+
 def test_qasper_boolean_form_takes_precedence_over_causal_word() -> None:
     plan = build_query_plan(
         "Do they demonstrate why interdisciplinary insights are important?",

@@ -107,7 +107,11 @@ def _build_heuristic_query_plan(
     periods = periods_in_question(text)
     period_kind = period_kind_in_question(text)
     metric = metric_phrase(text, periods, numeric_terms=_NUMERIC_TERMS)
-    capabilities = question_capabilities(text, tokens)
+    capabilities = question_capabilities(
+        text,
+        tokens,
+        boolean_question=normalized_type == "boolean",
+    )
     planned_question_type = question_type(
         tokens,
         normalized_type,

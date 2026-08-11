@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from ktem.docqa.evidence_identity import identity_of
@@ -10,6 +11,8 @@ from benchmark.answer_finalizer import finalize_prediction_answer
 from benchmark.contract_invariant_metrics import contract_invariant_summary
 from benchmark.qasper_answerability import verify_qasper_answerability
 from benchmark.qasper_contract_invariants import qasper_contract_metric_values
+from benchmark.qasper_evidence_identity import canonical_prompt_span
+from benchmark.qasper_quote_binding import _bind_authoritative_quote
 from benchmark.task_answer_contracts import (
     apply_task_answer_contract,
     synchronize_terminal_answer_state,
@@ -36,6 +39,25 @@ def _item(evidence_id: str, text: str) -> dict[str, Any]:
         "section_id": "results",
         "text": text,
     }
+
+
+def _alias_mapping(items: list[dict[str, Any]]) -> str:
+    aliases = []
+    for index, item in enumerate(items, start=1):
+        text = str(item["text"])
+        aliases.append(
+            {
+                "evidence_ref": f"E{index}:S1",
+                "runtime_evidence_id": identity_of(item).key,
+                **canonical_prompt_span(
+                    item,
+                    text=text,
+                    item_start=0,
+                    item_end=len(text),
+                ),
+            }
+        )
+    return json.dumps(aliases)
 
 
 def _artifact_experiment_evidence() -> dict[str, Any]:
@@ -90,16 +112,15 @@ def test_grounded_complete_quote_without_unique_evidence_identity_is_rejected() 
     second = _item("second", quote)
     second.update({"canonical_start": 100, "canonical_end": 100 + len(quote)})
 
-    result = verify_qasper_answerability(
-        _Verifier("yes_complete", quote),
-        question="Did the authors evaluate the model on clinical tasks?",
-        evidence=f"{quote}\n\n{quote}",
-        evidence_items=[first, second],
-        candidate_answer="unanswerable",
+    bound, status = _bind_authoritative_quote(
+        "",
+        quote,
+        [first, second],
+        alias_mapping=_alias_mapping([first, second]),
     )
 
-    assert result.answer == "unanswerable"
-    assert result.trace["reason"] == "quote_identity_unresolved"
+    assert bound is None
+    assert status == "quote_identity_unresolved"
 
 
 def test_overlapping_chunks_with_the_same_canonical_quote_collapse_to_one_authority() -> None:
@@ -109,18 +130,16 @@ def test_overlapping_chunks_with_the_same_canonical_quote_collapse_to_one_author
     second = _item("second", quote)
     second.update({"canonical_start": 100, "canonical_end": 100 + len(quote)})
 
-    result = verify_qasper_answerability(
-        _Verifier("yes_complete", quote),
-        question="Did the authors evaluate the model on clinical tasks?",
-        evidence=f"{quote}\n\n{quote}",
-        evidence_items=[first, second],
-        candidate_answer="unanswerable",
+    bound, status = _bind_authoritative_quote(
+        "",
+        quote,
+        [first, second],
+        alias_mapping=_alias_mapping([first, second]),
     )
 
-    assert result.answer == "yes"
-    assert result.trace["authoritative_quote_span_id"] == (
-        f"quote:paper:100:{100 + len(quote)}"
-    )
+    assert bound is not None
+    assert status == "bound"
+    assert bound.span.identity == (f"quote:paper:100:{100 + len(quote)}")
 
 
 def test_deterministic_experiment_resolution_keeps_its_selected_evidence() -> None:

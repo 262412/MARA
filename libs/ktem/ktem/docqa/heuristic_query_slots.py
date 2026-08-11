@@ -55,6 +55,7 @@ def heuristic_slots(
             metric,
             role="support",
             page_labels=_page_labels(capabilities),
+            allow_duplicate_queries=True,
         )
     if capabilities.get("requires_visual"):
         return (
@@ -136,6 +137,20 @@ def _boolean_slots(
                 ),
             ),
         )
+    paired_slots = _paired_slots(
+        question,
+        metric,
+        role="support",
+        page_labels=page_labels,
+    )
+    if not paired_slots:
+        return _boolean_slots(
+            question,
+            metric,
+            multi_evidence=False,
+            page_labels=page_labels,
+            typed_scope=typed_scope,
+        )
     return (
         EvidenceSlot(
             slot_id="support:proposition",
@@ -146,12 +161,7 @@ def _boolean_slots(
             statement_kind=statement_kind,
             query=query,
         ),
-        *_paired_slots(
-            question,
-            metric,
-            role="support",
-            page_labels=page_labels,
-        ),
+        *paired_slots,
     )
 
 
@@ -162,8 +172,19 @@ def _paired_slots(
     role: str,
     required_for_execution: bool = False,
     page_labels: tuple[str, ...] = (),
+    allow_duplicate_queries: bool = False,
 ) -> tuple[EvidenceSlot, ...]:
     left_query, right_query = cross_page_support_queries(question, metric)
+    if (
+        not left_query
+        or not right_query
+        or (
+            not allow_duplicate_queries
+            and " ".join(left_query.lower().split())
+            == " ".join(right_query.lower().split())
+        )
+    ):
+        return ()
     return tuple(
         EvidenceSlot(
             slot_id=(

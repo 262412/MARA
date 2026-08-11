@@ -28,7 +28,12 @@ class _Verifier:
         return type(
             "Result",
             (),
-            {"text": f'{{"verdict":"{self.verdict}","evidence_quote":"{self.quote}"}}'},
+            {
+                "text": (
+                    f'{{"verdict":"{self.verdict}","evidence_ref":"E1:S1",'
+                    f'"evidence_quote":"{self.quote}"}}'
+                )
+            },
         )()
 
 

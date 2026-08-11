@@ -17,7 +17,13 @@ from scripts.slurm.validate_contract_smoke import QASPER_HARD_GATES
 
 class _VerifierLLM:
     def __init__(self, payload: dict[str, str]):
-        self.payload = payload
+        self.payload = dict(payload)
+        if (
+            self.payload.get("verdict")
+            in {"yes_complete", "no_complete", "yes_partial", "no_partial"}
+            and "evidence_ref" not in self.payload
+        ):
+            self.payload["evidence_ref"] = "E1:S1"
         self.prompts: list[str] = []
 
     def __call__(self, prompt: str, **_kwargs: Any) -> SimpleNamespace:

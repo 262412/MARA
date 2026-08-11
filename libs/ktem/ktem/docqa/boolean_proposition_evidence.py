@@ -152,6 +152,7 @@ def _assess_proposition_span(
         actor=actor,
         section_role=section_role,
         structured_scope_available=True,
+        quote=span,
     )
     actor_score = (
         1.0

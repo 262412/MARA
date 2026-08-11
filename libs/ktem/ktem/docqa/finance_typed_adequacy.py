@@ -5,6 +5,7 @@ from typing import Any
 from .calculation_evidence_identity import calculation_evidence_lookup
 from .finance_calculation_contract import finance_calculation_authoritative
 from .finance_numeric_answer import finance_numeric_answer
+from .query_plan_schema import plan_from_payload
 from .query_planning import request_planning_question
 
 _FINANCE_DOMAINS = {"finance", "financial", "financebench"}
@@ -12,17 +13,24 @@ _FINANCE_DOMAINS = {"finance", "financial", "financebench"}
 
 def ensure_finance_numeric_trace(request: Any, bundle: Any) -> None:
     metadata = getattr(bundle, "metadata", None)
-    if not isinstance(metadata, dict) or metadata.get("finance_numeric_trace"):
+    if not isinstance(metadata, dict):
         return
     domain = str(getattr(request, "verification_domain", "") or "").strip().lower()
     if domain not in _FINANCE_DOMAINS:
         return
-    query_plan = dict(metadata.get("query_plan") or {})
-    if query_plan and not finance_calculation_authoritative(query_plan):
-        return
     evidence_items = [
         item for item in getattr(bundle, "items", []) or [] if isinstance(item, dict)
     ]
+    existing_trace = metadata.get("finance_numeric_trace")
+    if isinstance(existing_trace, dict) and existing_trace:
+        _synchronize_typed_query_state(
+            request, metadata, evidence_items, existing_trace
+        )
+        _synchronize_typed_support(metadata, evidence_items, existing_trace)
+        return
+    query_plan = dict(metadata.get("query_plan") or {})
+    if query_plan and not finance_calculation_authoritative(query_plan):
+        return
     result = finance_numeric_answer(
         request_planning_question(request),
         evidence_items,
@@ -31,17 +39,244 @@ def ensure_finance_numeric_trace(request: Any, bundle: Any) -> None:
     if result is not None:
         trace = result.as_trace()
         metadata["finance_numeric_trace"] = trace
-        authoritative = dict(trace.get("authoritative_query_plan") or {})
-        if authoritative:
-            metadata["query_plan"] = authoritative
-            metadata["bound_query_plan"] = authoritative
-            metadata["missing_required_slot_count"] = sum(
-                bool(slot.get("required_for_retrieval"))
-                and str(slot.get("status") or "missing") != "filled"
-                for slot in authoritative.get("evidence_slots") or []
-                if isinstance(slot, dict)
-            )
+        _synchronize_typed_query_state(request, metadata, evidence_items, trace)
         _synchronize_typed_support(metadata, evidence_items, trace)
+
+
+def _synchronize_typed_query_state(
+    request: Any,
+    metadata: dict[str, Any],
+    evidence_items: list[dict[str, Any]],
+    trace: dict[str, Any],
+) -> None:
+    authoritative = dict(trace.get("authoritative_query_plan") or {})
+    if not authoritative:
+        _synchronize_unverified_query_state(request, metadata)
+        return
+    existing = dict(metadata.get("query_plan") or {})
+    bound = dict(metadata.get("bound_query_plan") or {})
+    current_version = max(
+        _nonnegative_int(getattr(request, "query_plan_state_version", 0)),
+        _nonnegative_int(existing.get("state_version")),
+        _nonnegative_int(bound.get("state_version")),
+        _nonnegative_int(authoritative.get("state_version")),
+    )
+    payload = dict(authoritative)
+    question = request_planning_question(request)
+    request_plan = plan_from_payload(
+        question,
+        answer_type=str(
+            getattr(request, "answer_type", None)
+            or getattr(request, "task_type", None)
+            or payload.get("answer_type")
+            or "numeric"
+        ),
+        verification_domain=str(
+            getattr(request, "verification_domain", None)
+            or (payload.get("constraints") or {}).get("verification_domain")
+            or "finance"
+        ),
+        payload=payload,
+    )
+    payload["plan_id"] = request_plan.plan_id
+    slot_states = _typed_verification_slot_states(payload, evidence_items, trace)
+    changed = (
+        _query_plan_signature(existing) != _query_plan_signature(payload)
+        or _query_plan_signature(bound) != _query_plan_signature(payload)
+        or metadata.get("verification_slot_states") != slot_states
+    )
+    state_version = current_version + 1 if changed else current_version
+    if state_version:
+        payload["state_version"] = state_version
+    trace["authoritative_query_plan"] = dict(payload)
+    metadata["query_plan"] = payload
+    metadata["bound_query_plan"] = dict(payload)
+    metadata["query_plan_id"] = request_plan.plan_id
+    metadata["missing_required_slot_count"] = sum(
+        bool(slot.get("required_for_retrieval"))
+        and str(slot.get("status") or "missing") != "filled"
+        for slot in payload.get("evidence_slots") or []
+        if isinstance(slot, dict)
+    )
+    request.query_plan = request_plan
+    request.query_plan_id = request_plan.plan_id
+    request.query_plan_state_version = state_version
+    metadata["verification_slot_states"] = slot_states
+
+
+def _synchronize_unverified_query_state(
+    request: Any,
+    metadata: dict[str, Any],
+) -> None:
+    existing = dict(metadata.get("query_plan") or {})
+    bound = dict(metadata.get("bound_query_plan") or {})
+    request_payload = _request_query_plan_payload(request)
+    payload = _unverified_query_plan(existing or bound or request_payload, request)
+    question = request_planning_question(request)
+    request_plan = plan_from_payload(
+        question,
+        answer_type=str(payload.get("answer_type") or "numeric"),
+        verification_domain=str(
+            getattr(request, "verification_domain", None)
+            or (payload.get("constraints") or {}).get("verification_domain")
+            or "finance"
+        ),
+        payload=payload,
+    )
+    payload["plan_id"] = request_plan.plan_id
+    slot_states = _missing_verification_slot_states(payload)
+    current_version = max(
+        _nonnegative_int(getattr(request, "query_plan_state_version", 0)),
+        _nonnegative_int(existing.get("state_version")),
+        _nonnegative_int(bound.get("state_version")),
+    )
+    changed = (
+        _query_plan_signature(existing) != _query_plan_signature(payload)
+        or _query_plan_signature(bound) != _query_plan_signature(payload)
+        or metadata.get("verification_slot_states") != slot_states
+    )
+    state_version = current_version + 1 if changed else current_version
+    if state_version:
+        payload["state_version"] = state_version
+    metadata["query_plan"] = dict(payload)
+    metadata["bound_query_plan"] = dict(payload)
+    metadata["query_plan_id"] = request_plan.plan_id
+    metadata["missing_required_slot_count"] = sum(
+        bool(slot.get("required_for_retrieval"))
+        for slot in payload.get("evidence_slots") or []
+        if isinstance(slot, dict)
+    )
+    metadata["verification_slot_states"] = slot_states
+    request.query_plan = request_plan
+    request.query_plan_id = request_plan.plan_id
+    request.query_plan_state_version = state_version
+
+
+def _request_query_plan_payload(request: Any) -> dict[str, Any]:
+    plan = getattr(request, "query_plan", None)
+    as_dict = getattr(plan, "as_dict", None)
+    if callable(as_dict):
+        return dict(as_dict())
+    return dict(plan) if isinstance(plan, dict) else {}
+
+
+def _unverified_query_plan(
+    source: dict[str, Any],
+    request: Any,
+) -> dict[str, Any]:
+    payload = dict(source)
+    payload.pop("plan_id", None)
+    payload.pop("binding_trace", None)
+    payload.pop("verified_required_slot_ids", None)
+    payload["answer_type"] = str(
+        payload.get("answer_type")
+        or getattr(request, "answer_type", None)
+        or getattr(request, "task_type", None)
+        or "numeric"
+    )
+    payload["question_type"] = str(payload.get("question_type") or "unplanned_numeric")
+    payload["constraints"] = {
+        **dict(payload.get("constraints") or {}),
+        "verification_domain": str(
+            getattr(request, "verification_domain", None) or "finance"
+        ),
+    }
+    payload["state_authority"] = "unverified_calculation.v1"
+    payload["evidence_slots"] = [
+        _missing_slot(slot)
+        for slot in payload.get("evidence_slots") or []
+        if isinstance(slot, dict)
+    ]
+    return payload
+
+
+def _missing_slot(slot: dict[str, Any]) -> dict[str, Any]:
+    missing = dict(slot)
+    missing["status"] = "missing"
+    missing["evidence_ids"] = []
+    return missing
+
+
+def _missing_verification_slot_states(
+    query_plan: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "slot_id": str(slot.get("slot_id") or ""),
+            "status": "missing",
+            "evidence_ids": [],
+        }
+        for slot in query_plan.get("evidence_slots") or []
+        if isinstance(slot, dict) and bool(slot.get("required_for_verification"))
+    ]
+
+
+def _typed_verification_slot_states(
+    query_plan: dict[str, Any],
+    evidence_items: list[dict[str, Any]],
+    trace: dict[str, Any],
+) -> list[dict[str, Any]]:
+    verification = dict(trace.get("calculation_verification") or {})
+    execution = dict(trace.get("calculation_execution") or {})
+    verified_required = {
+        str(value).strip()
+        for value in verification.get("verified_required_slot_ids") or []
+        if str(value or "").strip()
+    }
+    citation_ids = {
+        str(value).strip()
+        for value in execution.get("citation_ids") or []
+        if str(value or "").strip()
+    }
+    lookup = calculation_evidence_lookup(evidence_items)
+    citations_resolve = bool(citation_ids) and citation_ids <= set(lookup)
+    states: list[dict[str, Any]] = []
+    for slot in query_plan.get("evidence_slots") or []:
+        if not isinstance(slot, dict) or not bool(
+            slot.get("required_for_verification")
+        ):
+            continue
+        slot_id = str(slot.get("slot_id") or "").strip()
+        raw_evidence_ids = [
+            str(value).strip()
+            for value in slot.get("evidence_ids") or []
+            if str(value or "").strip()
+        ]
+        evidence_ids = [value for value in raw_evidence_ids if value in lookup]
+        all_ids_resolve = bool(raw_evidence_ids) and len(evidence_ids) == len(
+            raw_evidence_ids
+        )
+        verified = (
+            slot_id in verified_required
+            and all_ids_resolve
+            and set(evidence_ids) <= citation_ids
+            and citations_resolve
+            and verification.get("valid") is True
+            and execution.get("status") == "ok"
+        )
+        states.append(
+            {
+                "slot_id": slot_id,
+                "status": "verified_support" if verified else "missing",
+                "evidence_ids": evidence_ids if verified else [],
+            }
+        )
+    return states
+
+
+def _query_plan_signature(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in payload.items()
+        if key not in {"stage", "state_version", "binding_trace"}
+    }
+
+
+def _nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _synchronize_typed_support(
@@ -52,6 +287,17 @@ def _synchronize_typed_support(
     verification = dict(trace.get("calculation_verification") or {})
     execution = dict(trace.get("calculation_execution") or {})
     if not verification.get("valid") or execution.get("status") != "ok":
+        _clear_typed_support(metadata)
+        return
+    slot_states = [
+        state
+        for state in metadata.get("verification_slot_states") or []
+        if isinstance(state, dict)
+    ]
+    if not slot_states or any(
+        state.get("status") != "verified_support" for state in slot_states
+    ):
+        _clear_typed_support(metadata)
         return
     lookup = calculation_evidence_lookup(evidence_items)
     citation_ids = [
@@ -59,16 +305,27 @@ def _synchronize_typed_support(
         for value in execution.get("citation_ids") or []
         if str(value or "").strip()
     ]
+    if not citation_ids:
+        _clear_typed_support(metadata)
+        return
     support: list[dict[str, Any]] = []
     seen: set[int] = set()
     for evidence_id in citation_ids:
         item = lookup.get(evidence_id)
-        if item is None or id(item) in seen:
+        if item is None:
+            _clear_typed_support(metadata)
+            return
+        if id(item) in seen:
             continue
         seen.add(id(item))
         support.append(item)
     metadata["typed_calculation_support_evidence"] = support
     metadata["typed_calculation_citation_ids"] = citation_ids
+
+
+def _clear_typed_support(metadata: dict[str, Any]) -> None:
+    metadata.pop("typed_calculation_support_evidence", None)
+    metadata.pop("typed_calculation_citation_ids", None)
 
 
 def typed_calculation_adequacy(

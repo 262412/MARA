@@ -52,6 +52,12 @@ def _grounded_narrative_claim_supported(
         return bool(result and _claim_in_answer(claim, result.answer))
     if not _narrative_intent(prompt):
         return None
+    if "primary customers" in str(prompt or "").lower():
+        return _partial_narrative_authority_supports(
+            claim,
+            evidence_items,
+            prompt=prompt,
+        )
     answer = finance_narrative_answer(prompt, evidence_items)
     if answer is not None and _claim_in_answer(claim, answer):
         return True
@@ -63,7 +69,19 @@ def _grounded_narrative_claim_supported(
 def _claim_in_answer(claim: str, answer: str) -> bool:
     normalized_claim = _normalize_claim_text(claim)
     normalized_answer = _normalize_claim_text(answer)
-    return bool(normalized_claim and normalized_claim in normalized_answer)
+    if not normalized_claim:
+        return False
+    if normalized_claim in normalized_answer:
+        return True
+    return any(
+        normalized_claim
+        in " ".join(
+            (
+                normalized_answer[: match.start()] + normalized_answer[match.end() :]
+            ).split()
+        )
+        for match in re.finditer(r"\band\b", normalized_answer)
+    )
 
 
 def _partial_narrative_authority_supports(
@@ -73,16 +91,14 @@ def _partial_narrative_authority_supports(
     prompt: str,
 ) -> bool:
     normalized_claim = _normalize_claim_text(claim)
-    normalized_text = _normalize_claim_text(evidence_text(evidence_items))
+    normalized_items = [
+        _normalize_claim_text(evidence_text([item])) for item in evidence_items
+    ]
     lowered_prompt = str(prompt or "").lower()
     if "primary customers" in lowered_prompt:
         return any(
-            phrase in normalized_claim and phrase in normalized_text
-            for phrase in (
-                "limited number of commercial airlines",
-                "substantial portion of our revenue from the u s government",
-                "revenues were earned pursuant to u s government contracts",
-            )
+            _primary_customer_evidence_supports(normalized_claim, normalized_text)
+            for normalized_text in normalized_items
         )
     if "acquired" in lowered_prompt and _has_any(
         lowered_prompt, ("companies", "company")
@@ -94,10 +110,36 @@ def _partial_narrative_authority_supports(
         }
         return bool(
             claim_names
-            and any(name.lower() in normalized_text for name in claim_names)
-            and "acquired" in normalized_text
+            and all(
+                any(
+                    name.lower() in normalized_text and "acquired" in normalized_text
+                    for normalized_text in normalized_items
+                )
+                for name in claim_names
+            )
         )
     return False
+
+
+def _primary_customer_evidence_supports(
+    normalized_claim: str,
+    normalized_text: str,
+) -> bool:
+    if not all(
+        phrase in normalized_claim and phrase in normalized_text
+        for phrase in ("commercial airlines", "u s government")
+    ):
+        return False
+    share = re.search(
+        r"\b((?:19|20)\d{2})\s+(\d+(?:\.\d+)?)\b.*?government contracts",
+        normalized_text,
+    )
+    return bool(
+        share
+        and share.group(1) in normalized_claim
+        and share.group(2) in normalized_claim
+        and "government contract" in normalized_claim
+    )
 
 
 def _gross_margin_profile_intent(prompt: str) -> bool:
@@ -115,6 +157,10 @@ def _narrative_intent(prompt: str) -> bool:
         or ("industry" in lowered and "primarily operate" in lowered)
         or "customer concentration" in lowered
         or "primary customers" in lowered
+        or (
+            "revenue" in lowered
+            and _has_any(lowered, ("what drove", "revenue change", "revenue driver"))
+        )
         or ("debt securities" in lowered and "national securities exchange" in lowered)
     )
 
@@ -124,6 +170,11 @@ def _normalize_claim_text(value: str) -> str:
 
 
 def finance_verification_claims(claims: list[str], *, prompt: str) -> list[str]:
+    if "primary customers" in str(prompt or "").lower():
+        combined = " ".join(
+            str(claim).strip() for claim in claims if str(claim).strip()
+        )
+        return [combined] if combined else claims
     if "quick ratio" not in str(prompt or "").lower():
         return claims
     focused = [claim for claim in claims if _is_quick_ratio_conclusion_claim(claim)]

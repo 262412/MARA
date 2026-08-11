@@ -26,10 +26,7 @@ def query_plan_constraints(
         "requires_distinct_evidence": cross_page,
         "requires_distinct_source_pages": bool(
             capabilities.get("requires_distinct_source_pages")
-            or (
-                cross_page
-                and ("page" in lowered_question or "across" in lowered_question)
-            )
+            or (cross_page and "page" in lowered_question)
         ),
         "requires_structure": (
             question_type in {"cross_page", "multi_period_numeric", "comparison_argmax"}

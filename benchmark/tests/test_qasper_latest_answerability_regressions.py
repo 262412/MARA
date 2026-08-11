@@ -5,11 +5,12 @@ import pytest
 
 from benchmark.qasper_answerability import verify_qasper_answerability
 from benchmark.qasper_boolean import boolean_candidate_polarity
+from benchmark.tests.qasper_test_support import with_default_evidence_ref
 
 
 class _VerifierLLM:
     def __init__(self, response: str):
-        self.response = response
+        self.response = with_default_evidence_ref(response)
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
     def __call__(self, prompt: str, **kwargs):

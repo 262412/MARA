@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from .query_phrase_extraction import cross_page_support_queries
+
 _LONG_FORM_TERMS = {"describe", "explain", "how", "summarize", "why"}
 _CAUSAL_TERMS = {
     "cause",
@@ -17,13 +19,22 @@ _CAUSAL_TERMS = {
     "why",
 }
 _CROSS_PAGE_TERMS = {
-    "across",
     "between",
     "compare",
     "comparison",
     "jointly",
     "versus",
     "vs",
+}
+_SOURCE_COLLECTION_TERMS = {
+    "document",
+    "documents",
+    "paper",
+    "papers",
+    "report",
+    "reports",
+    "source",
+    "sources",
 }
 _VISUAL_TERMS = {
     "chart",
@@ -98,8 +109,6 @@ def question_type(
         return "cross_page"
     if tokens & _VISUAL_TERMS:
         return "visual"
-    if tokens & _CROSS_PAGE_TERMS:
-        return "cross_page"
     if tokens & _LONG_FORM_TERMS:
         return "long_form"
     return "simple_fact"
@@ -108,6 +117,8 @@ def question_type(
 def question_capabilities(
     question: str,
     tokens: set[str],
+    *,
+    boolean_question: bool = False,
 ) -> dict[str, object]:
     page_numbers = re.findall(r"\bpages?\s+(\d+)|\bpage\s+(\d+)", question.lower())
     explicit_pages = {left or right for left, right in page_numbers if (left or right)}
@@ -145,12 +156,32 @@ def question_capabilities(
         question,
         re.I,
     )
-    requires_multiple = bool(tokens & _CROSS_PAGE_TERMS) or len(explicit_pages) >= 2
+    # ``across`` is commonly semantic (for example, across languages or
+    # datasets).  Only explicit page locators or comparison terms establish a
+    # physical multi-evidence requirement.
+    left_query, right_query = cross_page_support_queries(question, "")
+    distinct_subjects = bool(
+        left_query
+        and right_query
+        and " ".join(left_query.lower().split())
+        != " ".join(right_query.lower().split())
+    )
+    source_collection_comparison = bool(
+        tokens & {"compare", "comparison"} and tokens & _SOURCE_COLLECTION_TERMS
+    )
+    generic_comparison = bool(tokens & {"compare", "comparison"}) and not (
+        boolean_question
+    )
+    requires_multiple = len(explicit_pages) >= 2 or bool(
+        (tokens & _CROSS_PAGE_TERMS and distinct_subjects)
+        or source_collection_comparison
+        or generic_comparison
+    )
     return {
         "requires_visual": bool(tokens & _VISUAL_TERMS),
         "requires_multiple_evidence": requires_multiple,
         "requires_distinct_source_pages": requires_multiple
-        and (len(explicit_pages) >= 2 or "across" in tokens),
+        and len(explicit_pages) >= 2,
         "requires_structured_elements": bool(
             tokens & {"chart", "diagram", "figure", "formula", "plot", "table"}
         ),

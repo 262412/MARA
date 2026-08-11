@@ -10,7 +10,10 @@ from .deterministic_ranking import quantized_score
 from .evidence_identity import identity_of
 from .finance_narrative_evidence import authoritative_narrative_candidate_ids
 from .finance_scale import source_scale_evidence
-from .finance_segment_comparison import coherent_segment_evidence_items
+from .finance_segment_comparison import (
+    coherent_segment_evidence_items,
+    segment_comparison_evidence_items,
+)
 from .query_evidence_binding_support import (
     agreement_attributes as _agreement_attributes,
 )
@@ -49,9 +52,7 @@ def _bind_evidence_slots(
     *,
     preserve_existing: bool,
 ) -> tuple[QueryPlan, list[dict[str, Any]]]:
-    if any(slot.required_for_execution for slot in plan.evidence_slots):
-        evidence_items = reconcile_materialized_cells(evidence_items)
-    evidence_items = coherent_segment_evidence_items(plan, evidence_items)
+    evidence_items = _binding_evidence_items(plan, evidence_items)
     bound_slots = []
     binding_trace: list[dict[str, Any]] = []
     used_generic_operand_ids: set[str] = set()
@@ -124,6 +125,17 @@ def _bind_evidence_slots(
     return replace(plan, evidence_slots=tuple(bound_slots)), binding_trace
 
 
+def _binding_evidence_items(
+    plan: QueryPlan,
+    evidence_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if plan.constraints.get("comparison_operator") == "proportional_increase":
+        evidence_items = segment_comparison_evidence_items(evidence_items)
+    elif any(slot.required_for_execution for slot in plan.evidence_slots):
+        evidence_items = reconcile_materialized_cells(evidence_items)
+    return coherent_segment_evidence_items(plan, evidence_items)
+
+
 def _ranked_evidence(
     plan: QueryPlan,
     slot: EvidenceSlot,
@@ -160,6 +172,9 @@ def _candidate_ids_for_slot(
     used_comparison_ids: set[str],
     used_cross_page_locators: set[tuple[str, str]],
 ) -> list[str]:
+    segment_ids = _segment_comparison_candidate_ids(plan, slot, ranked)
+    if segment_ids is not None:
+        return segment_ids
     if slot.metric == "revolving credit capacity" and slot.entity.startswith("active"):
         selected: list[str] = []
         facilities: set[str] = set()
@@ -209,6 +224,26 @@ def _candidate_ids_for_slot(
         if slot.role == "operand"
         else candidate_ids
     )
+
+
+def _segment_comparison_candidate_ids(
+    plan: QueryPlan,
+    slot: EvidenceSlot,
+    ranked: list[tuple[float, int, dict[str, Any]]],
+) -> list[str] | None:
+    if (
+        plan.constraints.get("comparison_operator") != "proportional_increase"
+        or slot.role != "support"
+        or slot.statement_kind != "segment_table"
+        or slot.financial_scope != "segment"
+        or not slot.period
+    ):
+        return None
+    return [
+        identity_of(item).key
+        for _score, _index, item in ranked
+        if str(item.get("period") or item.get("column_label") or "") == slot.period
+    ]
 
 
 def _update_bound_operand_state(

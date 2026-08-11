@@ -191,7 +191,7 @@ def test_span_id_precedes_parent_element_id_projection():
 
 def test_qasper_boolean_conflict_does_not_preserve_wrong_answer():
     llm = _VerifierLLM(
-        '{"verdict":"yes_complete","evidence_quote":'
+        '{"verdict":"yes_complete","evidence_ref":"E1:S1","evidence_quote":'
         '"The authors released their source code with the paper."}'
     )
 

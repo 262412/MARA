@@ -2,11 +2,13 @@ from types import SimpleNamespace
 from typing import Any
 
 from benchmark.qasper_answerability import verify_qasper_answerability
+from benchmark.tests.qasper_test_support import with_default_evidence_ref
 
 
 class _VerifierLLM:
     def __init__(self, response: str | list[str]):
-        self.responses = [response] if isinstance(response, str) else list(response)
+        values = [response] if isinstance(response, str) else list(response)
+        self.responses = [with_default_evidence_ref(value) for value in values]
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
     def __call__(self, prompt: str, **kwargs):

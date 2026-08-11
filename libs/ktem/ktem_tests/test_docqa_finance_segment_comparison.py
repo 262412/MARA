@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 
 from ktem.docqa.finance_segment_comparison import finance_segment_comparison_answer
+from ktem.docqa.query_evidence_binding import bind_evidence_slots
+from ktem.docqa.query_planning import build_query_plan
 from ktem.reasoning.mara_finance_answering import route_finance_numeric_answer
 
 
@@ -39,6 +41,42 @@ def test_segment_comparison_binds_entity_period_matrix_before_argmax():
         "Gaming",
     }
     assert trace["citation_ids"] == ["segment-table"]
+
+
+def test_segment_comparison_plan_binds_materialized_page_cells_before_argmax():
+    question = (
+        "From FY21 to FY22, excluding Embedded, in which AMD reporting "
+        "segment did sales proportionally increase the most?"
+    )
+    page = {
+        "evidence_id": "AMD_2022_10K#page:48",
+        "source_id": "AMD_2022_10K",
+        "page_label": "48",
+        "table_group_id": "segment-revenue",
+        "text": (
+            "Revenue by reporting segment (in millions)\n2022 2021\n"
+            "Data Center 6,043 3,694\nClient 6,201 6,887\n"
+            "Gaming 6,805 5,607\nEmbedded 4,552 246"
+        ),
+        "modality": "table",
+    }
+    plan = build_query_plan(
+        question,
+        answer_type="extractive",
+        verification_domain="finance",
+    )
+
+    bound = bind_evidence_slots(plan, [page])
+    result = finance_segment_comparison_answer(
+        question,
+        [page],
+        query_plan=bound.as_dict(),
+    )
+
+    assert all(len(slot.evidence_ids) == 3 for slot in bound.evidence_slots)
+    assert result is not None
+    assert result.status == "ok"
+    assert result.answer == "Data Center"
 
 
 def test_segment_comparison_refuses_incomplete_entity_period_matrix():
@@ -249,6 +287,46 @@ def test_segment_comparison_rejects_mixed_scale_matrix():
     assert result.audit_status == "failed"
 
 
+def test_segment_comparison_rejects_matrix_without_currency_unit() -> None:
+    items = []
+    for entity, period, value in (
+        ("Data Center", "2021", "3694"),
+        ("Data Center", "2022", "6043"),
+        ("Client", "2021", "6887"),
+        ("Client", "2022", "6201"),
+    ):
+        items.append(
+            {
+                "evidence_id": f"{entity}-{period}",
+                "cell_id": f"{entity}-{period}",
+                "source_id": "AMD_2022_10K",
+                "page_label": "48",
+                "table_group_id": "segment-revenue",
+                "evidence_level": "cell",
+                "row_label": entity,
+                "column_label": period,
+                "period": period,
+                "value": value,
+                "unit": "",
+                "scale": "million",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+            }
+        )
+
+    result = finance_segment_comparison_answer(
+        (
+            "From FY21 to FY22, in which reporting segment did sales "
+            "proportionally increase the most?"
+        ),
+        items,
+    )
+
+    assert result is not None
+    assert result.answer == ""
+    assert result.audit_status == "failed"
+
+
 def test_segment_comparison_does_not_merge_periods_across_tables():
     items = []
     for table, period, values in (
@@ -308,6 +386,75 @@ def test_segment_comparison_rejects_identical_matrices_on_distinct_pages():
             }
             for page in ("48", "67")
         ],
+    )
+
+    assert result is not None
+    assert result.answer == ""
+    assert result.status == "ambiguous_matrix"
+
+
+def test_segment_comparison_rejects_identical_matrices_from_distinct_tables():
+    table = (
+        "Revenue by reporting segment (in millions)\n2022 2021\n"
+        "Data Center 6,043 3,694\nClient 6,201 6,887"
+    )
+    result = finance_segment_comparison_answer(
+        (
+            "From FY21 to FY22, in which reporting segment did sales "
+            "proportionally increase the most?"
+        ),
+        [
+            {
+                "evidence_id": f"segment-{table_id}",
+                "source_id": "AMD_2022_10K",
+                "page_label": "48",
+                "table_group_id": table_id,
+                "text": table,
+                "modality": "table",
+            }
+            for table_id in ("segment-revenue-a", "segment-revenue-b")
+        ],
+    )
+
+    assert result is not None
+    assert result.answer == ""
+    assert result.status == "ambiguous_matrix"
+
+
+def test_segment_comparison_separates_instances_within_one_table_group() -> None:
+    items = []
+    for instance, offset in (("segment-a", 0), ("segment-b", 100)):
+        for entity, prior, current in (
+            ("Data Center", 3694, 6043),
+            ("Client", 6887, 6201),
+        ):
+            for period, value in (("2021", prior + offset), ("2022", current + offset)):
+                items.append(
+                    {
+                        "evidence_id": f"{instance}-{entity}-{period}",
+                        "cell_id": f"{instance}-{entity}-{period}",
+                        "source_id": "AMD_2022_10K",
+                        "page_label": "48",
+                        "table_group_id": "segment-revenue-group",
+                        "table_instance_id": instance,
+                        "evidence_level": "cell",
+                        "row_label": entity,
+                        "column_label": period,
+                        "period": period,
+                        "value": str(value),
+                        "unit": "USD",
+                        "scale": "million",
+                        "statement_kind": "segment_table",
+                        "financial_scope": "segment",
+                    }
+                )
+
+    result = finance_segment_comparison_answer(
+        (
+            "From FY21 to FY22, in which reporting segment did sales "
+            "proportionally increase the most?"
+        ),
+        items,
     )
 
     assert result is not None

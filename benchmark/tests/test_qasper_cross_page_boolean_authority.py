@@ -16,16 +16,23 @@ NEGATIVE_QUOTE = "The authors did not release the code for the final evaluated s
 
 
 class _Verifier:
+    def __init__(self) -> None:
+        self.responses = [
+            (
+                '{"verdict":"yes_complete","evidence_ref":"",'
+                f'"evidence_quote":"{POSITIVE_QUOTE}"}}'
+            ),
+            (
+                '{"verdict":"yes_complete","evidence_ref":"E1:S1",'
+                f'"evidence_quote":"{POSITIVE_QUOTE}"}}'
+            ),
+        ]
+
     def __call__(self, _prompt: str, **_kwargs: Any) -> Any:
         return type(
             "Result",
             (),
-            {
-                "text": (
-                    '{"verdict":"yes_complete","evidence_ref":"",'
-                    f'"evidence_quote":"{POSITIVE_QUOTE}"}}'
-                )
-            },
+            {"text": self.responses.pop(0)},
         )()
 
 

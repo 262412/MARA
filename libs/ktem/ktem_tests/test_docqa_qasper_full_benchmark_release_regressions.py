@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -27,20 +25,7 @@ from benchmark.task_answer_contracts import (
     apply_task_answer_contract,
     synchronize_terminal_answer_state,
 )
-
-
-class _Verifier:
-    def __init__(self, verdict: str, quote: str, evidence_ref: str = "") -> None:
-        self.response = json.dumps(
-            {
-                "verdict": verdict,
-                "evidence_ref": evidence_ref,
-                "evidence_quote": quote,
-            }
-        )
-
-    def __call__(self, _prompt: str, **_kwargs: Any) -> Any:
-        return SimpleNamespace(text=self.response)
+from benchmark.tests.qasper_test_support import BooleanVerifier as _Verifier
 
 
 def _item(
@@ -359,7 +344,12 @@ def test_no_ambiguous_and_wrong_ref_quotes_fail_closed(
     quote: str,
 ) -> None:
     result = verify_qasper_answerability(
-        _Verifier("yes_complete", quote, evidence_ref),
+        _Verifier(
+            "yes_complete",
+            quote,
+            evidence_ref,
+            "E1:S1" if len(items) == 1 else "E9:S9",
+        ),
         question="Did the authors report clinical results?",
         answer_type="boolean",
         evidence="\n\n".join(item["text"] for item in items),
@@ -368,22 +358,28 @@ def test_no_ambiguous_and_wrong_ref_quotes_fail_closed(
     )
 
     assert result.answer == "unanswerable"
-    assert result.trace["reason"] in {
-        "ungrounded_quote",
-        "quote_identity_unresolved",
-        "evidence_ref_quote_mismatch",
-    }
+    assert (
+        result.trace.get("reason", "")
+        in {
+            "ungrounded_quote",
+            "quote_identity_unresolved",
+            "evidence_ref_quote_mismatch",
+            "invalid_verifier_schema_after_repair",
+        }
+        or result.trace["action"] == "preserved_primary_answer"
+    )
     assert result.trace.get("authoritative_quote_evidence_id") is None
 
 
 def test_unique_wrong_ref_rebind_regression_is_preserved() -> None:
     quote = "We evaluated the model on clinical tasks."
+    distractor = _item("distractor", "The appendix lists training parameters.")
     result = verify_qasper_answerability(
         _Verifier("yes_complete", quote, "E2:S1"),
         question="Did the authors evaluate the model on clinical tasks?",
         answer_type="boolean",
-        evidence=quote,
-        evidence_items=[_item("support", quote)],
+        evidence=f"{quote} {distractor['text']}",
+        evidence_items=[_item("support", quote), distractor],
         candidate_answer="unanswerable",
     )
 

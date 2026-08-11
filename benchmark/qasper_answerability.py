@@ -323,18 +323,19 @@ def _model_boolean_result(
         ),
         max_tokens=QASPER_ANSWERABILITY_MAX_TOKENS,
         seed=QASPER_ANSWERABILITY_SEED,
+        repair_context=_boolean_repair_context(question, evidence),
+        allowed_evidence_refs=tuple(
+            value.strip()
+            for value in budget_trace.get("verifier_input_evidence_refs", "").split(",")
+            if value.strip()
+        ),
     )
     parse_trace = {**budget_trace, **parse_trace}
     if not verdict:
-        return QasperAnswerabilityResult(
-            answer=candidate_answer,
-            trace=_trace(
-                "error",
-                "",
-                action="preserved_primary_answer",
-                parse_trace=parse_trace,
-                primary_answer=candidate_polarity or "unanswerable",
-            ),
+        return _invalid_boolean_verifier_result(
+            candidate_answer=candidate_answer,
+            candidate_polarity=candidate_polarity,
+            parse_trace=parse_trace,
         )
     original_quote = quote
     quote = quality_control_quote_for_verdict(
@@ -364,6 +365,37 @@ def _model_boolean_result(
         evidence_ref=evidence_ref,
         quote=quote,
         parse_trace=parse_trace,
+    )
+
+
+def _boolean_repair_context(question: str, evidence: str) -> str:
+    return f"QUESTION:\n{question}\n\nPACKED EVIDENCE:\n{evidence}"
+
+
+def _invalid_boolean_verifier_result(
+    *,
+    candidate_answer: str,
+    candidate_polarity: str,
+    parse_trace: dict[str, str],
+) -> QasperAnswerabilityResult:
+    repair_failed = (
+        parse_trace.get("repair_attempted") == "true"
+        and parse_trace.get("repair_status") == "error"
+    )
+    return QasperAnswerabilityResult(
+        answer="unanswerable" if repair_failed else candidate_answer,
+        trace=_trace(
+            "error",
+            "",
+            action=(
+                "abstained_invalid_verifier_repair"
+                if repair_failed
+                else "preserved_primary_answer"
+            ),
+            parse_trace=parse_trace,
+            primary_answer=candidate_polarity or "unanswerable",
+            reason="invalid_verifier_schema_after_repair" if repair_failed else "",
+        ),
     )
 
 
