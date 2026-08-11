@@ -415,10 +415,20 @@ jobs:
         run: npm ci
       - name: Run desktop contracts
         working-directory: apps/desktop
-        run: npm run verify
+        shell: pwsh
+        run: |
+          npm run verify
+          if (Test-Path "../../.theflow") {
+            throw "Desktop contracts created checkout-local TheFlow storage."
+          }
       - name: Package native Windows application
         working-directory: apps/desktop
-        run: npm run package:windows
+        shell: pwsh
+        run: |
+          npm run package:windows
+          if (Test-Path "../../.theflow") {
+            throw "Desktop packaging created checkout-local TheFlow storage."
+          }
       - name: Smoke packaged vertical slice and record metrics
         shell: pwsh
         run: |
@@ -453,6 +463,18 @@ jobs:
           $executable = (Resolve-Path "apps/desktop/release/MARA-win32-x64/MARA.exe").Path
           $installRoot = Split-Path $executable -Parent
           $readOnlyCwd = Join-Path $env:RUNNER_TEMP "mara-desktop-readonly-cwd"
+          $outsideTheflowRoots = [ordered]@{
+            "working-directory" = $readOnlyCwd
+            "install-directory" = $installRoot
+            "repository-checkout" = (Resolve-Path ".").Path
+          }
+          function Assert-NoExternalTheflow([string] $phase) {
+            foreach ($entry in $outsideTheflowRoots.GetEnumerator()) {
+              if (Test-Path (Join-Path $entry.Value ".theflow")) {
+                throw "Unexpected .theflow location=$($entry.Key) phase=$phase."
+              }
+            }
+          }
           New-Item -ItemType Directory -Force -Path $readOnlyCwd | Out-Null
           $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
           & icacls $readOnlyCwd /inheritance:r `
@@ -469,6 +491,7 @@ jobs:
           } catch [System.UnauthorizedAccessException] {
             "working_directory_acl=write_denied" | Set-Content $unconfiguredEvidence
           }
+          Assert-NoExternalTheflow "prelaunch"
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
           $portFile = Join-Path $env:RUNNER_TEMP "mara-embedding-port.txt"
@@ -558,11 +581,7 @@ jobs:
           if (-not $theflowProgress) {
             throw "The packaged index did not write TheFlow progress to Desktop cache."
           }
-          foreach ($outsideRoot in @($readOnlyCwd, $installRoot, (Resolve-Path ".").Path)) {
-            if (Test-Path (Join-Path $outsideRoot ".theflow")) {
-              throw "The packaged index wrote .theflow outside Desktop data."
-            }
-          }
+          Assert-NoExternalTheflow "post-index"
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
           "model_unavailable" | Set-Content $failureMarker
@@ -786,11 +805,7 @@ jobs:
           if (-not (Test-Path (Join-Path $unconfiguredDataRoot "logs/indexing.log"))) {
             throw "The unconfigured package did not create its Desktop-owned log."
           }
-          foreach ($outsideRoot in @($readOnlyCwd, $installRoot, (Resolve-Path ".").Path)) {
-            if (Test-Path (Join-Path $outsideRoot ".theflow")) {
-              throw "The unconfigured package wrote .theflow outside Desktop data."
-            }
-          }
+          Assert-NoExternalTheflow "post-unconfigured"
           @(
             "working_directory=acl-write-denied"
             "data_root=desktop-owned"

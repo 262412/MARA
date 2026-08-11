@@ -31,6 +31,11 @@ def test_native_packages_cover_read_only_cwd_and_unconfigured_first_start() -> N
     assert "/deny" in windows_commands
     assert "-WorkingDirectory $readOnlyCwd" in windows_commands
     assert "embedding_not_configured" in windows_commands
+    assert 'Assert-NoExternalTheflow "prelaunch"' in windows_commands
+    assert 'Assert-NoExternalTheflow "post-index"' in windows_commands
+    assert '"working-directory" = $readOnlyCwd' in windows_commands
+    assert '"install-directory" = $installRoot' in windows_commands
+    assert '"repository-checkout" = (Resolve-Path ".").Path' in windows_commands
 
 
 def test_desktop_workflow_tracks_embedding_and_storage_runtime_sources() -> None:
