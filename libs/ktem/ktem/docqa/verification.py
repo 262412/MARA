@@ -87,6 +87,7 @@ def verify_decision(
         claims=claims,
         prompt=prompt,
         domain=domain,
+        request=request,
     )
     decision = _decision_for_claim_results(
         mode,
@@ -109,6 +110,7 @@ def _verification_results(
     claims: list[str],
     prompt: str,
     domain: str,
+    request: Any,
 ) -> tuple[list[str], list[VerifiedClaim]]:
     calculation_claims = split_claim_clauses(claims) if domain == "finance" else claims
     typed_calculation = calculation_claim_result(
@@ -134,10 +136,20 @@ def _verification_results(
         prompt,
         answer,
         evidence_bundle.items,
+        allow_missing_polarity=_request_requires_boolean_authority(request),
     )
     if typed_boolean is not None:
         return typed_boolean
     return claims, _verify_claims(claims, evidence_bundle.items, prompt, domain)
+
+
+def _request_requires_boolean_authority(request: Any) -> bool:
+    plan = getattr(request, "query_plan", None)
+    if isinstance(plan, dict):
+        answer_type = plan.get("answer_type")
+    else:
+        answer_type = getattr(plan, "answer_type", None)
+    return str(answer_type or getattr(request, "task_type", "")).lower() == "boolean"
 
 
 def with_verification_evidence(

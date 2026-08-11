@@ -147,7 +147,13 @@ def _ingest_response_event(
 
 
 def finalize_stream_result(result: TurnStreamResult, empty_message: str) -> None:
-    result.text = extract_final_answer_text(_hide_unclosed_think_block(result.text))
+    answer = result.text
+    execution = result.capture.execution
+    if isinstance(execution, dict):
+        terminal_answer = str(execution.get("engine_terminal_answer") or "").strip()
+        if terminal_answer:
+            answer = terminal_answer
+    result.text = extract_final_answer_text(_hide_unclosed_think_block(answer))
     if not result.text:
         result.text = empty_message
 

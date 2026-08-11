@@ -372,6 +372,40 @@ def test_unrelated_negated_evidence_is_not_a_claim_contradiction():
     assert result.contradicting_evidence_ids == ()
 
 
+def test_related_negation_outside_claim_scope_does_not_override_exact_support():
+    claim = (
+        "Labeled features are manually provided indicators of specific classes, "
+        'such as words like "amazing" for the positive class.'
+    )
+    exact_support = {
+        "source_id": "paper",
+        "span_id": "support",
+        "text": (
+            "Labeled features are manually provided indicators of specific "
+            "classes, such as words like amazing for the positive class."
+        ),
+    }
+    related_context = {
+        "source_id": "paper",
+        "span_id": "context",
+        "text": (
+            "The method incorporates not only labeled features but also class "
+            "distribution. We build classification models without instance "
+            "annotation, but with labeled features."
+        ),
+    }
+
+    result = verify_claim(
+        claim,
+        [exact_support, related_context],
+        claim_id="claim:1",
+        prompt="What background knowledge does the method leverage?",
+    )
+
+    assert result.status == "supported"
+    assert result.contradicting_evidence_ids == ()
+
+
 def test_calculation_dimension_is_checked_on_result_claim_only():
     result = calculation_claim_result(
         _calculation_bundle(),

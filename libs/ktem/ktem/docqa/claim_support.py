@@ -305,15 +305,34 @@ def _context_stem(token: str) -> str:
 
 
 def _negation_conflict(claim: str, evidence: str) -> bool:
-    return _has_negation(claim) != _has_negation(evidence) and _shared_claim_context(
+    return _has_negation(claim) != _has_negation(evidence) and _strong_negation_context(
         claim, evidence
     )
+
+
+def _strong_negation_context(claim: str, evidence: str) -> bool:
+    claim_tokens = {
+        _context_stem(token)
+        for token in meaningful_tokens(claim) - _DIRECTION_CONTEXT_TOKENS
+    } - _WEAK_CONTEXT_TOKENS
+    evidence_tokens = {
+        _context_stem(token)
+        for token in meaningful_tokens(evidence) - _DIRECTION_CONTEXT_TOKENS
+    } - _WEAK_CONTEXT_TOKENS
+    if not claim_tokens or not evidence_tokens:
+        return False
+    overlap = claim_tokens & evidence_tokens
+    shortest = min(len(claim_tokens), len(evidence_tokens))
+    coverage = len(overlap) / shortest
+    if shortest <= 2:
+        return bool(overlap) and coverage >= 0.5
+    return len(overlap) >= 2 and coverage >= 0.5
 
 
 def _has_negation(value: str) -> bool:
     return bool(
         re.search(
-            r"\b(?:cannot|can't|didn't|doesn't|neither|never|not|without)\b",
+            r"\b(?:cannot|can't|didn't|doesn't|neither|never|without|not(?!\s+only\b))\b",
             str(value or ""),
             flags=re.IGNORECASE,
         )

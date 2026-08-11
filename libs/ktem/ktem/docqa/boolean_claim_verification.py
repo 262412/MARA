@@ -88,10 +88,13 @@ def boolean_claim_authority(
     prompt: str,
     answer: str,
     evidence_items: list[dict[str, Any]],
+    *,
+    allow_missing_polarity: bool = False,
 ) -> BooleanClaimAuthority | None:
     input_polarity = canonical_boolean_answer_polarity(answer)
-    if not input_polarity:
+    if not input_polarity and not allow_missing_polarity:
         return None
+    probe_polarity = input_polarity or "yes"
     closed_scope = resolve_closed_scope_boolean(prompt, evidence_items)
     resolved = _authority_from_closed_scope(prompt, closed_scope)
     if resolved is None:
@@ -108,12 +111,12 @@ def boolean_claim_authority(
             reason="exact_closed_scope_proposition",
         )
 
-    classified = classify_boolean_evidence_set(prompt, input_polarity, evidence_items)
+    classified = classify_boolean_evidence_set(prompt, probe_polarity, evidence_items)
     supporting = _exact_authorities(prompt, classified.supports)
     contradicting = _exact_authorities(prompt, classified.contradicts)
     if supporting and contradicting:
         return BooleanClaimAuthority(
-            claim=f"{input_polarity}: {prompt}",
+            claim=f"{probe_polarity}: {prompt}",
             status="conflicting",
             input_answer_polarity=input_polarity,
             canonical_answer_polarity="",
@@ -126,12 +129,12 @@ def boolean_claim_authority(
         return _supported_authority(
             prompt,
             input_polarity,
-            input_polarity,
+            probe_polarity,
             supporting,
             reason="exact_boolean_proposition",
         )
     if contradicting:
-        canonical_polarity = "no" if input_polarity == "yes" else "yes"
+        canonical_polarity = "no" if probe_polarity == "yes" else "yes"
         return _supported_authority(
             prompt,
             input_polarity,
@@ -141,7 +144,7 @@ def boolean_claim_authority(
             reason="exact_opposite_boolean_proposition",
         )
     return BooleanClaimAuthority(
-        claim=f"{input_polarity}: {prompt}",
+        claim=f"{probe_polarity}: {prompt}",
         status="unknown",
         input_answer_polarity=input_polarity,
         canonical_answer_polarity="",

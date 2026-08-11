@@ -127,6 +127,38 @@ def test_1dc_runtime_corrects_generated_polarity_before_terminal_commit(
     assert result.verify_decision.authoritative_quote in str(item["text"])
 
 
+@pytest.mark.parametrize("route_policy", ("doc", "auto", "hybrid"))
+def test_1dc_runtime_recovers_exact_authority_from_generated_abstention(
+    route_policy: str,
+) -> None:
+    question = "Do the authors conduct experiments on the tasks mentioned?"
+    item = _evidence(
+        "experiment",
+        (
+            "## Current state of the art\n"
+            "For instance, the sentence is translated by Google Translate, "
+            "Bing Translate, and Yandex. In fact, we have been unable to "
+            "construct any English sentence that those systems translate using "
+            "the feminine plural pronoun."
+        ),
+        section_id="experiments",
+    )
+
+    result = _run_boolean(
+        question,
+        "unanswerable The context does not mention experiments on these tasks.",
+        [item],
+        route_policy=route_policy,
+    )
+
+    assert result.answer == "yes"
+    assert result.guardrail_decision.action == "return"
+    assert result.verify_decision.input_answer_polarity == ""
+    assert result.verify_decision.canonical_answer_polarity == "yes"
+    assert result.verify_decision.semantic_correction_applied is True
+    assert result.verify_decision.authoritative_evidence_id == identity_of(item).key
+
+
 def test_348_runtime_resolves_closed_only_scope_to_no() -> None:
     question = "Do they report results only on English dataset?"
     item = _evidence(
@@ -271,3 +303,22 @@ def test_lexical_candidate_never_becomes_boolean_authority() -> None:
     [slot] = result.evidence_bundle.metadata["bound_query_plan"]["evidence_slots"]
     assert slot["status"] in {"retrieved_unverified", "retrieved_partial", "missing"}
     assert slot["status"] != "verified_support"
+
+
+def test_generated_abstention_without_exact_authority_remains_fail_closed() -> None:
+    question = "Did the authors release source code?"
+    item = _evidence(
+        "lexical-only",
+        "The source code section discusses release engineering terminology.",
+    )
+
+    result = _run_boolean(
+        question,
+        "unanswerable The evidence does not establish a release.",
+        [item],
+    )
+
+    assert result.answer == ABSTAIN_MESSAGE
+    assert result.verify_decision.input_answer_polarity == ""
+    assert result.verify_decision.canonical_answer_polarity == ""
+    assert result.guardrail_decision.action == "abstain"

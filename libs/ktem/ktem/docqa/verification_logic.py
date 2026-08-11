@@ -522,8 +522,15 @@ def _boolean_verification(
     prompt: str,
     answer: str,
     evidence_items: list[dict[str, Any]],
+    *,
+    allow_missing_polarity: bool = False,
 ) -> tuple[list[str], list[VerifiedClaim]] | None:
-    assessment = boolean_claim_authority(prompt, answer, evidence_items)
+    assessment = boolean_claim_authority(
+        prompt,
+        answer,
+        evidence_items,
+        allow_missing_polarity=allow_missing_polarity,
+    )
     if assessment is None:
         return None
     supporting = tuple(value.evidence_id for value in assessment.supporting)

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from ktem.docqa._runtime_mara import ResponseCapture
 from ktem.docqa._runtime_models import DocQARequest, DocQAResponse
+from ktem.docqa._runtime_turn import create_stream_result, finalize_stream_result
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import EvidenceBundle
 from ktem.docqa.execution import GuardrailDecision, _result
@@ -82,6 +83,17 @@ def test_response_capture_preserves_terminal_projection_without_rebuilding():
     assert payload["engine_verify_decision"] == execution["engine_verify_decision"]
     payload["engine_terminal_state"]["answer"] = "mutated"
     assert execution["engine_terminal_state"]["answer"] == "yes"
+
+
+def test_stream_finalization_uses_captured_engine_terminal_answer():
+    execution = _execution_result().as_dict()
+    result = create_stream_result(DocQARequest(prompt="Question"))
+    result.text = "yesyes"
+    result.capture.ingest("execution", execution)
+
+    finalize_stream_result(result, "empty")
+
+    assert result.text == "yes"
 
 
 def test_docqa_response_schema_exposes_terminal_projection_fields():
