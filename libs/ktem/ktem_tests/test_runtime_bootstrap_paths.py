@@ -8,7 +8,6 @@ from pathlib import Path
 
 from ktem.runtime_bootstrap import get_runtime_paths, load_packaged_runtime_env
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 EMBEDDING_ENV_NAMES = {
     "AZURE_OPENAI_API_KEY",

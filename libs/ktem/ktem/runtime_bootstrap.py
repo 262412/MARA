@@ -148,7 +148,8 @@ def bootstrap_packaged_runtime_settings() -> str:
 def load_packaged_runtime_env() -> Path:
     runtime_paths = get_runtime_paths()
     runtime_paths.config_dir.mkdir(parents=True, exist_ok=True)
-    load_dotenv(runtime_paths.env_path, override=False)
+    desktop_owned_config = bool(os.environ.get("MARA_DESKTOP_DATA_DIR"))
+    load_dotenv(runtime_paths.env_path, override=desktop_owned_config)
     return runtime_paths.env_path
 
 

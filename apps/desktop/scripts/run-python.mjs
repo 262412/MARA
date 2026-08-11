@@ -18,8 +18,18 @@ const python =
     : process.platform === "win32"
       ? "python"
       : "python3");
+const pythonPath = [
+  desktopRoot,
+  path.join(repositoryRoot, "libs", "ktem"),
+  path.join(repositoryRoot, "libs", "kotaemon"),
+  path.join(repositoryRoot, "libs", "slide_cli"),
+  process.env.PYTHONPATH,
+]
+  .filter(Boolean)
+  .join(path.delimiter);
 const result = spawnSync(python, process.argv.slice(2), {
   cwd: desktopRoot,
+  env: { ...process.env, PYTHONPATH: pythonPath },
   stdio: "inherit",
 });
 

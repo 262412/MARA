@@ -80,6 +80,16 @@ export const requiredSidecarModules = [
   "unstructured.partition.pptx",
 ];
 
+export const supportedDesktopEmbeddingProviders = [
+  {
+    module: "openai",
+    types: [
+      "kotaemon.embeddings.OpenAIEmbeddings",
+      "kotaemon.embeddings.AzureOpenAIEmbeddings",
+    ],
+  },
+];
+
 export const requiredSidecarDataPackages = ["chromadb", "llama_index.core"];
 
 export const requiredTiktokenEncodings = ["cl100k_base"];

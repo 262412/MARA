@@ -10,6 +10,7 @@ import {
   ipcMain,
   protocol,
   session,
+  shell,
 } from "electron";
 
 import type { FileRecord } from "../shared/file-contracts";
@@ -18,15 +19,20 @@ import type { QueryTask } from "../shared/query-contracts";
 import type {
   DesktopResult,
   RuntimeStatus,
+  SidecarError,
 } from "../shared/runtime-contracts";
 import { resolveDesktopDataRoot } from "./desktop-data";
+import { prepareEmbeddingConfiguration } from "./embedding-configuration";
 import {
   chooseFilesForIndex,
   validateDroppedPathsForIndex,
 } from "./file-import";
 import { registerDesktopIpc } from "./ipc";
 import { contentTypeFor, resolveAppAsset } from "./protocol";
-import { runRendererBridgeSmoke } from "./renderer-bridge-smoke";
+import {
+  runIndexingBlockedRendererSmoke,
+  runRendererBridgeSmoke,
+} from "./renderer-bridge-smoke";
 import { SidecarManager } from "./sidecar-manager";
 import { runDesktopSmoke } from "./smoke-runner";
 import {
@@ -55,6 +61,7 @@ import {
   assertGate3DeleteSmoke,
   assertGate3DiskFullSmoke,
   assertGate3IndexSmoke,
+  assertIndexingBlockedSmoke,
   assertGate3InterruptedRetrySmoke,
   assertGate3InterruptedSmoke,
   assertGate3LargeFileSmoke,
@@ -351,8 +358,43 @@ async function runGate3IndexAndDeleteSmoke(
     expectedNames,
   );
   process.stdout.write(`gate3_indexed_records=${expectedNames.join(",")}\n`);
+  process.stdout.write(
+    "gate3_embedding_provider=openai-compatible import_success=true\n",
+  );
   process.stdout.write("gate3_drop_handoff=validated status_success\n");
   await deleteSmokeFiles(initialFiles, indexedFileIds);
+}
+
+async function runUnconfiguredIndexingSmoke(): Promise<void> {
+  const inputPath = path.join(
+    desktopDataRoot,
+    "tmp",
+    "indexing-unconfigured-unique.txt",
+  );
+  await writeFile(
+    inputPath,
+    "MARA Desktop unconfigured first-start indexing probe 2026-08-11.\n",
+    "utf8",
+  );
+  const doctor = await sidecar.getDoctor();
+  const attemptedIndex = await sidecar.createIndexTask([inputPath]);
+  const latestTask = await sidecar.getLatestIndexTask();
+  assertIndexingBlockedSmoke(doctor, attemptedIndex, latestTask);
+  const journalPath = path.join(
+    desktopDataRoot,
+    "state",
+    "index-tasks.json",
+  );
+  if (existsSync(journalPath)) {
+    throw new Error("Unconfigured Desktop wrote the index task journal");
+  }
+  if (!mainWindow) {
+    throw new Error("Unconfigured renderer smoke has no main window");
+  }
+  await runIndexingBlockedRendererSmoke(mainWindow.webContents);
+  process.stdout.write(
+    "indexing_ready=false issue_code=embedding_not_configured retryable=false task_created=false\n",
+  );
 }
 
 async function runGate3ModelUnavailableSmoke(): Promise<void> {
@@ -801,9 +843,30 @@ async function createWatchedIndexTask(
   return result;
 }
 
+async function indexingReadinessError(): Promise<SidecarError | undefined> {
+  const doctor = await sidecar.getDoctor();
+  if (!doctor.ok) {
+    return doctor.error;
+  }
+  if (doctor.data.indexing_ready) {
+    return undefined;
+  }
+  return {
+    code: doctor.data.indexing_issue_code ?? "index_failed",
+    message: doctor.data.indexing_message,
+    details: null,
+    retryable: doctor.data.indexing_retryable,
+    request_id: doctor.data.request_id,
+  };
+}
+
 async function importDroppedFiles(
   filePaths: string[],
 ): Promise<DesktopResult<IndexTask>> {
+  const readinessError = await indexingReadinessError();
+  if (readinessError) {
+    return { ok: false, error: readinessError };
+  }
   const capabilities = await sidecar.getImportCapabilities();
   if (!capabilities.ok) {
     return { ok: false, error: capabilities.error };
@@ -841,6 +904,10 @@ function registerIpc(): void {
       sidecar.renameSession(conversationId, name),
     deleteSession: (conversationId) => sidecar.deleteSession(conversationId),
     importFiles: async () => {
+      const readinessError = await indexingReadinessError();
+      if (readinessError) {
+        return { ok: false, error: readinessError };
+      }
       const capabilities = await sidecar.getImportCapabilities();
       if (!capabilities.ok) {
         return { ok: false, error: capabilities.error };
@@ -858,6 +925,24 @@ function registerIpc(): void {
       return createWatchedIndexTask(paths);
     },
     importDroppedFiles,
+    openEmbeddingConfiguration: async () => {
+      try {
+        const configPath = await prepareEmbeddingConfiguration(desktopDataRoot);
+        shell.showItemInFolder(configPath);
+        return { ok: true, data: true };
+      } catch {
+        return {
+          ok: false,
+          error: {
+            code: "embedding_configuration_unavailable",
+            message: "MARA Desktop could not open the embedding configuration.",
+            details: null,
+            retryable: false,
+            request_id: randomUUID(),
+          },
+        };
+      }
+    },
     getLatestIndexTask: () => sidecar.getLatestIndexTask(),
     cancelIndexTask: async (taskId) => {
       const result = await sidecar.cancelIndexTask(taskId);
@@ -975,6 +1060,9 @@ app.whenReady().then(async () => {
   const requireGate3LargeFile = process.argv.includes(
     "--smoke-test-gate3-large-file",
   );
+  const requireIndexingUnconfigured = process.argv.includes(
+    "--smoke-test-indexing-unconfigured",
+  );
   const requireGate3Delete =
     process.argv.includes("--smoke-test-gate3") || requireGate3Formats;
   const requireNonEmptyFixture =
@@ -988,7 +1076,11 @@ app.whenReady().then(async () => {
     requireGate3DiskFull ||
     requireGate3DatabaseLock ||
     requireGate3LargeFile;
-  if (process.argv.includes("--smoke-test") || requireNonEmptyFixture) {
+  if (
+    process.argv.includes("--smoke-test") ||
+    requireNonEmptyFixture ||
+    requireIndexingUnconfigured
+  ) {
     const exitCode = await runDesktopSmoke(async () => {
       const [status, doctor, files, sessions, session, importCapabilities] =
         await Promise.all([
@@ -1010,7 +1102,9 @@ app.whenReady().then(async () => {
       }
       await runRendererBridgeSmoke(mainWindow.webContents);
       const initialFiles = files.ok ? files.data : [];
-      if (requireGate3ModelUnavailable) {
+      if (requireIndexingUnconfigured) {
+        await runUnconfiguredIndexingSmoke();
+      } else if (requireGate3ModelUnavailable) {
         await runGate3ModelUnavailableSmoke();
       } else if (requireGate3Retry) {
         await runGate3RetrySmoke(initialFiles);

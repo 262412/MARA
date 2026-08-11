@@ -33,6 +33,7 @@ class StubApplicationService:
             "indexing_issue_code": None,
             "indexing_message": "File indexing is ready.",
             "indexing_action": "none",
+            "indexing_retryable": False,
         }
 
     def list_files(self) -> list[dict]:
@@ -371,35 +372,6 @@ class SidecarContractTest(unittest.TestCase):
         self.assertEqual(relative_path.status_code, 422)
         self.assertEqual(relative_path.json()["code"], "invalid_request")
 
-    def test_unconfigured_embedding_is_rejected_before_task_creation(self) -> None:
-        client = TestClient(create_app(self.token, UnconfiguredEmbeddingService()))
-        try:
-            response = client.post(
-                "/v1/index-tasks",
-                headers={
-                    "Authorization": f"Bearer {self.token}",
-                    "X-Request-ID": "request-no-embedding",
-                    "Idempotency-Key": "import-no-embedding",
-                },
-                json={"paths": ["/private/source/paper.txt"]},
-            )
-            latest = client.get(
-                "/v1/index-tasks/latest",
-                headers={
-                    "Authorization": f"Bearer {self.token}",
-                    "X-Request-ID": "request-latest",
-                },
-            )
-
-            self.assertEqual(response.status_code, 409)
-            self.assertEqual(response.json()["code"], "embedding_not_configured")
-            self.assertFalse(response.json()["retryable"])
-            self.assertEqual(response.json()["request_id"], "request-no-embedding")
-            self.assertNotIn("/private", response.text)
-            self.assertIsNone(latest.json()["task"])
-        finally:
-            client.app.state.index_task_manager.close()
-
     def test_delete_uses_stable_file_id_and_returns_no_local_path(self) -> None:
         response = self.authenticated_request(
             "DELETE",
@@ -457,6 +429,38 @@ class SidecarContractTest(unittest.TestCase):
             ]["maxItems"],
             64,
         )
+
+
+class SidecarIndexingReadinessContractTest(unittest.TestCase):
+    def test_unconfigured_embedding_is_rejected_before_task_creation(self) -> None:
+        token = "test-token"
+        client = TestClient(create_app(token, UnconfiguredEmbeddingService()))
+        try:
+            response = client.post(
+                "/v1/index-tasks",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "X-Request-ID": "request-no-embedding",
+                    "Idempotency-Key": "import-no-embedding",
+                },
+                json={"paths": ["/private/source/paper.txt"]},
+            )
+            latest = client.get(
+                "/v1/index-tasks/latest",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "X-Request-ID": "request-latest",
+                },
+            )
+
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json()["code"], "embedding_not_configured")
+            self.assertFalse(response.json()["retryable"])
+            self.assertEqual(response.json()["request_id"], "request-no-embedding")
+            self.assertNotIn("/private", response.text)
+            self.assertIsNone(latest.json()["task"])
+        finally:
+            client.app.state.index_task_manager.close()
 
 
 if __name__ == "__main__":

@@ -5,21 +5,32 @@ import {
   type DragEvent,
 } from "react";
 
+import type { DoctorPayload } from "../../shared/doctor-contracts";
 import type { FileRecord } from "../../shared/file-contracts";
 import type { IndexTask } from "../../shared/index-task-contracts";
+import type { SidecarError } from "../../shared/runtime-contracts";
 import type { ResourceState } from "../resource-state";
 import { Icon } from "./Icon";
 
 type FilesPageProps = {
-  actionError?: string;
+  actionError?: SidecarError;
   deletingFileIds: string[];
   files: ResourceState<FileRecord[]>;
+  indexing: Pick<
+    DoctorPayload,
+    | "indexing_ready"
+    | "indexing_issue_code"
+    | "indexing_message"
+    | "indexing_action"
+    | "request_id"
+  >;
   indexActionPending: boolean;
   indexTask?: IndexTask;
   onCancelIndexTask: () => void;
   onDelete: (files: FileRecord[]) => void;
   onDropFiles: (files: File[]) => void;
   onImport: () => void;
+  onOpenEmbeddingConfiguration: () => void;
   onRetry: () => void;
   onRetryIndexTask: () => void;
   onSelectionChange: (fileIds: string[]) => void;
@@ -30,12 +41,14 @@ export function FilesPage({
   actionError,
   deletingFileIds,
   files,
+  indexing,
   indexActionPending,
   indexTask,
   onCancelIndexTask,
   onDelete,
   onDropFiles,
   onImport,
+  onOpenEmbeddingConfiguration,
   onRetry,
   onRetryIndexTask,
   onSelectionChange,
@@ -51,6 +64,10 @@ export function FilesPage({
   const allSelected =
     availableFiles.length > 0 && selectedFiles.length === availableFiles.length;
   const selectionDisabled = deletingFileIds.length > 0;
+  const dropEnabled = canAcceptFileDrop(
+    indexing.indexing_ready,
+    indexActionPending,
+  );
 
   const handleDragEnter = (event: DragEvent<HTMLElement>) => {
     if (!hasFilePayload(event)) {
@@ -58,7 +75,7 @@ export function FilesPage({
     }
     event.preventDefault();
     dragDepth.current += 1;
-    if (!indexActionPending) {
+    if (dropEnabled) {
       setDropActive(true);
     }
   };
@@ -68,7 +85,7 @@ export function FilesPage({
       event.dataTransfer.dropEffect = "none";
       return;
     }
-    event.dataTransfer.dropEffect = indexActionPending ? "none" : "copy";
+    event.dataTransfer.dropEffect = dropEnabled ? "copy" : "none";
   };
   const handleDragLeave = () => {
     dragDepth.current = Math.max(0, dragDepth.current - 1);
@@ -83,7 +100,7 @@ export function FilesPage({
     }
     dragDepth.current = 0;
     setDropActive(false);
-    if (indexActionPending) {
+    if (!dropEnabled) {
       return;
     }
     const droppedFiles = Array.from(event.dataTransfer.files);
@@ -132,7 +149,7 @@ export function FilesPage({
           ) : null}
           <button
             className="primary-button"
-            disabled={indexActionPending}
+            disabled={!indexing.indexing_ready || indexActionPending}
             onClick={onImport}
             type="button"
           >
@@ -141,11 +158,18 @@ export function FilesPage({
         </div>
       </header>
       <div className="files-content">
-        {dropActive ? (
+        {dropActive && dropEnabled ? (
           <div className="file-drop-overlay" role="status" aria-live="polite">
             <strong>释放文件以开始索引</strong>
             <span>也可以按 Ctrl+O 使用原生文件选择器</span>
           </div>
+        ) : null}
+        {!indexing.indexing_ready ? (
+          <IndexingReadinessCard
+            indexing={indexing}
+            onOpenEmbeddingConfiguration={onOpenEmbeddingConfiguration}
+            pending={indexActionPending}
+          />
         ) : null}
         {indexTask ? (
           <IndexTaskStatus
@@ -156,9 +180,12 @@ export function FilesPage({
           />
         ) : null}
         {actionError ? (
-          <p className="file-action-error" role="alert">
-            {actionError}
-          </p>
+          <section className="file-action-error" role="alert">
+            <strong>{actionError.message}</strong>
+            <span>错误代码：{actionError.code}</span>
+            <span>请求 ID：{actionError.request_id}</span>
+            <span>{indexingActionGuidance(actionError.code)}</span>
+          </section>
         ) : null}
         {files.status === "loading" ? (
           <ResourceMessage
@@ -265,6 +292,51 @@ export function isFileDrag(types: readonly string[]): boolean {
   return types.includes("Files");
 }
 
+export function canAcceptFileDrop(
+  indexingReady: boolean,
+  indexActionPending: boolean,
+): boolean {
+  return indexingReady && !indexActionPending;
+}
+
+function IndexingReadinessCard({
+  indexing,
+  onOpenEmbeddingConfiguration,
+  pending,
+}: {
+  indexing: FilesPageProps["indexing"];
+  onOpenEmbeddingConfiguration: () => void;
+  pending: boolean;
+}) {
+  return (
+    <section className="indexing-readiness-card" role="status">
+      <div>
+        <p className="eyebrow">索引准备状态</p>
+        <h2>文件索引尚未准备好</h2>
+        <p>{indexing.indexing_message}</p>
+        {indexing.indexing_issue_code ? (
+          <p>问题代码：{indexing.indexing_issue_code}</p>
+        ) : null}
+        <p>请求 ID：{indexing.request_id}</p>
+        <p>{indexingActionGuidance(indexing.indexing_issue_code)}</p>
+      </div>
+      {indexing.indexing_action === "configure_embedding" ? (
+        <div className="index-task-actions">
+          <button
+            className="small-button"
+            disabled={pending}
+            onClick={onOpenEmbeddingConfiguration}
+            type="button"
+          >
+            {pending ? "正在打开…" : "配置 Embedding"}
+          </button>
+          <span>保存配置后重启 MARA Desktop。</span>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function SelectAllCheckbox({
   checked,
   disabled,
@@ -318,7 +390,14 @@ function IndexTaskStatus({
         <p className="eyebrow">后台索引任务</p>
         <h2>{title}</h2>
         <p>{task.file_names.join("、")}</p>
-        {task.error ? <p>{task.error.message}</p> : null}
+        <p>任务 ID：{task.task_id}</p>
+        {task.error ? (
+          <>
+            <p>{task.error.message}</p>
+            <p>错误代码：{task.error.code}</p>
+            <p>{indexingActionGuidance(task.error.code)}</p>
+          </>
+        ) : null}
       </div>
       <div className="index-task-actions">
         {active ? (
@@ -413,4 +492,27 @@ function formatDate(value: string | null): string {
 
 function requestDetail(requestId: string | undefined): string {
   return requestId ? `请求 ID：${requestId}` : "请确认 Sidecar 状态后重试。";
+}
+
+function indexingActionGuidance(code: string | null): string {
+  switch (code) {
+    case "embedding_not_configured":
+      return "打开配置文件，填写受支持的 Embedding 配置。";
+    case "embedding_dependency_missing":
+      return "当前安装包缺少所选 provider；请安装受支持的 MARA Desktop 包。";
+    case "embedding_unavailable":
+      return "检查模型服务和网络连接后重试。";
+    case "index_runtime_storage_unwritable":
+      return "检查 MARA Desktop 应用数据目录的写入权限。";
+    case "source_permission_denied":
+      return "检查源文件读取权限后重新选择该文件。";
+    case "index_database_locked":
+      return "关闭占用 MARA 数据库的进程后重试。";
+    case "index_storage_full":
+      return "释放应用数据所在磁盘的空间后重试。";
+    case "index_failed":
+      return "保留任务和请求 ID，并查看本地索引日志。";
+    default:
+      return "等待索引准备检查完成后再添加文件。";
+  }
 }

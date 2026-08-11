@@ -66,6 +66,13 @@ def assert_gate2_session_detail(test: unittest.TestCase, session: dict) -> None:
     test.assertNotIn("user_id", session)
 
 
+def assert_gate2_indexing_blocked(test: unittest.TestCase, doctor: dict) -> None:
+    test.assertFalse(doctor["ok"])
+    test.assertFalse(doctor["indexing_ready"])
+    test.assertEqual(doctor["indexing_issue_code"], "embedding_not_configured")
+    test.assertFalse(doctor["indexing_retryable"])
+
+
 class Gate2SmokeFixtureTest(unittest.TestCase):
     def test_seeds_one_file_and_one_session_for_the_real_application_service(
         self,
@@ -97,7 +104,7 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
                 session = service.get_session(GATE2_SMOKE_SESSION_ID)
                 import_capabilities = service.get_import_capabilities()
 
-                self.assertTrue(doctor["ok"])
+                assert_gate2_indexing_blocked(self, doctor)
                 self.assertEqual(doctor["file_count"], 1)
                 self.assertEqual(doctor["session_count"], 1)
                 self.assertEqual(

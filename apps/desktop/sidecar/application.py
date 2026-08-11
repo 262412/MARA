@@ -7,6 +7,14 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
+from .indexing_readiness import (
+    DesktopIndexingPreflightError,
+    IndexingReadiness,
+    classify_index_failure,
+    collect_indexing_readiness,
+    validate_index_sources,
+)
+
 DESKTOP_DATA_DIRECTORIES = (
     "state",
     "documents",
@@ -88,6 +96,9 @@ class DesktopApplicationService:
         collect_import_capabilities: Callable[
             [], dict[str, list[str]]
         ] = _collect_import_capabilities,
+        collect_indexing_readiness: Callable[
+            [], IndexingReadiness
+        ] = collect_indexing_readiness,
         create_runtime: Callable[[], Any] = _create_runtime,
         create_query_request: Callable[..., Any] = _create_query_request,
     ) -> None:
@@ -95,6 +106,7 @@ class DesktopApplicationService:
         self._collect_files = collect_files
         self._collect_sessions = collect_sessions
         self._collect_import_capabilities = collect_import_capabilities
+        self._collect_indexing_readiness = collect_indexing_readiness
         self._create_runtime = create_runtime
         self._create_query_request = create_query_request
         self._runtime: Any | None = None
@@ -102,7 +114,9 @@ class DesktopApplicationService:
 
     def get_doctor(self) -> dict[str, Any]:
         with self._runtime_lock:
-            return self._collect_doctor()
+            doctor = self._collect_doctor()
+            readiness = self._collect_indexing_readiness()
+        return {**doctor, **readiness.as_dict()}
 
     def list_files(self) -> list[dict[str, Any]]:
         with self._runtime_lock:
@@ -205,6 +219,13 @@ class DesktopApplicationService:
         with self._runtime_lock:
             return self._collect_import_capabilities()
 
+    def validate_indexing(self, paths: list[str]) -> None:
+        with self._runtime_lock:
+            readiness = self._collect_indexing_readiness()
+        if not readiness.indexing_ready:
+            raise DesktopIndexingPreflightError.from_readiness(readiness)
+        validate_index_sources(paths)
+
     def index_files(
         self,
         paths: list[str],
@@ -219,13 +240,7 @@ class DesktopApplicationService:
                 for item in result.get("successes", [])
             ],
             "failures": [
-                {
-                    "name": _index_result_name(item),
-                    "code": "index_failed",
-                    "message": "MARA could not index this file.",
-                    "retryable": True,
-                }
-                for item in result.get("failures", [])
+                _index_failure_from_result(item) for item in result.get("failures", [])
             ],
         }
 
@@ -512,6 +527,16 @@ def _index_result_name(item: dict[str, Any]) -> str:
     return Path(str(item.get("file_path", "") or "")).name or "Unknown file"
 
 
+def _index_failure_from_result(item: dict[str, Any]) -> dict[str, Any]:
+    failure = classify_index_failure(str(item.get("message") or ""))
+    return {
+        "name": _index_result_name(item),
+        "code": failure.code,
+        "message": failure.message,
+        "retryable": failure.retryable,
+    }
+
+
 def _serialize_datetime(value: Any) -> str | None:
     if value is None:
         return None
@@ -526,14 +551,14 @@ def configure_desktop_data_root(data_root: Path) -> Path:
         raise ValueError("Desktop data root must be absolute")
     resolved_root = expanded_root.resolve()
 
-    for directory in DESKTOP_DATA_DIRECTORIES:
-        (resolved_root / directory).mkdir(parents=True, exist_ok=True)
-
-    app_data_dir = resolved_root / "state" / "ktem_app_data"
-    app_data_dir.mkdir(parents=True, exist_ok=True)
     os.environ["MARA_DESKTOP_DATA_DIR"] = str(resolved_root)
-    os.environ["KH_APP_DATA_DIR"] = str(app_data_dir)
-    os.environ["KH_OFFICE_TO_PDF_INDEXING"] = "false"
     os.environ["THEFLOW_SETTINGS_MODULE"] = "ktem.default_flowsettings"
     os.environ["KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED"] = "1"
+
+    for directory in DESKTOP_DATA_DIRECTORIES:
+        (resolved_root / directory).mkdir(parents=True, exist_ok=True)
+    app_data_dir = resolved_root / "state" / "ktem_app_data"
+    app_data_dir.mkdir(parents=True, exist_ok=True)
+    os.environ["KH_APP_DATA_DIR"] = str(app_data_dir)
+    os.environ["KH_OFFICE_TO_PDF_INDEXING"] = "false"
     return app_data_dir

@@ -32,6 +32,19 @@ class DoctorPayload(BaseModel):
     graph_cache_dir: str
     issues: list[str]
     warnings: list[str]
+    indexing_ready: bool
+    indexing_issue_code: str | None
+    indexing_message: str
+    indexing_action: Literal[
+        "none",
+        "configure_embedding",
+        "repair_installation",
+        "check_connection",
+        "free_storage",
+        "contact_support",
+    ]
+    indexing_retryable: bool
+    request_id: str
 
 
 class DoctorResponse(BaseModel):

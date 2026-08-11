@@ -9,11 +9,13 @@ from fastapi.responses import JSONResponse
 from .application import DesktopFileNotFoundError, DesktopSessionNotFoundError
 from .index_task_journal import IndexTaskPersistenceError
 from .index_tasks import IndexTaskConflictError, IndexTaskNotFoundError
+from .indexing_readiness import DesktopIndexingPreflightError
 from .query_task_journal import QueryTaskPersistenceError
 from .query_tasks import QueryTaskConflictError, QueryTaskNotFoundError
 
 ErrorResponse = Callable[..., JSONResponse]
 RequestId = Callable[[Request], str]
+INDEX_TASK_LOGGER = logging.getLogger("mara.desktop.index_tasks")
 
 
 def register_task_exception_handlers(
@@ -67,6 +69,31 @@ def _register_index_task_errors(
     request_id: RequestId,
     logger: logging.Logger,
 ) -> None:
+    @app.exception_handler(DesktopIndexingPreflightError)
+    async def handle_indexing_preflight_error(
+        request: Request,
+        error: DesktopIndexingPreflightError,
+    ) -> JSONResponse:
+        logger.error(
+            "Index task rejected request_id=%s error_code=%s error_type=%s",
+            request_id(request),
+            error.code,
+            type(error).__name__,
+        )
+        INDEX_TASK_LOGGER.error(
+            "Index task rejected request_id=%s error_code=%s error_type=%s",
+            request_id(request),
+            error.code,
+            type(error).__name__,
+        )
+        return error_response(
+            request,
+            status_code=error.status_code,
+            code=error.code,
+            message=error.message,
+            retryable=error.retryable,
+        )
+
     @app.exception_handler(IndexTaskPersistenceError)
     async def handle_task_persistence_error(
         request: Request, error: IndexTaskPersistenceError
@@ -76,12 +103,17 @@ def _register_index_task_errors(
             request_id(request),
             error.code,
         )
+        INDEX_TASK_LOGGER.error(
+            "Index task persistence unavailable request_id=%s error_code=%s",
+            request_id(request),
+            error.code,
+        )
         return error_response(
             request,
             status_code=503,
             code=error.code,
             message=error.message,
-            retryable=True,
+            retryable=error.retryable,
         )
 
     @app.exception_handler(IndexTaskNotFoundError)

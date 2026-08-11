@@ -31,6 +31,7 @@ const doctor: DoctorPayload = {
   indexing_issue_code: null,
   indexing_message: "File indexing is ready.",
   indexing_action: "none",
+  indexing_retryable: false,
   request_id: "doctor-request",
 };
 

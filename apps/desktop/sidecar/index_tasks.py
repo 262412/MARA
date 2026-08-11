@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import errno
 import logging
 import re
-import sqlite3
 import threading
 import time
 from collections.abc import Callable
@@ -14,13 +12,12 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
-from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
-
 from .index_task_journal import (
     IndexTaskJournal,
     IndexTaskPersistenceError,
     JsonIndexTaskJournal,
 )
+from .indexing_readiness import INDEXING_MESSAGES, classify_index_failure
 
 TERMINAL_STATUSES = {"partial", "success", "failed", "cancelled"}
 ACTIVE_STATUSES = {"queued", "running"}
@@ -76,9 +73,11 @@ class IndexTaskManager:
         *,
         journal_path: Path | None = None,
         journal: IndexTaskJournal | None = None,
+        validator: Callable[[list[str]], None] | None = None,
     ) -> None:
         self._service = service
         self._journal = journal or JsonIndexTaskJournal(journal_path)
+        self._validator = validator
         self._tasks: dict[str, _IndexTask] = {}
         self._idempotency: dict[str, str] = {}
         self._condition = threading.Condition(threading.RLock())
@@ -101,6 +100,8 @@ class IndexTaskManager:
             existing = self._task_for_idempotency(idempotency_key)
             if existing is not None:
                 return self._snapshot(existing)
+            if self._validator is not None:
+                self._validator(paths)
             task = _IndexTask(
                 task_id=str(uuid4()),
                 idempotency_key=idempotency_key,
@@ -152,6 +153,8 @@ class IndexTaskManager:
             ]
             if not sources:
                 raise IndexTaskConflictError("The task has no retryable files.")
+            if self._validator is not None:
+                self._validator([source.path for source in sources])
             retried = _IndexTask(
                 task_id=str(uuid4()),
                 idempotency_key=idempotency_key,
@@ -243,7 +246,7 @@ class IndexTaskManager:
                     reindex=task.reindex,
                 )
             except Exception as exc:
-                LOGGER.error("%s", _index_failure_log(task_id, source.name, exc))
+                LOGGER.error("%s", _index_failure_log(task_id, exc))
                 result = {
                     "successes": [],
                     "failures": [_failure_from_exception(source.name, exc)],
@@ -265,7 +268,6 @@ class IndexTaskManager:
                 self._finish_cancelled(task)
                 return
             successes = sum(source.status == "success" for source in task.sources)
-            failures = sum(source.status == "failed" for source in task.sources)
             if successes == len(task.sources):
                 task.status = "success"
                 task.stage = "completed"
@@ -276,12 +278,15 @@ class IndexTaskManager:
                 task.error = {
                     "code": "index_partial_failure",
                     "message": "Some files could not be indexed.",
-                    "retryable": True,
+                    "retryable": any(
+                        bool(source.error and source.error.get("retryable"))
+                        for source in task.sources
+                    ),
                 }
             else:
                 task.status = "failed"
                 task.stage = "completed"
-                task.error = _task_failure(task.sources, bool(failures))
+                task.error = _task_failure(task.sources)
             self._touch(task)
 
     def _finish_cancelled(self, task: _IndexTask) -> None:
@@ -311,26 +316,7 @@ class IndexTaskManager:
         return task
 
     def _snapshot(self, task: _IndexTask) -> dict[str, Any]:
-        success_count = sum(source.status == "success" for source in task.sources)
-        failures = [source.error for source in task.sources if source.error]
-        return {
-            "task_id": task.task_id,
-            "status": task.status,
-            "stage": task.stage,
-            "completed_files": sum(
-                source.status in {"success", "failed"} for source in task.sources
-            ),
-            "total_files": len(task.sources),
-            "file_names": [source.name for source in task.sources],
-            "success_count": success_count,
-            "failure_count": len(failures),
-            "failures": failures,
-            "error": task.error,
-            "retryable": task.status in {"partial", "failed", "cancelled"},
-            "created_at": task.created_at,
-            "updated_at": task.updated_at,
-            "version": task.version,
-        }
+        return _task_snapshot(task)
 
     def _load_journal(self) -> None:
         payload = self._journal.load()
@@ -382,6 +368,29 @@ def _persist_new_task(
         raise
 
 
+def _task_snapshot(task: _IndexTask) -> dict[str, Any]:
+    success_count = sum(source.status == "success" for source in task.sources)
+    failures = [source.error for source in task.sources if source.error]
+    return {
+        "task_id": task.task_id,
+        "status": task.status,
+        "stage": task.stage,
+        "completed_files": sum(
+            source.status in {"success", "failed"} for source in task.sources
+        ),
+        "total_files": len(task.sources),
+        "file_names": [source.name for source in task.sources],
+        "success_count": success_count,
+        "failure_count": len(failures),
+        "failures": failures,
+        "error": task.error,
+        "retryable": _task_is_retryable(task, failures),
+        "created_at": task.created_at,
+        "updated_at": task.updated_at,
+        "version": task.version,
+    }
+
+
 def _require_open(closed: bool) -> None:
     if closed:
         raise IndexTaskConflictError("The index task manager is stopping.")
@@ -409,13 +418,18 @@ def _set_persistence_failure(
 ) -> None:
     for source in task.sources:
         source.status = "failed"
-        source.error = _known_failure(source.name, error.code, error.message)
+        source.error = _known_failure(
+            source.name,
+            error.code,
+            error.message,
+            retryable=error.retryable,
+        )
     task.status = "failed"
     task.stage = "storage_error"
     task.error = {
         "code": error.code,
         "message": error.message,
-        "retryable": True,
+        "retryable": error.retryable,
     }
     task.version += 1
     task.updated_at = _now()
@@ -430,9 +444,10 @@ def _safe_failure(name: str) -> dict[str, Any]:
     }
 
 
-def _index_failure_log(task_id: str, file_name: str, error: Exception) -> str:
+def _index_failure_log(task_id: str, error: Exception) -> str:
+    failure = classify_index_failure(error)
     return (
-        f"Index task failed task_id={task_id} file_name={file_name} "
+        f"Index task failed task_id={task_id} error_code={failure.code} "
         f"error_type={type(error).__name__} "
         f"missing_module={_missing_module_name(error)}"
     )
@@ -447,45 +462,35 @@ def _missing_module_name(error: Exception) -> str:
     return "unknown"
 
 
-def _known_failure(name: str, code: str, message: str) -> dict[str, Any]:
+def _known_failure(
+    name: str,
+    code: str,
+    message: str,
+    *,
+    retryable: bool,
+) -> dict[str, Any]:
     return {
         "name": name,
         "code": code,
         "message": message,
-        "retryable": True,
+        "retryable": retryable,
     }
 
 
 def _failure_from_exception(name: str, error: Exception) -> dict[str, Any]:
-    if isinstance(error, OSError) and (
-        error.errno == errno.ENOSPC or getattr(error, "winerror", None) == 112
-    ):
-        return _known_failure(
-            name,
-            "index_storage_full",
-            "MARA does not have enough free storage to index this file.",
-        )
-    if isinstance(error, (sqlite3.OperationalError, SqlAlchemyOperationalError)) and (
-        "locked" in str(error).lower() or "busy" in str(error).lower()
-    ):
-        return _known_failure(
-            name,
-            "index_database_locked",
-            "MARA data is temporarily busy. Try indexing this file again.",
-        )
-    return _safe_failure(name)
+    failure = classify_index_failure(error)
+    return _known_failure(
+        name,
+        failure.code,
+        failure.message,
+        retryable=failure.retryable,
+    )
 
 
-def _task_failure(
-    sources: list[_TaskSource],
-    retryable: bool,
-) -> dict[str, Any]:
+def _task_failure(sources: list[_TaskSource]) -> dict[str, Any]:
     failures = [source.error for source in sources if source.error]
     codes = {failure["code"] for failure in failures}
-    if len(codes) == 1 and next(iter(codes)) in {
-        "index_storage_full",
-        "index_database_locked",
-    }:
+    if len(codes) == 1:
         failure = failures[0]
         return {
             "code": failure["code"],
@@ -495,7 +500,7 @@ def _task_failure(
     return {
         "code": "index_failed",
         "message": "MARA could not index the selected files.",
-        "retryable": retryable,
+        "retryable": any(bool(failure["retryable"]) for failure in failures),
     }
 
 
@@ -504,12 +509,27 @@ def _failure_from_result(name: str, result: dict[str, Any]) -> dict[str, Any]:
     if not failures:
         return _safe_failure(name)
     failure = failures[0]
-    return {
-        "name": Path(str(failure.get("name", name))).name or name,
-        "code": str(failure.get("code", "index_failed")),
-        "message": "MARA could not index this file.",
-        "retryable": bool(failure.get("retryable", True)),
-    }
+    code = str(failure.get("code", "index_failed"))
+    if code not in INDEXING_MESSAGES:
+        code = "index_failed"
+    return _known_failure(
+        Path(str(failure.get("name", name))).name or name,
+        code,
+        INDEXING_MESSAGES[code],
+        retryable=bool(failure.get("retryable", code == "index_failed")),
+    )
+
+
+def _task_is_retryable(
+    task: _IndexTask,
+    failures: list[dict[str, Any]],
+) -> bool:
+    if task.status == "cancelled":
+        return True
+    return task.status in {"partial", "failed"} and (
+        bool(task.error and task.error.get("retryable"))
+        or any(bool(failure.get("retryable")) for failure in failures)
+    )
 
 
 def _task_to_dict(task: _IndexTask) -> dict[str, Any]:

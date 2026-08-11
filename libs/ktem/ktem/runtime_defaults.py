@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from importlib.metadata import version
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,16 +17,19 @@ def _ensure_dir(path: Path) -> Path:
     return path
 
 
-def _build_auth_settings() -> dict[str, Any]:
-    configured_mode = config("MARA_AUTH_MODE", default=None)
-    legacy_sso_enabled = config("KH_SSO_ENABLED", default=False, cast=bool)
+ConfigReader = Callable[..., Any]
+
+
+def _build_auth_settings(read_config: ConfigReader) -> dict[str, Any]:
+    configured_mode = read_config("MARA_AUTH_MODE", default=None)
+    legacy_sso_enabled = read_config("KH_SSO_ENABLED", default=False, cast=bool)
     if configured_mode is None and not legacy_sso_enabled:
         legacy_credentials = resolve_legacy_bootstrap_credentials(
             SimpleNamespace(
-                KH_FEATURE_USER_MANAGEMENT_ADMIN=config(
+                KH_FEATURE_USER_MANAGEMENT_ADMIN=read_config(
                     "KH_FEATURE_USER_MANAGEMENT_ADMIN", default=""
                 ),
-                KH_FEATURE_USER_MANAGEMENT_PASSWORD=config(
+                KH_FEATURE_USER_MANAGEMENT_PASSWORD=read_config(
                     "KH_FEATURE_USER_MANAGEMENT_PASSWORD", default=""
                 ),
             )
@@ -44,6 +48,48 @@ def _build_auth_settings() -> dict[str, Any]:
     }
 
 
+def _add_azure_models(
+    settings: dict[str, Any],
+    read_config: ConfigReader,
+) -> None:
+    if not (
+        read_config("AZURE_OPENAI_API_KEY", default="")
+        and read_config("AZURE_OPENAI_ENDPOINT", default="")
+    ):
+        return
+    if read_config("AZURE_OPENAI_CHAT_DEPLOYMENT", default=""):
+        settings["KH_LLMS"]["azure"] = {
+            "spec": {
+                "__type__": "kotaemon.llms.AzureChatOpenAI",
+                "temperature": 0,
+                "azure_endpoint": read_config("AZURE_OPENAI_ENDPOINT", default=""),
+                "api_key": read_config("AZURE_OPENAI_API_KEY", default=""),
+                "api_version": read_config("OPENAI_API_VERSION", default="")
+                or "2024-02-15-preview",
+                "azure_deployment": read_config(
+                    "AZURE_OPENAI_CHAT_DEPLOYMENT", default=""
+                ),
+                "timeout": 20,
+            },
+            "default": False,
+        }
+    if read_config("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", default=""):
+        settings["KH_EMBEDDINGS"]["azure"] = {
+            "spec": {
+                "__type__": "kotaemon.embeddings.AzureOpenAIEmbeddings",
+                "azure_endpoint": read_config("AZURE_OPENAI_ENDPOINT", default=""),
+                "api_key": read_config("AZURE_OPENAI_API_KEY", default=""),
+                "api_version": read_config("OPENAI_API_VERSION", default="")
+                or "2024-02-15-preview",
+                "azure_deployment": read_config(
+                    "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", default=""
+                ),
+                "timeout": 10,
+            },
+            "default": False,
+        }
+
+
 def build_kotaemon_settings(
     *,
     base_dir: Path,
@@ -51,7 +97,9 @@ def build_kotaemon_settings(
     docs_dir: Path | None = None,
     mode: str = "dev",
     package_name: str = "mara-app",
+    config_reader: ConfigReader = config,
 ) -> dict[str, Any]:
+    read_config = config_reader
     base_dir = Path(base_dir).resolve()
     app_data_dir = Path(app_data_dir).resolve()
     docs_dir = Path(docs_dir).resolve() if docs_dir else (base_dir / "docs").resolve()
@@ -73,7 +121,7 @@ def build_kotaemon_settings(
     os.environ.setdefault("HF_HOME", str(app_data_dir / "huggingface"))
     os.environ.setdefault("HF_HUB_CACHE", str(app_data_dir / "huggingface"))
 
-    app_version = config("KH_APP_VERSION", None)
+    app_version = read_config("KH_APP_VERSION", None)
     if not app_version:
         try:
             app_version = version(package_name)
@@ -84,12 +132,14 @@ def build_kotaemon_settings(
         "KH_PACKAGE_NAME": package_name,
         "KH_APP_NAME": "MARA",
         "KH_APP_VERSION": app_version,
-        "KH_GRADIO_SHARE": config("KH_GRADIO_SHARE", default=False, cast=bool),
-        "KH_ENABLE_FIRST_SETUP": config(
+        "KH_GRADIO_SHARE": read_config("KH_GRADIO_SHARE", default=False, cast=bool),
+        "KH_ENABLE_FIRST_SETUP": read_config(
             "KH_ENABLE_FIRST_SETUP", default=True, cast=bool
         ),
-        "KH_DEMO_MODE": config("KH_DEMO_MODE", default=False, cast=bool),
-        "KH_OLLAMA_URL": config("KH_OLLAMA_URL", default="http://localhost:11434/v1/"),
+        "KH_DEMO_MODE": read_config("KH_DEMO_MODE", default=False, cast=bool),
+        "KH_OLLAMA_URL": read_config(
+            "KH_OLLAMA_URL", default="http://localhost:11434/v1/"
+        ),
         "KH_APP_DATA_DIR": app_data_dir,
         "KH_APP_DATA_EXISTS": app_data_exists,
         "KH_USER_DATA_DIR": user_data_dir,
@@ -101,26 +151,26 @@ def build_kotaemon_settings(
         "KH_OCR_CACHE_DIR": ocr_cache_dir,
         "KH_FORMULA_OCR_CACHE_DIR": formula_ocr_cache_dir,
         "KH_OFFICE_PDF_CACHE_DIR": office_pdf_cache_dir,
-        "KH_OFFICE_TO_PDF_INDEXING": config(
+        "KH_OFFICE_TO_PDF_INDEXING": read_config(
             "KH_OFFICE_TO_PDF_INDEXING", default=True, cast=bool
         ),
-        "KH_OFFICE_TO_PDF_INDEXING_STRICT": config(
+        "KH_OFFICE_TO_PDF_INDEXING_STRICT": read_config(
             "KH_OFFICE_TO_PDF_INDEXING_STRICT", default=True, cast=bool
         ),
         "KH_ZIP_OUTPUT_DIR": zip_output_dir,
         "KH_ZIP_INPUT_DIR": zip_input_dir,
         "KH_DOC_DIR": docs_dir,
         "KH_MODE": mode,
-        **_build_auth_settings(),
-        "KH_FEATURE_CHAT_SUGGESTION": config(
+        **_build_auth_settings(read_config),
+        "KH_FEATURE_CHAT_SUGGESTION": read_config(
             "KH_FEATURE_CHAT_SUGGESTION", default=False, cast=bool
         ),
         "KH_USER_CAN_SEE_PUBLIC": None,
         "KH_FEATURE_USER_MANAGEMENT_ADMIN": str(
-            config("KH_FEATURE_USER_MANAGEMENT_ADMIN", default="")
+            read_config("KH_FEATURE_USER_MANAGEMENT_ADMIN", default="")
         ),
         "KH_FEATURE_USER_MANAGEMENT_PASSWORD": str(
-            config("KH_FEATURE_USER_MANAGEMENT_PASSWORD", default="")
+            read_config("KH_FEATURE_USER_MANAGEMENT_PASSWORD", default="")
         ),
         "KH_ENABLE_ALEMBIC": False,
         "KH_DATABASE": f"sqlite:///{user_data_dir / 'sql.db'}",
@@ -141,44 +191,11 @@ def build_kotaemon_settings(
         "KH_RERANKINGS": {},
     }
 
-    if config("AZURE_OPENAI_API_KEY", default="") and config(
-        "AZURE_OPENAI_ENDPOINT", default=""
-    ):
-        if config("AZURE_OPENAI_CHAT_DEPLOYMENT", default=""):
-            settings["KH_LLMS"]["azure"] = {
-                "spec": {
-                    "__type__": "kotaemon.llms.AzureChatOpenAI",
-                    "temperature": 0,
-                    "azure_endpoint": config("AZURE_OPENAI_ENDPOINT", default=""),
-                    "api_key": config("AZURE_OPENAI_API_KEY", default=""),
-                    "api_version": config("OPENAI_API_VERSION", default="")
-                    or "2024-02-15-preview",
-                    "azure_deployment": config(
-                        "AZURE_OPENAI_CHAT_DEPLOYMENT", default=""
-                    ),
-                    "timeout": 20,
-                },
-                "default": False,
-            }
-        if config("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", default=""):
-            settings["KH_EMBEDDINGS"]["azure"] = {
-                "spec": {
-                    "__type__": "kotaemon.embeddings.AzureOpenAIEmbeddings",
-                    "azure_endpoint": config("AZURE_OPENAI_ENDPOINT", default=""),
-                    "api_key": config("AZURE_OPENAI_API_KEY", default=""),
-                    "api_version": config("OPENAI_API_VERSION", default="")
-                    or "2024-02-15-preview",
-                    "azure_deployment": config(
-                        "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", default=""
-                    ),
-                    "timeout": 10,
-                },
-                "default": False,
-            }
+    _add_azure_models(settings, read_config)
 
     openai_default = "<YOUR_OPENAI_KEY>"
-    openai_api_key = config("OPENAI_API_KEY", default=openai_default)
-    google_api_key = config("GOOGLE_API_KEY", default="your-key")
+    openai_api_key = read_config("OPENAI_API_KEY", default=openai_default)
+    google_api_key = read_config("GOOGLE_API_KEY", default="your-key")
     is_openai_default = len(openai_api_key) > 0 and openai_api_key != openai_default
 
     if openai_api_key:
@@ -186,10 +203,10 @@ def build_kotaemon_settings(
             "spec": {
                 "__type__": "kotaemon.llms.ChatOpenAI",
                 "temperature": 0,
-                "base_url": config("OPENAI_API_BASE", default="")
+                "base_url": read_config("OPENAI_API_BASE", default="")
                 or "https://api.openai.com/v1",
                 "api_key": openai_api_key,
-                "model": config("OPENAI_CHAT_MODEL", default="gpt-4o-mini"),
+                "model": read_config("OPENAI_CHAT_MODEL", default="gpt-4o-mini"),
                 "timeout": 20,
             },
             "default": is_openai_default,
@@ -197,11 +214,11 @@ def build_kotaemon_settings(
         settings["KH_EMBEDDINGS"]["openai"] = {
             "spec": {
                 "__type__": "kotaemon.embeddings.OpenAIEmbeddings",
-                "base_url": config(
+                "base_url": read_config(
                     "OPENAI_API_BASE", default="https://api.openai.com/v1"
                 ),
                 "api_key": openai_api_key,
-                "model": config(
+                "model": read_config(
                     "OPENAI_EMBEDDINGS_MODEL", default="text-embedding-3-large"
                 ),
                 "timeout": 10,
@@ -210,13 +227,15 @@ def build_kotaemon_settings(
             "default": is_openai_default,
         }
 
-    voyage_api_key = config("VOYAGE_API_KEY", default="")
+    voyage_api_key = read_config("VOYAGE_API_KEY", default="")
     if voyage_api_key:
         settings["KH_EMBEDDINGS"]["voyageai"] = {
             "spec": {
                 "__type__": "kotaemon.embeddings.VoyageAIEmbeddings",
                 "api_key": voyage_api_key,
-                "model": config("VOYAGE_EMBEDDINGS_MODEL", default="voyage-3-large"),
+                "model": read_config(
+                    "VOYAGE_EMBEDDINGS_MODEL", default="voyage-3-large"
+                ),
             },
             "default": False,
         }
@@ -229,12 +248,12 @@ def build_kotaemon_settings(
             "default": False,
         }
 
-    if config("LOCAL_MODEL", default=""):
+    if read_config("LOCAL_MODEL", default=""):
         settings["KH_LLMS"]["ollama"] = {
             "spec": {
                 "__type__": "kotaemon.llms.ChatOpenAI",
                 "base_url": settings["KH_OLLAMA_URL"],
-                "model": config("LOCAL_MODEL", default="qwen2.5:7b"),
+                "model": read_config("LOCAL_MODEL", default="qwen2.5:7b"),
                 "api_key": "ollama",
             },
             "default": False,
@@ -243,7 +262,7 @@ def build_kotaemon_settings(
             "spec": {
                 "__type__": "kotaemon.llms.LCOllamaChat",
                 "base_url": settings["KH_OLLAMA_URL"].replace("v1/", ""),
-                "model": config("LOCAL_MODEL", default="qwen2.5:7b"),
+                "model": read_config("LOCAL_MODEL", default="qwen2.5:7b"),
                 "num_ctx": 8192,
             },
             "default": False,
@@ -252,7 +271,9 @@ def build_kotaemon_settings(
             "spec": {
                 "__type__": "kotaemon.embeddings.OpenAIEmbeddings",
                 "base_url": settings["KH_OLLAMA_URL"],
-                "model": config("LOCAL_MODEL_EMBEDDINGS", default="nomic-embed-text"),
+                "model": read_config(
+                    "LOCAL_MODEL_EMBEDDINGS", default="nomic-embed-text"
+                ),
                 "api_key": "ollama",
             },
             "default": False,
@@ -294,7 +315,7 @@ def build_kotaemon_settings(
         "spec": {
             "__type__": "kotaemon.llms.chats.LCCohereChat",
             "model_name": "command-r-plus-08-2024",
-            "api_key": config("COHERE_API_KEY", default="your-key"),
+            "api_key": read_config("COHERE_API_KEY", default="your-key"),
         },
         "default": False,
     }
@@ -303,7 +324,7 @@ def build_kotaemon_settings(
             "__type__": "kotaemon.llms.ChatOpenAI",
             "base_url": "https://api.mistral.ai/v1",
             "model": "ministral-8b-latest",
-            "api_key": config("MISTRAL_API_KEY", default="your-key"),
+            "api_key": read_config("MISTRAL_API_KEY", default="your-key"),
         },
         "default": False,
     }
@@ -312,7 +333,7 @@ def build_kotaemon_settings(
         "spec": {
             "__type__": "kotaemon.embeddings.LCCohereEmbeddings",
             "model": "embed-multilingual-v3.0",
-            "cohere_api_key": config("COHERE_API_KEY", default="your-key"),
+            "cohere_api_key": read_config("COHERE_API_KEY", default="your-key"),
             "user_agent": "default",
         },
         "default": False,
@@ -329,7 +350,7 @@ def build_kotaemon_settings(
         "spec": {
             "__type__": "kotaemon.embeddings.LCMistralEmbeddings",
             "model": "mistral-embed",
-            "api_key": config("MISTRAL_API_KEY", default="your-key"),
+            "api_key": read_config("MISTRAL_API_KEY", default="your-key"),
         },
         "default": False,
     }
@@ -343,7 +364,7 @@ def build_kotaemon_settings(
         "spec": {
             "__type__": "kotaemon.rerankings.CohereReranking",
             "model_name": "rerank-v4.0-fast",
-            "cohere_api_key": config("COHERE_API_KEY", default=""),
+            "cohere_api_key": read_config("COHERE_API_KEY", default=""),
         },
         "default": False,
     }
@@ -355,15 +376,15 @@ def build_kotaemon_settings(
         "ktem.reasoning.react.ReactAgentPipeline",
         "ktem.reasoning.rewoo.RewooAgentPipeline",
     ]
-    settings["KH_REASONINGS_USE_MULTIMODAL"] = config(
+    settings["KH_REASONINGS_USE_MULTIMODAL"] = read_config(
         "USE_MULTIMODAL", default=False, cast=bool
     )
     settings[
         "KH_VLM_ENDPOINT"
     ] = "{0}/openai/deployments/{1}/chat/completions?api-version={2}".format(
-        config("AZURE_OPENAI_ENDPOINT", default=""),
-        config("OPENAI_VISION_DEPLOYMENT_NAME", default="gpt-4o"),
-        config("OPENAI_API_VERSION", default=""),
+        read_config("AZURE_OPENAI_ENDPOINT", default=""),
+        read_config("OPENAI_VISION_DEPLOYMENT_NAME", default="gpt-4o"),
+        read_config("OPENAI_API_VERSION", default=""),
     )
 
     settings["SETTINGS_APP"] = {}
@@ -382,19 +403,21 @@ def build_kotaemon_settings(
         },
         "max_context_length": {
             "name": "Max context length (LLM)",
-            "value": config("MAX_CONTEXT_LENGTH", default=32000, cast=int),
+            "value": read_config("MAX_CONTEXT_LENGTH", default=32000, cast=int),
             "component": "number",
         },
     }
 
-    settings["USE_GLOBAL_GRAPHRAG"] = config(
+    settings["USE_GLOBAL_GRAPHRAG"] = read_config(
         "USE_GLOBAL_GRAPHRAG", default=False, cast=bool
     )
-    settings["USE_NANO_GRAPHRAG"] = config(
+    settings["USE_NANO_GRAPHRAG"] = read_config(
         "USE_NANO_GRAPHRAG", default=False, cast=bool
     )
-    settings["USE_LIGHTRAG"] = config("USE_LIGHTRAG", default=False, cast=bool)
-    settings["USE_MS_GRAPHRAG"] = config("USE_MS_GRAPHRAG", default=False, cast=bool)
+    settings["USE_LIGHTRAG"] = read_config("USE_LIGHTRAG", default=False, cast=bool)
+    settings["USE_MS_GRAPHRAG"] = read_config(
+        "USE_MS_GRAPHRAG", default=False, cast=bool
+    )
     settings["GRAPHRAG_INDEX_TYPES"] = []
     settings["KH_INDEX_TYPES"] = ["ktem.index.file.FileIndex"]
     settings["GRAPHRAG_INDICES"] = []

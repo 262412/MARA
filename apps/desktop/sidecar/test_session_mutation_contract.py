@@ -56,6 +56,9 @@ class SessionMutationService:
             "failures": [],
         }
 
+    def validate_indexing(self, _paths: list[str]) -> None:
+        return None
+
     def delete_file(self, file_id: str) -> list[dict[str, str]]:
         return []
 

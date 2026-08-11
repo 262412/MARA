@@ -8,13 +8,13 @@ import threading
 import unittest
 from pathlib import Path
 
-from .indexing_readiness import DesktopIndexingPreflightError
 from .index_tasks import (
     IndexTaskConflictError,
     IndexTaskManager,
     _failure_from_exception,
     _missing_module_name,
 )
+from .indexing_readiness import DesktopIndexingPreflightError
 
 
 class StubIndexService:
