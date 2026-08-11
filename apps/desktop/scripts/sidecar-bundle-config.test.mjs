@@ -69,7 +69,11 @@ test("isolates PyInstaller analysis from the source checkout", () => {
     /THEFLOW_SETTINGS_MODULE: "ktem\.default_flowsettings"/,
   );
   assert.match(buildScript, /THEFLOW_TEMP_PATH: path\.join\(buildRuntimeRoot, "tmp"\)/);
-  assert.equal(buildScript.match(/cwd: buildRuntimeRoot/g)?.length, 2);
+  assert.equal(buildScript.match(/cwd: buildRuntimeRoot/g)?.length, 1);
+  assert.match(
+    buildScript,
+    /cwd: desktopRoot,\s*env: buildRuntimeEnvironment/,
+  );
   assert.match(buildScript, /finally \{[\s\S]*rmSync\(buildRuntimeRoot/);
 });
 

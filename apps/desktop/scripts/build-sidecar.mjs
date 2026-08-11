@@ -136,7 +136,7 @@ try {
       source,
     ],
     {
-      cwd: buildRuntimeRoot,
+      cwd: desktopRoot,
       env: buildRuntimeEnvironment,
       stdio: "inherit",
     },
