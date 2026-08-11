@@ -48,15 +48,25 @@ def _answerability_metrics(
     )
     required_slot_ids = _trace_ids(trace.get("verifier_required_slot_ids"))
     required_evidence_ids = _trace_ids(trace.get("verifier_required_evidence_ids"))
-    required_coverage = _required_authority_coverage(
+    required_verification_applicable = _required_verification_applicable(
         trace,
+        boolean_applicable=applicable,
         required_slot_ids=required_slot_ids,
         required_evidence_ids=required_evidence_ids,
-        required_verification_applicable=applicable,
+    )
+    required_coverage = (
+        _required_authority_coverage(
+            trace,
+            required_slot_ids=required_slot_ids,
+            required_evidence_ids=required_evidence_ids,
+            required_verification_applicable=True,
+        )
+        if required_verification_applicable
+        else None
     )
     authority = _required_authority_metrics(
         trace,
-        required_verification_applicable=applicable,
+        required_verification_applicable=required_verification_applicable,
     )
     contract_action = str(
         prediction.get("contract_action") or trace.get("contract_action") or ""
@@ -97,6 +107,24 @@ def _answerability_metrics(
         "qasper_runtime_scope_failure_count": float(runtime_failure_kind == "scope"),
         **authority,
     }
+
+
+def _required_verification_applicable(
+    trace: dict[str, Any],
+    *,
+    boolean_applicable: bool,
+    required_slot_ids: list[str],
+    required_evidence_ids: list[str],
+) -> bool:
+    explicit = trace.get("runtime_boolean_authority_applicable")
+    if explicit is not None:
+        return bool(explicit)
+    return bool(
+        boolean_applicable
+        or required_slot_ids
+        or required_evidence_ids
+        or _trace_count(trace.get("verifier_required_slot_count"))
+    )
 
 
 def _required_authority_metrics(

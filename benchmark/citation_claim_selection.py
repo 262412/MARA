@@ -7,6 +7,7 @@ from ktem.docqa.evidence_identity import identity_of
 
 from .qasper_boolean_scope import scope_valid_support_items
 from .qasper_deterministic_support import deterministic_support_ids
+from .task_answer_contracts import runtime_boolean_authority
 from .verified_claim_citations import verified_claim_support_groups
 
 
@@ -32,6 +33,9 @@ def _scope_valid_group(
 ) -> list[dict[str, Any]]:
     if str(prediction.get("answer_type") or "").strip().lower() != "boolean":
         return items
+    runtime_authoritative = _runtime_authoritative_qasper_support(prediction, items)
+    if runtime_authoritative:
+        return runtime_authoritative
     deterministic = _deterministic_qasper_support(prediction, items)
     if deterministic:
         return deterministic
@@ -43,6 +47,18 @@ def _scope_valid_group(
         span,
         items,
     )
+
+
+def _runtime_authoritative_qasper_support(
+    prediction: dict[str, Any],
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    authority = runtime_boolean_authority(prediction)
+    if not authority["complete"]:
+        return []
+    evidence_id = str(authority["evidence_id"])
+    matches = [item for item in items if identity_of(item).key == evidence_id]
+    return matches if len(matches) == 1 else []
 
 
 def _deterministic_qasper_support(

@@ -35,10 +35,14 @@ def rebuild_terminal_answer_state(
     guardrail_decision: dict[str, Any],
     emitted_citations: list[dict[str, Any]],
     claim_verification: dict[str, Any] | None = None,
+    scoring_answer: str | None = None,
 ) -> dict[str, Any]:
     """Atomically replace every field whose meaning depends on the final answer."""
 
     terminal_answer = _terminal_answer(answer)
+    scored_answer = (
+        terminal_answer if scoring_answer is None else _terminal_answer(scoring_answer)
+    )
     abstained = is_abstention_answer(terminal_answer)
     answer_status = "abstained" if abstained else "answered"
     decision = dict(verify_decision)
@@ -48,7 +52,7 @@ def rebuild_terminal_answer_state(
     guardrail = dict(guardrail_decision)
 
     prediction["predicted_answer"] = terminal_answer
-    prediction["answer_for_scoring"] = terminal_answer
+    prediction["answer_for_scoring"] = scored_answer
     if not _presentation_matches(prediction.get("answer_for_user"), terminal_answer):
         prediction["answer_for_user"] = terminal_answer
     prediction["answer_status"] = answer_status

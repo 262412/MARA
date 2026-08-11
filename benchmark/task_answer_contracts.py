@@ -9,7 +9,7 @@ from typing import Any
 from ktem.docqa.boolean_claim_verification import canonical_boolean_answer_polarity
 from ktem.docqa.evidence_identity import identity_of
 
-from .metrics import is_abstention_answer
+from .metrics import is_abstention_answer, normalize_text
 from .terminal_answer_state import rebuild_terminal_answer_state
 
 QASPER_RUNTIME_AUTHORITY_AUDIT = "qasper_runtime_authority_audit.v1"
@@ -64,7 +64,7 @@ def _qasper_audit_context(prediction: dict[str, Any]) -> dict[str, Any]:
         projection_required and ({engine_label, scored_label} & {"yes", "no"})
     )
     projection_present = _runtime_projection_present(prediction)
-    authority = _runtime_boolean_authority(prediction, engine_label)
+    authority = runtime_boolean_authority(prediction, engine_label)
     semantic_rewrite = bool(
         projection_present
         and engine_label
@@ -199,9 +199,16 @@ def synchronize_terminal_answer_state(prediction: dict[str, Any]) -> bool:
         for value in prediction.get("structured_citations") or []
         if isinstance(value, dict)
     ]
+    engine_answer = str(prediction.get("engine_terminal_answer") or "")
+    answer_type = str(prediction.get("answer_type") or "").strip().lower()
+    terminal_answer = (
+        final_label or final_answer
+        if answer_type == "boolean" or is_abstention_answer(engine_answer)
+        else engine_answer
+    )
     rebuild_terminal_answer_state(
         prediction,
-        answer=final_label or final_answer,
+        answer=terminal_answer,
         verify_decision=verify_decision,
         claim_verification={
             "contract_id": QASPER_RUNTIME_AUTHORITY_AUDIT,
@@ -213,6 +220,7 @@ def synchronize_terminal_answer_state(prediction: dict[str, Any]) -> bool:
         supporting_evidence=supporting_evidence,
         guardrail_decision=guardrail_decision,
         emitted_citations=citations,
+        scoring_answer=final_answer,
     )
     _update_contract_trace(prediction)
     return True
@@ -256,10 +264,14 @@ def _runtime_projection_present(prediction: dict[str, Any]) -> bool:
     )
 
 
-def _runtime_boolean_authority(
+def runtime_boolean_authority(
     prediction: dict[str, Any],
-    engine_label: str,
+    engine_label: str = "",
 ) -> dict[str, Any]:
+    if not engine_label:
+        engine_label = _canonical_semantic_label(
+            str(prediction.get("engine_terminal_answer") or "")
+        )
     (
         decision,
         bundle,
@@ -559,7 +571,7 @@ def _canonical_semantic_label(value: str) -> str:
     if is_abstention_answer(str(value or "")):
         return "unanswerable"
     polarity = canonical_boolean_answer_polarity(str(value or ""))
-    return polarity or " ".join(str(value or "").strip().lower().split())
+    return polarity or normalize_text(value)
 
 
 def _rewrite_type(before: str, after: str) -> str:

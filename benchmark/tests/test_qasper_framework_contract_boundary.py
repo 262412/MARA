@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 from ktem.docqa._runtime_models import DocQARequest
+from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.execution import execute_controller_turn
 
 from benchmark.answer_finalizer import finalize_prediction_answer
@@ -97,6 +98,100 @@ def _runtime_abstention_prediction() -> dict:
     return prediction
 
 
+def _runtime_generated_abstention_prediction() -> dict:
+    question = "Do the authors conduct experiments on the tasks mentioned?"
+    evidence = {
+        "evidence_id": "experiment",
+        "source_id": "paper",
+        "text": (
+            "Sentence pairs are useful challenges for machine translation.\n\n"
+            "## Current state of the art\n"
+            "For instance, the sentence is translated by Google Translate, "
+            "Bing Translate, and Yandex. In fact, I have been unable to "
+            "construct any English sentence that those systems translate "
+            "using the feminine plural pronoun."
+        ),
+    }
+    execution = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="boolean",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["paper"],
+            origin="benchmark",
+        ),
+        retrieve=lambda *_args: {"evidence": [evidence]},
+        generate=lambda *_args: "unanswerable The context does not mention experiments.",
+    )
+    prediction = {
+        **execution.as_dict(),
+        "example_id": "1dc2da5078a7e5ea82ccd1c90d81999a922bc9bf",
+        "question": question,
+        "answer_type": "boolean",
+        "predicted_answer": execution.answer,
+        "route": "text_rag",
+        "gold_answers": ["yes"],
+        "gold_evidence": ["experiment"],
+        "evidence_metadata": deepcopy(execution.evidence_bundle.metadata),
+        "structured_citations": [],
+        "predicted_citations": [],
+    }
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_contract_smoke",
+        mode="scoring_adapter_v1",
+    )
+    return prediction
+
+
+def _runtime_free_text_prediction() -> dict:
+    question = "What background knowledge does the method leverage?"
+    answer = "The method leverages labeled features and class distribution."
+    evidence = {
+        "evidence_id": "background",
+        "source_id": "paper",
+        "text": answer,
+    }
+    execution = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="free_text",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["paper"],
+            origin="benchmark",
+        ),
+        retrieve=lambda *_args: {"evidence": [evidence]},
+        generate=lambda *_args: answer,
+    )
+    prediction = {
+        **execution.as_dict(),
+        "example_id": "free-text-punctuation",
+        "question": question,
+        "answer_type": "evidence_qa",
+        "predicted_answer": execution.answer,
+        "route": "text_rag",
+        "gold_answers": [answer],
+        "gold_evidence": ["background"],
+        "evidence_metadata": deepcopy(execution.evidence_bundle.metadata),
+        "structured_citations": [],
+        "predicted_citations": [],
+    }
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_contract_smoke",
+        mode="scoring_adapter_v1",
+    )
+    return prediction
+
+
 def test_complete_runtime_authority_is_a_zero_llm_pass_through() -> None:
     prediction = _runtime_prediction()
     immutable = {
@@ -132,6 +227,63 @@ def test_complete_runtime_authority_is_a_zero_llm_pass_through() -> None:
     assert summary["contract_semantic_rewrite_count"] == 0.0
     assert summary["qasper_post_engine_answerability_llm_call_count"] == 0.0
     assert summary["qasper_runtime_authority_missing_count"] == 0.0
+
+
+def test_runtime_authority_is_used_directly_for_terminal_citation() -> None:
+    prediction = _runtime_generated_abstention_prediction()
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_contract_smoke",
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+    )
+    synchronize_terminal_answer_state(prediction)
+
+    assert prediction["engine_terminal_answer"] == "yes"
+    assert prediction["contract_action"] == "pass_through"
+    [citation] = prediction["structured_citations"]
+    assert citation["evidence_id"] == (
+        prediction["engine_verify_decision"]["authoritative_evidence_id"]
+    )
+    [emitted] = prediction["evidence_metadata"]["emitted_citation_evidence"]
+    assert identity_of(emitted).key == citation["evidence_id"]
+
+
+def test_scoring_punctuation_normalization_is_not_a_semantic_rewrite() -> None:
+    prediction = _runtime_free_text_prediction()
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_contract_smoke",
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+    )
+    synchronize_terminal_answer_state(prediction)
+
+    assert prediction["engine_terminal_answer"].endswith(".")
+    assert not prediction["answer_for_scoring"].endswith(".")
+    assert prediction["predicted_answer"] == prediction["engine_terminal_answer"]
+    assert prediction["terminal_answer_state"]["answer"] == (
+        prediction["engine_terminal_answer"]
+    )
+    assert prediction["contract_action"] == "pass_through"
+    assert prediction["contract_semantic_rewrite"] is False
+
+
+def test_required_authority_coverage_excludes_non_applicable_rows() -> None:
+    answerable = _runtime_prediction()
+    abstention = _runtime_abstention_prediction()
+    free_text = _runtime_free_text_prediction()
+    for prediction in (answerable, abstention, free_text):
+        apply_task_answer_contract(
+            prediction,
+            dataset_name="qasper_contract_smoke",
+            llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+        )
+
+    summary = contract_invariant_summary([answerable, abstention, free_text])
+
+    assert summary["qasper_required_verification_applicable_count"] == 1.0
+    assert summary["verifier_required_evidence_coverage"] == 1.0
 
 
 def test_safe_runtime_abstention_requires_projection_but_not_polarity_authority() -> None:
