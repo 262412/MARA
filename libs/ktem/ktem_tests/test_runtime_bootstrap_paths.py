@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ktem.runtime_bootstrap import get_runtime_paths
+from ktem.runtime_bootstrap import get_runtime_paths, load_packaged_runtime_env
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -26,6 +26,25 @@ def test_desktop_runtime_paths_stay_inside_the_desktop_data_root(
     assert paths.cache_dir == (desktop_root / "cache").resolve()
     assert paths.flowsettings_path == paths.config_dir / "flowsettings.py"
     assert paths.env_path == paths.config_dir / ".env"
+
+
+def test_desktop_owned_embedding_config_overrides_inherited_placeholders(
+    monkeypatch,
+    tmp_path,
+):
+    desktop_root = tmp_path / "MARA"
+    config_dir = desktop_root / "state" / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / ".env").write_text(
+        "OPENAI_API_KEY=desktop-configured-key\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MARA_DESKTOP_DATA_DIR", str(desktop_root))
+    monkeypatch.setenv("OPENAI_API_KEY", "<YOUR_OPENAI_KEY>")
+
+    load_packaged_runtime_env()
+
+    assert os.environ["OPENAI_API_KEY"] == "desktop-configured-key"
 
 
 def test_desktop_theflow_progress_ignores_read_only_cwd_and_storage_override(
