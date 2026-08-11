@@ -38,6 +38,21 @@ def test_native_packages_cover_read_only_cwd_and_unconfigured_first_start() -> N
     assert '"repository-checkout" = (Resolve-Path ".").Path' in windows_commands
 
 
+def test_windows_checks_unconfigured_first_start_before_any_fixture() -> None:
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    commands = _commands(workflow["jobs"]["package-windows"])
+
+    unconfigured_launch = commands.index(
+        '$unconfiguredProcess = Start-Process $executable'
+    )
+    first_fixture = commands.index("sidecar.smoke_fixture")
+
+    assert unconfigured_launch < first_fixture
+    assert '$unconfiguredDataRoot = $dataRoot' in commands
+    assert '$env:APPDATA = $unconfiguredAppData' not in commands
+    assert '"data_root=appdata-mara"' in commands
+
+
 def test_desktop_workflow_tracks_embedding_and_storage_runtime_sources() -> None:
     source = WORKFLOW_PATH.read_text(encoding="utf-8")
 

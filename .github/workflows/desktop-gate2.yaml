@@ -492,6 +492,56 @@ jobs:
             "working_directory_acl=write_denied" | Set-Content $unconfiguredEvidence
           }
           Assert-NoExternalTheflow "prelaunch"
+          $unconfiguredDataRoot = $dataRoot
+          foreach ($name in @(
+            "OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_EMBEDDINGS_MODEL",
+            "OPENAI_CHAT_MODEL", "GOOGLE_API_KEY", "AZURE_OPENAI_API_KEY",
+            "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT",
+            "LOCAL_MODEL", "LOCAL_MODEL_EMBEDDINGS", "KH_OLLAMA_URL",
+            "VOYAGE_API_KEY", "COHERE_API_KEY", "MISTRAL_API_KEY",
+            "KH_APP_DATA_DIR"
+          )) {
+            Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+          }
+          $unconfiguredProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-indexing-unconfigured" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $unconfiguredStdout `
+            -RedirectStandardError $unconfiguredStderr -PassThru
+          $unconfiguredProcess.WaitForExit()
+          if (Test-Path $unconfiguredStdout) {
+            Get-Content $unconfiguredStdout | Write-Host
+          }
+          if (Test-Path $unconfiguredStderr) {
+            Get-Content $unconfiguredStderr | Write-Host
+          }
+          if ($unconfiguredProcess.ExitCode -ne 0) {
+            exit $unconfiguredProcess.ExitCode
+          }
+          if (-not (Select-String -Path $unconfiguredStdout `
+            -SimpleMatch "issue_code=embedding_not_configured" -Quiet)) {
+            throw "The unconfigured package did not report embedding_not_configured."
+          }
+          if (Test-Path (Join-Path $unconfiguredDataRoot "state/index-tasks.json")) {
+            throw "The unconfigured package persisted an index task."
+          }
+          $unconfiguredProgress = Get-ChildItem `
+            (Join-Path $unconfiguredDataRoot "cache/theflow") `
+            -Filter progress.pkl -Recurse -File -ErrorAction SilentlyContinue
+          if ($unconfiguredProgress) {
+            throw "The unconfigured package started TheFlow indexing work."
+          }
+          if (-not (Test-Path (Join-Path $unconfiguredDataRoot "logs/indexing.log"))) {
+            throw "The unconfigured package did not create its Desktop-owned log."
+          }
+          Assert-NoExternalTheflow "post-unconfigured"
+          @(
+            "working_directory=acl-write-denied"
+            "data_root=appdata-mara"
+            "issue_code=embedding_not_configured"
+            "task_created=false"
+            "unconfigured_exit_code=$($unconfiguredProcess.ExitCode)"
+          ) | Add-Content $unconfiguredEvidence
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
           $portFile = Join-Path $env:RUNNER_TEMP "mara-embedding-port.txt"
@@ -759,60 +809,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "MARA CLI still observes records deleted by Desktop."
           }
-          $unconfiguredAppData = Join-Path $env:RUNNER_TEMP `
-            "mara-desktop-unconfigured-appdata"
-          New-Item -ItemType Directory -Force -Path $unconfiguredAppData | Out-Null
-          $env:APPDATA = $unconfiguredAppData
-          foreach ($name in @(
-            "OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_EMBEDDINGS_MODEL",
-            "OPENAI_CHAT_MODEL", "GOOGLE_API_KEY", "AZURE_OPENAI_API_KEY",
-            "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT",
-            "LOCAL_MODEL", "LOCAL_MODEL_EMBEDDINGS", "KH_OLLAMA_URL",
-            "VOYAGE_API_KEY", "COHERE_API_KEY", "MISTRAL_API_KEY",
-            "KH_APP_DATA_DIR"
-          )) {
-            Remove-Item "Env:$name" -ErrorAction SilentlyContinue
-          }
-          $unconfiguredDataRoot = Join-Path $unconfiguredAppData "MARA"
-          $unconfiguredProcess = Start-Process $executable `
-            -ArgumentList "--smoke-test-indexing-unconfigured" `
-            -WorkingDirectory $readOnlyCwd `
-            -RedirectStandardOutput $unconfiguredStdout `
-            -RedirectStandardError $unconfiguredStderr -PassThru
-          $unconfiguredProcess.WaitForExit()
-          if (Test-Path $unconfiguredStdout) {
-            Get-Content $unconfiguredStdout | Write-Host
-          }
-          if (Test-Path $unconfiguredStderr) {
-            Get-Content $unconfiguredStderr | Write-Host
-          }
-          if ($unconfiguredProcess.ExitCode -ne 0) {
-            exit $unconfiguredProcess.ExitCode
-          }
-          if (-not (Select-String -Path $unconfiguredStdout `
-            -SimpleMatch "issue_code=embedding_not_configured" -Quiet)) {
-            throw "The unconfigured package did not report embedding_not_configured."
-          }
-          if (Test-Path (Join-Path $unconfiguredDataRoot "state/index-tasks.json")) {
-            throw "The unconfigured package persisted an index task."
-          }
-          $unconfiguredProgress = Get-ChildItem `
-            (Join-Path $unconfiguredDataRoot "cache/theflow") `
-            -Filter progress.pkl -Recurse -File -ErrorAction SilentlyContinue
-          if ($unconfiguredProgress) {
-            throw "The unconfigured package started TheFlow indexing work."
-          }
-          if (-not (Test-Path (Join-Path $unconfiguredDataRoot "logs/indexing.log"))) {
-            throw "The unconfigured package did not create its Desktop-owned log."
-          }
-          Assert-NoExternalTheflow "post-unconfigured"
-          @(
-            "working_directory=acl-write-denied"
-            "data_root=desktop-owned"
-            "issue_code=embedding_not_configured"
-            "task_created=false"
-            "unconfigured_exit_code=$($unconfiguredProcess.ExitCode)"
-          ) | Add-Content $unconfiguredEvidence
           $files = Get-ChildItem "apps/desktop/release/MARA-win32-x64" -Recurse -File
           $bytes = ($files | Measure-Object Length -Sum).Sum
           $sidecar = "apps/desktop/release/MARA-win32-x64/resources/sidecar/mara-desktop-sidecar/mara-desktop-sidecar.exe"
