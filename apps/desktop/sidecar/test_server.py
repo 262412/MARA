@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -436,15 +437,17 @@ class SidecarIndexingReadinessContractTest(unittest.TestCase):
         token = "test-token"
         client = TestClient(create_app(token, UnconfiguredEmbeddingService()))
         try:
-            response = client.post(
-                "/v1/index-tasks",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "X-Request-ID": "request-no-embedding",
-                    "Idempotency-Key": "import-no-embedding",
-                },
-                json={"paths": ["/private/source/paper.txt"]},
-            )
+            with tempfile.TemporaryDirectory() as temporary_directory:
+                source_path = str(Path(temporary_directory) / "paper.txt")
+                response = client.post(
+                    "/v1/index-tasks",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "X-Request-ID": "request-no-embedding",
+                        "Idempotency-Key": "import-no-embedding",
+                    },
+                    json={"paths": [source_path]},
+                )
             latest = client.get(
                 "/v1/index-tasks/latest",
                 headers={
@@ -457,7 +460,7 @@ class SidecarIndexingReadinessContractTest(unittest.TestCase):
             self.assertEqual(response.json()["code"], "embedding_not_configured")
             self.assertFalse(response.json()["retryable"])
             self.assertEqual(response.json()["request_id"], "request-no-embedding")
-            self.assertNotIn("/private", response.text)
+            self.assertNotIn(source_path, response.text)
             self.assertIsNone(latest.json()["task"])
         finally:
             client.app.state.index_task_manager.close()

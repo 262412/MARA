@@ -28,7 +28,7 @@ class DesktopMaintenanceLoggingTest(unittest.TestCase):
                 logger.removeHandler(handler)
                 handler.close()
 
-            self.assertTrue(log_path.is_relative_to(data_root / "logs"))
+            self.assertTrue(log_path.is_relative_to(data_root.resolve() / "logs"))
             self.assertIn("task-safe-id", content)
             self.assertIn("embedding_unavailable", content)
             self.assertIn("ConnectionError", content)
