@@ -88,14 +88,17 @@ Beta 稳定化阶段，`Later` 表示不阻塞首发。状态在正式开发开�
 Gate 3 从“原生文件导入 → 后台索引 → Files 刷新/删除”开始。以下状态只表示该
 能力切片的进度，不代表未列出的 P0 功能或整个 Gate 3 已完成。
 
-| 能力                         | 状态        | 当前证据                                                                                          | 升级为 Verified 仍需                     |
-| ---------------------------- | ----------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 原生选择器导入               | In progress | Main 持有原生路径；无 embedding 时导入/拖放禁用且不建任务；Windows/Ubuntu handoff 组合包通过      | Windows 10/11 原生选择器与真实 OS 拖放   |
-| 后台索引任务                 | In progress | 真实 DocQA runtime；稳定 indexing readiness/error；只写 Desktop cache；三平台原生 smoke 通过      | PDF、图片、DOC/XLS/PPT；Windows 10/11 VM |
-| Files 完成后刷新与删除       | In progress | 终态只刷新一次；真实 deletion coordinator；窄批量契约；当前 Windows/Ubuntu 组合包通过             | 当前包 Windows 10/11 产品 VM             |
-| 会话详情读取                 | In progress | 真实 `load_session()`；五态、重试与过期响应保护；Windows、Ubuntu 22/24 非空组合包通过             | 当前 Gate 3 包的 Windows 10/11 产品 VM   |
-| 会话新建、搜索、重命名与删除 | In progress | 真实 create/rename/delete；客户端搜索；认证、幂等、写互斥与窄 IPC；Windows、Ubuntu 22/24 包通过   | 当前包 Windows 10/11 VM；固定            |
-| 文档/多文档问答、流式与引用  | In progress | 真实 `stream_turn()`；64 来源；单调 SSE；双文件相同 evidence ID 碰撞、partial 取消/重试三平台通过 | Windows 10/11 VM；页/选中文本；引用定位  |
+| 能力                             | 状态        | 当前证据                                                                                         | 升级为 Verified 仍需                     |
+| -------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| 原生选择器导入                   | In progress | Main 持有原生路径；无 embedding 时导入/拖放禁用且不建任务；Windows/Ubuntu handoff 组合包通过     | Windows 10/11 原生选择器与真实 OS 拖放   |
+| 后台索引任务                     | In progress | 真实 DocQA runtime；稳定 indexing readiness/error；只写 Desktop cache；三平台原生 smoke 通过     | PDF、图片、DOC/XLS/PPT；Windows 10/11 VM |
+| Files 完成后刷新与删除           | In progress | 终态只刷新一次；真实 deletion coordinator；窄批量契约；当前 Windows/Ubuntu 组合包通过            | 当前包 Windows 10/11 产品 VM             |
+| 会话详情读取                     | In progress | 真实 `load_session()`；五态、重试与过期响应保护；Windows、Ubuntu 22/24 非空组合包通过            | 当前 Gate 3 包的 Windows 10/11 产品 VM   |
+| 会话新建、搜索、重命名与删除     | In progress | 真实 create/rename/delete；客户端搜索；认证、幂等、写互斥与窄 IPC；Windows、Ubuntu 22/24 包通过  | 当前包 Windows 10/11 VM；固定            |
+| 冷启动草稿与 Composer            | In progress | 启动不建空会话；首次发送幂等建会话/任务；IME、Enter、Alt+Enter、重复键与失败保留自动化通过       | Windows 10/11 VM；中文 IME 人工验收      |
+| Resources、Help、Settings 基线页 | In progress | 五类强类型页面；焦点/ARIA/标题；离线帮助；模型设置页和跨页后台任务连续性三平台包通过             | 完整 Resources/Settings P0；缩放人工验收 |
+| 模型设置与问答准备状态           | In progress | Chat/Embedding 独立路由；安全凭据降级；重启后 Doctor；稳定 query readiness/error；三平台包通过   | Windows 10/11 安全存储与真实服务验收     |
+| 文档/多文档问答、流式与引用      | In progress | 真实 `stream_turn()`；64 来源；单调 SSE；未配置 LLM 不建任务；双文件 partial 取消/重试三平台通过 | Windows 10/11 VM；页/选中文本；引用定位  |
 
 当前 Gate 3 文件索引修复打包基线为
 `4112e99f5f9d6beccb06f67e5e4e3e160beb3129`。所有原生 smoke
@@ -108,4 +111,5 @@ Gate 3 从“原生文件导入 → 后台索引 → Files 刷新/删除”开�
 [Gate 3 会话详情纵向切片证据](gate-3-session-detail-evidence.md)、
 [Gate 3 会话管理纵向切片证据](gate-3-session-management-evidence.md)和
 [Gate 3 会话新建纵向切片证据](gate-3-session-creation-evidence.md)、
-[Gate 3 真实问答纵向切片证据](gate-3-query-streaming-evidence.md)。
+[Gate 3 真实问答纵向切片证据](gate-3-query-streaming-evidence.md)和
+[Gate 3 草稿、导航与模型准备纵向切片证据](gate-3-draft-navigation-and-model-settings-evidence.md)。

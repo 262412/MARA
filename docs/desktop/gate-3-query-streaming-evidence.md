@@ -19,7 +19,10 @@ Ubuntu 24.04 对 Ubuntu 22.04 同一包和同一数据快照复验通过；Windo
 本轮问答切片的自动化整改已经闭环，但功能矩阵和整个 Gate 3 仍为 **In progress**。
 当前包尚未在 Windows 10/11 产品 VM 复验；页级/选中文本范围、“全部/本次上传”来源
 模式、建议问题、可公开推理阶段、引用点击跳页/高亮，以及 Preview、Notes、Studio、
-Knowledge Graph、Resources、Settings、Help 和迁移等 P0 能力也尚未关闭。
+Knowledge Graph、完整 Resources 资源管理、完整 Settings 分组和迁移等 P0 能力也尚未
+关闭。基础 Resources/Help/Settings 页面、离线帮助、独立 Chat/Embedding 设置和
+问答准备状态已在后续切片实现，证据见
+[草稿、导航与模型准备纵向切片](gate-3-draft-navigation-and-model-settings-evidence.md)。
 
 ## 2026-08-09 NO-GO 整改闭环
 

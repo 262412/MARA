@@ -43,6 +43,8 @@
     快捷键、并发互斥和跨平台组合包证据。
 15. [Gate 3 真实问答纵向切片证据](gate-3-query-streaming-evidence.md)：文档/多文档
     来源范围、流式回答、取消/重试、安全引用和跨平台组合包证据。
+16. [Gate 3 草稿、导航与模型准备纵向切片证据](gate-3-draft-navigation-and-model-settings-evidence.md)：
+    冷启动草稿、真实页面导航、安全模型设置、问答准备契约和原生组合包证据。
 
 ## 阶段门
 
