@@ -46,6 +46,8 @@ def financial_numeric_facts(text: str) -> tuple[FinancialNumericFact, ...]:
         if not metric or len(amounts) != 1:
             continue
         value, scale, currency = amounts[0]
+        if currency and not scale:
+            scale = "one"
         agreement_key = (
             agreement_attributes.get("facility_identity", ""),
             agreement_attributes.get("agreement_lifecycle_status", ""),

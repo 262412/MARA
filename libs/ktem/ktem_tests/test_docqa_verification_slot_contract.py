@@ -15,7 +15,7 @@ from ktem.docqa.verification import (
 )
 
 
-def test_required_verification_slot_blocks_supported_status():
+def test_verification_only_slot_reaches_claim_verification_without_false_support():
     plan = QueryPlan(
         answer_type="free_text",
         question_type="cross_page",
@@ -59,9 +59,8 @@ def test_required_verification_slot_blocks_supported_status():
         answer="The first finding reports improved accuracy.",
     )
 
-    assert decision.status == "not_enough_evidence"
-    assert decision.action == "abstain"
-    assert "support:right" in decision.reason
+    assert decision.status == "unknown"
+    assert decision.claims == ["The first finding reports improved accuracy."]
 
 
 def test_boolean_verifier_checks_proposition_polarity():
@@ -256,7 +255,7 @@ def test_claim_support_reconciles_to_selected_slot_compatible_evidence():
         {
             "slot_id": "support:primary",
             "status": "verified_support",
-            "evidence_ids": [identity_of(bound).key, identity_of(support).key],
+            "evidence_ids": [identity_of(support).key],
         }
     ]
 

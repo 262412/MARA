@@ -12,6 +12,7 @@ from .calculation_evidence_identity import (
 )
 from .calculation_slot_verification import verify_required_calculation_slots
 from .evidence_identity import identity_of
+from .finance_calculation_binding import named_currency_dimensions
 from .finance_formula_inputs import FormulaInputSpec
 from .finance_scale import compatible_dimension_scope
 from .financial_statement_identity import financial_statement_identity
@@ -255,6 +256,13 @@ def verify_calculation_plan(
         )
         if not any(error.endswith(f":{operand.operand_id}") for error in errors):
             verified_operands.append(operand.operand_id)
+        if operand.operand_id.startswith("revolving_credit_capacity"):
+            if not operand.unit:
+                errors.append(f"operand_unit_missing:{operand.operand_id}")
+            if not operand.scale:
+                errors.append(f"operand_scale_missing:{operand.operand_id}")
+            if not (operand.scale_evidence_identity or operand.scale_evidence_id):
+                errors.append(f"operand_scale_evidence_missing:{operand.operand_id}")
     errors.extend(_compatibility_errors(plan))
     if plan.answer_scale and plan.answer_unit.lower() not in {"percent", "%", "ratio"}:
         errors.extend(
@@ -317,8 +325,6 @@ def _verify_operand(
         _evidence_text(item).lower(),
     ):
         errors.append(f"operand_period_kind_mismatch:{operand.operand_id}")
-    if operand.unit and not _term_matches(operand.unit, text):
-        errors.append(f"operand_unit_mismatch:{operand.operand_id}")
     if operand.scale_evidence_id:
         scale_lookup_id = operand.scale_evidence_identity or operand.scale_evidence_id
         scale_item = evidence_by_id.get(scale_lookup_id)
@@ -336,9 +342,19 @@ def _verify_operand(
             ):
                 errors.append(f"operand_scale_identity_mismatch:{operand.operand_id}")
             citations.append(scale_lookup_id)
-    if operand.scale and not _term_matches(operand.scale, scale_text):
+    dimension_text = " ".join((text, scale_text)) if operand.scale_evidence_id else text
+    unit_matches_currency = bool(
+        operand.currency
+        and operand.unit.lower() == operand.currency.lower()
+        and _currency_matches(operand.currency, dimension_text)
+    )
+    if operand.unit and not (
+        _term_matches(operand.unit, dimension_text) or unit_matches_currency
+    ):
+        errors.append(f"operand_unit_mismatch:{operand.operand_id}")
+    if operand.scale and not _scale_matches(operand, scale_text):
         errors.append(f"operand_scale_mismatch:{operand.operand_id}")
-    if operand.currency and not _currency_matches(operand.currency, text):
+    if operand.currency and not _currency_matches(operand.currency, dimension_text):
         errors.append(f"operand_currency_mismatch:{operand.operand_id}")
     if operand.entity and not _term_matches(operand.entity, text):
         errors.append(f"operand_entity_mismatch:{operand.operand_id}")
@@ -557,6 +573,20 @@ def _currency_matches(currency: str, text: str) -> bool:
     return any(
         alias.lower() in text.lower()
         for alias in aliases.get(normalized, (normalized,))
+    )
+
+
+def _scale_matches(operand: CalculationOperand, text: str) -> bool:
+    if str(operand.scale or "").strip().lower() != "one":
+        return _term_matches(operand.scale, text)
+    normalized_dimension = named_currency_dimensions(text, operand.value)
+    if normalized_dimension[0] and normalized_dimension[1] == operand.currency:
+        return True
+    return bool(
+        operand.currency
+        and _currency_matches(operand.currency, text)
+        and _value_appears(operand.value, text)
+        and not re.search(r"\b(?:thousand|million|billion|trillion)\b", text, re.I)
     )
 
 

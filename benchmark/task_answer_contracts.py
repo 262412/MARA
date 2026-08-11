@@ -100,7 +100,15 @@ def apply_task_answer_contract(
 
 
 def synchronize_terminal_answer_state(prediction: dict[str, Any]) -> bool:
-    """Commit one authoritative QASPER state after presentation finalization."""
+    """Commit one authoritative dataset state after presentation finalization."""
+
+    from .finance_terminal_sync import is_finance_terminal_prediction
+    from .finance_terminal_sync import (
+        synchronize_terminal_answer_state as synchronize_finance,
+    )
+
+    if is_finance_terminal_prediction(prediction):
+        return synchronize_finance(prediction)
 
     from .qasper_terminal_sync import synchronize_terminal_answer_state as synchronize
 

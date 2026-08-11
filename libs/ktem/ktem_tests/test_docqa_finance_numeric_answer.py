@@ -98,6 +98,11 @@ def test_finance_numeric_answer_binds_operand_dimensions_from_cell_metadata():
         "period": "2021",
         "entity": "Example Corp",
         "source": "evidence",
+        "dimension_evidence_id": "cell-revenue-2021",
+        "dimension_evidence_identity": "element::cell-revenue-2021",
+        "dimension_binding_scope": "table",
+        "scale_evidence_id": "cell-revenue-2021",
+        "scale_evidence_identity": "element::cell-revenue-2021",
     }
     assert operands["current"]["evidence_id"] == "cell-revenue-2022"
     assert operands["current"]["entity"] == "Example Corp"

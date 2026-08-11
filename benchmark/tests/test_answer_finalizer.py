@@ -1,6 +1,8 @@
 import json
 from typing import Any
 
+from ktem.docqa.evidence_identity import identity_of
+
 from benchmark.answer_finalizer import finalize_prediction_answer
 
 
@@ -432,6 +434,12 @@ def test_finalizer_recovers_answer_from_truncated_visual_json_without_scoring_br
 
 
 def test_finalizer_canonicalizes_existing_financebench_uuid_citation():
+    support = {
+        "source_id": "de95827e-87fb-4151-99bb-338b2d79f22c",
+        "page_label": "60",
+        "source_backrefs": ["de95827e-87fb-4151-99bb-338b2d79f22c#page:60"],
+    }
+    support_id = identity_of(support).key
     prediction: dict[str, Any] = {
         "predicted_answer": "The cash conversion cycle is not provided.",
         "answer_type": "extractive",
@@ -445,14 +453,26 @@ def test_finalizer_canonicalizes_existing_financebench_uuid_citation():
         ],
         "predicted_citations": ["de95827e-87fb-4151-99bb-338b2d79f22c#page:60"],
         "evidence_bundle": {
-            "items": [
-                {
-                    "source_id": "de95827e-87fb-4151-99bb-338b2d79f22c",
-                    "page_label": "60",
-                    "source_backrefs": ["de95827e-87fb-4151-99bb-338b2d79f22c#page:60"],
-                }
-            ]
+            "items": [support],
+            "metadata": {
+                "selected_evidence": [support],
+                "generation_context_evidence": [support],
+                "verified_claim_support_evidence": [support],
+                "query_plan": {
+                    "state_authority": "verified_claim_support.v1",
+                    "evidence_slots": [
+                        {
+                            "slot_id": "support:primary",
+                            "role": "support",
+                            "required_for_verification": True,
+                            "status": "verified_support",
+                            "evidence_ids": [support_id],
+                        }
+                    ],
+                },
+            },
         },
+        "verify_decision": {"status": "supported"},
         "predicted_sources": [
             "GENERALMILLS_2019_10K#page:60",
             "GENERALMILLS_2019_10K#page:3",

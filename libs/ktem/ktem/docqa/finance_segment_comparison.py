@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
+from .evidence_identity import exact_evidence_aliases, identity_of
+from .finance_segment_table import (
+    revenue_section_item,
+    segment_title,
+    vertical_segment_matrix,
+)
 from .financial_statement_identity import financial_statement_identity
 from .financial_table import parse_financial_table_cells
 
@@ -20,6 +26,11 @@ class FinanceSegmentComparisonAnswer:
     entity_period_values: dict[str, dict[str, str]]
     proportional_changes: dict[str, str]
     citation_ids: tuple[str, ...]
+    entity_period_cell_ids: dict[str, dict[str, str]]
+    unit: str
+    scale: str
+    matrix_evidence_ids: tuple[str, ...]
+    audit_status: str
     contract_id: str = FINANCE_SEGMENT_COMPARISON_CONTRACT
 
     def as_trace(self) -> dict[str, Any]:
@@ -27,37 +38,41 @@ class FinanceSegmentComparisonAnswer:
         payload["periods"] = list(self.periods)
         payload["excluded_entities"] = list(self.excluded_entities)
         payload["citation_ids"] = list(self.citation_ids)
+        payload["matrix_evidence_ids"] = list(self.matrix_evidence_ids)
         return payload
+
+
+@dataclass(frozen=True)
+class _SegmentMatrix:
+    values: dict[str, dict[str, Decimal]]
+    cell_ids: dict[str, dict[str, str]]
+    citation_ids: tuple[str, ...]
+    item_ids: tuple[str, ...]
+    unit: str
+    scale: str
+    source_page: tuple[str, str]
 
 
 def finance_segment_comparison_answer(
     question: str,
     evidence_items: list[dict[str, Any]],
+    *,
+    query_plan: dict[str, Any] | None = None,
 ) -> FinanceSegmentComparisonAnswer | None:
     if not _is_segment_comparison(question):
         return None
     periods = _question_periods(question)
     excluded = _excluded_entities(question)
     if len(periods) != 2:
-        return _result("", "missing_periods", periods, excluded, {}, {}, ())
-
-    values, citations = _collect_segment_values(evidence_items, periods, excluded)
-
-    complete = {
-        entity: period_values
-        for entity, period_values in values.items()
-        if all(period in period_values for period in periods)
-    }
-    if len(complete) < 2:
-        return _result(
-            "",
-            "insufficient_entities",
-            periods,
-            excluded,
-            complete,
-            {},
-            _ordered_citations(complete, citations),
-        )
+        return _empty_result("missing_periods", periods, excluded)
+    compatible_items = _query_plan_items(query_plan, evidence_items, periods)
+    matrices = _coherent_segment_matrices(compatible_items, periods, excluded)
+    if not matrices:
+        return _empty_result("insufficient_entities", periods, excluded)
+    if len(matrices) != 1:
+        return _empty_result("ambiguous_matrix", periods, excluded)
+    matrix = matrices[0]
+    complete = matrix.values
 
     prior_period, current_period = periods
     changes = {
@@ -76,7 +91,11 @@ def finance_segment_comparison_answer(
             excluded,
             complete,
             changes,
-            _ordered_citations(complete, citations),
+            matrix.citation_ids,
+            matrix.cell_ids,
+            matrix.unit,
+            matrix.scale,
+            matrix.item_ids,
         )
     answer = max(changes, key=changes.__getitem__)
     return _result(
@@ -86,67 +105,206 @@ def finance_segment_comparison_answer(
         excluded,
         complete,
         changes,
-        _ordered_citations(complete, citations),
+        matrix.citation_ids,
+        matrix.cell_ids,
+        matrix.unit,
+        matrix.scale,
+        matrix.item_ids,
     )
 
 
-def _collect_segment_values(
+def coherent_segment_evidence_items(
+    query_plan: Any,
+    evidence_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return only one complete, same-table segment revenue matrix.
+
+    This is used before ordinary slot ranking so a consolidated total, an
+    incomplete period row, or cells from unrelated tables cannot satisfy the
+    authoritative comparison plan.
+    """
+
+    plan = query_plan.as_dict() if hasattr(query_plan, "as_dict") else query_plan
+    plan = dict(plan or {})
+    if (
+        plan.get("constraints", {}).get("comparison_operator")
+        != "proportional_increase"
+    ):
+        return list(evidence_items)
+    periods = tuple(
+        str(value) for value in plan.get("constraints", {}).get("periods") or ()
+    )
+    excluded = tuple(
+        _title(str(value))
+        for value in plan.get("constraints", {}).get("excluded_entities") or ()
+    )
+    matrices = _coherent_segment_matrices(evidence_items, periods, excluded)
+    if len(matrices) != 1:
+        return []
+    allowed = set(matrices[0].item_ids)
+    return [item for item in evidence_items if identity_of(item).key in allowed]
+
+
+def _coherent_segment_matrices(
     evidence_items: list[dict[str, Any]],
     periods: tuple[str, ...],
     excluded: tuple[str, ...],
-) -> tuple[dict[str, dict[str, Decimal]], dict[str, set[str]]]:
+) -> list[_SegmentMatrix]:
+    matrices: list[_SegmentMatrix] = []
+    for group in _segment_evidence_groups(evidence_items):
+        matrix = _matrix_from_group(group, periods, excluded)
+        if matrix is not None:
+            matrices.append(matrix)
+    unique: dict[tuple[Any, ...], _SegmentMatrix] = {}
+    for matrix in matrices:
+        signature = (
+            matrix.source_page,
+            tuple(
+                (entity, tuple(sorted(values.items())))
+                for entity, values in sorted(matrix.values.items())
+            ),
+        )
+        unique.setdefault(signature, matrix)
+    return list(unique.values())
+
+
+def _matrix_from_group(
+    items: list[dict[str, Any]],
+    periods: tuple[str, ...],
+    excluded: tuple[str, ...],
+) -> _SegmentMatrix | None:
     values: dict[str, dict[str, Decimal]] = {}
-    citations: dict[str, set[str]] = {}
-    for item in evidence_items:
-        statement_kind, _scope = financial_statement_identity(item)
+    cell_ids: dict[str, dict[str, str]] = {}
+    citations: list[str] = []
+    item_ids: list[str] = []
+    dimensions: set[tuple[str, str]] = set()
+    conflicts = False
+    for item in items:
+        statement_kind, scope = financial_statement_identity(item)
         if statement_kind and statement_kind != "segment_table":
             continue
-        evidence_id = _item_id(item)
-        revenue_section = _revenue_section_item(item)
-        if revenue_section is None:
+        if scope and scope != "segment":
             continue
-        for cell in parse_financial_table_cells(revenue_section):
+        section = revenue_section_item(item)
+        explicit_cell = bool(
+            item.get("cell_id") or item.get("evidence_level") == "cell"
+        )
+        if section is None and not explicit_cell:
+            continue
+        parsed_item = section or item
+        item_identity = identity_of(item).key
+        observed = False
+        for cell in parse_financial_table_cells(parsed_item):
             if cell.period not in periods or _is_total_row(cell.row_label):
                 continue
             entity = _entity_label(cell.row_label)
-            if not entity or not _valid_segment_entity(entity):
+            if not _valid_segment_entity(entity) or _excluded(entity, excluded):
                 continue
-            _record_segment_value(
-                values,
-                citations,
-                entity,
-                {cell.period: cell.value},
-                evidence_id,
+            if not cell.scale:
+                continue
+            observed = True
+            dimensions.add((cell.unit or cell.currency, cell.scale))
+            prior = values.setdefault(entity, {}).get(cell.period)
+            if prior is not None and prior != cell.value:
+                conflicts = True
+                continue
+            values[entity][cell.period] = cell.value
+            cell_ids.setdefault(entity, {})[cell.period] = cell.cell_id
+        if not observed and section is not None:
+            observed, vertical_conflict = _merge_vertical_item(
+                section,
+                periods,
                 excluded,
-            )
-        for entity, period_values in _vertical_segment_values(
-            revenue_section,
-            periods,
-        ).items():
-            _record_segment_value(
                 values,
-                citations,
-                entity,
-                period_values,
-                evidence_id,
-                excluded,
+                cell_ids,
+                dimensions,
             )
-    return values, citations
+            conflicts = conflicts or vertical_conflict
+        if observed:
+            citation_id = _item_id(item)
+            if citation_id and citation_id not in citations:
+                citations.append(citation_id)
+            if item_identity not in item_ids:
+                item_ids.append(item_identity)
+    complete = {
+        entity: period_values
+        for entity, period_values in values.items()
+        if all(period in period_values for period in periods)
+    }
+    complete_cells = {entity: cell_ids[entity] for entity in complete}
+    if conflicts or len(complete) < 2 or len(dimensions) != 1:
+        return None
+    unit, scale = next(iter(dimensions))
+    if not scale:
+        return None
+    return _SegmentMatrix(
+        values=complete,
+        cell_ids=complete_cells,
+        citation_ids=tuple(citations),
+        item_ids=tuple(item_ids),
+        unit=unit,
+        scale=scale,
+        source_page=_source_page(items[0]),
+    )
 
 
-def _record_segment_value(
-    values: dict[str, dict[str, Decimal]],
-    citations: dict[str, set[str]],
-    entity: str,
-    period_values: dict[str, Decimal],
-    evidence_id: str,
+def _merge_vertical_item(
+    item: dict[str, Any],
+    periods: tuple[str, ...],
     excluded: tuple[str, ...],
-) -> None:
-    if not _valid_segment_entity(entity) or _excluded(entity, excluded):
-        return
-    values.setdefault(entity, {}).update(period_values)
-    if evidence_id:
-        citations.setdefault(entity, set()).add(evidence_id)
+    values: dict[str, dict[str, Decimal]],
+    cell_ids: dict[str, dict[str, str]],
+    dimensions: set[tuple[str, str]],
+) -> tuple[bool, bool]:
+    vertical_values, vertical_ids, unit, scale = vertical_segment_matrix(item, periods)
+    observed = False
+    conflicts = False
+    for entity, period_values in vertical_values.items():
+        if _excluded(entity, excluded):
+            continue
+        observed = True
+        dimensions.add((unit, scale))
+        for period, value in period_values.items():
+            prior = values.setdefault(entity, {}).get(period)
+            if prior is not None and prior != value:
+                conflicts = True
+                continue
+            values[entity][period] = value
+            cell_ids.setdefault(entity, {})[period] = vertical_ids[entity][period]
+    return observed, conflicts
+
+
+def _source_page(item: dict[str, Any]) -> tuple[str, str]:
+    metadata = item.get("metadata")
+    nested = metadata if isinstance(metadata, dict) else {}
+    return (
+        str(item.get("source_id") or nested.get("source_id") or ""),
+        str(item.get("page_label") or nested.get("page_label") or ""),
+    )
+
+
+def _segment_evidence_groups(
+    evidence_items: list[dict[str, Any]],
+) -> list[list[dict[str, Any]]]:
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for item in evidence_items:
+        metadata = item.get("metadata")
+        nested = metadata if isinstance(metadata, dict) else {}
+        source_id = str(item.get("source_id") or nested.get("source_id") or "")
+        page_label = str(item.get("page_label") or nested.get("page_label") or "")
+        lineage = str(
+            item.get("table_group_id")
+            or nested.get("table_group_id")
+            or item.get("table_instance_id")
+            or nested.get("table_instance_id")
+            or item.get("table_id")
+            or nested.get("table_id")
+            or item.get("parent_element_id")
+            or item.get("materialization_source_id")
+            or "page-table"
+        )
+        groups.setdefault((source_id, page_label, lineage), []).append(item)
+    return list(groups.values())
 
 
 def _result(
@@ -157,6 +315,10 @@ def _result(
     values: dict[str, dict[str, Decimal]],
     changes: dict[str, Decimal],
     citation_ids: tuple[str, ...],
+    cell_ids: dict[str, dict[str, str]],
+    unit: str,
+    scale: str,
+    matrix_evidence_ids: tuple[str, ...],
 ) -> FinanceSegmentComparisonAnswer:
     normalized_periods = (periods[0], periods[1]) if len(periods) >= 2 else ("", "")
     return FinanceSegmentComparisonAnswer(
@@ -172,7 +334,52 @@ def _result(
             entity: str(change) for entity, change in changes.items()
         },
         citation_ids=citation_ids,
+        entity_period_cell_ids=cell_ids,
+        unit=unit,
+        scale=scale,
+        matrix_evidence_ids=matrix_evidence_ids,
+        audit_status="passed" if status == "ok" else "failed",
     )
+
+
+def _empty_result(
+    status: str,
+    periods: tuple[str, ...],
+    excluded: tuple[str, ...],
+) -> FinanceSegmentComparisonAnswer:
+    return _result("", status, periods, excluded, {}, {}, (), {}, "", "", ())
+
+
+def _query_plan_items(
+    query_plan: dict[str, Any] | None,
+    evidence_items: list[dict[str, Any]],
+    periods: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    plan = dict(query_plan or {})
+    if not plan:
+        return list(evidence_items)
+    constraints = dict(plan.get("constraints") or {})
+    slots = [dict(slot) for slot in plan.get("evidence_slots") or []]
+    if constraints.get("comparison_operator") != "proportional_increase":
+        return []
+    if {str(slot.get("period") or "") for slot in slots} != set(periods):
+        return []
+    if any(
+        str(slot.get("statement_kind") or "") != "segment_table"
+        or str(slot.get("financial_scope") or "") != "segment"
+        or str(slot.get("metric") or "") not in {"net sales", "revenue"}
+        for slot in slots
+    ):
+        return []
+    bound_ids = {
+        str(evidence_id)
+        for slot in slots
+        for evidence_id in slot.get("evidence_ids") or []
+        if str(evidence_id or "").strip()
+    }
+    if not bound_ids:
+        return []
+    return [item for item in evidence_items if bound_ids & exact_evidence_aliases(item)]
 
 
 def _question_periods(question: str) -> tuple[str, ...]:
@@ -216,10 +423,7 @@ def _entity_label(row_label: str) -> str:
 
 
 def _title(value: str) -> str:
-    return " ".join(
-        token.upper() if token.lower() in {"amd", "gpu"} else token.capitalize()
-        for token in str(value or "").strip().split()
-    )
+    return segment_title(value)
 
 
 def _excluded(entity: str, excluded: tuple[str, ...]) -> bool:
@@ -257,132 +461,3 @@ def _item_id(item: dict[str, Any]) -> str:
         or item.get("canonical_id")
         or ""
     ).strip()
-
-
-def _vertical_segment_values(
-    item: dict[str, Any],
-    requested_periods: tuple[str, ...],
-) -> dict[str, dict[str, Decimal]]:
-    text = str(item.get("text") or "")
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    periods = tuple(
-        period
-        for period in dict.fromkeys(re.findall(r"\b(?:19|20)\d{2}\b", text))
-        if period in requested_periods
-    )
-    if len(periods) < 2:
-        return {}
-    try:
-        start = next(
-            index + 1
-            for index, line in enumerate(lines)
-            if re.fullmatch(
-                r"(?:net\s+)?(?:sales|revenue|revenues)\s*:?",
-                line,
-                flags=re.IGNORECASE,
-            )
-        )
-    except StopIteration:
-        return {}
-    end = next(
-        (
-            index
-            for index in range(start, len(lines))
-            if re.match(
-                r"(?:total\s+(?:net\s+)?(?:sales|revenue)|" r"operating\s+income)",
-                lines[index],
-                flags=re.IGNORECASE,
-            )
-        ),
-        len(lines),
-    )
-    values: dict[str, dict[str, Decimal]] = {}
-    index = start
-    while index < end:
-        label = lines[index]
-        if not re.search(r"[A-Za-z]", label):
-            index += 1
-            continue
-        numeric_values: list[Decimal] = []
-        cursor = index + 1
-        while cursor < end and not re.search(r"[A-Za-z]", lines[cursor]):
-            value = _decimal_line(lines[cursor])
-            if value is not None:
-                numeric_values.append(value)
-            cursor += 1
-        if len(numeric_values) >= len(periods):
-            values[_title(label)] = {
-                period: value
-                for period, value in zip(periods, numeric_values[: len(periods)])
-            }
-        index = max(cursor, index + 1)
-    return values
-
-
-def _revenue_section_item(
-    item: dict[str, Any],
-) -> dict[str, Any] | None:
-    text = str(item.get("text") or "")
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    heading_index = next(
-        (
-            index
-            for index, line in enumerate(lines)
-            if re.fullmatch(
-                r"(?:net\s+)?(?:sales|revenue|revenues)\s*:?",
-                line,
-                flags=re.IGNORECASE,
-            )
-            or (
-                re.search(
-                    r"\b(?:net\s+)?(?:sales|revenue|revenues)\b",
-                    line,
-                    flags=re.IGNORECASE,
-                )
-                and "segment" in line.lower()
-            )
-        ),
-        None,
-    )
-    if heading_index is None:
-        return None
-    end = next(
-        (
-            index
-            for index in range(heading_index + 1, len(lines))
-            if re.match(
-                r"(?:total\s+(?:net\s+)?(?:sales|revenue)|" r"operating\s+income)",
-                lines[index],
-                flags=re.IGNORECASE,
-            )
-        ),
-        len(lines),
-    )
-    section = dict(item)
-    section["text"] = "\n".join(lines[:end])
-    return section
-
-
-def _decimal_line(value: str) -> Decimal | None:
-    text = str(value or "").strip().replace("$", "").replace(",", "")
-    negative = text.startswith("(") and text.endswith(")")
-    if not re.fullmatch(r"\(?[+-]?\d+(?:\.\d+)?\)?", text):
-        return None
-    try:
-        parsed = Decimal(text.strip("()"))
-    except InvalidOperation:
-        return None
-    return -parsed if negative else parsed
-
-
-def _ordered_citations(
-    values: dict[str, dict[str, Decimal]],
-    citations: dict[str, set[str]],
-) -> tuple[str, ...]:
-    return tuple(
-        dict.fromkeys(
-            citation
-            for entity in values
-            for citation in sorted(citations.get(entity, set()))
-        )
-    )

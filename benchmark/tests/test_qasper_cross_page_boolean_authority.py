@@ -100,7 +100,6 @@ def test_artifact_shaped_cross_page_authority_reaches_real_conflict() -> None:
         classified.contradicts[0].proposition.claim_key
     )
     assert priorities.required_slot_ids == (
-        "support:proposition",
         "support:left_subject",
         "support:right_subject",
     )
@@ -125,7 +124,7 @@ def test_artifact_shaped_cross_page_authority_reaches_real_conflict() -> None:
     )
 
     assert result.answer == "unanswerable"
-    assert result.trace["verifier_required_slot_authority_count"] == "3"
+    assert result.trace["verifier_required_slot_authority_count"] == "2"
     assert result.trace["verifier_required_evidence_coverage"] == "1.000000"
     assert result.trace["conflict_status"] == "balanced_conflict"
     assert result.trace["reason"] != "missing_required_evidence_authority"

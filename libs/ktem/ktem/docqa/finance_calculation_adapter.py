@@ -19,11 +19,19 @@ from .execution_slot_lineage import linked_dimension_candidate, linked_parent_ca
 from .finance_calculation_binding import atomic_evidence_id as _atomic_evidence_id
 from .finance_calculation_binding import atomic_item_value as _atomic_item_value
 from .finance_calculation_binding import decimal_values as _decimal_values
+from .finance_calculation_binding import identity_for_raw_id as _identity_for_raw_id
 from .finance_calculation_binding import item_dimension as _item_dimension
+from .finance_calculation_binding import item_for_id as _item_for_id
 from .finance_calculation_binding import item_id as _item_id
 from .finance_calculation_binding import item_text as _item_text
+from .finance_calculation_binding import (
+    named_currency_dimensions as _named_currency_dimensions,
+)
 from .finance_calculation_binding import operand_period as _operand_period
 from .finance_calculation_binding import requested_scale as _requested_scale
+from .finance_calculation_binding import (
+    resolved_item_dimensions as _resolved_item_dimensions,
+)
 from .finance_calculation_binding import shared_scale as _shared_scale
 from .finance_calculation_binding import (
     single_question_period as _single_question_period,
@@ -356,11 +364,19 @@ def _operand_from_cell(
         scale = discovered_scale
     elif discovered_scale != scale:
         scale_evidence_id = ""
-    scale_item = _item_for_id(scale_evidence_id, evidence_items)
     scale_evidence_identity = _identity_for_raw_id(
         scale_evidence_id,
         evidence_items,
     )
+    local_scale, local_currency = _named_currency_dimensions(
+        _item_text(item),
+        cell.value,
+    )
+    if not scale and local_scale:
+        scale = "one"
+        scale_evidence_id = _item_id(item)
+        scale_evidence_identity = _item_identity(item)
+    scale_item = _item_for_id(scale_evidence_id, evidence_items)
     cell_value = abs(cell.value) if normalize_magnitude else cell.value
     bound_value = candidate_value if candidate_value == cell_value else cell_value
     return CalculationOperand(
@@ -372,9 +388,9 @@ def _operand_from_cell(
         value_semantics="positive_magnitude" if normalize_magnitude else "",
         query_slot_id=query_slot_id,
         source_id=_item_dimension(item, "source_id"),
-        unit=cell.unit,
+        unit=cell.unit or local_currency,
         scale=scale,
-        currency=cell.currency,
+        currency=cell.currency or local_currency,
         period=cell.period,
         period_kind=cell.period_kind,
         entity=_item_dimension(item, "entity"),
@@ -405,14 +421,15 @@ def _operand_from_item(
     query_slot_id: str = "",
     normalize_magnitude: bool = False,
 ) -> CalculationOperand:
-    text = _item_text(item) if item is not None else ""
     statement_kind, financial_scope = (
         financial_statement_identity(item) if item is not None else ("", "")
     )
-    scale = _item_dimension(item, "scale") or _scale(text, aliases=aliases)
-    scale_evidence_id = ""
-    if not scale:
-        scale, scale_evidence_id = _source_scale_evidence(item, evidence_items)
+    unit, scale, currency, scale_evidence_id = _resolved_item_dimensions(
+        name,
+        item,
+        evidence_items,
+        aliases=aliases,
+    )
     scale_item = _item_for_id(scale_evidence_id, evidence_items)
     bound_value = _atomic_item_value(item) if item is not None else None
     resolved_value = bound_value if bound_value is not None else value
@@ -427,12 +444,9 @@ def _operand_from_item(
         value_semantics="positive_magnitude" if normalize_magnitude else "",
         query_slot_id=query_slot_id,
         source_id=_item_dimension(item, "source_id"),
-        unit=_item_dimension(item, "unit"),
+        unit=unit,
         scale=scale,
-        currency=(
-            _item_dimension(item, "currency")
-            or ("USD" if "$" in text or "usd" in text.lower() else "")
-        ),
+        currency=currency,
         period=period or _item_dimension(item, "period"),
         period_kind=period_kind or _item_dimension(item, "period_kind"),
         entity=_item_dimension(item, "entity"),
@@ -468,39 +482,6 @@ def _item_identity(
         payload["cell_id"] = cell_id
         payload["evidence_level"] = "cell"
     return identity_of(payload).key
-
-
-def _identity_for_raw_id(
-    evidence_id: str,
-    evidence_items: list[dict[str, Any]],
-) -> str:
-    if not evidence_id:
-        return ""
-    item = next(
-        (
-            candidate
-            for candidate in evidence_items
-            if _item_id(candidate) == evidence_id
-        ),
-        None,
-    )
-    return _item_identity(item)
-
-
-def _item_for_id(
-    evidence_id: str,
-    evidence_items: list[dict[str, Any]],
-) -> dict[str, Any] | None:
-    if not evidence_id:
-        return None
-    return next(
-        (
-            candidate
-            for candidate in evidence_items
-            if _item_id(candidate) == evidence_id
-        ),
-        None,
-    )
 
 
 def _matching_item(

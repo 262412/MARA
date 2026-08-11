@@ -14,6 +14,7 @@ from .finance_query_planning import (
     finance_operand_specs,
     is_finance_segment_comparison,
 )
+from .finance_retrieval_focus import finance_retrieval_focus_terms
 from .financial_statement_identity import required_financial_identity
 from .heuristic_query_slots import heuristic_slots
 from .query_classification import (
@@ -364,15 +365,7 @@ def missing_required_slots(plan: QueryPlan) -> list[EvidenceSlot]:
 
 
 def slot_needs_second_round(slot: EvidenceSlot) -> bool:
-    if slot.status == "filled":
-        return False
-    if slot.required_for_retrieval:
-        return True
-    return bool(
-        slot.required_for_verification
-        and slot.statement_kind == "boolean_proposition"
-        and slot.status in {"missing", "retrieved_partial"}
-    )
+    return bool(slot.required_for_retrieval and slot.status != "filled")
 
 
 def missing_slot_queries(plan: QueryPlan) -> list[str]:
@@ -504,6 +497,11 @@ def _finance_retrieval_query(
         terms.append(headings[statement_kind])
     if period:
         terms.append(period)
+    terms.extend(
+        term
+        for term in finance_retrieval_focus_terms(query_context)
+        if term not in terms
+    )
     return " ".join(terms)
 
 

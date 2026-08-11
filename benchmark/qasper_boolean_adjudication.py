@@ -57,6 +57,7 @@ def adjudicate_boolean(
         evidence_items=evidence_items,
         authoritative_support=authoritative_support,
         alias_mapping=parse_trace.get("verifier_evidence_alias_mapping", ""),
+        parse_trace=parse_trace,
     )
     if required_authority_is_missing(parse_trace):
         return _missing_required_authority(finalized)
@@ -132,17 +133,32 @@ def _finalize_boolean_authority(
     evidence_items: list[dict[str, Any]] | None,
     authoritative_support: Any,
     alias_mapping: str,
+    parse_trace: dict[str, str],
 ) -> BooleanAdjudication:
     selected_answer = state.answer if state.answer in {"yes", "no"} else ""
     if selected_answer and authoritative_support is not None:
-        state.relation_trace.update(
-            authoritative_quote_binding_trace(
-                question,
-                selected_answer,
-                evidence_items or [],
-                authoritative_support,
-            )
+        binding_trace = authoritative_quote_binding_trace(
+            question,
+            selected_answer,
+            evidence_items or [],
+            authoritative_support,
         )
+        if not str(parse_trace.get("verifier_required_slot_ids") or "").strip():
+            binding_trace.update(
+                {
+                    "verifier_required_evidence_ids": (
+                        authoritative_support.evidence_id
+                    ),
+                    "verifier_required_slot_ids": "support:boolean_proposition",
+                    "verifier_required_slot_count": "1",
+                    "verifier_required_slot_authority_count": "1",
+                    "verifier_missing_required_slot_ids": "",
+                    "verifier_missing_required_evidence_ids": "",
+                    "verifier_required_authority_status": "complete",
+                    "verifier_required_evidence_coverage": "1.000000",
+                }
+            )
+        state.relation_trace.update(binding_trace)
     if not selected_answer or authoritative_support is None:
         if preserve_semantic_veto(
             state.reason,

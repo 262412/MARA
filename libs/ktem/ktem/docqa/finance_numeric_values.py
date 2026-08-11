@@ -539,7 +539,8 @@ def _format_precise_currency(value: Any, unit: str, *, decimals: int = 3) -> str
     numeric = float(value)
     prefix = "-$" if numeric < 0 else "$"
     rendered = f"{abs(numeric):,.{decimals}f}".rstrip("0").rstrip(".")
-    return f"{prefix}{rendered} {unit}".strip()
+    display_unit = "" if str(unit or "").lower() == "one" else unit
+    return f"{prefix}{rendered} {display_unit}".strip()
 
 
 def execution_payload(
