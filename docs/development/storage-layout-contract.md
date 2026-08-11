@@ -18,6 +18,10 @@ Python virtual environment:
 ~/fastscratch/envs/mara
 = /mnt/fastscratch/users/tbczhang/envs/mara
 
+uv-managed Python installations:
+~/fastscratch/python
+= /mnt/fastscratch/users/tbczhang/python
+
 Project .venv:
 ~/scratch/projects/MARA/.venv
 must be a symlink to ~/fastscratch/envs/mara
@@ -144,7 +148,8 @@ export XDG_CONFIG_HOME=$HOME/fastscratch/cache/xdg-config
 export XDG_DATA_HOME=$HOME/fastscratch/cache/xdg-data
 export PIP_CACHE_DIR=$HOME/fastscratch/cache/pip
 export UV_CACHE_DIR=$HOME/fastscratch/cache/uv
-export UV_PYTHON_INSTALL_DIR=$HOME/fastscratch/cache/uv/python
+export UV_NO_CACHE=1
+export UV_PYTHON_INSTALL_DIR=$HOME/fastscratch/python
 export PRE_COMMIT_HOME=$HOME/scratch/pre-commit-cache
 export HF_HOME=$HOME/fastscratch/cache/huggingface
 export HF_HUB_CACHE=$HF_HOME/hub
@@ -162,9 +167,29 @@ export MARA_RUNTIME_DIR=$HOME/fastscratch/mara_runtime
 export KH_APP_DATA_DIR=$MARA_RUNTIME_DIR/ktem_app_data
 ```
 
+`UV_NO_CACHE=1` is required on this inode-constrained host. Keep
+`UV_CACHE_DIR` on `fastscratch` as the canonical compatibility path, but make
+normal `uv` operations use a temporary cache that is removed when the command
+finishes. This prevents dependency installs and validation worktrees from
+recreating more than 150,000 shared-cache entries. `UV_PYTHON_INSTALL_DIR`
+remains persistent on `fastscratch`.
+
+Also set `no-cache = true` in the user-level `uv.toml`. Keep the default
+`~/.config/uv/uv.toml` as a symlink to the file under `XDG_CONFIG_HOME`, and
+keep the default `~/.cache/uv` and `~/.local/share/uv` paths as symlinks to
+their canonical `fastscratch` locations. This covers non-interactive tools
+that do not source `.bashrc` and prevents a second cache or tool tree under
+home.
+
 `flowsettings.py` must respect `KH_APP_DATA_DIR` so app initialization,
 DocQA indexing, graph caches, uploaded files, and SQLite state stay in
 `fastscratch`.
+
+Packaged TheFlow progress storage must resolve under the platform runtime cache,
+never under the source checkout as `.theflow`. Pytest must set
+`THEFLOW_SETTINGS_MODULE=ktem.default_flowsettings` and a session-owned
+`THEFLOW_TEMP_PATH`; the session cleanup then removes per-component progress and
+cache files instead of leaking them into `scratch` or `fastscratch`.
 
 ## Preflight Check
 
@@ -182,6 +207,7 @@ readlink -f .venv/bin/python
 df -h .venv ktem_app_data
 
 printf 'UV_CACHE_DIR=%s\n' "$UV_CACHE_DIR"
+printf 'UV_NO_CACHE=%s\n' "$UV_NO_CACHE"
 printf 'UV_PYTHON_INSTALL_DIR=%s\n' "$UV_PYTHON_INSTALL_DIR"
 printf 'PRE_COMMIT_HOME=%s\n' "$PRE_COMMIT_HOME"
 printf 'HF_HOME=%s\n' "$HF_HOME"
@@ -195,6 +221,7 @@ quota -s
 test ! -e data
 test ! -e datasets
 test ! -e outputs
+test ! -e .theflow
 ```
 
 The correct `.venv` result is a symlink that resolves to:
@@ -209,6 +236,9 @@ jobs, or model setup if:
 - `.venv` is a real directory instead of a symlink.
 - Any cache or runtime environment variable except `PRE_COMMIT_HOME` points to
   `scratch` or home.
+- `UV_NO_CACHE` is not `1`; a single dependency operation can otherwise
+  recreate enough shared-cache entries to exceed the `fastscratch` file soft
+  quota.
 - `lfs quota` shows `fastscratch` file usage above the soft quota.
 - `PRE_COMMIT_HOME` is unset when running pre-commit; without it, hook
   environments can consume tens of thousands of files under `fastscratch`.

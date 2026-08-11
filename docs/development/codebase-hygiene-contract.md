@@ -261,11 +261,13 @@ readlink -f .venv
 readlink -f .venv/bin/python
 df -h .venv ktem_app_data
 printf 'PRE_COMMIT_HOME=%s\n' "$PRE_COMMIT_HOME"
+printf 'UV_NO_CACHE=%s\n' "$UV_NO_CACHE"
 lfs quota -h -u tbczhang /mnt/fastscratch
 quota -s
 test ! -e data
 test ! -e datasets
 test ! -e outputs
+test ! -e .theflow
 ```
 
 Always before changing or committing Python files:

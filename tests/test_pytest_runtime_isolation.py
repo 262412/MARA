@@ -47,6 +47,9 @@ def test_runtime_environment_overrides_real_candidate_and_restores_it(tmp_path):
     assert Path(environment["KH_FILESTORAGE_PATH"]) == paths.file_storage_path
     for key in ISOLATED_RUNTIME_ENV_KEYS:
         assert str(real_candidate) not in environment[key]
+        if key == "THEFLOW_SETTINGS_MODULE":
+            assert environment[key] == "ktem.default_flowsettings"
+            continue
         assert Path(environment[key].removeprefix("sqlite:///")).is_relative_to(
             session_root
         )
@@ -68,15 +71,25 @@ def test_runtime_environment_overrides_real_candidate_and_restores_it(tmp_path):
 def test_pytest_session_activates_isolation_before_ktem_runtime_import(
     mara_test_runtime_paths,
 ):
+    from ktem.runtime_bootstrap import get_runtime_paths
     from theflow.settings import settings as flowsettings
 
+    runtime_paths = get_runtime_paths()
     assert Path(os.environ["KH_APP_DATA_DIR"]) == mara_test_runtime_paths.app_data_dir
+    assert os.environ["THEFLOW_SETTINGS_MODULE"] == "ktem.default_flowsettings"
+    assert Path(os.environ["THEFLOW_TEMP_PATH"]).is_relative_to(
+        mara_test_runtime_paths.root
+    )
     assert Path(flowsettings.KH_APP_DATA_DIR) == mara_test_runtime_paths.app_data_dir
     assert flowsettings.KH_DATABASE == (
         f"sqlite:///{mara_test_runtime_paths.database_path}"
     )
     assert Path(flowsettings.KH_FILESTORAGE_PATH) == (
         mara_test_runtime_paths.file_storage_path
+    )
+    assert Path(flowsettings.STORAGE["prefix"]) == runtime_paths.cache_dir / "theflow"
+    assert Path(flowsettings.STORAGE["prefix"]).is_relative_to(
+        mara_test_runtime_paths.root
     )
 
 

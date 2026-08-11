@@ -35,6 +35,8 @@ ISOLATED_RUNTIME_ENV_KEYS = (
     "HF_XET_CACHE",
     "TORCH_HOME",
     "TIKTOKEN_CACHE_DIR",
+    "THEFLOW_SETTINGS_MODULE",
+    "THEFLOW_TEMP_PATH",
 )
 
 
@@ -110,6 +112,8 @@ class TestRuntimePaths:
             "HF_XET_CACHE": str(cache_dir / "huggingface" / "xet"),
             "TORCH_HOME": str(cache_dir / "torch"),
             "TIKTOKEN_CACHE_DIR": str(cache_dir / "tiktoken"),
+            "THEFLOW_SETTINGS_MODULE": "ktem.default_flowsettings",
+            "THEFLOW_TEMP_PATH": str(cache_dir / "theflow-temp"),
         }
 
 

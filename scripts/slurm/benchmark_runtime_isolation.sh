@@ -138,7 +138,7 @@ mara_configure_benchmark_runtime() {
   mara_benchmark_write_settings_source "$MARA_BENCHMARK_THEFLOW_DIR" "$project_root"
 
   # Put only this job's settings module first.  Existing model/download caches
-  # remain shared through UV_CACHE_DIR/HF_HOME and are not redirected here.
+  # continue to follow the host UV/HF cache policy and are not redirected here.
   export PYTHONPATH="${MARA_BENCHMARK_THEFLOW_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 }
 
