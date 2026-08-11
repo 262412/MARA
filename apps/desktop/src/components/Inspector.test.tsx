@@ -32,6 +32,15 @@ const doctor: DoctorPayload = {
   indexing_message: "File indexing is ready.",
   indexing_action: "none",
   indexing_retryable: false,
+  query_ready: true,
+  query_issue_code: null,
+  query_message: "Question answering is ready.",
+  query_action: "none",
+  query_retryable: false,
+  query_provider: "Ollama",
+  query_model: "local-chat",
+  embedding_provider: "Ollama",
+  embedding_model: "local-embedding",
   request_id: "doctor-request",
 };
 

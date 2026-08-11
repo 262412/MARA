@@ -2,6 +2,10 @@ import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
 import type {
+  ModelSettingsInput,
+  ModelSettingsStatus,
+} from "../shared/model-contracts";
+import type {
   QueryTask,
   QueryTaskCreateRequest,
 } from "../shared/query-contracts";
@@ -29,6 +33,10 @@ type DesktopBridge = {
   importFiles(): Promise<DesktopResult<IndexTask | null>>;
   importDroppedFiles(files: File[]): Promise<DesktopResult<IndexTask>>;
   openEmbeddingConfiguration(): Promise<DesktopResult<boolean>>;
+  getModelSettings(): Promise<DesktopResult<ModelSettingsStatus>>;
+  saveModelSettings(
+    settings: ModelSettingsInput,
+  ): Promise<DesktopResult<ModelSettingsStatus>>;
   getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>>;
   cancelIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;

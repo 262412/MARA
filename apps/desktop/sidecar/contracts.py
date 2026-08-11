@@ -40,10 +40,29 @@ class DoctorPayload(BaseModel):
         "configure_embedding",
         "repair_installation",
         "check_connection",
+        "check_source_permissions",
+        "choose_source_again",
+        "retry",
         "free_storage",
         "contact_support",
     ]
     indexing_retryable: bool
+    query_ready: bool
+    query_issue_code: str | None
+    query_message: str
+    query_action: Literal[
+        "none",
+        "configure_llm",
+        "configure_credentials",
+        "repair_installation",
+        "check_connection",
+        "retry",
+    ]
+    query_retryable: bool
+    query_provider: str
+    query_model: str
+    embedding_provider: str
+    embedding_model: str
     request_id: str
 
 

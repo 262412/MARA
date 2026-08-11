@@ -6,6 +6,10 @@ import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
 import type {
+  ModelSettingsInput,
+  ModelSettingsStatus,
+} from "../shared/model-contracts";
+import type {
   QueryTask,
   QueryTaskCreateRequest,
 } from "../shared/query-contracts";
@@ -17,6 +21,7 @@ import type {
   SessionDetail,
   SessionSummary,
 } from "../shared/session-contracts";
+import { validateModelSettingsInput } from "./model-settings";
 
 type IpcEvent = {
   senderFrame?: {
@@ -40,6 +45,10 @@ export type DesktopIpcOperations = {
   importFiles(): Promise<DesktopResult<IndexTask | null>>;
   importDroppedFiles(filePaths: string[]): Promise<DesktopResult<IndexTask>>;
   openEmbeddingConfiguration(): Promise<DesktopResult<boolean>>;
+  getModelSettings(): Promise<DesktopResult<ModelSettingsStatus>>;
+  saveModelSettings(
+    settings: ModelSettingsInput,
+  ): Promise<DesktopResult<ModelSettingsStatus>>;
   getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>>;
   cancelIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
@@ -182,6 +191,26 @@ export function createTrustedQuestionIpcHandler<T>(
   };
 }
 
+export function createTrustedModelSettingsIpcHandler<T>(
+  operation: (settings: ModelSettingsInput) => T | Promise<T>,
+): IpcHandler<T> {
+  return async (event, ...args) => {
+    if (!event.senderFrame?.url.startsWith("mara://app/")) {
+      throw new Error("Untrusted IPC sender");
+    }
+    if (args.length !== 1) {
+      throw new Error("Desktop IPC received invalid model settings");
+    }
+    let settings: ModelSettingsInput;
+    try {
+      settings = validateModelSettingsInput(args[0]);
+    } catch {
+      throw new Error("Desktop IPC received invalid model settings");
+    }
+    return operation(settings);
+  };
+}
+
 export function createTrustedPathListIpcHandler<T>(
   operation: (filePaths: string[]) => T | Promise<T>,
 ): IpcHandler<T> {
@@ -269,6 +298,16 @@ export function registerDesktopIpc(
   registrar.handle(
     "desktop:open-embedding-configuration",
     createTrustedIpcHandler(() => operations.openEmbeddingConfiguration()),
+  );
+  registrar.handle(
+    "desktop:get-model-settings",
+    createTrustedIpcHandler(() => operations.getModelSettings()),
+  );
+  registrar.handle(
+    "desktop:save-model-settings",
+    createTrustedModelSettingsIpcHandler((settings) =>
+      operations.saveModelSettings(settings),
+    ),
   );
   registrar.handle(
     "desktop:get-latest-index-task",

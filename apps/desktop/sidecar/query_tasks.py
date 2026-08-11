@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from .query_readiness import QueryFailureContract, classify_query_failure
 from .query_stream_runner import QueryService, QueryStreamRunner
 from .query_task_journal import (
     JsonQueryTaskJournal,
@@ -385,7 +386,7 @@ class QueryTaskManager(_QueryTaskPersistence):
                 task.error = None
                 self._touch(task)
             else:
-                self._finish_task(task, outcome.status)
+                self._finish_task(task, outcome.status, error=outcome.error)
 
     def _apply_stream_update(
         self,
@@ -400,10 +401,23 @@ class QueryTaskManager(_QueryTaskPersistence):
             self._touch(task, force_persist=False)
             return True
 
-    def _finish_task(self, task: _QueryTask, outcome: str) -> None:
+    def _finish_task(
+        self,
+        task: _QueryTask,
+        outcome: str,
+        *,
+        error: QueryFailureContract | Exception | None = None,
+    ) -> None:
         task.status = "cancelled" if outcome == "cancelled" else "failed"
         task.stage = "completed"
-        task.error = _query_outcome_error(outcome)
+        task.error = _query_outcome_error(outcome, error)
+        LOGGER.error(
+            "Query task failed task_id=%s error_code=%s stage=%s error_type=%s",
+            task.task_id,
+            task.error["code"],
+            task.stage,
+            type(error).__name__ if error is not None else "QueryTaskOutcome",
+        )
         self._touch(task)
 
     def _require_task(self, task_id: str) -> _QueryTask:
@@ -432,7 +446,11 @@ def _task_snapshot(task: _QueryTask) -> dict[str, Any]:
         "answer": task.answer,
         "citations": [dict(item) for item in task.citations],
         "error": dict(task.error) if task.error else None,
-        "retryable": task.status in {"failed", "cancelled"},
+        "retryable": bool(
+            task.error.get("retryable")
+            if task.error is not None
+            else task.status == "cancelled"
+        ),
         "created_at": task.created_at,
         "updated_at": task.updated_at,
         "version": task.version,
@@ -452,7 +470,10 @@ def _apply_query_update(task: _QueryTask, update: dict[str, Any]) -> None:
         task.citations = citations
 
 
-def _query_outcome_error(outcome: str) -> dict[str, Any]:
+def _query_outcome_error(
+    outcome: str,
+    error: QueryFailureContract | Exception | None = None,
+) -> dict[str, Any]:
     if outcome == "cancelled":
         return {
             "code": "query_cancelled",
@@ -465,11 +486,11 @@ def _query_outcome_error(outcome: str) -> dict[str, Any]:
             "message": "MARA did not receive answer progress before the time limit.",
             "retryable": True,
         }
-    return {
-        "code": "query_failed",
-        "message": "MARA could not complete the answer.",
-        "retryable": True,
-    }
+    if isinstance(error, QueryFailureContract):
+        return error.as_dict()
+    return classify_query_failure(
+        error if error is not None else "query runtime failed"
+    ).as_dict()
 
 
 def _task_to_dict(task: _QueryTask) -> dict[str, Any]:

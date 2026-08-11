@@ -270,8 +270,12 @@ jobs:
                 --smoke-test-indexing-unconfigured
           ) > "$unconfigured_stdout" 2> "$unconfigured_stderr"
           grep -F "issue_code=embedding_not_configured" "$unconfigured_stdout"
+          grep -F "issue_code=llm_not_configured" "$unconfigured_stdout"
+          grep -F "renderer_ui=real-navigation,draft,settings,keyboard mode=blocked status_success" \
+            "$unconfigured_stdout"
           grep -F "task_created=false" "$unconfigured_stdout"
           test ! -e "$unconfigured_root/data/MARA/state/index-tasks.json"
+          test ! -e "$unconfigured_root/data/MARA/state/query-tasks.json"
           test -z "$(find "$unconfigured_root/data/MARA/cache/theflow" \
             -name progress.pkl -type f -print -quit)"
           test ! -e /usr/.theflow
@@ -283,6 +287,79 @@ jobs:
             'issue_code=embedding_not_configured' \
             'task_created=false' \
             > apps/desktop/release/metrics/linux-22-unconfigured-evidence.txt
+          record_phase model-settings-ui-smoke
+          settings_root=/tmp/mara-desktop-settings
+          settings_model_port=43128
+          settings_port_file="$settings_root/model-port.txt"
+          settings_data_root="$settings_root/data/MARA"
+          mkdir -p "$settings_data_root/tmp" \
+            "$settings_root/config" "$settings_root/cache"
+          (
+            cd apps/desktop
+            ../../.venv/bin/python -m sidecar.smoke_embedding_server \
+              --port-file "$settings_port_file" \
+              --port "$settings_model_port" \
+              --token ollama \
+              --constant-embeddings \
+              --block-marker "$settings_data_root/tmp/gate3-embedding-block" \
+              --request-marker "$settings_data_root/tmp/gate3-embedding-request" \
+              --chat-block-marker "$settings_data_root/tmp/gate3-query-block" \
+              --chat-request-marker "$settings_data_root/tmp/gate3-query-request"
+          ) &
+          settings_embedding_pid=$!
+          trap 'kill "$embedding_pid" "$settings_embedding_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 100); do
+            if test -s "$settings_port_file"; then break; fi
+            sleep 0.1
+          done
+          test -s "$settings_port_file"
+          (
+            cd /usr
+            env \
+              -u OPENAI_API_KEY -u OPENAI_API_BASE \
+              -u OPENAI_EMBEDDINGS_MODEL -u OPENAI_CHAT_MODEL \
+              -u GOOGLE_API_KEY -u AZURE_OPENAI_API_KEY \
+              -u AZURE_OPENAI_ENDPOINT -u AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT \
+              -u LOCAL_MODEL -u LOCAL_MODEL_EMBEDDINGS -u KH_OLLAMA_URL \
+              -u VOYAGE_API_KEY -u COHERE_API_KEY -u MISTRAL_API_KEY \
+              -u KH_APP_DATA_DIR \
+              MARA_DESKTOP_SMOKE_MODEL_BASE_URL="http://127.0.0.1:$settings_model_port/v1" \
+              XDG_DATA_HOME="$settings_root/data" \
+              XDG_CONFIG_HOME="$settings_root/config" \
+              XDG_CACHE_HOME="$settings_root/cache" \
+              xvfb-run -a "$app_executable" --smoke-test-model-settings
+          ) > apps/desktop/release/metrics/linux-22-settings-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-settings-stderr.txt
+          grep -F \
+            "renderer_model_settings=ui-save,restart,doctor-ready,redacted status_success" \
+            apps/desktop/release/metrics/linux-22-settings-stdout.txt
+          test ! -e "$settings_data_root/state/model-credentials.bin"
+          ! grep -F '"credential"' "$settings_data_root/state/model-settings.json"
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root "$settings_data_root"
+          record_phase model-settings-persistence-smoke
+          (
+            cd /usr
+            env \
+              -u OPENAI_API_KEY -u OPENAI_API_BASE \
+              -u OPENAI_EMBEDDINGS_MODEL -u OPENAI_CHAT_MODEL \
+              -u GOOGLE_API_KEY -u AZURE_OPENAI_API_KEY \
+              -u AZURE_OPENAI_ENDPOINT -u AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT \
+              -u LOCAL_MODEL -u LOCAL_MODEL_EMBEDDINGS -u KH_OLLAMA_URL \
+              -u VOYAGE_API_KEY -u COHERE_API_KEY -u MISTRAL_API_KEY \
+              -u KH_APP_DATA_DIR -u MARA_DESKTOP_SMOKE_MODEL_BASE_URL \
+              XDG_DATA_HOME="$settings_root/data" \
+              XDG_CONFIG_HOME="$settings_root/config" \
+              XDG_CACHE_HOME="$settings_root/cache" \
+              xvfb-run -a "$app_executable" \
+                --smoke-test-nonempty --smoke-test-gate3
+          ) > apps/desktop/release/metrics/linux-22-settings-restart-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-settings-restart-stderr.txt
+          grep -F "renderer_query=source-selection,enter,stream,citation status_success" \
+            apps/desktop/release/metrics/linux-22-settings-restart-stdout.txt
+          test ! -e /usr/.theflow
+          test ! -e "$GITHUB_WORKSPACE/.theflow"
+          test ! -e "$GITHUB_WORKSPACE/apps/desktop/release/MARA-linux-x64/.theflow"
           du -sb apps/desktop/release/MARA-linux-x64 \
             > apps/desktop/release/metrics/linux-22-size.txt
           find apps/desktop/release/MARA-linux-x64 -type f | wc -l \
@@ -300,7 +377,9 @@ jobs:
             --data-root /tmp/mara-desktop/data/MARA
           record_phase complete
           kill "$embedding_pid" 2>/dev/null || true
+          kill "$settings_embedding_pid" 2>/dev/null || true
           wait "$embedding_pid" 2>/dev/null || true
+          wait "$settings_embedding_pid" 2>/dev/null || true
           trap - EXIT
           cp -a /tmp/mara-desktop/data/MARA \
             apps/desktop/release/gate2-smoke-data
@@ -360,6 +439,7 @@ jobs:
             python3 -m sidecar.smoke_embedding_server \
               --port-file "$embedding_port_file" \
               --port "$smoke_model_port" \
+              --token ollama \
               --constant-embeddings \
               --chat-block-marker "$query_block_file" \
               --chat-request-marker "$query_request_file"
@@ -371,16 +451,16 @@ jobs:
             sleep 0.1
           done
           test -s "$embedding_port_file"
-          export OPENAI_API_KEY=mara-desktop-smoke
-          export OPENAI_API_BASE="http://127.0.0.1:$(cat "$embedding_port_file")/v1"
-          export OPENAI_EMBEDDINGS_MODEL=smoke-embedding
-          export OPENAI_CHAT_MODEL=smoke-chat
           export NO_PROXY=127.0.0.1,localhost
           export HTTP_PROXY=http://127.0.0.1:9
           export HTTPS_PROXY=http://127.0.0.1:9
           export no_proxy="$NO_PROXY"
           export http_proxy="$HTTP_PROXY"
           export https_proxy="$HTTPS_PROXY"
+          export MARA_DESKTOP_SMOKE_MODEL_BASE_URL="http://127.0.0.1:$(cat "$embedding_port_file")/v1"
+          xvfb-run -a desktop-artifact/MARA-linux-x64/MARA \
+            --smoke-test-model-settings
+          unset MARA_DESKTOP_SMOKE_MODEL_BASE_URL
           xvfb-run -a desktop-artifact/MARA-linux-x64/MARA \
             --smoke-test-nonempty --smoke-test-gate3 \
             --smoke-test-gate3-formats
@@ -460,6 +540,10 @@ jobs:
           $unconfiguredStdout = "apps/desktop/release/windows-unconfigured-stdout.txt"
           $unconfiguredStderr = "apps/desktop/release/windows-unconfigured-stderr.txt"
           $unconfiguredEvidence = "apps/desktop/release/windows-unconfigured-evidence.txt"
+          $settingsStdout = "apps/desktop/release/windows-settings-stdout.txt"
+          $settingsStderr = "apps/desktop/release/windows-settings-stderr.txt"
+          $settingsRestartStdout = "apps/desktop/release/windows-settings-restart-stdout.txt"
+          $settingsRestartStderr = "apps/desktop/release/windows-settings-restart-stderr.txt"
           $executable = (Resolve-Path "apps/desktop/release/MARA-win32-x64/MARA.exe").Path
           $installRoot = Split-Path $executable -Parent
           $readOnlyCwd = Join-Path $env:RUNNER_TEMP "mara-desktop-readonly-cwd"
@@ -522,8 +606,19 @@ jobs:
             -SimpleMatch "issue_code=embedding_not_configured" -Quiet)) {
             throw "The unconfigured package did not report embedding_not_configured."
           }
+          if (-not (Select-String -Path $unconfiguredStdout `
+            -SimpleMatch "issue_code=llm_not_configured" -Quiet)) {
+            throw "The unconfigured package did not report llm_not_configured."
+          }
+          if (-not (Select-String -Path $unconfiguredStdout `
+            -SimpleMatch "renderer_ui=real-navigation,draft,settings,keyboard mode=blocked status_success" -Quiet)) {
+            throw "The unconfigured package did not pass the real Renderer UI smoke."
+          }
           if (Test-Path (Join-Path $unconfiguredDataRoot "state/index-tasks.json")) {
             throw "The unconfigured package persisted an index task."
+          }
+          if (Test-Path (Join-Path $unconfiguredDataRoot "state/query-tasks.json")) {
+            throw "The unconfigured package persisted a query task."
           }
           $unconfiguredProgress = Get-ChildItem `
             (Join-Path $unconfiguredDataRoot "cache/theflow") `
@@ -539,9 +634,108 @@ jobs:
             "working_directory=acl-write-denied"
             "data_root=appdata-mara"
             "issue_code=embedding_not_configured"
+            "query_issue_code=llm_not_configured"
             "task_created=false"
             "unconfigured_exit_code=$($unconfiguredProcess.ExitCode)"
           ) | Add-Content $unconfiguredEvidence
+          $settingsAppData = Join-Path $env:RUNNER_TEMP `
+            "mara-settings-appdata-$([Guid]::NewGuid())"
+          $settingsDataRoot = Join-Path $settingsAppData "MARA"
+          New-Item -ItemType Directory -Force `
+            -Path (Join-Path $settingsDataRoot "tmp") | Out-Null
+          $settingsPortFile = Join-Path $env:RUNNER_TEMP `
+            "mara-settings-port-$([Guid]::NewGuid()).txt"
+          $settingsBlockMarker = Join-Path $settingsDataRoot `
+            "tmp/gate3-embedding-block"
+          $settingsRequestMarker = Join-Path $settingsDataRoot `
+            "tmp/gate3-embedding-request"
+          $settingsQueryBlockMarker = Join-Path $settingsDataRoot `
+            "tmp/gate3-query-block"
+          $settingsQueryRequestMarker = Join-Path $settingsDataRoot `
+            "tmp/gate3-query-request"
+          $python = (Resolve-Path ".venv/Scripts/python.exe").Path
+          $settingsServer = Start-Process -FilePath $python `
+            -ArgumentList @(
+              "-m", "sidecar.smoke_embedding_server",
+              "--port-file", $settingsPortFile,
+              "--token", "ollama",
+              "--constant-embeddings",
+              "--block-marker", $settingsBlockMarker,
+              "--request-marker", $settingsRequestMarker,
+              "--chat-block-marker", $settingsQueryBlockMarker,
+              "--chat-request-marker", $settingsQueryRequestMarker
+            ) `
+            -WorkingDirectory "apps/desktop" -PassThru -WindowStyle Hidden
+          for ($attempt = 0; $attempt -lt 100; $attempt++) {
+            if (Test-Path $settingsPortFile) { break }
+            Start-Sleep -Milliseconds 100
+          }
+          if (-not (Test-Path $settingsPortFile)) {
+            Stop-Process -Id $settingsServer.Id -Force -ErrorAction SilentlyContinue
+            throw "The deterministic Settings smoke server did not start."
+          }
+          $settingsPort = Get-Content $settingsPortFile
+          $env:APPDATA = $settingsAppData
+          $env:NO_PROXY = "127.0.0.1,localhost"
+          $env:MARA_DESKTOP_SMOKE_MODEL_BASE_URL = `
+            "http://127.0.0.1:$settingsPort/v1"
+          $settingsProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-model-settings" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $settingsStdout `
+            -RedirectStandardError $settingsStderr -PassThru
+          $settingsProcess.WaitForExit()
+          Remove-Item "Env:MARA_DESKTOP_SMOKE_MODEL_BASE_URL" `
+            -ErrorAction SilentlyContinue
+          if (Test-Path $settingsStdout) {
+            Get-Content $settingsStdout | Write-Host
+          }
+          if (Test-Path $settingsStderr) {
+            Get-Content $settingsStderr | Write-Host
+          }
+          if ($settingsProcess.ExitCode -ne 0) {
+            Stop-Process -Id $settingsServer.Id -Force -ErrorAction SilentlyContinue
+            exit $settingsProcess.ExitCode
+          }
+          if (-not (Select-String -Path $settingsStdout -SimpleMatch `
+            "renderer_model_settings=ui-save,restart,doctor-ready,redacted status_success" `
+            -Quiet)) {
+            Stop-Process -Id $settingsServer.Id -Force -ErrorAction SilentlyContinue
+            throw "The packaged Settings page did not save and refresh readiness."
+          }
+          if (Test-Path (Join-Path $settingsDataRoot `
+            "state/model-credentials.bin")) {
+            throw "The credential-free Ollama route created a credential file."
+          }
+          if (Select-String -Path (Join-Path $settingsDataRoot `
+            "state/model-settings.json") -SimpleMatch '"credential"' -Quiet) {
+            throw "Desktop model metadata contains a credential field."
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $settingsDataRoot
+          $settingsRestartProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-nonempty --smoke-test-gate3" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $settingsRestartStdout `
+            -RedirectStandardError $settingsRestartStderr -PassThru
+          $settingsRestartProcess.WaitForExit()
+          if (Test-Path $settingsRestartStdout) {
+            Get-Content $settingsRestartStdout | Write-Host
+          }
+          if (Test-Path $settingsRestartStderr) {
+            Get-Content $settingsRestartStderr | Write-Host
+          }
+          Stop-Process -Id $settingsServer.Id -Force -ErrorAction SilentlyContinue
+          if ($settingsRestartProcess.ExitCode -ne 0) {
+            exit $settingsRestartProcess.ExitCode
+          }
+          if (-not (Select-String -Path $settingsRestartStdout -SimpleMatch `
+            "renderer_query=source-selection,enter,stream,citation status_success" `
+            -Quiet)) {
+            throw "Persisted Settings did not support the real Renderer query."
+          }
+          $env:APPDATA = $appData
+          Assert-NoExternalTheflow "post-settings-persistence"
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
           $portFile = Join-Path $env:RUNNER_TEMP "mara-embedding-port.txt"
@@ -550,7 +744,6 @@ jobs:
           $requestMarker = Join-Path $dataRoot "tmp/gate3-embedding-request"
           $queryBlockMarker = Join-Path $dataRoot "tmp/gate3-query-block"
           $queryRequestMarker = Join-Path $dataRoot "tmp/gate3-query-request"
-          $python = (Resolve-Path ".venv/Scripts/python.exe").Path
           $embeddingServer = Start-Process -FilePath $python `
             -ArgumentList @(
               "-m", "sidecar.smoke_embedding_server",
@@ -896,6 +1089,10 @@ jobs:
             apps/desktop/release/windows-unconfigured-stdout.txt
             apps/desktop/release/windows-unconfigured-stderr.txt
             apps/desktop/release/windows-unconfigured-evidence.txt
+            apps/desktop/release/windows-settings-stdout.txt
+            apps/desktop/release/windows-settings-stderr.txt
+            apps/desktop/release/windows-settings-restart-stdout.txt
+            apps/desktop/release/windows-settings-restart-stderr.txt
             apps/desktop/release/windows-metrics.txt
             apps/desktop/release/windows-cli-compat-before.txt
             apps/desktop/release/windows-cli-compat-after.txt

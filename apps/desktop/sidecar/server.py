@@ -75,6 +75,15 @@ CAPABILITIES = [
 LOGGER = logging.getLogger("mara.desktop.sidecar")
 
 
+def _attach_query_maintenance_loggers(handler: logging.Handler) -> None:
+    for name in ("mara.desktop.query_tasks", "mara.desktop.query_stream"):
+        logger = logging.getLogger(name)
+        logger.setLevel(logging.INFO)
+        if handler not in logger.handlers:
+            logger.addHandler(handler)
+        logger.propagate = False
+
+
 class ApplicationService(Protocol):
     def get_doctor(self) -> dict[str, Any]:
         ...
@@ -227,12 +236,12 @@ def create_app(
 ) -> FastAPI:
     if not token:
         raise ValueError("Sidecar token is required")
-
     app = FastAPI(
         title="MARA Desktop Sidecar",
         version=SIDECAR_VERSION,
         docs_url=None,
         redoc_url=None,
+        openapi_url=None,
         responses={
             401: {"model": SidecarError},
             403: {"model": SidecarError},
@@ -277,6 +286,12 @@ def create_app(
     )
     _register_lifecycle_routes(app)
     _register_data_routes(app)
+    app.add_api_route(
+        "/openapi.json",
+        app.openapi,
+        include_in_schema=False,
+        dependencies=_protected_dependencies(),
+    )
     return app
 
 
@@ -525,7 +540,8 @@ def main() -> int:
 
     desktop_data_root = Path(data_root)
     configure_desktop_data_root(desktop_data_root)
-    configure_maintenance_logging(desktop_data_root)
+    maintenance_handler = configure_maintenance_logging(desktop_data_root)
+    _attach_query_maintenance_loggers(maintenance_handler)
     app = create_app(
         token,
         smoke_fault=os.environ.get("MARA_DESKTOP_SMOKE_FAULT") or None,

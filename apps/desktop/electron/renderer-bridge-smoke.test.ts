@@ -13,6 +13,7 @@ const successfulResult = {
   doctorOk: true,
   filesOk: true,
   sessionsOk: true,
+  modelSettingsOk: true,
   unavailableMessageVisible: false,
 };
 
@@ -35,11 +36,12 @@ test("packaged renderer smoke exercises the narrow bridge and real IPC methods",
     "getDoctor",
     "listFiles",
     "listSessions",
+    "getModelSettings",
   ]) {
     assert.match(script, new RegExp(`bridge\\.${method}\\(\\)`));
   }
   assert.deepEqual(messages, [
-    "renderer_bridge=window.desktop real_ipc=runtime,doctor,files,sessions status_success",
+    "renderer_bridge=window.desktop real_ipc=runtime,doctor,files,sessions,model-settings status_success",
   ]);
 });
 

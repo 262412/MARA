@@ -5,7 +5,7 @@ export function mergeQueryTaskSnapshot(
   incoming: QueryTask,
   replace = false,
 ): QueryTask {
-  if (!current || replace) {
+  if (!current) {
     return incoming;
   }
   if (incoming.task_id === current.task_id) {
@@ -17,7 +17,7 @@ export function mergeQueryTaskSnapshot(
   if (current.retry_of_task_id === incoming.task_id) {
     return current;
   }
-  return current;
+  return replace ? incoming : current;
 }
 
 export function submittedPromptTransition(

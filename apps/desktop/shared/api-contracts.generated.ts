@@ -5,11 +5,13 @@ export type DoctorPayload = {
   app_name: string;
   default_user_id: string;
   embedding_default: string;
+  embedding_model: string;
+  embedding_provider: string;
   file_count: number;
   graph_cache_dir: string;
   index_id: number | null;
   index_name: string;
-  indexing_action: "none" | "configure_embedding" | "repair_installation" | "check_connection" | "free_storage" | "contact_support";
+  indexing_action: "none" | "configure_embedding" | "repair_installation" | "check_connection" | "check_source_permissions" | "choose_source_again" | "retry" | "free_storage" | "contact_support";
   indexing_issue_code: string | null;
   indexing_message: string;
   indexing_ready: boolean;
@@ -17,6 +19,13 @@ export type DoctorPayload = {
   issues: Array<string>;
   llm_default: string;
   ok: boolean;
+  query_action: "none" | "configure_llm" | "configure_credentials" | "repair_installation" | "check_connection" | "retry";
+  query_issue_code: string | null;
+  query_message: string;
+  query_model: string;
+  query_provider: string;
+  query_ready: boolean;
+  query_retryable: boolean;
   request_id: string;
   session_count: number;
   warnings: Array<string>;

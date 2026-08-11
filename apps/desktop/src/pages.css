@@ -1,0 +1,239 @@
+.standalone-page {
+  grid-column: 2 / -1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 28px clamp(24px, 4vw, 56px) 44px;
+  overflow: auto;
+  background: var(--panel);
+}
+
+.standalone-header {
+  display: flex;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.standalone-header h1 {
+  margin: 2px 0 7px;
+  font-size: 24px;
+}
+
+.standalone-header p:last-child {
+  margin: 0;
+  color: var(--secondary);
+  font-size: 12px;
+}
+
+.standalone-header > button,
+.resource-runtime button,
+.help-page section button,
+.composer-notice button,
+.settings-actions button {
+  padding: 7px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel-elevated);
+}
+
+.composer-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.composer-notice small {
+  margin-left: auto;
+  color: var(--secondary);
+}
+
+.page-state,
+.settings-warning,
+.settings-compatibility,
+.settings-error {
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  margin-bottom: 16px;
+  color: var(--secondary);
+  font-size: 11px;
+  background: var(--panel-elevated);
+}
+
+.page-state[role="alert"],
+.settings-error {
+  border-color: #7d554b;
+  color: #efb2a2;
+  background: #2f211e;
+}
+
+.settings-warning {
+  border-color: #806f43;
+  color: #f0d58b;
+  background: #302b1f;
+}
+
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.resource-card,
+.resource-runtime,
+.help-page section,
+.model-route-card,
+.settings-readiness {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-elevated);
+}
+
+.resource-card {
+  padding: 15px;
+}
+
+.resource-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.resource-card h2,
+.resource-runtime h2,
+.help-page h2 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.resource-card strong {
+  color: var(--accent);
+  font-size: 10px;
+}
+
+.resource-card p,
+.resource-runtime,
+.help-page section {
+  color: var(--secondary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.resource-runtime {
+  padding: 17px;
+  margin-top: 14px;
+}
+
+.resource-runtime dl,
+.shortcut-list,
+.settings-readiness {
+  display: grid;
+  gap: 8px;
+}
+
+.resource-runtime dl div,
+.shortcut-list div,
+.settings-readiness > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.resource-runtime dt,
+.shortcut-list dt {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.resource-runtime dd,
+.shortcut-list dd {
+  margin: 0;
+}
+
+.help-page {
+  display: grid;
+  align-content: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.help-page .standalone-header {
+  grid-column: 1 / -1;
+}
+
+.help-page section {
+  padding: 18px;
+}
+
+.model-settings-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.model-route-card {
+  display: grid;
+  min-width: 0;
+  padding: 16px;
+  gap: 12px;
+}
+
+.model-route-card legend {
+  padding: 0 6px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.model-route-card label {
+  display: grid;
+  color: var(--secondary);
+  font-size: 10px;
+  gap: 5px;
+}
+
+.model-route-card input,
+.model-route-card select {
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--panel);
+}
+
+.credential-state {
+  color: var(--tertiary);
+}
+
+.settings-readiness {
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  color: var(--secondary);
+  font-size: 11px;
+}
+
+.settings-readiness strong {
+  color: var(--text);
+}
+
+.settings-error,
+.settings-actions {
+  grid-column: 1 / -1;
+}
+
+.settings-error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+}

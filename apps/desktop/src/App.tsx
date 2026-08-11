@@ -8,6 +8,10 @@ import {
 import type { FileRecord } from "../shared/file-contracts";
 import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
+import type {
+  ModelSettingsInput,
+  ModelSettingsStatus,
+} from "../shared/model-contracts";
 import type { QueryTask } from "../shared/query-contracts";
 import type {
   DesktopResult,
@@ -19,11 +23,15 @@ import type {
   SessionSummary,
 } from "../shared/session-contracts";
 import { FilesPage } from "./components/FilesPage";
+import { HelpPage } from "./components/HelpPage";
 import { Inspector, type InspectorTab } from "./components/Inspector";
+import { ResourcesPage } from "./components/ResourcesPage";
+import { SettingsPage } from "./components/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
 import { refreshFilesForTerminalTask } from "./index-task-state";
 import { mergeQueryTaskSnapshot } from "./query-task-state";
+import { PAGE_TITLES, type AppPage } from "./navigation";
 import type { ResourceState } from "./resource-state";
 import { useDesktopResource } from "./useDesktopResource";
 
@@ -35,7 +43,10 @@ const unavailableRuntime: RuntimeStatus = {
 };
 
 export default function App() {
-  const [activeNav, setActiveNav] = useState("workbench");
+  const [activeNav, setActiveNav] = useState<AppPage>("workbench");
+  const draftGeneration = useRef(0);
+  const [workspaceId, setWorkspaceId] = useState("draft:0");
+  const [composerPrompt, setComposerPrompt] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
   const [selectedSession, setSelectedSession] = useState<
     ResourceState<SessionDetail> | undefined
@@ -54,7 +65,9 @@ export default function App() {
   const [indexTask, setIndexTask] = useState<IndexTask>();
   const [answerTask, setAnswerTask] = useState<QueryTask>();
   const [answerActionPending, setAnswerActionPending] = useState(false);
-  const [answerActionError, setAnswerActionError] = useState<string>();
+  const [answerActionError, setAnswerActionError] = useState<SidecarError>();
+  const [modelSettingsSavePending, setModelSettingsSavePending] = useState(false);
+  const [modelSettingsSaveError, setModelSettingsSaveError] = useState<SidecarError>();
   const [indexActionPending, setIndexActionPending] = useState(false);
   const [deletingFileIds, setDeletingFileIds] = useState<string[]>([]);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
@@ -68,6 +81,7 @@ export default function App() {
   const sessionMutationLock = useRef(false);
   const sessionCreateLock = useRef(false);
   const answerActionLock = useRef(false);
+  const modelSettingsSaveLock = useRef(false);
   const sourceSelectionSession = useRef<string | undefined>(undefined);
   const [runtime, setRuntime] = useState<RuntimeStatus>(
     window.desktop
@@ -92,10 +106,25 @@ export default function App() {
       unavailableResult("Sessions 仅能在 MARA Desktop 中使用。"),
     [],
   );
+  const loadModelSettings = useCallback(
+    () =>
+      window.desktop?.getModelSettings() ??
+      unavailableResult<ModelSettingsStatus>(
+        "模型设置仅能在 MARA Desktop 中使用。",
+      ),
+    [],
+  );
   const doctor = useDesktopResource(loadDoctor);
   const files = useDesktopResource(loadFiles);
   const sessions = useDesktopResource(loadSessions);
+  const modelSettings = useDesktopResource(loadModelSettings);
   const indexing = indexingReadiness(doctor.resource);
+  const querying = queryReadiness(doctor.resource);
+
+  useEffect(() => {
+    document.title = `${PAGE_TITLES[activeNav]} · MARA`;
+    document.querySelector<HTMLElement>("[data-page-title]")?.focus();
+  }, [activeNav]);
 
   useEffect(() => {
     const generation = ++sessionRequestGeneration.current;
@@ -255,36 +284,6 @@ export default function App() {
     [runFileImport],
   );
 
-  const openEmbeddingConfiguration = useCallback(async () => {
-    if (indexActionLock.current) {
-      return;
-    }
-    indexActionLock.current = true;
-    setIndexActionPending(true);
-    setFileActionError(undefined);
-    try {
-      const result = await (
-        window.desktop?.openEmbeddingConfiguration() ??
-        unavailableResult<boolean>(
-          "Embedding 配置仅能在 MARA Desktop 中打开。",
-        )
-      );
-      if (!result.ok) {
-        setFileActionError(result.error);
-      }
-    } catch {
-      setFileActionError(
-        rendererSidecarError(
-          "embedding_configuration_unavailable",
-          "Embedding 配置未能打开。",
-        ),
-      );
-    } finally {
-      indexActionLock.current = false;
-      setIndexActionPending(false);
-    }
-  }, []);
-
   const cancelIndexTask = useCallback(async () => {
     if (!indexTask) {
       return;
@@ -439,8 +438,8 @@ export default function App() {
   const submitQuestion = useCallback(
     async (prompt: string) => {
       if (
-        !selectedSessionId ||
         selectedSourceIds.length === 0 ||
+        !querying.query_ready ||
         answerActionLock.current ||
         answerTask?.status === "queued" ||
         answerTask?.status === "running"
@@ -451,9 +450,32 @@ export default function App() {
       setAnswerActionPending(true);
       setAnswerActionError(undefined);
       try {
+        let conversationId = selectedSessionId;
+        if (!conversationId) {
+          if (sessionCreateLock.current || sessionMutationLock.current) {
+            return;
+          }
+          sessionCreateLock.current = true;
+          setSessionCreatePending(true);
+          const created = await (
+            window.desktop?.createSession() ??
+            unavailableResult<SessionDetail>(
+              "新建任务仅能在 MARA Desktop 中使用。",
+            )
+          );
+          if (!created.ok) {
+            setAnswerActionError(created.error);
+            return;
+          }
+          conversationId = created.data.conversation_id;
+          sourceSelectionSession.current = conversationId;
+          setSelectedSession({ status: "success", data: created.data });
+          setSelectedSessionId(conversationId);
+          sessions.retry();
+        }
         const result = await (
           window.desktop?.submitQuestion({
-            conversation_id: selectedSessionId,
+            conversation_id: conversationId,
             prompt,
             selected_file_ids: selectedSourceIds,
           }) ?? unavailableResult<QueryTask>("问答仅能在 MARA Desktop 中使用。")
@@ -461,16 +483,27 @@ export default function App() {
         if (result.ok) {
           updateAnswerTask(result.data, true);
         } else {
-          setAnswerActionError(result.error.message);
+          setAnswerActionError(result.error);
         }
       } catch {
-        setAnswerActionError("问题未能提交。");
+        setAnswerActionError(
+          rendererSidecarError("query_submit_failed", "问题未能提交。"),
+        );
       } finally {
+        sessionCreateLock.current = false;
+        setSessionCreatePending(false);
         answerActionLock.current = false;
         setAnswerActionPending(false);
       }
     },
-    [answerTask?.status, selectedSessionId, selectedSourceIds, updateAnswerTask],
+    [
+      answerTask?.status,
+      querying.query_ready,
+      selectedSessionId,
+      selectedSourceIds,
+      sessions.retry,
+      updateAnswerTask,
+    ],
   );
 
   const cancelAnswer = useCallback(async () => {
@@ -488,10 +521,12 @@ export default function App() {
       if (result.ok) {
         updateAnswerTask(result.data);
       } else {
-        setAnswerActionError(result.error.message);
+        setAnswerActionError(result.error);
       }
     } catch {
-      setAnswerActionError("停止回答未能完成。");
+      setAnswerActionError(
+        rendererSidecarError("query_cancel_failed", "停止回答未能完成。"),
+      );
     } finally {
       answerActionLock.current = false;
       setAnswerActionPending(false);
@@ -513,47 +548,70 @@ export default function App() {
       if (result.ok) {
         updateAnswerTask(result.data, true);
       } else {
-        setAnswerActionError(result.error.message);
+        setAnswerActionError(result.error);
       }
     } catch {
-      setAnswerActionError("重试回答未能完成。");
+      setAnswerActionError(
+        rendererSidecarError("query_retry_failed", "重试回答未能完成。"),
+      );
     } finally {
       answerActionLock.current = false;
       setAnswerActionPending(false);
     }
   }, [answerTask, updateAnswerTask]);
 
-  const createSession = useCallback(async () => {
+  const startDraft = useCallback(() => {
     if (sessionCreateLock.current || sessionMutationLock.current) {
       return;
     }
-    sessionCreateLock.current = true;
-    setSessionCreatePending(true);
+    draftGeneration.current += 1;
+    setWorkspaceId(`draft:${draftGeneration.current}`);
+    setActiveNav("workbench");
+    setSelectedSessionId(undefined);
+    setSelectedSession(undefined);
+    setComposerPrompt("");
+    setSessionSearchQuery("");
+    setSelectedSourceIds([]);
+    sourceSelectionSession.current = undefined;
+    setAnswerActionError(undefined);
     setSessionActionError(undefined);
-    try {
-      const result = await (
-        window.desktop?.createSession() ??
-        unavailableResult<SessionDetail>(
-          "新建任务仅能在 MARA Desktop 中使用。",
-        )
-      );
-      if (result.ok) {
-        setActiveNav("workbench");
-        setSessionSearchQuery("");
-        setSelectedSessionId(result.data.conversation_id);
-        sourceSelectionSession.current = undefined;
-        setSelectedSourceIds([]);
-        sessions.retry();
-      } else {
-        setSessionActionError(result.error.message);
+  }, []);
+
+  const saveModelSettings = useCallback(
+    async (settings: ModelSettingsInput) => {
+      if (modelSettingsSaveLock.current) {
+        return;
       }
-    } catch {
-      setSessionActionError("新建任务未能完成。");
-    } finally {
-      sessionCreateLock.current = false;
-      setSessionCreatePending(false);
-    }
-  }, [sessions.retry]);
+      modelSettingsSaveLock.current = true;
+      setModelSettingsSavePending(true);
+      setModelSettingsSaveError(undefined);
+      try {
+        const result = await (
+          window.desktop?.saveModelSettings(settings) ??
+          unavailableResult<ModelSettingsStatus>(
+            "模型设置仅能在 MARA Desktop 中保存。",
+          )
+        );
+        if (!result.ok) {
+          setModelSettingsSaveError(result.error);
+          return;
+        }
+        modelSettings.retry();
+        doctor.retry();
+      } catch {
+        setModelSettingsSaveError(
+          rendererSidecarError(
+            "model_settings_apply_failed",
+            "模型设置未能保存并应用。",
+          ),
+        );
+      } finally {
+        modelSettingsSaveLock.current = false;
+        setModelSettingsSavePending(false);
+      }
+    },
+    [doctor.retry, modelSettings.retry],
+  );
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -565,16 +623,24 @@ export default function App() {
         event.key.toLowerCase() === "n"
       ) {
         event.preventDefault();
-        void createSession();
+        startDraft();
+      } else if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key === ","
+      ) {
+        event.preventDefault();
+        setActiveNav("settings");
       }
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [createSession, importFiles]);
+  }, [importFiles, startDraft]);
 
   const selectSession = useCallback((sessionId: string) => {
     setActiveNav("workbench");
     setSelectedSessionId(sessionId);
+    setWorkspaceId(`session:${sessionId}`);
+    setComposerPrompt("");
     sourceSelectionSession.current = undefined;
     setAnswerActionError(undefined);
     setSessionActionError(undefined);
@@ -660,8 +726,11 @@ export default function App() {
         );
         if (result.ok) {
           if (selectedSessionId === conversationId) {
+            draftGeneration.current += 1;
+            setWorkspaceId(`draft:${draftGeneration.current}`);
             setSelectedSessionId(undefined);
             setSelectedSession(undefined);
+            setComposerPrompt("");
             setSelectedSourceIds([]);
             sourceSelectionSession.current = undefined;
             if (answerTask?.conversation_id === conversationId) {
@@ -704,7 +773,7 @@ export default function App() {
           onStartRename={startSessionRename}
           onEditingSessionNameChange={setEditingSessionName}
           onCancelRename={cancelSessionRename}
-          onCreateSession={() => void createSession()}
+          onCreateSession={startDraft}
           onRenameSession={(conversationId, name) =>
             void renameSession(conversationId, name)
           }
@@ -731,20 +800,48 @@ export default function App() {
               void importDroppedFiles(droppedFiles)
             }
             onImport={() => void importFiles()}
-            onOpenEmbeddingConfiguration={() =>
-              void openEmbeddingConfiguration()
-            }
+            onOpenEmbeddingConfiguration={() => setActiveNav("settings")}
             onRetry={() => void files.retry()}
             onRetryIndexTask={() => void retryIndexTask()}
             onSelectionChange={setSelectedFileIds}
             selectedFileIds={selectedFileIds}
+          />
+        ) : activeNav === "resources" ? (
+          <ResourcesPage
+            doctor={doctor.resource}
+            onOpenSettings={() => setActiveNav("settings")}
+            onRetry={doctor.retry}
+            runtime={runtime}
+          />
+        ) : activeNav === "help" ? (
+          <HelpPage
+            onOpenResources={() => setActiveNav("resources")}
+            onOpenSettings={() => setActiveNav("settings")}
+            version={runtime.version}
+          />
+        ) : activeNav === "settings" ? (
+          <SettingsPage
+            doctor={doctor.resource}
+            onRetry={() => {
+              modelSettings.retry();
+              doctor.retry();
+            }}
+            onSave={(settings) => void saveModelSettings(settings)}
+            saveError={modelSettingsSaveError}
+            savePending={modelSettingsSavePending}
+            settings={modelSettings.resource}
           />
         ) : (
           <Workspace
             answerActionError={answerActionError}
             answerActionPending={answerActionPending}
             answerTask={answerTask}
-            modelName={doctor.resource.status === "success" ? doctor.resource.data.llm_default : undefined}
+            isDraft={!selectedSessionId}
+            modelName={
+              doctor.resource.status === "success"
+                ? doctor.resource.data.query_model
+                : undefined
+            }
             onCancelAnswer={() => void cancelAnswer()}
             onOpenSources={() => {
               setInspectorOpen(true);
@@ -752,13 +849,18 @@ export default function App() {
             }}
             onRetryAnswer={() => void retryAnswer()}
             onRetrySession={() => setSessionReload((value) => value + 1)}
+            onOpenSettings={() => setActiveNav("settings")}
+            onPromptChange={setComposerPrompt}
             onSubmitQuestion={(prompt) => void submitQuestion(prompt)}
             onToggleInspector={() => setInspectorOpen((value) => !value)}
+            queryReadiness={querying}
+            promptValue={composerPrompt}
             selectedSourceCount={selectedSourceIds.length}
             session={selectedSession}
+            workspaceId={workspaceId}
           />
         )}
-        {inspectorOpen ? (
+        {activeNav === "workbench" && inspectorOpen ? (
           <Inspector
             activeTab={inspectorTab}
             doctor={doctor.resource}
@@ -799,6 +901,16 @@ type FilesIndexingReadiness = Pick<
   | "request_id"
 >;
 
+type WorkbenchQueryReadiness = Pick<
+  DoctorPayload,
+  | "query_ready"
+  | "query_issue_code"
+  | "query_message"
+  | "query_action"
+  | "query_retryable"
+  | "request_id"
+>;
+
 function indexingReadiness(
   doctor: ResourceState<DoctorPayload>,
 ): FilesIndexingReadiness {
@@ -825,6 +937,39 @@ function indexingReadiness(
     indexing_issue_code: "indexing_status_pending",
     indexing_message: "正在检查文件索引准备状态。",
     indexing_action: "none",
+    request_id: "doctor-pending",
+  };
+}
+
+function queryReadiness(
+  doctor: ResourceState<DoctorPayload>,
+): WorkbenchQueryReadiness {
+  if (doctor.status === "success") {
+    return {
+      query_ready: doctor.data.query_ready,
+      query_issue_code: doctor.data.query_issue_code,
+      query_message: doctor.data.query_message,
+      query_action: doctor.data.query_action,
+      query_retryable: doctor.data.query_retryable,
+      request_id: doctor.data.request_id,
+    };
+  }
+  if (doctor.status === "failed") {
+    return {
+      query_ready: false,
+      query_issue_code: doctor.error?.code ?? "doctor_unavailable",
+      query_message: "无法确认问答模型准备状态。",
+      query_action: "none",
+      query_retryable: true,
+      request_id: doctor.error?.request_id ?? "doctor-unavailable",
+    };
+  }
+  return {
+    query_ready: false,
+    query_issue_code: "query_status_pending",
+    query_message: "正在检查问答模型准备状态。",
+    query_action: "none",
+    query_retryable: true,
     request_id: "doctor-pending",
   };
 }

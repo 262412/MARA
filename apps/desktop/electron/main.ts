@@ -9,6 +9,7 @@ import {
   dialog,
   ipcMain,
   protocol,
+  safeStorage,
   session,
   shell,
 } from "electron";
@@ -28,14 +29,20 @@ import {
   validateDroppedPathsForIndex,
 } from "./file-import";
 import { registerDesktopIpc } from "./ipc";
+import {
+  createDesktopCredentialProtector,
+  DesktopModelSettingsStore,
+} from "./model-settings";
 import { contentTypeFor, resolveAppAsset } from "./protocol";
 import {
   runIndexingBlockedRendererSmoke,
   runRendererBridgeSmoke,
 } from "./renderer-bridge-smoke";
+import { runRendererWorkbenchSmoke } from "./renderer-workbench-smoke";
 import { SidecarManager } from "./sidecar-manager";
 import { runDesktopSmoke } from "./smoke-runner";
 import {
+  GATE2_SMOKE_FILE_ID,
   GATE2_SMOKE_SESSION_ID,
   GATE3_FORMAT_INPUT_NAMES,
   GATE3_FORMAT_RECORD_NAMES,
@@ -116,9 +123,15 @@ const desktopDataRoot = resolveDesktopDataRoot(
   app.getPath("home"),
   app.getPath("appData"),
 );
+const modelSettings = new DesktopModelSettingsStore(
+  desktopDataRoot,
+  createDesktopCredentialProtector(safeStorage, process.platform),
+);
+let modelSettingsLoadFailure: string | undefined;
 const sidecar = new SidecarManager({
   appPath: app.getAppPath(),
   dataRoot: desktopDataRoot,
+  environment: () => modelSettings.environment(),
   isPackaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
   smokeFault: gate3SmokeFault,
@@ -380,6 +393,21 @@ async function runUnconfiguredIndexingSmoke(): Promise<void> {
   const attemptedIndex = await sidecar.createIndexTask([inputPath]);
   const latestTask = await sidecar.getLatestIndexTask();
   assertIndexingBlockedSmoke(doctor, attemptedIndex, latestTask);
+  const attemptedQuery = await sidecar.createQueryTask({
+    conversation_id: GATE2_SMOKE_SESSION_ID,
+    prompt: "Unconfigured first-start query must remain a draft.",
+    selected_file_ids: [GATE2_SMOKE_FILE_ID],
+  });
+  const latestQuery = await sidecar.getLatestQueryTask();
+  if (
+    attemptedQuery.ok ||
+    attemptedQuery.error.code !== "llm_not_configured" ||
+    attemptedQuery.error.retryable ||
+    !latestQuery.ok ||
+    latestQuery.data !== null
+  ) {
+    throw new Error("Unconfigured Desktop persisted a blocked query task");
+  }
   const journalPath = path.join(
     desktopDataRoot,
     "state",
@@ -388,12 +416,23 @@ async function runUnconfiguredIndexingSmoke(): Promise<void> {
   if (existsSync(journalPath)) {
     throw new Error("Unconfigured Desktop wrote the index task journal");
   }
+  const queryJournalPath = path.join(
+    desktopDataRoot,
+    "state",
+    "query-tasks.json",
+  );
+  if (existsSync(queryJournalPath)) {
+    throw new Error("Unconfigured Desktop wrote the query task journal");
+  }
   if (!mainWindow) {
     throw new Error("Unconfigured renderer smoke has no main window");
   }
   await runIndexingBlockedRendererSmoke(mainWindow.webContents);
   process.stdout.write(
     "indexing_ready=false issue_code=embedding_not_configured retryable=false task_created=false\n",
+  );
+  process.stdout.write(
+    "query_ready=false issue_code=llm_not_configured retryable=false task_created=false\n",
   );
 }
 
@@ -943,6 +982,53 @@ function registerIpc(): void {
         };
       }
     },
+    getModelSettings: async () => {
+      if (modelSettingsLoadFailure) {
+        return {
+          ok: false,
+          error: {
+            code: "model_settings_unavailable",
+            message: "MARA Desktop could not read the saved model settings.",
+            details: null,
+            retryable: false,
+            request_id: randomUUID(),
+          },
+        };
+      }
+      return { ok: true, data: modelSettings.status() };
+    },
+    saveModelSettings: async (settings) => {
+      const requestId = randomUUID();
+      try {
+        const saved = await modelSettings.save(settings);
+        modelSettingsLoadFailure = undefined;
+        const restarted = await sidecar.restart();
+        if (restarted.state !== "healthy") {
+          throw new Error("Sidecar restart did not become healthy");
+        }
+        const doctor = await sidecar.getDoctor();
+        if (!doctor.ok) {
+          throw new Error("Doctor refresh failed after model settings save");
+        }
+        return { ok: true, data: saved };
+      } catch (error) {
+        console.error(
+          "Model settings apply failed request_id=%s error_type=%s",
+          requestId,
+          error instanceof Error ? error.name : "UnknownError",
+        );
+        return {
+          ok: false,
+          error: {
+            code: "model_settings_apply_failed",
+            message: "MARA Desktop could not save and apply the model settings.",
+            details: null,
+            retryable: false,
+            request_id: requestId,
+          },
+        };
+      }
+    },
     getLatestIndexTask: () => sidecar.getLatestIndexTask(),
     cancelIndexTask: async (taskId) => {
       const result = await sidecar.cancelIndexTask(taskId);
@@ -961,6 +1047,22 @@ function registerIpc(): void {
     deleteFile: (fileId) => sidecar.deleteFile(fileId),
     deleteFiles: (fileIds) => sidecar.deleteFiles(fileIds),
     submitQuestion: async (payload) => {
+      const doctor = await sidecar.getDoctor();
+      if (!doctor.ok) {
+        return doctor;
+      }
+      if (!doctor.data.query_ready) {
+        return {
+          ok: false,
+          error: {
+            code: doctor.data.query_issue_code ?? "llm_not_configured",
+            message: doctor.data.query_message,
+            details: null,
+            retryable: doctor.data.query_retryable,
+            request_id: doctor.data.request_id,
+          },
+        };
+      }
       const result = await sidecar.createQueryTask(payload);
       if (result.ok) {
         watchQueryTask(result.data);
@@ -1035,6 +1137,15 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   await registerApplicationProtocol();
+  try {
+    await modelSettings.load();
+  } catch (error) {
+    modelSettingsLoadFailure = error instanceof Error ? error.name : "UnknownError";
+    console.error(
+      "Model settings load failed error_type=%s",
+      modelSettingsLoadFailure,
+    );
+  }
   session.defaultSession.setPermissionRequestHandler(
     (_webContents, _permission, callback) => callback(false),
   );
@@ -1063,6 +1174,9 @@ app.whenReady().then(async () => {
   const requireIndexingUnconfigured = process.argv.includes(
     "--smoke-test-indexing-unconfigured",
   );
+  const requireModelSettings = process.argv.includes(
+    "--smoke-test-model-settings",
+  );
   const requireGate3Delete =
     process.argv.includes("--smoke-test-gate3") || requireGate3Formats;
   const requireNonEmptyFixture =
@@ -1079,7 +1193,8 @@ app.whenReady().then(async () => {
   if (
     process.argv.includes("--smoke-test") ||
     requireNonEmptyFixture ||
-    requireIndexingUnconfigured
+    requireIndexingUnconfigured ||
+    requireModelSettings
   ) {
     const exitCode = await runDesktopSmoke(async () => {
       const [status, doctor, files, sessions, session, importCapabilities] =
@@ -1101,6 +1216,32 @@ app.whenReady().then(async () => {
         throw new Error("Packaged renderer bridge smoke has no main window");
       }
       await runRendererBridgeSmoke(mainWindow.webContents);
+      const rendererSessionId = await runRendererWorkbenchSmoke(
+        mainWindow.webContents,
+        requireIndexingUnconfigured
+          ? "blocked"
+          : requireModelSettings
+            ? "settings"
+          : requireGate3Delete
+            ? "query"
+            : "navigation",
+        console.log,
+        requireModelSettings
+          ? {
+              baseUrl:
+                process.env.MARA_DESKTOP_SMOKE_MODEL_BASE_URL ?? "",
+            }
+          : undefined,
+      );
+      if (rendererSessionId) {
+        const deleted = await sidecar.deleteSession(rendererSessionId);
+        if (!deleted.ok) {
+          throw new Error("Renderer smoke session cleanup failed");
+        }
+        process.stdout.write(
+          "renderer_query=source-selection,enter,stream,citation status_success\n",
+        );
+      }
       const initialFiles = files.ok ? files.data : [];
       if (requireIndexingUnconfigured) {
         await runUnconfiguredIndexingSmoke();

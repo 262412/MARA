@@ -10,9 +10,64 @@ import {
   createTrustedIpcHandler,
   createTrustedPathListIpcHandler,
   createTrustedQuestionIpcHandler,
+  createTrustedModelSettingsIpcHandler,
   createTrustedSessionRenameIpcHandler,
   registerDesktopIpc,
 } from "./ipc";
+
+test("model settings IPC accepts only exact supported routes without exposing generic payloads", async () => {
+  const calls: unknown[] = [];
+  const handler = createTrustedModelSettingsIpcHandler(async (settings) => {
+    calls.push(settings);
+    return "ok";
+  });
+  const settings = {
+    chat: {
+      provider: "openai_compatible",
+      base_url: "https://api.openai.com/v1",
+      model: "gpt-4o-mini",
+      api_version: "",
+      credential: "configured-secret",
+    },
+    embedding: {
+      provider: "ollama",
+      base_url: "http://127.0.0.1:11434/v1",
+      model: "nomic-embed-text",
+      api_version: "",
+      credential: null,
+    },
+  };
+
+  assert.equal(
+    await handler({ senderFrame: { url: "mara://app/" } }, settings),
+    "ok",
+  );
+  assert.equal(calls.length, 1);
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "https://attacker.invalid/" } },
+      settings,
+    ),
+    /Untrusted IPC sender/,
+  );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      { ...settings, url: "file:///private/config" },
+    ),
+    /invalid model settings/,
+  );
+  await assert.rejects(
+    handler(
+      { senderFrame: { url: "mara://app/" } },
+      {
+        ...settings,
+        chat: { ...settings.chat, provider: "arbitrary-provider" },
+      },
+    ),
+    /invalid model settings/,
+  );
+});
 
 test("question IPC validates only a conversation, prompt, and source ids", async () => {
   const calls: unknown[] = [];
@@ -268,6 +323,8 @@ test("registers only explicit desktop capabilities", () => {
     importFiles: async () => ({ ok: true, data: null }),
     importDroppedFiles: async () => ({ ok: true, data: {} as never }),
     openEmbeddingConfiguration: async () => ({ ok: true, data: true }),
+    getModelSettings: async () => ({ ok: true, data: {} as never }),
+    saveModelSettings: async () => ({ ok: true, data: {} as never }),
     getLatestIndexTask: async () => ({ ok: true, data: null }),
     cancelIndexTask: async () => ({ ok: true, data: {} as never }),
     retryIndexTask: async () => ({ ok: true, data: {} as never }),
@@ -291,6 +348,8 @@ test("registers only explicit desktop capabilities", () => {
     "desktop:import-files",
     "desktop:import-dropped-files",
     "desktop:open-embedding-configuration",
+    "desktop:get-model-settings",
+    "desktop:save-model-settings",
     "desktop:get-latest-index-task",
     "desktop:cancel-index-task",
     "desktop:retry-index-task",

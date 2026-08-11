@@ -5,6 +5,7 @@ const requiredBridgeMethods = [
   "getDoctor",
   "listFiles",
   "listSessions",
+  "getModelSettings",
   "openEmbeddingConfiguration",
 ] as const;
 
@@ -15,6 +16,7 @@ type RendererBridgeSmokeResult = {
   doctorOk: boolean;
   filesOk: boolean;
   sessionsOk: boolean;
+  modelSettingsOk: boolean;
   unavailableMessageVisible: boolean;
 };
 
@@ -46,16 +48,18 @@ function rendererBridgeSmokeScript(): string {
           doctorOk: false,
           filesOk: false,
           sessionsOk: false,
+          modelSettingsOk: false,
           unavailableMessageVisible: document.body.innerText.includes(
             "仅能在 MARA Desktop 中使用。",
           ),
         };
       }
-      const [runtime, doctor, files, sessions] = await Promise.all([
+      const [runtime, doctor, files, sessions, modelSettings] = await Promise.all([
         bridge.getRuntimeStatus(),
         bridge.getDoctor(),
         bridge.listFiles(),
         bridge.listSessions(),
+        bridge.getModelSettings(),
       ]);
       return {
         bridgeAvailable: true,
@@ -64,6 +68,9 @@ function rendererBridgeSmokeScript(): string {
         doctorOk: doctor?.ok === true,
         filesOk: files?.ok === true && Array.isArray(files.data),
         sessionsOk: sessions?.ok === true && Array.isArray(sessions.data),
+        modelSettingsOk:
+          modelSettings?.ok === true &&
+          !JSON.stringify(modelSettings.data).includes('"credential":'),
         unavailableMessageVisible: document.body.innerText.includes(
           "仅能在 MARA Desktop 中使用。",
         ),
@@ -86,6 +93,7 @@ function assertRendererBridgeSmoke(
   if (!result.doctorOk) failures.push("Doctor IPC failed");
   if (!result.filesOk) failures.push("Files IPC failed");
   if (!result.sessionsOk) failures.push("Sessions IPC failed");
+  if (!result.modelSettingsOk) failures.push("model settings IPC was not redacted");
   if (result.unavailableMessageVisible) {
     failures.push("renderer displayed the bridge-unavailable fallback");
   }
@@ -103,7 +111,7 @@ export async function runRendererBridgeSmoke(
   )) as RendererBridgeSmokeResult;
   assertRendererBridgeSmoke(result);
   reportSuccess(
-    "renderer_bridge=window.desktop real_ipc=runtime,doctor,files,sessions status_success",
+    "renderer_bridge=window.desktop real_ipc=runtime,doctor,files,sessions,model-settings status_success",
   );
 }
 

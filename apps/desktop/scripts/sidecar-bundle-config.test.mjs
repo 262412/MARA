@@ -10,6 +10,7 @@ import {
   requiredSidecarDataPackages,
   requiredSidecarModules,
   requiredTiktokenEncodings,
+  supportedDesktopChatProviders,
   supportedDesktopEmbeddingProviders,
   tiktokenCacheDestination,
 } from "./sidecar-bundle-config.mjs";
@@ -39,6 +40,13 @@ test("excludes optional indexing accelerators and provider SDKs", () => {
 });
 
 test("declares only providers whose dependencies are native bundle requirements", () => {
+  assert.deepEqual(supportedDesktopChatProviders, [
+    {
+      module: "openai",
+      providers: ["openai_compatible", "azure_openai", "ollama"],
+      types: ["kotaemon.llms.ChatOpenAI", "kotaemon.llms.AzureChatOpenAI"],
+    },
+  ]);
   assert.deepEqual(supportedDesktopEmbeddingProviders, [
     {
       module: "openai",
@@ -48,7 +56,10 @@ test("declares only providers whose dependencies are native bundle requirements"
       ],
     },
   ]);
-  for (const provider of supportedDesktopEmbeddingProviders) {
+  for (const provider of [
+    ...supportedDesktopChatProviders,
+    ...supportedDesktopEmbeddingProviders,
+  ]) {
     assert.ok(requiredSidecarModules.includes(provider.module), provider.module);
     assert.ok(!excludedSidecarModules.includes(provider.module), provider.module);
   }

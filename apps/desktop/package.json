@@ -17,7 +17,7 @@
     "start": "npm run build && electron .",
     "test": "npm run test:electron && npm run test:renderer && npm run test:sidecar && npm run test:packaging",
     "test:electron": "npm run build:electron && node --test dist-electron/**/*.test.js",
-    "test:renderer": "tsc -p tsconfig.renderer-test.json && node --test dist-tests/src/*.test.js dist-tests/src/**/*.test.js",
+    "test:renderer": "tsc -p tsconfig.renderer-test.json && node --test --test-concurrency=1 dist-tests/src/*.test.js dist-tests/src/**/*.test.js",
     "test:sidecar": "node scripts/run-python.mjs -m unittest discover -s sidecar -t . -p test_*.py",
     "test:packaging": "node --test scripts/sidecar-bundle-config.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
@@ -33,7 +33,9 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.4",
     "@electron/packager": "20.0.4",
+    "@types/jsdom": "30.0.0",
     "electron": "43.2.0",
+    "jsdom": "30.0.1",
     "typescript": "7.0.2",
     "vite": "8.1.5"
   },

@@ -53,6 +53,7 @@ export type SidecarReadyMessage = {
 type SidecarManagerOptions = {
   appPath: string;
   dataRoot: string;
+  environment?: () => Record<string, string>;
   isPackaged: boolean;
   resourcesPath: string;
   smokeFault?: "disk_full" | "database_locked";
@@ -550,6 +551,11 @@ export class SidecarManager {
     return startup;
   }
 
+  async restart(): Promise<RuntimeStatus> {
+    await this.stop();
+    return this.start();
+  }
+
   private clearStartup(startup: Promise<RuntimeStatus>): void {
     if (this.startup === startup) {
       this.startup = undefined;
@@ -585,6 +591,7 @@ export class SidecarManager {
     const child = spawn(command.executable, command.args, {
       env: {
         ...process.env,
+        ...this.options.environment?.(),
         KH_APP_DATA_DIR: path.join(
           this.options.dataRoot,
           "state",

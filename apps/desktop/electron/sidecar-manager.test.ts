@@ -91,6 +91,28 @@ test("bounds automatic Sidecar restarts to three exponential delays", () => {
   );
 });
 
+test("controlled restart stops the current Sidecar before starting with refreshed settings", async () => {
+  const manager = Object.create(SidecarManager.prototype) as SidecarManager;
+  const calls: string[] = [];
+  manager.stop = async () => {
+    calls.push("stop");
+  };
+  manager.start = async () => {
+    calls.push("start");
+    return {
+      state: "healthy",
+      protocol: 1,
+      version: "0.8.0",
+      capabilities: [],
+    };
+  };
+
+  const status = await manager.restart();
+
+  assert.deepEqual(calls, ["stop", "start"]);
+  assert.equal(status.state, "healthy");
+});
+
 test("bounds query watcher reconnect delays without giving up on transient failures", () => {
   assert.deepEqual(
     [0, 1, 2, 3, 4, 20].map((attempt) => queryWatchRetryDelay(attempt)),

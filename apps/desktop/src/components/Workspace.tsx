@@ -8,43 +8,79 @@ import {
 } from "react";
 
 import type { QueryCitation, QueryTask } from "../../shared/query-contracts";
+import type { DoctorPayload } from "../../shared/doctor-contracts";
+import type { SidecarError } from "../../shared/runtime-contracts";
 import type { SessionDetail, SessionMessage } from "../../shared/session-contracts";
 import type { ResourceState } from "../resource-state";
 import { submittedPromptTransition } from "../query-task-state";
 import { Icon } from "./Icon";
 
 type WorkspaceProps = {
-  answerActionError?: string;
+  answerActionError?: SidecarError;
   answerActionPending: boolean;
   answerTask?: QueryTask;
   modelName?: string;
+  isDraft?: boolean;
+  onPromptChange?: (value: string) => void;
   onCancelAnswer: () => void;
   onOpenSources: () => void;
+  onOpenSettings?: () => void;
   onRetryAnswer: () => void;
   onRetrySession: () => void;
   onSubmitQuestion: (prompt: string) => void;
   onToggleInspector: () => void;
   selectedSourceCount: number;
   session: ResourceState<SessionDetail> | undefined;
+  queryReadiness?: QueryReadiness;
+  promptValue?: string;
+  workspaceId?: string;
+};
+
+export type QueryReadiness = Pick<
+  DoctorPayload,
+  | "query_ready"
+  | "query_issue_code"
+  | "query_message"
+  | "query_action"
+  | "query_retryable"
+  | "request_id"
+>;
+
+const readyQuery: QueryReadiness = {
+  query_ready: true,
+  query_issue_code: null,
+  query_message: "Question answering is ready.",
+  query_action: "none",
+  query_retryable: false,
+  request_id: "workspace-ready",
 };
 
 export function Workspace({
   answerActionError,
   answerActionPending,
   answerTask,
+  isDraft = false,
   modelName,
   onCancelAnswer,
   onOpenSources,
+  onOpenSettings = () => undefined,
+  onPromptChange,
   onRetryAnswer,
   onRetrySession,
   onSubmitQuestion,
   onToggleInspector,
   selectedSourceCount,
   session,
+  queryReadiness = readyQuery,
+  promptValue,
+  workspaceId = "workspace",
 }: WorkspaceProps) {
-  const [prompt, setPrompt] = useState("");
+  const [localPrompt, setLocalPrompt] = useState("");
+  const prompt = promptValue ?? localPrompt;
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const consumedPromptTaskId = useRef<string | undefined>(undefined);
+  const submitLock = useRef(false);
+  const previousWorkspaceId = useRef(workspaceId);
   const detail = session?.status === "success" ? session.data : undefined;
   const visibleTask =
     answerTask && answerTask.conversation_id === detail?.conversation_id
@@ -61,13 +97,20 @@ export function Workspace({
     [detail, visibleTask],
   );
   const disabledReason = composerDisabledReason(
+    isDraft,
+    session,
     detail,
     selectedSourceCount,
+    queryReadiness,
     active,
     backgroundActive,
     answerActionPending,
   );
   const canSubmit = !disabledReason && prompt.trim().length > 0;
+  const setPrompt = (value: string) => {
+    setLocalPrompt(value);
+    onPromptChange?.(value);
+  };
 
   useEffect(() => {
     const transition = submittedPromptTransition(
@@ -80,6 +123,22 @@ export function Workspace({
       setPrompt(transition.prompt);
     }
   }, [prompt, visibleTask]);
+
+  useEffect(() => {
+    if (previousWorkspaceId.current === workspaceId) {
+      return;
+    }
+    previousWorkspaceId.current = workspaceId;
+    setPrompt("");
+    consumedPromptTaskId.current = undefined;
+    submitLock.current = false;
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!answerActionPending && (answerActionError || visibleTask)) {
+      submitLock.current = false;
+    }
+  }, [answerActionError, answerActionPending, visibleTask]);
 
   useEffect(() => {
     const handleShortcut = (event: globalThis.KeyboardEvent) => {
@@ -99,13 +158,31 @@ export function Workspace({
 
   const submit = () => {
     const normalized = prompt.trim();
-    if (canSubmit && normalized) {
+    if (canSubmit && normalized && !submitLock.current) {
+      submitLock.current = true;
       onSubmitQuestion(normalized);
     }
   };
   const handlePromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+      return;
+    }
+    if (event.altKey) {
       event.preventDefault();
+      const input = event.currentTarget;
+      const start = input.selectionStart ?? prompt.length;
+      const end = input.selectionEnd ?? start;
+      const nextPrompt = `${prompt.slice(0, start)}\n${prompt.slice(end)}`;
+      const caret = start + 1;
+      setPrompt(nextPrompt);
+      queueMicrotask(() => input.setSelectionRange(caret, caret));
+      return;
+    }
+    if (event.shiftKey) {
+      return;
+    }
+    event.preventDefault();
+    if (!event.repeat) {
       submit();
     }
   };
@@ -115,7 +192,7 @@ export function Workspace({
       <header className="workspace-toolbar">
         <div>
           <p className="eyebrow">研究任务</p>
-          <h1>{detail?.name || "工作台"}</h1>
+          <h1 data-page-title tabIndex={-1}>{isDraft ? "新任务" : detail?.name || "工作台"}</h1>
         </div>
         <div className="toolbar-actions">
           <button className="source-count" onClick={onOpenSources} type="button">
@@ -133,7 +210,10 @@ export function Workspace({
       </header>
 
       <section className="conversation" aria-label="任务对话">
-        {!session ? (
+        {isDraft ? (
+          <WorkspaceState>这是一个新草稿。选择来源并输入问题后，首次发送才会保存任务。</WorkspaceState>
+        ) : null}
+        {!isDraft && !session ? (
           <WorkspaceState>从左侧选择一个任务以查看真实 MARA 会话。</WorkspaceState>
         ) : null}
         {session?.status === "loading" ? (
@@ -163,10 +243,27 @@ export function Workspace({
 
       <div className="composer-wrap">
         {answerActionError ? (
-          <div className="answer-action-error" role="alert">{answerActionError}</div>
+          <div className="answer-action-error" role="alert">
+            <span>{answerActionError.message}</span>
+            <small>请求 ID：{answerActionError.request_id}</small>
+          </div>
         ) : null}
         {disabledReason ? (
-          <div className="composer-notice" role="status">{disabledReason}</div>
+          <div className="composer-notice" id="composer-notice" role="status">
+            <span>{disabledReason}</span>
+            {!queryReadiness.query_ready ? (
+              <small>
+                {queryReadiness.query_issue_code ?? "query_unavailable"} · 请求 ID：
+                {queryReadiness.request_id}
+              </small>
+            ) : null}
+            {!queryReadiness.query_ready &&
+            ["configure_llm", "configure_credentials"].includes(
+              queryReadiness.query_action,
+            ) ? (
+              <button onClick={onOpenSettings} type="button">配置模型</button>
+            ) : null}
+          </div>
         ) : null}
         <div className="context-row">
           <button className="context-chip" onClick={onOpenSources} type="button">
@@ -180,12 +277,12 @@ export function Workspace({
         <div className={`composer${disabledReason ? " composer-disabled" : ""}`}>
           <label className="sr-only" htmlFor="task-input">向所选来源提问</label>
           <textarea
-            disabled={Boolean(disabledReason)}
+            aria-describedby={disabledReason ? "composer-notice composer-shortcut" : "composer-shortcut"}
             id="task-input"
             maxLength={20_000}
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={handlePromptKeyDown}
-            placeholder={disabledReason || "向所选来源提问…"}
+            placeholder="向所选来源提问…"
             ref={inputRef}
             rows={2}
             value={prompt}
@@ -200,12 +297,15 @@ export function Workspace({
               className="send-button"
               disabled={!canSubmit}
               onClick={submit}
-              title="Ctrl/⌘ + Enter"
+              title="Enter 发送；Alt+Enter 换行"
               type="button"
             >
               <Icon name="send" size={17} />
             </button>
           </div>
+          <span className="sr-only" id="composer-shortcut">
+            Enter 发送，Alt+Enter 换行，Ctrl 或 Command 加 Enter 也可发送。
+          </span>
         </div>
       </div>
     </main>
@@ -254,6 +354,7 @@ function CurrentAnswer({
         {task.error ? (
           <div className="answer-error" role="alert">
             {task.status === "cancelled" ? "生成已停止。" : task.error.message}
+            <small>错误代码：{task.error.code} · 任务 ID：{task.task_id}</small>
           </div>
         ) : null}
         {task.citations.length > 0 ? <Citations citations={task.citations} /> : null}
@@ -324,14 +425,23 @@ function messagesBeforeVisibleTask(
 }
 
 function composerDisabledReason(
+  isDraft: boolean,
+  session: ResourceState<SessionDetail> | undefined,
   detail: SessionDetail | undefined,
   selectedSourceCount: number,
+  queryReadiness: QueryReadiness,
   active: boolean,
   backgroundActive: boolean,
   actionPending: boolean,
 ): string | undefined {
-  if (!detail) {
+  if (!isDraft && session?.status === "loading") {
+    return "正在读取任务；你可以先编辑问题。";
+  }
+  if (!isDraft && !detail) {
     return "先选择或新建任务。";
+  }
+  if (!queryReadiness.query_ready) {
+    return queryReadiness.query_message;
   }
   if (selectedSourceCount === 0) {
     return "请先在 Sources 中选择来源。";

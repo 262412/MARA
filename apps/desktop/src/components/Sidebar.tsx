@@ -1,10 +1,11 @@
 import type { SessionSummary } from "../../shared/session-contracts";
 import type { ResourceState } from "../resource-state";
+import type { AppPage } from "../navigation";
 import { Icon, type IconName } from "./Icon";
 
 type SidebarProps = {
-  active: string;
-  onNavigate: (value: string) => void;
+  active: AppPage;
+  onNavigate: (value: AppPage) => void;
   sessions: ResourceState<SessionSummary[]>;
   selectedSessionId: string | undefined;
   onSelectSession: (sessionId: string) => void;
@@ -26,7 +27,7 @@ type SidebarProps = {
   sessionCreatePending: boolean;
 };
 
-const navigation: Array<{ id: string; label: string; icon: IconName }> = [
+const navigation: Array<{ id: AppPage; label: string; icon: IconName }> = [
   { id: "workbench", label: "工作台", icon: "workbench" },
   { id: "files", label: "Files", icon: "files" },
   { id: "resources", label: "Resources", icon: "resources" },
@@ -243,7 +244,12 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-footer">
-        <button className="nav-item" type="button">
+        <button
+          aria-current={active === "settings" ? "page" : undefined}
+          className={active === "settings" ? "nav-item active" : "nav-item"}
+          onClick={() => onNavigate("settings")}
+          type="button"
+        >
           <Icon name="settings" />
           Settings
         </button>

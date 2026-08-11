@@ -12,11 +12,13 @@ from unittest.mock import patch
 
 from .application import (
     DesktopApplicationService,
+    DesktopQueryPreflightError,
     DesktopSessionNotFoundError,
     _query_citations,
     configure_desktop_data_root,
 )
 from .indexing_readiness import IndexingReadiness
+from .query_readiness import QueryReadiness
 
 READY_DOCTOR = {
     "ok": True,
@@ -152,6 +154,51 @@ class DesktopApplicationServiceTest(unittest.TestCase):
                 "import-capabilities",
             ],
         )
+
+    def test_doctor_includes_query_and_provider_readiness_in_desktop_mode(self) -> None:
+        readiness = QueryReadiness.blocked(
+            code="llm_not_configured",
+            query_provider="",
+            query_model="",
+            embedding_provider="ollama",
+            embedding_model="nomic-embed-text",
+        )
+        service = DesktopApplicationService(
+            collect_doctor=lambda: {"ok": True},
+            collect_indexing_readiness=IndexingReadiness.ready,
+            collect_query_readiness=lambda: readiness,
+        )
+
+        doctor = service.get_doctor()
+
+        self.assertEqual(doctor["query_issue_code"], "llm_not_configured")
+        self.assertEqual(doctor["query_provider"], "")
+        self.assertEqual(doctor["query_model"], "")
+        self.assertEqual(doctor["embedding_provider"], "ollama")
+        self.assertEqual(doctor["embedding_model"], "nomic-embed-text")
+
+    def test_query_validation_fails_closed_before_runtime_creation(self) -> None:
+        runtime_created = False
+
+        def create_runtime():
+            nonlocal runtime_created
+            runtime_created = True
+            raise AssertionError("query readiness must run before runtime creation")
+
+        service = DesktopApplicationService(
+            collect_files=lambda: [{"file_id": "file-1", "name": "paper.pdf"}],
+            create_runtime=create_runtime,
+            collect_query_readiness=lambda: QueryReadiness.blocked(
+                code="llm_not_configured",
+            ),
+        )
+
+        with self.assertRaises(DesktopQueryPreflightError) as raised:
+            service.validate_query("session-1", "Question", ["file-1"])
+
+        self.assertEqual(raised.exception.code, "llm_not_configured")
+        self.assertFalse(raised.exception.retryable)
+        self.assertFalse(runtime_created)
 
     def test_loads_authorized_runtime_session_without_exposing_internal_state(
         self,

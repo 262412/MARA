@@ -35,6 +35,15 @@ class StubApplicationService:
             "indexing_message": "File indexing is ready.",
             "indexing_action": "none",
             "indexing_retryable": False,
+            "query_ready": True,
+            "query_issue_code": None,
+            "query_message": "Answer generation is ready.",
+            "query_action": "none",
+            "query_retryable": False,
+            "query_provider": "openai",
+            "query_model": "chat-model",
+            "embedding_provider": "openai",
+            "embedding_model": "embedding-model",
         }
 
     def list_files(self) -> list[dict]:
@@ -213,6 +222,18 @@ class SidecarContractTest(unittest.TestCase):
         self.assertIn("session_create", payload["capabilities"])
         self.assertNotIn("token", payload)
         self.assertNotIn("port", payload)
+
+    def test_openapi_json_requires_sidecar_auth_but_schema_generation_remains_available(
+        self,
+    ) -> None:
+        unauthenticated = self.client.get("/openapi.json")
+        self.assertEqual(unauthenticated.status_code, 401)
+
+        authenticated = self.authenticated_get("/openapi.json")
+        self.assertEqual(authenticated.status_code, 200)
+        self.assertIn("/v1/doctor", authenticated.json()["paths"])
+        self.assertIn("/v1/query-tasks", authenticated.json()["paths"])
+        self.assertIn("/v1/doctor", self.client.app.openapi()["paths"])
 
     def test_rejects_requests_with_a_browser_origin(self) -> None:
         response = self.authenticated_get(

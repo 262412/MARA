@@ -90,6 +90,165 @@ def _add_azure_models(
         }
 
 
+_DESKTOP_PLACEHOLDERS = frozenset(
+    {
+        "",
+        "your-key",
+        "your_api_key",
+        "your_key",
+        "<your_openai_key>",
+        "<your_openai_api_key>",
+        "<your-api-key>",
+    }
+)
+
+
+def _desktop_value(
+    read_config: ConfigReader,
+    name: str,
+    *,
+    default: str | None = None,
+) -> str:
+    value = read_config(name, default=None)
+    if value is None:
+        return default or ""
+    return str(value).strip()
+
+
+def _desktop_configured(value: Any) -> bool:
+    return str(value or "").strip().casefold() not in _DESKTOP_PLACEHOLDERS
+
+
+def _desktop_saved_provider_settings(
+    read_config: ConfigReader,
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    if _desktop_value(read_config, "MARA_DESKTOP_MODEL_SETTINGS") != "1":
+        return None
+    provider_settings = {
+        "openai_compatible": ("openai", "ChatOpenAI", "OpenAIEmbeddings"),
+        "azure_openai": ("azure", "AzureChatOpenAI", "AzureOpenAIEmbeddings"),
+        "ollama": ("ollama", "ChatOpenAI", "OpenAIEmbeddings"),
+    }
+    models: dict[str, dict[str, Any]] = {"CHAT": {}, "EMBEDDING": {}}
+    for kind in ("CHAT", "EMBEDDING"):
+        route = {
+            field: _desktop_value(read_config, f"MARA_DESKTOP_{kind}_{field}")
+            for field in "PROVIDER BASE_URL MODEL API_VERSION API_KEY".split()
+        }
+        provider = route["PROVIDER"].casefold()
+        provider_config = provider_settings.get(provider)
+        if provider_config is None:
+            continue
+        name, chat_type, embedding_type = provider_config
+        provider_type = (
+            f"kotaemon.{'llms' if kind == 'CHAT' else 'embeddings'}."
+            f"{chat_type if kind == 'CHAT' else embedding_type}"
+        )
+        spec: dict[str, Any] = {"__type__": provider_type}
+        if provider == "azure_openai":
+            spec.update(
+                azure_endpoint=route["BASE_URL"],
+                azure_deployment=route["MODEL"],
+                api_version=route["API_VERSION"],
+                api_key=route["API_KEY"],
+            )
+        else:
+            spec.update(base_url=route["BASE_URL"], model=route["MODEL"])
+            spec["api_key"] = "ollama" if provider == "ollama" else route["API_KEY"]
+        models[kind][name] = {"spec": spec, "default": True}
+    return models["CHAT"], models["EMBEDDING"]
+
+
+def _desktop_provider_settings(
+    settings: dict[str, Any],
+    read_config: ConfigReader,
+) -> None:
+    saved = _desktop_saved_provider_settings(read_config)
+    if saved is not None:
+        settings["KH_LLMS"], settings["KH_EMBEDDINGS"] = saved
+        return
+    llms = settings["KH_LLMS"]
+    embeddings = settings["KH_EMBEDDINGS"]
+    openai_configured = _desktop_configured(
+        _desktop_value(read_config, "OPENAI_API_KEY")
+    )
+    openai_base = _desktop_value(
+        read_config,
+        "OPENAI_API_BASE",
+        default="https://api.openai.com/v1",
+    )
+    openai_configured = openai_configured and _desktop_configured(openai_base)
+    openai_chat = _desktop_configured(
+        _desktop_value(read_config, "OPENAI_CHAT_MODEL", default="gpt-4o-mini")
+    )
+    openai_embedding = _desktop_configured(
+        _desktop_value(
+            read_config,
+            "OPENAI_EMBEDDINGS_MODEL",
+            default="text-embedding-3-large",
+        )
+    )
+    if not (openai_configured and openai_chat):
+        llms.pop("openai", None)
+    if not (openai_configured and openai_embedding):
+        embeddings.pop("openai", None)
+
+    azure_configured = all(
+        _desktop_configured(_desktop_value(read_config, name))
+        for name in ("AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT")
+    )
+    if not azure_configured or not _desktop_configured(
+        _desktop_value(read_config, "AZURE_OPENAI_CHAT_DEPLOYMENT")
+    ):
+        llms.pop("azure", None)
+    if not azure_configured or not _desktop_configured(
+        _desktop_value(read_config, "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT")
+    ):
+        embeddings.pop("azure", None)
+
+    local_model = _desktop_value(read_config, "LOCAL_MODEL")
+    local_embedding = _desktop_value(read_config, "LOCAL_MODEL_EMBEDDINGS")
+    if not _desktop_configured(local_model):
+        llms.pop("ollama", None)
+        llms.pop("ollama-long-context", None)
+    if not _desktop_configured(local_embedding):
+        embeddings.pop("ollama", None)
+    elif "ollama" not in embeddings:
+        embeddings["ollama"] = {
+            "spec": {
+                "__type__": "kotaemon.embeddings.OpenAIEmbeddings",
+                "base_url": _desktop_value(
+                    read_config,
+                    "KH_OLLAMA_URL",
+                    default="http://localhost:11434/v1/",
+                ),
+                "model": local_embedding,
+                "api_key": "ollama",
+            },
+            "default": False,
+        }
+
+    settings["KH_LLMS"] = {
+        name: model
+        for name, model in llms.items()
+        if name in {"openai", "azure", "ollama", "ollama-long-context"}
+    }
+    settings["KH_EMBEDDINGS"] = {
+        name: model
+        for name, model in embeddings.items()
+        if name in {"openai", "azure", "ollama"}
+    }
+
+
+def _select_desktop_default(
+    models: dict[str, Any],
+    preference: tuple[str, ...],
+) -> None:
+    selected = next((name for name in preference if name in models), None)
+    for name, model in models.items():
+        model["default"] = name == selected
+
+
 def build_kotaemon_settings(
     *,
     base_dir: Path,
@@ -354,6 +513,12 @@ def build_kotaemon_settings(
         },
         "default": False,
     }
+    if os.environ.get("MARA_DESKTOP_DATA_DIR"):
+        _desktop_provider_settings(settings, read_config)
+        _select_desktop_default(settings["KH_LLMS"], ("azure", "openai", "ollama"))
+        _select_desktop_default(
+            settings["KH_EMBEDDINGS"], ("ollama", "azure", "openai")
+        )
     settings["KH_RERANKINGS"]["local"] = {
         "spec": {
             "__type__": "kotaemon.rerankings.LocalMultilingualReranking",
@@ -379,14 +544,11 @@ def build_kotaemon_settings(
     settings["KH_REASONINGS_USE_MULTIMODAL"] = read_config(
         "USE_MULTIMODAL", default=False, cast=bool
     )
-    settings[
-        "KH_VLM_ENDPOINT"
-    ] = "{0}/openai/deployments/{1}/chat/completions?api-version={2}".format(
-        read_config("AZURE_OPENAI_ENDPOINT", default=""),
-        read_config("OPENAI_VISION_DEPLOYMENT_NAME", default="gpt-4o"),
-        read_config("OPENAI_API_VERSION", default=""),
+    settings["KH_VLM_ENDPOINT"] = (
+        f"{read_config('AZURE_OPENAI_ENDPOINT', default='')}/openai/deployments/"
+        f"{read_config('OPENAI_VISION_DEPLOYMENT_NAME', default='gpt-4o')}/chat/"
+        f"completions?api-version={read_config('OPENAI_API_VERSION', default='')}"
     )
-
     settings["SETTINGS_APP"] = {}
     settings["SETTINGS_REASONING"] = {
         "use": {

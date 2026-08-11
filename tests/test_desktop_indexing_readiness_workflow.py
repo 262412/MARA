@@ -19,6 +19,9 @@ def test_native_packages_cover_read_only_cwd_and_unconfigured_first_start() -> N
         commands = _commands(jobs[job_name])
         assert "--smoke-test-indexing-unconfigured" in commands
         assert "index-tasks.json" in commands
+        assert "query-tasks.json" in commands
+        assert "llm_not_configured" in commands
+        assert "renderer_ui=real-navigation,draft,settings,keyboard" in commands
         assert ".theflow" in commands
         assert "cache/theflow" in commands or "cache\\theflow" in commands
 

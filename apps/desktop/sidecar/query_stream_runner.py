@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from queue import Empty, Queue
 from typing import Any, Literal, Protocol
 
+from .query_readiness import QueryFailureContract, classify_query_failure
+
 STREAM_POLL_INTERVAL = 0.05
 LOGGER = logging.getLogger("mara.desktop.query_stream")
 
@@ -34,7 +36,7 @@ class QueryService(Protocol):
 @dataclass(frozen=True)
 class QueryStreamOutcome:
     status: Literal["success", "failed", "cancelled", "timeout"]
-    error: Exception | None = None
+    error: QueryFailureContract | None = None
 
 
 class QueryStreamRunner:
@@ -101,12 +103,15 @@ class QueryStreamRunner:
                 messages.put(("update", update))
             messages.put(("done", None))
         except Exception as error:
+            failure = classify_query_failure(error)
             LOGGER.error(
-                "Query runtime stream failed task_id=%s error_type=%s",
+                "Query runtime stream failed task_id=%s error_code=%s stage=%s error_type=%s",
                 task_id,
+                failure.code,
+                "streaming",
                 type(error).__name__,
             )
-            messages.put(("error", error))
+            messages.put(("error", failure))
         finally:
             close = getattr(stream, "close", None)
             if callable(close):

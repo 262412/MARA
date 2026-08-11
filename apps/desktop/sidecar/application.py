@@ -7,6 +7,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
+from .api_errors import SidecarApiError
 from .indexing_readiness import (
     DesktopIndexingPreflightError,
     IndexingReadiness,
@@ -14,6 +15,7 @@ from .indexing_readiness import (
     collect_indexing_readiness,
     validate_index_sources,
 )
+from .query_readiness import QueryReadiness, collect_query_readiness
 
 DESKTOP_DATA_DIRECTORIES = (
     "state",
@@ -86,6 +88,18 @@ class DesktopMutationError(RuntimeError):
     pass
 
 
+class DesktopQueryPreflightError(SidecarApiError):
+    @classmethod
+    def from_readiness(cls, readiness: QueryReadiness) -> "DesktopQueryPreflightError":
+        status_code = 503 if readiness.query_retryable else 409
+        return cls(
+            status_code,
+            readiness.query_issue_code or "llm_not_configured",
+            readiness.query_message,
+            retryable=readiness.query_retryable,
+        )
+
+
 class DesktopApplicationService:
     def __init__(
         self,
@@ -99,6 +113,9 @@ class DesktopApplicationService:
         collect_indexing_readiness: Callable[
             [], IndexingReadiness
         ] = collect_indexing_readiness,
+        collect_query_readiness: Callable[[], QueryReadiness | None] = (
+            collect_query_readiness
+        ),
         create_runtime: Callable[[], Any] = _create_runtime,
         create_query_request: Callable[..., Any] = _create_query_request,
     ) -> None:
@@ -107,6 +124,7 @@ class DesktopApplicationService:
         self._collect_sessions = collect_sessions
         self._collect_import_capabilities = collect_import_capabilities
         self._collect_indexing_readiness = collect_indexing_readiness
+        self._collect_query_readiness = collect_query_readiness
         self._create_runtime = create_runtime
         self._create_query_request = create_query_request
         self._runtime: Any | None = None
@@ -116,7 +134,11 @@ class DesktopApplicationService:
         with self._runtime_lock:
             doctor = self._collect_doctor()
             readiness = self._collect_indexing_readiness()
-        return {**doctor, **readiness.as_dict()}
+            query_readiness = self._collect_query_readiness()
+        payload = {**doctor, **readiness.as_dict()}
+        if query_readiness is not None:
+            payload.update(query_readiness.as_dict())
+        return payload
 
     def list_files(self) -> list[dict[str, Any]]:
         with self._runtime_lock:
@@ -191,6 +213,9 @@ class DesktopApplicationService:
         selected_file_ids: list[str],
     ) -> None:
         with self._runtime_lock:
+            query_readiness = self._collect_query_readiness()
+            if query_readiness is not None and not query_readiness.query_ready:
+                raise DesktopQueryPreflightError.from_readiness(query_readiness)
             _selected_source_records(self._collect_files(), selected_file_ids)
             if self._get_runtime().load_session(conversation_id) is None:
                 raise DesktopSessionNotFoundError(conversation_id)

@@ -4,6 +4,10 @@ import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
 import type {
+  ModelSettingsInput,
+  ModelSettingsStatus,
+} from "../shared/model-contracts";
+import type {
   QueryTask,
   QueryTaskCreateRequest,
 } from "../shared/query-contracts";
@@ -47,6 +51,12 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   openEmbeddingConfiguration: (): Promise<DesktopResult<boolean>> =>
     ipcRenderer.invoke("desktop:open-embedding-configuration"),
+  getModelSettings: (): Promise<DesktopResult<ModelSettingsStatus>> =>
+    ipcRenderer.invoke("desktop:get-model-settings"),
+  saveModelSettings: (
+    settings: ModelSettingsInput,
+  ): Promise<DesktopResult<ModelSettingsStatus>> =>
+    ipcRenderer.invoke("desktop:save-model-settings", settings),
   getLatestIndexTask: (): Promise<DesktopResult<IndexTask | null>> =>
     ipcRenderer.invoke("desktop:get-latest-index-task"),
   cancelIndexTask: (taskId: string): Promise<DesktopResult<IndexTask>> =>

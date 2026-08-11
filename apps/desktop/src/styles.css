@@ -473,6 +473,7 @@ kbd {
 }
 
 .files-page {
+  grid-column: 2 / -1;
   grid-template-rows: auto minmax(0, 1fr);
 }
 

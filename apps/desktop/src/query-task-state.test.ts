@@ -71,6 +71,12 @@ test("a late latest-task response cannot replace a new explicit task", () => {
   assert.deepEqual(mergeQueryTaskSnapshot(task, unrelated, true), unrelated);
 });
 
+test("an explicit same-task response cannot roll back a newer streamed version", () => {
+  const older = { ...task, version: 3, answer: "Older explicit response" };
+
+  assert.equal(mergeQueryTaskSnapshot(task, older, true), task);
+});
+
 test("submitted prompt clears once per new task and can then be asked again", () => {
   const first = submittedPromptTransition("Repeatable question", task, undefined);
   assert.deepEqual(first, { prompt: "", consumedTaskId: "query-1" });

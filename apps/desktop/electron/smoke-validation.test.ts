@@ -65,9 +65,7 @@ const status: RuntimeStatus = {
   version: "0.2.0",
   capabilities: ["doctor", "files", "sessions"],
 };
-const doctor: DesktopResult<DoctorPayload> = {
-  ok: true,
-  data: {
+const doctorPayload: DoctorPayload = {
     ok: true,
     app_name: "MARA",
     default_user_id: "default",
@@ -85,8 +83,20 @@ const doctor: DesktopResult<DoctorPayload> = {
     indexing_message: "File indexing is ready.",
     indexing_action: "none",
     indexing_retryable: false,
+    query_ready: true,
+    query_issue_code: null,
+    query_message: "Question answering is ready.",
+    query_action: "none",
+    query_retryable: false,
+    query_provider: "OpenAI-compatible",
+    query_model: "desktop-chat",
+    embedding_provider: "OpenAI-compatible",
+    embedding_model: "desktop-embedding",
     request_id: "doctor-smoke",
-  },
+};
+const doctor: DesktopResult<DoctorPayload> = {
+  ok: true,
+  data: doctorPayload,
 };
 const files: DesktopResult<FileRecord[]> = {
   ok: true,
@@ -282,7 +292,7 @@ test("accepts an additional CLI-indexed file in the shared smoke data", () => {
   };
   const cliDoctor: DesktopResult<DoctorPayload> = {
     ok: true,
-    data: { ...doctor.data, file_count: 2 },
+    data: { ...doctorPayload, file_count: 2 },
   };
 
   assert.doesNotThrow(() =>
@@ -308,7 +318,7 @@ test("rejects empty data when the packaged smoke requires real records", () => {
           status,
           doctor: {
             ok: true,
-            data: { ...doctor.data, file_count: 0, session_count: 0 },
+            data: { ...doctorPayload, file_count: 0, session_count: 0 },
           },
           files: { ok: true, data: [] },
           sessions: { ok: true, data: [] },
@@ -528,7 +538,7 @@ test("blocks an unconfigured packaged index before any task is created", () => {
   const blockedDoctor: DesktopResult<DoctorPayload> = {
     ok: true,
     data: {
-      ...doctor.data,
+      ...doctorPayload,
       indexing_ready: false,
       indexing_issue_code: "embedding_not_configured",
       indexing_message: "Configure a supported embedding model.",

@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from . import query_tasks as query_tasks_module
+from .query_readiness import QueryFailureContract
 from .query_tasks import (
     QueryTaskConflictError,
     QueryTaskManager,
@@ -317,9 +318,9 @@ class QueryTaskManagerTest(unittest.TestCase):
             )
             failed = wait_for_terminal(manager, created["task_id"])
             self.assertEqual(failed["status"], "failed")
-            self.assertEqual(failed["error"]["code"], "query_failed")
+            self.assertEqual(failed["error"]["code"], "query_runtime_failed")
             self.assertEqual(failed["answer"], "Partial answer")
-            self.assertTrue(failed["retryable"])
+            self.assertFalse(failed["retryable"])
             self.assertNotIn("/private", json.dumps(failed))
         finally:
             manager.close()
@@ -365,6 +366,52 @@ class QueryTaskManagerTest(unittest.TestCase):
                 self.assertTrue(restored["retryable"])
             finally:
                 manager.close()
+
+
+class QueryTaskReadinessTest(unittest.TestCase):
+    def test_query_preflight_rejection_does_not_write_the_journal(self) -> None:
+        class CountingJournal:
+            def __init__(self) -> None:
+                self.save_count = 0
+
+            def load(self):
+                return None
+
+            def save(self, _payload):
+                self.save_count += 1
+
+        class RejectedService(StubQueryService):
+            def validate_query(self, conversation_id, prompt, selected_file_ids):
+                raise RuntimeError("llm_not_configured")
+
+        journal = CountingJournal()
+        manager = QueryTaskManager(RejectedService(), journal=journal)
+        try:
+            with self.assertRaisesRegex(RuntimeError, "llm_not_configured"):
+                manager.create_task(
+                    "session-1",
+                    "Question",
+                    ["file-1"],
+                    idempotency_key="query-preflight",
+                )
+            self.assertEqual(journal.save_count, 0)
+            self.assertIsNone(manager.get_latest_task())
+        finally:
+            manager.close()
+
+    def test_classified_runtime_failure_is_stable(self) -> None:
+        self.assertEqual(
+            QueryFailureContract(
+                code="query_runtime_failed",
+                message="MARA could not complete the answer.",
+                retryable=False,
+            ).as_dict(),
+            {
+                "code": "query_runtime_failed",
+                "message": "MARA could not complete the answer.",
+                "retryable": False,
+            },
+        )
 
 
 if __name__ == "__main__":

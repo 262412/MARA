@@ -90,6 +90,14 @@ export const supportedDesktopEmbeddingProviders = [
   },
 ];
 
+export const supportedDesktopChatProviders = [
+  {
+    module: "openai",
+    providers: ["openai_compatible", "azure_openai", "ollama"],
+    types: ["kotaemon.llms.ChatOpenAI", "kotaemon.llms.AzureChatOpenAI"],
+  },
+];
+
 export const requiredSidecarDataPackages = ["chromadb", "llama_index.core"];
 
 export const requiredTiktokenEncodings = ["cl100k_base"];
