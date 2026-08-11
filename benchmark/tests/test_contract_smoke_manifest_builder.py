@@ -26,7 +26,7 @@ def test_contract_smoke_case_sets_cover_requested_contracts():
         "yes_no",
         "support_and_contradiction",
         "cross_page_required_slots",
-        "answerability_rewrite",
+        "runtime_authority_pass_through",
     }
 
 

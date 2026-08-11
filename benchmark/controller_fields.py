@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 
@@ -25,6 +26,24 @@ def controller_response_kwargs(response: Any) -> dict[str, Any]:
         "guardrail_decision": dict(getattr(response, "guardrail_decision", {}) or {}),
         "evidence_bundle": dict(getattr(response, "evidence_bundle", {}) or {}),
         "workflow_plan": dict(getattr(response, "workflow_plan", {}) or {}),
+        "engine_terminal_answer": str(
+            getattr(response, "engine_terminal_answer", "") or ""
+        ),
+        "engine_terminal_state": deepcopy(
+            getattr(response, "engine_terminal_state", {}) or {}
+        ),
+        "engine_verify_decision": deepcopy(
+            getattr(response, "engine_verify_decision", {}) or {}
+        ),
+        "engine_terminal_guardrail_decision": deepcopy(
+            getattr(response, "engine_terminal_guardrail_decision", {}) or {}
+        ),
+        "engine_terminal_evidence_bundle": deepcopy(
+            getattr(response, "engine_terminal_evidence_bundle", {}) or {}
+        ),
+        "engine_terminal_projection_hash": str(
+            getattr(response, "engine_terminal_projection_hash", "") or ""
+        ),
     }
 
 
@@ -38,4 +57,20 @@ def controller_prediction_kwargs(prediction: dict[str, Any]) -> dict[str, Any]:
         "guardrail_decision": dict(prediction.get("guardrail_decision") or {}),
         "evidence_bundle": dict(prediction.get("evidence_bundle") or {}),
         "workflow_plan": dict(prediction.get("workflow_plan") or {}),
+        "engine_terminal_answer": str(prediction.get("engine_terminal_answer") or ""),
+        "engine_terminal_state": deepcopy(
+            prediction.get("engine_terminal_state") or {}
+        ),
+        "engine_verify_decision": deepcopy(
+            prediction.get("engine_verify_decision") or {}
+        ),
+        "engine_terminal_guardrail_decision": deepcopy(
+            prediction.get("engine_terminal_guardrail_decision") or {}
+        ),
+        "engine_terminal_evidence_bundle": deepcopy(
+            prediction.get("engine_terminal_evidence_bundle") or {}
+        ),
+        "engine_terminal_projection_hash": str(
+            prediction.get("engine_terminal_projection_hash") or ""
+        ),
     }

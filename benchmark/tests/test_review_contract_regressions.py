@@ -25,8 +25,10 @@ from benchmark.task_answer_contracts import apply_task_answer_contract
 class _VerifierLLM:
     def __init__(self, response: str):
         self.response = response
+        self.calls: list[str] = []
 
-    def __call__(self, _prompt: str, **_kwargs: Any) -> SimpleNamespace:
+    def __call__(self, prompt: str, **_kwargs: Any) -> SimpleNamespace:
+        self.calls.append(prompt)
         return SimpleNamespace(text=self.response)
 
 
@@ -213,7 +215,7 @@ def test_qasper_boolean_conflict_does_not_preserve_wrong_answer():
     assert result.trace["action"] == "corrected_polarity"
 
 
-def test_task_contract_recomputes_citations_after_answer_change():
+def test_task_contract_does_not_recompute_citations_without_runtime_projection():
     llm = _VerifierLLM('{"verdict":"insufficient_evidence","evidence_quote":""}')
     prediction: dict[str, Any] = {
         "question": "Did the authors release the code?",
@@ -252,11 +254,12 @@ def test_task_contract_recomputes_citations_after_answer_change():
         mode="scoring_adapter_v1",
     )
 
-    assert changed is True
-    assert prediction["predicted_answer"] == "unanswerable"
-    assert prediction["structured_citations"] == []
-    assert prediction["predicted_citations"] == []
-    assert prediction["evidence_metadata"]["cited_evidence"] == []
+    assert changed is False
+    assert prediction["predicted_answer"] == "yes"
+    assert len(prediction["structured_citations"]) == 1
+    assert prediction["predicted_citations"] == ["paper#page:2"]
+    assert prediction["contract_action"] == ("hard_violation_missing_runtime_authority")
+    assert llm.calls == []
 
 
 def test_headline_policy_uses_manifest_role_instead_of_route_name():

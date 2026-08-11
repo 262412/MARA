@@ -7,7 +7,8 @@ from .evidence_identity import evidence_aliases, identity_of
 from .finance_narrative_evidence import finance_narrative_support_quality
 from .finance_query_planning import finance_metric_evidence_matches
 from .finance_scale import source_scale_evidence
-from .query_planning import QueryPlan, score_evidence_for_slot
+from .query_evidence_binding_support import candidate_score_for_slot
+from .query_planning import QueryPlan
 
 REQUIRED_SLOT_CANDIDATE_QUOTA = 2
 EXECUTION_SLOT_PARENT_QUOTA = 1
@@ -381,7 +382,7 @@ def slot_score(
     slot: Any,
     item: dict[str, Any],
 ) -> float:
-    score = score_evidence_for_slot(
+    score = candidate_score_for_slot(
         slot,
         item,
         requires_structure=bool(plan.constraints.get("requires_structure")),

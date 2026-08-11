@@ -18,6 +18,9 @@ from .query_evidence_binding_support import (
     agreement_attributes as _agreement_attributes,
 )
 from .query_evidence_binding_support import binding_quality as _binding_quality
+from .query_evidence_binding_support import (
+    candidate_score_for_slot as _candidate_score_for_slot,
+)
 from .query_evidence_binding_support import item_for_raw_id as _item_for_raw_id
 from .query_evidence_binding_support import score_evidence_for_slot
 from .query_evidence_binding_support import (
@@ -143,7 +146,7 @@ def _ranked_evidence(
 ) -> list[tuple[float, int, dict[str, Any]]]:
     ranked = (
         (
-            score_evidence_for_slot(
+            _candidate_score_for_slot(
                 slot,
                 item,
                 requires_structure=bool(plan.constraints.get("requires_structure")),
@@ -286,8 +289,13 @@ def _existing_binding_state(
     items = [evidence_by_identity.get(evidence_id) for evidence_id in slot.evidence_ids]
     if any(item is None for item in items):
         return False, "unresolved_existing_identity"
+    score_for_existing = (
+        _candidate_score_for_slot
+        if slot.status in {"retrieved_partial", "retrieved_unverified"}
+        else score_evidence_for_slot
+    )
     if any(
-        score_evidence_for_slot(
+        score_for_existing(
             slot,
             item,
             requires_structure=requires_structure,

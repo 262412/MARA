@@ -123,6 +123,12 @@ def _prepare_prediction_defaults(
         "workflow_plan": {},
         "claim_verification": {},
         "presentation": {},
+        "engine_terminal_answer": "",
+        "engine_terminal_state": {},
+        "engine_verify_decision": {},
+        "engine_terminal_guardrail_decision": {},
+        "engine_terminal_evidence_bundle": {},
+        "engine_terminal_projection_hash": "",
     }
     for key, value in defaults.items():
         prediction.setdefault(key, value)

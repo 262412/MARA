@@ -10,7 +10,10 @@ from ktem.docqa.controller import (
     parse_planner_decision,
 )
 from ktem.docqa.execution import execute_controller_turn
-from ktem_tests.controller_test_assertions import assert_graph_bundle_contract
+from ktem_tests.controller_test_assertions import (
+    assert_empty_verify_decision,
+    assert_graph_bundle_contract,
+)
 
 
 def test_docqa_package_exports_controller_helpers():
@@ -104,17 +107,12 @@ def test_response_capture_builds_controller_contract_fields():
         "reason": "Retrieved evidence is sufficient for generation.",
         "retry": False,
     }
-    assert payload["verify_decision"] == {
-        "mode": "strict",
-        "status": "supported",
-        "reason": "Strict verification requested; current verifier observed evidence.",
-        "action": "generate",
-        "claims": [],
-        "unsupported_claims": [],
-        "unknown_claims": [],
-        "verified_citations": [],
-        "claim_results": [],
-    }
+    assert_empty_verify_decision(
+        payload["verify_decision"],
+        mode="strict",
+        status="supported",
+        reason="Strict verification requested; current verifier observed evidence.",
+    )
     assert payload["controller_decision"] == {
         "route": "graph_rag",
         "legacy_route": "graph_global",
@@ -340,17 +338,12 @@ def test_direct_route_verification_is_not_required():
     )
 
     assert payload["retrieve_decision"]["status"] == "not_required"
-    assert payload["verify_decision"] == {
-        "mode": "light",
-        "status": "not_required",
-        "reason": "Direct route does not require evidence verification.",
-        "action": "generate",
-        "claims": [],
-        "unsupported_claims": [],
-        "unknown_claims": [],
-        "verified_citations": [],
-        "claim_results": [],
-    }
+    assert_empty_verify_decision(
+        payload["verify_decision"],
+        mode="light",
+        status="not_required",
+        reason="Direct route does not require evidence verification.",
+    )
 
 
 def test_execute_controller_turn_direct_answer_skips_retrieval_and_generation():

@@ -12,7 +12,6 @@ from benchmark.qasper_answerability import verify_qasper_answerability
 from benchmark.qasper_candidate_state import select_answerability_candidate
 from benchmark.qasper_prompt_budget import fit_qasper_verifier_items
 from benchmark.task_answer_contracts import apply_task_answer_contract
-from scripts.slurm.validate_contract_smoke import QASPER_HARD_GATES
 
 
 class _VerifierLLM:
@@ -40,7 +39,7 @@ def _item(local_id: str, text: str, **metadata: Any) -> dict[str, Any]:
     }
 
 
-def test_product_abstention_uses_pre_guardrail_candidate_for_answerability():
+def test_product_abstention_is_not_reanswered_after_the_engine():
     refusal = "MARA could not retrieve enough evidence to answer this question."
     support = _item(
         "support",
@@ -73,19 +72,17 @@ def test_product_abstention_uses_pre_guardrail_candidate_for_answerability():
     )
 
     trace = prediction["evidence_metadata"]["answerability_contract_trace"]
-    assert prediction["predicted_answer"] == "manually provided labeled features"
-    assert trace["input_candidate_kind"] == "pre_guardrail_answer"
-    assert trace["product_answer"] == refusal
-    assert trace["candidate_for_answerability"] == (
-        "manually provided labeled features"
-    )
-    assert trace["recovery_attempted"] is True
-    assert trace["recovery_result"] == "recovered"
+    assert prediction["predicted_answer"] == "unanswerable"
+    assert trace["input_candidate_kind"] == "engine_terminal_answer"
+    assert trace["product_answer"] == ""
+    assert trace["candidate_for_answerability"] == ""
+    assert trace["contract_action"] == "pass_through"
+    assert trace["post_engine_answerability_llm_call_count"] == 0
     assert trace["final_post_contract_answer"] == prediction["predicted_answer"]
-    assert all(refusal not in prompt for prompt in llm.prompts)
+    assert llm.prompts == []
 
 
-def test_product_abstention_without_original_candidate_is_preserved():
+def test_untyped_product_abstention_is_only_label_normalized():
     refusal = "MARA could not retrieve enough evidence to answer this question."
     prediction: dict[str, Any] = {
         "question": "What background knowledge do they use?",
@@ -106,7 +103,10 @@ def test_product_abstention_without_original_candidate_is_preserved():
             AssertionError("verifier must not generate a missing candidate")
         ),
     )
-    assert prediction["predicted_answer"] == refusal
+    assert prediction["predicted_answer"] == "unanswerable"
+    trace = prediction["evidence_metadata"]["answerability_contract_trace"]
+    assert trace["contract_action"] == "pass_through"
+    assert trace["post_engine_answerability_llm_call_count"] == 0
 
 
 def test_multiline_unanswerable_explanation_is_not_a_recovery_candidate():
@@ -389,7 +389,7 @@ def test_institution_name_is_not_a_non_english_dataset_counterexample():
     assert result.trace["reason"] == "grounded_complete_proposition"
 
 
-def test_missing_free_text_candidate_can_only_recheck_typed_boolean_proposition():
+def test_missing_boolean_runtime_projection_is_a_hard_violation():
     refusal = "MARA could not retrieve enough evidence to answer reliably."
     support = _item(
         "experiment",
@@ -448,11 +448,12 @@ def test_missing_free_text_candidate_can_only_recheck_typed_boolean_proposition(
     )
 
     trace = prediction["evidence_metadata"]["qasper_answerability"]
-    assert prediction["predicted_answer"] == "yes"
-    assert trace["candidate_for_answerability"] == ""
-    assert trace["typed_boolean_recheck"] == "true"
-    assert trace["recovery_attempted"] is True
-    assert trace["recovery_result"] == "recovered"
+    assert prediction["predicted_answer"] == refusal
+    assert prediction["contract_action"] == ("hard_violation_missing_runtime_authority")
+    assert trace["runtime_projection_present"] is False
+    assert trace["runtime_authority_failure_kind"] == "authority_missing"
+    assert trace["post_engine_answerability_llm_call_count"] == 0
+    assert llm.prompts == []
 
 
 def test_current_paper_non_english_counterexample_supports_no():
@@ -583,17 +584,3 @@ def test_citation_metrics_separate_support_scope_and_minimality():
     assert summary["citation_scope_violation_count"] == 1.0
     assert summary["citation_nonminimal_count"] == 1.0
     assert summary["wrong_polarity_count"] == 0.0
-
-
-def test_qasper_contract_smoke_declares_all_new_hard_gates():
-    assert {
-        "abstention_candidate_sent_as_semantic_answer_count",
-        "verifier_required_evidence_coverage",
-        "qasper_required_slot_empty_state_count",
-        "qasper_required_evidence_coverage_missing_count",
-        "answerable_false_abstention_count",
-        "boolean_scope_violation_count",
-        "wrong_polarity_count",
-        "citation_claim_support_violation_count",
-        "citation_scope_violation_count",
-    } <= set(QASPER_HARD_GATES)

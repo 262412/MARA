@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
@@ -44,6 +47,45 @@ RetrieveFn = Callable[[Any, "ControllerDecision"], dict[str, Any]]
 GenerateFn = Callable[[Any, "ControllerDecision", EvidenceBundle], str]
 RewriteFn = Callable[[Any, "ControllerDecision", EvidenceBundle, str], str]
 
+ENGINE_TERMINAL_STATE_CONTRACT = "engine_terminal_state.v1"
+
+
+def _engine_terminal_projection(
+    answer: str,
+    verify_decision: VerifyDecision,
+    guardrail_decision: GuardrailDecision,
+    bundle: EvidenceBundle,
+) -> tuple[str, dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], str]:
+    terminal_answer = str(answer or "")
+    terminal_verify = deepcopy(verify_decision.as_dict())
+    terminal_guardrail = deepcopy(guardrail_decision.as_dict())
+    terminal_evidence = deepcopy(bundle.as_dict())
+    terminal_state = {
+        "contract_id": ENGINE_TERMINAL_STATE_CONTRACT,
+        "answer": terminal_answer,
+        "verify_decision": deepcopy(terminal_verify),
+        "guardrail_decision": deepcopy(terminal_guardrail),
+        "evidence_bundle": deepcopy(terminal_evidence),
+    }
+    projection_hash = hashlib.sha256(
+        json.dumps(
+            terminal_state,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    return (
+        terminal_answer,
+        terminal_state,
+        terminal_verify,
+        terminal_guardrail,
+        terminal_evidence,
+        projection_hash,
+    )
+
+
 _CANONICAL_ROUTES = {
     "direct": "direct_answer",
     "doc_text": "text_rag",
@@ -75,6 +117,12 @@ class RouteExecutionResult:
     workflow_plan: dict[str, Any] = field(default_factory=dict)
     answer: str = ""
     controller_trace: list[dict[str, Any]] = field(default_factory=list)
+    engine_terminal_answer: str = ""
+    engine_terminal_state: dict[str, Any] = field(default_factory=dict)
+    engine_verify_decision: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_guardrail_decision: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_evidence_bundle: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_projection_hash: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -86,6 +134,16 @@ class RouteExecutionResult:
             "workflow_plan": dict(self.workflow_plan),
             "answer": self.answer,
             "controller_trace": list(self.controller_trace),
+            "engine_terminal_answer": self.engine_terminal_answer,
+            "engine_terminal_state": deepcopy(self.engine_terminal_state),
+            "engine_verify_decision": deepcopy(self.engine_verify_decision),
+            "engine_terminal_guardrail_decision": deepcopy(
+                self.engine_terminal_guardrail_decision
+            ),
+            "engine_terminal_evidence_bundle": deepcopy(
+                self.engine_terminal_evidence_bundle
+            ),
+            "engine_terminal_projection_hash": self.engine_terminal_projection_hash,
         }
 
 
@@ -491,6 +549,19 @@ def _result(
 ) -> RouteExecutionResult:
     bundle = with_verification_evidence(bundle, verify_decision, request)
     (stage_timings or PipelineStageTimings()).record(bundle)
+    (
+        terminal_answer,
+        terminal_state,
+        terminal_verify,
+        terminal_guardrail,
+        terminal_evidence,
+        projection_hash,
+    ) = _engine_terminal_projection(
+        answer,
+        verify_decision,
+        guardrail_decision,
+        bundle,
+    )
     prefix = [
         item
         for item in list(trace_prefix or [])
@@ -518,4 +589,10 @@ def _result(
             verify_decision,
         )
         + suffix,
+        engine_terminal_answer=terminal_answer,
+        engine_terminal_state=terminal_state,
+        engine_verify_decision=terminal_verify,
+        engine_terminal_guardrail_decision=terminal_guardrail,
+        engine_terminal_evidence_bundle=terminal_evidence,
+        engine_terminal_projection_hash=projection_hash,
     )

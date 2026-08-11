@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from scripts.slurm.validate_contract_smoke import QASPER_HARD_GATES
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_contract_smoke.py"
 CORE_STAGES = (
@@ -16,6 +18,13 @@ CORE_STAGES = (
     "generation_context_evidence",
     "verified_claim_support_evidence",
     "emitted_citation_evidence",
+)
+QASPER_REQUIREMENTS = (
+    "ordinary_free_text",
+    "yes_no",
+    "support_and_contradiction",
+    "cross_page_required_slots",
+    "runtime_authority_pass_through",
 )
 
 
@@ -97,56 +106,52 @@ def _write_run(
 
 def test_contract_smoke_validator_accepts_full_auditable_artifact(tmp_path):
     run_dir = tmp_path / "run"
-    requirements = [
-        "ordinary_free_text",
-        "yes_no",
-        "support_and_contradiction",
-        "cross_page_required_slots",
-        "answerability_rewrite",
-    ]
+    requirements = list(QASPER_REQUIREMENTS)
     first = _prediction(requirements)
     first.update(
         {
-            "gold_answers": ["unanswerable"],
-            "predicted_answer": "unanswerable",
-            "answer_for_scoring": "unanswerable",
-            "pre_contract_verification": {
+            "question": "Did the paper report the result?",
+            "answer_type": "boolean",
+            "gold_answers": ["yes"],
+            "predicted_answer": "yes",
+            "answer_for_scoring": "yes",
+            "engine_terminal_answer": "yes",
+            "engine_terminal_state": {
+                "contract_id": "engine_terminal_state.v1",
                 "answer": "yes",
-                "verify_decision": {"status": "supported"},
             },
-            "post_contract_verification": {
-                "answer": "unanswerable",
-                "verify_decision": {"status": "not_enough_evidence"},
-            },
-            "verify_decision": {"status": "not_enough_evidence"},
+            "engine_verify_decision": {"status": "supported"},
+            "engine_terminal_projection_hash": "verified-projection",
+            "contract_action": "pass_through",
+            "contract_semantic_rewrite": False,
+            "post_engine_answerability_llm_call_count": 0,
         }
     )
     first["evidence_metadata"].update(
         {
-            "verify_decision": {"status": "not_enough_evidence"},
-            "answer_dependent_state": "post_contract_verified",
             "qasper_answerability": {
-                "action": "abstained_insufficient_evidence",
-                "primary_answer": "yes",
-                "citation_state": "cleared_for_rebind",
                 "status": "ok",
-                "verifier_input_evidence_ids": "span:paper:s1",
-                "verifier_dropped_evidence_ids": "",
-                "verifier_input_character_count": "29",
-                "verifier_input_token_count": "5",
-                "verifier_budget_exhausted": "false",
-                "candidate_for_answerability": "yes",
+                "contract_action": "pass_through",
+                "contract_semantic_rewrite": False,
+                "engine_terminal_answer": "yes",
+                "engine_semantic_label": "yes",
+                "scored_semantic_label": "yes",
+                "runtime_projection_present": True,
+                "runtime_boolean_authority_applicable": True,
+                "runtime_authority_failure_kind": "",
+                "post_engine_answerability_llm_call_count": 0,
+                "raw_verifier_verdict": "yes_complete",
+                "final_post_contract_answer": "yes",
+                "boolean_scope_valid": "true",
+                "verifier_required_slot_ids": "support:boolean_proposition",
+                "verifier_required_slot_count": "1",
+                "verifier_required_slot_authority_count": "1",
                 "verifier_required_evidence_ids": "span:paper:s1",
+                "verifier_missing_required_slot_ids": "",
+                "verifier_missing_required_evidence_ids": "",
+                "verifier_required_authority_status": "complete",
                 "verifier_required_evidence_coverage": "1.000000",
-            },
-            "answerability_contract_trace": {
-                "pre_contract_answer": "yes",
-                "post_contract_answer": "unanswerable",
-                "rewrite_applied": True,
-                "rewrite_type": "polarity_to_unanswerable",
-                "rewrite_reason": "insufficient_evidence",
-                "pre_contract_verification": {},
-                "post_contract_verification": {},
+                "quote_ref_validation_status": "bound",
             },
         }
     )
@@ -230,15 +235,9 @@ def test_contract_smoke_validator_rejects_missing_required_case(tmp_path):
     assert "missing contract smoke requirements" in result.stderr
 
 
-def test_qasper_contract_smoke_requires_an_observed_answer_rewrite(tmp_path):
+def test_qasper_contract_smoke_requires_runtime_authority_pass_through(tmp_path):
     run_dir = tmp_path / "run"
-    requirements = [
-        "ordinary_free_text",
-        "yes_no",
-        "support_and_contradiction",
-        "cross_page_required_slots",
-        "answerability_rewrite",
-    ]
+    requirements = list(QASPER_REQUIREMENTS)
     first = _prediction(requirements)
     second = _prediction([])
     second["example_id"] = "smoke-2"
@@ -258,4 +257,25 @@ def test_qasper_contract_smoke_requires_an_observed_answer_rewrite(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "answerability_rewrite_not_observed" in result.stderr
+    assert "runtime_authority_pass_through_not_observed" in result.stderr
+
+
+def test_qasper_contract_smoke_declares_runtime_authority_hard_gates():
+    assert {
+        "abstention_candidate_sent_as_semantic_answer_count",
+        "verifier_required_evidence_coverage",
+        "qasper_required_slot_empty_state_count",
+        "qasper_required_evidence_coverage_missing_count",
+        "answerable_false_abstention_count",
+        "boolean_scope_violation_count",
+        "wrong_polarity_count",
+        "citation_claim_support_violation_count",
+        "citation_scope_violation_count",
+        "contract_semantic_rewrite_count",
+        "engine_scored_semantic_label_mismatch_count",
+        "qasper_post_engine_answerability_llm_call_count",
+        "qasper_runtime_authority_missing_count",
+        "qasper_runtime_semantic_verifier_failure_count",
+        "qasper_runtime_scope_failure_count",
+        "qasper_quote_validation_ref_mismatch_count",
+    } <= set(QASPER_HARD_GATES)

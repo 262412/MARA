@@ -116,15 +116,25 @@ def test_two_shared_tokens_do_not_become_claim_level_support():
     assert decision.unsupported_claims == []
     assert decision.unknown_claims == ["The retrieval model was trained on Wikipedia."]
     assert decision.verified_citations == []
-    assert decision.claim_results == [
-        {
-            "claim_id": "claim:1",
-            "claim": "The retrieval model was trained on Wikipedia.",
-            "status": "unknown",
-            "supporting_evidence_ids": [],
-            "contradicting_evidence_ids": [],
-        }
-    ]
+    [claim_result] = decision.claim_results
+    assert {
+        key: claim_result[key]
+        for key in (
+            "claim_id",
+            "claim",
+            "status",
+            "supporting_evidence_ids",
+            "contradicting_evidence_ids",
+        )
+    } == {
+        "claim_id": "claim:1",
+        "claim": "The retrieval model was trained on Wikipedia.",
+        "status": "unknown",
+        "supporting_evidence_ids": [],
+        "contradicting_evidence_ids": [],
+    }
+    assert claim_result["authority_status"] == ""
+    assert claim_result["authoritative_evidence_id"] == ""
 
 
 def test_scope_and_relation_must_be_supported_not_only_shared_tokens():

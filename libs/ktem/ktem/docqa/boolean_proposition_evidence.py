@@ -12,6 +12,7 @@ from .boolean_evidence_scope import (
     _has_closed_quantifier,
     _language_data_question,
     _non_english_counterexample,
+    _prior_work_scope_question,
     _requires_current_paper_scope,
     _scope_rejection,
     _section_role,
@@ -226,8 +227,9 @@ def _classify_proposition_span(
     scope_rejection: str,
 ) -> tuple[str, str]:
     if (
-        actor in {"cited_work", "other_authors"}
-        or section_role in {"related_work", "future_work"}
+        (actor in {"cited_work", "other_authors"} or section_role == "related_work")
+        and not _prior_work_scope_question(question)
+        or section_role == "future_work"
         or scope_rejection
     ):
         classification = "insufficient_scope"
@@ -494,7 +496,7 @@ def _target_relation_is_negated(question: str, text: str) -> bool:
     target = primary_boolean_relation(question)
     lowered = str(text or "").lower()
     if target == "improve" and re.search(
-        r"\b(?:small|minor|marginal)\s*,?\s*"
+        r"\b(?:(?:small|minor|marginal)\s*,?\s*)?"
         r"(?:non[- ]?significant|insignificant)\s+improvements?\b"
         r"|\bno\s+(?:noticeable|significant)\s+"
         r"(?:improvement|performance\s+difference)\b",

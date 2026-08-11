@@ -570,15 +570,11 @@ def test_authoritative_quality_quote_identity_survives_terminal_rebinding() -> N
     synchronize_terminal_answer_state(prediction)
 
     trace = prediction["evidence_metadata"]["qasper_answerability"]
-    assert prediction["answer_for_scoring"] == "no"
-    assert trace["authoritative_quote_evidence_id"] == "evidence:paper:quality"
-    assert prediction["evidence_metadata"]["verified_claim_support_evidence"] == [
-        evidence
-    ]
-    assert prediction["predicted_evidence"] == [quote]
-    assert prediction["structured_citations"][0]["evidence_id"] == (
-        "evidence:paper:quality"
-    )
+    assert prediction["answer_for_scoring"] == "yes"
+    assert trace["authoritative_quote_evidence_id"] == ""
+    assert prediction["contract_action"] == ("hard_violation_missing_runtime_authority")
+    assert prediction["structured_citations"] == []
+    assert prediction["post_engine_answerability_llm_call_count"] == 0
 
 
 def test_wrong_polarity_is_rejected_without_abstaining_valid_answer() -> None:

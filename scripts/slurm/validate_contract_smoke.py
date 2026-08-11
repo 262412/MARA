@@ -10,7 +10,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from benchmark.answerability_trace import normalized_answerability_trace  # noqa: E402
 from benchmark.contract_invariant_metrics import (  # noqa: E402
     contract_invariant_summary,
 )
@@ -49,7 +48,7 @@ REQUIREMENTS = {
         "yes_no",
         "support_and_contradiction",
         "cross_page_required_slots",
-        "answerability_rewrite",
+        "runtime_authority_pass_through",
     },
 }
 HARD_GATES = {
@@ -114,6 +113,13 @@ QASPER_HARD_GATES = {
     "qasper_complete_to_unanswerable_identity_count": ("eq", 0.0),
     "qasper_complete_to_unanswerable_ref_mismatch_count": ("eq", 0.0),
     "qasper_semantic_veto_audit_violation_count": ("eq", 0.0),
+    "contract_semantic_rewrite_count": ("eq", 0.0),
+    "engine_scored_semantic_label_mismatch_count": ("eq", 0.0),
+    "qasper_post_engine_answerability_llm_call_count": ("eq", 0.0),
+    "qasper_runtime_authority_missing_count": ("eq", 0.0),
+    "qasper_runtime_semantic_verifier_failure_count": ("eq", 0.0),
+    "qasper_runtime_scope_failure_count": ("eq", 0.0),
+    "qasper_quote_validation_ref_mismatch_count": ("eq", 0.0),
     "answerable_false_abstention_count": ("eq", 0.0),
     "boolean_scope_violation_count": ("eq", 0.0),
     "wrong_polarity_count": ("eq", 0.0),
@@ -250,19 +256,20 @@ def _hard_gate_results(
     return results
 
 
-def _observed_qasper_answer_rewrite(prediction: dict[str, Any]) -> bool:
-    trace = normalized_answerability_trace(prediction)
-    pre_answer = " ".join(
-        str(trace.get("pre_contract_answer") or "").strip().lower().split()
-    )
-    post_answer = " ".join(
-        str(trace.get("post_contract_answer") or "").strip().lower().split()
-    )
+def _observed_qasper_runtime_pass_through(prediction: dict[str, Any]) -> bool:
+    metadata = prediction.get("evidence_metadata")
+    trace = metadata.get("qasper_answerability") if isinstance(metadata, dict) else None
+    trace = trace if isinstance(trace, dict) else {}
+    terminal_state = prediction.get("engine_terminal_state")
     return bool(
-        trace.get("rewrite_applied") is True
-        and pre_answer
-        and post_answer
-        and pre_answer != post_answer
+        str(prediction.get("answer_type") or "").lower() == "boolean"
+        and trace.get("runtime_projection_present") is True
+        and isinstance(terminal_state, dict)
+        and terminal_state.get("contract_id") == "engine_terminal_state.v1"
+        and str(prediction.get("engine_terminal_projection_hash") or "")
+        and str(trace.get("contract_action") or "") == "pass_through"
+        and trace.get("contract_semantic_rewrite") is False
+        and int(trace.get("post_engine_answerability_llm_call_count") or 0) == 0
     )
 
 
@@ -373,15 +380,18 @@ def _behavior_violations(
         return _finance_behavior_violations(predictions)
     violations: list[str] = []
     if not any(
-        _observed_qasper_answer_rewrite(prediction) for prediction in predictions
+        _observed_qasper_runtime_pass_through(prediction) for prediction in predictions
     ):
-        violations.append("answerability_rewrite_not_observed")
+        violations.append("runtime_authority_pass_through_not_observed")
     required_trace_fields = (
-        "verifier_input_evidence_ids",
-        "verifier_dropped_evidence_ids",
-        "verifier_input_character_count",
-        "verifier_input_token_count",
-        "verifier_budget_exhausted",
+        "engine_terminal_answer",
+        "engine_semantic_label",
+        "scored_semantic_label",
+        "contract_semantic_rewrite",
+        "runtime_projection_present",
+        "runtime_boolean_authority_applicable",
+        "runtime_authority_failure_kind",
+        "post_engine_answerability_llm_call_count",
     )
     for prediction in predictions:
         trace = dict(

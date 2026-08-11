@@ -221,6 +221,7 @@ def _verification_summary(
 ) -> dict[str, float | None]:
     return {
         **_required_verification_summary(metrics),
+        **_qasper_authority_summary(metrics),
         "qasper_stale_verifier_state_count": _sum(
             metrics,
             "qasper_stale_verifier_state_count",
@@ -246,30 +247,6 @@ def _verification_summary(
             "boolean_scope_violation_count",
         ),
         "wrong_polarity_count": _sum(metrics, "wrong_polarity_count"),
-        "qasper_required_slot_authority_empty_count": _sum(
-            metrics,
-            "qasper_required_slot_authority_empty_count",
-        ),
-        "qasper_required_slot_authority_missing_count": _sum(
-            metrics,
-            "qasper_required_slot_authority_missing_count",
-        ),
-        "qasper_complete_to_unanswerable_empty_authority_count": _sum(
-            metrics,
-            "qasper_complete_to_unanswerable_empty_authority_count",
-        ),
-        "qasper_complete_to_unanswerable_identity_count": _sum(
-            metrics,
-            "qasper_complete_to_unanswerable_identity_count",
-        ),
-        "qasper_complete_to_unanswerable_ref_mismatch_count": _sum(
-            metrics,
-            "qasper_complete_to_unanswerable_ref_mismatch_count",
-        ),
-        "qasper_semantic_veto_audit_violation_count": _sum(
-            metrics,
-            "qasper_semantic_veto_audit_violation_count",
-        ),
         "citation_claim_support_violation_count": _sum(
             metrics,
             "citation_claim_support_violation_count",
@@ -283,6 +260,27 @@ def _verification_summary(
             "citation_nonminimal_count",
         ),
     }
+
+
+def _qasper_authority_summary(
+    metrics: list[dict[str, float | None]],
+) -> dict[str, float]:
+    keys = (
+        "contract_semantic_rewrite_count",
+        "engine_scored_semantic_label_mismatch_count",
+        "qasper_post_engine_answerability_llm_call_count",
+        "qasper_runtime_authority_missing_count",
+        "qasper_runtime_semantic_verifier_failure_count",
+        "qasper_runtime_scope_failure_count",
+        "qasper_required_slot_authority_empty_count",
+        "qasper_required_slot_authority_missing_count",
+        "qasper_complete_to_unanswerable_empty_authority_count",
+        "qasper_complete_to_unanswerable_identity_count",
+        "qasper_complete_to_unanswerable_ref_mismatch_count",
+        "qasper_quote_validation_ref_mismatch_count",
+        "qasper_semantic_veto_audit_violation_count",
+    )
+    return {key: _sum(metrics, key) for key in keys}
 
 
 def _required_verification_summary(

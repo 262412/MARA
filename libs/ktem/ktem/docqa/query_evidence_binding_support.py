@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .boolean_evidence_scope import boolean_proposition_evidence_score
+from .boolean_proposition_candidates import boolean_proposition_candidate_score
+from .boolean_proposition_evidence import boolean_proposition_evidence_score
 from .evidence_locators import locator_matches, locator_requirement_count
 from .evidence_modality import modality_matches
 from .finance_agreement_identity import revolving_agreement_attributes
@@ -93,6 +94,49 @@ def score_evidence_for_slot(
         finance_narrative_support_quality(slot.metric, item)
         if slot.role == "support"
         else 0.0
+    )
+
+
+def candidate_score_for_slot(
+    slot: EvidenceSlot,
+    item: dict[str, Any],
+    *,
+    requires_structure: bool = False,
+) -> float:
+    """Score retrieval candidates separately from strict authority matching."""
+
+    if slot.statement_kind != "boolean_proposition":
+        return score_evidence_for_slot(
+            slot,
+            item,
+            requires_structure=requires_structure,
+        )
+    text = " ".join(
+        str(value or "")
+        for value in (
+            evidence_text(item),
+            item.get("row_label"),
+            item.get("column_label"),
+            item.get("period"),
+            item.get("value"),
+        )
+        if str(value or "").strip()
+    ).lower()
+    locator_score = _locator_score(slot.locator, item)
+    if locator_score is None:
+        return 0.0
+    if slot.period and slot.period not in text:
+        return 0.0
+    if slot.period_kind and period_kind_conflicts(slot.period_kind, item, text):
+        return 0.0
+    modality = str(item.get("modality") or item.get("element_type") or "").lower()
+    if not modality_matches(slot.modality, modality):
+        return 0.0
+    query = str(slot.query or slot.metric or "").strip()
+    return boolean_proposition_candidate_score(
+        query,
+        item,
+        metric=slot.metric,
     )
 
 

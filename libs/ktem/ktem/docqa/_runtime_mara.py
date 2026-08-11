@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from time import monotonic
 from typing import Any
 
@@ -48,7 +49,7 @@ class ResponseCapture:
                 self.evidence_metadata["value"] = mara_content
         elif channel == "execution" or mara_channel == "execution":
             if isinstance(mara_content, dict):
-                self.execution = dict(mara_content)
+                self.execution = deepcopy(mara_content)
         elif channel == "artifact" or mara_channel == "artifact":
             self.artifact = mara_content
 
@@ -130,6 +131,22 @@ def _execution_response_kwargs(
         "guardrail_decision": _dict_field(execution, "guardrail_decision"),
         "evidence_bundle": evidence_bundle,
         "workflow_plan": _dict_field(execution, "workflow_plan"),
+        "engine_terminal_answer": str(execution.get("engine_terminal_answer") or ""),
+        "engine_terminal_state": _terminal_dict_field(
+            execution, "engine_terminal_state"
+        ),
+        "engine_verify_decision": _terminal_dict_field(
+            execution, "engine_verify_decision"
+        ),
+        "engine_terminal_guardrail_decision": _terminal_dict_field(
+            execution, "engine_terminal_guardrail_decision"
+        ),
+        "engine_terminal_evidence_bundle": _terminal_dict_field(
+            execution, "engine_terminal_evidence_bundle"
+        ),
+        "engine_terminal_projection_hash": str(
+            execution.get("engine_terminal_projection_hash") or ""
+        ),
     }
     payload.update(rebuilt_outputs)
     if not payload["route_decision"]:
@@ -142,6 +159,11 @@ def _execution_response_kwargs(
 def _dict_field(payload: dict[str, Any], key: str) -> dict[str, Any]:
     value = payload.get(key)
     return dict(value) if isinstance(value, dict) else {}
+
+
+def _terminal_dict_field(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    value = payload.get(key)
+    return deepcopy(value) if isinstance(value, dict) else {}
 
 
 def _list_field(payload: dict[str, Any], key: str) -> list[dict[str, Any]]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import fields, replace
 from pathlib import Path
 from time import perf_counter
@@ -164,6 +165,16 @@ def _engine_result_to_prediction(
         "guardrail_decision": result.guardrail_decision,
         "evidence_bundle": result.evidence_bundle,
         "workflow_plan": result.workflow_plan,
+        "engine_terminal_answer": result.engine_terminal_answer,
+        "engine_terminal_state": deepcopy(result.engine_terminal_state),
+        "engine_verify_decision": deepcopy(result.engine_verify_decision),
+        "engine_terminal_guardrail_decision": deepcopy(
+            result.engine_terminal_guardrail_decision
+        ),
+        "engine_terminal_evidence_bundle": deepcopy(
+            result.engine_terminal_evidence_bundle
+        ),
+        "engine_terminal_projection_hash": result.engine_terminal_projection_hash,
         "claim_verification": result.claim_verification,
         "presentation": result.presentation,
         "source_identity_crosswalk": result.source_identity_crosswalk,

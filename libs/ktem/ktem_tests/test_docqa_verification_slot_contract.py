@@ -1,12 +1,17 @@
+from dataclasses import replace
+
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import EvidenceBundle
 from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.query_evidence_binding import bind_evidence_slots_monotonic
 from ktem.docqa.query_plan_schema import EvidenceSlot, QueryPlan
 from ktem.docqa.query_planning import (
     bind_evidence_slots,
     build_query_plan,
     missing_slot_queries,
+    missing_slot_requests,
+    score_evidence_for_slot,
 )
 from ktem.docqa.verification import (
     VerifyDecision,
@@ -63,7 +68,7 @@ def test_verification_only_slot_reaches_claim_verification_without_false_support
     assert decision.claims == ["The first finding reports improved accuracy."]
 
 
-def test_boolean_verifier_checks_proposition_polarity():
+def test_boolean_verifier_corrects_exact_opposite_proposition_polarity():
     plan = QueryPlan(
         answer_type="boolean",
         question_type="simple_fact",
@@ -100,8 +105,11 @@ def test_boolean_verifier_checks_proposition_polarity():
         answer="yes",
     )
 
-    assert decision.status == "unsupported"
-    assert decision.claim_results[0]["status"] == "contradicted"
+    assert decision.status == "supported"
+    assert decision.input_answer_polarity == "yes"
+    assert decision.canonical_answer_polarity == "no"
+    assert decision.semantic_correction_applied is True
+    assert decision.claim_results[0]["status"] == "supported"
 
 
 def test_retrieved_unverified_boolean_slot_can_reach_typed_verification():
@@ -258,6 +266,145 @@ def test_claim_support_reconciles_to_selected_slot_compatible_evidence():
             "evidence_ids": [identity_of(support).key],
         }
     ]
+
+
+def test_metadata_poor_boolean_candidate_is_bound_without_relaxing_authority_score():
+    question = "Did the authors evaluate the model on clinical tasks?"
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    candidate = {
+        "evidence_id": "candidate",
+        "source_id": "paper",
+        "text": "We evaluated the model on clinical tasks.",
+    }
+
+    [slot] = plan.evidence_slots
+    assert score_evidence_for_slot(slot, candidate) == 0
+
+    bound = bind_evidence_slots(plan, [candidate])
+
+    [bound_slot] = bound.evidence_slots
+    assert bound_slot.status == "retrieved_unverified"
+    assert bound_slot.evidence_ids == (identity_of(candidate).key,)
+    assert missing_slot_requests(bound) == []
+
+
+def test_requirement_noun_candidate_matches_require_relation_without_authority():
+    question = "Did the authors require fine-tuning the model?"
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    candidate = {
+        "evidence_id": "requirement",
+        "source_id": "paper",
+        "text": "The authors' requirements include fine-tuning the model.",
+    }
+
+    [slot] = plan.evidence_slots
+    assert score_evidence_for_slot(slot, candidate) == 0
+
+    bound = bind_evidence_slots(plan, [candidate])
+
+    [bound_slot] = bound.evidence_slots
+    assert bound_slot.status == "retrieved_unverified"
+    assert bound_slot.evidence_ids == (identity_of(candidate).key,)
+    assert missing_slot_requests(bound) == []
+
+
+def test_b065_requirement_candidate_is_retained_for_later_boolean_verification():
+    question = (
+        "Is fine-tuning required to incorporate these embeddings into existing models?"
+    )
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    candidate = {
+        "evidence_id": "b065",
+        "source_id": "paper",
+        "text": (
+            "The only requirement is that the model accepts as input, an embedding "
+            "layer (for entities and relations). If a model fulfills this "
+            "requirement (which a large number of neural models on knowledge graphs "
+            "do), we can just use Dolores embeddings as a drop-in replacement. We "
+            "just initialize the corresponding embedding layer with Dolores "
+            "embeddings."
+        ),
+    }
+
+    [slot] = plan.evidence_slots
+    assert score_evidence_for_slot(slot, candidate) == 0
+
+    bound = bind_evidence_slots(plan, [candidate])
+
+    [bound_slot] = bound.evidence_slots
+    assert bound_slot.status == "retrieved_unverified"
+    assert bound_slot.evidence_ids == (identity_of(candidate).key,)
+    assert missing_slot_requests(bound) == []
+
+
+def test_monotonic_binding_preserves_metadata_poor_boolean_candidate():
+    question = "Did the authors evaluate the model on clinical tasks?"
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    candidate = {
+        "evidence_id": "candidate",
+        "source_id": "paper",
+        "text": "We evaluated the model on clinical tasks.",
+    }
+    bound = bind_evidence_slots(plan, [candidate])
+
+    monotonic, trace = bind_evidence_slots_monotonic(bound, [candidate])
+
+    [slot] = monotonic.evidence_slots
+    assert slot.status == "retrieved_unverified"
+    assert slot.evidence_ids == (identity_of(candidate).key,)
+    assert trace[0]["preserved_existing_binding"] is True
+
+
+def test_monotonic_binding_does_not_preserve_unverified_authority_status():
+    question = "Did the authors evaluate the model on clinical tasks?"
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    candidate = {
+        "evidence_id": "candidate",
+        "source_id": "paper",
+        "text": "We evaluated the model on clinical tasks.",
+    }
+    [slot] = plan.evidence_slots
+    bound = QueryPlan(
+        answer_type=plan.answer_type,
+        question_type=plan.question_type,
+        plan_id=plan.plan_id,
+        subqueries=plan.subqueries,
+        constraints=plan.constraints,
+        evidence_slots=(
+            replace(
+                slot,
+                evidence_ids=(identity_of(candidate).key,),
+                status="verified_support",
+            ),
+        ),
+    )
+
+    rebound, trace = bind_evidence_slots_monotonic(bound, [candidate])
+
+    [rebound_slot] = rebound.evidence_slots
+    assert rebound_slot.status == "retrieved_unverified"
+    assert rebound_slot.evidence_ids == (identity_of(candidate).key,)
+    assert trace[0]["preserved_existing_binding"] is False
 
 
 def test_claim_support_reconciliation_rejects_incompatible_selected_evidence():

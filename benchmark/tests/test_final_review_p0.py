@@ -74,7 +74,7 @@ def test_benchmark_element_adapter_preserves_atomic_fields(tmp_path: Path):
     assert records[0]["scale"] == "million"
 
 
-def test_qasper_answer_change_invalidates_verification_state():
+def test_qasper_adapter_does_not_mutate_engine_verification_state():
     prediction: dict[str, Any] = {
         "question": "Did the authors release the code?",
         "predicted_answer": "yes",
@@ -98,17 +98,13 @@ def test_qasper_answer_change_invalidates_verification_state():
         llm_factory=_VerifierLLM,
     )
 
-    assert "verified_evidence" not in prediction["evidence_metadata"]
-    assert "guardrail_decision" not in prediction["evidence_metadata"]
-    assert "verifier_observability" not in prediction["evidence_metadata"]
-    assert (
-        prediction["evidence_metadata"]["verify_decision"]["status"]
-        == "not_enough_evidence"
-    )
-    assert (
-        prediction["evidence_metadata"]["answer_dependent_state"]
-        == "post_contract_verified"
-    )
+    metadata = prediction["evidence_metadata"]
+    assert metadata["verified_evidence"] == [{"evidence_id": "old"}]
+    assert metadata["verify_decision"] == {"status": "supported"}
+    assert metadata["guardrail_decision"] == {"status": "ok"}
+    assert metadata["verifier_observability"] == {"supported": 1}
+    assert prediction["contract_action"] == ("hard_violation_missing_runtime_authority")
+    assert prediction["post_engine_answerability_llm_call_count"] == 0
 
 
 def test_canonical_citation_resolves_source_and_page_together():

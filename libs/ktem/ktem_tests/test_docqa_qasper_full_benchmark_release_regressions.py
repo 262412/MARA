@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 import pytest
@@ -8,6 +9,7 @@ from ktem.docqa.controller import RetrieveDecision, evaluate_retrieval_quality
 from ktem.docqa.evidence import EvidenceBundle
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_planning import select_planned_evidence
+from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.query_evidence_binding import bind_evidence_slots
 from ktem.docqa.query_plan_schema import EvidenceSlot, QueryPlan
 from ktem.docqa.query_planning import build_query_plan
@@ -238,33 +240,34 @@ def test_binding_failure_still_abstains_without_selected_support() -> None:
     assert "support:boolean_proposition" in enforced.reason
 
 
-def test_successful_post_verifier_keeps_canonical_ids_across_all_support_stages() -> (
-    None
-):
+def test_runtime_authority_keeps_canonical_ids_across_all_support_stages() -> (None):
     question = "Did the authors evaluate the model on clinical tasks?"
     quote = "We evaluated the model on clinical tasks."
     evidence = _item("evaluation", quote, canonical_start=100)
     canonical_id = identity_of(evidence).key
-    plan = bind_evidence_slots(
-        build_query_plan(
-            question,
-            answer_type="boolean",
+    execution = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="boolean",
+            verification_mode="strict",
             verification_domain="qasper",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["paper"],
+            origin="benchmark",
         ),
-        [evidence],
+        retrieve=lambda *_args: {"evidence": [evidence]},
+        generate=lambda *_args: "Yes. The authors evaluated the model.",
     )
     prediction: dict[str, Any] = {
+        **execution.as_dict(),
         "question": question,
         "answer_type": "boolean",
-        "predicted_answer": "unanswerable",
+        "predicted_answer": execution.answer,
         "route": "text_rag",
         "gold_evidence": ["anonymous-support"],
-        "evidence_bundle": {"items": [evidence], "metadata": {}},
-        "evidence_metadata": {
-            "selected_evidence": [evidence],
-            "generation_context_evidence": [evidence],
-            "query_plan": plan.as_dict(),
-        },
+        "evidence_metadata": deepcopy(execution.evidence_bundle.metadata),
         "structured_citations": [],
         "predicted_citations": [],
     }
@@ -274,10 +277,10 @@ def test_successful_post_verifier_keeps_canonical_ids_across_all_support_stages(
         dataset_name="qasper_typed",
         mode="scoring_adapter_v1",
     )
-    assert apply_task_answer_contract(
+    assert not apply_task_answer_contract(
         prediction,
         dataset_name="qasper_typed",
-        llm_factory=lambda: _Verifier("yes_complete", quote),
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
     )
     finalize_prediction_answer(
         prediction,
@@ -292,7 +295,6 @@ def test_successful_post_verifier_keeps_canonical_ids_across_all_support_stages(
     trace = prediction["evidence_metadata"]["qasper_answerability"]
     assert trace["authoritative_quote_evidence_id"] == canonical_id
     assert trace["final_support_evidence_ids"] == [canonical_id]
-    assert trace["verifier_input_evidence_ids"] == canonical_id
     assert trace["verifier_required_authority_status"] == "complete"
     assert trace["verifier_required_evidence_coverage"] == "1.000000"
     assert [

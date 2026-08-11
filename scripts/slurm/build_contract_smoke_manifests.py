@@ -30,12 +30,12 @@ QASPER_CASES = {
     "50be4a737dc0951b35d139f51075011095d77f2a": {"ordinary_free_text"},
     "2cd37743bcc7ea3bd405ce6d91e79e5339d7642e": {"yes_no"},
     "1dc2da5078a7e5ea82ccd1c90d81999a922bc9bf": {"support_and_contradiction"},
-    "206739417251064b910ae9e5ff096e867ee10fb8": {"answerability_rewrite"},
+    "206739417251064b910ae9e5ff096e867ee10fb8": {"runtime_authority_pass_through"},
 }
 QASPER_SYNTHETIC_REQUIREMENTS = {
     "support_and_contradiction",
     "cross_page_required_slots",
-    "answerability_rewrite",
+    "runtime_authority_pass_through",
 }
 DEFAULT_RUN_ROOT = Path(
     "/mnt/scratch/users/tbczhang/outputs/MARA/contract_smoke_round1"

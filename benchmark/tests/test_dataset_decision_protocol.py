@@ -188,7 +188,7 @@ def test_run_benchmark_summary_includes_phase2_protocol(monkeypatch, tmp_path):
             "dataset_name": "qasper_plan5_text_main_current",
             "dataset_decision": "main_quality_candidate",
             "route": "text_rag",
-            "phase2_failure_type": "false_abstention_after_retrieval",
+            "phase2_failure_type": "answer_mismatch_after_retrieval",
             "count": 1,
         }
     ]

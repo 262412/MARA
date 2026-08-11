@@ -9,9 +9,7 @@ from ktem.docqa.query_evidence_binding import bind_evidence_slots
 from ktem.docqa.query_planning import build_query_plan
 
 from benchmark.answer_finalizer import finalize_prediction_answer
-from benchmark.contract_invariant_metrics import contract_invariant_summary
 from benchmark.qasper_answerability import verify_qasper_answerability
-from benchmark.qasper_contract_invariants import qasper_contract_metric_values
 from benchmark.qasper_evidence_identity import canonical_prompt_span
 from benchmark.qasper_quote_binding import _bind_authoritative_quote
 from benchmark.task_answer_contracts import (
@@ -216,44 +214,15 @@ def test_1dc2da_target_support_survives_terminal_citation_rebuild(
     }
     applied, synchronized = _apply_qasper_contract(prediction)
 
-    assert applied is True
+    assert applied is False
     assert synchronized is True
-    assert prediction["answer_for_scoring"] == "yes"
-    assert prediction["verify_decision"]["status"] == "supported"
-    assert prediction["structured_citations"]
-    assert prediction["evidence_metadata"]["verified_claim_support_evidence"] == [
-        evidence
-    ]
-    assert prediction["predicted_evidence"] == [evidence["text"]]
-    assert prediction["evidence_metadata"]["emitted_citation_evidence"] == [evidence]
-    metrics = qasper_contract_metric_values(
-        prediction,
-        prediction["evidence_metadata"],
-        cited=prediction["evidence_metadata"]["emitted_citation_evidence"],
-        contract_items=[evidence],
-    )
-    assert metrics["citation_scope_violation_count"] == 0.0
-    assert (
-        contract_invariant_summary([prediction])["qasper_stale_verifier_state_count"]
-        == 0.0
-    )
-    assert prediction["evidence_metadata"]["qasper_answerability"][
-        "evidence_quote"
-    ].startswith("In fact, I have been unable")
+    assert prediction["answer_for_scoring"] == "unanswerable"
+    assert prediction["contract_action"] == ("hard_violation_missing_runtime_authority")
+    assert prediction["post_engine_answerability_llm_call_count"] == 0
     answerability = prediction["evidence_metadata"]["qasper_answerability"]
-    assert answerability["verifier_required_evidence_coverage"] == "1.000000"
-    assert answerability["verifier_required_slot_authority_count"] == "1"
-    assert answerability["authoritative_quote_evidence_id"] == identity_of(evidence).key
-    assert (
-        answerability["authoritative_quote_evidence_id"]
-        in answerability["final_support_evidence_ids"]
-    )
-    assert answerability["evidence_quote"] in evidence["text"]
-    emitted = prediction["evidence_metadata"]["emitted_citation_evidence"]
-    assert [identity_of(item).key for item in emitted] == [identity_of(evidence).key]
-    [verified_slot] = prediction["evidence_metadata"]["query_plan"]["evidence_slots"]
-    assert verified_slot["status"] == "verified_support"
-    assert verified_slot["evidence_ids"] == [identity_of(evidence).key]
+    assert answerability["verifier_required_evidence_coverage"] == "0.000000"
+    assert answerability["evidence_quote"] == ""
+    assert prediction["structured_citations"] == []
 
 
 @pytest.mark.parametrize(
@@ -305,19 +274,15 @@ def test_111afb77_target_no_keeps_exact_support_and_citation(route: str) -> None
         _Verifier("no_complete", quote),
     )
 
-    assert applied is True
+    assert applied is False
     assert synchronized is True
     assert prediction["answer_for_scoring"] == "no"
-    assert prediction["verify_decision"]["status"] == "supported"
-    assert prediction["predicted_evidence"] == [quote]
-    emitted = prediction["evidence_metadata"]["emitted_citation_evidence"]
-    assert [identity_of(item).key for item in emitted] == [identity_of(evidence).key]
+    assert prediction["contract_action"] == ("hard_violation_missing_runtime_authority")
+    assert prediction["contract_semantic_rewrite"] is False
+    assert prediction["post_engine_answerability_llm_call_count"] == 0
     trace = prediction["evidence_metadata"]["qasper_answerability"]
-    assert trace["evidence_quote"] == quote
-    assert trace["authoritative_quote_evidence_id"] == identity_of(evidence).key
+    assert trace["evidence_quote"] == ""
+    assert trace["authoritative_quote_evidence_id"] == ""
     [verified_slot] = prediction["evidence_metadata"]["query_plan"]["evidence_slots"]
-    assert verified_slot["status"] == "verified_support"
-    assert (
-        prediction["structured_citations"][0]["evidence_id"]
-        == identity_of(evidence).key
-    )
+    assert verified_slot["status"] == "retrieved_unverified"
+    assert prediction["structured_citations"] == []

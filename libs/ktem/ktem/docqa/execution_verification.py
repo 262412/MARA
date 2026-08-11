@@ -140,6 +140,7 @@ def _verify_nonempty_answer(
         )
         if revision_trace:
             trace.append(revision_trace)
+    answer = _verified_boolean_answer(answer, verify_decision)
     guardrail = timings.measure(
         "finalization_seconds",
         verification_guardrail,
@@ -154,6 +155,13 @@ def _verify_nonempty_answer(
         guardrail,
         trace,
     )
+
+
+def _verified_boolean_answer(answer: str, decision: VerifyDecision) -> str:
+    polarity = str(getattr(decision, "canonical_answer_polarity", "") or "")
+    if decision.status == "supported" and polarity in {"yes", "no"}:
+        return polarity
+    return answer
 
 
 def ragtruth_contract_request(request: Any | None) -> bool:

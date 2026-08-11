@@ -102,6 +102,12 @@ class DocQAResponse:
     workflow_plan: dict[str, Any] = field(default_factory=dict)
     backend_metadata: dict[str, Any] = field(default_factory=dict)
     artifact: Any = None
+    engine_terminal_answer: str = ""
+    engine_terminal_state: dict[str, Any] = field(default_factory=dict)
+    engine_verify_decision: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_guardrail_decision: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_evidence_bundle: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_projection_hash: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)

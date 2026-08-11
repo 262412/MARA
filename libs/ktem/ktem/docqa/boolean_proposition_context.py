@@ -1,10 +1,33 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
-from .boolean_evidence_scope import _actor, _requires_current_paper_scope
+from .boolean_evidence_scope import (
+    _actor,
+    _prior_work_scope_question,
+    _requires_current_paper_scope,
+)
 from .boolean_proposition_tokens import _content_tokens, _object_token
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
+
+
+@dataclass(frozen=True)
+class PropositionContextWindow:
+    text: str
+    start: int
+    end: int
+    canonical_start: int | None = None
+    canonical_end: int | None = None
+
+    def as_dict(self) -> dict[str, int | str | None]:
+        return {
+            "text": self.text,
+            "start": self.start,
+            "end": self.end,
+            "canonical_start": self.canonical_start,
+            "canonical_end": self.canonical_end,
+        }
 
 
 def contextual_actor(span: str, context: str, section_role: str) -> str:
@@ -28,15 +51,25 @@ def semantic_resolution_text(question: str, span: str, context: str) -> str:
 
 
 def bounded_proposition_context(text: str, span: str) -> str:
-    matches = list(re.finditer(re.escape(str(span or "")), str(text or "")))
+    window = exact_proposition_context(text, span)
+    return window.text if window is not None else span
+
+
+def exact_proposition_context(
+    text: str,
+    span: str,
+    *,
+    canonical_start: int | None = None,
+) -> PropositionContextWindow | None:
+    """Return one exact, continuous one-to-three sentence authority window."""
+
+    source = str(text or "")
+    target = str(span or "")
+    matches = list(re.finditer(re.escape(target), source)) if target else []
     if len(matches) != 1:
-        return span
+        return None
     match = matches[0]
-    statements = [
-        (candidate.start(), candidate.end())
-        for candidate in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", text)
-        if candidate.group(0).strip()
-    ]
+    statements = _sentence_offsets(source)
     index = next(
         (
             index
@@ -46,10 +79,31 @@ def bounded_proposition_context(text: str, span: str) -> str:
         None,
     )
     if index is None:
-        return span
-    start = statements[max(0, index - 1)][0]
-    end = statements[min(len(statements) - 1, index + 1)][1]
-    return text[start:end].strip()
+        start, end = match.span()
+    else:
+        start = statements[max(0, index - 1)][0]
+        end = statements[min(len(statements) - 1, index + 1)][1]
+    while start < end and source[start].isspace():
+        start += 1
+    while end > start and source[end - 1].isspace():
+        end -= 1
+    absolute_start = canonical_start + start if canonical_start is not None else None
+    absolute_end = canonical_start + end if canonical_start is not None else None
+    return PropositionContextWindow(
+        text=source[start:end],
+        start=start,
+        end=end,
+        canonical_start=absolute_start,
+        canonical_end=absolute_end,
+    )
+
+
+def _sentence_offsets(text: str) -> list[tuple[int, int]]:
+    return [
+        (candidate.start(), candidate.end())
+        for candidate in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", str(text or ""))
+        if candidate.group(0).strip()
+    ]
 
 
 def actor_scope_scores(
@@ -60,10 +114,16 @@ def actor_scope_scores(
 ) -> tuple[float, float]:
     actor_score = float(
         actor == "current_paper"
+        or (
+            actor in {"cited_work", "other_authors"}
+            and _prior_work_scope_question(question)
+        )
         or (actor == "unknown" and not _requires_current_paper_scope(question))
     )
     scope_score = float(
-        section_role not in {"related_work", "future_work"} and not scope_rejection
+        section_role != "future_work"
+        and (section_role != "related_work" or _prior_work_scope_question(question))
+        and not scope_rejection
     )
     return actor_score, scope_score
 

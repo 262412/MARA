@@ -116,6 +116,12 @@ RESPONSE_JSON_KEYS = (
     "workflow_plan",
     "backend_metadata",
     "artifact",
+    "engine_terminal_answer",
+    "engine_terminal_state",
+    "engine_verify_decision",
+    "engine_terminal_guardrail_decision",
+    "engine_terminal_evidence_bundle",
+    "engine_terminal_projection_hash",
 )
 
 

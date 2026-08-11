@@ -79,6 +79,7 @@ def _relation_surface_tokens(relation: str) -> set[str]:
 
 def _object_token(token: str) -> str:
     aliases = {
+        "any": "",
         "components": "component",
         "own": "",
         "our": "",
@@ -94,6 +95,10 @@ def _object_token(token: str) -> str:
         "tasks": "task",
         "authors": "",
         "author": "",
+        "earlier": "prior_work",
+        "previous": "prior_work",
+        "prior": "prior_work",
+        "recent": "prior_work",
     }
     return aliases.get(token, token.rstrip("s") if token.endswith("s") else token)
 

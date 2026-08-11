@@ -58,6 +58,16 @@ def _answerability_metrics(
         trace,
         required_verification_applicable=applicable,
     )
+    contract_action = str(
+        prediction.get("contract_action") or trace.get("contract_action") or ""
+    )
+    semantic_rewrite = bool(
+        prediction.get("contract_semantic_rewrite")
+        or trace.get("contract_semantic_rewrite")
+    )
+    engine_label = str(trace.get("engine_semantic_label") or "")
+    scored_label = str(trace.get("scored_semantic_label") or "")
+    runtime_failure_kind = str(trace.get("runtime_authority_failure_kind") or "")
     return {
         "abstention_candidate_sent_as_semantic_answer_count": float(
             bool(candidate and is_abstention_answer(candidate))
@@ -68,6 +78,23 @@ def _answerability_metrics(
         ),
         "boolean_scope_violation_count": float(scope_violation),
         "wrong_polarity_count": float(_wrong_boolean_polarity(prediction, answer)),
+        "contract_semantic_rewrite_count": float(semantic_rewrite),
+        "engine_scored_semantic_label_mismatch_count": float(
+            bool(engine_label and scored_label and engine_label != scored_label)
+        ),
+        "qasper_post_engine_answerability_llm_call_count": float(
+            prediction.get("post_engine_answerability_llm_call_count")
+            or trace.get("post_engine_answerability_llm_call_count")
+            or 0
+        ),
+        "qasper_runtime_authority_missing_count": float(
+            contract_action == "hard_violation_missing_runtime_authority"
+            and runtime_failure_kind in {"", "authority_missing"}
+        ),
+        "qasper_runtime_semantic_verifier_failure_count": float(
+            runtime_failure_kind == "semantic_verifier"
+        ),
+        "qasper_runtime_scope_failure_count": float(runtime_failure_kind == "scope"),
         **authority,
     }
 
@@ -77,6 +104,8 @@ def _required_authority_metrics(
     *,
     required_verification_applicable: bool,
 ) -> dict[str, float]:
+    if not required_verification_applicable:
+        return _not_applicable_authority_metrics()
     slot_ids = _trace_ids(trace.get("verifier_required_slot_ids"))
     required_ids = _trace_ids(trace.get("verifier_required_evidence_ids"))
     missing_ids = _trace_ids(trace.get("verifier_missing_required_slot_ids"))
@@ -115,23 +144,53 @@ def _required_authority_metrics(
         "quote_identity_unresolved",
         "evidence_ref_unresolved",
     }
-    ref_mismatch = complete_abstention and reason == "evidence_ref_quote_mismatch"
+    quote_status = str(trace.get("quote_ref_validation_status") or "")
+    ref_mismatch = complete_abstention and (
+        reason == "evidence_ref_quote_mismatch"
+        or quote_status == "evidence_ref_quote_mismatch"
+    )
+    quote_validation_ref_mismatch = (
+        reason == "evidence_ref_quote_mismatch"
+        or quote_status == "evidence_ref_quote_mismatch"
+    )
     semantic_audit_violation = semantic_veto and not (
         str(trace.get("evidence_ref") or "").strip()
         and str(trace.get("evidence_quote") or "").strip()
     )
-    empty_slot_state = required_verification_applicable and slot_count == 0
+    return _authority_metric_values(
+        trace,
+        slot_count=slot_count,
+        required_ids=required_ids,
+        authority_missing=authority_missing,
+        missing_count=missing_count,
+        complete_abstention=complete_abstention,
+        identity_clear=identity_clear,
+        ref_mismatch=ref_mismatch,
+        quote_validation_ref_mismatch=quote_validation_ref_mismatch,
+        semantic_audit_violation=semantic_audit_violation,
+    )
+
+
+def _authority_metric_values(
+    trace: dict[str, Any],
+    *,
+    slot_count: int,
+    required_ids: list[str],
+    authority_missing: bool,
+    missing_count: int,
+    complete_abstention: bool,
+    identity_clear: bool,
+    ref_mismatch: bool,
+    quote_validation_ref_mismatch: bool,
+    semantic_audit_violation: bool,
+) -> dict[str, float]:
+    empty_slot_state = slot_count == 0
     coverage_missing = (
-        required_verification_applicable
-        and _optional_float(trace.get("verifier_required_evidence_coverage")) is None
+        _optional_float(trace.get("verifier_required_evidence_coverage")) is None
     )
     return {
-        "qasper_required_verification_applicable_count": float(
-            required_verification_applicable
-        ),
-        "qasper_required_slot_nonempty_state_count": float(
-            required_verification_applicable and slot_count > 0
-        ),
+        "qasper_required_verification_applicable_count": float(True),
+        "qasper_required_slot_nonempty_state_count": float(slot_count > 0),
         "qasper_required_slot_empty_state_count": float(empty_slot_state),
         "qasper_required_evidence_coverage_missing_count": float(coverage_missing),
         "qasper_required_slot_authority_empty_count": float(
@@ -147,8 +206,28 @@ def _required_authority_metrics(
         ),
         "qasper_complete_to_unanswerable_identity_count": float(identity_clear),
         "qasper_complete_to_unanswerable_ref_mismatch_count": float(ref_mismatch),
+        "qasper_quote_validation_ref_mismatch_count": float(
+            quote_validation_ref_mismatch
+        ),
         "qasper_semantic_veto_audit_violation_count": float(semantic_audit_violation),
     }
+
+
+def _not_applicable_authority_metrics() -> dict[str, float]:
+    keys = (
+        "qasper_required_verification_applicable_count",
+        "qasper_required_slot_nonempty_state_count",
+        "qasper_required_slot_empty_state_count",
+        "qasper_required_evidence_coverage_missing_count",
+        "qasper_required_slot_authority_empty_count",
+        "qasper_required_slot_authority_missing_count",
+        "qasper_complete_to_unanswerable_empty_authority_count",
+        "qasper_complete_to_unanswerable_identity_count",
+        "qasper_complete_to_unanswerable_ref_mismatch_count",
+        "qasper_quote_validation_ref_mismatch_count",
+        "qasper_semantic_veto_audit_violation_count",
+    )
+    return {key: 0.0 for key in keys}
 
 
 _SEMANTIC_VETO_REASONS = {
@@ -301,6 +380,12 @@ def _empty_answerability_metrics() -> dict[str, float | None]:
         "answerable_false_abstention_count": 0.0,
         "boolean_scope_violation_count": 0.0,
         "wrong_polarity_count": 0.0,
+        "contract_semantic_rewrite_count": 0.0,
+        "engine_scored_semantic_label_mismatch_count": 0.0,
+        "qasper_post_engine_answerability_llm_call_count": 0.0,
+        "qasper_runtime_authority_missing_count": 0.0,
+        "qasper_runtime_semantic_verifier_failure_count": 0.0,
+        "qasper_runtime_scope_failure_count": 0.0,
         "qasper_required_verification_applicable_count": 0.0,
         "qasper_required_slot_nonempty_state_count": 0.0,
         "qasper_required_slot_empty_state_count": 0.0,
@@ -310,6 +395,7 @@ def _empty_answerability_metrics() -> dict[str, float | None]:
         "qasper_complete_to_unanswerable_empty_authority_count": 0.0,
         "qasper_complete_to_unanswerable_identity_count": 0.0,
         "qasper_complete_to_unanswerable_ref_mismatch_count": 0.0,
+        "qasper_quote_validation_ref_mismatch_count": 0.0,
         "qasper_semantic_veto_audit_violation_count": 0.0,
     }
 
@@ -321,7 +407,8 @@ def _qasper_boolean_applicable(
     if _answer_type(prediction) != "boolean":
         return False
     if isinstance(trace, dict):
-        return True
+        explicit = trace.get("runtime_boolean_authority_applicable")
+        return bool(explicit) if explicit is not None else True
     scoring_contract = str(prediction.get("mara_scoring_contract") or "")
     task_contract = prediction.get("task_answer_contract")
     task_contract_id = (

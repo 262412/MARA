@@ -367,6 +367,7 @@ def _actor(quote: str, section_role: str) -> str:
         "prior work",
         "earlier work",
         "related work",
+        "recent work",
     )
     if (
         section_role == "related_work"
@@ -459,7 +460,7 @@ def _nearest_heading(item: dict[str, Any], quote: str) -> str:
 
 
 def _section_role_from_text(value: str) -> str:
-    lowered = str(value or "").lower()
+    lowered = re.sub(r"[_-]+", " ", str(value or "").lower())
     if re.search(r"\b(?:related work|background|previous work|prior work)\b", lowered):
         return "related_work"
     if re.search(r"\b(?:future work|limitation)\b", lowered):
@@ -507,7 +508,11 @@ def _scope_rejection(
     ownership_rejection = own_data_provenance_rejection(question, quote)
     if ownership_rejection:
         return ownership_rejection
-    if actor in {"cited_work", "other_authors"}:
+    if _prior_work_scope_question(question):
+        return ""
+    if actor in {"cited_work", "other_authors"} and not _prior_work_scope_question(
+        question
+    ):
         return "cited_work_does_not_establish_current_paper_claim"
     if not _requires_current_paper_scope(question):
         return ""
@@ -522,6 +527,17 @@ def _scope_rejection(
     ):
         return "current_paper_scope_not_established"
     return ""
+
+
+def _prior_work_scope_question(question: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:previous|prior|earlier|related)\s+"
+            r"(?:work|research|stud(?:y|ies)|papers?)\b",
+            str(question or ""),
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _requires_experiment_scope(question: str) -> bool:

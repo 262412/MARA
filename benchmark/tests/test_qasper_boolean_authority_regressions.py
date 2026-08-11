@@ -5,7 +5,6 @@ from typing import Any
 import pytest
 
 from benchmark.answer_finalizer import finalize_prediction_answer
-from benchmark.contract_invariant_metrics import contract_invariant_summary
 from benchmark.qasper_answerability import verify_qasper_answerability
 from benchmark.qasper_evidence_identity import canonical_quote_spans
 from benchmark.task_answer_contracts import (
@@ -519,7 +518,7 @@ def test_existing_high_precision_semantic_corrections_remain_authoritative(
     )
 
 
-def test_rejected_authority_clears_terminal_support_and_citation_state() -> None:
+def test_missing_runtime_authority_is_audited_without_reanswering() -> None:
     question = "Do they experiment with the toolkits?"
     quote = (
         "We present GluonCV and GluonNLP, the deep learning toolkits for computer "
@@ -560,21 +559,11 @@ def test_rejected_authority_clears_terminal_support_and_citation_state() -> None
     synchronized = synchronize_terminal_answer_state(prediction)
 
     trace = prediction["evidence_metadata"]["qasper_answerability"]
-    assert applied is True
+    assert applied is False
     assert synchronized is True
-    assert prediction["answer_for_scoring"] == "unanswerable"
-    assert prediction["terminal_answer_state"]["answer"] == "unanswerable"
-    assert trace["reason"] == "polarity_authority_unproven"
-    assert "authoritative_quote_evidence_id" not in trace
-    assert prediction["evidence_metadata"]["verified_claim_support_evidence"] == []
+    assert prediction["answer_for_scoring"] == "yes"
+    assert prediction["contract_action"] == ("hard_violation_missing_runtime_authority")
+    assert trace["reason"] == "runtime_projection_missing"
+    assert trace["authoritative_quote_evidence_id"] == ""
     assert prediction["structured_citations"] == []
-    assert prediction["terminal_answer_state"]["supporting_evidence"] == []
-    assert prediction["terminal_answer_state"]["emitted_citations"] == []
-    assert (
-        contract_invariant_summary([prediction])["qasper_stale_verifier_state_count"]
-        == 0.0
-    )
-    assert not (
-        trace["reason"] == "grounded_complete_proposition"
-        and prediction["answer_for_scoring"] == "unanswerable"
-    )
+    assert prediction["post_engine_answerability_llm_call_count"] == 0

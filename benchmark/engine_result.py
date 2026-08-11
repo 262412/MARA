@@ -32,3 +32,9 @@ class EngineRunResult:
     claim_verification: dict[str, Any] = field(default_factory=dict)
     presentation: dict[str, Any] = field(default_factory=dict)
     source_identity_crosswalk: list[dict[str, Any]] = field(default_factory=list)
+    engine_terminal_answer: str = ""
+    engine_terminal_state: dict[str, Any] = field(default_factory=dict)
+    engine_verify_decision: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_guardrail_decision: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_evidence_bundle: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_projection_hash: str = ""

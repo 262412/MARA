@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
+from .boolean_evidence_scope import evidence_item_text
 from .claim_support import claim_supported
 from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from .evidence_identity import identity_of
@@ -26,6 +27,7 @@ def claim_aware_slot_support(
         (
             str(result.get("claim") or "").strip(),
             str(evidence_id).strip(),
+            result,
         )
         for result in decision.claim_results
         if str(result.get("status") or "") == "supported"
@@ -37,7 +39,7 @@ def claim_aware_slot_support(
     selected_items = list(evidence_bundle.items) if evidence_bundle is not None else []
     selected_lookup = unambiguous_evidence_alias_lookup(selected_items)
     resolved_support: list[tuple[str, dict[str, Any]]] = []
-    for claim, evidence_id in supported_claims:
+    for claim, evidence_id, result in supported_claims:
         item = selected_lookup.get(evidence_id)
         if item is None:
             continue
@@ -45,7 +47,12 @@ def claim_aware_slot_support(
             identity = identity_of(item).key
         except ValueError:
             continue
-        if claim_supported(claim, [item], prompt=prompt, domain=domain):
+        if _exact_boolean_authority_matches(result, item, identity) or claim_supported(
+            claim,
+            [item],
+            prompt=prompt,
+            domain=domain,
+        ):
             resolved_support.append((identity, item))
 
     reconciled: dict[str, tuple[str, ...]] = {}
@@ -108,7 +115,29 @@ def enforce_verification_slot_support(
     )
     unsupported_slots = unsupported_verification_slots(request, reconciled_slots)
     if not unsupported_slots:
-        return decision
+        slot_ids = list(reconciled_slots)
+        claim_results = [
+            {
+                **result,
+                "verified_slot_state": (
+                    "verified_support"
+                    if str(result.get("status") or "") == "supported"
+                    else str(result.get("verified_slot_state") or "")
+                ),
+                "verified_support_slot_ids": slot_ids,
+            }
+            for result in decision.claim_results
+        ]
+        return replace(
+            decision,
+            claim_results=claim_results,
+            verified_support_slot_ids=slot_ids,
+            boolean_authority_status=(
+                "verified_support"
+                if getattr(decision, "canonical_answer_polarity", "")
+                else getattr(decision, "boolean_authority_status", "")
+            ),
+        )
     return replace(
         decision,
         status="unknown",
@@ -133,3 +162,29 @@ def scoring_slot(slot: Any) -> EvidenceSlot:
     if not isinstance(slot, dict):
         return EvidenceSlot(slot_id="", role="support")
     return _slot_from_payload(1, slot)
+
+
+def _exact_boolean_authority_matches(
+    result: dict[str, Any],
+    item: dict[str, Any],
+    identity: str,
+) -> bool:
+    if str(result.get("authority_status") or "") != "exact":
+        return False
+    if str(result.get("authoritative_evidence_id") or "") != identity:
+        return False
+    quote = str(result.get("authoritative_quote") or "")
+    if not quote:
+        return False
+    text = evidence_item_text(item)
+    if text.count(quote) != 1:
+        return False
+    start = result.get("authoritative_span_start")
+    end = result.get("authoritative_span_end")
+    return (
+        isinstance(start, int)
+        and isinstance(end, int)
+        and start >= 0
+        and end > start
+        and text[start:end] == quote
+    )

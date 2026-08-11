@@ -57,5 +57,6 @@ def test_qasper_runtime_task_type_does_not_expose_gold_answer_category(tmp_path)
     )
 
     assert context["verification_domain"] == "qasper"
+    assert context["verification_mode"] == "strict"
     assert context["task_type"] == "qasper_qa"
     assert "unanswerable" not in context["task_type"]

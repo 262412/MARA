@@ -170,6 +170,16 @@ def with_verification_evidence(
         decision.claim_results,
         lookup,
     )
+    verified_spans = [
+        dict(span)
+        for result in decision.claim_results
+        for span in result.get("supporting_evidence_spans") or []
+        if isinstance(span, dict)
+    ]
+    if verified_spans:
+        metadata["verified_claim_support_spans"] = verified_spans
+    if decision.canonical_answer_polarity:
+        metadata["boolean_authority"] = _boolean_authority_metadata(decision)
     if request is not None:
         verified_ids = {identity_of(item).key for item in verified}
         reconciled_slots = claim_aware_slot_support(
@@ -195,7 +205,30 @@ def with_verification_evidence(
             decision,
             reconciled_slots,
         )
+    metadata["verify_decision"] = decision.as_dict()
     return EvidenceBundle(route=bundle.route, items=bundle.items, metadata=metadata)
+
+
+def _boolean_authority_metadata(decision: VerifyDecision) -> dict[str, Any]:
+    return {
+        "status": decision.boolean_authority_status,
+        "input_answer_polarity": decision.input_answer_polarity,
+        "canonical_answer_polarity": decision.canonical_answer_polarity,
+        "semantic_correction_applied": decision.semantic_correction_applied,
+        "evidence_id": decision.authoritative_evidence_id,
+        "evidence_ref": decision.authoritative_evidence_ref,
+        "span_id": decision.authoritative_span_id,
+        "quote": decision.authoritative_quote,
+        "span_start": decision.authoritative_span_start,
+        "span_end": decision.authoritative_span_end,
+        "canonical_start": decision.authoritative_canonical_start,
+        "canonical_end": decision.authoritative_canonical_end,
+        "actor": decision.actor,
+        "section_scope": decision.section_scope,
+        "relation": decision.relation,
+        "object": decision.object,
+        "quantifier": decision.quantifier,
+    }
 
 
 def _verification_slot_states(

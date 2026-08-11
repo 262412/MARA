@@ -7,3 +7,26 @@ def assert_graph_bundle_contract(payload):
     assert bundle["items"][0]["modality"] == "graph"
     assert bundle["items"][0]["evidence_level"] == "graph"
     assert payload["backend_metadata"] == {"graph_backend": "local_graph_index"}
+
+
+def assert_empty_verify_decision(
+    decision,
+    *,
+    mode,
+    status,
+    reason,
+):
+    assert decision == {
+        **decision,
+        "mode": mode,
+        "status": status,
+        "reason": reason,
+        "action": "generate",
+        "claims": [],
+        "unsupported_claims": [],
+        "unknown_claims": [],
+        "verified_citations": [],
+        "claim_results": [],
+        "boolean_authority_status": "",
+        "authoritative_evidence_id": "",
+    }

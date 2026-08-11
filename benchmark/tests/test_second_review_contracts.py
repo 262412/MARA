@@ -121,7 +121,7 @@ def test_calculation_citations_union_explanatory_claim_citations():
     } == {("report", "4"), ("report", "9")}
 
 
-def test_qasper_answer_change_clears_top_level_verifier_state():
+def test_qasper_adapter_preserves_top_level_verifier_state():
     prediction: dict[str, Any] = {
         "question": "Did the authors release the code?",
         "predicted_answer": "yes",
@@ -140,15 +140,15 @@ def test_qasper_answer_change_clears_top_level_verifier_state():
         llm_factory=_QasperVerifier,
     )
 
-    assert prediction["verify_decision"]["status"] != "supported"
-    for key in ("guardrail_decision", "verifier_observability"):
-        assert key not in prediction
-    assert prediction["pre_contract_verification"]["verify_decision"] == {
-        "status": "supported"
-    }
+    assert prediction["verify_decision"] == {"status": "supported"}
+    assert prediction["guardrail_decision"] == {"status": "ok"}
+    assert prediction["verifier_observability"] == {"has_unsupported_claim": 0}
+    assert "pre_contract_verification" not in prediction
+    assert "post_contract_verification" not in prediction
+    assert prediction["contract_action"] == ("hard_violation_missing_runtime_authority")
 
 
-def test_qasper_answer_change_runs_post_contract_verification():
+def test_qasper_adapter_never_runs_post_contract_verification():
     prediction: dict[str, Any] = {
         "question": "Did the authors release the code?",
         "predicted_answer": "yes",
@@ -171,10 +171,10 @@ def test_qasper_answer_change_runs_post_contract_verification():
         llm_factory=_QasperVerifier,
     )
 
-    post = prediction["post_contract_verification"]
-    assert post["answer"] == "unanswerable"
-    assert post["status"] == "not_enough_evidence"
-    assert prediction["verify_decision"] == post["verify_decision"]
+    assert "post_contract_verification" not in prediction
+    assert prediction["predicted_answer"] == "yes"
+    assert prediction["contract_action"] == ("hard_violation_missing_runtime_authority")
+    assert prediction["post_engine_answerability_llm_call_count"] == 0
 
 
 def test_duplicate_identity_contract_gate_detects_duplicate_atoms():

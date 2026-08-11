@@ -14,6 +14,8 @@ def controller_request_context(example: Any, config: BenchmarkConfig, config_get
     controller_kwargs = cf.controller_config_kwargs(config_getter)
     if controller_domain and not controller_kwargs.get("verification_domain"):
         controller_kwargs["verification_domain"] = controller_domain
+    if controller_domain == "qasper" and not controller_kwargs.get("verification_mode"):
+        controller_kwargs["verification_mode"] = "strict"
     if controller_domain == "ragtruth":
         controller_kwargs["allowed_routes"] = ["doc_text"]
         controller_kwargs["verification_mode"] = "off"
