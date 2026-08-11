@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runRendererBridgeSmoke } from "./renderer-bridge-smoke";
+import {
+  runIndexingBlockedRendererSmoke,
+  runRendererBridgeSmoke,
+} from "./renderer-bridge-smoke";
 
 const successfulResult = {
   bridgeAvailable: true,
@@ -18,12 +21,12 @@ test("packaged renderer smoke exercises the narrow bridge and real IPC methods",
   const messages: string[] = [];
   await runRendererBridgeSmoke(
     {
-      executeJavaScript: async (source) => {
+      executeJavaScript: async (source: string) => {
         script = source;
         return successfulResult;
       },
     },
-    (message) => messages.push(message),
+    (message: string) => messages.push(message),
   );
 
   assert.match(script, /window\.desktop/);
@@ -64,4 +67,33 @@ test("packaged renderer smoke rejects failed IPC and fallback UI", async () => {
     }),
     /Files IPC failed; renderer displayed the bridge-unavailable fallback/,
   );
+});
+
+test("packaged renderer smoke verifies the real unconfigured Files UI", async () => {
+  let script = "";
+  const messages: string[] = [];
+  await runIndexingBlockedRendererSmoke(
+    {
+      executeJavaScript: async (source) => {
+        script = source;
+        return {
+          addButtonDisabled: true,
+          configActionVisible: true,
+          doctorBlocked: true,
+          dropPromptVisible: false,
+          issueCodeVisible: true,
+          latestTaskEmpty: true,
+        };
+      },
+    },
+    (message) => messages.push(message),
+  );
+
+  assert.match(script, /bridge\.getDoctor\(\)/);
+  assert.match(script, /bridge\.getLatestIndexTask\(\)/);
+  assert.match(script, /文件索引尚未准备好/);
+  assert.match(script, /embedding_not_configured/);
+  assert.deepEqual(messages, [
+    "renderer_indexing=embedding_not_configured ui_blocked=true latest_task=empty status_success",
+  ]);
 });
