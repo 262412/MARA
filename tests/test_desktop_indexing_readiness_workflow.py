@@ -43,13 +43,13 @@ def test_windows_checks_unconfigured_first_start_before_any_fixture() -> None:
     commands = _commands(workflow["jobs"]["package-windows"])
 
     unconfigured_launch = commands.index(
-        '$unconfiguredProcess = Start-Process $executable'
+        "$unconfiguredProcess = Start-Process $executable"
     )
     first_fixture = commands.index("sidecar.smoke_fixture")
 
     assert unconfigured_launch < first_fixture
-    assert '$unconfiguredDataRoot = $dataRoot' in commands
-    assert '$env:APPDATA = $unconfiguredAppData' not in commands
+    assert "$unconfiguredDataRoot = $dataRoot" in commands
+    assert "$env:APPDATA = $unconfiguredAppData" not in commands
     assert '"data_root=appdata-mara"' in commands
 
 
