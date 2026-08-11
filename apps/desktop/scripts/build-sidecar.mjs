@@ -57,10 +57,11 @@ const buildRuntimeRoot = mkdtempSync(
 );
 const buildRuntimeEnvironment = {
   ...process.env,
-  KH_APP_DATA_DIR: path.join(buildRuntimeRoot, "state", "ktem_app_data"),
-  KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED: "1",
-  MARA_DESKTOP_DATA_DIR: buildRuntimeRoot,
-  THEFLOW_SETTINGS_MODULE: "ktem.default_flowsettings",
+  MARA_DESKTOP_BUILD_RUNTIME_ROOT: buildRuntimeRoot,
+  PYTHONPATH: [desktopRoot, ...workspacePackageRoots, process.env.PYTHONPATH]
+    .filter(Boolean)
+    .join(path.delimiter),
+  THEFLOW_SETTINGS_MODULE: "sidecar.build_flowsettings",
   THEFLOW_TEMP_PATH: path.join(buildRuntimeRoot, "tmp"),
 };
 

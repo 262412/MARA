@@ -56,9 +56,18 @@ test("declares only providers whose dependencies are native bundle requirements"
 
 test("isolates PyInstaller analysis from the source checkout", () => {
   assert.match(buildScript, /mkdtempSync\(\s*path\.join\(tmpdir\(\)/);
-  assert.match(buildScript, /MARA_DESKTOP_DATA_DIR: buildRuntimeRoot/);
-  assert.match(buildScript, /KH_APP_DATA_DIR: path\.join\(/);
-  assert.match(buildScript, /THEFLOW_SETTINGS_MODULE: "ktem\.default_flowsettings"/);
+  assert.match(
+    buildScript,
+    /MARA_DESKTOP_BUILD_RUNTIME_ROOT: buildRuntimeRoot/,
+  );
+  assert.match(
+    buildScript,
+    /THEFLOW_SETTINGS_MODULE: "sidecar\.build_flowsettings"/,
+  );
+  assert.doesNotMatch(
+    buildScript,
+    /THEFLOW_SETTINGS_MODULE: "ktem\.default_flowsettings"/,
+  );
   assert.match(buildScript, /THEFLOW_TEMP_PATH: path\.join\(buildRuntimeRoot, "tmp"\)/);
   assert.equal(buildScript.match(/cwd: buildRuntimeRoot/g)?.length, 2);
   assert.match(buildScript, /finally \{[\s\S]*rmSync\(buildRuntimeRoot/);
