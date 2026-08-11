@@ -18,11 +18,15 @@ from .boolean_evidence_scope import (
     evidence_item_text,
     validate_boolean_scope,
 )
-from .boolean_proposition_tokens import (
-    _content_tokens,
-    _object_token,
-    _relation_surface_tokens,
+from .boolean_proposition_context import (
+    actor_scope_scores,
+    bounded_proposition_context,
+    contextual_actor,
+    normalized_object_tokens,
+    proposition_spans,
 )
+from .boolean_proposition_context import semantic_resolution_text as _resolution_text
+from .boolean_proposition_tokens import _content_tokens, _relation_surface_tokens
 from .boolean_quality_control_evidence import quality_control_evidence_kind
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
 from .evidence_identity import identity_of
@@ -102,8 +106,8 @@ def classify_boolean_evidence_candidates(
     item: dict[str, Any],
 ) -> tuple[BooleanEvidenceAssessment, ...]:
     desired_polarity = _answer_polarity(answer)
-    spans = _proposition_spans(question, evidence_item_text(item))
-    return tuple(
+    spans = proposition_spans(question, evidence_item_text(item))
+    assessments = tuple(
         _assess_proposition_span(
             question,
             desired_polarity,
@@ -113,6 +117,7 @@ def classify_boolean_evidence_candidates(
         )
         for index, span in enumerate(spans, start=1)
     )
+    return _deduplicated_assessments(assessments)
 
 
 def _assess_proposition_span(
@@ -124,19 +129,26 @@ def _assess_proposition_span(
     span_index: int,
 ) -> BooleanEvidenceAssessment:
     semantic_question = semantic_boolean_proposition_question(question)
+    context = bounded_proposition_context(evidence_item_text(item), span)
+    resolution_text = _resolution_text(semantic_question, span, context)
     section_role = _section_role(item, span)
-    actor = _actor(span, section_role)
+    actor = contextual_actor(span, context, section_role)
     quantifier = _closed_quantifier(semantic_question)
     evidence_polarity = _evidence_polarity(
         semantic_question,
         span,
         desired_polarity=desired_polarity,
     )
-    relation_score = _relation_compatibility(semantic_question, span)
-    object_score, proposition_object = _object_compatibility(semantic_question, span)
+    relation_score = _relation_compatibility(semantic_question, resolution_text)
+    object_score, proposition_object = _object_compatibility(
+        semantic_question,
+        resolution_text,
+    )
     proposition = BooleanProposition(
         actor=actor,
-        action=primary_boolean_relation(span),
+        action=(
+            primary_boolean_relation(span) or primary_boolean_relation(resolution_text)
+        ),
         object=proposition_object,
         section_scope=(
             "current_paper"
@@ -154,16 +166,11 @@ def _assess_proposition_span(
         structured_scope_available=True,
         quote=span,
     )
-    actor_score = (
-        1.0
-        if actor == "current_paper"
-        or (actor == "unknown" and not _requires_current_paper_scope(question))
-        else 0.0
-    )
-    scope_score = (
-        1.0
-        if section_role not in {"related_work", "future_work"} and not scope_rejection
-        else 0.0
+    actor_score, scope_score = actor_scope_scores(
+        actor,
+        question,
+        section_role,
+        scope_rejection,
     )
     classification, reason = _classify_proposition_span(
         question,
@@ -190,6 +197,18 @@ def _assess_proposition_span(
         actor_score=actor_score,
         scope_score=scope_score,
     )
+
+
+def _deduplicated_assessments(
+    assessments: tuple[BooleanEvidenceAssessment, ...],
+) -> tuple[BooleanEvidenceAssessment, ...]:
+    output: dict[tuple[str, tuple[str, ...]], BooleanEvidenceAssessment] = {}
+    for assessment in assessments:
+        key = (assessment.classification, assessment.proposition.key)
+        current = output.get(key)
+        if current is None or _assessment_rank(assessment) > _assessment_rank(current):
+            output[key] = assessment
+    return tuple(output.values())
 
 
 def _classify_proposition_span(
@@ -474,6 +493,14 @@ def _evidence_polarity(
 def _target_relation_is_negated(question: str, text: str) -> bool:
     target = primary_boolean_relation(question)
     lowered = str(text or "").lower()
+    if target == "improve" and re.search(
+        r"\b(?:small|minor|marginal)\s*,?\s*"
+        r"(?:non[- ]?significant|insignificant)\s+improvements?\b"
+        r"|\bno\s+(?:noticeable|significant)\s+"
+        r"(?:improvement|performance\s+difference)\b",
+        lowered,
+    ):
+        return True
     relation_matches = [
         match
         for match in re.finditer(r"[a-z]+(?:'[a-z]+)?", lowered)
@@ -542,16 +569,8 @@ def _object_compatibility(question: str, text: str) -> tuple[float, str]:
         for relation in question_relations | evidence_relations
         for token in _relation_surface_tokens(relation)
     }
-    question_tokens = {
-        _object_token(token)
-        for token in _content_tokens(question)
-        if token not in relation_tokens
-    }
-    evidence_tokens = {
-        _object_token(token)
-        for token in _content_tokens(text)
-        if token not in relation_tokens
-    }
+    question_tokens = normalized_object_tokens(question, relation_tokens)
+    evidence_tokens = normalized_object_tokens(text, relation_tokens)
     question_tokens.discard("")
     evidence_tokens.discard("")
     if not question_tokens:
@@ -563,38 +582,3 @@ def _object_compatibility(question: str, text: str) -> tuple[float, str]:
     shared = question_tokens & evidence_tokens
     score = len(shared) / len(question_tokens)
     return score, proposition_object
-
-
-def _proposition_spans(question: str, text: str) -> list[str]:
-    protected = re.sub(
-        r"\bet\s+al\.",
-        "et al<dot>",
-        str(text or ""),
-        flags=re.IGNORECASE,
-    )
-    statements = re.split(r"(?:\r?\n)+|(?<=[.!?])\s+|\s*;\s*", protected)
-    target = primary_boolean_relation(question)
-    output: list[str] = []
-    for statement in statements:
-        clauses = re.split(
-            r"\s+(?:but|however|yet|whereas)\s+",
-            statement,
-            flags=re.IGNORECASE,
-        )
-        for clause in clauses:
-            clause = clause.replace("<dot>", ".").strip()
-            if not clause:
-                continue
-            output.extend(_split_target_conjunction(clause, target))
-    return output
-
-
-def _split_target_conjunction(value: str, target: str) -> list[str]:
-    if not target or " and " not in value.lower():
-        return [value]
-    parts = re.split(r"\s+and\s+", value, flags=re.IGNORECASE)
-    if len(parts) == 1:
-        return [value]
-    target_parts = [part for part in parts if target in boolean_relation_lemmas(part)]
-    relational_parts = [part for part in parts if boolean_relation_lemmas(part)]
-    return target_parts if len(relational_parts) > 1 and target_parts else [value]

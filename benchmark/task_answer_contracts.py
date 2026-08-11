@@ -15,11 +15,15 @@ from .qasper_answerability import (
     QasperAnswerabilityResult,
     verify_qasper_answerability,
 )
+from .qasper_authority import required_authority_audit
 from .qasper_candidate_state import (
     AnswerabilityCandidate,
     select_answerability_candidate,
 )
-from .qasper_evidence_priorities import qasper_evidence_priorities
+from .qasper_evidence_priorities import (
+    QasperEvidencePriorities,
+    qasper_evidence_priorities,
+)
 from .qasper_support_binding import bind_answerability_support
 
 
@@ -146,6 +150,11 @@ def _adjudicate_qasper_answer(
         )
     )
     if not candidate and not typed_boolean_recheck:
+        authority_trace = (
+            _missing_candidate_authority_trace(priorities)
+            if answer_type == "boolean"
+            else {}
+        )
         return QasperAnswerabilityResult(
             answer=candidate_state.product_answer,
             trace={
@@ -154,6 +163,7 @@ def _adjudicate_qasper_answer(
                 "verdict": "",
                 "action": "preserved_product_abstention",
                 "reason": "missing_original_candidate",
+                **authority_trace,
             },
         )
     result = verify_qasper_answerability(
@@ -178,6 +188,18 @@ def _adjudicate_qasper_answer(
     return QasperAnswerabilityResult(
         answer=result.answer,
         trace={**result.trace, "typed_boolean_recheck": "true"},
+    )
+
+
+def _missing_candidate_authority_trace(
+    priorities: QasperEvidencePriorities,
+) -> dict[str, str]:
+    return required_authority_audit(
+        required=set(priorities.required_evidence_ids),
+        selected_aliases=[],
+        required_slot_ids=list(priorities.required_slot_ids),
+        missing_required_slot_ids=list(priorities.missing_required_slot_ids),
+        missing_required_evidence_ids=list(priorities.missing_required_evidence_ids),
     )
 
 

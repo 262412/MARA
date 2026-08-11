@@ -8,14 +8,14 @@ from benchmark.docqa_index_cache import (
 from benchmark.schemas import BenchmarkDocument
 
 
-def test_controller_route_prepares_element_index_when_doc_element_is_allowed():
+def test_controller_auto_route_keeps_optional_element_index_unrequired():
     config = SimpleNamespace(
         route="controller_auto",
         route_policy="cost_aware",
         allowed_routes=["doc_text", "hybrid", "doc_page_image", "doc_element"],
     )
 
-    assert route_requires_element(config) is True
+    assert route_requires_element(config) is False
 
 
 def test_text_route_does_not_prepare_element_index():

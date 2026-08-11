@@ -55,6 +55,31 @@ def bind_evidence_ref_to_quote(
     return resolved_ref, status if resolved_ref else "evidence_ref_unresolved"
 
 
+def resolve_evidence_ref_to_quote(
+    evidence_ref: str,
+    quote: str,
+    evidence_items: list[dict[str, Any]],
+    alias_mapping: str,
+) -> tuple[str, str]:
+    """Resolve an exact quote, allowing only a unique canonical ref rebound."""
+
+    bound, status = _bind_authoritative_quote(
+        evidence_ref,
+        quote,
+        evidence_items,
+        alias_mapping=alias_mapping,
+        allow_ref_rebound=True,
+    )
+    if bound is None:
+        return "", status
+    resolved_ref = bound.evidence_ref or evidence_ref_for_quote(
+        quote,
+        evidence_items,
+        alias_mapping,
+    )
+    return resolved_ref, status if resolved_ref else "evidence_ref_unresolved"
+
+
 def _bind_authoritative_quote(
     evidence_ref: str,
     quote: str,

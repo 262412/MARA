@@ -72,8 +72,6 @@ def _required_slot_representatives(
     for slot in payload.get("evidence_slots") or []:
         if not isinstance(slot, dict) or not _slot_required(slot):
             continue
-        if _slot_pending_verification(slot):
-            continue
         slot_id = str(slot.get("slot_id") or "").strip()
         if slot_id and slot_id not in slot_ids:
             slot_ids.append(slot_id)
@@ -195,15 +193,6 @@ def _slot_required(slot: dict[str, Any]) -> bool:
             "required_for_execution",
             "required_for_verification",
         )
-    )
-
-
-def _slot_pending_verification(slot: dict[str, Any]) -> bool:
-    return bool(
-        slot.get("required_for_verification")
-        and slot.get("required_for_retrieval") is False
-        and not bool(slot.get("required_for_execution"))
-        and str(slot.get("status") or "missing") != "verified_support"
     )
 
 

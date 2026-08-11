@@ -37,6 +37,14 @@ def _relation_surface_tokens(relation: str) -> set[str]:
             "run",
             "test",
         },
+        "improve": {
+            "benefit",
+            "enhance",
+            "improve",
+            "improvement",
+            "improvements",
+            "increase",
+        },
         "provide": {
             "available",
             "distribute",

@@ -39,7 +39,15 @@ def build_selection_trace(
         ],
         "slot_coverage": slot_coverage(bound),
         "missing_required_slot_count": sum(
-            slot_needs_second_round(slot) for slot in bound.evidence_slots
+            slot_needs_second_round(
+                slot,
+                verification_domain=str(
+                    bound.constraints.get("verification_domain") or ""
+                )
+                .strip()
+                .casefold(),
+            )
+            for slot in bound.evidence_slots
         ),
         **context,
         **evidence_selection_budget_trace(bound, candidates, selected),

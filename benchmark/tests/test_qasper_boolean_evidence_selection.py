@@ -53,8 +53,9 @@ def test_boolean_verifier_packs_closed_language_scope_before_lexical_distractor(
     assert decisive in bounded
     spans = json.loads(trace["verifier_input_evidence_spans"])
     assert any(
-        span["span_start"] == long_item["text"].index(decisive)
-        and span["span_end"] == long_item["text"].index(decisive) + len(decisive)
+        span["span_start"] <= long_item["text"].index(decisive)
+        and span["span_end"] >= long_item["text"].index(decisive) + len(decisive)
+        and bounded.endswith(long_item["text"][span["span_start"] : span["span_end"]])
         for span in spans
     )
 

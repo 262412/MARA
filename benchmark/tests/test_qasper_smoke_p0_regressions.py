@@ -544,7 +544,7 @@ def test_qasper_smoke_metrics_expose_new_hard_gate_invariants():
     summary = contract_invariant_summary([prediction, scope_violation])
 
     assert summary["abstention_candidate_sent_as_semantic_answer_count"] == 1.0
-    assert summary["verifier_required_evidence_coverage"] == 0.5
+    assert summary["verifier_required_evidence_coverage"] == 0.25
     assert summary["answerable_false_abstention_count"] == 1.0
     assert summary["boolean_scope_violation_count"] == 1.0
 
@@ -589,6 +589,8 @@ def test_qasper_contract_smoke_declares_all_new_hard_gates():
     assert {
         "abstention_candidate_sent_as_semantic_answer_count",
         "verifier_required_evidence_coverage",
+        "qasper_required_slot_empty_state_count",
+        "qasper_required_evidence_coverage_missing_count",
         "answerable_false_abstention_count",
         "boolean_scope_violation_count",
         "wrong_polarity_count",

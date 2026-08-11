@@ -194,8 +194,9 @@ class DocQAIndexCache:
         source_revision = str(
             os.environ.get("MARA_BENCHMARK_GIT_COMMIT", "not_declared")
         )
+        canonical_document_id = str(document.document_id or "").strip()
         identity = {
-            "document_id": document.document_id,
+            "document_id": canonical_document_id,
             "path": normalized_path(str(path)),
             "size": size,
             "mtime_ns": mtime_ns,
@@ -208,6 +209,7 @@ class DocQAIndexCache:
         }
         key = (
             app_data_dir,
+            identity["document_id"],
             identity["path"],
             size,
             mtime_ns,
@@ -278,28 +280,19 @@ class DocQAIndexCache:
 def route_requires_element(config: Any) -> bool:
     route_policy = str(config_value(config, "route_policy", "") or "")
     route_id = str(config_value(config, "route", "") or "")
-    allowed_routes = {
-        str(route or "").replace("-", "_")
-        for route in config_value(config, "allowed_routes", []) or []
+    return route_policy.replace("-", "_") in {
+        "element",
+        "doc_element",
+        "element_rag",
+        "hybrid",
+        "hybrid_rag",
+    } or route_id.replace("-", "_") in {
+        "element",
+        "doc_element",
+        "element_rag",
+        "hybrid",
+        "hybrid_rag",
     }
-    return (
-        route_policy.replace("-", "_")
-        in {
-            "element",
-            "doc_element",
-            "element_rag",
-            "hybrid",
-            "hybrid_rag",
-        }
-        or route_id.replace("-", "_")
-        in {
-            "element",
-            "element_rag",
-            "hybrid",
-            "hybrid_rag",
-        }
-        or "doc_element" in allowed_routes
-    )
 
 
 def qasper_deterministic_index_settings(

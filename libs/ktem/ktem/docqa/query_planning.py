@@ -28,6 +28,7 @@ from .query_evidence_binding import score_evidence_for_slot as _score_evidence_f
 from .query_evidence_constraints import period_kind_in_question
 from .query_phrase_extraction import metric_phrase, periods_in_question
 from .query_plan_constraints import query_plan_constraints
+from .query_plan_retrieval import slot_needs_second_round
 from .query_plan_schema import (
     EvidenceLocator,
     EvidenceSlot,
@@ -365,11 +366,14 @@ def _segment_comparison_slots(
 
 
 def missing_required_slots(plan: QueryPlan) -> list[EvidenceSlot]:
-    return [slot for slot in plan.evidence_slots if slot_needs_second_round(slot)]
-
-
-def slot_needs_second_round(slot: EvidenceSlot) -> bool:
-    return bool(slot.required_for_retrieval and slot.status != "filled")
+    verification_domain = str(
+        plan.constraints.get("verification_domain", "")
+    ).casefold()
+    return [
+        slot
+        for slot in plan.evidence_slots
+        if slot_needs_second_round(slot, verification_domain=verification_domain)
+    ]
 
 
 def missing_slot_queries(plan: QueryPlan) -> list[str]:

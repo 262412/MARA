@@ -46,7 +46,7 @@ def _item(
     return item
 
 
-def test_verification_only_missing_slot_does_not_block_generation() -> None:
+def test_qasper_missing_verification_slot_requests_one_retry() -> None:
     question = "Did the authors evaluate the model on clinical tasks?"
     plan = QueryPlan(
         answer_type="boolean",
@@ -82,8 +82,8 @@ def test_verification_only_missing_slot_does_not_block_generation() -> None:
         verification_domain="qasper",
     )
 
-    assert decision.status == "good"
-    assert decision.retry is False
+    assert decision.status == "ambiguous"
+    assert decision.retry is True
 
 
 def test_verification_only_slot_reaches_claim_verification_before_abstention() -> None:
@@ -238,15 +238,20 @@ def test_binding_failure_still_abstains_without_selected_support() -> None:
     assert "support:boolean_proposition" in enforced.reason
 
 
-def test_successful_post_verifier_keeps_canonical_ids_across_all_support_stages() -> None:
+def test_successful_post_verifier_keeps_canonical_ids_across_all_support_stages() -> (
+    None
+):
     question = "Did the authors evaluate the model on clinical tasks?"
     quote = "We evaluated the model on clinical tasks."
     evidence = _item("evaluation", quote, canonical_start=100)
     canonical_id = identity_of(evidence).key
-    plan = build_query_plan(
-        question,
-        answer_type="boolean",
-        verification_domain="qasper",
+    plan = bind_evidence_slots(
+        build_query_plan(
+            question,
+            answer_type="boolean",
+            verification_domain="qasper",
+        ),
+        [evidence],
     )
     prediction: dict[str, Any] = {
         "question": question,

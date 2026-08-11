@@ -109,6 +109,14 @@ def _grounded_authority_state(
         parse_trace=parse_trace,
         relation_trace=relation_trace,
     )
+    if (
+        authoritative_support is not None
+        and parse_trace.get("quote_ref_validation_status") == "evidence_ref_rebound"
+    ):
+        authoritative_support = replace(
+            authoritative_support,
+            binding_status="evidence_ref_rebound",
+        )
     return (
         BooleanAdjudication(
             answer=answer,

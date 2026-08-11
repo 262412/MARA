@@ -5,6 +5,46 @@ from typing import Any
 from .finance_typed_adequacy import typed_calculation_adequacy
 
 
+def missing_qasper_verification_slot_count(
+    evidence_metadata: dict[str, Any],
+    *,
+    domain: str | None = None,
+) -> int:
+    """Count QASPER proposition slots with no compatible local evidence.
+
+    Boolean proposition slots are verification-only by design, so they are not
+    part of the ordinary retrieval-slot count.  A genuinely missing proposition
+    must nevertheless keep a non-empty graph/hybrid result from being declared
+    adequate; a retrieved-but-unverified proposition remains eligible for the
+    verifier and is therefore not counted here.
+    """
+
+    normalized_domain = str(domain or "").strip().casefold()
+    if not (normalized_domain == "qasper" or normalized_domain.startswith("qasper_")):
+        return 0
+    plan = next(
+        (
+            evidence_metadata.get(key)
+            for key in ("bound_query_plan", "query_plan")
+            if isinstance(evidence_metadata.get(key), dict)
+        ),
+        None,
+    )
+    if not isinstance(plan, dict):
+        return 0
+    slots = plan.get("evidence_slots")
+    if not isinstance(slots, list):
+        return 0
+    return sum(
+        str(slot.get("statement_kind") or "") == "boolean_proposition"
+        and bool(slot.get("required_for_verification"))
+        and not bool(slot.get("required_for_retrieval"))
+        and str(slot.get("status") or "missing") == "missing"
+        for slot in slots
+        if isinstance(slot, dict)
+    )
+
+
 def retrieval_adequacy_issue(
     prompt: str,
     evidence_metadata: dict[str, Any],

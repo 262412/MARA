@@ -19,18 +19,41 @@ def call_boolean_verifier(
     seed: int,
     repair_context: str = "",
     allowed_evidence_refs: tuple[str, ...] = (),
+    quote_ref_resolver: Any = None,
 ) -> tuple[str, str, str, dict[str, str]]:
     response = _call_verifier(llm, prompt, max_tokens, response_format, seed)
     initial_response = getattr(response, "text", "") or str(response)
     verdict, evidence_ref, quote = parser(initial_response)
-    needs_repair = _needs_structural_repair(
+    initial_evidence_ref = evidence_ref
+    structural_repair = _needs_structural_repair(
         verdict,
         evidence_ref,
         quote,
         allowed_evidence_refs,
     )
+    evidence_ref, validation_status, quote_ref_valid = _validate_quote_ref(
+        verdict,
+        evidence_ref,
+        quote,
+        quote_ref_resolver,
+    )
+    identity_cannot_be_repaired = not allowed_evidence_refs and validation_status in {
+        "evidence_ref_unresolved",
+        "quote_identity_unresolved",
+    }
+    needs_repair = structural_repair or (
+        not quote_ref_valid and not identity_cannot_be_repaired
+    )
     if verdict and not needs_repair:
-        return verdict, evidence_ref, quote, _parse_trace("ok", False, seed)
+        return (
+            verdict,
+            evidence_ref,
+            quote,
+            {
+                **_parse_trace("ok", False, seed),
+                "quote_ref_validation_status": validation_status,
+            },
+        )
     if not verdict and not _has_repairable_verdict(initial_response, allowed_values):
         return (
             "",
@@ -42,8 +65,37 @@ def call_boolean_verifier(
                 "initial_response": str(initial_response),
             },
         )
-    preserve_evidence_ref = bool(evidence_ref) and (
-        not allowed_evidence_refs or evidence_ref in allowed_evidence_refs
+    return _repair_boolean_verifier(
+        llm,
+        initial_response,
+        initial_evidence_ref,
+        response_format=response_format,
+        parser=parser,
+        allowed_values=allowed_values,
+        max_tokens=max_tokens,
+        seed=seed,
+        repair_context=repair_context,
+        allowed_evidence_refs=allowed_evidence_refs,
+        quote_ref_resolver=quote_ref_resolver,
+    )
+
+
+def _repair_boolean_verifier(
+    llm: Any,
+    initial_response: str,
+    initial_evidence_ref: str,
+    *,
+    response_format: dict[str, Any],
+    parser: Any,
+    allowed_values: tuple[str, ...],
+    max_tokens: int,
+    seed: int,
+    repair_context: str,
+    allowed_evidence_refs: tuple[str, ...],
+    quote_ref_resolver: Any,
+) -> tuple[str, str, str, dict[str, str]]:
+    preserve_evidence_ref = bool(initial_evidence_ref) and (
+        not allowed_evidence_refs or initial_evidence_ref in allowed_evidence_refs
     )
     repair_prompt, repair_prompt_truncated = _bounded_repair_prompt(
         initial_response,
@@ -57,11 +109,20 @@ def call_boolean_verifier(
     )
     repaired_text = getattr(repair_response, "text", "") or str(repair_response)
     verdict, evidence_ref, quote = parser(repaired_text)
-    repaired_needs_repair = _needs_structural_repair(
+    evidence_ref, validation_status, quote_ref_valid = _validate_quote_ref(
         verdict,
         evidence_ref,
         quote,
-        allowed_evidence_refs,
+        quote_ref_resolver,
+    )
+    repaired_needs_repair = (
+        _needs_structural_repair(
+            verdict,
+            evidence_ref,
+            quote,
+            allowed_evidence_refs,
+        )
+        or not quote_ref_valid
     )
     return (
         ("" if repaired_needs_repair else verdict),
@@ -76,8 +137,29 @@ def call_boolean_verifier(
             "repair_prompt_truncated": str(repair_prompt_truncated).lower(),
             "initial_response": str(initial_response),
             "repair_response": str(repaired_text),
+            "quote_ref_validation_status": validation_status,
         },
     )
+
+
+def _validate_quote_ref(
+    verdict: str,
+    evidence_ref: str,
+    quote: str,
+    resolver: Any,
+) -> tuple[str, str, bool]:
+    if verdict == "insufficient_evidence":
+        return evidence_ref, "not_applicable", True
+    if verdict not in {"yes_complete", "no_complete", "yes_partial", "no_partial"}:
+        return evidence_ref, "not_checked", True
+    if not evidence_ref or not quote or resolver is None:
+        return evidence_ref, "not_checked", resolver is None
+    resolved_ref, status = resolver(evidence_ref, quote)
+    if status == "bound" and resolved_ref:
+        return resolved_ref, status, True
+    if status == "evidence_ref_rebound" and resolved_ref:
+        return resolved_ref, status, True
+    return evidence_ref, status, False
 
 
 def _call_verifier(

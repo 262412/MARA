@@ -113,7 +113,7 @@ def test_complete_verdict_missing_ref_and_quote_gets_one_structural_repair() -> 
             '"evidence_quote":"The authors released their source code with the paper."}',
         ),
         (
-            '{"verdict":"yes_complete","evidence_ref":"E1:S1",' '"evidence_quote":""}',
+            '{"verdict":"yes_complete","evidence_ref":"E1:S1","evidence_quote":""}',
             '{"verdict":"yes_complete","evidence_ref":"E1:S1",'
             '"evidence_quote":"The authors released their source code with the paper."}',
         ),
@@ -250,16 +250,26 @@ def test_paraphrase_quote_abstains_but_exact_quote_is_authoritative() -> None:
     exact = "The authors released their source code with the paper."
     item = _item("support", exact)
 
-    paraphrase_result = verify_qasper_answerability(
-        _Verifier(
+    paraphrase_verifier = _Verifier(
+        [
             json.dumps(
                 {
                     "verdict": "yes_complete",
                     "evidence_ref": "E1:S1",
                     "evidence_quote": "The authors published the code with the paper.",
                 }
-            )
-        ),
+            ),
+            json.dumps(
+                {
+                    "verdict": "yes_complete",
+                    "evidence_ref": "E1:S1",
+                    "evidence_quote": "The authors published the code with the paper.",
+                }
+            ),
+        ]
+    )
+    paraphrase_result = verify_qasper_answerability(
+        paraphrase_verifier,
         question="Did the authors release the source code with the paper?",
         answer_type="boolean",
         evidence=exact,
@@ -284,7 +294,8 @@ def test_paraphrase_quote_abstains_but_exact_quote_is_authoritative() -> None:
     )
 
     assert paraphrase_result.answer == "unanswerable"
-    assert paraphrase_result.trace["reason"] == "ungrounded_quote"
+    assert paraphrase_result.trace["reason"] == "evidence_ref_quote_mismatch"
+    assert len(paraphrase_verifier.calls) == 2
     assert exact_result.answer == "yes"
     assert exact_result.trace["reason"] == "grounded_complete_proposition"
 

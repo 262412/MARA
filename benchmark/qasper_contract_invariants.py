@@ -34,8 +34,10 @@ def _answerability_metrics(
     metadata: dict[str, Any],
 ) -> dict[str, float | None]:
     trace = metadata.get("qasper_answerability")
-    if not isinstance(trace, dict):
+    applicable = _qasper_boolean_applicable(prediction, trace)
+    if not isinstance(trace, dict) and not applicable:
         return _empty_answerability_metrics()
+    trace = trace if isinstance(trace, dict) else {}
     candidate = str(trace.get("candidate_for_answerability") or "")
     answer = _final_answer(prediction)
     scope_violation = bool(
@@ -44,14 +46,23 @@ def _answerability_metrics(
         and not is_abstention_answer(answer)
         and str(trace.get("boolean_scope_valid") or "").lower() == "false"
     )
-    authority = _required_authority_metrics(trace)
+    required_slot_ids = _trace_ids(trace.get("verifier_required_slot_ids"))
+    required_evidence_ids = _trace_ids(trace.get("verifier_required_evidence_ids"))
+    required_coverage = _required_authority_coverage(
+        trace,
+        required_slot_ids=required_slot_ids,
+        required_evidence_ids=required_evidence_ids,
+        required_verification_applicable=applicable,
+    )
+    authority = _required_authority_metrics(
+        trace,
+        required_verification_applicable=applicable,
+    )
     return {
         "abstention_candidate_sent_as_semantic_answer_count": float(
             bool(candidate and is_abstention_answer(candidate))
         ),
-        "verifier_required_evidence_coverage": _optional_float(
-            trace.get("verifier_required_evidence_coverage")
-        ),
+        "verifier_required_evidence_coverage": required_coverage,
         "answerable_false_abstention_count": float(
             _gold_is_answerable(prediction) and is_abstention_answer(answer)
         ),
@@ -61,21 +72,34 @@ def _answerability_metrics(
     }
 
 
-def _required_authority_metrics(trace: dict[str, Any]) -> dict[str, float]:
+def _required_authority_metrics(
+    trace: dict[str, Any],
+    *,
+    required_verification_applicable: bool,
+) -> dict[str, float]:
     slot_ids = _trace_ids(trace.get("verifier_required_slot_ids"))
     required_ids = _trace_ids(trace.get("verifier_required_evidence_ids"))
     missing_ids = _trace_ids(trace.get("verifier_missing_required_slot_ids"))
     status = str(trace.get("verifier_required_authority_status") or "")
-    coverage = _optional_float(trace.get("verifier_required_evidence_coverage"))
+    coverage = _required_authority_coverage(
+        trace,
+        required_slot_ids=slot_ids,
+        required_evidence_ids=required_ids,
+        required_verification_applicable=required_verification_applicable,
+    )
+    slot_count = max(
+        len(slot_ids),
+        _trace_count(trace.get("verifier_required_slot_count")),
+    )
     authority_missing = bool(
-        slot_ids
+        slot_count
         and (
             status in {"missing_required_evidence", "required_evidence_not_selected"}
             or (not required_ids and coverage != 1.0)
         )
     )
     missing_count = (
-        len(missing_ids) if missing_ids else len(slot_ids) if authority_missing else 0
+        len(missing_ids) if missing_ids else slot_count if authority_missing else 0
     )
     raw_verdict = str(trace.get("raw_verifier_verdict") or "")
     final_answer = str(trace.get("final_post_contract_answer") or "").strip()
@@ -96,9 +120,26 @@ def _required_authority_metrics(trace: dict[str, Any]) -> dict[str, float]:
         str(trace.get("evidence_ref") or "").strip()
         and str(trace.get("evidence_quote") or "").strip()
     )
+    empty_slot_state = required_verification_applicable and slot_count == 0
+    coverage_missing = (
+        required_verification_applicable
+        and _optional_float(trace.get("verifier_required_evidence_coverage")) is None
+    )
     return {
+        "qasper_required_verification_applicable_count": float(
+            required_verification_applicable
+        ),
+        "qasper_required_slot_nonempty_state_count": float(
+            required_verification_applicable and slot_count > 0
+        ),
+        "qasper_required_slot_empty_state_count": float(empty_slot_state),
+        "qasper_required_evidence_coverage_missing_count": float(coverage_missing),
         "qasper_required_slot_authority_empty_count": float(
-            len(slot_ids) if authority_missing and not required_ids else 0
+            1
+            if empty_slot_state
+            else slot_count
+            if authority_missing and not required_ids
+            else 0
         ),
         "qasper_required_slot_authority_missing_count": float(missing_count),
         "qasper_complete_to_unanswerable_empty_authority_count": float(
@@ -127,6 +168,37 @@ def _trace_ids(value: Any) -> list[str]:
             dict.fromkeys(str(item).strip() for item in value if str(item).strip())
         )
     return [token.strip() for token in str(value or "").split(",") if token.strip()]
+
+
+def _required_authority_coverage(
+    trace: dict[str, Any],
+    *,
+    required_slot_ids: list[str],
+    required_evidence_ids: list[str],
+    required_verification_applicable: bool = False,
+) -> float | None:
+    coverage = _optional_float(trace.get("verifier_required_evidence_coverage"))
+    if coverage is not None:
+        return coverage
+    if required_slot_ids or required_evidence_ids:
+        return 0.0
+    if _trace_count(trace.get("verifier_required_slot_count")):
+        return 0.0
+    if str(trace.get("verifier_required_authority_status") or "") in {
+        "missing_required_evidence",
+        "required_evidence_not_selected",
+    }:
+        return 0.0
+    if required_verification_applicable:
+        return 0.0
+    return None
+
+
+def _trace_count(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _citation_support_metrics(
@@ -229,6 +301,10 @@ def _empty_answerability_metrics() -> dict[str, float | None]:
         "answerable_false_abstention_count": 0.0,
         "boolean_scope_violation_count": 0.0,
         "wrong_polarity_count": 0.0,
+        "qasper_required_verification_applicable_count": 0.0,
+        "qasper_required_slot_nonempty_state_count": 0.0,
+        "qasper_required_slot_empty_state_count": 0.0,
+        "qasper_required_evidence_coverage_missing_count": 0.0,
         "qasper_required_slot_authority_empty_count": 0.0,
         "qasper_required_slot_authority_missing_count": 0.0,
         "qasper_complete_to_unanswerable_empty_authority_count": 0.0,
@@ -236,6 +312,24 @@ def _empty_answerability_metrics() -> dict[str, float | None]:
         "qasper_complete_to_unanswerable_ref_mismatch_count": 0.0,
         "qasper_semantic_veto_audit_violation_count": 0.0,
     }
+
+
+def _qasper_boolean_applicable(
+    prediction: dict[str, Any],
+    trace: Any,
+) -> bool:
+    if _answer_type(prediction) != "boolean":
+        return False
+    if isinstance(trace, dict):
+        return True
+    scoring_contract = str(prediction.get("mara_scoring_contract") or "")
+    task_contract = prediction.get("task_answer_contract")
+    task_contract_id = (
+        str(task_contract.get("contract_id") or "")
+        if isinstance(task_contract, dict)
+        else ""
+    )
+    return "qasper" in scoring_contract.lower() or "qasper" in task_contract_id.lower()
 
 
 def _gold_is_answerable(prediction: dict[str, Any]) -> bool:

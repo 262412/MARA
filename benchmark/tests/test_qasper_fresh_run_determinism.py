@@ -208,7 +208,7 @@ def test_docqa_response_projection_applies_qasper_canonical_order() -> None:
     assert [item["text"] for item in response.evidence_bundle["items"]] == expected
 
 
-def test_boolean_prompt_renders_disjoint_sentences_as_independent_spans() -> None:
+def test_boolean_prompt_renders_one_continuous_proposition_window() -> None:
     text = (
         "We evaluate the model on clinical tasks. "
         + ("Unrelated background material. " * 90)
@@ -219,9 +219,10 @@ def test_boolean_prompt_renders_disjoint_sentences_as_independent_spans() -> Non
 
     assert " … " not in bounded
     assert "[evidence_ref=E1:S1]" in bounded
-    assert "[evidence_ref=E1:S2]" in bounded
+    assert "[evidence_ref=E1:S2]" not in bounded
+    assert bounded.endswith("We evaluate the model on clinical tasks.")
     spans = json.loads(trace["verifier_input_evidence_spans"])
-    assert [entry["evidence_ref"] for entry in spans] == ["E1:S1", "E1:S2"]
+    assert [entry["evidence_ref"] for entry in spans] == ["E1:S1"]
     assert all(entry["span_start"] < entry["span_end"] for entry in spans)
 
 

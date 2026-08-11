@@ -21,6 +21,7 @@ from .qasper_quote_support import (
     evidence_ref_for_quote,
     parse_boolean_verdict,
     quality_control_quote_for_verdict,
+    resolve_evidence_ref_to_quote,
 )
 
 QASPER_ANSWERABILITY_CONTRACT = "qasper_answerability.v15"
@@ -329,6 +330,12 @@ def _model_boolean_result(
             for value in budget_trace.get("verifier_input_evidence_refs", "").split(",")
             if value.strip()
         ),
+        quote_ref_resolver=lambda ref, value: resolve_evidence_ref_to_quote(
+            ref,
+            value,
+            evidence_items,
+            budget_trace.get("verifier_evidence_alias_mapping", ""),
+        ),
     )
     parse_trace = {**budget_trace, **parse_trace}
     if not verdict:
@@ -382,6 +389,17 @@ def _invalid_boolean_verifier_result(
         parse_trace.get("repair_attempted") == "true"
         and parse_trace.get("repair_status") == "error"
     )
+    quote_ref_status = str(parse_trace.get("quote_ref_validation_status") or "")
+    failure_reason = (
+        quote_ref_status
+        if quote_ref_status
+        in {
+            "evidence_ref_quote_mismatch",
+            "evidence_ref_unresolved",
+            "quote_identity_unresolved",
+        }
+        else "invalid_verifier_schema_after_repair"
+    )
     return QasperAnswerabilityResult(
         answer="unanswerable" if repair_failed else candidate_answer,
         trace=_trace(
@@ -394,7 +412,7 @@ def _invalid_boolean_verifier_result(
             ),
             parse_trace=parse_trace,
             primary_answer=candidate_polarity or "unanswerable",
-            reason="invalid_verifier_schema_after_repair" if repair_failed else "",
+            reason=failure_reason if repair_failed else "",
         ),
     )
 

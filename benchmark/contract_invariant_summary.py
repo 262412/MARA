@@ -220,6 +220,7 @@ def _verification_summary(
     metrics: list[dict[str, float | None]],
 ) -> dict[str, float | None]:
     return {
+        **_required_verification_summary(metrics),
         "qasper_stale_verifier_state_count": _sum(
             metrics,
             "qasper_stale_verifier_state_count",
@@ -282,6 +283,18 @@ def _verification_summary(
             "citation_nonminimal_count",
         ),
     }
+
+
+def _required_verification_summary(
+    metrics: list[dict[str, float | None]],
+) -> dict[str, float]:
+    keys = (
+        "qasper_required_verification_applicable_count",
+        "qasper_required_slot_nonempty_state_count",
+        "qasper_required_slot_empty_state_count",
+        "qasper_required_evidence_coverage_missing_count",
+    )
+    return {key: _sum(metrics, key) for key in keys}
 
 
 def _source_summary(

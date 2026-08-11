@@ -126,7 +126,7 @@ def _boolean_slots(
             EvidenceSlot(
                 slot_id="support:boolean_proposition",
                 role="support",
-                metric=metric,
+                metric=semantic_boolean_proposition_metric(question, metric),
                 modality="auto",
                 required_for_retrieval=not typed_scope,
                 required_for_verification=True,

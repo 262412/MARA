@@ -9,6 +9,7 @@ from ktem.docqa.evidence_identity import identity_of
 from .metrics import is_abstention_answer
 from .qasper_boolean_scope import scope_valid_support_items
 from .qasper_deterministic_support import deterministic_support_ids
+from .qasper_quote_binding import _bind_authoritative_quote
 
 
 def bind_answerability_support(
@@ -40,6 +41,9 @@ def bind_answerability_support(
         items = _validated_boolean_support(prediction, answer, trace, items)
     if not items:
         return
+    canonical_binding = _unique_canonical_binding(trace, evidence_items)
+    if canonical_binding is not None:
+        items = [canonical_binding.item]
     support = min(items, key=lambda item: len(_item_text(item)))
     support_id = identity_of(support).key
     prediction["predicted_evidence"] = [_item_text(support)]
@@ -81,7 +85,38 @@ def bind_answerability_support(
         }
         target["verified_claim_support_spans"] = support_spans
         target["answer_dependent_state"] = "post_contract_verified"
-    _promote_authoritative_query_plan(targets, support_id)
+    if canonical_binding is not None and canonical_binding.evidence_id == support_id:
+        _promote_authoritative_query_plan(targets, support_id)
+
+
+def _unique_canonical_binding(
+    trace: dict[str, Any],
+    evidence_items: list[dict[str, Any]],
+) -> Any | None:
+    quote = str(trace.get("evidence_quote") or "").strip()
+    if not quote:
+        return None
+    evidence_ref = str(trace.get("evidence_ref") or "").strip()
+    alias_mapping = str(trace.get("verifier_evidence_alias_mapping") or "")
+    bound, _status = _bind_authoritative_quote(
+        evidence_ref,
+        quote,
+        evidence_items,
+        alias_mapping=alias_mapping,
+    )
+    if bound is None and evidence_ref and not alias_mapping:
+        bound, _status = _bind_authoritative_quote(
+            "",
+            quote,
+            evidence_items,
+            alias_mapping="",
+        )
+    if bound is None:
+        return None
+    authoritative_id = str(trace.get("authoritative_quote_evidence_id") or "").strip()
+    if authoritative_id and authoritative_id != bound.evidence_id:
+        return None
+    return bound
 
 
 def _promote_authoritative_query_plan(

@@ -32,7 +32,7 @@ def _item(
     }
 
 
-def test_missing_boolean_verification_slot_does_not_request_second_round():
+def test_missing_boolean_verification_slot_requests_one_second_round():
     plan = build_query_plan(
         QUALITY_CONTROL_QUESTION,
         answer_type="boolean",
@@ -46,7 +46,9 @@ def test_missing_boolean_verification_slot_does_not_request_second_round():
 
     requests = missing_slot_requests(plan)
 
-    assert requests == []
+    assert len(requests) == 1
+    assert requests[0]["slot_id"] == "support:boolean_proposition"
+    assert "quality" in requests[0]["query"]
 
 
 def test_e971_first_round_artifact_candidate_stays_pending_verification():

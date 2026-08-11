@@ -6,11 +6,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
+from ktem.docqa.boolean_proposition_evidence import boolean_proposition_evidence_score
 from ktem.docqa.evidence_identity import exact_evidence_aliases, identity_of
 
 from .metrics import is_abstention_answer
 from .qasper_authority import required_authority_audit
-from .qasper_boolean import stemmed_content_tokens
+from .qasper_boolean import is_boolean_question, stemmed_content_tokens
 from .qasper_boolean_scope import resolve_closed_scope_boolean
 from .qasper_evidence_identity import canonical_evidence_sort_key, canonical_prompt_span
 from .qasper_prompt_budget_utils import budget_trace as _budget_trace
@@ -217,7 +218,15 @@ def _ranked_evidence_records(
     )
     ordered_priority = [row for row in rows if row.required]
     seen_priority = {row.identity for row in ordered_priority}
-    if not _looks_boolean(question):
+    boolean_question = is_boolean_question(question)
+    if boolean_question:
+        _append_boolean_priority(
+            ordered_priority,
+            rows,
+            seen_priority,
+            question=question,
+        )
+    else:
         _append_relation_priority(
             ordered_priority,
             rows,
@@ -238,8 +247,6 @@ def _ranked_evidence_records(
         question=question,
         candidate_answer=substantive_candidate,
     )
-    if _looks_boolean(question):
-        _append_boolean_priority(ordered_priority, rows, seen_priority)
     return [
         *ordered_priority,
         *(row for row in rows if row.identity not in seen_priority),
@@ -273,7 +280,9 @@ def _evidence_rows(
         seen.add(stable_key)
         span_texts: tuple[str, ...] = (text,)
         spans: tuple[tuple[int, int], ...] = ((0, len(text)),)
-        if len(text) > 1200 and (_looks_boolean(question) or bool(required & aliases)):
+        if len(text) > 1200 and (
+            is_boolean_question(question) or bool(required & aliases)
+        ):
             span_texts, spans = _boolean_proposition_snippet(
                 text,
                 question,
@@ -320,49 +329,46 @@ def _boolean_proposition_snippet(
     text: str,
     question: str,
 ) -> tuple[tuple[str, ...], tuple[tuple[int, int], ...]]:
-    statements = [
-        (match.start(), match.end(), match.group(0).strip())
-        for match in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", text)
-        if match.group(0).strip()
-    ]
+    statements = _sentence_spans(text)
     if not statements:
         bounded = _truncate_evidence(text, 900)
         return (bounded,), ((0, len(bounded)),)
     question_tokens = stemmed_content_tokens(question)
-    ranked = sorted(
-        statements,
-        key=lambda row: (
-            -len(question_tokens & stemmed_content_tokens(row[2])),
-            -int(_has_negation(row[2])),
-            len(row[2]),
-            row[0],
+    anchor = _closed_scope_statement(text, question) or _quality_control_statement(
+        statements, question
+    )
+    windows = [
+        (statements[start][0], statements[end - 1][1])
+        for start in range(len(statements))
+        for end in range(start + 1, min(len(statements), start + 3) + 1)
+    ]
+    if anchor is not None:
+        anchored = [
+            span for span in windows if span[0] <= anchor[0] and anchor[1] <= span[1]
+        ]
+        if anchored:
+            windows = anchored
+    start, end = min(
+        windows,
+        key=lambda span: (
+            -len(question_tokens & stemmed_content_tokens(text[span[0] : span[1]])),
+            span[1] - span[0],
+            span[0],
         ),
     )
-    best = (
-        _closed_scope_statement(text, question)
-        or _quality_control_statement(statements, question)
-        or ranked[0]
-    )
-    selected = [best]
-    best_negative = _has_negation(best[2])
-    opposite = next(
-        (
-            row
-            for row in ranked[1:]
-            if _has_negation(row[2]) is not best_negative
-            and question_tokens & stemmed_content_tokens(row[2])
-        ),
-        None,
-    )
-    if opposite is not None:
-        selected.append(opposite)
-    selected.sort(key=lambda row: row[0])
-    bounded_statements = [_truncate_evidence(row[2], 900) for row in selected]
-    spans = tuple(
-        (row[0], row[0] + len(bounded))
-        for row, bounded in zip(selected, bounded_statements)
-    )
-    return tuple(bounded_statements), spans
+    return (text[start:end],), ((start, end),)
+
+
+def _sentence_spans(text: str) -> list[tuple[int, int, str]]:
+    statements: list[tuple[int, int, str]] = []
+    for match in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", text):
+        raw = match.group(0)
+        if not raw.strip():
+            continue
+        start = match.start() + len(raw) - len(raw.lstrip())
+        end = match.end() - (len(raw) - len(raw.rstrip()))
+        statements.append((start, end, text[start:end]))
+    return statements
 
 
 def _closed_scope_statement(
@@ -537,19 +543,23 @@ def _append_boolean_priority(
     ordered: list[_EvidenceRow],
     rows: list[_EvidenceRow],
     seen: set[str],
+    *,
+    question: str,
 ) -> None:
     for negative in (False, True):
-        candidate = next(
-            (
-                row
-                for row in rows
-                if row.identity not in seen
-                and _has_negation(row.text) is negative
-                and row.relevance > 0
-            ),
-            None,
-        )
-        if candidate is not None:
+        candidates = [
+            (boolean_proposition_evidence_score(question, row.item), row)
+            for row in rows
+            if row.identity not in seen
+            and _has_negation(row.text) is negative
+            and row.relevance > 0
+        ]
+        compatible = [(score, row) for score, row in candidates if score > 0]
+        if compatible:
+            _score, candidate = min(
+                compatible,
+                key=lambda value: (-value[0], -value[1].relevance, value[1].stable_key),
+            )
             ordered.append(candidate)
             seen.add(candidate.identity)
 
@@ -563,16 +573,6 @@ def _item_text(item: dict[str, Any]) -> str:
         str(item.get(field) or "").strip()
         for field in ("text", "ocr_text", "vlm_text", "caption")
         if str(item.get(field) or "").strip()
-    )
-
-
-def _looks_boolean(question: str) -> bool:
-    return bool(
-        re.match(
-            r"^\s*(?:is|are|was|were|do|does|did|can|could|has|have|had|will|would)\b",
-            str(question or ""),
-            flags=re.IGNORECASE,
-        )
     )
 
 

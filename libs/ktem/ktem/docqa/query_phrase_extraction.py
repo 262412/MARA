@@ -59,12 +59,26 @@ def metric_phrase(
 
 
 def semantic_boolean_proposition_question(question: str) -> str:
-    """Remove only explicit two-page locators from proposition semantics."""
+    """Remove locators and narrow Boolean framing from proposition semantics."""
 
     text = str(question or "").strip()
-    cleaned, count = _EXPLICIT_PAGE_PAIR_RE.subn(" ", text)
-    if not count:
-        return text
+    cleaned = _EXPLICIT_PAGE_PAIR_RE.sub(" ", text)
+    cleaned = re.sub(r"^\s*overall\s*,\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(
+        r"^(\s*(?:is|are|was|were|do|does|did|has|have|had|can|could|"
+        r"will|would|should|may|might)\s+)having\s+",
+        r"\1",
+        cleaned,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"^\s*having\s+", "", cleaned, count=1, flags=re.IGNORECASE)
+    cleaned = re.sub(
+        r"\bacross\s+(?=multiple\b)",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
     cleaned = re.sub(r"\s+([,;:?.!])", r"\1", cleaned)
     return re.sub(r"\s+", " ", cleaned).strip(" ,;:")
 

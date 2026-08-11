@@ -24,6 +24,7 @@ from .qasper_quote_binding import (
     _BoundQuote,
     bind_evidence_ref_to_quote,
     evidence_ref_for_quote,
+    resolve_evidence_ref_to_quote,
 )
 
 __all__ = [
@@ -33,6 +34,7 @@ __all__ = [
     "evidence_ref_for_quote",
     "parse_boolean_verdict",
     "quality_control_quote_for_verdict",
+    "resolve_evidence_ref_to_quote",
     "resolve_authoritative_quote_support",
     "resolve_verified_quote_support",
 ]

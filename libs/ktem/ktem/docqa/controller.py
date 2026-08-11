@@ -6,7 +6,10 @@ from typing import Any
 
 from .evidence import build_evidence_bundle
 from .query_planning import ensure_request_query_plan, request_planning_question
-from .retrieval_adequacy import retrieval_adequacy_issue
+from .retrieval_adequacy import (
+    missing_qasper_verification_slot_count,
+    retrieval_adequacy_issue,
+)
 from .verification import VerifyDecision, verify_decision, with_verification_evidence
 from .workflow import build_workflow_plan
 from .workflow import executor_registry as workflow_executor_registry
@@ -292,6 +295,11 @@ def evaluate_retrieval_quality(
             ),
         )
         missing_required_slots = _missing_retrieval_slot_count(evidence_metadata)
+        missing_qasper_slots = missing_qasper_verification_slot_count(
+            evidence_metadata,
+            domain=verification_domain,
+        )
+        missing_required_slots += missing_qasper_slots
         typed_execution_is_authoritative = (
             evidence_metadata.get("typed_adequacy_status") == "good"
             and evidence_metadata.get("adequacy_decision_authority")
