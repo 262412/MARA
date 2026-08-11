@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,10 @@ import {
 const desktopRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
+);
+const buildScript = readFileSync(
+  path.join(desktopRoot, "scripts", "build-sidecar.mjs"),
+  "utf8",
 );
 
 test("excludes optional python-magic from the native Sidecar bundle", () => {
@@ -48,6 +52,16 @@ test("declares only providers whose dependencies are native bundle requirements"
     assert.ok(requiredSidecarModules.includes(provider.module), provider.module);
     assert.ok(!excludedSidecarModules.includes(provider.module), provider.module);
   }
+});
+
+test("isolates PyInstaller analysis from the source checkout", () => {
+  assert.match(buildScript, /mkdtempSync\(\s*path\.join\(tmpdir\(\)/);
+  assert.match(buildScript, /MARA_DESKTOP_DATA_DIR: buildRuntimeRoot/);
+  assert.match(buildScript, /KH_APP_DATA_DIR: path\.join\(/);
+  assert.match(buildScript, /THEFLOW_SETTINGS_MODULE: "ktem\.default_flowsettings"/);
+  assert.match(buildScript, /THEFLOW_TEMP_PATH: path\.join\(buildRuntimeRoot, "tmp"\)/);
+  assert.equal(buildScript.match(/cwd: buildRuntimeRoot/g)?.length, 2);
+  assert.match(buildScript, /finally \{[\s\S]*rmSync\(buildRuntimeRoot/);
 });
 
 test("includes the storage, embedding, and modern Office modules used by Gate 3", () => {
