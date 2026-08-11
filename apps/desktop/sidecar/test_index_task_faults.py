@@ -34,6 +34,31 @@ def wait_for_terminal(manager: IndexTaskManager, task_id: str) -> dict:
 
 
 class IndexTaskFaultTest(unittest.TestCase):
+    def test_unwritable_journal_is_non_retryable_and_rolls_back_task(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            journal = FailOnceJournal(
+                JsonIndexTaskJournal(Path(temporary_directory) / "index-tasks.json"),
+                PermissionError(13, "denied", "/private/state/index-tasks.tmp"),
+            )
+            manager = IndexTaskManager(SuccessfulIndexService(), journal=journal)
+            try:
+                with self.assertRaises(IndexTaskPersistenceError) as raised:
+                    manager.create_task(
+                        ["/private/source/paper.txt"],
+                        reindex=False,
+                        idempotency_key="unwritable-state-1",
+                    )
+
+                self.assertEqual(
+                    raised.exception.code,
+                    "index_runtime_storage_unwritable",
+                )
+                self.assertFalse(raised.exception.retryable)
+                self.assertNotIn("/private", str(raised.exception))
+                self.assertIsNone(manager.get_latest_task())
+            finally:
+                manager.close()
+
     def test_disk_full_rolls_back_unscheduled_task_and_recovers(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             journal = FailOnceJournal(
