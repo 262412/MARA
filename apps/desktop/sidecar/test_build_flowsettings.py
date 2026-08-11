@@ -1,34 +1,53 @@
 from __future__ import annotations
 
-import importlib
+import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 
 class BuildFlowsettingsTests(unittest.TestCase):
     def test_routes_build_time_theflow_state_to_the_isolated_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             runtime_root = Path(temp_dir).resolve()
-            with patch.dict(
-                os.environ,
-                {"MARA_DESKTOP_BUILD_RUNTIME_ROOT": str(runtime_root)},
-                clear=False,
-            ):
-                sys.modules.pop("sidecar.build_flowsettings", None)
-                settings = importlib.import_module("sidecar.build_flowsettings")
+            desktop_root = Path(__file__).resolve().parents[1]
+            env = os.environ.copy()
+            env["MARA_DESKTOP_BUILD_RUNTIME_ROOT"] = str(runtime_root)
+            env["PYTHONPATH"] = os.pathsep.join(
+                [str(desktop_root), env.get("PYTHONPATH", "")]
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import json; "
+                        "from sidecar import build_flowsettings as settings; "
+                        "print(json.dumps({"
+                        "'storage': settings.STORAGE['prefix'], "
+                        "'cache': settings.CACHE['path']}))"
+                    ),
+                ],
+                cwd=runtime_root,
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            settings = json.loads(result.stdout)
 
             self.assertEqual(
-                Path(settings.STORAGE["prefix"]),
+                Path(settings["storage"]),
                 runtime_root / "cache" / "theflow",
             )
             self.assertEqual(
-                Path(settings.CACHE["path"]),
+                Path(settings["cache"]),
                 runtime_root / "cache" / "components",
             )
+            self.assertFalse((runtime_root / ".theflow").exists())
 
 
 if __name__ == "__main__":
