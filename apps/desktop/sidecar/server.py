@@ -14,6 +14,10 @@ from pathlib import Path
 from typing import Annotated, Any, Protocol, cast
 from uuid import uuid4
 
+if os.environ.get("MARA_DESKTOP_DATA_DIR"):
+    os.environ.setdefault("THEFLOW_SETTINGS_MODULE", "ktem.default_flowsettings")
+    os.environ.setdefault("KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED", "1")
+
 import uvicorn
 from fastapi import BackgroundTasks, Depends, FastAPI
 from fastapi import Path as FastApiPath
@@ -27,6 +31,7 @@ from sidecar.application import (
     configure_desktop_data_root,
 )
 from sidecar.contracts import (
+    DoctorPayload,
     DoctorResponse,
     FileListResponse,
     ImportCapabilitiesResponse,
@@ -38,6 +43,7 @@ from sidecar.contracts import (
 from sidecar.file_routes import register_gate3_routes
 from sidecar.index_task_journal import JsonIndexTaskJournal
 from sidecar.index_tasks import IndexTaskManager
+from sidecar.maintenance_logging import configure_maintenance_logging
 from sidecar.query_routes import register_query_routes
 from sidecar.query_tasks import QueryService, QueryTaskManager
 from sidecar.session_routes import register_session_mutation_routes
@@ -100,6 +106,9 @@ class ApplicationService(Protocol):
         *,
         reindex: bool = False,
     ) -> dict[str, list[dict[str, Any]]]:
+        ...
+
+    def validate_indexing(self, paths: list[str]) -> None:
         ...
 
     def delete_file(self, file_id: str) -> list[dict[str, str]]:
@@ -231,6 +240,7 @@ def create_app(
             409: {"model": SidecarError},
             422: {"model": SidecarError},
             503: {"model": SidecarError},
+            507: {"model": SidecarError},
         },
     )
     service = application_service or DesktopApplicationService()
@@ -241,7 +251,11 @@ def create_app(
             JsonIndexTaskJournal(_index_task_journal_path()),
             smoke_fault,
         )
-        task_manager = IndexTaskManager(index_service, journal=journal)
+        task_manager = IndexTaskManager(
+            index_service,
+            journal=journal,
+            validator=service.validate_indexing,
+        )
     answer_task_manager = query_task_manager or QueryTaskManager(
         cast(QueryService, service),
         journal_path=_query_task_journal_path(),
@@ -404,9 +418,11 @@ def _register_data_routes(app: FastAPI) -> None:
         dependencies=protected_without_query,
     )
     def get_doctor(request: Request) -> DoctorResponse:
+        request_id = _request_id(request)
+        doctor = _call_service(request, "get_doctor")
         return DoctorResponse(
-            request_id=_request_id(request),
-            doctor=_call_service(request, "get_doctor"),
+            request_id=request_id,
+            doctor=DoctorPayload.model_validate({**doctor, "request_id": request_id}),
         )
 
     @app.get(
@@ -507,7 +523,9 @@ def main() -> int:
         print("MARA_DESKTOP_DATA_DIR is required", file=sys.stderr)
         return 2
 
-    configure_desktop_data_root(Path(data_root))
+    desktop_data_root = Path(data_root)
+    configure_desktop_data_root(desktop_data_root)
+    configure_maintenance_logging(desktop_data_root)
     app = create_app(
         token,
         smoke_fault=os.environ.get("MARA_DESKTOP_SMOKE_FAULT") or None,

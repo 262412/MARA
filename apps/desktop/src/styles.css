@@ -556,6 +556,35 @@ kbd {
   background: var(--panel-elevated);
 }
 
+.indexing-readiness-card {
+  display: flex;
+  padding: 14px 16px;
+  border: 1px solid #7d6944;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: #2d291d;
+}
+
+.indexing-readiness-card h2,
+.indexing-readiness-card p {
+  margin: 0;
+}
+
+.indexing-readiness-card h2 {
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.indexing-readiness-card p,
+.indexing-readiness-card span {
+  color: var(--secondary);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .index-task-card h2,
 .index-task-card p {
   margin: 0;
@@ -579,12 +608,14 @@ kbd {
 }
 
 .file-action-error {
+  display: grid;
   padding: 10px 12px;
   border: 1px solid #7d554b;
   border-radius: 8px;
   margin: 0 0 14px;
   color: #efb2a2;
   font-size: 11px;
+  gap: 3px;
   background: #2f211e;
 }
 

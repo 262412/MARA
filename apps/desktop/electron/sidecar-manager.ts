@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 import type {
@@ -570,6 +570,18 @@ export class SidecarManager {
 
     const token = randomBytes(32).toString("hex");
     const command = this.sidecarCommand();
+    const runtimeWorkingDirectory = path.join(this.options.dataRoot, "tmp");
+    mkdirSync(runtimeWorkingDirectory, { recursive: true });
+    const repositoryRoot = path.resolve(this.options.appPath, "..", "..");
+    const developmentPythonPath = [
+      this.options.appPath,
+      path.join(repositoryRoot, "libs", "ktem"),
+      path.join(repositoryRoot, "libs", "kotaemon"),
+      path.join(repositoryRoot, "libs", "slide_cli"),
+      process.env.PYTHONPATH,
+    ]
+      .filter((entry): entry is string => Boolean(entry))
+      .join(path.delimiter);
     const child = spawn(command.executable, command.args, {
       env: {
         ...process.env,
@@ -581,8 +593,13 @@ export class SidecarManager {
         MARA_DESKTOP_DATA_DIR: this.options.dataRoot,
         MARA_DESKTOP_TOKEN: token,
         MARA_DESKTOP_SMOKE_FAULT: this.options.smokeFault ?? "",
+        THEFLOW_SETTINGS_MODULE: "ktem.default_flowsettings",
+        KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED: "1",
+        ...(!this.options.isPackaged
+          ? { PYTHONPATH: developmentPythonPath }
+          : {}),
       },
-      cwd: this.options.isPackaged ? undefined : this.options.appPath,
+      cwd: runtimeWorkingDirectory,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });

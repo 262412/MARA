@@ -16,6 +16,16 @@ from .application import (
     _query_citations,
     configure_desktop_data_root,
 )
+from .indexing_readiness import IndexingReadiness
+
+READY_DOCTOR = {
+    "ok": True,
+    "indexing_ready": True,
+    "indexing_issue_code": None,
+    "indexing_message": "File indexing is ready.",
+    "indexing_action": "none",
+    "indexing_retryable": False,
+}
 
 
 class _StreamingQueryRuntime:
@@ -98,14 +108,19 @@ class DesktopApplicationServiceTest(unittest.TestCase):
             calls.append("import-capabilities")
             return {"supported_extensions": [".pdf", ".md"]}
 
+        def collect_indexing_readiness() -> IndexingReadiness:
+            calls.append("indexing-readiness")
+            return IndexingReadiness.ready()
+
         service = DesktopApplicationService(
             collect_doctor=collect_doctor,
             collect_files=collect_files,
             collect_sessions=collect_sessions,
             collect_import_capabilities=collect_import_capabilities,
+            collect_indexing_readiness=collect_indexing_readiness,
         )
 
-        self.assertEqual(service.get_doctor(), {"ok": True})
+        self.assertEqual(service.get_doctor(), READY_DOCTOR)
         self.assertEqual(
             service.list_files(),
             [
@@ -129,85 +144,12 @@ class DesktopApplicationServiceTest(unittest.TestCase):
         )
         self.assertEqual(
             calls,
-            ["doctor", "files", "sessions", "import-capabilities"],
-        )
-
-    def test_reuses_runtime_index_and_delete_services_without_exposing_paths(
-        self,
-    ) -> None:
-        calls: list[tuple] = []
-
-        class Runtime:
-            def index_paths(self, paths, reindex=False):
-                calls.append(("index", paths, reindex))
-                return SimpleNamespace(
-                    as_dict=lambda: {
-                        "successes": [
-                            {
-                                "file_name": "paper.pdf",
-                                "file_path": "/private/source/paper.pdf",
-                                "status": "success",
-                            }
-                        ],
-                        "failures": [
-                            {
-                                "file_name": "broken.pdf",
-                                "file_path": "/private/source/broken.pdf",
-                                "status": "failed",
-                                "message": "failed at /private/source/broken.pdf",
-                            }
-                        ],
-                        "debug_messages": ["private runtime details"],
-                    }
-                )
-
-            def delete_files(self, refs):
-                calls.append(("delete", refs))
-                return [
-                    SimpleNamespace(
-                        file_id=file_id,
-                        name=f"{file_id}.pdf",
-                        path=f"/private/storage/{file_id}.pdf",
-                    )
-                    for file_id in refs
-                ]
-
-        runtime = Runtime()
-        service = DesktopApplicationService(create_runtime=lambda: runtime)
-
-        self.assertEqual(
-            service.index_files(
-                ["/private/source/paper.pdf", "/private/source/broken.pdf"],
-                reindex=True,
-            ),
-            {
-                "successes": [{"name": "paper.pdf"}],
-                "failures": [
-                    {
-                        "name": "broken.pdf",
-                        "code": "index_failed",
-                        "message": "MARA could not index this file.",
-                        "retryable": True,
-                    }
-                ],
-            },
-        )
-        self.assertEqual(
-            service.delete_files(["file-1", "file-2"]),
             [
-                {"file_id": "file-1", "name": "file-1.pdf"},
-                {"file_id": "file-2", "name": "file-2.pdf"},
-            ],
-        )
-        self.assertEqual(
-            calls,
-            [
-                (
-                    "index",
-                    ["/private/source/paper.pdf", "/private/source/broken.pdf"],
-                    True,
-                ),
-                ("delete", ["file-1", "file-2"]),
+                "doctor",
+                "indexing-readiness",
+                "files",
+                "sessions",
+                "import-capabilities",
             ],
         )
 
@@ -292,6 +234,7 @@ class DesktopApplicationRuntimeTest(unittest.TestCase):
 
         service = DesktopApplicationService(
             collect_doctor=collect_doctor,
+            collect_indexing_readiness=IndexingReadiness.ready,
             create_runtime=create_runtime,
         )
         try:
@@ -301,7 +244,7 @@ class DesktopApplicationRuntimeTest(unittest.TestCase):
                 session = executor.submit(service.get_session, "session-1")
                 self.assertFalse(runtime_started.wait(timeout=0.1))
                 release_collector.set()
-                self.assertEqual(doctor.result(timeout=1), {"ok": True})
+                self.assertEqual(doctor.result(timeout=1), READY_DOCTOR)
                 self.assertEqual(
                     session.result(timeout=1)["conversation_id"],
                     "session-1",

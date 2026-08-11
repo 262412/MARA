@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -10,12 +10,17 @@ import {
   requiredSidecarDataPackages,
   requiredSidecarModules,
   requiredTiktokenEncodings,
+  supportedDesktopEmbeddingProviders,
   tiktokenCacheDestination,
 } from "./sidecar-bundle-config.mjs";
 
 const desktopRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
+);
+const buildScript = readFileSync(
+  path.join(desktopRoot, "scripts", "build-sidecar.mjs"),
+  "utf8",
 );
 
 test("excludes optional python-magic from the native Sidecar bundle", () => {
@@ -31,6 +36,45 @@ test("excludes optional indexing accelerators and provider SDKs", () => {
   ]) {
     assert.ok(excludedSidecarModules.includes(moduleName), moduleName);
   }
+});
+
+test("declares only providers whose dependencies are native bundle requirements", () => {
+  assert.deepEqual(supportedDesktopEmbeddingProviders, [
+    {
+      module: "openai",
+      types: [
+        "kotaemon.embeddings.OpenAIEmbeddings",
+        "kotaemon.embeddings.AzureOpenAIEmbeddings",
+      ],
+    },
+  ]);
+  for (const provider of supportedDesktopEmbeddingProviders) {
+    assert.ok(requiredSidecarModules.includes(provider.module), provider.module);
+    assert.ok(!excludedSidecarModules.includes(provider.module), provider.module);
+  }
+});
+
+test("isolates PyInstaller analysis from the source checkout", () => {
+  assert.match(buildScript, /mkdtempSync\(\s*path\.join\(tmpdir\(\)/);
+  assert.match(
+    buildScript,
+    /MARA_DESKTOP_BUILD_RUNTIME_ROOT: buildRuntimeRoot/,
+  );
+  assert.match(
+    buildScript,
+    /THEFLOW_SETTINGS_MODULE: "sidecar\.build_flowsettings"/,
+  );
+  assert.doesNotMatch(
+    buildScript,
+    /THEFLOW_SETTINGS_MODULE: "ktem\.default_flowsettings"/,
+  );
+  assert.match(buildScript, /THEFLOW_TEMP_PATH: path\.join\(buildRuntimeRoot, "tmp"\)/);
+  assert.equal(buildScript.match(/cwd: buildRuntimeRoot/g)?.length, 1);
+  assert.match(
+    buildScript,
+    /cwd: desktopRoot,\s*env: buildRuntimeEnvironment/,
+  );
+  assert.match(buildScript, /finally \{[\s\S]*rmSync\(buildRuntimeRoot/);
 });
 
 test("includes the storage, embedding, and modern Office modules used by Gate 3", () => {

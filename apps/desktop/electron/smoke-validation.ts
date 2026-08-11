@@ -141,6 +141,36 @@ export function assertPackagedSmoke(
   }
 }
 
+export function assertIndexingBlockedSmoke(
+  doctor: DesktopResult<DoctorPayload>,
+  attemptedIndex: DesktopResult<IndexTask>,
+  latestTask: DesktopResult<IndexTask | null>,
+): void {
+  if (!doctor.ok) {
+    throw new Error(`Doctor request failed: ${doctor.error.code}`);
+  }
+  if (
+    doctor.data.indexing_ready ||
+    doctor.data.indexing_issue_code !== "embedding_not_configured" ||
+    doctor.data.indexing_action !== "configure_embedding" ||
+    doctor.data.indexing_retryable
+  ) {
+    throw new Error("Unconfigured Desktop indexing did not fail closed");
+  }
+  if (attemptedIndex.ok) {
+    throw new Error("Unconfigured Desktop created an index task");
+  }
+  if (
+    attemptedIndex.error.code !== "embedding_not_configured" ||
+    attemptedIndex.error.retryable
+  ) {
+    throw new Error("Unconfigured Desktop returned the wrong index error");
+  }
+  if (!latestTask.ok || latestTask.data !== null) {
+    throw new Error("Unconfigured Desktop persisted an index task");
+  }
+}
+
 export function assertGate3DeleteSmoke(
   deleted: DesktopResult<string[]>,
   filesAfterDelete: DesktopResult<FileRecord[]>,

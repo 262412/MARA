@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld("desktop", {
     );
     return ipcRenderer.invoke("desktop:import-dropped-files", filePaths);
   },
+  openEmbeddingConfiguration: (): Promise<DesktopResult<boolean>> =>
+    ipcRenderer.invoke("desktop:open-embedding-configuration"),
   getLatestIndexTask: (): Promise<DesktopResult<IndexTask | null>> =>
     ipcRenderer.invoke("desktop:get-latest-index-task"),
   cancelIndexTask: (taskId: string): Promise<DesktopResult<IndexTask>> =>

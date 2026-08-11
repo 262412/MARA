@@ -7,10 +7,11 @@ from typing import Any, Protocol
 
 
 class IndexTaskPersistenceError(RuntimeError):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, *, retryable: bool) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+        self.retryable = retryable
 
 
 class IndexTaskJournal(Protocol):
@@ -54,8 +55,10 @@ def persistence_error_from(error: OSError) -> IndexTaskPersistenceError:
         return IndexTaskPersistenceError(
             "index_storage_full",
             "MARA does not have enough free storage to save indexing state.",
+            retryable=True,
         )
     return IndexTaskPersistenceError(
-        "index_persistence_failed",
-        "MARA could not save indexing state.",
+        "index_runtime_storage_unwritable",
+        "MARA Desktop cannot write its indexing cache or state.",
+        retryable=False,
     )

@@ -28,6 +28,7 @@ type DesktopBridge = {
   deleteSession(conversationId: string): Promise<DesktopResult<string>>;
   importFiles(): Promise<DesktopResult<IndexTask | null>>;
   importDroppedFiles(files: File[]): Promise<DesktopResult<IndexTask>>;
+  openEmbeddingConfiguration(): Promise<DesktopResult<boolean>>;
   getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>>;
   cancelIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;

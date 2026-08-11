@@ -13,6 +13,13 @@ Windows/Ubuntu 组合包验证；提交 `d087be1` 又关闭 DOCX、XLSX 和 PPTX
 Office 直接文本索引矩阵。剩余项不再包含原生构建流水线、文本类或现代 Office
 格式跨平台 smoke、批量删除、拖放 handoff 或这些故障恢复场景。
 
+2026-08-11 的索引首次启动修复基线为
+`4112e99f5f9d6beccb06f67e5e4e3e160beb3129`。当前源码已重新取得 Ubuntu 22.04
+原生构建、Ubuntu 24.04 同包复验、Windows Server 2022 原生构建和 Defender
+零检出证据；无 embedding 配置时会在创建任务前阻断，而不是生成必然失败的任务。
+当前包仍未在 Windows 10/11 干净产品 VM 验收，因此本切片继续保持
+**In progress**，不能标记为 `Verified`。
+
 本切片不复制 Gradio callback 或 DocQA 索引/删除业务逻辑，也不修改 `MARA`、
 `MARA-cli` 命令、Click 参数、Gradio 事件链、数据库 schema 或现有会话字段。
 
@@ -127,6 +134,69 @@ Windows 添加普通路径回退；后续 Studio/导出切片必须先实现等�
 当前基线重新验证已取得完整 package green：`ktem` 为 1,632 passed，`slide_cli`
 完整测试包也全部通过。Canonical runtime 新增的生成参数已同步到兼容 facade，并以
 独立提交锁定公开请求契约和历史位置参数 ABI。
+
+## 索引首次启动故障修复证据
+
+2026-08-11 的
+[Desktop Gate 3 运行 31458864077](https://github.com/262412/MARA/actions/runs/31458864077)
+基于提交 `4112e99f5f9d6beccb06f67e5e4e3e160beb3129`，三个任务全部成功：
+
+- TheFlow `STORAGE` 固定为 `<DesktopDataRoot>/cache/theflow`。Ubuntu 从只读系统
+  工作目录启动；Windows 工作目录 ACL 的写入探针得到拒绝。两平台都确认工作目录、
+  安装目录和干净 checkout 没有创建 `.theflow`，任务进度实际位于 Desktop cache。
+- Windows 先在干净 `%APPDATA%/MARA`、未创建任何 fixture 或任务且清除所有受支持
+  provider 变量的条件下启动。Doctor 返回 `indexing_ready=false`、
+  `embedding_not_configured`、`retryable=false`；Renderer 显示配置动作并禁用导入，
+  `latest_task=empty`、`task_created=false`，且没有 `index-tasks.json` 或 progress。
+- 随后才配置仅绑定 loopback 的 OpenAI-compatible provider。Windows 和 Ubuntu
+  均通过真实 TXT 与轻量/现代 Office 格式索引、Files 刷新、拖放 handoff 和一次
+  批量删除；Windows 记录 `import_success=true` 和 `count_10 status_success`。
+- `embedding_unavailable`、`index_storage_full`、`index_database_locked` 的打包态
+  故障恢复均成功；取消、部分失败、Sidecar 中断和 5 MiB canary 也保持通过。缺配置、
+  缺 provider 依赖、源文件权限、401/403、503、磁盘满、数据库锁和未知异常的稳定
+  code/retryable/脱敏契约另由 Sidecar 单元与响应契约测试覆盖。
+- OpenAI/Azure 是 Desktop 可选默认 provider，包内真实包含 `openai`；Google 不属于
+  当前 Desktop 默认支持范围，不会因占位 key 或缺失包被选择。维护日志只记录
+  request/task ID、稳定类别和异常类型，并写入 `<DesktopDataRoot>/logs`。
+
+| 平台/产物               | Artifact ID | 压缩大小    | Actions digest                                                     |
+| ----------------------- | ----------- | ----------- | ------------------------------------------------------------------ |
+| Windows 完整组合包      | 9089193810  | 410,623,997 | `98ec06d99c6b5d69e922f4c627337aef22cdb73dedb9b1bbf11527b17024df53` |
+| Windows smoke 诊断      | 9089183113  | 7,711       | `812ffbd6868b4a8abbaaf25e0ac4ba798701f375f6ae033c96a0877ddd08a656` |
+| Windows Defender 诊断   | 9089183369  | 359         | `c0f8b88b4cd7ebccf0ed23b323e456481e2ddd22486f7ab953ea220ec7986863` |
+| Ubuntu 22.04 完整组合包 | 9089178740  | 427,772,478 | `2471a8aff30942d98adeba38e6eb383e73be9c474ef41aa924fcbb692819e886` |
+| Ubuntu 22.04 包体测量   | 9089178992  | 9,183       | `a7a0722f4965e6d0cfec129d9a994dd08a85e0a342974f3198ca9d0c0c984294` |
+
+| 指标                   | Windows Server 2022                                                | Ubuntu 22.04                                                       |
+| ---------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| 发布目录 apparent size | 1,016,678,939 bytes                                                | 1,105,421,035 bytes                                                |
+| 发布目录文件数         | 2,741                                                              | 2,142                                                              |
+| 首段 smoke 耗时        | 17.023 秒                                                          | 15.94 秒                                                           |
+| 首段峰值内存           | 96,604,160 bytes                                                   | 548,592 KiB                                                        |
+| Sidecar SHA-256        | `7b03128d691844518f7ca7f67706becdbd666a22c85aa6969f78608c1562fb73` | `c267bbf5705c422d77c698fa3b41005d4316bbc45ae658b4e17e261c28934db8` |
+| 工作目录               | ACL write denied                                                   | system read-only                                                   |
+| Desktop 数据根         | `%APPDATA%/MARA`                                                   | Desktop-owned XDG data root                                        |
+| 外部 `.theflow`        | 工作目录、安装目录、checkout 均不存在                              | 工作目录、安装目录、checkout 均不存在                              |
+
+Defender 证据确认防病毒和反恶意软件服务开启，移除 hosted runner 的整盘排除，启用
+archive scanning，并得到 `scan_result=no_detections`。完整 Windows 包仍只在扫描成功
+后上传。Ubuntu 24.04 使用 artifact `9089178740` 的同一 Ubuntu 22.04 包完成复验。
+
+本地当前产品源码也从 `/usr` 启动自包含 Linux 包完成同一真实索引/删除与无配置阻断；
+仓库中既有、未由本修复创建的 `.theflow` 清单哈希在 smoke 前后均为
+`7c9e3ab5fe92e0ce34661ca850dad72d187f778c5d167a1f02b0b566f823a38b`，未删除、
+迁移或解释。补充本地包哈希为：Electron 可执行文件
+`84e1078c8f38659f3785fec90b68ff47dcb7b5ed94e97e4e4cc6dd3290758991`、Sidecar
+`31b754809feda4db698ff5a91ad0b37a37e9737e6f7f39c390ee13770b04e137`、归档
+`2b32ac9eeaf15466c350a8d5171d219851e805c5dd62b94f6755da335adda6f9`。
+
+可下载包已发布到
+[Gate 3 Indexing Preview 4112e99](https://github.com/262412/MARA/releases/tag/desktop-gate3-preview-4112e99)：
+[Windows x64 ZIP](https://github.com/262412/MARA/releases/download/desktop-gate3-preview-4112e99/MARA-Desktop-Gate3-4112e99-Windows-x64.zip)、
+[Linux x64 tar.gz](https://github.com/262412/MARA/releases/download/desktop-gate3-preview-4112e99/MARA-Desktop-Gate3-4112e99-Linux-x64.tar.gz)和
+[SHA256SUMS](https://github.com/262412/MARA/releases/download/desktop-gate3-preview-4112e99/SHA256SUMS.txt)。
+该发布明确标记为 prerelease；它提供当前自动化验收包，不替代 Windows 10/11 产品
+VM 验收。
 
 ## 跨平台 CI 证据
 

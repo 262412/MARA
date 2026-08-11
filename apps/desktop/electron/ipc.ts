@@ -39,6 +39,7 @@ export type DesktopIpcOperations = {
   deleteSession(conversationId: string): Promise<DesktopResult<string>>;
   importFiles(): Promise<DesktopResult<IndexTask | null>>;
   importDroppedFiles(filePaths: string[]): Promise<DesktopResult<IndexTask>>;
+  openEmbeddingConfiguration(): Promise<DesktopResult<boolean>>;
   getLatestIndexTask(): Promise<DesktopResult<IndexTask | null>>;
   cancelIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
   retryIndexTask(taskId: string): Promise<DesktopResult<IndexTask>>;
@@ -264,6 +265,10 @@ export function registerDesktopIpc(
     createTrustedPathListIpcHandler((filePaths) =>
       operations.importDroppedFiles(filePaths),
     ),
+  );
+  registrar.handle(
+    "desktop:open-embedding-configuration",
+    createTrustedIpcHandler(() => operations.openEmbeddingConfiguration()),
   );
   registrar.handle(
     "desktop:get-latest-index-task",

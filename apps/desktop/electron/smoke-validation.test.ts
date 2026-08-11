@@ -5,6 +5,7 @@ import type { DesktopResult, RuntimeStatus } from "../shared/runtime-contracts";
 import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { FileRecord } from "../shared/file-contracts";
 import type { ImportCapabilities } from "../shared/file-contracts";
+import type { IndexTask } from "../shared/index-task-contracts";
 import type { QueryTask } from "../shared/query-contracts";
 import type {
   SessionDetail,
@@ -21,6 +22,7 @@ import {
   assertGate3CancellationSmoke,
   assertGate3CancelRetrySmoke,
   assertGate3IndexSmoke,
+  assertIndexingBlockedSmoke,
   assertGate3ModelUnavailableSmoke,
   assertGate3QueryCancelSmoke,
   assertGate3QueryRetrySmoke,
@@ -78,6 +80,12 @@ const doctor: DesktopResult<DoctorPayload> = {
     graph_cache_dir: "/private/runtime/path",
     issues: [],
     warnings: [],
+    indexing_ready: true,
+    indexing_issue_code: null,
+    indexing_message: "File indexing is ready.",
+    indexing_action: "none",
+    indexing_retryable: false,
+    request_id: "doctor-smoke",
   },
 };
 const files: DesktopResult<FileRecord[]> = {
@@ -513,6 +521,48 @@ test("accepts a successful packaged background index and refreshed Files", () =>
         indexedFiles,
       ),
     /did not succeed/,
+  );
+});
+
+test("blocks an unconfigured packaged index before any task is created", () => {
+  const blockedDoctor: DesktopResult<DoctorPayload> = {
+    ok: true,
+    data: {
+      ...doctor.data,
+      indexing_ready: false,
+      indexing_issue_code: "embedding_not_configured",
+      indexing_message: "Configure a supported embedding model.",
+      indexing_action: "configure_embedding",
+      indexing_retryable: false,
+      request_id: "doctor-unconfigured",
+    },
+  };
+  const rejected: DesktopResult<IndexTask> = {
+    ok: false,
+    error: {
+      code: "embedding_not_configured",
+      message: "Configure a supported embedding model.",
+      details: null,
+      retryable: false,
+      request_id: "index-unconfigured",
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertIndexingBlockedSmoke(blockedDoctor, rejected, {
+      ok: true,
+      data: null,
+    }),
+  );
+  assert.throws(
+    () =>
+      assertIndexingBlockedSmoke(blockedDoctor, {
+        ok: true,
+        data: {
+          task_id: "must-not-exist",
+        } as IndexTask,
+      }, { ok: true, data: null }),
+    /created an index task/,
   );
 });
 

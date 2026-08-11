@@ -9,9 +9,15 @@ export type DoctorPayload = {
   graph_cache_dir: string;
   index_id: number | null;
   index_name: string;
+  indexing_action: "none" | "configure_embedding" | "repair_installation" | "check_connection" | "free_storage" | "contact_support";
+  indexing_issue_code: string | null;
+  indexing_message: string;
+  indexing_ready: boolean;
+  indexing_retryable: boolean;
   issues: Array<string>;
   llm_default: string;
   ok: boolean;
+  request_id: string;
   session_count: number;
   warnings: Array<string>;
 };

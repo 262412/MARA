@@ -6,11 +6,13 @@ import {
 } from "react";
 
 import type { FileRecord } from "../shared/file-contracts";
+import type { DoctorPayload } from "../shared/doctor-contracts";
 import type { IndexTask } from "../shared/index-task-contracts";
 import type { QueryTask } from "../shared/query-contracts";
 import type {
   DesktopResult,
   RuntimeStatus,
+  SidecarError,
 } from "../shared/runtime-contracts";
 import type {
   SessionDetail,
@@ -57,7 +59,7 @@ export default function App() {
   const [deletingFileIds, setDeletingFileIds] = useState<string[]>([]);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
-  const [fileActionError, setFileActionError] = useState<string>();
+  const [fileActionError, setFileActionError] = useState<SidecarError>();
   const lastTaskRefresh = useRef<string | undefined>(undefined);
   const lastAnswerRefresh = useRef<string | undefined>(undefined);
   const fileDeletionLock = useRef(false);
@@ -93,6 +95,7 @@ export default function App() {
   const doctor = useDesktopResource(loadDoctor);
   const files = useDesktopResource(loadFiles);
   const sessions = useDesktopResource(loadSessions);
+  const indexing = indexingReadiness(doctor.resource);
 
   useEffect(() => {
     const generation = ++sessionRequestGeneration.current;
@@ -198,9 +201,10 @@ export default function App() {
   const runFileImport = useCallback(
     async (
       operation: () => Promise<DesktopResult<IndexTask | null>>,
+      failureCode: string,
       failureMessage: string,
     ) => {
-      if (indexActionLock.current) {
+      if (!indexing.indexing_ready || indexActionLock.current) {
         return;
       }
       indexActionLock.current = true;
@@ -209,18 +213,18 @@ export default function App() {
       try {
         const result = await operation();
         if (!result.ok) {
-          setFileActionError(result.error.message);
+          setFileActionError(result.error);
         } else if (result.data) {
           updateIndexTask(result.data);
         }
       } catch {
-        setFileActionError(failureMessage);
+        setFileActionError(rendererSidecarError(failureCode, failureMessage));
       } finally {
         indexActionLock.current = false;
         setIndexActionPending(false);
       }
     },
-    [updateIndexTask],
+    [indexing.indexing_ready, updateIndexTask],
   );
 
   const importFiles = useCallback(
@@ -231,6 +235,7 @@ export default function App() {
           unavailableResult<IndexTask | null>(
             "文件导入仅能在 MARA Desktop 中使用。",
           ),
+        "file_import_failed",
         "文件导入未能完成。",
       ),
     [runFileImport],
@@ -244,10 +249,41 @@ export default function App() {
           unavailableResult<IndexTask>(
             "文件拖放仅能在 MARA Desktop 中使用。",
           ),
+        "file_drop_failed",
         "拖放文件未能导入。",
       ),
     [runFileImport],
   );
+
+  const openEmbeddingConfiguration = useCallback(async () => {
+    if (indexActionLock.current) {
+      return;
+    }
+    indexActionLock.current = true;
+    setIndexActionPending(true);
+    setFileActionError(undefined);
+    try {
+      const result = await (
+        window.desktop?.openEmbeddingConfiguration() ??
+        unavailableResult<boolean>(
+          "Embedding 配置仅能在 MARA Desktop 中打开。",
+        )
+      );
+      if (!result.ok) {
+        setFileActionError(result.error);
+      }
+    } catch {
+      setFileActionError(
+        rendererSidecarError(
+          "embedding_configuration_unavailable",
+          "Embedding 配置未能打开。",
+        ),
+      );
+    } finally {
+      indexActionLock.current = false;
+      setIndexActionPending(false);
+    }
+  }, []);
 
   const cancelIndexTask = useCallback(async () => {
     if (!indexTask) {
@@ -267,10 +303,12 @@ export default function App() {
       if (result.ok) {
         updateIndexTask(result.data);
       } else {
-        setFileActionError(result.error.message);
+        setFileActionError(result.error);
       }
     } catch {
-      setFileActionError("取消索引未能完成。");
+      setFileActionError(
+        rendererSidecarError("index_cancel_failed", "取消索引未能完成。"),
+      );
     } finally {
       indexActionLock.current = false;
       setIndexActionPending(false);
@@ -295,10 +333,12 @@ export default function App() {
       if (result.ok) {
         updateIndexTask(result.data);
       } else {
-        setFileActionError(result.error.message);
+        setFileActionError(result.error);
       }
     } catch {
-      setFileActionError("重试索引未能完成。");
+      setFileActionError(
+        rendererSidecarError("index_retry_failed", "重试索引未能完成。"),
+      );
     } finally {
       indexActionLock.current = false;
       setIndexActionPending(false);
@@ -338,11 +378,13 @@ export default function App() {
           );
           files.retry();
         } else {
-          setFileActionError(result.error.message);
+          setFileActionError(result.error);
           files.retry();
         }
       } catch {
-        setFileActionError("文件删除未能完成。");
+        setFileActionError(
+          rendererSidecarError("file_delete_failed", "文件删除未能完成。"),
+        );
         files.retry();
       } finally {
         fileDeletionLock.current = false;
@@ -678,6 +720,7 @@ export default function App() {
             actionError={fileActionError}
             deletingFileIds={deletingFileIds}
             files={files.resource}
+            indexing={indexing}
             indexActionPending={
               indexActionPending || deletingFileIds.length > 0
             }
@@ -688,6 +731,9 @@ export default function App() {
               void importDroppedFiles(droppedFiles)
             }
             onImport={() => void importFiles()}
+            onOpenEmbeddingConfiguration={() =>
+              void openEmbeddingConfiguration()
+            }
             onRetry={() => void files.retry()}
             onRetryIndexTask={() => void retryIndexTask()}
             onSelectionChange={setSelectedFileIds}
@@ -742,4 +788,53 @@ function unavailableResult<T>(message: string): Promise<DesktopResult<T>> {
       request_id: "renderer-offline",
     },
   });
+}
+
+type FilesIndexingReadiness = Pick<
+  DoctorPayload,
+  | "indexing_ready"
+  | "indexing_issue_code"
+  | "indexing_message"
+  | "indexing_action"
+  | "request_id"
+>;
+
+function indexingReadiness(
+  doctor: ResourceState<DoctorPayload>,
+): FilesIndexingReadiness {
+  if (doctor.status === "success") {
+    return {
+      indexing_ready: doctor.data.indexing_ready,
+      indexing_issue_code: doctor.data.indexing_issue_code,
+      indexing_message: doctor.data.indexing_message,
+      indexing_action: doctor.data.indexing_action,
+      request_id: doctor.data.request_id,
+    };
+  }
+  if (doctor.status === "failed") {
+    return {
+      indexing_ready: false,
+      indexing_issue_code: doctor.error?.code ?? "doctor_unavailable",
+      indexing_message: "无法确认文件索引准备状态。",
+      indexing_action: "none",
+      request_id: doctor.error?.request_id ?? "doctor-unavailable",
+    };
+  }
+  return {
+    indexing_ready: false,
+    indexing_issue_code: "indexing_status_pending",
+    indexing_message: "正在检查文件索引准备状态。",
+    indexing_action: "none",
+    request_id: "doctor-pending",
+  };
+}
+
+function rendererSidecarError(code: string, message: string): SidecarError {
+  return {
+    code,
+    message,
+    details: null,
+    retryable: false,
+    request_id: "renderer-local",
+  };
 }

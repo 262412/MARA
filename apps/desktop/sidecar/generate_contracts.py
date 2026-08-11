@@ -49,6 +49,9 @@ class _SchemaApplicationService:
     ) -> dict[str, list[dict[str, Any]]]:
         raise AssertionError("Schema generation must not call application services")
 
+    def validate_indexing(self, paths: list[str]) -> None:
+        raise AssertionError("Schema generation must not call application services")
+
     def delete_file(self, file_id: str) -> list[dict[str, str]]:
         raise AssertionError("Schema generation must not call application services")
 

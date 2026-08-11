@@ -6,7 +6,10 @@ name: Desktop Gate 2
     paths:
       - ".github/workflows/desktop-gate2.yaml"
       - "apps/desktop/**"
+      - "libs/ktem/ktem/default_flowsettings.py"
+      - "libs/ktem/ktem/runtime_defaults.py"
       - "libs/ktem/ktem/runtime_bootstrap.py"
+      - "libs/kotaemon/kotaemon/embeddings/**"
       - "libs/ktem/ktem_tests/test_runtime_bootstrap_paths.py"
       - "libs/slide_cli/slide_cli/docqa_runtime.py"
       - "uv.lock"
@@ -15,7 +18,10 @@ name: Desktop Gate 2
     paths:
       - ".github/workflows/desktop-gate2.yaml"
       - "apps/desktop/**"
+      - "libs/ktem/ktem/default_flowsettings.py"
+      - "libs/ktem/ktem/runtime_defaults.py"
       - "libs/ktem/ktem/runtime_bootstrap.py"
+      - "libs/kotaemon/kotaemon/embeddings/**"
       - "libs/ktem/ktem_tests/test_runtime_bootstrap_paths.py"
       - "libs/slide_cli/slide_cli/docqa_runtime.py"
       - "uv.lock"
@@ -126,10 +132,21 @@ jobs:
                 --expect-name gate3-cli-compat.txt \
                 --summary-file apps/desktop/release/metrics/linux-22-cli-before.txt
           record_phase index-delete-smoke
-          /usr/bin/time -v -o apps/desktop/release/metrics/linux-22-time.txt \
-            xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
-              --smoke-test-nonempty --smoke-test-gate3 \
-              --smoke-test-gate3-formats
+          app_executable="$GITHUB_WORKSPACE/apps/desktop/release/MARA-linux-x64/MARA"
+          time_file="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-time.txt"
+          (
+            cd /usr
+            /usr/bin/time -v -o "$time_file" \
+              xvfb-run -a "$app_executable" \
+                --smoke-test-nonempty --smoke-test-gate3 \
+                --smoke-test-gate3-formats
+          )
+          test -n "$(find /tmp/mara-desktop/data/MARA/cache/theflow \
+            -name progress.pkl -type f -print -quit)"
+          test ! -e /usr/.theflow
+          test ! -e "$GITHUB_WORKSPACE/.theflow"
+          test ! -e "$GITHUB_WORKSPACE/apps/desktop/release/MARA-linux-x64/.theflow"
+          test ! -e /tmp/mara-desktop/data/MARA/tmp/.theflow
           .venv/bin/MARA docqa files --json \
             | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
                 --phase desktop-deleted \
@@ -230,6 +247,42 @@ jobs:
                 --phase large-file-recovered \
                 --expect-empty \
                 --summary-file apps/desktop/release/metrics/linux-22-large-file-after.txt
+          record_phase unconfigured-first-start
+          unconfigured_root=/tmp/mara-desktop-unconfigured
+          mkdir -p "$unconfigured_root/data" \
+            "$unconfigured_root/config" "$unconfigured_root/cache"
+          unconfigured_stdout="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-unconfigured-stdout.txt"
+          unconfigured_stderr="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-unconfigured-stderr.txt"
+          (
+            cd /usr
+            env \
+              -u OPENAI_API_KEY -u OPENAI_API_BASE \
+              -u OPENAI_EMBEDDINGS_MODEL -u OPENAI_CHAT_MODEL \
+              -u GOOGLE_API_KEY -u AZURE_OPENAI_API_KEY \
+              -u AZURE_OPENAI_ENDPOINT -u AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT \
+              -u LOCAL_MODEL -u LOCAL_MODEL_EMBEDDINGS -u KH_OLLAMA_URL \
+              -u VOYAGE_API_KEY -u COHERE_API_KEY -u MISTRAL_API_KEY \
+              -u KH_APP_DATA_DIR \
+              XDG_DATA_HOME="$unconfigured_root/data" \
+              XDG_CONFIG_HOME="$unconfigured_root/config" \
+              XDG_CACHE_HOME="$unconfigured_root/cache" \
+              xvfb-run -a "$app_executable" \
+                --smoke-test-indexing-unconfigured
+          ) > "$unconfigured_stdout" 2> "$unconfigured_stderr"
+          grep -F "issue_code=embedding_not_configured" "$unconfigured_stdout"
+          grep -F "task_created=false" "$unconfigured_stdout"
+          test ! -e "$unconfigured_root/data/MARA/state/index-tasks.json"
+          test -z "$(find "$unconfigured_root/data/MARA/cache/theflow" \
+            -name progress.pkl -type f -print -quit)"
+          test ! -e /usr/.theflow
+          test ! -e "$GITHUB_WORKSPACE/.theflow"
+          test ! -e "$GITHUB_WORKSPACE/apps/desktop/release/MARA-linux-x64/.theflow"
+          printf '%s\n' \
+            'working_directory=system-read-only' \
+            'data_root=desktop-owned' \
+            'issue_code=embedding_not_configured' \
+            'task_created=false' \
+            > apps/desktop/release/metrics/linux-22-unconfigured-evidence.txt
           du -sb apps/desktop/release/MARA-linux-x64 \
             > apps/desktop/release/metrics/linux-22-size.txt
           find apps/desktop/release/MARA-linux-x64 -type f | wc -l \
@@ -362,10 +415,20 @@ jobs:
         run: npm ci
       - name: Run desktop contracts
         working-directory: apps/desktop
-        run: npm run verify
+        shell: pwsh
+        run: |
+          npm run verify
+          if (Test-Path "../../.theflow") {
+            throw "Desktop contracts created checkout-local TheFlow storage."
+          }
       - name: Package native Windows application
         working-directory: apps/desktop
-        run: npm run package:windows
+        shell: pwsh
+        run: |
+          npm run package:windows
+          if (Test-Path "../../.theflow") {
+            throw "Desktop packaging created checkout-local TheFlow storage."
+          }
       - name: Smoke packaged vertical slice and record metrics
         shell: pwsh
         run: |
@@ -394,7 +457,91 @@ jobs:
           $databaseLockStderr = "apps/desktop/release/windows-database-lock-stderr.txt"
           $largeFileStdout = "apps/desktop/release/windows-large-file-stdout.txt"
           $largeFileStderr = "apps/desktop/release/windows-large-file-stderr.txt"
-          $executable = "apps/desktop/release/MARA-win32-x64/MARA.exe"
+          $unconfiguredStdout = "apps/desktop/release/windows-unconfigured-stdout.txt"
+          $unconfiguredStderr = "apps/desktop/release/windows-unconfigured-stderr.txt"
+          $unconfiguredEvidence = "apps/desktop/release/windows-unconfigured-evidence.txt"
+          $executable = (Resolve-Path "apps/desktop/release/MARA-win32-x64/MARA.exe").Path
+          $installRoot = Split-Path $executable -Parent
+          $readOnlyCwd = Join-Path $env:RUNNER_TEMP "mara-desktop-readonly-cwd"
+          $outsideTheflowRoots = [ordered]@{
+            "working-directory" = $readOnlyCwd
+            "install-directory" = $installRoot
+            "repository-checkout" = (Resolve-Path ".").Path
+          }
+          function Assert-NoExternalTheflow([string] $phase) {
+            foreach ($entry in $outsideTheflowRoots.GetEnumerator()) {
+              if (Test-Path (Join-Path $entry.Value ".theflow")) {
+                throw "Unexpected .theflow location=$($entry.Key) phase=$phase."
+              }
+            }
+          }
+          New-Item -ItemType Directory -Force -Path $readOnlyCwd | Out-Null
+          $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+          & icacls $readOnlyCwd /inheritance:r `
+            /grant:r "SYSTEM:(OI)(CI)(F)" `
+            /grant:r "${currentUser}:(OI)(CI)(RX)" `
+            /deny "${currentUser}:(OI)(CI)(W)" | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not apply the read-only working-directory ACL."
+          }
+          try {
+            Set-Content (Join-Path $readOnlyCwd "write-probe") "blocked" `
+              -ErrorAction Stop
+            throw "The Windows smoke working directory remained writable."
+          } catch [System.UnauthorizedAccessException] {
+            "working_directory_acl=write_denied" | Set-Content $unconfiguredEvidence
+          }
+          Assert-NoExternalTheflow "prelaunch"
+          $unconfiguredDataRoot = $dataRoot
+          foreach ($name in @(
+            "OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_EMBEDDINGS_MODEL",
+            "OPENAI_CHAT_MODEL", "GOOGLE_API_KEY", "AZURE_OPENAI_API_KEY",
+            "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT",
+            "LOCAL_MODEL", "LOCAL_MODEL_EMBEDDINGS", "KH_OLLAMA_URL",
+            "VOYAGE_API_KEY", "COHERE_API_KEY", "MISTRAL_API_KEY",
+            "KH_APP_DATA_DIR"
+          )) {
+            Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+          }
+          $unconfiguredProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-indexing-unconfigured" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $unconfiguredStdout `
+            -RedirectStandardError $unconfiguredStderr -PassThru
+          $unconfiguredProcess.WaitForExit()
+          if (Test-Path $unconfiguredStdout) {
+            Get-Content $unconfiguredStdout | Write-Host
+          }
+          if (Test-Path $unconfiguredStderr) {
+            Get-Content $unconfiguredStderr | Write-Host
+          }
+          if ($unconfiguredProcess.ExitCode -ne 0) {
+            exit $unconfiguredProcess.ExitCode
+          }
+          if (-not (Select-String -Path $unconfiguredStdout `
+            -SimpleMatch "issue_code=embedding_not_configured" -Quiet)) {
+            throw "The unconfigured package did not report embedding_not_configured."
+          }
+          if (Test-Path (Join-Path $unconfiguredDataRoot "state/index-tasks.json")) {
+            throw "The unconfigured package persisted an index task."
+          }
+          $unconfiguredProgress = Get-ChildItem `
+            (Join-Path $unconfiguredDataRoot "cache/theflow") `
+            -Filter progress.pkl -Recurse -File -ErrorAction SilentlyContinue
+          if ($unconfiguredProgress) {
+            throw "The unconfigured package started TheFlow indexing work."
+          }
+          if (-not (Test-Path (Join-Path $unconfiguredDataRoot "logs/indexing.log"))) {
+            throw "The unconfigured package did not create its Desktop-owned log."
+          }
+          Assert-NoExternalTheflow "post-unconfigured"
+          @(
+            "working_directory=acl-write-denied"
+            "data_root=appdata-mara"
+            "issue_code=embedding_not_configured"
+            "task_created=false"
+            "unconfigured_exit_code=$($unconfiguredProcess.ExitCode)"
+          ) | Add-Content $unconfiguredEvidence
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
           $portFile = Join-Path $env:RUNNER_TEMP "mara-embedding-port.txt"
@@ -455,6 +602,7 @@ jobs:
               "--smoke-test-nonempty --smoke-test-gate3 " +
               "--smoke-test-gate3-formats"
             ) `
+            -WorkingDirectory $readOnlyCwd `
             -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
           $peakWorkingSet = 0
           while (-not $process.HasExited) {
@@ -478,6 +626,12 @@ jobs:
             Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
             exit $process.ExitCode
           }
+          $theflowProgress = Get-ChildItem (Join-Path $dataRoot "cache/theflow") `
+            -Filter progress.pkl -Recurse -File -ErrorAction SilentlyContinue
+          if (-not $theflowProgress) {
+            throw "The packaged index did not write TheFlow progress to Desktop cache."
+          }
+          Assert-NoExternalTheflow "post-index"
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
           "model_unavailable" | Set-Content $failureMarker
@@ -739,6 +893,9 @@ jobs:
             apps/desktop/release/windows-database-lock-stderr.txt
             apps/desktop/release/windows-large-file-stdout.txt
             apps/desktop/release/windows-large-file-stderr.txt
+            apps/desktop/release/windows-unconfigured-stdout.txt
+            apps/desktop/release/windows-unconfigured-stderr.txt
+            apps/desktop/release/windows-unconfigured-evidence.txt
             apps/desktop/release/windows-metrics.txt
             apps/desktop/release/windows-cli-compat-before.txt
             apps/desktop/release/windows-cli-compat-after.txt
