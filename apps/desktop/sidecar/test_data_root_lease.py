@@ -59,11 +59,10 @@ class DesktopDataRootLeaseTest(unittest.TestCase):
 
             for _ in range(3):
                 with DesktopDataRootLease.acquire(data_root):
-                    identity = json.loads(lease_path.read_text(encoding="ascii"))
-                    self.assertEqual(
-                        identity["pid"], multiprocessing.current_process().pid
-                    )
-                    self.assertEqual(len(identity["identity"]), 32)
+                    pass
+                identity = json.loads(lease_path.read_text(encoding="ascii"))
+                self.assertEqual(identity["pid"], multiprocessing.current_process().pid)
+                self.assertEqual(len(identity["identity"]), 32)
 
             self.assertLess(lease_path.stat().st_size, 128)
 
