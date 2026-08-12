@@ -468,6 +468,7 @@ def _answerability_trace(
         "engine_terminal_answer": engine_answer,
         "engine_semantic_label": engine_label,
         "scored_semantic_label": scored_label,
+        "contract_action": action,
         "contract_semantic_rewrite": semantic_rewrite,
         "runtime_projection_present": projection_present,
         "runtime_boolean_authority_applicable": (runtime_boolean_authority_applicable),

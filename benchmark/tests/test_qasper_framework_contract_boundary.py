@@ -241,6 +241,10 @@ def test_runtime_authority_is_used_directly_for_terminal_citation() -> None:
 
     assert prediction["engine_terminal_answer"] == "yes"
     assert prediction["contract_action"] == "pass_through"
+    assert (
+        prediction["evidence_metadata"]["qasper_answerability"]["contract_action"]
+        == "pass_through"
+    )
     [citation] = prediction["structured_citations"]
     assert citation["evidence_id"] == (
         prediction["engine_verify_decision"]["authoritative_evidence_id"]
