@@ -191,7 +191,7 @@ class QueryContractTest(unittest.TestCase):
                 conversation_id: str,
                 prompt: str,
                 selected_file_ids: list[str],
-            ) -> None:
+            ) -> dict[str, object]:
                 raise DesktopFileNotFoundError(selected_file_ids[0])
 
         manager = QueryTaskManager(MissingSourceService())
