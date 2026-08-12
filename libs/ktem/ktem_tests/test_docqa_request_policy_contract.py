@@ -122,6 +122,8 @@ RESPONSE_JSON_KEYS = (
     "engine_terminal_guardrail_decision",
     "engine_terminal_evidence_bundle",
     "engine_terminal_projection_hash",
+    "engine_terminal_commit",
+    "terminal_semantic_commit",
 )
 
 

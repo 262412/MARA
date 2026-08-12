@@ -7,6 +7,8 @@ from ktem.docqa.boolean_claim_verification import canonical_boolean_answer_polar
 
 from .metrics import is_abstention_answer, normalize_text
 
+_INLINE_CITATION_RE = re.compile(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]")
+
 
 def normalize_qasper_contract_answer(
     answer: str,
@@ -76,10 +78,11 @@ def valid_qasper_typed_label(value: str) -> bool:
 
 
 def canonical_semantic_label(value: str) -> str:
-    if is_abstention_answer(str(value or "")):
+    semantic_value = _INLINE_CITATION_RE.sub(" ", str(value or ""))
+    if is_abstention_answer(semantic_value):
         return "unanswerable"
-    polarity = canonical_boolean_answer_polarity(str(value or ""))
-    return polarity or normalize_text(value)
+    polarity = canonical_boolean_answer_polarity(semantic_value)
+    return polarity or normalize_text(semantic_value)
 
 
 def semantic_rewrite_type(before: str, after: str) -> str:

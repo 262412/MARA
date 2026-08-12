@@ -12,11 +12,10 @@ def qasper_terminal_scoring_commit(
 ) -> tuple[str, bool]:
     """Select the immutable non-Boolean QASPER engine answer for scoring."""
 
-    qasper = "qasper" in str(dataset_name or "").strip().lower()
+    del dataset_name
     answer_type = str(prediction.get("answer_type") or "").strip().lower()
     preserve = bool(
-        qasper
-        and answer_type not in {"boolean", "unanswerable"}
+        answer_type not in {"boolean", "unanswerable"}
         and runtime_projection_present(prediction)
     )
     source = "engine_terminal_answer" if preserve else "predicted_answer"

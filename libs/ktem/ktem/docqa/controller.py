@@ -4,7 +4,9 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .controller_trace import build_controller_output_trace
 from .evidence import build_evidence_bundle
+from .query_plan_schema import slot_binding_state
 from .query_planning import ensure_request_query_plan, request_planning_question
 from .retrieval_adequacy import (
     missing_qasper_verification_slot_count,
@@ -195,32 +197,13 @@ def build_controller_outputs(
         evidence_bundle, verify_decision, request
     )
     controller_trace = ControllerTrace(
-        [
-            {
-                "stage": "planner",
-                "controller_mode": route_decision.controller_mode,
-                "route": route_decision.route,
-                "policy": route_decision.policy,
-            },
-            {
-                "stage": "workflow_plan",
-                "strategy": workflow_plan["strategy"],
-                "execution_control": workflow_plan["execution_control"],
-                "step_count": len(workflow_plan["steps"]),
-                "total_cost_units": workflow_plan["total_cost_units"],
-            },
-            {
-                "stage": "retrieval_evaluator",
-                "status": retrieve_decision.status,
-                "retry": retrieve_decision.retry,
-            },
-            {
-                "stage": "verifier",
-                "mode": verify_decision.mode,
-                "status": verify_decision.status,
-            },
-            *list(agent_trace or []),
-        ]
+        build_controller_output_trace(
+            route_decision,
+            workflow_plan,
+            retrieve_decision,
+            verify_decision,
+            agent_trace,
+        )
     )
     return {
         "controller_decision": _controller_decision_payload(route_decision),
@@ -364,7 +347,7 @@ def _missing_retrieval_slot_count(evidence_metadata: dict[str, Any]) -> int:
             continue
         return sum(
             bool(slot.get("required_for_retrieval"))
-            and str(slot.get("status") or "missing") != "filled"
+            and slot_binding_state(slot) != "filled"
             for slot in slots
         )
     return int(evidence_metadata.get("missing_required_slot_count") or 0)

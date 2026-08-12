@@ -199,3 +199,66 @@ def test_verifier_observability_summary_and_route_table_counts_predictions():
             "route_switch_rate": 0.5,
         }
     ]
+
+
+def test_observability_separates_retrieval_retry_and_verifier_recovery():
+    recovery = {
+        "stage": "reverify",
+        "verifier_recovery_attempt": 1,
+        "failure_type": "required_boolean_authority_missing",
+        "retry_reason": "required_boolean_authority_missing",
+    }
+    prediction = {
+        "controller_trace": [
+            {"stage": "retrieval", "action": "retrieval_retry", "retry": True},
+            dict(recovery, stage="critic"),
+            dict(recovery, stage="focused_retrieval"),
+            dict(recovery, stage="evidence_rebind"),
+            recovery,
+        ],
+        "agent_trace": [dict(recovery, stage="agent_reverify")],
+    }
+
+    observability = prediction_verifier_observability(prediction)
+
+    assert observability["retrieval_retry_count"] == 1
+    assert observability["verifier_recovery_count"] == 1
+    assert observability["route_switch_count"] == 0
+
+
+def test_observability_counts_implicit_second_retrieval_round_only_once():
+    prediction = {
+        "evidence_metadata": {"retrieval_rounds": 2},
+        "controller_trace": [
+            {
+                "stage": "retrieval_evaluator",
+                "status": "good",
+                "retry": False,
+            }
+        ],
+    }
+
+    observability = prediction_verifier_observability(prediction)
+
+    assert observability["retrieval_retry_count"] == 1
+    assert observability["verifier_recovery_count"] == 0
+
+
+def test_observability_keeps_route_switch_separate_from_recovery_transition():
+    transition = {
+        "stage": "route_switch",
+        "transition_id": "verifier-recovery:1:doc_text->hybrid",
+        "from_route": "doc_text",
+        "to_route": "hybrid",
+        "verifier_recovery_attempt": 1,
+        "failure_type": "required_boolean_authority_missing",
+    }
+    prediction = {
+        "controller_trace": [transition, dict(transition, stage="agent")],
+        "workflow_plan": {"events": [dict(transition, stage="planner")]},
+    }
+
+    observability = prediction_verifier_observability(prediction)
+
+    assert observability["route_switch_count"] == 1
+    assert observability["verifier_recovery_count"] == 1

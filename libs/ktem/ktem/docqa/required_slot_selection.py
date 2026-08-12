@@ -7,7 +7,11 @@ from .evidence_identity import evidence_aliases, identity_of
 from .finance_narrative_evidence import finance_narrative_support_quality
 from .finance_query_planning import finance_metric_evidence_matches
 from .finance_scale import source_scale_evidence
-from .query_evidence_binding_support import candidate_score_for_slot
+from .query_evidence_binding_support import (
+    agreement_attributes,
+    candidate_score_for_slot,
+)
+from .query_plan_schema import required_slot_count
 from .query_planning import QueryPlan
 
 REQUIRED_SLOT_CANDIDATE_QUOTA = 2
@@ -34,7 +38,7 @@ def required_slot_candidate_limit(
     base_limit: int,
 ) -> int:
     quota = sum(
-        REQUIRED_SLOT_CANDIDATE_QUOTA
+        max(REQUIRED_SLOT_CANDIDATE_QUOTA, required_slot_count(slot))
         + (
             EXECUTION_SLOT_PARENT_QUOTA
             if slot.required_for_execution and slot.role == "operand"
@@ -69,46 +73,16 @@ def required_slot_shortlist(
     )
     original_index = {identity_of(item).key: index for index, item in enumerate(items)}
     for slot in required_slots:
-        ranked = sorted(
-            (
-                (slot_score(plan, slot, item), index, item)
-                for index, item in enumerate(items)
-            ),
-            key=lambda row: (
-                -quantized_score(row[0]),
-                -quantized_score(_reranker_score(row[2])),
-                identity_of(row[2]).key,
-            ),
+        _select_required_slot_candidates(
+            items,
+            plan,
+            slot,
+            selected_ids,
+            selected_locators,
+            candidate_limit=candidate_limit,
+            per_slot_quota=per_slot_quota,
+            preserve_locator_diversity=preserve_locator_diversity,
         )
-        if slot.required_for_execution and slot.role == "operand":
-            _add_slot_candidates(
-                ranked,
-                selected_ids,
-                selected_locators,
-                candidate_limit=candidate_limit,
-                quota=per_slot_quota,
-                preserve_locator_diversity=preserve_locator_diversity,
-                atomic=True,
-            )
-            _add_slot_candidates(
-                ranked,
-                selected_ids,
-                selected_locators,
-                candidate_limit=candidate_limit,
-                quota=EXECUTION_SLOT_PARENT_QUOTA,
-                preserve_locator_diversity=False,
-                atomic=False,
-            )
-        else:
-            _add_slot_candidates(
-                ranked,
-                selected_ids,
-                selected_locators,
-                candidate_limit=candidate_limit,
-                quota=per_slot_quota,
-                preserve_locator_diversity=preserve_locator_diversity,
-                atomic=None,
-            )
         if len(selected_ids) >= candidate_limit:
             break
     _add_execution_dimension_candidates(
@@ -123,6 +97,69 @@ def required_slot_shortlist(
         candidate_limit=candidate_limit,
         original_index=original_index,
     )
+
+
+def _select_required_slot_candidates(
+    items: list[dict[str, Any]],
+    plan: QueryPlan,
+    slot: Any,
+    selected_ids: set[str],
+    selected_locators: set[tuple[str, str]],
+    *,
+    candidate_limit: int,
+    per_slot_quota: int,
+    preserve_locator_diversity: bool,
+) -> None:
+    selected_facilities: set[str] = set()
+    ranked = sorted(
+        (
+            (slot_score(plan, slot, item), index, item)
+            for index, item in enumerate(items)
+        ),
+        key=lambda row: (
+            -quantized_score(row[0]),
+            -quantized_score(_reranker_score(row[2])),
+            identity_of(row[2]).key,
+        ),
+    )
+    if slot.required_for_execution and slot.role == "operand":
+        _add_slot_candidates(
+            ranked,
+            selected_ids,
+            selected_locators,
+            selected_facilities,
+            candidate_limit=candidate_limit,
+            quota=max(per_slot_quota, required_slot_count(slot)),
+            preserve_locator_diversity=preserve_locator_diversity,
+            preserve_facility_diversity=True,
+            atomic=True,
+        )
+        _add_slot_candidates(
+            ranked,
+            selected_ids,
+            selected_locators,
+            selected_facilities,
+            candidate_limit=candidate_limit,
+            quota=EXECUTION_SLOT_PARENT_QUOTA,
+            preserve_locator_diversity=False,
+            preserve_facility_diversity=False,
+            atomic=False,
+        )
+    else:
+        _add_slot_candidates(
+            ranked,
+            selected_ids,
+            selected_locators,
+            selected_facilities,
+            candidate_limit=candidate_limit,
+            quota=per_slot_quota,
+            preserve_locator_diversity=preserve_locator_diversity,
+            preserve_facility_diversity=(
+                slot.role == "operand"
+                and str(slot.operator_role or "").lower() == "collection"
+            ),
+            atomic=None,
+        )
 
 
 def _ranked_required_slots(plan: QueryPlan, items: list[dict[str, Any]]) -> list[Any]:
@@ -299,16 +336,19 @@ def _add_slot_candidates(
     ranked: list[tuple[float, int, dict[str, Any]]],
     selected_ids: set[str],
     selected_locators: set[tuple[str, str]],
+    selected_facilities: set[str],
     *,
     candidate_limit: int,
     quota: int,
     preserve_locator_diversity: bool,
+    preserve_facility_diversity: bool,
     atomic: bool | None,
 ) -> None:
     added = 0
     for score, _index, item in ranked:
         identity = identity_of(item).key
         locator = _source_page(item)
+        facility = _facility_identity(item)
         if atomic is not None and _is_atomic_operand_candidate(item) is not atomic:
             continue
         if (
@@ -319,11 +359,18 @@ def _add_slot_candidates(
                 and locator[1]
                 and locator in selected_locators
             )
+            or (
+                preserve_facility_diversity
+                and facility
+                and facility in selected_facilities
+            )
         ):
             continue
         selected_ids.add(identity)
         if locator[1]:
             selected_locators.add(locator)
+        if facility:
+            selected_facilities.add(facility)
         added += 1
         if added >= quota or len(selected_ids) >= candidate_limit:
             return
@@ -334,6 +381,13 @@ def _is_atomic_operand_candidate(item: dict[str, Any]) -> bool:
         None,
         "",
     )
+
+
+def _facility_identity(item: dict[str, Any]) -> str:
+    attributes = agreement_attributes(item)
+    return str(
+        attributes.get("facility_identity") or attributes.get("facility_type") or ""
+    ).strip()
 
 
 def slot_requires_selection(slot: Any) -> bool:

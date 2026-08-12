@@ -157,14 +157,18 @@ def _quantified_scope_decision(
         quote,
         quantifier=quantifier,
     )
+    actor_scope_valid = actor == "current_paper" or (
+        actor in {"cited_work", "other_authors"}
+        and _prior_work_scope_question(question)
+    )
     return BooleanScopeDecision(
         actor,
         section_role,
         quantifier,
-        actor == "current_paper" and complete,
+        actor_scope_valid and complete,
         (
             "quantified_scope_requires_current_paper_actor"
-            if actor != "current_paper"
+            if not actor_scope_valid
             else "quantified_object_scope_complete"
             if complete
             else "quantified_object_scope_incomplete"

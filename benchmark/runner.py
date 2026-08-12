@@ -175,6 +175,8 @@ def _engine_result_to_prediction(
             result.engine_terminal_evidence_bundle
         ),
         "engine_terminal_projection_hash": result.engine_terminal_projection_hash,
+        "engine_terminal_commit": deepcopy(result.engine_terminal_commit),
+        "terminal_semantic_commit": deepcopy(result.engine_terminal_commit),
         "claim_verification": result.claim_verification,
         "presentation": result.presentation,
         "source_identity_crosswalk": result.source_identity_crosswalk,
@@ -303,6 +305,8 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
         "route": item["route"],
         "scope": item["scope"],
         "benchmark_role": item.get("benchmark_role", "qa_quality"),
+        "agent_mode": item.get("agent_mode"),
+        "route_policy": item.get("route_policy"),
         "benchmark_prompt_policy": item.get("benchmark_prompt_policy"),
         "benchmark_prompt_profile": item.get("benchmark_prompt_profile"),
         "benchmark_prompt_source": item.get("benchmark_prompt_source"),
@@ -341,6 +345,8 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
         "error": item.get("error"),
         "error_type": item.get("error_type"),
         "route_timeout_seconds": item.get("route_timeout_seconds"),
+        "engine_terminal_commit": item.get("engine_terminal_commit", {}),
+        "terminal_semantic_commit": item.get("terminal_semantic_commit", {}),
     }
 
 

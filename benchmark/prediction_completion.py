@@ -129,6 +129,12 @@ def _prepare_prediction_defaults(
         "engine_terminal_guardrail_decision": {},
         "engine_terminal_evidence_bundle": {},
         "engine_terminal_projection_hash": "",
+        "engine_terminal_commit": {},
+        "terminal_semantic_commit": {},
+        "agent_mode": getattr(route_config, "agent_mode", None)
+        or route.get("agent_mode"),
+        "route_policy": getattr(route_config, "route_policy", None)
+        or route.get("route_policy"),
     }
     for key, value in defaults.items():
         prediction.setdefault(key, value)

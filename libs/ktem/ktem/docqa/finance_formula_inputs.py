@@ -119,6 +119,11 @@ def _explicit_formula_input_ids(
             "numerator": "operating_income",
             "denominator": "net_sales",
         },
+        "quick_ratio": {
+            "current_assets": "current_assets",
+            "inventories": "inventory",
+            "current_liabilities": "current_liabilities",
+        },
     }
     mapping = mappings.get(question_type, {})
     return {input_id: mapping.get(input_id, input_id) for input_id in input_ids}

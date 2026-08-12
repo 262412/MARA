@@ -34,6 +34,7 @@ from .query_plan_schema import (
     EvidenceSlot,
     QueryPlan,
     initial_plan_from_payload,
+    slot_binding_state,
     with_plan_id,
 )
 
@@ -399,7 +400,9 @@ def slot_coverage(plan: QueryPlan) -> float | None:
     required = [slot for slot in plan.evidence_slots if slot.required_for_retrieval]
     if not required:
         return None
-    return sum(slot.status == "filled" for slot in required) / len(required)
+    return sum(slot_binding_state(slot) == "filled" for slot in required) / len(
+        required
+    )
 
 
 def retrieval_budget(plan: QueryPlan) -> dict[str, int]:

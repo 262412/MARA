@@ -352,6 +352,8 @@ def test_standard_summary_emits_per_example_metric_records():
             "dataset": "qasper",
             "example_id": "ex-1",
             "route": "controller",
+            "agent_mode": "",
+            "route_policy": "",
             "deployed_policy": "",
             "primary_score": 0.75,
             "metrics": {"native_score": 0.75, "f1": 0.5},

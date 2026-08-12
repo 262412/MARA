@@ -115,11 +115,34 @@ def resolve_current_experiment_question(
             "caption": "",
         }
         assessment = classify_boolean_evidence(question, "yes", scope_item)
+        # A current-experiment sentence is only a closed-scope resolution when
+        # its *exact* proposition matches the requested relation and object.
+        # Falling back to ``yes`` for any experiment-shaped sentence lets a
+        # mention such as "we use BioBERT" answer a question about unrelated
+        # tasks.  Retrieval may still keep that sentence as a candidate, but
+        # authority must remain unknown until a typed proposition is bound.
         polarity = (
             str(assessment.proposition.polarity or "")
-            if assessment.relation_score > 0 and assessment.object_score >= 0.6
-            else "yes"
+            if assessment.classification in {"supports", "contradicts"}
+            and assessment.relation_score > 0
+            and assessment.object_score >= 0.6
+            else ""
         )
+        if (
+            not polarity
+            and re.search(
+                r"\b(?:these|those|aforementioned)\s+tasks?\b|"
+                r"\btasks?\s+mentioned\b",
+                str(question or ""),
+                flags=re.IGNORECASE,
+            )
+            and is_direct_current_empirical_action(quote)
+        ):
+            # The existing QASPER deictic task contract treats a direct
+            # empirical action as evidence for the previously introduced task
+            # set.  Keep that narrow compatibility path, but never apply it
+            # to open-ended objects such as "other tasks".
+            polarity = "yes"
         if polarity not in {"yes", "no"}:
             continue
         decision = validate_boolean_scope(

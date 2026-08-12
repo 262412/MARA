@@ -40,6 +40,7 @@ class RouteExecutionResult:
     engine_terminal_guardrail_decision: dict[str, Any] = field(default_factory=dict)
     engine_terminal_evidence_bundle: dict[str, Any] = field(default_factory=dict)
     engine_terminal_projection_hash: str = ""
+    engine_terminal_commit: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -61,4 +62,6 @@ class RouteExecutionResult:
                 self.engine_terminal_evidence_bundle
             ),
             "engine_terminal_projection_hash": self.engine_terminal_projection_hash,
+            "engine_terminal_commit": deepcopy(self.engine_terminal_commit),
+            "terminal_semantic_commit": deepcopy(self.engine_terminal_commit),
         }

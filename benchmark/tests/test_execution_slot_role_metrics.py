@@ -289,6 +289,74 @@ def test_verified_execution_gold_discrepancy_is_reported_without_rescoring() -> 
     assert prediction.get("metrics") is None
 
 
+def test_benchmark_audit_rejects_duplicate_collection_facility_fill() -> None:
+    first, _dimension = _evidence_records()
+    first.update(
+        {
+            "cell_id": "facility-one",
+            "value": "4200000000",
+            "facility_identity": "short_term:active",
+        }
+    )
+    duplicate = {
+        **first,
+        "cell_id": "facility-two",
+    }
+    first_id = identity_of(first).key
+    duplicate_id = identity_of(duplicate).key
+    slot_id = "operand:credit_capacity:2023"
+    metadata = {
+        "query_plan": {
+            "state_authority": "verified_calculation_plan",
+            "answer_type": "numeric",
+            "evidence_slots": [
+                {
+                    "slot_id": slot_id,
+                    "role": "operand",
+                    "operator_role": "collection",
+                    "cardinality": 2,
+                    "required_for_execution": True,
+                    "status": "filled",
+                    "evidence_ids": [first_id, duplicate_id],
+                }
+            ],
+        },
+        "finance_numeric_trace": {
+            "calculation_plan": {
+                "operands": [
+                    {
+                        "operand_id": "capacity_one",
+                        "query_slot_id": slot_id,
+                        "evidence_identity": first_id,
+                    },
+                    {
+                        "operand_id": "capacity_two",
+                        "query_slot_id": slot_id,
+                        "evidence_identity": duplicate_id,
+                    },
+                ]
+            },
+            "calculation_verification": {
+                "valid": True,
+                "verified_required_slot_ids": [slot_id],
+            },
+            "calculation_execution": {"status": "ok"},
+        },
+        "selected_evidence": [first, duplicate],
+    }
+    prediction = {
+        "example_id": "duplicate-collection-facility",
+        "question": "What is the combined capacity?",
+        "answer_type": "numeric",
+        "gold_answers": ["8400000000"],
+        "evidence_metadata": metadata,
+    }
+
+    summary = contract_invariant_summary([prediction])
+
+    assert summary["query_plan_calculation_plan_state_mismatch_count"] == 1.0
+
+
 def _evidence_records() -> tuple[dict[str, Any], dict[str, Any]]:
     operand = {
         "source_id": "report",

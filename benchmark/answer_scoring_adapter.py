@@ -37,6 +37,15 @@ def select_scoring_answer(
 ) -> tuple[str, str]:
     if mode == "product":
         return answer_for_user, "product_answer"
+    if preserve_semantic_answer:
+        return (
+            answer_for_scoring(
+                answer_for_scoring_source,
+                dataset_name=dataset_name,
+                preserve_semantic_answer=True,
+            ),
+            "terminal_projection_adapter",
+        )
     if structured_answer is not None:
         return (
             answer_for_scoring(
@@ -76,20 +85,20 @@ def answer_for_scoring(
         json_answer, _, _ = ragtruth_json_answer(answer)
         if json_answer:
             return json_answer
+    if preserve_semantic_answer:
+        return _terminal_projection_answer(answer)
     cleaned = _clean_scoring_text(extract_final_answer_text(answer))
     if "qampari" in dataset:
         return _comma_list_answer(cleaned)
-    if preserve_semantic_answer:
-        return _complete_answer(cleaned)
     return _short_answer(cleaned)
 
 
-def _complete_answer(answer: str) -> str:
-    return _strip_terminal_period(
-        " ".join(
-            line.strip() for line in str(answer or "").splitlines() if line.strip()
-        )
-    )
+def _terminal_projection_answer(answer: str) -> str:
+    """Apply only semantics-preserving cleanup to an immutable terminal answer."""
+
+    text = _INLINE_CITATION_RE.sub(" ", str(answer or ""))
+    normalized = " ".join(text.split())
+    return _strip_terminal_period(normalized)
 
 
 def _clean_scoring_text(answer: str) -> str:

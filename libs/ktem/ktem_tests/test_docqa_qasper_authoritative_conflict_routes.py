@@ -88,7 +88,7 @@ def _assert_authoritative_conflict(result: Any) -> dict[str, Any]:
 
 def _assert_conflict_terminal_result(result: Any) -> None:
     _assert_authoritative_conflict(result)
-    assert result.answer == ABSTAIN_MESSAGE
+    assert result.answer == "unanswerable"
     assert result.guardrail_decision.action == "abstain"
     [slot] = result.evidence_bundle.metadata["query_plan"]["evidence_slots"]
     assert slot["status"] == "verified_conflict"
@@ -192,7 +192,7 @@ def test_missing_authority_allows_at_most_one_recovery_and_abstains(
     ("route_policy", "allowed_routes", "agent_mode", "recovery_route"),
     (
         ("doc", ["doc_text"], None, "doc_text"),
-        ("auto", ["doc_text", "hybrid"], None, "hybrid"),
+        ("auto", ["doc_text", "hybrid"], None, "doc_text"),
         ("auto", ["doc_text", "hybrid"], "thorough", "doc_text"),
     ),
     ids=("text_rag", "controller_auto", "crag_guarded"),
@@ -234,10 +234,7 @@ def test_recovery_conflict_terminates_resolved_and_preserves_authority_sides(
     [terminal] = _terminal_events(result)
     assert terminal["stop_reason"] == "authority_conflict_resolved"
     route_switches = _stage_events(result, "route_switch")
-    if route_policy == "auto" and agent_mode is None:
-        assert len(route_switches) == 1
-    else:
-        assert not route_switches
+    assert not route_switches
 
 
 def test_crag_recovery_rebind_and_reverify_keep_both_conflicting_authorities() -> None:

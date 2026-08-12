@@ -12,6 +12,7 @@ from .evidence_selection_budget import (
 )
 from .execution_slot_lineage import execution_slot_lineage
 from .finance_query_planning import finance_metric_evidence_matches
+from .query_plan_schema import slot_binding_state
 from .query_planning import QueryPlan, slot_coverage, slot_needs_second_round
 from .required_slot_selection import slot_requires_selection, slot_score
 from .selection_score_normalization import SELECTION_SCORE_CONTRACT
@@ -87,7 +88,9 @@ def _required_slot_bindings(
                 "status": slot.status,
                 "retrieval_satisfied": bool(slot.evidence_ids or parent_available),
                 "execution_satisfied": (
-                    slot.status == "filled" if slot.required_for_execution else None
+                    slot_binding_state(slot) == "filled"
+                    if slot.required_for_execution
+                    else None
                 ),
                 "verification_satisfied": (
                     slot.status == "verified_support"
@@ -97,7 +100,7 @@ def _required_slot_bindings(
                 "reason": (
                     "parent_evidence_not_materialized"
                     if slot.required_for_execution
-                    and slot.status != "filled"
+                    and slot_binding_state(slot) != "filled"
                     and parent_available
                     else ""
                 ),

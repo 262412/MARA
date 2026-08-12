@@ -11,7 +11,7 @@ from .claim_support import claim_supported
 from .domain_verifiers import normalize_verification_domain
 from .evidence import EvidenceBundle
 from .evidence_identity import identity_of
-from .query_plan_schema import QueryPlan
+from .query_plan_schema import QueryPlan, slot_binding_state
 from .query_planning import request_planning_question
 from .verification_evidence_mapping import (
     blocking_verification_slots,
@@ -369,8 +369,7 @@ def _synchronize_verified_claim_query_plan(
     metadata["bound_query_plan"] = payload
     metadata["query_plan_id"] = authoritative.plan_id
     metadata["missing_required_slot_count"] = sum(
-        slot.required_for_retrieval
-        and slot.status not in {"filled", "verified_support", "verified_conflict"}
+        slot.required_for_retrieval and slot_binding_state(slot) != "filled"
         for slot in authoritative.evidence_slots
     )
 

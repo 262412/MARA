@@ -3,6 +3,11 @@ from __future__ import annotations
 import re
 
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
+from .boolean_scope_language import _current_language_data_context  # noqa: F401
+from .boolean_scope_language import _english_closed_scope  # noqa: F401
+from .boolean_scope_language import _language_data_question  # noqa: F401
+from .boolean_scope_language import _non_english_counterexample  # noqa: F401
+from .boolean_scope_language import _scope_excerpt  # noqa: F401
 
 
 def _has_closed_quantifier(question: str) -> bool:
@@ -18,6 +23,8 @@ def _closed_quantifier(question: str) -> str:
         return "all"
     if re.search(r"\bboth\b", lowered):
         return "both"
+    if re.search(r"\b(?:some|any)\b", lowered):
+        return "some" if re.search(r"\bsome\b", lowered) else "any"
     count_match = re.search(
         r"\b(?:the\s+)?(two|three|four|five|six|seven|eight|nine|[2-9])\s+"
         r"[a-z][a-z-]*s\b",
@@ -41,6 +48,13 @@ def _quantified_object_scope_complete(
         return _all_quantified_scope_complete(question, quote, relation_spans)
     if quantifier == "both":
         return _both_quantified_scope_complete(question, quote, relation_spans)
+    if quantifier in {"some", "any"}:
+        return _existential_quantified_scope_complete(
+            question,
+            quote,
+            relation_spans,
+            quantifier,
+        )
     if quantifier.startswith("count:"):
         return _counted_quantified_scope_complete(
             question,
@@ -49,6 +63,62 @@ def _quantified_object_scope_complete(
             quantifier,
         )
     return True
+
+
+def _existential_quantified_scope_complete(
+    question: str,
+    quote: str,
+    relation_spans: list[str],
+    quantifier: str,
+) -> bool:
+    """Require one explicit object for ``some``/``any`` propositions.
+
+    ``some`` is existential: one exact object mention is sufficient.  ``any``
+    is retained as a distinct typed quantifier for authority traces, but it
+    still cannot be satisfied by a relation-only sentence or by a question
+    token copied into an evidence quote.
+    """
+
+    noun = _quantified_object_noun(question, quantifier)
+    lowered_question = str(question or "").lower()
+    if (
+        "task" in lowered_question
+        and (
+            re.search(r"\b(?:these|those|aforementioned)\s+tasks?\b", lowered_question)
+            or re.search(r"\btasks?\s+mentioned\b", lowered_question)
+        )
+        and relation_spans
+    ):
+        # Deictic task sets are established by the surrounding experiment
+        # frame; the source need not repeat a synthetic noun such as
+        # ``tasks mentioned`` in every predicate clause.
+        return True
+    if not noun:
+        return False
+    if (
+        quantifier == "any"
+        and re.search(r"\bother\s+than\b", lowered_question)
+        and _span_mentions_object_noun(quote, noun)
+    ):
+        # A verifier quote may retain the complete sentence while the exact
+        # relation clause contains only its object complement.  Treat that
+        # sentence as scope-complete here; exact proposition authority still
+        # validates the relation span independently.
+        return True
+    for span in relation_spans:
+        if not _span_mentions_object_noun(span, noun):
+            continue
+        if quantifier == "any" and _quantified_object_exception(
+            quote,
+            noun=noun,
+        ):
+            # ``any ... other than X`` is a complete negative/exclusion
+            # proposition when the exact relation span names the object.
+            return True
+        if _quantified_object_exception(quote, noun=noun):
+            continue
+        return True
+    return False
 
 
 def _only_quantified_scope_complete(
@@ -223,6 +293,14 @@ def _quantified_object_noun(question: str, quantifier: str) -> str:
         prefix = r"(?:all|every|each)"
     else:
         prefix = re.escape(quantifier)
+    if quantifier in {"any", "some"}:
+        alternative = re.search(
+            rf"\b{re.escape(quantifier)}\s+other\s+([a-z][a-z-]*s?)\b",
+            str(question or ""),
+            flags=re.IGNORECASE,
+        )
+        if alternative is not None:
+            return _singular_object_noun(alternative.group(1))
     match = re.search(
         rf"\b{prefix}\s+(?:[a-z0-9][a-z0-9-]*\s+){{0,2}}" r"([a-z][a-z-]*s?)\b",
         str(question or ""),
@@ -487,88 +565,3 @@ def _number_value(value: str) -> int:
         "nine": 9,
     }
     return words.get(value, int(value) if value.isdigit() else 0)
-
-
-def _language_data_question(question: str) -> bool:
-    lowered = str(question or "").lower()
-    return "english" in lowered and bool(
-        re.search(r"\b(?:data|dataset|corpus|language|result|experiment)\w*\b", lowered)
-    )
-
-
-def _non_english_counterexample(quote: str) -> bool:
-    for statement in re.split(r"(?:\r?\n)+|(?<=[.!?])\s+", str(quote or "")):
-        lowered = statement.lower()
-        if re.search(
-            r"\b(?:non-english|greek|german|french|spanish|chinese|"
-            r"japanese|arabic|multilingual)\b",
-            lowered,
-        ) and re.search(
-            r"\b(?:evaluate|evaluated|evaluation|experiment|report|results?|"
-            r"test|tested|dataset|corpus)\w*\b",
-            lowered,
-        ):
-            return True
-    return False
-
-
-def _english_closed_scope(quote: str) -> bool:
-    lowered = str(quote or "").lower()
-    return "english" in lowered and bool(
-        re.search(
-            r"\b(?:only|exclusively|solely|all (?:the )?(?:data|datasets|corpora)|"
-            r"english-speaking countries)\b",
-            lowered,
-        )
-    )
-
-
-def _current_language_data_context(text: str) -> bool:
-    current_actor = re.compile(
-        r"\b(?:we|our|current study|this (?:paper|study|work|section))\b",
-        flags=re.IGNORECASE,
-    )
-    data_relation = re.compile(
-        r"\b(?:collect|compil|creat|data selection|dataset|corpus|corpora|"
-        r"evaluat|experiment|report|results?)\w*\b",
-        flags=re.IGNORECASE,
-    )
-    return any(
-        current_actor.search(statement) and data_relation.search(statement)
-        for statement in re.split(r"(?:\r?\n)+|(?<=[.!?])\s+", str(text or ""))
-    )
-
-
-def _scope_excerpt(text: str, polarity: str) -> str | None:
-    statements = [
-        (match.start(), match.end(), match.group(0).strip())
-        for match in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", str(text or ""))
-        if match.group(0).strip()
-    ]
-    windows = list(statements)
-    windows.extend(
-        (left[0], right[1], text[left[0] : right[1]].strip())
-        for left, right in zip(statements, statements[1:])
-    )
-    candidates = []
-    item_has_current_data_context = _current_language_data_context(text)
-    for start, end, excerpt in windows:
-        if polarity == "no":
-            valid = _non_english_counterexample(excerpt)
-        else:
-            valid = _english_closed_scope(excerpt) and (
-                item_has_current_data_context
-                or bool(
-                    re.search(
-                        r"\b(?:report|result|evaluat|experiment|test|dataset|"
-                        r"corpus|data)\w*\b",
-                        excerpt,
-                        flags=re.IGNORECASE,
-                    )
-                )
-            )
-        if valid:
-            candidates.append((end - start, start, excerpt))
-    if not candidates:
-        return None
-    return min(candidates)[2]

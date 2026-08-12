@@ -5,6 +5,7 @@ from typing import Any
 
 from .finance_query_planning import finance_metric_evidence_matches
 from .financial_statement_identity import financial_statement_identity
+from .query_plan_schema import slot_binding_state
 
 
 def verify_required_calculation_slots(
@@ -57,6 +58,22 @@ def verify_required_calculation_slots(
         if len(matching_operands) < cardinality:
             errors.append(f"required_slot_missing:{slot_id}")
             continue
+        operand_evidence_ids = [
+            str(
+                getattr(operand, "evidence_identity", "")
+                or getattr(operand, "evidence_id", "")
+                or ""
+            ).strip()
+            for operand in matching_operands
+        ]
+        state_slot = {
+            **slot,
+            "status": "filled",
+            "evidence_ids": operand_evidence_ids,
+        }
+        if slot_binding_state(state_slot, list(evidence_by_id.values())) != "filled":
+            errors.append(f"required_slot_missing:{slot_id}")
+            continue
         used_operands.update(
             operand.operand_id for operand in matching_operands[:cardinality]
         )
@@ -69,8 +86,6 @@ def _dimension_matches_slot(
     slot: dict[str, Any],
     evidence_by_id: dict[str, dict[str, Any]],
 ) -> bool:
-    if str(slot.get("status") or "") != "filled":
-        return False
     evidence_ids = {
         str(value or "").strip()
         for value in slot.get("evidence_ids") or []
@@ -80,10 +95,23 @@ def _dimension_matches_slot(
         evidence_by_id.get(evidence_id) is None for evidence_id in evidence_ids
     ):
         return False
+    if slot_binding_state(slot, list(evidence_by_id.values())) != "filled":
+        return False
     dimension = str(slot.get("slot_id") or "").lower().rsplit(":", 1)[-1]
+    raw_dimension_values = [
+        str(getattr(operand, dimension, "") or "").strip().lower()
+        for operand in operands
+    ]
+    if not raw_dimension_values or any(not value for value in raw_dimension_values):
+        return False
+    dimension_values = set(raw_dimension_values)
+    required_value = str(slot.get(dimension) or "").strip().lower()
+    if len(dimension_values) != 1 or (
+        required_value and dimension_values != {required_value}
+    ):
+        return False
     for operand in operands:
         value = str(getattr(operand, dimension, "") or "").strip().lower()
-        required_value = str(slot.get(dimension) or "").strip().lower()
         if required_value and value != required_value:
             continue
         if not value:

@@ -149,8 +149,12 @@ def _verify_nonempty_answer(
         guardrail_factory=guardrail_factory,
     )
     bundle.metadata["pre_guardrail_answer"] = answer
+    if verify_decision.status == "verified_conflict":
+        answer = "unanswerable"
+    elif guardrail.action == "abstain":
+        answer = abstain_message
     return (
-        abstain_message if guardrail.action == "abstain" else answer,
+        answer,
         verify_decision,
         guardrail,
         trace,

@@ -9,6 +9,7 @@ from .boolean_claim_verification import canonical_boolean_answer_polarity
 from .evidence import EvidenceBundle
 from .execution_contracts import ABSTAIN_MESSAGE, ENGINE_TERMINAL_STATE_CONTRACT
 from .execution_models import GuardrailDecision
+from .terminal_semantic_commit import build_terminal_semantic_commit
 from .verification import VerifyDecision
 
 
@@ -68,6 +69,12 @@ def engine_terminal_projection(
         "guardrail_decision": deepcopy(terminal_guardrail),
         "evidence_bundle": deepcopy(terminal_evidence),
     }
+    terminal_state["terminal_semantic_commit"] = build_terminal_semantic_commit(
+        terminal_answer,
+        terminal_verify,
+        terminal_guardrail,
+        terminal_evidence,
+    ).as_dict()
     projection_hash = hashlib.sha256(
         json.dumps(
             terminal_state,

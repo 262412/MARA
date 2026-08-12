@@ -134,6 +134,8 @@ def test_execute_controller_turn_records_workflow_plan_and_trace():
     assert result.controller_trace[1] == {
         "stage": "workflow_plan",
         "strategy": "planned_trace",
+        "agent_mode": "auto",
+        "verification_mode": "off",
         "execution_control": "fixed_state_machine",
         "step_count": 4,
         "total_cost_units": 6,

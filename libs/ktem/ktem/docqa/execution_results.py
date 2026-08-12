@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from .controller import RetrieveDecision, _verify_decision, evaluate_retrieval_quality
@@ -181,6 +182,9 @@ def result(
         engine_terminal_guardrail_decision=terminal_guardrail,
         engine_terminal_evidence_bundle=terminal_evidence,
         engine_terminal_projection_hash=projection_hash,
+        engine_terminal_commit=deepcopy(
+            terminal_state.get("terminal_semantic_commit") or {}
+        ),
     )
 
 

@@ -8,7 +8,7 @@ from ktem.docqa.boolean_proposition_evidence import classify_boolean_evidence_ca
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import EvidenceBundle
 from ktem.docqa.evidence_identity import identity_of
-from ktem.docqa.execution import ABSTAIN_MESSAGE, execute_controller_turn
+from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.query_planning import bind_evidence_slots, build_query_plan
 from ktem.docqa.verification import verify_decision
 
@@ -208,7 +208,7 @@ def test_smoke_artifact_bundle_commits_complete_conflict_terminal_state() -> Non
         for value in conflict[side]
     } == {POSITIVE_SPAN, NEGATIVE_SMOKE_SPAN}
 
-    assert result.answer == ABSTAIN_MESSAGE
+    assert result.answer == "unanswerable"
     terminal = result.engine_terminal_state
     assert terminal["normalized_candidate_label"] == "unanswerable"
     assert terminal["terminal_reason"] == "authoritative_conflict_abstention"
@@ -345,7 +345,7 @@ def test_execute_controller_turn_commits_conflict_terminal_state_fail_closed() -
         generate=lambda *_args: "yes",
     )
 
-    assert result.answer == ABSTAIN_MESSAGE
+    assert result.answer == "unanswerable"
     assert result.engine_terminal_state["terminal_reason"] == (
         "authoritative_conflict_abstention"
     )

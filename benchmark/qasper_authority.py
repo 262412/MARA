@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import AbstractSet, Any
 
+from ktem.docqa.boolean_proposition_evidence import exact_span_asserts_boolean_relation
+
 from .qasper_boolean_grounding import resolve_grounded_boolean_conflict
 from .qasper_quote_support import resolve_verified_quote_support
 
@@ -129,8 +131,18 @@ def resolve_boolean_authority_and_conflict(
     )
 
 
-def preserve_semantic_veto(reason: str, quote: str, quote_grounded: bool) -> bool:
-    return bool(quote_grounded and quote and reason in _SEMANTIC_VETO_REASONS)
+def preserve_semantic_veto(
+    reason: str,
+    quote: str,
+    quote_grounded: bool,
+    *,
+    question: str = "",
+) -> bool:
+    if not (quote_grounded and quote and reason in _SEMANTIC_VETO_REASONS):
+        return False
+    if reason != "quantified_object_scope_incomplete":
+        return True
+    return exact_span_asserts_boolean_relation(question, quote)
 
 
 _SEMANTIC_VETO_REASONS = {

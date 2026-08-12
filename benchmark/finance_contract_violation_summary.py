@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.query_plan_schema import slot_binding_state
+
 from .metrics import numeric_tolerance_score
 
 FINANCE_VIOLATION_KEYS = (
@@ -72,11 +75,12 @@ def query_plan_calculation_plan_state_mismatch(
         for operand in calculation_plan.get("operands") or []
         if isinstance(operand, dict)
     ]
-    operands_by_slot = {
-        str(operand.get("query_slot_id") or ""): operand
-        for operand in operands
-        if str(operand.get("query_slot_id") or "")
-    }
+    operands_by_slot: dict[str, list[dict[str, Any]]] = {}
+    for operand in operands:
+        slot_id = str(operand.get("query_slot_id") or "")
+        if slot_id:
+            operands_by_slot.setdefault(slot_id, []).append(operand)
+    evidence_items = _evidence_items(metadata)
     verified_slot_ids = {
         str(value).strip()
         for value in verification.get("verified_required_slot_ids") or []
@@ -90,12 +94,21 @@ def query_plan_calculation_plan_state_mismatch(
         return True
     if any(
         slots.get(slot_id) is None
-        or not _operand_state_matches(slots[slot_id], operand)
-        for slot_id, operand in operands_by_slot.items()
+        or not _operand_state_matches(
+            slots[slot_id],
+            slot_operands,
+            evidence_items,
+        )
+        for slot_id, slot_operands in operands_by_slot.items()
     ):
         return True
     return any(
-        not _dimension_state_matches(slots, operands, dimension)
+        not _dimension_state_matches(
+            slots,
+            operands,
+            dimension,
+            evidence_items,
+        )
         for dimension in ("scale", "unit", "currency")
     )
 
@@ -163,32 +176,40 @@ def _unique_violation_count(
 
 def _operand_state_matches(
     slot: dict[str, Any],
-    operand: dict[str, Any],
+    operands: list[dict[str, Any]],
+    evidence_items: list[dict[str, Any]],
 ) -> bool:
-    evidence_id = str(
-        operand.get("evidence_identity") or operand.get("evidence_id") or ""
-    )
     if (
-        str(slot.get("status") or "missing") != "filled"
-        or not evidence_id
-        or evidence_id not in set(slot.get("evidence_ids") or [])
+        slot_binding_state(
+            slot,
+            evidence_items,
+            materialized=lambda item: item.get("value") not in (None, ""),
+        )
+        != "filled"
     ):
         return False
-    for field_name in (
-        "source_id",
-        "unit",
-        "scale",
-        "currency",
-        "period",
-        "period_kind",
-        "statement_kind",
-        "financial_scope",
-        "table_instance_id",
-        "table_group_id",
-    ):
-        value = operand.get(field_name)
-        if value not in (None, "") and slot.get(field_name) != value:
+    slot_evidence_ids = set(slot.get("evidence_ids") or [])
+    for operand in operands:
+        evidence_id = str(
+            operand.get("evidence_identity") or operand.get("evidence_id") or ""
+        )
+        if not evidence_id or evidence_id not in slot_evidence_ids:
             return False
+        for field_name in (
+            "source_id",
+            "unit",
+            "scale",
+            "currency",
+            "period",
+            "period_kind",
+            "statement_kind",
+            "financial_scope",
+            "table_instance_id",
+            "table_group_id",
+        ):
+            value = operand.get(field_name)
+            if value not in (None, "") and slot.get(field_name) != value:
+                return False
     return True
 
 
@@ -196,6 +217,7 @@ def _dimension_state_matches(
     slots: dict[str, dict[str, Any]],
     operands: list[dict[str, Any]],
     dimension: str,
+    evidence_items: list[dict[str, Any]],
 ) -> bool:
     evidence_ids = {
         str(
@@ -219,6 +241,29 @@ def _dimension_state_matches(
     )
     return bool(
         slot
-        and str(slot.get("status") or "missing") == "filled"
+        and slot_binding_state(slot, evidence_items) == "filled"
         and evidence_ids <= set(slot.get("evidence_ids") or [])
     )
+
+
+def _evidence_items(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for key in (
+        "evidence",
+        "selected_evidence",
+        "execution_operand_evidence",
+        "generation_context_evidence",
+    ):
+        for item in metadata.get(key) or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                identity = identity_of(item).key
+            except ValueError:
+                continue
+            if identity in seen:
+                continue
+            seen.add(identity)
+            items.append(item)
+    return items

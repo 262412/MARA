@@ -9,7 +9,7 @@ from .finance_calculation_recovery import (
     synchronize_calculation_recovery,
 )
 from .finance_numeric_answer import finance_numeric_answer
-from .query_plan_schema import plan_from_payload
+from .query_plan_schema import plan_from_payload, slot_binding_state
 from .query_planning import request_planning_question
 
 _FINANCE_DOMAINS = {"finance", "financial", "financebench"}
@@ -27,7 +27,7 @@ def ensure_finance_numeric_trace(request: Any, bundle: Any) -> None:
     ]
     existing_trace = metadata.get("finance_numeric_trace")
     if isinstance(existing_trace, dict) and existing_trace:
-        trace = _refresh_trace_missing_dimensions(
+        trace = _refresh_trace_missing_slots(
             request,
             metadata,
             evidence_items,
@@ -53,7 +53,7 @@ def ensure_finance_numeric_trace(request: Any, bundle: Any) -> None:
         _synchronize_typed_support(metadata, evidence_items, trace)
 
 
-def _refresh_trace_missing_dimensions(
+def _refresh_trace_missing_slots(
     request: Any,
     metadata: dict[str, Any],
     evidence_items: list[dict[str, Any]],
@@ -129,7 +129,7 @@ def _synchronize_typed_query_state(
     metadata["query_plan_id"] = request_plan.plan_id
     metadata["missing_required_slot_count"] = sum(
         bool(slot.get("required_for_retrieval"))
-        and str(slot.get("status") or "missing") != "filled"
+        and slot_binding_state(slot) != "filled"
         for slot in payload.get("evidence_slots") or []
         if isinstance(slot, dict)
     )
@@ -288,6 +288,12 @@ def _typed_verification_slot_states(
             and citations_resolve
             and verification.get("valid") is True
             and execution.get("status") == "ok"
+            and slot_binding_state(
+                slot,
+                evidence_items,
+                materialized=lambda item: _typed_slot_materialized(slot, item),
+            )
+            == "filled"
         )
         states.append(
             {
@@ -409,17 +415,36 @@ def typed_calculation_adequacy(
     }
     if execution_required and not execution_required.issubset(verified):
         return "incomplete", "query_plan_execution_slots_not_verified"
-    citation_ids = [
-        str(value).strip()
-        for value in execution.get("citation_ids") or []
-        if str(value or "").strip()
-    ]
     evidence = [
         item
         for item in evidence_metadata.get("evidence") or []
         if isinstance(item, dict)
     ]
+    if any(
+        slot_binding_state(
+            slot,
+            evidence,
+            materialized=lambda item: _typed_slot_materialized(slot, item),
+        )
+        != "filled"
+        for slot in query_plan.get("evidence_slots") or []
+        if isinstance(slot, dict) and bool(slot.get("required_for_execution"))
+    ):
+        return "incomplete", "query_plan_execution_slots_incomplete"
+    citation_ids = [
+        str(value).strip()
+        for value in execution.get("citation_ids") or []
+        if str(value or "").strip()
+    ]
     evidence_lookup = calculation_evidence_lookup(evidence)
     if not citation_ids or any(value not in evidence_lookup for value in citation_ids):
         return "incomplete", "execution_citation_not_resolvable"
     return "good", "verified_typed_execution"
+
+
+def _typed_slot_materialized(slot: dict[str, Any], item: dict[str, Any]) -> bool:
+    if str(slot.get("role") or "") == "dimension":
+        return bool(item.get("scale") or item.get("unit") or item.get("text"))
+    if bool(slot.get("required_for_execution")):
+        return item.get("value") not in (None, "")
+    return bool(item.get("value") or item.get("text") or item.get("ocr_text"))

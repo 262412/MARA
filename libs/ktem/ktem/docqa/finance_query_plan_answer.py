@@ -11,13 +11,14 @@ from .calculation_evidence_identity import (
 from .evidence_identity import identity_of
 from .finance_calculation_contract import finance_calculation_authoritative
 from .finance_dimension_trace import finance_dimension_bindings
+from .finance_query_plan_state import operand_slot_state
 from .finance_scale import (
     valid_dimension_binding_scope,
     valid_dimension_evidence_identity,
 )
 from .query_evidence_binding import bind_evidence_slots_monotonic
 from .query_evidence_constraints import executable_operand_evidence
-from .query_plan_schema import plan_from_payload
+from .query_plan_schema import plan_from_payload, slot_binding_state
 
 
 @dataclass(frozen=True)
@@ -83,9 +84,12 @@ def answer_from_query_plan(
     missing_slots = [
         slot
         for slot in slots
-        if str(slot.get("status") or "missing") != "filled"
-        or len(list(slot.get("evidence_ids") or []))
-        < max(1, int(slot.get("cardinality") or 1))
+        if slot_binding_state(
+            slot,
+            calculation_evidence_items(evidence_items),
+            materialized=executable_operand_evidence,
+        )
+        != "filled"
     ]
     if missing_slots:
         return _failed_plan_attempt(missing_slots)
@@ -370,7 +374,7 @@ def _reconciled_query_plan(
         slot_id = str(slot.get("slot_id") or "")
         slot_operands = operands.get(slot_id)
         if slot_operands is not None:
-            slot.update(_operand_slot_state(slot_operands))
+            slot.update(operand_slot_state(slot_operands, slot))
         elif str(slot.get("role") or "") == "dimension":
             slot.update(_dimension_slot_state(slot_id, operand_values))
         slots.append(slot)
@@ -406,45 +410,6 @@ def _calculation_query_plan(query_plan: dict[str, Any]) -> dict[str, Any]:
     payload["evidence_slots"] = slots
     payload["constraints"] = dict(query_plan.get("constraints") or {})
     return payload
-
-
-def _operand_slot_state(operands: list[dict[str, Any]]) -> dict[str, Any]:
-    evidence_ids = list(
-        dict.fromkeys(
-            str(operand.get("evidence_identity") or operand.get("evidence_id") or "")
-            for operand in operands
-            if str(operand.get("evidence_identity") or operand.get("evidence_id") or "")
-        )
-    )
-    state = {
-        "role": "operand",
-        "required_for_execution": True,
-        "status": "filled" if evidence_ids else "missing",
-        "evidence_ids": evidence_ids,
-    }
-    for field_name in (
-        "source_id",
-        "unit",
-        "scale",
-        "currency",
-        "period",
-        "period_kind",
-        "statement_kind",
-        "financial_scope",
-        "table_instance_id",
-        "table_group_id",
-        "dimension_binding_scope",
-    ):
-        values = list(
-            dict.fromkeys(
-                str(operand.get(field_name) or "")
-                for operand in operands
-                if str(operand.get(field_name) or "")
-            )
-        )
-        if values:
-            state[field_name] = values[-1]
-    return state
 
 
 def _dimension_slot_state(

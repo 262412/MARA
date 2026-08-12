@@ -7,6 +7,7 @@ from ktem.docqa.calculation_evidence_identity import calculation_evidence_lookup
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_labels import normalize_evidence_label
 from ktem.docqa.evidence_locators import normalized_source_page_locators
+from ktem.docqa.query_plan_schema import slot_binding_state
 
 from .contract_gate_metrics import prediction_gate_metrics
 from .contract_invariant_summary import summarize_contract_invariants
@@ -362,6 +363,7 @@ def _contract_evidence_items(metadata: dict[str, Any]) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
     for key in (
+        "evidence",
         "canonical_candidate_evidence",
         "candidate_evidence",
         "fused_evidence",
@@ -499,15 +501,17 @@ def _answered_with_missing_execution_slot(
     metadata: dict[str, Any],
 ) -> bool:
     query_plan = dict(metadata.get("query_plan") or {})
+    evidence_items = _contract_evidence_items(metadata)
     missing = [
         slot
         for slot in query_plan.get("evidence_slots") or []
         if isinstance(slot, dict)
         and slot.get("required_for_execution")
-        and (
-            str(slot.get("status") or "") != "filled"
-            or not list(slot.get("evidence_ids") or [])
+        and slot_binding_state(
+            slot,
+            evidence_items if evidence_items else None,
         )
+        != "filled"
     ]
     answer = str(
         prediction.get("answer_for_scoring") or prediction.get("predicted_answer") or ""

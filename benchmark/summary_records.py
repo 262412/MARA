@@ -30,6 +30,8 @@ def benchmark_identity_summary(
             if item.get("backend_status") == "not_configured"
         ],
         "num_predictions": len(predictions),
+        "agent_modes": _observed_values(predictions, "agent_mode"),
+        "route_policies": _observed_values(predictions, "route_policy"),
     }
 
 
@@ -46,6 +48,8 @@ def per_example_metric_records(
                 "dataset": dataset_name,
                 "example_id": str(prediction.get("example_id") or ""),
                 "route": str(prediction.get("route") or ""),
+                "agent_mode": str(prediction.get("agent_mode") or ""),
+                "route_policy": str(prediction.get("route_policy") or ""),
                 "deployed_policy": str(prediction.get("headline_role") or ""),
                 "primary_score": metrics.get("native_score"),
                 "metrics": metrics,
@@ -70,3 +74,12 @@ def adapter_metadata_summary(
             external_adapter_metric_metadata_by_route or {}
         ),
     }
+
+
+def _observed_values(predictions: list[dict[str, Any]], key: str) -> list[str]:
+    values: list[str] = []
+    for prediction in predictions:
+        value = str(prediction.get(key) or "").strip()
+        if value and value not in values:
+            values.append(value)
+    return values

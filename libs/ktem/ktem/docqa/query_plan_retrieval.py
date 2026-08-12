@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .query_plan_schema import EvidenceSlot
+from .query_plan_schema import EvidenceSlot, slot_binding_state
 
 
 def slot_needs_second_round(
@@ -8,7 +8,7 @@ def slot_needs_second_round(
     *,
     verification_domain: str = "",
 ) -> bool:
-    if slot.required_for_retrieval and slot.status != "filled":
+    if slot.required_for_retrieval and slot_binding_state(slot) != "filled":
         return True
     return bool(
         (verification_domain == "qasper" or verification_domain.startswith("qasper_"))

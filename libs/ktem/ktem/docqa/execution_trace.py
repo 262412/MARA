@@ -15,6 +15,8 @@ def execution_trace(
         {
             "stage": "workflow_plan",
             "strategy": workflow_plan.get("strategy", ""),
+            "agent_mode": workflow_plan.get("agent_mode", "auto"),
+            "verification_mode": workflow_plan.get("verification_mode", "off"),
             "execution_control": workflow_plan.get("execution_control", ""),
             "step_count": len(workflow_plan.get("steps") or []),
             "total_cost_units": workflow_plan.get("total_cost_units", 0),

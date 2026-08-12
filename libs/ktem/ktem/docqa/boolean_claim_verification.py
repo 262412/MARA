@@ -172,6 +172,7 @@ def _authority_from_closed_scope(
         return None
     identity = identity_of(item).key
     span_id = _span_identity(identity, window)
+    source_id, page_label = source_page_locator(item)
     return (
         resolution.polarity,
         BooleanEvidenceAuthority(
@@ -191,6 +192,8 @@ def _authority_from_closed_scope(
             polarity=resolution.polarity,
             reason=resolution.decision.reason,
             qualifier=proposition_qualifier(window.text),
+            source_id=source_id,
+            page_label=page_label,
         ),
     )
 

@@ -4,6 +4,8 @@ import hashlib
 import json
 from typing import Any
 
+from ktem.docqa.terminal_semantic_commit import terminal_commit_projection_present
+
 from .qasper_answer_normalization import canonical_semantic_label
 
 
@@ -30,6 +32,21 @@ def runtime_projection_present(prediction: dict[str, Any]) -> bool:
         evidence_bundle=evidence_bundle,
     ):
         return False
+    commit = prediction.get("engine_terminal_commit") or prediction.get(
+        "terminal_semantic_commit"
+    )
+    if commit is not None and commit != {}:
+        if not terminal_commit_projection_present(commit):
+            return False
+        state_commit = state.get("terminal_semantic_commit")
+        if isinstance(state_commit, dict) and state_commit != commit:
+            return False
+        if (
+            commit.get("semantic_answer") != terminal_answer
+            or commit.get("verify_decision") != verify_decision
+            or commit.get("guardrail_decision") != guardrail_decision
+        ):
+            return False
     expected_hash = hashlib.sha256(
         json.dumps(
             state,
@@ -42,6 +59,13 @@ def runtime_projection_present(prediction: dict[str, Any]) -> bool:
     return str(prediction.get("engine_terminal_projection_hash") or "") == (
         expected_hash
     )
+
+
+def runtime_terminal_commit(prediction: dict[str, Any]) -> dict[str, Any]:
+    commit = prediction.get("engine_terminal_commit") or prediction.get(
+        "terminal_semantic_commit"
+    )
+    return dict(commit) if isinstance(commit, dict) else {}
 
 
 def typed_boolean_authority_frame_complete(

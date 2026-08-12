@@ -264,6 +264,47 @@ def _slot_score(
     return score
 
 
+def slot_item_materialized(slot: EvidenceSlot, item: dict[str, Any]) -> bool:
+    if slot.role == "dimension":
+        return bool(
+            item.get("scale")
+            or item.get("unit")
+            or item.get("text")
+            or item.get("ocr_text")
+        )
+    if slot.required_for_execution:
+        if item.get("value") not in (None, ""):
+            return True
+        return (
+            not slot.statement_kind
+            and not slot.financial_scope
+            and bool(item.get("span_id") or item.get("text") or item.get("ocr_text"))
+        )
+    return bool(item.get("text") or item.get("ocr_text") or item.get("value"))
+
+
+def slot_semantic_match(
+    slot: EvidenceSlot,
+    item: dict[str, Any],
+    *,
+    requires_structure: bool,
+) -> bool:
+    if (
+        slot.statement_kind == "segment_table"
+        and str(item.get("statement_kind") or "") == "segment_table"
+        and str(item.get("financial_scope") or "") == "segment"
+        and (
+            not slot.period
+            or str(item.get("period") or item.get("column_label") or "") == slot.period
+        )
+        and item.get("value") not in (None, "")
+    ):
+        return True
+    return (
+        candidate_score_for_slot(slot, item, requires_structure=requires_structure) > 0
+    )
+
+
 def _locator_score(
     locator: EvidenceLocator | None,
     item: dict[str, Any],

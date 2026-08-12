@@ -147,6 +147,14 @@ def _execution_response_kwargs(
         "engine_terminal_projection_hash": str(
             execution.get("engine_terminal_projection_hash") or ""
         ),
+        "engine_terminal_commit": _terminal_dict_field(
+            execution, "engine_terminal_commit"
+        )
+        or _terminal_dict_field(execution, "terminal_semantic_commit"),
+        "terminal_semantic_commit": _terminal_dict_field(
+            execution, "terminal_semantic_commit"
+        )
+        or _terminal_dict_field(execution, "engine_terminal_commit"),
     }
     payload.update(rebuilt_outputs)
     if not payload["route_decision"]:

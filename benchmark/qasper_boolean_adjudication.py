@@ -172,6 +172,7 @@ def _finalize_boolean_authority(
             state.reason,
             state.quote,
             state.quote_grounded,
+            question=question,
         ):
             rebound_ref = evidence_ref_for_quote(
                 state.quote,
@@ -187,6 +188,9 @@ def _finalize_boolean_authority(
                     quote_grounded=True,
                     quote_supports_relation=False,
                 )
+        reason = state.reason
+        if reason == "quantified_object_scope_incomplete":
+            reason = "polarity_authority_unproven"
         return replace(
             state,
             verdict="insufficient_evidence",
@@ -194,6 +198,7 @@ def _finalize_boolean_authority(
             quote="",
             quote_grounded=False,
             quote_supports_relation=False,
+            reason=reason,
         )
     evidence_ref = authoritative_support.evidence_ref or state.evidence_ref
     return replace(state, evidence_ref=evidence_ref)

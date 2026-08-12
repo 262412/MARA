@@ -44,6 +44,9 @@ def controller_response_kwargs(response: Any) -> dict[str, Any]:
         "engine_terminal_projection_hash": str(
             getattr(response, "engine_terminal_projection_hash", "") or ""
         ),
+        "engine_terminal_commit": deepcopy(
+            getattr(response, "engine_terminal_commit", {}) or {}
+        ),
     }
 
 
@@ -72,5 +75,10 @@ def controller_prediction_kwargs(prediction: dict[str, Any]) -> dict[str, Any]:
         ),
         "engine_terminal_projection_hash": str(
             prediction.get("engine_terminal_projection_hash") or ""
+        ),
+        "engine_terminal_commit": deepcopy(
+            prediction.get("engine_terminal_commit")
+            or prediction.get("terminal_semantic_commit")
+            or {}
         ),
     }

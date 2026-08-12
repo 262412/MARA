@@ -308,7 +308,12 @@ def _render_claim(claim: dict[str, Any]) -> str:
     )
     if citation_text.startswith("["):
         citation_text = f" {citation_text}"
-    return f"{claim['text']}{citation_text}".strip()
+    text = str(claim["text"] or "").strip()
+    trailing = ""
+    while text and text[-1] in ".!?":
+        trailing = text[-1] + trailing
+        text = text[:-1].rstrip()
+    return f"{text}{citation_text}{trailing}".strip()
 
 
 def _structured_output(text: str) -> bool:

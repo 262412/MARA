@@ -22,6 +22,7 @@ from .boolean_evidence_scope import (
     evidence_item_text,
     validate_boolean_scope,
 )
+from .boolean_proposition_arguments import _question_argument_tokens
 from .boolean_proposition_context import (
     actor_scope_scores,
     bounded_proposition_context,
@@ -164,6 +165,11 @@ def _proposition_frame(
     relation_score = _relation_compatibility(semantic_question, resolution_text)
     object_score, proposition_object = _object_compatibility(
         semantic_question,
+        # A bounded context is an exact, continuous evidence window.  It may
+        # complete a proposition split across adjacent sentences (for example
+        # a setup sentence followed by a qualified result), while unrelated
+        # question nouns still cannot enter because ``_object_compatibility``
+        # requires evidence-side tokens.
         resolution_text,
     )
     proposition = BooleanProposition(
@@ -531,13 +537,23 @@ def _object_compatibility(question: str, text: str) -> tuple[float, str]:
         for relation in question_relations | evidence_relations
         for token in _relation_surface_tokens(relation)
     }
-    question_tokens = normalized_object_tokens(question, relation_tokens)
+    question_tokens = _question_argument_tokens(
+        question,
+        relation_tokens,
+    )
     evidence_tokens = normalized_object_tokens(text, relation_tokens)
     question_tokens.discard("")
     evidence_tokens.discard("")
     if (
         "task" in question_tokens
-        and re.search(r"\b(?:these|those|aforementioned)\s+tasks?\b", question, re.I)
+        and (
+            re.search(
+                r"\b(?:these|those|aforementioned)\s+tasks?\b",
+                question,
+                re.I,
+            )
+            or re.search(r"\btasks?\s+mentioned\b", question, re.I)
+        )
         and evidence_relations
         and evidence_tokens
     ):

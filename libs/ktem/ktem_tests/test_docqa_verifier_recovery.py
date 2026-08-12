@@ -88,12 +88,12 @@ def test_text_rag_runs_one_focused_same_route_recovery_after_missing_authority()
     assert not _stage_events(result, "route_switch")
 
 
-def test_controller_auto_switches_route_once_after_required_authority_failure():
+def test_controller_auto_rebinds_same_route_when_relevant_span_lacks_authority():
     calls: list[tuple[str, int]] = []
 
     def retrieve(request: DocQARequest, decision: Any) -> dict[str, Any]:
         calls.append((decision.legacy_route, request.retrieval_round_id))
-        text = NEAR_MATCH if decision.legacy_route == "doc_text" else EXACT_AUTHORITY
+        text = NEAR_MATCH if request.retrieval_round_id == 1 else EXACT_AUTHORITY
         return {"evidence": [_evidence(f"evidence-{len(calls)}", text)]}
 
     result = execute_controller_turn(
@@ -105,16 +105,46 @@ def test_controller_auto_switches_route_once_after_required_authority_failure():
         generate=lambda *_args: "yes",
     )
 
-    assert calls == [("doc_text", 1), ("hybrid", 2)]
+    assert calls == [("doc_text", 1), ("doc_text", 2)]
     assert result.answer == "yes"
-    assert result.controller_decision.legacy_route == "hybrid"
+    assert result.controller_decision.legacy_route == "doc_text"
+    [recovery] = _stage_events(result, "verifier_recovery")
+    assert recovery["verifier_recovery_attempt"] == 1
+    assert recovery["retry_reason"] == "required_boolean_authority_missing"
+    assert recovery["stop_reason"] == "authority_recovered"
+    assert not _stage_events(result, "route_switch")
+
+
+def test_controller_auto_switches_route_when_no_relevant_proposition_exists():
+    calls: list[tuple[str, int]] = []
+
+    def retrieve(request: DocQARequest, decision: Any) -> dict[str, Any]:
+        calls.append((decision.legacy_route, request.retrieval_round_id))
+        text = (
+            "The paper introduces a conversational system."
+            if decision.legacy_route == "doc_text"
+            else EXACT_AUTHORITY
+        )
+        return {"evidence": [_evidence(f"evidence-{len(calls)}", text)]}
+
+    result = execute_controller_turn(
+        _request(
+            route_policy="auto",
+            allowed_routes=["doc_text", "hybrid"],
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: "yes",
+    )
+
+    assert calls == [("doc_text", 1), ("doc_text", 2), ("hybrid", 1)]
+    assert result.answer == "yes"
     [transition] = _stage_events(result, "route_switch")
     assert transition["from_route"] == "doc_text"
     assert transition["to_route"] == "hybrid"
-    assert transition["transition_id"]
-    assert transition["verifier_recovery_attempt"] == 1
-    assert transition["retry_reason"] == "required_boolean_authority_missing"
-    assert transition["stop_reason"] == "authority_recovered"
+    assert transition["failure_type"] == "retrieval_adequacy_failure"
+    assert transition["recovered_evidence_ids"]
+    assert transition["reverification_status"] == "supported"
+    assert transition["reverification_evidence_ids"]
 
 
 def test_crag_guarded_records_critic_retrieval_rebind_and_reverify_once():

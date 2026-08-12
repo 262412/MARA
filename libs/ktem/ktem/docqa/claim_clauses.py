@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 _CLAUSE_BOUNDARY_RE = re.compile(
-    r"\s*;\s*|,\s*(?:and|but|while|whereas)\s+|\s+(?:while|whereas)\s+",
+    r"\s*;\s*|,\s*(?:and|but(?!\s+only\b)|while|whereas)\s+|\s+(?:while|whereas)\s+",
     flags=re.IGNORECASE,
 )
 

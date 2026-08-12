@@ -434,6 +434,11 @@ def test_execute_controller_turn_switches_route_after_poor_retrieval():
         "failed_retrieval_rounds": 1,
         "failed_slot_coverage": None,
         "failed_missing_required_slot_count": 0,
+        "failure_type": "retrieval_adequacy_failure",
+        "recovered_evidence_ids": ["hybrid-1"],
+        "reverification_status": "not_requested",
+        "reverification_reason": "Verification disabled.",
+        "reverification_evidence_ids": ["hybrid-1"],
     }
 
 

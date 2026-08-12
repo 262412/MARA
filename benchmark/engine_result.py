@@ -38,3 +38,4 @@ class EngineRunResult:
     engine_terminal_guardrail_decision: dict[str, Any] = field(default_factory=dict)
     engine_terminal_evidence_bundle: dict[str, Any] = field(default_factory=dict)
     engine_terminal_projection_hash: str = ""
+    engine_terminal_commit: dict[str, Any] = field(default_factory=dict)

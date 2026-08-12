@@ -410,7 +410,7 @@ def test_rehashed_incomplete_authority_frame_fails_runtime_audit() -> None:
     )
 
     trace = prediction["evidence_metadata"]["qasper_answerability"]
-    assert trace["runtime_projection_present"] is True
+    assert trace["runtime_projection_present"] is False
     assert prediction["contract_action"] == "hard_violation_missing_runtime_authority"
 
 
@@ -436,9 +436,13 @@ def test_adapter_detects_but_never_hides_semantic_label_rewrite() -> None:
 
     synchronize_terminal_answer_state(prediction)
 
-    assert prediction["terminal_answer_state"]["answer"] == "no"
-    assert prediction["post_contract_verification"]["answer"] == "no"
+    assert prediction["terminal_answer_state"]["answer"] == "yes"
+    assert prediction["post_contract_verification"]["answer"] == "yes"
+    assert prediction["answer_for_scoring"] == "yes"
     assert prediction["engine_terminal_answer"] == "yes"
+    trace = prediction["evidence_metadata"]["answerability_contract_trace"]
+    assert trace["post_contract_answer"] == "no"
+    assert trace["contract_semantic_rewrite"] is True
 
 
 def test_query_plan_boolean_slot_drives_audit_applicability() -> None:

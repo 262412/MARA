@@ -3,13 +3,160 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field, replace
-from typing import Any
+from typing import Any, Callable
+
+from .evidence_identity import evidence_aliases, identity_of
+from .finance_agreement_identity import revolving_agreement_attributes
 
 QUERY_PLAN_CONTRACT = "query_plan.v1"
 MAX_RETRIEVAL_ROUNDS = 2
 EVIDENCE_REFERENCE_BOUND_STATUSES = frozenset(
     {"filled", "verified_support", "verified_conflict"}
 )
+
+
+def required_slot_count(slot: Any) -> int:
+    """Return the minimum number of distinct evidence identities for a slot."""
+
+    try:
+        return max(1, int(_slot_value(slot, "cardinality") or 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def slot_binding_state(
+    slot: Any,
+    evidence_items: list[dict[str, Any]] | None = None,
+    *,
+    semantic_match: Callable[[dict[str, Any]], bool] | None = None,
+    materialized: Callable[[dict[str, Any]], bool] | None = None,
+    provenance_complete: Callable[[dict[str, Any]], bool] | None = None,
+) -> str:
+    """Classify a slot from one cardinality-aware binding contract.
+
+    A slot is ``filled`` only when enough canonical identities are present,
+    collection facilities are distinct, and every resolved item satisfies the
+    semantic, provenance, and materialization checks supplied by the caller.
+    Missing or partial collections remain ``retrieved_partial`` so downstream
+    recovery cannot mistake one result for a complete collection.
+    """
+
+    evidence_ids = _unique_strings(_slot_value(slot, "evidence_ids") or ())
+    required = required_slot_count(slot)
+    if not evidence_ids:
+        return "missing"
+    if evidence_items is None:
+        if len(evidence_ids) < required:
+            return "retrieved_partial"
+        return (
+            "filled"
+            if str(_slot_value(slot, "status") or "")
+            in EVIDENCE_REFERENCE_BOUND_STATUSES
+            else "retrieved_partial"
+        )
+
+    resolved = _resolve_slot_items(evidence_ids, evidence_items)
+    canonical_ids = {_canonical_item_id(item) for item in resolved}
+    if len(canonical_ids) < required:
+        return "retrieved_partial"
+    if len(resolved) < len(evidence_ids):
+        return "retrieved_partial"
+    if _collection_facilities_required(slot, resolved):
+        facilities = {_facility_identity(item) for item in resolved}
+        if "" in facilities or len(facilities) < required:
+            return "retrieved_partial"
+    if semantic_match is not None and any(
+        not semantic_match(item) for item in resolved
+    ):
+        return "retrieved_partial"
+    if provenance_complete is not None and any(
+        not provenance_complete(item) for item in resolved
+    ):
+        return "retrieved_partial"
+    if materialized is not None and any(not materialized(item) for item in resolved):
+        return "retrieved_partial"
+    return "filled"
+
+
+def _slot_value(slot: Any, key: str) -> Any:
+    return slot.get(key) if isinstance(slot, dict) else getattr(slot, key, None)
+
+
+def _unique_strings(values: Any) -> list[str]:
+    output: list[str] = []
+    seen: set[str] = set()
+    for value in values or ():
+        normalized = str(value or "").strip()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            output.append(normalized)
+    return output
+
+
+def _resolve_slot_items(
+    evidence_ids: list[str],
+    evidence_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    resolved: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for evidence_id in evidence_ids:
+        item = None
+        for candidate in evidence_items:
+            if evidence_id == str(candidate.get("canonical_id") or "").strip():
+                item = candidate
+                break
+            try:
+                if evidence_id in evidence_aliases(candidate):
+                    item = candidate
+                    break
+            except ValueError:
+                continue
+        if item is None:
+            continue
+        identity = _canonical_item_id(item)
+        if identity not in seen:
+            seen.add(identity)
+            resolved.append(item)
+    return resolved
+
+
+def _canonical_item_id(item: dict[str, Any]) -> str:
+    return str(item.get("canonical_id") or identity_of(item).key).strip()
+
+
+def _collection_facilities_required(
+    slot: Any,
+    items: list[dict[str, Any]],
+) -> bool:
+    if required_slot_count(slot) <= 1:
+        return False
+    if str(_slot_value(slot, "operator_role") or "").lower() != "collection":
+        return False
+    return str(_slot_value(slot, "role") or "") == "operand" and any(
+        _facility_identity(item) for item in items
+    )
+
+
+def _facility_identity(item: dict[str, Any]) -> str:
+    metadata = item.get("metadata")
+    nested = metadata if isinstance(metadata, dict) else {}
+    for key in ("facility_identity", "facility_id"):
+        value = str(item.get(key) or nested.get(key) or "").strip()
+        if value:
+            return value
+    observed = revolving_agreement_attributes(
+        str(item.get("text") or item.get("ocr_text") or item.get("caption") or "")
+    )
+    parsed = str(observed.get("facility_identity") or "").strip()
+    if parsed:
+        return parsed
+    facility_type = str(
+        item.get("facility_type") or nested.get("facility_type") or ""
+    ).strip()
+    effective_date = str(
+        item.get("effective_date") or nested.get("effective_date") or ""
+    ).strip()
+    return ":".join(value for value in (facility_type, effective_date) if value)
 
 
 @dataclass(frozen=True)
@@ -63,10 +210,17 @@ class EvidenceSlot:
         return payload
 
 
-def evidence_slot_references_are_bound(slot: EvidenceSlot) -> bool:
-    """Return whether a typed slot state retains materialized evidence bindings."""
+def evidence_slot_references_are_bound(
+    slot: EvidenceSlot,
+    evidence_items: list[dict[str, Any]] | None = None,
+) -> bool:
+    """Return whether a slot has a complete, cardinality-aware binding."""
 
-    return slot.status in EVIDENCE_REFERENCE_BOUND_STATUSES
+    if evidence_items is not None:
+        return slot_binding_state(slot, evidence_items) == "filled"
+    return str(slot.status or "") in EVIDENCE_REFERENCE_BOUND_STATUSES and len(
+        _unique_strings(slot.evidence_ids)
+    ) >= required_slot_count(slot)
 
 
 @dataclass(frozen=True)

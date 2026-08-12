@@ -105,6 +105,7 @@ def _relation_surface_tokens(relation: str) -> set[str]:
 def _object_token(token: str) -> str:
     aliases = {
         "any": "",
+        "some": "",
         "components": "component",
         "own": "",
         "our": "",
@@ -154,6 +155,7 @@ def _content_tokens(value: str) -> set[str]:
         "overall",
         "seven",
         "six",
+        "some",
         "the",
         "three",
         "they",

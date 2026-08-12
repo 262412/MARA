@@ -171,6 +171,30 @@ def test_free_text_citation_rendering_is_not_a_semantic_rewrite():
     assert prediction["contract_semantic_rewrite"] is False
 
 
+def test_free_text_inline_citation_cleanup_is_not_a_semantic_rewrite():
+    answer = "The method leverages labeled features [1]."
+    _execution, prediction = _run_free_text_runtime(
+        "What background knowledge does the method leverage?",
+        answer,
+    )
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_contract_smoke",
+        mode="scoring_adapter_v1",
+    )
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_contract_smoke",
+        llm_factory=lambda: (_ for _ in ()).throw(
+            AssertionError("citation cleanup must not trigger re-answering")
+        ),
+    )
+
+    assert prediction["answer_for_scoring"] == ("The method leverages labeled features")
+    assert prediction["contract_action"] == "pass_through"
+    assert prediction["contract_semantic_rewrite"] is False
+
+
 def test_free_text_commit_is_reverified_before_terminal_projection(monkeypatch):
     from ktem.docqa import execution_results
 

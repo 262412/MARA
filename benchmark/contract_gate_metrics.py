@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.query_plan_schema import slot_binding_state
+
 from .evidence_identity_metrics import reranker_lineage
 from .metrics import is_abstention_answer, safe_mean
 
@@ -419,13 +421,15 @@ def _safe_abstention_applicable(
 ) -> bool:
     query_plan = dict(metadata.get("query_plan") or {})
     constraints = dict(query_plan.get("constraints") or {})
+    evidence_items = _execution_slot_evidence(metadata)
     missing_execution = any(
         isinstance(slot, dict)
         and bool(slot.get("required_for_execution"))
-        and (
-            str(slot.get("status") or "missing") != "filled"
-            or not list(slot.get("evidence_ids") or [])
+        and slot_binding_state(
+            slot,
+            evidence_items if evidence_items else None,
         )
+        != "filled"
         for slot in query_plan.get("evidence_slots") or []
     )
     return bool(
@@ -433,6 +437,19 @@ def _safe_abstention_applicable(
         or constraints.get("finance_formula_status") == "unsupported"
         or missing_execution
     )
+
+
+def _execution_slot_evidence(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        item
+        for key in (
+            "evidence",
+            "selected_evidence",
+            "generation_context_evidence",
+            "execution_operand_evidence",
+        )
+        for item in _records(metadata.get(key))
+    ]
 
 
 def _calculation_executed(metadata: dict[str, Any]) -> bool:

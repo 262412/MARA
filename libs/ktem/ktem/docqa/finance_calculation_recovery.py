@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from .evidence_identity import evidence_aliases
+from .finance_agreement_identity import revolving_agreement_attributes
+from .query_plan_schema import required_slot_count, slot_binding_state
 from .query_planning import request_planning_question
 
 _RECOVERY_QUERY_PREFIX = "round2:calculation_recovery:"
@@ -22,9 +25,11 @@ def missing_required_calculation_slot_ids(
         slot_id
         for slot in query_plan.get("evidence_slots") or []
         if isinstance(slot, dict)
-        and str(slot.get("role") or "") == "dimension"
         and bool(slot.get("required_for_execution"))
-        and (slot_id := str(slot.get("slot_id") or "").strip()) in missing
+        and (
+            (slot_id := str(slot.get("slot_id") or "").strip()) in missing
+            or slot_binding_state(slot) != "filled"
+        )
     )
 
 
@@ -35,10 +40,20 @@ def synchronize_calculation_recovery(
 ) -> None:
     missing_slot_ids = list(missing_required_calculation_slot_ids(metadata))
     authoritative = dict(trace.get("authoritative_query_plan") or {})
+    if not authoritative and isinstance(trace.get("evidence_slots"), list):
+        authoritative = dict(trace)
     metadata["missing_required_calculation_slot_ids"] = missing_slot_ids
-    metadata["missing_required_slot_count"] = _retrieval_missing_count(
-        authoritative
-    ) + len(missing_slot_ids)
+    retrieval_missing_ids = {
+        str(slot.get("slot_id") or "").strip()
+        for slot in authoritative.get("evidence_slots") or []
+        if isinstance(slot, dict)
+        and bool(slot.get("required_for_retrieval"))
+        and slot_binding_state(slot) != "filled"
+        and str(slot.get("slot_id") or "").strip()
+    }
+    metadata["missing_required_slot_count"] = len(
+        retrieval_missing_ids | set(missing_slot_ids)
+    )
     recovery = metadata.get("calculation_recovery_trace")
     recovery_trace = dict(recovery) if isinstance(recovery, dict) else None
     if not missing_slot_ids:
@@ -81,7 +96,7 @@ def _missing_verification_slot_ids(verification: dict[str, Any]) -> set[str]:
 def _retrieval_missing_count(query_plan: dict[str, Any]) -> int:
     return sum(
         bool(slot.get("required_for_retrieval"))
-        and str(slot.get("status") or "missing") != "filled"
+        and slot_binding_state(slot) != "filled"
         for slot in query_plan.get("evidence_slots") or []
         if isinstance(slot, dict)
     )
@@ -182,7 +197,12 @@ def _recovery_requests(
                         str(slots.get(slot_id, {}).get("query") or "").strip(),
                         *operand_context,
                         question,
-                        "parent table dollars scale unit convention statement locator",
+                        *_slot_recovery_terms(slots.get(slot_id, {})),
+                        *_bound_facility_exclusions(
+                            slot_id,
+                            metadata,
+                            slots.get(slot_id, {}),
+                        ),
                     )
                     if value
                 )
@@ -191,6 +211,62 @@ def _recovery_requests(
         }
         for slot_id in missing_slot_ids
     ]
+
+
+def _slot_recovery_terms(slot: dict[str, Any]) -> list[str]:
+    role = str(slot.get("role") or "").strip().lower()
+    if role == "dimension":
+        return ["parent table dollars scale unit convention statement locator"]
+    if str(slot.get("operator_role") or "").strip().lower() == "collection":
+        return ["distinct facility identity active agreement exclude bound facility"]
+    return ["exact evidence identity period metric statement scope"]
+
+
+def _bound_facility_exclusions(
+    slot_id: str,
+    metadata: dict[str, Any],
+    slot: dict[str, Any],
+) -> list[str]:
+    """Keep a collection recovery round from selecting a bound facility again."""
+
+    if (
+        str(slot.get("operator_role") or "").lower() != "collection"
+        and required_slot_count(slot) <= 1
+    ):
+        return []
+    bound_ids = {
+        str(value).strip()
+        for value in slot.get("evidence_ids") or []
+        if str(value or "").strip()
+    }
+    if not bound_ids:
+        return []
+    evidence: list[Any] = []
+    for key in ("evidence", "selected_evidence", "evidence_items"):
+        value = metadata.get(key)
+        if isinstance(value, list):
+            evidence = value
+            break
+    facilities: list[str] = []
+    for item in evidence:
+        if not isinstance(item, dict) or not bound_ids.intersection(
+            evidence_aliases(item)
+        ):
+            continue
+        observed = revolving_agreement_attributes(
+            str(item.get("text") or item.get("ocr_text") or item.get("caption") or "")
+        )
+        nested = item.get("metadata")
+        nested = nested if isinstance(nested, dict) else {}
+        facility = str(
+            item.get("facility_identity")
+            or nested.get("facility_identity")
+            or observed.get("facility_identity")
+            or ""
+        ).strip()
+        if facility and facility not in facilities:
+            facilities.append(facility)
+    return [f"exclude facility identity {facility}" for facility in facilities]
 
 
 def _operand_context(

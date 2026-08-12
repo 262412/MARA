@@ -4,7 +4,6 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
-from .metrics import is_abstention_answer
 from .qasper_answer_normalization import (
     canonical_semantic_label as _canonical_semantic_label,
 )
@@ -198,7 +197,15 @@ def synchronize_terminal_answer_state(prediction: dict[str, Any]) -> bool:
     if not isinstance(contract, dict) or contract.get("contract_id") != (
         QASPER_RUNTIME_AUTHORITY_AUDIT
     ):
-        return False
+        return _synchronize_runtime_terminal_commit(prediction)
+
+    return _synchronize_qasper_terminal_state(prediction, contract)
+
+
+def _synchronize_qasper_terminal_state(
+    prediction: dict[str, Any],
+    contract: dict[str, Any],
+) -> bool:
     engine_label = _canonical_semantic_label(
         str(prediction.get("engine_terminal_answer") or "")
     )
@@ -236,16 +243,16 @@ def synchronize_terminal_answer_state(prediction: dict[str, Any]) -> bool:
         if isinstance(value, dict)
     ]
     engine_answer = str(prediction.get("engine_terminal_answer") or "")
-    answer_type = str(prediction.get("answer_type") or "").strip().lower()
-    terminal_answer = (
-        final_answer
-        if semantic_rewrite
-        else (
-            final_label or final_answer
-            if answer_type == "boolean" or is_abstention_answer(engine_answer)
-            else engine_answer
-        )
+    terminal_commit = prediction.get("engine_terminal_commit") or prediction.get(
+        "terminal_semantic_commit"
     )
+    immutable_engine_answer = engine_answer
+    if isinstance(terminal_commit, dict) and _runtime_projection_present(prediction):
+        immutable_engine_answer = str(
+            terminal_commit.get("semantic_answer") or engine_answer
+        )
+    terminal_answer = immutable_engine_answer
+    scoring_answer = immutable_engine_answer if semantic_rewrite else final_answer
     rebuild_terminal_answer_state(
         prediction,
         answer=terminal_answer,
@@ -260,9 +267,61 @@ def synchronize_terminal_answer_state(prediction: dict[str, Any]) -> bool:
         supporting_evidence=supporting_evidence,
         guardrail_decision=guardrail_decision,
         emitted_citations=citations,
-        scoring_answer=final_answer,
+        scoring_answer=scoring_answer,
     )
-    _update_contract_trace(prediction)
+    if not semantic_rewrite:
+        _update_contract_trace(prediction)
+    return True
+
+
+def _synchronize_runtime_terminal_commit(prediction: dict[str, Any]) -> bool:
+    """Project a non-QASPER runtime commit without changing its answer."""
+
+    from .answer_scoring_adapter import answer_for_scoring
+    from .qasper_runtime_projection import (
+        runtime_projection_present,
+        runtime_terminal_commit,
+    )
+    from .terminal_answer_state import rebuild_terminal_answer_state
+
+    commit = runtime_terminal_commit(prediction)
+    if not commit or not runtime_projection_present(prediction):
+        return False
+    answer = str(commit.get("semantic_answer") or "")
+    if not answer:
+        return False
+    verify_decision = deepcopy(commit.get("verify_decision") or {})
+    guardrail_decision = deepcopy(commit.get("guardrail_decision") or {})
+    supporting_evidence = [
+        dict(item)
+        for item in commit.get("authoritative_evidence") or []
+        if isinstance(item, dict)
+    ]
+    citations = [
+        dict(item)
+        for item in prediction.get("structured_citations") or []
+        if isinstance(item, dict)
+    ]
+    rebuild_terminal_answer_state(
+        prediction,
+        answer=answer,
+        verify_decision=verify_decision,
+        supporting_evidence=supporting_evidence,
+        guardrail_decision=guardrail_decision,
+        emitted_citations=citations,
+        scoring_answer=answer_for_scoring(
+            answer,
+            dataset_name=str(
+                prediction.get("dataset_name") or prediction.get("dataset") or ""
+            ),
+            preserve_semantic_answer=True,
+        ),
+    )
+    prediction.setdefault("evidence_metadata", {})["terminal_commit_projection"] = {
+        "contract_id": commit.get("contract_id"),
+        "projection_hash": commit.get("projection_hash"),
+        "answer": answer,
+    }
     return True
 
 

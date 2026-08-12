@@ -54,6 +54,7 @@ from .query_evidence_constraints import (
     period_kind_conflicts,
     period_kind_in_question,
 )
+from .query_plan_schema import slot_binding_state
 
 _SCALED_RESULT_TYPES = {
     "capital_expenditure",
@@ -241,7 +242,7 @@ def _slot_evidence_ids(
         for dimension in (query_plan or {}).get("evidence_slots") or []
         if isinstance(dimension, dict)
         and str(dimension.get("role") or "") == "dimension"
-        and str(dimension.get("status") or "") == "filled"
+        and slot_binding_state(dimension) == "filled"
         for evidence_id in dimension.get("evidence_ids") or []
     )
     return list(dict.fromkeys(values))

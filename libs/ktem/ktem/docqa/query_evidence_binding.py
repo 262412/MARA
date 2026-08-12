@@ -27,10 +27,19 @@ from .query_evidence_binding_support import (
 from .query_evidence_binding_support import item_for_raw_id as _item_for_raw_id
 from .query_evidence_binding_support import score_evidence_for_slot
 from .query_evidence_binding_support import (
+    slot_item_materialized as _slot_item_materialized,
+)
+from .query_evidence_binding_support import slot_semantic_match as _slot_semantic_match
+from .query_evidence_binding_support import (
     trusted_dimension_item as _trusted_dimension_item,
 )
 from .query_phrase_extraction import source_page_locator
-from .query_plan_schema import EvidenceSlot, QueryPlan
+from .query_plan_schema import (
+    EvidenceSlot,
+    QueryPlan,
+    required_slot_count,
+    slot_binding_state,
+)
 
 
 def bind_evidence_slots(
@@ -189,15 +198,32 @@ def _candidate_ids_for_slot(
     segment_ids = _segment_comparison_candidate_ids(plan, slot, ranked)
     if segment_ids is not None:
         return segment_ids
-    if slot.metric == "revolving credit capacity" and slot.entity.startswith("active"):
+    if (
+        slot.role == "operand"
+        and str(slot.operator_role or "").lower() == "collection"
+        and max(1, slot.cardinality) > 1
+    ):
         selected: list[str] = []
         facilities: set[str] = set()
         for score, _index, item in ranked:
             if score <= 0:
                 continue
             attributes = _agreement_attributes(item)
-            facility = attributes["facility_identity"] or attributes["facility_type"]
-            if not facility or facility in facilities:
+            if slot.metric == "revolving credit capacity" and slot.entity.startswith(
+                "active"
+            ):
+                if attributes["agreement_lifecycle_status"] != "active":
+                    continue
+                as_of_date = slot.entity.removeprefix("active_at:")
+                effective_date = attributes["effective_date"]
+                if (
+                    slot.entity.startswith("active_at:")
+                    and effective_date
+                    and effective_date > as_of_date
+                ):
+                    continue
+            facility = attributes["facility_identity"] or identity_of(item).key
+            if facility in facilities:
                 continue
             facilities.add(facility)
             selected.append(identity_of(item).key)
@@ -297,7 +323,7 @@ def _existing_binding_state(
         or not slot.evidence_ids
     ):
         return False, "missing_existing_binding"
-    if len(slot.evidence_ids) < max(1, slot.cardinality):
+    if len(slot.evidence_ids) < required_slot_count(slot):
         return False, "incomplete_existing_binding"
     items = [evidence_by_identity.get(evidence_id) for evidence_id in slot.evidence_ids]
     if any(item is None for item in items):
@@ -322,6 +348,21 @@ def _existing_binding_state(
         not _trusted_dimension_item(item) for item in items if item is not None
     ):
         return False, "incompatible_existing_binding"
+    if (
+        slot_binding_state(
+            slot,
+            [item for item in items if item is not None],
+            semantic_match=lambda item: _slot_semantic_match(
+                slot,
+                item,
+                requires_structure=requires_structure,
+            ),
+            materialized=lambda item: _slot_item_materialized(slot, item),
+            provenance_complete=lambda item: bool(identity_of(item).key),
+        )
+        != "filled"
+    ):
+        return False, "incomplete_existing_binding"
     if _provenance_complete_revenue_equivalent_available(
         slot,
         items,
@@ -355,7 +396,23 @@ def _bound_slot_status(
         if levels and "complete" not in levels and "partial" in levels:
             return "retrieved_partial"
         return "retrieved_unverified"
-    return "filled"
+    items = [
+        evidence_by_identity[evidence_id]
+        for evidence_id in evidence_ids
+        if evidence_id in evidence_by_identity
+    ]
+    state_slot = replace(slot, evidence_ids=evidence_ids)
+    return slot_binding_state(
+        state_slot,
+        items,
+        semantic_match=lambda item: _slot_semantic_match(
+            slot,
+            item,
+            requires_structure=bool(slot.statement_kind or slot.financial_scope),
+        ),
+        materialized=lambda item: _slot_item_materialized(slot, item),
+        provenance_complete=lambda item: bool(identity_of(item).key),
+    )
 
 
 def _binding_trace(

@@ -454,8 +454,8 @@ def test_trailing_row_label_revenue_materializes_for_net_sales_slot() -> None:
 
 def test_financial_numeric_span_is_an_executable_operand() -> None:
     question = (
-        "As of May 26, 2023, what is the total amount available under the "
-        "revolving credit agreements?"
+        "As of May 26, 2023, what amount was available under the "
+        "revolving credit agreement?"
     )
     span = {
         "evidence_id": "span:report:2:credit-capacity",

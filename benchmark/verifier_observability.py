@@ -12,6 +12,8 @@ OBSERVABILITY_COUNT_FIELDS = (
     "false_abstention",
     "has_unsupported_claim",
     "retry_count",
+    "retrieval_retry_count",
+    "verifier_recovery_count",
     "route_switch_count",
 )
 
@@ -21,7 +23,7 @@ def prediction_verifier_observability(prediction: dict[str, Any]) -> dict[str, i
     abstained = _prediction_abstained(prediction, metrics)
     false_abstention = int(_metric_positive(metrics, "false_abstention"))
     unsupported_claim_count = _unsupported_claim_count(prediction, metrics)
-    return {
+    observations = {
         "abstained": abstained,
         "true_abstention": int(bool(abstained and not false_abstention)),
         "false_abstention": false_abstention,
@@ -38,13 +40,22 @@ def prediction_verifier_observability(prediction: dict[str, Any]) -> dict[str, i
             kind="route_switch",
         ),
     }
+    category_counts = _category_event_counts(prediction)
+    if (
+        category_counts["retrieval_retry_count"]
+        or category_counts["verifier_recovery_count"]
+    ):
+        observations.update(category_counts)
+    return observations
 
 
 def verifier_observability_summary(
     predictions: list[dict[str, Any]],
-) -> dict[str, int | float | None]:
+) -> dict[str, Any]:
     observations = _observations(predictions)
-    return _observation_summary(observations)
+    summary = _observation_summary(observations)
+    summary.update(_observed_policy_fields(predictions))
+    return summary
 
 
 def route_verifier_observability_table(
@@ -71,8 +82,10 @@ def route_verifier_observability_table(
 
 def route_verifier_observability_fields(
     predictions: list[dict[str, Any]],
-) -> dict[str, int | float | None]:
-    return _observation_summary(_observations(predictions))
+) -> dict[str, Any]:
+    fields = _observation_summary(_observations(predictions))
+    fields.update(_observed_policy_fields(predictions))
+    return fields
 
 
 def _observation_summary(
@@ -93,7 +106,7 @@ def _observation_summary(
         1 for item in observations if item.get("route_switch_count", 0) > 0
     )
     total_route_switch_count = _sum_observations(observations, "route_switch_count")
-    return {
+    summary = {
         "num_abstention": num_abstention,
         "num_true_abstention": num_true_abstention,
         "num_false_abstention": num_false_abstention,
@@ -109,6 +122,32 @@ def _observation_summary(
         "retry_rate": _rate(num_retry, num_predictions),
         "route_switch_rate": _rate(num_route_switch, num_predictions),
     }
+    retrieval_retry_count = _sum_observations(
+        observations,
+        "retrieval_retry_count",
+    )
+    verifier_recovery_count = _sum_observations(
+        observations,
+        "verifier_recovery_count",
+    )
+    if retrieval_retry_count or verifier_recovery_count:
+        summary.update(
+            {
+                "num_retrieval_retry": sum(
+                    1
+                    for item in observations
+                    if item.get("retrieval_retry_count", 0) > 0
+                ),
+                "total_retrieval_retry_count": retrieval_retry_count,
+                "num_verifier_recovery": sum(
+                    1
+                    for item in observations
+                    if item.get("verifier_recovery_count", 0) > 0
+                ),
+                "total_verifier_recovery_count": verifier_recovery_count,
+            }
+        )
+    return summary
 
 
 def _observations(predictions: list[dict[str, Any]]) -> list[dict[str, int]]:
@@ -198,6 +237,69 @@ def _control_event_count(
     return count
 
 
+def _category_event_counts(prediction: dict[str, Any]) -> dict[str, int]:
+    events = _control_events(prediction)
+    verifier_recovery_count = _control_event_count_from_events(
+        events,
+        _is_verifier_recovery_event,
+        kind="verifier_recovery",
+    )
+    explicit_retrieval_retry_count = _control_event_count_from_events(
+        events,
+        _is_retrieval_retry_event,
+        kind="retrieval_retry",
+    )
+    return {
+        "retrieval_retry_count": max(
+            explicit_retrieval_retry_count,
+            _implicit_retrieval_retry_count(
+                prediction,
+                verifier_recovery_count=verifier_recovery_count,
+            ),
+        ),
+        "verifier_recovery_count": verifier_recovery_count,
+    }
+
+
+def _implicit_retrieval_retry_count(
+    prediction: dict[str, Any],
+    *,
+    verifier_recovery_count: int,
+) -> int:
+    rounds = 1
+    metadata_values = [prediction.get("evidence_metadata")]
+    bundle = prediction.get("evidence_bundle")
+    if isinstance(bundle, dict):
+        metadata_values.append(bundle.get("metadata"))
+    for metadata in metadata_values:
+        if not isinstance(metadata, dict):
+            continue
+        try:
+            rounds = max(rounds, int(metadata.get("retrieval_rounds") or 1))
+        except (TypeError, ValueError):
+            continue
+    return max(0, rounds - 1 - verifier_recovery_count)
+
+
+def _control_event_count_from_events(
+    events: list[dict[str, Any]],
+    predicate: Callable[[dict[str, Any]], bool],
+    *,
+    kind: str,
+) -> int:
+    seen: set[tuple[str, ...]] = set()
+    count = 0
+    for event in events:
+        if not predicate(event):
+            continue
+        key = _logical_control_event_key(event, kind=kind)
+        if key in seen:
+            continue
+        seen.add(key)
+        count += 1
+    return count
+
+
 def _logical_control_event_key(
     event: dict[str, Any],
     *,
@@ -217,6 +319,18 @@ def _logical_control_event_key(
             return (kind, "route", from_route, to_route, *attempt)
         return (kind, "marker", _route_switch_marker(event), *attempt)
 
+    if kind == "verifier_recovery":
+        return (
+            kind,
+            "recovery",
+            _event_id(event, kind=kind),
+            _normalized_event_value(event.get("verifier_recovery_attempt"))
+            or _normalized_event_value(event.get("attempt")),
+            _normalized_event_value(event.get("failure_type"))
+            or _normalized_event_value(event.get("retry_reason")),
+            _route_value(event.get("from_route") or event.get("route")),
+            _route_value(event.get("to_route")),
+        )
     return (
         kind,
         "retry",
@@ -235,6 +349,8 @@ def _event_id(event: dict[str, Any], *, kind: str) -> str:
     )
     if kind == "retry":
         keys += ("retry_id", "logical_retry_key", "retry_key")
+    if kind == "verifier_recovery":
+        keys += ("recovery_id", "logical_recovery_key", "recovery_key")
     for key in keys:
         value = _normalized_event_value(event.get(key))
         if value:
@@ -321,6 +437,37 @@ def _is_retry_event(event: dict[str, Any]) -> bool:
     return "retry" in _event_text(event)
 
 
+def _is_verifier_recovery_event(event: dict[str, Any]) -> bool:
+    if event.get("verifier_recovery_attempt") is not None:
+        return True
+    stage = _normalized_event_value(event.get("stage"))
+    return bool(
+        stage
+        in {
+            "verifier_recovery",
+            "critic",
+            "focused_retrieval",
+            "evidence_rebind",
+            "reverify",
+        }
+        and (
+            "recovery" in _event_text(event)
+            or event.get("failure_type")
+            or event.get("retry_reason")
+        )
+    )
+
+
+def _is_retrieval_retry_event(event: dict[str, Any]) -> bool:
+    if _is_verifier_recovery_event(event):
+        return False
+    explicit = " ".join(
+        _normalized_event_value(event.get(key))
+        for key in ("retry_kind", "retry_reason", "action", "event", "operation")
+    )
+    return "retrieval" in explicit and "retry" in explicit
+
+
 def _is_route_switch_event(event: dict[str, Any]) -> bool:
     from_route = str(event.get("from_route") or event.get("previous_route") or "")
     to_route = str(event.get("to_route") or event.get("next_route") or "")
@@ -378,3 +525,23 @@ def _ordered_routes(predictions: list[dict[str, Any]]) -> list[str]:
         if route and route not in routes:
             routes.append(route)
     return routes
+
+
+def _observed_policy_fields(predictions: list[dict[str, Any]]) -> dict[str, Any]:
+    modes = _observed_values(predictions, "agent_mode")
+    policies = _observed_values(predictions, "route_policy")
+    fields: dict[str, Any] = {}
+    if modes:
+        fields["agent_modes"] = modes
+    if policies:
+        fields["route_policies"] = policies
+    return fields
+
+
+def _observed_values(predictions: list[dict[str, Any]], key: str) -> list[str]:
+    values: list[str] = []
+    for prediction in predictions:
+        value = str(prediction.get(key) or "").strip()
+        if value and value not in values:
+            values.append(value)
+    return values
