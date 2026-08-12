@@ -232,6 +232,9 @@ def _classify_proposition_span(
     ):
         classification = "insufficient_scope"
         reason = scope_rejection or f"excluded_{section_role or actor}_scope"
+    elif not exact_span_asserts_boolean_relation(question, span):
+        classification = "unrelated"
+        reason = "target_relation_not_asserted_in_exact_span"
     elif _metalinguistic_relation_mention(question, span):
         classification = "unrelated"
         reason = "target_relation_mentioned_but_not_asserted"
@@ -259,6 +262,15 @@ def _classify_proposition_span(
         classification = "contradicts"
         reason = "scope_valid_opposite_proposition"
     return classification, reason
+
+
+def exact_span_asserts_boolean_relation(question: str, span: str) -> bool:
+    """Return whether the exact span asserts a compatible Boolean relation."""
+
+    semantic_question = semantic_boolean_proposition_question(question)
+    if not primary_boolean_relation(semantic_question):
+        return False
+    return _relation_compatibility(semantic_question, span) > 0
 
 
 def _metalinguistic_relation_mention(question: str, span: str) -> bool:

@@ -17,6 +17,9 @@ NEGATIVE_SPAN = "The authors did not release the code."
 FOLLOWUP_SPAN = "The release statement describes packaging."
 POSITIVE_SPAN = "The authors released the code publicly with the paper."
 NEGATIVE_PAGE_SPAN = "The authors did not release the code for the final system."
+NEGATIVE_SMOKE_SPAN = (
+    "The authors did not release the code for the final evaluated system."
+)
 
 
 def _item(
@@ -57,6 +60,48 @@ def _cross_page_items() -> tuple[dict[str, Any], dict[str, Any]]:
         _item("positive", "1", POSITIVE_SPAN),
         _item("negative", "2", NEGATIVE_PAGE_SPAN),
     )
+
+
+def _smoke_artifact_items() -> list[dict[str, Any]]:
+    positive = _item(
+        "positive-page",
+        "1",
+        (
+            "Contract Smoke Study - Methods\n"
+            f"{POSITIVE_SPAN}\n"
+            "The release statement applies to the final evaluated system.\n"
+            "Page 1"
+        ),
+    )
+    negative = _item(
+        "negative-page",
+        "2",
+        (
+            "Contract Smoke Study - Correction\n"
+            f"{NEGATIVE_SMOKE_SPAN}\n"
+            "This correction explicitly supersedes the earlier release statement.\n"
+            "Page 2"
+        ),
+    )
+    positive_graph = {
+        **_item("positive-graph-1", "1", f"Methods\n{POSITIVE_SPAN}"),
+        "modality": "graph",
+        "evidence_level": "graph",
+        "element_id": "contract:paper:1",
+    }
+    stale_positive_graph = {
+        **_item("positive-graph-2", "2", f"Methods\n{POSITIVE_SPAN}"),
+        "modality": "graph",
+        "evidence_level": "graph",
+        "element_id": "contract:paper:2",
+    }
+    negative_graph = {
+        **_item("negative-graph-2", "2", f"Correction\n{NEGATIVE_SMOKE_SPAN}"),
+        "modality": "graph",
+        "evidence_level": "graph",
+        "element_id": "correction:paper:2",
+    }
+    return [positive, negative, positive_graph, stale_positive_graph, negative_graph]
 
 
 def _bound_cross_page_plan(
@@ -103,6 +148,80 @@ def test_boolean_negation_is_derived_from_exact_proposition_span() -> None:
     assert selected.polarity == "no"
     assert selected.quote == NEGATIVE_SPAN
     assert FOLLOWUP_SPAN not in selected.quote
+
+
+def test_page_locator_cannot_borrow_prior_relation_or_opposite_polarity() -> None:
+    items = _smoke_artifact_items()
+    negative = items[1]
+
+    assessments = classify_boolean_evidence_candidates(QUESTION, "no", negative)
+    assert all(
+        assessment.span_text != "Page 2"
+        or assessment.classification not in {"supports", "contradicts"}
+        for assessment in assessments
+    )
+
+    authority = boolean_claim_authority(QUESTION, "no", items)
+    assert authority is not None
+    assert authority.status == "conflicting"
+    assert {
+        value.quote for value in (*authority.supporting, *authority.contradicting)
+    } == {
+        POSITIVE_SPAN,
+        NEGATIVE_SMOKE_SPAN,
+    }
+    assert all("Page " not in value.quote for value in authority.supporting)
+    assert all("Page " not in value.quote for value in authority.contradicting)
+
+    plan = _bound_cross_page_plan(items)
+    decision = verify_decision(
+        _request(plan),
+        RetrieveDecision(status="good", reason="ok"),
+        EvidenceBundle(
+            route="hybrid",
+            items=items,
+            metadata={"query_plan": plan.as_dict()},
+        ),
+        answer="no",
+    )
+    assert decision.status == "verified_conflict"
+    assert decision.authoritative_conflict["required_evidence_coverage"] == 1.0
+
+
+def test_smoke_artifact_bundle_commits_complete_conflict_terminal_state() -> None:
+    items = _smoke_artifact_items()
+    result = execute_controller_turn(
+        _request(),
+        retrieve=lambda *_args: {"evidence": items},
+        generate=lambda *_args: "no",
+    )
+
+    decision = result.verify_decision.as_dict()
+    conflict = decision["authoritative_conflict"]
+    assert decision["status"] == "verified_conflict"
+    assert decision["action"] == "abstain"
+    assert decision["reason"] == "authoritative_conflict_abstention"
+    assert conflict["required_evidence_coverage"] == 1.0
+    assert {
+        value["quote"]
+        for side in ("positive_authorities", "negative_authorities")
+        for value in conflict[side]
+    } == {POSITIVE_SPAN, NEGATIVE_SMOKE_SPAN}
+
+    assert result.answer == ABSTAIN_MESSAGE
+    terminal = result.engine_terminal_state
+    assert terminal["normalized_candidate_label"] == "unanswerable"
+    assert terminal["terminal_reason"] == "authoritative_conflict_abstention"
+    assert terminal["authoritative_conflict"] == conflict
+    plan = result.evidence_bundle.metadata["query_plan"]
+    assert plan["stage"] == "verified"
+    assert plan["state_authority"] == "boolean_authoritative_conflict.v1"
+    assert {slot["status"] for slot in plan["evidence_slots"]} == {"verified_conflict"}
+    assert not any(
+        event.get("verifier_recovery_attempt") for event in result.controller_trace
+    )
+    [stop] = [event for event in result.controller_trace if event.get("stop_reason")]
+    assert stop["stop_reason"] == "authority_conflict_resolved"
 
 
 def test_two_sided_authorities_are_disjoint_by_canonical_span_identity() -> None:

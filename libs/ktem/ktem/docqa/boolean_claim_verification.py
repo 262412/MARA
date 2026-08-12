@@ -15,19 +15,22 @@ from .boolean_evidence_scope import (
 )
 from .boolean_proposition_context import (
     PropositionContextWindow,
-    bounded_proposition_context,
     exact_proposition_context,
 )
 from .boolean_proposition_evidence import (
     BooleanEvidenceAssessment,
     boolean_proposition_object_identity,
     classify_boolean_evidence_set,
+    exact_span_asserts_boolean_relation,
     proposition_qualifier,
 )
-from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
+from .boolean_relations import primary_boolean_relation
 from .evidence_identity import identity_of
 from .evidence_text import extract_final_answer_text
-from .query_phrase_extraction import source_page_locator
+from .query_phrase_extraction import (
+    semantic_boolean_proposition_question,
+    source_page_locator,
+)
 
 
 def canonical_boolean_answer_polarity(answer: str) -> str:
@@ -330,7 +333,7 @@ def _exact_authorities(
         window = _exact_window(
             assessment.item,
             assessment.span_text,
-            question=prompt,
+            question=semantic_boolean_proposition_question(prompt),
         )
         if window is None:
             continue
@@ -428,13 +431,8 @@ def _assertive_relation(
     assessment: BooleanEvidenceAssessment,
 ) -> bool:
     span = assessment.span_text.lower()
-    context = bounded_proposition_context(
-        evidence_item_text(assessment.item),
-        assessment.span_text,
-        question=prompt,
-    ).lower()
-    relation = primary_boolean_relation(prompt)
-    if not relation or relation not in boolean_relation_lemmas(context):
+    semantic_prompt = semantic_boolean_proposition_question(prompt)
+    if not exact_span_asserts_boolean_relation(semantic_prompt, span):
         return False
     if assessment.object_score < 1.0 or not assessment.proposition.object:
         return False
