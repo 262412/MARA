@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .finance_calculation_recovery import missing_required_calculation_slot_ids
 from .finance_typed_adequacy import typed_calculation_adequacy
 
 
@@ -62,17 +63,28 @@ def retrieval_adequacy_issue(
         evidence_metadata,
         domain=domain,
     )
+    missing_calculation_slots = missing_required_calculation_slot_ids(evidence_metadata)
+    calculation_issue = (
+        "Typed calculation is missing required slot(s): "
+        + ", ".join(missing_calculation_slots)
+        + "."
+        if missing_calculation_slots
+        else ""
+    )
+    final_issue = "" if typed_status == "good" else calculation_issue or heuristic_issue
     heuristic_status = "ambiguous" if heuristic_issue else "good"
     typed_overrides = typed_status == "good" and bool(heuristic_issue)
     evidence_metadata.update(
         {
             "typed_adequacy_status": typed_status,
             "heuristic_adequacy_status": heuristic_status,
-            "final_adequacy_status": (
-                "good" if typed_status == "good" else heuristic_status
-            ),
+            "final_adequacy_status": ("ambiguous" if final_issue else "good"),
             "adequacy_decision_authority": (
-                "typed_calculation" if typed_status == "good" else "general_heuristic"
+                "typed_calculation"
+                if typed_status == "good"
+                else "query_plan"
+                if calculation_issue
+                else "general_heuristic"
             ),
             "heuristic_overridden": typed_overrides,
             "heuristic_override_reason": (
@@ -83,7 +95,7 @@ def retrieval_adequacy_issue(
             "typed_adequacy_reason": typed_reason,
         }
     )
-    return "" if typed_status == "good" else heuristic_issue
+    return final_issue
 
 
 def _heuristic_adequacy_issue(

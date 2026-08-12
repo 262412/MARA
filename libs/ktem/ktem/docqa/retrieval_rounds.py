@@ -42,6 +42,7 @@ def retrieve_with_rounds(
         attempted_retry=False,
     )
     second_round_requests = _second_round_requests(evidence_bundle)
+    calculation_recovery = _calculation_recovery_requests(second_round_requests)
     retry_for_slots = bool(second_round_requests)
     retry_for_quality = (
         retrieve_decision.status == "ambiguous" and retrieve_decision.retry
@@ -69,8 +70,13 @@ def retrieve_with_rounds(
         retrieve,
         second_round_requests,
     )
-    merged_metadata = _merge_retrieval_metadata(
+    merge_base = _second_round_merge_base(
         evidence_metadata,
+        evidence_bundle,
+        calculation_recovery,
+    )
+    merged_metadata = _merge_retrieval_metadata(
+        merge_base,
         second_round_metadata,
     )
     evidence_bundle = build_evidence_bundle(
@@ -267,6 +273,36 @@ def _second_round_requests(bundle: EvidenceBundle) -> list[dict[str, str]]:
             start=1,
         )
     ]
+
+
+def _calculation_recovery_requests(
+    requests: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    return [
+        request
+        for request in requests
+        if str(request.get("query_id") or "").startswith("round2:calculation_recovery:")
+    ]
+
+
+def _second_round_merge_base(
+    evidence_metadata: dict[str, Any],
+    bundle: EvidenceBundle,
+    calculation_recovery: list[dict[str, str]],
+) -> dict[str, Any]:
+    base = dict(evidence_metadata)
+    if not calculation_recovery:
+        return base
+    trace = dict(bundle.metadata.get("calculation_recovery_trace") or {})
+    trace.update(
+        {
+            "attempt_count": int(trace.get("attempt_count") or 0) + 1,
+            "status": "retrieving",
+            "targeted_requests": [dict(item) for item in calculation_recovery],
+        }
+    )
+    base["calculation_recovery_trace"] = trace
+    return base
 
 
 def _quality_retry_request(request: Any) -> dict[str, str]:

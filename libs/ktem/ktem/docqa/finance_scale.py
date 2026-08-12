@@ -98,6 +98,29 @@ def source_scale_evidence(
     return scale, evidence_id
 
 
+def source_page_table_scale_evidence(
+    item: dict[str, Any] | None,
+    evidence_items: list[dict[str, Any]],
+) -> tuple[str, str]:
+    """Resolve scale only inside the operand's exact source/page/table lineage."""
+
+    if item is None:
+        return "", ""
+    source_id = _source_id(item)
+    page_label = _item_dimension(item, "page_label")
+    table_keys = _table_keys(item)
+    if not source_id or not page_label or not table_keys:
+        return "", ""
+    local_items = [
+        candidate
+        for candidate in evidence_items
+        if _source_id(candidate) == source_id
+        and _item_dimension(candidate, "page_label") == page_label
+        and bool(table_keys & _table_keys(candidate))
+    ]
+    return source_scale_evidence(item, local_items)
+
+
 def _explicit_scale_in_text(text: str, scale: str) -> bool:
     return bool(
         re.search(

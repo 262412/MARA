@@ -4,6 +4,10 @@ from typing import Any
 
 from .calculation_evidence_identity import calculation_evidence_lookup
 from .finance_calculation_contract import finance_calculation_authoritative
+from .finance_calculation_recovery import (
+    missing_required_calculation_slot_ids,
+    synchronize_calculation_recovery,
+)
 from .finance_numeric_answer import finance_numeric_answer
 from .query_plan_schema import plan_from_payload
 from .query_planning import request_planning_question
@@ -23,10 +27,15 @@ def ensure_finance_numeric_trace(request: Any, bundle: Any) -> None:
     ]
     existing_trace = metadata.get("finance_numeric_trace")
     if isinstance(existing_trace, dict) and existing_trace:
-        _synchronize_typed_query_state(
-            request, metadata, evidence_items, existing_trace
+        trace = _refresh_trace_missing_dimensions(
+            request,
+            metadata,
+            evidence_items,
+            existing_trace,
         )
-        _synchronize_typed_support(metadata, evidence_items, existing_trace)
+        _synchronize_typed_query_state(request, metadata, evidence_items, trace)
+        synchronize_calculation_recovery(request, metadata, trace)
+        _synchronize_typed_support(metadata, evidence_items, trace)
         return
     query_plan = dict(metadata.get("query_plan") or {})
     if query_plan and not finance_calculation_authoritative(query_plan):
@@ -40,7 +49,33 @@ def ensure_finance_numeric_trace(request: Any, bundle: Any) -> None:
         trace = result.as_trace()
         metadata["finance_numeric_trace"] = trace
         _synchronize_typed_query_state(request, metadata, evidence_items, trace)
+        synchronize_calculation_recovery(request, metadata, trace)
         _synchronize_typed_support(metadata, evidence_items, trace)
+
+
+def _refresh_trace_missing_dimensions(
+    request: Any,
+    metadata: dict[str, Any],
+    evidence_items: list[dict[str, Any]],
+    existing_trace: dict[str, Any],
+) -> dict[str, Any]:
+    if not missing_required_calculation_slot_ids(metadata):
+        return existing_trace
+    query_plan = dict(
+        existing_trace.get("authoritative_query_plan")
+        or metadata.get("query_plan")
+        or {}
+    )
+    result = finance_numeric_answer(
+        request_planning_question(request),
+        evidence_items,
+        query_plan=query_plan,
+    )
+    if result is None:
+        return existing_trace
+    trace = result.as_trace()
+    metadata["finance_numeric_trace"] = trace
+    return trace
 
 
 def _synchronize_typed_query_state(

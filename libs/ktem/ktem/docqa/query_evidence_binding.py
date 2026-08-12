@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from .boolean_proposition_evidence import boolean_proposition_authority_level
@@ -9,11 +10,13 @@ from .cross_page_boolean_authority import reconcile_cross_page_boolean_propositi
 from .deterministic_ranking import quantized_score
 from .evidence_identity import identity_of
 from .finance_narrative_evidence import authoritative_narrative_candidate_ids
-from .finance_scale import source_scale_evidence
+from .finance_query_planning import finance_revenue_row_quality
+from .finance_scale import source_page_table_scale_evidence, source_scale_evidence
 from .finance_segment_comparison import (
     coherent_segment_evidence_items,
     segment_comparison_evidence_items,
 )
+from .financial_statement_identity import source_identity
 from .query_evidence_binding_support import (
     agreement_attributes as _agreement_attributes,
 )
@@ -67,6 +70,7 @@ def _bind_evidence_slots(
         preserved, replacement_reason = _existing_binding_state(
             slot,
             evidence_by_identity,
+            evidence_items,
             requires_structure=bool(plan.constraints.get("requires_structure")),
         )
         if preserve_existing and preserved:
@@ -159,7 +163,14 @@ def _ranked_evidence(
     return sorted(
         ranked,
         key=lambda row: (
-            -quantized_score(row[0] + _binding_quality(slot, row[2])),
+            -quantized_score(
+                row[0]
+                + _slot_binding_quality(
+                    slot,
+                    row[2],
+                    evidence_items,
+                )
+            ),
             -quantized_score(row[0]),
             identity_of(row[2]).key,
         ),
@@ -270,6 +281,7 @@ def _update_bound_operand_state(
 def _existing_binding_state(
     slot: EvidenceSlot,
     evidence_by_identity: dict[str, dict[str, Any]],
+    evidence_items: list[dict[str, Any]],
     *,
     requires_structure: bool,
 ) -> tuple[bool, str]:
@@ -309,6 +321,13 @@ def _existing_binding_state(
         not _trusted_dimension_item(item) for item in items if item is not None
     ):
         return False, "incompatible_existing_binding"
+    if _provenance_complete_revenue_equivalent_available(
+        slot,
+        items,
+        evidence_items,
+        requires_structure=requires_structure,
+    ):
+        return False, "provenance_complete_equivalent_available"
     return True, ""
 
 
@@ -373,6 +392,98 @@ def _dimension_candidate_ids(
         if identity not in selected:
             selected.append(identity)
     return selected
+
+
+def _slot_binding_quality(
+    slot: EvidenceSlot,
+    item: dict[str, Any],
+    evidence_items: list[dict[str, Any]],
+) -> float:
+    quality = _binding_quality(slot, item)
+    if not _is_revenue_operand_slot(slot):
+        return quality
+    local_scale, _evidence_id = source_page_table_scale_evidence(
+        item,
+        evidence_items,
+    )
+    return quality + (2.0 if local_scale else 0.0)
+
+
+def _provenance_complete_revenue_equivalent_available(
+    slot: EvidenceSlot,
+    existing_items: list[dict[str, Any] | None],
+    evidence_items: list[dict[str, Any]],
+    *,
+    requires_structure: bool,
+) -> bool:
+    if not _is_revenue_operand_slot(slot) or len(existing_items) != 1:
+        return False
+    existing = existing_items[0]
+    if existing is None:
+        return False
+    existing_scale, _existing_scale_id = source_page_table_scale_evidence(
+        existing,
+        evidence_items,
+    )
+    if existing_scale:
+        return False
+    return any(
+        identity_of(candidate).key != identity_of(existing).key
+        and _equivalent_revenue_operand(existing, candidate)
+        and _candidate_score_for_slot(
+            slot,
+            candidate,
+            requires_structure=requires_structure,
+        )
+        > 0
+        and bool(source_page_table_scale_evidence(candidate, evidence_items)[0])
+        for candidate in evidence_items
+    )
+
+
+def _is_revenue_operand_slot(slot: EvidenceSlot) -> bool:
+    return slot.role == "operand" and slot.metric in {"net sales", "revenue"}
+
+
+def _equivalent_revenue_operand(
+    existing: dict[str, Any],
+    candidate: dict[str, Any],
+) -> bool:
+    # Equivalent disclosures may be repeated on different pages. Rebinding swaps
+    # the complete cell identity; it never copies the candidate's scale to the
+    # previously bound cell.
+    existing_source = source_identity(existing)
+    candidate_source = source_identity(candidate)
+    return bool(
+        existing_source
+        and existing_source == candidate_source
+        and str(existing.get("period") or existing.get("column_label") or "").strip()
+        == str(candidate.get("period") or candidate.get("column_label") or "").strip()
+        and _same_numeric_value(existing.get("value"), candidate.get("value"))
+        and str(existing.get("statement_kind") or "").strip()
+        == str(candidate.get("statement_kind") or "").strip()
+        and str(existing.get("financial_scope") or "").strip()
+        == str(candidate.get("financial_scope") or "").strip()
+        and finance_revenue_row_quality(
+            "revenue",
+            str(existing.get("row_label") or ""),
+        )
+        and finance_revenue_row_quality(
+            "revenue",
+            str(candidate.get("row_label") or ""),
+        )
+    )
+
+
+def _same_numeric_value(left: Any, right: Any) -> bool:
+    if left in (None, "") or right in (None, ""):
+        return False
+    try:
+        return Decimal(str(left).replace(",", "")) == Decimal(
+            str(right).replace(",", "")
+        )
+    except InvalidOperation:
+        return False
 
 
 def _distinct_candidate_ids(
