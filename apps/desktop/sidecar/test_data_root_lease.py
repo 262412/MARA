@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import multiprocessing
 import tempfile
 import threading
@@ -50,6 +51,21 @@ class DesktopDataRootLeaseTest(unittest.TestCase):
             with DesktopDataRootLease.acquire(data_root):
                 with self.assertRaises(DesktopDataRootLockedError):
                     DesktopDataRootLease.acquire(data_root)
+
+    def test_repeated_acquisition_replaces_one_valid_process_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            data_root = Path(temporary_directory)
+            lease_path = data_root / "state" / ".sidecar-writer.lock"
+
+            for _ in range(3):
+                with DesktopDataRootLease.acquire(data_root):
+                    identity = json.loads(lease_path.read_text(encoding="ascii"))
+                    self.assertEqual(
+                        identity["pid"], multiprocessing.current_process().pid
+                    )
+                    self.assertEqual(len(identity["identity"]), 32)
+
+            self.assertLess(lease_path.stat().st_size, 128)
 
     def test_two_threads_racing_for_one_data_root_have_one_writer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

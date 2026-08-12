@@ -41,7 +41,7 @@ class DesktopDataRootLease:
                 raise DesktopDataRootLockedError()
             try:
                 lease_path.parent.mkdir(parents=True, exist_ok=True)
-                stream = lease_path.open("a+b")
+                stream = _open_lease_stream(lease_path)
             except OSError:
                 raise DesktopDataRootLeaseError(
                     "desktop_data_root_unwritable",
@@ -87,25 +87,44 @@ def _write_identity(stream: BinaryIO) -> None:
         {"pid": os.getpid(), "identity": uuid4().hex},
         separators=(",", ":"),
     ).encode("ascii")
-    stream.seek(0)
-    stream.write(payload)
-    stream.truncate()
-    stream.flush()
-    os.fsync(stream.fileno())
+    descriptor = stream.fileno()
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    _write_all(descriptor, payload)
+    os.ftruncate(descriptor, len(payload))
+    os.fsync(descriptor)
+
+
+def _open_lease_stream(path: Path) -> BinaryIO:
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        return os.fdopen(descriptor, "r+b", buffering=0)
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _write_all(descriptor: int, payload: bytes) -> None:
+    offset = 0
+    while offset < len(payload):
+        written = os.write(descriptor, payload[offset:])
+        if written <= 0:
+            raise OSError("Unable to write Desktop lease identity")
+        offset += written
 
 
 def _lock_stream(stream: BinaryIO) -> None:
     if os.name == "nt":
         import msvcrt
 
-        stream.seek(0)
-        if stream.read(1) == b"":
-            stream.seek(0)
-            stream.write(b"\0")
-            stream.flush()
-        stream.seek(0)
+        descriptor = stream.fileno()
+        if os.fstat(descriptor).st_size == 0:
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            _write_all(descriptor, b"\0")
+            os.fsync(descriptor)
+        os.lseek(descriptor, 0, os.SEEK_SET)
         msvcrt.locking(  # type: ignore[attr-defined]
-            stream.fileno(),
+            descriptor,
             msvcrt.LK_NBLCK,  # type: ignore[attr-defined]
             1,
         )
@@ -120,9 +139,10 @@ def _unlock_stream(stream: BinaryIO) -> None:
     if os.name == "nt":
         import msvcrt
 
-        stream.seek(0)
+        descriptor = stream.fileno()
+        os.lseek(descriptor, 0, os.SEEK_SET)
         msvcrt.locking(  # type: ignore[attr-defined]
-            stream.fileno(),
+            descriptor,
             msvcrt.LK_UNLCK,  # type: ignore[attr-defined]
             1,
         )

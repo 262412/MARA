@@ -57,8 +57,14 @@ class JsonQueryTaskJournal:
         try:
             if not self._path.exists():
                 return None
+            if self._path.is_dir():
+                raise _corrupt_error(IsADirectoryError(), operation="load")
             raw = self._path.read_text(encoding="utf-8")
+        except QueryTaskPersistenceError:
+            raise
         except OSError as error:
+            if self._path.is_dir():
+                raise _corrupt_error(error, operation="load") from None
             raise _persistence_error(error, operation="load") from None
         try:
             payload = json.loads(raw)
@@ -80,6 +86,11 @@ class JsonQueryTaskJournal:
         temporary_path = _unique_path(self._path, "tmp")
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
+            if self._path.is_dir():
+                raise _corrupt_error(
+                    IsADirectoryError(),
+                    operation="atomic_replace",
+                )
             _write_synced_file(temporary_path, serialized)
             _replace_with_bounded_retry(temporary_path, self._path)
             _sync_directory(self._path.parent)
