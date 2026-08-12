@@ -16,6 +16,7 @@ from .query_task_journal import (
     QueryTaskPersistenceError,
     _persistence_error,
     _post_failure_probe,
+    _write_synced_file,
     persistence_diagnostic,
 )
 
@@ -278,9 +279,7 @@ class QueryTaskJournalAtomicityTest(unittest.TestCase):
 
             def capture_write(temporary_path: Path, payload: bytes) -> None:
                 temporary_paths.append(temporary_path)
-                temporary_path.write_bytes(payload)
-                with temporary_path.open("rb") as stream:
-                    os.fsync(stream.fileno())
+                _write_synced_file(temporary_path, payload)
 
             def access_denied_then_replace(source: Path, destination: Path) -> None:
                 nonlocal attempts
