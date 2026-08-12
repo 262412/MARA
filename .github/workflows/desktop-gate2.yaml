@@ -1153,6 +1153,8 @@ jobs:
             apps/desktop/release/windows-settings-stderr.txt
             apps/desktop/release/windows-settings-restart-stdout.txt
             apps/desktop/release/windows-settings-restart-stderr.txt
+            apps/desktop/release/windows-settings-chat-route.json
+            apps/desktop/release/windows-model-route-migration.json
             apps/desktop/release/windows-metrics.txt
             apps/desktop/release/windows-cli-compat-before.txt
             apps/desktop/release/windows-cli-compat-after.txt

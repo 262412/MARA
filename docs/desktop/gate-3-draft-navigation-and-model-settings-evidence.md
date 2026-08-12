@@ -129,7 +129,7 @@ token/port、响应正文和 traceback 不进入 Renderer 响应。
 | ----------------------------------- | ------------------------------------------------------------------------------- |
 | `cd apps/desktop && npm run verify` | Electron 75、Renderer 34、Sidecar 106、打包配置 5；契约漂移、类型和生产构建通过 |
 | 受影响 `ktem` / `slide_cli` DocQA   | 105 passed；另有 9 项公共 CLI 契约通过                                          |
-| workflow 与供应链策略               | 50 passed                                                                       |
+| workflow 与供应链策略               | 51 passed                                                                       |
 | 代码卫生                            | 所有变更 Python 文件 pre-commit 与 hygiene gate 通过；baseline 未刷新           |
 | Node 依赖                           | `npm audit` 为 0 vulnerabilities                                                |
 

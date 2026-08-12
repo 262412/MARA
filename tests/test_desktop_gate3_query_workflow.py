@@ -53,3 +53,15 @@ def test_desktop_route_implementation_changes_trigger_native_packages() -> None:
     for event in ("pull_request", "push"):
         paths = set(workflow["on"][event]["paths"])
         assert expected_paths <= paths
+
+
+def test_windows_diagnostics_retain_actual_route_and_migration_reports() -> None:
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["package-windows"]["steps"]
+    upload = next(
+        step for step in steps if step.get("name") == "Upload Windows smoke diagnostics"
+    )
+    uploaded_paths = upload["with"]["path"]
+
+    assert "windows-settings-chat-route.json" in uploaded_paths
+    assert "windows-model-route-migration.json" in uploaded_paths
