@@ -37,7 +37,9 @@ from .qasper_answer_normalization import (
 from .qasper_answer_normalization import (
     record_qasper_metadata as _record_qasper_metadata,
 )
+from .qasper_terminal_commit import qasper_terminal_scoring_commit
 from .ragtruth_answer_contract import ragtruth_finalization_metadata
+from .ragtruth_answer_finalizer import finalize_ragtruth_if_requested
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
 _TRUNCATED_JSON_ANSWER_RE = re.compile(
@@ -53,18 +55,19 @@ def finalize_prediction_answer(
     mode: str,
 ) -> None:
     normalized_mode = normalize_benchmark_answer_mode(mode)
-    raw_answer = str(prediction.get("predicted_answer") or "")
-    if "ragtruth" in str(dataset_name or "").strip().lower():
-        _finalize_ragtruth_prediction(
-            prediction,
-            raw_answer=raw_answer,
-            mode=normalized_mode,
-        )
+    raw_answer, preserve_semantic_answer = qasper_terminal_scoring_commit(
+        prediction,
+        dataset_name=dataset_name,
+    )
+    if finalize_ragtruth_if_requested(
+        prediction, raw_answer, dataset_name, normalized_mode
+    ):
         return
-    raw_answer, repetition_removed, repetition_kind = _deduplicate_final_answer(
+    raw_answer, repetition_removed, repetition_kind = _finalization_answer_source(
         raw_answer,
         prediction=prediction,
         dataset_name=dataset_name,
+        preserve_semantic_answer=preserve_semantic_answer,
     )
     raw_answer, qasper_contract_normalized = _normalize_qasper_contract_answer(
         raw_answer,
@@ -96,6 +99,7 @@ def finalize_prediction_answer(
         truncated_answer=truncated_answer,
         dataset_name=dataset_name,
         mode=normalized_mode,
+        preserve_semantic_answer=preserve_semantic_answer,
     )
     if structured_or_text_abstention(prediction, answer_text_for_user):
         answer_for_scoring = "unanswerable"
@@ -122,6 +126,23 @@ def finalize_prediction_answer(
         answer_text_for_user=answer_text_for_user,
         dataset_name=dataset_name,
         qasper_contract_normalized=qasper_contract_normalized,
+    )
+
+
+def _finalization_answer_source(
+    raw_answer: str,
+    *,
+    prediction: dict[str, Any],
+    dataset_name: str,
+    preserve_semantic_answer: bool,
+) -> tuple[str, bool, str]:
+    if preserve_semantic_answer:
+        prediction["predicted_answer"] = raw_answer
+        return raw_answer, False, ""
+    return _deduplicate_final_answer(
+        raw_answer,
+        prediction=prediction,
+        dataset_name=dataset_name,
     )
 
 
@@ -225,30 +246,6 @@ def _store_finalized_answers(
         prediction["answer_finalization"].update(
             ragtruth_finalization_metadata(answer_text_for_user)
         )
-
-
-def _finalize_ragtruth_prediction(
-    prediction: dict[str, Any],
-    *,
-    raw_answer: str,
-    mode: str,
-) -> None:
-    from .ragtruth_answer_contract import ragtruth_json_answer
-
-    json_answer, repair_attempted, repair_succeeded = ragtruth_json_answer(raw_answer)
-    source = "ragtruth_contract" if json_answer else "ragtruth_contract_error"
-    prediction["answer_for_user"] = json_answer
-    prediction["answer_for_scoring"] = json_answer
-    prediction["answer_finalization"] = {
-        "mode": mode,
-        "source": source,
-        "repetition_removed": False,
-        "repetition_kind": "",
-        "ragtruth_json_repair_attempted": repair_attempted,
-        "ragtruth_json_repair_succeeded": repair_succeeded,
-        "ragtruth_json_valid": bool(json_answer),
-        "task_contract_status": "ok" if json_answer else "error",
-    }
 
 
 def attach_structured_citations_from_evidence(

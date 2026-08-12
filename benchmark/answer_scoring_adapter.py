@@ -33,26 +33,44 @@ def select_scoring_answer(
     truncated_answer: str,
     dataset_name: str,
     mode: str,
+    preserve_semantic_answer: bool = False,
 ) -> tuple[str, str]:
     if mode == "product":
         return answer_for_user, "product_answer"
     if structured_answer is not None:
         return (
-            answer_for_scoring(structured_answer["answer"], dataset_name=dataset_name),
+            answer_for_scoring(
+                structured_answer["answer"],
+                dataset_name=dataset_name,
+                preserve_semantic_answer=preserve_semantic_answer,
+            ),
             "structured_adapter",
         )
     if truncated_answer:
         return (
-            answer_for_scoring(truncated_answer, dataset_name=dataset_name),
+            answer_for_scoring(
+                truncated_answer,
+                dataset_name=dataset_name,
+                preserve_semantic_answer=preserve_semantic_answer,
+            ),
             "truncated_structured_adapter",
         )
     return (
-        answer_for_scoring(answer_for_scoring_source, dataset_name=dataset_name),
+        answer_for_scoring(
+            answer_for_scoring_source,
+            dataset_name=dataset_name,
+            preserve_semantic_answer=preserve_semantic_answer,
+        ),
         "deterministic_adapter",
     )
 
 
-def answer_for_scoring(answer: str, *, dataset_name: str) -> str:
+def answer_for_scoring(
+    answer: str,
+    *,
+    dataset_name: str,
+    preserve_semantic_answer: bool = False,
+) -> str:
     dataset = str(dataset_name or "").lower()
     if "ragtruth" in dataset:
         json_answer, _, _ = ragtruth_json_answer(answer)
@@ -61,7 +79,17 @@ def answer_for_scoring(answer: str, *, dataset_name: str) -> str:
     cleaned = _clean_scoring_text(extract_final_answer_text(answer))
     if "qampari" in dataset:
         return _comma_list_answer(cleaned)
+    if preserve_semantic_answer:
+        return _complete_answer(cleaned)
     return _short_answer(cleaned)
+
+
+def _complete_answer(answer: str) -> str:
+    return _strip_terminal_period(
+        " ".join(
+            line.strip() for line in str(answer or "").splitlines() if line.strip()
+        )
+    )
 
 
 def _clean_scoring_text(answer: str) -> str:

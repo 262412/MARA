@@ -32,6 +32,7 @@ class VerifiedClaim:
     quantifier: str = ""
     supporting_evidence_spans: tuple[dict[str, Any], ...] = ()
     contradicting_evidence_spans: tuple[dict[str, Any], ...] = ()
+    authoritative_conflict: dict[str, Any] = field(default_factory=dict)
     verified_slot_state: str = ""
 
     def as_dict(self) -> dict[str, Any]:
@@ -81,6 +82,7 @@ class VerifyDecision:
     qualifier: str = ""
     quantifier: str = ""
     verified_support_slot_ids: list[str] = field(default_factory=list)
+    authoritative_conflict: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)

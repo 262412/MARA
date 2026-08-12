@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.boolean_authoritative_conflict import (
+    BOOLEAN_AUTHORITATIVE_CONFLICT_CONTRACT,
+    authoritative_conflict_complete,
+    conflict_authorities,
+    conflict_authority_matches_item,
+)
 from ktem.docqa.evidence_identity import identity_of
 
 from .qasper_answer_normalization import canonical_semantic_label
@@ -23,6 +29,41 @@ def runtime_boolean_authority(
         verified_slots,
         required_ids,
     ) = runtime_authority_inputs(prediction)
+    if (
+        decision.get("status") == "verified_conflict"
+        or isinstance(decision.get("authoritative_conflict"), dict)
+        and bool(decision.get("authoritative_conflict"))
+    ):
+        return _runtime_conflict_authority(
+            decision,
+            bundle=bundle,
+            plan=plan,
+            slots=slots,
+            verified_slots=verified_slots,
+            required_ids=required_ids,
+            engine_label=engine_label,
+        )
+    return _runtime_polarity_authority(
+        decision,
+        bundle=bundle,
+        plan=plan,
+        slots=slots,
+        verified_slots=verified_slots,
+        required_ids=required_ids,
+        engine_label=engine_label,
+    )
+
+
+def _runtime_polarity_authority(
+    decision: dict[str, Any],
+    *,
+    bundle: dict[str, Any],
+    plan: dict[str, Any],
+    slots: list[dict[str, Any]],
+    verified_slots: list[dict[str, Any]],
+    required_ids: list[str],
+    engine_label: str,
+) -> dict[str, Any]:
     evidence_id = str(decision.get("authoritative_evidence_id") or "")
     quote = str(decision.get("authoritative_quote") or "")
     evidence_ref = str(decision.get("authoritative_evidence_ref") or "")
@@ -62,6 +103,7 @@ def runtime_boolean_authority(
     )
     return {
         "complete": complete,
+        "authority_kind": "canonical_polarity",
         "status": "complete" if complete else "missing_or_inconsistent",
         "decision": decision,
         "plan": plan,
@@ -109,7 +151,9 @@ def runtime_authority_inputs(
         )
     ]
     verified_slots = [
-        slot for slot in slots if slot.get("status") == "verified_support"
+        slot
+        for slot in slots
+        if slot.get("status") in {"verified_support", "verified_conflict"}
     ]
     required_ids = list(
         dict.fromkeys(
@@ -120,6 +164,107 @@ def runtime_authority_inputs(
         )
     )
     return decision, bundle, plan, slots, verified_slots, required_ids
+
+
+def _runtime_conflict_authority(
+    decision: dict[str, Any],
+    *,
+    bundle: dict[str, Any],
+    plan: dict[str, Any],
+    slots: list[dict[str, Any]],
+    verified_slots: list[dict[str, Any]],
+    required_ids: list[str],
+    engine_label: str,
+) -> dict[str, Any]:
+    conflict = decision.get("authoritative_conflict")
+    conflict = conflict if isinstance(conflict, dict) else {}
+    claim_results = records(decision.get("claim_results"))
+    quote_status = _conflict_quote_identity_status(
+        conflict,
+        records(bundle.get("items")),
+    )
+    slot_ids = [str(slot.get("slot_id") or "") for slot in slots]
+    complete = bool(
+        engine_label == "unanswerable"
+        and decision.get("action") == "abstain"
+        and decision.get("reason") == "authoritative_conflict_abstention"
+        and decision.get("canonical_answer_polarity") == ""
+        and decision.get("boolean_authority_status") == "verified_conflict"
+        and plan.get("stage") == "verified"
+        and plan.get("state_authority") == BOOLEAN_AUTHORITATIVE_CONFLICT_CONTRACT
+        and slots
+        and len(verified_slots) == len(slots)
+        and all(slot.get("status") == "verified_conflict" for slot in slots)
+        and authoritative_conflict_complete(conflict)
+        and set(conflict.get("required_slot_ids") or []) == set(slot_ids)
+        and set(conflict.get("verified_required_slot_ids") or []) == set(slot_ids)
+        and set(conflict.get("required_evidence_ids") or []) == set(required_ids)
+        and quote_status == "bound"
+        and _conflict_claim_result_complete(claim_results, conflict, slot_ids)
+    )
+    failure_kind = (
+        ""
+        if complete
+        else (
+            "ref_mismatch"
+            if quote_status != "bound"
+            else (
+                "semantic_verifier"
+                if decision.get("status") != "verified_conflict"
+                else "authority_missing"
+            )
+        )
+    )
+    return {
+        "complete": complete,
+        "authority_kind": "authoritative_conflict",
+        "status": "complete" if complete else "missing_or_inconsistent",
+        "decision": decision,
+        "plan": plan,
+        "required_slot_ids": slot_ids,
+        "required_evidence_ids": required_ids,
+        "evidence_id": "",
+        "evidence_ref": "",
+        "quote": "",
+        "quote_ref_validation_status": quote_status,
+        "claim_results": claim_results,
+        "authoritative_conflict": conflict,
+        "failure_kind": failure_kind,
+    }
+
+
+def _conflict_quote_identity_status(
+    conflict: dict[str, Any],
+    items: list[dict[str, Any]],
+) -> str:
+    authorities = conflict_authorities(conflict)
+    if not authorities:
+        return "evidence_ref_quote_mismatch"
+    for authority in authorities:
+        item = _evidence_item_by_identity(
+            items,
+            str(authority.get("evidence_id") or ""),
+        )
+        if item is None or not conflict_authority_matches_item(authority, item):
+            return "evidence_ref_quote_mismatch"
+    return "bound"
+
+
+def _conflict_claim_result_complete(
+    claim_results: list[dict[str, Any]],
+    conflict: dict[str, Any],
+    slot_ids: list[str],
+) -> bool:
+    matches = [
+        result
+        for result in claim_results
+        if result.get("status") == "conflicting"
+        and result.get("authority_status") == "verified_conflict"
+        and result.get("verified_slot_state") == "verified_conflict"
+        and result.get("authoritative_conflict") == conflict
+        and set(result.get("verified_support_slot_ids") or []) == set(slot_ids)
+    ]
+    return len(matches) == 1 and len(claim_results) == 1
 
 
 def _authority_state_complete(

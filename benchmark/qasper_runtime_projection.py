@@ -89,7 +89,9 @@ def _projection_fields_match(
     evidence_bundle: dict[str, Any],
 ) -> bool:
     raw_answer = str(state.get("raw_generated_answer") or "")
+    raw_candidate_label = _candidate_label(raw_answer, evidence_bundle)
     verified_label = str(verify_decision.get("canonical_answer_polarity") or "")
+    conflict_terminal = verify_decision.get("status") == "verified_conflict"
     correction_applied = bool(
         verify_decision.get("semantic_correction_applied")
         or (
@@ -100,7 +102,12 @@ def _projection_fields_match(
     expected = {
         "answer": terminal_answer,
         "raw_generated_answer": raw_answer,
-        "normalized_candidate_label": _candidate_label(raw_answer, evidence_bundle),
+        "raw_candidate_label": raw_candidate_label,
+        "normalized_candidate_label": (
+            _candidate_label(terminal_answer, evidence_bundle)
+            if conflict_terminal
+            else raw_candidate_label
+        ),
         "verified_canonical_answer": verified_label,
         "semantic_correction_applied": correction_applied,
         "correction_reason": (
@@ -113,6 +120,10 @@ def _projection_fields_match(
             verify_decision.get("authoritative_evidence_ref") or ""
         ),
         "authoritative_quote": str(verify_decision.get("authoritative_quote") or ""),
+        "authoritative_conflict": verify_decision.get("authoritative_conflict") or {},
+        "terminal_reason": (
+            str(verify_decision.get("reason") or "") if conflict_terminal else ""
+        ),
         "guardrail_result": guardrail_decision,
         "verify_decision": verify_decision,
         "guardrail_decision": guardrail_decision,

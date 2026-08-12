@@ -3,6 +3,12 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
+from .boolean_authoritative_conflict import (
+    conflict_authorities,
+    conflict_authority_matches_item,
+    conflict_sides_are_complete,
+    with_verified_conflict_slots,
+)
 from .boolean_evidence_scope import evidence_item_text
 from .claim_support import claim_supported
 from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
@@ -105,6 +111,49 @@ def unsupported_verification_slots(
     ]
 
 
+def conflict_aware_slot_support(
+    request: Any,
+    decision: Any,
+    evidence_bundle: EvidenceBundle | None,
+) -> dict[str, tuple[str, ...]]:
+    """Map both exact conflict sides onto every required support slot."""
+
+    conflict = getattr(decision, "authoritative_conflict", None)
+    if (
+        not isinstance(conflict, dict)
+        or not conflict_sides_are_complete(conflict)
+        or evidence_bundle is None
+    ):
+        return {}
+    selected_lookup = unambiguous_evidence_alias_lookup(evidence_bundle.items)
+    resolved: dict[str, dict[str, Any]] = {}
+    for authority in conflict_authorities(conflict):
+        evidence_id = str(authority.get("evidence_id") or "")
+        item = selected_lookup.get(evidence_id)
+        if item is None or not conflict_authority_matches_item(authority, item):
+            return {}
+        resolved[identity_of(item).key] = item
+    if not resolved:
+        return {}
+
+    reconciled: dict[str, tuple[str, ...]] = {}
+    for slot in verification_slots(request):
+        if str(slot_value(slot, "role") or "") != "support":
+            continue
+        slot_id = str(slot_value(slot, "slot_id") or "")
+        bound_ids = _selected_slot_identities(slot, selected_lookup)
+        support_ids = [
+            evidence_id
+            for evidence_id, item in resolved.items()
+            if evidence_id in bound_ids
+            or score_evidence_for_slot(scoring_slot(slot), item) > 0
+        ]
+        if support_ids:
+            reconciled[slot_id] = tuple(dict.fromkeys(support_ids))
+    used_ids = {evidence_id for values in reconciled.values() for evidence_id in values}
+    return reconciled if set(resolved) <= used_ids else {}
+
+
 def enforce_verification_slot_support(
     request: Any,
     decision: Any,
@@ -113,6 +162,8 @@ def enforce_verification_slot_support(
     prompt: str = "",
     domain: str = "",
 ) -> Any:
+    if decision.status == "verified_conflict":
+        return _enforce_conflict_slot_support(request, decision, evidence_bundle)
     if decision.status != "supported":
         return decision
     reconciled_slots = claim_aware_slot_support(
@@ -159,6 +210,63 @@ def enforce_verification_slot_support(
     )
 
 
+def _enforce_conflict_slot_support(
+    request: Any,
+    decision: Any,
+    evidence_bundle: EvidenceBundle | None,
+) -> Any:
+    reconciled_slots = conflict_aware_slot_support(
+        request,
+        decision,
+        evidence_bundle,
+    )
+    unsupported_slots = unsupported_verification_slots(request, reconciled_slots)
+    if unsupported_slots:
+        return replace(
+            decision,
+            status="unknown",
+            reason=(
+                "Authoritative conflict did not bind verification-required slots: "
+                + ", ".join(unsupported_slots)
+            ),
+            action="abstain",
+            unknown_claims=decision.claims,
+            boolean_authority_status="conflict_incomplete",
+        )
+    conflict = with_verified_conflict_slots(
+        decision.authoritative_conflict,
+        reconciled_slots,
+    )
+    slot_ids = list(reconciled_slots)
+    claim_results = [
+        {
+            **result,
+            "authority_status": (
+                "verified_conflict"
+                if result.get("authoritative_conflict")
+                else str(result.get("authority_status") or "")
+            ),
+            "authoritative_conflict": (
+                conflict if result.get("authoritative_conflict") else {}
+            ),
+            "verified_slot_state": (
+                "verified_conflict"
+                if result.get("authoritative_conflict")
+                else str(result.get("verified_slot_state") or "")
+            ),
+            "verified_support_slot_ids": slot_ids,
+        }
+        for result in decision.claim_results
+    ]
+    return replace(
+        decision,
+        claim_results=claim_results,
+        verified_support_slot_ids=slot_ids,
+        boolean_authority_status="verified_conflict",
+        authoritative_conflict=conflict,
+    )
+
+
 def slot_value(slot: Any, key: str) -> Any:
     if isinstance(slot, dict):
         return slot.get(key)
@@ -171,6 +279,17 @@ def scoring_slot(slot: Any) -> EvidenceSlot:
     if not isinstance(slot, dict):
         return EvidenceSlot(slot_id="", role="support")
     return _slot_from_payload(1, slot)
+
+
+def _selected_slot_identities(
+    slot: Any,
+    selected_lookup: dict[str, dict[str, Any]],
+) -> set[str]:
+    return {
+        identity_of(selected_lookup[evidence_id]).key
+        for value in slot_value(slot, "evidence_ids") or ()
+        if (evidence_id := str(value).strip()) in selected_lookup
+    }
 
 
 def _exact_boolean_authority_matches(

@@ -36,7 +36,11 @@ def verification_slots(request: Any, evidence_bundle: Any | None = None) -> list
     if (
         isinstance(bundle_plan, dict)
         and bundle_plan.get("state_authority")
-        in {"verified_calculation_plan", "verified_claim_support.v1"}
+        in {
+            "verified_calculation_plan",
+            "verified_claim_support.v1",
+            "boolean_authoritative_conflict.v1",
+        }
         and isinstance(bundle_plan.get("evidence_slots"), list)
     ):
         return [
@@ -60,7 +64,12 @@ def missing_verification_slots(
         str(_slot_value(slot, "slot_id") or "")
         for slot in verification_slots(request, evidence_bundle)
         if str(_slot_value(slot, "status") or "")
-        not in {"filled", "retrieved_unverified", "verified_support"}
+        not in {
+            "filled",
+            "retrieved_unverified",
+            "verified_support",
+            "verified_conflict",
+        }
         or not tuple(_slot_value(slot, "evidence_ids") or ())
     ]
 
@@ -78,7 +87,12 @@ def blocking_verification_slots(
         )
         and (
             str(_slot_value(slot, "status") or "")
-            not in {"filled", "retrieved_unverified", "verified_support"}
+            not in {
+                "filled",
+                "retrieved_unverified",
+                "verified_support",
+                "verified_conflict",
+            }
             or not tuple(_slot_value(slot, "evidence_ids") or ())
         )
     ]

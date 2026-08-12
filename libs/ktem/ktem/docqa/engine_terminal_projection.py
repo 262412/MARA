@@ -27,7 +27,13 @@ def engine_terminal_projection(
     terminal_verify = deepcopy(verify_decision.as_dict())
     terminal_guardrail = deepcopy(guardrail_decision.as_dict())
     terminal_evidence = deepcopy(bundle.as_dict())
-    candidate_label = normalized_candidate_label(raw_answer, terminal_evidence)
+    raw_candidate_label = normalized_candidate_label(raw_answer, terminal_evidence)
+    conflict_terminal = terminal_verify.get("status") == "verified_conflict"
+    candidate_label = (
+        normalized_candidate_label(terminal_answer, terminal_evidence)
+        if conflict_terminal
+        else raw_candidate_label
+    )
     verified_label = str(terminal_verify.get("canonical_answer_polarity") or "").strip()
     correction_applied = bool(
         terminal_verify.get("semantic_correction_applied")
@@ -37,6 +43,7 @@ def engine_terminal_projection(
         "contract_id": ENGINE_TERMINAL_STATE_CONTRACT,
         "answer": terminal_answer,
         "raw_generated_answer": raw_answer,
+        "raw_candidate_label": raw_candidate_label,
         "normalized_candidate_label": candidate_label,
         "verified_canonical_answer": verified_label,
         "semantic_correction_applied": correction_applied,
@@ -50,6 +57,12 @@ def engine_terminal_projection(
             terminal_verify.get("authoritative_evidence_ref") or ""
         ),
         "authoritative_quote": str(terminal_verify.get("authoritative_quote") or ""),
+        "authoritative_conflict": deepcopy(
+            terminal_verify.get("authoritative_conflict") or {}
+        ),
+        "terminal_reason": (
+            str(terminal_verify.get("reason") or "") if conflict_terminal else ""
+        ),
         "guardrail_result": deepcopy(terminal_guardrail),
         "verify_decision": deepcopy(terminal_verify),
         "guardrail_decision": deepcopy(terminal_guardrail),

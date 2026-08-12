@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
+from .boolean_authoritative_conflict import BOOLEAN_AUTHORITATIVE_CONFLICT_CONTRACT
 from .calculation_claim_verification import calculation_claim_result
 from .calculation_evidence_identity import calculation_evidence_lookup
 from .claim_clauses import split_claim_clauses
@@ -33,6 +34,7 @@ from .verification_logic import (
 )
 from .verification_slot_support import (
     claim_aware_slot_support,
+    conflict_aware_slot_support,
     enforce_verification_slot_support,
     slot_value,
 )
@@ -157,7 +159,12 @@ def with_verification_evidence(
     decision: VerifyDecision,
     request: Any | None = None,
 ) -> EvidenceBundle:
-    if decision.status not in {"supported", "unsupported", "unknown"}:
+    if decision.status not in {
+        "supported",
+        "unsupported",
+        "unknown",
+        "verified_conflict",
+    }:
         return bundle
     citation_ids = {
         str(citation).strip()
@@ -185,6 +192,7 @@ def with_verification_evidence(
     verified_spans = [
         dict(span)
         for result in decision.claim_results
+        if str(result.get("status") or "") == "supported"
         for span in result.get("supporting_evidence_spans") or []
         if isinstance(span, dict)
     ]
@@ -192,21 +200,22 @@ def with_verification_evidence(
         metadata["verified_claim_support_spans"] = verified_spans
     if decision.canonical_answer_polarity:
         metadata["boolean_authority"] = _boolean_authority_metadata(decision)
+    if decision.status == "verified_conflict":
+        metadata["boolean_authoritative_conflict"] = dict(
+            decision.authoritative_conflict
+        )
     if request is not None:
         verified_ids = {identity_of(item).key for item in verified}
-        reconciled_slots = claim_aware_slot_support(
+        reconciled_slots = _reconciled_verification_slots(
             request,
             decision,
             bundle,
-            prompt=request_planning_question(request),
-            domain=normalize_verification_domain(
-                getattr(request, "verification_domain", None)
-            ),
         )
         metadata["verification_slot_states"] = _verification_slot_states(
             request,
             verified_ids,
             reconciled_slots=reconciled_slots,
+            verification_status=decision.status,
         )
         pending_slots = pending_verification_slots(request, bundle)
         if pending_slots:
@@ -219,6 +228,24 @@ def with_verification_evidence(
         )
     metadata["verify_decision"] = decision.as_dict()
     return EvidenceBundle(route=bundle.route, items=bundle.items, metadata=metadata)
+
+
+def _reconciled_verification_slots(
+    request: Any,
+    decision: VerifyDecision,
+    bundle: EvidenceBundle,
+) -> dict[str, tuple[str, ...]]:
+    if decision.status == "verified_conflict":
+        return conflict_aware_slot_support(request, decision, bundle)
+    return claim_aware_slot_support(
+        request,
+        decision,
+        bundle,
+        prompt=request_planning_question(request),
+        domain=normalize_verification_domain(
+            getattr(request, "verification_domain", None)
+        ),
+    )
 
 
 def _boolean_authority_metadata(decision: VerifyDecision) -> dict[str, Any]:
@@ -252,6 +279,7 @@ def _verification_slot_states(
     verified_evidence_ids: set[str],
     *,
     reconciled_slots: dict[str, tuple[str, ...]] | None = None,
+    verification_status: str = "supported",
 ) -> list[dict[str, Any]]:
     states: list[dict[str, Any]] = []
     reconciled_slots = reconciled_slots or {}
@@ -267,9 +295,13 @@ def _verification_slot_states(
             {
                 "slot_id": slot_id,
                 "status": (
-                    "verified_support"
-                    if set(evidence_ids) & verified_evidence_ids
-                    else str(slot_value(slot, "status") or "missing")
+                    "verified_conflict"
+                    if verification_status == "verified_conflict" and reconciled_ids
+                    else (
+                        "verified_support"
+                        if set(evidence_ids) & verified_evidence_ids
+                        else str(slot_value(slot, "status") or "missing")
+                    )
                 ),
                 "evidence_ids": evidence_ids,
             }
@@ -284,7 +316,9 @@ def _synchronize_verified_claim_query_plan(
     reconciled_slots: dict[str, tuple[str, ...]],
 ) -> None:
     plan = getattr(request, "query_plan", None)
-    if decision.status != "supported" or not isinstance(plan, QueryPlan):
+    if decision.status not in {"supported", "verified_conflict"} or not isinstance(
+        plan, QueryPlan
+    ):
         return
     verification_support_slots = [
         slot
@@ -295,16 +329,23 @@ def _synchronize_verified_claim_query_plan(
         not reconciled_slots.get(slot.slot_id) for slot in verification_support_slots
     ):
         return
+    verified_status = (
+        "verified_conflict"
+        if decision.status == "verified_conflict"
+        else "verified_support"
+    )
     authoritative = replace(
         plan,
         evidence_slots=tuple(
-            replace(
-                slot,
-                status="verified_support",
-                evidence_ids=reconciled_slots[slot.slot_id],
+            (
+                replace(
+                    slot,
+                    status=verified_status,
+                    evidence_ids=reconciled_slots[slot.slot_id],
+                )
+                if slot in verification_support_slots
+                else slot
             )
-            if slot in verification_support_slots
-            else slot
             for slot in plan.evidence_slots
         ),
     )
@@ -317,7 +358,11 @@ def _synchronize_verified_claim_query_plan(
         {
             "stage": "verified",
             "state_version": state_version,
-            "state_authority": "verified_claim_support.v1",
+            "state_authority": (
+                BOOLEAN_AUTHORITATIVE_CONFLICT_CONTRACT
+                if decision.status == "verified_conflict"
+                else "verified_claim_support.v1"
+            ),
         }
     )
     metadata["query_plan"] = payload
@@ -325,7 +370,7 @@ def _synchronize_verified_claim_query_plan(
     metadata["query_plan_id"] = authoritative.plan_id
     metadata["missing_required_slot_count"] = sum(
         slot.required_for_retrieval
-        and slot.status not in {"filled", "verified_support"}
+        and slot.status not in {"filled", "verified_support", "verified_conflict"}
         for slot in authoritative.evidence_slots
     )
 

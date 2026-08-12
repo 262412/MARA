@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .boolean_authoritative_conflict import conflict_sides_are_complete
 from .boolean_claim_verification import boolean_claim_authority
 from .calculation_claim_verification import calculation_claim_result
 from .claim_clauses import split_claim_clauses
@@ -254,18 +255,22 @@ def _decision_for_claim_results(
     )
     citations = _supported_citations(results)
     serialized = [result.as_dict() for result in results]
+    if _verified_authoritative_conflict(results):
+        return _authoritative_conflict_decision(
+            mode,
+            claims,
+            serialized,
+            decision_metadata,
+        )
     if unsupported:
-        return _result_decision(
+        return _unsupported_claim_decision(
             mode,
             claims,
             unknown,
             citations,
             serialized,
-            status="unsupported",
-            reason=f"{mode.title()} verification found unsupported claims.",
-            action="revise",
-            unsupported_claims=unsupported,
-            decision_metadata=decision_metadata,
+            unsupported,
+            decision_metadata,
         )
     if unknown:
         supported_core = bool(results and results[0].status == "supported")
@@ -311,6 +316,48 @@ def _decision_for_claim_results(
     )
 
 
+def _authoritative_conflict_decision(
+    mode: str,
+    claims: list[str],
+    serialized: list[dict[str, Any]],
+    decision_metadata: dict[str, Any],
+) -> VerifyDecision:
+    return _result_decision(
+        mode,
+        claims,
+        [],
+        [],
+        serialized,
+        status="verified_conflict",
+        reason="authoritative_conflict_abstention",
+        action="abstain",
+        decision_metadata=decision_metadata,
+    )
+
+
+def _unsupported_claim_decision(
+    mode: str,
+    claims: list[str],
+    unknown: list[str],
+    citations: list[str],
+    serialized: list[dict[str, Any]],
+    unsupported: list[str],
+    decision_metadata: dict[str, Any],
+) -> VerifyDecision:
+    return _result_decision(
+        mode,
+        claims,
+        unknown,
+        citations,
+        serialized,
+        status="unsupported",
+        reason=f"{mode.title()} verification found unsupported claims.",
+        action="revise",
+        unsupported_claims=unsupported,
+        decision_metadata=decision_metadata,
+    )
+
+
 def _supported_citations(results: list[VerifiedClaim]) -> list[str]:
     return list(
         dict.fromkeys(
@@ -351,7 +398,11 @@ def _result_decision(
 
 def _claim_decision_metadata(results: list[VerifiedClaim]) -> dict[str, Any]:
     typed = next(
-        (result for result in results if result.canonical_answer_polarity),
+        (
+            result
+            for result in results
+            if result.canonical_answer_polarity or result.authoritative_conflict
+        ),
         None,
     )
     if typed is None:
@@ -376,7 +427,21 @@ def _claim_decision_metadata(results: list[VerifiedClaim]) -> dict[str, Any]:
         "predicate_arguments": typed.predicate_arguments,
         "qualifier": typed.qualifier,
         "quantifier": typed.quantifier,
+        "authoritative_conflict": typed.authoritative_conflict,
     }
+
+
+def _verified_authoritative_conflict(results: list[VerifiedClaim]) -> bool:
+    conflicts = [
+        result
+        for result in results
+        if result.status == "conflicting" and result.authoritative_conflict
+    ]
+    return bool(
+        len(conflicts) == 1
+        and len(results) == 1
+        and conflict_sides_are_complete(conflicts[0].authoritative_conflict)
+    )
 
 
 def _unsupported_and_unknown(
@@ -462,7 +527,12 @@ def _boolean_verification(
         return None
     supporting = tuple(value.evidence_id for value in assessment.supporting)
     contradicting = tuple(value.evidence_id for value in assessment.contradicting)
-    authority = assessment.supporting[0] if assessment.supporting else None
+    conflict = assessment.authoritative_conflict or {}
+    authority = (
+        assessment.supporting[0]
+        if assessment.status == "supported" and assessment.supporting
+        else None
+    )
     result = VerifiedClaim(
         claim_id="claim:1",
         claim=assessment.claim,
@@ -472,7 +542,13 @@ def _boolean_verification(
         input_answer_polarity=assessment.input_answer_polarity,
         canonical_answer_polarity=assessment.canonical_answer_polarity,
         semantic_correction_applied=assessment.semantic_correction_applied,
-        authority_status=("exact" if authority is not None else "missing"),
+        authority_status=(
+            "exact_conflict"
+            if conflict
+            else "exact"
+            if authority is not None
+            else "missing"
+        ),
         authoritative_evidence_id=(authority.evidence_id if authority else ""),
         authoritative_evidence_ref=(authority.evidence_ref if authority else ""),
         authoritative_span_id=(authority.span_id if authority else ""),
@@ -498,6 +574,7 @@ def _boolean_verification(
         contradicting_evidence_spans=tuple(
             value.as_dict() for value in assessment.contradicting
         ),
+        authoritative_conflict=conflict,
     )
     return [assessment.claim], [result]
 

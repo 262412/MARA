@@ -104,6 +104,7 @@ def selection_trace_consistency_errors(
                 "retrieved_partial",
                 "retrieved_unverified",
                 "verified_support",
+                "verified_conflict",
             }
         ) != bool(evidence_ids):
             errors.append(f"slot_status_identity_mismatch:{slot.slot_id}")
@@ -136,11 +137,15 @@ def slot_candidate_reasons(
             chosen.append(
                 _candidate_reason(
                     identity,
-                    "bound_to_slot"
-                    if bound
-                    else "parent_retained"
-                    if parent
-                    else "selected_in_context_not_bound",
+                    (
+                        "bound_to_slot"
+                        if bound
+                        else (
+                            "parent_retained"
+                            if parent
+                            else "selected_in_context_not_bound"
+                        )
+                    ),
                     score,
                 )
             )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .boolean_authoritative_conflict import authoritative_conflict_complete
 from .controller import (
     RetrieveDecision,
     RouteDecision,
@@ -70,6 +71,7 @@ def recover_after_failed_verification(
     timings: PipelineStageTimings,
 ) -> RouteExecutionResult:
     if not required_boolean_authority_missing(request, initial_result.verify_decision):
+        _mark_resolved_initial_conflict(initial_result)
         return initial_result
     if not optional_stage_allowed(request):
         return initial_result
@@ -230,11 +232,23 @@ def complete_verifier_recovery(
         timings,
     )
     recovered = not required_boolean_authority_missing(request, result.verify_decision)
+    conflict_resolved = (
+        result.verify_decision.status == "verified_conflict"
+        and authoritative_conflict_complete(
+            result.verify_decision.authoritative_conflict
+        )
+    )
     terminal_event.update(
         {
             "verification_status": result.verify_decision.status,
             "stop_reason": (
-                "authority_recovered" if recovered else "authority_recovery_exhausted"
+                "authority_conflict_resolved"
+                if conflict_resolved
+                else (
+                    "authority_recovered"
+                    if recovered
+                    else "authority_recovery_exhausted"
+                )
             ),
         }
     )
@@ -306,6 +320,10 @@ def required_boolean_authority_missing(
     )
     if not boolean_required:
         return False
+    if verify_decision.status == "verified_conflict":
+        return not authoritative_conflict_complete(
+            verify_decision.authoritative_conflict
+        )
     return not (
         verify_decision.status == "supported"
         and verify_decision.canonical_answer_polarity in {"yes", "no"}
@@ -313,6 +331,18 @@ def required_boolean_authority_missing(
         and bool(verify_decision.authoritative_evidence_ref)
         and bool(verify_decision.authoritative_quote)
     )
+
+
+def _mark_resolved_initial_conflict(result: RouteExecutionResult) -> None:
+    decision = result.verify_decision
+    if decision.status != "verified_conflict" or not authoritative_conflict_complete(
+        decision.authoritative_conflict
+    ):
+        return
+    for event in reversed(result.controller_trace):
+        if event.get("stage") == "verifier":
+            event["stop_reason"] = "authority_conflict_resolved"
+            break
 
 
 def switch_after_failed_verification(

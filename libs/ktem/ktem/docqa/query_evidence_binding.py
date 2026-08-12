@@ -292,6 +292,7 @@ def _existing_binding_state(
             "retrieved_partial",
             "retrieved_unverified",
             "verified_support",
+            "verified_conflict",
         }
         or not slot.evidence_ids
     ):

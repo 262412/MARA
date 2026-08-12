@@ -22,6 +22,8 @@ class BooleanEvidenceAuthority:
     polarity: str
     reason: str
     qualifier: str = "none"
+    source_id: str = ""
+    page_label: str = ""
 
     @property
     def predicate(self) -> str:
@@ -56,6 +58,8 @@ class BooleanEvidenceAuthority:
             "polarity": self.polarity,
             "qualifier": self.qualifier,
             "reason": self.reason,
+            "source_id": self.source_id,
+            "page_label": self.page_label,
         }
 
 
@@ -69,3 +73,4 @@ class BooleanClaimAuthority:
     supporting: tuple[BooleanEvidenceAuthority, ...] = ()
     contradicting: tuple[BooleanEvidenceAuthority, ...] = ()
     reason: str = ""
+    authoritative_conflict: dict[str, Any] | None = None

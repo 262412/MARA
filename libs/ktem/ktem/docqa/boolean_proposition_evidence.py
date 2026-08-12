@@ -232,6 +232,9 @@ def _classify_proposition_span(
     ):
         classification = "insufficient_scope"
         reason = scope_rejection or f"excluded_{section_role or actor}_scope"
+    elif _metalinguistic_relation_mention(question, span):
+        classification = "unrelated"
+        reason = "target_relation_mentioned_but_not_asserted"
     elif relation_score <= 0 or object_score < 0.6:
         classification = "unrelated"
         reason = "claim_relation_or_object_incompatible"
@@ -256,6 +259,22 @@ def _classify_proposition_span(
         classification = "contradicts"
         reason = "scope_valid_opposite_proposition"
     return classification, reason
+
+
+def _metalinguistic_relation_mention(question: str, span: str) -> bool:
+    relation = primary_boolean_relation(question)
+    if not relation:
+        return False
+    surfaces = sorted(_relation_surface_tokens(relation), key=len, reverse=True)
+    relation_pattern = "|".join(re.escape(value) for value in surfaces)
+    return bool(
+        re.search(
+            rf"\b(?:{relation_pattern})\s+"
+            r"(?:assertion|claim|description|discussion|mention|statement)\b",
+            str(span or ""),
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _assessment_rank(assessment: BooleanEvidenceAssessment) -> tuple[int, float, float]:

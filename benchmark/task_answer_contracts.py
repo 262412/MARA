@@ -83,6 +83,9 @@ def _qasper_audit_context(
     )
     projection_present = _runtime_projection_present(prediction)
     authority = runtime_boolean_authority(prediction, engine_label)
+    conflict_authority_required = (
+        authority.get("authority_kind") == "authoritative_conflict"
+    )
     semantic_rewrite = bool(
         engine_label and scored_label and engine_label != scored_label
     )
@@ -95,16 +98,23 @@ def _qasper_audit_context(
     )
     authority_missing = bool(
         (projection_required and not projection_present)
-        or (polarity_authority_required and not authority["complete"])
+        or (
+            (polarity_authority_required or conflict_authority_required)
+            and not authority["complete"]
+        )
     )
     action = (
         "hard_violation_semantic_rewrite"
         if semantic_rewrite
-        else "hard_violation_missing_runtime_authority"
-        if authority_missing
-        else "hard_violation_invalid_typed_label"
-        if invalid_typed_label
-        else "pass_through"
+        else (
+            "hard_violation_missing_runtime_authority"
+            if authority_missing
+            else (
+                "hard_violation_invalid_typed_label"
+                if invalid_typed_label
+                else "pass_through"
+            )
+        )
     )
     return {
         "engine_answer": engine_answer,
@@ -119,6 +129,7 @@ def _qasper_audit_context(
         "typed_label_required": typed_label_required,
         "runtime_boolean_authority_applicable": authority_applicable,
         "runtime_boolean_polarity_authority_required": polarity_authority_required,
+        "runtime_boolean_conflict_authority_required": conflict_authority_required,
         "runtime_boolean_projection_required": projection_required,
         "violation": semantic_rewrite or authority_missing or invalid_typed_label,
     }
@@ -229,9 +240,11 @@ def synchronize_terminal_answer_state(prediction: dict[str, Any]) -> bool:
     terminal_answer = (
         final_answer
         if semantic_rewrite
-        else final_label or final_answer
-        if answer_type == "boolean" or is_abstention_answer(engine_answer)
-        else engine_answer
+        else (
+            final_label or final_answer
+            if answer_type == "boolean" or is_abstention_answer(engine_answer)
+            else engine_answer
+        )
     )
     rebuild_terminal_answer_state(
         prediction,
@@ -268,39 +281,44 @@ def _answerability_trace(
     typed_label_required: bool,
     runtime_boolean_authority_applicable: bool,
     runtime_boolean_polarity_authority_required: bool,
+    runtime_boolean_conflict_authority_required: bool,
     runtime_boolean_projection_required: bool,
 ) -> dict[str, Any]:
     complete = bool(authority["complete"])
-    failure_kind = (
-        "authority_missing"
-        if runtime_boolean_projection_required and not projection_present
-        else ""
-        if complete or not runtime_boolean_polarity_authority_required
-        else str(authority.get("failure_kind") or "authority_missing")
+    conflict_complete = bool(
+        complete and authority.get("authority_kind") == "authoritative_conflict"
+    )
+    authority_required = bool(
+        runtime_boolean_polarity_authority_required
+        or runtime_boolean_conflict_authority_required
+    )
+    failure_kind = _runtime_authority_failure(
+        authority,
+        complete=complete,
+        authority_required=authority_required,
+        projection_required=runtime_boolean_projection_required,
+        projection_present=projection_present,
     )
     return {
         "contract_id": QASPER_RUNTIME_AUTHORITY_AUDIT,
         "status": "violation" if action.startswith("hard_violation") else "ok",
         "verdict": engine_label if complete else "insufficient_evidence",
-        "raw_verifier_verdict": (
-            f"{engine_label}_complete"
-            if complete and engine_label in {"yes", "no"}
-            else ""
+        "raw_verifier_verdict": _runtime_verifier_verdict(
+            engine_label,
+            complete=complete,
+            conflict_complete=conflict_complete,
         ),
         "action": action,
-        "reason": (
-            "runtime_authority_verified"
-            if complete
-            else "runtime_projection_missing"
-            if runtime_boolean_projection_required and not projection_present
-            else "runtime_safe_abstention"
-            if not runtime_boolean_polarity_authority_required
-            else "runtime_authority_missing_or_inconsistent"
-            if runtime_boolean_authority_applicable
-            else "runtime_boolean_authority_not_applicable"
+        "reason": _runtime_authority_reason(
+            complete=complete,
+            conflict_complete=conflict_complete,
+            authority_required=authority_required,
+            authority_applicable=runtime_boolean_authority_applicable,
+            projection_required=runtime_boolean_projection_required,
+            projection_present=projection_present,
         ),
         "primary_answer": engine_answer,
-        "adjudicated_polarity": engine_label,
+        "adjudicated_polarity": "" if conflict_complete else engine_label,
         "final_post_contract_answer": scored_answer,
         "post_contract_answer": scored_answer,
         "engine_terminal_answer": engine_answer,
@@ -315,6 +333,9 @@ def _answerability_trace(
         "runtime_boolean_polarity_authority_required": (
             runtime_boolean_polarity_authority_required
         ),
+        "runtime_boolean_conflict_authority_required": (
+            runtime_boolean_conflict_authority_required
+        ),
         "runtime_boolean_projection_required": (runtime_boolean_projection_required),
         "runtime_authority_failure_kind": failure_kind,
         "post_engine_answerability_llm_call_count": 0,
@@ -323,6 +344,56 @@ def _answerability_trace(
             prediction.get("engine_verify_decision") or {}
         ),
     }
+
+
+def _runtime_authority_failure(
+    authority: dict[str, Any],
+    *,
+    complete: bool,
+    authority_required: bool,
+    projection_required: bool,
+    projection_present: bool,
+) -> str:
+    if projection_required and not projection_present:
+        return "authority_missing"
+    if complete or not authority_required:
+        return ""
+    return str(authority.get("failure_kind") or "authority_missing")
+
+
+def _runtime_verifier_verdict(
+    engine_label: str,
+    *,
+    complete: bool,
+    conflict_complete: bool,
+) -> str:
+    if conflict_complete:
+        return "conflict_complete"
+    return (
+        f"{engine_label}_complete" if complete and engine_label in {"yes", "no"} else ""
+    )
+
+
+def _runtime_authority_reason(
+    *,
+    complete: bool,
+    conflict_complete: bool,
+    authority_required: bool,
+    authority_applicable: bool,
+    projection_required: bool,
+    projection_present: bool,
+) -> str:
+    if conflict_complete:
+        return "runtime_authoritative_conflict"
+    if complete:
+        return "runtime_authority_verified"
+    if projection_required and not projection_present:
+        return "runtime_projection_missing"
+    if not authority_required:
+        return "runtime_safe_abstention"
+    if authority_applicable:
+        return "runtime_authority_missing_or_inconsistent"
+    return "runtime_boolean_authority_not_applicable"
 
 
 def _authority_trace_fields(
@@ -353,6 +424,9 @@ def _authority_trace_fields(
         ),
         "verifier_required_evidence_coverage": ("1.000000" if complete else "0.000000"),
         "final_support_evidence_ids": list(evidence_ids),
+        "authoritative_conflict": deepcopy(
+            authority.get("authoritative_conflict") or {}
+        ),
     }
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .boolean_authoritative_conflict import authoritative_conflict_claim
 from .boolean_authority_schema import BooleanClaimAuthority, BooleanEvidenceAuthority
 from .boolean_evidence_scope import (
     ClosedScopeResolution,
@@ -26,6 +27,7 @@ from .boolean_proposition_evidence import (
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
 from .evidence_identity import identity_of
 from .evidence_text import extract_final_answer_text
+from .query_phrase_extraction import source_page_locator
 
 
 def canonical_boolean_answer_polarity(answer: str) -> str:
@@ -71,15 +73,12 @@ def boolean_claim_authority(
     supporting = _exact_authorities(prompt, classified.supports)
     contradicting = _exact_authorities(prompt, classified.contradicts)
     if supporting and contradicting:
-        return BooleanClaimAuthority(
-            claim=f"{probe_polarity}: {prompt}",
-            status="conflicting",
-            input_answer_polarity=input_polarity,
-            canonical_answer_polarity="",
-            semantic_correction_applied=False,
-            supporting=supporting,
-            contradicting=contradicting,
-            reason="conflicting_exact_boolean_propositions",
+        return authoritative_conflict_claim(
+            prompt,
+            input_polarity,
+            probe_polarity,
+            supporting,
+            contradicting,
         )
     if supporting:
         return _supported_authority(
@@ -305,9 +304,11 @@ def _negative_requirement_authority(
                     section_scope=section_role,
                     relation="require",
                     object=" ".join(sorted(question_terms)),
-                    quantifier="only"
-                    if re.search(r"\b(?:only|solely|exclusively)\b", prompt, re.I)
-                    else "none",
+                    quantifier=(
+                        "only"
+                        if re.search(r"\b(?:only|solely|exclusively)\b", prompt, re.I)
+                        else "none"
+                    ),
                     polarity="no",
                     reason="explicit_requirement_negative_qualifier",
                     qualifier=proposition_qualifier(quote),
@@ -335,6 +336,7 @@ def _exact_authorities(
             continue
         identity = identity_of(assessment.item).key
         span_id = _span_identity(identity, window)
+        source_id, page_label = source_page_locator(assessment.item)
         authorities.append(
             BooleanEvidenceAuthority(
                 evidence_id=identity,
@@ -353,6 +355,8 @@ def _exact_authorities(
                 polarity=assessment.proposition.polarity,
                 reason=assessment.reason,
                 qualifier=assessment.proposition.qualifier,
+                source_id=source_id,
+                page_label=page_label,
             )
         )
     deduplicated = {
