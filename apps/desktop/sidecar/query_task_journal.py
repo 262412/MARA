@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import json
 import os
 import time
@@ -9,7 +10,8 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 WINDOWS_SHARING_ERRORS = {32, 33}
-WINDOWS_SHARING_RETRY_DELAYS = (0.02, 0.04, 0.08, 0.16)
+WINDOWS_TRANSIENT_REPLACE_ERRORS = {5, *WINDOWS_SHARING_ERRORS}
+WINDOWS_REPLACE_RETRY_DELAYS = (0.02, 0.04, 0.08, 0.16)
 
 
 class QueryTaskPersistenceError(RuntimeError):
@@ -24,6 +26,8 @@ class QueryTaskPersistenceError(RuntimeError):
         error_number: int | None = None,
         winerror: int | None = None,
         retry_count: int = 0,
+        post_failure_probe: str = "not_run",
+        smoke_mode: bool = False,
     ) -> None:
         super().__init__(message)
         self.code = code
@@ -34,6 +38,8 @@ class QueryTaskPersistenceError(RuntimeError):
         self.error_number = error_number
         self.winerror = winerror
         self.retry_count = retry_count
+        self.post_failure_probe = post_failure_probe
+        self.smoke_mode = smoke_mode
 
 
 class QueryTaskJournal(Protocol):
@@ -83,7 +89,6 @@ class JsonQueryTaskJournal:
             )
         except (TypeError, ValueError) as error:
             raise _corrupt_error(error, operation="write_temp") from None
-        temporary_path = _unique_path(self._path, "tmp")
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             if self._path.is_dir():
@@ -91,15 +96,12 @@ class JsonQueryTaskJournal:
                     IsADirectoryError(),
                     operation="atomic_replace",
                 )
-            _write_synced_file(temporary_path, serialized)
-            _replace_with_bounded_retry(temporary_path, self._path)
+            _save_with_bounded_retry(self._path, serialized)
             _sync_directory(self._path.parent)
         except QueryTaskPersistenceError:
             raise
         except OSError as error:
             raise _persistence_error(error, operation="write_temp") from None
-        finally:
-            _remove_temporary(temporary_path)
 
     def probe(self) -> None:
         if self._path is None:
@@ -149,24 +151,108 @@ def _write_synced_file(path: Path, payload: bytes) -> None:
         raise
 
 
-def _replace_with_bounded_retry(source: Path, destination: Path) -> None:
+def _save_with_bounded_retry(destination: Path, payload: bytes) -> None:
     retry_count = 0
     while True:
+        source = _unique_path(destination, "tmp")
         try:
-            os.replace(source, destination)
+            _write_synced_file(source, payload)
+            _replace_with_bounded_retry(source, destination)
             return
-        except OSError as error:
-            winerror = getattr(error, "winerror", None)
-            if winerror not in WINDOWS_SHARING_ERRORS or retry_count >= len(
-                WINDOWS_SHARING_RETRY_DELAYS
-            ):
-                raise _persistence_error(
-                    error,
-                    operation="atomic_replace",
-                    retry_count=retry_count,
-                ) from None
-            time.sleep(WINDOWS_SHARING_RETRY_DELAYS[retry_count])
+        except QueryTaskPersistenceError as error:
+            transient_replace = (
+                error.operation == "atomic_replace"
+                and error.winerror in WINDOWS_TRANSIENT_REPLACE_ERRORS
+            )
+            if not transient_replace:
+                raise
+            if retry_count >= len(WINDOWS_REPLACE_RETRY_DELAYS):
+                if error.winerror == 5:
+                    probe_result = _post_failure_probe(destination)
+                    raise _replace_failure_after_probe(
+                        error,
+                        retry_count=retry_count,
+                        probe_result=probe_result,
+                    ) from None
+                raise _replace_retry_exhausted(error, retry_count) from None
+            time.sleep(WINDOWS_REPLACE_RETRY_DELAYS[retry_count])
             retry_count += 1
+        finally:
+            _remove_temporary(source)
+
+
+def _replace_with_bounded_retry(source: Path, destination: Path) -> None:
+    try:
+        os.replace(source, destination)
+    except OSError as error:
+        raise _persistence_error(error, operation="atomic_replace") from None
+
+
+def _post_failure_probe(destination: Path) -> str:
+    source = _unique_path(destination, "post-probe-source")
+    target = _unique_path(destination, "post-probe-target")
+    try:
+        try:
+            _write_synced_file(source, b'{"probe":true}\n')
+        except QueryTaskPersistenceError as error:
+            return "flush_blocked" if error.operation == "flush" else "write_blocked"
+        try:
+            _replace_with_bounded_retry(source, target)
+        except QueryTaskPersistenceError:
+            return "replace_blocked"
+        try:
+            _sync_directory(destination.parent)
+        except QueryTaskPersistenceError:
+            return "flush_blocked"
+        return "ready"
+    finally:
+        _remove_temporary(source)
+        _remove_temporary(target)
+
+
+def _replace_failure_after_probe(
+    error: QueryTaskPersistenceError,
+    *,
+    retry_count: int,
+    probe_result: str,
+) -> QueryTaskPersistenceError:
+    if probe_result == "write_blocked":
+        code = "query_state_permission_denied"
+        message = "MARA cannot create answer checkpoints under the app data policy."
+    else:
+        code = "query_state_replace_blocked"
+        message = (
+            "The operating system temporarily blocked the answer state replacement."
+        )
+    return QueryTaskPersistenceError(
+        code,
+        message,
+        retryable=True,
+        operation="atomic_replace",
+        error_type=error.error_type,
+        error_number=error.error_number,
+        winerror=error.winerror,
+        retry_count=retry_count,
+        post_failure_probe=probe_result,
+        smoke_mode=error.smoke_mode,
+    )
+
+
+def _replace_retry_exhausted(
+    error: QueryTaskPersistenceError,
+    retry_count: int,
+) -> QueryTaskPersistenceError:
+    return QueryTaskPersistenceError(
+        error.code,
+        error.message,
+        retryable=error.retryable,
+        operation=error.operation,
+        error_type=error.error_type,
+        error_number=error.error_number,
+        winerror=error.winerror,
+        retry_count=retry_count,
+        smoke_mode=error.smoke_mode,
+    )
 
 
 def _sync_directory(directory: Path) -> None:
@@ -230,9 +316,25 @@ def _persistence_error(
             retry_count=retry_count,
         )
     if error_number in {errno.EACCES, errno.EPERM} or winerror == 5:
+        if operation == "atomic_replace":
+            return _classified_error(
+                "query_state_replace_blocked",
+                "The operating system blocked the answer state replacement.",
+                error,
+                operation=operation,
+                retry_count=retry_count,
+            )
+        if operation == "flush":
+            return _classified_error(
+                "query_persistence_failed",
+                "MARA could not flush the answer checkpoint safely.",
+                error,
+                operation=operation,
+                retry_count=retry_count,
+            )
         return _classified_error(
             "query_state_permission_denied",
-            "MARA cannot write answer state until app data permissions are fixed.",
+            "MARA cannot create or read answer state under the app data policy.",
             error,
             operation=operation,
             retry_count=retry_count,
@@ -282,3 +384,24 @@ def _classified_error(
         winerror=getattr(error, "winerror", None),
         retry_count=retry_count,
     )
+
+
+def persistence_diagnostic(error: QueryTaskPersistenceError) -> dict[str, Any]:
+    values = (
+        error.operation,
+        error.error_number,
+        error.winerror,
+        error.retry_count,
+        error.post_failure_probe,
+        int(error.smoke_mode),
+    )
+    fingerprint = hashlib.sha256("|".join(map(str, values)).encode("ascii")).hexdigest()
+    return {
+        "operation": error.operation,
+        "errno": error.error_number,
+        "winerror": error.winerror,
+        "retry_count": error.retry_count,
+        "post_failure_probe": error.post_failure_probe,
+        "smoke_mode": error.smoke_mode,
+        "fingerprint": f"qpf-{fingerprint[:16]}",
+    }

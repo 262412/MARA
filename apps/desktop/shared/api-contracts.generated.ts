@@ -135,8 +135,19 @@ export type QueryCitation = {
   quote?: string | null;
 };
 
+export type QueryPersistenceDiagnostic = {
+  errno: number | null;
+  fingerprint: string;
+  operation: "write_temp" | "flush" | "atomic_replace" | "load" | "unknown";
+  post_failure_probe: "not_run" | "ready" | "write_blocked" | "replace_blocked" | "flush_blocked";
+  retry_count: number;
+  smoke_mode: boolean;
+  winerror: number | null;
+};
+
 export type QueryTask = {
   answer: string;
+  answer_saved: boolean;
   citations: Array<QueryCitation>;
   conversation_id: string;
   created_at: string;
@@ -168,6 +179,7 @@ export type QueryTaskError = {
   code: string;
   diagnostic?: string | null;
   message: string;
+  persistence?: QueryPersistenceDiagnostic | null;
   provider_request_id?: string | null;
   retryable: boolean;
 };

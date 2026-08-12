@@ -221,6 +221,24 @@ class QueryCitation(BaseModel):
     quote: str | None = Field(default=None, max_length=4000)
 
 
+class QueryPersistenceDiagnostic(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    operation: Literal["write_temp", "flush", "atomic_replace", "load", "unknown"]
+    errno: int | None
+    winerror: int | None
+    retry_count: int = Field(ge=0, le=100)
+    post_failure_probe: Literal[
+        "not_run",
+        "ready",
+        "write_blocked",
+        "replace_blocked",
+        "flush_blocked",
+    ]
+    smoke_mode: bool
+    fingerprint: str = Field(pattern=r"^qpf-[0-9a-f]{16}$")
+
+
 class QueryTaskError(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -229,6 +247,7 @@ class QueryTaskError(BaseModel):
     retryable: bool
     provider_request_id: str | None = Field(default=None, max_length=200)
     diagnostic: str | None = Field(default=None, max_length=512)
+    persistence: QueryPersistenceDiagnostic | None = None
 
 
 class QueryTask(BaseModel):
@@ -248,6 +267,7 @@ class QueryTask(BaseModel):
     status: Literal["queued", "running", "success", "failed", "cancelled"]
     stage: str
     answer: str = Field(max_length=1_000_000)
+    answer_saved: bool
     citations: list[QueryCitation] = Field(max_length=10_000)
     error: QueryTaskError | None
     retryable: bool

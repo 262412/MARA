@@ -15,11 +15,13 @@ from .query_task_journal import (
     JsonQueryTaskJournal,
     QueryTaskJournal,
     QueryTaskPersistenceError,
+    persistence_diagnostic,
 )
 from .query_task_recovery import (
     ACTIVE_QUERY_STATUSES,
     QUERY_JOURNAL_VERSION,
     load_recoverable_tasks,
+    persistence_action,
     restore_committed_turn,
 )
 from .query_task_state import QueryTaskState as _QueryTask
@@ -31,6 +33,7 @@ TERMINAL_QUERY_STATUSES = {"success", "failed", "cancelled"}
 DEFAULT_JOURNAL_FLUSH_INTERVAL = 0.25
 DEFAULT_MAX_RETAINED_TASKS = 100
 DEFAULT_STREAM_IDLE_TIMEOUT = 300.0
+STREAM_CHECKPOINT_RECOVERY_DELAYS = (0.02, 0.05)
 LOGGER = logging.getLogger("mara.desktop.query_tasks")
 IdempotencyFingerprint = tuple[str, ...]
 
@@ -93,7 +96,8 @@ class _QueryTaskPersistence:
     ) -> None:
         LOGGER.error(
             "Query task persistence failed task_id=%s error_code=%s operation=%s "
-            "error_type=%s errno=%s winerror=%s retried=%s retry_count=%s",
+            "error_type=%s errno=%s winerror=%s retried=%s retry_count=%s "
+            "post_failure_probe=%s smoke_mode=%s",
             task_id,
             error.code,
             error.operation,
@@ -102,16 +106,20 @@ class _QueryTaskPersistence:
             error.winerror,
             error.retry_count > 0,
             error.retry_count,
+            error.post_failure_probe,
+            error.smoke_mode,
         )
         with self._condition:
             self._persistence_issue = error
             task = self._tasks[task_id]
             task.status = "failed"
             task.stage = "storage_error"
+            task.answer_saved = False
             task.error = {
                 "code": error.code,
                 "message": error.message,
                 "retryable": error.retryable,
+                "persistence": persistence_diagnostic(error),
             }
             task.version += 1
             task.updated_at = _now()
@@ -161,13 +169,44 @@ class _QueryTaskPersistence:
             self._save_journal()
 
     def _save_journal(self) -> None:
-        self._journal.save(
-            {
-                "journal_version": QUERY_JOURNAL_VERSION,
-                "tasks": [_task_to_dict(task) for task in self._tasks.values()],
-            }
-        )
+        unsaved_answers = [
+            task for task in self._tasks.values() if not task.answer_saved
+        ]
+        for task in unsaved_answers:
+            task.answer_saved = True
+        try:
+            self._journal.save(
+                {
+                    "journal_version": QUERY_JOURNAL_VERSION,
+                    "tasks": [_task_to_dict(task) for task in self._tasks.values()],
+                }
+            )
+        except QueryTaskPersistenceError:
+            for task in unsaved_answers:
+                task.answer_saved = False
+            raise
         self._last_journal_save = time.monotonic()
+
+    def _persist_stream_checkpoint(self, task: _QueryTask) -> None:
+        try:
+            self._touch(task, force_persist=False)
+            return
+        except QueryTaskPersistenceError as error:
+            if not error.retryable:
+                raise
+            last_error = error
+        for delay in STREAM_CHECKPOINT_RECOVERY_DELAYS:
+            time.sleep(delay)
+            try:
+                self._save_journal()
+                self._persistence_issue = None
+                self._condition.notify_all()
+                return
+            except QueryTaskPersistenceError as error:
+                if not error.retryable:
+                    raise
+                last_error = error
+        raise last_error
 
     def persistence_readiness(self) -> dict[str, Any]:
         with self._condition:
@@ -192,7 +231,7 @@ class _QueryTaskPersistence:
                 "query_persistence_ready": False,
                 "query_persistence_issue_code": error.code,
                 "query_persistence_message": error.message,
-                "query_persistence_action": _persistence_action(error.code),
+                "query_persistence_action": persistence_action(error.code),
                 "query_persistence_retryable": error.retryable,
             }
 
@@ -463,8 +502,11 @@ class QueryTaskManager(_QueryTaskPersistence):
             task = self._require_task(task_id)
             if task.status != "running":
                 return False
+            previous_answer = task.answer
             _apply_query_update(task, update)
-            self._touch(task, force_persist=False)
+            if task.answer != previous_answer:
+                task.answer_saved = False
+            self._persist_stream_checkpoint(task)
             return True
 
     def _finish_task(
@@ -553,13 +595,3 @@ def _task_fingerprint(task: _QueryTask) -> IdempotencyFingerprint:
         task.prompt,
         task.selected_file_ids,
     )
-
-
-def _persistence_action(code: str) -> str:
-    return {
-        "query_storage_full": "free_storage",
-        "query_state_locked": "close_extra_instance",
-        "query_state_permission_denied": "check_data_permissions",
-        "query_state_read_only": "check_data_permissions",
-        "query_state_corrupt": "repair_state",
-    }.get(code, "retry")

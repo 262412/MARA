@@ -14,6 +14,17 @@ ACTIVE_QUERY_STATUSES = {"queued", "running"}
 LOGGER = logging.getLogger("mara.desktop.query_tasks")
 
 
+def persistence_action(code: str) -> str:
+    return {
+        "query_storage_full": "free_storage",
+        "query_state_locked": "close_extra_instance",
+        "query_state_replace_blocked": "retry",
+        "query_state_permission_denied": "check_data_permissions",
+        "query_state_read_only": "check_data_permissions",
+        "query_state_corrupt": "repair_state",
+    }.get(code, "retry")
+
+
 def load_recoverable_tasks(
     journal: QueryTaskJournal,
     service: Any,
@@ -82,6 +93,7 @@ def restore_committed_turn(service: Any, task: QueryTaskState) -> bool:
     if not isinstance(committed, dict):
         return False
     task.answer = str(committed.get("answer") or "")
+    task.answer_saved = True
     task.citations = [
         dict(item) for item in committed.get("citations", []) if isinstance(item, dict)
     ]

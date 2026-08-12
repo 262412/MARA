@@ -7,7 +7,12 @@ import {
   type ReactNode,
 } from "react";
 
-import type { QueryCitation, QueryTask } from "../../shared/query-contracts";
+import type {
+  QueryCitation,
+  QueryPersistenceDiagnostic,
+  QueryTask,
+  QueryTaskError,
+} from "../../shared/query-contracts";
 import type { DoctorPayload } from "../../shared/doctor-contracts";
 import type { SidecarError } from "../../shared/runtime-contracts";
 import type { SessionDetail, SessionMessage } from "../../shared/session-contracts";
@@ -247,6 +252,7 @@ export function Workspace({
         {answerActionError ? (
           <div className="answer-action-error" role="alert">
             <span>{answerActionError.message}</span>
+            <span>{queryActionErrorAction(answerActionError)}</span>
             <small>
               错误代码：{answerActionError.code} · 请求 ID：
               {answerActionError.request_id}
@@ -361,7 +367,10 @@ function CurrentAnswer({
         {task.error ? (
           <div className="answer-error" role="alert">
             {task.status === "cancelled" ? "生成已停止。" : task.error.message}
-            <p>{queryErrorAction(task.error.code)}</p>
+            <p>{queryErrorAction(task.error)}</p>
+            {task.answer && !task.answer_saved ? (
+              <p>当前部分回答尚未安全保存；最后一次已确认状态仍保留在本地。</p>
+            ) : null}
             <small>错误代码：{task.error.code} · 任务 ID：{task.task_id}</small>
             {task.error.provider_request_id ? (
               <small>提供方请求 ID：{task.error.provider_request_id}</small>
@@ -404,7 +413,11 @@ function queryErrorNeedsSettings(code: string): boolean {
   ].includes(code);
 }
 
-function queryErrorAction(code: string): string {
+function queryErrorAction(error: QueryTaskError): string {
+  const persistenceAction = persistenceErrorAction(error.persistence);
+  if (persistenceAction) {
+    return persistenceAction;
+  }
   const actions: Record<string, string> = {
     llm_model_not_found: "请检查模型 ID 和提供方地址，然后重新保存设置。",
     llm_model_unsupported: "请在设置中选择该提供方支持的聊天模型。",
@@ -416,12 +429,77 @@ function queryErrorAction(code: string): string {
     llm_dependency_missing: "当前安装缺少提供方依赖，请修复或重新安装 MARA。",
     query_storage_full: "请释放应用数据所在磁盘的空间，然后重试。",
     query_state_locked: "请关闭额外的 MARA 实例，然后重试。",
-    query_state_permission_denied: "请检查 MARA 应用数据目录的写入权限，然后重试。",
+    query_state_permission_denied: "请检查 MARA 应用数据的写入策略，然后重试。",
+    query_state_replace_blocked: "状态文件替换持续受阻；原文件已保留，可安全重试。",
     query_state_read_only: "请让 MARA 应用数据目录恢复可写，然后重试。",
     query_state_corrupt: "回答状态文件已保留，请先修复状态文件再继续。",
     query_persistence_failed: "请确认应用数据存储可用，然后重试。",
   };
-  return actions[code] ?? "请记录任务 ID 后重试；若持续失败，请联系维护者。";
+  return actions[error.code] ?? "请记录任务 ID 后重试；若持续失败，请联系维护者。";
+}
+
+function queryActionErrorAction(error: SidecarError): string {
+  return queryErrorAction({
+    code: error.code,
+    message: error.message,
+    retryable: error.retryable,
+    persistence: persistenceDiagnosticFromDetails(error.details),
+  });
+}
+
+function persistenceErrorAction(
+  persistence: QueryPersistenceDiagnostic | null | undefined,
+): string | undefined {
+  if (persistence?.smoke_mode) {
+    return "检测到内部构建验证故障；普通版本不应启用此模式，请更换正式构建。";
+  }
+  if (persistence?.operation === "write_temp") {
+    return "MARA 无法创建回答检查点，请检查应用数据写入策略后重试。";
+  }
+  if (
+    persistence?.operation === "atomic_replace" &&
+    persistence.post_failure_probe === "write_blocked"
+  ) {
+    return "替换恢复探测也无法创建检查点，请检查 MARA 应用数据写入策略后重试。";
+  }
+  if (persistence?.operation === "atomic_replace") {
+    return "Windows 暂时阻止状态文件更新；原文件未损坏，可安全重试。";
+  }
+  if (persistence?.operation === "flush") {
+    return "回答检查点未能安全落盘；请稍后重试，无需重设整个 AppData 权限。";
+  }
+  return undefined;
+}
+
+function persistenceDiagnosticFromDetails(
+  details: unknown,
+): QueryPersistenceDiagnostic | undefined {
+  if (!details || typeof details !== "object" || !("persistence" in details)) {
+    return undefined;
+  }
+  const persistence = details.persistence;
+  if (!persistence || typeof persistence !== "object") {
+    return undefined;
+  }
+  const candidate = persistence as Partial<QueryPersistenceDiagnostic>;
+  const operations = ["write_temp", "flush", "atomic_replace", "load", "unknown"];
+  const probes = [
+    "not_run",
+    "ready",
+    "write_blocked",
+    "replace_blocked",
+    "flush_blocked",
+  ];
+  if (
+    !operations.includes(candidate.operation ?? "") ||
+    !probes.includes(candidate.post_failure_probe ?? "") ||
+    typeof candidate.retry_count !== "number" ||
+    typeof candidate.smoke_mode !== "boolean" ||
+    typeof candidate.fingerprint !== "string"
+  ) {
+    return undefined;
+  }
+  return candidate as QueryPersistenceDiagnostic;
 }
 
 function AssistantHeading({ detail }: { detail: string }) {

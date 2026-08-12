@@ -863,6 +863,7 @@ export default function App() {
         {activeNav === "workbench" && inspectorOpen ? (
           <Inspector
             activeTab={inspectorTab}
+            answerTask={answerTask}
             doctor={doctor.resource}
             files={files.resource}
             onClose={() => setInspectorOpen(false)}

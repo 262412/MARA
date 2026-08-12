@@ -1,5 +1,6 @@
 import type { DoctorPayload } from "../../shared/doctor-contracts";
 import type { FileRecord } from "../../shared/file-contracts";
+import type { QueryTask } from "../../shared/query-contracts";
 import type { RuntimeStatus } from "../../shared/runtime-contracts";
 import type { ResourceState } from "../resource-state";
 import { Icon } from "./Icon";
@@ -8,6 +9,7 @@ export type InspectorTab = "preview" | "sources" | "run";
 
 type InspectorProps = {
   activeTab: InspectorTab;
+  answerTask?: QueryTask;
   doctor: ResourceState<DoctorPayload>;
   files: ResourceState<FileRecord[]>;
   onClose: () => void;
@@ -21,6 +23,7 @@ type InspectorProps = {
 
 export function Inspector({
   activeTab,
+  answerTask,
   doctor,
   files,
   onClose,
@@ -74,6 +77,7 @@ export function Inspector({
       {activeTab === "run" ? (
         <RunStatus
           doctor={doctor}
+          answerTask={answerTask}
           onRetryDoctor={onRetryDoctor}
           runtime={runtime}
         />
@@ -177,10 +181,12 @@ function InspectorState({
 function RunStatus({
   runtime,
   doctor,
+  answerTask,
   onRetryDoctor,
 }: {
   runtime: RuntimeStatus;
   doctor: ResourceState<DoctorPayload>;
+  answerTask?: QueryTask;
   onRetryDoctor: () => void;
 }) {
   return (
@@ -211,8 +217,30 @@ function RunStatus({
         </div>
       ) : null}
       {doctor.status === "success" ? <DoctorSummary doctor={doctor.data} /> : null}
+      {answerTask?.error?.persistence ? (
+        <QueryPersistenceSummary task={answerTask} />
+      ) : null}
       <button className="diagnostics-button" disabled type="button">诊断中心将在后续切片启用</button>
     </div>
+  );
+}
+
+function QueryPersistenceSummary({ task }: { task: QueryTask }) {
+  const diagnostic = task.error?.persistence;
+  if (!diagnostic) {
+    return null;
+  }
+  return (
+    <section className="query-persistence-diagnostic" aria-label="回答状态诊断">
+      <strong>回答状态诊断</strong>
+      <code>{diagnostic.fingerprint}</code>
+      <small>任务 ID：{task.task_id}</small>
+      <small>
+        {diagnostic.operation} · errno {diagnostic.errno ?? "—"} · WinError{" "}
+        {diagnostic.winerror ?? "—"} · retry {diagnostic.retry_count} · probe{" "}
+        {diagnostic.post_failure_probe} · smoke {String(diagnostic.smoke_mode)}
+      </small>
+    </section>
   );
 }
 

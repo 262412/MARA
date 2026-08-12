@@ -43,6 +43,7 @@ import type {
   SessionRenameRequest,
   SessionSummary,
 } from "../shared/session-contracts";
+import { mergeSidecarEnvironment } from "./smoke-environment";
 
 export type SidecarReadyMessage = {
   type: "ready";
@@ -642,8 +643,7 @@ export class SidecarManager {
       .join(path.delimiter);
     const child = spawn(command.executable, command.args, {
       env: {
-        ...process.env,
-        ...environment,
+        ...mergeSidecarEnvironment(process.env, environment),
         KH_APP_DATA_DIR: path.join(
           this.options.dataRoot,
           "state",

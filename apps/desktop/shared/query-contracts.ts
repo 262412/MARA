@@ -1,6 +1,7 @@
 export type {
   LatestQueryTaskResponse,
   QueryCitation,
+  QueryPersistenceDiagnostic,
   QueryTask,
   QueryTaskCreateRequest,
   QueryTaskError,

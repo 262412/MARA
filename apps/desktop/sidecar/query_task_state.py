@@ -28,6 +28,7 @@ class QueryTaskState:
     status: str = "queued"
     stage: str = "queued"
     answer: str = ""
+    answer_saved: bool = True
     citations: list[dict[str, Any]] = field(default_factory=list)
     created_at: str = field(default_factory=now)
     updated_at: str = field(default_factory=now)
@@ -55,6 +56,7 @@ def task_snapshot(task: QueryTaskState) -> dict[str, Any]:
         "status": task.status,
         "stage": task.stage,
         "answer": task.answer,
+        "answer_saved": task.answer_saved,
         "citations": [dict(item) for item in task.citations],
         "error": dict(task.error) if task.error else None,
         "retryable": bool(
@@ -85,6 +87,7 @@ def task_to_dict(task: QueryTaskState) -> dict[str, Any]:
         "status": task.status,
         "stage": task.stage,
         "answer": task.answer,
+        "answer_saved": task.answer_saved,
         "citations": [dict(item) for item in task.citations],
         "created_at": task.created_at,
         "updated_at": task.updated_at,
@@ -113,6 +116,7 @@ def task_from_dict(item: dict[str, Any]) -> QueryTaskState:
         status=str(item.get("status", "failed")),
         stage=str(item.get("stage", "interrupted")),
         answer=str(item.get("answer", "")),
+        answer_saved=_saved_answer_state(item),
         citations=[
             dict(value)
             for value in item.get("citations", [])
@@ -124,3 +128,10 @@ def task_from_dict(item: dict[str, Any]) -> QueryTaskState:
         cancel_requested=bool(item.get("cancel_requested", False)),
         error=item.get("error"),
     )
+
+
+def _saved_answer_state(item: dict[str, Any]) -> bool:
+    value = item.get("answer_saved", True)
+    if not isinstance(value, bool):
+        raise TypeError("Query task answer_saved must be a boolean.")
+    return value

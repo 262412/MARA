@@ -41,6 +41,10 @@ import {
 } from "./renderer-bridge-smoke";
 import { runRendererWorkbenchSmoke } from "./renderer-workbench-smoke";
 import { SidecarManager } from "./sidecar-manager";
+import {
+  createQueryPersistenceSmokeEnvironment,
+  createStartupDelaySmokeEnvironment,
+} from "./smoke-environment";
 import { runDesktopSmoke } from "./smoke-runner";
 import {
   GATE2_SMOKE_FILE_ID,
@@ -142,6 +146,9 @@ const requireGate3DatabaseLock = process.argv.includes(
 const requireQueryPersistenceFault = process.argv.includes(
   "--smoke-test-query-persistence",
 );
+const requireModelSettings = process.argv.includes(
+  "--smoke-test-model-settings",
+);
 if (requireGate3DiskFull && requireGate3DatabaseLock) {
   throw new Error("Only one Gate 3 storage fault can be injected per launch");
 }
@@ -160,8 +167,23 @@ const desktopDataRoot = resolveDesktopDataRoot(
 const queryPersistenceFaultMarker = path.join(
   desktopDataRoot,
   "tmp",
-  "query-journal-permission-fault",
+  `query-journal-permission-fault-${
+    requireQueryPersistenceFault ? randomUUID() : "disabled"
+  }`,
 );
+const queryPersistenceSmokeToken = requireQueryPersistenceFault
+  ? randomUUID()
+  : "disabled";
+const queryPersistenceSmokeEnvironment =
+  createQueryPersistenceSmokeEnvironment({
+    enabled: requireQueryPersistenceFault,
+    markerPath: queryPersistenceFaultMarker,
+    token: queryPersistenceSmokeToken,
+  });
+const startupDelaySmokeEnvironment = createStartupDelaySmokeEnvironment({
+  enabled: requireModelSettings,
+  value: process.env.MARA_DESKTOP_SMOKE_STARTUP_DELAY_MS,
+});
 const modelSettings = new DesktopModelSettingsStore(
   desktopDataRoot,
   createDesktopCredentialProtector(safeStorage, process.platform),
@@ -173,12 +195,8 @@ const sidecar = new SidecarManager({
   dataRoot: desktopDataRoot,
   environment: () => ({
     ...modelSettings.environment(),
-    ...(requireQueryPersistenceFault
-      ? {
-          MARA_DESKTOP_QUERY_SMOKE_FAULT_MARKER:
-            queryPersistenceFaultMarker,
-        }
-      : {}),
+    ...queryPersistenceSmokeEnvironment,
+    ...startupDelaySmokeEnvironment,
   }),
   isPackaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
@@ -961,7 +979,7 @@ async function runQueryPersistenceSmoke(): Promise<void> {
   ) {
     throw new Error("Storage-fault retry created work or reached the model");
   }
-  await unlink(queryPersistenceFaultMarker);
+  await removeQueryPersistenceSmokeMarker();
   const retried = await sidecar.retryQueryTask(created.data.task_id);
   if (!retried.ok) {
     throw new Error(`Query persistence retry failed: ${retried.error.code}`);
@@ -1040,6 +1058,31 @@ async function runSingleInstanceSmoke(): Promise<void> {
   process.stdout.write(
     "single_instance=secondary_blocked,primary_focused,one_sidecar status_success\n",
   );
+}
+
+async function removeQueryPersistenceSmokeMarker(): Promise<void> {
+  if (!requireQueryPersistenceFault) {
+    return;
+  }
+  try {
+    await unlink(queryPersistenceFaultMarker);
+  } catch (error) {
+    if (!isNodeError(error) || error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+
+async function cleanupDesktopSmoke(): Promise<void> {
+  try {
+    await sidecar.stop();
+  } finally {
+    await removeQueryPersistenceSmokeMarker();
+  }
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 async function createWatchedIndexTask(
@@ -1331,7 +1374,11 @@ if (singleInstanceLockAcquired) {
   }
   if (requireQueryPersistenceFault) {
     await mkdir(path.dirname(queryPersistenceFaultMarker), { recursive: true });
-    await writeFile(queryPersistenceFaultMarker, "armed\n", "utf8");
+    await writeFile(
+      queryPersistenceFaultMarker,
+      `${queryPersistenceSmokeToken}\n`,
+      { encoding: "utf8", flag: "wx", mode: 0o600 },
+    );
   }
   session.defaultSession.setPermissionRequestHandler(
     (_webContents, _permission, callback) => callback(false),
@@ -1367,9 +1414,6 @@ if (singleInstanceLockAcquired) {
   );
   const requireIndexingUnconfigured = process.argv.includes(
     "--smoke-test-indexing-unconfigured",
-  );
-  const requireModelSettings = process.argv.includes(
-    "--smoke-test-model-settings",
   );
   const requireSecureModelSettings = process.argv.includes(
     "--smoke-test-model-settings-secure",
@@ -1492,7 +1536,7 @@ if (singleInstanceLockAcquired) {
             : [],
         );
       }
-    }, () => sidecar.stop());
+    }, cleanupDesktopSmoke);
     quitting = true;
     app.exit(exitCode);
     return;
@@ -1505,7 +1549,7 @@ if (singleInstanceLockAcquired) {
       createWindow();
     }
   });
-  });
+  }).finally(removeQueryPersistenceSmokeMarker);
 }
 
 app.on("before-quit", (event) => {

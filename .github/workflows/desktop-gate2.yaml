@@ -144,6 +144,12 @@ jobs:
           record_phase index-delete-smoke
           app_executable="$GITHUB_WORKSPACE/apps/desktop/release/MARA-linux-x64/MARA"
           time_file="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-time.txt"
+          stale_query_marker=/tmp/mara-desktop/data/MARA/tmp/query-journal-stale-marker
+          stale_query_token=stale-query-smoke-token
+          printf '%s\n' "$stale_query_token" > "$stale_query_marker"
+          export MARA_DESKTOP_QUERY_SMOKE_FAULT_MARKER="$stale_query_marker"
+          export MARA_DESKTOP_QUERY_SMOKE_FAULT_TOKEN="$stale_query_token"
+          export MARA_DESKTOP_QUERY_SMOKE_MODE=query_persistence
           (
             cd /usr
             /usr/bin/time -v -o "$time_file" \
@@ -151,6 +157,13 @@ jobs:
                 --smoke-test-nonempty --smoke-test-gate3 \
                 --smoke-test-gate3-formats
           )
+          unset MARA_DESKTOP_QUERY_SMOKE_FAULT_MARKER
+          unset MARA_DESKTOP_QUERY_SMOKE_FAULT_TOKEN
+          unset MARA_DESKTOP_QUERY_SMOKE_MODE
+          test -f "$stale_query_marker"
+          unlink "$stale_query_marker"
+          printf '%s\n' \
+            'query_smoke_isolation=inherited_env,residual_marker status_success'
           test -n "$(find /tmp/mara-desktop/data/MARA/cache/theflow \
             -name progress.pkl -type f -print -quit)"
           test ! -e /usr/.theflow
@@ -270,6 +283,8 @@ jobs:
             "query_persistence=partial,typed_error,blocked_retry,recovery,single_turn error_code=query_state_permission_denied status_success" \
             "$query_persistence_stdout"
           ! grep -F "/tmp/mara-desktop/data/MARA" "$query_persistence_stderr"
+          ! find /tmp/mara-desktop/data/MARA/tmp -maxdepth 1 \
+            -name 'query-journal-permission-fault-*' -print -quit | grep -q .
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
             --data-root /tmp/mara-desktop/data/MARA
           record_phase single-instance-smoke
@@ -912,6 +927,13 @@ jobs:
             throw "MARA CLI did not observe the Desktop fixture."
           }
           $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+          $staleQueryMarker = Join-Path $dataRoot `
+            "tmp/query-journal-stale-marker"
+          $staleQueryToken = "stale-query-smoke-token"
+          Set-Content -Path $staleQueryMarker -Value $staleQueryToken
+          $env:MARA_DESKTOP_QUERY_SMOKE_FAULT_MARKER = $staleQueryMarker
+          $env:MARA_DESKTOP_QUERY_SMOKE_FAULT_TOKEN = $staleQueryToken
+          $env:MARA_DESKTOP_QUERY_SMOKE_MODE = "query_persistence"
           $process = Start-Process $executable `
             -ArgumentList (
               "--smoke-test-nonempty --smoke-test-gate3 " +
@@ -926,11 +948,23 @@ jobs:
             Start-Sleep -Milliseconds 100
           }
           $stopwatch.Stop()
+          Remove-Item "Env:MARA_DESKTOP_QUERY_SMOKE_FAULT_MARKER" `
+            -ErrorAction SilentlyContinue
+          Remove-Item "Env:MARA_DESKTOP_QUERY_SMOKE_FAULT_TOKEN" `
+            -ErrorAction SilentlyContinue
+          Remove-Item "Env:MARA_DESKTOP_QUERY_SMOKE_MODE" `
+            -ErrorAction SilentlyContinue
+          if (-not (Test-Path $staleQueryMarker)) {
+            throw "Ordinary startup consumed a residual query smoke marker."
+          }
+          Remove-Item $staleQueryMarker -Force
           @(
             "exit_code=$($process.ExitCode)"
             "elapsed_ms=$($stopwatch.ElapsedMilliseconds)"
             "peak_working_set_bytes=$peakWorkingSet"
           ) | Set-Content $diagnostics
+          "query_smoke_isolation=inherited_env,residual_marker status_success" |
+            Add-Content $diagnostics
           if (Test-Path $stdout) {
             Get-Content $stdout | Write-Host
           }
@@ -1048,6 +1082,10 @@ jobs:
             "query_persistence=partial,typed_error,blocked_retry,recovery,single_turn error_code=query_state_permission_denied status_success" `
             -Quiet)) {
             throw "The packaged query journal did not recover one persisted turn."
+          }
+          if (Get-ChildItem (Join-Path $dataRoot "tmp") `
+              -Filter "query-journal-permission-fault-*" -ErrorAction SilentlyContinue) {
+            throw "The packaged query persistence smoke left its marker behind."
           }
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot

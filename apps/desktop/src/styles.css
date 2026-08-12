@@ -1721,6 +1721,29 @@ kbd {
   color: var(--secondary);
 }
 
+.query-persistence-diagnostic {
+  display: flex;
+  padding: 12px;
+  border: 1px solid #6d5034;
+  border-radius: 9px;
+  margin: 8px 0 16px;
+  flex-direction: column;
+  gap: 5px;
+  background: #30251b;
+}
+
+.query-persistence-diagnostic strong {
+  color: #e6b77f;
+  font-size: 11px;
+}
+
+.query-persistence-diagnostic code,
+.query-persistence-diagnostic small {
+  overflow-wrap: anywhere;
+  color: var(--secondary);
+  font-size: 9px;
+}
+
 .diagnostics-button {
   margin-top: 2px;
 }

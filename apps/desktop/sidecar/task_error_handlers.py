@@ -10,7 +10,7 @@ from .application import DesktopFileNotFoundError, DesktopSessionNotFoundError
 from .index_task_journal import IndexTaskPersistenceError
 from .index_tasks import IndexTaskConflictError, IndexTaskNotFoundError
 from .indexing_readiness import DesktopIndexingPreflightError
-from .query_task_journal import QueryTaskPersistenceError
+from .query_task_journal import QueryTaskPersistenceError, persistence_diagnostic
 from .query_tasks import QueryTaskConflictError, QueryTaskNotFoundError
 
 ErrorResponse = Callable[..., JSONResponse]
@@ -152,7 +152,7 @@ def _register_query_task_errors(
         logger.error(
             "Query task persistence unavailable request_id=%s error_code=%s "
             "operation=%s error_type=%s errno=%s winerror=%s retried=%s "
-            "retry_count=%s",
+            "retry_count=%s post_failure_probe=%s smoke_mode=%s",
             request_id(request),
             error.code,
             error.operation,
@@ -161,12 +161,15 @@ def _register_query_task_errors(
             error.winerror,
             error.retry_count > 0,
             error.retry_count,
+            error.post_failure_probe,
+            error.smoke_mode,
         )
         return error_response(
             request,
             status_code=503,
             code=error.code,
             message=error.message,
+            details={"persistence": persistence_diagnostic(error)},
             retryable=error.retryable,
         )
 

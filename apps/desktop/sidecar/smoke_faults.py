@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import hmac
 import os
 import sqlite3
 from pathlib import Path
@@ -71,7 +72,7 @@ class PartialQueryJournalFault:
 
     def save(self, payload: dict[str, Any]) -> None:
         if self._faulted and self._marker.exists():
-            raise _query_permission_error("atomic_replace")
+            raise _query_permission_error("flush")
         if self._marker.exists() and _contains_running_partial(payload):
             self._faulted = True
             raise _query_permission_error("flush")
@@ -109,13 +110,22 @@ def inject_query_smoke_fault(
 
 
 def query_smoke_fault_marker(data_root: Path) -> Path | None:
+    if os.environ.get("MARA_DESKTOP_QUERY_SMOKE_MODE") != "query_persistence":
+        return None
     marker = os.environ.get("MARA_DESKTOP_QUERY_SMOKE_FAULT_MARKER", "")
-    if not marker:
+    token = os.environ.get("MARA_DESKTOP_QUERY_SMOKE_FAULT_TOKEN", "")
+    if not marker or not token or len(token) > 128:
         return None
     resolved = Path(marker).resolve()
     expected_parent = (data_root / "tmp").resolve()
     if resolved.parent != expected_parent:
         raise ValueError("Query smoke fault marker must be Desktop-owned.")
+    try:
+        marker_token = resolved.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not hmac.compare_digest(marker_token, token):
+        return None
     return resolved
 
 
@@ -138,4 +148,5 @@ def _query_permission_error(operation: str) -> QueryTaskPersistenceError:
         error_type="PermissionError",
         error_number=errno.EACCES,
         winerror=5,
+        smoke_mode=True,
     )
